@@ -186,53 +186,40 @@ export class DevEnvironment {
   private async installPlaywrightBrowsers() {
     console.log(chalk.blue('⏳ Installing Playwright browsers (this may take a few minutes)...'));
     
-    try {
-      // Use Playwright's programmatic install API
-      const { chromium: { _install } } = await import('playwright');
-      
-      // If _install doesn't exist, fall back to command line
-      if (typeof _install === 'function') {
-        await _install();
-        console.log(chalk.green('✅ Playwright browsers installed successfully!'));
-      } else {
-        // Fallback: use npx with playwright package directly
-        await new Promise<void>((resolve, reject) => {
-          const installProcess = spawn('npx', ['--yes', 'playwright@^1.49.0', 'install', 'chromium'], {
-            stdio: ['inherit', 'pipe', 'pipe'],
-            shell: true,
-          });
+    return new Promise<void>((resolve, reject) => {
+      // Use npx with playwright package directly to ensure browsers are installed
+      const installProcess = spawn('npx', ['--yes', 'playwright@^1.49.0', 'install', 'chromium'], {
+        stdio: ['inherit', 'pipe', 'pipe'],
+        shell: true,
+      });
 
-          installProcess.stdout?.on('data', (data) => {
-            const message = data.toString().trim();
-            if (message) {
-              console.log(chalk.gray('[PLAYWRIGHT]'), message);
-            }
-          });
+      installProcess.stdout?.on('data', (data) => {
+        const message = data.toString().trim();
+        if (message) {
+          console.log(chalk.gray('[PLAYWRIGHT]'), message);
+        }
+      });
 
-          installProcess.stderr?.on('data', (data) => {
-            const message = data.toString().trim();
-            if (message) {
-              console.log(chalk.gray('[PLAYWRIGHT]'), message);
-            }
-          });
+      installProcess.stderr?.on('data', (data) => {
+        const message = data.toString().trim();
+        if (message) {
+          console.log(chalk.gray('[PLAYWRIGHT]'), message);
+        }
+      });
 
-          installProcess.on('exit', (code) => {
-            if (code === 0) {
-              console.log(chalk.green('✅ Playwright browsers installed successfully!'));
-              resolve();
-            } else {
-              reject(new Error(`Playwright installation failed with code ${code}`));
-            }
-          });
+      installProcess.on('exit', (code) => {
+        if (code === 0) {
+          console.log(chalk.green('✅ Playwright browsers installed successfully!'));
+          resolve();
+        } else {
+          reject(new Error(`Playwright installation failed with code ${code}`));
+        }
+      });
 
-          installProcess.on('error', (error) => {
-            reject(new Error(`Failed to start Playwright installation: ${error.message}`));
-          });
-        });
-      }
-    } catch (error) {
-      throw new Error(`Failed to install Playwright browsers: ${error instanceof Error ? error.message : String(error)}`);
-    }
+      installProcess.on('error', (error) => {
+        reject(new Error(`Failed to start Playwright installation: ${error.message}`));
+      });
+    });
   }
 
   private async setupPageMonitoring(page: Page) {
