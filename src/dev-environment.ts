@@ -187,10 +187,23 @@ export class DevEnvironment {
     console.log(chalk.blue('⏳ Installing Playwright browsers (this may take a few minutes)...'));
     
     return new Promise<void>((resolve, reject) => {
-      // Use npx with playwright package directly to ensure browsers are installed
-      const installProcess = spawn('npx', ['--yes', 'playwright@^1.49.0', 'install', 'chromium'], {
+      // Use node with playwright installation script directly
+      const installProcess = spawn('node', ['-e', `
+        const { execSync } = require('child_process');
+        try {
+          // Install playwright and then install browsers
+          console.log('Installing playwright...');
+          execSync('npm install playwright@^1.49.0', { stdio: 'inherit' });
+          console.log('Installing chromium browser...');
+          execSync('npx playwright install chromium', { stdio: 'inherit' });
+          console.log('Installation complete!');
+        } catch (error) {
+          console.error('Installation failed:', error.message);
+          process.exit(1);
+        }
+      `], {
         stdio: ['inherit', 'pipe', 'pipe'],
-        shell: true,
+        shell: false,
       });
 
       installProcess.stdout?.on('data', (data) => {
