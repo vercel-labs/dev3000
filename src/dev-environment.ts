@@ -3,6 +3,7 @@ import { chromium, Browser, Page, BrowserContext } from 'playwright';
 import { writeFileSync, appendFileSync, mkdirSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { createRequire } from 'module';
 import chalk from 'chalk';
 
 interface DevEnvironmentOptions {
@@ -187,11 +188,11 @@ export class DevEnvironment {
     return new Promise<void>((resolve, reject) => {
       console.log(chalk.blue('⏳ Installing Playwright browsers (this may take a few minutes)...'));
       
-      // Use the playwright binary from our own node_modules
+      // Use createRequire to properly resolve playwright CLI from our package context
       const currentFile = fileURLToPath(import.meta.url);
-      const packageRoot = dirname(dirname(currentFile)); // Go up from dist/ to package root
-      const playwrightPath = join(packageRoot, 'node_modules', 'playwright', 'cli.js');
-      const installProcess = spawn('node', [playwrightPath, 'install', 'chromium'], {
+      const require = createRequire(currentFile);
+      const playwrightCliPath = require.resolve('playwright/cli.js');
+      const installProcess = spawn('node', [playwrightCliPath, 'install', 'chromium'], {
         stdio: ['inherit', 'pipe', 'pipe'],
         shell: false,
       });
