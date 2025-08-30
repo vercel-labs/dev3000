@@ -270,7 +270,7 @@ async function updatePackageJson(packageJsonPath: string, packageJson: any, opti
     return;
   }
   
-  packageJson.scripts['dev:ai'] = 'nextjs-ai-dev start';
+  packageJson.scripts['dev:ai'] = 'next-ai-dev start';
   
   // Add mcp-handler and zod if not present
   if (!packageJson.dependencies) {
