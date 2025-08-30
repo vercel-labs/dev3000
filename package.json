@@ -1,6 +1,6 @@
 {
   "name": "next-ai-dev",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "AI-powered development tools for Next.js with browser monitoring and MCP server integration",
   "type": "module",
   "main": "dist/index.js",
