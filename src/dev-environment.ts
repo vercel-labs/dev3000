@@ -186,9 +186,11 @@ export class DevEnvironment {
     return new Promise<void>((resolve, reject) => {
       console.log(chalk.blue('⏳ Installing Playwright browsers (this may take a few minutes)...'));
       
-      const installProcess = spawn('npx', ['playwright', 'install', 'chromium'], {
+      // Use the playwright binary from our own node_modules
+      const playwrightPath = require.resolve('playwright/cli.js');
+      const installProcess = spawn('node', [playwrightPath, 'install', 'chromium'], {
         stdio: ['inherit', 'pipe', 'pipe'],
-        shell: true,
+        shell: false,
       });
 
       installProcess.stdout?.on('data', (data) => {
