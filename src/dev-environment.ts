@@ -137,15 +137,35 @@ export class DevEnvironment {
       mkdirSync(this.options.profileDir, { recursive: true });
     }
     
-    // Launch browser with persistent context
-    this.browserContext = await chromium.launchPersistentContext(this.options.profileDir, {
-      headless: false,
-      args: [
-        '--remote-debugging-port=9222',
-        '--disable-web-security',
-        '--disable-blink-features=AutomationControlled',
-      ],
-    });
+    try {
+      // Launch browser with persistent context
+      this.browserContext = await chromium.launchPersistentContext(this.options.profileDir, {
+        headless: false,
+        args: [
+          '--remote-debugging-port=9222',
+          '--disable-web-security',
+          '--disable-blink-features=AutomationControlled',
+        ],
+      });
+    } catch (error: any) {
+      // Check if it's a missing browser error
+      if (error.message?.includes('Executable doesn\'t exist')) {
+        console.log(chalk.yellow('📦 Playwright browsers not found. Installing automatically...'));
+        await this.installPlaywrightBrowsers();
+        
+        // Retry browser launch
+        this.browserContext = await chromium.launchPersistentContext(this.options.profileDir, {
+          headless: false,
+          args: [
+            '--remote-debugging-port=9222',
+            '--disable-web-security',
+            '--disable-blink-features=AutomationControlled',
+          ],
+        });
+      } else {
+        throw error;
+      }
+    }
     
     // Navigate to the app
     const page = await this.browserContext.newPage();
@@ -160,6 +180,44 @@ export class DevEnvironment {
     });
     
     console.log(chalk.green('✅ Browser monitoring active!'));
+  }
+
+  private async installPlaywrightBrowsers() {
+    return new Promise<void>((resolve, reject) => {
+      console.log(chalk.blue('⏳ Installing Playwright browsers (this may take a few minutes)...'));
+      
+      const installProcess = spawn('npx', ['playwright', 'install', 'chromium'], {
+        stdio: ['inherit', 'pipe', 'pipe'],
+        shell: true,
+      });
+
+      installProcess.stdout?.on('data', (data) => {
+        const message = data.toString().trim();
+        if (message) {
+          console.log(chalk.gray('[PLAYWRIGHT]'), message);
+        }
+      });
+
+      installProcess.stderr?.on('data', (data) => {
+        const message = data.toString().trim();
+        if (message) {
+          console.log(chalk.gray('[PLAYWRIGHT]'), message);
+        }
+      });
+
+      installProcess.on('exit', (code) => {
+        if (code === 0) {
+          console.log(chalk.green('✅ Playwright browsers installed successfully!'));
+          resolve();
+        } else {
+          reject(new Error(`Playwright installation failed with code ${code}`));
+        }
+      });
+
+      installProcess.on('error', (error) => {
+        reject(new Error(`Failed to start Playwright installation: ${error.message}`));
+      });
+    });
   }
 
   private async setupPageMonitoring(page: Page) {
