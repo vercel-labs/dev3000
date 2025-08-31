@@ -7,6 +7,7 @@ import chalk from 'chalk';
 
 interface DevEnvironmentOptions {
   port: string;
+  mcpPort: string;
   serverCommand: string;
   profileDir: string;
   logFile: string;
@@ -35,6 +36,7 @@ class Logger {
 
 export class DevEnvironment {
   private serverProcess: ChildProcess | null = null;
+  private mcpServerProcess: ChildProcess | null = null;
   private browserContext: BrowserContext | null = null;
   private logger: Logger;
   private options: DevEnvironmentOptions;
@@ -50,11 +52,15 @@ export class DevEnvironment {
     // Setup cleanup handlers
     this.setupCleanupHandlers();
     
-    // Start server
+    // Start user's dev server
     await this.startServer();
     
-    // Wait for server to be ready
+    // Start MCP server
+    await this.startMcpServer();
+    
+    // Wait for both servers to be ready
     await this.waitForServer();
+    await this.waitForMcpServer();
     
     // Start browser monitoring
     await this.startBrowserMonitoring();
@@ -62,7 +68,7 @@ export class DevEnvironment {
     console.log(chalk.green('\n✅ Development environment ready!'));
     console.log(chalk.blue(`📊 Logs: ${this.options.logFile}`));
     console.log(chalk.blue(`🌐 App: http://localhost:${this.options.port}`));
-    console.log(chalk.blue(`🤖 MCP Server: http://localhost:${this.options.port}/api/mcp/http`));
+    console.log(chalk.blue(`🤖 MCP Server: http://localhost:${this.options.mcpPort}/api/mcp/http`));
     console.log(chalk.yellow('Press Ctrl+C to stop all processes'));
     
     // Keep alive
@@ -104,6 +110,47 @@ export class DevEnvironment {
     });
   }
 
+  private async startMcpServer() {
+    console.log(chalk.blue(`🤖 Starting MCP server on port ${this.options.mcpPort}...`));
+    
+    // Get the path to our bundled MCP server
+    const currentFile = fileURLToPath(import.meta.url);
+    const packageRoot = dirname(dirname(currentFile)); // Go up from dist/ to package root
+    const mcpServerPath = join(packageRoot, 'mcp-server');
+    
+    // Start the MCP server
+    this.mcpServerProcess = spawn('npm', ['run', 'dev'], {
+      stdio: ['inherit', 'pipe', 'pipe'],
+      shell: true,
+      cwd: mcpServerPath,
+      env: {
+        ...process.env,
+        PORT: this.options.mcpPort,
+      },
+    });
+
+    // Log MCP server output
+    this.mcpServerProcess.stdout?.on('data', (data) => {
+      const message = data.toString().trim();
+      if (message) {
+        this.logger.log('server', `[MCP] ${message}`);
+        console.log(chalk.gray('[MCP]'), message);
+      }
+    });
+
+    this.mcpServerProcess.stderr?.on('data', (data) => {
+      const message = data.toString().trim();
+      if (message) {
+        this.logger.log('server', `[MCP ERROR] ${message}`);
+        console.error(chalk.red('[MCP ERROR]'), message);
+      }
+    });
+
+    this.mcpServerProcess.on('exit', (code) => {
+      console.log(chalk.red(`MCP server process exited with code ${code}`));
+    });
+  }
+
   private async waitForServer() {
     console.log(chalk.blue('⏳ Waiting for server to be ready...'));
     
@@ -128,6 +175,32 @@ export class DevEnvironment {
     }
     
     throw new Error('Server failed to start within 30 seconds');
+  }
+
+  private async waitForMcpServer() {
+    console.log(chalk.blue('⏳ Waiting for MCP server to be ready...'));
+    
+    const maxAttempts = 30;
+    let attempts = 0;
+    
+    while (attempts < maxAttempts) {
+      try {
+        const response = await fetch(`http://localhost:${this.options.mcpPort}`, {
+          method: 'HEAD',
+        });
+        if (response.ok || response.status === 404) {
+          console.log(chalk.green('✅ MCP server is ready!'));
+          return;
+        }
+      } catch (error) {
+        // MCP server not ready yet
+      }
+      
+      attempts++;
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    
+    throw new Error('MCP server failed to start within 30 seconds');
   }
 
   private async startBrowserMonitoring() {
@@ -310,6 +383,18 @@ export class DevEnvironment {
         setTimeout(() => {
           if (this.serverProcess && !this.serverProcess.killed) {
             this.serverProcess.kill('SIGKILL');
+          }
+        }, 5000);
+      }
+
+      if (this.mcpServerProcess) {
+        console.log(chalk.blue('🔄 Stopping MCP server...'));
+        this.mcpServerProcess.kill('SIGTERM');
+        
+        // Force kill after 5 seconds
+        setTimeout(() => {
+          if (this.mcpServerProcess && !this.mcpServerProcess.killed) {
+            this.mcpServerProcess.kill('SIGKILL');
           }
         }, 5000);
       }

@@ -1,14 +1,15 @@
 {
-  "name": "next-ai-dev",
-  "version": "1.0.7",
-  "description": "AI-powered development tools for Next.js with browser monitoring and MCP server integration",
+  "name": "aidev",
+  "version": "0.0.1",
+  "description": "AI-powered development tools with browser monitoring and MCP server integration",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "next-ai-dev": "dist/cli.js"
+    "aidev": "dist/cli.js"
   },
   "files": [
     "dist/",
+    "mcp-server/",
     "README.md"
   ],
   "scripts": {
@@ -43,7 +44,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/elsigh/next-ai-dev.git"
+    "url": "https://github.com/elsigh/aidev.git"
   },
   "author": "Lindsey Simon <elsigh@gmail.com>",
   "license": "MIT"

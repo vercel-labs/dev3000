@@ -1,6 +1,6 @@
-# Next.js AI Development Tools
+# AI Dev
 
-AI-powered development tools for Next.js with browser monitoring, intelligent logging, and Model Context Protocol (MCP) server integration. Designed to work seamlessly with AI assistants like Claude.
+AI-powered development tools with browser monitoring, intelligent logging, and Model Context Protocol (MCP) server integration. Designed to work seamlessly with AI assistants like Claude for any web development project.
 
 ## Features
 
@@ -15,28 +15,25 @@ AI-powered development tools for Next.js with browser monitoring, intelligent lo
 ### Install and Setup
 
 ```bash
-# Install the package
-npm install next-ai-dev
+# Install the package globally
+npm install -g aidev
 
-# Setup MCP routes in your Next.js app (run from your Next.js project root)
-npx next-ai-dev setup
-
-# Install the dependencies that were added
-npm install
+# Or use directly with npx
+npx aidev start
 ```
 
 ### Start Development
 
 ```bash
 # Start AI-enhanced development environment
-npm run dev:ai
+aidev start
 ```
 
 This will:
 - Start your Next.js dev server
 - Launch browser with monitoring
 - Create unified logs at `./ai-dev-tools/consolidated.log`  
-- Serve MCP tools at `http://localhost:3000/api/mcp/http`
+- Serve MCP tools at `http://localhost:3684/api/mcp/http`
 
 ## MCP Tools for AI Assistants
 
@@ -46,41 +43,41 @@ Once running, AI assistants can use these tools:
 - **`search_logs`** - Regex search through logs with context lines
 - **`get_browser_errors`** - Extract browser errors from specified time periods
 
+Access these tools at: `http://localhost:3684/api/mcp/http`
+
 ## Requirements
 
-- **Next.js 13+** with app directory
 - **Node.js 18+**
-- **Chrome/Chromium** browser
+- **Chrome/Chromium** browser (auto-installed via Playwright)
 
 ## How It Works
 
-1. **Setup Phase**: Adds MCP API routes to your Next.js app
-2. **Development**: Launches coordinated dev server + browser monitoring  
-3. **AI Integration**: Provides MCP endpoint for intelligent log analysis
+1. **Development**: Launches your dev server + browser monitoring + MCP server
+2. **AI Integration**: Provides standalone MCP server for intelligent log analysis
+3. **No Setup**: Works with any web development project
 
 ## File Structure Created
 
 ```
-your-nextjs-app/
-├── app/api/mcp/[transport]/route.ts  # MCP server endpoint
+your-project/
 ├── ai-dev-tools/
 │   ├── chrome-profile/               # Isolated browser profile
 │   └── consolidated.log              # Unified development logs
-└── package.json                      # Updated with dev:ai script
+└── (MCP server runs separately on port 3001)
 ```
 
 ## Commands
 
 ```bash
-# Setup MCP routes and scripts
-npx next-ai-dev setup [--force]
-
 # Start development environment  
-npx next-ai-dev start [options]
+aidev start [options]
+# or
+npx aidev start [options]
 
 # Options:
 #   -p, --port <port>              Dev server port (default: 3000)
-#   --server-command <command>     Custom server command (default: npm run dev)
+#   --mcp-port <port>              MCP server port (default: 3684)
+#   --server-command <command>     Custom server command (default: pnpm dev)
 #   --profile-dir <dir>            Chrome profile directory
 #   --log-file <file>              Log file path
 ```
