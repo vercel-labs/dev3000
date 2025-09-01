@@ -100,7 +100,7 @@ export default function LogsPage() {
       if (data.lines) {
         const entries = data.lines
           .map(parseLogLine)
-          .filter((entry): entry is LogEntry => entry !== null);
+          .filter((entry: LogEntry | null): entry is LogEntry => entry !== null);
         setLogs(entries);
       }
     } catch (error) {
@@ -117,7 +117,7 @@ export default function LogsPage() {
       if (data.newLines) {
         const newEntries = data.newLines
           .map(parseLogLine)
-          .filter((entry): entry is LogEntry => entry !== null);
+          .filter((entry: LogEntry | null): entry is LogEntry => entry !== null);
         
         setLogs(prev => [...prev, ...newEntries]);
       }

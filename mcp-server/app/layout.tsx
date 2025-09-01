@@ -1,8 +1,8 @@
+import React from 'react';
+
 export default function RootLayout({
   children,
-}: {
-  children: React.ReactNode;
-}) {
+}: any) {
   return (
     <html lang="en">
       <head>

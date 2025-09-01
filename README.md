@@ -36,10 +36,10 @@ pnpx dev-playwright
 
 # Or specify a different build script and port
 pnpx dev-playwright --script build-start --port 3001
-
+is the
 
 # To stop all processes:
-pkill -f "dev-playwright
+pkill -f "dev-playwright"
 ```
 
 That's it! dev-playwright will:
