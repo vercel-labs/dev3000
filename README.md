@@ -1,6 +1,14 @@
-# 🎭 Dev Playwright
+# 🎭 dev-playwright
 
-Feed your AI assistant a delicious stream of development data! Dev Playwright captures everything happening in your web app - server logs, browser events, console messages, network requests, and automatic screenshots - all in one unified, timestamped feed that Claude (and other AI assistants) can easily digest.
+Feed your AI assistant a delicious stream of development data! dev-playwright captures everything happening in your web app - server logs, browser events, console messages, network requests, and automatic screenshots - all in one unified, timestamped feed that Claude (and other AI assistants) can easily digest.
+
+## 🧠 Why this exists
+
+Ever tried to debug an issue with Claude but struggled to explain what was happening? Or spent forever trying to reproduce a bug that only happens in specific conditions?
+
+dev-playwright creates a complete visual + textual timeline of your development session that AI assistants can understand instantly. Claude can see your server logs, browser console, network requests, AND screenshots all in chronological order.
+
+It's like having a development photographer + stenographer + AI whisperer all in one tool! 📸🤖
 
 ## ✨ What makes this special?
 
@@ -9,7 +17,7 @@ Feed your AI assistant a delicious stream of development data! Dev Playwright ca
 🔍 **Smart Monitoring** - Watches your app in a real browser, catching what dev tools miss  
 🌐 **Beautiful Web UI** - View logs with inlined screenshots at `http://localhost:3684/logs`  
 🤖 **AI-Ready** - MCP server lets Claude read logs and analyze issues instantly  
-⚡ **Zero Config** - One command, works with any web framework  
+⚡ **Zero Config** - One command, works with any web framework
 
 ## 🚀 Quick Start
 
@@ -17,17 +25,25 @@ Feed your AI assistant a delicious stream of development data! Dev Playwright ca
 # Install in your project
 pnpm install dev-playwright
 
-# Start monitoring (default: runs "pnpm run dev" on port 3000)
-pnpx dev-playwright
 
-# Or tell Claude to run it for you:
+# My primary usage mechanism is to tell Claude to run it for you:
 # "Run pnpx dev-playwright to start monitoring my development environment"
 
-# Or specify your build script and port
+
+# Or you can start in a terminal (default: runs "pnpm run dev",  port 3000)
+pnpx dev-playwright
+
+
+# Or specify a different build script and port
 pnpx dev-playwright --script build-start --port 3001
+
+
+# To stop all processes:
+pkill -f "dev-playwright
 ```
 
-That's it! Dev Playwright will:
+That's it! dev-playwright will:
+
 1. 🔍 Check if your ports (3000, 3684) are available
 2. 🚀 Start your dev server (any npm script you want)
 3. 🌐 Launch a monitored browser pointing to your app
@@ -35,12 +51,12 @@ That's it! Dev Playwright will:
 5. 📊 Create a beautiful log viewer with visual timeline
 6. 🤖 Serve MCP tools for AI assistants
 
-**Note:** If ports are already in use, Dev Playwright will show you which processes are using them and provide the exact command to free them up.
+**Note:** If ports are already in use, dev-playwright will show you which processes are using them and provide the exact command to free them up.
 
 ## 🎯 Perfect for...
 
 - **Debugging with Claude** - Show Claude exactly what happened with visual context
-- **Issue reproduction** - Visual timeline of user interactions leading to bugs  
+- **Issue reproduction** - Visual timeline of user interactions leading to bugs
 - **Performance monitoring** - See network requests alongside visual changes
 - **Team debugging** - Share visual debugging timelines with screenshots
 - **Development documentation** - Automatic visual history of your app's behavior
@@ -50,7 +66,7 @@ That's it! Dev Playwright will:
 Visit `http://localhost:3684/logs` to see your development timeline with:
 
 - **📸 Inlined screenshots** showing exactly what users saw
-- **⚡ Virtual scrolling** for massive log files  
+- **⚡ Virtual scrolling** for massive log files
 - **🔴 Live tail mode** with real-time updates
 - **🔍 Head/tail commands** like Unix utilities
 - **🎨 Syntax highlighting** for different log types
@@ -60,13 +76,15 @@ Visit `http://localhost:3684/logs` to see your development timeline with:
 Claude can read your logs directly or use the MCP server for advanced querying:
 
 **Direct log access:**
+
 ```
 Read /tmp/dev-playwright-consolidated.log
 ```
 
 **MCP tools** (at `http://localhost:3684/api/mcp/http`):
+
 - `read_consolidated_logs` - Get recent logs with filtering
-- `search_logs` - Regex search with context  
+- `search_logs` - Regex search with context
 - `get_browser_errors` - Extract browser errors by time period
 
 ## 🛠️ Command Options
@@ -76,13 +94,11 @@ pnpx dev-playwright [options]
 
 Options:
   -p, --port <port>         Your app's port (default: 3000)
-  --mcp-port <port>         MCP server port (default: 3684)  
+  --mcp-port <port>         MCP server port (default: 3684)
   -s, --script <script>     Package.json script to run (default: dev)
   --profile-dir <dir>       Chrome profile directory
   --log-file <file>         Log file path
 ```
-
-**To stop all processes:** `pkill -f "dev-playwright"`
 
 ## 🎨 Examples
 
@@ -90,7 +106,7 @@ Options:
 # Default Next.js development
 pnpx dev-playwright
 
-# Production build testing  
+# Production build testing
 pnpx dev-playwright --script build-start
 
 # Custom port
@@ -106,21 +122,22 @@ pnpx dev-playwright --script "build && serve" --port 8080
 ## 🎪 What you'll see
 
 Your terminal becomes a live feed of everything:
+
 ```
 🔍 Checking port 3000...
-🔍 Checking port 3684...  
+🔍 Checking port 3684...
 🚀 Starting development environment...
 🔧 Starting server: pnpm run dev
 🤖 Starting MCP server on port 3684...
 ⏳ Waiting for server to be ready...
 ✅ Server is ready!
 ✅ MCP server is ready!
-🌐 Starting browser monitoring...
+🌐 Starting playwright for browser monitoring...
 ✅ Browser monitoring active!
 
 ✅ Development environment ready!
 📊 Logs: /tmp/dev-playwright-consolidated.log
-🌐 App: http://localhost:3000
+🌐 Your App: http://localhost:3000
 🤖 MCP Server: http://localhost:3684/api/mcp/http
 📸 Visual Timeline: http://localhost:3684/logs
 ```
@@ -128,21 +145,14 @@ Your terminal becomes a live feed of everything:
 ## 📸 Screenshot Magic
 
 Screenshots are automatically captured and inlined in logs for:
+
 - ✅ Initial page load
-- ✅ Route changes  
+- ✅ Route changes
 - ✅ JavaScript errors
 - ✅ Network failures (4xx, 5xx responses)
 
 Each screenshot shows exactly what the user was seeing when events occurred!
 
-## 🧠 Why this exists
-
-Ever tried to debug an issue with Claude but struggled to explain what was happening? Or spent forever trying to reproduce a bug that only happens in specific conditions? 
-
-Dev Playwright creates a complete visual + textual timeline of your development session that AI assistants can understand instantly. Claude can see your server logs, browser console, network requests, AND screenshots all in chronological order.
-
-It's like having a development photographer + stenographer + AI whisperer all in one tool! 📸🤖
-
 ---
 
-*Made with <3 by [elsigh](https://github.com/elsigh) & [Claude](https://claude.ai)*
+_Made with <3 by [elsigh](https://github.com/elsigh) & [Claude](https://claude.ai)_

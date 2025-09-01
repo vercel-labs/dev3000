@@ -135,7 +135,7 @@ export class DevEnvironment {
     
     console.log(chalk.green('\n✅ Development environment ready!'));
     console.log(chalk.blue(`📊 Logs: ${this.options.logFile}`));
-    console.log(chalk.blue(`🌐 App: http://localhost:${this.options.port}`));
+    console.log(chalk.blue(`🌐 Your App: http://localhost:${this.options.port}`));
     console.log(chalk.blue(`🤖 MCP Server: http://localhost:${this.options.mcpPort}/api/mcp/http`));
     console.log(chalk.magenta(`📸 Visual Timeline: http://localhost:${this.options.mcpPort}/logs`));
     // console.log(chalk.gray(`   To stop later: kill -TERM -$(cat ${this.pidFile})`));
@@ -283,7 +283,7 @@ export class DevEnvironment {
   }
 
   private async startBrowserMonitoring() {
-    console.log(chalk.blue('🌐 Starting browser monitoring...'));
+    console.log(chalk.blue('🌐 Starting playwright for browser monitoring...'));
     
     // Ensure profile directory exists
     if (!existsSync(this.options.profileDir)) {
