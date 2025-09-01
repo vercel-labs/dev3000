@@ -9,7 +9,11 @@
   },
   "files": [
     "dist/",
-    "mcp-server/",
+    "mcp-server/app/",
+    "mcp-server/package.json",
+    "mcp-server/tsconfig.json",
+    "mcp-server/next.config.ts",
+    "mcp-server/next-env.d.ts",
     "README.md"
   ],
   "scripts": {
