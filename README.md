@@ -82,6 +82,8 @@ Options:
   --log-file <file>         Log file path
 ```
 
+**To stop all processes:** `pkill -f "dev-playwright"`
+
 ## 🎨 Examples
 
 ```bash

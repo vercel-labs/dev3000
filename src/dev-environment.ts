@@ -1,8 +1,9 @@
 import { spawn, ChildProcess } from 'child_process';
 import { chromium, Browser, Page, BrowserContext } from 'playwright';
-import { writeFileSync, appendFileSync, mkdirSync, existsSync, copyFileSync } from 'fs';
+import { writeFileSync, appendFileSync, mkdirSync, existsSync, copyFileSync, unlinkSync } from 'fs';
 import { join, dirname, basename } from 'path';
 import { fileURLToPath } from 'url';
+import { tmpdir } from 'os';
 import chalk from 'chalk';
 
 interface DevEnvironmentOptions {
@@ -49,11 +50,13 @@ export class DevEnvironment {
   private options: DevEnvironmentOptions;
   private screenshotDir: string;
   private mcpPublicDir: string;
+  private pidFile: string;
 
   constructor(options: DevEnvironmentOptions) {
     this.options = options;
     this.logger = new Logger(options.logFile);
     this.screenshotDir = join(dirname(options.logFile), 'screenshots');
+    this.pidFile = join(tmpdir(), 'dev-playwright.pid');
     
     // Set up MCP server public directory for web-accessible screenshots
     const currentFile = fileURLToPath(import.meta.url);
@@ -111,6 +114,9 @@ export class DevEnvironment {
     // Check if ports are available first
     await this.checkPortsAvailable();
     
+    // Write our process group ID to PID file for cleanup
+    writeFileSync(this.pidFile, process.pid.toString());
+    
     // Setup cleanup handlers
     this.setupCleanupHandlers();
     
@@ -131,9 +137,11 @@ export class DevEnvironment {
     console.log(chalk.blue(`📊 Logs: ${this.options.logFile}`));
     console.log(chalk.blue(`🌐 App: http://localhost:${this.options.port}`));
     console.log(chalk.blue(`🤖 MCP Server: http://localhost:${this.options.mcpPort}/api/mcp/http`));
-    console.log(chalk.yellow('Press Ctrl+C to stop all processes'));
+    console.log(chalk.magenta(`📸 Visual Timeline: http://localhost:${this.options.mcpPort}/logs`));
+    // console.log(chalk.gray(`   To stop later: kill -TERM -$(cat ${this.pidFile})`));
+    console.log(chalk.yellow('\n🎯 Ready for AI debugging! All processes are running in the background.'));
     
-    // Keep alive
+    // Keep alive instead of exiting
     return new Promise<void>((resolve) => {
       // The process will be kept alive by the cleanup handlers
     });
@@ -145,9 +153,9 @@ export class DevEnvironment {
     const [command, ...args] = this.options.serverCommand.split(' ');
     
     this.serverProcess = spawn(command, args, {
-      stdio: ['inherit', 'pipe', 'pipe'],
+      stdio: ['ignore', 'pipe', 'pipe'],
       shell: true,
-      detached: true, // Create new process group
+      detached: false, // Keep in same process group for easier cleanup
     });
 
     // Log server output
@@ -189,8 +197,9 @@ export class DevEnvironment {
     
     // Start the MCP server
     this.mcpServerProcess = spawn('npm', ['run', 'dev'], {
-      stdio: ['inherit', 'pipe', 'pipe'],
+      stdio: ['ignore', 'pipe', 'pipe'],
       shell: true,
+      detached: false, // Keep in same process group for easier cleanup
       cwd: mcpServerPath,
       env: {
         ...process.env,
@@ -203,16 +212,16 @@ export class DevEnvironment {
     this.mcpServerProcess.stdout?.on('data', (data) => {
       const message = data.toString().trim();
       if (message) {
-        this.logger.log('server', `[MCP] ${message}`);
-        console.log(chalk.gray('[MCP]'), message);
+        this.logger.log('server', message);
+        console.log(chalk.gray('[LOG VIEWER]'), message);
       }
     });
 
     this.mcpServerProcess.stderr?.on('data', (data) => {
       const message = data.toString().trim();
       if (message) {
-        this.logger.log('server', `[MCP ERROR] ${message}`);
-        console.error(chalk.red('[MCP ERROR]'), message);
+        this.logger.log('server', `ERROR: ${message}`);
+        console.error(chalk.red('[LOG VIEWER ERROR]'), message);
       }
     });
 
@@ -468,13 +477,13 @@ export class DevEnvironment {
     
     // Network requests
     page.on('request', (request) => {
-      if (page.url().includes(`localhost:${this.options.port}`)) {
+      if (page.url().includes(`localhost:${this.options.port}`) && !request.url().includes(`localhost:${this.options.mcpPort}`)) {
         this.logger.log('browser', `[NETWORK REQUEST] ${request.method()} ${request.url()}`);
       }
     });
     
     page.on('response', async (response) => {
-      if (page.url().includes(`localhost:${this.options.port}`)) {
+      if (page.url().includes(`localhost:${this.options.port}`) && !response.url().includes(`localhost:${this.options.mcpPort}`)) {
         const status = response.status();
         const url = response.url();
         if (status >= 400) {
@@ -552,6 +561,15 @@ export class DevEnvironment {
             this.mcpServerProcess.kill('SIGKILL');
           }
         }, 5000);
+      }
+      
+      // Clean up PID file
+      try {
+        if (existsSync(this.pidFile)) {
+          unlinkSync(this.pidFile);
+        }
+      } catch (error) {
+        // Ignore cleanup errors
       }
       
       console.log(chalk.green('✅ Cleanup complete'));

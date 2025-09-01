@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 3, "column": 0}, "map": {"version":3,"sources":[],"names":[],"mappings":"","debugId":null}},
+    {"offset": {"line": 55, "column": 0}, "map": {"version":3,"sources":["file:///Users/elsigh/src/elsigh/dev-playwright/mcp-server/app/api/config/route.ts"],"sourcesContent":["import { NextResponse } from 'next/server';\n\nexport async function GET() {\n  return NextResponse.json({\n    logFilePath: process.env.LOG_FILE_PATH || '/tmp/dev-playwright-consolidated.log'\n  });\n}"],"names":[],"mappings":";;;;AAAA;;AAEO,eAAe;IACpB,OAAO,iKAAY,CAAC,IAAI,CAAC;QACvB,aAAa,QAAQ,GAAG,CAAC,aAAa,IAAI;IAC5C;AACF","debugId":null}}]
+}
