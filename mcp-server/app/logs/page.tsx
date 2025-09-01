@@ -94,7 +94,7 @@ export default function LogsPage() {
 
   const loadInitialLogs = async () => {
     try {
-      const response = await fetch(`/api/logs/${mode}?lines=100`);
+      const response = await fetch(`/api/logs/${mode}?lines=1000`);
       const data = await response.json();
       
       if (data.lines) {
