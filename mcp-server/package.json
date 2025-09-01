@@ -1,5 +1,5 @@
 {
-  "name": "aidev-mcp-server",
+  "name": "dev-playwright-mcp-server",
   "version": "1.0.0",
   "private": true,
   "scripts": {

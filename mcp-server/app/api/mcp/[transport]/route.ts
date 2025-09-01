@@ -3,10 +3,7 @@ import { z } from "zod";
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
 
-const handler = createMcpHandler(
-  "AI Dev Tools",
-  "0.0.1",
-  (server) => {
+const handler = createMcpHandler((server) => {
     // Tool to read consolidated logs
     server.tool(
       "read_consolidated_logs",
@@ -186,7 +183,6 @@ const handler = createMcpHandler(
         }
       }
     );
-  }
-);
+});
 
 export { handler as GET, handler as POST };

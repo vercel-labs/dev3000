@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 4, "column": 0}, "map": {"version":3,"sources":["file:///Users/elsigh/aidev/mcp-server/node_modules/%40swc/helpers/cjs/_interop_require_default.cjs"],"sourcesContent":["\"use strict\";\n\nfunction _interop_require_default(obj) {\n    return obj && obj.__esModule ? obj : { default: obj };\n}\nexports._ = _interop_require_default;\n"],"names":[],"mappings":"AAEA,SAAS,yBAAyB,GAAG;IACjC,OAAO,OAAO,IAAI,UAAU,GAAG,MAAM;QAAE,SAAS;IAAI;AACxD;AACA,QAAQ,CAAC,GAAG","ignoreList":[0],"debugId":null}},
+    {"offset": {"line": 14, "column": 0}, "map": {"version":3,"sources":["file:///Users/elsigh/aidev/mcp-server/node_modules/next/src/client/components/builtin/layout.tsx"],"sourcesContent":["import React from 'react'\n\nexport default function DefaultLayout({\n  children,\n}: {\n  children: React.ReactNode\n}) {\n  return (\n    <html>\n      <body>{children}</body>\n    </html>\n  )\n}\n"],"names":["DefaultLayout","children","html","body"],"mappings":";;;+BAEA,WAAA;;;eAAwBA;;;;;gEAFN;AAEH,SAASA,cAAc,KAIrC;IAJqC,IAAA,EACpCC,QAAQ,EAGT,GAJqC;IAKpC,OAAA,WAAA,GACE,CAAA,GAAA,YAAA,GAAA,EAACC,QAAAA;kBACC,WAAA,GAAA,CAAA,GAAA,YAAA,GAAA,EAACC,QAAAA;sBAAMF;;;AAGb","ignoreList":[0],"debugId":null}}]
+}

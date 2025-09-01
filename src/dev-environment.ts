@@ -1,7 +1,7 @@
 import { spawn, ChildProcess } from 'child_process';
 import { chromium, Browser, Page, BrowserContext } from 'playwright';
-import { writeFileSync, appendFileSync, mkdirSync, existsSync } from 'fs';
-import { join, dirname } from 'path';
+import { writeFileSync, appendFileSync, mkdirSync, existsSync, copyFileSync } from 'fs';
+import { join, dirname, basename } from 'path';
 import { fileURLToPath } from 'url';
 import chalk from 'chalk';
 
@@ -34,20 +34,82 @@ class Logger {
   }
 }
 
+function detectPackageManager(): string {
+  if (existsSync('pnpm-lock.yaml')) return 'pnpx';
+  if (existsSync('yarn.lock')) return 'yarn dlx';
+  if (existsSync('package-lock.json')) return 'npx';
+  return 'npx'; // fallback
+}
+
 export class DevEnvironment {
   private serverProcess: ChildProcess | null = null;
   private mcpServerProcess: ChildProcess | null = null;
   private browserContext: BrowserContext | null = null;
   private logger: Logger;
   private options: DevEnvironmentOptions;
+  private screenshotDir: string;
+  private mcpPublicDir: string;
 
   constructor(options: DevEnvironmentOptions) {
     this.options = options;
     this.logger = new Logger(options.logFile);
+    this.screenshotDir = join(dirname(options.logFile), 'screenshots');
+    
+    // Set up MCP server public directory for web-accessible screenshots
+    const currentFile = fileURLToPath(import.meta.url);
+    const packageRoot = dirname(dirname(currentFile));
+    this.mcpPublicDir = join(packageRoot, 'mcp-server', 'public', 'screenshots');
+    
+    // Ensure directories exist
+    if (!existsSync(this.screenshotDir)) {
+      mkdirSync(this.screenshotDir, { recursive: true });
+    }
+    if (!existsSync(this.mcpPublicDir)) {
+      mkdirSync(this.mcpPublicDir, { recursive: true });
+    }
+  }
+
+  private async checkPortsAvailable() {
+    const ports = [this.options.port, this.options.mcpPort];
+    
+    for (const port of ports) {
+      try {
+        console.log(chalk.blue(`🔍 Checking port ${port}...`));
+        const result = await new Promise<string>((resolve) => {
+          const proc = spawn('lsof', ['-t', '-c', '-i', `:${port}`], { stdio: 'pipe' });
+          let output = '';
+          proc.stdout?.on('data', (data) => output += data.toString());
+          proc.on('exit', () => resolve(output.trim()));
+        });
+        
+        if (result) {
+          const lines = result.split('\n').filter(line => line.trim());
+          const processes = lines.map(line => {
+            const parts = line.trim().split(/\s+/);
+            return { name: parts[0], pid: parts[1] };
+          }).filter(proc => proc.pid);
+          
+          const processNames = processes.map(p => p.name).join(', ');
+          const pids = processes.map(p => p.pid).join(' ');
+          
+          console.log(chalk.red(`❌ Port ${port} is already in use by: ${processNames}`));
+          console.log(chalk.yellow(`💡 To free up port ${port}, run: kill ${pids}`));
+          throw new Error(`Port ${port} is already in use. Please free the port and try again.`);
+        }
+      } catch (error) {
+        if (error instanceof Error && error.message.includes('Port')) {
+          throw error; // Re-throw our custom error
+        }
+        // Ignore other errors - port might just be free
+      }
+    }
   }
 
   async start() {
     console.log(chalk.blue('🚀 Starting development environment...'));
+    
+    // Check if ports are available first
+    await this.checkPortsAvailable();
     
     // Setup cleanup handlers
     this.setupCleanupHandlers();
@@ -85,6 +147,7 @@ export class DevEnvironment {
     this.serverProcess = spawn(command, args, {
       stdio: ['inherit', 'pipe', 'pipe'],
       shell: true,
+      detached: true, // Create new process group
     });
 
     // Log server output
@@ -118,6 +181,12 @@ export class DevEnvironment {
     const packageRoot = dirname(dirname(currentFile)); // Go up from dist/ to package root
     const mcpServerPath = join(packageRoot, 'mcp-server');
     
+    console.log(chalk.gray(`MCP server path: ${mcpServerPath}`));
+    
+    if (!existsSync(mcpServerPath)) {
+      throw new Error(`MCP server directory not found at ${mcpServerPath}`);
+    }
+    
     // Start the MCP server
     this.mcpServerProcess = spawn('npm', ['run', 'dev'], {
       stdio: ['inherit', 'pipe', 'pipe'],
@@ -126,6 +195,7 @@ export class DevEnvironment {
       env: {
         ...process.env,
         PORT: this.options.mcpPort,
+        LOG_FILE_PATH: this.options.logFile, // Pass log file path to MCP server
       },
     });
 
@@ -212,9 +282,10 @@ export class DevEnvironment {
     }
     
     try {
-      // Launch browser with persistent context
+      // Try to use system Chrome first
       this.browserContext = await chromium.launchPersistentContext(this.options.profileDir, {
         headless: false,
+        channel: 'chrome', // Use system Chrome
         args: [
           '--remote-debugging-port=9222',
           '--disable-web-security',
@@ -222,12 +293,8 @@ export class DevEnvironment {
         ],
       });
     } catch (error: any) {
-      // Check if it's a missing browser error
-      if (error.message?.includes('Executable doesn\'t exist')) {
-        console.log(chalk.yellow('📦 Playwright browsers not found. Installing automatically...'));
-        await this.installPlaywrightBrowsers();
-        
-        // Retry browser launch
+      // Fallback to Playwright's bundled chromium
+      try {
         this.browserContext = await chromium.launchPersistentContext(this.options.profileDir, {
           headless: false,
           args: [
@@ -236,14 +303,36 @@ export class DevEnvironment {
             '--disable-blink-features=AutomationControlled',
           ],
         });
-      } else {
-        throw error;
+      } catch (playwrightError: any) {
+        if (playwrightError.message?.includes('Executable doesn\'t exist')) {
+          const packageManager = detectPackageManager();
+          console.log(chalk.yellow('📦 Installing Playwright chromium browser...'));
+          await this.installPlaywrightBrowsers();
+          
+          // Retry with bundled chromium
+          this.browserContext = await chromium.launchPersistentContext(this.options.profileDir, {
+            headless: false,
+            args: [
+              '--remote-debugging-port=9222',
+              '--disable-web-security',
+              '--disable-blink-features=AutomationControlled',
+            ],
+          });
+        } else {
+          throw playwrightError;
+        }
       }
     }
     
     // Navigate to the app
     const page = await this.browserContext.newPage();
     await page.goto(`http://localhost:${this.options.port}`);
+    
+    // Take initial screenshot
+    const initialScreenshot = await this.takeScreenshot(page, 'initial-load');
+    if (initialScreenshot) {
+      this.logger.log('browser', `[SCREENSHOT] ${initialScreenshot}`);
+    }
     
     // Set up monitoring
     await this.setupPageMonitoring(page);
@@ -256,30 +345,30 @@ export class DevEnvironment {
     console.log(chalk.green('✅ Browser monitoring active!'));
   }
 
-  private async installPlaywrightBrowsers() {
-    console.log(chalk.blue('⏳ Installing Playwright browsers (this may take a few minutes)...'));
+  private async installPlaywrightBrowsers(): Promise<void> {
+    console.log(chalk.blue('⏳ Installing Playwright chromium browser (this may take 2-3 minutes)...'));
     
     return new Promise<void>((resolve, reject) => {
-      // Use node with playwright installation script directly
-      const installProcess = spawn('node', ['-e', `
-        const { execSync } = require('child_process');
-        try {
-          // Install playwright and then install browsers
-          console.log('Installing playwright...');
-          execSync('npm install playwright@^1.49.0', { stdio: 'inherit' });
-          console.log('Installing chromium browser...');
-          execSync('npx playwright install chromium', { stdio: 'inherit' });
-          console.log('Installation complete!');
-        } catch (error) {
-          console.error('Installation failed:', error.message);
-          process.exit(1);
-        }
-      `], {
+      const packageManager = detectPackageManager();
+      const [command, ...args] = packageManager.split(' ');
+      
+      console.log(chalk.gray(`Running: ${command} ${[...args, 'playwright', 'install', 'chromium'].join(' ')}`));
+      
+      const installProcess = spawn(command, [...args, 'playwright', 'install', 'chromium'], {
         stdio: ['inherit', 'pipe', 'pipe'],
-        shell: false,
+        shell: true,
       });
 
+      // Add timeout (5 minutes)
+      const timeout = setTimeout(() => {
+        installProcess.kill('SIGKILL');
+        reject(new Error('Playwright installation timed out after 5 minutes'));
+      }, 5 * 60 * 1000);
+
+      let hasOutput = false;
+
       installProcess.stdout?.on('data', (data) => {
+        hasOutput = true;
         const message = data.toString().trim();
         if (message) {
           console.log(chalk.gray('[PLAYWRIGHT]'), message);
@@ -287,6 +376,7 @@ export class DevEnvironment {
       });
 
       installProcess.stderr?.on('data', (data) => {
+        hasOutput = true;
         const message = data.toString().trim();
         if (message) {
           console.log(chalk.gray('[PLAYWRIGHT]'), message);
@@ -294,18 +384,51 @@ export class DevEnvironment {
       });
 
       installProcess.on('exit', (code) => {
+        clearTimeout(timeout);
         if (code === 0) {
-          console.log(chalk.green('✅ Playwright browsers installed successfully!'));
+          console.log(chalk.green('✅ Playwright chromium installed successfully!'));
           resolve();
         } else {
-          reject(new Error(`Playwright installation failed with code ${code}`));
+          reject(new Error(`Playwright installation failed with exit code ${code}`));
         }
       });
 
       installProcess.on('error', (error) => {
+        clearTimeout(timeout);
         reject(new Error(`Failed to start Playwright installation: ${error.message}`));
       });
+
+      // Check if process seems stuck
+      setTimeout(() => {
+        if (!hasOutput) {
+          console.log(chalk.yellow('⚠️  Installation seems stuck. This is normal for the first run - downloading ~100MB...'));
+        }
+      }, 10000); // Show message after 10 seconds of no output
     });
+  }
+
+  private async takeScreenshot(page: Page, event: string): Promise<string | null> {
+    try {
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const filename = `${timestamp}-${event}.png`;
+      const screenshotPath = join(this.screenshotDir, filename);
+      const mcpScreenshotPath = join(this.mcpPublicDir, filename);
+      
+      await page.screenshot({ 
+        path: screenshotPath,
+        fullPage: false, // Just viewport for speed
+        animations: 'disabled' // Disable animations during screenshot
+      });
+      
+      // Copy to MCP server public folder for web access
+      copyFileSync(screenshotPath, mcpScreenshotPath);
+      
+      // Return web-accessible URL
+      return `http://localhost:${this.options.mcpPort}/screenshots/${filename}`;
+    } catch (error) {
+      console.error(chalk.red('[SCREENSHOT ERROR]'), error);
+      return null;
+    }
   }
 
   private async setupPageMonitoring(page: Page) {
@@ -329,9 +452,13 @@ export class DevEnvironment {
     });
     
     // Page errors
-    page.on('pageerror', (error) => {
+    page.on('pageerror', async (error) => {
       if (page.url().includes(`localhost:${this.options.port}`)) {
+        const screenshotPath = await this.takeScreenshot(page, 'error');
         this.logger.log('browser', `[PAGE ERROR] ${error.message}`);
+        if (screenshotPath) {
+          this.logger.log('browser', `[SCREENSHOT] ${screenshotPath}`);
+        }
         if (error.stack) {
           this.logger.log('browser', `[PAGE ERROR STACK] ${error.stack}`);
         }
@@ -346,21 +473,37 @@ export class DevEnvironment {
       }
     });
     
-    page.on('response', (response) => {
+    page.on('response', async (response) => {
       if (page.url().includes(`localhost:${this.options.port}`)) {
         const status = response.status();
         const url = response.url();
         if (status >= 400) {
+          const screenshotPath = await this.takeScreenshot(page, 'network-error');
           this.logger.log('browser', `[NETWORK ERROR] ${status} ${url}`);
+          if (screenshotPath) {
+            this.logger.log('browser', `[SCREENSHOT] ${screenshotPath}`);
+          }
           console.error(chalk.red('[NETWORK ERROR]'), status, url);
         }
       }
     });
     
-    // Navigation
-    page.on('framenavigated', (frame) => {
+    // Navigation (only screenshot on route changes, not every navigation)
+    let lastRoute = '';
+    page.on('framenavigated', async (frame) => {
       if (frame === page.mainFrame() && frame.url().includes(`localhost:${this.options.port}`)) {
+        const currentRoute = new URL(frame.url()).pathname;
         this.logger.log('browser', `[NAVIGATION] ${frame.url()}`);
+        
+        // Only screenshot if route actually changed
+        if (currentRoute !== lastRoute) {
+          const screenshotPath = await this.takeScreenshot(page, 'route-change');
+          if (screenshotPath) {
+            this.logger.log('browser', `[SCREENSHOT] ${screenshotPath}`);
+          }
+          lastRoute = currentRoute;
+        }
+        
         console.log(chalk.magenta('[BROWSER]'), `Navigated to: ${frame.url()}`);
       }
     });
@@ -377,12 +520,24 @@ export class DevEnvironment {
       
       if (this.serverProcess) {
         console.log(chalk.blue('🔄 Stopping server...'));
-        this.serverProcess.kill('SIGTERM');
+        // Kill the entire process group to ensure child processes (like Next.js) are also killed
+        if (this.serverProcess.pid) {
+          try {
+            process.kill(-this.serverProcess.pid, 'SIGTERM'); // Negative PID kills process group
+          } catch (error) {
+            // Fallback to regular kill if process group kill fails
+            this.serverProcess.kill('SIGTERM');
+          }
+        }
         
         // Force kill after 5 seconds
         setTimeout(() => {
-          if (this.serverProcess && !this.serverProcess.killed) {
-            this.serverProcess.kill('SIGKILL');
+          if (this.serverProcess && !this.serverProcess.killed && this.serverProcess.pid) {
+            try {
+              process.kill(-this.serverProcess.pid, 'SIGKILL');
+            } catch (error) {
+              this.serverProcess.kill('SIGKILL');
+            }
           }
         }, 5000);
       }

@@ -1,11 +1,11 @@
 {
-  "name": "aidev",
+  "name": "dev-playwright",
   "version": "0.0.1",
   "description": "AI-powered development tools with browser monitoring and MCP server integration",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "aidev": "dist/cli.js"
+    "dev-playwright": "dist/cli.js"
   },
   "files": [
     "dist/",
@@ -44,7 +44,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/elsigh/aidev.git"
+    "url": "https://github.com/elsigh/dev-playwright.git"
   },
   "author": "Lindsey Simon <elsigh@gmail.com>",
   "license": "MIT"

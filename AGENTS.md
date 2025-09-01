@@ -31,11 +31,13 @@ This is a TypeScript npm package that provides AI-powered development tools for 
    - Manages .gitignore entries for `ai-dev-tools/` directory
 
 2. **Development Environment** (`src/dev-environment.ts`):
-   - Orchestrates Next.js dev server + browser monitoring via Playwright
-   - Uses persistent Chrome profile in `./ai-dev-tools/chrome-profile/`
-   - Captures unified logs from both server and browser to `./ai-dev-tools/consolidated.log`
+   - Orchestrates any dev server + browser monitoring via Playwright
+   - Works with any web framework (Next.js, Vite, etc.)
+   - Checks port availability before starting (defaults: 3000 for app, 3684 for MCP server)
+   - If ports are in use, displays process IDs and kill command instead of auto-killing
+   - Uses persistent Chrome profile and captures unified logs
    - Monitors console logs, network requests, page errors, navigation events
-   - Only monitors pages on localhost with matching port
+   - Takes automatic screenshots on errors and route changes
 
 **MCP Integration**: The generated route provides AI assistants with tools to analyze development logs in real-time. Tools can read recent logs, search with regex patterns, and extract browser errors from specified time periods.
 
