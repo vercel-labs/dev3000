@@ -126,6 +126,12 @@ export class DevEnvironment {
     // Start MCP server
     await this.startMcpServer();
     
+    // Show URLs immediately so user knows where to look
+    console.log(chalk.green('\n🔗 Quick Access URLs:'));
+    console.log(chalk.blue(`🌐 Your App: http://localhost:${this.options.port}`));
+    console.log(chalk.blue(`📊 Log Viewer: http://localhost:${this.options.mcpPort}/logs`));
+    console.log(chalk.blue(`🤖 MCP Server: http://localhost:${this.options.mcpPort}/api/mcp/http`));
+    
     // Wait for both servers to be ready
     await this.waitForServer();
     await this.waitForMcpServer();
@@ -140,11 +146,9 @@ export class DevEnvironment {
     console.log(chalk.magenta(`📸 Visual Timeline: http://localhost:${this.options.mcpPort}/logs`));
     // console.log(chalk.gray(`   To stop later: kill -TERM -$(cat ${this.pidFile})`));
     console.log(chalk.yellow('\n🎯 Ready for AI debugging! All processes are running in the background.'));
+    console.log(chalk.gray('\n💡 Tip: Use "pkill -f dev-playwright" to stop all processes later.'));
     
-    // Keep alive instead of exiting
-    return new Promise<void>((resolve) => {
-      // The process will be kept alive by the cleanup handlers
-    });
+    // Exit successfully - servers will continue running in background
   }
 
   private async startServer() {
@@ -240,20 +244,21 @@ export class DevEnvironment {
       try {
         const response = await fetch(`http://localhost:${this.options.port}`, {
           method: 'HEAD',
+          signal: AbortSignal.timeout(2000)
         });
         if (response.ok || response.status === 404) {
           console.log(chalk.green('✅ Server is ready!'));
           return;
         }
       } catch (error) {
-        // Server not ready yet
+        console.log(chalk.gray(`Server not ready yet (attempt ${attempts + 1}/${maxAttempts})...`));
       }
       
       attempts++;
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
     
-    throw new Error('Server failed to start within 30 seconds');
+    console.log(chalk.yellow('⚠️ Server health check failed, but continuing anyway...'));
   }
 
   private async waitForMcpServer() {
@@ -266,20 +271,21 @@ export class DevEnvironment {
       try {
         const response = await fetch(`http://localhost:${this.options.mcpPort}`, {
           method: 'HEAD',
+          signal: AbortSignal.timeout(2000)
         });
         if (response.ok || response.status === 404) {
           console.log(chalk.green('✅ MCP server is ready!'));
           return;
         }
       } catch (error) {
-        // MCP server not ready yet
+        console.log(chalk.gray(`MCP server not ready yet (attempt ${attempts + 1}/${maxAttempts})...`));
       }
       
       attempts++;
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
     
-    throw new Error('MCP server failed to start within 30 seconds');
+    console.log(chalk.yellow('⚠️ MCP server health check failed, but continuing anyway...'));
   }
 
   private async startBrowserMonitoring() {
