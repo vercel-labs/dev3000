@@ -201,9 +201,9 @@ export class DevEnvironment {
     }
     
     // Read version from package.json
-    const currentFile = fileURLToPath(import.meta.url);
-    const packageRoot = dirname(dirname(currentFile));
-    const packageJsonPath = join(packageRoot, 'package.json');
+    const versionCurrentFile = fileURLToPath(import.meta.url);
+    const versionPackageRoot = dirname(dirname(versionCurrentFile));
+    const packageJsonPath = join(versionPackageRoot, 'package.json');
     let version = '0.0.0';
     try {
       const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
