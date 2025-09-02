@@ -322,7 +322,8 @@ export class DevEnvironment {
       this.browserContext = await chromium.launchPersistentContext(this.options.profileDir, {
         headless: false,
         channel: 'chrome', // Use system Chrome
-        viewport: null, // Allow natural viewport resizing
+        viewport: { width: 1280, height: 720 },
+        deviceScaleFactor: 2,
         // Remove automation flags to allow normal dialog behavior
         args: [
           '--disable-web-security', // Keep this for dev server access
@@ -335,7 +336,8 @@ export class DevEnvironment {
       try {
         this.browserContext = await chromium.launchPersistentContext(this.options.profileDir, {
           headless: false,
-          viewport: null, // Allow natural viewport resizing
+          viewport: { width: 1280, height: 720 },
+        deviceScaleFactor: 2,
           deviceScaleFactor: 2,
           // Remove automation flags to allow normal dialog behavior
           args: [
@@ -353,7 +355,8 @@ export class DevEnvironment {
           // Retry with bundled chromium
           this.browserContext = await chromium.launchPersistentContext(this.options.profileDir, {
             headless: false,
-            viewport: null, // Allow natural viewport resizing
+            viewport: { width: 1280, height: 720 },
+        deviceScaleFactor: 2,
             deviceScaleFactor: 2,
             // Remove automation flags to allow normal dialog behavior
             args: [
@@ -382,6 +385,9 @@ export class DevEnvironment {
     });
     
     await page.goto(`http://localhost:${this.options.port}`);
+    
+    // Allow viewport to resize after initial load to prevent white flashing
+    await page.setViewportSize({ width: 0, height: 0 }); // This allows natural resizing
     
     // Take initial screenshot
     const initialScreenshot = await this.takeScreenshot(page, 'initial-load');
