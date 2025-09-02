@@ -382,9 +382,6 @@ export class DevEnvironment {
       // This prevents Playwright from auto-handling the dialog
     });
     
-    // Set initial viewport size to prevent white flashing
-    await page.setViewportSize({ width: 1280, height: 720 });
-    
     await page.goto(`http://localhost:${this.options.port}`);
     
     // Take initial screenshot
