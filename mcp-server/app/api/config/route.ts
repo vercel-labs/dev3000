@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server';
+import { ConfigApiResponse } from '../../types';
 
-export async function GET() {
-  return NextResponse.json({
-    logFilePath: process.env.LOG_FILE_PATH || '/tmp/dev-playwright-consolidated.log'
-  });
+export async function GET(): Promise<NextResponse> {
+  const response: ConfigApiResponse = {
+    version: process.env.DEV_PLAYWRIGHT_VERSION || '0.0.0'
+  };
+  
+  return NextResponse.json(response);
 }

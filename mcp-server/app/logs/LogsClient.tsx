@@ -1,14 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useMemo } from 'react';
-
-interface LogEntry {
-  timestamp: string;
-  source: string;
-  message: string;
-  screenshot?: string;
-  original: string;
-}
+import { LogEntry, LogsApiResponse, ConfigApiResponse } from '../../types';
 
 function parseLogLine(line: string): LogEntry | null {
   const match = line.match(/\[([^\]]+)\] \[([^\]]+)\] (.+)/);
@@ -75,7 +68,7 @@ export default function LogsClient({ version }: LogsClientProps) {
     
     try {
       const response = await fetch('/api/logs/tail?lines=1000');
-      const data = await response.json();
+      const data: LogsApiResponse = await response.json();
       
       const entries = data.logs
         .split('\n')
@@ -119,7 +112,7 @@ export default function LogsClient({ version }: LogsClientProps) {
   const loadInitialLogs = async () => {
     try {
       const response = await fetch(`/api/logs/${mode}?lines=1000`);
-      const data = await response.json();
+      const data: LogsApiResponse = await response.json();
       
       const entries = data.logs
         .split('\n')
