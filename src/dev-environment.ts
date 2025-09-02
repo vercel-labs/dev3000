@@ -158,18 +158,13 @@ export class DevEnvironment {
     // Stop progress bar and show results
     this.progressBar.stop();
     
-    console.log(chalk.green('\n🔗 Quick Access URLs:'));
-    console.log(chalk.blue(`🌐 Your App: http://localhost:${this.options.port}`));
-    console.log(chalk.blue(`📊 Log Viewer: http://localhost:${this.options.mcpPort}/logs`));
-    console.log(chalk.blue(`🤖 MCP Server: http://localhost:${this.options.mcpPort}/api/mcp/http`));
-    
     console.log(chalk.green('\n✅ Development environment ready!'));
     console.log(chalk.blue(`📊 Logs: ${this.options.logFile}`));
+    console.log(chalk.yellow('💡 Give this to an AI to auto debug and fix your app\n'));
     console.log(chalk.blue(`🌐 Your App: http://localhost:${this.options.port}`));
     console.log(chalk.blue(`🤖 MCP Server: http://localhost:${this.options.mcpPort}/api/mcp/http`));
     console.log(chalk.magenta(`📸 Visual Timeline: http://localhost:${this.options.mcpPort}/logs`));
-    console.log(chalk.yellow('\n🎯 Ready for AI debugging! All processes are running in the background.'));
-    console.log(chalk.gray(`\n💡 To stop servers later: lsof -ti:${this.options.port} | xargs kill -9 && lsof -ti:${this.options.mcpPort} | xargs kill -9`));
+    console.log(chalk.gray('\n💡 To stop all servers and kill playwright: Ctrl-C'));
   }
 
   private async startServer() {
