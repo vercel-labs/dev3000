@@ -365,13 +365,21 @@ export class DevEnvironment {
     }
     
     // Create context with viewport: null to enable window resizing + persistent storage
-    this.browserContext = await this.browser.newContext({
-      viewport: null, // This makes the page size depend on the window size
-      deviceScaleFactor: 2, // Prevent white flashing
-      storageState: existsSync(join(this.options.profileDir, 'state.json')) 
-        ? join(this.options.profileDir, 'state.json') 
-        : undefined, // Load persistent state if it exists
-    });
+    try {
+      const stateFile = join(this.options.profileDir, 'state.json');
+      this.browserContext = await this.browser.newContext({
+        viewport: null, // This makes the page size depend on the window size
+        deviceScaleFactor: 2, // Prevent white flashing
+        storageState: existsSync(stateFile) ? stateFile : undefined, // Load persistent state if it exists
+      });
+    } catch (error) {
+      console.error(chalk.red('[BROWSER CONTEXT ERROR]'), error);
+      // Fallback: create context without storage state
+      this.browserContext = await this.browser.newContext({
+        viewport: null,
+        deviceScaleFactor: 2,
+      });
+    }
     
     // Navigate to the app using the existing blank page
     const pages = this.browserContext.pages();
