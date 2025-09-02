@@ -1,138 +1,59 @@
-# 🎭 dev-playwright
+# dev-playwright
 
-Feed your AI assistant a delicious stream of development data! dev-playwright captures everything happening in your web app - server logs, browser events, console messages, network requests, and automatic screenshots - all in one unified, timestamped feed that Claude (and other AI assistants) can easily digest.
+Captures your web app's complete development timeline - server logs, browser events, console messages, network requests, and automatic screenshots - in a unified, timestamped feed for AI debugging.
 
-## 🚀 Quick Start
+## Quick Start
 
 ```bash
-# Install in your project
 pnpm install dev-playwright
-
-# Start monitoring (default: runs "pnpm run dev" on port 3000)
 pnpx dev-playwright
 ```
 
-## 🧠 Why this exists
+## What it does
 
-Ever tried to debug an issue with Claude but struggled to explain what was happening? Or spent forever trying to reproduce a bug that only happens in specific conditions?
+Creates a comprehensive log of your development session that AI assistants can easily understand. When you have a bug or issue, Claude can see your server output, browser console, network requests, and screenshots all in chronological order.
 
-dev-playwright creates a complete visual + textual timeline of your development session that AI assistants can understand instantly. Claude can see your server logs, browser console, network requests, AND screenshots all in chronological order.
+The tool monitors your app in a real browser and captures:
+- Server logs and console output
+- Browser console messages and errors  
+- Network requests and responses
+- Automatic screenshots on navigation, errors, and key events
+- Visual timeline at `http://localhost:3684/logs`
 
-It's like having a development photographer + stenographer + AI whisperer all in one tool! 📸🤖
+## AI Integration
 
-## ✨ What makes this special?
-
-🎬 **Visual Timeline** - Screenshots automatically captured on navigation, errors, and key events  
-📊 **Unified Logs** - Server output + browser console + network requests in chronological order  
-🔍 **Smart Monitoring** - Watches your app in a real browser, catching what dev tools miss  
-🌐 **Beautiful Web UI** - View logs with inlined screenshots at `http://localhost:3684/logs`  
-🤖 **AI-Ready** - MCP server lets Claude read logs and analyze issues instantly  
-⚡ **Zero Config** - One command, works with any web framework
-
-That's it! dev-playwright will:
-
-1. 🔍 Check if your ports (3000, 3684) are available
-2. 🚀 Start your dev server (any npm script you want)
-3. 🌐 Launch a monitored browser pointing to your app
-4. 📸 Take screenshots on navigation, errors, and key events
-5. 📊 Create a beautiful log viewer with visual timeline
-6. 🤖 Serve MCP tools for AI assistants
-
-**Note:** If ports are already in use, dev-playwright will show you which processes are using them and provide the exact command to free them up.
-
-## 🎯 Perfect for...
-
-- **Debugging with Claude** - Show Claude exactly what happened with visual context
-- **Issue reproduction** - Visual timeline of user interactions leading to bugs
-- **Performance monitoring** - See network requests alongside visual changes
-- **Team debugging** - Share visual debugging timelines with screenshots
-- **Development documentation** - Automatic visual history of your app's behavior
-
-## 🖼️ Visual Log Viewer
-
-Visit `http://localhost:3684/logs` to see your development timeline with:
-
-- **📸 Inlined screenshots** showing exactly what users saw
-- **⚡ Virtual scrolling** for massive log files
-- **🔴 Live tail mode** with real-time updates
-- **🔍 Head/tail commands** like Unix utilities
-- **🎨 Syntax highlighting** for different log types
-
-## 🤖 AI Assistant Integration
-
-Claude can read your logs directly or use the MCP server for advanced querying:
-
-**Direct log access:**
+Give Claude your log file for instant debugging:
 
 ```
 Read /tmp/dev-playwright-consolidated.log
 ```
 
-**MCP tools** (at `http://localhost:3684/api/mcp/http`):
-
+Or use the MCP server at `http://localhost:3684/api/mcp/http` for advanced querying:
 - `read_consolidated_logs` - Get recent logs with filtering
-- `search_logs` - Regex search with context
+- `search_logs` - Regex search with context  
 - `get_browser_errors` - Extract browser errors by time period
 
-## ⚙️ Options
+## Options
 
 ```bash
 pnpx dev-playwright [options]
 
-Options:
   -p, --port <port>         Your app's port (default: 3000)
-  --mcp-port <port>         MCP server port (default: 3684)
+  --mcp-port <port>         MCP server port (default: 3684)  
   -s, --script <script>     Package.json script to run (default: dev)
   --profile-dir <dir>       Chrome profile directory (persists cookies/login state)
   --log-file <file>         Log file path
 ```
 
-**Examples:**
+Examples:
 ```bash
-# Production build testing
-pnpx dev-playwright --script build-start
+# Custom port for Vite  
+pnpx dev-playwright --port 5173
 
-# Custom port for Vite
-pnpx dev-playwright --script dev --port 5173
-
-# Persistent login state (saves cookies/sessions)
+# Persistent login state
 pnpx dev-playwright --profile-dir ./chrome-profile
 ```
 
-## 🎪 What you'll see
-
-Your terminal becomes a live feed of everything:
-
-```
-🔍 Checking port 3000...
-🔍 Checking port 3684...
-🚀 Starting development environment...
-🔧 Starting server: pnpm run dev
-🤖 Starting MCP server on port 3684...
-⏳ Waiting for server to be ready...
-✅ Server is ready!
-✅ MCP server is ready!
-🌐 Starting playwright for browser monitoring...
-✅ Browser monitoring active!
-
-✅ Development environment ready!
-📊 Logs: /tmp/dev-playwright-consolidated.log
-🌐 Your App: http://localhost:3000
-🤖 MCP Server: http://localhost:3684/api/mcp/http
-📸 Visual Timeline: http://localhost:3684/logs
-```
-
-## 📸 Screenshot Magic
-
-Screenshots are automatically captured and inlined in logs for:
-
-- ✅ Initial page load
-- ✅ Route changes
-- ✅ JavaScript errors
-- ✅ Network failures (4xx, 5xx responses)
-
-Each screenshot shows exactly what the user was seeing when events occurred!
-
 ---
 
-_Made with <3 by [elsigh](https://github.com/elsigh) & [Claude](https://claude.ai)_
+_Made by [elsigh](https://github.com/elsigh)_
