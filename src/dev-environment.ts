@@ -156,6 +156,7 @@ export class DevEnvironment {
     
     console.log(chalk.green('\n✅ Development environment ready!'));
     console.log(chalk.blue(`📊 Logs: ${this.options.logFile}`));
+    console.log(chalk.gray(`🔧 MCP Server Logs: ${join(dirname(this.options.logFile), 'dev-playwright-mcp.log')}`));
     console.log(chalk.yellow('☝️ Give this to an AI to auto debug and fix your app\n'));
     console.log(chalk.blue(`🌐 Your App: http://localhost:${this.options.port}`));
     console.log(chalk.blue(`🤖 MCP Server: http://localhost:${this.options.mcpPort}/api/mcp/http`));
@@ -233,12 +234,27 @@ export class DevEnvironment {
       },
     });
 
-    // Don't log MCP server output to the main log file at all
-    // Only show critical errors in stdout for debugging
+    // Log MCP server output to separate file for debugging
+    const mcpLogFile = join(dirname(this.options.logFile), 'dev-playwright-mcp.log');
+    writeFileSync(mcpLogFile, ''); // Clear the file
+    
+    this.mcpServerProcess.stdout?.on('data', (data) => {
+      const message = data.toString().trim();
+      if (message) {
+        const timestamp = new Date().toISOString();
+        appendFileSync(mcpLogFile, `[${timestamp}] [MCP-STDOUT] ${message}\n`);
+      }
+    });
+    
     this.mcpServerProcess.stderr?.on('data', (data) => {
       const message = data.toString().trim();
-      if (message && (message.includes('FATAL') || message.includes('Error:'))) {
-        console.error(chalk.red('[LOG VIEWER ERROR]'), message);
+      if (message) {
+        const timestamp = new Date().toISOString();
+        appendFileSync(mcpLogFile, `[${timestamp}] [MCP-STDERR] ${message}\n`);
+        // Only show critical errors in stdout for debugging
+        if (message.includes('FATAL') || message.includes('Error:')) {
+          console.error(chalk.red('[LOG VIEWER ERROR]'), message);
+        }
       }
     });
 
