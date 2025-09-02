@@ -328,6 +328,8 @@ export class DevEnvironment {
           '--disable-web-security', // Keep this for dev server access
           '--hide-crash-restore-bubble', // Don't ask to restore pages
           '--disable-infobars', // Remove info bars
+          '--disable-blink-features=AutomationControlled', // Hide automation detection
+          '--disable-features=VizDisplayCompositor', // Reduce automation fingerprinting
         ],
       });
     } catch (error: any) {
@@ -340,6 +342,8 @@ export class DevEnvironment {
             '--disable-web-security', // Keep this for dev server access
             '--hide-crash-restore-bubble', // Don't ask to restore pages
             '--disable-infobars', // Remove info bars
+            '--disable-blink-features=AutomationControlled', // Hide automation detection
+            '--disable-features=VizDisplayCompositor', // Reduce automation fingerprinting
           ],
         });
       } catch (playwrightError: any) {
