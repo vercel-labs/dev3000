@@ -96,7 +96,7 @@ Options:
   -p, --port <port>         Your app's port (default: 3000)
   --mcp-port <port>         MCP server port (default: 3684)
   -s, --script <script>     Package.json script to run (default: dev)
-  --profile-dir <dir>       Chrome profile directory
+  --profile-dir <dir>       Chrome profile directory (persists cookies/login state)
   --log-file <file>         Log file path
 ```
 
@@ -117,6 +117,9 @@ pnpx dev-playwright --script dev --port 5173
 
 # Custom build setup
 pnpx dev-playwright --script "build && serve" --port 8080
+
+# Persistent login state (saves cookies/sessions)
+pnpx dev-playwright --profile-dir ./chrome-profile
 ```
 
 ## 🎪 What you'll see

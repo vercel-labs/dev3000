@@ -214,7 +214,7 @@ export default function LogsPage() {
 
       <div 
         ref={containerRef}
-        className="max-w-7xl mx-auto"
+        className="w-full px-4"
         style={{ height: 'calc(100vh - 80px)', overflow: 'auto' }}
         onScroll={handleScroll}
       >

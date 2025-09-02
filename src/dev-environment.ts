@@ -148,7 +148,11 @@ export class DevEnvironment {
     console.log(chalk.yellow('\n🎯 Ready for AI debugging! All processes are running in the background.'));
     console.log(chalk.gray('\n💡 Tip: Use "pkill -f dev-playwright" to stop all processes later.'));
     
-    // Exit successfully - servers will continue running in background
+    // Detach browser from cleanup so it can run independently
+    this.browserContext = null;
+    
+    // Force exit to return control to Claude while servers run in background
+    setTimeout(() => process.exit(0), 1000);
   }
 
   private async startServer() {
@@ -528,10 +532,11 @@ export class DevEnvironment {
     const cleanup = async () => {
       console.log(chalk.yellow('\n🧹 Shutting down development environment...'));
       
-      if (this.browserContext) {
-        console.log(chalk.blue('🔄 Closing browser...'));
-        await this.browserContext.close();
-      }
+      // Don't close browser - let it run independently
+      // if (this.browserContext) {
+      //   console.log(chalk.blue('🔄 Closing browser...'));
+      //   await this.browserContext.close();
+      // }
       
       if (this.serverProcess) {
         console.log(chalk.blue('🔄 Stopping server...'));
