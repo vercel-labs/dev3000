@@ -321,6 +321,7 @@ export class DevEnvironment {
           '--remote-debugging-port=9222',
           '--disable-web-security',
           '--disable-blink-features=AutomationControlled',
+          '--device-scale-factor=1.5',
         ],
       });
     } catch (error: any) {
@@ -332,6 +333,7 @@ export class DevEnvironment {
             '--remote-debugging-port=9222',
             '--disable-web-security',
             '--disable-blink-features=AutomationControlled',
+            '--device-scale-factor=1.5',
           ],
         });
       } catch (playwrightError: any) {
@@ -347,6 +349,7 @@ export class DevEnvironment {
               '--remote-debugging-port=9222',
               '--disable-web-security',
               '--disable-blink-features=AutomationControlled',
+              '--device-scale-factor=1.5',
             ],
           });
         } else {
