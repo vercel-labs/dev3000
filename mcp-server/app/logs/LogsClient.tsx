@@ -198,7 +198,11 @@ export default function LogsClient({ version }: LogsClientProps) {
               {/* Mode Toggle */}
               <div className="flex items-center bg-gray-100 rounded-md p-1">
                 <button
-                  onClick={() => setMode('head')}
+                  onClick={() => {
+                    setMode('head');
+                    // Scroll to top when switching to head mode
+                    containerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
                   className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
                     mode === 'head' 
                       ? 'bg-white text-gray-900 shadow-sm' 
@@ -235,7 +239,7 @@ export default function LogsClient({ version }: LogsClientProps) {
 
       <div 
         ref={containerRef}
-        className="max-w-7xl mx-auto px-4 py-6 pb-10 max-h-screen overflow-y-auto"
+        className="max-w-7xl mx-auto px-4 py-6 pb-14 max-h-screen overflow-y-auto"
         onScroll={handleScroll}
       >
         {filteredLogs.length === 0 ? (
@@ -256,8 +260,8 @@ export default function LogsClient({ version }: LogsClientProps) {
       </div>
       
       {/* Footer with status and scroll indicator - full width like header */}
-      <div className="h-4 border-t border-gray-200 bg-gray-50 fixed bottom-0 left-0 right-0">
-        <div className="max-w-7xl mx-auto px-4 h-full flex items-center justify-between">
+      <div className="py-2 border-t border-gray-200 bg-gray-50 fixed bottom-0 left-0 right-0">
+        <div className="max-w-7xl mx-auto px-4 flex items-center justify-between">
           <div className="flex items-center">
             {isLoadingNew && (
               <div className="flex items-center gap-1">

@@ -360,6 +360,12 @@ export class DevEnvironment {
     // Disable automatic dialog handling - let dialogs behave naturally
     page.removeAllListeners('dialog');
     
+    // Add a no-op dialog handler to prevent auto-dismissal
+    page.on('dialog', async (dialog) => {
+      // Don't accept or dismiss - let user handle it manually
+      // This prevents Playwright from auto-handling the dialog
+    });
+    
     await page.goto(`http://localhost:${this.options.port}`);
     
     // Take initial screenshot
@@ -375,6 +381,12 @@ export class DevEnvironment {
     this.browserContext.on('page', async (newPage) => {
       // Disable automatic dialog handling for new pages too
       newPage.removeAllListeners('dialog');
+      
+      // Add a no-op dialog handler to prevent auto-dismissal
+      newPage.on('dialog', async (dialog) => {
+        // Don't accept or dismiss - let user handle it manually
+      });
+      
       await this.setupPageMonitoring(newPage);
     });
   }
