@@ -1,5 +1,18 @@
 'use client';
 
+function VersionDisplay() {
+  const [version, setVersion] = useState('0.0.0');
+  
+  useEffect(() => {
+    fetch('/api/config')
+      .then(res => res.json())
+      .then(data => setVersion(data.version))
+      .catch(() => setVersion('0.0.0'));
+  }, []);
+  
+  return <span className="text-xs text-gray-400 ml-2">(v{version})</span>;
+}
+
 import { useState, useEffect, useRef, useMemo } from 'react';
 
 interface LogEntry {
@@ -154,7 +167,7 @@ export default function LogsPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <h1 className="text-2xl font-bold text-gray-900">🎭 dev-playwright</h1>
-              <span className="text-xs text-gray-400 ml-2">(v{process.env.DEV_PLAYWRIGHT_VERSION || '0.0.0'})</span>
+              <VersionDisplay />
               <span className="text-sm text-gray-500">{logs.length} entries</span>
             </div>
             
