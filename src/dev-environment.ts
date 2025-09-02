@@ -356,6 +356,10 @@ export class DevEnvironment {
     // Navigate to the app using the existing blank page
     const pages = this.browserContext.pages();
     const page = pages.length > 0 ? pages[0] : await this.browserContext.newPage();
+    
+    // Disable automatic dialog handling - let dialogs behave naturally
+    page.removeAllListeners('dialog');
+    
     await page.goto(`http://localhost:${this.options.port}`);
     
     // Take initial screenshot
@@ -369,6 +373,8 @@ export class DevEnvironment {
     
     // Monitor new pages
     this.browserContext.on('page', async (newPage) => {
+      // Disable automatic dialog handling for new pages too
+      newPage.removeAllListeners('dialog');
       await this.setupPageMonitoring(newPage);
     });
   }
