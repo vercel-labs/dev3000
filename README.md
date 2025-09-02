@@ -25,15 +25,8 @@ It's like having a development photographer + stenographer + AI whisperer all in
 # Install in your project
 pnpm install dev-playwright
 
-
-# Start in a terminal (default: runs "pnpm run dev",  port 3000)
-# Logs will be written to a file path for you to give to claude or tail -f yourself
+# Start monitoring (default: runs "pnpm run dev" on port 3000)
 pnpx dev-playwright
-
-
-# Or specify a different build script and port
-pnpx dev-playwright --script build-start --port 3001
-
 ```
 
 That's it! dev-playwright will:
@@ -81,7 +74,7 @@ Read /tmp/dev-playwright-consolidated.log
 - `search_logs` - Regex search with context
 - `get_browser_errors` - Extract browser errors by time period
 
-## 🛠️ Command Options
+## ⚙️ Options
 
 ```bash
 pnpx dev-playwright [options]
@@ -94,23 +87,13 @@ Options:
   --log-file <file>         Log file path
 ```
 
-## 🎨 Examples
-
+**Examples:**
 ```bash
-# Default Next.js development
-pnpx dev-playwright
-
 # Production build testing
 pnpx dev-playwright --script build-start
 
-# Custom port
-pnpx dev-playwright --script dev --port 3001
-
-# Vite app
+# Custom port for Vite
 pnpx dev-playwright --script dev --port 5173
-
-# Custom build setup
-pnpx dev-playwright --script "build && serve" --port 8080
 
 # Persistent login state (saves cookies/sessions)
 pnpx dev-playwright --profile-dir ./chrome-profile

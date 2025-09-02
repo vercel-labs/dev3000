@@ -97,24 +97,17 @@ export class DevEnvironment {
       try {
         console.log(chalk.blue(`🔍 Checking port ${port}...`));
         const result = await new Promise<string>((resolve) => {
-          const proc = spawn('lsof', ['-t', '-c', '-i', `:${port}`], { stdio: 'pipe' });
+          const proc = spawn('lsof', ['-ti', `:${port}`], { stdio: 'pipe' });
           let output = '';
           proc.stdout?.on('data', (data) => output += data.toString());
           proc.on('exit', () => resolve(output.trim()));
         });
         
         if (result) {
-          const lines = result.split('\n').filter(line => line.trim());
-          const processes = lines.map(line => {
-            const parts = line.trim().split(/\s+/);
-            return { name: parts[0], pid: parts[1] };
-          }).filter(proc => proc.pid);
+          const pids = result.split('\n').filter(line => line.trim());
           
-          const processNames = processes.map(p => p.name).join(', ');
-          const pids = processes.map(p => p.pid).join(' ');
-          
-          console.log(chalk.red(`❌ Port ${port} is already in use by: ${processNames}`));
-          console.log(chalk.yellow(`💡 To free up port ${port}, run: kill ${pids}`));
+          console.log(chalk.red(`❌ Port ${port} is already in use`));
+          console.log(chalk.yellow(`💡 To free up port ${port}, run: lsof -ti:${port} | xargs kill -9`));
           throw new Error(`Port ${port} is already in use. Please free the port and try again.`);
         }
       } catch (error) {
