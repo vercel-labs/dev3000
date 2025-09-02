@@ -382,14 +382,10 @@ export class DevEnvironment {
       // This prevents Playwright from auto-handling the dialog
     });
     
-    await page.goto(`http://localhost:${this.options.port}`);
+    // Set initial viewport size to prevent white flashing
+    await page.setViewportSize({ width: 1280, height: 720 });
     
-    // Get current browser window size and set viewport to match, enabling resizing
-    const browserSize = await page.evaluate(() => ({
-      width: window.outerWidth,
-      height: window.outerHeight
-    }));
-    await page.setViewportSize({ width: browserSize.width, height: browserSize.height });
+    await page.goto(`http://localhost:${this.options.port}`);
     
     // Take initial screenshot
     const initialScreenshot = await this.takeScreenshot(page, 'initial-load');
