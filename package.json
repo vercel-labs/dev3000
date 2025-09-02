@@ -1,11 +1,11 @@
 {
-  "name": "dev-playwright",
-  "version": "0.0.54",
+  "name": "dev3000",
+  "version": "0.0.1",
   "description": "AI-powered development tools with browser monitoring and MCP server integration",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "dev-playwright": "dist/cli.js"
+    "dev3000": "dist/cli.js"
   },
   "files": [
     "dist/",
@@ -52,8 +52,8 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/elsigh/dev-playwright.git"
+    "url": "https://github.com/vercel-labs/dev3000.git"
   },
-  "author": "Lindsey Simon <elsigh@gmail.com>",
+  "author": "Lindsey Simon <lindsey@vercel.com>",
   "license": "MIT"
 }

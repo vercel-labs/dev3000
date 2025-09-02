@@ -17,7 +17,7 @@ function detectPackageManager(): string {
 const program = new Command();
 
 program
-  .name('dev-playwright')
+  .name('dev3000')
   .description('AI-powered development tools with browser monitoring and MCP server')
   .version('0.0.1');
 
@@ -26,8 +26,8 @@ program
   .option('-p, --port <port>', 'Development server port', '3000')
   .option('--mcp-port <port>', 'MCP server port', '3684')
   .option('-s, --script <script>', 'Package.json script to run (e.g. dev, build-start)', 'dev')
-  .option('--profile-dir <dir>', 'Chrome profile directory', join(tmpdir(), 'dev-playwright-chrome-profile'))
-  .option('--logfile <file>', 'Consolidated log file path', '/tmp/dev-playwright.log')
+  .option('--profile-dir <dir>', 'Chrome profile directory', join(tmpdir(), 'dev3000-chrome-profile'))
+  .option('--logfile <file>', 'Consolidated log file path', '/tmp/dev3000.log')
   .action(async (options) => {
     console.log(chalk.blue.bold('🤖 Starting AI Development Environment'));
     

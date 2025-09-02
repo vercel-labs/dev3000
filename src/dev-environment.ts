@@ -68,7 +68,7 @@ export class DevEnvironment {
     this.options = options;
     this.logger = new Logger(options.logFile);
     this.screenshotDir = join(dirname(options.logFile), 'screenshots');
-    this.pidFile = join(tmpdir(), 'dev-playwright.pid');
+    this.pidFile = join(tmpdir(), 'dev3000.pid');
     
     // Set up MCP server public directory for web-accessible screenshots
     const currentFile = fileURLToPath(import.meta.url);
@@ -77,7 +77,7 @@ export class DevEnvironment {
     
     // Initialize progress bar
     this.progressBar = new cliProgress.SingleBar({
-      format: chalk.blue('Starting dev-playwright') + ' |' + chalk.cyan('{bar}') + '| {percentage}% | {stage}',
+      format: chalk.blue('Starting dev3000') + ' |' + chalk.cyan('{bar}') + '| {percentage}% | {stage}',
       barCompleteChar: '█',
       barIncompleteChar: '░',
       hideCursor: true,
@@ -159,12 +159,12 @@ export class DevEnvironment {
     
     console.log(chalk.green('\n✅ Development environment ready!'));
     console.log(chalk.blue(`📊 Logs: ${this.options.logFile}`));
-    console.log(chalk.gray(`🔧 MCP Server Logs: ${join(dirname(this.options.logFile), 'dev-playwright-mcp.log')}`));
+    console.log(chalk.gray(`🔧 MCP Server Logs: ${join(dirname(this.options.logFile), 'dev3000-mcp.log')}`));
     console.log(chalk.yellow('☝️ Give this to an AI to auto debug and fix your app\n'));
     console.log(chalk.blue(`🌐 Your App: http://localhost:${this.options.port}`));
     console.log(chalk.blue(`🤖 MCP Server: http://localhost:${this.options.mcpPort}/api/mcp/http`));
     console.log(chalk.magenta(`📸 Visual Timeline: http://localhost:${this.options.mcpPort}/logs`));
-    console.log(chalk.gray('\n💡 To stop all servers and kill playwright: Ctrl-C'));
+    console.log(chalk.gray('\n💡 To stop all servers and kill dev3000: Ctrl-C'));
   }
 
   private async startServer() {
@@ -233,12 +233,12 @@ export class DevEnvironment {
         ...process.env,
         PORT: this.options.mcpPort,
         LOG_FILE_PATH: this.options.logFile, // Pass log file path to MCP server
-        DEV_PLAYWRIGHT_VERSION: version, // Pass version to MCP server
+        DEV3000_VERSION: version, // Pass version to MCP server
       },
     });
 
     // Log MCP server output to separate file for debugging
-    const mcpLogFile = join(dirname(this.options.logFile), 'dev-playwright-mcp.log');
+    const mcpLogFile = join(dirname(this.options.logFile), 'dev3000-mcp.log');
     writeFileSync(mcpLogFile, ''); // Clear the file
     
     this.mcpServerProcess.stdout?.on('data', (data) => {
@@ -656,7 +656,7 @@ export class DevEnvironment {
       // Kill servers after browser is closed
       await Promise.all([
         killPortProcess(this.options.port, 'your app server'),
-        killPortProcess(this.options.mcpPort, 'dev-playwright MCP server')
+        killPortProcess(this.options.mcpPort, 'dev3000 MCP server')
       ]);
       
       console.log(chalk.green('✅ Cleanup complete'));

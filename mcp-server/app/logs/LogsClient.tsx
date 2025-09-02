@@ -189,7 +189,7 @@ export default function LogsClient({ version }: LogsClientProps) {
         <div className="max-w-7xl mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <h1 className="text-2xl font-bold text-gray-900">🎭 dev-playwright</h1>
+              <h1 className="text-2xl font-bold text-gray-900">🎯 dev3000</h1>
               <span className="text-xs text-gray-400 ml-2">(v{version})</span>
               <span className="text-sm text-gray-500">{logs.length} entries</span>
             </div>

@@ -1,12 +1,12 @@
-# dev-playwright
+# dev3000
 
 Captures your web app's complete development timeline - server logs, browser events, console messages, network requests, and automatic screenshots - in a unified, timestamped feed for AI debugging.
 
 ## Quick Start
 
 ```bash
-pnpm install dev-playwright
-pnpx dev-playwright
+pnpm install dev3000
+pnpx dev3000
 ```
 
 ## What it does
@@ -25,7 +25,7 @@ The tool monitors your app in a real browser and captures:
 Give Claude your log file for instant debugging:
 
 ```
-Read /tmp/dev-playwright.log
+Read /tmp/dev3000.log
 ```
 
 Or use the MCP server at `http://localhost:3684/api/mcp/http` for advanced querying:
@@ -36,22 +36,22 @@ Or use the MCP server at `http://localhost:3684/api/mcp/http` for advanced query
 ## Options
 
 ```bash
-pnpx dev-playwright [options]
+pnpx dev3000 [options]
 
   -p, --port <port>         Your app's port (default: 3000)
   --mcp-port <port>         MCP server port (default: 3684)  
   -s, --script <script>     Package.json script to run (default: dev)
   --profile-dir <dir>       Chrome profile directory (persists cookies/login state)
-  --logfile <file>          Log file path (default: /tmp/dev-playwright.log)
+  --logfile <file>          Log file path (default: /tmp/dev3000.log)
 ```
 
 Examples:
 ```bash
 # Custom port for Vite  
-pnpx dev-playwright --port 5173
+pnpx dev3000 --port 5173
 
 # Persistent login state
-pnpx dev-playwright --profile-dir ./chrome-profile
+pnpx dev3000 --profile-dir ./chrome-profile
 ```
 
 ---
