@@ -384,9 +384,6 @@ export class DevEnvironment {
     
     await page.goto(`http://localhost:${this.options.port}`);
     
-    // Allow viewport to resize after initial load to prevent white flashing
-    await page.setViewportSize({ width: 0, height: 0 }); // This allows natural resizing
-    
     // Take initial screenshot
     const initialScreenshot = await this.takeScreenshot(page, 'initial-load');
     if (initialScreenshot) {
