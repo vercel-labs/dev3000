@@ -5,6 +5,7 @@ import { join, dirname, basename } from 'path';
 import { fileURLToPath } from 'url';
 import { tmpdir } from 'os';
 import chalk from 'chalk';
+import * as cliProgress from 'cli-progress';
 
 interface DevEnvironmentOptions {
   port: string;
@@ -51,6 +52,7 @@ export class DevEnvironment {
   private screenshotDir: string;
   private mcpPublicDir: string;
   private pidFile: string;
+  private progressBar: cliProgress.SingleBar;
 
   constructor(options: DevEnvironmentOptions) {
     this.options = options;
@@ -62,6 +64,15 @@ export class DevEnvironment {
     const currentFile = fileURLToPath(import.meta.url);
     const packageRoot = dirname(dirname(currentFile));
     this.mcpPublicDir = join(packageRoot, 'mcp-server', 'public', 'screenshots');
+    
+    // Initialize progress bar
+    this.progressBar = new cliProgress.SingleBar({
+      format: chalk.blue('Starting dev-playwright') + ' |' + chalk.cyan('{bar}') + '| {percentage}% | {stage}',
+      barCompleteChar: '█',
+      barIncompleteChar: '░',
+      hideCursor: true,
+      barsize: 40
+    }, cliProgress.Presets.shades_classic);
     
     // Ensure directories exist
     if (!existsSync(this.screenshotDir)) {
@@ -113,8 +124,12 @@ export class DevEnvironment {
     console.log(chalk.green.bold(`📊 Consolidated Log: ${this.options.logFile}`));
     console.log(chalk.gray('💡 Give Claude this log file path for AI debugging!\n'));
     
+    // Start progress bar
+    this.progressBar.start(100, 0, { stage: 'Checking ports...' });
+    
     // Check if ports are available first
     await this.checkPortsAvailable();
+    this.progressBar.update(10, { stage: 'Starting servers...' });
     
     // Write our process group ID to PID file for cleanup
     writeFileSync(this.pidFile, process.pid.toString());
@@ -124,36 +139,40 @@ export class DevEnvironment {
     
     // Start user's dev server
     await this.startServer();
+    this.progressBar.update(20, { stage: 'Starting MCP server...' });
     
     // Start MCP server
     await this.startMcpServer();
+    this.progressBar.update(30, { stage: 'Waiting for your app server...' });
     
-    // Show URLs immediately so user knows where to look
+    // Wait for both servers to be ready
+    await this.waitForServer();
+    this.progressBar.update(50, { stage: 'Waiting for MCP server...' });
+    await this.waitForMcpServer();
+    this.progressBar.update(70, { stage: 'Starting browser...' });
+    
+    // Start browser monitoring
+    await this.startBrowserMonitoring();
+    this.progressBar.update(100, { stage: 'Complete!' });
+    
+    // Stop progress bar and show results
+    this.progressBar.stop();
+    
     console.log(chalk.green('\n🔗 Quick Access URLs:'));
     console.log(chalk.blue(`🌐 Your App: http://localhost:${this.options.port}`));
     console.log(chalk.blue(`📊 Log Viewer: http://localhost:${this.options.mcpPort}/logs`));
     console.log(chalk.blue(`🤖 MCP Server: http://localhost:${this.options.mcpPort}/api/mcp/http`));
-    
-    // Wait for both servers to be ready
-    await this.waitForServer();
-    await this.waitForMcpServer();
-    
-    // Start browser monitoring
-    await this.startBrowserMonitoring();
     
     console.log(chalk.green('\n✅ Development environment ready!'));
     console.log(chalk.blue(`📊 Logs: ${this.options.logFile}`));
     console.log(chalk.blue(`🌐 Your App: http://localhost:${this.options.port}`));
     console.log(chalk.blue(`🤖 MCP Server: http://localhost:${this.options.mcpPort}/api/mcp/http`));
     console.log(chalk.magenta(`📸 Visual Timeline: http://localhost:${this.options.mcpPort}/logs`));
-    // console.log(chalk.gray(`   To stop later: kill -TERM -$(cat ${this.pidFile})`));
     console.log(chalk.yellow('\n🎯 Ready for AI debugging! All processes are running in the background.'));
     console.log(chalk.gray(`\n💡 To stop servers later: lsof -ti:${this.options.port} | xargs kill -9 && lsof -ti:${this.options.mcpPort} | xargs kill -9`));
   }
 
   private async startServer() {
-    console.log(chalk.blue(`🔧 Starting server: ${this.options.serverCommand}`));
-    
     const [command, ...args] = this.options.serverCommand.split(' ');
     
     this.serverProcess = spawn(command, args, {
@@ -187,14 +206,10 @@ export class DevEnvironment {
   }
 
   private async startMcpServer() {
-    console.log(chalk.blue(`🤖 Starting MCP server on port ${this.options.mcpPort}...`));
-    
     // Get the path to our bundled MCP server
     const currentFile = fileURLToPath(import.meta.url);
     const packageRoot = dirname(dirname(currentFile)); // Go up from dist/ to package root
     const mcpServerPath = join(packageRoot, 'mcp-server');
-    
-    console.log(chalk.gray(`MCP server path: ${mcpServerPath}`));
     
     if (!existsSync(mcpServerPath)) {
       throw new Error(`MCP server directory not found at ${mcpServerPath}`);
@@ -251,8 +266,6 @@ export class DevEnvironment {
   }
 
   private async waitForServer() {
-    console.log(chalk.blue('⏳ Waiting for server to be ready...'));
-    
     const maxAttempts = 30;
     let attempts = 0;
     
@@ -263,23 +276,20 @@ export class DevEnvironment {
           signal: AbortSignal.timeout(2000)
         });
         if (response.ok || response.status === 404) {
-          console.log(chalk.green('✅ Server is ready!'));
           return;
         }
       } catch (error) {
-        console.log(chalk.gray(`Server not ready yet (attempt ${attempts + 1}/${maxAttempts})...`));
+        // Server not ready yet, continue waiting
       }
       
       attempts++;
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
     
-    console.log(chalk.yellow('⚠️ Server health check failed, but continuing anyway...'));
+    // Continue anyway if health check fails
   }
 
   private async waitForMcpServer() {
-    console.log(chalk.blue('⏳ Waiting for MCP server to be ready...'));
-    
     const maxAttempts = 30;
     let attempts = 0;
     
@@ -290,23 +300,20 @@ export class DevEnvironment {
           signal: AbortSignal.timeout(2000)
         });
         if (response.ok || response.status === 404) {
-          console.log(chalk.green('✅ MCP server is ready!'));
           return;
         }
       } catch (error) {
-        console.log(chalk.gray(`MCP server not ready yet (attempt ${attempts + 1}/${maxAttempts})...`));
+        // MCP server not ready yet, continue waiting
       }
       
       attempts++;
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
     
-    console.log(chalk.yellow('⚠️ MCP server health check failed, but continuing anyway...'));
+    // Continue anyway if health check fails
   }
 
   private async startBrowserMonitoring() {
-    console.log(chalk.blue('🌐 Starting playwright for browser monitoring...'));
-    
     // Ensure profile directory exists
     if (!existsSync(this.options.profileDir)) {
       mkdirSync(this.options.profileDir, { recursive: true });
@@ -317,11 +324,12 @@ export class DevEnvironment {
       this.browserContext = await chromium.launchPersistentContext(this.options.profileDir, {
         headless: false,
         channel: 'chrome', // Use system Chrome
+        viewport: { width: 1280, height: 720 },
+        deviceScaleFactor: 2,
         args: [
           '--remote-debugging-port=9222',
           '--disable-web-security',
           '--disable-blink-features=AutomationControlled',
-          '--device-scale-factor=1.5',
         ],
       });
     } catch (error: any) {
@@ -329,11 +337,12 @@ export class DevEnvironment {
       try {
         this.browserContext = await chromium.launchPersistentContext(this.options.profileDir, {
           headless: false,
+          viewport: { width: 1280, height: 720 },
+          deviceScaleFactor: 2,
           args: [
             '--remote-debugging-port=9222',
             '--disable-web-security',
             '--disable-blink-features=AutomationControlled',
-            '--device-scale-factor=1.5',
           ],
         });
       } catch (playwrightError: any) {
@@ -345,11 +354,12 @@ export class DevEnvironment {
           // Retry with bundled chromium
           this.browserContext = await chromium.launchPersistentContext(this.options.profileDir, {
             headless: false,
+            viewport: { width: 1280, height: 720 },
+            deviceScaleFactor: 2,
             args: [
               '--remote-debugging-port=9222',
               '--disable-web-security',
               '--disable-blink-features=AutomationControlled',
-              '--device-scale-factor=1.5',
             ],
           });
         } else {
@@ -375,12 +385,10 @@ export class DevEnvironment {
     this.browserContext.on('page', async (newPage) => {
       await this.setupPageMonitoring(newPage);
     });
-    
-    console.log(chalk.green('✅ Browser monitoring active!'));
   }
 
   private async installPlaywrightBrowsers(): Promise<void> {
-    console.log(chalk.blue('⏳ Installing Playwright chromium browser (this may take 2-3 minutes)...'));
+    this.progressBar.update(75, { stage: 'Installing Playwright browser (2-3 min)...' });
     
     return new Promise<void>((resolve, reject) => {
       const packageManager = detectPackageManager();
@@ -539,11 +547,42 @@ export class DevEnvironment {
   }
 
   private setupCleanupHandlers() {
-    // Remove cleanup handlers - let processes run independently
-    // Only clean up on explicit SIGINT (Ctrl+C)
-    process.on('SIGINT', () => {
-      console.log(chalk.yellow('\n🛑 Received interrupt signal. Processes will continue running in background.'));
-      console.log(chalk.gray('💡 Use "pkill -f dev-playwright" to stop all processes.'));
+    // Handle Ctrl+C to kill all processes
+    process.on('SIGINT', async () => {
+      console.log(chalk.yellow('\n🛑 Received interrupt signal. Cleaning up processes...'));
+      
+      // Kill processes on both ports
+      const killPortProcess = async (port: string, name: string) => {
+        try {
+          const { spawn } = await import('child_process');
+          const killProcess = spawn('sh', ['-c', `lsof -ti:${port} | xargs kill -9`], { stdio: 'inherit' });
+          killProcess.on('exit', (code) => {
+            if (code === 0) {
+              console.log(chalk.green(`✅ Killed ${name} on port ${port}`));
+            }
+          });
+        } catch (error) {
+          console.log(chalk.gray(`⚠️ Could not kill ${name} on port ${port}`));
+        }
+      };
+      
+      await Promise.all([
+        killPortProcess(this.options.port, 'your app server'),
+        killPortProcess(this.options.mcpPort, 'dev-playwright MCP server')
+      ]);
+      
+      // Close browser if still running
+      if (this.browserContext) {
+        try {
+          console.log(chalk.blue('🔄 Closing browser...'));
+          await this.browserContext.close();
+          console.log(chalk.green('✅ Browser closed'));
+        } catch (error) {
+          console.log(chalk.gray('⚠️ Could not close browser gracefully'));
+        }
+      }
+      
+      console.log(chalk.green('✅ Cleanup complete'));
       process.exit(0);
     });
   }
