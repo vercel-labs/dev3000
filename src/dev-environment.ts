@@ -364,10 +364,13 @@ export class DevEnvironment {
       }
     }
     
-    // Create context with viewport: null to enable window resizing
+    // Create context with viewport: null to enable window resizing + persistent storage
     this.browserContext = await this.browser.newContext({
       viewport: null, // This makes the page size depend on the window size
       deviceScaleFactor: 2, // Prevent white flashing
+      storageState: existsSync(join(this.options.profileDir, 'state.json')) 
+        ? join(this.options.profileDir, 'state.json') 
+        : undefined, // Load persistent state if it exists
     });
     
     // Navigate to the app using the existing blank page
@@ -593,11 +596,15 @@ export class DevEnvironment {
       ]);
       
       // Close browser if still running
-      if (this.browser) {
+      if (this.browser && this.browserContext) {
         try {
-          console.log(chalk.blue('🔄 Closing browser...'));
+          console.log(chalk.blue('🔄 Saving browser state and closing...'));
+          // Save storage state (cookies, localStorage, etc.)
+          await this.browserContext.storageState({ 
+            path: join(this.options.profileDir, 'state.json') 
+          });
           await this.browser.close();
-          console.log(chalk.green('✅ Browser closed'));
+          console.log(chalk.green('✅ Browser state saved and closed'));
         } catch (error) {
           console.log(chalk.gray('⚠️ Could not close browser gracefully'));
         }
