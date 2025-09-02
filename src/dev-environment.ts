@@ -602,39 +602,54 @@ export class DevEnvironment {
     process.on('SIGINT', async () => {
       console.log(chalk.yellow('\n🛑 Received interrupt signal. Cleaning up processes...'));
       
-      // Kill processes on both ports
+      // Kill processes on both ports FIRST - this is most important
       const killPortProcess = async (port: string, name: string) => {
         try {
           const { spawn } = await import('child_process');
           const killProcess = spawn('sh', ['-c', `lsof -ti:${port} | xargs kill -9`], { stdio: 'inherit' });
-          killProcess.on('exit', (code) => {
-            if (code === 0) {
-              console.log(chalk.green(`✅ Killed ${name} on port ${port}`));
-            }
+          return new Promise<void>((resolve) => {
+            killProcess.on('exit', (code) => {
+              if (code === 0) {
+                console.log(chalk.green(`✅ Killed ${name} on port ${port}`));
+              }
+              resolve();
+            });
           });
         } catch (error) {
           console.log(chalk.gray(`⚠️ Could not kill ${name} on port ${port}`));
         }
       };
       
+      // Kill servers immediately - don't wait for browser cleanup
+      console.log(chalk.blue('🔄 Killing servers...'));
+      await Promise.all([
+        killPortProcess(this.options.port, 'your app server'),
+        killPortProcess(this.options.mcpPort, 'dev3000 MCP server')
+      ]);
+      
       // Clear the state saving timer
       if (this.stateTimer) {
         clearInterval(this.stateTimer);
       }
       
-      // Try to save browser state before closing
+      // Try to save browser state quickly (with timeout)
       if (this.browserContext) {
         try {
           console.log(chalk.blue('💾 Saving browser state...'));
           const stateFile = join(this.options.profileDir, 'state.json');
-          await this.browserContext.storageState({ path: stateFile });
+          const savePromise = this.browserContext.storageState({ path: stateFile });
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Timeout')), 2000)
+          );
+          
+          await Promise.race([savePromise, timeoutPromise]);
           console.log(chalk.green('✅ Browser state saved'));
         } catch (error) {
-          console.log(chalk.gray('⚠️ Could not save browser state'));
+          console.log(chalk.gray('⚠️ Could not save browser state (timed out)'));
         }
       }
       
-      // Close browser
+      // Close browser quickly (with timeout)
       if (this.browser) {
         try {
           if (this.browserType === 'system-chrome') {
@@ -642,22 +657,22 @@ export class DevEnvironment {
           } else {
             console.log(chalk.blue('🔄 Closing browser...'));
           }
-          await this.browser.close();
+          
+          const closePromise = this.browser.close();
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Timeout')), 2000)
+          );
+          
+          await Promise.race([closePromise, timeoutPromise]);
           console.log(chalk.green('✅ Browser closed'));
         } catch (error) {
           if (this.browserType === 'system-chrome') {
             console.log(chalk.gray('⚠️ Chrome tab close failed (this is normal - your Chrome stays open)'));
           } else {
-            console.log(chalk.gray('⚠️ Browser already closed'));
+            console.log(chalk.gray('⚠️ Browser close timed out'));
           }
         }
       }
-      
-      // Kill servers after browser is closed
-      await Promise.all([
-        killPortProcess(this.options.port, 'your app server'),
-        killPortProcess(this.options.mcpPort, 'dev3000 MCP server')
-      ]);
       
       console.log(chalk.green('✅ Cleanup complete'));
       process.exit(0);
