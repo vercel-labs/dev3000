@@ -394,7 +394,7 @@ export class DevEnvironment {
           // Ignore errors - context might be closed
         }
       }
-    }, 30000);
+    }, 15000); // Save every 15 seconds
     
     // Navigate to the app using the existing blank page
     const pages = this.browserContext.pages();
@@ -618,12 +618,7 @@ export class DevEnvironment {
         clearInterval(this.stateTimer);
       }
       
-      await Promise.all([
-        killPortProcess(this.options.port, 'your app server'),
-        killPortProcess(this.options.mcpPort, 'dev-playwright MCP server')
-      ]);
-      
-      // Close browser if still running
+      // Save browser state and close browser BEFORE killing servers
       if (this.browser && this.browserContext) {
         try {
           console.log(chalk.blue('🔄 Saving browser state and closing...'));
@@ -643,6 +638,12 @@ export class DevEnvironment {
           }
         }
       }
+      
+      // Kill servers after browser is closed
+      await Promise.all([
+        killPortProcess(this.options.port, 'your app server'),
+        killPortProcess(this.options.mcpPort, 'dev-playwright MCP server')
+      ]);
       
       console.log(chalk.green('✅ Cleanup complete'));
       process.exit(0);
