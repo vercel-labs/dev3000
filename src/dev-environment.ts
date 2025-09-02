@@ -384,6 +384,13 @@ export class DevEnvironment {
     
     await page.goto(`http://localhost:${this.options.port}`);
     
+    // Try to enable resizing by setting viewport to null after page load
+    try {
+      await page.setViewportSize(null as any);
+    } catch (error) {
+      // If null doesn't work, ignore the error and continue
+    }
+    
     // Take initial screenshot
     const initialScreenshot = await this.takeScreenshot(page, 'initial-load');
     if (initialScreenshot) {
