@@ -147,12 +147,6 @@ export class DevEnvironment {
     // console.log(chalk.gray(`   To stop later: kill -TERM -$(cat ${this.pidFile})`));
     console.log(chalk.yellow('\n🎯 Ready for AI debugging! All processes are running in the background.'));
     console.log(chalk.gray('\n💡 Tip: Use "pkill -f dev-playwright" to stop all processes later.'));
-    
-    // Detach browser from cleanup so it can run independently
-    this.browserContext = null;
-    
-    // Force exit to return control to Claude while servers run in background
-    setTimeout(() => process.exit(0), 1000);
   }
 
   private async startServer() {
@@ -163,7 +157,7 @@ export class DevEnvironment {
     this.serverProcess = spawn(command, args, {
       stdio: ['ignore', 'pipe', 'pipe'],
       shell: true,
-      detached: false, // Keep in same process group for easier cleanup
+      detached: true, // Run independently
     });
 
     // Log server output
@@ -207,7 +201,7 @@ export class DevEnvironment {
     this.mcpServerProcess = spawn('npm', ['run', 'dev'], {
       stdio: ['ignore', 'pipe', 'pipe'],
       shell: true,
-      detached: false, // Keep in same process group for easier cleanup
+      detached: true, // Run independently
       cwd: mcpServerPath,
       env: {
         ...process.env,
@@ -529,67 +523,13 @@ export class DevEnvironment {
   }
 
   private setupCleanupHandlers() {
-    const cleanup = async () => {
-      console.log(chalk.yellow('\n🧹 Shutting down development environment...'));
-      
-      // Don't close browser - let it run independently
-      // if (this.browserContext) {
-      //   console.log(chalk.blue('🔄 Closing browser...'));
-      //   await this.browserContext.close();
-      // }
-      
-      if (this.serverProcess) {
-        console.log(chalk.blue('🔄 Stopping server...'));
-        // Kill the entire process group to ensure child processes (like Next.js) are also killed
-        if (this.serverProcess.pid) {
-          try {
-            process.kill(-this.serverProcess.pid, 'SIGTERM'); // Negative PID kills process group
-          } catch (error) {
-            // Fallback to regular kill if process group kill fails
-            this.serverProcess.kill('SIGTERM');
-          }
-        }
-        
-        // Force kill after 5 seconds
-        setTimeout(() => {
-          if (this.serverProcess && !this.serverProcess.killed && this.serverProcess.pid) {
-            try {
-              process.kill(-this.serverProcess.pid, 'SIGKILL');
-            } catch (error) {
-              this.serverProcess.kill('SIGKILL');
-            }
-          }
-        }, 5000);
-      }
-
-      if (this.mcpServerProcess) {
-        console.log(chalk.blue('🔄 Stopping MCP server...'));
-        this.mcpServerProcess.kill('SIGTERM');
-        
-        // Force kill after 5 seconds
-        setTimeout(() => {
-          if (this.mcpServerProcess && !this.mcpServerProcess.killed) {
-            this.mcpServerProcess.kill('SIGKILL');
-          }
-        }, 5000);
-      }
-      
-      // Clean up PID file
-      try {
-        if (existsSync(this.pidFile)) {
-          unlinkSync(this.pidFile);
-        }
-      } catch (error) {
-        // Ignore cleanup errors
-      }
-      
-      console.log(chalk.green('✅ Cleanup complete'));
+    // Remove cleanup handlers - let processes run independently
+    // Only clean up on explicit SIGINT (Ctrl+C)
+    process.on('SIGINT', () => {
+      console.log(chalk.yellow('\n🛑 Received interrupt signal. Processes will continue running in background.'));
+      console.log(chalk.gray('💡 Use "pkill -f dev-playwright" to stop all processes.'));
       process.exit(0);
-    };
-
-    process.on('SIGINT', cleanup);
-    process.on('SIGTERM', cleanup);
-    process.on('exit', cleanup);
+    });
   }
 }
 
