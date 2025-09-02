@@ -233,22 +233,12 @@ export class DevEnvironment {
       },
     });
 
-    // Log MCP server output (to file only, reduce stdout noise)
-    this.mcpServerProcess.stdout?.on('data', (data) => {
-      const message = data.toString().trim();
-      if (message) {
-        this.logger.log('server', message);
-      }
-    });
-
+    // Don't log MCP server output to the main log file at all
+    // Only show critical errors in stdout for debugging
     this.mcpServerProcess.stderr?.on('data', (data) => {
       const message = data.toString().trim();
-      if (message) {
-        this.logger.log('server', `ERROR: ${message}`);
-        // Only show critical MCP server errors in stdout
-        if (message.includes('FATAL') || message.includes('Error:')) {
-          console.error(chalk.red('[LOG VIEWER ERROR]'), message);
-        }
+      if (message && (message.includes('FATAL') || message.includes('Error:'))) {
+        console.error(chalk.red('[LOG VIEWER ERROR]'), message);
       }
     });
 
