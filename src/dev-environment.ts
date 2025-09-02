@@ -337,7 +337,6 @@ export class DevEnvironment {
         this.browserContext = await chromium.launchPersistentContext(this.options.profileDir, {
           headless: false,
           viewport: { width: 1280, height: 720 },
-        deviceScaleFactor: 2,
           deviceScaleFactor: 2,
           // Remove automation flags to allow normal dialog behavior
           args: [
@@ -356,7 +355,6 @@ export class DevEnvironment {
           this.browserContext = await chromium.launchPersistentContext(this.options.profileDir, {
             headless: false,
             viewport: { width: 1280, height: 720 },
-        deviceScaleFactor: 2,
             deviceScaleFactor: 2,
             // Remove automation flags to allow normal dialog behavior
             args: [
