@@ -111,7 +111,6 @@ export class DevEnvironment {
     
     for (const port of ports) {
       try {
-        console.log(chalk.blue(`🔍 Checking port ${port}...`));
         const result = await new Promise<string>((resolve) => {
           const proc = spawn('lsof', ['-ti', `:${port}`], { stdio: 'pipe' });
           let output = '';
@@ -380,8 +379,9 @@ export class DevEnvironment {
       }
     }
     
-    // Navigate to the app
-    const page = await this.browserContext.newPage();
+    // Navigate to the app using the default page
+    const pages = this.browserContext.pages();
+    const page = pages[0] || await this.browserContext.newPage();
     await page.goto(`http://localhost:${this.options.port}`);
     
     // Take initial screenshot
