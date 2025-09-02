@@ -220,12 +220,14 @@ export default function LogsClient({ version }: LogsClientProps) {
               </div>
               
               {/* Live indicator */}
-              {mode === 'tail' && isAtBottom && (
-                <div className="flex items-center gap-1 text-green-600">
-                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                  <span className="text-xs">Live</span>
-                </div>
-              )}
+              <div 
+                className={`flex items-center gap-1 text-green-600 ${
+                  mode === 'tail' && isAtBottom ? 'visible' : 'invisible'
+                }`}
+              >
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                <span className="text-xs">Live</span>
+              </div>
             </div>
           </div>
         </div>
@@ -233,7 +235,7 @@ export default function LogsClient({ version }: LogsClientProps) {
 
       <div 
         ref={containerRef}
-        className="max-w-7xl mx-auto px-4 py-6 max-h-screen overflow-y-auto"
+        className="max-w-7xl mx-auto px-4 py-6 pb-10 max-h-screen overflow-y-auto"
         onScroll={handleScroll}
       >
         {filteredLogs.length === 0 ? (
@@ -249,31 +251,37 @@ export default function LogsClient({ version }: LogsClientProps) {
               <LogEntryComponent key={index} entry={entry} />
             ))}
             <div ref={bottomRef} />
-            
-            {/* Footer with status and scroll indicator */}
-            <div className="h-4 flex items-center justify-center border-t border-gray-200 bg-gray-50">
-              {isLoadingNew && (
-                <div className="flex items-center gap-1">
-                  <div className="w-3 h-3 border border-gray-300 border-t-blue-500 rounded-full animate-spin"></div>
-                  <span className="text-xs text-gray-500">Loading...</span>
-                </div>
-              )}
-              {mode === 'tail' && !isAtBottom && !isLoadingNew && (
-                <button
-                  onClick={() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' })}
-                  className="flex items-center gap-1 px-2 py-0.5 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
-                >
-                  ↓ Live updates
-                </button>
-              )}
-              {!isLoadingNew && isAtBottom && lastFetched && (
-                <span className="text-xs text-gray-400 font-mono">
-                  Last updated {lastFetched.toLocaleTimeString()}
-                </span>
-              )}
-            </div>
           </div>
         )}
+      </div>
+      
+      {/* Footer with status and scroll indicator - full width like header */}
+      <div className="h-4 border-t border-gray-200 bg-gray-50 fixed bottom-0 left-0 right-0">
+        <div className="max-w-7xl mx-auto px-4 h-full flex items-center justify-between">
+          <div className="flex items-center">
+            {isLoadingNew && (
+              <div className="flex items-center gap-1">
+                <div className="w-3 h-3 border border-gray-300 border-t-blue-500 rounded-full animate-spin"></div>
+                <span className="text-xs text-gray-500">Loading...</span>
+              </div>
+            )}
+            {!isLoadingNew && isAtBottom && lastFetched && (
+              <span className="text-xs text-gray-400 font-mono">
+                Last updated {lastFetched.toLocaleTimeString()}
+              </span>
+            )}
+          </div>
+          
+          {/* Scroll to bottom button - positioned on the right */}
+          {mode === 'tail' && !isAtBottom && !isLoadingNew && (
+            <button
+              onClick={() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' })}
+              className="flex items-center gap-1 px-2 py-0.5 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
+            >
+              ↓ Live updates
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
