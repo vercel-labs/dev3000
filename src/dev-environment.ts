@@ -321,6 +321,8 @@ export class DevEnvironment {
         // Remove automation flags to allow normal dialog behavior
         args: [
           '--disable-web-security', // Keep this for dev server access
+          '--disable-session-crashed-bubble', // Don't ask to restore pages
+          '--disable-infobars', // Remove info bars
         ],
       });
     } catch (error: any) {
@@ -333,6 +335,8 @@ export class DevEnvironment {
           // Remove automation flags to allow normal dialog behavior
           args: [
             '--disable-web-security', // Keep this for dev server access
+            '--disable-session-crashed-bubble', // Don't ask to restore pages
+            '--disable-infobars', // Remove info bars
           ],
         });
       } catch (playwrightError: any) {
@@ -349,6 +353,8 @@ export class DevEnvironment {
             // Remove automation flags to allow normal dialog behavior
             args: [
               '--disable-web-security', // Keep this for dev server access
+              '--disable-session-crashed-bubble', // Don't ask to restore pages
+              '--disable-infobars', // Remove info bars
             ],
           });
         } else {
