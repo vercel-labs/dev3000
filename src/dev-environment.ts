@@ -1,6 +1,6 @@
 import { spawn, ChildProcess } from 'child_process';
 import { chromium, Browser, Page, BrowserContext } from 'playwright';
-import { writeFileSync, appendFileSync, mkdirSync, existsSync, copyFileSync, unlinkSync, readFileSync } from 'fs';
+import { writeFileSync, appendFileSync, mkdirSync, existsSync, copyFileSync, unlinkSync, readFileSync, symlinkSync } from 'fs';
 import { join, dirname, basename } from 'path';
 import { fileURLToPath } from 'url';
 import { tmpdir } from 'os';
@@ -27,6 +27,22 @@ class Logger {
     }
     // Clear log file
     writeFileSync(this.logFile, '');
+    
+    // Create symlink from default path to actual log file for consistent README reference
+    const defaultLogPath = join(tmpdir(), 'dev-playwright-consolidated.log');
+    if (this.logFile !== defaultLogPath) {
+      try {
+        // Remove existing symlink if it exists
+        if (existsSync(defaultLogPath)) {
+          unlinkSync(defaultLogPath);
+        }
+        // Create symlink
+        symlinkSync(this.logFile, defaultLogPath);
+      } catch (error) {
+        // Symlink creation failed, but continue - not critical
+        console.log(chalk.gray('⚠️ Could not create symlink for default log path'));
+      }
+    }
   }
 
   log(source: 'server' | 'browser', message: string) {
