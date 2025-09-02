@@ -43,6 +43,13 @@ function detectPackageManager(): string {
   return 'npx'; // fallback
 }
 
+function detectPackageManagerForRun(): string {
+  if (existsSync('pnpm-lock.yaml')) return 'pnpm';
+  if (existsSync('yarn.lock')) return 'yarn';
+  if (existsSync('package-lock.json')) return 'npm';
+  return 'npm'; // fallback
+}
+
 export class DevEnvironment {
   private serverProcess: ChildProcess | null = null;
   private mcpServerProcess: ChildProcess | null = null;
@@ -227,8 +234,9 @@ export class DevEnvironment {
       console.log(chalk.yellow('⚠️ Could not read version from package.json'));
     }
 
-    // Start the MCP server
-    this.mcpServerProcess = spawn('npm', ['run', 'dev'], {
+    // Start the MCP server using detected package manager
+    const packageManagerForRun = detectPackageManagerForRun();
+    this.mcpServerProcess = spawn(packageManagerForRun, ['run', 'dev'], {
       stdio: ['ignore', 'pipe', 'pipe'],
       shell: true,
       detached: true, // Run independently

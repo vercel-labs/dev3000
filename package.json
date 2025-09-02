@@ -19,9 +19,9 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "prepare": "npm run build",
-    "postinstall": "cd mcp-server && npm install",
-    "release": "npm run build && npm version patch && git push origin main --tags && npm publish --otp=$(op item get npm --otp)"
+    "prepare": "pnpm run build",
+    "postinstall": "cd mcp-server && pnpm install",
+    "release": "pnpm run build && pnpm version patch && git push origin main --tags && pnpm publish --otp=$(op item get npm --otp)"
   },
   "keywords": [
     "nextjs",

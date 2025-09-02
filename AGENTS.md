@@ -6,10 +6,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Build the project:
 ```bash
-npm run build
+pnpm run build
 # or with tsx for development
-npm run dev
+pnpm run dev
 ```
+
+**IMPORTANT**: This project uses pnpm exclusively. Always use pnpm commands, never npm. When making changes to this codebase:
+- Use `pnpm install` to install dependencies
+- Use `pnpm run build` to build 
+- Use `pnpm run release` to publish new versions
+- Use `pnpm publish` not `npm publish`
 
 The default server command in CLI is `pnpm dev` but can be overridden with `--server-command`.
 
