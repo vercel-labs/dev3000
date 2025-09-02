@@ -57,6 +57,7 @@ export class DevEnvironment {
   private browserContext: BrowserContext | null = null;
   private logger: Logger;
   private stateTimer: NodeJS.Timeout | null = null;
+  private browserType: 'system-chrome' | 'playwright-chromium' | null = null;
   private options: DevEnvironmentOptions;
   private screenshotDir: string;
   private mcpPublicDir: string;
@@ -333,6 +334,7 @@ export class DevEnvironment {
           '--disable-features=VizDisplayCompositor', // Reduce automation fingerprinting
         ],
       });
+      this.browserType = 'system-chrome';
     } catch (error: any) {
       // Fallback to Playwright's bundled chromium
       try {
@@ -347,6 +349,7 @@ export class DevEnvironment {
             '--disable-features=VizDisplayCompositor', // Reduce automation fingerprinting
           ],
         });
+        this.browserType = 'playwright-chromium';
       } catch (playwrightError: any) {
         if (playwrightError.message?.includes('Executable doesn\'t exist')) {
           const packageManager = detectPackageManager();
@@ -363,6 +366,7 @@ export class DevEnvironment {
               '--disable-infobars', // Remove info bars
             ],
           });
+          this.browserType = 'playwright-chromium';
         } else {
           throw playwrightError;
         }
@@ -618,23 +622,33 @@ export class DevEnvironment {
         clearInterval(this.stateTimer);
       }
       
-      // Save browser state and close browser BEFORE killing servers
-      if (this.browser && this.browserContext) {
+      // Try to save browser state before closing
+      if (this.browserContext) {
         try {
-          console.log(chalk.blue('🔄 Saving browser state and closing...'));
-          // Save storage state (cookies, localStorage, etc.)
-          await this.browserContext.storageState({ 
-            path: join(this.options.profileDir, 'state.json') 
-          });
-          await this.browser.close();
-          console.log(chalk.green('✅ Browser state saved and closed'));
+          console.log(chalk.blue('💾 Saving browser state...'));
+          const stateFile = join(this.options.profileDir, 'state.json');
+          await this.browserContext.storageState({ path: stateFile });
+          console.log(chalk.green('✅ Browser state saved'));
         } catch (error) {
-          console.log(chalk.yellow('⚠️ Could not close browser gracefully:'), error);
-          // Still try to close the browser even if saving state failed
-          try {
-            await this.browser.close();
-          } catch (closeError) {
-            console.log(chalk.gray('⚠️ Browser close also failed'));
+          console.log(chalk.gray('⚠️ Could not save browser state'));
+        }
+      }
+      
+      // Close browser
+      if (this.browser) {
+        try {
+          if (this.browserType === 'system-chrome') {
+            console.log(chalk.blue('🔄 Closing browser tab (keeping Chrome open)...'));
+          } else {
+            console.log(chalk.blue('🔄 Closing browser...'));
+          }
+          await this.browser.close();
+          console.log(chalk.green('✅ Browser closed'));
+        } catch (error) {
+          if (this.browserType === 'system-chrome') {
+            console.log(chalk.gray('⚠️ Chrome tab close failed (this is normal - your Chrome stays open)'));
+          } else {
+            console.log(chalk.gray('⚠️ Browser already closed'));
           }
         }
       }
