@@ -135,9 +135,6 @@ export class DevEnvironment {
   }
 
   async start() {
-    console.log(chalk.blue('🚀 Starting development environment...'));
-    console.log(chalk.green.bold(`📊 Consolidated Log: ${this.options.logFile}`));
-    console.log(chalk.gray('💡 Give Claude this log file path for AI debugging!\n'));
     
     // Start progress bar
     this.progressBar.start(100, 0, { stage: 'Checking ports...' });
@@ -175,7 +172,10 @@ export class DevEnvironment {
     
     console.log(chalk.green('\n✅ Development environment ready!'));
     console.log(chalk.blue(`📊 Logs: ${join(tmpdir(), 'dev-playwright-consolidated.log')}`));
-    console.log(chalk.yellow('💡 Give this to an AI to auto debug and fix your app\n'));
+    if (this.options.logFile !== join(tmpdir(), 'dev-playwright-consolidated.log')) {
+      console.log(chalk.gray(`   (symlinked to ${this.options.logFile})`));
+    }
+    console.log(chalk.yellow('☝️ Give this to an AI to auto debug and fix your app\n'));
     console.log(chalk.blue(`🌐 Your App: http://localhost:${this.options.port}`));
     console.log(chalk.blue(`🤖 MCP Server: http://localhost:${this.options.mcpPort}/api/mcp/http`));
     console.log(chalk.magenta(`📸 Visual Timeline: http://localhost:${this.options.mcpPort}/logs`));
@@ -379,9 +379,9 @@ export class DevEnvironment {
       }
     }
     
-    // Navigate to the app using the default page
+    // Navigate to the app using the existing blank page
     const pages = this.browserContext.pages();
-    const page = pages[0] || await this.browserContext.newPage();
+    const page = pages.length > 0 ? pages[0] : await this.browserContext.newPage();
     await page.goto(`http://localhost:${this.options.port}`);
     
     // Take initial screenshot
