@@ -322,7 +322,7 @@ export class DevEnvironment {
       this.browserContext = await chromium.launchPersistentContext(this.options.profileDir, {
         headless: false,
         channel: 'chrome', // Use system Chrome
-        viewport: { width: 1280, height: 720 },
+        // No fixed viewport to allow window resizing
         deviceScaleFactor: 2,
         // Remove automation flags to allow normal dialog behavior
         args: [
