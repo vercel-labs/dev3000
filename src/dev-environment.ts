@@ -318,10 +318,9 @@ export class DevEnvironment {
         channel: 'chrome', // Use system Chrome
         viewport: { width: 1280, height: 720 },
         deviceScaleFactor: 2,
+        // Remove automation flags to allow normal dialog behavior
         args: [
-          '--remote-debugging-port=9222',
-          '--disable-web-security',
-          '--disable-blink-features=AutomationControlled',
+          '--disable-web-security', // Keep this for dev server access
         ],
       });
     } catch (error: any) {
@@ -331,10 +330,9 @@ export class DevEnvironment {
           headless: false,
           viewport: { width: 1280, height: 720 },
           deviceScaleFactor: 2,
+          // Remove automation flags to allow normal dialog behavior
           args: [
-            '--remote-debugging-port=9222',
-            '--disable-web-security',
-            '--disable-blink-features=AutomationControlled',
+            '--disable-web-security', // Keep this for dev server access
           ],
         });
       } catch (playwrightError: any) {
@@ -348,10 +346,9 @@ export class DevEnvironment {
             headless: false,
             viewport: { width: 1280, height: 720 },
             deviceScaleFactor: 2,
+            // Remove automation flags to allow normal dialog behavior
             args: [
-              '--remote-debugging-port=9222',
-              '--disable-web-security',
-              '--disable-blink-features=AutomationControlled',
+              '--disable-web-security', // Keep this for dev server access
             ],
           });
         } else {
