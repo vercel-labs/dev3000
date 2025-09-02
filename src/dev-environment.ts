@@ -616,7 +616,13 @@ export class DevEnvironment {
           await this.browser.close();
           console.log(chalk.green('✅ Browser state saved and closed'));
         } catch (error) {
-          console.log(chalk.gray('⚠️ Could not close browser gracefully'));
+          console.log(chalk.yellow('⚠️ Could not close browser gracefully:'), error);
+          // Still try to close the browser even if saving state failed
+          try {
+            await this.browser.close();
+          } catch (closeError) {
+            console.log(chalk.gray('⚠️ Browser close also failed'));
+          }
         }
       }
       
