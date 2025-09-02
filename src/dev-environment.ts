@@ -1,6 +1,6 @@
 import { spawn, ChildProcess } from 'child_process';
 import { chromium, Browser, Page, BrowserContext } from 'playwright';
-import { writeFileSync, appendFileSync, mkdirSync, existsSync, copyFileSync, unlinkSync, readFileSync, symlinkSync } from 'fs';
+import { writeFileSync, appendFileSync, mkdirSync, existsSync, copyFileSync, unlinkSync, readFileSync } from 'fs';
 import { join, dirname, basename } from 'path';
 import { fileURLToPath } from 'url';
 import { tmpdir } from 'os';
@@ -27,22 +27,6 @@ class Logger {
     }
     // Clear log file
     writeFileSync(this.logFile, '');
-    
-    // Create symlink from default path to actual log file for consistent README reference
-    const defaultLogPath = join(tmpdir(), 'dev-playwright-consolidated.log');
-    if (this.logFile !== defaultLogPath) {
-      try {
-        // Remove existing symlink if it exists
-        if (existsSync(defaultLogPath)) {
-          unlinkSync(defaultLogPath);
-        }
-        // Create symlink
-        symlinkSync(this.logFile, defaultLogPath);
-      } catch (error) {
-        // Symlink creation failed, but continue - not critical
-        console.log(chalk.gray('⚠️ Could not create symlink for default log path'));
-      }
-    }
   }
 
   log(source: 'server' | 'browser', message: string) {
@@ -171,10 +155,7 @@ export class DevEnvironment {
     this.progressBar.stop();
     
     console.log(chalk.green('\n✅ Development environment ready!'));
-    console.log(chalk.blue(`📊 Logs: ${join(tmpdir(), 'dev-playwright-consolidated.log')}`));
-    if (this.options.logFile !== join(tmpdir(), 'dev-playwright-consolidated.log')) {
-      console.log(chalk.gray(`   (symlinked to ${this.options.logFile})`));
-    }
+    console.log(chalk.blue(`📊 Logs: ${this.options.logFile}`));
     console.log(chalk.yellow('☝️ Give this to an AI to auto debug and fix your app\n'));
     console.log(chalk.blue(`🌐 Your App: http://localhost:${this.options.port}`));
     console.log(chalk.blue(`🤖 MCP Server: http://localhost:${this.options.mcpPort}/api/mcp/http`));
