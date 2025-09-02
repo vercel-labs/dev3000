@@ -56,6 +56,7 @@ export class DevEnvironment {
   private browser: Browser | null = null;
   private browserContext: BrowserContext | null = null;
   private logger: Logger;
+  private stateTimer: NodeJS.Timeout | null = null;
   private options: DevEnvironmentOptions;
   private screenshotDir: string;
   private mcpPublicDir: string;
@@ -383,6 +384,18 @@ export class DevEnvironment {
       });
     }
     
+    // Set up periodic storage state saving (every 30 seconds)
+    this.stateTimer = setInterval(async () => {
+      if (this.browserContext) {
+        try {
+          const stateFile = join(this.options.profileDir, 'state.json');
+          await this.browserContext.storageState({ path: stateFile });
+        } catch (error) {
+          // Ignore errors - context might be closed
+        }
+      }
+    }, 30000);
+    
     // Navigate to the app using the existing blank page
     const pages = this.browserContext.pages();
     const page = pages.length > 0 ? pages[0] : await this.browserContext.newPage();
@@ -599,6 +612,11 @@ export class DevEnvironment {
           console.log(chalk.gray(`⚠️ Could not kill ${name} on port ${port}`));
         }
       };
+      
+      // Clear the state saving timer
+      if (this.stateTimer) {
+        clearInterval(this.stateTimer);
+      }
       
       await Promise.all([
         killPortProcess(this.options.port, 'your app server'),
