@@ -53,6 +53,7 @@ function detectPackageManagerForRun(): string {
 export class DevEnvironment {
   private serverProcess: ChildProcess | null = null;
   private mcpServerProcess: ChildProcess | null = null;
+  private browser: Browser | null = null;
   private browserContext: BrowserContext | null = null;
   private logger: Logger;
   private options: DevEnvironmentOptions;
@@ -319,11 +320,9 @@ export class DevEnvironment {
     
     try {
       // Try to use system Chrome first
-      this.browserContext = await chromium.launchPersistentContext(this.options.profileDir, {
+      this.browser = await chromium.launch({
         headless: false,
         channel: 'chrome', // Use system Chrome
-        // No fixed viewport to allow window resizing
-        deviceScaleFactor: 2,
         // Remove automation flags to allow normal dialog behavior
         args: [
           '--disable-web-security', // Keep this for dev server access
@@ -334,10 +333,8 @@ export class DevEnvironment {
     } catch (error: any) {
       // Fallback to Playwright's bundled chromium
       try {
-        this.browserContext = await chromium.launchPersistentContext(this.options.profileDir, {
+        this.browser = await chromium.launch({
           headless: false,
-          viewport: { width: 1280, height: 720 },
-          deviceScaleFactor: 2,
           // Remove automation flags to allow normal dialog behavior
           args: [
             '--disable-web-security', // Keep this for dev server access
@@ -352,10 +349,8 @@ export class DevEnvironment {
           await this.installPlaywrightBrowsers();
           
           // Retry with bundled chromium
-          this.browserContext = await chromium.launchPersistentContext(this.options.profileDir, {
+          this.browser = await chromium.launch({
             headless: false,
-            viewport: { width: 1280, height: 720 },
-            deviceScaleFactor: 2,
             // Remove automation flags to allow normal dialog behavior
             args: [
               '--disable-web-security', // Keep this for dev server access
@@ -368,6 +363,12 @@ export class DevEnvironment {
         }
       }
     }
+    
+    // Create context with viewport: null to enable window resizing
+    this.browserContext = await this.browser.newContext({
+      viewport: null, // This makes the page size depend on the window size
+      deviceScaleFactor: 2, // Prevent white flashing
+    });
     
     // Navigate to the app using the existing blank page
     const pages = this.browserContext.pages();
@@ -383,13 +384,6 @@ export class DevEnvironment {
     });
     
     await page.goto(`http://localhost:${this.options.port}`);
-    
-    // Try to enable resizing by setting viewport to null after page load
-    try {
-      await page.setViewportSize(null as any);
-    } catch (error) {
-      // If null doesn't work, ignore the error and continue
-    }
     
     // Take initial screenshot
     const initialScreenshot = await this.takeScreenshot(page, 'initial-load');
@@ -599,10 +593,10 @@ export class DevEnvironment {
       ]);
       
       // Close browser if still running
-      if (this.browserContext) {
+      if (this.browser) {
         try {
           console.log(chalk.blue('🔄 Closing browser...'));
-          await this.browserContext.close();
+          await this.browser.close();
           console.log(chalk.green('✅ Browser closed'));
         } catch (error) {
           console.log(chalk.gray('⚠️ Could not close browser gracefully'));
