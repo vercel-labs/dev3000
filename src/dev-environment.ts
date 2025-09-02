@@ -323,7 +323,6 @@ export class DevEnvironment {
         headless: false,
         channel: 'chrome', // Use system Chrome
         viewport: null, // Allow natural viewport resizing
-        deviceScaleFactor: 2,
         // Remove automation flags to allow normal dialog behavior
         args: [
           '--disable-web-security', // Keep this for dev server access
