@@ -322,7 +322,7 @@ export class DevEnvironment {
       this.browserContext = await chromium.launchPersistentContext(this.options.profileDir, {
         headless: false,
         channel: 'chrome', // Use system Chrome
-        viewport: { width: 1280, height: 720 },
+        viewport: null, // Allow natural viewport resizing
         deviceScaleFactor: 2,
         // Remove automation flags to allow normal dialog behavior
         args: [
@@ -336,7 +336,7 @@ export class DevEnvironment {
       try {
         this.browserContext = await chromium.launchPersistentContext(this.options.profileDir, {
           headless: false,
-          viewport: { width: 1280, height: 720 },
+          viewport: null, // Allow natural viewport resizing
           deviceScaleFactor: 2,
           // Remove automation flags to allow normal dialog behavior
           args: [
@@ -354,7 +354,7 @@ export class DevEnvironment {
           // Retry with bundled chromium
           this.browserContext = await chromium.launchPersistentContext(this.options.profileDir, {
             headless: false,
-            viewport: { width: 1280, height: 720 },
+            viewport: null, // Allow natural viewport resizing
             deviceScaleFactor: 2,
             // Remove automation flags to allow normal dialog behavior
             args: [
