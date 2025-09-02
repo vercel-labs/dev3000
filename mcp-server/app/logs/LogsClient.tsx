@@ -59,6 +59,7 @@ export default function LogsClient({ version }: LogsClientProps) {
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [isLoadingNew, setIsLoadingNew] = useState(false);
   const [lastLogCount, setLastLogCount] = useState(0);
+  const [lastFetched, setLastFetched] = useState<Date | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -68,7 +69,16 @@ export default function LogsClient({ version }: LogsClientProps) {
     
     try {
       const response = await fetch('/api/logs/tail?lines=1000');
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
       const data: LogsApiResponse = await response.json();
+      
+      if (!data.logs) {
+        console.warn('No logs data in response');
+        return;
+      }
       
       const entries = data.logs
         .split('\n')
@@ -78,6 +88,7 @@ export default function LogsClient({ version }: LogsClientProps) {
       
       if (entries.length > lastLogCount) {
         setIsLoadingNew(true);
+        setLastFetched(new Date());
         setTimeout(() => {
           setLogs(entries);
           setLastLogCount(entries.length);
@@ -90,6 +101,7 @@ export default function LogsClient({ version }: LogsClientProps) {
       }
     } catch (error) {
       console.error('Error polling logs:', error);
+      // Don't spam console on network errors during polling
     }
   };
 
@@ -112,7 +124,17 @@ export default function LogsClient({ version }: LogsClientProps) {
   const loadInitialLogs = async () => {
     try {
       const response = await fetch(`/api/logs/${mode}?lines=1000`);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
       const data: LogsApiResponse = await response.json();
+      
+      if (!data.logs) {
+        console.warn('No logs data in response');
+        setLogs([]);
+        return;
+      }
       
       const entries = data.logs
         .split('\n')
@@ -122,6 +144,7 @@ export default function LogsClient({ version }: LogsClientProps) {
       
       setLogs(entries);
       setLastLogCount(entries.length);
+      setLastFetched(new Date());
       
       // Auto-scroll to bottom for tail mode
       if (mode === 'tail') {
@@ -132,6 +155,7 @@ export default function LogsClient({ version }: LogsClientProps) {
       }
     } catch (error) {
       console.error('Error loading logs:', error);
+      setLogs([]);
     }
   };
 
@@ -226,21 +250,26 @@ export default function LogsClient({ version }: LogsClientProps) {
             ))}
             <div ref={bottomRef} />
             
-            {/* Footer with loading spinner and scroll indicator */}
-            <div className="h-16 flex items-center justify-center">
+            {/* Footer with status and scroll indicator */}
+            <div className="h-4 flex items-center justify-center border-t border-gray-200 bg-gray-50">
               {isLoadingNew && (
-                <div className="flex items-center gap-2 text-gray-500">
-                  <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin"></div>
-                  <span className="text-sm">Loading new logs...</span>
+                <div className="flex items-center gap-1">
+                  <div className="w-3 h-3 border border-gray-300 border-t-blue-500 rounded-full animate-spin"></div>
+                  <span className="text-xs text-gray-500">Loading...</span>
                 </div>
               )}
               {mode === 'tail' && !isAtBottom && !isLoadingNew && (
                 <button
                   onClick={() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' })}
-                  className="flex items-center gap-1 px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
+                  className="flex items-center gap-1 px-2 py-0.5 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
                 >
-                  ↓ Scroll to bottom for live updates
+                  ↓ Live updates
                 </button>
+              )}
+              {!isLoadingNew && isAtBottom && lastFetched && (
+                <span className="text-xs text-gray-400 font-mono">
+                  Last updated {lastFetched.toLocaleTimeString()}
+                </span>
               )}
             </div>
           </div>
