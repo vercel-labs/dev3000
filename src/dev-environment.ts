@@ -384,6 +384,13 @@ export class DevEnvironment {
     
     await page.goto(`http://localhost:${this.options.port}`);
     
+    // Get current browser window size and set viewport to match, enabling resizing
+    const browserSize = await page.evaluate(() => ({
+      width: window.outerWidth,
+      height: window.outerHeight
+    }));
+    await page.setViewportSize({ width: browserSize.width, height: browserSize.height });
+    
     // Take initial screenshot
     const initialScreenshot = await this.takeScreenshot(page, 'initial-load');
     if (initialScreenshot) {
