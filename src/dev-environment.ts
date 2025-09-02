@@ -175,7 +175,7 @@ export class DevEnvironment {
     this.progressBar.stop();
     
     console.log(chalk.green('\n✅ Development environment ready!'));
-    console.log(chalk.blue(`📊 Logs: ${this.options.logFile}`));
+    console.log(chalk.blue(`📊 Logs: ${join(tmpdir(), 'dev-playwright-consolidated.log')}`));
     console.log(chalk.yellow('💡 Give this to an AI to auto debug and fix your app\n'));
     console.log(chalk.blue(`🌐 Your App: http://localhost:${this.options.port}`));
     console.log(chalk.blue(`🤖 MCP Server: http://localhost:${this.options.mcpPort}/api/mcp/http`));
