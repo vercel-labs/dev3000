@@ -1,6 +1,6 @@
 {
   "name": "dev-playwright",
-  "version": "0.0.27",
+  "version": "0.0.28",
   "description": "AI-powered development tools with browser monitoring and MCP server integration",
   "type": "module",
   "main": "dist/index.js",
