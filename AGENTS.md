@@ -17,6 +17,8 @@ pnpm run dev
 - Use `pnpm run release` to publish new versions
 - Use `pnpm publish` not `npm publish`
 
+**CRITICAL**: NEVER run `pnpm run release` or any publish commands unless the user explicitly says "release" or "publish". Always wait for explicit permission before releasing versions.
+
 The default server command in CLI is `pnpm dev` but can be overridden with `--server-command`.
 
 ## Architecture Overview
