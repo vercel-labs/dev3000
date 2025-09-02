@@ -2,6 +2,16 @@
 
 Feed your AI assistant a delicious stream of development data! dev-playwright captures everything happening in your web app - server logs, browser events, console messages, network requests, and automatic screenshots - all in one unified, timestamped feed that Claude (and other AI assistants) can easily digest.
 
+## 🚀 Quick Start
+
+```bash
+# Install in your project
+pnpm install dev-playwright
+
+# Start monitoring (default: runs "pnpm run dev" on port 3000)
+pnpx dev-playwright
+```
+
 ## 🧠 Why this exists
 
 Ever tried to debug an issue with Claude but struggled to explain what was happening? Or spent forever trying to reproduce a bug that only happens in specific conditions?
@@ -18,16 +28,6 @@ It's like having a development photographer + stenographer + AI whisperer all in
 🌐 **Beautiful Web UI** - View logs with inlined screenshots at `http://localhost:3684/logs`  
 🤖 **AI-Ready** - MCP server lets Claude read logs and analyze issues instantly  
 ⚡ **Zero Config** - One command, works with any web framework
-
-## 🚀 Quick Start
-
-```bash
-# Install in your project
-pnpm install dev-playwright
-
-# Start monitoring (default: runs "pnpm run dev" on port 3000)
-pnpx dev-playwright
-```
 
 That's it! dev-playwright will:
 
