@@ -1,6 +1,6 @@
 import { spawn, ChildProcess } from 'child_process';
 import { chromium, Browser, Page, BrowserContext } from 'playwright';
-import { writeFileSync, appendFileSync, mkdirSync, existsSync, copyFileSync, unlinkSync } from 'fs';
+import { writeFileSync, appendFileSync, mkdirSync, existsSync, copyFileSync, unlinkSync, readFileSync } from 'fs';
 import { join, dirname, basename } from 'path';
 import { fileURLToPath } from 'url';
 import { tmpdir } from 'os';
@@ -110,6 +110,8 @@ export class DevEnvironment {
 
   async start() {
     console.log(chalk.blue('🚀 Starting development environment...'));
+    console.log(chalk.green.bold(`📊 Consolidated Log: ${this.options.logFile}`));
+    console.log(chalk.gray('💡 Give Claude this log file path for AI debugging!\n'));
     
     // Check if ports are available first
     await this.checkPortsAvailable();
@@ -146,7 +148,7 @@ export class DevEnvironment {
     console.log(chalk.magenta(`📸 Visual Timeline: http://localhost:${this.options.mcpPort}/logs`));
     // console.log(chalk.gray(`   To stop later: kill -TERM -$(cat ${this.pidFile})`));
     console.log(chalk.yellow('\n🎯 Ready for AI debugging! All processes are running in the background.'));
-    console.log(chalk.gray('\n💡 Tip: Use "pkill -f dev-playwright" to stop all processes later.'));
+    console.log(chalk.gray(`\n💡 To stop servers later: lsof -ti:${this.options.port} | xargs kill -9 && lsof -ti:${this.options.mcpPort} | xargs kill -9`));
   }
 
   private async startServer() {
@@ -160,13 +162,11 @@ export class DevEnvironment {
       detached: true, // Run independently
     });
 
-    // Log server output
+    // Log server output (to file only, reduce stdout noise)
     this.serverProcess.stdout?.on('data', (data) => {
       const message = data.toString().trim();
       if (message) {
         this.logger.log('server', message);
-        // Also show in console with prefix
-        console.log(chalk.gray('[SERVER]'), message);
       }
     });
 
@@ -174,7 +174,10 @@ export class DevEnvironment {
       const message = data.toString().trim();
       if (message) {
         this.logger.log('server', `ERROR: ${message}`);
-        console.error(chalk.red('[SERVER ERROR]'), message);
+        // Only show critical server errors in stdout
+        if (message.includes('FATAL') || message.includes('Error:')) {
+          console.error(chalk.red('[SERVER ERROR]'), message);
+        }
       }
     });
 
@@ -197,6 +200,18 @@ export class DevEnvironment {
       throw new Error(`MCP server directory not found at ${mcpServerPath}`);
     }
     
+    // Read version from package.json
+    const currentFile = fileURLToPath(import.meta.url);
+    const packageRoot = dirname(dirname(currentFile));
+    const packageJsonPath = join(packageRoot, 'package.json');
+    let version = '0.0.0';
+    try {
+      const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
+      version = packageJson.version;
+    } catch (error) {
+      console.log(chalk.yellow('⚠️ Could not read version from package.json'));
+    }
+
     // Start the MCP server
     this.mcpServerProcess = spawn('npm', ['run', 'dev'], {
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -207,15 +222,15 @@ export class DevEnvironment {
         ...process.env,
         PORT: this.options.mcpPort,
         LOG_FILE_PATH: this.options.logFile, // Pass log file path to MCP server
+        DEV_PLAYWRIGHT_VERSION: version, // Pass version to MCP server
       },
     });
 
-    // Log MCP server output
+    // Log MCP server output (to file only, reduce stdout noise)
     this.mcpServerProcess.stdout?.on('data', (data) => {
       const message = data.toString().trim();
       if (message) {
         this.logger.log('server', message);
-        console.log(chalk.gray('[LOG VIEWER]'), message);
       }
     });
 
@@ -223,7 +238,10 @@ export class DevEnvironment {
       const message = data.toString().trim();
       if (message) {
         this.logger.log('server', `ERROR: ${message}`);
-        console.error(chalk.red('[LOG VIEWER ERROR]'), message);
+        // Only show critical MCP server errors in stdout
+        if (message.includes('FATAL') || message.includes('Error:')) {
+          console.error(chalk.red('[LOG VIEWER ERROR]'), message);
+        }
       }
     });
 
@@ -460,7 +478,6 @@ export class DevEnvironment {
         const level = msg.type().toUpperCase();
         const text = msg.text();
         this.logger.log('browser', `[CONSOLE ${level}] ${text}`);
-        console.log(chalk.cyan('[BROWSER]'), `[${level}]`, text);
       }
     });
     
@@ -475,7 +492,6 @@ export class DevEnvironment {
         if (error.stack) {
           this.logger.log('browser', `[PAGE ERROR STACK] ${error.stack}`);
         }
-        console.error(chalk.red('[BROWSER ERROR]'), error.message);
       }
     });
     
@@ -496,7 +512,6 @@ export class DevEnvironment {
           if (screenshotPath) {
             this.logger.log('browser', `[SCREENSHOT] ${screenshotPath}`);
           }
-          console.error(chalk.red('[NETWORK ERROR]'), status, url);
         }
       }
     });
@@ -516,8 +531,6 @@ export class DevEnvironment {
           }
           lastRoute = currentRoute;
         }
-        
-        console.log(chalk.magenta('[BROWSER]'), `Navigated to: ${frame.url()}`);
       }
     });
   }

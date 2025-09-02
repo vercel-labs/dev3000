@@ -153,7 +153,8 @@ export default function LogsPage() {
         <div className="max-w-7xl mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <h1 className="text-2xl font-bold text-gray-900">🎭 Dev Playwright</h1>
+              <h1 className="text-2xl font-bold text-gray-900">🎭 dev-playwright</h1>
+              <span className="text-xs text-gray-400 ml-2">(v{process.env.DEV_PLAYWRIGHT_VERSION || '0.0.0'})</span>
               <span className="text-sm text-gray-500">{logs.length} entries</span>
             </div>
             

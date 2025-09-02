@@ -26,20 +26,14 @@ It's like having a development photographer + stenographer + AI whisperer all in
 pnpm install dev-playwright
 
 
-# My primary usage mechanism is to tell Claude to run it for you:
-# "Run pnpx dev-playwright to start monitoring my development environment"
-
-
-# Or you can start in a terminal (default: runs "pnpm run dev",  port 3000)
+# Start in a terminal (default: runs "pnpm run dev",  port 3000)
+# Logs will be written to a file path for you to give to claude or tail -f yourself
 pnpx dev-playwright
 
 
 # Or specify a different build script and port
 pnpx dev-playwright --script build-start --port 3001
-is the
 
-# To stop all processes:
-pkill -f "dev-playwright"
 ```
 
 That's it! dev-playwright will:
