@@ -25,7 +25,7 @@ The tool monitors your app in a real browser and captures:
 Give Claude your log file for instant debugging:
 
 ```
-Read /tmp/dev-playwright-consolidated.log
+Read /tmp/dev-playwright.log
 ```
 
 Or use the MCP server at `http://localhost:3684/api/mcp/http` for advanced querying:
@@ -42,7 +42,7 @@ pnpx dev-playwright [options]
   --mcp-port <port>         MCP server port (default: 3684)  
   -s, --script <script>     Package.json script to run (default: dev)
   --profile-dir <dir>       Chrome profile directory (persists cookies/login state)
-  --log-file <file>         Log file path
+  --logfile <file>          Log file path (default: /tmp/dev-playwright.log)
 ```
 
 Examples:

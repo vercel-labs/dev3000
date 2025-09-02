@@ -27,7 +27,7 @@ program
   .option('--mcp-port <port>', 'MCP server port', '3684')
   .option('-s, --script <script>', 'Package.json script to run (e.g. dev, build-start)', 'dev')
   .option('--profile-dir <dir>', 'Chrome profile directory', join(tmpdir(), 'dev-playwright-chrome-profile'))
-  .option('--log-file <file>', 'Consolidated log file path', join(tmpdir(), 'dev-playwright-consolidated.log'))
+  .option('--logfile <file>', 'Consolidated log file path', '/tmp/dev-playwright.log')
   .action(async (options) => {
     console.log(chalk.blue.bold('🤖 Starting AI Development Environment'));
     
@@ -38,6 +38,7 @@ program
     try {
       await startDevEnvironment({
         ...options,
+        logFile: options.logfile,
         serverCommand
       });
     } catch (error) {
