@@ -946,9 +946,17 @@ export class DevEnvironment {
           const interaction = text.replace('[DEV3000_INTERACTION] ', '');
           this.logger.log('browser', `[INTERACTION] ${interaction}`);
         } else {
-          // Regular console logs
+          // Clean up styled console logs (remove %c formatters and excessive whitespace)
+          const cleanText = text
+            .replace(/%[cs]/g, '') // Remove %c and %s formatters
+            .replace(/background:[^;]+;/g, '') // Remove CSS background styles
+            .replace(/color:[^;]+;/g, '') // Remove CSS color styles  
+            .replace(/border-radius:[^;]+;?/g, '') // Remove CSS border-radius
+            .replace(/\s{2,}/g, ' ') // Replace multiple spaces with single space
+            .trim(); // Remove leading/trailing whitespace
+          
           const level = msg.type().toUpperCase();
-          this.logger.log('browser', `[CONSOLE ${level}] ${text}`);
+          this.logger.log('browser', `[CONSOLE ${level}] ${cleanText}`);
         }
       }
     });
