@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { LogEntry, LogsApiResponse, ConfigApiResponse } from '../../types';
+import { LogEntry, LogsApiResponse, ConfigApiResponse, LogFile, LogListResponse } from '@/types';
 
 export function parseLogEntries(logContent: string): LogEntry[] {
   // Split by timestamp pattern - each timestamp starts a new log entry
@@ -106,9 +106,28 @@ export default function LogsClient({ version }: LogsClientProps) {
   const [isLoadingNew, setIsLoadingNew] = useState(false);
   const [lastLogCount, setLastLogCount] = useState(0);
   const [lastFetched, setLastFetched] = useState<Date | null>(null);
+  const [availableLogs, setAvailableLogs] = useState<LogFile[]>([]);
+  const [currentLogFile, setCurrentLogFile] = useState<string>('');
+  const [projectName, setProjectName] = useState<string>('');
+  const [showLogSelector, setShowLogSelector] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const loadAvailableLogs = async () => {
+    try {
+      const response = await fetch('/api/logs/list');
+      if (response.ok) {
+        const data: LogListResponse = await response.json();
+        setAvailableLogs(data.files);
+        setCurrentLogFile(data.currentFile);
+        setProjectName(data.projectName);
+      }
+    } catch (error) {
+      console.error('Error loading available logs:', error);
+    }
+  };
 
   const pollForNewLogs = async () => {
     if (mode !== 'tail' || !isAtBottom) return;
@@ -164,6 +183,9 @@ export default function LogsClient({ version }: LogsClientProps) {
   }, [mode, isAtBottom, lastLogCount]);
 
   const loadInitialLogs = async () => {
+    // Load available logs list first
+    await loadAvailableLogs();
+    
     try {
       const response = await fetch(`/api/logs/${mode}?lines=1000`);
       if (!response.ok) {
@@ -209,6 +231,20 @@ export default function LogsClient({ version }: LogsClientProps) {
     };
   }, []);
 
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowLogSelector(false);
+      }
+    };
+
+    if (showLogSelector) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showLogSelector]);
+
   const handleScroll = () => {
     if (containerRef.current) {
       const { scrollTop, scrollHeight, clientHeight } = containerRef.current;
@@ -229,6 +265,62 @@ export default function LogsClient({ version }: LogsClientProps) {
             <div className="flex items-center gap-4">
               <h1 className="text-2xl font-bold text-gray-900">🎯 dev3000</h1>
               <span className="text-xs text-gray-400 ml-2">(v{version})</span>
+              
+              {/* Log File Selector */}
+              <div className="relative" ref={dropdownRef}>
+                <button
+                  onClick={() => setShowLogSelector(!showLogSelector)}
+                  className="flex items-center gap-2 px-3 py-1 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-md transition-colors"
+                >
+                  <span className="font-mono text-xs">
+                    {currentLogFile ? currentLogFile.split('/').pop() : 'dev3000.log'}
+                  </span>
+                  <svg 
+                    className={`w-4 h-4 transition-transform ${showLogSelector ? 'rotate-180' : ''}`} 
+                    fill="none" 
+                    stroke="currentColor" 
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                
+                {/* Dropdown */}
+                {showLogSelector && availableLogs.length > 1 && (
+                  <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-20 min-w-80">
+                    <div className="py-1 max-h-60 overflow-y-auto">
+                      <div className="px-3 py-2 text-xs font-medium text-gray-500 border-b">
+                        {projectName} logs ({availableLogs.length})
+                      </div>
+                      {availableLogs.map((logFile) => (
+                        <button
+                          key={logFile.path}
+                          onClick={() => {
+                            // TODO: Implement log switching
+                            setShowLogSelector(false);
+                          }}
+                          className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center justify-between ${
+                            logFile.isCurrent ? 'bg-blue-50 text-blue-900' : 'text-gray-700'
+                          }`}
+                        >
+                          <div className="flex flex-col">
+                            <span className="font-mono text-xs">
+                              {logFile.name}
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              {new Date(logFile.mtime).toLocaleString()} • {Math.round(logFile.size / 1024)}KB
+                            </span>
+                          </div>
+                          {logFile.isCurrent && (
+                            <span className="text-xs text-blue-600 font-medium">current</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              
               <span className="text-sm text-gray-500">{logs.length} entries</span>
             </div>
             

@@ -6,7 +6,7 @@ import { tmpdir } from 'os';
 import { join, dirname } from 'path';
 import { existsSync, readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
-import { startDevEnvironment } from './dev-environment.js';
+import { startDevEnvironment, createPersistentLogFile } from './dev-environment.js';
 
 function detectPackageManager(): string {
   if (existsSync('pnpm-lock.yaml')) return 'pnpm';
@@ -41,7 +41,6 @@ program
   .option('--mcp-port <port>', 'MCP server port', '3684')
   .option('-s, --script <script>', 'Package.json script to run (e.g. dev, build-start)', 'dev')
   .option('--profile-dir <dir>', 'Chrome profile directory', join(tmpdir(), 'dev3000-chrome-profile'))
-  .option('--logfile <file>', 'Consolidated log file path', '/tmp/dev3000.log')
   .action(async (options) => {
     console.log(chalk.blue.bold('🤖 Starting AI Development Environment'));
     
@@ -50,9 +49,14 @@ program
     const serverCommand = `${packageManager} run ${options.script}`;
     
     try {
+      // Create persistent log file and setup symlink
+      const logFile = createPersistentLogFile();
+      console.log(chalk.gray(`📝 Logging to: ${logFile}`));
+      console.log(chalk.gray(`📎 Current session symlinked to /tmp/dev3000.log`));
+      
       await startDevEnvironment({
         ...options,
-        logFile: options.logfile,
+        logFile,
         serverCommand
       });
     } catch (error) {

@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { readFileSync, existsSync } from 'fs';
-import { LogsApiResponse, LogsApiError } from '../../../types';
+import { LogsApiResponse, LogsApiError } from '@/types';
 
 export async function GET(request: NextRequest): Promise<Response> {
   try {

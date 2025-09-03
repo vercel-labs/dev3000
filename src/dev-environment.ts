@@ -1,7 +1,7 @@
 import { spawn, ChildProcess } from 'child_process';
 import { chromium, Browser, Page, BrowserContext } from 'playwright';
-import { writeFileSync, appendFileSync, mkdirSync, existsSync, copyFileSync, readFileSync, cpSync, lstatSync } from 'fs';
-import { join, dirname } from 'path';
+import { writeFileSync, appendFileSync, mkdirSync, existsSync, copyFileSync, readFileSync, cpSync, lstatSync, symlinkSync, unlinkSync, readdirSync, statSync } from 'fs';
+import { join, dirname, basename } from 'path';
 import { fileURLToPath } from 'url';
 import { tmpdir } from 'os';
 import chalk from 'chalk';
@@ -48,6 +48,85 @@ function detectPackageManagerForRun(): string {
   if (existsSync('yarn.lock')) return 'yarn';
   if (existsSync('package-lock.json')) return 'npm';
   return 'npm'; // fallback
+}
+
+export function createPersistentLogFile(): string {
+  // Create /var/log/dev3000 directory
+  const logBaseDir = '/var/log/dev3000';
+  try {
+    if (!existsSync(logBaseDir)) {
+      mkdirSync(logBaseDir, { recursive: true });
+    }
+  } catch (error) {
+    // Fallback to user's temp directory if /var/log is not writable
+    const fallbackDir = join(tmpdir(), 'dev3000-logs');
+    if (!existsSync(fallbackDir)) {
+      mkdirSync(fallbackDir, { recursive: true });
+    }
+    return createLogFileInDir(fallbackDir);
+  }
+  
+  return createLogFileInDir(logBaseDir);
+}
+
+function createLogFileInDir(baseDir: string): string {
+  // Get current working directory name
+  const cwdName = basename(process.cwd()).replace(/[^a-zA-Z0-9-_]/g, '_');
+  
+  // Create timestamp
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  
+  // Create log file path
+  const logFileName = `dev3000-${cwdName}-${timestamp}.log`;
+  const logFilePath = join(baseDir, logFileName);
+  
+  // Prune old logs for this project (keep only 10 most recent)
+  pruneOldLogs(baseDir, cwdName);
+  
+  // Create the log file
+  writeFileSync(logFilePath, '');
+  
+  // Create or update symlink to /tmp/dev3000.log
+  const symlinkPath = '/tmp/dev3000.log';
+  try {
+    if (existsSync(symlinkPath)) {
+      unlinkSync(symlinkPath);
+    }
+    symlinkSync(logFilePath, symlinkPath);
+  } catch (error) {
+    console.warn(chalk.yellow(`⚠️ Could not create symlink ${symlinkPath}: ${error}`));
+  }
+  
+  return logFilePath;
+}
+
+function pruneOldLogs(baseDir: string, cwdName: string): void {
+  try {
+    // Find all log files for this project
+    const files = readdirSync(baseDir)
+      .filter(file => file.startsWith(`dev3000-${cwdName}-`) && file.endsWith('.log'))
+      .map(file => ({
+        name: file,
+        path: join(baseDir, file),
+        mtime: statSync(join(baseDir, file)).mtime
+      }))
+      .sort((a, b) => b.mtime.getTime() - a.mtime.getTime()); // Most recent first
+    
+    // Keep only the 10 most recent, delete the rest
+    if (files.length >= 10) {
+      const filesToDelete = files.slice(9); // Keep first 9, delete the rest
+      for (const file of filesToDelete) {
+        try {
+          unlinkSync(file.path);
+          console.log(chalk.gray(`🗑️ Pruned old log: ${file.name}`));
+        } catch (error) {
+          console.warn(chalk.yellow(`⚠️ Could not delete old log ${file.name}: ${error}`));
+        }
+      }
+    }
+  } catch (error) {
+    console.warn(chalk.yellow(`⚠️ Could not prune logs: ${error}`));
+  }
 }
 
 export class DevEnvironment {

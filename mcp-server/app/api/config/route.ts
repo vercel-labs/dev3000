@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { ConfigApiResponse } from '../../types';
+import { ConfigApiResponse } from '@/types';
 
 export async function GET(): Promise<NextResponse> {
   const response: ConfigApiResponse = {

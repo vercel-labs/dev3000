@@ -28,6 +28,8 @@ Give Claude your log file for instant debugging:
 Read /tmp/dev3000.log
 ```
 
+Logs are automatically saved with timestamps in `/var/log/dev3000/` (or temp directory) and rotated to keep the 10 most recent per project. The current session is always symlinked to `/tmp/dev3000.log` for easy access.
+
 Or use the MCP server at `http://localhost:3684/api/mcp/http` for advanced querying:
 - `read_consolidated_logs` - Get recent logs with filtering
 - `search_logs` - Regex search with context  
@@ -42,7 +44,6 @@ dev3000 [options]
   --mcp-port <port>         MCP server port (default: 3684)  
   -s, --script <script>     Package.json script to run (default: dev)
   --profile-dir <dir>       Chrome profile directory (persists cookies/login state)
-  --logfile <file>          Log file path (default: /tmp/dev3000.log)
 ```
 
 Examples:

@@ -25,3 +25,22 @@ export interface StreamLogData {
   type: 'log';
   line: string;
 }
+
+export interface LogFile {
+  name: string;
+  path: string;
+  timestamp: string;
+  size: number;
+  mtime: Date;
+  isCurrent: boolean;
+}
+
+export interface LogListResponse {
+  files: LogFile[];
+  currentFile: string;
+  projectName: string;
+}
+
+export interface LogListError {
+  error: string;
+}
