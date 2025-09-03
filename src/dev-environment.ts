@@ -230,8 +230,13 @@ export class DevEnvironment {
     // Check if MCP server dependencies are installed, install if missing
     const nodeModulesPath = join(mcpServerPath, 'node_modules');
     if (!existsSync(nodeModulesPath)) {
-      console.log(chalk.blue('📦 Installing MCP server dependencies (first time only)...'));
+      // Hide progress bar during installation
+      this.progressBar.stop();
+      console.log(chalk.blue('\n📦 Installing MCP server dependencies (first time only)...'));
       await this.installMcpServerDeps(mcpServerPath);
+      console.log(''); // Add spacing
+      // Resume progress bar
+      this.progressBar.start(100, 20, { stage: 'Starting MCP server...' });
     }
     
     // Read version from package.json
@@ -286,7 +291,10 @@ export class DevEnvironment {
     });
 
     this.mcpServerProcess.on('exit', (code) => {
-      console.log(chalk.red(`MCP server process exited with code ${code}`));
+      // Only show exit messages for unexpected failures, not restarts
+      if (code !== 0 && code !== null) {
+        this.logger.log('server', `MCP server process exited with code ${code}`);
+      }
     });
   }
 
@@ -348,59 +356,81 @@ export class DevEnvironment {
     return new Promise<void>((resolve, reject) => {
       const packageManager = detectPackageManagerForRun();
       
-      console.log(chalk.gray(`Running: ${packageManager} install in MCP server directory`));
+      // Show spinner instead of verbose output
+      const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+      let frameIndex = 0;
+      const spinnerInterval = setInterval(() => {
+        process.stdout.write(`\r${chalk.blue(frames[frameIndex])} Installing dependencies...`);
+        frameIndex = (frameIndex + 1) % frames.length;
+      }, 100);
       
       const installProcess = spawn(packageManager, ['install'], {
-        stdio: ['inherit', 'pipe', 'pipe'],
+        stdio: ['ignore', 'pipe', 'pipe'],
         shell: true,
         cwd: mcpServerPath,
       });
 
       // Add timeout (3 minutes)
       const timeout = setTimeout(() => {
+        clearInterval(spinnerInterval);
+        process.stdout.write('\r');
         installProcess.kill('SIGKILL');
         reject(new Error('MCP server dependency installation timed out after 3 minutes'));
       }, 3 * 60 * 1000);
 
       let hasOutput = false;
 
+      // Suppress most output for cleaner experience
       installProcess.stdout?.on('data', (data) => {
         hasOutput = true;
+        // Only show critical messages
         const message = data.toString().trim();
-        if (message && !message.includes('Progress:')) {
-          console.log(chalk.gray('[MCP INSTALL]'), message);
+        if (message.includes('Done in')) {
+          clearInterval(spinnerInterval);
+          process.stdout.write(`\r${chalk.green('✅')} Dependencies installed successfully\n`);
         }
       });
 
       installProcess.stderr?.on('data', (data) => {
         hasOutput = true;
-        const message = data.toString().trim();
-        if (message && !message.includes('WARN') && !message.includes('deprecated')) {
-          console.log(chalk.gray('[MCP INSTALL]'), message);
-        }
+        // Suppress warnings and progress messages
       });
 
       installProcess.on('exit', (code) => {
+        clearInterval(spinnerInterval);
+        process.stdout.write('\r');
         clearTimeout(timeout);
+        
         if (code === 0) {
-          console.log(chalk.green('✅ MCP server dependencies installed successfully!'));
+          if (!hasOutput || !process.stdout.isTTY) {
+            console.log(chalk.green('✅ MCP server dependencies installed successfully!'));
+          }
           resolve();
         } else {
+          console.log(chalk.red('❌ MCP server dependency installation failed'));
           reject(new Error(`MCP server dependency installation failed with exit code ${code}`));
         }
       });
 
       installProcess.on('error', (error) => {
+        clearInterval(spinnerInterval);
+        process.stdout.write('\r');
         clearTimeout(timeout);
         reject(new Error(`Failed to start MCP server dependency installation: ${error.message}`));
       });
 
-      // Check if process seems stuck
+      // Show helpful message after 5 seconds
       setTimeout(() => {
         if (!hasOutput) {
-          console.log(chalk.yellow('⚠️  Installation in progress... This may take a minute on first run.'));
+          clearInterval(spinnerInterval);
+          process.stdout.write(`\r${chalk.yellow('⏳')} This may take a minute on first run...\n`);
+          // Restart spinner on next line
+          setInterval(() => {
+            process.stdout.write(`\r${chalk.blue(frames[frameIndex])} Installing dependencies...`);
+            frameIndex = (frameIndex + 1) % frames.length;
+          }, 100);
         }
-      }, 10000); // Show message after 10 seconds of no output
+      }, 5000);
     });
   }
 
