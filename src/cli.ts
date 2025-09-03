@@ -3,8 +3,9 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import { tmpdir } from 'os';
-import { join } from 'path';
-import { existsSync } from 'fs';
+import { join, dirname } from 'path';
+import { existsSync, readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
 import { startDevEnvironment } from './dev-environment.js';
 
 function detectPackageManager(): string {
@@ -14,12 +15,25 @@ function detectPackageManager(): string {
   return 'npm'; // fallback
 }
 
+// Read version from package.json
+function getVersion(): string {
+  try {
+    const currentFile = fileURLToPath(import.meta.url);
+    const packageRoot = dirname(dirname(currentFile)); // Go up from dist/ to package root
+    const packageJsonPath = join(packageRoot, 'package.json');
+    const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
+    return packageJson.version;
+  } catch (error) {
+    return '0.0.0'; // fallback
+  }
+}
+
 const program = new Command();
 
 program
   .name('dev3000')
   .description('AI-powered development tools with browser monitoring and MCP server')
-  .version('0.0.1');
+  .version(getVersion());
 
 program
   .description('AI-powered development tools with browser monitoring and MCP server')
