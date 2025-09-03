@@ -233,22 +233,15 @@ export class DevEnvironment {
     await this.startMcpServer();
     this.progressBar.update(30, { stage: 'Waiting for your app server...' });
     
-    // Animate progress while waiting for servers with realistic increments
-    const serverWaitPromise = this.waitForServer();
-    const progressAnimation = this.animateProgress(30, 50, serverWaitPromise, 'app server starting');
-    await Promise.all([serverWaitPromise, progressAnimation]);
+    // Wait for servers to be ready (no artificial delays)
+    await this.waitForServer();
+    this.progressBar.update(50, { stage: 'MCP server ready, starting browser...' });
     
-    this.progressBar.update(50, { stage: 'Waiting for MCP server...' });
-    const mcpWaitPromise = this.waitForMcpServer();
-    const mcpProgressAnimation = this.animateProgress(50, 70, mcpWaitPromise, 'MCP server starting');
-    await Promise.all([mcpWaitPromise, mcpProgressAnimation]);
-    
-    this.progressBar.update(70, { stage: 'Starting browser...' });
+    await this.waitForMcpServer();
+    this.progressBar.update(80, { stage: 'Starting browser...' });
     
     // Start browser monitoring
-    const browserPromise = this.startBrowserMonitoring();
-    const browserProgressAnimation = this.animateProgress(70, 100, browserPromise, 'browser starting');
-    await Promise.all([browserPromise, browserProgressAnimation]);
+    await this.startBrowserMonitoring();
     
     this.progressBar.update(100, { stage: 'Complete!' });
     
@@ -599,34 +592,6 @@ export class DevEnvironment {
     // Continue anyway if health check fails
   }
 
-  private async animateProgress(startPercent: number, endPercent: number, waitPromise: Promise<any>, stage: string) {
-    const duration = 15000; // 15 seconds max animation
-    const interval = 200; // Update every 200ms
-    const totalSteps = duration / interval;
-    
-    let currentPercent = startPercent;
-    let step = 0;
-    
-    const animationInterval = setInterval(() => {
-      if (step < totalSteps) {
-        // Use easing function for more realistic progress
-        const progress = step / totalSteps;
-        const easedProgress = 1 - Math.pow(1 - progress, 3); // Ease-out cubic
-        currentPercent = startPercent + (endPercent - startPercent) * easedProgress;
-        
-        this.progressBar.update(Math.min(currentPercent, endPercent - 1), { 
-          stage: `${stage}... ${Math.floor(currentPercent)}%` 
-        });
-        step++;
-      }
-    }, interval);
-    
-    try {
-      await waitPromise;
-    } finally {
-      clearInterval(animationInterval);
-    }
-  }
 
   private async installMcpServerDeps(mcpServerPath: string): Promise<void> {
     return new Promise<void>((resolve, reject) => {
