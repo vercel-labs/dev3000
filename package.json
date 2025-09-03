@@ -20,7 +20,6 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "prepare": "pnpm run build",
-    "postinstall": "cd mcp-server && pnpm install",
     "release": "pnpm run build && pnpm version patch && git push origin main --tags && pnpm publish --otp=$(op item get npm --otp)"
   },
   "keywords": [
