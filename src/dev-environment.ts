@@ -937,27 +937,62 @@ export class DevEnvironment {
     this.logger.log('browser', `📄 New page: ${url}`);
     
     // Console logs
-    page.on('console', (msg) => {
+    page.on('console', async (msg) => {
       if (page.url().includes(`localhost:${this.options.port}`)) {
-        const text = msg.text();
-        
         // Handle our interaction tracking logs specially
+        const text = msg.text();
         if (text.startsWith('[DEV3000_INTERACTION]')) {
           const interaction = text.replace('[DEV3000_INTERACTION] ', '');
           this.logger.log('browser', `[INTERACTION] ${interaction}`);
-        } else {
-          // Clean up styled console logs (remove %c formatters and excessive whitespace)
-          const cleanText = text
-            .replace(/%[cs]/g, '') // Remove %c and %s formatters
-            .replace(/background:[^;]+;/g, '') // Remove CSS background styles
-            .replace(/color:[^;]+;/g, '') // Remove CSS color styles  
-            .replace(/border-radius:[^;]+;?/g, '') // Remove CSS border-radius
-            .replace(/\s{2,}/g, ' ') // Replace multiple spaces with single space
-            .trim(); // Remove leading/trailing whitespace
-          
-          const level = msg.type().toUpperCase();
-          this.logger.log('browser', `[CONSOLE ${level}] ${cleanText}`);
+          return;
         }
+
+        // Try to reconstruct the console message properly
+        let logMessage: string;
+        try {
+          // Get all arguments from the console message
+          const args = msg.args();
+          if (args.length === 0) {
+            logMessage = text;
+          } else if (args.length === 1) {
+            // Single argument - use text() which is already formatted
+            logMessage = text;
+          } else {
+            // Multiple arguments - try to format them properly
+            const argValues = await Promise.all(
+              args.map(async (arg) => {
+                try {
+                  const value = await arg.jsonValue();
+                  return typeof value === 'object' ? JSON.stringify(value) : String(value);
+                } catch {
+                  return '[object]';
+                }
+              })
+            );
+            
+            // If first arg contains %c or %s formatters, it's a styled log - clean it up
+            const firstArg = argValues[0] || '';
+            if (firstArg.includes('%c') || firstArg.includes('%s')) {
+              // Clean up styled console logs
+              logMessage = argValues.join(' ')
+                .replace(/%[cs]/g, '') // Remove %c and %s formatters
+                .replace(/background:[^;]+;/g, '') // Remove CSS background styles
+                .replace(/color:[^;]+;/g, '') // Remove CSS color styles  
+                .replace(/border-radius:[^;]+;?/g, '') // Remove CSS border-radius
+                .replace(/\s{2,}/g, ' ') // Replace multiple spaces with single space
+                .trim();
+            } else {
+              // Regular multi-argument console log
+              logMessage = argValues.join(' ');
+            }
+          }
+        } catch (error) {
+          // Fallback to original text if args processing fails
+          logMessage = text;
+        }
+
+        const level = msg.type().toUpperCase();
+        this.logger.log('browser', `[CONSOLE ${level}] ${logMessage}`);
       }
     });
     
