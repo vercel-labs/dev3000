@@ -318,6 +318,12 @@ export class DevEnvironment {
       const tmpDirPath = join(tmpdir(), 'dev3000-mcp-deps');
       nodeModulesPath = join(tmpDirPath, 'node_modules');
       actualWorkingDir = tmpDirPath;
+      
+      // Update screenshot directory to use the temp directory for global installs
+      this.screenshotDir = join(actualWorkingDir, 'public', 'screenshots');
+      if (!existsSync(this.screenshotDir)) {
+        mkdirSync(this.screenshotDir, { recursive: true });
+      }
     }
     
     if (!existsSync(nodeModulesPath)) {
