@@ -143,6 +143,7 @@ export class DevEnvironment {
   private mcpPublicDir: string;
   private pidFile: string;
   private progressBar: cliProgress.SingleBar;
+  private version: string;
 
   constructor(options: DevEnvironmentOptions) {
     this.options = options;
@@ -158,9 +159,23 @@ export class DevEnvironment {
     this.pidFile = join(tmpdir(), 'dev3000.pid');
     this.mcpPublicDir = join(packageRoot, 'mcp-server', 'public', 'screenshots');
     
-    // Initialize progress bar
+    // Read version from package.json for startup message
+    this.version = '0.0.0';
+    try {
+      const packageJsonPath = join(packageRoot, 'package.json');
+      const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
+      this.version = packageJson.version;
+      // Add -dev suffix for local development installs
+      if (packageRoot.includes('vercel-labs/dev3000')) {
+        this.version += '-dev';
+      }
+    } catch (error) {
+      // Use fallback version
+    }
+    
+    // Initialize progress bar with version
     this.progressBar = new cliProgress.SingleBar({
-      format: chalk.blue('Starting dev3000') + ' |' + chalk.cyan('{bar}') + '| {percentage}% | {stage}',
+      format: chalk.blue(`Starting dev3000 (v${this.version})`) + ' |' + chalk.cyan('{bar}') + '| {percentage}% | {stage}',
       barCompleteChar: '█',
       barIncompleteChar: '░',
       hideCursor: true,
@@ -336,21 +351,7 @@ export class DevEnvironment {
       this.progressBar.start(100, 20, { stage: 'Starting MCP server...' });
     }
     
-    // Read version from package.json
-    const versionCurrentFile = fileURLToPath(import.meta.url);
-    const versionPackageRoot = dirname(dirname(versionCurrentFile));
-    const packageJsonPath = join(versionPackageRoot, 'package.json');
-    let version = '0.0.0';
-    try {
-      const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
-      version = packageJson.version;
-      // Add -dev suffix for local development when running from symlinked source
-      if (process.cwd().includes('vercel-labs/dev3000')) {
-        version += '-dev';
-      }
-    } catch (error) {
-      console.log(chalk.yellow('⚠️ Could not read version from package.json'));
-    }
+    // Use version already read in constructor
 
     // For global installs, ensure all necessary files are copied to temp directory
     if (isGlobalInstall && actualWorkingDir !== mcpServerPath) {
@@ -403,7 +404,7 @@ export class DevEnvironment {
         ...process.env,
         PORT: this.options.mcpPort,
         LOG_FILE_PATH: this.options.logFile, // Pass log file path to MCP server
-        DEV3000_VERSION: version, // Pass version to MCP server
+        DEV3000_VERSION: this.version, // Pass version to MCP server
       },
     });
 

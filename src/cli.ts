@@ -22,7 +22,14 @@ function getVersion(): string {
     const packageRoot = dirname(dirname(currentFile)); // Go up from dist/ to package root
     const packageJsonPath = join(packageRoot, 'package.json');
     const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
-    return packageJson.version;
+    let version = packageJson.version;
+    
+    // Add -dev suffix for local development installs
+    if (packageRoot.includes('vercel-labs/dev3000')) {
+      version += '-dev';
+    }
+    
+    return version;
   } catch (error) {
     return '0.0.0'; // fallback
   }
