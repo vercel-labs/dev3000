@@ -3,7 +3,7 @@ import { ConfigApiResponse } from '@/types';
 
 export async function GET(): Promise<NextResponse> {
   const response: ConfigApiResponse = {
-    version: process.env.DEV_PLAYWRIGHT_VERSION || '0.0.0'
+    version: process.env.DEV3000_VERSION || '0.0.0'
   };
   
   return NextResponse.json(response);

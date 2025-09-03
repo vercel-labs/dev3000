@@ -41,6 +41,7 @@ program
   .option('--mcp-port <port>', 'MCP server port', '3684')
   .option('-s, --script <script>', 'Package.json script to run (e.g. dev, build-start)', 'dev')
   .option('--profile-dir <dir>', 'Chrome profile directory', join(tmpdir(), 'dev3000-chrome-profile'))
+  .option('--debug', 'Enable debug logging to console')
   .action(async (options) => {
     console.log(chalk.blue.bold('🤖 Starting AI Development Environment'));
     
@@ -57,7 +58,8 @@ program
       await startDevEnvironment({
         ...options,
         logFile,
-        serverCommand
+        serverCommand,
+        debug: options.debug
       });
     } catch (error) {
       console.error(chalk.red('❌ Failed to start development environment:'), error);

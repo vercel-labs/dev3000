@@ -104,6 +104,7 @@ export default function LogsClient({ version }: LogsClientProps) {
   const [mode, setMode] = useState<'head' | 'tail'>('tail');
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [isLoadingNew, setIsLoadingNew] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [lastLogCount, setLastLogCount] = useState(0);
   const [lastFetched, setLastFetched] = useState<Date | null>(null);
   const [availableLogs, setAvailableLogs] = useState<LogFile[]>([]);
@@ -183,6 +184,8 @@ export default function LogsClient({ version }: LogsClientProps) {
   }, [mode, isAtBottom, lastLogCount]);
 
   const loadInitialLogs = async () => {
+    setIsInitialLoading(true);
+    
     // Load available logs list first
     await loadAvailableLogs();
     
@@ -197,6 +200,7 @@ export default function LogsClient({ version }: LogsClientProps) {
       if (!data.logs) {
         console.warn('No logs data in response');
         setLogs([]);
+        setIsInitialLoading(false);
         return;
       }
       
@@ -205,6 +209,7 @@ export default function LogsClient({ version }: LogsClientProps) {
       setLogs(entries);
       setLastLogCount(entries.length);
       setLastFetched(new Date());
+      setIsInitialLoading(false);
       
       // Auto-scroll to bottom for tail mode
       if (mode === 'tail') {
@@ -262,28 +267,29 @@ export default function LogsClient({ version }: LogsClientProps) {
       <div className="bg-white shadow-sm border-b sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <h1 className="text-2xl font-bold text-gray-900">🎯 dev3000</h1>
-              <span className="text-xs text-gray-400 ml-2">(v{version})</span>
+            <div className="flex items-center gap-2 sm:gap-4">
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900 whitespace-nowrap">dev3000</h1>
+              <span className="text-xs text-gray-400 whitespace-nowrap">(v{version})</span>
               
               {/* Log File Selector */}
-              <div className="relative" ref={dropdownRef}>
-                <button
-                  onClick={() => setShowLogSelector(!showLogSelector)}
-                  className="flex items-center gap-2 px-3 py-1 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-md transition-colors"
-                >
-                  <span className="font-mono text-xs">
-                    {currentLogFile ? currentLogFile.split('/').pop() : 'dev3000.log'}
-                  </span>
-                  <svg 
-                    className={`w-4 h-4 transition-transform ${showLogSelector ? 'rotate-180' : ''}`} 
-                    fill="none" 
-                    stroke="currentColor" 
-                    viewBox="0 0 24 24"
+              {availableLogs.length > 1 ? (
+                <div className="relative" ref={dropdownRef}>
+                  <button
+                    onClick={() => setShowLogSelector(!showLogSelector)}
+                    className="flex items-center gap-2 px-3 py-1 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-md transition-colors"
                   >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
+                    <span className="font-mono text-xs">
+                      {currentLogFile ? currentLogFile.split('/').pop() : 'dev3000.log'}
+                    </span>
+                    <svg 
+                      className={`w-4 h-4 transition-transform ${showLogSelector ? 'rotate-180' : ''}`} 
+                      fill="none" 
+                      stroke="currentColor" 
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
                 
                 {/* Dropdown */}
                 {showLogSelector && availableLogs.length > 1 && (
@@ -319,12 +325,17 @@ export default function LogsClient({ version }: LogsClientProps) {
                     </div>
                   </div>
                 )}
-              </div>
+                </div>
+              ) : (
+                <span className="font-mono text-xs text-gray-600 px-3 py-1">
+                  {currentLogFile ? currentLogFile.split('/').pop() : 'dev3000.log'}
+                </span>
+              )}
               
-              <span className="text-sm text-gray-500">{logs.length} entries</span>
+              <span className="text-sm text-gray-500 hidden sm:inline">{logs.length} entries</span>
             </div>
             
-            <div className="flex items-center gap-4 text-sm">
+            <div className="flex items-center gap-2 sm:gap-4 text-sm">
               {/* Mode Toggle */}
               <div className="flex items-center bg-gray-100 rounded-md p-1">
                 <button
@@ -333,23 +344,23 @@ export default function LogsClient({ version }: LogsClientProps) {
                     // Scroll to top when switching to head mode
                     containerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
                   }}
-                  className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                  className={`px-2 sm:px-3 py-1 rounded text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
                     mode === 'head' 
                       ? 'bg-white text-gray-900 shadow-sm' 
                       : 'text-gray-600 hover:text-gray-900'
                   }`}
                 >
-                  📄 Head
+                  Head
                 </button>
                 <button
                   onClick={() => setMode('tail')}
-                  className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                  className={`px-2 sm:px-3 py-1 rounded text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
                     mode === 'tail' 
                       ? 'bg-white text-gray-900 shadow-sm' 
                       : 'text-gray-600 hover:text-gray-900'
                   }`}
                 >
-                  📺 Tail
+                  Tail
                 </button>
               </div>
               
@@ -372,7 +383,12 @@ export default function LogsClient({ version }: LogsClientProps) {
         className="max-w-7xl mx-auto px-4 py-6 pb-14 max-h-screen overflow-y-auto"
         onScroll={handleScroll}
       >
-        {filteredLogs.length === 0 ? (
+        {isInitialLoading ? (
+          <div className="text-center py-12">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <div className="text-gray-500 text-sm mt-4">Loading logs...</div>
+          </div>
+        ) : filteredLogs.length === 0 ? (
           <div className="text-center py-12">
             <div className="text-gray-400 text-lg">📝 No logs yet</div>
             <div className="text-gray-500 text-sm mt-2">

@@ -13,6 +13,7 @@ interface DevEnvironmentOptions {
   serverCommand: string;
   profileDir: string;
   logFile: string;
+  debug?: boolean;
 }
 
 class Logger {
@@ -169,6 +170,12 @@ export class DevEnvironment {
     }
     if (!existsSync(this.mcpPublicDir)) {
       mkdirSync(this.mcpPublicDir, { recursive: true });
+    }
+  }
+
+  private debugLog(message: string) {
+    if (this.options.debug) {
+      console.log(chalk.gray(`[DEBUG] ${message}`));
     }
   }
 
@@ -400,6 +407,141 @@ export class DevEnvironment {
         this.logger.log('server', `MCP server process exited with code ${code}`);
       }
     });
+  }
+
+  private startStateSaving() {
+    if (this.stateTimer) {
+      clearInterval(this.stateTimer);
+    }
+    
+    // Start continuous autosave timer (no focus dependency since it's non-intrusive)
+    this.stateTimer = setInterval(async () => {
+      if (this.browserContext) {
+        try {
+          this.debugLog('Running periodic context autosave (non-intrusive)...');
+          await this.saveStateManually();
+          this.debugLog('Context autosave completed successfully');
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          this.debugLog(`Context autosave failed: ${errorMessage}`);
+          // If context is closed, stop the timer
+          if (errorMessage.includes('closed') || errorMessage.includes('destroyed')) {
+            this.debugLog('Browser context appears closed, stopping autosave timer');
+            this.stopStateSaving();
+          }
+        }
+      }
+    }, 15000); // Save every 15 seconds
+  }
+  
+  private stopStateSaving() {
+    if (this.stateTimer) {
+      clearInterval(this.stateTimer);
+      this.stateTimer = null;
+    }
+  }
+
+  private async saveStateManually() {
+    if (!this.browserContext) return;
+
+    const stateDir = this.options.profileDir;
+    const cookiesFile = join(stateDir, 'cookies.json');
+    const storageFile = join(stateDir, 'storage.json');
+
+    try {
+      // Save cookies (non-intrusive)
+      const cookies = await this.browserContext.cookies();
+      writeFileSync(cookiesFile, JSON.stringify(cookies, null, 2));
+
+      // Save localStorage and sessionStorage from current pages (non-intrusive)
+      const pages = this.browserContext.pages();
+      if (pages.length > 0) {
+        const page = pages[0]; // Use first page to avoid creating new ones
+        if (!page.isClosed()) {
+          const storageData = await page.evaluate(() => {
+            return {
+              localStorage: JSON.stringify(localStorage),
+              sessionStorage: JSON.stringify(sessionStorage),
+              url: window.location.href
+            };
+          });
+          writeFileSync(storageFile, JSON.stringify(storageData, null, 2));
+        }
+      }
+    } catch (error) {
+      // Re-throw to be handled by caller
+      throw error;
+    }
+  }
+
+  private async loadStateManually() {
+    if (!this.browserContext) return;
+
+    const stateDir = this.options.profileDir;
+    const cookiesFile = join(stateDir, 'cookies.json');
+    const storageFile = join(stateDir, 'storage.json');
+
+    try {
+      // Load cookies if they exist
+      if (existsSync(cookiesFile)) {
+        const cookies = JSON.parse(readFileSync(cookiesFile, 'utf8'));
+        if (Array.isArray(cookies) && cookies.length > 0) {
+          await this.browserContext.addCookies(cookies);
+          this.debugLog(`Restored ${cookies.length} cookies`);
+        }
+      }
+
+      // Load storage data for later restoration (we'll apply it after page navigation)
+      if (existsSync(storageFile)) {
+        const storageData = JSON.parse(readFileSync(storageFile, 'utf8'));
+        if (storageData.localStorage || storageData.sessionStorage) {
+          // Store this for restoration after page loads
+          (this.browserContext as any)._dev3000_storageData = storageData;
+          this.debugLog('Loaded storage data for restoration');
+        }
+      }
+    } catch (error) {
+      this.debugLog(`Failed to load saved state: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  private async restoreStorageData(page: Page) {
+    if (!this.browserContext || page.isClosed()) return;
+
+    const storageData = (this.browserContext as any)._dev3000_storageData;
+    if (!storageData) return;
+
+    try {
+      await page.evaluate((data) => {
+        // Restore localStorage
+        if (data.localStorage) {
+          const localStorageData = JSON.parse(data.localStorage);
+          Object.keys(localStorageData).forEach(key => {
+            localStorage.setItem(key, localStorageData[key]);
+          });
+        }
+
+        // Restore sessionStorage
+        if (data.sessionStorage) {
+          const sessionStorageData = JSON.parse(data.sessionStorage);
+          Object.keys(sessionStorageData).forEach(key => {
+            sessionStorage.setItem(key, sessionStorageData[key]);
+          });
+        }
+      }, storageData);
+
+      this.debugLog('Restored localStorage and sessionStorage');
+      
+      // Clear the stored data since it's been applied
+      delete (this.browserContext as any)._dev3000_storageData;
+    } catch (error) {
+      this.debugLog(`Failed to restore storage data: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  
+  private async setupFocusHandlers(page: Page) {
+    // Note: Focus handlers removed since autosave is now continuous and non-intrusive
+    // The autosave timer will detect context closure through its own error handling
   }
 
   private async waitForServer() {
@@ -644,32 +786,16 @@ export class DevEnvironment {
       }
     }
     
-    // Create context with viewport: null to enable window resizing + persistent storage
-    try {
-      const stateFile = join(this.options.profileDir, 'state.json');
-      this.browserContext = await this.browser.newContext({
-        viewport: null, // This makes the page size depend on the window size
-        storageState: existsSync(stateFile) ? stateFile : undefined, // Load persistent state if it exists
-      });
-    } catch (error) {
-      console.error(chalk.red('[BROWSER CONTEXT ERROR]'), error);
-      // Fallback: create context without storage state
-      this.browserContext = await this.browser.newContext({
-        viewport: null,
-      });
-    }
+    // Create context with viewport: null to enable window resizing
+    this.browserContext = await this.browser.newContext({
+      viewport: null, // This makes the page size depend on the window size
+    });
+
+    // Restore state manually (non-intrusive)
+    await this.loadStateManually();
     
-    // Set up periodic storage state saving (every 30 seconds)
-    this.stateTimer = setInterval(async () => {
-      if (this.browserContext) {
-        try {
-          const stateFile = join(this.options.profileDir, 'state.json');
-          await this.browserContext.storageState({ path: stateFile });
-        } catch (error) {
-          // Ignore errors - context might be closed
-        }
-      }
-    }, 15000); // Save every 15 seconds
+    // Set up focus-aware periodic storage state saving
+    this.startStateSaving();
     
     // Navigate to the app using the existing blank page
     const pages = this.browserContext.pages();
@@ -685,6 +811,12 @@ export class DevEnvironment {
     });
     
     await page.goto(`http://localhost:${this.options.port}`);
+    
+    // Restore localStorage and sessionStorage after navigation
+    await this.restoreStorageData(page);
+    
+    // Set up focus detection after navigation to prevent context execution errors
+    await this.setupFocusHandlers(page);
     
     // Take initial screenshot
     const initialScreenshot = await this.takeScreenshot(page, 'initial-load');
@@ -899,16 +1031,13 @@ export class DevEnvironment {
       ]);
       
       // Clear the state saving timer
-      if (this.stateTimer) {
-        clearInterval(this.stateTimer);
-      }
+      this.stopStateSaving();
       
-      // Try to save browser state quickly (with timeout)
+      // Try to save browser state quickly (with timeout) - non-intrusive
       if (this.browserContext) {
         try {
           console.log(chalk.blue('💾 Saving browser state...'));
-          const stateFile = join(this.options.profileDir, 'state.json');
-          const savePromise = this.browserContext.storageState({ path: stateFile });
+          const savePromise = this.saveStateManually();
           const timeoutPromise = new Promise((_, reject) => 
             setTimeout(() => reject(new Error('Timeout')), 2000)
           );
