@@ -345,6 +345,10 @@ export class DevEnvironment {
     try {
       const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
       version = packageJson.version;
+      // Add -dev suffix for local development when running from symlinked source
+      if (process.cwd().includes('vercel-labs/dev3000')) {
+        version += '-dev';
+      }
     } catch (error) {
       console.log(chalk.yellow('⚠️ Could not read version from package.json'));
     }
