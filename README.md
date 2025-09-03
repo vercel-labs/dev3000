@@ -5,8 +5,8 @@ Captures your web app's complete development timeline - server logs, browser eve
 ## Quick Start
 
 ```bash
-pnpm install dev3000
-pnpx dev3000
+pnpm install -g dev3000
+dev3000
 ```
 
 ## What it does
@@ -36,7 +36,7 @@ Or use the MCP server at `http://localhost:3684/api/mcp/http` for advanced query
 ## Options
 
 ```bash
-pnpx dev3000 [options]
+dev3000 [options]
 
   -p, --port <port>         Your app's port (default: 3000)
   --mcp-port <port>         MCP server port (default: 3684)  
@@ -48,10 +48,10 @@ pnpx dev3000 [options]
 Examples:
 ```bash
 # Custom port for Vite  
-pnpx dev3000 --port 5173
+dev3000 --port 5173
 
 # Persistent login state
-pnpx dev3000 --profile-dir ./chrome-profile
+dev3000 --profile-dir ./chrome-profile
 ```
 
 ---
