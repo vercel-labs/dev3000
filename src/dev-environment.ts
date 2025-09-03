@@ -144,14 +144,23 @@ export class DevEnvironment {
     await this.startMcpServer();
     this.progressBar.update(30, { stage: 'Waiting for your app server...' });
     
-    // Wait for both servers to be ready
-    await this.waitForServer();
+    // Animate progress while waiting for servers with realistic increments
+    const serverWaitPromise = this.waitForServer();
+    const progressAnimation = this.animateProgress(30, 50, serverWaitPromise, 'app server starting');
+    await Promise.all([serverWaitPromise, progressAnimation]);
+    
     this.progressBar.update(50, { stage: 'Waiting for MCP server...' });
-    await this.waitForMcpServer();
+    const mcpWaitPromise = this.waitForMcpServer();
+    const mcpProgressAnimation = this.animateProgress(50, 70, mcpWaitPromise, 'MCP server starting');
+    await Promise.all([mcpWaitPromise, mcpProgressAnimation]);
+    
     this.progressBar.update(70, { stage: 'Starting browser...' });
     
     // Start browser monitoring
-    await this.startBrowserMonitoring();
+    const browserPromise = this.startBrowserMonitoring();
+    const browserProgressAnimation = this.animateProgress(70, 100, browserPromise, 'browser starting');
+    await Promise.all([browserPromise, browserProgressAnimation]);
+    
     this.progressBar.update(100, { stage: 'Complete!' });
     
     // Stop progress bar and show results
@@ -188,9 +197,17 @@ export class DevEnvironment {
       const message = data.toString().trim();
       if (message) {
         this.logger.log('server', `ERROR: ${message}`);
-        // Only show critical server errors in stdout
-        if (message.includes('FATAL') || message.includes('Error:')) {
-          console.error(chalk.red('[SERVER ERROR]'), message);
+        // Suppress build errors and common dev errors from console output
+        // They're still logged to file for debugging
+        // Only show truly critical errors that would prevent startup
+        const isCriticalError = message.includes('EADDRINUSE') || 
+                               message.includes('EACCES') || 
+                               message.includes('ENOENT') ||
+                               (message.includes('FATAL') && !message.includes('generateStaticParams')) ||
+                               (message.includes('Cannot find module') && !message.includes('.next'));
+        
+        if (isCriticalError) {
+          console.error(chalk.red('[CRITICAL ERROR]'), message);
         }
       }
     });
@@ -288,6 +305,36 @@ export class DevEnvironment {
     }
     
     // Continue anyway if health check fails
+  }
+
+  private async animateProgress(startPercent: number, endPercent: number, waitPromise: Promise<any>, stage: string) {
+    const duration = 15000; // 15 seconds max animation
+    const interval = 200; // Update every 200ms
+    const totalSteps = duration / interval;
+    const incrementPerStep = (endPercent - startPercent) / totalSteps;
+    
+    let currentPercent = startPercent;
+    let step = 0;
+    
+    const animationInterval = setInterval(() => {
+      if (step < totalSteps) {
+        // Use easing function for more realistic progress
+        const progress = step / totalSteps;
+        const easedProgress = 1 - Math.pow(1 - progress, 3); // Ease-out cubic
+        currentPercent = startPercent + (endPercent - startPercent) * easedProgress;
+        
+        this.progressBar.update(Math.min(currentPercent, endPercent - 1), { 
+          stage: `${stage}... ${Math.floor(currentPercent)}%` 
+        });
+        step++;
+      }
+    }, interval);
+    
+    try {
+      await waitPromise;
+    } finally {
+      clearInterval(animationInterval);
+    }
   }
 
   private async waitForMcpServer() {
