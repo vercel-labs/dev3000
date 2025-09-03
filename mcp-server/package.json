@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
-    "build": "next build --turbopack",
-    "start": "next start"
+    "dev": "pnpx next dev --turbopack",
+    "build": "pnpx next build --turbopack",
+    "start": "pnpx next start"
   },
   "dependencies": {
     "next": "^15.5.1-canary.13",
