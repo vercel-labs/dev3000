@@ -19,6 +19,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
+    "test": "vitest",
     "prepare": "pnpm run build",
     "release": "pnpm run build && pnpm version patch && git push origin main --tags && pnpm publish --otp=$(op item get npm --otp)"
   },
@@ -44,7 +45,8 @@
     "tsx": "^4.20.3",
     "@types/node": "^22.8.7",
     "@types/cli-progress": "^3.11.6",
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "vitest": "^1.0.0"
   },
   "engines": {
     "node": ">=18.0.0"
