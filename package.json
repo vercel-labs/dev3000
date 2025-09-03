@@ -21,7 +21,7 @@
     "dev": "tsc --watch",
     "test": "vitest run",
     "prepare": "husky",
-    "release": "pnpm run build && pnpm test && pnpm version patch && git push origin main --tags && pnpm publish --otp=$(op item get npm --otp)"
+    "release": "./scripts/release.sh"
   },
   "keywords": [
     "nextjs",
