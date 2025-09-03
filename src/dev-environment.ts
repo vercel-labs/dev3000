@@ -1,7 +1,7 @@
 import { spawn, ChildProcess } from 'child_process';
 import { chromium, Browser, Page, BrowserContext } from 'playwright';
-import { writeFileSync, appendFileSync, mkdirSync, existsSync, copyFileSync, unlinkSync, readFileSync, cpSync, lstatSync } from 'fs';
-import { join, dirname, basename } from 'path';
+import { writeFileSync, appendFileSync, mkdirSync, existsSync, copyFileSync, readFileSync, cpSync, lstatSync } from 'fs';
+import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { tmpdir } from 'os';
 import chalk from 'chalk';
@@ -106,7 +106,7 @@ export class DevEnvironment {
         });
         
         if (result) {
-          const pids = result.split('\n').filter(line => line.trim());
+          result.split('\n').filter(line => line.trim());
           
           console.log(chalk.red(`❌ Port ${port} is already in use`));
           console.log(chalk.yellow(`💡 To free up port ${port}, run: lsof -ti:${port} | xargs kill -9`));
@@ -351,7 +351,6 @@ export class DevEnvironment {
     const duration = 15000; // 15 seconds max animation
     const interval = 200; // Update every 200ms
     const totalSteps = duration / interval;
-    const incrementPerStep = (endPercent - startPercent) / totalSteps;
     
     let currentPercent = startPercent;
     let step = 0;
@@ -545,7 +544,7 @@ export class DevEnvironment {
         this.browserType = 'playwright-chromium';
       } catch (playwrightError: any) {
         if (playwrightError.message?.includes('Executable doesn\'t exist')) {
-          const packageManager = detectPackageManager();
+          detectPackageManager();
           console.log(chalk.yellow('📦 Installing Playwright chromium browser...'));
           await this.installPlaywrightBrowsers();
           
