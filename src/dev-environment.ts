@@ -147,12 +147,15 @@ export class DevEnvironment {
   constructor(options: DevEnvironmentOptions) {
     this.options = options;
     this.logger = new Logger(options.logFile);
-    this.screenshotDir = join(dirname(options.logFile), 'screenshots');
-    this.pidFile = join(tmpdir(), 'dev3000.pid');
     
     // Set up MCP server public directory for web-accessible screenshots
     const currentFile = fileURLToPath(import.meta.url);
     const packageRoot = dirname(dirname(currentFile));
+    
+    // Always use MCP server's public directory for screenshots to ensure they're web-accessible
+    // and avoid permission issues with /var/log paths
+    this.screenshotDir = join(packageRoot, 'mcp-server', 'public', 'screenshots');
+    this.pidFile = join(tmpdir(), 'dev3000.pid');
     this.mcpPublicDir = join(packageRoot, 'mcp-server', 'public', 'screenshots');
     
     // Initialize progress bar
@@ -908,7 +911,6 @@ export class DevEnvironment {
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const filename = `${timestamp}-${event}.png`;
       const screenshotPath = join(this.screenshotDir, filename);
-      const mcpScreenshotPath = join(this.mcpPublicDir, filename);
       
       await page.screenshot({ 
         path: screenshotPath,
@@ -916,10 +918,7 @@ export class DevEnvironment {
         animations: 'disabled' // Disable animations during screenshot
       });
       
-      // Copy to MCP server public folder for web access
-      copyFileSync(screenshotPath, mcpScreenshotPath);
-      
-      // Return web-accessible URL
+      // Return web-accessible URL (no need to copy since we save directly to MCP public dir)
       return `http://localhost:${this.options.mcpPort}/screenshots/${filename}`;
     } catch (error) {
       console.error(chalk.red('[SCREENSHOT ERROR]'), error);
