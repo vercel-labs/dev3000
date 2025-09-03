@@ -228,7 +228,17 @@ export class DevEnvironment {
     }
     
     // Check if MCP server dependencies are installed, install if missing
-    const nodeModulesPath = join(mcpServerPath, 'node_modules');
+    const isGlobalInstall = mcpServerPath.includes('.pnpm');
+    let nodeModulesPath = join(mcpServerPath, 'node_modules');
+    let actualWorkingDir = mcpServerPath;
+    
+    if (isGlobalInstall) {
+      const os = require('os');
+      const tmpDir = join(os.tmpdir(), 'dev3000-mcp-deps');
+      nodeModulesPath = join(tmpDir, 'node_modules');
+      actualWorkingDir = tmpDir;
+    }
+    
     if (!existsSync(nodeModulesPath)) {
       // Hide progress bar during installation
       this.progressBar.stop();
@@ -251,13 +261,29 @@ export class DevEnvironment {
       console.log(chalk.yellow('⚠️ Could not read version from package.json'));
     }
 
+    // For global installs, ensure all necessary files are copied to temp directory
+    if (isGlobalInstall && actualWorkingDir !== mcpServerPath) {
+      const requiredFiles = ['app', 'public', 'next.config.ts', 'next-env.d.ts', 'tsconfig.json'];
+      for (const file of requiredFiles) {
+        const srcPath = join(mcpServerPath, file);
+        const destPath = join(actualWorkingDir, file);
+        if (existsSync(srcPath) && !existsSync(destPath)) {
+          if (require('fs').lstatSync(srcPath).isDirectory()) {
+            require('fs').cpSync(srcPath, destPath, { recursive: true });
+          } else {
+            require('fs').copyFileSync(srcPath, destPath);
+          }
+        }
+      }
+    }
+
     // Start the MCP server using detected package manager
     const packageManagerForRun = detectPackageManagerForRun();
     this.mcpServerProcess = spawn(packageManagerForRun, ['run', 'dev'], {
       stdio: ['ignore', 'pipe', 'pipe'],
       shell: true,
       detached: true, // Run independently
-      cwd: mcpServerPath,
+      cwd: actualWorkingDir,
       env: {
         ...process.env,
         PORT: this.options.mcpPort,
@@ -354,6 +380,31 @@ export class DevEnvironment {
 
   private async installMcpServerDeps(mcpServerPath: string): Promise<void> {
     return new Promise<void>((resolve, reject) => {
+      // For global installs, we need to install to a writable location
+      // Check if this is a global install by looking for .pnpm in the path
+      const isGlobalInstall = mcpServerPath.includes('.pnpm');
+      
+      let workingDir = mcpServerPath;
+      if (isGlobalInstall) {
+        // Create a writable copy in temp directory for global installs
+        const os = require('os');
+        const tmpDir = join(os.tmpdir(), 'dev3000-mcp-deps');
+        
+        // Ensure tmp directory exists
+        if (!existsSync(tmpDir)) {
+          require('fs').mkdirSync(tmpDir, { recursive: true });
+        }
+        
+        // Copy package.json to temp directory if it doesn't exist
+        const tmpPackageJson = join(tmpDir, 'package.json');
+        if (!existsSync(tmpPackageJson)) {
+          const sourcePackageJson = join(mcpServerPath, 'package.json');
+          require('fs').copyFileSync(sourcePackageJson, tmpPackageJson);
+        }
+        
+        workingDir = tmpDir;
+      }
+      
       const packageManager = detectPackageManagerForRun();
       
       // Show spinner instead of verbose output
@@ -367,7 +418,7 @@ export class DevEnvironment {
       const installProcess = spawn(packageManager, ['install'], {
         stdio: ['ignore', 'pipe', 'pipe'],
         shell: true,
-        cwd: mcpServerPath,
+        cwd: workingDir,
       });
 
       // Add timeout (3 minutes)
