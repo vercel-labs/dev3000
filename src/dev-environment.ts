@@ -359,11 +359,35 @@ export class DevEnvironment {
       for (const file of requiredFiles) {
         const srcPath = join(mcpServerPath, file);
         const destPath = join(actualWorkingDir, file);
-        if (existsSync(srcPath) && !existsSync(destPath)) {
-          if (lstatSync(srcPath).isDirectory()) {
-            cpSync(srcPath, destPath, { recursive: true });
-          } else {
-            copyFileSync(srcPath, destPath);
+        
+        // Check if we need to copy (source exists and destination doesn't exist or source is newer)
+        if (existsSync(srcPath)) {
+          let shouldCopy = !existsSync(destPath);
+          
+          // If destination exists, check if source is newer
+          if (!shouldCopy && existsSync(destPath)) {
+            const srcStat = lstatSync(srcPath);
+            const destStat = lstatSync(destPath);
+            shouldCopy = srcStat.mtime > destStat.mtime;
+          }
+          
+          if (shouldCopy) {
+            // Remove existing destination if it exists
+            if (existsSync(destPath)) {
+              if (lstatSync(destPath).isDirectory()) {
+                cpSync(destPath, destPath + '.bak', { recursive: true });
+                cpSync(srcPath, destPath, { recursive: true, force: true });
+              } else {
+                unlinkSync(destPath);
+                copyFileSync(srcPath, destPath);
+              }
+            } else {
+              if (lstatSync(srcPath).isDirectory()) {
+                cpSync(srcPath, destPath, { recursive: true });
+              } else {
+                copyFileSync(srcPath, destPath);
+              }
+            }
           }
         }
       }
