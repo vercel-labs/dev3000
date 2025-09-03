@@ -10,6 +10,16 @@ function parseLogLine(line: string): LogEntry | null {
   const [, timestamp, source, message] = match;
   const screenshot = message.match(/\[SCREENSHOT\] (.+)/)?.[1];
   
+  // Debug logging for truncation issues
+  if (message.includes('📺') && message.length < line.length - 50) {
+    console.log('Potential truncation detected:', { 
+      originalLength: line.length, 
+      messageLength: message.length,
+      original: line,
+      parsed: message 
+    });
+  }
+  
   return {
     timestamp,
     source,
@@ -32,8 +42,13 @@ function LogEntryComponent({ entry }: { entry: LogEntry }) {
           {entry.source}
         </span>
       </div>
-      <div className="mt-1 font-mono text-sm whitespace-pre-wrap">
+      <div className="mt-1 font-mono text-sm whitespace-pre-wrap break-words overflow-wrap-anywhere">
         {entry.message}
+        {entry.message.includes('📺') && entry.message.length < 50 && (
+          <div className="mt-1 text-xs text-gray-500 border-l-2 border-yellow-300 pl-2">
+            <span className="text-yellow-600">Debug - Original:</span> {entry.original}
+          </div>
+        )}
       </div>
       {entry.screenshot && (
         <div className="mt-2">
