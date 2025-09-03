@@ -939,9 +939,17 @@ export class DevEnvironment {
     // Console logs
     page.on('console', (msg) => {
       if (page.url().includes(`localhost:${this.options.port}`)) {
-        const level = msg.type().toUpperCase();
         const text = msg.text();
-        this.logger.log('browser', `[CONSOLE ${level}] ${text}`);
+        
+        // Handle our interaction tracking logs specially
+        if (text.startsWith('[DEV3000_INTERACTION]')) {
+          const interaction = text.replace('[DEV3000_INTERACTION] ', '');
+          this.logger.log('browser', `[INTERACTION] ${interaction}`);
+        } else {
+          // Regular console logs
+          const level = msg.type().toUpperCase();
+          this.logger.log('browser', `[CONSOLE ${level}] ${text}`);
+        }
       }
     });
     
@@ -997,6 +1005,90 @@ export class DevEnvironment {
         }
       }
     });
+
+    // Set up user interaction tracking (clicks, scrolls, etc.)
+    await this.setupInteractionTracking(page);
+  }
+
+  private async setupInteractionTracking(page: Page) {
+    if (!page.url().includes(`localhost:${this.options.port}`)) {
+      return;
+    }
+
+    try {
+      // Inject interaction tracking scripts into the page
+      await page.addInitScript(() => {
+        // Track clicks and taps
+        document.addEventListener('click', (event) => {
+          const target = event.target as Element;
+          const targetInfo = target.tagName.toLowerCase() + 
+            (target.id ? `#${target.id}` : '') + 
+            (target.className ? `.${target.className.split(' ').join('.')}` : '');
+          
+          console.log(`[DEV3000_INTERACTION] CLICK at (${event.clientX}, ${event.clientY}) on ${targetInfo}`);
+        }, true);
+
+        // Track touch events (mobile/tablet)
+        document.addEventListener('touchstart', (event) => {
+          if (event.touches.length > 0) {
+            const touch = event.touches[0];
+            const target = event.target as Element;
+            const targetInfo = target.tagName.toLowerCase() + 
+              (target.id ? `#${target.id}` : '') + 
+              (target.className ? `.${target.className.split(' ').join('.')}` : '');
+            
+            console.log(`[DEV3000_INTERACTION] TAP at (${Math.round(touch.clientX)}, ${Math.round(touch.clientY)}) on ${targetInfo}`);
+          }
+        }, true);
+
+        // Track scrolling with throttling to avoid spam
+        let lastScrollTime = 0;
+        let lastScrollY = window.scrollY;
+        let lastScrollX = window.scrollX;
+        
+        document.addEventListener('scroll', () => {
+          const now = Date.now();
+          if (now - lastScrollTime > 500) { // Throttle to max once per 500ms
+            const deltaY = window.scrollY - lastScrollY;
+            const deltaX = window.scrollX - lastScrollX;
+            
+            if (Math.abs(deltaY) > 10 || Math.abs(deltaX) > 10) { // Only log significant scrolls
+              const direction = deltaY > 0 ? 'DOWN' : deltaY < 0 ? 'UP' : deltaX > 0 ? 'RIGHT' : 'LEFT';
+              const distance = Math.round(Math.sqrt(deltaX * deltaX + deltaY * deltaY));
+              
+              console.log(`[DEV3000_INTERACTION] SCROLL ${direction} ${distance}px to (${window.scrollX}, ${window.scrollY})`);
+              
+              lastScrollTime = now;
+              lastScrollY = window.scrollY;
+              lastScrollX = window.scrollX;
+            }
+          }
+        }, true);
+
+        // Track keyboard events (for form interactions)
+        document.addEventListener('keydown', (event) => {
+          const target = event.target as HTMLElement;
+          if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.contentEditable === 'true') {
+            const targetInfo = target.tagName.toLowerCase() + 
+              (target.id ? `#${target.id}` : '') + 
+              ((target as any).type ? `[type=${(target as any).type}]` : '') +
+              (target.className ? `.${target.className.split(' ').join('.')}` : '');
+            
+            // Log special keys, but not every character to avoid logging sensitive data
+            if (event.key.length > 1) { // Special keys like 'Enter', 'Tab', 'Backspace', etc.
+              console.log(`[DEV3000_INTERACTION] KEY ${event.key} in ${targetInfo}`);
+            } else if (event.key === ' ') {
+              console.log(`[DEV3000_INTERACTION] KEY Space in ${targetInfo}`);
+            }
+          }
+        }, true);
+      });
+
+      // Note: Interaction logs will be captured by the existing console handler in setupPageMonitoring
+
+    } catch (error) {
+      console.warn('Could not set up interaction tracking:', error);
+    }
   }
 
   private setupCleanupHandlers() {
