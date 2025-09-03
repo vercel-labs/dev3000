@@ -268,8 +268,10 @@ export default function LogsClient({ version }: LogsClientProps) {
         <div className="max-w-7xl mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 sm:gap-4">
-              <h1 className="text-xl sm:text-2xl font-bold text-gray-900 whitespace-nowrap">dev3000</h1>
-              <span className="text-xs text-gray-400 whitespace-nowrap">(v{version})</span>
+              <div className="flex items-center gap-1">
+                <h1 className="text-xl sm:text-2xl font-bold text-gray-900 whitespace-nowrap">dev3000</h1>
+                <span className="text-xs text-gray-400 whitespace-nowrap">(v{version})</span>
+              </div>
               
               {/* Log File Selector */}
               {availableLogs.length > 1 ? (
@@ -278,8 +280,12 @@ export default function LogsClient({ version }: LogsClientProps) {
                     onClick={() => setShowLogSelector(!showLogSelector)}
                     className="flex items-center gap-2 px-3 py-1 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-md transition-colors"
                   >
-                    <span className="font-mono text-xs">
-                      {currentLogFile ? currentLogFile.split('/').pop() : 'dev3000.log'}
+                    <span className="font-mono text-xs whitespace-nowrap">
+                      {isInitialLoading && !currentLogFile ? (
+                        <div className="h-4 bg-gray-200 rounded animate-pulse" style={{width: '220px'}} />
+                      ) : (
+                        currentLogFile ? currentLogFile.split('/').pop() : 'dev3000.log'
+                      )}
                     </span>
                     <svg 
                       className={`w-4 h-4 transition-transform ${showLogSelector ? 'rotate-180' : ''}`} 
@@ -327,52 +333,46 @@ export default function LogsClient({ version }: LogsClientProps) {
                 )}
                 </div>
               ) : (
-                <span className="font-mono text-xs text-gray-600 px-3 py-1">
-                  {currentLogFile ? currentLogFile.split('/').pop() : 'dev3000.log'}
+                <span className="font-mono text-xs text-gray-600 px-3 py-1 whitespace-nowrap">
+                  {isInitialLoading && !currentLogFile ? (
+                    <div className="h-4 bg-gray-200 rounded animate-pulse" style={{width: '220px'}} />
+                  ) : (
+                    currentLogFile ? currentLogFile.split('/').pop() : 'dev3000.log'
+                  )}
                 </span>
               )}
               
-              <span className="text-sm text-gray-500 hidden sm:inline">{logs.length} entries</span>
+              {logs.length > 0 && (
+                <span className="text-sm text-gray-500 hidden sm:inline">{logs.length} entries</span>
+              )}
             </div>
             
-            <div className="flex items-center gap-2 sm:gap-4 text-sm">
-              {/* Mode Toggle */}
-              <div className="flex items-center bg-gray-100 rounded-md p-1">
-                <button
-                  onClick={() => {
-                    setMode('head');
-                    // Scroll to top when switching to head mode
-                    containerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-                  }}
-                  className={`px-2 sm:px-3 py-1 rounded text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
-                    mode === 'head' 
-                      ? 'bg-white text-gray-900 shadow-sm' 
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  Head
-                </button>
-                <button
-                  onClick={() => setMode('tail')}
-                  className={`px-2 sm:px-3 py-1 rounded text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
-                    mode === 'tail' 
-                      ? 'bg-white text-gray-900 shadow-sm' 
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  Tail
-                </button>
-              </div>
-              
-              {/* Live indicator */}
-              <div 
-                className={`flex items-center gap-1 text-green-600 ${
-                  mode === 'tail' && isAtBottom ? 'visible' : 'invisible'
+            {/* Mode Toggle */}
+            <div className="flex items-center bg-gray-100 rounded-md p-1">
+              <button
+                onClick={() => {
+                  setMode('head');
+                  // Scroll to top when switching to head mode
+                  containerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                className={`px-2 sm:px-3 py-1 rounded text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
+                  mode === 'head' 
+                    ? 'bg-white text-gray-900 shadow-sm' 
+                    : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                <span className="text-xs">Live</span>
-              </div>
+                Head
+              </button>
+              <button
+                onClick={() => setMode('tail')}
+                className={`px-2 sm:px-3 py-1 rounded text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
+                  mode === 'tail' 
+                    ? 'bg-white text-gray-900 shadow-sm' 
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Tail
+              </button>
             </div>
           </div>
         </div>
@@ -406,31 +406,54 @@ export default function LogsClient({ version }: LogsClientProps) {
       </div>
       
       {/* Footer with status and scroll indicator - full width like header */}
-      <div className="py-2 border-t border-gray-200 bg-gray-50 fixed bottom-0 left-0 right-0">
-        <div className="max-w-7xl mx-auto px-4 flex items-center justify-between">
-          <div className="flex items-center">
+      <div className="border-t border-gray-200 bg-gray-50 fixed bottom-0 left-0 right-0">
+        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
             {isLoadingNew && (
               <div className="flex items-center gap-1">
                 <div className="w-3 h-3 border border-gray-300 border-t-blue-500 rounded-full animate-spin"></div>
                 <span className="text-xs text-gray-500">Loading...</span>
               </div>
             )}
-            {!isLoadingNew && isAtBottom && lastFetched && (
+            {!isLoadingNew && lastFetched && (
               <span className="text-xs text-gray-400 font-mono">
                 Last updated {lastFetched.toLocaleTimeString()}
               </span>
             )}
+            {currentLogFile && (
+              <a 
+                href={`file://${currentLogFile}`} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1"
+              >
+                Raw Log ↗
+              </a>
+            )}
           </div>
           
-          {/* Scroll to bottom button - positioned on the right */}
-          {mode === 'tail' && !isAtBottom && !isLoadingNew && (
+          {/* Live indicator or scroll to bottom button - positioned on the right */}
+          <div className="relative">
+            {/* Live indicator when at bottom */}
+            <div 
+              className={`flex items-center gap-1 text-green-600 ${
+                mode === 'tail' && isAtBottom && !isLoadingNew ? 'visible' : 'invisible'
+              }`}
+            >
+              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+              <span className="text-xs">Live</span>
+            </div>
+            
+            {/* Scroll to bottom button when not at bottom */}
             <button
               onClick={() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' })}
-              className="flex items-center gap-1 px-2 py-0.5 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
+              className={`absolute top-0 right-0 flex items-center gap-1 px-2 py-0.5 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 ${
+                mode === 'tail' && !isAtBottom && !isLoadingNew ? 'visible' : 'invisible'
+              }`}
             >
               ↓ Live updates
             </button>
-          )}
+          </div>
         </div>
       </div>
     </div>
