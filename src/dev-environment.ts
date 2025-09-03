@@ -1,6 +1,6 @@
 import { spawn, ChildProcess } from 'child_process';
 import { chromium, Browser, Page, BrowserContext } from 'playwright';
-import { writeFileSync, appendFileSync, mkdirSync, existsSync, copyFileSync, unlinkSync, readFileSync } from 'fs';
+import { writeFileSync, appendFileSync, mkdirSync, existsSync, copyFileSync, unlinkSync, readFileSync, cpSync, lstatSync } from 'fs';
 import { join, dirname, basename } from 'path';
 import { fileURLToPath } from 'url';
 import { tmpdir } from 'os';
@@ -233,10 +233,9 @@ export class DevEnvironment {
     let actualWorkingDir = mcpServerPath;
     
     if (isGlobalInstall) {
-      const os = require('os');
-      const tmpDir = join(os.tmpdir(), 'dev3000-mcp-deps');
-      nodeModulesPath = join(tmpDir, 'node_modules');
-      actualWorkingDir = tmpDir;
+      const tmpDirPath = join(tmpdir(), 'dev3000-mcp-deps');
+      nodeModulesPath = join(tmpDirPath, 'node_modules');
+      actualWorkingDir = tmpDirPath;
     }
     
     if (!existsSync(nodeModulesPath)) {
@@ -268,10 +267,10 @@ export class DevEnvironment {
         const srcPath = join(mcpServerPath, file);
         const destPath = join(actualWorkingDir, file);
         if (existsSync(srcPath) && !existsSync(destPath)) {
-          if (require('fs').lstatSync(srcPath).isDirectory()) {
-            require('fs').cpSync(srcPath, destPath, { recursive: true });
+          if (lstatSync(srcPath).isDirectory()) {
+            cpSync(srcPath, destPath, { recursive: true });
           } else {
-            require('fs').copyFileSync(srcPath, destPath);
+            copyFileSync(srcPath, destPath);
           }
         }
       }
@@ -387,22 +386,21 @@ export class DevEnvironment {
       let workingDir = mcpServerPath;
       if (isGlobalInstall) {
         // Create a writable copy in temp directory for global installs
-        const os = require('os');
-        const tmpDir = join(os.tmpdir(), 'dev3000-mcp-deps');
+        const tmpDirPath = join(tmpdir(), 'dev3000-mcp-deps');
         
         // Ensure tmp directory exists
-        if (!existsSync(tmpDir)) {
-          require('fs').mkdirSync(tmpDir, { recursive: true });
+        if (!existsSync(tmpDirPath)) {
+          mkdirSync(tmpDirPath, { recursive: true });
         }
         
         // Copy package.json to temp directory if it doesn't exist
-        const tmpPackageJson = join(tmpDir, 'package.json');
+        const tmpPackageJson = join(tmpDirPath, 'package.json');
         if (!existsSync(tmpPackageJson)) {
           const sourcePackageJson = join(mcpServerPath, 'package.json');
-          require('fs').copyFileSync(sourcePackageJson, tmpPackageJson);
+          copyFileSync(sourcePackageJson, tmpPackageJson);
         }
         
-        workingDir = tmpDir;
+        workingDir = tmpDirPath;
       }
       
       const packageManager = detectPackageManagerForRun();
