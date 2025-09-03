@@ -4,21 +4,12 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { LogEntry, LogsApiResponse, ConfigApiResponse } from '../../types';
 
 function parseLogLine(line: string): LogEntry | null {
-  const match = line.match(/\[([^\]]+)\] \[([^\]]+)\] (.+)/);
+  // More robust parsing - match timestamp and source, then take everything else as message
+  const match = line.match(/^\[([^\]]+)\] \[([^\]]+)\] (.*)$/s);
   if (!match) return null;
   
   const [, timestamp, source, message] = match;
   const screenshot = message.match(/\[SCREENSHOT\] (.+)/)?.[1];
-  
-  // Debug logging for truncation issues
-  if (message.includes('📺') && message.length < line.length - 50) {
-    console.log('Potential truncation detected:', { 
-      originalLength: line.length, 
-      messageLength: message.length,
-      original: line,
-      parsed: message 
-    });
-  }
   
   return {
     timestamp,
@@ -44,11 +35,6 @@ function LogEntryComponent({ entry }: { entry: LogEntry }) {
       </div>
       <div className="mt-1 font-mono text-sm whitespace-pre-wrap break-words overflow-wrap-anywhere">
         {entry.message}
-        {entry.message.includes('📺') && entry.message.length < 50 && (
-          <div className="mt-1 text-xs text-gray-500 border-l-2 border-yellow-300 pl-2">
-            <span className="text-yellow-600">Debug - Original:</span> {entry.original}
-          </div>
-        )}
       </div>
       {entry.screenshot && (
         <div className="mt-2">
