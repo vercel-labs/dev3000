@@ -958,7 +958,7 @@ export class DevEnvironment {
             // Single argument - use text() which is already formatted
             logMessage = text;
           } else {
-            // Multiple arguments - try to format them properly
+            // Multiple arguments - format them properly
             const argValues = await Promise.all(
               args.map(async (arg) => {
                 try {
@@ -970,21 +970,8 @@ export class DevEnvironment {
               })
             );
             
-            // If first arg contains %c or %s formatters, it's a styled log - clean it up
-            const firstArg = argValues[0] || '';
-            if (firstArg.includes('%c') || firstArg.includes('%s')) {
-              // Clean up styled console logs
-              logMessage = argValues.join(' ')
-                .replace(/%[cs]/g, '') // Remove %c and %s formatters
-                .replace(/background:[^;]+;/g, '') // Remove CSS background styles
-                .replace(/color:[^;]+;/g, '') // Remove CSS color styles  
-                .replace(/border-radius:[^;]+;?/g, '') // Remove CSS border-radius
-                .replace(/\s{2,}/g, ' ') // Replace multiple spaces with single space
-                .trim();
-            } else {
-              // Regular multi-argument console log
-              logMessage = argValues.join(' ');
-            }
+            // Join all arguments with spaces (like normal console output)
+            logMessage = argValues.join(' ');
           }
         } catch (error) {
           // Fallback to original text if args processing fails
