@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { LogEntry, LogsApiResponse, ConfigApiResponse } from '../../types';
 
-function parseLogEntries(logContent: string): LogEntry[] {
+export function parseLogEntries(logContent: string): LogEntry[] {
   // Split by timestamp pattern - each timestamp starts a new log entry
   const timestampPattern = /\[(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z)\] \[([^\]]+)\] /;
   

@@ -1,53 +1,6 @@
 import { describe, it, expect } from 'vitest';
-
-// Extract the parseLogEntries function for testing
-function parseLogEntries(logContent: string): LogEntry[] {
-  const timestampPattern = /\[(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z)\] \[([^\]]+)\] /;
-  
-  const entries: LogEntry[] = [];
-  const lines = logContent.split('\n');
-  let currentEntry: LogEntry | null = null;
-  
-  for (const line of lines) {
-    if (!line.trim()) continue;
-    
-    const match = line.match(timestampPattern);
-    if (match) {
-      if (currentEntry) {
-        entries.push(currentEntry);
-      }
-      
-      const [fullMatch, timestamp, source] = match;
-      const message = line.substring(fullMatch.length);
-      const screenshot = message.match(/\[SCREENSHOT\] (.+)/)?.[1];
-      
-      currentEntry = {
-        timestamp,
-        source,
-        message,
-        screenshot,
-        original: line
-      };
-    } else if (currentEntry) {
-      currentEntry.message += '\n' + line;
-      currentEntry.original += '\n' + line;
-    }
-  }
-  
-  if (currentEntry) {
-    entries.push(currentEntry);
-  }
-  
-  return entries;
-}
-
-interface LogEntry {
-  timestamp: string;
-  source: string;
-  message: string;
-  screenshot?: string;
-  original: string;
-}
+import { parseLogEntries } from './LogsClient';
+import { LogEntry } from '../../types';
 
 describe('parseLogEntries', () => {
   it('should parse single-line log entries correctly', () => {
