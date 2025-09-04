@@ -404,7 +404,7 @@ export class CDPMonitor {
     // Browser console logs via Log domain (additional capture method)
     this.onCDPEvent('Log.entryAdded', (event) => {
       const { entry } = event.params;
-      const { level, text, source, url, lineNumber } = entry;
+      const { level, text, url, lineNumber } = entry;
       
       let logMsg = `[CONSOLE ${level.toUpperCase()}] ${text}`;
       if (url && lineNumber) {
