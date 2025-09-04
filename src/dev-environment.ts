@@ -119,9 +119,8 @@ function pruneOldLogs(baseDir: string, cwdName: string): void {
       for (const file of filesToDelete) {
         try {
           unlinkSync(file.path);
-          console.log(chalk.gray(`🗑️ Pruned old log: ${file.name}`));
         } catch (error) {
-          console.warn(chalk.yellow(`⚠️ Could not delete old log ${file.name}: ${error}`));
+          // Silently ignore deletion errors
         }
       }
     }
@@ -173,9 +172,9 @@ export class DevEnvironment {
       // Use fallback version
     }
     
-    // Initialize progress bar with version
+    // Initialize progress bar
     this.progressBar = new cliProgress.SingleBar({
-      format: chalk.blue(`Starting dev3000 (v${this.version})`) + ' |' + chalk.cyan('{bar}') + '| {percentage}% | {stage}',
+      format: '|' + chalk.cyan('{bar}') + '| {percentage}% | {stage}',
       barCompleteChar: '█',
       barIncompleteChar: '░',
       hideCursor: true,
@@ -227,6 +226,9 @@ export class DevEnvironment {
 
   async start() {
     
+    // Show startup message first
+    console.log(chalk.blue(`Starting dev3000 (v${this.version})`));
+    
     // Start progress bar
     this.progressBar.start(100, 0, { stage: 'Checking ports...' });
     
@@ -250,22 +252,22 @@ export class DevEnvironment {
     
     // Wait for servers to be ready (no artificial delays)
     await this.waitForServer();
-    this.progressBar.update(50, { stage: 'MCP server ready, starting browser...' });
+    this.progressBar.update(60, { stage: 'Waiting for MCP server...' });
     
     await this.waitForMcpServer();
     this.progressBar.update(80, { stage: 'Starting browser...' });
     
-    // Start browser monitoring
-    await this.startBrowserMonitoring();
+    // Start browser monitoring but don't wait for full setup
+    this.startBrowserMonitoringAsync();
     
     this.progressBar.update(100, { stage: 'Complete!' });
     
-    // Stop progress bar and show results
+    // Stop progress bar and show results immediately
     this.progressBar.stop();
     
     console.log(chalk.green('\n✅ Development environment ready!'));
-    console.log(chalk.blue(`📊 Logs: ${this.options.logFile}`));
-    console.log(chalk.gray(`🔧 MCP Server Logs: ${join(dirname(this.options.logFile), 'dev3000-mcp.log')}`));
+    console.log(chalk.blue(`Logs: ${this.options.logFile}`));
+    console.log(chalk.blue(`Logs symlink: /tmp/dev3000.log`));
     console.log(chalk.yellow('☝️ Give this to an AI to auto debug and fix your app\n'));
     console.log(chalk.blue(`🌐 Your App: http://localhost:${this.options.port}`));
     console.log(chalk.blue(`🤖 MCP Server: http://localhost:${this.options.mcpPort}/api/mcp/http`));
@@ -730,6 +732,13 @@ export class DevEnvironment {
     // Continue anyway if health check fails
   }
 
+  private startBrowserMonitoringAsync() {
+    // Start browser monitoring in background without blocking completion
+    this.startBrowserMonitoring().catch(error => {
+      console.error(chalk.red('⚠️ Browser monitoring setup failed:'), error);
+    });
+  }
+
   private async startBrowserMonitoring() {
     // Ensure profile directory exists
     if (!existsSync(this.options.profileDir)) {
@@ -1046,16 +1055,28 @@ export class DevEnvironment {
     }
 
     try {
-      // Inject interaction tracking scripts into the page
-      await page.addInitScript(() => {
+      // Inject interaction tracking scripts into the page (both at init and after load)
+      const trackingScript = () => {
+        // Only inject once
+        if ((window as any).__dev3000_tracking_injected) return;
+        (window as any).__dev3000_tracking_injected = true;
         // Track clicks and taps
         document.addEventListener('click', (event) => {
           const target = event.target as Element;
-          const targetInfo = target.tagName.toLowerCase() + 
+          const targetSelector = target.tagName.toLowerCase() + 
             (target.id ? `#${target.id}` : '') + 
             (target.className ? `.${target.className.split(' ').join('.')}` : '');
           
-          console.log(`[DEV3000_INTERACTION] CLICK at (${event.clientX}, ${event.clientY}) on ${targetInfo}`);
+          const interactionData = {
+            type: 'CLICK',
+            coordinates: { x: event.clientX, y: event.clientY },
+            target: targetSelector,
+            text: target.textContent?.slice(0, 50) || null,
+            viewport: { width: window.innerWidth, height: window.innerHeight },
+            scroll: { x: window.scrollX, y: window.scrollY }
+          };
+          
+          console.log(`[DEV3000_INTERACTION] ${JSON.stringify(interactionData)}`);
         }, true);
 
         // Track touch events (mobile/tablet)
@@ -1063,11 +1084,20 @@ export class DevEnvironment {
           if (event.touches.length > 0) {
             const touch = event.touches[0];
             const target = event.target as Element;
-            const targetInfo = target.tagName.toLowerCase() + 
+            const targetSelector = target.tagName.toLowerCase() + 
               (target.id ? `#${target.id}` : '') + 
               (target.className ? `.${target.className.split(' ').join('.')}` : '');
             
-            console.log(`[DEV3000_INTERACTION] TAP at (${Math.round(touch.clientX)}, ${Math.round(touch.clientY)}) on ${targetInfo}`);
+            const interactionData = {
+              type: 'TAP',
+              coordinates: { x: Math.round(touch.clientX), y: Math.round(touch.clientY) },
+              target: targetSelector,
+              text: target.textContent?.slice(0, 50) || null,
+              viewport: { width: window.innerWidth, height: window.innerHeight },
+              scroll: { x: window.scrollX, y: window.scrollY }
+            };
+            
+            console.log(`[DEV3000_INTERACTION] ${JSON.stringify(interactionData)}`);
           }
         }, true);
 
@@ -1086,7 +1116,16 @@ export class DevEnvironment {
               const direction = deltaY > 0 ? 'DOWN' : deltaY < 0 ? 'UP' : deltaX > 0 ? 'RIGHT' : 'LEFT';
               const distance = Math.round(Math.sqrt(deltaX * deltaX + deltaY * deltaY));
               
-              console.log(`[DEV3000_INTERACTION] SCROLL ${direction} ${distance}px to (${window.scrollX}, ${window.scrollY})`);
+              const interactionData = {
+                type: 'SCROLL',
+                direction: direction,
+                distance: distance,
+                from: { x: lastScrollX, y: lastScrollY },
+                to: { x: window.scrollX, y: window.scrollY },
+                viewport: { width: window.innerWidth, height: window.innerHeight }
+              };
+              
+              console.log(`[DEV3000_INTERACTION] ${JSON.stringify(interactionData)}`);
               
               lastScrollTime = now;
               lastScrollY = window.scrollY;
@@ -1099,20 +1138,37 @@ export class DevEnvironment {
         document.addEventListener('keydown', (event) => {
           const target = event.target as HTMLElement;
           if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.contentEditable === 'true') {
-            const targetInfo = target.tagName.toLowerCase() + 
+            const targetSelector = target.tagName.toLowerCase() + 
               (target.id ? `#${target.id}` : '') + 
               ((target as any).type ? `[type=${(target as any).type}]` : '') +
               (target.className ? `.${target.className.split(' ').join('.')}` : '');
             
             // Log special keys, but not every character to avoid logging sensitive data
-            if (event.key.length > 1) { // Special keys like 'Enter', 'Tab', 'Backspace', etc.
-              console.log(`[DEV3000_INTERACTION] KEY ${event.key} in ${targetInfo}`);
-            } else if (event.key === ' ') {
-              console.log(`[DEV3000_INTERACTION] KEY Space in ${targetInfo}`);
+            if (event.key.length > 1 || event.key === ' ') {
+              const interactionData = {
+                type: 'KEY',
+                key: event.key === ' ' ? 'Space' : event.key,
+                target: targetSelector,
+                modifiers: {
+                  ctrl: event.ctrlKey,
+                  alt: event.altKey,
+                  shift: event.shiftKey,
+                  meta: event.metaKey
+                },
+                inputType: (target as any).type || target.tagName.toLowerCase()
+              };
+              
+              console.log(`[DEV3000_INTERACTION] ${JSON.stringify(interactionData)}`);
             }
           }
         }, true);
-      });
+        
+        // Log that tracking is active
+        console.log('[DEV3000_INTERACTION] Tracking initialized');
+      };
+
+      // Add to page init - this should be sufficient
+      await page.addInitScript(trackingScript);
 
       // Note: Interaction logs will be captured by the existing console handler in setupPageMonitoring
 

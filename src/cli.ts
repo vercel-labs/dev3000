@@ -50,8 +50,6 @@ program
   .option('--profile-dir <dir>', 'Chrome profile directory', join(tmpdir(), 'dev3000-chrome-profile'))
   .option('--debug', 'Enable debug logging to console')
   .action(async (options) => {
-    console.log(chalk.blue.bold('🤖 Starting AI Development Environment'));
-    
     // Convert script option to full command
     const packageManager = detectPackageManager();
     const serverCommand = `${packageManager} run ${options.script}`;
@@ -59,8 +57,6 @@ program
     try {
       // Create persistent log file and setup symlink
       const logFile = createPersistentLogFile();
-      console.log(chalk.gray(`📝 Logging to: ${logFile}`));
-      console.log(chalk.gray(`📎 Current session symlinked to /tmp/dev3000.log`));
       
       await startDevEnvironment({
         ...options,

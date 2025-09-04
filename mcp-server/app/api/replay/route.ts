@@ -58,43 +58,80 @@ function parseLogFile(logContent: string, startTime?: string, endTime?: string):
     if (!actualStartTime) actualStartTime = timestamp;
     actualEndTime = timestamp;
     
-    // Parse interaction events
-    const interactionMatch = line.match(/\[INTERACTION\] (CLICK|TAP|SCROLL|KEY) (.+)/);
+    // Parse interaction events (both old and new formats)
+    const interactionMatch = line.match(/\[INTERACTION\] (.+)/);
     if (interactionMatch) {
-      const [, type, details] = interactionMatch;
+      const data = interactionMatch[1];
       
-      if (type === 'CLICK' || type === 'TAP') {
-        const coordMatch = details.match(/at \((\d+), (\d+)\) on (.+)/);
-        if (coordMatch) {
+      try {
+        // Try parsing as JSON (new format)
+        const interactionData = JSON.parse(data);
+        
+        if (interactionData.type === 'CLICK' || interactionData.type === 'TAP') {
           interactions.push({
             timestamp,
-            type: type as 'CLICK' | 'TAP',
-            x: parseInt(coordMatch[1]),
-            y: parseInt(coordMatch[2]),
-            target: coordMatch[3]
+            type: interactionData.type as 'CLICK' | 'TAP',
+            x: interactionData.coordinates?.x || 0,
+            y: interactionData.coordinates?.y || 0,
+            target: interactionData.target || 'unknown'
           });
-        }
-      } else if (type === 'SCROLL') {
-        const scrollMatch = details.match(/(\w+) (\d+)px to \((\d+), (\d+)\)/);
-        if (scrollMatch) {
+        } else if (interactionData.type === 'SCROLL') {
           interactions.push({
             timestamp,
             type: 'SCROLL',
-            direction: scrollMatch[1],
-            distance: parseInt(scrollMatch[2]),
-            x: parseInt(scrollMatch[3]),
-            y: parseInt(scrollMatch[4])
+            direction: interactionData.direction || 'DOWN',
+            distance: interactionData.distance || 0,
+            x: interactionData.to?.x || 0,
+            y: interactionData.to?.y || 0
           });
-        }
-      } else if (type === 'KEY') {
-        const keyMatch = details.match(/(.+) in (.+)/);
-        if (keyMatch) {
+        } else if (interactionData.type === 'KEY') {
           interactions.push({
             timestamp,
             type: 'KEY',
-            key: keyMatch[1],
-            target: keyMatch[2]
+            key: interactionData.key || 'unknown',
+            target: interactionData.target || 'unknown'
           });
+        }
+      } catch (jsonError) {
+        // Fallback to old format parsing
+        const oldFormatMatch = data.match(/(CLICK|TAP|SCROLL|KEY) (.+)/);
+        if (oldFormatMatch) {
+          const [, type, details] = oldFormatMatch;
+          
+          if (type === 'CLICK' || type === 'TAP') {
+            const coordMatch = details.match(/at \((\d+), (\d+)\) on (.+)/);
+            if (coordMatch) {
+              interactions.push({
+                timestamp,
+                type: type as 'CLICK' | 'TAP',
+                x: parseInt(coordMatch[1]),
+                y: parseInt(coordMatch[2]),
+                target: coordMatch[3]
+              });
+            }
+          } else if (type === 'SCROLL') {
+            const scrollMatch = details.match(/(\w+) (\d+)px to \((\d+), (\d+)\)/);
+            if (scrollMatch) {
+              interactions.push({
+                timestamp,
+                type: 'SCROLL',
+                direction: scrollMatch[1],
+                distance: parseInt(scrollMatch[2]),
+                x: parseInt(scrollMatch[3]),
+                y: parseInt(scrollMatch[4])
+              });
+            }
+          } else if (type === 'KEY') {
+            const keyMatch = details.match(/(.+) in (.+)/);
+            if (keyMatch) {
+              interactions.push({
+                timestamp,
+                type: 'KEY',
+                key: keyMatch[1],
+                target: keyMatch[2]
+              });
+            }
+          }
         }
       }
     }
@@ -175,15 +212,27 @@ export async function POST(request: NextRequest) {
     const { action, replayData, speed = 1 } = body;
     
     if (action === 'execute') {
-      // For now, return the replay script that could be executed
-      // In a full implementation, this could launch a new Playwright session
-      const replayScript = generateReplayScript(replayData, speed);
+      // Generate CDP commands for replay
+      const cdpCommands = generateCDPCommands(replayData, speed);
       
-      return NextResponse.json({
-        success: true,
-        message: 'Replay script generated',
-        script: replayScript
-      });
+      // Try to execute the commands via CDP
+      try {
+        const result = await executeCDPCommands(cdpCommands);
+        return NextResponse.json({
+          success: true,
+          message: 'Replay executed successfully',
+          result: result,
+          totalCommands: cdpCommands.length
+        });
+      } catch (error) {
+        // Fallback: return commands for manual execution
+        return NextResponse.json({
+          success: false,
+          message: 'CDP execution failed, returning commands for manual execution',
+          commands: cdpCommands,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
     }
     
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
@@ -196,49 +245,107 @@ export async function POST(request: NextRequest) {
   }
 }
 
-function generateReplayScript(replayData: ReplayData, speed: number): string {
+interface CDPCommand {
+  method: string;
+  params: any;
+  delay: number;
+  description: string;
+}
+
+function generateCDPCommands(replayData: ReplayData, speed: number): CDPCommand[] {
   const events = [
     ...replayData.interactions.map(i => ({ ...i, eventType: 'interaction' })),
     ...replayData.navigations.map(n => ({ ...n, eventType: 'navigation' }))
   ].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
   
-  let script = `
-// Generated replay script
-const replayEvents = ${JSON.stringify(events, null, 2)};
-const speed = ${speed};
-const startTime = new Date('${replayData.startTime}').getTime();
-
-async function executeReplay() {
-  console.log('Starting session replay...');
+  const commands: CDPCommand[] = [];
+  const startTime = new Date(replayData.startTime).getTime();
   
-  for (const event of replayEvents) {
+  for (const event of events) {
     const eventTime = new Date(event.timestamp).getTime();
-    const delay = (eventTime - startTime) / speed;
-    
-    await new Promise(resolve => setTimeout(resolve, delay));
+    const delay = Math.max(0, (eventTime - startTime) / speed);
     
     if (event.eventType === 'navigation') {
-      console.log('Navigate to:', event.url);
-      // window.location.href = event.url;
+      commands.push({
+        method: 'Page.navigate',
+        params: { url: event.url },
+        delay: delay,
+        description: `Navigate to ${event.url}`
+      });
     } else if (event.eventType === 'interaction') {
-      if (event.type === 'CLICK') {
-        console.log('Click at:', event.x, event.y, 'on', event.target);
-        // Simulate click at coordinates
-      } else if (event.type === 'SCROLL') {
-        console.log('Scroll:', event.direction, event.distance + 'px to', event.x, event.y);
-        // window.scrollTo(event.x, event.y);
-      } else if (event.type === 'KEY') {
-        console.log('Key press:', event.key, 'in', event.target);
-        // Simulate key press
+      if (event.type === 'CLICK' && event.x !== undefined && event.y !== undefined) {
+        // Mouse down
+        commands.push({
+          method: 'Input.dispatchMouseEvent',
+          params: {
+            type: 'mousePressed',
+            x: event.x,
+            y: event.y,
+            button: 'left',
+            clickCount: 1
+          },
+          delay: delay,
+          description: `Click at (${event.x}, ${event.y}) on ${event.target}`
+        });
+        
+        // Mouse up (after small delay)
+        commands.push({
+          method: 'Input.dispatchMouseEvent',
+          params: {
+            type: 'mouseReleased',
+            x: event.x,
+            y: event.y,
+            button: 'left',
+            clickCount: 1
+          },
+          delay: 50, // 50ms between down and up
+          description: `Release click at (${event.x}, ${event.y})`
+        });
+      } else if (event.type === 'SCROLL' && event.x !== undefined && event.y !== undefined) {
+        commands.push({
+          method: 'Runtime.evaluate',
+          params: {
+            expression: `window.scrollTo({left: ${event.x}, top: ${event.y}, behavior: 'smooth'})`
+          },
+          delay: delay,
+          description: `Scroll to (${event.x}, ${event.y})`
+        });
+      } else if (event.type === 'KEY' && event.key) {
+        // Key down
+        commands.push({
+          method: 'Input.dispatchKeyEvent',
+          params: {
+            type: 'keyDown',
+            key: event.key,
+            text: event.key.length === 1 ? event.key : undefined
+          },
+          delay: delay,
+          description: `Key down: ${event.key}`
+        });
+        
+        // Key up
+        commands.push({
+          method: 'Input.dispatchKeyEvent',
+          params: {
+            type: 'keyUp',
+            key: event.key
+          },
+          delay: 50,
+          description: `Key up: ${event.key}`
+        });
       }
     }
   }
   
-  console.log('Replay complete!');
+  return commands;
 }
 
-// executeReplay();
-`;
+async function executeCDPCommands(commands: CDPCommand[]): Promise<any> {
+  // For now, we'll try to connect to the CDP session
+  // This would require the browser to be launched with --remote-debugging-port
+  // or we'd need to get the CDP endpoint from the Playwright instance
   
-  return script;
+  // Since we can't easily access the existing Playwright browser from here,
+  // let's return the commands for the client to execute
+  throw new Error('Direct CDP execution not yet implemented - browser connection needed');
 }
