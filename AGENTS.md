@@ -15,9 +15,17 @@ pnpm run dev
 - Use `pnpm install` to install dependencies
 - Use `pnpm run build` to build 
 - Use `pnpm run release` to publish new versions
-- Use `pnpm publish` not `npm publish`
+- NEVER run `pnpm publish` directly - always use the `pnpm run release` script
 
 **CRITICAL**: NEVER run `pnpm run release` or any publish commands unless the user explicitly says "release" or "publish". Always wait for explicit permission before releasing versions.
+
+**RELEASE PROCESS**: When releasing, ONLY use `pnpm run release` - this script handles the entire process:
+1. Builds and tests the project
+2. Bumps the version and creates git tags
+3. Pushes to GitHub
+4. Publishes to npm with OTP authentication
+5. Sets up the next canary version for development
+NEVER manually run `pnpm publish`, `pnpm version`, or individual release steps - let the script handle everything.
 
 **USER PREFERENCE**: The user prefers pnpm for all package management. When suggesting installation commands to users, always use pnpm (e.g., `pnpm install -g dev3000`) instead of npm.
 

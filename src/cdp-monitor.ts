@@ -324,7 +324,8 @@ export class CDPMonitor {
       'Page',          // Page events, navigation
       'DOM',           // DOM mutations
       'Performance',   // Performance metrics
-      'Security'       // Security events
+      'Security',      // Security events
+      'Log'            // Browser console logs
     ];
 
     for (const domain of domains) {
@@ -352,6 +353,7 @@ export class CDPMonitor {
   private setupEventHandlers(): void {
     // Console messages with full context
     this.onCDPEvent('Runtime.consoleAPICalled', (event) => {
+      this.debugLog(`Runtime.consoleAPICalled event received: ${event.params.type}`);
       const { type, args, stackTrace } = event.params;
       
       // Check if this is our interaction tracking
@@ -383,6 +385,7 @@ export class CDPMonitor {
 
     // Runtime exceptions with full stack traces
     this.onCDPEvent('Runtime.exceptionThrown', (event) => {
+      this.debugLog('Runtime.exceptionThrown event received');
       const { exceptionDetails } = event.params;
       const { text, lineNumber, columnNumber, url, stackTrace } = exceptionDetails;
       
@@ -396,6 +399,22 @@ export class CDPMonitor {
       }
 
       this.logger('browser', errorMsg);
+    });
+
+    // Browser console logs via Log domain (additional capture method)
+    this.onCDPEvent('Log.entryAdded', (event) => {
+      const { entry } = event.params;
+      const { level, text, source, url, lineNumber } = entry;
+      
+      let logMsg = `[CONSOLE ${level.toUpperCase()}] ${text}`;
+      if (url && lineNumber) {
+        logMsg += ` at ${url}:${lineNumber}`;
+      }
+      
+      // Only log if it's an error/warning or if we're not already capturing it via Runtime
+      if (level === 'error' || level === 'warning') {
+        this.logger('browser', logMsg);
+      }
     });
 
     // Network requests with full details
