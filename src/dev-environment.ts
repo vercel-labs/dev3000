@@ -1,11 +1,11 @@
 import { spawn, ChildProcess } from 'child_process';
-import { chromium, Browser, Page, BrowserContext } from 'playwright';
 import { writeFileSync, appendFileSync, mkdirSync, existsSync, copyFileSync, readFileSync, cpSync, lstatSync, symlinkSync, unlinkSync, readdirSync, statSync } from 'fs';
 import { join, dirname, basename } from 'path';
 import { fileURLToPath } from 'url';
 import { tmpdir } from 'os';
 import chalk from 'chalk';
 import * as cliProgress from 'cli-progress';
+import { CDPMonitor } from './cdp-monitor.js';
 
 interface DevEnvironmentOptions {
   port: string;
@@ -37,12 +37,6 @@ class Logger {
   }
 }
 
-function detectPackageManager(): string {
-  if (existsSync('pnpm-lock.yaml')) return 'pnpx';
-  if (existsSync('yarn.lock')) return 'yarn dlx';
-  if (existsSync('package-lock.json')) return 'npx';
-  return 'npx'; // fallback
-}
 
 function detectPackageManagerForRun(): string {
   if (existsSync('pnpm-lock.yaml')) return 'pnpm';
@@ -132,11 +126,8 @@ function pruneOldLogs(baseDir: string, cwdName: string): void {
 export class DevEnvironment {
   private serverProcess: ChildProcess | null = null;
   private mcpServerProcess: ChildProcess | null = null;
-  private browser: Browser | null = null;
-  private browserContext: BrowserContext | null = null;
+  private cdpMonitor: CDPMonitor | null = null;
   private logger: Logger;
-  private stateTimer: NodeJS.Timeout | null = null;
-  private browserType: 'system-chrome' | 'playwright-chromium' | null = null;
   private options: DevEnvironmentOptions;
   private screenshotDir: string;
   private mcpPublicDir: string;
@@ -164,9 +155,20 @@ export class DevEnvironment {
       const packageJsonPath = join(packageRoot, 'package.json');
       const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
       this.version = packageJson.version;
-      // Add -dev suffix for local development installs
-      if (packageRoot.includes('vercel-labs/dev3000')) {
-        this.version += '-dev';
+      
+      // Use git to detect if we're in the dev3000 source repository
+      try {
+        const { execSync } = require('child_process');
+        const gitRemote = execSync('git remote get-url origin 2>/dev/null', { 
+          cwd: packageRoot, 
+          encoding: 'utf8' 
+        }).trim();
+        
+        if (gitRemote.includes('vercel-labs/dev3000') && !this.version.includes('canary')) {
+          this.version += '-local';
+        }
+      } catch {
+        // Not in git repo or no git - use version as-is
       }
     } catch (error) {
       // Use fallback version
@@ -190,11 +192,6 @@ export class DevEnvironment {
     }
   }
 
-  private debugLog(message: string) {
-    if (this.options.debug) {
-      console.log(chalk.gray(`[DEBUG] ${message}`));
-    }
-  }
 
   private async checkPortsAvailable() {
     const ports = [this.options.port, this.options.mcpPort];
@@ -257,8 +254,8 @@ export class DevEnvironment {
     await this.waitForMcpServer();
     this.progressBar.update(80, { stage: 'Starting browser...' });
     
-    // Start browser monitoring but don't wait for full setup
-    this.startBrowserMonitoringAsync();
+    // Start CDP monitoring but don't wait for full setup
+    this.startCDPMonitoringAsync();
     
     this.progressBar.update(100, { stage: 'Complete!' });
     
@@ -442,140 +439,6 @@ export class DevEnvironment {
     });
   }
 
-  private startStateSaving() {
-    if (this.stateTimer) {
-      clearInterval(this.stateTimer);
-    }
-    
-    // Start continuous autosave timer (no focus dependency since it's non-intrusive)
-    this.stateTimer = setInterval(async () => {
-      if (this.browserContext) {
-        try {
-          this.debugLog('Running periodic context autosave (non-intrusive)...');
-          await this.saveStateManually();
-          this.debugLog('Context autosave completed successfully');
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          this.debugLog(`Context autosave failed: ${errorMessage}`);
-          // If context is closed, stop the timer
-          if (errorMessage.includes('closed') || errorMessage.includes('destroyed')) {
-            this.debugLog('Browser context appears closed, stopping autosave timer');
-            this.stopStateSaving();
-          }
-        }
-      }
-    }, 15000); // Save every 15 seconds
-  }
-  
-  private stopStateSaving() {
-    if (this.stateTimer) {
-      clearInterval(this.stateTimer);
-      this.stateTimer = null;
-    }
-  }
-
-  private async saveStateManually() {
-    if (!this.browserContext) return;
-
-    const stateDir = this.options.profileDir;
-    const cookiesFile = join(stateDir, 'cookies.json');
-    const storageFile = join(stateDir, 'storage.json');
-
-    try {
-      // Save cookies (non-intrusive)
-      const cookies = await this.browserContext.cookies();
-      writeFileSync(cookiesFile, JSON.stringify(cookies, null, 2));
-
-      // Save localStorage and sessionStorage from current pages (non-intrusive)
-      const pages = this.browserContext.pages();
-      if (pages.length > 0) {
-        const page = pages[0]; // Use first page to avoid creating new ones
-        if (!page.isClosed()) {
-          const storageData = await page.evaluate(() => {
-            return {
-              localStorage: JSON.stringify(localStorage),
-              sessionStorage: JSON.stringify(sessionStorage),
-              url: window.location.href
-            };
-          });
-          writeFileSync(storageFile, JSON.stringify(storageData, null, 2));
-        }
-      }
-    } catch (error) {
-      // Re-throw to be handled by caller
-      throw error;
-    }
-  }
-
-  private async loadStateManually() {
-    if (!this.browserContext) return;
-
-    const stateDir = this.options.profileDir;
-    const cookiesFile = join(stateDir, 'cookies.json');
-    const storageFile = join(stateDir, 'storage.json');
-
-    try {
-      // Load cookies if they exist
-      if (existsSync(cookiesFile)) {
-        const cookies = JSON.parse(readFileSync(cookiesFile, 'utf8'));
-        if (Array.isArray(cookies) && cookies.length > 0) {
-          await this.browserContext.addCookies(cookies);
-          this.debugLog(`Restored ${cookies.length} cookies`);
-        }
-      }
-
-      // Load storage data for later restoration (we'll apply it after page navigation)
-      if (existsSync(storageFile)) {
-        const storageData = JSON.parse(readFileSync(storageFile, 'utf8'));
-        if (storageData.localStorage || storageData.sessionStorage) {
-          // Store this for restoration after page loads
-          (this.browserContext as any)._dev3000_storageData = storageData;
-          this.debugLog('Loaded storage data for restoration');
-        }
-      }
-    } catch (error) {
-      this.debugLog(`Failed to load saved state: ${error instanceof Error ? error.message : String(error)}`);
-    }
-  }
-
-  private async restoreStorageData(page: Page) {
-    if (!this.browserContext || page.isClosed()) return;
-
-    const storageData = (this.browserContext as any)._dev3000_storageData;
-    if (!storageData) return;
-
-    try {
-      await page.evaluate((data) => {
-        // Restore localStorage
-        if (data.localStorage) {
-          const localStorageData = JSON.parse(data.localStorage);
-          Object.keys(localStorageData).forEach(key => {
-            localStorage.setItem(key, localStorageData[key]);
-          });
-        }
-
-        // Restore sessionStorage
-        if (data.sessionStorage) {
-          const sessionStorageData = JSON.parse(data.sessionStorage);
-          Object.keys(sessionStorageData).forEach(key => {
-            sessionStorage.setItem(key, sessionStorageData[key]);
-          });
-        }
-      }, storageData);
-
-      this.debugLog('Restored localStorage and sessionStorage');
-      
-      // Clear the stored data since it's been applied
-      delete (this.browserContext as any)._dev3000_storageData;
-    } catch (error) {
-      this.debugLog(`Failed to restore storage data: ${error instanceof Error ? error.message : String(error)}`);
-    }
-  }
-  
-  private async setupFocusHandlers(page: Page) {
-    // Note: Focus handlers removed since autosave is now continuous and non-intrusive
-    // The autosave timer will detect context closure through its own error handling
-  }
 
   private async waitForServer() {
     const maxAttempts = 30;
@@ -732,450 +595,40 @@ export class DevEnvironment {
     // Continue anyway if health check fails
   }
 
-  private startBrowserMonitoringAsync() {
-    // Start browser monitoring in background without blocking completion
-    this.startBrowserMonitoring().catch(error => {
-      console.error(chalk.red('⚠️ Browser monitoring setup failed:'), error);
+  private startCDPMonitoringAsync() {
+    // Start CDP monitoring in background without blocking completion
+    this.startCDPMonitoring().catch(error => {
+      console.error(chalk.red('⚠️ CDP monitoring setup failed:'), error);
     });
   }
 
-  private async startBrowserMonitoring() {
+  private async startCDPMonitoring() {
     // Ensure profile directory exists
     if (!existsSync(this.options.profileDir)) {
       mkdirSync(this.options.profileDir, { recursive: true });
     }
     
+    // Initialize CDP monitor with enhanced logging
+    this.cdpMonitor = new CDPMonitor(this.options.profileDir, (source: string, message: string) => {
+      this.logger.log('browser', message);
+    }, this.options.debug);
+    
     try {
-      // Try to use system Chrome first
-      this.browser = await chromium.launch({
-        headless: false,
-        channel: 'chrome', // Use system Chrome
-        // Remove automation flags to allow normal dialog behavior
-        args: [
-          '--disable-web-security', // Keep this for dev server access
-          '--hide-crash-restore-bubble', // Don't ask to restore pages
-          '--disable-infobars', // Remove info bars
-          '--disable-blink-features=AutomationControlled', // Hide automation detection
-          '--disable-features=VizDisplayCompositor', // Reduce automation fingerprinting
-        ],
-      });
-      this.browserType = 'system-chrome';
-    } catch (error: any) {
-      // Fallback to Playwright's bundled chromium
-      try {
-        this.browser = await chromium.launch({
-          headless: false,
-          // Remove automation flags to allow normal dialog behavior
-          args: [
-            '--disable-web-security', // Keep this for dev server access
-            '--hide-crash-restore-bubble', // Don't ask to restore pages
-            '--disable-infobars', // Remove info bars
-            '--disable-blink-features=AutomationControlled', // Hide automation detection
-            '--disable-features=VizDisplayCompositor', // Reduce automation fingerprinting
-          ],
-        });
-        this.browserType = 'playwright-chromium';
-      } catch (playwrightError: any) {
-        if (playwrightError.message?.includes('Executable doesn\'t exist')) {
-          detectPackageManager();
-          console.log(chalk.yellow('📦 Installing Playwright chromium browser...'));
-          await this.installPlaywrightBrowsers();
-          
-          // Retry with bundled chromium
-          this.browser = await chromium.launch({
-            headless: false,
-            // Remove automation flags to allow normal dialog behavior
-            args: [
-              '--disable-web-security', // Keep this for dev server access
-              '--hide-crash-restore-bubble', // Don't ask to restore pages
-              '--disable-infobars', // Remove info bars
-            ],
-          });
-          this.browserType = 'playwright-chromium';
-        } else {
-          throw playwrightError;
-        }
-      }
-    }
-    
-    // Create context with viewport: null to enable window resizing
-    this.browserContext = await this.browser.newContext({
-      viewport: null, // This makes the page size depend on the window size
-    });
-
-    // Restore state manually (non-intrusive)
-    await this.loadStateManually();
-    
-    // Set up focus-aware periodic storage state saving
-    this.startStateSaving();
-    
-    // Navigate to the app using the existing blank page
-    const pages = this.browserContext.pages();
-    const page = pages.length > 0 ? pages[0] : await this.browserContext.newPage();
-    
-    // Disable automatic dialog handling - let dialogs behave naturally
-    page.removeAllListeners('dialog');
-    
-    // Add a no-op dialog handler to prevent auto-dismissal
-    page.on('dialog', async (dialog) => {
-      // Don't accept or dismiss - let user handle it manually
-      // This prevents Playwright from auto-handling the dialog
-    });
-    
-    await page.goto(`http://localhost:${this.options.port}`);
-    
-    // Restore localStorage and sessionStorage after navigation
-    await this.restoreStorageData(page);
-    
-    // Set up focus detection after navigation to prevent context execution errors
-    await this.setupFocusHandlers(page);
-    
-    // Take initial screenshot
-    const initialScreenshot = await this.takeScreenshot(page, 'initial-load');
-    if (initialScreenshot) {
-      this.logger.log('browser', `[SCREENSHOT] ${initialScreenshot}`);
-    }
-    
-    // Set up monitoring
-    await this.setupPageMonitoring(page);
-    
-    // Monitor new pages
-    this.browserContext.on('page', async (newPage) => {
-      // Disable automatic dialog handling for new pages too
-      newPage.removeAllListeners('dialog');
+      // Start CDP monitoring
+      await this.cdpMonitor.start();
+      this.logger.log('browser', '[CDP] Chrome launched with DevTools Protocol monitoring');
       
-      // Add a no-op dialog handler to prevent auto-dismissal
-      newPage.on('dialog', async (dialog) => {
-        // Don't accept or dismiss - let user handle it manually
-      });
+      // Navigate to the app
+      await this.cdpMonitor.navigateToApp(this.options.port);
+      this.logger.log('browser', `[CDP] Navigated to http://localhost:${this.options.port}`);
       
-      await this.setupPageMonitoring(newPage);
-    });
-  }
-
-  private async installPlaywrightBrowsers(): Promise<void> {
-    this.progressBar.update(75, { stage: 'Installing Playwright browser (2-3 min)...' });
-    
-    return new Promise<void>((resolve, reject) => {
-      const packageManager = detectPackageManager();
-      const [command, ...args] = packageManager.split(' ');
-      
-      console.log(chalk.gray(`Running: ${command} ${[...args, 'playwright', 'install', 'chromium'].join(' ')}`));
-      
-      const installProcess = spawn(command, [...args, 'playwright', 'install', 'chromium'], {
-        stdio: ['inherit', 'pipe', 'pipe'],
-        shell: true,
-      });
-
-      // Add timeout (5 minutes)
-      const timeout = setTimeout(() => {
-        installProcess.kill('SIGKILL');
-        reject(new Error('Playwright installation timed out after 5 minutes'));
-      }, 5 * 60 * 1000);
-
-      let hasOutput = false;
-
-      installProcess.stdout?.on('data', (data) => {
-        hasOutput = true;
-        const message = data.toString().trim();
-        if (message) {
-          console.log(chalk.gray('[PLAYWRIGHT]'), message);
-        }
-      });
-
-      installProcess.stderr?.on('data', (data) => {
-        hasOutput = true;
-        const message = data.toString().trim();
-        if (message) {
-          console.log(chalk.gray('[PLAYWRIGHT]'), message);
-        }
-      });
-
-      installProcess.on('exit', (code) => {
-        clearTimeout(timeout);
-        if (code === 0) {
-          console.log(chalk.green('✅ Playwright chromium installed successfully!'));
-          resolve();
-        } else {
-          reject(new Error(`Playwright installation failed with exit code ${code}`));
-        }
-      });
-
-      installProcess.on('error', (error) => {
-        clearTimeout(timeout);
-        reject(new Error(`Failed to start Playwright installation: ${error.message}`));
-      });
-
-      // Check if process seems stuck
-      setTimeout(() => {
-        if (!hasOutput) {
-          console.log(chalk.yellow('⚠️  Installation seems stuck. This is normal for the first run - downloading ~100MB...'));
-        }
-      }, 10000); // Show message after 10 seconds of no output
-    });
-  }
-
-  private async takeScreenshot(page: Page, event: string): Promise<string | null> {
-    try {
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const filename = `${timestamp}-${event}.png`;
-      const screenshotPath = join(this.screenshotDir, filename);
-      
-      await page.screenshot({ 
-        path: screenshotPath,
-        fullPage: false, // Just viewport for speed
-        animations: 'disabled' // Disable animations during screenshot
-      });
-      
-      // Return web-accessible URL (no need to copy since we save directly to MCP public dir)
-      return `http://localhost:${this.options.mcpPort}/screenshots/${filename}`;
     } catch (error) {
-      console.error(chalk.red('[SCREENSHOT ERROR]'), error);
-      return null;
+      // Log error but don't crash - we want the servers to keep running
+      this.logger.log('browser', `[CDP ERROR] Failed to start CDP monitoring: ${error}`);
+      console.error(chalk.red('⚠️ CDP monitoring failed, but servers are still running'));
     }
   }
 
-  private async setupPageMonitoring(page: Page) {
-    const url = page.url();
-    
-    // Only monitor localhost pages
-    if (!url.includes(`localhost:${this.options.port}`) && url !== 'about:blank') {
-      return;
-    }
-
-    this.logger.log('browser', `📄 New page: ${url}`);
-    
-    // Console logs
-    page.on('console', async (msg) => {
-      if (page.url().includes(`localhost:${this.options.port}`)) {
-        // Handle our interaction tracking logs specially
-        const text = msg.text();
-        if (text.startsWith('[DEV3000_INTERACTION]')) {
-          const interaction = text.replace('[DEV3000_INTERACTION] ', '');
-          this.logger.log('browser', `[INTERACTION] ${interaction}`);
-          return;
-        }
-
-        // Try to reconstruct the console message properly
-        let logMessage: string;
-        try {
-          // Get all arguments from the console message
-          const args = msg.args();
-          if (args.length === 0) {
-            logMessage = text;
-          } else if (args.length === 1) {
-            // Single argument - use text() which is already formatted
-            logMessage = text;
-          } else {
-            // Multiple arguments - format them properly
-            const argValues = await Promise.all(
-              args.map(async (arg) => {
-                try {
-                  const value = await arg.jsonValue();
-                  return typeof value === 'object' ? JSON.stringify(value) : String(value);
-                } catch {
-                  return '[object]';
-                }
-              })
-            );
-            
-            // Join all arguments with spaces (like normal console output)
-            logMessage = argValues.join(' ');
-          }
-        } catch (error) {
-          // Fallback to original text if args processing fails
-          logMessage = text;
-        }
-
-        const level = msg.type().toUpperCase();
-        this.logger.log('browser', `[CONSOLE ${level}] ${logMessage}`);
-      }
-    });
-    
-    // Page errors
-    page.on('pageerror', async (error) => {
-      if (page.url().includes(`localhost:${this.options.port}`)) {
-        const screenshotPath = await this.takeScreenshot(page, 'error');
-        this.logger.log('browser', `[PAGE ERROR] ${error.message}`);
-        if (screenshotPath) {
-          this.logger.log('browser', `[SCREENSHOT] ${screenshotPath}`);
-        }
-        if (error.stack) {
-          this.logger.log('browser', `[PAGE ERROR STACK] ${error.stack}`);
-        }
-      }
-    });
-    
-    // Network requests
-    page.on('request', (request) => {
-      if (page.url().includes(`localhost:${this.options.port}`) && !request.url().includes(`localhost:${this.options.mcpPort}`)) {
-        this.logger.log('browser', `[NETWORK REQUEST] ${request.method()} ${request.url()}`);
-      }
-    });
-    
-    page.on('response', async (response) => {
-      if (page.url().includes(`localhost:${this.options.port}`) && !response.url().includes(`localhost:${this.options.mcpPort}`)) {
-        const status = response.status();
-        const url = response.url();
-        if (status >= 400) {
-          const screenshotPath = await this.takeScreenshot(page, 'network-error');
-          this.logger.log('browser', `[NETWORK ERROR] ${status} ${url}`);
-          if (screenshotPath) {
-            this.logger.log('browser', `[SCREENSHOT] ${screenshotPath}`);
-          }
-        }
-      }
-    });
-    
-    // Navigation (only screenshot on route changes, not every navigation)
-    let lastRoute = '';
-    page.on('framenavigated', async (frame) => {
-      if (frame === page.mainFrame() && frame.url().includes(`localhost:${this.options.port}`)) {
-        const currentRoute = new URL(frame.url()).pathname;
-        this.logger.log('browser', `[NAVIGATION] ${frame.url()}`);
-        
-        // Only screenshot if route actually changed
-        if (currentRoute !== lastRoute) {
-          const screenshotPath = await this.takeScreenshot(page, 'route-change');
-          if (screenshotPath) {
-            this.logger.log('browser', `[SCREENSHOT] ${screenshotPath}`);
-          }
-          lastRoute = currentRoute;
-        }
-      }
-    });
-
-    // Set up user interaction tracking (clicks, scrolls, etc.)
-    await this.setupInteractionTracking(page);
-  }
-
-  private async setupInteractionTracking(page: Page) {
-    if (!page.url().includes(`localhost:${this.options.port}`)) {
-      return;
-    }
-
-    try {
-      // Inject interaction tracking scripts into the page (both at init and after load)
-      const trackingScript = () => {
-        // Only inject once
-        if ((window as any).__dev3000_tracking_injected) return;
-        (window as any).__dev3000_tracking_injected = true;
-        // Track clicks and taps
-        document.addEventListener('click', (event) => {
-          const target = event.target as Element;
-          const targetSelector = target.tagName.toLowerCase() + 
-            (target.id ? `#${target.id}` : '') + 
-            (target.className ? `.${target.className.split(' ').join('.')}` : '');
-          
-          const interactionData = {
-            type: 'CLICK',
-            coordinates: { x: event.clientX, y: event.clientY },
-            target: targetSelector,
-            text: target.textContent?.slice(0, 50) || null,
-            viewport: { width: window.innerWidth, height: window.innerHeight },
-            scroll: { x: window.scrollX, y: window.scrollY }
-          };
-          
-          console.log(`[DEV3000_INTERACTION] ${JSON.stringify(interactionData)}`);
-        }, true);
-
-        // Track touch events (mobile/tablet)
-        document.addEventListener('touchstart', (event) => {
-          if (event.touches.length > 0) {
-            const touch = event.touches[0];
-            const target = event.target as Element;
-            const targetSelector = target.tagName.toLowerCase() + 
-              (target.id ? `#${target.id}` : '') + 
-              (target.className ? `.${target.className.split(' ').join('.')}` : '');
-            
-            const interactionData = {
-              type: 'TAP',
-              coordinates: { x: Math.round(touch.clientX), y: Math.round(touch.clientY) },
-              target: targetSelector,
-              text: target.textContent?.slice(0, 50) || null,
-              viewport: { width: window.innerWidth, height: window.innerHeight },
-              scroll: { x: window.scrollX, y: window.scrollY }
-            };
-            
-            console.log(`[DEV3000_INTERACTION] ${JSON.stringify(interactionData)}`);
-          }
-        }, true);
-
-        // Track scrolling with throttling to avoid spam
-        let lastScrollTime = 0;
-        let lastScrollY = window.scrollY;
-        let lastScrollX = window.scrollX;
-        
-        document.addEventListener('scroll', () => {
-          const now = Date.now();
-          if (now - lastScrollTime > 500) { // Throttle to max once per 500ms
-            const deltaY = window.scrollY - lastScrollY;
-            const deltaX = window.scrollX - lastScrollX;
-            
-            if (Math.abs(deltaY) > 10 || Math.abs(deltaX) > 10) { // Only log significant scrolls
-              const direction = deltaY > 0 ? 'DOWN' : deltaY < 0 ? 'UP' : deltaX > 0 ? 'RIGHT' : 'LEFT';
-              const distance = Math.round(Math.sqrt(deltaX * deltaX + deltaY * deltaY));
-              
-              const interactionData = {
-                type: 'SCROLL',
-                direction: direction,
-                distance: distance,
-                from: { x: lastScrollX, y: lastScrollY },
-                to: { x: window.scrollX, y: window.scrollY },
-                viewport: { width: window.innerWidth, height: window.innerHeight }
-              };
-              
-              console.log(`[DEV3000_INTERACTION] ${JSON.stringify(interactionData)}`);
-              
-              lastScrollTime = now;
-              lastScrollY = window.scrollY;
-              lastScrollX = window.scrollX;
-            }
-          }
-        }, true);
-
-        // Track keyboard events (for form interactions)
-        document.addEventListener('keydown', (event) => {
-          const target = event.target as HTMLElement;
-          if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.contentEditable === 'true') {
-            const targetSelector = target.tagName.toLowerCase() + 
-              (target.id ? `#${target.id}` : '') + 
-              ((target as any).type ? `[type=${(target as any).type}]` : '') +
-              (target.className ? `.${target.className.split(' ').join('.')}` : '');
-            
-            // Log special keys, but not every character to avoid logging sensitive data
-            if (event.key.length > 1 || event.key === ' ') {
-              const interactionData = {
-                type: 'KEY',
-                key: event.key === ' ' ? 'Space' : event.key,
-                target: targetSelector,
-                modifiers: {
-                  ctrl: event.ctrlKey,
-                  alt: event.altKey,
-                  shift: event.shiftKey,
-                  meta: event.metaKey
-                },
-                inputType: (target as any).type || target.tagName.toLowerCase()
-              };
-              
-              console.log(`[DEV3000_INTERACTION] ${JSON.stringify(interactionData)}`);
-            }
-          }
-        }, true);
-        
-        // Log that tracking is active
-        console.log('[DEV3000_INTERACTION] Tracking initialized');
-      };
-
-      // Add to page init - this should be sufficient
-      await page.addInitScript(trackingScript);
-
-      // Note: Interaction logs will be captured by the existing console handler in setupPageMonitoring
-
-    } catch (error) {
-      console.warn('Could not set up interaction tracking:', error);
-    }
-  }
 
   private setupCleanupHandlers() {
     // Handle Ctrl+C to kill all processes
@@ -1207,47 +660,14 @@ export class DevEnvironment {
         killPortProcess(this.options.mcpPort, 'dev3000 MCP server')
       ]);
       
-      // Clear the state saving timer
-      this.stopStateSaving();
-      
-      // Try to save browser state quickly (with timeout) - non-intrusive
-      if (this.browserContext) {
+      // Shutdown CDP monitor
+      if (this.cdpMonitor) {
         try {
-          console.log(chalk.blue('💾 Saving browser state...'));
-          const savePromise = this.saveStateManually();
-          const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Timeout')), 2000)
-          );
-          
-          await Promise.race([savePromise, timeoutPromise]);
-          console.log(chalk.green('✅ Browser state saved'));
+          console.log(chalk.blue('🔄 Closing CDP monitor...'));
+          await this.cdpMonitor.shutdown();
+          console.log(chalk.green('✅ CDP monitor closed'));
         } catch (error) {
-          console.log(chalk.gray('⚠️ Could not save browser state (timed out)'));
-        }
-      }
-      
-      // Close browser quickly (with timeout)
-      if (this.browser) {
-        try {
-          if (this.browserType === 'system-chrome') {
-            console.log(chalk.blue('🔄 Closing browser tab (keeping Chrome open)...'));
-          } else {
-            console.log(chalk.blue('🔄 Closing browser...'));
-          }
-          
-          const closePromise = this.browser.close();
-          const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Timeout')), 2000)
-          );
-          
-          await Promise.race([closePromise, timeoutPromise]);
-          console.log(chalk.green('✅ Browser closed'));
-        } catch (error) {
-          if (this.browserType === 'system-chrome') {
-            console.log(chalk.gray('⚠️ Chrome tab close failed (this is normal - your Chrome stays open)'));
-          } else {
-            console.log(chalk.gray('⚠️ Browser close timed out'));
-          }
+          console.log(chalk.gray('⚠️ CDP monitor shutdown failed'));
         }
       }
       

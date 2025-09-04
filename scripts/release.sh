@@ -59,4 +59,32 @@ git push origin main --tags
 echo "📦 Publishing to npm..."
 pnpm publish --otp=$(op item get npm --otp)
 
+# Calculate canary version (next patch + canary suffix)
+CANARY_VERSION=$(node -e "
+    const semver = require('./package.json').version.split('.');
+    semver[2] = parseInt(semver[2]) + 1;
+    console.log(semver.join('.') + '-canary');
+")
+
+# Update package.json to canary version for local development
+echo "🧪 Bumping to canary version $CANARY_VERSION for local development..."
+node -e "
+    const fs = require('fs');
+    const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+    pkg.version = '$CANARY_VERSION';
+    fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+"
+
+# Commit the canary version bump
+git add package.json
+git commit -m "Bump to v$CANARY_VERSION for local development
+
+🤖 Generated with [Claude Code](https://claude.ai/code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>"
+
+# Push the canary version commit
+git push origin main
+
 echo "🎉 Release v$NEXT_VERSION completed successfully!"
+echo "🧪 Local development now on v$CANARY_VERSION"

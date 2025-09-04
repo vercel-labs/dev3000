@@ -341,11 +341,72 @@ function generateCDPCommands(replayData: ReplayData, speed: number): CDPCommand[
 }
 
 async function executeCDPCommands(commands: CDPCommand[]): Promise<any> {
-  // For now, we'll try to connect to the CDP session
-  // This would require the browser to be launched with --remote-debugging-port
-  // or we'd need to get the CDP endpoint from the Playwright instance
+  const WebSocket = require('ws');
   
-  // Since we can't easily access the existing Playwright browser from here,
-  // let's return the commands for the client to execute
-  throw new Error('Direct CDP execution not yet implemented - browser connection needed');
+  try {
+    // Connect to Chrome DevTools Protocol on port 9222
+    const response = await fetch('http://localhost:9222/json/version');
+    const versionData = await response.json();
+    const wsUrl = versionData.webSocketDebuggerUrl;
+    
+    return new Promise((resolve, reject) => {
+      const ws = new WebSocket(wsUrl);
+      let commandIndex = 0;
+      let nextId = 1;
+      const results: any[] = [];
+      
+      ws.on('open', () => {
+        // Execute commands sequentially with proper timing
+        const executeNext = () => {
+          if (commandIndex >= commands.length) {
+            ws.close();
+            resolve({ executed: commandIndex, results });
+            return;
+          }
+          
+          const command = commands[commandIndex];
+          const message = {
+            id: nextId++,
+            method: command.method,
+            params: command.params
+          };
+          
+          ws.send(JSON.stringify(message));
+          commandIndex++;
+          
+          // Schedule next command with delay
+          setTimeout(executeNext, command.delay || 100);
+        };
+        
+        // Start executing commands
+        executeNext();
+      });
+      
+      ws.on('message', (data) => {
+        try {
+          const response = JSON.parse(data.toString());
+          if (response.id) {
+            results.push(response);
+          }
+        } catch (error) {
+          // Ignore parsing errors for events
+        }
+      });
+      
+      ws.on('error', reject);
+      ws.on('close', () => {
+        if (commandIndex < commands.length) {
+          reject(new Error(`Connection closed after executing ${commandIndex}/${commands.length} commands`));
+        }
+      });
+      
+      // Timeout after 30 seconds
+      setTimeout(() => {
+        ws.close();
+        reject(new Error('Replay execution timed out'));
+      }, 30000);
+    });
+  } catch (error) {
+    throw new Error(`Failed to connect to CDP: ${error}`);
+  }
 }

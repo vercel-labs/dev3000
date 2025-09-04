@@ -24,9 +24,19 @@ function getVersion(): string {
     const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
     let version = packageJson.version;
     
-    // Add -dev suffix for local development installs
-    if (packageRoot.includes('vercel-labs/dev3000')) {
-      version += '-dev';
+    // Use git to detect if we're in the dev3000 source repository
+    try {
+      const { execSync } = require('child_process');
+      const gitRemote = execSync('git remote get-url origin 2>/dev/null', { 
+        cwd: packageRoot, 
+        encoding: 'utf8' 
+      }).trim();
+      
+      if (gitRemote.includes('vercel-labs/dev3000') && !version.includes('canary')) {
+        version += '-local';
+      }
+    } catch {
+      // Not in git repo or no git - use version as-is
     }
     
     return version;
