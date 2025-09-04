@@ -1,6 +1,6 @@
 {
   "name": "dev3000",
-  "version": "0.0.24",
+  "version": "0.0.25-canary",
   "description": "AI-powered development tools with browser monitoring and MCP server integration",
   "type": "module",
   "main": "dist/index.js",
@@ -21,30 +21,33 @@
     "dev": "tsc --watch",
     "test": "vitest run",
     "prepare": "husky",
-    "release": "./scripts/release.sh"
+    "release": "./scripts/release.sh",
+    "test-canary": "pnpm run build && pnpm pack && pnpm install -g file:$(pwd)/dev3000-$(node -p \"require('./package.json').version\").tgz"
   },
   "keywords": [
     "nextjs",
     "ai",
     "development",
-    "playwright",
+    "chrome-devtools-protocol",
+    "cdp",
     "mcp",
     "browser-monitoring",
     "debugging",
     "claude"
   ],
   "dependencies": {
-    "playwright": "^1.49.0",
     "mcp-handler": "^1.0.2",
     "zod": "^3.22.4",
     "chalk": "^5.3.0",
     "commander": "^11.1.0",
-    "cli-progress": "^3.12.0"
+    "cli-progress": "^3.12.0",
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "tsx": "^4.20.3",
     "@types/node": "^22.8.7",
     "@types/cli-progress": "^3.11.6",
+    "@types/ws": "^8.5.12",
     "typescript": "^5.0.0",
     "vitest": "^1.0.0",
     "husky": "^9.0.0"
