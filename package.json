@@ -11,6 +11,7 @@
     "dist/",
     "mcp-server/app/",
     "mcp-server/package.json",
+    "mcp-server/pnpm-lock.yaml",
     "mcp-server/tsconfig.json",
     "mcp-server/next.config.ts",
     "mcp-server/next-env.d.ts",
@@ -21,8 +22,9 @@
     "dev": "tsc --watch",
     "test": "vitest run",
     "prepare": "husky",
+    "postinstall": "cd mcp-server && pnpm install --frozen-lockfile",
     "release": "./scripts/release.sh",
-    "test-canary": "pnpm run build && pnpm pack && pnpm install -g file:$(pwd)/dev3000-$(node -p \"require('./package.json').version\").tgz"
+    "test-canary": "./scripts/test-canary.sh"
   },
   "keywords": [
     "nextjs",

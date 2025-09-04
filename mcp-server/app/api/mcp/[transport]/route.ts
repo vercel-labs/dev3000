@@ -2,8 +2,28 @@ import { createMcpHandler } from "mcp-handler";
 import { z } from "zod";
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
+import { WebSocket } from "ws";
 
 const handler = createMcpHandler((server) => {
+    // Healthcheck tool
+    server.tool(
+      "healthcheck",
+      "Simple healthcheck to verify MCP server is working",
+      {
+        message: z.string().optional().describe("Optional message to echo back")
+      },
+      async ({ message = "MCP server is healthy!" }) => {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `✅ ${message} - Timestamp: ${new Date().toISOString()}`
+            }
+          ]
+        };
+      }
+    );
+
     // Tool to read consolidated logs
     server.tool(
       "read_consolidated_logs",
@@ -183,6 +203,207 @@ const handler = createMcpHandler((server) => {
         }
       }
     );
+
+    // Tool to execute browser actions via CDP
+    server.tool(
+      "execute_browser_action",
+      "Execute safe browser actions via Chrome DevTools Protocol",
+      {
+        action: z.enum(["click", "navigate", "screenshot", "evaluate", "scroll", "type"]).describe("Action to perform"),
+        params: z.object({
+          x: z.number().optional().describe("X coordinate for click/scroll"),
+          y: z.number().optional().describe("Y coordinate for click/scroll"),
+          url: z.string().optional().describe("URL for navigation"),
+          selector: z.string().optional().describe("CSS selector for element targeting"),
+          text: z.string().optional().describe("Text to type"),
+          expression: z.string().optional().describe("JavaScript expression to evaluate (safe expressions only)"),
+          deltaX: z.number().optional().describe("Horizontal scroll amount"),
+          deltaY: z.number().optional().describe("Vertical scroll amount")
+        }).describe("Parameters for the action")
+      },
+      async ({ action, params }) => {
+        try {
+          // Connect to CDP on port 9222
+          const targetsResponse = await fetch('http://localhost:9222/json');
+          const targets = await targetsResponse.json();
+          
+          const pageTarget = targets.find((target: any) => target.type === 'page');
+          if (!pageTarget) {
+            throw new Error('No browser tab found. Make sure dev3000 is running with CDP monitoring.');
+          }
+
+          const wsUrl = pageTarget.webSocketDebuggerUrl;
+          
+          const result = await new Promise((resolve, reject) => {
+            // WebSocket imported at top of file
+            const ws = new WebSocket(wsUrl);
+            let messageId = 1;
+            
+            ws.on('open', async () => {
+              try {
+                let cdpResult;
+                
+                switch (action) {
+                  case 'click':
+                    if (!params.x || !params.y) {
+                      throw new Error('Click action requires x and y coordinates');
+                    }
+                    // Send mouse down and up events
+                    await sendCDPCommand(ws, messageId++, 'Input.dispatchMouseEvent', {
+                      type: 'mousePressed',
+                      x: params.x,
+                      y: params.y,
+                      button: 'left',
+                      clickCount: 1
+                    });
+                    await sendCDPCommand(ws, messageId++, 'Input.dispatchMouseEvent', {
+                      type: 'mouseReleased',
+                      x: params.x,
+                      y: params.y,
+                      button: 'left',
+                      clickCount: 1
+                    });
+                    cdpResult = { action: 'click', coordinates: { x: params.x, y: params.y } };
+                    break;
+                    
+                  case 'navigate':
+                    if (!params.url) {
+                      throw new Error('Navigate action requires url parameter');
+                    }
+                    // Basic URL validation
+                    if (!params.url.startsWith('http://') && !params.url.startsWith('https://')) {
+                      throw new Error('Only http:// and https:// URLs are allowed');
+                    }
+                    cdpResult = await sendCDPCommand(ws, messageId++, 'Page.navigate', { url: params.url });
+                    break;
+                    
+                  case 'screenshot':
+                    cdpResult = await sendCDPCommand(ws, messageId++, 'Page.captureScreenshot', {
+                      format: 'png',
+                      quality: 80
+                    });
+                    break;
+                    
+                  case 'evaluate':
+                    if (!params.expression) {
+                      throw new Error('Evaluate action requires expression parameter');
+                    }
+                    // Whitelist safe expressions only
+                    const safeExpressions = [
+                      /^document\.title$/,
+                      /^window\.location\.href$/,
+                      /^document\.querySelector\(['"][^'"]*['"]\)\.textContent$/,
+                      /^document\.body\.scrollHeight$/,
+                      /^window\.scrollY$/,
+                      /^window\.scrollX$/
+                    ];
+                    
+                    if (!safeExpressions.some(regex => regex.test(params.expression!))) {
+                      throw new Error('Expression not in whitelist. Only safe read-only expressions allowed.');
+                    }
+                    
+                    cdpResult = await sendCDPCommand(ws, messageId++, 'Runtime.evaluate', {
+                      expression: params.expression,
+                      returnByValue: true
+                    });
+                    break;
+                    
+                  case 'scroll':
+                    const scrollX = params.deltaX || 0;
+                    const scrollY = params.deltaY || 0;
+                    cdpResult = await sendCDPCommand(ws, messageId++, 'Input.dispatchMouseEvent', {
+                      type: 'mouseWheel',
+                      x: params.x || 500,
+                      y: params.y || 500,
+                      deltaX: scrollX,
+                      deltaY: scrollY
+                    });
+                    break;
+                    
+                  case 'type':
+                    if (!params.text) {
+                      throw new Error('Type action requires text parameter');
+                    }
+                    // Type each character
+                    for (const char of params.text) {
+                      await sendCDPCommand(ws, messageId++, 'Input.dispatchKeyEvent', {
+                        type: 'char',
+                        text: char
+                      });
+                    }
+                    cdpResult = { action: 'type', text: params.text };
+                    break;
+                    
+                  default:
+                    throw new Error(`Unsupported action: ${action}`);
+                }
+                
+                ws.close();
+                resolve(cdpResult);
+              } catch (error) {
+                ws.close();
+                reject(error);
+              }
+            });
+            
+            ws.on('error', reject);
+            
+            // Helper function to send CDP commands
+            async function sendCDPCommand(ws: any, id: number, method: string, params: any): Promise<any> {
+              return new Promise((cmdResolve, cmdReject) => {
+                const command = { id, method, params };
+                
+                const messageHandler = (data: any) => {
+                  const message = JSON.parse(data.toString());
+                  if (message.id === id) {
+                    ws.removeListener('message', messageHandler);
+                    if (message.error) {
+                      cmdReject(new Error(message.error.message));
+                    } else {
+                      cmdResolve(message.result);
+                    }
+                  }
+                };
+                
+                ws.on('message', messageHandler);
+                ws.send(JSON.stringify(command));
+                
+                // Command timeout
+                setTimeout(() => {
+                  ws.removeListener('message', messageHandler);
+                  cmdReject(new Error(`CDP command timeout: ${method}`));
+                }, 5000);
+              });
+            }
+          });
+          
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Browser action '${action}' executed successfully. Result: ${JSON.stringify(result, null, 2)}`
+              }
+            ]
+          };
+          
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Browser action failed: ${error instanceof Error ? error.message : String(error)}`
+              }
+            ]
+          };
+        }
+      }
+    );
+}, {
+  // Server options
+}, {
+  basePath: "/api/mcp",
+  maxDuration: 60,
+  verboseLogs: true
 });
 
 export { handler as GET, handler as POST };

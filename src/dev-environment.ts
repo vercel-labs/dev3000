@@ -313,20 +313,31 @@ export class DevEnvironment {
     });
   }
 
+  private debugLog(message: string) {
+    if (this.options.debug) {
+      console.log(`[MCP DEBUG] ${message}`);
+    }
+  }
+
   private async startMcpServer() {
+    this.debugLog('Starting MCP server setup');
     // Get the path to our bundled MCP server
     const currentFile = fileURLToPath(import.meta.url);
     const packageRoot = dirname(dirname(currentFile)); // Go up from dist/ to package root
     const mcpServerPath = join(packageRoot, 'mcp-server');
+    this.debugLog(`MCP server path: ${mcpServerPath}`);
     
     if (!existsSync(mcpServerPath)) {
       throw new Error(`MCP server directory not found at ${mcpServerPath}`);
     }
+    this.debugLog('MCP server directory found');
     
     // Check if MCP server dependencies are installed, install if missing
     const isGlobalInstall = mcpServerPath.includes('.pnpm');
+    this.debugLog(`Is global install: ${isGlobalInstall}`);
     let nodeModulesPath = join(mcpServerPath, 'node_modules');
     let actualWorkingDir = mcpServerPath;
+    this.debugLog(`Node modules path: ${nodeModulesPath}`);
     
     if (isGlobalInstall) {
       const tmpDirPath = join(tmpdir(), 'dev3000-mcp-deps');
@@ -340,15 +351,13 @@ export class DevEnvironment {
       }
     }
     
-    if (!existsSync(nodeModulesPath)) {
-      // Hide progress bar during installation
-      this.progressBar.stop();
-      console.log(chalk.blue('\n📦 Installing MCP server dependencies (first time only)...'));
-      await this.installMcpServerDeps(mcpServerPath);
-      console.log(''); // Add spacing
-      // Resume progress bar
-      this.progressBar.start(100, 20, { stage: 'Starting MCP server...' });
-    }
+    // Always install dependencies to ensure they're up to date
+    this.debugLog('Installing/updating MCP server dependencies');
+    this.progressBar.stop();
+    console.log(chalk.blue('\n📦 Installing MCP server dependencies...'));
+    await this.installMcpServerDeps(mcpServerPath);
+    console.log(''); // Add spacing
+    this.progressBar.start(100, 20, { stage: 'Starting MCP server...' });
     
     // Use version already read in constructor
 
@@ -394,6 +403,10 @@ export class DevEnvironment {
 
     // Start the MCP server using detected package manager
     const packageManagerForRun = detectPackageManagerForRun();
+    this.debugLog(`Using package manager: ${packageManagerForRun}`);
+    this.debugLog(`MCP server working directory: ${actualWorkingDir}`);
+    this.debugLog(`MCP server port: ${this.options.mcpPort}`);
+    
     this.mcpServerProcess = spawn(packageManagerForRun, ['run', 'dev'], {
       stdio: ['ignore', 'pipe', 'pipe'],
       shell: true,
@@ -406,6 +419,8 @@ export class DevEnvironment {
         DEV3000_VERSION: this.version, // Pass version to MCP server
       },
     });
+    
+    this.debugLog('MCP server process spawned');
 
     // Log MCP server output to separate file for debugging
     const mcpLogFile = join(dirname(this.options.logFile), 'dev3000-mcp.log');
@@ -432,11 +447,14 @@ export class DevEnvironment {
     });
 
     this.mcpServerProcess.on('exit', (code) => {
+      this.debugLog(`MCP server process exited with code ${code}`);
       // Only show exit messages for unexpected failures, not restarts
       if (code !== 0 && code !== null) {
         this.logger.log('server', `MCP server process exited with code ${code}`);
       }
     });
+    
+    this.debugLog('MCP server event handlers setup complete');
   }
 
 
@@ -577,22 +595,29 @@ export class DevEnvironment {
     
     while (attempts < maxAttempts) {
       try {
+        // Test the actual MCP endpoint
         const response = await fetch(`http://localhost:${this.options.mcpPort}`, {
           method: 'HEAD',
           signal: AbortSignal.timeout(2000)
         });
-        if (response.ok || response.status === 404) {
+        this.debugLog(`MCP server health check: ${response.status}`);
+        if (response.status === 500) {
+          const errorText = await response.text();
+          this.debugLog(`MCP server 500 error: ${errorText}`);
+        }
+        if (response.ok || response.status === 404) { // 404 is OK - means server is responding
           return;
         }
       } catch (error) {
-        // MCP server not ready yet, continue waiting
+        this.debugLog(`MCP server not ready (attempt ${attempts}): ${error}`);
       }
       
       attempts++;
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
     
-    // Continue anyway if health check fails
+    this.debugLog('MCP server health check failed, terminating');
+    throw new Error(`MCP server failed to start after ${maxAttempts} seconds. Check the logs for errors.`);
   }
 
   private startCDPMonitoringAsync() {

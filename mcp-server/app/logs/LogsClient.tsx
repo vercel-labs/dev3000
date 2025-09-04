@@ -164,6 +164,7 @@ export default function LogsClient({ version }: LogsClientProps) {
   const [showFilters, setShowFilters] = useState(false);
   const [showReplayPreview, setShowReplayPreview] = useState(false);
   const [replayEvents, setReplayEvents] = useState<any[]>([]);
+  const [isRotatingLog, setIsRotatingLog] = useState(false);
   const [filters, setFilters] = useState({
     browser: true,
     server: true,
@@ -381,6 +382,43 @@ export default function LogsClient({ version }: LogsClientProps) {
     }
   };
 
+  const handleRotateLog = async () => {
+    if (!currentLogFile || isRotatingLog) return;
+    
+    setIsRotatingLog(true);
+    try {
+      const response = await fetch('/api/logs/rotate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ currentLogPath: currentLogFile }),
+      });
+
+      if (response.ok) {
+        // Clear current logs from UI
+        setLogs([]);
+        setLastLogCount(0);
+        setLastFetched(null);
+        
+        // Reload available logs to show the new archived file
+        await loadAvailableLogs();
+        
+        // Start fresh polling
+        await loadInitialLogs();
+      } else {
+        const error = await response.json();
+        console.error('Failed to rotate log:', error);
+        alert('Failed to rotate log: ' + error.error);
+      }
+    } catch (error) {
+      console.error('Error rotating log:', error);
+      alert('Error rotating log');
+    } finally {
+      setIsRotatingLog(false);
+    }
+  };
+
   const filteredLogs = useMemo(() => {
     return logs.filter(entry => {
       // Check specific message types first (these override source filtering)
@@ -470,13 +508,25 @@ export default function LogsClient({ version }: LogsClientProps) {
                 )}
                 </div>
               ) : (
-                <span className="font-mono text-xs text-gray-600 px-3 py-1 whitespace-nowrap">
-                  {isInitialLoading && !currentLogFile ? (
-                    <div className="h-4 bg-gray-200 rounded animate-pulse" style={{width: '220px'}} />
-                  ) : (
-                    currentLogFile ? currentLogFile.split('/').pop() : 'dev3000.log'
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-xs text-gray-600 px-3 py-1 whitespace-nowrap">
+                    {isInitialLoading && !currentLogFile ? (
+                      <div className="h-4 bg-gray-200 rounded animate-pulse" style={{width: '220px'}} />
+                    ) : (
+                      currentLogFile ? currentLogFile.split('/').pop() : 'dev3000.log'
+                    )}
+                  </span>
+                  {currentLogFile && !isInitialLoading && (
+                    <button
+                      onClick={handleRotateLog}
+                      disabled={isRotatingLog}
+                      className="px-2 py-1 text-xs bg-orange-100 text-orange-700 hover:bg-orange-200 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Clear logs (rotate current log to archive and start fresh)"
+                    >
+                      {isRotatingLog ? '...' : 'Clear'}
+                    </button>
                   )}
-                </span>
+                </div>
               )}
               
               {logs.length > 0 && (

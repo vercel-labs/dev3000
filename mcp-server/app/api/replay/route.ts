@@ -273,7 +273,7 @@ function generateCDPCommands(replayData: ReplayData, speed: number): CDPCommand[
         description: `Navigate to ${event.url}`
       });
     } else if (event.eventType === 'interaction') {
-      if (event.type === 'CLICK' && event.x !== undefined && event.y !== undefined) {
+      if ('type' in event && event.type === 'CLICK' && event.x !== undefined && event.y !== undefined) {
         // Mouse down
         commands.push({
           method: 'Input.dispatchMouseEvent',
@@ -301,7 +301,7 @@ function generateCDPCommands(replayData: ReplayData, speed: number): CDPCommand[
           delay: 50, // 50ms between down and up
           description: `Release click at (${event.x}, ${event.y})`
         });
-      } else if (event.type === 'SCROLL' && event.x !== undefined && event.y !== undefined) {
+      } else if ('type' in event && event.type === 'SCROLL' && event.x !== undefined && event.y !== undefined) {
         commands.push({
           method: 'Runtime.evaluate',
           params: {
@@ -310,7 +310,7 @@ function generateCDPCommands(replayData: ReplayData, speed: number): CDPCommand[
           delay: delay,
           description: `Scroll to (${event.x}, ${event.y})`
         });
-      } else if (event.type === 'KEY' && event.key) {
+      } else if ('type' in event && event.type === 'KEY' && event.key) {
         // Key down
         commands.push({
           method: 'Input.dispatchKeyEvent',
@@ -382,7 +382,7 @@ async function executeCDPCommands(commands: CDPCommand[]): Promise<any> {
         executeNext();
       });
       
-      ws.on('message', (data) => {
+      ws.on('message', (data: any) => {
         try {
           const response = JSON.parse(data.toString());
           if (response.id) {

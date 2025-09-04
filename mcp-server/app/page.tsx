@@ -28,7 +28,7 @@ export default function HomePage() {
           </a>
           
           <a 
-            href="/api/mcp/http"
+            href="/api/mcp/mcp"
             className="block w-full bg-green-500 text-white text-center py-3 px-4 rounded hover:bg-green-600 transition-colors"
           >
             🤖 MCP Endpoint
