@@ -267,7 +267,7 @@ export class DevEnvironment {
     console.log(chalk.blue(`Logs symlink: /tmp/dev3000.log`));
     console.log(chalk.yellow('☝️ Give this to an AI to auto debug and fix your app\n'));
     console.log(chalk.blue(`🌐 Your App: http://localhost:${this.options.port}`));
-    console.log(chalk.blue(`🤖 MCP Server: http://localhost:${this.options.mcpPort}/api/mcp/http`));
+    console.log(chalk.blue(`🤖 MCP Server: http://localhost:${this.options.mcpPort}/api/mcp/mcp`));
     console.log(chalk.magenta(`📸 Visual Timeline: http://localhost:${this.options.mcpPort}/logs`));
     console.log(chalk.gray('\n💡 To stop all servers and kill dev3000: Ctrl-C'));
   }
