@@ -615,6 +615,8 @@ export class DevEnvironment {
     // Start CDP monitoring in background without blocking completion
     this.startCDPMonitoring().catch(error => {
       console.error(chalk.red('⚠️ CDP monitoring setup failed:'), error);
+      // CDP monitoring is critical - shutdown if it fails
+      this.gracefulShutdown();
     });
   }
 
@@ -639,9 +641,9 @@ export class DevEnvironment {
       this.logger.log('browser', `[CDP] Navigated to http://localhost:${this.options.port}`);
       
     } catch (error) {
-      // Log error but don't crash - we want the servers to keep running
+      // Log error and throw to trigger graceful shutdown
       this.logger.log('browser', `[CDP ERROR] Failed to start CDP monitoring: ${error}`);
-      console.error(chalk.red('⚠️ CDP monitoring failed, but servers are still running'));
+      throw error;
     }
   }
 
@@ -651,10 +653,10 @@ export class DevEnvironment {
     
     // Stop spinner if it's running
     if (this.spinner && this.spinner.isSpinning) {
-      this.spinner.fail('Server failure detected');
+      this.spinner.fail('Critical failure detected');
     }
     
-    console.log(chalk.yellow('🛑 Shutting down dev3000 due to server failure...'));
+    console.log(chalk.yellow('🛑 Shutting down dev3000 due to critical failure...'));
     
     // Kill processes on both ports
     const killPortProcess = async (port: string, name: string) => {

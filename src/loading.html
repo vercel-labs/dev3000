@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>dev3000 - Starting...</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #1e1e1e 0%, #2d2d2d 100%);
+      color: #fafafa;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    .container {
+      text-align: center;
+      position: relative;
+      z-index: 2;
+    }
+    .logo-container {
+      margin-bottom: 32px;
+      position: relative;
+      width: 80px;
+      height: 80px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .triangle {
+      position: absolute;
+      top: 46%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 48px;
+      height: 41px;
+      animation: pulse 2s ease-in-out infinite;
+      z-index: 2;
+    }
+    .triangle svg {
+      width: 100%;
+      height: 100%;
+      fill: #fafafa;
+    }
+    .spinner-ring {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 80px;
+      height: 80px;
+      border: 2px solid rgba(250, 250, 250, 0.1);
+      border-top: 2px solid #fafafa;
+      border-radius: 50%;
+      animation: spin 1.5s linear infinite;
+      z-index: 1;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+      50% { opacity: 0.8; transform: translate(-50%, -50%) scale(1.05); }
+    }
+    h1 { 
+      margin: 0 0 16px; 
+      font-size: 32px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+    .tagline {
+      margin: 0 0 8px;
+      font-size: 16px;
+      color: #a1a1aa;
+      font-weight: 500;
+    }
+    .subtitle {
+      font-family: monospace;
+      display: inline-block;
+      margin: 0;
+      font-size: 14px;
+      color: #71717a;
+      font-weight: 400;
+    }
+    .word-container {
+      display: inline-block;
+      overflow: hidden;
+      vertical-align: baseline;
+      height: 1.2em;
+      position: relative;
+      min-width: 2em;
+      top: 3px;
+      left: 2px;
+    }
+    .word {
+      position: absolute;
+      top: 0;
+      left: 0;
+      color: #fbbf24;
+      font-weight: 500;
+      white-space: nowrap;
+      transition: all 0.3s ease-out;
+      opacity: 0;
+      transform: translateY(-20px);
+    }
+    .word.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .word.exiting {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    .footer {
+      position: fixed;
+      bottom: 24px;
+      left: 0;
+      right: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      font-size: 12px;
+      color: #52525b;
+      opacity: 0.8;
+    }
+    .triangle-small {
+      display: flex;
+      width: 10px;
+      height: 10px;
+    }
+    .triangle-small svg {
+      width: 100%;
+      height: 100%;
+      fill: #52525b;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo-container">
+      <div class="triangle">
+        <svg width="76" height="65" viewBox="0 0 76 65" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M37.5274 0L75.0548 65H0L37.5274 0Z" fill="#fafafa"/>
+        </svg>
+      </div>
+      <div class="spinner-ring"></div>
+    </div>
+    <h1>dev3000</h1>
+    <p class="tagline">Connecting to servers...</p>
+    <p class="subtitle">You can just <span class="word-container">
+      <span class="word">fix</span>
+      <span class="word">log</span>
+      <span class="word">cdp</span>
+      <span class="word">mcp</span>
+    </span> things.</p>
+  </div>
+  <div class="footer">
+    <span class="triangle-small">
+      <svg width="76" height="65" viewBox="0 0 76 65" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M37.5274 0L75.0548 65H0L37.5274 0Z" fill="#52525b"/>
+      </svg>
+    </span>Powered by Vercel Labs
+  </div>
+
+<script>
+  (function() {
+    const words = document.querySelectorAll('.word');
+    let currentIndex = 0;
+
+    function animateWordTransition() {
+        const currentWord = words[currentIndex];
+        const nextIndex = (currentIndex + 1) % words.length;
+        const nextWord = words[nextIndex];
+
+        // Animate current word out with exit transition
+        currentWord.classList.remove('visible');
+        currentWord.classList.add('exiting');
+
+        // After exit animation, prepare next word and animate it in
+        setTimeout(() => {
+            // Reset current word to initial state
+            currentWord.classList.remove('exiting');
+            
+            // Animate next word in
+            nextWord.classList.add('visible');
+            currentIndex = nextIndex;
+        }, 300); // Match CSS transition duration
+    }
+
+    // Initialize - first word starts visible
+    words[0].classList.add('visible');
+    
+    setTimeout(() => {
+      setInterval(animateWordTransition, 2000);
+    }, 300);
+  })();
+</script>
+</body>
+</html>

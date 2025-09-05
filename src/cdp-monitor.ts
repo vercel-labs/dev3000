@@ -1,8 +1,9 @@
 import { spawn, ChildProcess } from "child_process";
 import { WebSocket } from "ws";
-import { writeFileSync, existsSync, mkdirSync } from "fs";
-import { join } from "path";
+import { writeFileSync, existsSync, mkdirSync, readFileSync } from "fs";
+import { join, dirname } from "path";
 import { tmpdir } from "os";
+import { fileURLToPath } from "url";
 
 export interface CDPEvent {
   method: string;
@@ -77,168 +78,28 @@ export class CDPMonitor {
     }
 
     const loadingPath = join(loadingDir, "loading.html");
-    const loadingHtml = `<!DOCTYPE html>
+    
+    // Read the loading HTML from the source file
+    const currentFile = fileURLToPath(import.meta.url);
+    const currentDir = dirname(currentFile);
+    const loadingHtmlPath = join(currentDir, "src/loading.html");
+    let loadingHtml: string;
+    
+    try {
+      loadingHtml = readFileSync(loadingHtmlPath, 'utf-8');
+    } catch (error) {
+      // Fallback to a simple loading page if file not found
+      loadingHtml = `<!DOCTYPE html>
 <html>
-<head>
-  <title>dev3000 - Starting...</title>
-  <style>
-    * {
-      box-sizing: border-box;
-    }
-    body {
-      margin: 0;
-      padding: 0;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
-      background: #000000;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
-      color: #fafafa;
-    }
-    .container {
-      text-align: center;
-      padding: 48px;
-      max-width: 400px;
-    }
-    .logo-container {
-      margin-bottom: 32px;
-      position: relative;
-      width: 80px;
-      height: 80px;
-      margin-left: auto;
-      margin-right: auto;
-    }
-    .triangle {
-      position: absolute;
-      top: 46%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 48px;
-      height: 41px;
-      animation: pulse 2s ease-in-out infinite;
-      z-index: 2;
-    }
-    .triangle svg {
-      width: 100%;
-      height: 100%;
-      fill: #fafafa;
-    }
-    .spinner-ring {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 80px;
-      height: 80px;
-      border: 2px solid rgba(250, 250, 250, 0.1);
-      border-top: 2px solid #fafafa;
-      border-radius: 50%;
-      animation: spin 1.5s linear infinite;
-      z-index: 1;
-    }
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-      50% { opacity: 0.8; transform: translate(-50%, -50%) scale(1.05); }
-    }
-    h1 { 
-      margin: 0 0 16px; 
-      font-size: 28px; 
-      font-weight: 500; 
-      letter-spacing: -0.5px;
-    }
-    .tagline {
-      margin: 0 0 8px;
-      font-size: 16px;
-      color: #a1a1aa;
-      font-weight: 400;
-    }
-    .subtitle {
-      margin: 0;
-      font-size: 14px;
-      color: #71717a;
-      font-weight: 400;
-    }
-    .rotating-word {
-      display: inline-block;
-      color: #fbbf24;
-      font-weight: 500;
-      animation: wordRotate 8s infinite;
-    }
-    @keyframes wordRotate {
-      0%, 20% { opacity: 1; transform: translateY(0px); }
-      25%, 45% { opacity: 0; transform: translateY(-10px); }
-      50%, 70% { opacity: 1; transform: translateY(0px); }
-      75%, 95% { opacity: 0; transform: translateY(-10px); }
-      100% { opacity: 1; transform: translateY(0px); }
-    }
-    .footer {
-      position: absolute;
-      bottom: 24px;
-      left: 50%;
-      transform: translateX(-50%);
-      font-size: 12px;
-      color: #52525b;
-      opacity: 0.8;
-    }
-    .triangle-small {
-      display: inline-block;
-      width: 8px;
-      height: 7px;
-      margin-right: 6px;
-      vertical-align: baseline;
-    }
-    .triangle-small svg {
-      width: 100%;
-      height: 100%;
-      fill: #52525b;
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="logo-container">
-      <div class="triangle">
-        <svg width="76" height="65" viewBox="0 0 76 65" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M37.5274 0L75.0548 65H0L37.5274 0Z" fill="#fafafa"/>
-        </svg>
-      </div>
-      <div class="spinner-ring"></div>
-    </div>
+<head><title>dev3000 - Starting...</title></head>
+<body style="font-family: system-ui; background: #1e1e1e; color: #fff; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0;">
+  <div style="text-align: center;">
     <h1>dev3000</h1>
-    <p class="tagline">Connecting to servers...</p>
-    <p class="subtitle">You can just <span class="rotating-word" id="rotatingWord">log</span> things.</p>
+    <p>Starting development environment...</p>
   </div>
-  <div class="footer">
-    <span class="triangle-small">
-      <svg width="76" height="65" viewBox="0 0 76 65" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M37.5274 0L75.0548 65H0L37.5274 0Z" fill="#52525b"/>
-      </svg>
-    </span>Powered by Vercel Labs
-  </div>
-
-<script>
-  (function() {
-    const words = ['log', 'capture', 'cdp', 'mcp', 'fix'];
-    const element = document.getElementById('rotatingWord');
-    let currentIndex = 0;
-    
-    function rotateWords() {
-      currentIndex = (currentIndex + 1) % words.length;
-      element.textContent = words[currentIndex];
-    }
-    
-    // Start rotation after 2 seconds, then every 2 seconds
-    setTimeout(() => {
-      setInterval(rotateWords, 2000);
-    }, 2000);
-  })();
-</script>
 </body>
 </html>`;
+    }
 
     writeFileSync(loadingPath, loadingHtml);
     return `file://${loadingPath}`;
@@ -511,6 +372,12 @@ export class CDPMonitor {
         `Runtime.consoleAPICalled event received: ${event.params.type}`
       );
       const { type, args, stackTrace } = event.params;
+
+      // Debug: Log all console messages to see if tracking script is working
+      if (args.length > 0) {
+        this.debugLog(`Console message value: ${args[0].value}`);
+        this.debugLog(`Console message full arg: ${JSON.stringify(args[0])}`);
+      }
 
       // Check if this is our interaction tracking
       if (args.length > 0 && args[0].value?.includes("[DEV3000_INTERACTION]")) {
@@ -792,81 +659,117 @@ export class CDPMonitor {
 
   private async setupInteractionTracking(): Promise<void> {
     try {
-      // Enhanced tracking script for automatable replay - only log user interactions
+      // Full interaction tracking script with element details for replay
       const trackingScript = `
         try {
-          // Only inject once, no debug logging
-          if (window.__dev3000_cdp_tracking) {
-            return;
-          }
-          window.__dev3000_cdp_tracking = true;
-          
-          // Helper function to generate CSS selector for element
-          function getElementSelector(el) {
-            if (!el || el === document) return 'document';
+          if (!window.__dev3000_cdp_tracking) {
+            window.__dev3000_cdp_tracking = true;
             
-            // Try ID first (most reliable)
-            if (el.id) return '#' + el.id;
-            
-            // Build path with tag + classes
-            let selector = el.tagName.toLowerCase();
-            if (el.className && typeof el.className === 'string') {
-              let classes = el.className.trim().split(/\\s+/).filter(c => c.length > 0);
-              if (classes.length > 0) selector += '.' + classes.join('.');
-            }
-            
-            // Add nth-child if needed to make unique
-            if (el.parentNode) {
-              let siblings = Array.from(el.parentNode.children).filter(child => 
-                child.tagName === el.tagName && 
-                child.className === el.className
-              );
-              if (siblings.length > 1) {
-                let index = siblings.indexOf(el) + 1;
-                selector += ':nth-child(' + index + ')';
+            // Helper function to generate CSS selector for element
+            function getElementSelector(el) {
+              if (!el || el === document) return 'document';
+              
+              // Try ID first (most reliable)
+              if (el.id) return '#' + el.id;
+              
+              // Build path with tag + classes
+              let selector = el.tagName.toLowerCase();
+              if (el.className && typeof el.className === 'string') {
+                let classes = el.className.trim().split(/\\\\s+/).filter(c => c.length > 0);
+                if (classes.length > 0) selector += '.' + classes.join('.');
               }
+              
+              // Add nth-child if needed to make unique
+              if (el.parentNode) {
+                let siblings = Array.from(el.parentNode.children).filter(child => 
+                  child.tagName === el.tagName && 
+                  child.className === el.className
+                );
+                if (siblings.length > 1) {
+                  let index = siblings.indexOf(el) + 1;
+                  selector += ':nth-child(' + index + ')';
+                }
+              }
+              
+              return selector;
             }
             
-            return selector;
+            // Helper to get element details for replay
+            function getElementDetails(el) {
+              let details = {
+                selector: getElementSelector(el),
+                tag: el.tagName.toLowerCase(),
+                text: el.textContent ? el.textContent.trim().substring(0, 50) : '',
+                id: el.id || '',
+                className: el.className || '',
+                name: el.name || '',
+                type: el.type || '',
+                value: el.value || ''
+              };
+              return JSON.stringify(details);
+            }
+            
+            // Scroll coalescing variables
+            let scrollTimeout = null;
+            let lastScrollX = window.scrollX;
+            let lastScrollY = window.scrollY;
+            let scrollStartX = window.scrollX;
+            let scrollStartY = window.scrollY;
+            let scrollTarget = 'document';
+            
+            // Add click tracking with element details
+            document.addEventListener('click', function(e) {
+              let details = getElementDetails(e.target);
+              console.log('[DEV3000_INTERACTION] CLICK at ' + e.clientX + ',' + e.clientY + ' on ' + details);
+            });
+            
+            // Add key tracking with element details
+            document.addEventListener('keydown', function(e) {
+              let details = getElementDetails(e.target);
+              console.log('[DEV3000_INTERACTION] KEY ' + e.key + ' in ' + details);
+            });
+            
+            // Add coalesced scroll tracking
+            document.addEventListener('scroll', function(e) {
+              let target = e.target === document ? 'document' : getElementSelector(e.target);
+              
+              // If this is the first scroll event or different target, reset
+              if (scrollTimeout === null) {
+                scrollStartX = lastScrollX;
+                scrollStartY = lastScrollY;
+                scrollTarget = target;
+              } else {
+                clearTimeout(scrollTimeout);
+              }
+              
+              // Update current position
+              lastScrollX = window.scrollX;
+              lastScrollY = window.scrollY;
+              
+              // Set timeout to log scroll after 150ms of no scrolling
+              scrollTimeout = setTimeout(function() {
+                console.log('[DEV3000_INTERACTION] SCROLL from ' + scrollStartX + ',' + scrollStartY + ' to ' + lastScrollX + ',' + lastScrollY + ' in ' + target);
+                scrollTimeout = null;
+              }, 150);
+            });
           }
-          
-          // Helper to get element details for replay
-          function getElementDetails(el) {
-            let details = {
-              selector: getElementSelector(el),
-              tag: el.tagName.toLowerCase(),
-              text: el.textContent ? el.textContent.trim().substring(0, 50) : '',
-              id: el.id || '',
-              className: el.className || '',
-              name: el.name || '',
-              type: el.type || '',
-              value: el.value || ''
-            };
-            return JSON.stringify(details);
-          }
-          
-          // Only log actual user interactions
-          document.addEventListener('click', function(e) {
-            let details = getElementDetails(e.target);
-            console.log('[DEV3000_INTERACTION] CLICK at ' + e.clientX + ',' + e.clientY + ' on ' + details);
-          });
-          
-          document.addEventListener('keydown', function(e) {
-            let details = getElementDetails(e.target);
-            console.log('[DEV3000_INTERACTION] KEY ' + e.key + ' in ' + details);
-          });
-          
-          document.addEventListener('scroll', function(e) {
-            let target = e.target === document ? 'document' : getElementSelector(e.target);
-            console.log('[DEV3000_INTERACTION] SCROLL x=' + window.scrollX + ' y=' + window.scrollY + ' in ' + target);
-          });
-          
         } catch (err) {
           console.log('[DEV3000_INTERACTION] ERROR: ' + err.message);
         }
       `;
 
       this.debugLog("About to inject tracking script...");
+
+      // Validate JavaScript syntax before injection
+      try {
+        new Function(trackingScript);
+        this.debugLog("JavaScript syntax validation passed");
+      } catch (syntaxError) {
+        const errorMessage = syntaxError instanceof Error ? syntaxError.message : String(syntaxError);
+        this.debugLog(`JavaScript syntax error detected: ${errorMessage}`);
+        this.logger("browser", `[CDP ERROR] Tracking script syntax error: ${errorMessage}`);
+        throw new Error(`Invalid tracking script syntax: ${errorMessage}`);
+      }
 
       // First try a simple test
       const simpleTest = `console.log('DEV3000_TEST: Simple script execution working!');`;
@@ -897,6 +800,15 @@ export class CDPMonitor {
           result.result?.value || "undefined"
         }`
       );
+      
+      // Log any errors from the script injection
+      if (result.exceptionDetails) {
+        this.debugLog(`Script injection exception: ${JSON.stringify(result.exceptionDetails)}`);
+        this.logger(
+          "browser",
+          `[DEBUG] Script injection exception: ${result.exceptionDetails.exception?.description || "Unknown error"}`
+        );
+      }
     } catch (error) {
       this.debugLog(`Failed to inject interaction tracking: ${error}`);
       this.logger(

@@ -18,7 +18,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && mkdir -p dist/src && cp src/loading.html dist/src/",
     "dev": "tsc --watch",
     "test": "vitest run",
     "prepare": "husky",
