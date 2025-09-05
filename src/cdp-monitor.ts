@@ -23,12 +23,14 @@ export class CDPMonitor {
   private debugPort: number = 9222;
   private eventHandlers = new Map<string, (event: CDPEvent) => void>();
   private profileDir: string;
+  private screenshotDir: string;
   private logger: (source: string, message: string) => void;
   private debug: boolean = false;
   private isShuttingDown = false;
 
-  constructor(profileDir: string, logger: (source: string, message: string) => void, debug: boolean = false) {
+  constructor(profileDir: string, screenshotDir: string, logger: (source: string, message: string) => void, debug: boolean = false) {
     this.profileDir = profileDir;
+    this.screenshotDir = screenshotDir;
     this.logger = logger;
     this.debug = debug;
   }
@@ -399,6 +401,11 @@ export class CDPMonitor {
       }
 
       this.logger('browser', errorMsg);
+      
+      // Take screenshot on errors
+      setTimeout(() => {
+        this.takeScreenshot('error');
+      }, 500);
     });
 
     // Browser console logs via Log domain (additional capture method)
@@ -467,7 +474,7 @@ export class CDPMonitor {
       
       // Take screenshot after navigation
       setTimeout(() => {
-        this.takeScreenshot('navigation');
+        this.takeScreenshot('route-change');
       }, 1000);
     });
 
@@ -528,6 +535,11 @@ export class CDPMonitor {
     // Enable interaction tracking via Runtime.evaluate
     await this.setupInteractionTracking();
     this.debugLog('Interaction tracking setup completed');
+    
+    // Take initial screenshot after page load
+    setTimeout(() => {
+      this.takeScreenshot('initial-load');
+    }, 2000);
   }
 
   private async setupInteractionTracking(): Promise<void> {
@@ -714,11 +726,14 @@ export class CDPMonitor {
 
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const filename = `${timestamp}-${event}.png`;
-      const screenshotPath = `/tmp/dev3000-screenshot-${filename}`;
+      const screenshotPath = join(this.screenshotDir, filename);
       
       // Save the base64 image
       const buffer = Buffer.from(result.data, 'base64');
       writeFileSync(screenshotPath, buffer);
+      
+      // Log screenshot with proper format that dev3000 expects
+      this.logger('browser', `[SCREENSHOT] ${filename}`);
       
       return filename;
     } catch (error) {

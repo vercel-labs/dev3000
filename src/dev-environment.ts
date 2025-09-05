@@ -634,7 +634,7 @@ export class DevEnvironment {
     }
     
     // Initialize CDP monitor with enhanced logging
-    this.cdpMonitor = new CDPMonitor(this.options.profileDir, (source: string, message: string) => {
+    this.cdpMonitor = new CDPMonitor(this.options.profileDir, this.screenshotDir, (source: string, message: string) => {
       this.logger.log('browser', message);
     }, this.options.debug);
     
