@@ -27,6 +27,8 @@ export class CDPMonitor {
   private logger: (source: string, message: string) => void;
   private debug: boolean = false;
   private isShuttingDown = false;
+  private pendingRequests = 0;
+  private networkIdleTimer: NodeJS.Timeout | null = null;
 
   constructor(profileDir: string, screenshotDir: string, logger: (source: string, message: string) => void, debug: boolean = false) {
     this.profileDir = profileDir;
@@ -402,10 +404,8 @@ export class CDPMonitor {
 
       this.logger('browser', errorMsg);
       
-      // Take screenshot on errors
-      setTimeout(() => {
-        this.takeScreenshot('error');
-      }, 500);
+      // Take screenshot immediately on errors (no delay needed)
+      this.takeScreenshot('error');
     });
 
     // Browser console logs via Log domain (additional capture method)
@@ -471,11 +471,36 @@ export class CDPMonitor {
       if (frame.parentId) return; // Only log main frame navigation
       
       this.logger('browser', `[NAVIGATION] ${frame.url}`);
-      
-      // Take screenshot after navigation
-      setTimeout(() => {
-        this.takeScreenshot('route-change');
-      }, 1000);
+    });
+
+    // Page load events for better screenshot timing
+    this.onCDPEvent('Page.loadEventFired', (event) => {
+      this.logger('browser', '[PAGE] Load event fired');
+      this.takeScreenshot('page-loaded');
+    });
+
+    this.onCDPEvent('Page.domContentEventFired', (event) => {
+      this.logger('browser', '[PAGE] DOM content loaded');
+      // Don't take screenshot here since loadEventFired will handle it
+    });
+
+    // Network activity tracking for better screenshot timing
+    this.onCDPEvent('Network.requestWillBeSent', (event) => {
+      this.pendingRequests++;
+      if (this.networkIdleTimer) {
+        clearTimeout(this.networkIdleTimer);
+        this.networkIdleTimer = null;
+      }
+    });
+
+    this.onCDPEvent('Network.loadingFinished', (event) => {
+      this.pendingRequests--;
+      this.scheduleNetworkIdleScreenshot();
+    });
+
+    this.onCDPEvent('Network.loadingFailed', (event) => {
+      this.pendingRequests--;
+      this.scheduleNetworkIdleScreenshot();
     });
 
     // DOM mutations for interaction context
@@ -536,10 +561,7 @@ export class CDPMonitor {
     await this.setupInteractionTracking();
     this.debugLog('Interaction tracking setup completed');
     
-    // Take initial screenshot after page load
-    setTimeout(() => {
-      this.takeScreenshot('initial-load');
-    }, 2000);
+    // Initial screenshot will be taken by Page.loadEventFired event handler
   }
 
   private async setupInteractionTracking(): Promise<void> {
@@ -713,6 +735,21 @@ export class CDPMonitor {
       expression: trackingScript,
       includeCommandLineAPI: false
     });
+  }
+
+  private scheduleNetworkIdleScreenshot(): void {
+    // Only schedule if we have 0 pending requests
+    if (this.pendingRequests === 0) {
+      if (this.networkIdleTimer) {
+        clearTimeout(this.networkIdleTimer);
+      }
+      
+      // Wait 500ms of network idle before taking screenshot
+      this.networkIdleTimer = setTimeout(() => {
+        this.takeScreenshot('network-idle');
+        this.networkIdleTimer = null;
+      }, 500);
+    }
   }
 
   private async takeScreenshot(event: string): Promise<string | null> {

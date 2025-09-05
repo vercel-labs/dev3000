@@ -344,19 +344,18 @@ export class DevEnvironment {
       nodeModulesPath = join(tmpDirPath, 'node_modules');
       actualWorkingDir = tmpDirPath;
       
-      // Update screenshot directory to use the temp directory for global installs
+      // Update screenshot and MCP public directory to use the temp directory for global installs
       this.screenshotDir = join(actualWorkingDir, 'public', 'screenshots');
-      if (!existsSync(this.screenshotDir)) {
-        mkdirSync(this.screenshotDir, { recursive: true });
+      this.mcpPublicDir = join(actualWorkingDir, 'public', 'screenshots');
+      if (!existsSync(this.mcpPublicDir)) {
+        mkdirSync(this.mcpPublicDir, { recursive: true });
       }
     }
     
     // Always install dependencies to ensure they're up to date
     this.debugLog('Installing/updating MCP server dependencies');
     this.progressBar.stop();
-    console.log(chalk.blue('\n📦 Installing MCP server dependencies...'));
     await this.installMcpServerDeps(mcpServerPath);
-    console.log(''); // Add spacing
     this.progressBar.start(100, 20, { stage: 'Starting MCP server...' });
     
     // Use version already read in constructor
@@ -512,6 +511,7 @@ export class DevEnvironment {
       const packageManager = detectPackageManagerForRun();
       
       // Show spinner instead of verbose output
+      console.log(chalk.blue('📦 Installing MCP server dependencies...'));
       const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
       let frameIndex = 0;
       const spinnerInterval = setInterval(() => {
@@ -553,12 +553,12 @@ export class DevEnvironment {
 
       installProcess.on('exit', (code) => {
         clearInterval(spinnerInterval);
-        process.stdout.write('\r');
+        process.stdout.write('\r' + ' '.repeat(50) + '\r'); // Clear the spinner line completely
         clearTimeout(timeout);
         
         if (code === 0) {
           if (!hasOutput || !process.stdout.isTTY) {
-            console.log(chalk.green('✅ MCP server dependencies installed successfully!'));
+            console.log(chalk.green('✅ Dependencies installed successfully'));
           }
           resolve();
         } else {
@@ -569,7 +569,7 @@ export class DevEnvironment {
 
       installProcess.on('error', (error) => {
         clearInterval(spinnerInterval);
-        process.stdout.write('\r');
+        process.stdout.write('\r' + ' '.repeat(50) + '\r'); // Clear the spinner line completely
         clearTimeout(timeout);
         reject(new Error(`Failed to start MCP server dependency installation: ${error.message}`));
       });
@@ -633,8 +633,8 @@ export class DevEnvironment {
       mkdirSync(this.options.profileDir, { recursive: true });
     }
     
-    // Initialize CDP monitor with enhanced logging
-    this.cdpMonitor = new CDPMonitor(this.options.profileDir, this.screenshotDir, (source: string, message: string) => {
+    // Initialize CDP monitor with enhanced logging - use MCP public directory for screenshots
+    this.cdpMonitor = new CDPMonitor(this.options.profileDir, this.mcpPublicDir, (source: string, message: string) => {
       this.logger.log('browser', message);
     }, this.options.debug);
     

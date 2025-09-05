@@ -133,7 +133,7 @@ function LogEntryComponent({ entry }: { entry: LogEntry }) {
       {entry.screenshot && (
         <div className="mt-2">
           <img 
-            src={entry.screenshot} 
+            src={`/screenshots/${entry.screenshot}`} 
             alt="Screenshot" 
             className="max-w-full h-auto border rounded shadow-sm"
             style={{ maxHeight: '400px' }}
