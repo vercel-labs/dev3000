@@ -10,7 +10,7 @@ pnpm run build
 echo "🧪 Running tests..."
 pnpm run test
 
-# Get current version
+# Get current version and check if it's a canary version
 CURRENT_VERSION=$(node -p "require('./package.json').version")
 echo "📋 Current version: $CURRENT_VERSION"
 
@@ -22,38 +22,72 @@ else
     exit 1
 fi
 
-# Calculate what the next version will be
-NEXT_VERSION=$(node -e "
-    const semver = require('./package.json').version.split('.');
-    semver[2] = parseInt(semver[2]) + 1;
-    console.log(semver.join('.'));
-")
+# Calculate what the next version will be based on current version
+if [[ $CURRENT_VERSION == *"-canary" ]]; then
+    # If current version is canary, use the base version
+    NEXT_VERSION=$(node -e "
+        const version = require('./package.json').version;
+        const baseVersion = version.replace('-canary', '');
+        console.log(baseVersion);
+    ")
+else
+    # If current version is stable, increment patch
+    NEXT_VERSION=$(node -e "
+        const semver = require('./package.json').version.split('.');
+        semver[2] = parseInt(semver[2]) + 1;
+        console.log(semver.join('.'));
+    ")
+fi
 
-# Check if tag already exists locally or remotely
+echo "📋 Next version will be: $NEXT_VERSION"
 TAG_NAME="v$NEXT_VERSION"
-if git tag -l "$TAG_NAME" | grep -q "$TAG_NAME" || git ls-remote --tags origin | grep -q "refs/tags/$TAG_NAME"; then
+
+# Function to cleanup existing tags
+cleanup_existing_tag() {
     echo "⚠️ Tag $TAG_NAME already exists. Cleaning up..."
     
     # Delete local tag if it exists
-    if git tag -l "$TAG_NAME" | grep -q "$TAG_NAME"; then
+    if git tag -l "$TAG_NAME" | grep -q "^$TAG_NAME$"; then
         git tag -d "$TAG_NAME"
         echo "🗑️ Deleted local tag $TAG_NAME"
     fi
     
     # Delete remote tag if it exists
-    if git ls-remote --tags origin | grep -q "refs/tags/$TAG_NAME"; then
-        git push --delete origin "$TAG_NAME" || echo "⚠️ Could not delete remote tag (might not exist)"
+    if git ls-remote --tags origin | grep -q "refs/tags/$TAG_NAME$"; then
+        git push --delete origin "$TAG_NAME" 2>/dev/null || echo "⚠️ Could not delete remote tag (might not exist)"
         echo "🗑️ Deleted remote tag $TAG_NAME"
     fi
+    
+    # Wait a moment for changes to propagate
+    sleep 1
+}
+
+# Check if tag already exists and clean up if needed
+if git tag -l "$TAG_NAME" | grep -q "^$TAG_NAME$" || git ls-remote --tags origin 2>/dev/null | grep -q "refs/tags/$TAG_NAME$"; then
+    cleanup_existing_tag
 fi
 
-# Now do the version bump (this will create a local tag)
+# Update version in package.json manually to avoid pnpm version creating tags automatically
 echo "⬆️ Bumping version to $NEXT_VERSION..."
-pnpm version patch
+node -e "
+    const fs = require('fs');
+    const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+    pkg.version = '$NEXT_VERSION';
+    fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+"
 
-# Push everything (commit and tags)
-echo "📤 Pushing changes and tags..."
-git push origin main --tags
+# Commit version change
+git add package.json
+git commit -m "Release v$NEXT_VERSION
+
+🤖 Generated with [Claude Code](https://claude.ai/code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>"
+
+# Create and push tag manually for better control
+git tag -a "$TAG_NAME" -m "Release v$NEXT_VERSION"
+git push origin main
+git push origin "$TAG_NAME"
 
 # Publish to npm
 echo "📦 Publishing to npm..."
