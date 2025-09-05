@@ -77,47 +77,102 @@ export class CDPMonitor {
 <head>
   <title>dev3000 - Starting...</title>
   <style>
+    * {
+      box-sizing: border-box;
+    }
     body {
       margin: 0;
       padding: 0;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+      background: #000000;
       display: flex;
       align-items: center;
       justify-content: center;
       height: 100vh;
-      color: white;
+      color: #fafafa;
     }
     .container {
       text-align: center;
-      padding: 40px;
-      border-radius: 12px;
-      background: rgba(255,255,255,0.1);
-      backdrop-filter: blur(10px);
-      box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+      padding: 48px;
+      max-width: 400px;
     }
-    .spinner {
-      width: 40px;
-      height: 40px;
-      border: 3px solid rgba(255,255,255,0.3);
-      border-top: 3px solid white;
+    .logo-container {
+      margin-bottom: 32px;
+      position: relative;
+    }
+    .triangle {
+      font-size: 48px;
+      color: #fafafa;
+      margin-bottom: 24px;
+      display: block;
+      animation: pulse 2s ease-in-out infinite;
+      line-height: 1;
+    }
+    .spinner-ring {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 80px;
+      height: 80px;
+      border: 2px solid rgba(250, 250, 250, 0.1);
+      border-top: 2px solid #fafafa;
       border-radius: 50%;
-      animation: spin 1s linear infinite;
-      margin: 0 auto 20px;
+      animation: spin 1.5s linear infinite;
     }
     @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
+      0% { transform: translate(-50%, -50%) rotate(0deg); }
+      100% { transform: translate(-50%, -50%) rotate(360deg); }
     }
-    h1 { margin: 0 0 10px; font-size: 24px; font-weight: 600; }
-    p { margin: 0; opacity: 0.9; font-size: 16px; }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.8; transform: scale(1.05); }
+    }
+    h1 { 
+      margin: 0 0 16px; 
+      font-size: 28px; 
+      font-weight: 500; 
+      letter-spacing: -0.5px;
+    }
+    .tagline {
+      margin: 0 0 8px;
+      font-size: 16px;
+      color: #a1a1aa;
+      font-weight: 400;
+    }
+    .subtitle {
+      margin: 0;
+      font-size: 14px;
+      color: #71717a;
+      font-weight: 400;
+    }
+    .footer {
+      position: absolute;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 12px;
+      color: #52525b;
+      opacity: 0.8;
+    }
+    .triangle-small {
+      font-size: 10px;
+      margin-right: 6px;
+    }
   </style>
 </head>
 <body>
   <div class="container">
-    <div class="spinner"></div>
+    <div class="logo-container">
+      <div class="triangle">▲</div>
+      <div class="spinner-ring"></div>
+    </div>
     <h1>dev3000</h1>
-    <p>Starting your development environment...</p>
+    <p class="tagline">Your development environment is starting...</p>
+    <p class="subtitle">Getting ready to capture everything 📸</p>
+  </div>
+  <div class="footer">
+    <span class="triangle-small">▲</span>Powered by Vercel Labs
   </div>
 </body>
 </html>`;
