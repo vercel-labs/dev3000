@@ -65,6 +65,187 @@ function parseLogLine(line: string): LogEntry | null {
   };
 }
 
+// Component to render truncated URLs with click-to-expand
+function URLRenderer({ url, maxLength = 60 }: { url: string, maxLength?: number }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  
+  if (url.length <= maxLength) {
+    return (
+      <a 
+        href={url} 
+        target="_blank" 
+        rel="noopener noreferrer"
+        className="text-blue-600 hover:text-blue-800 underline"
+      >
+        {url}
+      </a>
+    );
+  }
+  
+  const truncated = url.substring(0, maxLength) + '...';
+  
+  return (
+    <span className="inline-block">
+      {isExpanded ? (
+        <span>
+          <a 
+            href={url} 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-blue-600 hover:text-blue-800 underline"
+          >
+            {url}
+          </a>
+          <button
+            onClick={() => setIsExpanded(false)}
+            className="ml-2 text-xs text-gray-500 hover:text-gray-700 px-1 py-0.5 rounded hover:bg-gray-100"
+          >
+            [collapse]
+          </button>
+        </span>
+      ) : (
+        <span>
+          <a 
+            href={url} 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-blue-600 hover:text-blue-800 underline"
+          >
+            {truncated}
+          </a>
+          <button
+            onClick={() => setIsExpanded(true)}
+            className="ml-1 text-xs text-gray-500 hover:text-gray-700 px-1 py-0.5 rounded hover:bg-gray-100"
+          >
+            [expand]
+          </button>
+        </span>
+      )}
+    </span>
+  );
+}
+
+// Component to render Chrome DevTools-style collapsible objects
+function ObjectRenderer({ content }: { content: string }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  
+  try {
+    const obj = JSON.parse(content);
+    
+    // Check if it's a Chrome DevTools object representation
+    if (obj && typeof obj === 'object' && obj.type === 'object' && obj.properties) {
+      const properties = obj.properties;
+      const description = obj.description || 'Object';
+      const overflow = obj.overflow;
+      
+      return (
+        <div className="inline-block">
+          <button
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 font-mono text-sm"
+          >
+            <svg 
+              className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+              fill="currentColor" 
+              viewBox="0 0 20 20"
+            >
+              <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 111.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+            </svg>
+            <span className="text-purple-600">{description}</span>
+            {!isExpanded && (
+              <span className="text-gray-500">
+                {overflow ? '...' : ''} {'{'}
+                {properties.slice(0, 3).map((prop: any, idx: number) => (
+                  <span key={idx}>
+                    {idx > 0 && ', '}
+                    <span className="text-red-600">{prop.name}</span>: 
+                    <span className="text-blue-600">
+                      {prop.type === 'string' ? `"${prop.value}"` : 
+                       prop.type === 'number' ? prop.value :
+                       prop.type === 'object' ? (prop.subtype === 'array' ? prop.value : '{...}') :
+                       prop.value}
+                    </span>
+                  </span>
+                ))}
+                {properties.length > 3 && ', ...'}
+                {'}'}
+              </span>
+            )}
+          </button>
+          
+          {isExpanded && (
+            <div className="mt-1 ml-4 border-l-2 border-gray-200 pl-3">
+              <div className="font-mono text-sm">
+                <div className="text-gray-600">{description} {'{'}
+                <div className="ml-4">
+                  {properties.map((prop: any, idx: number) => (
+                    <div key={idx} className="py-0.5">
+                      <span className="text-red-600">{prop.name}</span>
+                      <span className="text-gray-500">: </span>
+                      <span className={
+                        prop.type === 'string' ? 'text-green-600' :
+                        prop.type === 'number' ? 'text-blue-600' :
+                        prop.type === 'object' ? 'text-purple-600' :
+                        'text-orange-600'
+                      }>
+                        {prop.type === 'string' ? `"${prop.value}"` :
+                         prop.type === 'number' ? prop.value :
+                         prop.type === 'object' ? (prop.subtype === 'array' ? prop.value : '{...}') :
+                         prop.value}
+                      </span>
+                      {idx < properties.length - 1 && <span className="text-gray-500">,</span>}
+                    </div>
+                  ))}
+                  {overflow && (
+                    <div className="text-gray-500 italic">... and more properties</div>
+                  )}
+                </div>
+                <div className="text-gray-600">{'}'}</div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+    
+    // For regular JSON objects, render them nicely too
+    return (
+      <div className="inline-block">
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 font-mono text-sm"
+        >
+          <svg 
+            className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+            fill="currentColor" 
+            viewBox="0 0 20 20"
+          >
+            <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 111.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+          </svg>
+          <span className="text-purple-600">Object</span>
+          {!isExpanded && (
+            <span className="text-gray-500">
+              {'{'}...{'}'}
+            </span>
+          )}
+        </button>
+        
+        {isExpanded && (
+          <div className="mt-1 ml-4 border-l-2 border-gray-200 pl-3">
+            <pre className="font-mono text-sm text-gray-700 whitespace-pre-wrap">
+              {JSON.stringify(obj, null, 2)}
+            </pre>
+          </div>
+        )}
+      </div>
+    );
+  } catch (e) {
+    // If it's not valid JSON, just return the original content
+    return <span>{content}</span>;
+  }
+}
+
 function LogEntryComponent({ entry }: { entry: LogEntry }) {
   // Parse log type from message patterns
   const parseLogType = (message: string) => {
@@ -81,13 +262,17 @@ function LogEntryComponent({ entry }: { entry: LogEntry }) {
 
   const logTypeInfo = parseLogType(entry.message);
   
-  // Extract and highlight type tags
+  // Extract and highlight type tags, detect JSON objects and URLs
   const renderMessage = (message: string) => {
     const typeTagRegex = /\[([A-Z\s]+)\]/g;
+    const jsonRegex = /\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g;
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    
     const parts = [];
     let lastIndex = 0;
     let match;
     
+    // First, handle type tags
     while ((match = typeTagRegex.exec(message)) !== null) {
       // Add text before the tag
       if (match.index > lastIndex) {
@@ -108,28 +293,80 @@ function LogEntryComponent({ entry }: { entry: LogEntry }) {
     }
     
     // Add remaining text
-    if (lastIndex < message.length) {
-      parts.push(message.slice(lastIndex));
-    }
+    let remainingText = message.slice(lastIndex);
+    
+    // Process remaining text for JSON objects and URLs
+    const processTextForObjects = (text: string, keyPrefix: string) => {
+      const jsonMatches = [...text.matchAll(jsonRegex)];
+      const urlMatches = [...text.matchAll(urlRegex)];
+      const allMatches = [...jsonMatches.map(m => ({ ...m, type: 'json' })), ...urlMatches.map(m => ({ ...m, type: 'url' }))];
+      
+      // Sort matches by index
+      allMatches.sort((a, b) => a.index! - b.index!);
+      
+      if (allMatches.length === 0) {
+        return [text];
+      }
+      
+      const finalParts = [];
+      let textLastIndex = 0;
+      
+      allMatches.forEach((objMatch, idx) => {
+        // Add text before match
+        if (objMatch.index! > textLastIndex) {
+          finalParts.push(text.slice(textLastIndex, objMatch.index));
+        }
+        
+        // Add appropriate renderer
+        if (objMatch.type === 'json') {
+          finalParts.push(
+            <ObjectRenderer key={`${keyPrefix}-json-${idx}`} content={objMatch[0]} />
+          );
+        } else if (objMatch.type === 'url') {
+          finalParts.push(
+            <URLRenderer key={`${keyPrefix}-url-${idx}`} url={objMatch[0]} />
+          );
+        }
+        
+        textLastIndex = objMatch.index! + objMatch[0].length;
+      });
+      
+      // Add any text after the last match
+      if (textLastIndex < text.length) {
+        finalParts.push(text.slice(textLastIndex));
+      }
+      
+      return finalParts;
+    };
+    
+    const processedRemaining = processTextForObjects(remainingText, 'main');
+    parts.push(...processedRemaining);
     
     return parts.length > 0 ? parts : message;
   };
 
   return (
     <div className={`border-l-4 ${logTypeInfo.color} pl-4 py-2`}>
-      <div className="flex items-center gap-2 text-xs text-gray-500">
-        <span className="font-mono">
+      {/* Table-like layout using CSS Grid */}
+      <div className="grid grid-cols-[auto_auto_1fr] gap-3 items-start">
+        {/* Column 1: Timestamp */}
+        <div className="text-xs text-gray-500 font-mono whitespace-nowrap">
           {new Date(entry.timestamp).toLocaleTimeString()}
-        </span>
-        <span className={`px-2 py-1 rounded text-xs font-medium ${
+        </div>
+        
+        {/* Column 2: Source */}
+        <div className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${
           entry.source === 'SERVER' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
         }`}>
           {entry.source}
-        </span>
+        </div>
+        
+        {/* Column 3: Message content */}
+        <div className="font-mono text-sm min-w-0">
+          {renderMessage(entry.message)}
+        </div>
       </div>
-      <div className="mt-1 font-mono text-sm whitespace-pre-wrap break-words overflow-wrap-anywhere">
-        {renderMessage(entry.message)}
-      </div>
+      
       {entry.screenshot && (
         <div className="mt-2">
           <img 
