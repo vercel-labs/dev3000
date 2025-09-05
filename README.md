@@ -9,6 +9,8 @@ pnpm install -g dev3000
 dev3000
 ```
 
+![dev3000 CLI](cli.jpg)
+
 **You can also connect claude code to the mcp-server to have it issue commands to the browser.**
 
 ```bash
@@ -26,6 +28,8 @@ The tool monitors your app in a real browser and captures:
 - Network requests and responses
 - Automatic screenshots on navigation, errors, and key events
 - Visual timeline at `http://localhost:3684/logs`
+
+![dev3000 Logs Viewer](logs.jpg)
 
 ## AI Integration
 
