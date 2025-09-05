@@ -4,7 +4,7 @@ import { join, dirname, basename } from 'path';
 import { fileURLToPath } from 'url';
 import { tmpdir } from 'os';
 import chalk from 'chalk';
-import * as cliProgress from 'cli-progress';
+import ora from 'ora';
 import { CDPMonitor } from './cdp-monitor.js';
 
 interface DevEnvironmentOptions {
@@ -132,8 +132,9 @@ export class DevEnvironment {
   private screenshotDir: string;
   private mcpPublicDir: string;
   private pidFile: string;
-  private progressBar: cliProgress.SingleBar;
+  private spinner: ReturnType<typeof ora>;
   private version: string;
+  private isShuttingDown: boolean = false;
 
   constructor(options: DevEnvironmentOptions) {
     this.options = options;
@@ -174,14 +175,8 @@ export class DevEnvironment {
       // Use fallback version
     }
     
-    // Initialize progress bar
-    this.progressBar = new cliProgress.SingleBar({
-      format: '|' + chalk.cyan('{bar}') + '| {percentage}% | {stage}',
-      barCompleteChar: '█',
-      barIncompleteChar: '░',
-      hideCursor: true,
-      barsize: 40
-    }, cliProgress.Presets.shades_classic);
+    // Initialize spinner for clean output management
+    this.spinner = ora({ text: 'Initializing...', spinner: 'dots' });
     
     // Ensure directories exist
     if (!existsSync(this.screenshotDir)) {
@@ -208,7 +203,10 @@ export class DevEnvironment {
         if (result) {
           result.split('\n').filter(line => line.trim());
           
-          console.log(chalk.red(`❌ Port ${port} is already in use`));
+          // Stop spinner and show error
+          if (this.spinner && this.spinner.isSpinning) {
+            this.spinner.fail(`Port ${port} is already in use`);
+          }
           console.log(chalk.yellow(`💡 To free up port ${port}, run: lsof -ti:${port} | xargs kill -9`));
           throw new Error(`Port ${port} is already in use. Please free the port and try again.`);
         }
@@ -222,47 +220,44 @@ export class DevEnvironment {
   }
 
   async start() {
-    
     // Show startup message first
     console.log(chalk.blue(`Starting dev3000 (v${this.version})`));
     
-    // Start progress bar
-    this.progressBar.start(100, 0, { stage: 'Checking ports...' });
+    // Start spinner
+    this.spinner.start('Checking ports...');
     
     // Check if ports are available first
     await this.checkPortsAvailable();
-    this.progressBar.update(10, { stage: 'Starting servers...' });
     
+    this.spinner.text = 'Setting up environment...';
     // Write our process group ID to PID file for cleanup
     writeFileSync(this.pidFile, process.pid.toString());
-    
+
     // Setup cleanup handlers
     this.setupCleanupHandlers();
-    
+
     // Start user's dev server
+    this.spinner.text = 'Starting your dev server...';
     await this.startServer();
-    this.progressBar.update(20, { stage: 'Starting MCP server...' });
-    
+
     // Start MCP server
+    this.spinner.text = 'Starting dev3000 services...';
     await this.startMcpServer();
-    this.progressBar.update(30, { stage: 'Waiting for your app server...' });
-    
-    // Wait for servers to be ready (no artificial delays)
+
+    // Wait for servers to be ready
+    this.spinner.text = 'Waiting for your app server...';
     await this.waitForServer();
-    this.progressBar.update(60, { stage: 'Waiting for MCP server...' });
-    
+
+    this.spinner.text = 'Waiting for dev3000 services...';
     await this.waitForMcpServer();
-    this.progressBar.update(80, { stage: 'Starting browser...' });
-    
+
     // Start CDP monitoring but don't wait for full setup
+    this.spinner.text = 'Launching browser monitor...';
     this.startCDPMonitoringAsync();
+
+    // Complete startup
+    this.spinner.succeed('Development environment ready!');
     
-    this.progressBar.update(100, { stage: 'Complete!' });
-    
-    // Stop progress bar and show results immediately
-    this.progressBar.stop();
-    
-    console.log(chalk.green('\n✅ Development environment ready!'));
     console.log(chalk.blue(`Logs: ${this.options.logFile}`));
     console.log(chalk.blue(`Logs symlink: /tmp/dev3000.log`));
     console.log(chalk.yellow('☝️ Give this to an AI to auto debug and fix your app\n'));
@@ -309,13 +304,49 @@ export class DevEnvironment {
     });
 
     this.serverProcess.on('exit', (code) => {
-      console.log(chalk.red(`Server process exited with code ${code}`));
+      if (this.isShuttingDown) return; // Don't handle exits during shutdown
+      
+      if (code !== 0 && code !== null) {
+        this.debugLog(`Server process exited with code ${code}`);
+        this.logger.log('server', `Server process exited with code ${code}`);
+        
+        // Only shutdown for truly fatal exit codes, not build failures or restarts
+        // Common exit codes that indicate temporary issues, not fatal errors:
+        // - Code 1: Generic build failure or restart
+        // - Code 130: Ctrl+C (SIGINT)
+        // - Code 143: SIGTERM
+        const isFatalExit = code !== 1 && code !== 130 && code !== 143;
+        
+        if (isFatalExit) {
+          // Stop spinner and show error for fatal exits only
+          if (this.spinner && this.spinner.isSpinning) {
+            this.spinner.fail(`Server process fatally exited with code ${code}`);
+          } else {
+            console.log(chalk.red(`\n❌ Server process fatally exited with code ${code}`));
+          }
+          console.log(chalk.yellow('💡 Check your server command and logs for details'));
+          this.gracefulShutdown();
+        } else {
+          // For non-fatal exits (like build failures), just log and continue
+          if (this.spinner && this.spinner.isSpinning) {
+            this.spinner.text = 'Server process restarted, waiting...';
+          }
+        }
+      }
     });
   }
 
   private debugLog(message: string) {
     if (this.options.debug) {
-      console.log(`[MCP DEBUG] ${message}`);
+      if (this.spinner && this.spinner.isSpinning) {
+        // Temporarily stop the spinner, show debug message, then restart
+        const currentText = this.spinner.text;
+        this.spinner.stop();
+        console.log(chalk.gray(`[DEBUG] ${message}`));
+        this.spinner.start(currentText);
+      } else {
+        console.log(chalk.gray(`[DEBUG] ${message}`));
+      }
     }
   }
 
@@ -354,9 +385,7 @@ export class DevEnvironment {
     
     // Always install dependencies to ensure they're up to date
     this.debugLog('Installing/updating MCP server dependencies');
-    this.progressBar.stop();
     await this.installMcpServerDeps(mcpServerPath);
-    this.progressBar.start(100, 20, { stage: 'Starting MCP server...' });
     
     // Use version already read in constructor
 
@@ -510,14 +539,8 @@ export class DevEnvironment {
       
       const packageManager = detectPackageManagerForRun();
       
-      // Show spinner instead of verbose output
-      console.log(chalk.blue('📦 Installing MCP server dependencies...'));
-      const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-      let frameIndex = 0;
-      const spinnerInterval = setInterval(() => {
-        process.stdout.write(`\r${chalk.blue(frames[frameIndex])} Installing dependencies...`);
-        frameIndex = (frameIndex + 1) % frames.length;
-      }, 100);
+      // Don't show any console output during dependency installation
+      // All status will be handled by the progress bar
       
       const installProcess = spawn(packageManager, ['install'], {
         stdio: ['ignore', 'pipe', 'pipe'],
@@ -527,65 +550,33 @@ export class DevEnvironment {
 
       // Add timeout (3 minutes)
       const timeout = setTimeout(() => {
-        clearInterval(spinnerInterval);
-        process.stdout.write('\r');
         installProcess.kill('SIGKILL');
         reject(new Error('MCP server dependency installation timed out after 3 minutes'));
       }, 3 * 60 * 1000);
 
-      let hasOutput = false;
-
-      // Suppress most output for cleaner experience
+      // Suppress all output to prevent progress bar interference
       installProcess.stdout?.on('data', (data) => {
-        hasOutput = true;
-        // Only show critical messages
-        const message = data.toString().trim();
-        if (message.includes('Done in')) {
-          clearInterval(spinnerInterval);
-          process.stdout.write(`\r${chalk.green('✅')} Dependencies installed successfully\n`);
-        }
+        // Silently consume output
       });
 
       installProcess.stderr?.on('data', (data) => {
-        hasOutput = true;
-        // Suppress warnings and progress messages
+        // Silently consume output
       });
 
       installProcess.on('exit', (code) => {
-        clearInterval(spinnerInterval);
-        process.stdout.write('\r' + ' '.repeat(50) + '\r'); // Clear the spinner line completely
         clearTimeout(timeout);
         
         if (code === 0) {
-          if (!hasOutput || !process.stdout.isTTY) {
-            console.log(chalk.green('✅ Dependencies installed successfully'));
-          }
           resolve();
         } else {
-          console.log(chalk.red('❌ MCP server dependency installation failed'));
           reject(new Error(`MCP server dependency installation failed with exit code ${code}`));
         }
       });
 
       installProcess.on('error', (error) => {
-        clearInterval(spinnerInterval);
-        process.stdout.write('\r' + ' '.repeat(50) + '\r'); // Clear the spinner line completely
         clearTimeout(timeout);
         reject(new Error(`Failed to start MCP server dependency installation: ${error.message}`));
       });
-
-      // Show helpful message after 5 seconds
-      setTimeout(() => {
-        if (!hasOutput) {
-          clearInterval(spinnerInterval);
-          process.stdout.write(`\r${chalk.yellow('⏳')} This may take a minute on first run...\n`);
-          // Restart spinner on next line
-          setInterval(() => {
-            process.stdout.write(`\r${chalk.blue(frames[frameIndex])} Installing dependencies...`);
-            frameIndex = (frameIndex + 1) % frames.length;
-          }, 100);
-        }
-      }, 5000);
     });
   }
 
@@ -654,10 +645,68 @@ export class DevEnvironment {
     }
   }
 
+  private async gracefulShutdown() {
+    if (this.isShuttingDown) return; // Prevent multiple shutdown attempts
+    this.isShuttingDown = true;
+    
+    // Stop spinner if it's running
+    if (this.spinner && this.spinner.isSpinning) {
+      this.spinner.fail('Server failure detected');
+    }
+    
+    console.log(chalk.yellow('🛑 Shutting down dev3000 due to server failure...'));
+    
+    // Kill processes on both ports
+    const killPortProcess = async (port: string, name: string) => {
+      try {
+        const { spawn } = await import('child_process');
+        const killProcess = spawn('sh', ['-c', `lsof -ti:${port} | xargs kill -9`], { stdio: 'inherit' });
+        return new Promise<void>((resolve) => {
+          killProcess.on('exit', (code) => {
+            if (code === 0) {
+              console.log(chalk.green(`✅ Killed ${name} on port ${port}`));
+            }
+            resolve();
+          });
+        });
+      } catch (error) {
+        console.log(chalk.gray(`⚠️ Could not kill ${name} on port ${port}`));
+      }
+    };
+    
+    // Kill servers
+    console.log(chalk.blue('🔄 Killing servers...'));
+    await Promise.all([
+      killPortProcess(this.options.port, 'your app server'),
+      killPortProcess(this.options.mcpPort, 'dev3000 MCP server')
+    ]);
+    
+    // Shutdown CDP monitor
+    if (this.cdpMonitor) {
+      try {
+        console.log(chalk.blue('🔄 Closing CDP monitor...'));
+        await this.cdpMonitor.shutdown();
+        console.log(chalk.green('✅ CDP monitor closed'));
+      } catch (error) {
+        console.log(chalk.gray('⚠️ CDP monitor shutdown failed'));
+      }
+    }
+    
+    console.log(chalk.red('❌ Dev3000 exited due to server failure'));
+    process.exit(1);
+  }
 
   private setupCleanupHandlers() {
     // Handle Ctrl+C to kill all processes
     process.on('SIGINT', async () => {
+      if (this.isShuttingDown) return; // Prevent multiple shutdown attempts
+      this.isShuttingDown = true;
+      
+      // Stop spinner if it's running
+      if (this.spinner && this.spinner.isSpinning) {
+        this.spinner.fail('Interrupted');
+      }
+      
       console.log(chalk.yellow('\n🛑 Received interrupt signal. Cleaning up processes...'));
       
       // Kill processes on both ports FIRST - this is most important
