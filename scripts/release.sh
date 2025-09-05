@@ -14,11 +14,11 @@ pnpm run test
 CURRENT_VERSION=$(node -p "require('./package.json').version")
 echo "📋 Current version: $CURRENT_VERSION"
 
-# Check if we have any uncommitted changes (excluding package.json version changes)
-if git diff --quiet HEAD -- . ':!package.json' && git diff --staged --quiet; then
+# Check if we have any uncommitted changes (excluding package.json and dist/ files)
+if git diff --quiet HEAD -- . ':!package.json' ':!dist/' && git diff --staged --quiet; then
     echo "✅ Working directory is clean"
 else
-    echo "❌ You have uncommitted changes (excluding package.json). Please commit or stash them first."
+    echo "❌ You have uncommitted changes (excluding package.json and dist/). Please commit or stash them first."
     exit 1
 fi
 
@@ -57,7 +57,7 @@ git push origin main --tags
 
 # Publish to npm
 echo "📦 Publishing to npm..."
-pnpm publish --otp=$(op item get npm --otp)
+pnpm publish --no-git-checks --otp=$(op item get npm --otp)
 
 # Calculate canary version (next patch + canary suffix)
 CANARY_VERSION=$(node -e "
