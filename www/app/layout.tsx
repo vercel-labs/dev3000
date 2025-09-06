@@ -33,6 +33,14 @@ export const metadata: Metadata = {
     siteName: "dev3000",
     type: "website",
     locale: "en_US",
+    images: [
+      {
+        url: "/d3k-og.svg",
+        width: 1200,
+        height: 630,
+        alt: "d3k - AI-powered development browser with unified logs and real-time monitoring"
+      }
+    ],
   },
   twitter: {
     card: "summary_large_image",

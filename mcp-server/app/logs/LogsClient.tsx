@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { LogEntry, LogsApiResponse, ConfigApiResponse, LogFile, LogListResponse } from '@/types';
 
 // Hook for dark mode with system preference detection
@@ -428,19 +429,27 @@ function LogEntryComponent({ entry }: { entry: LogEntry }) {
 
 interface LogsClientProps {
   version: string;
+  initialData?: {
+    logs: LogEntry[];
+    logFiles: any[];
+    currentLogFile: string;
+    mode: 'head' | 'tail';
+  };
 }
 
-export default function LogsClient({ version }: LogsClientProps) {
+export default function LogsClient({ version, initialData }: LogsClientProps) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [darkMode, setDarkMode] = useDarkMode();
-  const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [mode, setMode] = useState<'head' | 'tail'>('tail');
+  const [logs, setLogs] = useState<LogEntry[]>(initialData?.logs || []);
+  const [mode, setMode] = useState<'head' | 'tail'>(initialData?.mode || 'tail');
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [isLoadingNew, setIsLoadingNew] = useState(false);
-  const [isInitialLoading, setIsInitialLoading] = useState(true);
-  const [lastLogCount, setLastLogCount] = useState(0);
+  const [isInitialLoading, setIsInitialLoading] = useState(!initialData);
+  const [lastLogCount, setLastLogCount] = useState(initialData?.logs.length || 0);
   const [lastFetched, setLastFetched] = useState<Date | null>(null);
-  const [availableLogs, setAvailableLogs] = useState<LogFile[]>([]);
-  const [currentLogFile, setCurrentLogFile] = useState<string>('');
+  const [availableLogs, setAvailableLogs] = useState<LogFile[]>(initialData?.logFiles || []);
+  const [currentLogFile, setCurrentLogFile] = useState<string>(initialData?.currentLogFile || '');
   const [projectName, setProjectName] = useState<string>('');
   const [showLogSelector, setShowLogSelector] = useState(false);
   const [isReplaying, setIsReplaying] = useState(false);
@@ -569,7 +578,19 @@ export default function LogsClient({ version }: LogsClientProps) {
   };
 
   useEffect(() => {
-    loadInitialLogs();
+    // Only load initial logs if we don't have initial data (client-side fallback)
+    if (!initialData) {
+      loadInitialLogs();
+    } else {
+      // We have initial data, just start polling for updates
+      setIsInitialLoading(false);
+      if (mode === 'tail' && isAtBottom) {
+        // Set up polling timer for new logs
+        pollIntervalRef.current = setInterval(() => {
+          pollForNewLogs();
+        }, 2000);
+      }
+    }
   }, [mode]);
 
   useEffect(() => {
@@ -788,8 +809,8 @@ export default function LogsClient({ version }: LogsClientProps) {
                         <button
                           key={logFile.path}
                           onClick={() => {
-                            // TODO: Implement log switching
                             setShowLogSelector(false);
+                            router.push(`/logs?file=${encodeURIComponent(logFile.name)}&mode=${mode}`);
                           }}
                           className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center justify-between ${
                             logFile.isCurrent ? 'bg-blue-50 text-blue-900' : 'text-gray-700'
@@ -964,9 +985,10 @@ export default function LogsClient({ version }: LogsClientProps) {
               <div className="flex items-center bg-gray-100 rounded-md p-1">
               <button
                 onClick={() => {
-                  setMode('head');
-                  // Scroll to top when switching to head mode
-                  containerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+                  const currentFile = searchParams.get('file');
+                  if (currentFile) {
+                    router.push(`/logs?file=${encodeURIComponent(currentFile)}&mode=head`);
+                  }
                 }}
                 className={`px-2 sm:px-3 py-1 rounded text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
                   mode === 'head' 
@@ -977,7 +999,12 @@ export default function LogsClient({ version }: LogsClientProps) {
                 Head
               </button>
               <button
-                onClick={() => setMode('tail')}
+                onClick={() => {
+                  const currentFile = searchParams.get('file');
+                  if (currentFile) {
+                    router.push(`/logs?file=${encodeURIComponent(currentFile)}&mode=tail`);
+                  }
+                }}
                 className={`px-2 sm:px-3 py-1 rounded text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
                   mode === 'tail' 
                     ? 'bg-white text-gray-900 shadow-sm' 

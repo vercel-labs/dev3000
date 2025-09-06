@@ -1,0 +1,122 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Gradient backgrounds -->
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a1a2e;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#16213e;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0f3460;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- Terminal gradient -->
+    <linearGradient id="terminalGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1e1e2e;stop-opacity:0.9" />
+      <stop offset="100%" style="stop-color:#181825;stop-opacity:0.9" />
+    </linearGradient>
+    
+    <!-- Glow effect -->
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge> 
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    
+    <!-- Text glow -->
+    <filter id="textGlow">
+      <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+      <feMerge> 
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bgGradient)" />
+  
+  <!-- Subtle grid pattern -->
+  <defs>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#ffffff" stroke-width="0.5" opacity="0.1"/>
+    </pattern>
+  </defs>
+  <rect width="1200" height="630" fill="url(#grid)" />
+  
+  <!-- Main terminal window -->
+  <rect x="80" y="120" width="640" height="400" rx="12" fill="url(#terminalGradient)" stroke="#333" stroke-width="1" filter="url(#glow)" />
+  
+  <!-- Terminal header -->
+  <rect x="80" y="120" width="640" height="40" rx="12" fill="#2a2a3e" />
+  <rect x="80" y="148" width="640" height="1" fill="#333" />
+  
+  <!-- Terminal dots -->
+  <circle cx="110" cy="140" r="6" fill="#ff5f56" />
+  <circle cx="130" cy="140" r="6" fill="#ffbd2e" />
+  <circle cx="150" cy="140" r="6" fill="#27c93f" />
+  
+  <!-- Terminal title -->
+  <text x="180" y="147" font-family="SF Mono, Consolas, monospace" font-size="14" fill="#8b949e">dev3000 logs</text>
+  
+  <!-- Terminal content -->
+  <!-- Server log line -->
+  <text x="100" y="190" font-family="SF Mono, Consolas, monospace" font-size="12" fill="#6e7681">[12:34:56.789]</text>
+  <rect x="190" y="182" width="50" height="16" rx="3" fill="#1f6feb" opacity="0.2" />
+  <text x="195" y="193" font-family="SF Mono, Consolas, monospace" font-size="11" fill="#58a6ff" font-weight="500">SERVER</text>
+  <text x="250" y="193" font-family="SF Mono, Consolas, monospace" font-size="12" fill="#e6edf3">Ready on http://localhost:3000</text>
+  
+  <!-- Browser log line -->
+  <text x="100" y="220" font-family="SF Mono, Consolas, monospace" font-size="12" fill="#6e7681">[12:34:57.123]</text>
+  <rect x="190" y="212" width="60" height="16" rx="3" fill="#238636" opacity="0.2" />
+  <text x="195" y="223" font-family="SF Mono, Consolas, monospace" font-size="11" fill="#56d364" font-weight="500">BROWSER</text>
+  <text x="260" y="223" font-family="SF Mono, Consolas, monospace" font-size="12" fill="#e6edf3">Page loaded successfully</text>
+  
+  <!-- Interaction log line -->
+  <text x="100" y="250" font-family="SF Mono, Consolas, monospace" font-size="12" fill="#6e7681">[12:34:58.456]</text>
+  <rect x="190" y="242" width="75" height="16" rx="3" fill="#a855f7" opacity="0.2" />
+  <text x="195" y="253" font-family="SF Mono, Consolas, monospace" font-size="11" fill="#c084fc" font-weight="500">INTERACTION</text>
+  <text x="275" y="253" font-family="SF Mono, Consolas, monospace" font-size="12" fill="#e6edf3">CLICK at (245, 180) on button</text>
+  
+  <!-- Screenshot log line -->
+  <text x="100" y="280" font-family="SF Mono, Consolas, monospace" font-size="12" fill="#6e7681">[12:34:59.789]</text>
+  <rect x="190" y="272" width="75" height="16" rx="3" fill="#f97316" opacity="0.2" />
+  <text x="195" y="283" font-family="SF Mono, Consolas, monospace" font-size="11" fill="#fb923c" font-weight="500">SCREENSHOT</text>
+  <text x="275" y="283" font-family="SF Mono, Consolas, monospace" font-size="12" fill="#e6edf3">Captured on click event</text>
+  
+  <!-- Browser window mockup -->
+  <rect x="760" y="200" width="320" height="200" rx="8" fill="#1e1e2e" stroke="#333" stroke-width="1" />
+  <rect x="760" y="200" width="320" height="30" rx="8" fill="#2a2a3e" />
+  <rect x="760" y="228" width="320" height="1" fill="#333" />
+  
+  <!-- Browser dots -->
+  <circle cx="780" cy="215" r="4" fill="#ff5f56" />
+  <circle cx="795" cy="215" r="4" fill="#ffbd2e" />
+  <circle cx="810" cy="215" r="4" fill="#27c93f" />
+  
+  <!-- Browser URL -->
+  <rect x="830" y="208" width="180" height="14" rx="7" fill="#16213e" />
+  <text x="840" y="218" font-family="SF Mono, Consolas, monospace" font-size="10" fill="#8b949e">localhost:3000</text>
+  
+  <!-- Browser content -->
+  <rect x="780" y="250" width="280" height="20" rx="4" fill="#58a6ff" opacity="0.3" />
+  <rect x="780" y="280" width="200" height="8" rx="4" fill="#e6edf3" opacity="0.2" />
+  <rect x="780" y="295" width="250" height="8" rx="4" fill="#e6edf3" opacity="0.2" />
+  <rect x="780" y="310" width="180" height="8" rx="4" fill="#e6edf3" opacity="0.2" />
+  
+  <!-- Main title -->
+  <text x="600" y="80" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="72" font-weight="700" fill="#e6edf3" text-anchor="middle" filter="url(#textGlow)">d3k</text>
+  
+  <!-- Subtitle -->
+  <text x="600" y="110" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="24" font-weight="400" fill="#58a6ff" text-anchor="middle">AI-powered development browser</text>
+  
+  <!-- Features -->
+  <text x="100" y="580" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="16" font-weight="500" fill="#e6edf3">✨ Unified logs & events</text>
+  <text x="300" y="580" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="16" font-weight="500" fill="#e6edf3">📸 Auto screenshots</text>
+  <text x="500" y="580" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="16" font-weight="500" fill="#e6edf3">🤖 AI-ready</text>
+  <text x="650" y="580" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="16" font-weight="500" fill="#e6edf3">⚡ Real-time</text>
+  
+  <!-- Decorative elements -->
+  <circle cx="1050" cy="150" r="40" fill="#58a6ff" opacity="0.1" />
+  <circle cx="1120" cy="400" r="60" fill="#a855f7" opacity="0.08" />
+  <circle cx="150" cy="450" r="30" fill="#56d364" opacity="0.12" />
+</svg>

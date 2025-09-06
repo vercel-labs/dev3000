@@ -79,7 +79,8 @@ export default function HomePage() {
               AI-Powered Debugging
             </Badge>
             <h1 className="text-3xl md:text-5xl font-bold mb-3 text-balance animate-fade-in-up">
-              Complete Dev Timeline
+              <span className="block">The browser for</span>
+              <span className="block">AI-based development</span>
             </h1>
             <p className="text-base text-muted-foreground mb-4 text-pretty max-w-2xl mx-auto leading-relaxed">
               Captures server + browser logs, events, and network requests.

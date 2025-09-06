@@ -1,7 +1,128 @@
-import LogsClient from './LogsClient';
+import LogsClient, { parseLogEntries } from './LogsClient';
+import { redirect } from 'next/navigation';
+import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
+import { join, dirname, basename } from 'path';
 
-export default function LogsPage() {
+interface PageProps {
+  searchParams: { file?: string; mode?: 'head' | 'tail' };
+}
+
+async function getLogFiles() {
+  try {
+    const currentLogPath = process.env.LOG_FILE_PATH || '/tmp/dev3000.log';
+    
+    if (!existsSync(currentLogPath)) {
+      return { files: [], currentFile: '', projectName: 'unknown' };
+    }
+
+    const logDir = dirname(currentLogPath);
+    const currentLogName = basename(currentLogPath);
+    
+    // Extract project name from current log filename
+    const projectMatch = currentLogName.match(/^dev3000-(.+?)-\d{4}-\d{2}-\d{2}T/);
+    const projectName = projectMatch ? projectMatch[1] : 'unknown';
+    
+    const dirContents = readdirSync(logDir);
+    const logFiles = dirContents
+      .filter(file => 
+        file.startsWith(`dev3000-${projectName}-`) && 
+        file.endsWith('.log')
+      )
+      .map(file => {
+        const filePath = join(logDir, file);
+        const stats = statSync(filePath);
+        
+        const timestampMatch = file.match(/(\d{4}-\d{2}-\d{2}T[\d-]+Z)/);
+        const timestamp = timestampMatch ? timestampMatch[1].replace(/-/g, ':') : '';
+        
+        return {
+          name: file,
+          path: filePath,
+          timestamp,
+          size: stats.size,
+          mtime: stats.mtime,
+          isCurrent: file === currentLogName
+        };
+      })
+      .sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
+    
+    return {
+      files: logFiles,
+      currentFile: currentLogPath,
+      projectName
+    };
+  } catch (error) {
+    return { files: [], currentFile: '', projectName: 'unknown' };
+  }
+}
+
+async function getLogData(logPath: string, mode: 'head' | 'tail' = 'tail', lines: number = 100) {
+  try {
+    if (!existsSync(logPath)) {
+      return { logs: '', total: 0 };
+    }
+    
+    const logContent = readFileSync(logPath, 'utf-8');
+    const allLines = logContent.split('\n').filter(line => line.trim());
+    
+    const selectedLines = mode === 'head' 
+      ? allLines.slice(0, lines)
+      : allLines.slice(-lines);
+    
+    return {
+      logs: selectedLines.join('\n'),
+      total: allLines.length
+    };
+  } catch (error) {
+    return { logs: '', total: 0 };
+  }
+}
+
+export default async function LogsPage({ searchParams }: PageProps) {
   const version = process.env.DEV3000_VERSION || '0.0.0';
   
-  return <LogsClient version={version} />;
+  // Get available log files
+  const { files, currentFile } = await getLogFiles();
+  
+  // If no file specified and we have files, redirect to latest
+  if (!searchParams.file && files.length > 0) {
+    const latestFile = files[0].name;
+    redirect(`/logs?file=${encodeURIComponent(latestFile)}`);
+  }
+  
+  // If no file specified and no files available, render with empty data
+  if (!searchParams.file) {
+    return (
+      <LogsClient 
+        version={version}
+        initialData={{
+          logs: [],
+          logFiles: [],
+          currentLogFile: '',
+          mode: 'tail'
+        }}
+      />
+    );
+  }
+  
+  // Find the selected log file
+  const selectedFile = files.find(f => f.name === searchParams.file);
+  const logPath = selectedFile?.path || currentFile;
+  const mode = (searchParams.mode as 'head' | 'tail') || 'tail';
+  
+  // Get initial log data server-side
+  const logData = await getLogData(logPath, mode);
+  const parsedLogs = parseLogEntries(logData.logs);
+  
+  return (
+    <LogsClient 
+      version={version}
+      initialData={{
+        logs: parsedLogs,
+        logFiles: files,
+        currentLogFile: logPath,
+        mode
+      }}
+    />
+  );
 }
