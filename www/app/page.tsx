@@ -1,3 +1,4 @@
+import React from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +14,7 @@ import {
   Clock,
   Quote,
 } from "lucide-react";
+import Link from "next/link";
 
 export default function HomePage() {
   return (
@@ -132,43 +134,120 @@ export default function HomePage() {
             </p>
           </div>
 
-          <div className="max-w-4xl mx-auto space-y-3">
+          <div className="max-w-5xl mx-auto space-y-4">
+            {/* Step 1: Install */}
             <Card className="bg-card/50 backdrop-blur-sm border-2 border-gray-700/40 card-hover shadow-lg hover:shadow-xl transition-all">
-              <div className="p-3">
-                <h3 className="font-semibold mb-2 text-base flex items-center gap-2">
-                  <Terminal className="w-5 h-5 text-blue-400" />
-                  In your project
+              <div className="p-4">
+                <h3 className="font-semibold mb-3 text-lg flex items-center gap-2">
+                  <span className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-bold">
+                    1
+                  </span>
+                  Install dev3000
                 </h3>
-                <div className="codeg-secondary/50 rounded p-2 mt-4 font-mono text-sm border-2 border-gray-700/35 shadow-sm">
-                  <div className="text-foreground mb-2">pnpm i -g dev3000</div>
-                  <div className="text-foreground">dev3000</div>
+                <div className="bg-secondary/50 rounded p-3 font-mono text-sm border-2 border-gray-700/35 shadow-sm">
+                  <div className="text-foreground">pnpm i -g dev3000</div>
                 </div>
               </div>
             </Card>
-            <div className="max-w-4xl mx-auto space-y-3">
-              <Card className="bg-card/50 backdrop-blur-sm border-2 border-gray-700/40 card-hover shadow-lg hover:shadow-xl transition-all">
-                <div className="p-3">
-                  <h3 className="font-semibold mb-2 text-base flex items-center gap-2">
-                    <Network className="w-5 h-5 text-purple-400" />
-                    Framework-flexible
-                  </h3>
-                  <div className="bg-secondary/50 rounded p-4 font-mono text-sm space-y-2">
-                    <div className="text-muted-foreground"># Default</div>
-                    <div className="text-foreground text-xs">
-                      dev3000 --port 3000 --script dev
+
+            {/* Step 2: Replace your dev command */}
+            <Card className="bg-card/50 backdrop-blur-sm border-2 border-gray-700/40 card-hover shadow-lg hover:shadow-xl transition-all">
+              <div className="p-4">
+                <h3 className="font-semibold mb-3 text-lg flex items-center gap-2">
+                  <span className="w-6 h-6 bg-purple-500 text-white rounded-full flex items-center justify-center text-sm font-bold">
+                    2
+                  </span>
+                  Replace your dev command
+                </h3>
+                <div className="space-y-3">
+                  {/* Visual example 1 */}
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+                    <div className="bg-red-50 dark:bg-red-900/20 rounded p-2 font-mono text-sm flex-1 border border-red-200 dark:border-red-800">
+                      <span className="text-muted-foreground">Instead of:</span>{" "}
+                      <span className="text-foreground">pnpm dev</span>
                     </div>
-                    <div className="text-muted-foreground mt-4"># Custom</div>
-                    <div className="text-foreground text-xs">
-                      dev3000 --port 3030 --script start
+                    <div className="text-2xl self-center">→</div>
+                    <div className="bg-green-50 dark:bg-green-900/20 rounded p-2 font-mono text-sm flex-1 border border-green-200 dark:border-green-800">
+                      <span className="text-muted-foreground">Run:</span>{" "}
+                      <span className="text-foreground">dev3000</span>
                     </div>
-                    <div className="text-muted-foreground mt-4">
-                      # d3k shortcut 🤙
+                  </div>
+
+                  {/* Visual example 2 */}
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+                    <div className="bg-red-50 dark:bg-red-900/20 rounded p-2 font-mono text-sm flex-1 border border-red-200 dark:border-red-800">
+                      <span className="text-muted-foreground">Instead of:</span>{" "}
+                      <span className="text-foreground">next dev -p 5000</span>
                     </div>
-                    <div className="text-foreground text-xs">d3k</div>
+                    <div className="text-2xl self-center">→</div>
+                    <div className="bg-green-50 dark:bg-green-900/20 rounded p-2 font-mono text-sm flex-1 border border-green-200 dark:border-green-800">
+                      <span className="text-muted-foreground">Run:</span>{" "}
+                      <span className="text-foreground">
+                        dev3000 --port 5000
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+                    <div className="bg-red-50 dark:bg-red-900/20 rounded p-2 font-mono text-sm flex-1 border border-red-200 dark:border-red-800">
+                      <span className="text-muted-foreground">Instead of:</span>{" "}
+                      <span className="text-foreground">pnpm build-start</span>
+                    </div>
+                    <div className="text-2xl self-center">→</div>
+                    <div className="bg-green-50 dark:bg-green-900/20 rounded p-2 font-mono text-sm flex-1 border border-green-200 dark:border-green-800">
+                      <span className="text-muted-foreground">Run:</span>{" "}
+                      <span className="text-foreground">
+                        dev3000 --script build-start
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Quick shortcut */}
+                  <div className="bg-blue-50 dark:bg-blue-900/20 rounded p-3 border border-blue-200 dark:border-blue-800">
+                    <div className="text-sm text-muted-foreground mb-1">
+                      Pro tip: Use the shortcut
+                    </div>
+                    <div className="font-mono text-sm text-foreground">d3k</div>
+                  </div>
+                  <p>
+                    More details in the{" "}
+                    <Link
+                      href="https://github.com/vercel-labs/dev3000"
+                      className="text-sm text-muted-foreground"
+                    >
+                      README
+                    </Link>
+                  </p>
+                </div>
+              </div>
+            </Card>
+
+            {/* Step 3: Connect to Claude */}
+            <Card className="bg-card/50 backdrop-blur-sm border-2 border-gray-700/40 card-hover shadow-lg hover:shadow-xl transition-all">
+              <div className="p-4">
+                <h3 className="font-semibold mb-3 text-lg flex items-center gap-2">
+                  <span className="w-6 h-6 bg-green-500 text-white rounded-full flex items-center justify-center text-sm font-bold">
+                    3
+                  </span>
+                  Connect to Claude/Cursor
+                </h3>
+                <div className="space-y-3">
+                  <div className="text-sm text-muted-foreground mb-2">
+                    Add the MCP server to Claude Desktop or Cursor:
+                  </div>
+                  <div className="bg-secondary/50 rounded p-3 font-mono text-xs border-2 border-gray-700/35 shadow-sm overflow-x-auto">
+                    <div className="text-foreground whitespace-nowrap">
+                      claude mcp add --transport http --scope user dev3000
+                      http://localhost:3684/api/mcp/mcp
+                    </div>
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Now Claude can read your logs, search for errors, and help
+                    debug in real-time!
                   </div>
                 </div>
-              </Card>
-            </div>
+              </div>
+            </Card>
 
             {/* What Happens Next */}
             <Card className="bg-card/50 backdrop-blur-sm border-border/50">
