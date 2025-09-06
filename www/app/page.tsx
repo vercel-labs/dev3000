@@ -132,72 +132,38 @@ export default function HomePage() {
           </div>
 
           <div className="max-w-4xl mx-auto space-y-3">
-            {/* Installation */}
             <Card className="bg-card/50 backdrop-blur-sm border-2 border-gray-700/40 card-hover shadow-lg hover:shadow-xl transition-all">
               <div className="p-3">
                 <h3 className="font-semibold mb-2 text-base flex items-center gap-2">
                   <Terminal className="w-5 h-5 text-blue-400" />
-                  Installation
+                  Try it in your project
                 </h3>
-                <div className="bg-secondary/50 rounded p-2 font-mono text-sm border-2 border-gray-700/35 shadow-sm">
-                  <div className="text-muted-foreground mb-2">
-                    # Install globally with pnpm
-                  </div>
-                  <div className="text-foreground">pnpm install -g dev3000</div>
-                  <div className="text-muted-foreground mt-3 text-xs">
-                    Also installs the hip{" "}
-                    <code className="text-foreground">d3k</code> shortcut
-                  </div>
+                <div className="codeg-secondary/50 rounded p-2 mt-4 font-mono text-sm border-2 border-gray-700/35 shadow-sm">
+                  <div className="text-foreground mb-2">pnpm i -g dev3000</div>
+                  <div className="text-foreground">dev3000</div>
                 </div>
               </div>
             </Card>
-
-            {/* Usage Examples */}
-            <div className="grid md:grid-cols-2 gap-6">
-              <Card className="bg-card/50 backdrop-blur-sm border-2 border-gray-700/40 card-hover shadow-lg hover:shadow-xl transition-all">
-                <div className="p-3">
-                  <h3 className="font-semibold mb-2 text-base flex items-center gap-2">
-                    <Zap className="w-5 h-5 text-emerald-400" />
-                    Next.js Projects
-                  </h3>
-                  <div className="bg-secondary/50 rounded p-4 font-mono text-sm space-y-2">
-                    <div className="text-muted-foreground">
-                      # In your Next.js project
-                    </div>
-                    <div className="text-foreground">dev3000</div>
-                    <div className="text-muted-foreground mt-3">
-                      # With custom port
-                    </div>
-                    <div className="text-foreground text-xs">
-                      dev3000 --port 3001
-                    </div>
-                  </div>
-                </div>
-              </Card>
-
+            <div className="max-w-4xl mx-auto space-y-3">
               <Card className="bg-card/50 backdrop-blur-sm border-2 border-gray-700/40 card-hover shadow-lg hover:shadow-xl transition-all">
                 <div className="p-3">
                   <h3 className="font-semibold mb-2 text-base flex items-center gap-2">
                     <Network className="w-5 h-5 text-purple-400" />
-                    Other Frameworks
+                    Flexible for frameworks
                   </h3>
                   <div className="bg-secondary/50 rounded p-4 font-mono text-sm space-y-2">
-                    <div className="text-muted-foreground"># Vite projects</div>
+                    <div className="text-muted-foreground"># Default</div>
                     <div className="text-foreground text-xs">
-                      dev3000 --port 5173 --script dev
+                      dev3000 --port 3000 --script dev
                     </div>
-                    <div className="text-muted-foreground mt-3">
-                      # Custom server
-                    </div>
+                    <div className="text-muted-foreground mt-4"># Custom</div>
                     <div className="text-foreground text-xs">
-                      dev3000 --script start
+                      dev3000 --port 3030 --script start
                     </div>
-                    <div className="text-muted-foreground mt-3">
-                      # Pro tip: use the d3k shortcut 🤙
+                    <div className="text-muted-foreground mt-4">
+                      # d3k shortcut 🤙
                     </div>
-                    <div className="text-foreground text-xs">
-                      d3k --port 3000
-                    </div>
+                    <div className="text-foreground text-xs">d3k</div>
                   </div>
                 </div>
               </Card>
@@ -228,8 +194,8 @@ export default function HomePage() {
                     <div>
                       <div className="font-medium mb-1">Browser Opens</div>
                       <div className="text-muted-foreground text-xs">
-                        Automated browser starts capturing events and
-                        screenshots
+                        Automated CDP-connected browser starts capturing events
+                        and screenshots
                       </div>
                     </div>
                   </div>
@@ -416,6 +382,7 @@ export default function HomePage() {
               Everything is timestamped and unified - server logs, browser
               events, network requests, and screenshots
             </p>
+            {/*
             <Button variant="outline" className="border-gray-600/50" asChild>
               <a
                 href="https://github.com/vercel-labs/dev3000#examples"
@@ -426,6 +393,7 @@ export default function HomePage() {
                 <ExternalLink className="w-3 h-3 ml-2" />
               </a>
             </Button>
+            */}
           </div>
         </div>
       </section>
@@ -465,7 +433,7 @@ export default function HomePage() {
                 </div>
                 <div className="bg-secondary/30 rounded p-3 font-mono text-sm border-2 border-gray-700/35 shadow-md">
                   <div className="text-muted-foreground mb-2">
-                    # Give Claude your logs
+                    # Give AI your logs
                   </div>
                   <div className="text-foreground">Read /tmp/dev3000.log</div>
                   <div className="text-muted-foreground mt-4 mb-2">
@@ -474,7 +442,7 @@ export default function HomePage() {
                   <div className="text-foreground text-xs">
                     http://localhost:3684/api/mcp/mcp
                   </div>
-                  <div className="text-muted-foreground mt-2 mb-1">
+                  <div className="text-muted-foreground mt-4 mb-1">
                     # Visual timeline at
                   </div>
                   <div className="text-foreground text-xs">
