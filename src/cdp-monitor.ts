@@ -709,12 +709,12 @@ export class CDPMonitor {
               return JSON.stringify(details);
             }
             
-            // Scroll coalescing variables
+            // Scroll coalescing variables  
             let scrollTimeout = null;
-            let lastScrollX = window.scrollX;
-            let lastScrollY = window.scrollY;
-            let scrollStartX = window.scrollX;
-            let scrollStartY = window.scrollY;
+            let lastScrollX = 0;
+            let lastScrollY = 0;
+            let scrollStartX = 0;
+            let scrollStartY = 0;
             let scrollTarget = 'document';
             
             // Add click tracking with element details
@@ -729,29 +729,39 @@ export class CDPMonitor {
               console.log('[DEV3000_INTERACTION] KEY ' + e.key + ' in ' + details);
             });
             
-            // Add coalesced scroll tracking
+            // Add coalesced scroll tracking with capture to catch all scroll events
             document.addEventListener('scroll', function(e) {
               let target = e.target === document ? 'document' : getElementSelector(e.target);
+              let currentScrollX, currentScrollY;
+              
+              // Get scroll position from the actual scrolling element
+              if (e.target === document) {
+                currentScrollX = window.scrollX;
+                currentScrollY = window.scrollY;
+              } else {
+                currentScrollX = e.target.scrollLeft;
+                currentScrollY = e.target.scrollTop;
+              }
               
               // If this is the first scroll event or different target, reset
               if (scrollTimeout === null) {
-                scrollStartX = lastScrollX;
-                scrollStartY = lastScrollY;
+                scrollStartX = currentScrollX;
+                scrollStartY = currentScrollY;
                 scrollTarget = target;
               } else {
                 clearTimeout(scrollTimeout);
               }
               
               // Update current position
-              lastScrollX = window.scrollX;
-              lastScrollY = window.scrollY;
+              lastScrollX = currentScrollX;
+              lastScrollY = currentScrollY;
               
               // Set timeout to log scroll after 150ms of no scrolling
               scrollTimeout = setTimeout(function() {
                 console.log('[DEV3000_INTERACTION] SCROLL from ' + scrollStartX + ',' + scrollStartY + ' to ' + lastScrollX + ',' + lastScrollY + ' in ' + target);
                 scrollTimeout = null;
               }, 150);
-            });
+            }, true); // Use capture: true to catch scroll events on all elements
           }
         } catch (err) {
           console.log('[DEV3000_INTERACTION] ERROR: ' + err.message);
