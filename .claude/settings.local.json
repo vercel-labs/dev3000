@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__context7__resolve-library-id",
+      "mcp__context7__get-library-docs",
+      "Bash(pnpm run:*)",
+      "Bash(SHELL=/bin/bash bash -c 'cd \"\"/Users/duncan/dev/dev3000/mcp-server\"\" && pnpm run build')",
+      "Bash(SHELL=/bin/bash bash -c 'cd \"\"/Users/duncan/dev/dev3000/mcp-server\"\" && npx tsc --noEmit')"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

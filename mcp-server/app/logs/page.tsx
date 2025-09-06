@@ -1,10 +1,10 @@
-import LogsClient, { parseLogEntries } from './LogsClient';
+import LogsClient from './LogsClient';
 import { redirect } from 'next/navigation';
 import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
 import { join, dirname, basename } from 'path';
 
 interface PageProps {
-  searchParams: { file?: string; mode?: 'head' | 'tail' };
+  searchParams: Promise<{ file?: string; mode?: 'head' | 'tail' }>;
 }
 
 async function getLogFiles() {
@@ -84,19 +84,22 @@ export default async function LogsPage({ searchParams }: PageProps) {
   // Get available log files
   const { files, currentFile } = await getLogFiles();
   
+  // Await searchParams before accessing its properties
+  const resolvedSearchParams = await searchParams;
+  
   // If no file specified and we have files, redirect to latest
-  if (!searchParams.file && files.length > 0) {
+  if (!resolvedSearchParams.file && files.length > 0) {
     const latestFile = files[0].name;
     redirect(`/logs?file=${encodeURIComponent(latestFile)}`);
   }
   
   // If no file specified and no files available, render with empty data
-  if (!searchParams.file) {
+  if (!resolvedSearchParams.file) {
     return (
       <LogsClient 
         version={version}
         initialData={{
-          logs: [],
+          logs: '',
           logFiles: [],
           currentLogFile: '',
           mode: 'tail'
@@ -106,19 +109,18 @@ export default async function LogsPage({ searchParams }: PageProps) {
   }
   
   // Find the selected log file
-  const selectedFile = files.find(f => f.name === searchParams.file);
+  const selectedFile = files.find(f => f.name === resolvedSearchParams.file);
   const logPath = selectedFile?.path || currentFile;
-  const mode = (searchParams.mode as 'head' | 'tail') || 'tail';
+  const mode = (resolvedSearchParams.mode as 'head' | 'tail') || 'tail';
   
   // Get initial log data server-side
   const logData = await getLogData(logPath, mode);
-  const parsedLogs = parseLogEntries(logData.logs);
   
   return (
     <LogsClient 
       version={version}
       initialData={{
-        logs: parsedLogs,
+        logs: logData.logs,
         logFiles: files,
         currentLogFile: logPath,
         mode

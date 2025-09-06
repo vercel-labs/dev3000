@@ -430,7 +430,7 @@ function LogEntryComponent({ entry }: { entry: LogEntry }) {
 interface LogsClientProps {
   version: string;
   initialData?: {
-    logs: LogEntry[];
+    logs: string | LogEntry[];
     logFiles: any[];
     currentLogFile: string;
     mode: 'head' | 'tail';
@@ -441,12 +441,24 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [darkMode, setDarkMode] = useDarkMode();
-  const [logs, setLogs] = useState<LogEntry[]>(initialData?.logs || []);
+  const [logs, setLogs] = useState<LogEntry[]>(() => {
+    if (!initialData?.logs) return [];
+    if (typeof initialData.logs === 'string') {
+      return parseLogEntries(initialData.logs);
+    }
+    return initialData.logs;
+  });
   const [mode, setMode] = useState<'head' | 'tail'>(initialData?.mode || 'tail');
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [isLoadingNew, setIsLoadingNew] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(!initialData);
-  const [lastLogCount, setLastLogCount] = useState(initialData?.logs.length || 0);
+  const [lastLogCount, setLastLogCount] = useState(() => {
+    if (!initialData?.logs) return 0;
+    if (typeof initialData.logs === 'string') {
+      return parseLogEntries(initialData.logs).length;
+    }
+    return initialData.logs.length;
+  });
   const [lastFetched, setLastFetched] = useState<Date | null>(null);
   const [availableLogs, setAvailableLogs] = useState<LogFile[]>(initialData?.logFiles || []);
   const [currentLogFile, setCurrentLogFile] = useState<string>(initialData?.currentLogFile || '');
