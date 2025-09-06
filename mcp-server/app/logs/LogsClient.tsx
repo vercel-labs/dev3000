@@ -395,7 +395,7 @@ function LogEntryComponent({ entry }: { entry: LogEntry }) {
       {/* Table-like layout using CSS Grid */}
       <div className="grid grid-cols-[auto_auto_1fr] gap-3 items-start">
         {/* Column 1: Timestamp */}
-        <div className="text-xs text-gray-500 dark:text-gray-400 font-mono whitespace-nowrap">
+        <div className="text-xs text-gray-500 dark:text-gray-400 font-mono whitespace-nowrap pt-1">
           {new Date(entry.timestamp).toLocaleTimeString()}
         </div>
         
@@ -653,16 +653,38 @@ export default function LogsClient({ version }: LogsClientProps) {
     }
   };
 
-  const loadReplayPreview = async () => {
-    try {
-      const response = await fetch('/api/replay?action=parse');
-      if (response.ok) {
-        const data = await response.json();
-        setReplayEvents(data.interactions || []);
-      }
-    } catch (error) {
-      console.error('Error loading replay preview:', error);
-    }
+  const loadReplayPreview = () => {
+    // Extract interactions from current logs instead of making API call
+    const interactions = logs
+      .filter(log => log.message.includes('[INTERACTION]'))
+      .map(log => {
+        const match = log.message.match(/\[INTERACTION\] (.+)/);
+        if (match) {
+          try {
+            // Try parsing as JSON (new format)
+            const data = JSON.parse(match[1]);
+            return {
+              timestamp: log.timestamp,
+              type: data.type,
+              details: data
+            };
+          } catch {
+            // Fallback to old format parsing
+            const oldMatch = match[1].match(/(CLICK|TAP|SCROLL|KEY) (.+)/);
+            if (oldMatch) {
+              return {
+                timestamp: log.timestamp,
+                type: oldMatch[1],
+                details: oldMatch[2]
+              };
+            }
+          }
+        }
+        return null;
+      })
+      .filter(Boolean);
+    
+    setReplayEvents(interactions);
   };
 
   const handleRotateLog = async () => {
@@ -817,26 +839,8 @@ export default function LogsClient({ version }: LogsClientProps) {
               )}
             </div>
             
-            {/* Dark Mode Toggle, Mode Toggle with Replay Button */}
+            {/* Mode Toggle with Replay Button */}
             <div className="flex items-center gap-2">
-              {/* Dark Mode Toggle */}
-              <button
-                onClick={() => setDarkMode(!darkMode)}
-                className="p-2 rounded-md text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
-              >
-                {darkMode ? (
-                  // Sun icon for light mode
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-                  </svg>
-                ) : (
-                  // Moon icon for dark mode
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-                  </svg>
-                )}
-              </button>
               {/* Replay Button with Hover Preview */}
               <div className="relative">
                 <button
@@ -983,6 +987,25 @@ export default function LogsClient({ version }: LogsClientProps) {
                 Tail
               </button>
               </div>
+              
+              {/* Dark Mode Toggle */}
+              <button
+                onClick={() => setDarkMode(!darkMode)}
+                className="p-2 rounded-md text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+              >
+                {darkMode ? (
+                  // Sun icon for light mode
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                  </svg>
+                ) : (
+                  // Moon icon for dark mode
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                  </svg>
+                )}
+              </button>
             </div>
           </div>
         </div>

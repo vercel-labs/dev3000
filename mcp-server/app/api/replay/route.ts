@@ -354,7 +354,7 @@ async function executeBrowserActions(replayData: ReplayData, speed: number): Pro
           results.push({
             event,
             result,
-            description: `${event.eventType}: ${event.eventType === 'navigation' ? event.url : event.type}`
+            description: `${event.eventType}: ${event.eventType === 'navigation' ? event.url : ('type' in event ? event.type : 'unknown')}`
           });
         }
         
