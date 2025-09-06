@@ -120,48 +120,74 @@ export class CDPMonitor {
       );
       this.debugLog(`Profile directory: ${this.profileDir}`);
 
-      let chromePath = chromeCommands[0]; // Default to macOS path
-      this.debugLog(`Using Chrome path: ${chromePath}`);
+      let attemptIndex = 0;
 
-      this.browser = spawn(
-        chromePath,
-        [
-          `--remote-debugging-port=${this.debugPort}`,
-          `--user-data-dir=${this.profileDir}`,
-          "--no-first-run",
-          this.createLoadingPage(),
-        ],
-        {
-          stdio: "pipe",
-          detached: false,
+      const tryNextChrome = () => {
+        if (attemptIndex >= chromeCommands.length) {
+          reject(new Error("Failed to launch Chrome: all browser paths exhausted"));
+          return;
         }
-      );
 
-      if (!this.browser) {
-        reject(new Error("Failed to launch Chrome"));
-        return;
-      }
+        const chromePath = chromeCommands[attemptIndex];
+        this.debugLog(`Trying Chrome path [${attemptIndex}]: ${chromePath}`);
+        attemptIndex++;
 
-      this.browser.on("error", (error) => {
-        this.debugLog(`Chrome launch error: ${error.message}`);
-        if (!this.isShuttingDown) {
-          reject(error);
+        this.browser = spawn(
+          chromePath,
+          [
+            `--remote-debugging-port=${this.debugPort}`,
+            `--user-data-dir=${this.profileDir}`,
+            "--no-first-run",
+            this.createLoadingPage(),
+          ],
+          {
+            stdio: "pipe",
+            detached: false,
+          }
+        );
+
+        if (!this.browser) {
+          this.debugLog(`Failed to spawn Chrome process for path: ${chromePath}`);
+          setTimeout(tryNextChrome, 100);
+          return;
         }
-      });
 
-      this.browser.stderr?.on("data", (data) => {
-        this.debugLog(`Chrome stderr: ${data.toString().trim()}`);
-      });
+        let processExited = false;
 
-      this.browser.stdout?.on("data", (data) => {
-        this.debugLog(`Chrome stdout: ${data.toString().trim()}`);
-      });
+        this.browser.on("error", (error) => {
+          this.debugLog(`Chrome launch error for ${chromePath}: ${error.message}`);
+          if (!this.isShuttingDown && !processExited) {
+            processExited = true;
+            setTimeout(tryNextChrome, 100);
+          }
+        });
 
-      // Give Chrome time to start up
-      setTimeout(() => {
-        this.debugLog("Chrome startup timeout reached, assuming success");
-        resolve();
-      }, 3000);
+        this.browser.on("exit", (code, signal) => {
+          if (!this.isShuttingDown && !processExited && code !== 0) {
+            this.debugLog(`Chrome exited early for ${chromePath} with code ${code}, signal ${signal}`);
+            processExited = true;
+            setTimeout(tryNextChrome, 100);
+          }
+        });
+
+        this.browser.stderr?.on("data", (data) => {
+          this.debugLog(`Chrome stderr: ${data.toString().trim()}`);
+        });
+
+        this.browser.stdout?.on("data", (data) => {
+          this.debugLog(`Chrome stdout: ${data.toString().trim()}`);
+        });
+
+        // Give Chrome time to start up
+        setTimeout(() => {
+          if (!processExited) {
+            this.debugLog(`Chrome successfully started with path: ${chromePath}`);
+            resolve();
+          }
+        }, 3000);
+      };
+
+      tryNextChrome();
     });
   }
 
