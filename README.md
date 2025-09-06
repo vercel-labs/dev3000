@@ -62,7 +62,7 @@ dev3000 [options]
 Examples:
 
 ```bash
-# Custom port for Vite
+# Custom port
 dev3000 --port 5173
 
 # Persistent login state
