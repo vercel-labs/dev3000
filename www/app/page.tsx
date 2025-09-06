@@ -100,7 +100,7 @@ export default function HomePage() {
               <Button
                 variant="outline"
                 size="lg"
-                className="border-2 !border-gray-700/30"
+                className="border-2 !border-gray-700/30 p-5"
                 asChild
               >
                 <a

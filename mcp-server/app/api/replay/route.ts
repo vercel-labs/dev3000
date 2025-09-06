@@ -212,24 +212,20 @@ export async function POST(request: NextRequest) {
     const { action, replayData, speed = 1 } = body;
     
     if (action === 'execute') {
-      // Generate CDP commands for replay
-      const cdpCommands = generateCDPCommands(replayData, speed);
-      
-      // Try to execute the commands via CDP
+      // Execute replay via MCP server's execute_browser_action tool
       try {
-        const result = await executeCDPCommands(cdpCommands);
+        const result = await executeBrowserActions(replayData, speed);
         return NextResponse.json({
           success: true,
-          message: 'Replay executed successfully',
+          message: 'Replay executed successfully via MCP server',
           result: result,
-          totalCommands: cdpCommands.length
+          totalEvents: result.totalEvents,
+          executedEvents: result.executed
         });
       } catch (error) {
-        // Fallback: return commands for manual execution
         return NextResponse.json({
           success: false,
-          message: 'CDP execution failed, returning commands for manual execution',
-          commands: cdpCommands,
+          message: 'MCP server execution failed',
           error: error instanceof Error ? error.message : 'Unknown error'
         });
       }
@@ -245,168 +241,139 @@ export async function POST(request: NextRequest) {
   }
 }
 
-interface CDPCommand {
-  method: string;
-  params: any;
-  delay: number;
-  description: string;
-}
 
-function generateCDPCommands(replayData: ReplayData, speed: number): CDPCommand[] {
-  const events = [
-    ...replayData.interactions.map(i => ({ ...i, eventType: 'interaction' })),
-    ...replayData.navigations.map(n => ({ ...n, eventType: 'navigation' }))
-  ].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-  
-  const commands: CDPCommand[] = [];
-  const startTime = new Date(replayData.startTime).getTime();
-  
-  for (const event of events) {
-    const eventTime = new Date(event.timestamp).getTime();
-    const delay = Math.max(0, (eventTime - startTime) / speed);
+async function executeBrowserActions(replayData: ReplayData, speed: number): Promise<any> {
+  try {
+    // Get MCP server URL from environment (defaults to local MCP server)
+    const mcpServerUrl = process.env.MCP_SERVER_URL || 'http://localhost:3684';
     
-    if (event.eventType === 'navigation') {
-      commands.push({
-        method: 'Page.navigate',
-        params: { url: event.url },
-        delay: delay,
-        description: `Navigate to ${event.url}`
-      });
-    } else if (event.eventType === 'interaction') {
-      if ('type' in event && event.type === 'CLICK' && event.x !== undefined && event.y !== undefined) {
-        // Mouse down
-        commands.push({
-          method: 'Input.dispatchMouseEvent',
-          params: {
-            type: 'mousePressed',
-            x: event.x,
-            y: event.y,
-            button: 'left',
-            clickCount: 1
-          },
-          delay: delay,
-          description: `Click at (${event.x}, ${event.y}) on ${event.target}`
-        });
+    const events = [
+      ...replayData.interactions.map(i => ({ ...i, eventType: 'interaction' })),
+      ...replayData.navigations.map(n => ({ ...n, eventType: 'navigation' }))
+    ].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    
+    const results: any[] = [];
+    const startTime = new Date(replayData.startTime).getTime();
+    
+    // Execute events sequentially with proper timing
+    for (let i = 0; i < events.length; i++) {
+      const event = events[i];
+      const eventTime = new Date(event.timestamp).getTime();
+      const delay = Math.max(0, (eventTime - startTime) / speed);
+      
+      // Wait for the calculated delay
+      if (delay > 0) {
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+      
+      try {
+        let response;
         
-        // Mouse up (after small delay)
-        commands.push({
-          method: 'Input.dispatchMouseEvent',
-          params: {
-            type: 'mouseReleased',
-            x: event.x,
-            y: event.y,
-            button: 'left',
-            clickCount: 1
-          },
-          delay: 50, // 50ms between down and up
-          description: `Release click at (${event.x}, ${event.y})`
-        });
-      } else if ('type' in event && event.type === 'SCROLL' && event.x !== undefined && event.y !== undefined) {
-        commands.push({
-          method: 'Runtime.evaluate',
-          params: {
-            expression: `window.scrollTo({left: ${event.x}, top: ${event.y}, behavior: 'smooth'})`
-          },
-          delay: delay,
-          description: `Scroll to (${event.x}, ${event.y})`
-        });
-      } else if ('type' in event && event.type === 'KEY' && event.key) {
-        // Key down
-        commands.push({
-          method: 'Input.dispatchKeyEvent',
-          params: {
-            type: 'keyDown',
-            key: event.key,
-            text: event.key.length === 1 ? event.key : undefined
-          },
-          delay: delay,
-          description: `Key down: ${event.key}`
-        });
+        if (event.eventType === 'navigation') {
+          // Navigate to URL
+          response = await fetch(`${mcpServerUrl}/mcp`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              jsonrpc: '2.0',
+              id: i + 1,
+              method: 'tools/call',
+              params: {
+                name: 'execute_browser_action',
+                arguments: {
+                  action: 'navigate',
+                  url: event.url
+                }
+              }
+            })
+          });
+        } else if (event.eventType === 'interaction') {
+          if ('type' in event && event.type === 'CLICK' && event.x !== undefined && event.y !== undefined) {
+            // Click action
+            response = await fetch(`${mcpServerUrl}/mcp`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                jsonrpc: '2.0',
+                id: i + 1,
+                method: 'tools/call',
+                params: {
+                  name: 'execute_browser_action',
+                  arguments: {
+                    action: 'click',
+                    x: event.x,
+                    y: event.y
+                  }
+                }
+              })
+            });
+          } else if ('type' in event && event.type === 'SCROLL' && event.x !== undefined && event.y !== undefined) {
+            // Scroll action
+            response = await fetch(`${mcpServerUrl}/mcp`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                jsonrpc: '2.0',
+                id: i + 1,
+                method: 'tools/call',
+                params: {
+                  name: 'execute_browser_action',
+                  arguments: {
+                    action: 'scroll',
+                    x: 0,
+                    y: 0,
+                    deltaX: event.x,
+                    deltaY: event.y
+                  }
+                }
+              })
+            });
+          } else if ('type' in event && event.type === 'KEY' && event.key) {
+            // Type action
+            response = await fetch(`${mcpServerUrl}/mcp`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                jsonrpc: '2.0',
+                id: i + 1,
+                method: 'tools/call',
+                params: {
+                  name: 'execute_browser_action',
+                  arguments: {
+                    action: 'type',
+                    text: event.key
+                  }
+                }
+              })
+            });
+          }
+        }
         
-        // Key up
-        commands.push({
-          method: 'Input.dispatchKeyEvent',
-          params: {
-            type: 'keyUp',
-            key: event.key
-          },
-          delay: 50,
-          description: `Key up: ${event.key}`
+        if (response) {
+          const result = await response.json();
+          results.push({
+            event,
+            result,
+            description: `${event.eventType}: ${event.eventType === 'navigation' ? event.url : event.type}`
+          });
+        }
+        
+      } catch (error) {
+        results.push({
+          event,
+          error: error instanceof Error ? error.message : 'Unknown error',
+          description: `Failed: ${event.eventType}`
         });
       }
     }
-  }
-  
-  return commands;
-}
-
-async function executeCDPCommands(commands: CDPCommand[]): Promise<any> {
-  const WebSocket = require('ws');
-  
-  try {
-    // Connect to Chrome DevTools Protocol on port 9222
-    const response = await fetch('http://localhost:9222/json/version');
-    const versionData = await response.json();
-    const wsUrl = versionData.webSocketDebuggerUrl;
     
-    return new Promise((resolve, reject) => {
-      const ws = new WebSocket(wsUrl);
-      let commandIndex = 0;
-      let nextId = 1;
-      const results: any[] = [];
-      
-      ws.on('open', () => {
-        // Execute commands sequentially with proper timing
-        const executeNext = () => {
-          if (commandIndex >= commands.length) {
-            ws.close();
-            resolve({ executed: commandIndex, results });
-            return;
-          }
-          
-          const command = commands[commandIndex];
-          const message = {
-            id: nextId++,
-            method: command.method,
-            params: command.params
-          };
-          
-          ws.send(JSON.stringify(message));
-          commandIndex++;
-          
-          // Schedule next command with delay
-          setTimeout(executeNext, command.delay || 100);
-        };
-        
-        // Start executing commands
-        executeNext();
-      });
-      
-      ws.on('message', (data: any) => {
-        try {
-          const response = JSON.parse(data.toString());
-          if (response.id) {
-            results.push(response);
-          }
-        } catch (error) {
-          // Ignore parsing errors for events
-        }
-      });
-      
-      ws.on('error', reject);
-      ws.on('close', () => {
-        if (commandIndex < commands.length) {
-          reject(new Error(`Connection closed after executing ${commandIndex}/${commands.length} commands`));
-        }
-      });
-      
-      // Timeout after 30 seconds
-      setTimeout(() => {
-        ws.close();
-        reject(new Error('Replay execution timed out'));
-      }, 30000);
-    });
+    return {
+      executed: results.length,
+      results,
+      totalEvents: events.length
+    };
+    
   } catch (error) {
-    throw new Error(`Failed to connect to CDP: ${error}`);
+    throw new Error(`Failed to execute replay via MCP server: ${error}`);
   }
 }
