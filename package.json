@@ -5,7 +5,8 @@
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "dev3000": "dist/cli.js"
+    "dev3000": "dist/cli.js",
+    "d3k": "dist/cli.js"
   },
   "files": [
     "dist/",

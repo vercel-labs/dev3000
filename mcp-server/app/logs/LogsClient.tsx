@@ -3,6 +3,51 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { LogEntry, LogsApiResponse, ConfigApiResponse, LogFile, LogListResponse } from '@/types';
 
+// Hook for dark mode with system preference detection
+function useDarkMode() {
+  const [darkMode, setDarkMode] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      // Check localStorage first
+      const saved = localStorage.getItem('dev3000-dark-mode');
+      if (saved !== null) {
+        return JSON.parse(saved);
+      }
+      // Default to system preference
+      return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    // Save to localStorage
+    localStorage.setItem('dev3000-dark-mode', JSON.stringify(darkMode));
+    
+    // Apply dark class to document
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [darkMode]);
+
+  // Listen for system theme changes
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handler = (e: MediaQueryListEvent) => {
+      // Only update if no explicit choice has been made
+      const saved = localStorage.getItem('dev3000-dark-mode');
+      if (saved === null) {
+        setDarkMode(e.matches);
+      }
+    };
+    
+    mediaQuery.addEventListener('change', handler);
+    return () => mediaQuery.removeEventListener('change', handler);
+  }, []);
+
+  return [darkMode, setDarkMode] as const;
+}
+
 export function parseLogEntries(logContent: string): LogEntry[] {
   // Split by timestamp pattern - each timestamp starts a new log entry
   const timestampPattern = /\[(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z)\] \[([^\]]+)\] /;
@@ -75,7 +120,7 @@ function URLRenderer({ url, maxLength = 60 }: { url: string, maxLength?: number 
         href={url} 
         target="_blank" 
         rel="noopener noreferrer"
-        className="text-blue-600 hover:text-blue-800 underline"
+        className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline"
       >
         {url}
       </a>
@@ -92,13 +137,13 @@ function URLRenderer({ url, maxLength = 60 }: { url: string, maxLength?: number 
             href={url} 
             target="_blank" 
             rel="noopener noreferrer"
-            className="text-blue-600 hover:text-blue-800 underline"
+            className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline"
           >
             {url}
           </a>
           <button
             onClick={() => setIsExpanded(false)}
-            className="ml-2 text-xs text-gray-500 hover:text-gray-700 px-1 py-0.5 rounded hover:bg-gray-100"
+            className="ml-2 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 px-1 py-0.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
           >
             [collapse]
           </button>
@@ -109,13 +154,13 @@ function URLRenderer({ url, maxLength = 60 }: { url: string, maxLength?: number 
             href={url} 
             target="_blank" 
             rel="noopener noreferrer"
-            className="text-blue-600 hover:text-blue-800 underline"
+            className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline"
           >
             {truncated}
           </a>
           <button
             onClick={() => setIsExpanded(true)}
-            className="ml-1 text-xs text-gray-500 hover:text-gray-700 px-1 py-0.5 rounded hover:bg-gray-100"
+            className="ml-1 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 px-1 py-0.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
           >
             [expand]
           </button>
@@ -247,17 +292,17 @@ function ObjectRenderer({ content }: { content: string }) {
 }
 
 function LogEntryComponent({ entry }: { entry: LogEntry }) {
-  // Parse log type from message patterns
+  // Parse log type from message patterns with dark mode support
   const parseLogType = (message: string) => {
-    if (message.includes('[INTERACTION]')) return { type: 'INTERACTION', color: 'bg-purple-50 border-purple-200', tag: 'bg-purple-100 text-purple-800' };
-    if (message.includes('[CONSOLE ERROR]')) return { type: 'ERROR', color: 'bg-red-50 border-red-200', tag: 'bg-red-100 text-red-800' };
-    if (message.includes('[CONSOLE WARN]')) return { type: 'WARNING', color: 'bg-yellow-50 border-yellow-200', tag: 'bg-yellow-100 text-yellow-800' };
-    if (message.includes('[SCREENSHOT]')) return { type: 'SCREENSHOT', color: 'bg-blue-50 border-blue-200', tag: 'bg-blue-100 text-blue-800' };
-    if (message.includes('[NAVIGATION]')) return { type: 'NAVIGATION', color: 'bg-indigo-50 border-indigo-200', tag: 'bg-indigo-100 text-indigo-800' };
-    if (message.includes('[NETWORK ERROR]')) return { type: 'NETWORK', color: 'bg-red-50 border-red-200', tag: 'bg-red-100 text-red-800' };
-    if (message.includes('[NETWORK REQUEST]')) return { type: 'NETWORK', color: 'bg-gray-50 border-gray-200', tag: 'bg-gray-100 text-gray-700' };
-    if (message.includes('[PAGE ERROR]')) return { type: 'ERROR', color: 'bg-red-50 border-red-200', tag: 'bg-red-100 text-red-800' };
-    return { type: 'DEFAULT', color: 'border-gray-200', tag: 'bg-gray-100 text-gray-700' };
+    if (message.includes('[INTERACTION]')) return { type: 'INTERACTION', color: 'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800', tag: 'bg-purple-100 dark:bg-purple-800 text-purple-800 dark:text-purple-200' };
+    if (message.includes('[CONSOLE ERROR]')) return { type: 'ERROR', color: 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800', tag: 'bg-red-100 dark:bg-red-800 text-red-800 dark:text-red-200' };
+    if (message.includes('[CONSOLE WARN]')) return { type: 'WARNING', color: 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800', tag: 'bg-yellow-100 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200' };
+    if (message.includes('[SCREENSHOT]')) return { type: 'SCREENSHOT', color: 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800', tag: 'bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200' };
+    if (message.includes('[NAVIGATION]')) return { type: 'NAVIGATION', color: 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800', tag: 'bg-indigo-100 dark:bg-indigo-800 text-indigo-800 dark:text-indigo-200' };
+    if (message.includes('[NETWORK ERROR]')) return { type: 'NETWORK', color: 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800', tag: 'bg-red-100 dark:bg-red-800 text-red-800 dark:text-red-200' };
+    if (message.includes('[NETWORK REQUEST]')) return { type: 'NETWORK', color: 'bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700', tag: 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300' };
+    if (message.includes('[PAGE ERROR]')) return { type: 'ERROR', color: 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800', tag: 'bg-red-100 dark:bg-red-800 text-red-800 dark:text-red-200' };
+    return { type: 'DEFAULT', color: 'border-gray-200 dark:border-gray-700', tag: 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300' };
   };
 
   const logTypeInfo = parseLogType(entry.message);
@@ -350,19 +395,19 @@ function LogEntryComponent({ entry }: { entry: LogEntry }) {
       {/* Table-like layout using CSS Grid */}
       <div className="grid grid-cols-[auto_auto_1fr] gap-3 items-start">
         {/* Column 1: Timestamp */}
-        <div className="text-xs text-gray-500 font-mono whitespace-nowrap">
+        <div className="text-xs text-gray-500 dark:text-gray-400 font-mono whitespace-nowrap">
           {new Date(entry.timestamp).toLocaleTimeString()}
         </div>
         
         {/* Column 2: Source */}
         <div className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${
-          entry.source === 'SERVER' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
+          entry.source === 'SERVER' ? 'bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200' : 'bg-green-100 dark:bg-green-800 text-green-800 dark:text-green-200'
         }`}>
           {entry.source}
         </div>
         
         {/* Column 3: Message content */}
-        <div className="font-mono text-sm min-w-0">
+        <div className="font-mono text-sm min-w-0 text-gray-900 dark:text-gray-100">
           {renderMessage(entry.message)}
         </div>
       </div>
@@ -386,6 +431,7 @@ interface LogsClientProps {
 }
 
 export default function LogsClient({ version }: LogsClientProps) {
+  const [darkMode, setDarkMode] = useDarkMode();
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [mode, setMode] = useState<'head' | 'tail'>('tail');
   const [isAtBottom, setIsAtBottom] = useState(true);
@@ -674,15 +720,15 @@ export default function LogsClient({ version }: LogsClientProps) {
   }, [logs, filters]);
 
   return (
-    <div className="h-screen bg-gray-50 flex flex-col">
+    <div className="h-screen bg-gray-50 dark:bg-gray-900 flex flex-col transition-colors">
       {/* Header - Fixed */}
-      <div className="bg-white shadow-sm border-b flex-none z-10">
+      <div className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 flex-none z-10">
         <div className="max-w-7xl mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 sm:gap-4">
               <div className="flex items-center gap-1">
-                <h1 className="text-xl sm:text-2xl font-bold text-gray-900 whitespace-nowrap">dev3000</h1>
-                <span className="text-xs text-gray-400 whitespace-nowrap">(v{version})</span>
+                <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white whitespace-nowrap">dev3000</h1>
+                <span className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">(v{version})</span>
               </div>
               
               {/* Log File Selector */}
@@ -690,11 +736,11 @@ export default function LogsClient({ version }: LogsClientProps) {
                 <div className="relative" ref={dropdownRef}>
                   <button
                     onClick={() => setShowLogSelector(!showLogSelector)}
-                    className="flex items-center gap-2 px-3 py-1 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-md transition-colors"
+                    className="flex items-center gap-2 px-3 py-1 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-700 rounded-md transition-colors"
                   >
                     <span className="font-mono text-xs whitespace-nowrap">
                       {isInitialLoading && !currentLogFile ? (
-                        <div className="h-4 bg-gray-200 rounded animate-pulse" style={{width: '220px'}} />
+                        <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" style={{width: '220px'}} />
                       ) : (
                         currentLogFile ? currentLogFile.split('/').pop() : 'dev3000.log'
                       )}
@@ -711,9 +757,9 @@ export default function LogsClient({ version }: LogsClientProps) {
                 
                 {/* Dropdown */}
                 {showLogSelector && availableLogs.length > 1 && (
-                  <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-20 min-w-80">
+                  <div className="absolute top-full left-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md shadow-lg z-20 min-w-80">
                     <div className="py-1 max-h-60 overflow-y-auto">
-                      <div className="px-3 py-2 text-xs font-medium text-gray-500 border-b">
+                      <div className="px-3 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-600">
                         {projectName} logs ({availableLogs.length})
                       </div>
                       {availableLogs.map((logFile) => (
@@ -771,8 +817,26 @@ export default function LogsClient({ version }: LogsClientProps) {
               )}
             </div>
             
-            {/* Mode Toggle with Replay Button */}
+            {/* Dark Mode Toggle, Mode Toggle with Replay Button */}
             <div className="flex items-center gap-2">
+              {/* Dark Mode Toggle */}
+              <button
+                onClick={() => setDarkMode(!darkMode)}
+                className="p-2 rounded-md text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+              >
+                {darkMode ? (
+                  // Sun icon for light mode
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                  </svg>
+                ) : (
+                  // Moon icon for dark mode
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                  </svg>
+                )}
+              </button>
               {/* Replay Button with Hover Preview */}
               <div className="relative">
                 <button
@@ -938,15 +1002,15 @@ export default function LogsClient({ version }: LogsClientProps) {
             </div>
           ) : logs.length === 0 ? (
             <div className="text-center py-12">
-              <div className="text-gray-400 text-lg">📝 No logs yet</div>
-              <div className="text-gray-500 text-sm mt-2">
+              <div className="text-gray-400 dark:text-gray-500 text-lg">📝 No logs yet</div>
+              <div className="text-gray-500 dark:text-gray-400 text-sm mt-2">
                 Logs will appear here as your development server runs
               </div>
             </div>
           ) : filteredLogs.length === 0 ? (
             <div className="text-center py-12">
-              <div className="text-gray-400 text-lg">🔍 No logs match current filters</div>
-              <div className="text-gray-500 text-sm mt-2">
+              <div className="text-gray-400 dark:text-gray-500 text-lg">🔍 No logs match current filters</div>
+              <div className="text-gray-500 dark:text-gray-400 text-sm mt-2">
                 Try adjusting your filter settings to see more logs
               </div>
             </div>
@@ -962,17 +1026,17 @@ export default function LogsClient({ version }: LogsClientProps) {
       </div>
       
       {/* Footer - Fixed */}
-      <div className="border-t border-gray-200 bg-gray-50 flex-none">
+      <div className="border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex-none">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             {isLoadingNew && (
               <div className="flex items-center gap-1">
                 <div className="w-3 h-3 border border-gray-300 border-t-blue-500 rounded-full animate-spin"></div>
-                <span className="text-xs text-gray-500">Loading...</span>
+                <span className="text-xs text-gray-500 dark:text-gray-400">Loading...</span>
               </div>
             )}
             {!isLoadingNew && lastFetched && (
-              <span className="text-xs text-gray-400 font-mono">
+              <span className="text-xs text-gray-400 dark:text-gray-500 font-mono">
                 Last updated {lastFetched.toLocaleTimeString()}
               </span>
             )}

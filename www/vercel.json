@@ -1,0 +1,7 @@
+{
+  "projectSettings": {
+    "name": "dev3000-www"
+  },
+  "buildCommand": "pnpm run build",
+  "installCommand": "pnpm install"
+}

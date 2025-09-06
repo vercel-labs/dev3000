@@ -1,0 +1,5 @@
+<svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+  <rect width="32" height="32" fill="#000000"/>
+  <polygon points="16,8 24,20 8,20" fill="#ffffff"/>
+  <text x="16" y="18" font-family="monospace" font-size="6" font-weight="bold" text-anchor="middle" fill="#000000">d3k</text>
+</svg>
