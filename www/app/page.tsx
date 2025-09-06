@@ -109,7 +109,10 @@ export default function HomePage() {
       </section>
 
       {/* Quick Start */}
-      <section id="quickstart" className="relative py-6 border-b border-gray-700/30">
+      <section
+        id="quickstart"
+        className="relative py-6 border-b border-gray-700/30"
+      >
         <div className="container mx-auto px-4">
           <div className="max-w-2xl mx-auto text-center mb-5">
             <h2 className="text-2xl font-bold mb-2">Quick Start</h2>
@@ -132,7 +135,8 @@ export default function HomePage() {
                   </div>
                   <div className="text-foreground">pnpm install -g dev3000</div>
                   <div className="text-muted-foreground mt-3 text-xs">
-                    Also installs the hip <code className="text-foreground">d3k</code> shortcut
+                    Also installs the hip{" "}
+                    <code className="text-foreground">d3k</code> shortcut
                   </div>
                 </div>
               </div>
@@ -240,7 +244,10 @@ export default function HomePage() {
       </section>
 
       {/* Features */}
-      <section id="features" className="relative py-6 border-b border-gray-700/30">
+      <section
+        id="features"
+        className="relative py-6 border-b border-gray-700/30"
+      >
         <div className="container mx-auto px-4">
           <div className="max-w-2xl mx-auto text-center mb-6">
             <h2 className="text-2xl font-bold mb-2">
@@ -546,12 +553,9 @@ export default function HomePage() {
       <section className="relative py-6 bg-gradient-to-b from-transparent to-secondary/10">
         <div className="container mx-auto px-4">
           <div className="max-w-2xl mx-auto text-center mb-5">
-            <h2 className="text-2xl font-bold mb-2">See dev3000 in Action</h2>
-            <p className="text-muted-foreground text-sm">
-              Watch a complete walkthrough of dev3000's AI debugging capabilities
-            </p>
+            <h2 className="text-2xl font-bold mb-2">Vibes</h2>
           </div>
-          
+
           <div className="max-w-4xl mx-auto">
             <Card className="bg-card/50 backdrop-blur-sm border-2 border-gray-700/40 overflow-hidden shadow-2xl">
               <div className="relative aspect-video">
