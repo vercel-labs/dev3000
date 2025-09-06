@@ -136,7 +136,7 @@ export default function HomePage() {
               <div className="p-3">
                 <h3 className="font-semibold mb-2 text-base flex items-center gap-2">
                   <Terminal className="w-5 h-5 text-blue-400" />
-                  Try it in your project
+                  In your project
                 </h3>
                 <div className="codeg-secondary/50 rounded p-2 mt-4 font-mono text-sm border-2 border-gray-700/35 shadow-sm">
                   <div className="text-foreground mb-2">pnpm i -g dev3000</div>
@@ -149,7 +149,7 @@ export default function HomePage() {
                 <div className="p-3">
                   <h3 className="font-semibold mb-2 text-base flex items-center gap-2">
                     <Network className="w-5 h-5 text-purple-400" />
-                    Flexible for frameworks
+                    Framework-flexible
                   </h3>
                   <div className="bg-secondary/50 rounded p-4 font-mono text-sm space-y-2">
                     <div className="text-muted-foreground"># Default</div>
