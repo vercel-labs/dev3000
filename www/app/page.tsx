@@ -25,7 +25,7 @@ export default function HomePage() {
         <div className="container mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-foreground rounded-sm flex items-center justify-center">
+              <div className="w-8 h-8 bg-foreground rounded flex items-center justify-center">
                 <span className="text-background font-mono font-bold text-sm">
                   d3k
                 </span>
@@ -50,7 +50,12 @@ export default function HomePage() {
                   Quick Start
                 </a>
               </div>
-              <Button variant="outline" size="sm" asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-gray-600/50"
+                asChild
+              >
                 <a
                   href="https://github.com/vercel-labs/dev3000"
                   target="_blank"
@@ -78,8 +83,8 @@ export default function HomePage() {
             </h1>
             <p className="text-base text-muted-foreground mb-4 text-pretty max-w-2xl mx-auto leading-relaxed">
               Captures server + browser logs, events, and network requests.
-              Takes automatic screenshots and stiches into a unified,
-              timestamped feed that AI tools can easily understand.
+              Takes automatic screenshots and stiches it all into a unified,
+              timestamped feed for AI and you.
             </p>
             <div className="flex flex-col sm:flex-row gap-2 justify-center items-center">
               <Button
@@ -92,7 +97,12 @@ export default function HomePage() {
                   Get Started
                 </a>
               </Button>
-              <Button variant="outline" size="lg" asChild>
+              <Button
+                variant="outline"
+                size="lg"
+                className="border-2 !border-gray-700/30"
+                asChild
+              >
                 <a
                   href="https://github.com/vercel-labs/dev3000"
                   target="_blank"
@@ -129,7 +139,7 @@ export default function HomePage() {
                   <Terminal className="w-5 h-5 text-blue-400" />
                   Installation
                 </h3>
-                <div className="bg-secondary/50 rounded-lg p-2 font-mono text-sm border-2 border-gray-700/35 shadow-sm">
+                <div className="bg-secondary/50 rounded p-2 font-mono text-sm border-2 border-gray-700/35 shadow-sm">
                   <div className="text-muted-foreground mb-2">
                     # Install globally with pnpm
                   </div>
@@ -150,7 +160,7 @@ export default function HomePage() {
                     <Zap className="w-5 h-5 text-emerald-400" />
                     Next.js Projects
                   </h3>
-                  <div className="bg-secondary/50 rounded-lg p-4 font-mono text-sm space-y-2">
+                  <div className="bg-secondary/50 rounded p-4 font-mono text-sm space-y-2">
                     <div className="text-muted-foreground">
                       # In your Next.js project
                     </div>
@@ -171,7 +181,7 @@ export default function HomePage() {
                     <Network className="w-5 h-5 text-purple-400" />
                     Other Frameworks
                   </h3>
-                  <div className="bg-secondary/50 rounded-lg p-4 font-mono text-sm space-y-2">
+                  <div className="bg-secondary/50 rounded p-4 font-mono text-sm space-y-2">
                     <div className="text-muted-foreground"># Vite projects</div>
                     <div className="text-foreground text-xs">
                       dev3000 --port 5173 --script dev
@@ -406,7 +416,7 @@ export default function HomePage() {
               Everything is timestamped and unified - server logs, browser
               events, network requests, and screenshots
             </p>
-            <Button variant="outline" asChild>
+            <Button variant="outline" className="border-gray-600/50" asChild>
               <a
                 href="https://github.com/vercel-labs/dev3000#examples"
                 target="_blank"
@@ -453,7 +463,7 @@ export default function HomePage() {
                     </div>
                   </div>
                 </div>
-                <div className="bg-secondary/30 rounded-lg p-3 font-mono text-sm border-2 border-gray-700/35 shadow-md">
+                <div className="bg-secondary/30 rounded p-3 font-mono text-sm border-2 border-gray-700/35 shadow-md">
                   <div className="text-muted-foreground mb-2">
                     # Give Claude your logs
                   </div>
@@ -561,7 +571,7 @@ export default function HomePage() {
               <div className="relative aspect-video">
                 <video
                   controls
-                  className="w-full h-full object-cover rounded-lg"
+                  className="w-full h-full object-cover rounded"
                   preload="metadata"
                 >
                   <source src="/d3k.mp4#t=0.25" type="video/mp4" />
@@ -578,7 +588,7 @@ export default function HomePage() {
         <div className="container mx-auto px-4">
           <div className="flex flex-col md:flex-row justify-between items-center gap-2">
             <div className="flex items-center gap-2">
-              <div className="w-6 h-6 bg-foreground rounded-sm flex items-center justify-center">
+              <div className="w-6 h-6 bg-foreground rounded flex items-center justify-center">
                 <span className="text-background font-mono font-bold text-xs">
                   d3k
                 </span>
@@ -589,7 +599,12 @@ export default function HomePage() {
               </span>
             </div>
             <div className="flex items-center gap-3">
-              <Button variant="ghost" size="sm" asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="border border-gray-600/50"
+                asChild
+              >
                 <a
                   href="https://github.com/vercel-labs/dev3000"
                   target="_blank"
