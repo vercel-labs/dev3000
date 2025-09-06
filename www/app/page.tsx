@@ -250,7 +250,7 @@ export default function HomePage() {
             </Card>
 
             {/* What Happens Next */}
-            <Card className="bg-card/50 backdrop-blur-sm border-border/50">
+            <Card className="bg-card/50 backdrop-blur-sm border-2 border-gray-700/40 card-hover shadow-lg hover:shadow-xl transition-all">
               <div className="p-3">
                 <h3 className="font-semibold mb-4">What happens next?</h3>
                 <div className="grid md:grid-cols-3 gap-6 text-sm">
