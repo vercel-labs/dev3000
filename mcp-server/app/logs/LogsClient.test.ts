@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseLogEntries } from './LogsClient';
+import { parseLogEntries } from './utils';
 import { LogEntry } from '../../types';
 
 describe('parseLogEntries', () => {
