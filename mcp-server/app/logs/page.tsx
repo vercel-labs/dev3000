@@ -4,7 +4,7 @@ import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
 import { join, dirname, basename } from 'path';
 
 interface PageProps {
-  searchParams: { file?: string; mode?: 'head' | 'tail' };
+  searchParams: Promise<{ file?: string; mode?: 'head' | 'tail' }>;
 }
 
 async function getLogFiles() {
@@ -81,17 +81,20 @@ async function getLogData(logPath: string, mode: 'head' | 'tail' = 'tail', lines
 export default async function LogsPage({ searchParams }: PageProps) {
   const version = process.env.DEV3000_VERSION || '0.0.0';
   
+  // Await searchParams (Next.js 15 requirement)
+  const params = await searchParams;
+  
   // Get available log files
   const { files, currentFile } = await getLogFiles();
   
   // If no file specified and we have files, redirect to latest
-  if (!searchParams.file && files.length > 0) {
+  if (!params.file && files.length > 0) {
     const latestFile = files[0].name;
     redirect(`/logs?file=${encodeURIComponent(latestFile)}`);
   }
   
   // If no file specified and no files available, render with empty data
-  if (!searchParams.file) {
+  if (!params.file) {
     return (
       <LogsClient 
         version={version}
@@ -106,9 +109,9 @@ export default async function LogsPage({ searchParams }: PageProps) {
   }
   
   // Find the selected log file
-  const selectedFile = files.find(f => f.name === searchParams.file);
+  const selectedFile = files.find(f => f.name === params.file);
   const logPath = selectedFile?.path || currentFile;
-  const mode = (searchParams.mode as 'head' | 'tail') || 'tail';
+  const mode = (params.mode as 'head' | 'tail') || 'tail';
   
   // Get initial log data server-side
   const logData = await getLogData(logPath, mode);
