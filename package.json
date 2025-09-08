@@ -21,6 +21,7 @@
   "scripts": {
     "build": "tsc && mkdir -p dist/src && cp src/loading.html dist/src/",
     "dev": "tsc --watch",
+    "format": "biome format --write .",
     "test": "vitest run",
     "prepare": "husky",
     "postinstall": "cd mcp-server && pnpm install --frozen-lockfile",
@@ -39,6 +40,7 @@
     "claude"
   ],
   "dependencies": {
+    "biome": "^0.3.3",
     "chalk": "^5.3.0",
     "cli-progress": "^3.12.0",
     "commander": "^11.1.0",
