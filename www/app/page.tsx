@@ -2,6 +2,7 @@ import React from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 import {
   Terminal,
   Eye,
@@ -52,6 +53,7 @@ export default function HomePage() {
                   Quick Start
                 </a>
               </div>
+              <ThemeToggle />
               <Button
                 variant="outline"
                 size="sm"
@@ -632,7 +634,7 @@ export default function HomePage() {
       </section>
 
       {/* Footer */}
-      <footer className="relative border-t border-border/40 py-6">
+       <footer className="relative border-t border-border/40 py-6">
         <div className="container mx-auto px-4">
           <div className="flex flex-col md:flex-row justify-between items-center gap-2">
             <div className="flex items-center gap-2">
