@@ -59,12 +59,13 @@ export const metadata: Metadata = {
   category: "technology",
   icons: {
     icon: [
+      { url: "/favicon.ico", type: "image/x-icon" },
       { url: "/favicon-16.svg", type: "image/svg+xml", sizes: "16x16" },
       { url: "/favicon.svg", type: "image/svg+xml", sizes: "32x32" },
       { url: "/favicon-64.svg", type: "image/svg+xml", sizes: "64x64" },
     ],
     shortcut: "/favicon.svg",
-    apple: "/favicon-64.svg",
+    apple: "/favicon-180.png",
   },
 };
 
