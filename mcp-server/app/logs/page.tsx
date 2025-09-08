@@ -1,7 +1,8 @@
-import LogsClient, { parseLogEntries } from './LogsClient';
+import LogsClient from './LogsClient';
 import { redirect } from 'next/navigation';
 import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
 import { join, dirname, basename } from 'path';
+import { parseLogEntries } from './utils';
 
 interface PageProps {
   searchParams: { file?: string; mode?: 'head' | 'tail' };
