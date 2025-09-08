@@ -23,6 +23,7 @@
     "dev": "tsc --watch",
     "format": "biome format --write .",
     "test": "vitest run",
+    "test-postinstall": "tsx scripts/test-postinstall.ts",
     "prepare": "husky",
     "postinstall": "cd mcp-server && pnpm install --frozen-lockfile --silent --no-optional || true",
     "release": "./scripts/release.sh",
