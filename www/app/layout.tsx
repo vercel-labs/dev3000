@@ -7,8 +7,10 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Suspense } from "react";
 import "./globals.css";
 
+const BASE_URL = "https://dev3000.ai";
+
 export const metadata: Metadata = {
-  metadataBase: new URL("https://dev3000.vercel.app"),
+  metadataBase: new URL(BASE_URL),
   title:
     "dev3000 - AI-Powered Debugging & Development Monitoring | Vercel Labs",
   description:
@@ -36,7 +38,7 @@ export const metadata: Metadata = {
     title: "dev3000 - AI-Powered Debugging & Development Monitoring",
     description:
       "Capture your web app's complete development timeline for AI debugging. Unified logs, browser events, and automatic screenshots.",
-    url: "https://dev3000.vercel.app",
+    url: BASE_URL,
     siteName: "dev3000",
     type: "website",
     locale: "en_US",
