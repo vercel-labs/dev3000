@@ -1,6 +1,6 @@
 {
   "name": "dev3000",
-  "version": "0.0.46",
+  "version": "0.0.47",
   "description": "AI-powered development tools with browser monitoring and MCP server integration",
   "type": "module",
   "main": "dist/index.js",
@@ -24,7 +24,7 @@
     "format": "biome format --write .",
     "test": "vitest run",
     "prepare": "husky",
-    "postinstall": "cd mcp-server && pnpm install --frozen-lockfile",
+    "postinstall": "cd mcp-server && pnpm install --frozen-lockfile --silent --no-optional || true",
     "release": "./scripts/release.sh",
     "test-canary": "./scripts/test-canary.sh"
   },
