@@ -82,4 +82,5 @@ Before submitting a PR:
 - **Pull the latest changes** from `main`.
 - **Run** `scripts/test-canary.sh` to test your feature locally and verify what is already in the canary build.
 - **Tip** `dev3000 --version` to verify you're on the canary locally
-- Please check the canary build to avoid duplicating work that may already be done.
+- **FYI** .husky/pre-commit.sh runs `pnpm format` to apply biome.json rules to all code
+- Please run and test the canary build locally to avoid duplicating work that may already be done.
