@@ -72,3 +72,14 @@ dev3000 --profile-dir ./chrome-profile
 ---
 
 _Made by [elsigh](https://github.com/elsigh)_
+
+## Contributing
+
+We welcome pull requests (PRs) from the community!
+
+Before submitting a PR:
+
+- **Pull the latest changes** from `main`.
+- **Run** `scripts/test-canary.sh` to test your feature locally and verify what is already in the canary build.
+- **Tip** `dev3000 --version` to verify you're on the canary locally
+- Please check the canary build to avoid duplicating work that may already be done.
