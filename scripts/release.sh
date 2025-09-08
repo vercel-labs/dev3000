@@ -84,6 +84,18 @@ git commit -m "Release v$NEXT_VERSION
 
 Co-Authored-By: Claude <noreply@anthropic.com>"
 
+# Ensure we're on main branch and up to date
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+echo "📍 Current branch: $CURRENT_BRANCH"
+
+if [ "$CURRENT_BRANCH" != "main" ]; then
+    echo "🔀 Switching to main branch..."
+    git checkout main
+fi
+
+echo "⬇️ Pulling latest changes from origin/main..."
+git pull origin main
+
 # Create and push tag manually for better control
 git tag -a "$TAG_NAME" -m "Release v$NEXT_VERSION"
 git push origin main
