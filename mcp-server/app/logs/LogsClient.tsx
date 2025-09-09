@@ -99,6 +99,7 @@ function URLRenderer({ url, maxLength = 60 }: { url: string; maxLength?: number 
             {url}
           </a>
           <button
+            type="button"
             onClick={() => setIsExpanded(false)}
             className="ml-2 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 px-1 py-0.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
           >
@@ -116,6 +117,7 @@ function URLRenderer({ url, maxLength = 60 }: { url: string; maxLength?: number 
             {truncated}
           </a>
           <button
+            type="button"
             onClick={() => setIsExpanded(true)}
             className="ml-1 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 px-1 py-0.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
           >
@@ -1438,6 +1440,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
 
             {/* Scroll to bottom button when not at bottom */}
             <button
+              type="button"
               onClick={() => bottomRef.current?.scrollIntoView({ behavior: "smooth" })}
               className={`absolute top-0 right-0 flex items-center gap-1 px-2 py-0.5 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 whitespace-nowrap ${
                 mode === "tail" && !isAtBottom ? "visible" : "invisible"
