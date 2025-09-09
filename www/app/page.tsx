@@ -13,6 +13,8 @@ import {
   Play,
   Clock,
   Quote,
+  ChevronDown,
+  HelpCircle,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -245,6 +247,9 @@ export default function HomePage() {
                     Now Claude can read your logs, search for errors, and help
                     debug in real-time!
                   </div>
+                  <div className="text-xs text-yellow-400 mt-2">
+                    💡 For Cursor: If it shows "no tools", register with Claude first
+                  </div>
                 </div>
               </div>
             </Card>
@@ -361,11 +366,22 @@ export default function HomePage() {
             </p>
           </div>
 
+          {/* CLI GIF */}
+          <div className="max-w-4xl mx-auto mb-8">
+            <Card className="bg-card/50 backdrop-blur-sm border-2 border-gray-700/40 overflow-hidden shadow-xl">
+              <img
+                src="/cli.gif"
+                alt="dev3000 CLI in action"
+                className="w-full h-auto"
+              />
+            </Card>
+          </div>
+
           <Card className="max-w-5xl mx-auto bg-card/50 backdrop-blur-sm border-2 border-gray-700/40 overflow-hidden shadow-xl">
             <div className="bg-secondary/30 px-3 py-1 border-b-2 border-gray-700/35 flex items-center gap-2">
               <Clock className="w-4 h-4 text-muted-foreground" />
               <span className="text-sm text-muted-foreground font-mono">
-                dev3000.log
+                /tmp/d3k.log
               </span>
               <div className="ml-auto flex items-center gap-2">
                 <div className="w-2 h-2 bg-red-400 rounded-full" />
@@ -627,6 +643,58 @@ export default function HomePage() {
                 </video>
               </div>
             </Card>
+          </div>
+        </div>
+      </section>
+
+      {/* FAQ */}
+      <section className="relative py-6 border-b border-gray-700/30">
+        <div className="container mx-auto px-4">
+          <div className="max-w-2xl mx-auto text-center mb-6">
+            <h2 className="text-2xl font-bold mb-4 flex items-center justify-center gap-2">
+              <HelpCircle className="w-6 h-6 text-blue-400" />
+              FAQ
+            </h2>
+          </div>
+
+          <div className="max-w-3xl mx-auto">
+            <ul className="space-y-4 text-sm">
+              <li>
+                <div className="mb-1">
+                  <strong className="text-yellow-400">Q: Getting a pnpm "approve-builds" warning?</strong>
+                </div>
+                <div className="text-muted-foreground mb-2">
+                  <strong>A:</strong> If you're using pnpm 10+, run <code className="bg-secondary/50 px-1 rounded font-mono text-xs">pnpm approve-builds -g</code> and approve dev3000.
+                </div>
+              </li>
+              
+              <li>
+                <div className="mb-1">
+                  <strong>Q: Does dev3000 save my login state?</strong>
+                </div>
+                <div className="text-muted-foreground">
+                  <strong>A:</strong> Yes, login state is saved automatically in the browser profile. No need to re-login.
+                </div>
+              </li>
+              
+              <li>
+                <div className="mb-1">
+                  <strong>Q: How do I stop a dev3000 session?</strong>
+                </div>
+                <div className="text-muted-foreground">
+                  <strong>A:</strong> Press <kbd className="bg-secondary/50 px-1 rounded text-xs">Ctrl+C</kbd> to stop everything (server, browser, and MCP server).
+                </div>
+              </li>
+              
+              <li>
+                <div className="mb-1">
+                  <strong>Q: Does dev3000 work with other frameworks besides Next.js?</strong>
+                </div>
+                <div className="text-muted-foreground">
+                  <strong>A:</strong> Yes, it works with React, Vue, Vite, etc. Use <code className="bg-secondary/50 px-1 rounded font-mono text-xs">--script</code> to specify your dev command.
+                </div>
+              </li>
+            </ul>
           </div>
         </div>
       </section>

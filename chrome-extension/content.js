@@ -59,13 +59,14 @@
     }
     
     handleCDPEvent(event) {
-      // Log CDP events to console for debugging
+      // Handle CDP events forwarded from background script
       if (event.method === 'Runtime.consoleAPICalled') {
         // Don't double-log console events
         return;
       }
       
-      console.debug('CDP Event:', event.method, event.params);
+      // CDP event handling can be added here if needed
+      // Removed debug logging to reduce noise in application logs
     }
     
     injectMonitoring() {

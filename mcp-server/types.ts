@@ -6,6 +6,8 @@ export interface LogEntry {
   message: string;
   screenshot?: string;
   original: string;
+  tabIdentifier?: string;
+  userAgent?: string;
 }
 
 export interface LogsApiResponse {

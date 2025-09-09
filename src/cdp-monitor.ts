@@ -369,7 +369,9 @@ export class CDPMonitor {
         this.debugLog(`Enabling CDP domain: ${domain}`);
         await this.sendCDPCommand(`${domain}.enable`);
         this.debugLog(`Successfully enabled CDP domain: ${domain}`);
-        this.logger("browser", `[CDP] Enabled ${domain} domain`);
+        if (this.debug) {
+          this.logger("browser", `[CDP] Enabled ${domain} domain`);
+        }
       } catch (error) {
         this.debugLog(`Failed to enable CDP domain ${domain}: ${error}`);
         this.logger(
@@ -409,18 +411,27 @@ export class CDPMonitor {
       if (args.length > 0 && args[0].value?.includes("[DEV3000_INTERACTION]")) {
         const interaction = args[0].value.replace("[DEV3000_INTERACTION] ", "");
         this.logger("browser", `[INTERACTION] ${interaction}`);
+        
+        // Take screenshot when scroll settles
+        if (interaction.startsWith("SCROLL_SETTLED")) {
+          this.takeScreenshot("scroll-settled");
+        }
+        
         return;
       }
+
 
       // Debug: Log all console messages to see if tracking script is even running
       if (
         args.length > 0 &&
         args[0].value?.includes("CDP tracking initialized")
       ) {
-        this.logger(
-          "browser",
-          `[DEBUG] Interaction tracking script loaded successfully`
-        );
+        if (this.debug) {
+          this.logger(
+            "browser",
+            `[DEBUG] Interaction tracking script loaded successfully`
+          );
+        }
       }
 
       // Log regular console messages with enhanced context
@@ -770,7 +781,7 @@ export class CDPMonitor {
               }
               
               // If this is the first scroll event or different target, reset
-              if (scrollTimeout === null) {
+              if (scrollTimeout === null || scrollTarget !== target) {
                 scrollStartX = currentScrollX;
                 scrollStartY = currentScrollY;
                 scrollTarget = target;
@@ -782,11 +793,19 @@ export class CDPMonitor {
               lastScrollX = currentScrollX;
               lastScrollY = currentScrollY;
               
-              // Set timeout to log scroll after 150ms of no scrolling
+              // Set timeout to log scroll after 300ms of no scrolling (scroll settled)
               scrollTimeout = setTimeout(function() {
-                console.log('[DEV3000_INTERACTION] SCROLL from ' + scrollStartX + ',' + scrollStartY + ' to ' + lastScrollX + ',' + lastScrollY + ' in ' + target);
+                // Only log if there was actual movement (threshold of 5 pixels)
+                let deltaX = Math.abs(lastScrollX - scrollStartX);
+                let deltaY = Math.abs(lastScrollY - scrollStartY);
+                
+                if (deltaX > 5 || deltaY > 5) {
+                  console.log('[DEV3000_INTERACTION] SCROLL from ' + scrollStartX + ',' + scrollStartY + ' to ' + lastScrollX + ',' + lastScrollY + ' in ' + target);
+                  // Take screenshot after scroll settles
+                  console.log('[DEV3000_INTERACTION] SCROLL_SETTLED at ' + lastScrollX + ',' + lastScrollY);
+                }
                 scrollTimeout = null;
-              }, 150);
+              }, 300);
             }, true); // Use capture: true to catch scroll events on all elements
           }
         } catch (err) {
@@ -807,19 +826,6 @@ export class CDPMonitor {
         throw new Error(`Invalid tracking script syntax: ${errorMessage}`);
       }
 
-      // First try a simple test
-      const simpleTest = `console.log('DEV3000_TEST: Simple script execution working!');`;
-      const testResult = await this.sendCDPCommand("Runtime.evaluate", {
-        expression: simpleTest,
-        includeCommandLineAPI: false,
-      });
-
-      this.debugLog(`Simple test result: ${JSON.stringify(testResult)}`);
-      this.logger(
-        "browser",
-        `[DEBUG] Simple test result: ${testResult.result?.value || "undefined"}`
-      );
-
       const result = await this.sendCDPCommand("Runtime.evaluate", {
         expression: trackingScript,
         includeCommandLineAPI: false,
@@ -829,12 +835,6 @@ export class CDPMonitor {
         `Interaction tracking script injected. Result: ${JSON.stringify(
           result
         )}`
-      );
-      this.logger(
-        "browser",
-        `[DEBUG] Script injection result: ${
-          result.result?.value || "undefined"
-        }`
       );
       
       // Log any errors from the script injection

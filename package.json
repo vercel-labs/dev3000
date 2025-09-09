@@ -27,7 +27,7 @@
     "prepare": "husky",
     "postinstall": "echo 'Starting postinstall...' && cd mcp-server && echo 'Installing mcp-server dependencies...' && timeout 30s pnpm install --no-frozen-lockfile --ignore-scripts && echo 'Postinstall completed successfully!' || echo 'Postinstall failed or timed out, but continuing...'",
     "release": "./scripts/release.sh",
-    "test-canary": "./scripts/test-canary.sh"
+    "canary": "./scripts/canary.sh"
   },
   "keywords": [
     "nextjs",

@@ -181,4 +181,23 @@ myapp:dev: }
     expect(entries[1].message).toContain('Invalid format');
     expect(entries[1].message).toContain('requestId: \'req_validation_456\'');
   });
+
+  it('should handle console log entries with CSS formatting directives', () => {
+    const logContent = `[2025-09-09T21:24:27.264Z] [BROWSER] [CONSOLE LOG] %c[Vercel Web Analytics]%c Debug mode is enabled by default in development. No requests will be sent to the server. color: rgb(120, 120, 120) color: inherit
+[2025-09-09T21:24:27.264Z] [BROWSER] [CONSOLE LOG] %c[Vercel Speed Insights]%c [vitals] color: rgb(120, 120, 120) color: inherit {"type":"object","description":"Object","overflow":false}`;
+
+    const entries = parseLogEntries(logContent);
+
+    expect(entries).toHaveLength(2);
+    
+    // First entry should have CSS formatting cleaned up
+    expect(entries[0].timestamp).toBe('2025-09-09T21:24:27.264Z');
+    expect(entries[0].source).toBe('BROWSER');
+    expect(entries[0].message).toBe('[CONSOLE LOG] [Vercel Web Analytics] Debug mode is enabled by default in development. No requests will be sent to the server.');
+    
+    // Second entry should have CSS formatting cleaned up and preserve JSON
+    expect(entries[1].timestamp).toBe('2025-09-09T21:24:27.264Z');
+    expect(entries[1].source).toBe('BROWSER');
+    expect(entries[1].message).toBe('[CONSOLE LOG] [Vercel Speed Insights] [vitals] {"type":"object","description":"Object","overflow":false}');
+  });
 });

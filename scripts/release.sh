@@ -101,9 +101,8 @@ git tag -a "$TAG_NAME" -m "Release v$NEXT_VERSION"
 git push origin main
 git push origin "$TAG_NAME"
 
-# Publish to npm
-echo "📦 Publishing to npm..."
-pnpm publish --no-git-checks --otp=$(op item get npm --otp)
+echo "📦 Ready for publishing!"
+echo "🔄 To publish to npm, run: pnpm publish --no-git-checks"
 
 # Calculate canary version (next patch + canary suffix)
 CANARY_VERSION=$(node -e "

@@ -58,11 +58,16 @@ program
   .option('--mcp-port <port>', 'MCP server port', '3684')
   .option('-s, --script <script>', 'Package.json script to run (e.g. dev, build-start)', 'dev')
   .option('--profile-dir <dir>', 'Chrome profile directory', join(tmpdir(), 'dev3000-chrome-profile'))
+  .option('--servers-only', 'Run servers only, skip browser launch (use with Chrome extension)')
   .option('--debug', 'Enable debug logging to console')
   .action(async (options) => {
     // Convert script option to full command
     const packageManager = detectPackageManager();
     const serverCommand = `${packageManager} run ${options.script}`;
+    
+    // Detect which command name was used (dev3000 or d3k)
+    const executablePath = process.argv[1];
+    const commandName = executablePath.endsWith('/d3k') || executablePath.includes('/d3k') ? 'd3k' : 'dev3000';
     
     try {
       // Create persistent log file and setup symlink
@@ -72,7 +77,9 @@ program
         ...options,
         logFile,
         serverCommand,
-        debug: options.debug
+        debug: options.debug,
+        serversOnly: options.serversOnly,
+        commandName
       });
     } catch (error) {
       console.error(chalk.red('❌ Failed to start development environment:'), error);

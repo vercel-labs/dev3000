@@ -88,10 +88,10 @@ export default async function LogsPage({ searchParams }: PageProps) {
   // Get available log files
   const { files, currentFile } = await getLogFiles();
   
-  // If no file specified and we have files, redirect to latest
+  // If no file specified and we have files, redirect to latest with tail mode
   if (!params.file && files.length > 0) {
     const latestFile = files[0].name;
-    redirect(`/logs?file=${encodeURIComponent(latestFile)}`);
+    redirect(`/logs?file=${encodeURIComponent(latestFile)}&mode=tail`);
   }
   
   // If no file specified and no files available, render with empty data
@@ -112,7 +112,11 @@ export default async function LogsPage({ searchParams }: PageProps) {
   // Find the selected log file
   const selectedFile = files.find(f => f.name === params.file);
   const logPath = selectedFile?.path || currentFile;
-  const mode = (params.mode as 'head' | 'tail') || 'tail';
+  
+  // Always default to 'tail' mode for initial loads
+  const isCurrentFile = selectedFile?.isCurrent !== false;
+  const defaultMode = 'tail'; // Always start in tail mode
+  const mode = (params.mode as 'head' | 'tail') || defaultMode;
   
   // Get initial log data server-side
   const logData = await getLogData(logPath, mode);

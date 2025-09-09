@@ -11,6 +11,12 @@ pnpm run build
 pnpm run dev
 ```
 
+Test canary builds:
+```bash
+pnpm run canary
+# or directly: scripts/canary.sh
+```
+
 **IMPORTANT**: This project uses pnpm exclusively. Always use pnpm commands, never npm. When making changes to this codebase:
 - Use `pnpm install` to install dependencies
 - Use `pnpm run build` to build 

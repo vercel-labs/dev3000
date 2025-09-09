@@ -99,26 +99,50 @@ function parseLogFile(logContent: string, startTime?: string, endTime?: string):
           const [, type, details] = oldFormatMatch;
           
           if (type === 'CLICK' || type === 'TAP') {
-            const coordMatch = details.match(/at \((\d+), (\d+)\) on (.+)/);
+            // Match both old and new CLICK formats:
+            // Old: "at (286, 303) on target"
+            // New: "at 286,303 on {"selector":"...","tag":"..."}"
+            const coordMatch = details.match(/at (?:\((\d+),\s*(\d+)\)|(\d+),(\d+)) on (.+)/);
             if (coordMatch) {
+              const x = parseInt(coordMatch[1] || coordMatch[3]);
+              const y = parseInt(coordMatch[2] || coordMatch[4]);
+              const targetData = coordMatch[5];
+              
+              // Try to parse target as JSON, fallback to string
+              let target = targetData;
+              try {
+                const parsedTarget = JSON.parse(targetData);
+                target = parsedTarget.selector || parsedTarget.tag || targetData;
+              } catch {
+                // Use as string if not JSON
+              }
+              
               interactions.push({
                 timestamp,
                 type: type as 'CLICK' | 'TAP',
-                x: parseInt(coordMatch[1]),
-                y: parseInt(coordMatch[2]),
-                target: coordMatch[3]
+                x,
+                y,
+                target
               });
             }
           } else if (type === 'SCROLL') {
-            const scrollMatch = details.match(/(\w+) (\d+)px to \((\d+), (\d+)\)/);
+            // Match new SCROLL format: "from 0,599.5 to 0,0 in document"
+            const scrollMatch = details.match(/from ([\d.]+),([\d.]+) to ([\d.]+),([\d.]+) in (.+)/);
             if (scrollMatch) {
+              const fromX = parseFloat(scrollMatch[1]);
+              const fromY = parseFloat(scrollMatch[2]);
+              const toX = parseFloat(scrollMatch[3]);
+              const toY = parseFloat(scrollMatch[4]);
+              const target = scrollMatch[5];
+              
               interactions.push({
                 timestamp,
                 type: 'SCROLL',
-                direction: scrollMatch[1],
-                distance: parseInt(scrollMatch[2]),
-                x: parseInt(scrollMatch[3]),
-                y: parseInt(scrollMatch[4])
+                x: toX,
+                y: toY,
+                direction: toY > fromY ? 'DOWN' : 'UP',
+                distance: Math.abs(toY - fromY),
+                target
               });
             }
           } else if (type === 'KEY') {

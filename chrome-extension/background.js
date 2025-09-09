@@ -360,10 +360,10 @@ class Dev3000Monitor {
         break;
         
       default:
-        // Log other events for debugging
-        if (method.startsWith('Network.') || method.startsWith('Runtime.') || method.startsWith('Page.')) {
-          logEntry = `[${timestamp}] [TAB-${tabIdentifier}] [BROWSER] [${method}] ${JSON.stringify(params)}`;
-        }
+        // Skip noisy debug events that aren't useful for application debugging
+        // These include: Network.webSocketFrame*, Network.dataReceived, Runtime.executionContextDestroyed, etc.
+        // Only log meaningful browser events that help with application debugging
+        break;
     }
     
     if (logEntry) {

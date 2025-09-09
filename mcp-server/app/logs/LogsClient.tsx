@@ -474,9 +474,29 @@ function LogEntryComponent({ entry }: { entry: LogEntry }) {
           {entry.source}
         </div>
 
-        {/* Column 3: Message content */}
+        {/* Column 3: Message content with user agent info */}
         <div className="font-mono text-sm min-w-0 text-gray-900 dark:text-gray-100">
-          {renderMessage(entry.message)}
+          <div className="flex flex-wrap items-start gap-2">
+            <div className="flex-1 min-w-0">
+              {renderMessage(entry.message)}
+            </div>
+            {/* User Agent and Tab Identifier Pills */}
+            <div className="flex items-center gap-1 flex-shrink-0">
+              {entry.tabIdentifier && (
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                  {entry.tabIdentifier}
+                </span>
+              )}
+              {entry.userAgent && (
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-200">
+                  {entry.userAgent.includes('Chrome') ? 'Chrome' : 
+                   entry.userAgent.includes('Firefox') ? 'Firefox' : 
+                   entry.userAgent.includes('Safari') ? 'Safari' : 
+                   entry.userAgent.includes('Edge') ? 'Edge' : 'Browser'}
+                </span>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -512,8 +532,15 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
   const [mode, setMode] = useState<"head" | "tail">(
     initialData?.mode || "tail"
   );
+
+  // Update mode when URL parameters change
+  useEffect(() => {
+    const urlMode = searchParams.get("mode") as "head" | "tail" | null;
+    if (urlMode && urlMode !== mode) {
+      setMode(urlMode);
+    }
+  }, [searchParams, mode]);
   const [isAtBottom, setIsAtBottom] = useState(true);
-  const [isLoadingNew, setIsLoadingNew] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(!initialData);
   const [lastLogCount, setLastLogCount] = useState(
     initialData?.logs.length || 0
@@ -538,6 +565,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
     interaction: true,
     screenshot: true,
   });
+  const [userAgentFilters, setUserAgentFilters] = useState<Record<string, boolean>>({});
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -562,7 +590,31 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
     if (mode !== "tail" || !isAtBottom) return;
 
     try {
-      const response = await fetch("/api/logs/tail?lines=1000");
+      // Determine which log file to poll
+      const requestedFile = searchParams.get("file");
+      let logPath = "";
+      let isCurrentFile = true;
+      
+      if (requestedFile && availableLogs.length > 0) {
+        // Find the specific log file requested
+        const foundFile = availableLogs.find(f => f.name === requestedFile);
+        logPath = foundFile?.path || currentLogFile;
+        isCurrentFile = foundFile?.isCurrent !== false;
+      } else {
+        // Use current log file
+        logPath = currentLogFile;
+        isCurrentFile = true;
+      }
+
+      // Only poll for new logs if viewing the current (active) log file
+      if (!isCurrentFile) return;
+
+      // Build API URL with logPath parameter if needed
+      const apiUrl = logPath 
+        ? `/api/logs/tail?lines=1000&logPath=${encodeURIComponent(logPath)}`
+        : `/api/logs/tail?lines=1000`;
+
+      const response = await fetch(apiUrl);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
@@ -577,17 +629,15 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
       const entries = parseLogEntries(data.logs);
 
       if (entries.length > lastLogCount) {
-        setIsLoadingNew(true);
         setLastFetched(new Date());
-        setTimeout(() => {
-          setLogs(entries);
-          setLastLogCount(entries.length);
-          setIsLoadingNew(false);
-          // Auto-scroll to bottom for new content
+        setLogs(entries);
+        setLastLogCount(entries.length);
+        // Only auto-scroll if user is at bottom (don't force scroll when user scrolled up)
+        if (isAtBottom) {
           setTimeout(() => {
             bottomRef.current?.scrollIntoView({ behavior: "smooth" });
           }, 50);
-        }, 250);
+        }
       }
     } catch (error) {
       console.error("Error polling logs:", error);
@@ -609,7 +659,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
         clearInterval(pollIntervalRef.current);
       }
     }
-  }, [mode, isAtBottom, lastLogCount]);
+  }, [mode, isAtBottom]); // Remove lastLogCount to avoid excessive polling restarts
 
   const loadInitialLogs = async () => {
     setIsInitialLoading(true);
@@ -618,7 +668,25 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
     await loadAvailableLogs();
 
     try {
-      const response = await fetch(`/api/logs/${mode}?lines=1000`);
+      // Determine which log file to load
+      const requestedFile = searchParams.get("file");
+      let logPath = "";
+      
+      if (requestedFile && availableLogs.length > 0) {
+        // Find the specific log file requested
+        const foundFile = availableLogs.find(f => f.name === requestedFile);
+        logPath = foundFile?.path || currentLogFile;
+      } else {
+        // Use current log file
+        logPath = currentLogFile;
+      }
+
+      // Build API URL with logPath parameter if needed
+      const apiUrl = logPath 
+        ? `/api/logs/${mode}?lines=1000&logPath=${encodeURIComponent(logPath)}`
+        : `/api/logs/${mode}?lines=1000`;
+        
+      const response = await fetch(apiUrl);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
@@ -641,10 +709,17 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
 
       // Auto-scroll to bottom for tail mode
       if (mode === "tail") {
-        setTimeout(() => {
-          bottomRef.current?.scrollIntoView({ behavior: "auto" });
-          setIsAtBottom(true);
-        }, 100);
+        setIsAtBottom(true);
+        const scrollToBottom = () => {
+          if (bottomRef.current) {
+            bottomRef.current.scrollIntoView({ behavior: "auto" });
+          } else if (containerRef.current) {
+            containerRef.current.scrollTop = containerRef.current.scrollHeight;
+          }
+        };
+        // Try multiple times to ensure it works
+        setTimeout(scrollToBottom, 0);
+        setTimeout(scrollToBottom, 100);
       }
     } catch (error) {
       console.error("Error loading logs:", error);
@@ -653,20 +728,55 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
   };
 
   useEffect(() => {
-    // Only load initial logs if we don't have initial data (client-side fallback)
-    if (!initialData) {
+    // Only load logs if we don't have initial data or mode actually changed
+    const currentMode = searchParams.get("mode") || "tail";
+    const hasInitialData = initialData && initialData.logs && initialData.logs.length > 0;
+    
+    if (!hasInitialData && !logs.length) {
+      // No server-side data and no client data - load fresh
       loadInitialLogs();
-    } else {
-      // We have initial data, just start polling for updates
+    } else if (hasInitialData && logs.length === 0) {
+      // We have server-side data but client state is empty - use server data
+      setLogs(initialData.logs);
       setIsInitialLoading(false);
-      if (mode === "tail" && isAtBottom) {
-        // Set up polling timer for new logs
-        pollIntervalRef.current = setInterval(() => {
-          pollForNewLogs();
-        }, 2000);
+      if (mode === "tail") {
+        // Scroll to bottom for tail mode with server data - more aggressive approach
+        setIsAtBottom(true);
+        const scrollToBottom = () => {
+          if (bottomRef.current) {
+            bottomRef.current.scrollIntoView({ behavior: "auto" });
+          } else if (containerRef.current) {
+            containerRef.current.scrollTop = containerRef.current.scrollHeight;
+          }
+        };
+        // Try multiple times to ensure it works
+        setTimeout(scrollToBottom, 0);
+        setTimeout(scrollToBottom, 100);
+        setTimeout(scrollToBottom, 300);
       }
+    } else if (mode === "tail" && isAtBottom) {
+      // Set up polling timer for new logs if we're in tail mode
+      setIsInitialLoading(false);
+      pollIntervalRef.current = setInterval(() => {
+        pollForNewLogs();
+      }, 2000);
     }
-  }, [mode]);
+  }, [mode]); // Only depend on mode to avoid infinite loops
+
+  // Separate effect to handle scrolling after logs are rendered
+  useEffect(() => {
+    if (logs.length > 0 && mode === "tail" && isAtBottom) {
+      const scrollToBottom = () => {
+        if (bottomRef.current) {
+          bottomRef.current.scrollIntoView({ behavior: "auto" });
+        } else if (containerRef.current) {
+          containerRef.current.scrollTop = containerRef.current.scrollHeight;
+        }
+      };
+      // Scroll after DOM updates
+      setTimeout(scrollToBottom, 0);
+    }
+  }, [logs.length, mode]); // Trigger when logs are actually rendered
 
   useEffect(() => {
     return () => {
@@ -799,6 +909,17 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
   const handleRotateLog = async () => {
     if (!currentLogFile || isRotatingLog) return;
 
+    const confirmed = window.confirm(
+      "Clear logs and start fresh?\n\n" +
+      "This will:\n" +
+      "• Archive the current log file\n" +
+      "• Start a new empty log file\n" +
+      "• Clear the current view\n\n" +
+      "The archived logs will still be available in the dropdown."
+    );
+    
+    if (!confirmed) return;
+
     setIsRotatingLog(true);
     try {
       const response = await fetch("/api/logs/rotate", {
@@ -833,6 +954,33 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
     }
   };
 
+  // Compute available user agents from browser logs
+  const availableUserAgents = useMemo(() => {
+    const userAgents = new Set<string>();
+    logs.forEach(entry => {
+      if (entry.source === "BROWSER" && entry.userAgent) {
+        userAgents.add(entry.userAgent);
+      }
+    });
+    return Array.from(userAgents).sort();
+  }, [logs]);
+
+  // Update user agent filters when available user agents change
+  useEffect(() => {
+    if (availableUserAgents.length > 0) {
+      setUserAgentFilters(prev => {
+        const newFilters = { ...prev };
+        // Enable all user agents by default if not already set
+        availableUserAgents.forEach(ua => {
+          if (!(ua in newFilters)) {
+            newFilters[ua] = true;
+          }
+        });
+        return newFilters;
+      });
+    }
+  }, [availableUserAgents]);
+
   const filteredLogs = useMemo(() => {
     return logs.filter((entry) => {
       // Check specific message types first (these override source filtering)
@@ -844,11 +992,22 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
 
       // For other logs, filter by source
       if (entry.source === "SERVER") return filters.server;
-      if (entry.source === "BROWSER") return filters.browser;
+      if (entry.source === "BROWSER") {
+        // First check if browser logs are enabled at all
+        if (!filters.browser) return false;
+        
+        // If there are user agent filters and this entry has a user agent, apply UA filtering
+        if (availableUserAgents.length > 0 && entry.userAgent) {
+          return userAgentFilters[entry.userAgent] !== false;
+        }
+        
+        // Otherwise, just show if browser is enabled
+        return true;
+      }
 
       return true;
     });
-  }, [logs, filters]);
+  }, [logs, filters, userAgentFilters, availableUserAgents]);
 
   return (
     <div className="h-screen bg-gray-50 dark:bg-gray-900 flex flex-col transition-colors">
@@ -879,9 +1038,12 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                           style={{ width: "220px" }}
                         />
                       ) : currentLogFile ? (
-                        currentLogFile.split("/").pop()
+                        // Show symlink name for current file, basename for others
+                        availableLogs.find(log => log.path === currentLogFile)?.isCurrent 
+                          ? "d3k.log"
+                          : currentLogFile.split("/").pop()
                       ) : (
-                        "dev3000.log"
+                        "d3k.log"
                       )}
                     </span>
                     <svg
@@ -953,27 +1115,34 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                         style={{ width: "220px" }}
                       />
                     ) : currentLogFile ? (
-                      currentLogFile.split("/").pop()
+                      // Show symlink name for current file, basename for others  
+                      availableLogs.find(log => log.path === currentLogFile)?.isCurrent 
+                        ? "d3k.log"
+                        : currentLogFile.split("/").pop()
                     ) : (
-                      "dev3000.log"
+                      "d3k.log"
                     )}
                   </span>
-                  {currentLogFile && !isInitialLoading && (
-                    <button
-                      onClick={handleRotateLog}
-                      disabled={isRotatingLog}
-                      className="px-2 py-1 text-xs bg-orange-100 text-orange-700 hover:bg-orange-200 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      title="Clear logs (rotate current log to archive and start fresh)"
-                    >
-                      {isRotatingLog ? "..." : "Clear"}
-                    </button>
-                  )}
                 </div>
               )}
+              
+              {/* Entries count */}
               {logs.length > 0 && (
                 <span className="text-sm text-gray-500 hidden sm:inline">
                   {logs.length} entries
                 </span>
+              )}
+              
+              {/* Clear button - always visible when we have a current log file */}
+              {currentLogFile && !isInitialLoading && (
+                <button
+                  onClick={handleRotateLog}
+                  disabled={isRotatingLog}
+                  className="px-2 py-1 text-xs bg-orange-100 text-orange-700 hover:bg-orange-200 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Clear logs (rotate current log to archive and start fresh)"
+                >
+                  {isRotatingLog ? "..." : "Clear"}
+                </button>
               )}
             </div>
 
@@ -1096,60 +1265,131 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                 </button>
                 {/* Filter Dropdown */}
                 {showFilters && (
-                  <div className="absolute top-full right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-20 min-w-48">
+                  <div className="absolute top-full right-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg z-20 min-w-48">
                     <div className="py-2">
-                      <div className="px-3 py-2 text-xs font-medium text-gray-500 border-b">
+                      <div className="px-3 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
                         Log Types
                       </div>
-                      {[
-                        {
-                          key: "server",
-                          label: "Server",
-                          count: logs.filter((l) => l.source === "SERVER")
-                            .length,
-                        },
-                        {
-                          key: "browser",
-                          label: "Browser",
-                          count: logs.filter((l) => l.source === "BROWSER")
-                            .length,
-                        },
-                        {
-                          key: "interaction",
-                          label: "Interaction",
-                          count: logs.filter((l) =>
-                            l.message.includes("[INTERACTION]")
-                          ).length,
-                        },
-                        {
-                          key: "screenshot",
-                          label: "Screenshot",
-                          count: logs.filter((l) =>
-                            l.message.includes("[SCREENSHOT]")
-                          ).length,
-                        },
-                      ].map(({ key, label, count }) => (
-                        <label
-                          key={key}
-                          className="flex items-center justify-between px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer"
-                        >
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="checkbox"
-                              checked={filters[key as keyof typeof filters]}
-                              onChange={(e) =>
-                                setFilters((prev) => ({
-                                  ...prev,
-                                  [key]: e.target.checked,
-                                }))
-                              }
-                              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                            />
-                            <span>{label}</span>
-                          </div>
-                          <span className="text-xs text-gray-400">{count}</span>
-                        </label>
-                      ))}
+                      
+                      {/* Server Logs */}
+                      <label className="flex items-center justify-between px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={filters.server}
+                            onChange={(e) =>
+                              setFilters((prev) => ({
+                                ...prev,
+                                server: e.target.checked,
+                              }))
+                            }
+                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <span className="text-gray-900 dark:text-gray-100">Server</span>
+                        </div>
+                        <span className="text-xs text-gray-400">
+                          {logs.filter((l) => l.source === "SERVER").length}
+                        </span>
+                      </label>
+
+                      {/* Browser Logs */}
+                      <label className="flex items-center justify-between px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={filters.browser}
+                            onChange={(e) =>
+                              setFilters((prev) => ({
+                                ...prev,
+                                browser: e.target.checked,
+                              }))
+                            }
+                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <span className="text-gray-900 dark:text-gray-100">Browser</span>
+                        </div>
+                        <span className="text-xs text-gray-400">
+                          {logs.filter((l) => l.source === "BROWSER").length}
+                        </span>
+                      </label>
+
+                      {/* User Agent Sub-filters */}
+                      {availableUserAgents.length > 1 && filters.browser && (
+                        <div className="ml-6 border-l border-gray-200 dark:border-gray-600 pl-2">
+                          {availableUserAgents.map((ua) => {
+                            const shortUA = ua.includes('Chrome') ? 'Chrome' : 
+                                           ua.includes('Firefox') ? 'Firefox' : 
+                                           ua.includes('Safari') ? 'Safari' : 
+                                           ua.includes('Edge') ? 'Edge' : 'Browser';
+                            return (
+                              <label
+                                key={ua}
+                                className="flex items-center justify-between px-2 py-1 text-xs hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="checkbox"
+                                    checked={userAgentFilters[ua] !== false}
+                                    onChange={(e) =>
+                                      setUserAgentFilters((prev) => ({
+                                        ...prev,
+                                        [ua]: e.target.checked,
+                                      }))
+                                    }
+                                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-3 h-3"
+                                  />
+                                  <span className="text-gray-700 dark:text-gray-300">{shortUA}</span>
+                                </div>
+                                <span className="text-xs text-gray-400">
+                                  {logs.filter((l) => l.source === "BROWSER" && l.userAgent === ua).length}
+                                </span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* Interaction Logs */}
+                      <label className="flex items-center justify-between px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={filters.interaction}
+                            onChange={(e) =>
+                              setFilters((prev) => ({
+                                ...prev,
+                                interaction: e.target.checked,
+                              }))
+                            }
+                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <span className="text-gray-900 dark:text-gray-100">Interaction</span>
+                        </div>
+                        <span className="text-xs text-gray-400">
+                          {logs.filter((l) => l.message.includes("[INTERACTION]")).length}
+                        </span>
+                      </label>
+
+                      {/* Screenshot Logs */}
+                      <label className="flex items-center justify-between px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={filters.screenshot}
+                            onChange={(e) =>
+                              setFilters((prev) => ({
+                                ...prev,
+                                screenshot: e.target.checked,
+                              }))
+                            }
+                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <span className="text-gray-900 dark:text-gray-100">Screenshot</span>
+                        </div>
+                        <span className="text-xs text-gray-400">
+                          {logs.filter((l) => l.message.includes("[SCREENSHOT]")).length}
+                        </span>
+                      </label>
                     </div>
                   </div>
                 )}
@@ -1164,6 +1404,8 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                           currentFile
                         )}&mode=head`
                       );
+                    } else {
+                      router.push('/logs?mode=head');
                     }
                   }}
                   className={`px-2 sm:px-3 py-1 rounded text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
@@ -1183,6 +1425,8 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                           currentFile
                         )}&mode=tail`
                       );
+                    } else {
+                      router.push('/logs?mode=tail');
                     }
                   }}
                   className={`px-2 sm:px-3 py-1 rounded text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
@@ -1284,15 +1528,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
       <div className="border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex-none">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            {isLoadingNew && (
-              <div className="flex items-center gap-1">
-                <div className="w-3 h-3 border border-gray-300 border-t-blue-500 rounded-full animate-spin"></div>
-                <span className="text-xs text-gray-500 dark:text-gray-400">
-                  Loading...
-                </span>
-              </div>
-            )}
-            {!isLoadingNew && lastFetched && (
+            {lastFetched && (
               <span className="text-xs text-gray-400 dark:text-gray-500 font-mono">
                 Last updated {lastFetched.toLocaleTimeString()}
               </span>
@@ -1314,7 +1550,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
             {/* Live indicator when at bottom */}
             <div
               className={`flex items-center gap-1 text-green-600 ${
-                mode === "tail" && isAtBottom && !isLoadingNew
+                mode === "tail" && isAtBottom
                   ? "visible"
                   : "invisible"
               }`}
@@ -1329,7 +1565,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                 bottomRef.current?.scrollIntoView({ behavior: "smooth" })
               }
               className={`absolute top-0 right-0 flex items-center gap-1 px-2 py-0.5 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 whitespace-nowrap ${
-                mode === "tail" && !isAtBottom && !isLoadingNew
+                mode === "tail" && !isAtBottom
                   ? "visible"
                   : "invisible"
               }`}
