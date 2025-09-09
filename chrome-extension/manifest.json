@@ -17,7 +17,12 @@
   },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Dev3000 Monitor"
+    "default_title": "d3k Monitor",
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
   },
   "options_page": "options.html",
   "content_scripts": [
@@ -28,8 +33,8 @@
     }
   ],
   "icons": {
-    "16": "icon16.svg",
-    "48": "icon48.svg",
-    "128": "icon128.svg"
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
   }
 }
