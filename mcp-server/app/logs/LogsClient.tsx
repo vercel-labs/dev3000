@@ -145,6 +145,7 @@ function ObjectRenderer({ content }: { content: string }) {
       return (
         <div className="inline-block">
           <button
+            type="button"
             onClick={() => setIsExpanded(!isExpanded)}
             className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 font-mono text-sm"
           >
@@ -235,6 +236,7 @@ function ObjectRenderer({ content }: { content: string }) {
     return (
       <div className="inline-block">
         <button
+          type="button"
           onClick={() => setIsExpanded(!isExpanded)}
           className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 font-mono text-sm"
         >
@@ -975,6 +977,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
               {availableLogs.length > 1 ? (
                 <div className="relative" ref={dropdownRef}>
                   <button
+                    type="button"
                     onClick={() => setShowLogSelector(!showLogSelector)}
                     className="flex items-center gap-2 px-3 py-1 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-700 rounded-md transition-colors"
                   >
@@ -1013,6 +1016,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                         </div>
                         {availableLogs.map((logFile) => (
                           <button
+                            type="button"
                             key={logFile.path}
                             onClick={() => {
                               setShowLogSelector(false)
@@ -1060,6 +1064,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
               {/* Clear button - always visible when we have a current log file */}
               {currentLogFile && !isInitialLoading && (
                 <button
+                  type="button"
                   onClick={handleRotateLog}
                   disabled={isRotatingLog}
                   className="px-2 py-1 text-xs bg-orange-100 text-orange-700 hover:bg-orange-200 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1075,6 +1080,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
               {/* Replay Button with Hover Preview */}
               <div className="relative">
                 <button
+                  type="button"
                   onClick={handleReplay}
                   disabled={isReplaying}
                   onMouseEnter={() => {
@@ -1158,6 +1164,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
               {/* Filter Button */}
               <div className="relative" ref={filterDropdownRef}>
                 <button
+                  type="button"
                   onClick={() => setShowFilters(!showFilters)}
                   className="flex items-center gap-1 px-3 py-1 rounded text-sm font-medium transition-colors whitespace-nowrap bg-gray-100 text-gray-700 hover:bg-gray-200"
                 >
@@ -1309,6 +1316,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
               </div>
               <div className="flex items-center bg-gray-100 rounded-md p-1">
                 <button
+                  type="button"
                   onClick={() => {
                     const currentFile = searchParams.get("file")
                     if (currentFile) {
@@ -1324,6 +1332,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                   Head
                 </button>
                 <button
+                  type="button"
                   onClick={() => {
                     const currentFile = searchParams.get("file")
                     if (currentFile) {
@@ -1341,6 +1350,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
               </div>
               {/* Dark Mode Toggle - moved to last item */}
               <button
+                type="button"
                 onClick={() => setDarkMode(!darkMode)}
                 className="p-2 rounded-md text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors ml-2"
                 title={darkMode ? "Switch to light mode" : "Switch to dark mode"}
