@@ -38,7 +38,8 @@
       },
       "a11y": {
         "useKeyWithClickEvents": "off",
-        "useMediaCaption": "off"
+        "useMediaCaption": "off",
+        "noSvgWithoutTitle": "off"
       },
       "style": {
         "useNodejsImportProtocol": "off"
