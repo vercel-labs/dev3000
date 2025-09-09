@@ -10,10 +10,10 @@ importers:
     dependencies:
       mcp-handler:
         specifier: ^1.0.2
-        version: 1.0.2(@modelcontextprotocol/sdk@1.17.5)(next@15.5.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
+        version: 1.0.2(@modelcontextprotocol/sdk@1.17.5)(next@15.5.2(babel-plugin-react-compiler@19.1.0-rc.3)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))
       next:
         specifier: ^15.5.1-canary.13
-        version: 15.5.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+        version: 15.5.2(babel-plugin-react-compiler@19.1.0-rc.3)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       react:
         specifier: ^18.0.0
         version: 18.3.1
@@ -39,11 +39,26 @@ importers:
       '@types/ws':
         specifier: ^8.5.12
         version: 8.18.1
+      babel-plugin-react-compiler:
+        specifier: 19.1.0-rc.3
+        version: 19.1.0-rc.3
       typescript:
         specifier: ^5.0.0
         version: 5.9.2
 
 packages:
+
+  '@babel/helper-string-parser@7.27.1':
+    resolution: {integrity: sha512-qMlSxKbpRlAridDExk92nSobyDdpPijUq2DW6oDnUqd0iOGxmQjyqhMIihI9+zv4LPyZdRje2cavWPbCbWm3eA==}
+    engines: {node: '>=6.9.0'}
+
+  '@babel/helper-validator-identifier@7.27.1':
+    resolution: {integrity: sha512-D2hP9eA+Sqx1kBZgzxZh0y1trbuU+JoDkiEwqhQ36nodYqJwyEIhPSdMNd7lOm/4io72luTPWH20Yda0xOuUow==}
+    engines: {node: '>=6.9.0'}
+
+  '@babel/types@7.28.4':
+    resolution: {integrity: sha512-bkFqkLhh3pMBUQQkpVgWDWq/lqzc2678eUyDlTBhRqhCHFguYYGM0Efga7tYk4TogG/3x0EEl66/OQ+WGbWB/Q==}
+    engines: {node: '>=6.9.0'}
 
   '@emnapi/runtime@1.5.0':
     resolution: {integrity: sha512-97/BJ3iXHww3djw6hYIfErCZFee7qCtrneuLa20UXFCOTCfBM2cvQHjWJ2EG0s0MtdNwInarqCTz35i4wWXHsQ==}
@@ -280,6 +295,9 @@ packages:
 
   ajv@6.12.6:
     resolution: {integrity: sha512-j3fVLgvTo527anyYyJOGTYJbG+vnnQYvE0m5mmkc1TK+nxAppkCLMIL0aZ4dblVCNoGShhm+kzE4ZUykBoMg4g==}
+
+  babel-plugin-react-compiler@19.1.0-rc.3:
+    resolution: {integrity: sha512-mjRn69WuTz4adL0bXGx8Rsyk1086zFJeKmes6aK0xPuK3aaXmDJdLHqwKKMrpm6KAI1MCoUK72d2VeqQbu8YIA==}
 
   body-parser@2.2.0:
     resolution: {integrity: sha512-02qvAaxv8tp7fBa/mw1ga98OGm+eCbqzJOKoRt70sLmfEEi+jyBYVTDGfCL/k06/4EMk/z01gCe7HoCH/f2LTg==}
@@ -780,6 +798,15 @@ packages:
 
 snapshots:
 
+  '@babel/helper-string-parser@7.27.1': {}
+
+  '@babel/helper-validator-identifier@7.27.1': {}
+
+  '@babel/types@7.28.4':
+    dependencies:
+      '@babel/helper-string-parser': 7.27.1
+      '@babel/helper-validator-identifier': 7.27.1
+
   '@emnapi/runtime@1.5.0':
     dependencies:
       tslib: 2.8.1
@@ -974,6 +1001,10 @@ snapshots:
       fast-json-stable-stringify: 2.1.0
       json-schema-traverse: 0.4.1
       uri-js: 4.4.1
+
+  babel-plugin-react-compiler@19.1.0-rc.3:
+    dependencies:
+      '@babel/types': 7.28.4
 
   body-parser@2.2.0:
     dependencies:
@@ -1209,14 +1240,14 @@ snapshots:
 
   math-intrinsics@1.1.0: {}
 
-  mcp-handler@1.0.2(@modelcontextprotocol/sdk@1.17.5)(next@15.5.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)):
+  mcp-handler@1.0.2(@modelcontextprotocol/sdk@1.17.5)(next@15.5.2(babel-plugin-react-compiler@19.1.0-rc.3)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)):
     dependencies:
       '@modelcontextprotocol/sdk': 1.17.5
       chalk: 5.6.0
       commander: 11.1.0
       redis: 4.7.1
     optionalDependencies:
-      next: 15.5.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      next: 15.5.2(babel-plugin-react-compiler@19.1.0-rc.3)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
 
   media-typer@1.1.0: {}
 
@@ -1234,7 +1265,7 @@ snapshots:
 
   negotiator@1.0.0: {}
 
-  next@15.5.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1):
+  next@15.5.2(babel-plugin-react-compiler@19.1.0-rc.3)(react-dom@18.3.1(react@18.3.1))(react@18.3.1):
     dependencies:
       '@next/env': 15.5.2
       '@swc/helpers': 0.5.15
@@ -1252,6 +1283,7 @@ snapshots:
       '@next/swc-linux-x64-musl': 15.5.2
       '@next/swc-win32-arm64-msvc': 15.5.2
       '@next/swc-win32-x64-msvc': 15.5.2
+      babel-plugin-react-compiler: 19.1.0-rc.3
       sharp: 0.34.3
     transitivePeerDependencies:
       - '@babel/core'

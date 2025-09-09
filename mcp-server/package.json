@@ -22,6 +22,7 @@
     "@types/react": "^18.0.0",
     "@types/react-dom": "^18.0.0",
     "@types/ws": "^8.5.12",
+    "babel-plugin-react-compiler": "19.1.0-rc.3",
     "typescript": "^5.0.0"
   }
 }
