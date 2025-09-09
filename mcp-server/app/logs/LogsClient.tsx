@@ -1,8 +1,30 @@
 "use client"
 
+import Image from "next/image"
 import { useRouter, useSearchParams } from "next/navigation"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { LogEntry, LogFile, LogListResponse, LogsApiResponse } from "@/types"
+
+// Define interfaces for object property rendering
+interface PropertyData {
+  name: string
+  value: string | number | boolean | null
+  type: string
+  subtype?: string
+}
+
+interface ReplayEvent {
+  timestamp: string
+  event: string
+  details: string
+  type?: string
+  x?: number
+  y?: number
+  target?: string
+  direction?: string
+  distance?: number
+  key?: string
+}
 import { parseLogEntries } from "./utils"
 
 // Hook for dark mode with system preference detection
@@ -164,8 +186,8 @@ function ObjectRenderer({ content }: { content: string }) {
             {!isExpanded && (
               <span className="text-gray-500">
                 {overflow ? "..." : ""} {"{"}
-                {properties.slice(0, 3).map((prop: any, idx: number) => (
-                  <span key={idx}>
+                {properties.slice(0, 3).map((prop: PropertyData, idx: number) => (
+                  <span key={`${prop.name}-${idx}`}>
                     {idx > 0 && ", "}
                     <span className="text-red-600">{prop.name}</span>:
                     <span className="text-blue-600">
@@ -193,8 +215,8 @@ function ObjectRenderer({ content }: { content: string }) {
                 <div className="text-gray-600">
                   {description} {"{"}
                   <div className="ml-4">
-                    {properties.map((prop: any, idx: number) => (
-                      <div key={idx} className="py-0.5">
+                    {properties.map((prop: PropertyData, idx: number) => (
+                      <div key={`${prop.name}-${idx}`} className="py-0.5">
                         <span className="text-red-600">{prop.name}</span>
                         <span className="text-gray-500">: </span>
                         <span
@@ -209,14 +231,14 @@ function ObjectRenderer({ content }: { content: string }) {
                           }
                         >
                           {prop.type === "string"
-                            ? `"${prop.value}"`
+                            ? `"${String(prop.value)}"`
                             : prop.type === "number"
-                              ? prop.value
+                              ? String(prop.value)
                               : prop.type === "object"
                                 ? prop.subtype === "array"
-                                  ? prop.value
+                                  ? String(prop.value)
                                   : "{...}"
-                                : prop.value}
+                                : String(prop.value)}
                         </span>
                         {idx < properties.length - 1 && <span className="text-gray-500">,</span>}
                       </div>
@@ -340,10 +362,11 @@ function LogEntryComponent({ entry }: { entry: LogEntry }) {
 
     const parts = []
     let lastIndex = 0
-    let match
+    let match: RegExpExecArray | null
 
     // First, handle type tags
-    while ((match = typeTagRegex.exec(message)) !== null) {
+    match = typeTagRegex.exec(message)
+    while (match !== null) {
       // Add text before the tag
       if (match.index > lastIndex) {
         parts.push(message.slice(lastIndex, match.index))
@@ -360,6 +383,7 @@ function LogEntryComponent({ entry }: { entry: LogEntry }) {
       )
 
       lastIndex = match.index + match[0].length
+      match = typeTagRegex.exec(message)
     }
 
     // Add remaining text
@@ -375,7 +399,7 @@ function LogEntryComponent({ entry }: { entry: LogEntry }) {
       ]
 
       // Sort matches by index
-      allMatches.sort((a, b) => a.index! - b.index!)
+      allMatches.sort((a, b) => (a.index ?? 0) - (b.index ?? 0))
 
       if (allMatches.length === 0) {
         return [text]
@@ -384,20 +408,25 @@ function LogEntryComponent({ entry }: { entry: LogEntry }) {
       const finalParts = []
       let textLastIndex = 0
 
-      allMatches.forEach((objMatch, idx) => {
+      allMatches.forEach((objMatch, _idx) => {
         // Add text before match
-        if (objMatch.index! > textLastIndex) {
-          finalParts.push(text.slice(textLastIndex, objMatch.index))
+        if ((objMatch.index ?? 0) > textLastIndex) {
+          finalParts.push(text.slice(textLastIndex, objMatch.index ?? 0))
         }
 
         // Add appropriate renderer
         if (objMatch.type === "json") {
-          finalParts.push(<ObjectRenderer key={`${keyPrefix}-json-${idx}`} content={objMatch[0]} />)
+          finalParts.push(
+            <ObjectRenderer
+              key={`${keyPrefix}-json-${objMatch.index}-${objMatch[0].slice(0, 20)}`}
+              content={objMatch[0]}
+            />
+          )
         } else if (objMatch.type === "url") {
-          finalParts.push(<URLRenderer key={`${keyPrefix}-url-${idx}`} url={objMatch[0]} />)
+          finalParts.push(<URLRenderer key={`${keyPrefix}-url-${objMatch.index}-${objMatch[0]}`} url={objMatch[0]} />)
         }
 
-        textLastIndex = objMatch.index! + objMatch[0].length
+        textLastIndex = (objMatch.index ?? 0) + objMatch[0].length
       })
 
       // Add any text after the last match
@@ -465,11 +494,14 @@ function LogEntryComponent({ entry }: { entry: LogEntry }) {
 
       {entry.screenshot && (
         <div className="mt-2">
-          <img
+          <Image
             src={`/screenshots/${entry.screenshot}`}
             alt="Screenshot"
+            width={800}
+            height={400}
             className="max-w-full h-auto border rounded shadow-sm"
             style={{ maxHeight: "400px" }}
+            unoptimized
           />
         </div>
       )}
@@ -481,7 +513,7 @@ interface LogsClientProps {
   version: string
   initialData?: {
     logs: LogEntry[]
-    logFiles: any[]
+    logFiles: LogFile[]
     currentLogFile: string
     mode: "head" | "tail"
   }
@@ -512,7 +544,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
   const [isReplaying, setIsReplaying] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
   const [showReplayPreview, setShowReplayPreview] = useState(false)
-  const [replayEvents, setReplayEvents] = useState<any[]>([])
+  const [replayEvents, setReplayEvents] = useState<ReplayEvent[]>([])
   const [isRotatingLog, setIsRotatingLog] = useState(false)
   const [filters, setFilters] = useState({
     browser: true,
@@ -527,7 +559,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
   const dropdownRef = useRef<HTMLDivElement>(null)
   const filterDropdownRef = useRef<HTMLDivElement>(null)
 
-  const loadAvailableLogs = async () => {
+  const loadAvailableLogs = useCallback(async () => {
     try {
       const response = await fetch("/api/logs/list")
       if (response.ok) {
@@ -539,9 +571,9 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
     } catch (error) {
       console.error("Error loading available logs:", error)
     }
-  }
+  }, [])
 
-  const pollForNewLogs = async () => {
+  const pollForNewLogs = useCallback(async () => {
     if (mode !== "tail" || !isAtBottom) return
 
     try {
@@ -598,7 +630,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
       console.error("Error polling logs:", error)
       // Don't spam console on network errors during polling
     }
-  }
+  }, [mode, isAtBottom, searchParams, availableLogs, currentLogFile, lastLogCount])
 
   // Start/stop polling based on mode and scroll position
   useEffect(() => {
@@ -616,7 +648,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
     }
   }, [mode, isAtBottom, pollForNewLogs]) // Remove lastLogCount to avoid excessive polling restarts
 
-  const loadInitialLogs = async () => {
+  const loadInitialLogs = useCallback(async () => {
     setIsInitialLoading(true)
 
     // Load available logs list first
@@ -680,12 +712,12 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
       console.error("Error loading logs:", error)
       setLogs([])
     }
-  }
+  }, [loadAvailableLogs, searchParams, availableLogs, currentLogFile, mode])
 
   useEffect(() => {
     // Only load logs if we don't have initial data or mode actually changed
     const _currentMode = searchParams.get("mode") || "tail"
-    const hasInitialData = initialData?.logs && initialData.logs.length > 0
+    const hasInitialData = initialData?.logs && initialData?.logs.length > 0
 
     if (!hasInitialData && !logs.length) {
       // No server-side data and no client data - load fresh
@@ -718,7 +750,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
     }
   }, [
     mode,
-    initialData.logs,
+    initialData?.logs,
     isAtBottom, // No server-side data and no client data - load fresh
     loadInitialLogs,
     logs.length,
@@ -835,24 +867,32 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
             const data = JSON.parse(match[1])
             return {
               timestamp: log.timestamp,
+              event: data.type || 'unknown',
+              details: JSON.stringify(data),
               type: data.type,
-              details: data
-            }
+              x: data.x,
+              y: data.y,
+              target: data.target,
+              direction: data.direction,
+              distance: data.distance,
+              key: data.key
+            } as ReplayEvent
           } catch {
             // Fallback to old format parsing
             const oldMatch = match[1].match(/(CLICK|TAP|SCROLL|KEY) (.+)/)
             if (oldMatch) {
               return {
                 timestamp: log.timestamp,
-                type: oldMatch[1],
-                details: oldMatch[2]
-              }
+                event: oldMatch[1],
+                details: oldMatch[2],
+                type: oldMatch[1]
+              } as ReplayEvent
             }
           }
         }
         return null
       })
-      .filter(Boolean)
+      .filter((item): item is ReplayEvent => item !== null)
 
     setReplayEvents(interactions)
   }
@@ -1128,7 +1168,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                         ) : (
                           replayEvents.map((event, index) => (
                             <div
-                              key={index}
+                              key={`${event.timestamp}-${index}`}
                               className="px-3 py-2 text-sm hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
                             >
                               <div className="flex items-center gap-2">
@@ -1407,7 +1447,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
           ) : (
             <div className="space-y-1 pb-4">
               {filteredLogs.map((entry, index) => (
-                <LogEntryComponent key={index} entry={entry} />
+                <LogEntryComponent key={`${entry.timestamp}-${index}`} entry={entry} />
               ))}
               <div ref={bottomRef} />
             </div>

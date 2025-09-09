@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
-    "start": "next start"
+    "start": "next start",
+    "typegen": "next typegen",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "mcp-handler": "^1.0.2",
