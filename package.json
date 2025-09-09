@@ -25,7 +25,7 @@
     "test": "vitest run",
     "test-postinstall": "tsx scripts/test-postinstall.ts",
     "prepare": "husky",
-    "postinstall": "cd mcp-server && pnpm install --frozen-lockfile --silent --no-optional || true",
+    "postinstall": "echo 'Starting postinstall...' && cd mcp-server && echo 'Installing mcp-server dependencies...' && timeout 30s pnpm install --no-frozen-lockfile --ignore-scripts && echo 'Postinstall completed successfully!' || echo 'Postinstall failed or timed out, but continuing...'",
     "release": "./scripts/release.sh",
     "test-canary": "./scripts/test-canary.sh"
   },
