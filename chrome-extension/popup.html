@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      width: 350px;
+      min-height: 400px;
+      margin: 0;
+      padding: 16px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 14px;
+    }
+    
+    .header {
+      display: flex;
+      align-items: center;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #e1e1e1;
+    }
+    
+    .header h1 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 600;
+      color: #333;
+    }
+    
+    .status {
+      display: flex;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+    
+    .status-indicator {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 8px;
+    }
+    
+    .status-indicator.active {
+      background-color: #22c55e;
+    }
+    
+    .status-indicator.inactive {
+      background-color: #ef4444;
+    }
+    
+    .tab-info {
+      background: #f8fafc;
+      padding: 12px;
+      border-radius: 6px;
+      margin-bottom: 16px;
+      font-size: 12px;
+    }
+    
+    .tab-info strong {
+      color: #374151;
+    }
+    
+    .controls {
+      margin-bottom: 16px;
+    }
+    
+    .btn {
+      background: #3b82f6;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      margin-right: 8px;
+      margin-bottom: 8px;
+    }
+    
+    .btn:hover {
+      background: #2563eb;
+    }
+    
+    .btn:disabled {
+      background: #9ca3af;
+      cursor: not-allowed;
+    }
+    
+    .btn.secondary {
+      background: #6b7280;
+    }
+    
+    .btn.secondary:hover {
+      background: #4b5563;
+    }
+    
+    .logs-container {
+      max-height: 200px;
+      overflow-y: auto;
+      border: 1px solid #e1e1e1;
+      border-radius: 4px;
+      padding: 8px;
+      font-family: 'SF Mono', Monaco, Consolas, monospace;
+      font-size: 11px;
+      background: #1f2937;
+      color: #f9fafb;
+    }
+    
+    .log-entry {
+      margin-bottom: 2px;
+      word-wrap: break-word;
+    }
+    
+    .log-entry.error {
+      color: #fecaca;
+    }
+    
+    .log-entry.network {
+      color: #93c5fd;
+    }
+    
+    .log-entry.console {
+      color: #d1fae5;
+    }
+    
+    .search-container {
+      margin-bottom: 12px;
+    }
+    
+    .search-input {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #d1d5db;
+      border-radius: 4px;
+      font-size: 12px;
+      box-sizing: border-box;
+    }
+    
+    .stats {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 12px;
+      font-size: 12px;
+      color: #6b7280;
+    }
+    
+    .loading {
+      text-align: center;
+      color: #6b7280;
+      font-style: italic;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Dev3000 Monitor</h1>
+  </div>
+  
+  <div class="status">
+    <div class="status-indicator" id="statusIndicator"></div>
+    <span id="statusText">Checking...</span>
+  </div>
+  
+  <div class="status" style="margin-top: 8px; font-size: 12px;">
+    <div class="status-indicator" id="mcpStatusIndicator"></div>
+    <span id="mcpStatusText">MCP Server: Checking...</span>
+  </div>
+  
+  <div class="tab-info" id="tabInfo">
+    <div class="loading">Loading tab information...</div>
+  </div>
+  
+  <div class="controls">
+    <button class="btn" id="attachBtn">Attach to Tab</button>
+    <button class="btn secondary" id="refreshBtn">Refresh Logs</button>
+    <button class="btn secondary" id="clearBtn">Clear</button>
+  </div>
+  
+  <div class="search-container">
+    <input type="text" class="search-input" id="searchInput" placeholder="Search logs (regex supported)">
+  </div>
+  
+  <div class="stats">
+    <span id="logCount">0 entries</span>
+    <span id="attachedTabs">0 tabs monitored</span>
+  </div>
+  
+  <div id="tabsInfo" style="margin-bottom: 12px; font-size: 11px; color: #6b7280;"></div>
+  
+  <div class="logs-container" id="logsContainer">
+    <div class="loading">No logs available</div>
+  </div>
+  
+  <div style="margin-top: 12px; font-size: 11px; color: #6b7280; text-align: center; border-top: 1px solid #e1e1e1; padding-top: 8px;">
+    📄 View full logs: <a href="http://localhost:3684/logs" target="_blank" style="color: #3b82f6;">localhost:3684/logs</a><br>
+    🤖 AI debugging: <code style="background: #f3f4f6; padding: 1px 4px; border-radius: 2px;">Read /tmp/dev3000.log</code>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
