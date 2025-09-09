@@ -1,18 +1,17 @@
-import type React from "react";
-import type { Metadata } from "next";
-import { GeistSans } from "geist/font/sans";
-import { GeistMono } from "geist/font/mono";
-import { Analytics } from "@vercel/analytics/next";
-import { SpeedInsights } from "@vercel/speed-insights/next";
-import { Suspense } from "react";
-import "./globals.css";
+import { Analytics } from "@vercel/analytics/next"
+import { SpeedInsights } from "@vercel/speed-insights/next"
+import { GeistMono } from "geist/font/mono"
+import { GeistSans } from "geist/font/sans"
+import type { Metadata } from "next"
+import type React from "react"
+import { Suspense } from "react"
+import "./globals.css"
 
-const BASE_URL = "https://dev3000.ai";
+const BASE_URL = "https://dev3000.ai"
 
 export const metadata: Metadata = {
   metadataBase: new URL(BASE_URL),
-  title:
-    "dev3000 - AI-Powered Debugging & Development Monitoring | Vercel Labs",
+  title: "dev3000 - AI-Powered Debugging & Development Monitoring | Vercel Labs",
   description:
     "Capture your web app's complete development timeline with dev3000. Unified server logs, browser events, console messages, network requests, and automatic screenshots for AI debugging. Perfect for Next.js, React, and modern web development.",
   keywords: [
@@ -26,12 +25,9 @@ export const metadata: Metadata = {
     "Claude AI",
     "MCP protocol",
     "developer tools",
-    "Vercel Labs",
+    "Vercel Labs"
   ],
-  authors: [
-    { name: "Vercel Labs" },
-    { name: "elsigh", url: "https://github.com/elsigh" },
-  ],
+  authors: [{ name: "Vercel Labs" }, { name: "elsigh", url: "https://github.com/elsigh" }],
   creator: "Vercel Labs",
   publisher: "Vercel Labs",
   openGraph: {
@@ -41,22 +37,22 @@ export const metadata: Metadata = {
     url: BASE_URL,
     siteName: "dev3000",
     type: "website",
-    locale: "en_US",
+    locale: "en_US"
   },
   twitter: {
     card: "summary_large_image",
     title: "dev3000 - AI-Powered Debugging & Development Monitoring",
     description:
       "Capture your web app's complete development timeline for AI debugging. Unified logs, browser events, and automatic screenshots.",
-    creator: "@vercel",
+    creator: "@vercel"
   },
   robots: {
     index: true,
     follow: true,
     googleBot: {
       index: true,
-      follow: true,
-    },
+      follow: true
+    }
   },
   category: "technology",
   icons: {
@@ -64,17 +60,17 @@ export const metadata: Metadata = {
       { url: "/favicon.ico", type: "image/x-icon" },
       { url: "/favicon-16.svg", type: "image/svg+xml", sizes: "16x16" },
       { url: "/favicon.svg", type: "image/svg+xml", sizes: "32x32" },
-      { url: "/favicon-64.svg", type: "image/svg+xml", sizes: "64x64" },
+      { url: "/favicon-64.svg", type: "image/svg+xml", sizes: "64x64" }
     ],
     shortcut: "/favicon.svg",
-    apple: "/favicon-180.png",
-  },
-};
+    apple: "/favicon-180.png"
+  }
+}
 
 export default function RootLayout({
-  children,
+  children
 }: Readonly<{
-  children: React.ReactNode;
+  children: React.ReactNode
 }>) {
   return (
     <html lang="en" className="dark">
@@ -84,5 +80,5 @@ export default function RootLayout({
         <SpeedInsights />
       </body>
     </html>
-  );
+  )
 }

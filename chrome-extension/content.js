@@ -1,96 +1,94 @@
 // Dev3000 Content Script
 // Injects monitoring capabilities and communicates with background script
 
-(function() {
-  'use strict';
-  
+;(() => {
   // Prevent multiple injections
-  if (window.dev3000Injected) return;
-  window.dev3000Injected = true;
-  
-  console.log('DEV3000_TEST: Simple script execution working!');
-  
+  if (window.dev3000Injected) return
+  window.dev3000Injected = true
+
+  console.log("DEV3000_TEST: Simple script execution working!")
+
   class Dev3000ContentScript {
     constructor() {
-      this.initialize();
+      this.initialize()
     }
-    
+
     initialize() {
       // Listen for messages from background script
       chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-        this.handleMessage(request, sender, sendResponse);
-      });
-      
+        this.handleMessage(request, sender, sendResponse)
+      })
+
       // Inject additional monitoring if needed
-      this.injectMonitoring();
-      
+      this.injectMonitoring()
+
       // Report page load
-      this.reportPageLoad();
+      this.reportPageLoad()
     }
-    
-    handleMessage(request, sender, sendResponse) {
+
+    handleMessage(request, _sender, sendResponse) {
       switch (request.type) {
-        case 'CDP_EVENT':
+        case "CDP_EVENT":
           // Handle CDP events forwarded from background script
-          this.handleCDPEvent(request);
-          break;
-          
-        case 'GET_PAGE_INFO':
+          this.handleCDPEvent(request)
+          break
+
+        case "GET_PAGE_INFO":
           sendResponse({
             url: window.location.href,
             title: document.title,
             userAgent: navigator.userAgent,
             timestamp: new Date().toISOString()
-          });
-          break;
-          
-        case 'EXECUTE_SCRIPT':
+          })
+          break
+
+        case "EXECUTE_SCRIPT":
           try {
-            const result = eval(request.script);
-            sendResponse({ result, success: true });
+            const result = eval(request.script)
+            sendResponse({ result, success: true })
           } catch (error) {
-            sendResponse({ error: error.message, success: false });
+            sendResponse({ error: error.message, success: false })
           }
-          break;
-          
+          break
+
         default:
-          sendResponse({ error: 'Unknown message type' });
+          sendResponse({ error: "Unknown message type" })
       }
     }
-    
+
     handleCDPEvent(event) {
       // Handle CDP events forwarded from background script
-      if (event.method === 'Runtime.consoleAPICalled') {
+      if (event.method === "Runtime.consoleAPICalled") {
         // Don't double-log console events
-        return;
+        return
       }
-      
+
       // CDP event handling can be added here if needed
       // Removed debug logging to reduce noise in application logs
     }
-    
+
     injectMonitoring() {
       // Inject performance monitoring
-      this.monitorPerformance();
-      
+      this.monitorPerformance()
+
       // Monitor DOM changes
-      this.monitorDOMChanges();
-      
+      this.monitorDOMChanges()
+
       // Monitor errors
-      this.monitorErrors();
-      
+      this.monitorErrors()
+
       // Monitor network (limited from content script)
-      this.monitorFetch();
+      this.monitorFetch()
     }
-    
+
     monitorPerformance() {
       // Performance Observer for timing data
-      if ('PerformanceObserver' in window) {
+      if ("PerformanceObserver" in window) {
         try {
           const observer = new PerformanceObserver((list) => {
-            list.getEntries().forEach(entry => {
+            list.getEntries().forEach((entry) => {
               chrome.runtime.sendMessage({
-                type: 'PERFORMANCE_ENTRY',
+                type: "PERFORMANCE_ENTRY",
                 entry: {
                   name: entry.name,
                   type: entry.entryType,
@@ -98,49 +96,49 @@
                   duration: entry.duration,
                   timestamp: new Date().toISOString()
                 }
-              });
-            });
-          });
-          
-          observer.observe({ entryTypes: ['navigation', 'resource', 'measure', 'paint'] });
+              })
+            })
+          })
+
+          observer.observe({ entryTypes: ["navigation", "resource", "measure", "paint"] })
         } catch (error) {
-          console.debug('Performance Observer not supported:', error);
+          console.debug("Performance Observer not supported:", error)
         }
       }
     }
-    
+
     monitorDOMChanges() {
       // MutationObserver for DOM changes
-      if ('MutationObserver' in window) {
+      if ("MutationObserver" in window) {
         const observer = new MutationObserver((mutations) => {
-          const significantChanges = mutations.filter(mutation => 
-            mutation.type === 'childList' && mutation.addedNodes.length > 0
-          );
-          
+          const significantChanges = mutations.filter(
+            (mutation) => mutation.type === "childList" && mutation.addedNodes.length > 0
+          )
+
           if (significantChanges.length > 0) {
             chrome.runtime.sendMessage({
-              type: 'DOM_CHANGE',
+              type: "DOM_CHANGE",
               changes: significantChanges.length,
               timestamp: new Date().toISOString()
-            });
+            })
           }
-        });
-        
+        })
+
         observer.observe(document.body || document.documentElement, {
           childList: true,
           subtree: true,
           attributes: false,
           attributeOldValue: false,
           characterData: false
-        });
+        })
       }
     }
-    
+
     monitorErrors() {
       // Global error handler
-      window.addEventListener('error', (event) => {
+      window.addEventListener("error", (event) => {
         chrome.runtime.sendMessage({
-          type: 'JAVASCRIPT_ERROR',
+          type: "JAVASCRIPT_ERROR",
           error: {
             message: event.message,
             filename: event.filename,
@@ -149,66 +147,66 @@
             stack: event.error?.stack,
             timestamp: new Date().toISOString()
           }
-        });
-      });
-      
+        })
+      })
+
       // Promise rejection handler
-      window.addEventListener('unhandledrejection', (event) => {
+      window.addEventListener("unhandledrejection", (event) => {
         chrome.runtime.sendMessage({
-          type: 'PROMISE_REJECTION',
+          type: "PROMISE_REJECTION",
           error: {
             reason: event.reason,
             promise: event.promise.toString(),
             timestamp: new Date().toISOString()
           }
-        });
-      });
+        })
+      })
     }
-    
+
     monitorFetch() {
       // Intercept fetch requests (limited visibility)
-      const originalFetch = window.fetch;
-      
-      window.fetch = async function(...args) {
-        const startTime = performance.now();
-        const url = typeof args[0] === 'string' ? args[0] : args[0]?.url;
-        
+      const originalFetch = window.fetch
+
+      window.fetch = async function (...args) {
+        const startTime = performance.now()
+        const url = typeof args[0] === "string" ? args[0] : args[0]?.url
+
         try {
-          const response = await originalFetch.apply(this, args);
-          const endTime = performance.now();
-          
+          const response = await originalFetch.apply(this, args)
+          const endTime = performance.now()
+
           chrome.runtime.sendMessage({
-            type: 'FETCH_REQUEST',
+            type: "FETCH_REQUEST",
             request: {
               url,
-              method: args[1]?.method || 'GET',
+              method: args[1]?.method || "GET",
               status: response.status,
               statusText: response.statusText,
               duration: endTime - startTime,
               timestamp: new Date().toISOString()
             }
-          });
-          
-          return response;
+          })
+
+          return response
         } catch (error) {
-          const endTime = performance.now();
-          
+          const endTime = performance.now()
+
           chrome.runtime.sendMessage({
-            type: 'FETCH_ERROR',
+            type: "FETCH_ERROR",
             request: {
               url,
-              method: args[1]?.method || 'GET',
+              method: args[1]?.method || "GET",
               error: error.message,
               duration: endTime - startTime,
               timestamp: new Date().toISOString()
             }
-          });
-          
-          throw error;
+          })
+
+          throw error
         }
-      };
+      }
     }
-    
+
     reportPageLoad() {
       // Get additional tab context
       const tabContext = {
@@ -225,37 +223,36 @@
         windowSize: `${window.innerWidth}x${window.innerHeight}`,
         colorDepth: screen.colorDepth,
         pixelRatio: window.devicePixelRatio
-      };
-      
+      }
+
       // Report initial page load
       chrome.runtime.sendMessage({
-        type: 'PAGE_LOAD',
+        type: "PAGE_LOAD",
         page: tabContext
-      });
-      
+      })
+
       // Report when DOM is ready
-      if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => {
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", () => {
           chrome.runtime.sendMessage({
-            type: 'DOM_READY',
+            type: "DOM_READY",
             timestamp: new Date().toISOString()
-          });
-        });
+          })
+        })
       }
-      
+
       // Report when page is fully loaded
-      if (document.readyState !== 'complete') {
-        window.addEventListener('load', () => {
+      if (document.readyState !== "complete") {
+        window.addEventListener("load", () => {
           chrome.runtime.sendMessage({
-            type: 'PAGE_LOADED',
+            type: "PAGE_LOADED",
             timestamp: new Date().toISOString()
-          });
-        });
+          })
+        })
       }
     }
   }
-  
+
   // Initialize content script
-  new Dev3000ContentScript();
-  
-})();
+  new Dev3000ContentScript()
+})()

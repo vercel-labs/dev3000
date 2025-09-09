@@ -22,6 +22,8 @@
     "build": "tsc && mkdir -p dist/src && cp src/loading.html dist/src/",
     "dev": "tsc --watch",
     "format": "biome format --write .",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
     "test": "vitest run",
     "test-postinstall": "tsx scripts/test-postinstall.ts",
     "prepare": "husky",

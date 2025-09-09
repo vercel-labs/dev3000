@@ -3,15 +3,8 @@
   "name": "d3k Browser Monitor",
   "version": "1.0.0",
   "description": "Unified development logs & events - browser monitoring via Chrome DevTools Protocol integrated with MCP server",
-  "permissions": [
-    "debugger",
-    "activeTab",
-    "storage",
-    "tabs"
-  ],
-  "host_permissions": [
-    "http://localhost:3684/*"
-  ],
+  "permissions": ["debugger", "activeTab", "storage", "tabs"],
+  "host_permissions": ["http://localhost:3684/*"],
   "background": {
     "service_worker": "background.js"
   },

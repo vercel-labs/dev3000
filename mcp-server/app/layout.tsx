@@ -1,8 +1,4 @@
-import React from 'react';
-
-export default function RootLayout({
-  children,
-}: any) {
+export default function RootLayout({ children }: any) {
   return (
     <html lang="en" className="h-full">
       <head>
@@ -19,11 +15,11 @@ export default function RootLayout({
               tailwind.config = {
                 darkMode: 'class',
               }
-            `,
+            `
           }}
         />
       </head>
       <body className="h-full">{children}</body>
     </html>
-  );
+  )
 }

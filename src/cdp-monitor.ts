@@ -1,35 +1,35 @@
-import { spawn, ChildProcess } from "child_process";
-import { WebSocket } from "ws";
-import { writeFileSync, existsSync, mkdirSync, readFileSync } from "fs";
-import { join, dirname } from "path";
-import { tmpdir } from "os";
-import { fileURLToPath } from "url";
+import { type ChildProcess, spawn } from "child_process"
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs"
+import { tmpdir } from "os"
+import { dirname, join } from "path"
+import { fileURLToPath } from "url"
+import { WebSocket } from "ws"
 
 export interface CDPEvent {
-  method: string;
-  params: any;
-  timestamp: number;
-  sessionId?: string;
+  method: string
+  params: any
+  timestamp: number
+  sessionId?: string
 }
 
 export interface CDPConnection {
-  ws: WebSocket;
-  sessionId: string | null;
-  nextId: number;
+  ws: WebSocket
+  sessionId: string | null
+  nextId: number
 }
 
 export class CDPMonitor {
-  private browser: ChildProcess | null = null;
-  private connection: CDPConnection | null = null;
-  private debugPort: number = 9222;
-  private eventHandlers = new Map<string, (event: CDPEvent) => void>();
-  private profileDir: string;
-  private screenshotDir: string;
-  private logger: (source: string, message: string) => void;
-  private debug: boolean = false;
-  private isShuttingDown = false;
-  private pendingRequests = 0;
-  private networkIdleTimer: NodeJS.Timeout | null = null;
+  private browser: ChildProcess | null = null
+  private connection: CDPConnection | null = null
+  private debugPort: number = 9222
+  private eventHandlers = new Map<string, (event: CDPEvent) => void>()
+  private profileDir: string
+  private screenshotDir: string
+  private logger: (source: string, message: string) => void
+  private debug: boolean = false
+  private isShuttingDown = false
+  private pendingRequests = 0
+  private networkIdleTimer: NodeJS.Timeout | null = null
 
   constructor(
     profileDir: string,
@@ -37,57 +37,57 @@ export class CDPMonitor {
     logger: (source: string, message: string) => void,
     debug: boolean = false
   ) {
-    this.profileDir = profileDir;
-    this.screenshotDir = screenshotDir;
-    this.logger = logger;
-    this.debug = debug;
+    this.profileDir = profileDir
+    this.screenshotDir = screenshotDir
+    this.logger = logger
+    this.debug = debug
   }
 
   private debugLog(message: string) {
     if (this.debug) {
-      console.log(`[CDP DEBUG] ${message}`);
+      console.log(`[CDP DEBUG] ${message}`)
     }
   }
 
   async start(): Promise<void> {
     // Launch Chrome with CDP enabled
-    this.debugLog("Starting Chrome launch process");
-    await this.launchChrome();
-    this.debugLog("Chrome launch completed");
+    this.debugLog("Starting Chrome launch process")
+    await this.launchChrome()
+    this.debugLog("Chrome launch completed")
 
     // Connect to Chrome DevTools Protocol
-    this.debugLog("Starting CDP connection");
-    await this.connectToCDP();
-    this.debugLog("CDP connection completed");
+    this.debugLog("Starting CDP connection")
+    await this.connectToCDP()
+    this.debugLog("CDP connection completed")
 
     // Enable all the CDP domains we need for comprehensive monitoring
-    this.debugLog("Starting CDP domain enablement");
-    await this.enableCDPDomains();
-    this.debugLog("CDP domain enablement completed");
+    this.debugLog("Starting CDP domain enablement")
+    await this.enableCDPDomains()
+    this.debugLog("CDP domain enablement completed")
 
     // Setup event handlers for comprehensive logging
-    this.debugLog("Setting up CDP event handlers");
-    this.setupEventHandlers();
-    this.debugLog("CDP event handlers setup completed");
+    this.debugLog("Setting up CDP event handlers")
+    this.setupEventHandlers()
+    this.debugLog("CDP event handlers setup completed")
   }
 
   private createLoadingPage(): string {
-    const loadingDir = join(tmpdir(), "dev3000-loading");
+    const loadingDir = join(tmpdir(), "dev3000-loading")
     if (!existsSync(loadingDir)) {
-      mkdirSync(loadingDir, { recursive: true });
+      mkdirSync(loadingDir, { recursive: true })
     }
 
-    const loadingPath = join(loadingDir, "loading.html");
-    
+    const loadingPath = join(loadingDir, "loading.html")
+
     // Read the loading HTML from the source file
-    const currentFile = fileURLToPath(import.meta.url);
-    const currentDir = dirname(currentFile);
-    const loadingHtmlPath = join(currentDir, "src/loading.html");
-    let loadingHtml: string;
-    
+    const currentFile = fileURLToPath(import.meta.url)
+    const currentDir = dirname(currentFile)
+    const loadingHtmlPath = join(currentDir, "src/loading.html")
+    let loadingHtml: string
+
     try {
-      loadingHtml = readFileSync(loadingHtmlPath, 'utf-8');
-    } catch (error) {
+      loadingHtml = readFileSync(loadingHtmlPath, "utf-8")
+    } catch (_error) {
       // Fallback to a simple loading page if file not found
       loadingHtml = `<!DOCTYPE html>
 <html>
@@ -98,11 +98,11 @@ export class CDPMonitor {
     <p>Starting development environment...</p>
   </div>
 </body>
-</html>`;
+</html>`
     }
 
-    writeFileSync(loadingPath, loadingHtml);
-    return `file://${loadingPath}`;
+    writeFileSync(loadingPath, loadingHtml)
+    return `file://${loadingPath}`
   }
 
   private async launchChrome(): Promise<void> {
@@ -112,25 +112,23 @@ export class CDPMonitor {
         "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
         "google-chrome",
         "chrome",
-        "chromium",
-      ];
+        "chromium"
+      ]
 
-      this.debugLog(
-        `Attempting to launch Chrome for CDP monitoring on port ${this.debugPort}`
-      );
-      this.debugLog(`Profile directory: ${this.profileDir}`);
+      this.debugLog(`Attempting to launch Chrome for CDP monitoring on port ${this.debugPort}`)
+      this.debugLog(`Profile directory: ${this.profileDir}`)
 
-      let attemptIndex = 0;
+      let attemptIndex = 0
 
       const tryNextChrome = () => {
         if (attemptIndex >= chromeCommands.length) {
-          reject(new Error("Failed to launch Chrome: all browser paths exhausted"));
-          return;
+          reject(new Error("Failed to launch Chrome: all browser paths exhausted"))
+          return
         }
 
-        const chromePath = chromeCommands[attemptIndex];
-        this.debugLog(`Trying Chrome path [${attemptIndex}]: ${chromePath}`);
-        attemptIndex++;
+        const chromePath = chromeCommands[attemptIndex]
+        this.debugLog(`Trying Chrome path [${attemptIndex}]: ${chromePath}`)
+        attemptIndex++
 
         this.browser = spawn(
           chromePath,
@@ -138,218 +136,198 @@ export class CDPMonitor {
             `--remote-debugging-port=${this.debugPort}`,
             `--user-data-dir=${this.profileDir}`,
             "--no-first-run",
-            this.createLoadingPage(),
+            this.createLoadingPage()
           ],
           {
             stdio: "pipe",
-            detached: false,
+            detached: false
           }
-        );
+        )
 
         if (!this.browser) {
-          this.debugLog(`Failed to spawn Chrome process for path: ${chromePath}`);
-          setTimeout(tryNextChrome, 100);
-          return;
+          this.debugLog(`Failed to spawn Chrome process for path: ${chromePath}`)
+          setTimeout(tryNextChrome, 100)
+          return
         }
 
-        let processExited = false;
+        let processExited = false
 
         this.browser.on("error", (error) => {
-          this.debugLog(`Chrome launch error for ${chromePath}: ${error.message}`);
+          this.debugLog(`Chrome launch error for ${chromePath}: ${error.message}`)
           if (!this.isShuttingDown && !processExited) {
-            processExited = true;
-            setTimeout(tryNextChrome, 100);
+            processExited = true
+            setTimeout(tryNextChrome, 100)
           }
-        });
+        })
 
         this.browser.on("exit", (code, signal) => {
           if (!this.isShuttingDown && !processExited && code !== 0) {
-            this.debugLog(`Chrome exited early for ${chromePath} with code ${code}, signal ${signal}`);
-            processExited = true;
-            setTimeout(tryNextChrome, 100);
+            this.debugLog(`Chrome exited early for ${chromePath} with code ${code}, signal ${signal}`)
+            processExited = true
+            setTimeout(tryNextChrome, 100)
           }
-        });
+        })
 
         this.browser.stderr?.on("data", (data) => {
-          this.debugLog(`Chrome stderr: ${data.toString().trim()}`);
-        });
+          this.debugLog(`Chrome stderr: ${data.toString().trim()}`)
+        })
 
         this.browser.stdout?.on("data", (data) => {
-          this.debugLog(`Chrome stdout: ${data.toString().trim()}`);
-        });
+          this.debugLog(`Chrome stdout: ${data.toString().trim()}`)
+        })
 
         // Give Chrome time to start up
         setTimeout(() => {
           if (!processExited) {
-            this.debugLog(`Chrome successfully started with path: ${chromePath}`);
-            resolve();
+            this.debugLog(`Chrome successfully started with path: ${chromePath}`)
+            resolve()
           }
-        }, 3000);
-      };
+        }, 3000)
+      }
 
-      tryNextChrome();
-    });
+      tryNextChrome()
+    })
   }
 
   private async connectToCDP(): Promise<void> {
-    this.debugLog(`Attempting to connect to CDP on port ${this.debugPort}`);
+    this.debugLog(`Attempting to connect to CDP on port ${this.debugPort}`)
 
     // Retry connection with exponential backoff
-    let retryCount = 0;
-    const maxRetries = 5;
+    let retryCount = 0
+    const maxRetries = 5
 
     while (retryCount < maxRetries) {
       try {
         // Get the WebSocket URL from Chrome's debug endpoint
-        const targetsResponse = await fetch(
-          `http://localhost:${this.debugPort}/json`
-        );
-        const targets = await targetsResponse.json();
+        const targetsResponse = await fetch(`http://localhost:${this.debugPort}/json`)
+        const targets = await targetsResponse.json()
 
         // Find the first page target (tab)
-        const pageTarget = targets.find(
-          (target: any) => target.type === "page"
-        );
+        const pageTarget = targets.find((target: any) => target.type === "page")
         if (!pageTarget) {
-          throw new Error("No page target found in Chrome");
+          throw new Error("No page target found in Chrome")
         }
 
-        const wsUrl = pageTarget.webSocketDebuggerUrl;
-        this.debugLog(
-          `Found page target: ${pageTarget.title || "Unknown"} - ${
-            pageTarget.url
-          }`
-        );
-        this.debugLog(`Got CDP WebSocket URL: ${wsUrl}`);
+        const wsUrl = pageTarget.webSocketDebuggerUrl
+        this.debugLog(`Found page target: ${pageTarget.title || "Unknown"} - ${pageTarget.url}`)
+        this.debugLog(`Got CDP WebSocket URL: ${wsUrl}`)
 
         return new Promise((resolve, reject) => {
-          this.debugLog(`Creating WebSocket connection to: ${wsUrl}`);
-          const ws = new WebSocket(wsUrl);
+          this.debugLog(`Creating WebSocket connection to: ${wsUrl}`)
+          const ws = new WebSocket(wsUrl)
 
           // Increase max listeners to prevent warnings
-          ws.setMaxListeners(20);
+          ws.setMaxListeners(20)
 
           ws.on("open", () => {
-            this.debugLog("WebSocket connection opened successfully");
+            this.debugLog("WebSocket connection opened successfully")
             this.connection = {
               ws,
               sessionId: null,
-              nextId: 1,
-            };
-            resolve();
-          });
+              nextId: 1
+            }
+            resolve()
+          })
 
           ws.on("error", (error) => {
-            this.debugLog(`WebSocket connection error: ${error}`);
-            reject(error);
-          });
+            this.debugLog(`WebSocket connection error: ${error}`)
+            reject(error)
+          })
 
           ws.on("message", (data) => {
             try {
-              const message = JSON.parse(data.toString());
-              this.handleCDPMessage(message);
+              const message = JSON.parse(data.toString())
+              this.handleCDPMessage(message)
             } catch (error) {
-              this.logger(
-                "browser",
-                `[CDP ERROR] Failed to parse message: ${error}`
-              );
+              this.logger("browser", `[CDP ERROR] Failed to parse message: ${error}`)
             }
-          });
+          })
 
           ws.on("close", (code, reason) => {
-            this.debugLog(
-              `WebSocket closed with code ${code}, reason: ${reason}`
-            );
+            this.debugLog(`WebSocket closed with code ${code}, reason: ${reason}`)
             if (!this.isShuttingDown) {
-              this.logger(
-                "browser",
-                `[CDP] Connection closed unexpectedly (code: ${code}, reason: ${reason})`
-              );
+              this.logger("browser", `[CDP] Connection closed unexpectedly (code: ${code}, reason: ${reason})`)
             }
-          });
+          })
 
           // Connection timeout
           setTimeout(() => {
-            this.debugLog(
-              `WebSocket readyState: ${ws.readyState} (CONNECTING=0, OPEN=1, CLOSING=2, CLOSED=3)`
-            );
+            this.debugLog(`WebSocket readyState: ${ws.readyState} (CONNECTING=0, OPEN=1, CLOSING=2, CLOSED=3)`)
             if (ws.readyState === WebSocket.CONNECTING) {
-              this.debugLog("WebSocket connection timed out, closing");
-              ws.close();
-              reject(new Error("CDP connection timeout"));
+              this.debugLog("WebSocket connection timed out, closing")
+              ws.close()
+              reject(new Error("CDP connection timeout"))
             }
-          }, 5000);
-        });
+          }, 5000)
+        })
       } catch (error) {
-        retryCount++;
-        this.debugLog(`CDP connection attempt ${retryCount} failed: ${error}`);
+        retryCount++
+        this.debugLog(`CDP connection attempt ${retryCount} failed: ${error}`)
 
         if (retryCount >= maxRetries) {
-          throw new Error(
-            `Failed to connect to CDP after ${maxRetries} attempts: ${error}`
-          );
+          throw new Error(`Failed to connect to CDP after ${maxRetries} attempts: ${error}`)
         }
 
         // Exponential backoff
-        const delay = Math.min(1000 * Math.pow(2, retryCount - 1), 5000);
-        this.debugLog(`Retrying CDP connection in ${delay}ms`);
-        await new Promise((resolve) => setTimeout(resolve, delay));
+        const delay = Math.min(1000 * 2 ** (retryCount - 1), 5000)
+        this.debugLog(`Retrying CDP connection in ${delay}ms`)
+        await new Promise((resolve) => setTimeout(resolve, delay))
       }
     }
   }
 
   private async sendCDPCommand(method: string, params: any = {}): Promise<any> {
     if (!this.connection) {
-      throw new Error("No CDP connection available");
+      throw new Error("No CDP connection available")
     }
 
     return new Promise((resolve, reject) => {
-      const id = this.connection!.nextId++;
+      const id = this.connection!.nextId++
       const command = {
         id,
         method,
-        params,
-      };
+        params
+      }
 
       const messageHandler = (data: any) => {
         try {
-          const message = JSON.parse(data.toString());
+          const message = JSON.parse(data.toString())
           if (message.id === id) {
-            this.connection!.ws.removeListener("message", messageHandler);
+            this.connection?.ws.removeListener("message", messageHandler)
             if (message.error) {
-              reject(new Error(message.error.message));
+              reject(new Error(message.error.message))
             } else {
-              resolve(message.result);
+              resolve(message.result)
             }
           }
         } catch (error) {
-          this.connection!.ws.removeListener("message", messageHandler);
-          reject(error);
+          this.connection?.ws.removeListener("message", messageHandler)
+          reject(error)
         }
-      };
+      }
 
-      this.connection!.ws.on("message", messageHandler);
+      this.connection?.ws.on("message", messageHandler)
 
       // Command timeout
       const timeout = setTimeout(() => {
-        this.connection!.ws.removeListener("message", messageHandler);
-        reject(new Error(`CDP command timeout: ${method}`));
-      }, 10000);
+        this.connection?.ws.removeListener("message", messageHandler)
+        reject(new Error(`CDP command timeout: ${method}`))
+      }, 10000)
 
       // Clear timeout if command succeeds/fails
-      const originalResolve = resolve;
-      const originalReject = reject;
+      const originalResolve = resolve
+      const originalReject = reject
       resolve = (value: any) => {
-        clearTimeout(timeout);
-        originalResolve(value);
-      };
+        clearTimeout(timeout)
+        originalResolve(value)
+      }
       reject = (reason: any) => {
-        clearTimeout(timeout);
-        originalReject(reason);
-      };
+        clearTimeout(timeout)
+        originalReject(reason)
+      }
 
-      this.connection!.ws.send(JSON.stringify(command));
-    });
+      this.connection?.ws.send(JSON.stringify(command))
+    })
   }
 
   private async enableCDPDomains(): Promise<void> {
@@ -361,76 +339,64 @@ export class CDPMonitor {
       "Performance", // Performance metrics
       "Security", // Security events
       "Log", // Browser console logs
-      "Input", // Mouse and keyboard input events
-    ];
+      "Input" // Mouse and keyboard input events
+    ]
 
     for (const domain of domains) {
       try {
-        this.debugLog(`Enabling CDP domain: ${domain}`);
-        await this.sendCDPCommand(`${domain}.enable`);
-        this.debugLog(`Successfully enabled CDP domain: ${domain}`);
+        this.debugLog(`Enabling CDP domain: ${domain}`)
+        await this.sendCDPCommand(`${domain}.enable`)
+        this.debugLog(`Successfully enabled CDP domain: ${domain}`)
         if (this.debug) {
-          this.logger("browser", `[CDP] Enabled ${domain} domain`);
+          this.logger("browser", `[CDP] Enabled ${domain} domain`)
         }
       } catch (error) {
-        this.debugLog(`Failed to enable CDP domain ${domain}: ${error}`);
-        this.logger(
-          "browser",
-          `[CDP ERROR] Failed to enable ${domain}: ${error}`
-        );
+        this.debugLog(`Failed to enable CDP domain ${domain}: ${error}`)
+        this.logger("browser", `[CDP ERROR] Failed to enable ${domain}: ${error}`)
         // Continue with other domains instead of throwing
       }
     }
 
-    this.debugLog("Setting up input event capturing");
-    await this.sendCDPCommand("Input.setIgnoreInputEvents", { ignore: false });
+    this.debugLog("Setting up input event capturing")
+    await this.sendCDPCommand("Input.setIgnoreInputEvents", { ignore: false })
 
-    this.debugLog("Enabling runtime for console and exception capture");
-    await this.sendCDPCommand("Runtime.enable");
+    this.debugLog("Enabling runtime for console and exception capture")
+    await this.sendCDPCommand("Runtime.enable")
     await this.sendCDPCommand("Runtime.setAsyncCallStackDepth", {
-      maxDepth: 32,
-    });
-    this.debugLog("CDP domains enabled successfully");
+      maxDepth: 32
+    })
+    this.debugLog("CDP domains enabled successfully")
   }
 
   private setupEventHandlers(): void {
     // Console messages with full context
     this.onCDPEvent("Runtime.consoleAPICalled", (event) => {
-      this.debugLog(
-        `Runtime.consoleAPICalled event received: ${event.params.type}`
-      );
-      const { type, args, stackTrace } = event.params;
+      this.debugLog(`Runtime.consoleAPICalled event received: ${event.params.type}`)
+      const { type, args, stackTrace } = event.params
 
       // Debug: Log all console messages to see if tracking script is working
       if (args.length > 0) {
-        this.debugLog(`Console message value: ${args[0].value}`);
-        this.debugLog(`Console message full arg: ${JSON.stringify(args[0])}`);
+        this.debugLog(`Console message value: ${args[0].value}`)
+        this.debugLog(`Console message full arg: ${JSON.stringify(args[0])}`)
       }
 
       // Check if this is our interaction tracking
       if (args.length > 0 && args[0].value?.includes("[DEV3000_INTERACTION]")) {
-        const interaction = args[0].value.replace("[DEV3000_INTERACTION] ", "");
-        this.logger("browser", `[INTERACTION] ${interaction}`);
-        
+        const interaction = args[0].value.replace("[DEV3000_INTERACTION] ", "")
+        this.logger("browser", `[INTERACTION] ${interaction}`)
+
         // Take screenshot when scroll settles
         if (interaction.startsWith("SCROLL_SETTLED")) {
-          this.takeScreenshot("scroll-settled");
+          this.takeScreenshot("scroll-settled")
         }
-        
-        return;
+
+        return
       }
 
-
       // Debug: Log all console messages to see if tracking script is even running
-      if (
-        args.length > 0 &&
-        args[0].value?.includes("CDP tracking initialized")
-      ) {
+      if (args.length > 0 && args[0].value?.includes("CDP tracking initialized")) {
         if (this.debug) {
-          this.logger(
-            "browser",
-            `[DEBUG] Interaction tracking script loaded successfully`
-          );
+          this.logger("browser", `[DEBUG] Interaction tracking script loaded successfully`)
         }
       }
 
@@ -438,178 +404,157 @@ export class CDPMonitor {
       const values = args
         .map((arg: any) => {
           if (arg.type === "object" && arg.preview) {
-            return JSON.stringify(arg.preview);
+            return JSON.stringify(arg.preview)
           }
-          return arg.value || "[object]";
+          return arg.value || "[object]"
         })
-        .join(" ");
+        .join(" ")
 
-      let logMsg = `[CONSOLE ${type.toUpperCase()}] ${values}`;
+      let logMsg = `[CONSOLE ${type.toUpperCase()}] ${values}`
 
       // Add stack trace for errors
       if (stackTrace && (type === "error" || type === "assert")) {
         logMsg += `\n[STACK] ${stackTrace.callFrames
           .slice(0, 3)
-          .map(
-            (frame: any) =>
-              `${frame.functionName || "anonymous"}@${frame.url}:${
-                frame.lineNumber
-              }`
-          )
-          .join(" -> ")}`;
+          .map((frame: any) => `${frame.functionName || "anonymous"}@${frame.url}:${frame.lineNumber}`)
+          .join(" -> ")}`
       }
 
-      this.logger("browser", logMsg);
-    });
+      this.logger("browser", logMsg)
+    })
 
     // Runtime exceptions with full stack traces
     this.onCDPEvent("Runtime.exceptionThrown", (event) => {
-      this.debugLog("Runtime.exceptionThrown event received");
-      const { exceptionDetails } = event.params;
-      const { text, lineNumber, columnNumber, url, stackTrace } =
-        exceptionDetails;
+      this.debugLog("Runtime.exceptionThrown event received")
+      const { exceptionDetails } = event.params
+      const { text, lineNumber, columnNumber, url, stackTrace } = exceptionDetails
 
-      let errorMsg = `[RUNTIME ERROR] ${text}`;
-      if (url) errorMsg += ` at ${url}:${lineNumber}:${columnNumber}`;
+      let errorMsg = `[RUNTIME ERROR] ${text}`
+      if (url) errorMsg += ` at ${url}:${lineNumber}:${columnNumber}`
 
       if (stackTrace) {
         errorMsg += `\n[STACK] ${stackTrace.callFrames
           .slice(0, 5)
-          .map(
-            (frame: any) =>
-              `${frame.functionName || "anonymous"}@${frame.url}:${
-                frame.lineNumber
-              }`
-          )
-          .join(" -> ")}`;
+          .map((frame: any) => `${frame.functionName || "anonymous"}@${frame.url}:${frame.lineNumber}`)
+          .join(" -> ")}`
       }
 
-      this.logger("browser", errorMsg);
+      this.logger("browser", errorMsg)
 
       // Take screenshot immediately on errors (no delay needed)
-      this.takeScreenshot("error");
-    });
+      this.takeScreenshot("error")
+    })
 
     // Browser console logs via Log domain (additional capture method)
     this.onCDPEvent("Log.entryAdded", (event) => {
-      const { entry } = event.params;
-      const { level, text, url, lineNumber } = entry;
+      const { entry } = event.params
+      const { level, text, url, lineNumber } = entry
 
-      let logMsg = `[CONSOLE ${level.toUpperCase()}] ${text}`;
+      let logMsg = `[CONSOLE ${level.toUpperCase()}] ${text}`
       if (url && lineNumber) {
-        logMsg += ` at ${url}:${lineNumber}`;
+        logMsg += ` at ${url}:${lineNumber}`
       }
 
       // Only log if it's an error/warning or if we're not already capturing it via Runtime
       if (level === "error" || level === "warning") {
-        this.logger("browser", logMsg);
+        this.logger("browser", logMsg)
       }
-    });
+    })
 
     // Network requests with full details
     this.onCDPEvent("Network.requestWillBeSent", (event) => {
-      const { request, type, initiator } = event.params;
-      const { url, method, headers, postData } = request;
+      const { request, type, initiator } = event.params
+      const { url, method, headers, postData } = request
 
-      let logMsg = `[NETWORK REQUEST] ${method} ${url}`;
-      if (type) logMsg += ` (${type})`;
-      if (initiator?.type) logMsg += ` initiated by ${initiator.type}`;
+      let logMsg = `[NETWORK REQUEST] ${method} ${url}`
+      if (type) logMsg += ` (${type})`
+      if (initiator?.type) logMsg += ` initiated by ${initiator.type}`
 
       // Log important headers
-      const importantHeaders = ["content-type", "authorization", "cookie"];
+      const importantHeaders = ["content-type", "authorization", "cookie"]
       const headerInfo = importantHeaders
         .filter((h) => headers[h])
-        .map(
-          (h) =>
-            `${h}: ${headers[h].slice(0, 50)}${
-              headers[h].length > 50 ? "..." : ""
-            }`
-        )
-        .join(", ");
+        .map((h) => `${h}: ${headers[h].slice(0, 50)}${headers[h].length > 50 ? "..." : ""}`)
+        .join(", ")
 
-      if (headerInfo) logMsg += ` [${headerInfo}]`;
-      if (postData)
-        logMsg += ` body: ${postData.slice(0, 100)}${
-          postData.length > 100 ? "..." : ""
-        }`;
+      if (headerInfo) logMsg += ` [${headerInfo}]`
+      if (postData) logMsg += ` body: ${postData.slice(0, 100)}${postData.length > 100 ? "..." : ""}`
 
-      this.logger("browser", logMsg);
-    });
+      this.logger("browser", logMsg)
+    })
 
     // Network responses with full details
     this.onCDPEvent("Network.responseReceived", (event) => {
-      const { response, type } = event.params;
-      const { url, status, statusText, mimeType } = response;
+      const { response, type } = event.params
+      const { url, status, statusText, mimeType } = response
 
-      let logMsg = `[NETWORK RESPONSE] ${status} ${statusText} ${url}`;
-      if (type) logMsg += ` (${type})`;
-      if (mimeType) logMsg += ` [${mimeType}]`;
+      let logMsg = `[NETWORK RESPONSE] ${status} ${statusText} ${url}`
+      if (type) logMsg += ` (${type})`
+      if (mimeType) logMsg += ` [${mimeType}]`
 
       // Add timing info if available
-      const timing = response.timing;
+      const timing = response.timing
       if (timing) {
-        const totalTime = Math.round(
-          timing.receiveHeadersEnd - timing.requestTime
-        );
-        if (totalTime > 0) logMsg += ` (${totalTime}ms)`;
+        const totalTime = Math.round(timing.receiveHeadersEnd - timing.requestTime)
+        if (totalTime > 0) logMsg += ` (${totalTime}ms)`
       }
 
-      this.logger("browser", logMsg);
-    });
+      this.logger("browser", logMsg)
+    })
 
     // Page navigation with full context
     this.onCDPEvent("Page.frameNavigated", (event) => {
-      const { frame } = event.params;
-      if (frame.parentId) return; // Only log main frame navigation
+      const { frame } = event.params
+      if (frame.parentId) return // Only log main frame navigation
 
-      this.logger("browser", `[NAVIGATION] ${frame.url}`);
+      this.logger("browser", `[NAVIGATION] ${frame.url}`)
 
       // Take screenshot on navigation to catch initial render
       setTimeout(() => {
-        this.takeScreenshot("frame-navigated");
-      }, 200);
-    });
+        this.takeScreenshot("frame-navigated")
+      }, 200)
+    })
 
     // Page load events for better screenshot timing
-    this.onCDPEvent("Page.loadEventFired", async (event) => {
-      this.logger("browser", "[PAGE] Load event fired");
-      this.takeScreenshot("page-loaded");
+    this.onCDPEvent("Page.loadEventFired", async (_event) => {
+      this.logger("browser", "[PAGE] Load event fired")
+      this.takeScreenshot("page-loaded")
       // Reinject interaction tracking on page load
-      await this.setupInteractionTracking();
-    });
+      await this.setupInteractionTracking()
+    })
 
-    this.onCDPEvent("Page.domContentEventFired", async (event) => {
-      this.logger("browser", "[PAGE] DOM content loaded");
+    this.onCDPEvent("Page.domContentEventFired", async (_event) => {
+      this.logger("browser", "[PAGE] DOM content loaded")
       // Take screenshot on DOM content loaded too for earlier capture
-      this.takeScreenshot("dom-content-loaded");
+      this.takeScreenshot("dom-content-loaded")
       // Reinject interaction tracking on DOM content loaded
-      await this.setupInteractionTracking();
-    });
+      await this.setupInteractionTracking()
+    })
 
     // Network activity tracking for better screenshot timing
-    this.onCDPEvent("Network.requestWillBeSent", (event) => {
-      this.pendingRequests++;
+    this.onCDPEvent("Network.requestWillBeSent", (_event) => {
+      this.pendingRequests++
       if (this.networkIdleTimer) {
-        clearTimeout(this.networkIdleTimer);
-        this.networkIdleTimer = null;
+        clearTimeout(this.networkIdleTimer)
+        this.networkIdleTimer = null
       }
-    });
+    })
 
-    this.onCDPEvent("Network.loadingFinished", (event) => {
-      this.pendingRequests--;
-      this.scheduleNetworkIdleScreenshot();
-    });
+    this.onCDPEvent("Network.loadingFinished", (_event) => {
+      this.pendingRequests--
+      this.scheduleNetworkIdleScreenshot()
+    })
 
-    this.onCDPEvent("Network.loadingFailed", (event) => {
-      this.pendingRequests--;
-      this.scheduleNetworkIdleScreenshot();
-    });
+    this.onCDPEvent("Network.loadingFailed", (_event) => {
+      this.pendingRequests--
+      this.scheduleNetworkIdleScreenshot()
+    })
 
     // DOM mutations for interaction context
     this.onCDPEvent("DOM.documentUpdated", () => {
       // Document structure changed - useful for SPA routing
-      this.logger("browser", "[DOM] Document updated");
-    });
+      this.logger("browser", "[DOM] Document updated")
+    })
 
     // Note: Input.dispatchMouseEvent and Input.dispatchKeyEvent are for SENDING events, not capturing them
     // We need to rely on JavaScript injection for user input capture since CDP doesn't have
@@ -632,64 +577,64 @@ export class CDPMonitor {
   }
 
   private onCDPEvent(method: string, handler: (event: CDPEvent) => void): void {
-    this.eventHandlers.set(method, handler);
+    this.eventHandlers.set(method, handler)
   }
 
   private handleCDPMessage(message: any): void {
     if (message.method) {
-      const handler = this.eventHandlers.get(message.method);
+      const handler = this.eventHandlers.get(message.method)
       if (handler) {
         const event: CDPEvent = {
           method: message.method,
           params: message.params || {},
           timestamp: Date.now(),
-          sessionId: message.sessionId,
-        };
-        handler(event);
+          sessionId: message.sessionId
+        }
+        handler(event)
       }
     }
   }
 
   async navigateToApp(port: string): Promise<void> {
     if (!this.connection) {
-      throw new Error("No CDP connection available");
+      throw new Error("No CDP connection available")
     }
 
-    this.debugLog(`Navigating to http://localhost:${port}`);
+    this.debugLog(`Navigating to http://localhost:${port}`)
     // Navigate to the app
     await this.sendCDPCommand("Page.navigate", {
-      url: `http://localhost:${port}`,
-    });
-    this.debugLog("Navigation command sent successfully");
+      url: `http://localhost:${port}`
+    })
+    this.debugLog("Navigation command sent successfully")
 
     // Take an immediate screenshot after navigation command
     setTimeout(() => {
-      this.takeScreenshot("navigation-immediate");
-    }, 100);
+      this.takeScreenshot("navigation-immediate")
+    }, 100)
 
     // Take backup screenshots with increasing delays to catch different loading states
     setTimeout(() => {
-      this.takeScreenshot("navigation-1s");
-    }, 1000);
+      this.takeScreenshot("navigation-1s")
+    }, 1000)
 
     setTimeout(() => {
-      this.takeScreenshot("navigation-3s");
-    }, 3000);
+      this.takeScreenshot("navigation-3s")
+    }, 3000)
 
-    this.debugLog("Setting up interaction tracking");
+    this.debugLog("Setting up interaction tracking")
     // Enable interaction tracking via Runtime.evaluate - inject with delays to ensure it works
-    await this.setupInteractionTracking();
+    await this.setupInteractionTracking()
 
     // Also inject on DOM content loaded and page loaded events to ensure it gets set up
     setTimeout(async () => {
-      await this.setupInteractionTracking();
-    }, 1000);
+      await this.setupInteractionTracking()
+    }, 1000)
 
     setTimeout(async () => {
-      await this.setupInteractionTracking();
-    }, 2000);
+      await this.setupInteractionTracking()
+    }, 2000)
 
-    this.debugLog("Interaction tracking setup completed");
+    this.debugLog("Interaction tracking setup completed")
 
     // Multiple screenshot triggers will ensure we catch the initial page load
   }
@@ -811,46 +756,39 @@ export class CDPMonitor {
         } catch (err) {
           console.log('[DEV3000_INTERACTION] ERROR: ' + err.message);
         }
-      `;
+      `
 
-      this.debugLog("About to inject tracking script...");
+      this.debugLog("About to inject tracking script...")
 
       // Validate JavaScript syntax before injection
       try {
-        new Function(trackingScript);
-        this.debugLog("JavaScript syntax validation passed");
+        new Function(trackingScript)
+        this.debugLog("JavaScript syntax validation passed")
       } catch (syntaxError) {
-        const errorMessage = syntaxError instanceof Error ? syntaxError.message : String(syntaxError);
-        this.debugLog(`JavaScript syntax error detected: ${errorMessage}`);
-        this.logger("browser", `[CDP ERROR] Tracking script syntax error: ${errorMessage}`);
-        throw new Error(`Invalid tracking script syntax: ${errorMessage}`);
+        const errorMessage = syntaxError instanceof Error ? syntaxError.message : String(syntaxError)
+        this.debugLog(`JavaScript syntax error detected: ${errorMessage}`)
+        this.logger("browser", `[CDP ERROR] Tracking script syntax error: ${errorMessage}`)
+        throw new Error(`Invalid tracking script syntax: ${errorMessage}`)
       }
 
       const result = await this.sendCDPCommand("Runtime.evaluate", {
         expression: trackingScript,
-        includeCommandLineAPI: false,
-      });
+        includeCommandLineAPI: false
+      })
 
-      this.debugLog(
-        `Interaction tracking script injected. Result: ${JSON.stringify(
-          result
-        )}`
-      );
-      
+      this.debugLog(`Interaction tracking script injected. Result: ${JSON.stringify(result)}`)
+
       // Log any errors from the script injection
       if (result.exceptionDetails) {
-        this.debugLog(`Script injection exception: ${JSON.stringify(result.exceptionDetails)}`);
+        this.debugLog(`Script injection exception: ${JSON.stringify(result.exceptionDetails)}`)
         this.logger(
           "browser",
           `[DEBUG] Script injection exception: ${result.exceptionDetails.exception?.description || "Unknown error"}`
-        );
+        )
       }
     } catch (error) {
-      this.debugLog(`Failed to inject interaction tracking: ${error}`);
-      this.logger(
-        "browser",
-        `[CDP ERROR] Interaction tracking failed: ${error}`
-      );
+      this.debugLog(`Failed to inject interaction tracking: ${error}`)
+      this.logger("browser", `[CDP ERROR] Interaction tracking failed: ${error}`)
     }
   }
 
@@ -858,14 +796,14 @@ export class CDPMonitor {
     // Only schedule if we have 0 pending requests
     if (this.pendingRequests === 0) {
       if (this.networkIdleTimer) {
-        clearTimeout(this.networkIdleTimer);
+        clearTimeout(this.networkIdleTimer)
       }
 
       // Wait 500ms of network idle before taking screenshot
       this.networkIdleTimer = setTimeout(() => {
-        this.takeScreenshot("network-idle");
-        this.networkIdleTimer = null;
-      }, 500);
+        this.takeScreenshot("network-idle")
+        this.networkIdleTimer = null
+      }, 500)
     }
   }
 
@@ -875,31 +813,31 @@ export class CDPMonitor {
         format: "png",
         quality: 80,
         clip: undefined, // Full viewport
-        fromSurface: true,
-      });
+        fromSurface: true
+      })
 
-      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-      const filename = `${timestamp}-${event}.png`;
-      const screenshotPath = join(this.screenshotDir, filename);
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-")
+      const filename = `${timestamp}-${event}.png`
+      const screenshotPath = join(this.screenshotDir, filename)
 
       // Save the base64 image
-      const buffer = Buffer.from(result.data, "base64");
-      writeFileSync(screenshotPath, buffer);
+      const buffer = Buffer.from(result.data, "base64")
+      writeFileSync(screenshotPath, buffer)
 
       // Log screenshot with proper format that dev3000 expects
-      this.logger("browser", `[SCREENSHOT] ${filename}`);
+      this.logger("browser", `[SCREENSHOT] ${filename}`)
 
-      return filename;
+      return filename
     } catch (error) {
-      this.logger("browser", `[CDP ERROR] Screenshot failed: ${error}`);
-      return null;
+      this.logger("browser", `[CDP ERROR] Screenshot failed: ${error}`)
+      return null
     }
   }
 
   // Enhanced replay functionality using CDP
   async executeInteraction(interaction: any): Promise<void> {
     if (!this.connection) {
-      throw new Error("No CDP connection available");
+      throw new Error("No CDP connection available")
     }
 
     try {
@@ -910,26 +848,26 @@ export class CDPMonitor {
             x: interaction.coordinates.x,
             y: interaction.coordinates.y,
             button: "left",
-            clickCount: 1,
-          });
+            clickCount: 1
+          })
 
           await this.sendCDPCommand("Input.dispatchMouseEvent", {
             type: "mouseReleased",
             x: interaction.coordinates.x,
             y: interaction.coordinates.y,
             button: "left",
-            clickCount: 1,
-          });
-          break;
+            clickCount: 1
+          })
+          break
 
         case "KEYDOWN":
           await this.sendCDPCommand("Input.dispatchKeyEvent", {
             type: "keyDown",
             key: interaction.key,
             code: interaction.code,
-            ...interaction.modifiers,
-          });
-          break;
+            ...interaction.modifiers
+          })
+          break
 
         case "SCROLL":
           await this.sendCDPCommand("Input.dispatchMouseEvent", {
@@ -937,45 +875,39 @@ export class CDPMonitor {
             x: interaction.to.x,
             y: interaction.to.y,
             deltaX: interaction.to.x - interaction.from.x,
-            deltaY: interaction.to.y - interaction.from.y,
-          });
-          break;
+            deltaY: interaction.to.y - interaction.from.y
+          })
+          break
 
         default:
-          this.logger(
-            "browser",
-            `[REPLAY] Unknown interaction type: ${interaction.type}`
-          );
+          this.logger("browser", `[REPLAY] Unknown interaction type: ${interaction.type}`)
       }
     } catch (error) {
-      this.logger(
-        "browser",
-        `[REPLAY ERROR] Failed to execute ${interaction.type}: ${error}`
-      );
+      this.logger("browser", `[REPLAY ERROR] Failed to execute ${interaction.type}: ${error}`)
     }
   }
 
   async shutdown(): Promise<void> {
-    this.isShuttingDown = true;
+    this.isShuttingDown = true
 
     // Close CDP connection
     if (this.connection) {
-      this.connection.ws.close();
-      this.connection = null;
+      this.connection.ws.close()
+      this.connection = null
     }
 
     // Close browser
     if (this.browser) {
-      this.browser.kill("SIGTERM");
+      this.browser.kill("SIGTERM")
 
       // Force kill after 2 seconds if not closed
       setTimeout(() => {
         if (this.browser) {
-          this.browser.kill("SIGKILL");
+          this.browser.kill("SIGKILL")
         }
-      }, 2000);
+      }, 2000)
 
-      this.browser = null;
+      this.browser = null
     }
   }
 }

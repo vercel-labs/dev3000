@@ -1,2 +1,3 @@
-pnpm format
-pnpm test
+#\!/bin/sh
+pnpm run lint:fix
+pnpm run test

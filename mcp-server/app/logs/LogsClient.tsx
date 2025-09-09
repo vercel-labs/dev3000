@@ -1,87 +1,75 @@
-"use client";
+"use client"
 
-import { useState, useEffect, useRef, useMemo } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import {
-  LogEntry,
-  LogsApiResponse,
-  ConfigApiResponse,
-  LogFile,
-  LogListResponse,
-} from "@/types";
-import { parseLogEntries } from "./utils";
+import { useRouter, useSearchParams } from "next/navigation"
+import { useEffect, useMemo, useRef, useState } from "react"
+import type { LogEntry, LogFile, LogListResponse, LogsApiResponse } from "@/types"
+import { parseLogEntries } from "./utils"
 
 // Hook for dark mode with system preference detection
 function useDarkMode() {
   const [darkMode, setDarkMode] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
       // Check localStorage first
-      const saved = localStorage.getItem("dev3000-dark-mode");
+      const saved = localStorage.getItem("dev3000-dark-mode")
       if (saved !== null) {
-        return JSON.parse(saved);
+        return JSON.parse(saved)
       }
       // Default to system preference
-      return window.matchMedia("(prefers-color-scheme: dark)").matches;
+      return window.matchMedia("(prefers-color-scheme: dark)").matches
     }
-    return false;
-  });
+    return false
+  })
 
   useEffect(() => {
     // Save to localStorage
-    localStorage.setItem("dev3000-dark-mode", JSON.stringify(darkMode));
+    localStorage.setItem("dev3000-dark-mode", JSON.stringify(darkMode))
 
     // Apply dark class to document
     if (darkMode) {
-      document.documentElement.classList.add("dark");
+      document.documentElement.classList.add("dark")
     } else {
-      document.documentElement.classList.remove("dark");
+      document.documentElement.classList.remove("dark")
     }
-  }, [darkMode]);
+  }, [darkMode])
 
   // Listen for system theme changes
   useEffect(() => {
-    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)")
     const handler = (e: MediaQueryListEvent) => {
       // Only update if no explicit choice has been made
-      const saved = localStorage.getItem("dev3000-dark-mode");
+      const saved = localStorage.getItem("dev3000-dark-mode")
       if (saved === null) {
-        setDarkMode(e.matches);
+        setDarkMode(e.matches)
       }
-    };
+    }
 
-    mediaQuery.addEventListener("change", handler);
-    return () => mediaQuery.removeEventListener("change", handler);
-  }, []);
+    mediaQuery.addEventListener("change", handler)
+    return () => mediaQuery.removeEventListener("change", handler)
+  }, [])
 
-  return [darkMode, setDarkMode] as const;
+  return [darkMode, setDarkMode] as const
 }
 
 // Keep this for backwards compatibility, but it's not used anymore
-function parseLogLine(line: string): LogEntry | null {
-  const match = line.match(/^\[([^\]]+)\] \[([^\]]+)\] (.*)$/s);
-  if (!match) return null;
+function _parseLogLine(line: string): LogEntry | null {
+  const match = line.match(/^\[([^\]]+)\] \[([^\]]+)\] (.*)$/s)
+  if (!match) return null
 
-  const [, timestamp, source, message] = match;
-  const screenshot = message.match(/\[SCREENSHOT\] (.+)/)?.[1];
+  const [, timestamp, source, message] = match
+  const screenshot = message.match(/\[SCREENSHOT\] (.+)/)?.[1]
 
   return {
     timestamp,
     source,
     message,
     screenshot,
-    original: line,
-  };
+    original: line
+  }
 }
 
 // Component to render truncated URLs with click-to-expand
-function URLRenderer({
-  url,
-  maxLength = 60,
-}: {
-  url: string;
-  maxLength?: number;
-}) {
-  const [isExpanded, setIsExpanded] = useState(false);
+function URLRenderer({ url, maxLength = 60 }: { url: string; maxLength?: number }) {
+  const [isExpanded, setIsExpanded] = useState(false)
 
   if (url.length <= maxLength) {
     return (
@@ -93,10 +81,10 @@ function URLRenderer({
       >
         {url}
       </a>
-    );
+    )
   }
 
-  const truncated = url.substring(0, maxLength) + "...";
+  const truncated = `${url.substring(0, maxLength)}...`
 
   return (
     <span className="inline-block">
@@ -136,26 +124,21 @@ function URLRenderer({
         </span>
       )}
     </span>
-  );
+  )
 }
 
 // Component to render Chrome DevTools-style collapsible objects
 function ObjectRenderer({ content }: { content: string }) {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false)
 
   try {
-    const obj = JSON.parse(content);
+    const obj = JSON.parse(content)
 
     // Check if it's a Chrome DevTools object representation
-    if (
-      obj &&
-      typeof obj === "object" &&
-      obj.type === "object" &&
-      obj.properties
-    ) {
-      const properties = obj.properties;
-      const description = obj.description || "Object";
-      const overflow = obj.overflow;
+    if (obj && typeof obj === "object" && obj.type === "object" && obj.properties) {
+      const properties = obj.properties
+      const description = obj.description || "Object"
+      const overflow = obj.overflow
 
       return (
         <div className="inline-block">
@@ -164,9 +147,7 @@ function ObjectRenderer({ content }: { content: string }) {
             className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 font-mono text-sm"
           >
             <svg
-              className={`w-3 h-3 transition-transform ${
-                isExpanded ? "rotate-90" : ""
-              }`}
+              className={`w-3 h-3 transition-transform ${isExpanded ? "rotate-90" : ""}`}
               fill="currentColor"
               viewBox="0 0 20 20"
             >
@@ -188,12 +169,12 @@ function ObjectRenderer({ content }: { content: string }) {
                       {prop.type === "string"
                         ? `"${prop.value}"`
                         : prop.type === "number"
-                        ? prop.value
-                        : prop.type === "object"
-                        ? prop.subtype === "array"
                           ? prop.value
-                          : "{...}"
-                        : prop.value}
+                          : prop.type === "object"
+                            ? prop.subtype === "array"
+                              ? prop.value
+                              : "{...}"
+                            : prop.value}
                     </span>
                   </span>
                 ))}
@@ -218,32 +199,26 @@ function ObjectRenderer({ content }: { content: string }) {
                             prop.type === "string"
                               ? "text-green-600"
                               : prop.type === "number"
-                              ? "text-blue-600"
-                              : prop.type === "object"
-                              ? "text-purple-600"
-                              : "text-orange-600"
+                                ? "text-blue-600"
+                                : prop.type === "object"
+                                  ? "text-purple-600"
+                                  : "text-orange-600"
                           }
                         >
                           {prop.type === "string"
                             ? `"${prop.value}"`
                             : prop.type === "number"
-                            ? prop.value
-                            : prop.type === "object"
-                            ? prop.subtype === "array"
                               ? prop.value
-                              : "{...}"
-                            : prop.value}
+                              : prop.type === "object"
+                                ? prop.subtype === "array"
+                                  ? prop.value
+                                  : "{...}"
+                                : prop.value}
                         </span>
-                        {idx < properties.length - 1 && (
-                          <span className="text-gray-500">,</span>
-                        )}
+                        {idx < properties.length - 1 && <span className="text-gray-500">,</span>}
                       </div>
                     ))}
-                    {overflow && (
-                      <div className="text-gray-500 italic">
-                        ... and more properties
-                      </div>
-                    )}
+                    {overflow && <div className="text-gray-500 italic">... and more properties</div>}
                   </div>
                   <div className="text-gray-600">{"}"}</div>
                 </div>
@@ -251,7 +226,7 @@ function ObjectRenderer({ content }: { content: string }) {
             </div>
           )}
         </div>
-      );
+      )
     }
 
     // For regular JSON objects, render them nicely too
@@ -262,9 +237,7 @@ function ObjectRenderer({ content }: { content: string }) {
           className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 font-mono text-sm"
         >
           <svg
-            className={`w-3 h-3 transition-transform ${
-              isExpanded ? "rotate-90" : ""
-            }`}
+            className={`w-3 h-3 transition-transform ${isExpanded ? "rotate-90" : ""}`}
             fill="currentColor"
             viewBox="0 0 20 20"
           >
@@ -284,16 +257,14 @@ function ObjectRenderer({ content }: { content: string }) {
 
         {isExpanded && (
           <div className="mt-1 ml-4 border-l-2 border-gray-200 pl-3">
-            <pre className="font-mono text-sm text-gray-700 whitespace-pre-wrap">
-              {JSON.stringify(obj, null, 2)}
-            </pre>
+            <pre className="font-mono text-sm text-gray-700 whitespace-pre-wrap">{JSON.stringify(obj, null, 2)}</pre>
           </div>
         )}
       </div>
-    );
-  } catch (e) {
+    )
+  } catch (_e) {
     // If it's not valid JSON, just return the original content
-    return <span>{content}</span>;
+    return <span>{content}</span>
   }
 }
 
@@ -303,83 +274,75 @@ function LogEntryComponent({ entry }: { entry: LogEntry }) {
     if (message.includes("[INTERACTION]"))
       return {
         type: "INTERACTION",
-        color:
-          "bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800",
-        tag: "bg-purple-100 dark:bg-purple-800 text-purple-800 dark:text-purple-200",
-      };
+        color: "bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800",
+        tag: "bg-purple-100 dark:bg-purple-800 text-purple-800 dark:text-purple-200"
+      }
     if (message.includes("[CONSOLE ERROR]"))
       return {
         type: "ERROR",
-        color:
-          "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800",
-        tag: "bg-red-100 dark:bg-red-800 text-red-800 dark:text-red-200",
-      };
+        color: "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800",
+        tag: "bg-red-100 dark:bg-red-800 text-red-800 dark:text-red-200"
+      }
     if (message.includes("[CONSOLE WARN]"))
       return {
         type: "WARNING",
-        color:
-          "bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800",
-        tag: "bg-yellow-100 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200",
-      };
+        color: "bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800",
+        tag: "bg-yellow-100 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200"
+      }
     if (message.includes("[SCREENSHOT]"))
       return {
         type: "SCREENSHOT",
-        color:
-          "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800",
-        tag: "bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200",
-      };
+        color: "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800",
+        tag: "bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200"
+      }
     if (message.includes("[NAVIGATION]"))
       return {
         type: "NAVIGATION",
-        color:
-          "bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800",
-        tag: "bg-indigo-100 dark:bg-indigo-800 text-indigo-800 dark:text-indigo-200",
-      };
+        color: "bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800",
+        tag: "bg-indigo-100 dark:bg-indigo-800 text-indigo-800 dark:text-indigo-200"
+      }
     if (message.includes("[NETWORK ERROR]"))
       return {
         type: "NETWORK",
-        color:
-          "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800",
-        tag: "bg-red-100 dark:bg-red-800 text-red-800 dark:text-red-200",
-      };
+        color: "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800",
+        tag: "bg-red-100 dark:bg-red-800 text-red-800 dark:text-red-200"
+      }
     if (message.includes("[NETWORK REQUEST]"))
       return {
         type: "NETWORK",
-        color:
-          "bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700",
-        tag: "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300",
-      };
+        color: "bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700",
+        tag: "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
+      }
     if (message.includes("[PAGE ERROR]"))
       return {
         type: "ERROR",
-        color:
-          "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800",
-        tag: "bg-red-100 dark:bg-red-800 text-red-800 dark:text-red-200",
-      };
+        color: "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800",
+        tag: "bg-red-100 dark:bg-red-800 text-red-800 dark:text-red-200"
+      }
     return {
       type: "DEFAULT",
       color: "border-gray-200 dark:border-gray-700",
-      tag: "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300",
-    };
-  };
+      tag: "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
+    }
+  }
 
-  const logTypeInfo = parseLogType(entry.message);
+  const logTypeInfo = parseLogType(entry.message)
 
   // Extract and highlight type tags, detect JSON objects and URLs
   const renderMessage = (message: string) => {
-    const typeTagRegex = /\[([A-Z\s]+)\]/g;
-    const jsonRegex = /\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g;
-    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const typeTagRegex = /\[([A-Z\s]+)\]/g
+    const jsonRegex = /\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g
+    const urlRegex = /(https?:\/\/[^\s]+)/g
 
-    const parts = [];
-    let lastIndex = 0;
-    let match;
+    const parts = []
+    let lastIndex = 0
+    let match
 
     // First, handle type tags
     while ((match = typeTagRegex.exec(message)) !== null) {
       // Add text before the tag
       if (match.index > lastIndex) {
-        parts.push(message.slice(lastIndex, match.index));
+        parts.push(message.slice(lastIndex, match.index))
       }
 
       // Add the tag with styling
@@ -390,69 +353,62 @@ function LogEntryComponent({ entry }: { entry: LogEntry }) {
         >
           {match[1]}
         </span>
-      );
+      )
 
-      lastIndex = match.index + match[0].length;
+      lastIndex = match.index + match[0].length
     }
 
     // Add remaining text
-    let remainingText = message.slice(lastIndex);
+    const remainingText = message.slice(lastIndex)
 
     // Process remaining text for JSON objects and URLs
     const processTextForObjects = (text: string, keyPrefix: string) => {
-      const jsonMatches = [...text.matchAll(jsonRegex)];
-      const urlMatches = [...text.matchAll(urlRegex)];
+      const jsonMatches = [...text.matchAll(jsonRegex)]
+      const urlMatches = [...text.matchAll(urlRegex)]
       const allMatches = [
         ...jsonMatches.map((m) => ({ ...m, type: "json" })),
-        ...urlMatches.map((m) => ({ ...m, type: "url" })),
-      ];
+        ...urlMatches.map((m) => ({ ...m, type: "url" }))
+      ]
 
       // Sort matches by index
-      allMatches.sort((a, b) => a.index! - b.index!);
+      allMatches.sort((a, b) => a.index! - b.index!)
 
       if (allMatches.length === 0) {
-        return [text];
+        return [text]
       }
 
-      const finalParts = [];
-      let textLastIndex = 0;
+      const finalParts = []
+      let textLastIndex = 0
 
       allMatches.forEach((objMatch, idx) => {
         // Add text before match
         if (objMatch.index! > textLastIndex) {
-          finalParts.push(text.slice(textLastIndex, objMatch.index));
+          finalParts.push(text.slice(textLastIndex, objMatch.index))
         }
 
         // Add appropriate renderer
         if (objMatch.type === "json") {
-          finalParts.push(
-            <ObjectRenderer
-              key={`${keyPrefix}-json-${idx}`}
-              content={objMatch[0]}
-            />
-          );
+          finalParts.push(<ObjectRenderer key={`${keyPrefix}-json-${idx}`} content={objMatch[0]} />)
         } else if (objMatch.type === "url") {
-          finalParts.push(
-            <URLRenderer key={`${keyPrefix}-url-${idx}`} url={objMatch[0]} />
-          );
+          finalParts.push(<URLRenderer key={`${keyPrefix}-url-${idx}`} url={objMatch[0]} />)
         }
 
-        textLastIndex = objMatch.index! + objMatch[0].length;
-      });
+        textLastIndex = objMatch.index! + objMatch[0].length
+      })
 
       // Add any text after the last match
       if (textLastIndex < text.length) {
-        finalParts.push(text.slice(textLastIndex));
+        finalParts.push(text.slice(textLastIndex))
       }
 
-      return finalParts;
-    };
+      return finalParts
+    }
 
-    const processedRemaining = processTextForObjects(remainingText, "main");
-    parts.push(...processedRemaining);
+    const processedRemaining = processTextForObjects(remainingText, "main")
+    parts.push(...processedRemaining)
 
-    return parts.length > 0 ? parts : message;
-  };
+    return parts.length > 0 ? parts : message
+  }
 
   return (
     <div className={`border-l-4 ${logTypeInfo.color} pl-4 py-2`}>
@@ -477,9 +433,7 @@ function LogEntryComponent({ entry }: { entry: LogEntry }) {
         {/* Column 3: Message content with user agent info */}
         <div className="font-mono text-sm min-w-0 text-gray-900 dark:text-gray-100">
           <div className="flex flex-wrap items-start gap-2">
-            <div className="flex-1 min-w-0">
-              {renderMessage(entry.message)}
-            </div>
+            <div className="flex-1 min-w-0">{renderMessage(entry.message)}</div>
             {/* User Agent and Tab Identifier Pills */}
             <div className="flex items-center gap-1 flex-shrink-0">
               {entry.tabIdentifier && (
@@ -489,10 +443,15 @@ function LogEntryComponent({ entry }: { entry: LogEntry }) {
               )}
               {entry.userAgent && (
                 <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-200">
-                  {entry.userAgent.includes('Chrome') ? 'Chrome' : 
-                   entry.userAgent.includes('Firefox') ? 'Firefox' : 
-                   entry.userAgent.includes('Safari') ? 'Safari' : 
-                   entry.userAgent.includes('Edge') ? 'Edge' : 'Browser'}
+                  {entry.userAgent.includes("Chrome")
+                    ? "Chrome"
+                    : entry.userAgent.includes("Firefox")
+                      ? "Firefox"
+                      : entry.userAgent.includes("Safari")
+                        ? "Safari"
+                        : entry.userAgent.includes("Edge")
+                          ? "Edge"
+                          : "Browser"}
                 </span>
               )}
             </div>
@@ -511,330 +470,323 @@ function LogEntryComponent({ entry }: { entry: LogEntry }) {
         </div>
       )}
     </div>
-  );
+  )
 }
 
 interface LogsClientProps {
-  version: string;
+  version: string
   initialData?: {
-    logs: LogEntry[];
-    logFiles: any[];
-    currentLogFile: string;
-    mode: "head" | "tail";
-  };
+    logs: LogEntry[]
+    logFiles: any[]
+    currentLogFile: string
+    mode: "head" | "tail"
+  }
 }
 
 export default function LogsClient({ version, initialData }: LogsClientProps) {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const [darkMode, setDarkMode] = useDarkMode();
-  const [logs, setLogs] = useState<LogEntry[]>(initialData?.logs || []);
-  const [mode, setMode] = useState<"head" | "tail">(
-    initialData?.mode || "tail"
-  );
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const [darkMode, setDarkMode] = useDarkMode()
+  const [logs, setLogs] = useState<LogEntry[]>(initialData?.logs || [])
+  const [mode, setMode] = useState<"head" | "tail">(initialData?.mode || "tail")
 
   // Update mode when URL parameters change
   useEffect(() => {
-    const urlMode = searchParams.get("mode") as "head" | "tail" | null;
+    const urlMode = searchParams.get("mode") as "head" | "tail" | null
     if (urlMode && urlMode !== mode) {
-      setMode(urlMode);
+      setMode(urlMode)
     }
-  }, [searchParams, mode]);
-  const [isAtBottom, setIsAtBottom] = useState(true);
-  const [isInitialLoading, setIsInitialLoading] = useState(!initialData);
-  const [lastLogCount, setLastLogCount] = useState(
-    initialData?.logs.length || 0
-  );
-  const [lastFetched, setLastFetched] = useState<Date | null>(null);
-  const [availableLogs, setAvailableLogs] = useState<LogFile[]>(
-    initialData?.logFiles || []
-  );
-  const [currentLogFile, setCurrentLogFile] = useState<string>(
-    initialData?.currentLogFile || ""
-  );
-  const [projectName, setProjectName] = useState<string>("");
-  const [showLogSelector, setShowLogSelector] = useState(false);
-  const [isReplaying, setIsReplaying] = useState(false);
-  const [showFilters, setShowFilters] = useState(false);
-  const [showReplayPreview, setShowReplayPreview] = useState(false);
-  const [replayEvents, setReplayEvents] = useState<any[]>([]);
-  const [isRotatingLog, setIsRotatingLog] = useState(false);
+  }, [searchParams, mode])
+  const [isAtBottom, setIsAtBottom] = useState(true)
+  const [isInitialLoading, setIsInitialLoading] = useState(!initialData)
+  const [lastLogCount, setLastLogCount] = useState(initialData?.logs.length || 0)
+  const [lastFetched, setLastFetched] = useState<Date | null>(null)
+  const [availableLogs, setAvailableLogs] = useState<LogFile[]>(initialData?.logFiles || [])
+  const [currentLogFile, setCurrentLogFile] = useState<string>(initialData?.currentLogFile || "")
+  const [projectName, setProjectName] = useState<string>("")
+  const [showLogSelector, setShowLogSelector] = useState(false)
+  const [isReplaying, setIsReplaying] = useState(false)
+  const [showFilters, setShowFilters] = useState(false)
+  const [showReplayPreview, setShowReplayPreview] = useState(false)
+  const [replayEvents, setReplayEvents] = useState<any[]>([])
+  const [isRotatingLog, setIsRotatingLog] = useState(false)
   const [filters, setFilters] = useState({
     browser: true,
     server: true,
     interaction: true,
-    screenshot: true,
-  });
-  const [userAgentFilters, setUserAgentFilters] = useState<Record<string, boolean>>({});
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  const filterDropdownRef = useRef<HTMLDivElement>(null);
+    screenshot: true
+  })
+  const [userAgentFilters, setUserAgentFilters] = useState<Record<string, boolean>>({})
+  const bottomRef = useRef<HTMLDivElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+  const filterDropdownRef = useRef<HTMLDivElement>(null)
 
   const loadAvailableLogs = async () => {
     try {
-      const response = await fetch("/api/logs/list");
+      const response = await fetch("/api/logs/list")
       if (response.ok) {
-        const data: LogListResponse = await response.json();
-        setAvailableLogs(data.files);
-        setCurrentLogFile(data.currentFile);
-        setProjectName(data.projectName);
+        const data: LogListResponse = await response.json()
+        setAvailableLogs(data.files)
+        setCurrentLogFile(data.currentFile)
+        setProjectName(data.projectName)
       }
     } catch (error) {
-      console.error("Error loading available logs:", error);
+      console.error("Error loading available logs:", error)
     }
-  };
+  }
 
   const pollForNewLogs = async () => {
-    if (mode !== "tail" || !isAtBottom) return;
+    if (mode !== "tail" || !isAtBottom) return
 
     try {
       // Determine which log file to poll
-      const requestedFile = searchParams.get("file");
-      let logPath = "";
-      let isCurrentFile = true;
-      
+      const requestedFile = searchParams.get("file")
+      let logPath = ""
+      let isCurrentFile = true
+
       if (requestedFile && availableLogs.length > 0) {
         // Find the specific log file requested
-        const foundFile = availableLogs.find(f => f.name === requestedFile);
-        logPath = foundFile?.path || currentLogFile;
-        isCurrentFile = foundFile?.isCurrent !== false;
+        const foundFile = availableLogs.find((f) => f.name === requestedFile)
+        logPath = foundFile?.path || currentLogFile
+        isCurrentFile = foundFile?.isCurrent !== false
       } else {
         // Use current log file
-        logPath = currentLogFile;
-        isCurrentFile = true;
+        logPath = currentLogFile
+        isCurrentFile = true
       }
 
       // Only poll for new logs if viewing the current (active) log file
-      if (!isCurrentFile) return;
+      if (!isCurrentFile) return
 
       // Build API URL with logPath parameter if needed
-      const apiUrl = logPath 
+      const apiUrl = logPath
         ? `/api/logs/tail?lines=1000&logPath=${encodeURIComponent(logPath)}`
-        : `/api/logs/tail?lines=1000`;
+        : `/api/logs/tail?lines=1000`
 
-      const response = await fetch(apiUrl);
+      const response = await fetch(apiUrl)
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       }
 
-      const data: LogsApiResponse = await response.json();
+      const data: LogsApiResponse = await response.json()
 
       if (!data.logs) {
-        console.warn("No logs data in response");
-        return;
+        console.warn("No logs data in response")
+        return
       }
 
-      const entries = parseLogEntries(data.logs);
+      const entries = parseLogEntries(data.logs)
 
       if (entries.length > lastLogCount) {
-        setLastFetched(new Date());
-        setLogs(entries);
-        setLastLogCount(entries.length);
+        setLastFetched(new Date())
+        setLogs(entries)
+        setLastLogCount(entries.length)
         // Only auto-scroll if user is at bottom (don't force scroll when user scrolled up)
         if (isAtBottom) {
           setTimeout(() => {
-            bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-          }, 50);
+            bottomRef.current?.scrollIntoView({ behavior: "smooth" })
+          }, 50)
         }
       }
     } catch (error) {
-      console.error("Error polling logs:", error);
+      console.error("Error polling logs:", error)
       // Don't spam console on network errors during polling
     }
-  };
+  }
 
   // Start/stop polling based on mode and scroll position
   useEffect(() => {
     if (mode === "tail" && isAtBottom) {
-      pollIntervalRef.current = setInterval(pollForNewLogs, 2000); // Poll every 2 seconds
+      pollIntervalRef.current = setInterval(pollForNewLogs, 2000) // Poll every 2 seconds
       return () => {
         if (pollIntervalRef.current) {
-          clearInterval(pollIntervalRef.current);
+          clearInterval(pollIntervalRef.current)
         }
-      };
+      }
     } else {
       if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current);
+        clearInterval(pollIntervalRef.current)
       }
     }
-  }, [mode, isAtBottom]); // Remove lastLogCount to avoid excessive polling restarts
+  }, [mode, isAtBottom, pollForNewLogs]) // Remove lastLogCount to avoid excessive polling restarts
 
   const loadInitialLogs = async () => {
-    setIsInitialLoading(true);
+    setIsInitialLoading(true)
 
     // Load available logs list first
-    await loadAvailableLogs();
+    await loadAvailableLogs()
 
     try {
       // Determine which log file to load
-      const requestedFile = searchParams.get("file");
-      let logPath = "";
-      
+      const requestedFile = searchParams.get("file")
+      let logPath = ""
+
       if (requestedFile && availableLogs.length > 0) {
         // Find the specific log file requested
-        const foundFile = availableLogs.find(f => f.name === requestedFile);
-        logPath = foundFile?.path || currentLogFile;
+        const foundFile = availableLogs.find((f) => f.name === requestedFile)
+        logPath = foundFile?.path || currentLogFile
       } else {
         // Use current log file
-        logPath = currentLogFile;
+        logPath = currentLogFile
       }
 
       // Build API URL with logPath parameter if needed
-      const apiUrl = logPath 
+      const apiUrl = logPath
         ? `/api/logs/${mode}?lines=1000&logPath=${encodeURIComponent(logPath)}`
-        : `/api/logs/${mode}?lines=1000`;
-        
-      const response = await fetch(apiUrl);
+        : `/api/logs/${mode}?lines=1000`
+
+      const response = await fetch(apiUrl)
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       }
 
-      const data: LogsApiResponse = await response.json();
+      const data: LogsApiResponse = await response.json()
 
       if (!data.logs) {
-        console.warn("No logs data in response");
-        setLogs([]);
-        setIsInitialLoading(false);
-        return;
+        console.warn("No logs data in response")
+        setLogs([])
+        setIsInitialLoading(false)
+        return
       }
 
-      const entries = parseLogEntries(data.logs);
+      const entries = parseLogEntries(data.logs)
 
-      setLogs(entries);
-      setLastLogCount(entries.length);
-      setLastFetched(new Date());
-      setIsInitialLoading(false);
+      setLogs(entries)
+      setLastLogCount(entries.length)
+      setLastFetched(new Date())
+      setIsInitialLoading(false)
 
       // Auto-scroll to bottom for tail mode
       if (mode === "tail") {
-        setIsAtBottom(true);
+        setIsAtBottom(true)
         const scrollToBottom = () => {
           if (bottomRef.current) {
-            bottomRef.current.scrollIntoView({ behavior: "auto" });
+            bottomRef.current.scrollIntoView({ behavior: "auto" })
           } else if (containerRef.current) {
-            containerRef.current.scrollTop = containerRef.current.scrollHeight;
+            containerRef.current.scrollTop = containerRef.current.scrollHeight
           }
-        };
+        }
         // Try multiple times to ensure it works
-        setTimeout(scrollToBottom, 0);
-        setTimeout(scrollToBottom, 100);
+        setTimeout(scrollToBottom, 0)
+        setTimeout(scrollToBottom, 100)
       }
     } catch (error) {
-      console.error("Error loading logs:", error);
-      setLogs([]);
+      console.error("Error loading logs:", error)
+      setLogs([])
     }
-  };
+  }
 
   useEffect(() => {
     // Only load logs if we don't have initial data or mode actually changed
-    const currentMode = searchParams.get("mode") || "tail";
-    const hasInitialData = initialData && initialData.logs && initialData.logs.length > 0;
-    
+    const _currentMode = searchParams.get("mode") || "tail"
+    const hasInitialData = initialData?.logs && initialData.logs.length > 0
+
     if (!hasInitialData && !logs.length) {
       // No server-side data and no client data - load fresh
-      loadInitialLogs();
+      loadInitialLogs()
     } else if (hasInitialData && logs.length === 0) {
       // We have server-side data but client state is empty - use server data
-      setLogs(initialData.logs);
-      setIsInitialLoading(false);
+      setLogs(initialData.logs)
+      setIsInitialLoading(false)
       if (mode === "tail") {
         // Scroll to bottom for tail mode with server data - more aggressive approach
-        setIsAtBottom(true);
+        setIsAtBottom(true)
         const scrollToBottom = () => {
           if (bottomRef.current) {
-            bottomRef.current.scrollIntoView({ behavior: "auto" });
+            bottomRef.current.scrollIntoView({ behavior: "auto" })
           } else if (containerRef.current) {
-            containerRef.current.scrollTop = containerRef.current.scrollHeight;
+            containerRef.current.scrollTop = containerRef.current.scrollHeight
           }
-        };
+        }
         // Try multiple times to ensure it works
-        setTimeout(scrollToBottom, 0);
-        setTimeout(scrollToBottom, 100);
-        setTimeout(scrollToBottom, 300);
+        setTimeout(scrollToBottom, 0)
+        setTimeout(scrollToBottom, 100)
+        setTimeout(scrollToBottom, 300)
       }
     } else if (mode === "tail" && isAtBottom) {
       // Set up polling timer for new logs if we're in tail mode
-      setIsInitialLoading(false);
+      setIsInitialLoading(false)
       pollIntervalRef.current = setInterval(() => {
-        pollForNewLogs();
-      }, 2000);
+        pollForNewLogs()
+      }, 2000)
     }
-  }, [mode]); // Only depend on mode to avoid infinite loops
+  }, [
+    mode,
+    initialData.logs,
+    isAtBottom, // No server-side data and no client data - load fresh
+    loadInitialLogs,
+    logs.length,
+    pollForNewLogs,
+    searchParams.get
+  ]) // Only depend on mode to avoid infinite loops
 
   // Separate effect to handle scrolling after logs are rendered
   useEffect(() => {
     if (logs.length > 0 && mode === "tail" && isAtBottom) {
       const scrollToBottom = () => {
         if (bottomRef.current) {
-          bottomRef.current.scrollIntoView({ behavior: "auto" });
+          bottomRef.current.scrollIntoView({ behavior: "auto" })
         } else if (containerRef.current) {
-          containerRef.current.scrollTop = containerRef.current.scrollHeight;
+          containerRef.current.scrollTop = containerRef.current.scrollHeight
         }
-      };
+      }
       // Scroll after DOM updates
-      setTimeout(scrollToBottom, 0);
+      setTimeout(scrollToBottom, 0)
     }
-  }, [logs.length, mode]); // Trigger when logs are actually rendered
+  }, [logs.length, mode, isAtBottom]) // Trigger when logs are actually rendered
 
   useEffect(() => {
     return () => {
       if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current);
+        clearInterval(pollIntervalRef.current)
       }
-    };
-  }, []);
+    }
+  }, [])
 
   // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target as Node)
-      ) {
-        setShowLogSelector(false);
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowLogSelector(false)
       }
-      if (
-        filterDropdownRef.current &&
-        !filterDropdownRef.current.contains(event.target as Node)
-      ) {
-        setShowFilters(false);
+      if (filterDropdownRef.current && !filterDropdownRef.current.contains(event.target as Node)) {
+        setShowFilters(false)
       }
-    };
+    }
 
     if (showLogSelector || showFilters) {
-      document.addEventListener("mousedown", handleClickOutside);
-      return () =>
-        document.removeEventListener("mousedown", handleClickOutside);
+      document.addEventListener("mousedown", handleClickOutside)
+      return () => document.removeEventListener("mousedown", handleClickOutside)
     }
-  }, [showLogSelector, showFilters]);
+  }, [showLogSelector, showFilters])
 
   const handleScroll = () => {
     if (containerRef.current) {
-      const { scrollTop, scrollHeight, clientHeight } = containerRef.current;
-      const atBottom = scrollTop + clientHeight >= scrollHeight - 10;
-      setIsAtBottom(atBottom);
+      const { scrollTop, scrollHeight, clientHeight } = containerRef.current
+      const atBottom = scrollTop + clientHeight >= scrollHeight - 10
+      setIsAtBottom(atBottom)
     }
-  };
+  }
 
   const handleReplay = async () => {
-    if (isReplaying) return;
+    if (isReplaying) return
 
-    setIsReplaying(true);
+    setIsReplaying(true)
 
     try {
       // Get replay data from logs
-      const response = await fetch("/api/replay?action=parse");
+      const response = await fetch("/api/replay?action=parse")
       if (!response.ok) {
-        throw new Error("Failed to parse replay data");
+        throw new Error("Failed to parse replay data")
       }
 
-      const replayData = await response.json();
+      const replayData = await response.json()
 
       if (replayData.interactions.length === 0) {
-        alert("No user interactions found in logs to replay");
-        return;
+        alert("No user interactions found in logs to replay")
+        return
       }
 
       // Generate CDP commands for replay
@@ -844,170 +796,165 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
         body: JSON.stringify({
           action: "execute",
           replayData: replayData,
-          speed: 2,
-        }),
-      });
+          speed: 2
+        })
+      })
 
-      const result = await response2.json();
+      const result = await response2.json()
 
       if (result.success) {
-        console.log("Replay executed successfully:", result);
-        alert(`Replay completed! Executed ${result.totalCommands} commands.`);
+        console.log("Replay executed successfully:", result)
+        alert(`Replay completed! Executed ${result.totalCommands} commands.`)
       } else {
-        console.log("CDP execution failed, showing commands:", result);
+        console.log("CDP execution failed, showing commands:", result)
         alert(
-          `CDP execution not available. Generated ${
-            result.commands?.length || 0
-          } commands. Check console for details.`
-        );
+          `CDP execution not available. Generated ${result.commands?.length || 0} commands. Check console for details.`
+        )
       }
     } catch (error) {
-      console.error("Replay error:", error);
-      alert(
-        "Failed to start replay: " +
-          (error instanceof Error ? error.message : "Unknown error")
-      );
+      console.error("Replay error:", error)
+      alert(`Failed to start replay: ${error instanceof Error ? error.message : "Unknown error"}`)
     } finally {
-      setIsReplaying(false);
+      setIsReplaying(false)
     }
-  };
+  }
 
   const loadReplayPreview = () => {
     // Extract interactions from current logs instead of making API call
     const interactions = logs
       .filter((log) => log.message.includes("[INTERACTION]"))
       .map((log) => {
-        const match = log.message.match(/\[INTERACTION\] (.+)/);
+        const match = log.message.match(/\[INTERACTION\] (.+)/)
         if (match) {
           try {
             // Try parsing as JSON (new format)
-            const data = JSON.parse(match[1]);
+            const data = JSON.parse(match[1])
             return {
               timestamp: log.timestamp,
               type: data.type,
-              details: data,
-            };
+              details: data
+            }
           } catch {
             // Fallback to old format parsing
-            const oldMatch = match[1].match(/(CLICK|TAP|SCROLL|KEY) (.+)/);
+            const oldMatch = match[1].match(/(CLICK|TAP|SCROLL|KEY) (.+)/)
             if (oldMatch) {
               return {
                 timestamp: log.timestamp,
                 type: oldMatch[1],
-                details: oldMatch[2],
-              };
+                details: oldMatch[2]
+              }
             }
           }
         }
-        return null;
+        return null
       })
-      .filter(Boolean);
+      .filter(Boolean)
 
-    setReplayEvents(interactions);
-  };
+    setReplayEvents(interactions)
+  }
 
   const handleRotateLog = async () => {
-    if (!currentLogFile || isRotatingLog) return;
+    if (!currentLogFile || isRotatingLog) return
 
     const confirmed = window.confirm(
       "Clear logs and start fresh?\n\n" +
-      "This will:\n" +
-      "• Archive the current log file\n" +
-      "• Start a new empty log file\n" +
-      "• Clear the current view\n\n" +
-      "The archived logs will still be available in the dropdown."
-    );
-    
-    if (!confirmed) return;
+        "This will:\n" +
+        "• Archive the current log file\n" +
+        "• Start a new empty log file\n" +
+        "• Clear the current view\n\n" +
+        "The archived logs will still be available in the dropdown."
+    )
 
-    setIsRotatingLog(true);
+    if (!confirmed) return
+
+    setIsRotatingLog(true)
     try {
       const response = await fetch("/api/logs/rotate", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
+          "Content-Type": "application/json"
         },
-        body: JSON.stringify({ currentLogPath: currentLogFile }),
-      });
+        body: JSON.stringify({ currentLogPath: currentLogFile })
+      })
 
       if (response.ok) {
         // Clear current logs from UI
-        setLogs([]);
-        setLastLogCount(0);
-        setLastFetched(null);
+        setLogs([])
+        setLastLogCount(0)
+        setLastFetched(null)
 
         // Reload available logs to show the new archived file
-        await loadAvailableLogs();
+        await loadAvailableLogs()
 
         // Start fresh polling
-        await loadInitialLogs();
+        await loadInitialLogs()
       } else {
-        const error = await response.json();
-        console.error("Failed to rotate log:", error);
-        alert("Failed to rotate log: " + error.error);
+        const error = await response.json()
+        console.error("Failed to rotate log:", error)
+        alert(`Failed to rotate log: ${error.error}`)
       }
     } catch (error) {
-      console.error("Error rotating log:", error);
-      alert("Error rotating log");
+      console.error("Error rotating log:", error)
+      alert("Error rotating log")
     } finally {
-      setIsRotatingLog(false);
+      setIsRotatingLog(false)
     }
-  };
+  }
 
   // Compute available user agents from browser logs
   const availableUserAgents = useMemo(() => {
-    const userAgents = new Set<string>();
-    logs.forEach(entry => {
+    const userAgents = new Set<string>()
+    logs.forEach((entry) => {
       if (entry.source === "BROWSER" && entry.userAgent) {
-        userAgents.add(entry.userAgent);
+        userAgents.add(entry.userAgent)
       }
-    });
-    return Array.from(userAgents).sort();
-  }, [logs]);
+    })
+    return Array.from(userAgents).sort()
+  }, [logs])
 
   // Update user agent filters when available user agents change
   useEffect(() => {
     if (availableUserAgents.length > 0) {
-      setUserAgentFilters(prev => {
-        const newFilters = { ...prev };
+      setUserAgentFilters((prev) => {
+        const newFilters = { ...prev }
         // Enable all user agents by default if not already set
-        availableUserAgents.forEach(ua => {
+        availableUserAgents.forEach((ua) => {
           if (!(ua in newFilters)) {
-            newFilters[ua] = true;
+            newFilters[ua] = true
           }
-        });
-        return newFilters;
-      });
+        })
+        return newFilters
+      })
     }
-  }, [availableUserAgents]);
+  }, [availableUserAgents])
 
   const filteredLogs = useMemo(() => {
     return logs.filter((entry) => {
       // Check specific message types first (these override source filtering)
-      const isInteraction = entry.message.includes("[INTERACTION]");
-      const isScreenshot = entry.message.includes("[SCREENSHOT]");
+      const isInteraction = entry.message.includes("[INTERACTION]")
+      const isScreenshot = entry.message.includes("[SCREENSHOT]")
 
-      if (isInteraction) return filters.interaction;
-      if (isScreenshot) return filters.screenshot;
+      if (isInteraction) return filters.interaction
+      if (isScreenshot) return filters.screenshot
 
       // For other logs, filter by source
-      if (entry.source === "SERVER") return filters.server;
+      if (entry.source === "SERVER") return filters.server
       if (entry.source === "BROWSER") {
         // First check if browser logs are enabled at all
-        if (!filters.browser) return false;
-        
+        if (!filters.browser) return false
+
         // If there are user agent filters and this entry has a user agent, apply UA filtering
         if (availableUserAgents.length > 0 && entry.userAgent) {
-          return userAgentFilters[entry.userAgent] !== false;
+          return userAgentFilters[entry.userAgent] !== false
         }
-        
+
         // Otherwise, just show if browser is enabled
-        return true;
+        return true
       }
 
-      return true;
-    });
-  }, [logs, filters, userAgentFilters, availableUserAgents]);
+      return true
+    })
+  }, [logs, filters, userAgentFilters, availableUserAgents])
 
   return (
     <div className="h-screen bg-gray-50 dark:bg-gray-900 flex flex-col transition-colors">
@@ -1020,9 +967,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                 <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white whitespace-nowrap">
                   dev3000
                 </h1>
-                <span className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">
-                  (v{version})
-                </span>
+                <span className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">(v{version})</span>
               </div>
               {/* Log File Selector */}
               {availableLogs.length > 1 ? (
@@ -1039,27 +984,22 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                         />
                       ) : currentLogFile ? (
                         // Show symlink name for current file, basename for others
-                        availableLogs.find(log => log.path === currentLogFile)?.isCurrent 
-                          ? "d3k.log"
-                          : currentLogFile.split("/").pop()
+                        availableLogs.find((log) => log.path === currentLogFile)?.isCurrent ? (
+                          "d3k.log"
+                        ) : (
+                          currentLogFile.split("/").pop()
+                        )
                       ) : (
                         "d3k.log"
                       )}
                     </span>
                     <svg
-                      className={`w-4 h-4 transition-transform ${
-                        showLogSelector ? "rotate-180" : ""
-                      }`}
+                      className={`w-4 h-4 transition-transform ${showLogSelector ? "rotate-180" : ""}`}
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
                     >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M19 9l-7 7-7-7"
-                      />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                     </svg>
                   </button>
                   {/* Dropdown */}
@@ -1073,33 +1013,20 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                           <button
                             key={logFile.path}
                             onClick={() => {
-                              setShowLogSelector(false);
-                              router.push(
-                                `/logs?file=${encodeURIComponent(
-                                  logFile.name
-                                )}&mode=${mode}`
-                              );
+                              setShowLogSelector(false)
+                              router.push(`/logs?file=${encodeURIComponent(logFile.name)}&mode=${mode}`)
                             }}
                             className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center justify-between ${
-                              logFile.isCurrent
-                                ? "bg-blue-50 text-blue-900"
-                                : "text-gray-700"
+                              logFile.isCurrent ? "bg-blue-50 text-blue-900" : "text-gray-700"
                             }`}
                           >
                             <div className="flex flex-col">
-                              <span className="font-mono text-xs">
-                                {logFile.name}
-                              </span>
+                              <span className="font-mono text-xs">{logFile.name}</span>
                               <span className="text-xs text-gray-500">
-                                {new Date(logFile.mtime).toLocaleString()} •{" "}
-                                {Math.round(logFile.size / 1024)}KB
+                                {new Date(logFile.mtime).toLocaleString()} • {Math.round(logFile.size / 1024)}KB
                               </span>
                             </div>
-                            {logFile.isCurrent && (
-                              <span className="text-xs text-blue-600 font-medium">
-                                current
-                              </span>
-                            )}
+                            {logFile.isCurrent && <span className="text-xs text-blue-600 font-medium">current</span>}
                           </button>
                         ))}
                       </div>
@@ -1110,29 +1037,24 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                 <div className="flex items-center gap-2">
                   <span className="font-mono text-xs text-gray-600 px-3 py-1 whitespace-nowrap">
                     {isInitialLoading && !currentLogFile ? (
-                      <div
-                        className="h-4 bg-gray-200 rounded animate-pulse"
-                        style={{ width: "220px" }}
-                      />
+                      <div className="h-4 bg-gray-200 rounded animate-pulse" style={{ width: "220px" }} />
                     ) : currentLogFile ? (
-                      // Show symlink name for current file, basename for others  
-                      availableLogs.find(log => log.path === currentLogFile)?.isCurrent 
-                        ? "d3k.log"
-                        : currentLogFile.split("/").pop()
+                      // Show symlink name for current file, basename for others
+                      availableLogs.find((log) => log.path === currentLogFile)?.isCurrent ? (
+                        "d3k.log"
+                      ) : (
+                        currentLogFile.split("/").pop()
+                      )
                     ) : (
                       "d3k.log"
                     )}
                   </span>
                 </div>
               )}
-              
+
               {/* Entries count */}
-              {logs.length > 0 && (
-                <span className="text-sm text-gray-500 hidden sm:inline">
-                  {logs.length} entries
-                </span>
-              )}
-              
+              {logs.length > 0 && <span className="text-sm text-gray-500 hidden sm:inline">{logs.length} entries</span>}
+
               {/* Clear button - always visible when we have a current log file */}
               {currentLogFile && !isInitialLoading && (
                 <button
@@ -1155,8 +1077,8 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                   disabled={isReplaying}
                   onMouseEnter={() => {
                     if (!isReplaying) {
-                      loadReplayPreview();
-                      setShowReplayPreview(true);
+                      loadReplayPreview()
+                      setShowReplayPreview(true)
                     }
                   }}
                   onMouseLeave={() => setShowReplayPreview(false)}
@@ -1173,12 +1095,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                     </>
                   ) : (
                     <>
-                      <svg
-                        className="w-4 h-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path
                           strokeLinecap="round"
                           strokeLinejoin="round"
@@ -1199,9 +1116,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                       </div>
                       <div className="max-h-60 overflow-y-auto">
                         {replayEvents.length === 0 ? (
-                          <div className="px-3 py-4 text-sm text-gray-500 text-center">
-                            No interactions to replay
-                          </div>
+                          <div className="px-3 py-4 text-sm text-gray-500 text-center">No interactions to replay</div>
                         ) : (
                           replayEvents.map((event, index) => (
                             <div
@@ -1214,25 +1129,21 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                                     event.type === "CLICK"
                                       ? "bg-blue-100 text-blue-800"
                                       : event.type === "SCROLL"
-                                      ? "bg-green-100 text-green-800"
-                                      : "bg-gray-100 text-gray-700"
+                                        ? "bg-green-100 text-green-800"
+                                        : "bg-gray-100 text-gray-700"
                                   }`}
                                 >
                                   {event.type}
                                 </span>
                                 <span className="text-xs text-gray-500 font-mono">
-                                  {new Date(
-                                    event.timestamp
-                                  ).toLocaleTimeString()}
+                                  {new Date(event.timestamp).toLocaleTimeString()}
                                 </span>
                               </div>
                               <div className="mt-1 text-xs text-gray-600 font-mono truncate">
-                                {event.type === "CLICK" &&
-                                  `(${event.x}, ${event.y}) on ${event.target}`}
+                                {event.type === "CLICK" && `(${event.x}, ${event.y}) on ${event.target}`}
                                 {event.type === "SCROLL" &&
                                   `${event.direction} ${event.distance}px to (${event.x}, ${event.y})`}
-                                {event.type === "KEY" &&
-                                  `${event.key} in ${event.target}`}
+                                {event.type === "KEY" && `${event.key} in ${event.target}`}
                               </div>
                             </div>
                           ))
@@ -1248,12 +1159,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                   onClick={() => setShowFilters(!showFilters)}
                   className="flex items-center gap-1 px-3 py-1 rounded text-sm font-medium transition-colors whitespace-nowrap bg-gray-100 text-gray-700 hover:bg-gray-200"
                 >
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
                       strokeLinecap="round"
                       strokeLinejoin="round"
@@ -1270,7 +1176,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                       <div className="px-3 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
                         Log Types
                       </div>
-                      
+
                       {/* Server Logs */}
                       <label className="flex items-center justify-between px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer">
                         <div className="flex items-center gap-2">
@@ -1280,7 +1186,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                             onChange={(e) =>
                               setFilters((prev) => ({
                                 ...prev,
-                                server: e.target.checked,
+                                server: e.target.checked
                               }))
                             }
                             className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
@@ -1301,7 +1207,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                             onChange={(e) =>
                               setFilters((prev) => ({
                                 ...prev,
-                                browser: e.target.checked,
+                                browser: e.target.checked
                               }))
                             }
                             className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
@@ -1317,10 +1223,15 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                       {availableUserAgents.length > 1 && filters.browser && (
                         <div className="ml-6 border-l border-gray-200 dark:border-gray-600 pl-2">
                           {availableUserAgents.map((ua) => {
-                            const shortUA = ua.includes('Chrome') ? 'Chrome' : 
-                                           ua.includes('Firefox') ? 'Firefox' : 
-                                           ua.includes('Safari') ? 'Safari' : 
-                                           ua.includes('Edge') ? 'Edge' : 'Browser';
+                            const shortUA = ua.includes("Chrome")
+                              ? "Chrome"
+                              : ua.includes("Firefox")
+                                ? "Firefox"
+                                : ua.includes("Safari")
+                                  ? "Safari"
+                                  : ua.includes("Edge")
+                                    ? "Edge"
+                                    : "Browser"
                             return (
                               <label
                                 key={ua}
@@ -1333,7 +1244,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                                     onChange={(e) =>
                                       setUserAgentFilters((prev) => ({
                                         ...prev,
-                                        [ua]: e.target.checked,
+                                        [ua]: e.target.checked
                                       }))
                                     }
                                     className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-3 h-3"
@@ -1344,7 +1255,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                                   {logs.filter((l) => l.source === "BROWSER" && l.userAgent === ua).length}
                                 </span>
                               </label>
-                            );
+                            )
                           })}
                         </div>
                       )}
@@ -1358,7 +1269,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                             onChange={(e) =>
                               setFilters((prev) => ({
                                 ...prev,
-                                interaction: e.target.checked,
+                                interaction: e.target.checked
                               }))
                             }
                             className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
@@ -1379,7 +1290,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                             onChange={(e) =>
                               setFilters((prev) => ({
                                 ...prev,
-                                screenshot: e.target.checked,
+                                screenshot: e.target.checked
                               }))
                             }
                             className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
@@ -1397,42 +1308,30 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
               <div className="flex items-center bg-gray-100 rounded-md p-1">
                 <button
                   onClick={() => {
-                    const currentFile = searchParams.get("file");
+                    const currentFile = searchParams.get("file")
                     if (currentFile) {
-                      router.push(
-                        `/logs?file=${encodeURIComponent(
-                          currentFile
-                        )}&mode=head`
-                      );
+                      router.push(`/logs?file=${encodeURIComponent(currentFile)}&mode=head`)
                     } else {
-                      router.push('/logs?mode=head');
+                      router.push("/logs?mode=head")
                     }
                   }}
                   className={`px-2 sm:px-3 py-1 rounded text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
-                    mode === "head"
-                      ? "bg-white text-gray-900 shadow-sm"
-                      : "text-gray-600 hover:text-gray-900"
+                    mode === "head" ? "bg-white text-gray-900 shadow-sm" : "text-gray-600 hover:text-gray-900"
                   }`}
                 >
                   Head
                 </button>
                 <button
                   onClick={() => {
-                    const currentFile = searchParams.get("file");
+                    const currentFile = searchParams.get("file")
                     if (currentFile) {
-                      router.push(
-                        `/logs?file=${encodeURIComponent(
-                          currentFile
-                        )}&mode=tail`
-                      );
+                      router.push(`/logs?file=${encodeURIComponent(currentFile)}&mode=tail`)
                     } else {
-                      router.push('/logs?mode=tail');
+                      router.push("/logs?mode=tail")
                     }
                   }}
                   className={`px-2 sm:px-3 py-1 rounded text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
-                    mode === "tail"
-                      ? "bg-white text-gray-900 shadow-sm"
-                      : "text-gray-600 hover:text-gray-900"
+                    mode === "tail" ? "bg-white text-gray-900 shadow-sm" : "text-gray-600 hover:text-gray-900"
                   }`}
                 >
                   Tail
@@ -1442,18 +1341,11 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
               <button
                 onClick={() => setDarkMode(!darkMode)}
                 className="p-2 rounded-md text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors ml-2"
-                title={
-                  darkMode ? "Switch to light mode" : "Switch to dark mode"
-                }
+                title={darkMode ? "Switch to light mode" : "Switch to dark mode"}
               >
                 {darkMode ? (
                   // Sun icon for light mode
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
                       strokeLinecap="round"
                       strokeLinejoin="round"
@@ -1463,12 +1355,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                   </svg>
                 ) : (
                   // Moon icon for dark mode
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
                       strokeLinecap="round"
                       strokeLinejoin="round"
@@ -1485,11 +1372,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
 
       {/* Content Area - Fills remaining space */}
       <div className="flex-1 overflow-hidden">
-        <div
-          ref={containerRef}
-          className="max-w-7xl mx-auto px-4 py-6 h-full overflow-y-auto"
-          onScroll={handleScroll}
-        >
+        <div ref={containerRef} className="max-w-7xl mx-auto px-4 py-6 h-full overflow-y-auto" onScroll={handleScroll}>
           {isInitialLoading ? (
             <div className="text-center py-12">
               <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -1497,18 +1380,14 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
             </div>
           ) : logs.length === 0 ? (
             <div className="text-center py-12">
-              <div className="text-gray-400 dark:text-gray-500 text-lg">
-                📝 No logs yet
-              </div>
+              <div className="text-gray-400 dark:text-gray-500 text-lg">📝 No logs yet</div>
               <div className="text-gray-500 dark:text-gray-400 text-sm mt-2">
                 Logs will appear here as your development server runs
               </div>
             </div>
           ) : filteredLogs.length === 0 ? (
             <div className="text-center py-12">
-              <div className="text-gray-400 dark:text-gray-500 text-lg">
-                🔍 No logs match current filters
-              </div>
+              <div className="text-gray-400 dark:text-gray-500 text-lg">🔍 No logs match current filters</div>
               <div className="text-gray-500 dark:text-gray-400 text-sm mt-2">
                 Try adjusting your filter settings to see more logs
               </div>
@@ -1550,9 +1429,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
             {/* Live indicator when at bottom */}
             <div
               className={`flex items-center gap-1 text-green-600 ${
-                mode === "tail" && isAtBottom
-                  ? "visible"
-                  : "invisible"
+                mode === "tail" && isAtBottom ? "visible" : "invisible"
               }`}
             >
               <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
@@ -1561,13 +1438,9 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
 
             {/* Scroll to bottom button when not at bottom */}
             <button
-              onClick={() =>
-                bottomRef.current?.scrollIntoView({ behavior: "smooth" })
-              }
+              onClick={() => bottomRef.current?.scrollIntoView({ behavior: "smooth" })}
               className={`absolute top-0 right-0 flex items-center gap-1 px-2 py-0.5 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 whitespace-nowrap ${
-                mode === "tail" && !isAtBottom
-                  ? "visible"
-                  : "invisible"
+                mode === "tail" && !isAtBottom ? "visible" : "invisible"
               }`}
             >
               ↓ Live
@@ -1576,5 +1449,5 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
         </div>
       </div>
     </div>
-  );
+  )
 }
