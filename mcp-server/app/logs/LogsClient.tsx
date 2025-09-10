@@ -25,6 +25,7 @@ interface ReplayEvent {
   distance?: number
   key?: string
 }
+
 import { parseLogEntries } from "./utils"
 
 // Hook for dark mode with system preference detection
@@ -487,6 +488,212 @@ function LogEntryComponent({ entry }: { entry: LogEntry }) {
                           : "Browser"}
                 </span>
               )}
+              {/* Browser Type Pill (Chrome Extension vs Playwright) - only show if browser source */}
+              {entry.source === "BROWSER" &&
+                (() => {
+                  const isPlaywright = entry.message.includes("[PLAYWRIGHT]")
+                  const isChromeExtension = entry.message.includes("[CHROME_EXTENSION]") || entry.tabIdentifier // Tab identifier indicates Chrome Extension
+
+                  if (isPlaywright) {
+                    return (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-purple-100 dark:bg-purple-800 text-purple-700 dark:text-purple-200">
+                        🎭 Playwright
+                      </span>
+                    )
+                  } else if (isChromeExtension) {
+                    return (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-200">
+                        🧩 Extension
+                      </span>
+                    )
+                  }
+                  return null
+                })()}
+              {/* Server Framework Pill - only show if server source */}
+              {entry.source === "SERVER" &&
+                (() => {
+                  const message = entry.message.toLowerCase()
+
+                  // Next.js - look for Next.js specific patterns
+                  if (
+                    message.includes("ready on http://localhost") ||
+                    message.includes("ready in ") ||
+                    message.includes("next.js") ||
+                    message.includes("compiled client and server")
+                  ) {
+                    return (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-black text-white">
+                        ▲ Next.js
+                      </span>
+                    )
+                  }
+
+                  // Nuxt.js - look for Nuxt specific patterns
+                  else if (
+                    message.includes("nuxt") ||
+                    (message.includes("nitro") && message.includes("http://localhost")) ||
+                    message.includes("universal mode") ||
+                    message.includes("spa mode")
+                  ) {
+                    return (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-500 text-white">
+                        💚 Nuxt
+                      </span>
+                    )
+                  }
+
+                  // Vue CLI/Vite + Vue - look for Vue specific patterns
+                  else if (
+                    message.includes("vue-cli-service") ||
+                    (message.includes("vue") && (message.includes("dev server") || message.includes("local:"))) ||
+                    message.includes("@vue/cli-service")
+                  ) {
+                    return (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-600 text-white">
+                        🟢 Vue
+                      </span>
+                    )
+                  }
+
+                  // Vite (generic) - look for Vite patterns
+                  else if (
+                    (message.includes("local:") && message.includes("vite")) ||
+                    message.includes("dev server running") ||
+                    message.includes("vite v")
+                  ) {
+                    return (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-500 text-white">
+                        ⚡ Vite
+                      </span>
+                    )
+                  }
+
+                  // Ruby on Rails - look for Rails patterns
+                  else if (
+                    message.includes("rails server") ||
+                    message.includes("puma starting") ||
+                    message.includes("use ctrl-c to stop") ||
+                    (message.includes("listening on tcp://") && message.includes("3000"))
+                  ) {
+                    return (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-red-600 text-white">
+                        💎 Rails
+                      </span>
+                    )
+                  }
+
+                  // Laravel - look for Laravel/Artisan patterns
+                  else if (
+                    message.includes("laravel development server") ||
+                    message.includes("artisan serve") ||
+                    (message.includes("laravel") && message.includes("127.0.0.1:8000"))
+                  ) {
+                    return (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-red-500 text-white">
+                        🅻 Laravel
+                      </span>
+                    )
+                  }
+
+                  // Express.js/Node.js - look for Express patterns
+                  else if (
+                    message.includes("express server") ||
+                    message.includes("server listening on") ||
+                    message.includes("app listening on port") ||
+                    message.includes("node server")
+                  ) {
+                    return (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-700 text-white">
+                        🟩 Express
+                      </span>
+                    )
+                  }
+
+                  // Django - look for Django patterns
+                  else if (
+                    message.includes("django") ||
+                    (message.includes("development server") && message.includes("127.0.0.1:8000")) ||
+                    message.includes("runserver")
+                  ) {
+                    return (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-800 text-white">
+                        🐍 Django
+                      </span>
+                    )
+                  }
+
+                  // Flask - look for Flask patterns
+                  else if (
+                    message.includes("flask") ||
+                    message.includes("running on http://127.0.0.1:5000") ||
+                    message.includes("debug mode: on")
+                  ) {
+                    return (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-800 text-white">
+                        🌶️ Flask
+                      </span>
+                    )
+                  }
+
+                  // Svelte/SvelteKit - look for Svelte patterns
+                  else if (
+                    message.includes("sveltekit") ||
+                    (message.includes("svelte") && message.includes("dev")) ||
+                    message.includes("@sveltejs")
+                  ) {
+                    return (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-orange-500 text-white">
+                        🔥 Svelte
+                      </span>
+                    )
+                  }
+
+                  // Remix - look for Remix patterns
+                  else if (message.includes("remix") || message.includes("@remix-run")) {
+                    return (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-400 text-white">
+                        💿 Remix
+                      </span>
+                    )
+                  }
+
+                  // Astro - look for Astro patterns
+                  else if (message.includes("astro") || message.includes("@astrojs")) {
+                    return (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-purple-600 text-white">
+                        🚀 Astro
+                      </span>
+                    )
+                  }
+
+                  // Spring Boot - look for Spring patterns
+                  else if (
+                    message.includes("spring boot") ||
+                    message.includes("tomcat started on port") ||
+                    (message.includes("started application") && message.includes("seconds"))
+                  ) {
+                    return (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-green-500 text-white">
+                        🍃 Spring
+                      </span>
+                    )
+                  }
+
+                  // Generic React (CRA, webpack-dev-server) - fallback for React patterns
+                  else if (
+                    message.includes("webpack compiled") ||
+                    message.includes("compiled successfully") ||
+                    message.includes("webpack-dev-server")
+                  ) {
+                    return (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-600 text-white">
+                        ⚛️ React
+                      </span>
+                    )
+                  }
+
+                  return null
+                })()}
             </div>
           </div>
         </div>
@@ -553,11 +760,13 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
     screenshot: true
   })
   const [userAgentFilters, setUserAgentFilters] = useState<Record<string, boolean>>({})
+  const [logBuffer, setLogBuffer] = useState<LogEntry[]>([]) // Buffer logs when not in live mode
   const bottomRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const filterDropdownRef = useRef<HTMLDivElement>(null)
+  const userScrolledManually = useRef<boolean>(false) // Track if user manually scrolled away from live mode
 
   const loadAvailableLogs = useCallback(async () => {
     try {
@@ -574,7 +783,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
   }, [])
 
   const pollForNewLogs = useCallback(async () => {
-    if (mode !== "tail" || !isAtBottom) return
+    if (mode !== "tail") return
 
     try {
       // Determine which log file to poll
@@ -616,26 +825,44 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
       const entries = parseLogEntries(data.logs)
 
       if (entries.length > lastLogCount) {
-        setLastFetched(new Date())
-        setLogs(entries)
-        setLastLogCount(entries.length)
-        // Only auto-scroll if user is at bottom (don't force scroll when user scrolled up)
         if (isAtBottom) {
-          setTimeout(() => {
-            bottomRef.current?.scrollIntoView({ behavior: "smooth" })
-          }, 50)
+          // In live mode - apply logs immediately and flush buffer
+          setLastFetched(new Date()) // Only update "Last updated" when actually showing new logs
+
+          if (logBuffer.length > 0) {
+            // Merge buffer with latest entries
+            setLogs([...logs, ...logBuffer, ...entries.slice(lastLogCount)])
+            setLogBuffer([]) // Clear buffer
+          } else {
+            setLogs(entries)
+          }
+          setLastLogCount(entries.length)
+
+          // Auto-scroll to bottom - but only if user hasn't manually scrolled away
+          if (!userScrolledManually.current) {
+            setTimeout(() => {
+              bottomRef.current?.scrollIntoView({ behavior: "smooth" })
+            }, 50)
+          }
+        } else {
+          // Not in live mode - buffer the new entries (don't update "Last updated")
+          const newEntries = entries.slice(lastLogCount)
+          if (newEntries.length > 0) {
+            setLogBuffer((prev) => [...prev, ...newEntries])
+            setLastLogCount(entries.length)
+          }
         }
       }
     } catch (error) {
       console.error("Error polling logs:", error)
       // Don't spam console on network errors during polling
     }
-  }, [mode, isAtBottom, searchParams, availableLogs, currentLogFile, lastLogCount])
+  }, [mode, isAtBottom, searchParams, availableLogs, currentLogFile, lastLogCount, logBuffer, logs])
 
-  // Start/stop polling based on mode and scroll position
+  // Start/stop polling based on mode (always poll in tail mode, but buffer when not at bottom)
   useEffect(() => {
-    if (mode === "tail" && isAtBottom) {
-      pollIntervalRef.current = setInterval(pollForNewLogs, 2000) // Poll every 2 seconds
+    if (mode === "tail") {
+      pollIntervalRef.current = setInterval(pollForNewLogs, 3000) // Poll every 3 seconds
       return () => {
         if (pollIntervalRef.current) {
           clearInterval(pollIntervalRef.current)
@@ -646,7 +873,10 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
         clearInterval(pollIntervalRef.current)
       }
     }
-  }, [mode, isAtBottom, pollForNewLogs]) // Remove lastLogCount to avoid excessive polling restarts
+  }, [mode, pollForNewLogs]) // Removed isAtBottom - now always poll in tail mode
+
+  // Handle returning to live mode - ONLY flush buffer when user explicitly clicks "Live" button
+  // This effect is removed to prevent race conditions - buffer flushing now happens only on explicit user action
 
   const loadInitialLogs = useCallback(async () => {
     setIsInitialLoading(true)
@@ -694,8 +924,8 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
       setLastFetched(new Date())
       setIsInitialLoading(false)
 
-      // Auto-scroll to bottom for tail mode
-      if (mode === "tail") {
+      // Auto-scroll to bottom for tail mode - only if user hasn't manually scrolled away
+      if (mode === "tail" && !userScrolledManually.current) {
         setIsAtBottom(true)
         const scrollToBottom = () => {
           if (bottomRef.current) {
@@ -726,8 +956,8 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
       // We have server-side data but client state is empty - use server data
       setLogs(initialData.logs)
       setIsInitialLoading(false)
-      if (mode === "tail") {
-        // Scroll to bottom for tail mode with server data - more aggressive approach
+      if (mode === "tail" && !userScrolledManually.current) {
+        // Scroll to bottom for tail mode with server data - only if user hasn't manually scrolled away
         setIsAtBottom(true)
         const scrollToBottom = () => {
           if (bottomRef.current) {
@@ -746,7 +976,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
       setIsInitialLoading(false)
       pollIntervalRef.current = setInterval(() => {
         pollForNewLogs()
-      }, 2000)
+      }, 3000)
     }
   }, [
     mode,
@@ -760,7 +990,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
 
   // Separate effect to handle scrolling after logs are rendered
   useEffect(() => {
-    if (logs.length > 0 && mode === "tail" && isAtBottom) {
+    if (logs.length > 0 && mode === "tail" && isAtBottom && !userScrolledManually.current) {
       const scrollToBottom = () => {
         if (bottomRef.current) {
           bottomRef.current.scrollIntoView({ behavior: "auto" })
@@ -802,6 +1032,15 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
     if (containerRef.current) {
       const { scrollTop, scrollHeight, clientHeight } = containerRef.current
       const atBottom = scrollTop + clientHeight >= scrollHeight - 10
+
+      // If user scrolled up from the bottom, mark as manual scroll
+      if (isAtBottom && !atBottom) {
+        userScrolledManually.current = true
+      }
+
+      // If user scrolled back to bottom, clear manual scroll flag only via explicit action
+      // (not automatically - they need to click the "Live" button)
+
       setIsAtBottom(atBottom)
     }
   }
@@ -867,7 +1106,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
             const data = JSON.parse(match[1])
             return {
               timestamp: log.timestamp,
-              event: data.type || 'unknown',
+              event: data.type || "unknown",
               details: JSON.stringify(data),
               type: data.type,
               x: data.x,
@@ -1101,6 +1340,13 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
               {/* Entries count */}
               {logs.length > 0 && <span className="text-sm text-gray-500 hidden sm:inline">{logs.length} entries</span>}
 
+              {/* Buffered logs indicator */}
+              {logBuffer.length > 0 && !isAtBottom && (
+                <span className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-2 py-1 rounded-full">
+                  +{logBuffer.length} buffered
+                </span>
+              )}
+
               {/* Clear button - always visible when we have a current log file */}
               {currentLogFile && !isInitialLoading && (
                 <button
@@ -1115,92 +1361,94 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
               )}
             </div>
 
-            {/* Mode Toggle with Replay Button */}
+            {/* Mode Toggle */}
             <div className="flex items-center gap-2">
-              {/* Replay Button with Hover Preview */}
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={handleReplay}
-                  disabled={isReplaying}
-                  onMouseEnter={() => {
-                    if (!isReplaying) {
-                      loadReplayPreview()
-                      setShowReplayPreview(true)
-                    }
-                  }}
-                  onMouseLeave={() => setShowReplayPreview(false)}
-                  className={`flex items-center gap-1 px-3 py-1 rounded text-sm font-medium transition-colors whitespace-nowrap ${
-                    isReplaying
-                      ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                      : "bg-purple-100 text-purple-800 hover:bg-purple-200"
-                  }`}
-                >
-                  {isReplaying ? (
-                    <>
-                      <div className="w-3 h-3 border border-purple-300 border-t-purple-600 rounded-full animate-spin"></div>
-                      Replaying...
-                    </>
-                  ) : (
-                    <>
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h1m4 0h1m6-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M7 7V4a1 1 0 011-1h4a1 1 0 011 1v3m-9 4h16m-5 4v1a1 1 0 01-1 1H8a1 1 0 01-1-1v-1m8 0V9a1 1 0 00-1-1H8a1 1 0 00-1 1v8.001"
-                        />
-                      </svg>
-                      Replay
-                    </>
-                  )}
-                </button>
-                {/* Replay Preview Dropdown */}
-                {showReplayPreview && !isReplaying && (
-                  <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-30 w-80">
-                    <div className="py-2">
-                      <div className="px-3 py-2 text-xs font-medium text-gray-500 border-b">
-                        Replay Events ({replayEvents.length})
-                      </div>
-                      <div className="max-h-60 overflow-y-auto">
-                        {replayEvents.length === 0 ? (
-                          <div className="px-3 py-4 text-sm text-gray-500 text-center">No interactions to replay</div>
-                        ) : (
-                          replayEvents.map((event, index) => (
-                            <div
-                              key={`${event.timestamp}-${index}`}
-                              className="px-3 py-2 text-sm hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
-                            >
-                              <div className="flex items-center gap-2">
-                                <span
-                                  className={`px-1.5 py-0.5 rounded text-xs font-medium ${
-                                    event.type === "CLICK"
-                                      ? "bg-blue-100 text-blue-800"
-                                      : event.type === "SCROLL"
-                                        ? "bg-green-100 text-green-800"
-                                        : "bg-gray-100 text-gray-700"
-                                  }`}
-                                >
-                                  {event.type}
-                                </span>
-                                <span className="text-xs text-gray-500 font-mono">
-                                  {new Date(event.timestamp).toLocaleTimeString()}
-                                </span>
+              {/* Replay Button - Hidden until functionality is complete */}
+              {false && (
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={handleReplay}
+                    disabled={isReplaying}
+                    onMouseEnter={() => {
+                      if (!isReplaying) {
+                        loadReplayPreview()
+                        setShowReplayPreview(true)
+                      }
+                    }}
+                    onMouseLeave={() => setShowReplayPreview(false)}
+                    className={`flex items-center gap-1 px-3 py-1 rounded text-sm font-medium transition-colors whitespace-nowrap ${
+                      isReplaying
+                        ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                        : "bg-purple-100 text-purple-800 hover:bg-purple-200"
+                    }`}
+                  >
+                    {isReplaying ? (
+                      <>
+                        <div className="w-3 h-3 border border-purple-300 border-t-purple-600 rounded-full animate-spin"></div>
+                        Replaying...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h1m4 0h1m6-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M7 7V4a1 1 0 011-1h4a1 1 0 011 1v3m-9 4h16m-5 4v1a1 1 0 01-1 1H8a1 1 0 01-1-1v-1m8 0V9a1 1 0 00-1-1H8a1 1 0 00-1 1v8.001"
+                          />
+                        </svg>
+                        Replay
+                      </>
+                    )}
+                  </button>
+                  {/* Replay Preview Dropdown */}
+                  {showReplayPreview && !isReplaying && (
+                    <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-30 w-80">
+                      <div className="py-2">
+                        <div className="px-3 py-2 text-xs font-medium text-gray-500 border-b">
+                          Replay Events ({replayEvents.length})
+                        </div>
+                        <div className="max-h-60 overflow-y-auto">
+                          {replayEvents.length === 0 ? (
+                            <div className="px-3 py-4 text-sm text-gray-500 text-center">No interactions to replay</div>
+                          ) : (
+                            replayEvents.map((event, index) => (
+                              <div
+                                key={`${event.timestamp}-${index}`}
+                                className="px-3 py-2 text-sm hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <span
+                                    className={`px-1.5 py-0.5 rounded text-xs font-medium ${
+                                      event.type === "CLICK"
+                                        ? "bg-blue-100 text-blue-800"
+                                        : event.type === "SCROLL"
+                                          ? "bg-green-100 text-green-800"
+                                          : "bg-gray-100 text-gray-700"
+                                    }`}
+                                  >
+                                    {event.type}
+                                  </span>
+                                  <span className="text-xs text-gray-500 font-mono">
+                                    {new Date(event.timestamp).toLocaleTimeString()}
+                                  </span>
+                                </div>
+                                <div className="mt-1 text-xs text-gray-600 font-mono truncate">
+                                  {event.type === "CLICK" && `(${event.x}, ${event.y}) on ${event.target}`}
+                                  {event.type === "SCROLL" &&
+                                    `${event.direction} ${event.distance}px to (${event.x}, ${event.y})`}
+                                  {event.type === "KEY" && `${event.key} in ${event.target}`}
+                                </div>
                               </div>
-                              <div className="mt-1 text-xs text-gray-600 font-mono truncate">
-                                {event.type === "CLICK" && `(${event.x}, ${event.y}) on ${event.target}`}
-                                {event.type === "SCROLL" &&
-                                  `${event.direction} ${event.distance}px to (${event.x}, ${event.y})`}
-                                {event.type === "KEY" && `${event.key} in ${event.target}`}
-                              </div>
-                            </div>
-                          ))
-                        )}
+                            ))
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
               {/* Filter Button */}
               <div className="relative" ref={filterDropdownRef}>
                 <button
@@ -1491,7 +1739,18 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
             {/* Scroll to bottom button when not at bottom */}
             <button
               type="button"
-              onClick={() => bottomRef.current?.scrollIntoView({ behavior: "smooth" })}
+              onClick={() => {
+                userScrolledManually.current = false // Clear manual scroll flag
+
+                // Flush any buffered logs when explicitly returning to live mode
+                if (logBuffer.length > 0) {
+                  setLogs((prevLogs) => [...prevLogs, ...logBuffer])
+                  setLogBuffer([])
+                  setLastFetched(new Date()) // Update "Last updated" when showing buffered logs
+                }
+
+                bottomRef.current?.scrollIntoView({ behavior: "smooth" })
+              }}
               className={`absolute top-0 right-0 flex items-center gap-1 px-2 py-0.5 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 whitespace-nowrap ${
                 mode === "tail" && !isAtBottom ? "visible" : "invisible"
               }`}

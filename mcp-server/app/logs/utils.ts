@@ -87,10 +87,29 @@ export function parseLogEntries(logContent: string): LogEntry[] {
         }
       }
 
-      const screenshot = message.match(/\[SCREENSHOT\] (.+)/)?.[1]
+      const screenshot = message.match(/\[SCREENSHOT\] ([^\s[]+)/)?.[1]
 
       // Clean up CSS formatting directives in console log messages
-      const cleanedMessage = cleanConsoleFormatting(message)
+      let cleanedMessage = cleanConsoleFormatting(message)
+
+      // Remove browser type markers from displayed message (they'll show as pills instead)
+      cleanedMessage = cleanedMessage.replace(/ \[PLAYWRIGHT\]$/, "").replace(/ \[CHROME_EXTENSION\]$/, "")
+
+      // Filter out noisy WebSocket logs from Next.js dev server
+      const isNoisyWebSocketLog =
+        cleanedMessage.includes("[Network.webSocketFrameSent]") ||
+        cleanedMessage.includes("[Network.webSocketFrameReceived]") ||
+        cleanedMessage.includes("[Network.webSocketFrame") ||
+        (cleanedMessage.includes("webSocketDebuggerUrl") && cleanedMessage.includes("localhost")) ||
+        (cleanedMessage.includes("[NETWORK") &&
+          cleanedMessage.includes("__PAGE__") &&
+          cleanedMessage.includes("refresh"))
+
+      // Skip noisy WebSocket logs unless user specifically wants to see them
+      if (isNoisyWebSocketLog) {
+        currentEntry = null // Skip this entry
+        continue
+      }
 
       currentEntry = {
         timestamp,

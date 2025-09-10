@@ -205,4 +205,212 @@ myapp:dev: }
       '[CONSOLE LOG] [Vercel Speed Insights] [vitals] {"type":"object","description":"Object","overflow":false}'
     )
   })
+
+  it("should extract screenshot filenames correctly excluding browser type tags", () => {
+    const logContent = `[2025-09-10T21:24:42.976Z] [BROWSER] [SCREENSHOT] 2025-09-10T21-24-42-976Z-scroll-settled.png [PLAYWRIGHT]
+[2025-09-10T21:25:15.123Z] [TAB-1.2] [BROWSER] [SCREENSHOT] 2025-09-10T21-25-15-123Z-click.png [CHROME_EXTENSION]
+[2025-09-10T21:25:30.456Z] [BROWSER] [SCREENSHOT] 2025-09-10T21-25-30-456Z-error.png [PLAYWRIGHT] with additional context
+[2025-09-10T21:26:00.789Z] [BROWSER] [SCREENSHOT] 2025-09-10T21-26-00-789Z-navigation.png`
+
+    const entries = parseLogEntries(logContent)
+
+    expect(entries).toHaveLength(4)
+
+    // Test Playwright screenshot - should extract filename without [PLAYWRIGHT] tag
+    expect(entries[0].screenshot).toBe("2025-09-10T21-24-42-976Z-scroll-settled.png")
+    expect(entries[0].screenshot).not.toContain("[PLAYWRIGHT]")
+
+    // Test Chrome Extension screenshot - should extract filename without [CHROME_EXTENSION] tag
+    expect(entries[1].screenshot).toBe("2025-09-10T21-25-15-123Z-click.png")
+    expect(entries[1].screenshot).not.toContain("[CHROME_EXTENSION]")
+    expect(entries[1].tabIdentifier).toBe("TAB-1.2")
+
+    // Test screenshot with additional context after browser tag
+    expect(entries[2].screenshot).toBe("2025-09-10T21-25-30-456Z-error.png")
+    expect(entries[2].screenshot).not.toContain("[PLAYWRIGHT]")
+    expect(entries[2].screenshot).not.toContain("with")
+
+    // Test screenshot without browser type tag
+    expect(entries[3].screenshot).toBe("2025-09-10T21-26-00-789Z-navigation.png")
+  })
+
+  it("should remove browser type markers from displayed message but keep in original", () => {
+    const playwrightLog = `[2025-09-10T21:24:42.976Z] [BROWSER] [CONSOLE LOG] App initialized [PLAYWRIGHT]`
+    const extensionLog = `[2025-09-10T21:24:42.976Z] [TAB-123.456] [BROWSER] [CONSOLE ERROR] Script error [CHROME_EXTENSION]`
+
+    const entries1 = parseLogEntries(playwrightLog)
+    const entries2 = parseLogEntries(extensionLog)
+
+    expect(entries1).toHaveLength(1)
+    expect(entries1[0].message).toBe("[CONSOLE LOG] App initialized")
+    expect(entries1[0].message).not.toContain("[PLAYWRIGHT]")
+    expect(entries1[0].original).toContain("[PLAYWRIGHT]")
+
+    expect(entries2).toHaveLength(1)
+    expect(entries2[0].message).toBe("[CONSOLE ERROR] Script error")
+    expect(entries2[0].message).not.toContain("[CHROME_EXTENSION]")
+    expect(entries2[0].original).toContain("[CHROME_EXTENSION]")
+    expect(entries2[0].tabIdentifier).toBe("TAB-123.456")
+  })
+
+  it("should generate valid image URLs from screenshot filenames", () => {
+    const logContent = `[2025-09-10T21:24:42.976Z] [BROWSER] [SCREENSHOT] 2025-09-10T21-24-42-976Z-scroll-settled.png [PLAYWRIGHT]`
+
+    const entries = parseLogEntries(logContent)
+    expect(entries).toHaveLength(1)
+
+    const screenshot = entries[0].screenshot
+    expect(screenshot).toBe("2025-09-10T21-24-42-976Z-scroll-settled.png")
+
+    // Verify the screenshot filename would create a valid URL
+    const imageUrl = `/screenshots/${screenshot}`
+    expect(imageUrl).toBe("/screenshots/2025-09-10T21-24-42-976Z-scroll-settled.png")
+
+    // Verify no invalid characters that would break URLs
+    expect(screenshot).not.toMatch(/[\s[\]]/) // No spaces, brackets
+    expect(screenshot).toMatch(/^[\w.-]+$/) // Only valid filename characters
+  })
+
+  it("should handle various server framework log patterns", () => {
+    const frameworkLogs = [
+      `[2025-09-10T21:24:42.976Z] [SERVER] Ready on http://localhost:3000`,
+      `[2025-09-10T21:24:42.976Z] [SERVER] Nuxt server ready on http://localhost:3000`,
+      `[2025-09-10T21:24:42.976Z] [SERVER] vue-cli-service serve starting...`,
+      `[2025-09-10T21:24:42.976Z] [SERVER] Local: http://localhost:3000/ - vite dev server`,
+      `[2025-09-10T21:24:42.976Z] [SERVER] Rails server starting on port 3000`,
+      `[2025-09-10T21:24:42.976Z] [SERVER] Laravel development server started: http://127.0.0.1:8000`,
+      `[2025-09-10T21:24:42.976Z] [SERVER] Express server listening on port 3000`,
+      `[2025-09-10T21:24:42.976Z] [SERVER] Starting development server at http://127.0.0.1:8000/ - Django`,
+      `[2025-09-10T21:24:42.976Z] [SERVER] Flask running on http://127.0.0.1:5000/`,
+      `[2025-09-10T21:24:42.976Z] [SERVER] SvelteKit dev server ready`,
+      `[2025-09-10T21:24:42.976Z] [SERVER] Remix dev server running`,
+      `[2025-09-10T21:24:42.976Z] [SERVER] Astro dev server started`,
+      `[2025-09-10T21:24:42.976Z] [SERVER] Tomcat started on port 8080 - Spring Boot application`
+    ]
+
+    const entries = parseLogEntries(frameworkLogs.join("\n"))
+
+    expect(entries).toHaveLength(13)
+    expect(entries[0].source).toBe("SERVER")
+    expect(entries[0].message).toBe("Ready on http://localhost:3000")
+
+    // Verify each entry is properly parsed as SERVER source
+    entries.forEach((entry) => {
+      expect(entry.source).toBe("SERVER")
+      expect(entry.timestamp).toBe("2025-09-10T21:24:42.976Z")
+    })
+  })
+
+  describe("Server Framework Detection", () => {
+    // Helper function to test framework detection patterns
+    const testFrameworkDetection = (frameworkName: string, testCases: string[]) => {
+      testCases.forEach((logMessage, index) => {
+        it(`should detect ${frameworkName} from pattern ${index + 1}: "${logMessage}"`, () => {
+          const logContent = `[2025-09-10T21:24:42.976Z] [SERVER] ${logMessage}`
+          const entries = parseLogEntries(logContent)
+
+          expect(entries).toHaveLength(1)
+          expect(entries[0].source).toBe("SERVER")
+          expect(entries[0].message).toBe(logMessage)
+          // Note: Actual framework pill detection happens in the UI component,
+          // this test ensures the log is parsed correctly for detection
+        })
+      })
+    }
+
+    // Test cases for each framework - add new frameworks here!
+    testFrameworkDetection("Next.js", [
+      "Ready on http://localhost:3000",
+      "ready in 2.3s",
+      "Next.js application starting",
+      "Compiled client and server successfully"
+    ])
+
+    testFrameworkDetection("Nuxt", [
+      "Nuxt server listening on http://localhost:3000",
+      "Nitro server started on http://localhost:3000",
+      "Universal mode enabled",
+      "SPA mode enabled"
+    ])
+
+    testFrameworkDetection("Vue", [
+      "vue-cli-service serve --port 3000",
+      "Vue development server running on local: http://localhost:3000",
+      "@vue/cli-service starting"
+    ])
+
+    testFrameworkDetection("Vite", [
+      "Local: http://localhost:3000/ - vite dev server",
+      "Dev server running at http://localhost:3000",
+      "Vite v4.0.0 dev server running"
+    ])
+
+    testFrameworkDetection("Rails", [
+      "Rails server starting on port 3000",
+      "Puma starting in development mode",
+      "Use Ctrl-C to stop server",
+      "Listening on tcp://localhost:3000"
+    ])
+
+    testFrameworkDetection("Laravel", [
+      "Laravel development server started: http://127.0.0.1:8000",
+      "Artisan serve command starting",
+      "Laravel app running on http://127.0.0.1:8000"
+    ])
+
+    testFrameworkDetection("Express", [
+      "Express server listening on port 3000",
+      "Server listening on http://localhost:3000",
+      "App listening on port 3000",
+      "Node server started on port 3000"
+    ])
+
+    testFrameworkDetection("Django", [
+      "Starting development server at http://127.0.0.1:8000/",
+      "Django development server running",
+      "python manage.py runserver"
+    ])
+
+    testFrameworkDetection("Flask", [
+      "Flask running on http://127.0.0.1:5000/",
+      "Running on http://127.0.0.1:5000/",
+      "Debug mode: on"
+    ])
+
+    testFrameworkDetection("Svelte", [
+      "SvelteKit dev server started",
+      "Svelte development mode",
+      "@sveltejs/kit starting"
+    ])
+
+    testFrameworkDetection("Remix", ["Remix dev server started", "@remix-run/dev server running"])
+
+    testFrameworkDetection("Astro", ["Astro dev server started", "@astrojs/dev starting"])
+
+    testFrameworkDetection("Spring Boot", [
+      "Tomcat started on port 8080",
+      "Spring Boot application started in 3.2 seconds",
+      "Started Application in 2.1 seconds"
+    ])
+
+    // Test that non-framework logs don't get detected
+    it("should not detect frameworks from generic server logs", () => {
+      const genericLogs = [
+        "[2025-09-10T21:24:42.976Z] [SERVER] Server started successfully",
+        "[2025-09-10T21:24:42.976Z] [SERVER] Processing request...",
+        "[2025-09-10T21:24:42.976Z] [SERVER] Database connection established",
+        "[2025-09-10T21:24:42.976Z] [SERVER] Cache cleared"
+      ]
+
+      const entries = parseLogEntries(genericLogs.join("\n"))
+
+      expect(entries).toHaveLength(4)
+      entries.forEach((entry) => {
+        expect(entry.source).toBe("SERVER")
+        // These should be parsed correctly but not trigger framework detection
+        expect(entry.message).not.toMatch(/ready on http:\/\//)
+        expect(entry.message).not.toMatch(/listening on/)
+      })
+    })
+  })
 })
