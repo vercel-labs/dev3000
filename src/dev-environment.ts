@@ -613,12 +613,10 @@ export class DevEnvironment {
           mkdirSync(tmpDirPath, { recursive: true });
         }
 
-        // Copy package.json to temp directory if it doesn't exist
+        // Always copy package.json to temp directory to ensure it's up to date
         const tmpPackageJson = join(tmpDirPath, "package.json");
-        if (!existsSync(tmpPackageJson)) {
-          const sourcePackageJson = join(mcpServerPath, "package.json");
-          copyFileSync(sourcePackageJson, tmpPackageJson);
-        }
+        const sourcePackageJson = join(mcpServerPath, "package.json");
+        copyFileSync(sourcePackageJson, tmpPackageJson);
 
         workingDir = tmpDirPath;
       }
@@ -628,7 +626,12 @@ export class DevEnvironment {
       // Don't show any console output during dependency installation
       // All status will be handled by the progress bar
 
-      const installProcess = spawn(packageManager, ["install"], {
+      // For pnpm, use --dev flag to include devDependencies
+      const installArgs = packageManager === "pnpm" 
+        ? ["install", "--prod=false"] // Install both prod and dev dependencies
+        : ["install", "--include=dev"]; // npm/yarn syntax
+      
+      const installProcess = spawn(packageManager, installArgs, {
         stdio: ["ignore", "pipe", "pipe"],
         shell: true,
         cwd: workingDir,
