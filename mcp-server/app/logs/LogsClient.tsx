@@ -806,9 +806,10 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
       if (!isCurrentFile) return
 
       // Build API URL with logPath parameter if needed
+      // For polling, only fetch a small number of new lines to reduce server load
       const apiUrl = logPath
-        ? `/api/logs/tail?lines=1000&logPath=${encodeURIComponent(logPath)}`
-        : `/api/logs/tail?lines=1000`
+        ? `/api/logs/tail?lines=50&logPath=${encodeURIComponent(logPath)}`
+        : `/api/logs/tail?lines=50`
 
       const response = await fetch(apiUrl)
       if (!response.ok) {

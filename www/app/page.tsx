@@ -522,7 +522,7 @@ export default function HomePage() {
             <ul className="space-y-4 text-sm">
               <li>
                 <div className="mb-1">
-                  <strong className="text-yellow-400">Q: Getting a pnpm "approve-builds" warning?</strong>
+                  <strong>Q: Getting a pnpm "approve-builds" warning?</strong>
                 </div>
                 <div className="text-muted-foreground mb-2">
                   <strong>A:</strong> If you're using pnpm 10+, run{" "}

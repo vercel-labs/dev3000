@@ -415,7 +415,7 @@ const handler = createMcpHandler(
                       throw new Error("Evaluate action requires expression parameter")
                     }
 
-                    if (!safeExpressions.some((regex) => regex.test(params.expression))) {
+                    if (!safeExpressions.some((regex) => regex.test(params.expression as string))) {
                       throw new Error("Expression not in whitelist. Only safe read-only expressions allowed.")
                     }
 

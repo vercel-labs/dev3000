@@ -339,7 +339,7 @@ export class CDPMonitor {
     }
 
     return new Promise((resolve, reject) => {
-      const id = this.connection!.nextId++
+      const id = (this.connection as CDPConnection).nextId++
       const command = {
         id,
         method,
@@ -428,17 +428,17 @@ export class CDPMonitor {
   private setupEventHandlers(): void {
     // Console messages with full context
     this.onCDPEvent("Runtime.consoleAPICalled", (event) => {
-      this.debugLog(`Runtime.consoleAPICalled event received: ${event.params.type}`)
-      const { type, args, stackTrace } = event.params
+      this.debugLog(`Runtime.consoleAPICalled event received: ${(event.params as any).type}`)
+      const { type, args, stackTrace } = event.params as any
 
       // Debug: Log all console messages to see if tracking script is working
-      if (args.length > 0) {
+      if (args && args.length > 0) {
         this.debugLog(`Console message value: ${args[0].value}`)
         this.debugLog(`Console message full arg: ${JSON.stringify(args[0])}`)
       }
 
       // Check if this is our interaction tracking
-      if (args.length > 0 && args[0].value?.includes("[DEV3000_INTERACTION]")) {
+      if (args && args.length > 0 && args[0].value?.includes("[DEV3000_INTERACTION]")) {
         const interaction = args[0].value.replace("[DEV3000_INTERACTION] ", "")
         this.logger("browser", `[INTERACTION] ${interaction} [PLAYWRIGHT]`)
 
@@ -451,14 +451,14 @@ export class CDPMonitor {
       }
 
       // Debug: Log all console messages to see if tracking script is even running
-      if (args.length > 0 && args[0].value?.includes("CDP tracking initialized")) {
+      if (args && args.length > 0 && args[0].value?.includes("CDP tracking initialized")) {
         if (this.debug) {
           this.logger("browser", `[DEBUG] Interaction tracking script loaded successfully [PLAYWRIGHT]`)
         }
       }
 
       // Log regular console messages with enhanced context
-      const values = args
+      const values = (args || [])
         .map((arg: any) => {
           if (arg.type === "object" && arg.preview) {
             return JSON.stringify(arg.preview)
@@ -467,11 +467,11 @@ export class CDPMonitor {
         })
         .join(" ")
 
-      let logMsg = `[CONSOLE ${type.toUpperCase()}] ${values}`
+      let logMsg = `[CONSOLE ${(type || "log").toUpperCase()}] ${values}`
 
       // Add stack trace for errors
       if (stackTrace && (type === "error" || type === "assert")) {
-        logMsg += `\n[STACK] ${stackTrace.callFrames
+        logMsg += `\n[STACK] ${(stackTrace as any).callFrames
           .slice(0, 3)
           .map((frame: any) => `${frame.functionName || "anonymous"}@${frame.url}:${frame.lineNumber}`)
           .join(" -> ")}`
@@ -483,14 +483,14 @@ export class CDPMonitor {
     // Runtime exceptions with full stack traces
     this.onCDPEvent("Runtime.exceptionThrown", (event) => {
       this.debugLog("Runtime.exceptionThrown event received")
-      const { exceptionDetails } = event.params
-      const { text, lineNumber, columnNumber, url, stackTrace } = exceptionDetails
+      const { exceptionDetails } = event.params as any
+      const { text, lineNumber, columnNumber, url, stackTrace } = exceptionDetails as any
 
       let errorMsg = `[RUNTIME ERROR] ${text}`
       if (url) errorMsg += ` at ${url}:${lineNumber}:${columnNumber}`
 
       if (stackTrace) {
-        errorMsg += `\n[STACK] ${stackTrace.callFrames
+        errorMsg += `\n[STACK] ${(stackTrace as any).callFrames
           .slice(0, 5)
           .map((frame: any) => `${frame.functionName || "anonymous"}@${frame.url}:${frame.lineNumber}`)
           .join(" -> ")}`
@@ -504,10 +504,10 @@ export class CDPMonitor {
 
     // Browser console logs via Log domain (additional capture method)
     this.onCDPEvent("Log.entryAdded", (event) => {
-      const { entry } = event.params
-      const { level, text, url, lineNumber } = entry
+      const { entry } = event.params as any
+      const { level, text, url, lineNumber } = entry as any
 
-      let logMsg = `[CONSOLE ${level.toUpperCase()}] ${text}`
+      let logMsg = `[CONSOLE ${(level || "log").toUpperCase()}] ${text}`
       if (url && lineNumber) {
         logMsg += ` at ${url}:${lineNumber}`
       }
@@ -520,8 +520,8 @@ export class CDPMonitor {
 
     // Network requests with full details
     this.onCDPEvent("Network.requestWillBeSent", (event) => {
-      const { request, type, initiator } = event.params
-      const { url, method, headers, postData } = request
+      const { request, type, initiator } = event.params as any
+      const { url, method, headers, postData } = request as any
 
       let logMsg = `[NETWORK REQUEST] ${method} ${url}`
       if (type) logMsg += ` (${type})`
@@ -530,7 +530,7 @@ export class CDPMonitor {
       // Log important headers
       const importantHeaders = ["content-type", "authorization", "cookie"]
       const headerInfo = importantHeaders
-        .filter((h) => headers[h])
+        .filter((h) => headers && headers[h])
         .map((h) => `${h}: ${headers[h].slice(0, 50)}${headers[h].length > 50 ? "..." : ""}`)
         .join(", ")
 
@@ -542,15 +542,15 @@ export class CDPMonitor {
 
     // Network responses with full details
     this.onCDPEvent("Network.responseReceived", (event) => {
-      const { response, type } = event.params
-      const { url, status, statusText, mimeType } = response
+      const { response, type } = event.params as any
+      const { url, status, statusText, mimeType } = response as any
 
       let logMsg = `[NETWORK RESPONSE] ${status} ${statusText} ${url}`
       if (type) logMsg += ` (${type})`
       if (mimeType) logMsg += ` [${mimeType}]`
 
       // Add timing info if available
-      const timing = response.timing
+      const timing = (response as any).timing
       if (timing) {
         const totalTime = Math.round(timing.receiveHeadersEnd - timing.requestTime)
         if (totalTime > 0) logMsg += ` (${totalTime}ms)`
@@ -561,10 +561,10 @@ export class CDPMonitor {
 
     // Page navigation with full context
     this.onCDPEvent("Page.frameNavigated", (event) => {
-      const { frame } = event.params
-      if (frame.parentId) return // Only log main frame navigation
+      const { frame } = event.params as any
+      if (frame && frame.parentId) return // Only log main frame navigation
 
-      this.logger("browser", `[NAVIGATION] ${frame.url} [PLAYWRIGHT]`)
+      this.logger("browser", `[NAVIGATION] ${frame?.url || "unknown"} [PLAYWRIGHT]`)
 
       // Take screenshot on navigation to catch initial render
       setTimeout(() => {
@@ -836,11 +836,11 @@ export class CDPMonitor {
       this.debugLog(`Interaction tracking script injected. Result: ${JSON.stringify(result)}`)
 
       // Log any errors from the script injection
-      if (result.exceptionDetails) {
-        this.debugLog(`Script injection exception: ${JSON.stringify(result.exceptionDetails)}`)
+      if ((result as any).exceptionDetails) {
+        this.debugLog(`Script injection exception: ${JSON.stringify((result as any).exceptionDetails)}`)
         this.logger(
           "browser",
-          `[DEBUG] Script injection exception: ${result.exceptionDetails.exception?.description || "Unknown error"}`
+          `[DEBUG] Script injection exception: ${(result as any).exceptionDetails.exception?.description || "Unknown error"}`
         )
       }
     } catch (error) {
@@ -878,7 +878,7 @@ export class CDPMonitor {
       const screenshotPath = join(this.screenshotDir, filename)
 
       // Save the base64 image
-      const buffer = Buffer.from(result.data, "base64")
+      const buffer = Buffer.from((result as any).data, "base64")
       writeFileSync(screenshotPath, buffer)
 
       // Log screenshot with proper format that dev3000 expects
