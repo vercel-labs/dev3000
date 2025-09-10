@@ -23,6 +23,7 @@
   "scripts": {
     "build": "tsc && mkdir -p dist/src && cp src/loading.html dist/src/",
     "dev": "tsc --watch",
+    "typecheck": "tsc --noEmit",
     "format": "biome format --write .",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",

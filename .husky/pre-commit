@@ -1,3 +1,4 @@
 #\!/bin/sh
 pnpm run lint:fix
+pnpm run typecheck
 pnpm run test
