@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/vercel-labs-dev3000-badge.png)](https://mseep.ai/app/vercel-labs-dev3000)
+
 # dev3000
 
 Captures your web app's complete development timeline - server logs, browser events, console messages, network requests, and automatic screenshots - in a unified, timestamped feed for AI debugging.
