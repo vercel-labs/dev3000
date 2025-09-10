@@ -70,8 +70,8 @@ const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
   }
 
   return (
-    // biome-ignore lint/security/noDangerouslySetInnerHtml: shadcn/ui component needs to inject CSS
     <style
+      // biome-ignore lint/security/noDangerouslySetInnerHtml: shadcn/ui component needs to inject CSS
       dangerouslySetInnerHTML={{
         __html: Object.entries(THEMES)
           .map(

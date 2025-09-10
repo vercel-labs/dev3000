@@ -79,6 +79,7 @@ export default function HomePage() {
       </section>
 
       {/* Quick Start */}
+      {/* biome-ignore lint/correctness/useUniqueElementIds: page section IDs are intentionally static for navigation */}
       <section id="quickstart" className="relative py-6 border-b border-gray-700/30">
         <div className="container mx-auto px-4">
           <div className="max-w-2xl mx-auto text-center mb-5">
@@ -239,6 +240,7 @@ export default function HomePage() {
       </section>
 
       {/* Features */}
+      {/* biome-ignore lint/correctness/useUniqueElementIds: page section IDs are intentionally static for navigation */}
       <section id="features" className="relative py-6 border-b border-gray-700/30">
         <div className="container mx-auto px-4">
           <div className="max-w-2xl mx-auto text-center mb-6">
@@ -289,6 +291,7 @@ export default function HomePage() {
           {/* CLI GIF */}
           <div className="max-w-4xl mx-auto mb-8">
             <Card className="bg-card/50 backdrop-blur-sm border-2 border-gray-700/40 overflow-hidden shadow-xl">
+              {/* biome-ignore lint/performance/noImgElement: GIF animation not supported by next/image */}
               <img src="/cli.gif" alt="dev3000 CLI in action" className="w-full h-auto" />
             </Card>
           </div>

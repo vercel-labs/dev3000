@@ -554,7 +554,7 @@ export class CDPMonitor {
       // Log important headers
       const importantHeaders = ["content-type", "authorization", "cookie"]
       const headerInfo = importantHeaders
-        .filter((h) => headers && headers[h])
+        .filter((h) => headers?.[h])
         .map((h) => `${h}: ${headers[h].slice(0, 50)}${headers[h].length > 50 ? "..." : ""}`)
         .join(", ")
 
@@ -597,7 +597,7 @@ export class CDPMonitor {
     this.onCDPEvent("Page.frameNavigated", (event) => {
       const params = event.params as { frame?: { url?: string; parentId?: string } }
       const { frame } = params
-      if (frame && frame.parentId) return // Only log main frame navigation
+      if (frame?.parentId) return // Only log main frame navigation
 
       this.logger("browser", `[NAVIGATION] ${frame?.url || "unknown"} [PLAYWRIGHT]`)
 
@@ -672,7 +672,7 @@ export class CDPMonitor {
     this.eventHandlers.set(method, handler)
   }
 
-  private handleCDPMessage(message: any): void {
+  private handleCDPMessage(message: { method?: string; params?: Record<string, unknown>; sessionId?: string }): void {
     if (message.method) {
       const handler = this.eventHandlers.get(message.method)
       if (handler) {
@@ -871,11 +871,12 @@ export class CDPMonitor {
       this.debugLog(`Interaction tracking script injected. Result: ${JSON.stringify(result)}`)
 
       // Log any errors from the script injection
-      if ((result as any).exceptionDetails) {
-        this.debugLog(`Script injection exception: ${JSON.stringify((result as any).exceptionDetails)}`)
+      const resultWithDetails = result as { exceptionDetails?: { exception?: { description?: string } } }
+      if (resultWithDetails.exceptionDetails) {
+        this.debugLog(`Script injection exception: ${JSON.stringify(resultWithDetails.exceptionDetails)}`)
         this.logger(
           "browser",
-          `[DEBUG] Script injection exception: ${(result as any).exceptionDetails.exception?.description || "Unknown error"}`
+          `[DEBUG] Script injection exception: ${resultWithDetails.exceptionDetails.exception?.description || "Unknown error"}`
         )
       }
     } catch (error) {
@@ -913,7 +914,8 @@ export class CDPMonitor {
       const screenshotPath = join(this.screenshotDir, filename)
 
       // Save the base64 image
-      const buffer = Buffer.from((result as any).data, "base64")
+      const resultWithData = result as { data: string }
+      const buffer = Buffer.from(resultWithData.data, "base64")
       writeFileSync(screenshotPath, buffer)
 
       // Log screenshot with proper format that dev3000 expects
@@ -927,7 +929,15 @@ export class CDPMonitor {
   }
 
   // Enhanced replay functionality using CDP
-  async executeInteraction(interaction: any): Promise<void> {
+  async executeInteraction(interaction: {
+    type: string
+    coordinates?: { x: number; y: number }
+    key?: string
+    code?: string
+    modifiers?: Record<string, unknown>
+    to?: { x: number; y: number }
+    from?: { x: number; y: number }
+  }): Promise<void> {
     if (!this.connection) {
       throw new Error("No CDP connection available")
     }

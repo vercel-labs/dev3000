@@ -54,7 +54,8 @@
         "noNestedComponentDefinitions": "warn"
       },
       "suspicious": {
-        "noArrayIndexKey": "warn"
+        "noArrayIndexKey": "warn",
+        "noDocumentCookie": "off"
       },
       "security": {
         "noDangerouslySetInnerHtml": "warn",
