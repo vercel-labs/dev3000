@@ -259,7 +259,14 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function executeBrowserActions(replayData: ReplayData, speed: number): Promise<any> {
+async function executeBrowserActions(
+  replayData: ReplayData,
+  speed: number
+): Promise<{
+  executed: number
+  results: Array<{ event?: any; result?: any; error?: string; description: string }>
+  totalEvents: number
+}> {
   try {
     // Get MCP server URL from environment (defaults to local MCP server)
     const mcpServerUrl = process.env.MCP_SERVER_URL || "http://localhost:3684"
@@ -269,7 +276,7 @@ async function executeBrowserActions(replayData: ReplayData, speed: number): Pro
       ...replayData.navigations.map((n) => ({ ...n, eventType: "navigation" }))
     ].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
 
-    const results: any[] = []
+    const results: Array<{ event?: any; result?: any; error?: string; description: string }> = []
     const startTime = new Date(replayData.startTime).getTime()
 
     // Execute events sequentially with proper timing
@@ -284,7 +291,7 @@ async function executeBrowserActions(replayData: ReplayData, speed: number): Pro
       }
 
       try {
-        let response
+        let response: Response | undefined
 
         if (event.eventType === "navigation") {
           // Navigate to URL

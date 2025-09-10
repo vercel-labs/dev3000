@@ -5,10 +5,28 @@ import { z } from "zod"
 
 const handler = createMcpHandler(
   (server) => {
+    // Get current timestamp for workflow tracking
+    server.tool(
+      "get_current_timestamp",
+      "Get the current timestamp in ISO format - use this to mark points in time before/after user testing. WORKFLOW: Always capture timestamp before asking user to test changes, then capture again after they return, then use get_logs_between_timestamps to analyze what happened during testing.",
+      {},
+      async () => {
+        const timestamp = new Date().toISOString()
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Current timestamp: ${timestamp}`
+            }
+          ]
+        }
+      }
+    )
+
     // Healthcheck tool
     server.tool(
       "healthcheck",
-      "Simple healthcheck to verify MCP server is working",
+      "Simple healthcheck to verify MCP server is working. Use this to test connectivity and confirm the MCP server is responsive. Returns current timestamp and health status. Useful for initial connection testing or when debugging MCP connectivity issues.",
       {
         message: z.string().optional().describe("Optional message to echo back")
       },
@@ -27,7 +45,7 @@ const handler = createMcpHandler(
     // Tool to read consolidated logs
     server.tool(
       "read_consolidated_logs",
-      "Read the consolidated development logs (server + browser)",
+      "Read recent consolidated development logs containing server output, browser console logs, network requests, user interactions, and screenshots. INSIGHTS: Use this for general log overview, recent error checking, or when you need to understand current application state. Logs include [PLAYWRIGHT] or [CHROME_EXTENSION] tags to distinguish monitoring sources. Filter by keywords like 'ERROR', 'NETWORK', 'INTERACTION', or 'SCREENSHOT' for focused analysis. Combine with search_logs for pattern-based analysis.",
       {
         lines: z.number().optional().describe("Number of recent lines to read (default: 50)"),
         filter: z.string().optional().describe("Filter logs by text content"),
@@ -81,7 +99,7 @@ const handler = createMcpHandler(
     // Tool to search logs
     server.tool(
       "search_logs",
-      "Search through consolidated logs with regex patterns",
+      "Search through consolidated logs using regex patterns with context lines around matches. POWERFUL DEBUGGING: Essential for tracing error patterns, finding specific API calls, or tracking user interaction sequences. Use patterns like 'ERROR.*fetch', 'CLICK.*button', or 'NETWORK.*POST' to find relevant events. Context lines help understand what led to and followed each match. Great for correlating server errors with user actions.",
       {
         pattern: z.string().describe("Regex pattern to search for"),
         context: z.number().optional().describe("Number of lines of context around matches (default: 2)"),
@@ -137,10 +155,103 @@ const handler = createMcpHandler(
       }
     )
 
+    // Tool to get logs between timestamps
+    server.tool(
+      "get_logs_between_timestamps",
+      "Get logs between two specific timestamps - CRITICAL for timestamp-based debugging workflow. WORKFLOW: (1) Use get_current_timestamp before user testing, (2) Ask user to reproduce issue/test changes, (3) Use get_current_timestamp after user returns, (4) Use this tool with both timestamps to see exactly what happened during testing. This eliminates noise and focuses analysis on the specific user session. Essential for correlating user actions with server/browser events.",
+      {
+        startTime: z.string().describe("Start timestamp (ISO 8601 format: 2024-01-01T12:00:00.000Z)"),
+        endTime: z.string().describe("End timestamp (ISO 8601 format: 2024-01-01T12:30:00.000Z)"),
+        filter: z.string().optional().describe("Filter logs by text content (case insensitive)"),
+        logPath: z.string().optional().describe("Path to log file (default: ./ai-dev-tools/consolidated.log)")
+      },
+      async ({ startTime, endTime, filter, logPath = "./ai-dev-tools/consolidated.log" }) => {
+        try {
+          if (!existsSync(logPath)) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `No log file found at ${logPath}.`
+                }
+              ]
+            }
+          }
+
+          const start = new Date(startTime)
+          const end = new Date(endTime)
+
+          if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: "Invalid timestamp format. Use ISO 8601 format: 2024-01-01T12:00:00.000Z"
+                }
+              ]
+            }
+          }
+
+          if (start >= end) {
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: "Start time must be before end time."
+                }
+              ]
+            }
+          }
+
+          const logContent = readFileSync(logPath, "utf-8")
+          const logLines = logContent.split("\n").filter((line) => line.trim())
+
+          // Filter by timestamp range
+          const filteredLines = logLines.filter((line) => {
+            const timestampMatch = line.match(/\[(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z)\]/)
+            if (timestampMatch) {
+              const logTime = new Date(timestampMatch[1])
+              return logTime >= start && logTime <= end
+            }
+            return false // Exclude lines without parseable timestamps
+          })
+
+          // Apply text filter if provided
+          let resultLines = filteredLines
+          if (filter) {
+            resultLines = filteredLines.filter((line) => line.toLowerCase().includes(filter.toLowerCase()))
+          }
+
+          const timeRange = `${start.toISOString()} to ${end.toISOString()}`
+          const summary = `Found ${
+            resultLines.length
+          } logs between ${timeRange}${filter ? ` matching "${filter}"` : ""}`
+
+          return {
+            content: [
+              {
+                type: "text",
+                text: resultLines.length > 0 ? `${summary}:\n\n${resultLines.join("\n")}` : `${summary}.`
+              }
+            ]
+          }
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Error reading logs between timestamps: ${error instanceof Error ? error.message : String(error)}`
+              }
+            ]
+          }
+        }
+      }
+    )
+
     // Tool to get browser errors
     server.tool(
       "get_browser_errors",
-      "Get recent browser errors and page errors from logs",
+      "Get recent browser errors including console errors, JavaScript exceptions, and page errors from both Playwright and Chrome extension monitoring. DEBUGGING FOCUS: Start here when user reports issues like 'page not working', broken functionality, or visual problems. Filters logs to show only ERROR, CONSOLE ERROR, and PAGE ERROR entries. Use this before search_logs to identify specific error patterns to investigate further. Time-based filtering helps focus on recent issues.",
       {
         hours: z.number().optional().describe("Hours to look back (default: 1)"),
         logPath: z.string().optional().describe("Path to log file (default: ./ai-dev-tools/consolidated.log)")
@@ -202,7 +313,7 @@ const handler = createMcpHandler(
     // Tool to execute browser actions via CDP
     server.tool(
       "execute_browser_action",
-      "Execute safe browser actions via Chrome DevTools Protocol",
+      "Execute safe browser actions via Chrome DevTools Protocol for testing and interaction automation. TESTING CAPABILITIES: Click elements, navigate pages, take screenshots, evaluate JavaScript expressions, scroll, and type text. SAFETY: Only whitelisted JavaScript expressions allowed, URLs restricted to http/https. Use for reproducing user interactions, testing fixes, or capturing current page state. Screenshots and actions are logged automatically for debugging context.",
       {
         action: z.enum(["click", "navigate", "screenshot", "evaluate", "scroll", "type"]).describe("Action to perform"),
         params: z
@@ -224,7 +335,9 @@ const handler = createMcpHandler(
           const targetsResponse = await fetch("http://localhost:9222/json")
           const targets = await targetsResponse.json()
 
-          const pageTarget = targets.find((target: any) => target.type === "page")
+          const pageTarget = targets.find(
+            (target: { type: string; webSocketDebuggerUrl: string }) => target.type === "page"
+          )
           if (!pageTarget) {
             throw new Error("No browser tab found. Make sure dev3000 is running with CDP monitoring.")
           }
@@ -238,7 +351,7 @@ const handler = createMcpHandler(
 
             ws.on("open", async () => {
               try {
-                let cdpResult
+                let cdpResult: Record<string, unknown>
 
                 switch (action) {
                   case "click":
@@ -260,7 +373,10 @@ const handler = createMcpHandler(
                       button: "left",
                       clickCount: 1
                     })
-                    cdpResult = { action: "click", coordinates: { x: params.x, y: params.y } }
+                    cdpResult = {
+                      action: "click",
+                      coordinates: { x: params.x, y: params.y }
+                    }
                     break
 
                   case "navigate":
@@ -294,6 +410,10 @@ const handler = createMcpHandler(
                       /^window\.scrollY$/,
                       /^window\.scrollX$/
                     ]
+
+                    if (!params.expression) {
+                      throw new Error("Evaluate action requires expression parameter")
+                    }
 
                     if (!safeExpressions.some((regex) => regex.test(params.expression!))) {
                       throw new Error("Expression not in whitelist. Only safe read-only expressions allowed.")
@@ -348,11 +468,16 @@ const handler = createMcpHandler(
             ws.on("error", reject)
 
             // Helper function to send CDP commands
-            async function sendCDPCommand(ws: any, id: number, method: string, params: any): Promise<any> {
+            async function sendCDPCommand(
+              ws: WebSocket,
+              id: number,
+              method: string,
+              params: Record<string, unknown>
+            ): Promise<Record<string, unknown>> {
               return new Promise((cmdResolve, cmdReject) => {
                 const command = { id, method, params }
 
-                const messageHandler = (data: any) => {
+                const messageHandler = (data: Buffer) => {
                   const message = JSON.parse(data.toString())
                   if (message.id === id) {
                     ws.removeListener("message", messageHandler)
@@ -398,7 +523,9 @@ const handler = createMcpHandler(
     )
   },
   {
-    // Server options
+    // dev3000 MCP Server - Advanced development debugging tools
+    // Provides AI tools with comprehensive access to real-time development logs,
+    // browser monitoring data, and timestamp-based debugging workflows
   },
   {
     basePath: "/api/mcp",

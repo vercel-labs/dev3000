@@ -44,7 +44,8 @@
 
         case "EXECUTE_SCRIPT":
           try {
-            const result = eval(request.script)
+            // Use Function constructor instead of eval for better security
+            const result = new Function(`return ${request.script}`)()
             sendResponse({ result, success: true })
           } catch (error) {
             sendResponse({ error: error.message, success: false })

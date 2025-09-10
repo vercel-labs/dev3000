@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.2.3/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.2.4/schema.json",
   "assist": {
     "enabled": true,
     "actions": {
@@ -40,6 +40,10 @@
         "useKeyWithClickEvents": "off",
         "useMediaCaption": "off",
         "noSvgWithoutTitle": "off"
+      },
+      "security": {
+        "noDangerouslySetInnerHtml": "warn",
+        "noGlobalEval": "error"
       },
       "style": {
         "useNodejsImportProtocol": "off"

@@ -9,6 +9,8 @@ class Dev3000Monitor {
     this.currentIconState = "inactive"
     this.mcpServerStatus = "unknown" // 'connected', 'disconnected', 'unknown'
     this.lastMcpServerCheck = 0
+    this.errorCounts = new Map() // Track error counts per tab for crash detection
+    this.suspectedCrashes = new Map() // Track suspected crashes
 
     // Listen for extension events
     chrome.runtime.onStartup.addListener(() => this.initialize())
@@ -21,6 +23,13 @@ class Dev3000Monitor {
       }
     })
 
+    // Listen for tab removal to detect potential crashes
+    chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
+      if (this.attachedTabs.has(tabId)) {
+        this.handleTabRemoval(tabId, removeInfo)
+      }
+    })
+
     // Listen for debugger events
     chrome.debugger.onEvent.addListener((source, method, params) => {
       this.handleDebuggerEvent(source, method, params)
@@ -29,8 +38,7 @@ class Dev3000Monitor {
     // Listen for debugger detach
     chrome.debugger.onDetach.addListener((source, reason) => {
       console.log(`Debugger detached from tab ${source.tabId}: ${reason}`)
-      this.attachedTabs.delete(source.tabId)
-      this.updateIcon()
+      this.handleTabDisconnection(source.tabId, reason)
     })
   }
 
@@ -262,15 +270,15 @@ class Dev3000Monitor {
       // Create a friendly tab identifier
       const tabIdentifier = this.createTabIdentifier(tabMetadata)
 
-      // Log attachment with tab info
+      // Log attachment with tab info and mark as Chrome Extension
       this.addLogEntry(
-        `[${new Date().toISOString()}] [TAB-${tabIdentifier}] [ATTACH] Monitoring started - ${tab.title} (${tab.url})`
+        `[${new Date().toISOString()}] [TAB-${tabIdentifier}] [BROWSER] [ATTACH] Monitoring started - ${tab.title} (${tab.url}) [CHROME_EXTENSION]`
       )
       this.addLogEntry(
-        `[${new Date().toISOString()}] [TAB-${tabIdentifier}] [INFO] User-Agent: ${browserInfo.userAgent || "Unknown"}`
+        `[${new Date().toISOString()}] [TAB-${tabIdentifier}] [BROWSER] [INFO] User-Agent: ${browserInfo.userAgent || "Unknown"} [CHROME_EXTENSION]`
       )
       this.addLogEntry(
-        `[${new Date().toISOString()}] [TAB-${tabIdentifier}] [INFO] Resolution: ${browserInfo.screenResolution || "Unknown"}, Window: ${browserInfo.windowSize || "Unknown"}`
+        `[${new Date().toISOString()}] [TAB-${tabIdentifier}] [BROWSER] [INFO] Resolution: ${browserInfo.screenResolution || "Unknown"}, Window: ${browserInfo.windowSize || "Unknown"} [CHROME_EXTENSION]`
       )
 
       // Enable domains we want to monitor
@@ -292,6 +300,114 @@ class Dev3000Monitor {
   getTabIdentifier(tabId) {
     const tabData = this.attachedTabs.get(tabId)
     return tabData ? this.createTabIdentifier(tabData) : `${tabId}`
+  }
+
+  handleTabDisconnection(tabId, reason) {
+    const tabData = this.attachedTabs.get(tabId)
+    const tabIdentifier = this.getTabIdentifier(tabId)
+    const timestamp = new Date().toISOString()
+
+    if (reason === "target_closed" && tabData) {
+      // Analyze if this might be a crash rather than normal closure
+      const timeSinceAttach = Date.now() - tabData.startTime
+      const errorCount = this.errorCounts.get(tabId) || 0
+      const recentErrorThreshold = 10 // More than 10 errors might indicate instability
+      const quickCloseThreshold = 5000 // Less than 5 seconds might indicate crash
+
+      let suspectedCrash = false
+      const crashReasons = []
+
+      if (timeSinceAttach < quickCloseThreshold) {
+        suspectedCrash = true
+        crashReasons.push(`closed quickly (${Math.round(timeSinceAttach / 1000)}s after attach)`)
+      }
+
+      if (errorCount > recentErrorThreshold) {
+        suspectedCrash = true
+        crashReasons.push(`high error count (${errorCount} errors)`)
+      }
+
+      // Check for memory-related errors in recent logs
+      const recentLogs = this.getRecentLogsForTab(tabId, 20)
+      const memoryErrors = recentLogs.filter(
+        (log) =>
+          log.includes("memory") ||
+          log.includes("heap") ||
+          log.includes("allocation") ||
+          log.includes("out of memory") ||
+          log.includes("FATAL ERROR")
+      )
+
+      if (memoryErrors.length > 0) {
+        suspectedCrash = true
+        crashReasons.push(`memory-related errors (${memoryErrors.length} instances)`)
+      }
+
+      if (suspectedCrash) {
+        this.suspectedCrashes.set(tabId, {
+          tabData,
+          reasons: crashReasons,
+          timestamp: Date.now(),
+          errorCount,
+          recentLogs: recentLogs.slice(-10) // Keep last 10 log entries for context
+        })
+
+        this.addLogEntry(
+          `[${timestamp}] [TAB-${tabIdentifier}] [BROWSER] [SUSPECTED CRASH] Tab disconnected unexpectedly - ${crashReasons.join(", ")} [CHROME_EXTENSION]`
+        )
+
+        // Log error context if available
+        if (errorCount > 0) {
+          this.addLogEntry(
+            `[${timestamp}] [TAB-${tabIdentifier}] [BROWSER] [CRASH CONTEXT] ${errorCount} errors preceded disconnection [CHROME_EXTENSION]`
+          )
+        }
+
+        // Log memory errors if found
+        memoryErrors.slice(-3).forEach((errorLog) => {
+          this.addLogEntry(
+            `[${timestamp}] [TAB-${tabIdentifier}] [BROWSER] [CRASH CONTEXT] Recent error: ${errorLog.split("] [BROWSER] ").pop()} [CHROME_EXTENSION]`
+          )
+        })
+      } else {
+        this.addLogEntry(
+          `[${timestamp}] [TAB-${tabIdentifier}] [BROWSER] [DISCONNECT] Tab closed normally (${Math.round(timeSinceAttach / 1000)}s runtime, ${errorCount} errors) [CHROME_EXTENSION]`
+        )
+      }
+    } else {
+      this.addLogEntry(
+        `[${timestamp}] [TAB-${tabIdentifier}] [BROWSER] [DISCONNECT] Debugger detached: ${reason} [CHROME_EXTENSION]`
+      )
+    }
+
+    // Clean up tracking data
+    this.attachedTabs.delete(tabId)
+    this.errorCounts.delete(tabId)
+    this.updateIcon()
+  }
+
+  handleTabRemoval(tabId, removeInfo) {
+    const tabData = this.attachedTabs.get(tabId)
+    const tabIdentifier = this.getTabIdentifier(tabId)
+    const timestamp = new Date().toISOString()
+
+    if (tabData && !removeInfo.isWindowClosing) {
+      // Individual tab was closed (not part of window close)
+      // This provides additional context for crash detection
+      this.addLogEntry(
+        `[${timestamp}] [TAB-${tabIdentifier}] [BROWSER] [TAB REMOVED] Individual tab closed (not window closure) [CHROME_EXTENSION]`
+      )
+    }
+  }
+
+  getRecentLogsForTab(tabId, count = 20) {
+    const tabIdentifier = this.getTabIdentifier(tabId)
+    return this.logBuffer.filter((log) => log.includes(`[TAB-${tabIdentifier}]`)).slice(-count)
+  }
+
+  trackErrorForTab(tabId) {
+    const currentCount = this.errorCounts.get(tabId) || 0
+    this.errorCounts.set(tabId, currentCount + 1)
   }
 
   async enableDomains(tabId) {
@@ -330,6 +446,10 @@ class Dev3000Monitor {
     switch (method) {
       case "Runtime.consoleAPICalled":
         logEntry = this.formatConsoleLog(timestamp, tabIdentifier, params)
+        // Track console errors for crash detection
+        if (params.type === "error" || params.type === "assert") {
+          this.trackErrorForTab(tabId)
+        }
         break
 
       case "Network.responseReceived":
@@ -337,23 +457,24 @@ class Dev3000Monitor {
         break
 
       case "Page.loadEventFired":
-        logEntry = `[${timestamp}] [TAB-${tabIdentifier}] [BROWSER] [PAGE] Load event fired`
+        logEntry = `[${timestamp}] [TAB-${tabIdentifier}] [BROWSER] [PAGE] Load event fired [CHROME_EXTENSION]`
         break
 
       case "Page.domContentLoadedEventFired":
-        logEntry = `[${timestamp}] [TAB-${tabIdentifier}] [BROWSER] [PAGE] DOM content loaded`
+        logEntry = `[${timestamp}] [TAB-${tabIdentifier}] [BROWSER] [PAGE] DOM content loaded [CHROME_EXTENSION]`
         break
 
       case "Page.frameNavigated":
-        logEntry = `[${timestamp}] [TAB-${tabIdentifier}] [BROWSER] [NAVIGATION] ${params.frame.url}`
+        logEntry = `[${timestamp}] [TAB-${tabIdentifier}] [BROWSER] [NAVIGATION] ${params.frame.url} [CHROME_EXTENSION]`
         break
 
       case "Runtime.exceptionThrown":
         logEntry = this.formatException(timestamp, tabIdentifier, params)
+        this.trackErrorForTab(tabId) // Track error for crash detection
         break
 
       case "Security.securityStateChanged":
-        logEntry = `[${timestamp}] [TAB-${tabIdentifier}] [BROWSER] [SECURITY] State changed to ${params.securityState}`
+        logEntry = `[${timestamp}] [TAB-${tabIdentifier}] [BROWSER] [SECURITY] State changed to ${params.securityState} [CHROME_EXTENSION]`
         break
 
       default:
@@ -398,7 +519,7 @@ class Dev3000Monitor {
         .join(" ")
     }
 
-    return `[${timestamp}] [TAB-${tabIdentifier}] [BROWSER] [CONSOLE ${level}] ${message}`
+    return `[${timestamp}] [TAB-${tabIdentifier}] [BROWSER] [CONSOLE ${level}] ${message} [CHROME_EXTENSION]`
   }
 
   formatNetworkResponse(timestamp, tabIdentifier, params) {
@@ -409,7 +530,7 @@ class Dev3000Monitor {
     const mimeType = response.mimeType
     const resourceType = params.type || "Unknown"
 
-    return `[${timestamp}] [TAB-${tabIdentifier}] [BROWSER] [NETWORK RESPONSE] ${status} ${statusText} ${url} (${resourceType}) [${mimeType}]`
+    return `[${timestamp}] [TAB-${tabIdentifier}] [BROWSER] [NETWORK RESPONSE] ${status} ${statusText} ${url} (${resourceType}) [${mimeType}] [CHROME_EXTENSION]`
   }
 
   formatException(timestamp, tabIdentifier, params) {
@@ -419,7 +540,7 @@ class Dev3000Monitor {
     const line = exception.lineNumber || 0
     const col = exception.columnNumber || 0
 
-    return `[${timestamp}] [TAB-${tabIdentifier}] [BROWSER] [ERROR] ${message} at ${url}:${line}:${col}`
+    return `[${timestamp}] [TAB-${tabIdentifier}] [BROWSER] [ERROR] ${message} at ${url}:${line}:${col} [CHROME_EXTENSION]`
   }
 
   addLogEntry(entry) {

@@ -1,4 +1,6 @@
-export default function RootLayout({ children }: any) {
+import type React from "react"
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="h-full">
       <head>

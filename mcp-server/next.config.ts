@@ -1,4 +1,4 @@
-import type { NextConfig } from "next";
+import type { NextConfig } from "next"
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
@@ -6,12 +6,12 @@ const nextConfig: NextConfig = {
   output: "standalone",
   devIndicators: false,
   turbopack: {
-    root: __dirname,
+    root: __dirname
   },
   // Optimize for minimal MCP server
   eslint: {
-    ignoreDuringBuilds: true,
-  },
-};
+    ignoreDuringBuilds: true
+  }
+}
 
-export default nextConfig;
+export default nextConfig

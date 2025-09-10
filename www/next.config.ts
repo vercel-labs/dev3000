@@ -1,19 +1,19 @@
-import type { NextConfig } from "next";
-import path from "path";
-import { fileURLToPath } from "url";
+import type { NextConfig } from "next"
+import path from "path"
+import { fileURLToPath } from "url"
 
-const currentDir = path.dirname(fileURLToPath(import.meta.url));
+const currentDir = path.dirname(fileURLToPath(import.meta.url))
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   experimental: { reactCompiler: true },
   outputFileTracingRoot: currentDir,
   eslint: {
-    ignoreDuringBuilds: true,
+    ignoreDuringBuilds: true
   },
   typescript: {
-    ignoreBuildErrors: true,
-  },
-};
+    ignoreBuildErrors: true
+  }
+}
 
-export default nextConfig;
+export default nextConfig
