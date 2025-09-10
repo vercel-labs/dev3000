@@ -374,7 +374,7 @@ export class CDPMonitor {
       // Clear timeout if command succeeds/fails
       const originalResolve = resolve
       const originalReject = reject
-      resolve = (value: Record<string, unknown>) => {
+      resolve = (value: Record<string, unknown> | PromiseLike<Record<string, unknown>>) => {
         clearTimeout(timeout)
         originalResolve(value)
       }
@@ -555,7 +555,7 @@ export class CDPMonitor {
       const importantHeaders = ["content-type", "authorization", "cookie"]
       const headerInfo = importantHeaders
         .filter((h) => headers?.[h])
-        .map((h) => `${h}: ${headers[h].slice(0, 50)}${headers[h].length > 50 ? "..." : ""}`)
+        .map((h) => `${h}: ${headers![h].slice(0, 50)}${headers![h].length > 50 ? "..." : ""}`)
         .join(", ")
 
       if (headerInfo) logMsg += ` [${headerInfo}]`
@@ -945,6 +945,7 @@ export class CDPMonitor {
     try {
       switch (interaction.type) {
         case "CLICK":
+          if (!interaction.coordinates) break
           await this.sendCDPCommand("Input.dispatchMouseEvent", {
             type: "mousePressed",
             x: interaction.coordinates.x,
@@ -972,6 +973,7 @@ export class CDPMonitor {
           break
 
         case "SCROLL":
+          if (!interaction.to || !interaction.from) break
           await this.sendCDPCommand("Input.dispatchMouseEvent", {
             type: "mouseWheel",
             x: interaction.to.x,
