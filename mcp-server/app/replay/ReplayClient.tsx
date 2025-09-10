@@ -1,7 +1,7 @@
 "use client"
 
 import Image from "next/image"
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 
 interface InteractionEvent {
   timestamp: string
@@ -45,7 +45,7 @@ export default function ReplayClient() {
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentEventIndex, setCurrentEventIndex] = useState(0)
 
-  const loadReplayData = async () => {
+  const loadReplayData = useCallback(async () => {
     setLoading(true)
     try {
       const params = new URLSearchParams({ action: "parse" })
@@ -66,7 +66,7 @@ export default function ReplayClient() {
       console.error("Error loading replay data:", error)
     }
     setLoading(false)
-  }
+  }, [selectedTimeRange])
 
   useEffect(() => {
     loadReplayData()

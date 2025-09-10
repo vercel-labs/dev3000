@@ -346,7 +346,7 @@ export class CDPMonitor {
         params
       }
 
-      const messageHandler = (data: any) => {
+      const messageHandler = (data: Buffer) => {
         try {
           const message = JSON.parse(data.toString())
           if (message.id === id) {
@@ -374,11 +374,11 @@ export class CDPMonitor {
       // Clear timeout if command succeeds/fails
       const originalResolve = resolve
       const originalReject = reject
-      resolve = (value: any) => {
+      resolve = (value: Record<string, unknown>) => {
         clearTimeout(timeout)
         originalResolve(value)
       }
-      reject = (reason: any) => {
+      reject = (reason: unknown) => {
         clearTimeout(timeout)
         originalReject(reason)
       }
@@ -428,8 +428,13 @@ export class CDPMonitor {
   private setupEventHandlers(): void {
     // Console messages with full context
     this.onCDPEvent("Runtime.consoleAPICalled", (event) => {
-      this.debugLog(`Runtime.consoleAPICalled event received: ${(event.params as any).type}`)
-      const { type, args, stackTrace } = event.params as any
+      const params = event.params as {
+        type?: string
+        args?: Array<{ type: string; value?: string; preview?: unknown }>
+        stackTrace?: { callFrames: Array<{ functionName?: string; url: string; lineNumber: number }> }
+      }
+      this.debugLog(`Runtime.consoleAPICalled event received: ${params.type}`)
+      const { type, args, stackTrace } = params
 
       // Debug: Log all console messages to see if tracking script is working
       if (args && args.length > 0) {
@@ -459,7 +464,7 @@ export class CDPMonitor {
 
       // Log regular console messages with enhanced context
       const values = (args || [])
-        .map((arg: any) => {
+        .map((arg: { type: string; value?: string; preview?: unknown }) => {
           if (arg.type === "object" && arg.preview) {
             return JSON.stringify(arg.preview)
           }
@@ -471,9 +476,12 @@ export class CDPMonitor {
 
       // Add stack trace for errors
       if (stackTrace && (type === "error" || type === "assert")) {
-        logMsg += `\n[STACK] ${(stackTrace as any).callFrames
+        logMsg += `\n[STACK] ${stackTrace.callFrames
           .slice(0, 3)
-          .map((frame: any) => `${frame.functionName || "anonymous"}@${frame.url}:${frame.lineNumber}`)
+          .map(
+            (frame: { functionName?: string; url: string; lineNumber: number }) =>
+              `${frame.functionName || "anonymous"}@${frame.url}:${frame.lineNumber}`
+          )
           .join(" -> ")}`
       }
 
@@ -483,16 +491,27 @@ export class CDPMonitor {
     // Runtime exceptions with full stack traces
     this.onCDPEvent("Runtime.exceptionThrown", (event) => {
       this.debugLog("Runtime.exceptionThrown event received")
-      const { exceptionDetails } = event.params as any
-      const { text, lineNumber, columnNumber, url, stackTrace } = exceptionDetails as any
+      const params = event.params as {
+        exceptionDetails: {
+          text: string
+          lineNumber: number
+          columnNumber: number
+          url?: string
+          stackTrace?: { callFrames: Array<{ functionName?: string; url: string; lineNumber: number }> }
+        }
+      }
+      const { text, lineNumber, columnNumber, url, stackTrace } = params.exceptionDetails
 
       let errorMsg = `[RUNTIME ERROR] ${text}`
       if (url) errorMsg += ` at ${url}:${lineNumber}:${columnNumber}`
 
       if (stackTrace) {
-        errorMsg += `\n[STACK] ${(stackTrace as any).callFrames
+        errorMsg += `\n[STACK] ${stackTrace.callFrames
           .slice(0, 5)
-          .map((frame: any) => `${frame.functionName || "anonymous"}@${frame.url}:${frame.lineNumber}`)
+          .map(
+            (frame: { functionName?: string; url: string; lineNumber: number }) =>
+              `${frame.functionName || "anonymous"}@${frame.url}:${frame.lineNumber}`
+          )
           .join(" -> ")}`
       }
 
@@ -504,8 +523,8 @@ export class CDPMonitor {
 
     // Browser console logs via Log domain (additional capture method)
     this.onCDPEvent("Log.entryAdded", (event) => {
-      const { entry } = event.params as any
-      const { level, text, url, lineNumber } = entry as any
+      const params = event.params as { entry: { level?: string; text: string; url?: string; lineNumber?: number } }
+      const { level, text, url, lineNumber } = params.entry
 
       let logMsg = `[CONSOLE ${(level || "log").toUpperCase()}] ${text}`
       if (url && lineNumber) {
@@ -520,8 +539,13 @@ export class CDPMonitor {
 
     // Network requests with full details
     this.onCDPEvent("Network.requestWillBeSent", (event) => {
-      const { request, type, initiator } = event.params as any
-      const { url, method, headers, postData } = request as any
+      const params = event.params as {
+        request: { url: string; method: string; headers?: Record<string, string>; postData?: string }
+        type?: string
+        initiator?: { type: string }
+      }
+      const { url, method, headers, postData } = params.request
+      const { type, initiator } = params
 
       let logMsg = `[NETWORK REQUEST] ${method} ${url}`
       if (type) logMsg += ` (${type})`
@@ -542,15 +566,25 @@ export class CDPMonitor {
 
     // Network responses with full details
     this.onCDPEvent("Network.responseReceived", (event) => {
-      const { response, type } = event.params as any
-      const { url, status, statusText, mimeType } = response as any
+      const params = event.params as {
+        response: {
+          url: string
+          status: number
+          statusText: string
+          mimeType?: string
+          timing?: { receiveHeadersEnd: number; requestTime: number }
+        }
+        type?: string
+      }
+      const { url, status, statusText, mimeType } = params.response
+      const { type } = params
 
       let logMsg = `[NETWORK RESPONSE] ${status} ${statusText} ${url}`
       if (type) logMsg += ` (${type})`
       if (mimeType) logMsg += ` [${mimeType}]`
 
       // Add timing info if available
-      const timing = (response as any).timing
+      const timing = params.response.timing
       if (timing) {
         const totalTime = Math.round(timing.receiveHeadersEnd - timing.requestTime)
         if (totalTime > 0) logMsg += ` (${totalTime}ms)`
@@ -561,7 +595,8 @@ export class CDPMonitor {
 
     // Page navigation with full context
     this.onCDPEvent("Page.frameNavigated", (event) => {
-      const { frame } = event.params as any
+      const params = event.params as { frame?: { url?: string; parentId?: string } }
+      const { frame } = params
       if (frame && frame.parentId) return // Only log main frame navigation
 
       this.logger("browser", `[NAVIGATION] ${frame?.url || "unknown"} [PLAYWRIGHT]`)
