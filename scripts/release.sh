@@ -77,12 +77,14 @@ node -e "
 "
 
 # Commit version change
+echo "📝 Committing version change..."
 git add package.json
 git commit -m "Release v$NEXT_VERSION
 
 🤖 Generated with [Claude Code](https://claude.ai/code)
 
 Co-Authored-By: Claude <noreply@anthropic.com>"
+echo "✅ Version change committed"
 
 # Ensure we're on main branch and up to date
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
@@ -97,8 +99,11 @@ echo "⬇️ Pulling latest changes from origin/main..."
 git pull origin main
 
 # Create and push tag manually for better control
+echo "🏷️ Creating git tag $TAG_NAME..."
 git tag -a "$TAG_NAME" -m "Release v$NEXT_VERSION"
+echo "⬆️ Pushing version commit to main..."
 git push origin main
+echo "⬆️ Pushing tag to origin..."
 git push origin "$TAG_NAME"
 
 echo "🎉 Release v$NEXT_VERSION completed successfully!"
