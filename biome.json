@@ -31,15 +31,27 @@
     "enabled": true,
     "rules": {
       "recommended": true,
-      "correctness": {
-        "noUnusedImports": { "level": "on", "fix": "unsafe" },
-        "noUnusedVariables": { "level": "on", "fix": "unsafe" },
-        "useExhaustiveDependencies": "warn"
-      },
       "a11y": {
         "useKeyWithClickEvents": "off",
         "useMediaCaption": "off",
-        "noSvgWithoutTitle": "off"
+        "noSvgWithoutTitle": "off",
+        "useFocusableInteractive": "warn",
+        "useSemanticElements": "warn",
+        "useButtonType": "warn",
+        "useAriaPropsForRole": "warn"
+      },
+      "performance": {
+        "noImgElement": "warn"
+      },
+      "correctness": {
+        "noUnusedImports": { "level": "on", "fix": "unsafe" },
+        "noUnusedVariables": { "level": "on", "fix": "unsafe" },
+        "useExhaustiveDependencies": "warn",
+        "useUniqueElementIds": "warn",
+        "noNestedComponentDefinitions": "warn"
+      },
+      "suspicious": {
+        "noArrayIndexKey": "warn"
       },
       "security": {
         "noDangerouslySetInnerHtml": "warn",

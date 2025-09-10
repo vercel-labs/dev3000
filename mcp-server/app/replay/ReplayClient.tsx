@@ -163,6 +163,7 @@ export default function ReplayClient() {
 
               {!isPlaying ? (
                 <button
+                  type="button"
                   onClick={startReplay}
                   disabled={!replayData || allEvents.length === 0}
                   className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -170,7 +171,11 @@ export default function ReplayClient() {
                   ▶ Play
                 </button>
               ) : (
-                <button onClick={stopReplay} className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">
+                <button
+                  type="button"
+                  onClick={stopReplay}
+                  className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+                >
                   ⏹ Stop
                 </button>
               )}
@@ -195,7 +200,7 @@ export default function ReplayClient() {
               <div className="max-h-96 overflow-y-auto">
                 {allEvents.map((event, index) => (
                   <div
-                    key={index}
+                    key={`${event.timestamp}-${index}`}
                     className={`px-4 py-2 border-b last:border-b-0 ${
                       index === currentEventIndex ? "bg-blue-50 border-blue-200" : ""
                     }`}
@@ -252,7 +257,10 @@ export default function ReplayClient() {
               </div>
               <div className="max-h-96 overflow-y-auto">
                 {replayData.screenshots.map((screenshot, index) => (
-                  <div key={index} className="px-4 py-2 border-b last:border-b-0">
+                  <div
+                    key={`${screenshot.timestamp}-${screenshot.event}-${index}`}
+                    className="px-4 py-2 border-b last:border-b-0"
+                  >
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-xs font-mono text-gray-500">{formatTimestamp(screenshot.timestamp)}</span>
                       <span className="text-xs text-gray-600">{screenshot.event}</span>

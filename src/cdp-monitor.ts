@@ -7,7 +7,7 @@ import { WebSocket } from "ws"
 
 export interface CDPEvent {
   method: string
-  params: any
+  params: Record<string, unknown>
   timestamp: number
   sessionId?: string
 }
@@ -244,7 +244,9 @@ export class CDPMonitor {
         const targets = await targetsResponse.json()
 
         // Find the first page target (tab)
-        const pageTarget = targets.find((target: any) => target.type === "page")
+        const pageTarget = targets.find(
+          (target: { type: string; webSocketDebuggerUrl: string }) => target.type === "page"
+        )
         if (!pageTarget) {
           throw new Error("No page target found in Chrome")
         }
@@ -331,7 +333,7 @@ export class CDPMonitor {
     }
   }
 
-  private async sendCDPCommand(method: string, params: any = {}): Promise<any> {
+  private async sendCDPCommand(method: string, params: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
     if (!this.connection) {
       throw new Error("No CDP connection available")
     }

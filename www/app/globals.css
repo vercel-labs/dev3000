@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* biome-ignore lint/suspicious/noUnknownAtRules: Tailwind CSS custom variant */
 @custom-variant dark (&:is(.dark *));
 
 :root {
@@ -74,6 +75,7 @@
   --sidebar-ring: oklch(0.4 0 0);
 }
 
+/* biome-ignore lint/suspicious/noUnknownAtRules: Tailwind CSS theme configuration */
 @theme inline {
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
@@ -117,9 +119,11 @@
 
 @layer base {
   * {
+    /* biome-ignore lint/suspicious/noUnknownAtRules: Tailwind CSS @apply directive */
     @apply border-border outline-ring/50;
   }
   body {
+    /* biome-ignore lint/suspicious/noUnknownAtRules: Tailwind CSS @apply directive */
     @apply bg-background text-foreground;
   }
 }

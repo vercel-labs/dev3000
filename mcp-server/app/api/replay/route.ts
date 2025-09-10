@@ -259,12 +259,19 @@ export async function POST(request: NextRequest) {
   }
 }
 
+interface ReplayResult {
+  event?: Record<string, unknown>
+  result?: Record<string, unknown>
+  error?: string
+  description: string
+}
+
 async function executeBrowserActions(
   replayData: ReplayData,
   speed: number
 ): Promise<{
   executed: number
-  results: Array<{ event?: any; result?: any; error?: string; description: string }>
+  results: Array<ReplayResult>
   totalEvents: number
 }> {
   try {
@@ -276,7 +283,7 @@ async function executeBrowserActions(
       ...replayData.navigations.map((n) => ({ ...n, eventType: "navigation" }))
     ].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
 
-    const results: Array<{ event?: any; result?: any; error?: string; description: string }> = []
+    const results: Array<ReplayResult> = []
     const startTime = new Date(replayData.startTime).getTime()
 
     // Execute events sequentially with proper timing
