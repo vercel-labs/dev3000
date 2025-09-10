@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import { useEffect, useState } from "react"
 
 interface InteractionEvent {
@@ -265,9 +266,11 @@ export default function ReplayClient() {
                       <span className="text-xs font-mono text-gray-500">{formatTimestamp(screenshot.timestamp)}</span>
                       <span className="text-xs text-gray-600">{screenshot.event}</span>
                     </div>
-                    <img
+                    <Image
                       src={screenshot.url}
                       alt={`Screenshot: ${screenshot.event}`}
+                      width={400}
+                      height={200}
                       className="w-full rounded border"
                       style={{ maxHeight: "200px", objectFit: "contain" }}
                     />
