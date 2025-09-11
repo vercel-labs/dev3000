@@ -442,18 +442,6 @@ export class CDPMonitor {
         this.debugLog(`Console message full arg: ${JSON.stringify(args[0])}`)
       }
 
-      // Check if this is our interaction tracking
-      if (args && args.length > 0 && args[0].value?.includes("[DEV3000_INTERACTION]")) {
-        const interaction = args[0].value.replace("[DEV3000_INTERACTION] ", "")
-        this.logger("browser", `[INTERACTION] ${interaction} [PLAYWRIGHT]`)
-
-        // Take screenshot when scroll settles
-        if (interaction.startsWith("SCROLL_SETTLED")) {
-          this.takeScreenshot("scroll-settled")
-        }
-
-        return
-      }
 
       // Debug: Log all console messages to see if tracking script is even running
       if (args && args.length > 0 && args[0].value?.includes("CDP tracking initialized")) {
@@ -728,6 +716,9 @@ export class CDPMonitor {
 
     this.debugLog("Interaction tracking setup completed")
 
+    // Start polling for interactions from the injected script
+    this.startInteractionPolling()
+
     // Multiple screenshot triggers will ensure we catch the initial page load
   }
 
@@ -794,13 +785,19 @@ export class CDPMonitor {
             // Add click tracking with element details
             document.addEventListener('click', function(e) {
               let details = getElementDetails(e.target);
-              console.log('[DEV3000_INTERACTION] CLICK at ' + e.clientX + ',' + e.clientY + ' on ' + details);
+              // Send interaction data via custom event instead of console.log to avoid user visibility
+              window.dispatchEvent(new CustomEvent('dev3000-interaction', {
+                detail: { type: 'CLICK', x: e.clientX, y: e.clientY, element: details }
+              }));
             });
             
             // Add key tracking with element details
             document.addEventListener('keydown', function(e) {
               let details = getElementDetails(e.target);
-              console.log('[DEV3000_INTERACTION] KEY ' + e.key + ' in ' + details);
+              // Send interaction data via custom event instead of console.log to avoid user visibility
+              window.dispatchEvent(new CustomEvent('dev3000-interaction', {
+                detail: { type: 'KEY', key: e.key, element: details }
+              }));
             });
             
             // Add coalesced scroll tracking with capture to catch all scroll events
@@ -837,16 +834,58 @@ export class CDPMonitor {
                 let deltaY = Math.abs(lastScrollY - scrollStartY);
                 
                 if (deltaX > 5 || deltaY > 5) {
-                  console.log('[DEV3000_INTERACTION] SCROLL from ' + scrollStartX + ',' + scrollStartY + ' to ' + lastScrollX + ',' + lastScrollY + ' in ' + target);
-                  // Take screenshot after scroll settles
-                  console.log('[DEV3000_INTERACTION] SCROLL_SETTLED at ' + lastScrollX + ',' + lastScrollY);
+                  // Send interaction data via custom event instead of console.log to avoid user visibility
+                  window.dispatchEvent(new CustomEvent('dev3000-interaction', {
+                    detail: { type: 'SCROLL', from: { x: scrollStartX, y: scrollStartY }, to: { x: lastScrollX, y: lastScrollY }, target: target }
+                  }));
+                  window.dispatchEvent(new CustomEvent('dev3000-interaction', {
+                    detail: { type: 'SCROLL_SETTLED', x: lastScrollX, y: lastScrollY }
+                  }));
                 }
                 scrollTimeout = null;
               }, 300);
             }, true); // Use capture: true to catch scroll events on all elements
+            
+            // Listen for our custom interaction events and store them for CDP polling
+            window.__dev3000_interactions = [];
+            
+            window.addEventListener('dev3000-interaction', function(e) {
+              const detail = e.detail;
+              let message = '';
+              
+              switch(detail.type) {
+                case 'CLICK':
+                  message = 'CLICK at ' + detail.x + ',' + detail.y + ' on ' + detail.element;
+                  break;
+                case 'KEY':
+                  message = 'KEY ' + detail.key + ' in ' + detail.element;
+                  break;
+                case 'SCROLL':
+                  message = 'SCROLL from ' + detail.from.x + ',' + detail.from.y + ' to ' + detail.to.x + ',' + detail.to.y + ' in ' + detail.target;
+                  break;
+                case 'SCROLL_SETTLED':
+                  message = 'SCROLL_SETTLED at ' + detail.x + ',' + detail.y;
+                  break;
+              }
+              
+              if (message) {
+                // Store interaction in array for CDP to poll, don't log to console
+                window.__dev3000_interactions.push({
+                  timestamp: Date.now(),
+                  message: message
+                });
+                
+                // Keep only last 100 interactions to avoid memory issues
+                if (window.__dev3000_interactions.length > 100) {
+                  window.__dev3000_interactions = window.__dev3000_interactions.slice(-100);
+                }
+              }
+            });
+            
+            console.debug('CDP tracking initialized');
           }
         } catch (err) {
-          console.log('[DEV3000_INTERACTION] ERROR: ' + err.message);
+          console.debug('[DEV3000_INTERACTION] ERROR: ' + err.message);
         }
       `
 
@@ -883,6 +922,52 @@ export class CDPMonitor {
       this.debugLog(`Failed to inject interaction tracking: ${error}`)
       this.logger("browser", `[CDP ERROR] Interaction tracking failed: ${error} [PLAYWRIGHT]`)
     }
+  }
+
+  private startInteractionPolling(): void {
+    // Poll for interactions every 500ms to avoid console.log spam
+    const pollInteractions = async () => {
+      if (this.isShuttingDown) return
+
+      try {
+        const result = await this.sendCDPCommand("Runtime.evaluate", {
+          expression: `
+            (() => {
+              if (window.__dev3000_interactions && window.__dev3000_interactions.length > 0) {
+                const interactions = [...window.__dev3000_interactions];
+                window.__dev3000_interactions = []; // Clear the array
+                return interactions;
+              }
+              return [];
+            })()
+          `,
+          returnByValue: true
+        }) as { result?: { value?: Array<{ timestamp: number; message: string }> } }
+
+        const interactions = result.result?.value || []
+        
+        for (const interaction of interactions) {
+          this.logger("browser", `[INTERACTION] ${interaction.message} [PLAYWRIGHT]`)
+          
+          // Take screenshot when scroll settles
+          if (interaction.message.startsWith("SCROLL_SETTLED")) {
+            this.takeScreenshot("scroll-settled")
+          }
+        }
+      } catch (error) {
+        this.debugLog(`Failed to poll interactions: ${error}`)
+      }
+
+      // Continue polling if not shutting down
+      if (!this.isShuttingDown) {
+        setTimeout(pollInteractions, 500)
+      }
+    }
+
+    // Start polling after a brief delay to ensure injection script is ready
+    setTimeout(() => {
+      pollInteractions()
+    }, 1000)
   }
 
   private scheduleNetworkIdleScreenshot(): void {
