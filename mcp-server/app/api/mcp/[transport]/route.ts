@@ -165,7 +165,12 @@ const handler = createMcpHandler(
         filter: z.string().optional().describe("Filter logs by text content (case insensitive)"),
         logPath: z.string().optional().describe("Path to log file (default: ./ai-dev-tools/consolidated.log)")
       },
-      async ({ startTime, endTime, filter, logPath = process.env.LOG_FILE_PATH || "./ai-dev-tools/consolidated.log" }) => {
+      async ({
+        startTime,
+        endTime,
+        filter,
+        logPath = process.env.LOG_FILE_PATH || "./ai-dev-tools/consolidated.log"
+      }) => {
         try {
           if (!existsSync(logPath)) {
             return {

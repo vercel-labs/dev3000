@@ -409,7 +409,10 @@ export class CDPMonitor {
         }
       } catch (error) {
         this.debugLog(`Failed to enable CDP domain ${domain}: ${error}`)
-        this.logger("browser", `[CDP ERROR] Failed to enable ${domain}: ${error} [PLAYWRIGHT]`)
+        // Only log CDP errors when debug mode is enabled
+        if (this.debug) {
+          this.logger("browser", `[CDP ERROR] Failed to enable ${domain}: ${error} [PLAYWRIGHT]`)
+        }
         // Continue with other domains instead of throwing
       }
     }
@@ -441,7 +444,6 @@ export class CDPMonitor {
         this.debugLog(`Console message value: ${args[0].value}`)
         this.debugLog(`Console message full arg: ${JSON.stringify(args[0])}`)
       }
-
 
       // Debug: Log all console messages to see if tracking script is even running
       if (args && args.length > 0 && args[0].value?.includes("CDP tracking initialized")) {
@@ -930,7 +932,7 @@ export class CDPMonitor {
       if (this.isShuttingDown) return
 
       try {
-        const result = await this.sendCDPCommand("Runtime.evaluate", {
+        const result = (await this.sendCDPCommand("Runtime.evaluate", {
           expression: `
             (() => {
               if (window.__dev3000_interactions && window.__dev3000_interactions.length > 0) {
@@ -942,13 +944,13 @@ export class CDPMonitor {
             })()
           `,
           returnByValue: true
-        }) as { result?: { value?: Array<{ timestamp: number; message: string }> } }
+        })) as { result?: { value?: Array<{ timestamp: number; message: string }> } }
 
         const interactions = result.result?.value || []
-        
+
         for (const interaction of interactions) {
           this.logger("browser", `[INTERACTION] ${interaction.message} [PLAYWRIGHT]`)
-          
+
           // Take screenshot when scroll settles
           if (interaction.message.startsWith("SCROLL_SETTLED")) {
             this.takeScreenshot("scroll-settled")

@@ -9,13 +9,21 @@ pnpm install -g dev3000
 dev3000
 ```
 
-![dev3000 CLI](www/public/cli.gif)
+## AI Integration
 
-**You can also connect claude code to the mcp-server to have it issue commands to the browser.**
+**You should connect claude code or any AI tool to the mcp-server to have it issue commands to the browser.**
 
 ```bash
 claude mcp add dev3000 http://localhost:3684/api/mcp/mcp
 ```
+
+Then issue the following prompt:
+
+```
+Use your dev3000 tools to help debug my app
+```
+
+![dev3000 CLI](www/public/cli.gif)
 
 ## What it does
 
@@ -31,24 +39,16 @@ The tool monitors your app in a real browser and captures:
 
 ![dev3000 Logs Viewer](logs.jpg)
 
-## AI Integration
-
-Give Claude your log file for instant debugging:
-
-```
-Read /tmp/d3k.log
-```
-
 Logs are automatically saved with timestamps in `/var/log/dev3000/` (or temp directory) and rotated to keep the 10 most recent per project. The current session is always symlinked to `/tmp/d3k.log` for easy access.
 
-Or use the MCP server at `http://localhost:3684/api/mcp/mcp` for advanced querying:
+### MCP Integration Notes
+
+The MCP server at `http://localhost:3684/api/mcp/mcp` supports the HTTP prototcol (not stdio) as well as the following commands for advanced querying:
 
 - `read_consolidated_logs` - Get recent logs with filtering
 - `search_logs` - Regex search with context
 - `get_browser_errors` - Extract browser errors by time period
 - `execute_browser_action` - Control the browser (click, navigate, screenshot, evaluate, scroll, type)
-
-### MCP Integration Notes
 
 **Cursor Compatibility**: If registering the MCP server directly in Cursor shows "no tools or prompts", first register it with Claude, then it will work in both applications. This is a known Cursor MCP integration issue.
 

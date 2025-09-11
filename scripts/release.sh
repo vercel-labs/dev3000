@@ -86,6 +86,18 @@ git commit -m "Release v$NEXT_VERSION
 Co-Authored-By: Claude <noreply@anthropic.com>"
 echo "✅ Version change committed"
 
+# Check for any formatting changes made by pre-commit hooks and commit them
+if ! git diff --quiet; then
+    echo "📝 Committing formatting changes from pre-commit hooks..."
+    git add -A
+    git commit -m "Fix formatting after release version bump
+
+🤖 Generated with [Claude Code](https://claude.ai/code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>"
+    echo "✅ Formatting changes committed"
+fi
+
 # Ensure we're on main branch and up to date
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 echo "📍 Current branch: $CURRENT_BRANCH"
