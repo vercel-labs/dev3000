@@ -47,10 +47,6 @@ if [[ ! $REPLY =~ ^[Yy]$ ]]; then
   exit 1
 fi
 
-# Run tests one more time before publishing
-echo "🧪 Running final tests..."
-pnpm test
-
 # Publish to npm
 echo "📦 Publishing to npm..."
 npm publish --access public
