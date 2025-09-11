@@ -51,7 +51,7 @@ const handler = createMcpHandler(
         filter: z.string().optional().describe("Filter logs by text content"),
         logPath: z.string().optional().describe("Path to log file (default: ./ai-dev-tools/consolidated.log)")
       },
-      async ({ lines = 50, filter, logPath = "./ai-dev-tools/consolidated.log" }) => {
+      async ({ lines = 50, filter, logPath = process.env.LOG_FILE_PATH || "./ai-dev-tools/consolidated.log" }) => {
         try {
           if (!existsSync(logPath)) {
             return {
@@ -105,7 +105,7 @@ const handler = createMcpHandler(
         context: z.number().optional().describe("Number of lines of context around matches (default: 2)"),
         logPath: z.string().optional().describe("Path to log file (default: ./ai-dev-tools/consolidated.log)")
       },
-      async ({ pattern, context = 2, logPath = "./ai-dev-tools/consolidated.log" }) => {
+      async ({ pattern, context = 2, logPath = process.env.LOG_FILE_PATH || "./ai-dev-tools/consolidated.log" }) => {
         try {
           if (!existsSync(logPath)) {
             return {
@@ -165,7 +165,7 @@ const handler = createMcpHandler(
         filter: z.string().optional().describe("Filter logs by text content (case insensitive)"),
         logPath: z.string().optional().describe("Path to log file (default: ./ai-dev-tools/consolidated.log)")
       },
-      async ({ startTime, endTime, filter, logPath = "./ai-dev-tools/consolidated.log" }) => {
+      async ({ startTime, endTime, filter, logPath = process.env.LOG_FILE_PATH || "./ai-dev-tools/consolidated.log" }) => {
         try {
           if (!existsSync(logPath)) {
             return {
@@ -256,7 +256,7 @@ const handler = createMcpHandler(
         hours: z.number().optional().describe("Hours to look back (default: 1)"),
         logPath: z.string().optional().describe("Path to log file (default: ./ai-dev-tools/consolidated.log)")
       },
-      async ({ hours = 1, logPath = "./ai-dev-tools/consolidated.log" }) => {
+      async ({ hours = 1, logPath = process.env.LOG_FILE_PATH || "./ai-dev-tools/consolidated.log" }) => {
         try {
           if (!existsSync(logPath)) {
             return {
