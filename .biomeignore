@@ -1,0 +1,2 @@
+# Ignore demo apps with intentional bugs
+demo-apps-with-bugs/**/*
