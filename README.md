@@ -74,7 +74,7 @@ Since the extension isn't published to the Chrome Web Store, install it locally:
 4. Navigate to your dev3000 installation directory and select the `chrome-extension` folder
 5. The extension will now monitor localhost tabs automatically
 
-#### Using with -so, --servers-only
+#### Using with --servers-only
 
 When using the Chrome extension, start dev3000 with the `--servers-only` flag to skip Playwright:
 
@@ -114,7 +114,7 @@ dev3000 --port 5173
 # Use with Chrome extension (no Playwright)
 dev3000 --servers-only
 
-# Custom profile directory 
+# Custom profile directory
 dev3000 --profile-dir ./chrome-profile
 ```
 
