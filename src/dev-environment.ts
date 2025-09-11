@@ -151,6 +151,7 @@ export class DevEnvironment {
   private spinner: ReturnType<typeof ora>
   private version: string
   private isShuttingDown: boolean = false
+  private serverStartTime: number | null = null
 
   constructor(options: DevEnvironmentOptions) {
     this.options = options
@@ -292,6 +293,7 @@ export class DevEnvironment {
   private async startServer() {
     const [command, ...args] = this.options.serverCommand.split(" ")
 
+    this.serverStartTime = Date.now()
     this.serverProcess = spawn(command, args, {
       stdio: ["ignore", "pipe", "pipe"],
       shell: true,
@@ -333,7 +335,39 @@ export class DevEnvironment {
         this.debugLog(`Server process exited with code ${code}`)
         this.logger.log("server", `Server process exited with code ${code}`)
 
-        // Only shutdown for truly fatal exit codes, not build failures or restarts
+        const timeSinceStart = this.serverStartTime ? Date.now() - this.serverStartTime : 0
+        const isEarlyExit = timeSinceStart < 5000 // Less than 5 seconds
+
+        // Check if node_modules exists
+        const nodeModulesExists = existsSync(join(process.cwd(), "node_modules"))
+
+        // If it's an early exit and node_modules doesn't exist, show helpful message
+        if (isEarlyExit && !nodeModulesExists) {
+          if (this.spinner?.isSpinning) {
+            this.spinner.fail("Server script failed to start - missing dependencies")
+          } else {
+            console.log(chalk.red("\n❌ Server script failed to start"))
+          }
+          console.log(chalk.yellow("💡 It looks like dependencies are not installed."))
+          console.log(chalk.yellow("   Run 'pnpm install' (or npm/yarn install) and try again."))
+          this.gracefulShutdown()
+          return
+        }
+
+        // If it's an early exit but node_modules exists, it's still likely a configuration issue
+        if (isEarlyExit) {
+          if (this.spinner?.isSpinning) {
+            this.spinner.fail(`Server script failed to start (exited with code ${code})`)
+          } else {
+            console.log(chalk.red(`\n❌ Server script failed to start (exited with code ${code})`))
+          }
+          console.log(chalk.yellow("💡 Check your server command configuration and project setup"))
+          console.log(chalk.yellow(`   Command: ${this.options.serverCommand}`))
+          this.gracefulShutdown()
+          return
+        }
+
+        // For later exits, use the original logic for build failures vs fatal errors
         // Common exit codes that indicate temporary issues, not fatal errors:
         // - Code 1: Generic build failure or restart
         // - Code 130: Ctrl+C (SIGINT)
