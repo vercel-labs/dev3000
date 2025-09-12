@@ -395,8 +395,8 @@ export class CDPMonitor {
       "DOM", // DOM mutations
       "Performance", // Performance metrics
       "Security", // Security events
-      "Log", // Browser console logs
-      "Input" // Mouse and keyboard input events
+      "Log" // Browser console logs
+      // Note: Input domain is for dispatching events, not monitoring them - we use JS injection instead
     ]
 
     for (const domain of domains) {
@@ -416,9 +416,6 @@ export class CDPMonitor {
         // Continue with other domains instead of throwing
       }
     }
-
-    this.debugLog("Setting up input event capturing")
-    await this.sendCDPCommand("Input.setIgnoreInputEvents", { ignore: false })
 
     this.debugLog("Enabling runtime for console and exception capture")
     await this.sendCDPCommand("Runtime.enable")

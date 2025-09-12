@@ -704,10 +704,11 @@ function LogEntryComponent({ entry }: { entry: LogEntry }) {
           <Image
             src={`/screenshots/${entry.screenshot}`}
             alt="Screenshot"
-            width={800}
-            height={400}
-            className="max-w-full h-auto border rounded shadow-sm"
-            style={{ maxHeight: "400px" }}
+            width={0}
+            height={0}
+            sizes="100vw"
+            className="w-full h-auto max-w-2xl border rounded shadow-sm"
+            style={{ maxHeight: "600px", objectFit: "contain" }}
             unoptimized
           />
         </div>
