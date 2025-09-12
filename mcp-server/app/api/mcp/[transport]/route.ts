@@ -26,7 +26,7 @@ const handler = createMcpHandler(
     // Healthcheck tool
     server.tool(
       "healthcheck",
-      "Simple healthcheck to verify MCP server is working. Use this to test connectivity and confirm the MCP server is responsive. Returns current timestamp and health status. Useful for initial connection testing or when debugging MCP connectivity issues.",
+      "Internal healthcheck tool - rarely needed since MCP connection is already working if you can see this. Only use if explicitly asked to verify server health. Prefer read_consolidated_logs for debugging.",
       {
         message: z.string().optional().describe("Optional message to echo back")
       },
