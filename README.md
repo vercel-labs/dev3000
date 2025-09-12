@@ -20,7 +20,7 @@ claude mcp add dev3000 http://localhost:3684/api/mcp/mcp
 Then issue the following prompt:
 
 ```
-Use your dev3000 tools to help debug my app
+Use dev3000 to debug my app
 ```
 
 ![dev3000 CLI](www/public/cli.gif)
@@ -50,7 +50,18 @@ The MCP server at `http://localhost:3684/api/mcp/mcp` supports the HTTP prototco
 - `get_browser_errors` - Extract browser errors by time period
 - `execute_browser_action` - Control the browser (click, navigate, screenshot, evaluate, scroll, type)
 
-**Cursor Compatibility**: If registering the MCP server directly in Cursor shows "no tools or prompts", first register it with Claude, then it will work in both applications. This is a known Cursor MCP integration issue.
+**Cursor**:
+
+```js
+{
+  "mcpServers": {
+      "dev3000": {
+          "type": "http",
+          "url": "http://localhost:3684/api/mcp/mcp"
+      }
+  }
+}
+```
 
 ## Using the Chrome Extension vs Playwright
 
