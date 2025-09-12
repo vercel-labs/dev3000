@@ -30,7 +30,6 @@
     "test": "vitest run",
     "test-postinstall": "tsx scripts/test-postinstall.ts",
     "prepare": "husky",
-    "postinstall": "echo 'Starting postinstall...' && cd mcp-server && echo 'Installing mcp-server dependencies...' && pnpm install --no-frozen-lockfile --ignore-scripts && echo 'Postinstall completed successfully!' || echo 'Postinstall failed, but continuing...'",
     "release": "./scripts/release.sh",
     "canary": "./scripts/canary.sh"
   },
