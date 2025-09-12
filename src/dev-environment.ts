@@ -12,13 +12,14 @@ import {
   statSync,
   symlinkSync,
   unlinkSync,
-  writeFileSync
-} from "fs"
-import ora from "ora"
-import { tmpdir } from "os"
-import { basename, dirname, join } from "path"
-import { fileURLToPath } from "url"
-import { CDPMonitor } from "./cdp-monitor.js"
+  writeFileSync,
+} from "fs";
+import ora from "ora";
+import { tmpdir } from "os";
+import { basename, dirname, join } from "path";
+import { fileURLToPath } from "url";
+import { CDPMonitor } from "./cdp-monitor.js";
+import { OutputProcessor, LogEntry, StandardLogParser, NextJsErrorDetector } from "./services/parsers/index.js";
 
 interface DevEnvironmentOptions {
   port: string
@@ -140,22 +141,27 @@ function pruneOldLogs(baseDir: string, cwdName: string): void {
 }
 
 export class DevEnvironment {
-  private serverProcess: ChildProcess | null = null
-  private mcpServerProcess: ChildProcess | null = null
-  private cdpMonitor: CDPMonitor | null = null
-  private logger: Logger
-  private options: DevEnvironmentOptions
-  private screenshotDir: string
-  private mcpPublicDir: string
-  private pidFile: string
-  private spinner: ReturnType<typeof ora>
-  private version: string
-  private isShuttingDown: boolean = false
+  private serverProcess: ChildProcess | null = null;
+  private mcpServerProcess: ChildProcess | null = null;
+  private cdpMonitor: CDPMonitor | null = null;
+  private logger: Logger;
+  private outputProcessor: OutputProcessor;
+  private options: DevEnvironmentOptions;
+  private screenshotDir: string;
+  private mcpPublicDir: string;
+  private pidFile: string;
+  private spinner: ReturnType<typeof ora>;
+  private version: string;
+  private isShuttingDown: boolean = false;
   private serverStartTime: number | null = null
 
   constructor(options: DevEnvironmentOptions) {
-    this.options = options
-    this.logger = new Logger(options.logFile)
+    this.options = options;
+    this.logger = new Logger(options.logFile);
+    this.outputProcessor = new OutputProcessor(
+      new StandardLogParser(),
+      new NextJsErrorDetector()
+    );
 
     // Set up MCP server public directory for web-accessible screenshots
     const currentFile = fileURLToPath(import.meta.url)
@@ -302,31 +308,27 @@ export class DevEnvironment {
 
     // Log server output (to file only, reduce stdout noise)
     this.serverProcess.stdout?.on("data", (data) => {
-      const message = data.toString().trim()
-      if (message) {
-        this.logger.log("server", message)
-      }
-    })
+      const text = data.toString();
+      const entries = this.outputProcessor.process(text, false);
+
+      entries.forEach((entry: LogEntry) => {
+        this.logger.log("server", entry.formatted);
+      });
+    });
 
     this.serverProcess.stderr?.on("data", (data) => {
-      const message = data.toString().trim()
-      if (message) {
-        this.logger.log("server", `ERROR: ${message}`)
-        // Suppress build errors and common dev errors from console output
-        // They're still logged to file for debugging
-        // Only show truly critical errors that would prevent startup
-        const isCriticalError =
-          message.includes("EADDRINUSE") ||
-          message.includes("EACCES") ||
-          message.includes("ENOENT") ||
-          (message.includes("FATAL") && !message.includes("generateStaticParams")) ||
-          (message.includes("Cannot find module") && !message.includes(".next"))
+      const text = data.toString();
+      const entries = this.outputProcessor.process(text, true);
 
-        if (isCriticalError) {
-          console.error(chalk.red("[CRITICAL ERROR]"), message)
+      entries.forEach((entry: LogEntry) => {
+        this.logger.log("server", entry.formatted);
+
+        // Show critical errors to console (parser determines what's critical)
+        if (entry.isCritical && entry.rawMessage) {
+          console.error(chalk.red("[CRITICAL ERROR]"), entry.rawMessage);
         }
-      }
-    })
+      });
+    });
 
     this.serverProcess.on("exit", (code) => {
       if (this.isShuttingDown) return // Don't handle exits during shutdown
