@@ -27,6 +27,7 @@ export class CDPMonitor {
   private screenshotDir: string
   private logger: (source: string, message: string) => void
   private debug: boolean = false
+  private browserPath?: string
   private isShuttingDown = false
   private pendingRequests = 0
   private networkIdleTimer: NodeJS.Timeout | null = null
@@ -35,12 +36,14 @@ export class CDPMonitor {
     profileDir: string,
     screenshotDir: string,
     logger: (source: string, message: string) => void,
-    debug: boolean = false
+    debug: boolean = false,
+    browserPath?: string
   ) {
     this.profileDir = profileDir
     this.screenshotDir = screenshotDir
     this.logger = logger
     this.debug = debug
+    this.browserPath = browserPath
   }
 
   private debugLog(message: string) {
@@ -144,16 +147,22 @@ export class CDPMonitor {
 
   private async launchChrome(): Promise<void> {
     return new Promise((resolve, reject) => {
-      // Try different Chrome executables based on platform
-      const chromeCommands = [
-        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-        "google-chrome",
-        "chrome",
-        "chromium"
-      ]
+      // Use custom browser path if provided, otherwise try different Chrome executables based on platform
+      const chromeCommands = this.browserPath 
+        ? [this.browserPath]
+        : [
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            "google-chrome",
+            "chrome",
+            "chromium"
+          ]
 
-      this.debugLog(`Attempting to launch Chrome for CDP monitoring on port ${this.debugPort}`)
+      const browserType = this.browserPath ? "custom browser" : "Chrome"
+      this.debugLog(`Attempting to launch ${browserType} for CDP monitoring on port ${this.debugPort}`)
       this.debugLog(`Profile directory: ${this.profileDir}`)
+      if (this.browserPath) {
+        this.debugLog(`Custom browser path: ${this.browserPath}`)
+      }
 
       let attemptIndex = 0
 
