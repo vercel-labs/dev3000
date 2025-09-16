@@ -58,7 +58,10 @@ program
   .option("--mcp-port <port>", "MCP server port", "3684")
   .option("-s, --script <script>", "Package.json script to run (e.g. dev, build-start)", "dev")
   .option("--profile-dir <dir>", "Chrome profile directory", join(tmpdir(), "dev3000-chrome-profile"))
-  .option("--browser <path>", "Full path to browser executable (e.g. for Arc: '/Applications/Arc.app/Contents/MacOS/Arc')")
+  .option(
+    "--browser <path>",
+    "Full path to browser executable (e.g. for Arc: '/Applications/Arc.app/Contents/MacOS/Arc')"
+  )
   .option("--servers-only", "Run servers only, skip browser launch (use with Chrome extension)")
   .option("--debug", "Enable debug logging to console")
   .action(async (options) => {

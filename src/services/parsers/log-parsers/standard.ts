@@ -3,18 +3,18 @@
  * Handles standard server logs without special process manager formatting
  */
 
-import { LogFormatParser, ParsedLogLine } from './base.js';
+import type { LogFormatParser, ParsedLogLine } from "./base.js"
 
 export class StandardLogParser implements LogFormatParser {
   parse(text: string): ParsedLogLine[] {
     if (!text || !text.trim()) {
-      return [];
+      return []
     }
-    
-    const lines = text.trim().split('\n').filter(Boolean);
-    return lines.map(line => ({
+
+    const lines = text.trim().split("\n").filter(Boolean)
+    return lines.map((line) => ({
       formatted: line,
-      message: line,
-    }));
+      message: line
+    }))
   }
 }

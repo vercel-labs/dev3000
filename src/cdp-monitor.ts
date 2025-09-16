@@ -148,14 +148,9 @@ export class CDPMonitor {
   private async launchChrome(): Promise<void> {
     return new Promise((resolve, reject) => {
       // Use custom browser path if provided, otherwise try different Chrome executables based on platform
-      const chromeCommands = this.browserPath 
+      const chromeCommands = this.browserPath
         ? [this.browserPath]
-        : [
-            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-            "google-chrome",
-            "chrome",
-            "chromium"
-          ]
+        : ["/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", "google-chrome", "chrome", "chromium"]
 
       const browserType = this.browserPath ? "custom browser" : "Chrome"
       this.debugLog(`Attempting to launch ${browserType} for CDP monitoring on port ${this.debugPort}`)

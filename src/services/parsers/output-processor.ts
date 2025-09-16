@@ -3,16 +3,16 @@
  * Provides the main API for processing server log output
  */
 
-import { LogFormatParser } from './log-parsers/index.js';
-import { ErrorDetector } from './error-detectors/index.js';
+import type { ErrorDetector } from "./error-detectors/index.js"
+import type { LogFormatParser } from "./log-parsers/index.js"
 
 /**
  * Log entry structure for processed output
  */
 export interface LogEntry {
-  formatted: string;      // Ready-to-log formatted message
-  isCritical?: boolean;   // Optional flag for critical errors that should be shown to console
-  rawMessage?: string;    // Optional raw message for critical error display
+  formatted: string // Ready-to-log formatted message
+  isCritical?: boolean // Optional flag for critical errors that should be shown to console
+  rawMessage?: string // Optional raw message for critical error display
 }
 
 /**
@@ -33,39 +33,39 @@ export class OutputProcessor {
    */
   process(text: string, isError: boolean = false): LogEntry[] {
     // First, parse the log format to extract structured information
-    const parsedLines = this.logFormatParser.parse(text);
+    const parsedLines = this.logFormatParser.parse(text)
 
     // Then, apply error detection and create log entries
-    return parsedLines.map(line => {
+    return parsedLines.map((line) => {
       // For error output, check if it's critical
-      const isCritical = isError && this.errorDetector.isCritical(line.message);
+      const isCritical = isError && this.errorDetector.isCritical(line.message)
 
       // Build the log entry
       const entry: LogEntry = {
-        formatted: isError ? `ERROR: ${line.formatted}` : line.formatted,
-      };
+        formatted: isError ? `ERROR: ${line.formatted}` : line.formatted
+      }
 
       // Add critical error information if applicable
       if (isCritical) {
-        entry.isCritical = true;
-        entry.rawMessage = line.message;
+        entry.isCritical = true
+        entry.rawMessage = line.message
       }
 
-      return entry;
-    });
+      return entry
+    })
   }
 
   /**
    * Get the current log format parser
    */
   getLogFormatParser(): LogFormatParser {
-    return this.logFormatParser;
+    return this.logFormatParser
   }
 
   /**
    * Get the current error detector
    */
   getErrorDetector(): ErrorDetector {
-    return this.errorDetector;
+    return this.errorDetector
   }
 }

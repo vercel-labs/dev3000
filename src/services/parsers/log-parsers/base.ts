@@ -7,10 +7,10 @@
  * Parsed log line structure after format parsing
  */
 export interface ParsedLogLine {
-  formatted: string;     // Display format (e.g., "[WEB] Started GET /")
-  message: string;       // Raw message for error detection (e.g., "Started GET /")
-  processName?: string;  // Optional process identifier (e.g., "web", "js")
-  metadata?: Record<string, any>;  // Additional metadata from parsing
+  formatted: string // Display format (e.g., "[WEB] Started GET /")
+  message: string // Raw message for error detection (e.g., "Started GET /")
+  processName?: string // Optional process identifier (e.g., "web", "js")
+  metadata?: Record<string, any> // Additional metadata from parsing
 }
 
 /**
@@ -23,5 +23,5 @@ export interface LogFormatParser {
    * @param text Raw log text to parse
    * @returns Array of parsed log lines with formatting and metadata
    */
-  parse(text: string): ParsedLogLine[];
+  parse(text: string): ParsedLogLine[]
 }
