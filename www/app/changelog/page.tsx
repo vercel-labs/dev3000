@@ -1,4 +1,4 @@
-import { Github, Calendar, Package, Sparkles, Bug, Zap } from "lucide-react"
+import { Bug, Calendar, Github, Package, Sparkles, Zap } from "lucide-react"
 import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -18,7 +18,7 @@ const changelog = [
     ]
   },
   {
-    version: "0.0.49", 
+    version: "0.0.49",
     date: "2025-01-15",
     type: "minor" as const,
     highlights: [
@@ -29,7 +29,7 @@ const changelog = [
   },
   {
     version: "0.0.40",
-    date: "2025-01-10", 
+    date: "2025-01-10",
     type: "minor" as const,
     highlights: [
       "Introduced unified logging system with timestamped events",
@@ -40,7 +40,7 @@ const changelog = [
   {
     version: "0.0.30",
     date: "2025-01-05",
-    type: "minor" as const, 
+    type: "minor" as const,
     highlights: [
       "Added Chrome DevTools Protocol (CDP) monitoring",
       "Implemented persistent browser profile management",
@@ -63,7 +63,7 @@ const getVersionTypeIcon = (type: string) => {
   switch (type) {
     case "major":
       return <Sparkles className="w-4 h-4 text-yellow-400" />
-    case "minor": 
+    case "minor":
       return <Zap className="w-4 h-4 text-blue-400" />
     case "patch":
       return <Bug className="w-4 h-4 text-green-400" />
@@ -109,7 +109,7 @@ export default function ChangelogPage() {
             <nav className="flex items-center gap-4">
               <div className="hidden md:flex items-center gap-6">
                 <Link href="/#features" className="text-muted-foreground hover:text-foreground transition-colors">
-                  Features  
+                  Features
                 </Link>
                 <Link href="/#quickstart" className="text-muted-foreground hover:text-foreground transition-colors">
                   Quick Start
@@ -135,14 +135,12 @@ export default function ChangelogPage() {
               <h1 className="text-3xl md:text-4xl font-bold">Changelog</h1>
             </div>
             <p className="text-base text-muted-foreground mb-6 text-pretty leading-relaxed">
-              Track the latest updates, features, and improvements to dev3000. 
-              We're continuously enhancing the AI-powered debugging experience.
+              Track the latest updates, features, and improvements to dev3000. We're continuously enhancing the
+              AI-powered debugging experience.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center items-center">
               <Button variant="outline" className="border-gray-600/50" asChild>
-                <Link href="/">
-                  ← Back to Home
-                </Link>
+                <Link href="/">← Back to Home</Link>
               </Button>
               <Button variant="outline" className="border-gray-600/50" asChild>
                 <a href="https://www.npmjs.com/package/dev3000" target="_blank" rel="noopener noreferrer">
@@ -161,7 +159,10 @@ export default function ChangelogPage() {
           <div className="max-w-4xl mx-auto">
             <div className="space-y-6">
               {changelog.map((release, index) => (
-                <Card key={release.version} className="bg-card/50 backdrop-blur-sm border-2 border-gray-700/40 card-hover shadow-lg">
+                <Card
+                  key={release.version}
+                  className="bg-card/50 backdrop-blur-sm border-2 border-gray-700/40 card-hover shadow-lg"
+                >
                   <div className="p-6">
                     <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-4">
                       <div className="flex items-center gap-3">
@@ -169,7 +170,9 @@ export default function ChangelogPage() {
                         <div>
                           <h2 className="text-xl font-bold flex items-center gap-2">
                             Version {release.version}
-                            {index === 0 && <Badge className="bg-green-400/20 text-green-400 border-green-400/30">Latest</Badge>}
+                            {index === 0 && (
+                              <Badge className="bg-green-400/20 text-green-400 border-green-400/30">Latest</Badge>
+                            )}
                           </h2>
                           <div className="flex items-center gap-2 mt-1">
                             <span className="text-sm text-muted-foreground">{release.date}</span>
@@ -178,7 +181,7 @@ export default function ChangelogPage() {
                         </div>
                       </div>
                     </div>
-                    
+
                     <div className="space-y-2">
                       <h3 className="font-semibold text-sm mb-3">Key Highlights:</h3>
                       <ul className="space-y-2">
@@ -194,13 +197,11 @@ export default function ChangelogPage() {
                 </Card>
               ))}
             </div>
-            
+
             {/* More Versions Available */}
             <div className="mt-8 text-center">
               <Card className="bg-card/30 backdrop-blur-sm border-2 border-gray-700/40 p-6">
-                <p className="text-muted-foreground mb-4">
-                  Want to see the complete version history?
-                </p>
+                <p className="text-muted-foreground mb-4">Want to see the complete version history?</p>
                 <Button variant="outline" className="border-gray-600/50" asChild>
                   <a href="https://github.com/vercel-labs/dev3000/releases" target="_blank" rel="noopener noreferrer">
                     <Github className="w-4 h-4 mr-2" />

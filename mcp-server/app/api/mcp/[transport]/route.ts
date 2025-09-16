@@ -18,13 +18,13 @@ const handler = createMcpHandler(
       async ({ focusArea = "all" }) => {
         const logPath = process.env.LOG_FILE_PATH || "/tmp/d3k.log"
         const results: string[] = []
-        
+
         try {
           if (!existsSync(logPath)) {
             return {
               content: [
                 {
-                  type: "text", 
+                  type: "text",
                   text: `❌ No dev3000 logs found at ${logPath}. Make sure dev3000 is running (d3k or dev3000 command). If you're not using dev3000, I'll need you to specify which log files to check.`
                 }
               ]
@@ -32,28 +32,29 @@ const handler = createMcpHandler(
           }
 
           const logContent = readFileSync(logPath, "utf-8")
-          const logLines = logContent.split("\n").filter(line => line.trim())
-          
+          const logLines = logContent.split("\n").filter((line) => line.trim())
+
           results.push("🔍 **COMPREHENSIVE APP DEBUG ANALYSIS**\n")
-          
+
           // 1. Check for recent errors
           const recentLines = logLines.slice(-100)
-          const errorLines = recentLines.filter(line => 
-            line.includes("ERROR") || 
-            line.includes("Exception") || 
-            line.includes("FAIL") ||
-            line.includes("500") || 
-            line.includes("404") ||
-            line.includes("timeout")
+          const errorLines = recentLines.filter(
+            (line) =>
+              line.includes("ERROR") ||
+              line.includes("Exception") ||
+              line.includes("FAIL") ||
+              line.includes("500") ||
+              line.includes("404") ||
+              line.includes("timeout")
           )
-          
+
           if (errorLines.length > 0) {
             results.push("🚨 **RECENT ERRORS DETECTED:**")
             results.push(errorLines.slice(-10).join("\n"))
             results.push("")
             results.push("🔧 **IMMEDIATE ACTION REQUIRED:** I can help fix these errors right now! Let me:")
             results.push("• Analyze the error patterns and identify root causes")
-            results.push("• Edit the problematic code files to fix the issues") 
+            results.push("• Edit the problematic code files to fix the issues")
             results.push("• Use browser automation to verify the fixes work")
             results.push("• This is the magical dev3000 experience - AI that fixes, not just finds!")
             results.push("")
@@ -63,10 +64,10 @@ const handler = createMcpHandler(
 
           // 2. Check browser errors (last hour)
           const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000)
-          const browserErrors = logLines.filter(line => {
+          const browserErrors = logLines.filter((line) => {
             if (!line.includes("[BROWSER]")) return false
             if (!(line.includes("ERROR") || line.includes("CONSOLE ERROR"))) return false
-            
+
             const timestampMatch = line.match(/\[(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z)\]/)
             if (timestampMatch) {
               const logTime = new Date(timestampMatch[1])
@@ -74,7 +75,7 @@ const handler = createMcpHandler(
             }
             return true
           })
-          
+
           if (browserErrors.length > 0) {
             results.push("🌐 **BROWSER ERRORS (LAST HOUR):**")
             results.push(browserErrors.join("\n"))
@@ -91,14 +92,15 @@ const handler = createMcpHandler(
 
           // 3. Check for build/compilation issues
           if (focusArea === "all" || focusArea === "build") {
-            const buildErrors = recentLines.filter(line =>
-              line.includes("Failed to compile") ||
-              line.includes("Build failed") ||
-              line.includes("Type error") ||
-              line.includes("Syntax error") ||
-              line.includes("Module not found")
+            const buildErrors = recentLines.filter(
+              (line) =>
+                line.includes("Failed to compile") ||
+                line.includes("Build failed") ||
+                line.includes("Type error") ||
+                line.includes("Syntax error") ||
+                line.includes("Module not found")
             )
-            
+
             if (buildErrors.length > 0) {
               results.push("🔨 **BUILD/COMPILATION ISSUES:**")
               results.push(buildErrors.join("\n"))
@@ -114,15 +116,12 @@ const handler = createMcpHandler(
 
           // 4. Check for network issues
           if (focusArea === "all" || focusArea === "network") {
-            const networkIssues = recentLines.filter(line =>
-              line.includes("NETWORK") && (
-                line.includes("failed") ||
-                line.includes("timeout") ||
-                line.includes("500") ||
-                line.includes("404")
-              )
+            const networkIssues = recentLines.filter(
+              (line) =>
+                line.includes("NETWORK") &&
+                (line.includes("failed") || line.includes("timeout") || line.includes("500") || line.includes("404"))
             )
-            
+
             if (networkIssues.length > 0) {
               results.push("🌐 **NETWORK ISSUES:**")
               results.push(networkIssues.join("\n"))
@@ -155,7 +154,7 @@ const handler = createMcpHandler(
             results.push("• Use get_current_timestamp before testing, then get_logs_between_timestamps after")
             results.push("• I'm ready to fix any issues that appear!")
           }
-          
+
           results.push(`• Full logs available at: ${logPath}`)
           results.push("• Quick access: tail -f /tmp/d3k.log")
 
@@ -167,7 +166,6 @@ const handler = createMcpHandler(
               }
             ]
           }
-
         } catch (error) {
           return {
             content: [
@@ -341,12 +339,7 @@ const handler = createMcpHandler(
         filter: z.string().optional().describe("Filter logs by text content (case insensitive)"),
         logPath: z.string().optional().describe("Path to log file (default: /tmp/d3k.log)")
       },
-      async ({
-        startTime,
-        endTime,
-        filter,
-        logPath = process.env.LOG_FILE_PATH || "/tmp/d3k.log"
-      }) => {
+      async ({ startTime, endTime, filter, logPath = process.env.LOG_FILE_PATH || "/tmp/d3k.log" }) => {
         try {
           if (!existsSync(logPath)) {
             return {
@@ -501,12 +494,7 @@ const handler = createMcpHandler(
         severity: z.enum(["all", "critical", "warnings"]).optional().describe("Error severity filter (default: 'all')"),
         logPath: z.string().optional().describe("Path to log file (default: /tmp/d3k.log)")
       },
-      async ({
-        startTime,
-        endTime,
-        severity = "all",
-        logPath = process.env.LOG_FILE_PATH || "/tmp/d3k.log"
-      }) => {
+      async ({ startTime, endTime, severity = "all", logPath = process.env.LOG_FILE_PATH || "/tmp/d3k.log" }) => {
         try {
           if (!existsSync(logPath)) {
             return {
@@ -574,15 +562,7 @@ const handler = createMcpHandler(
             /timeout.*error/i
           ]
 
-          const warningPatterns = [
-            /WARN/i,
-            /WARNING/i,
-            /404/,
-            /deprecated/i,
-            /timeout/i,
-            /retry/i,
-            /slow/i
-          ]
+          const warningPatterns = [/WARN/i, /WARNING/i, /404/, /deprecated/i, /timeout/i, /retry/i, /slow/i]
 
           let patterns: RegExp[]
           switch (severity) {
@@ -598,32 +578,37 @@ const handler = createMcpHandler(
 
           // Filter lines that match error patterns
           const errorLines = timeFilteredLines.filter((line) => {
-            return patterns.some(pattern => pattern.test(line))
+            return patterns.some((pattern) => pattern.test(line))
           })
 
           // Group errors by type for better analysis
           const categorizedErrors = {
-            serverErrors: errorLines.filter(line => 
-              line.includes("[SERVER]") && (line.includes("ERROR") || line.includes("Exception"))
+            serverErrors: errorLines.filter(
+              (line) => line.includes("[SERVER]") && (line.includes("ERROR") || line.includes("Exception"))
             ),
-            browserErrors: errorLines.filter(line => 
-              line.includes("[BROWSER]") && (line.includes("ERROR") || line.includes("CONSOLE ERROR"))
+            browserErrors: errorLines.filter(
+              (line) => line.includes("[BROWSER]") && (line.includes("ERROR") || line.includes("CONSOLE ERROR"))
             ),
-            buildErrors: errorLines.filter(line => 
-              line.includes("Failed to compile") || line.includes("Type error") || line.includes("Build failed")
+            buildErrors: errorLines.filter(
+              (line) =>
+                line.includes("Failed to compile") || line.includes("Type error") || line.includes("Build failed")
             ),
-            networkErrors: errorLines.filter(line => 
-              line.includes("NETWORK") || line.includes("404") || line.includes("500") || line.includes("timeout")
+            networkErrors: errorLines.filter(
+              (line) =>
+                line.includes("NETWORK") || line.includes("404") || line.includes("500") || line.includes("timeout")
             ),
-            otherErrors: errorLines.filter(line => 
-              !line.includes("[SERVER]") && !line.includes("[BROWSER]") && 
-              !line.includes("Failed to compile") && !line.includes("NETWORK")
+            otherErrors: errorLines.filter(
+              (line) =>
+                !line.includes("[SERVER]") &&
+                !line.includes("[BROWSER]") &&
+                !line.includes("Failed to compile") &&
+                !line.includes("NETWORK")
             )
           }
 
           const results = []
           const timeRange = `${start.toISOString()} to ${end.toISOString()}`
-          
+
           if (errorLines.length === 0) {
             results.push(`✅ No errors found between ${timeRange}`)
             results.push("🎯 This is great! Your code changes appear to be working without issues.")
@@ -631,37 +616,37 @@ const handler = createMcpHandler(
           } else {
             results.push(`🚨 FOUND ${errorLines.length} ERROR(S) between ${timeRange}`)
             results.push("")
-            
+
             if (categorizedErrors.serverErrors.length > 0) {
               results.push("🔥 **SERVER ERRORS:**")
               results.push(categorizedErrors.serverErrors.join("\n"))
               results.push("")
             }
-            
+
             if (categorizedErrors.browserErrors.length > 0) {
               results.push("🌐 **BROWSER ERRORS:**")
               results.push(categorizedErrors.browserErrors.join("\n"))
               results.push("")
             }
-            
+
             if (categorizedErrors.buildErrors.length > 0) {
               results.push("🔨 **BUILD ERRORS:**")
               results.push(categorizedErrors.buildErrors.join("\n"))
               results.push("")
             }
-            
+
             if (categorizedErrors.networkErrors.length > 0) {
               results.push("🌐 **NETWORK ERRORS:**")
               results.push(categorizedErrors.networkErrors.join("\n"))
               results.push("")
             }
-            
+
             if (categorizedErrors.otherErrors.length > 0) {
               results.push("⚠️ **OTHER ERRORS:**")
               results.push(categorizedErrors.otherErrors.join("\n"))
               results.push("")
             }
-            
+
             results.push("🪄 **IMMEDIATE ACTION REQUIRED - MAGIC FIXING TIME:**")
             results.push("🎯 **I can fix these errors RIGHT NOW! Here's what I'll do:**")
             results.push("• Analyze each error pattern and identify root causes")
@@ -707,7 +692,7 @@ const handler = createMcpHandler(
       },
       async ({ minutes = 5, autoFix = true }) => {
         const logPath = process.env.LOG_FILE_PATH || "/tmp/d3k.log"
-        
+
         try {
           if (!existsSync(logPath)) {
             return {
@@ -721,8 +706,8 @@ const handler = createMcpHandler(
           }
 
           const logContent = readFileSync(logPath, "utf-8")
-          const logLines = logContent.split("\n").filter(line => line.trim())
-          
+          const logLines = logContent.split("\n").filter((line) => line.trim())
+
           // Get logs from the last N minutes
           const cutoffTime = new Date(Date.now() - minutes * 60 * 1000)
           const recentLines = logLines.filter((line) => {
@@ -733,34 +718,51 @@ const handler = createMcpHandler(
             }
             return false
           })
-          
+
           // Find all error patterns
           const errorPatterns = [
-            /ERROR/i, /Exception/i, /FATAL/i, /CRASH/i, /Failed to compile/i, 
-            /Build failed/i, /Type error/i, /Syntax error/i, /Module not found/i, 
-            /500/, /404/, /ECONNREFUSED/i, /NETWORK.*failed/i, /timeout.*error/i,
-            /WARN/i, /WARNING/i, /deprecated/i
+            /ERROR/i,
+            /Exception/i,
+            /FATAL/i,
+            /CRASH/i,
+            /Failed to compile/i,
+            /Build failed/i,
+            /Type error/i,
+            /Syntax error/i,
+            /Module not found/i,
+            /500/,
+            /404/,
+            /ECONNREFUSED/i,
+            /NETWORK.*failed/i,
+            /timeout.*error/i,
+            /WARN/i,
+            /WARNING/i,
+            /deprecated/i
           ]
-          
+
           const errorLines = recentLines.filter((line) => {
-            return errorPatterns.some(pattern => pattern.test(line))
+            return errorPatterns.some((pattern) => pattern.test(line))
           })
-          
+
           const results = []
-          
+
           if (errorLines.length === 0) {
             results.push(`✅ Background monitoring: No new errors in the last ${minutes} minutes`)
             results.push("🎯 Development environment looks healthy!")
             results.push(`💡 Continue coding - I'll keep monitoring in the background.`)
             results.push("")
-            results.push("🔄 **AUTOMATED MONITORING TIP:** Run this tool again in a few minutes to stay on top of any issues.")
+            results.push(
+              "🔄 **AUTOMATED MONITORING TIP:** Run this tool again in a few minutes to stay on top of any issues."
+            )
           } else {
-            results.push(`🚨 BACKGROUND MONITORING ALERT: Found ${errorLines.length} error(s) in the last ${minutes} minutes`)
+            results.push(
+              `🚨 BACKGROUND MONITORING ALERT: Found ${errorLines.length} error(s) in the last ${minutes} minutes`
+            )
             results.push("")
             results.push("📋 **RECENT ERRORS DETECTED:**")
             results.push(errorLines.slice(-10).join("\n")) // Show last 10 errors
             results.push("")
-            
+
             if (autoFix) {
               results.push("🪄 **MAGIC AUTO-FIX MODE ACTIVATED:**")
               results.push("🎯 **I can fix these errors immediately! Here's the plan:**")
@@ -779,7 +781,7 @@ const handler = createMcpHandler(
               results.push("• Or say 'debug my app' for comprehensive error analysis")
             }
           }
-          
+
           return {
             content: [
               {

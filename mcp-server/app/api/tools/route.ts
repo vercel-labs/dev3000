@@ -8,7 +8,8 @@ export async function GET() {
     const tools = [
       {
         name: "debug_my_app",
-        description: "🚨 SHORTCUT COMMAND: Complete proactive analysis of your development environment. Automatically checks recent logs for errors, searches for common patterns, gets browser errors, and provides actionable debugging insights with immediate fixes.",
+        description:
+          "🚨 SHORTCUT COMMAND: Complete proactive analysis of your development environment. Automatically checks recent logs for errors, searches for common patterns, gets browser errors, and provides actionable debugging insights with immediate fixes.",
         category: "Primary Debugging",
         parameters: [
           {
@@ -21,13 +22,15 @@ export async function GET() {
       },
       {
         name: "get_current_timestamp",
-        description: "⏰ CRITICAL MONITORING TOOL: Get current timestamp for proactive error monitoring workflow. Use constantly before/after user interactions for timestamp-based debugging.",
+        description:
+          "⏰ CRITICAL MONITORING TOOL: Get current timestamp for proactive error monitoring workflow. Use constantly before/after user interactions for timestamp-based debugging.",
         category: "Monitoring",
         parameters: []
       },
       {
         name: "get_errors_between_timestamps",
-        description: "🚨 PROACTIVE ERROR EXTRACTION: Get ALL types of errors (server errors, exceptions, browser errors, build failures, network issues) between specific timestamps. Essential for continuous monitoring.",
+        description:
+          "🚨 PROACTIVE ERROR EXTRACTION: Get ALL types of errors (server errors, exceptions, browser errors, build failures, network issues) between specific timestamps. Essential for continuous monitoring.",
         category: "Error Analysis",
         parameters: [
           {
@@ -36,7 +39,7 @@ export async function GET() {
             description: "Start timestamp (ISO 8601 format: 2024-01-01T12:00:00.000Z)"
           },
           {
-            name: "endTime", 
+            name: "endTime",
             type: "string",
             description: "End timestamp (ISO 8601 format: 2024-01-01T12:30:00.000Z)"
           },
@@ -50,7 +53,8 @@ export async function GET() {
       },
       {
         name: "monitor_for_new_errors",
-        description: "🔍 AUTOMATED BACKGROUND MONITORING: Check for ANY new errors that appeared in the last few minutes. Use frequently for continuous quality assurance and preventive debugging.",
+        description:
+          "🔍 AUTOMATED BACKGROUND MONITORING: Check for ANY new errors that appeared in the last few minutes. Use frequently for continuous quality assurance and preventive debugging.",
         category: "Monitoring",
         parameters: [
           {
@@ -61,7 +65,7 @@ export async function GET() {
           },
           {
             name: "autoFix",
-            type: "boolean", 
+            type: "boolean",
             optional: true,
             description: "Whether to immediately offer fixes when errors found (default: true)"
           }
@@ -69,7 +73,8 @@ export async function GET() {
       },
       {
         name: "read_consolidated_logs",
-        description: "Read recent consolidated development logs containing server output, browser console logs, network requests, user interactions, and screenshots. Essential for general log overview and proactive error detection.",
+        description:
+          "Read recent consolidated development logs containing server output, browser console logs, network requests, user interactions, and screenshots. Essential for general log overview and proactive error detection.",
         category: "Log Analysis",
         parameters: [
           {
@@ -88,8 +93,9 @@ export async function GET() {
       },
       {
         name: "search_logs",
-        description: "Search through consolidated logs using regex patterns with context lines. Essential for tracing error patterns, finding specific API calls, or tracking user interaction sequences.",
-        category: "Log Analysis", 
+        description:
+          "Search through consolidated logs using regex patterns with context lines. Essential for tracing error patterns, finding specific API calls, or tracking user interaction sequences.",
+        category: "Log Analysis",
         parameters: [
           {
             name: "pattern",
@@ -106,17 +112,18 @@ export async function GET() {
       },
       {
         name: "get_logs_between_timestamps",
-        description: "Get logs between two specific timestamps - critical for timestamp-based debugging workflow. Eliminates noise and focuses analysis on specific user sessions.",
+        description:
+          "Get logs between two specific timestamps - critical for timestamp-based debugging workflow. Eliminates noise and focuses analysis on specific user sessions.",
         category: "Log Analysis",
         parameters: [
           {
-            name: "startTime", 
+            name: "startTime",
             type: "string",
             description: "Start timestamp (ISO 8601 format)"
           },
           {
             name: "endTime",
-            type: "string", 
+            type: "string",
             description: "End timestamp (ISO 8601 format)"
           },
           {
@@ -129,7 +136,8 @@ export async function GET() {
       },
       {
         name: "get_browser_errors",
-        description: "Get recent browser errors including console errors, JavaScript exceptions, and page errors from monitoring. Use proactively to catch JavaScript exceptions and runtime issues immediately.",
+        description:
+          "Get recent browser errors including console errors, JavaScript exceptions, and page errors from monitoring. Use proactively to catch JavaScript exceptions and runtime issues immediately.",
         category: "Browser Debugging",
         parameters: [
           {
@@ -141,8 +149,9 @@ export async function GET() {
         ]
       },
       {
-        name: "execute_browser_action", 
-        description: "🪄 MAGICAL VERIFICATION TOOL: Execute safe browser actions via Chrome DevTools Protocol for testing and interaction automation. The secret to dev3000 magic - use to verify fixes work by automating browser interactions and taking screenshots.",
+        name: "execute_browser_action",
+        description:
+          "🪄 MAGICAL VERIFICATION TOOL: Execute safe browser actions via Chrome DevTools Protocol for testing and interaction automation. The secret to dev3000 magic - use to verify fixes work by automating browser interactions and taking screenshots.",
         category: "Browser Automation",
         parameters: [
           {
@@ -159,7 +168,8 @@ export async function GET() {
       },
       {
         name: "healthcheck",
-        description: "Internal healthcheck tool - rarely needed since MCP connection working means server is healthy. Only use if explicitly asked to verify server health.",
+        description:
+          "Internal healthcheck tool - rarely needed since MCP connection working means server is healthy. Only use if explicitly asked to verify server health.",
         category: "System",
         parameters: [
           {
@@ -176,12 +186,9 @@ export async function GET() {
       tools,
       endpoint: "http://localhost:3684/api/mcp/mcp",
       totalTools: tools.length,
-      categories: [...new Set(tools.map(t => t.category))]
+      categories: [...new Set(tools.map((t) => t.category))]
     })
   } catch (error) {
-    return NextResponse.json(
-      { error: "Failed to extract tools documentation" },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: "Failed to extract tools documentation" }, { status: 500 })
   }
 }

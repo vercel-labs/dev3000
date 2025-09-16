@@ -1,42 +1,42 @@
-"use client";
+"use client"
 
-import Link from "next/link";
-import { useEffect, useState } from "react";
+import Link from "next/link"
+import { useEffect, useState } from "react"
 
 interface MCPTool {
-  name: string;
-  description: string;
-  category: string;
+  name: string
+  description: string
+  category: string
   parameters: Array<{
-    name: string;
-    type: string;
-    optional?: boolean;
-    description: string;
-  }>;
+    name: string
+    type: string
+    optional?: boolean
+    description: string
+  }>
 }
 
 interface ToolsResponse {
-  tools: MCPTool[];
-  endpoint: string;
-  totalTools: number;
-  categories: string[];
+  tools: MCPTool[]
+  endpoint: string
+  totalTools: number
+  categories: string[]
 }
 
 export default function HomePage() {
-  const [tools, setTools] = useState<ToolsResponse | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [tools, setTools] = useState<ToolsResponse | null>(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     fetch("/api/tools")
       .then((res) => res.json())
       .then((data) => {
-        setTools(data);
-        setLoading(false);
+        setTools(data)
+        setLoading(false)
       })
       .catch(() => {
-        setLoading(false);
-      });
-  }, []);
+        setLoading(false)
+      })
+  }, [])
 
   return (
     <div className="min-h-screen bg-white">
@@ -50,9 +50,7 @@ export default function HomePage() {
                   <span className="text-white font-mono font-bold">d3k</span>
                 </div>
                 <div>
-                  <h1 className="text-3xl font-bold text-gray-900">
-                    dev3000 MCP Server
-                  </h1>
+                  <h1 className="text-3xl font-bold text-gray-900">dev3000 MCP Server</h1>
                   <div className="flex items-center gap-3 mt-2">
                     <span className="inline-flex items-center gap-2 text-sm text-green-600 font-medium">
                       <span className="w-2 h-2 bg-green-500 rounded-full"></span>
@@ -90,23 +88,16 @@ export default function HomePage() {
           {/* Quick Start */}
           <section className="mb-16">
             <div className="bg-blue-50 border border-blue-200 rounded p-8">
-              <h2 className="text-xl font-semibold text-blue-900 mb-4">
-                🚀 Quick Start
-              </h2>
+              <h2 className="text-xl font-semibold text-blue-900 mb-4">🚀 Quick Start</h2>
               <div className="space-y-4">
                 <div>
-                  <span className="text-sm font-medium text-blue-800">
-                    MCP Endpoint:
-                  </span>
+                  <span className="text-sm font-medium text-blue-800">MCP Endpoint:</span>
                   <code className="ml-3 px-4 py-2 bg-blue-100 text-blue-800 text-sm font-mono rounded">
                     {tools?.endpoint || "http://localhost:3684/api/mcp/mcp"}
                   </code>
                 </div>
                 <div className="text-sm text-blue-700">
-                  <p className="mb-3">
-                    Connect your AI tools to this MCP server for real-time
-                    development debugging:
-                  </p>
+                  <p className="mb-3">Connect your AI tools to this MCP server for real-time development debugging:</p>
                   <div className="flex gap-6">
                     <a
                       href="https://github.com/vercel-labs/dev3000#claude-desktop"
@@ -134,9 +125,7 @@ export default function HomePage() {
           <section>
             <div className="mb-12">
               <div>
-                <h2 className="text-3xl font-bold text-gray-900 mb-3">
-                  Available Tools
-                </h2>
+                <h2 className="text-3xl font-bold text-gray-900 mb-3">Available Tools</h2>
                 <p className="text-gray-600 text-lg">
                   {loading
                     ? "Loading MCP tools..."
@@ -150,9 +139,7 @@ export default function HomePage() {
             {loading ? (
               <div className="text-center py-16">
                 <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                <p className="mt-6 text-gray-600">
-                  Loading tool documentation...
-                </p>
+                <p className="mt-6 text-gray-600">Loading tool documentation...</p>
               </div>
             ) : tools ? (
               <div className="grid gap-6 lg:grid-cols-2">
@@ -163,38 +150,26 @@ export default function HomePage() {
                     className="border border-gray-200 rounded p-6 hover:border-gray-300 transition-colors"
                   >
                     <div className="mb-4">
-                      <h4 className="text-xl font-semibold text-gray-900 font-mono mb-3">
-                        {tool.name}
-                      </h4>
+                      <h4 className="text-xl font-semibold text-gray-900 font-mono mb-3">{tool.name}</h4>
                       <p className="text-gray-600 leading-relaxed">
-                        {tool.description
-                          .replace(/🚨|⏰|🔍|🪄|📊|🌐|⚙️/g, "")
-                          .trim()}
+                        {tool.description.replace(/🚨|⏰|🔍|🪄|📊|🌐|⚙️/g, "").trim()}
                       </p>
                     </div>
                     {tool.parameters.length > 0 && (
                       <div>
-                        <h5 className="text-sm font-semibold text-gray-800 mb-3">
-                          Parameters:
-                        </h5>
+                        <h5 className="text-sm font-semibold text-gray-800 mb-3">Parameters:</h5>
                         <div className="space-y-2">
                           {tool.parameters.map((param) => (
                             <div key={param.name} className="text-sm">
                               <div className="flex items-start gap-2">
-                                <span className="font-mono text-blue-600 font-medium">
-                                  {param.name}
-                                </span>
+                                <span className="font-mono text-blue-600 font-medium">{param.name}</span>
                                 <span className="text-gray-500 text-xs">
                                   {param.optional ? "(optional)" : "(required)"}
                                 </span>
-                                <span className="text-gray-400 text-xs">
-                                  - {param.type}
-                                </span>
+                                <span className="text-gray-400 text-xs">- {param.type}</span>
                               </div>
                               {param.description && (
-                                <div className="text-gray-600 ml-1 mt-1 text-sm">
-                                  {param.description}
-                                </div>
+                                <div className="text-gray-600 ml-1 mt-1 text-sm">{param.description}</div>
                               )}
                             </div>
                           ))}
@@ -206,9 +181,7 @@ export default function HomePage() {
               </div>
             ) : (
               <div className="text-center py-16">
-                <p className="text-red-600 mb-6">
-                  Failed to load tool documentation
-                </p>
+                <p className="text-red-600 mb-6">Failed to load tool documentation</p>
                 <button
                   onClick={() => window.location.reload()}
                   className="px-6 py-3 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors"
@@ -222,9 +195,7 @@ export default function HomePage() {
 
           {/* Magic Workflow */}
           <section className="mt-20 bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded p-10">
-            <h2 className="text-2xl font-semibold text-gray-900 mb-6 flex items-center gap-3">
-              🪄 The Magic Workflow
-            </h2>
+            <h2 className="text-2xl font-semibold text-gray-900 mb-6 flex items-center gap-3">🪄 The Magic Workflow</h2>
             <div className="grid md:grid-cols-3 gap-8">
               <div className="text-center">
                 <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -232,8 +203,7 @@ export default function HomePage() {
                 </div>
                 <h3 className="font-semibold mb-3 text-lg">AI Finds Issues</h3>
                 <p className="text-gray-600 leading-relaxed">
-                  Tools like debug_my_app and monitor_for_new_errors
-                  automatically detect problems
+                  Tools like debug_my_app and monitor_for_new_errors automatically detect problems
                 </p>
               </div>
               <div className="text-center">
@@ -249,12 +219,9 @@ export default function HomePage() {
                 <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                   <span className="text-green-600 font-bold text-lg">3</span>
                 </div>
-                <h3 className="font-semibold mb-3 text-lg">
-                  AI Verifies Fixes
-                </h3>
+                <h3 className="font-semibold mb-3 text-lg">AI Verifies Fixes</h3>
                 <p className="text-gray-600 leading-relaxed">
-                  execute_browser_action tests the fixes in real-time with
-                  screenshots
+                  execute_browser_action tests the fixes in real-time with screenshots
                 </p>
               </div>
             </div>
@@ -291,8 +258,7 @@ export default function HomePage() {
         <div className="max-w-7xl mx-auto px-6 py-8">
           <div className="flex items-center justify-between text-sm text-gray-600">
             <div>
-              <span className="font-semibold">dev3000 MCP Server</span> -
-              AI-powered development monitoring
+              <span className="font-semibold">dev3000 MCP Server</span> - AI-powered development monitoring
             </div>
             <div className="flex items-center gap-8">
               <a
@@ -311,10 +277,7 @@ export default function HomePage() {
               >
                 Homepage
               </a>
-              <Link
-                href="/logs"
-                className="hover:text-gray-900 transition-colors"
-              >
+              <Link href="/logs" className="hover:text-gray-900 transition-colors">
                 Logs
               </Link>
             </div>
@@ -322,5 +285,5 @@ export default function HomePage() {
         </div>
       </footer>
     </div>
-  );
+  )
 }
