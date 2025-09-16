@@ -1,136 +1,326 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
+import Link from "next/link";
+import { useEffect, useState } from "react";
 
-interface HealthStatus {
-  status: string
-  timestamp: string
-  mcpEndpoint: string
-  logFile: {
-    path: string
-    exists: boolean
-  }
-  version: string
+interface MCPTool {
+  name: string;
+  description: string;
+  category: string;
+  parameters: Array<{
+    name: string;
+    type: string;
+    optional?: boolean;
+    description: string;
+  }>;
+}
+
+interface ToolsResponse {
+  tools: MCPTool[];
+  endpoint: string;
+  totalTools: number;
+  categories: string[];
 }
 
 export default function HomePage() {
-  const [health, setHealth] = useState<HealthStatus | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [tools, setTools] = useState<ToolsResponse | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/health")
+    fetch("/api/tools")
       .then((res) => res.json())
       .then((data) => {
-        setHealth(data)
-        setLoading(false)
+        setTools(data);
+        setLoading(false);
       })
       .catch(() => {
-        setLoading(false)
-      })
-  }, [])
+        setLoading(false);
+      });
+  }, []);
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <a
-        href="https://github.com/vercel-labs/dev3000"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="fixed top-4 right-4 text-gray-600 hover:text-gray-900 transition-colors"
-        title="View on GitHub"
-      >
-        <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-          <path d="M12 0C5.374 0 0 5.373 0 12 0 17.302 3.438 21.8 8.207 23.387c.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23A11.509 11.509 0 0112 5.803c1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576C20.566 21.797 24 17.3 24 12c0-6.627-5.373-12-12-12z" />
-        </svg>
-      </a>
-
-      <div className="bg-white rounded-lg shadow-lg p-8 max-w-2xl w-full">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">🎯 dev3000</h1>
-          <p className="text-gray-600">AI-powered development monitoring</p>
-        </div>
-
-        {/* Health Status */}
-        <div className="mb-8 p-4 bg-gray-50 rounded-lg">
-          <h2 className="text-lg font-semibold mb-3 flex items-center">
-            {loading ? "⏳" : health?.status === "healthy" ? "✅" : "❌"}
-            <span className="ml-2">Server Status</span>
-          </h2>
-          {loading ? (
-            <p className="text-gray-600">Checking health...</p>
-          ) : health ? (
-            <div className="space-y-2 text-sm">
-              <p>
-                <span className="font-medium">Status:</span> {health.status}
-              </p>
-              <p>
-                <span className="font-medium">Version:</span> {health.version}
-              </p>
-              <p>
-                <span className="font-medium">Log File:</span> {health.logFile.exists ? "✅" : "❌"}{" "}
-                {health.logFile.path}
-              </p>
+    <div className="min-h-screen bg-white">
+      {/* Header */}
+      <header className="bg-gray-50 border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-6 py-8">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="flex items-center gap-4 mb-3">
+                <div className="w-12 h-12 bg-black rounded flex items-center justify-center">
+                  <span className="text-white font-mono font-bold">d3k</span>
+                </div>
+                <div>
+                  <h1 className="text-3xl font-bold text-gray-900">
+                    dev3000 MCP Server
+                  </h1>
+                  <div className="flex items-center gap-3 mt-2">
+                    <span className="inline-flex items-center gap-2 text-sm text-green-600 font-medium">
+                      <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                      Server Running
+                    </span>
+                    <span className="text-gray-300">•</span>
+                    <span className="text-sm text-gray-600">Port 3684</span>
+                  </div>
+                </div>
+              </div>
             </div>
-          ) : (
-            <p className="text-red-600">Failed to get health status</p>
-          )}
-        </div>
-
-        {/* Navigation */}
-        <div className="space-y-4 mb-8">
-          <a
-            href="/logs"
-            className="block w-full bg-blue-500 text-white text-center py-3 px-4 rounded hover:bg-blue-600 transition-colors"
-          >
-            📊 View Development Logs
-          </a>
-        </div>
-
-        {/* MCP Configuration */}
-        <div className="border-t pt-6">
-          <h2 className="text-lg font-semibold mb-4 flex items-center">
-            🤖 <span className="ml-2">MCP Integration</span>
-          </h2>
-
-          <div className="bg-blue-50 p-4 rounded-lg mb-4">
-            <p className="text-sm text-blue-800 mb-2">
-              <span className="font-medium">Endpoint:</span>
-              <code className="bg-blue-100 px-2 py-1 rounded text-xs ml-2">
-                http://localhost:{typeof window !== "undefined" ? window.location.port : "3684"}/api/mcp/mcp
-              </code>
-            </p>
-            <p className="text-xs text-blue-600">Use HTTP transport (not stdio) when configuring MCP clients</p>
-          </div>
-
-          <div className="space-y-3">
-            <h3 className="font-medium text-gray-900">Configure AI Tools:</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="flex items-center gap-4">
+              <Link
+                href="/logs"
+                className="inline-flex items-center gap-2 px-5 py-3 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700 transition-colors"
+              >
+                📊 View Logs
+              </Link>
               <a
-                href="https://github.com/vercel-labs/dev3000#claude-desktop"
+                href="https://github.com/vercel-labs/dev3000#setup"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center justify-between p-3 border rounded hover:bg-gray-50 transition-colors text-sm"
+                className="inline-flex items-center gap-2 px-5 py-3 border border-gray-300 text-gray-700 text-sm font-medium rounded hover:bg-gray-50 transition-colors"
               >
-                <span>Claude Desktop</span>
-                <span className="text-gray-400">↗</span>
-              </a>
-              <a
-                href="https://github.com/vercel-labs/dev3000#mcp-clients"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-between p-3 border rounded hover:bg-gray-50 transition-colors text-sm"
-              >
-                <span>Other MCP Clients</span>
-                <span className="text-gray-400">↗</span>
+                📖 Setup Guide
               </a>
             </div>
           </div>
         </div>
+      </header>
 
-        <div className="mt-8 text-sm text-gray-600 text-center border-t pt-6">
-          <p>Real-time development monitoring with visual context</p>
-          <p className="mt-1">Server logs + Browser events + Screenshots + AI debugging</p>
-        </div>
+      <div className="flex max-w-7xl mx-auto">
+        {/* Main Content */}
+        <main className="flex-1 px-6 py-8 min-w-0 lg:pr-80">
+          {/* Quick Start */}
+          <section className="mb-16">
+            <div className="bg-blue-50 border border-blue-200 rounded p-8">
+              <h2 className="text-xl font-semibold text-blue-900 mb-4">
+                🚀 Quick Start
+              </h2>
+              <div className="space-y-4">
+                <div>
+                  <span className="text-sm font-medium text-blue-800">
+                    MCP Endpoint:
+                  </span>
+                  <code className="ml-3 px-4 py-2 bg-blue-100 text-blue-800 text-sm font-mono rounded">
+                    {tools?.endpoint || "http://localhost:3684/api/mcp/mcp"}
+                  </code>
+                </div>
+                <div className="text-sm text-blue-700">
+                  <p className="mb-3">
+                    Connect your AI tools to this MCP server for real-time
+                    development debugging:
+                  </p>
+                  <div className="flex gap-6">
+                    <a
+                      href="https://github.com/vercel-labs/dev3000#claude-desktop"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:text-blue-800 font-medium"
+                    >
+                      Claude Desktop Setup →
+                    </a>
+                    <a
+                      href="https://github.com/vercel-labs/dev3000#cursor"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:text-blue-800 font-medium"
+                    >
+                      Cursor Setup →
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* Tools Documentation */}
+          <section>
+            <div className="mb-12">
+              <div>
+                <h2 className="text-3xl font-bold text-gray-900 mb-3">
+                  Available Tools
+                </h2>
+                <p className="text-gray-600 text-lg">
+                  {loading
+                    ? "Loading MCP tools..."
+                    : `${tools?.totalTools || 0} tools across ${
+                        tools?.categories.length || 0
+                      } categories for AI-powered development debugging`}
+                </p>
+              </div>
+            </div>
+
+            {loading ? (
+              <div className="text-center py-16">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                <p className="mt-6 text-gray-600">
+                  Loading tool documentation...
+                </p>
+              </div>
+            ) : tools ? (
+              <div className="grid gap-6 lg:grid-cols-2">
+                {tools.tools.map((tool) => (
+                  <div
+                    key={tool.name}
+                    id={tool.name}
+                    className="border border-gray-200 rounded p-6 hover:border-gray-300 transition-colors"
+                  >
+                    <div className="mb-4">
+                      <h4 className="text-xl font-semibold text-gray-900 font-mono mb-3">
+                        {tool.name}
+                      </h4>
+                      <p className="text-gray-600 leading-relaxed">
+                        {tool.description
+                          .replace(/🚨|⏰|🔍|🪄|📊|🌐|⚙️/g, "")
+                          .trim()}
+                      </p>
+                    </div>
+                    {tool.parameters.length > 0 && (
+                      <div>
+                        <h5 className="text-sm font-semibold text-gray-800 mb-3">
+                          Parameters:
+                        </h5>
+                        <div className="space-y-2">
+                          {tool.parameters.map((param) => (
+                            <div key={param.name} className="text-sm">
+                              <div className="flex items-start gap-2">
+                                <span className="font-mono text-blue-600 font-medium">
+                                  {param.name}
+                                </span>
+                                <span className="text-gray-500 text-xs">
+                                  {param.optional ? "(optional)" : "(required)"}
+                                </span>
+                                <span className="text-gray-400 text-xs">
+                                  - {param.type}
+                                </span>
+                              </div>
+                              {param.description && (
+                                <div className="text-gray-600 ml-1 mt-1 text-sm">
+                                  {param.description}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-16">
+                <p className="text-red-600 mb-6">
+                  Failed to load tool documentation
+                </p>
+                <button
+                  onClick={() => window.location.reload()}
+                  className="px-6 py-3 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors"
+                  type="button"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+          </section>
+
+          {/* Magic Workflow */}
+          <section className="mt-20 bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded p-10">
+            <h2 className="text-2xl font-semibold text-gray-900 mb-6 flex items-center gap-3">
+              🪄 The Magic Workflow
+            </h2>
+            <div className="grid md:grid-cols-3 gap-8">
+              <div className="text-center">
+                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <span className="text-blue-600 font-bold text-lg">1</span>
+                </div>
+                <h3 className="font-semibold mb-3 text-lg">AI Finds Issues</h3>
+                <p className="text-gray-600 leading-relaxed">
+                  Tools like debug_my_app and monitor_for_new_errors
+                  automatically detect problems
+                </p>
+              </div>
+              <div className="text-center">
+                <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <span className="text-purple-600 font-bold text-lg">2</span>
+                </div>
+                <h3 className="font-semibold mb-3 text-lg">AI Fixes Code</h3>
+                <p className="text-gray-600 leading-relaxed">
+                  AI analyzes errors and edits your code files to resolve issues
+                </p>
+              </div>
+              <div className="text-center">
+                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <span className="text-green-600 font-bold text-lg">3</span>
+                </div>
+                <h3 className="font-semibold mb-3 text-lg">
+                  AI Verifies Fixes
+                </h3>
+                <p className="text-gray-600 leading-relaxed">
+                  execute_browser_action tests the fixes in real-time with
+                  screenshots
+                </p>
+              </div>
+            </div>
+          </section>
+        </main>
+
+        {/* Table of Contents - Sticky Sidebar (Right) */}
+        <aside className="lg:block w-72 flex-shrink-0 fixed right-0 top-0 h-screen overflow-y-auto z-10">
+          <div className="p-6 bg-gray-50 border-l border-gray-200 h-full">
+            <h3 className="text-sm font-semibold text-gray-900 mb-4">Tools</h3>
+            {loading ? (
+              <div className="text-sm text-gray-500">Loading tools...</div>
+            ) : tools ? (
+              <nav className="space-y-1 text-sm">
+                {tools.tools.map((tool) => (
+                  <a
+                    key={tool.name}
+                    href={`#${tool.name}`}
+                    className="text-gray-600 hover:text-blue-600 transition-colors block py-2 px-3 rounded hover:bg-white"
+                  >
+                    {tool.name}
+                  </a>
+                ))}
+              </nav>
+            ) : (
+              <div className="text-sm text-gray-500">Failed to load tools</div>
+            )}
+          </div>
+        </aside>
       </div>
+
+      {/* Footer */}
+      <footer className="border-t border-gray-200 mt-20">
+        <div className="max-w-7xl mx-auto px-6 py-8">
+          <div className="flex items-center justify-between text-sm text-gray-600">
+            <div>
+              <span className="font-semibold">dev3000 MCP Server</span> -
+              AI-powered development monitoring
+            </div>
+            <div className="flex items-center gap-8">
+              <a
+                href="https://github.com/vercel-labs/dev3000"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-gray-900 transition-colors"
+              >
+                GitHub
+              </a>
+              <a
+                href="https://dev3000.ai"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-gray-900 transition-colors"
+              >
+                Homepage
+              </a>
+              <Link
+                href="/logs"
+                className="hover:text-gray-900 transition-colors"
+              >
+                Logs
+              </Link>
+            </div>
+          </div>
+        </div>
+      </footer>
     </div>
-  )
+  );
 }

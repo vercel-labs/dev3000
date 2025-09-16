@@ -154,6 +154,7 @@ export class DevEnvironment {
   private version: string;
   private isShuttingDown: boolean = false;
   private serverStartTime: number | null = null
+  private healthCheckTimer: NodeJS.Timeout | null = null
 
   constructor(options: DevEnvironmentOptions) {
     this.options = options;
@@ -242,6 +243,59 @@ export class DevEnvironment {
     }
   }
 
+  private async checkProcessHealth(): Promise<boolean> {
+    if (this.isShuttingDown) return true // Skip health check if already shutting down
+
+    try {
+      const ports = [this.options.port, this.options.mcpPort]
+
+      for (const port of ports) {
+        const result = await new Promise<string>((resolve) => {
+          const proc = spawn("lsof", ["-ti", `:${port}`], { stdio: "pipe" })
+          let output = ""
+          proc.stdout?.on("data", (data) => {
+            output += data.toString()
+          })
+          proc.on("exit", () => resolve(output.trim()))
+        })
+
+        if (!result) {
+          this.debugLog(`Health check failed: Port ${port} is no longer in use`)
+          this.logger.log("server", `Health check failed: Critical process on port ${port} is no longer running`)
+          return false
+        }
+      }
+
+      this.debugLog("Health check passed: All critical processes are running")
+      return true
+    } catch (error) {
+      this.debugLog(`Health check error: ${error}`)
+      // Treat errors as non-fatal - network issues shouldn't kill the process
+      return true
+    }
+  }
+
+  private startHealthCheck() {
+    // Start health checks every 10 seconds
+    this.healthCheckTimer = setInterval(async () => {
+      const isHealthy = await this.checkProcessHealth()
+      if (!isHealthy) {
+        console.log(chalk.yellow("⚠️ Critical processes no longer detected. Shutting down gracefully..."))
+        this.gracefulShutdown()
+      }
+    }, 10000) // 10 seconds
+
+    this.debugLog("Health check timer started (10 second intervals)")
+  }
+
+  private stopHealthCheck() {
+    if (this.healthCheckTimer) {
+      clearInterval(this.healthCheckTimer)
+      this.healthCheckTimer = null
+      this.debugLog("Health check timer stopped")
+    }
+  }
+
   async start() {
     // Show startup message first
     console.log(chalk.greenBright(`Starting ${this.options.commandName} (v${this.version})`))
@@ -294,6 +348,9 @@ export class DevEnvironment {
       console.log(chalk.cyan("🖥️  Servers-only mode - use Chrome extension for browser monitoring"))
     }
     console.log(chalk.gray(`\n💡 To stop all servers and kill ${this.options.commandName}: Ctrl-C`))
+
+    // Start health monitoring after everything is ready
+    this.startHealthCheck()
   }
 
   private async startServer() {
@@ -352,6 +409,7 @@ export class DevEnvironment {
           }
           console.log(chalk.yellow("💡 It looks like dependencies are not installed."))
           console.log(chalk.yellow("   Run 'pnpm install' (or npm/yarn install) and try again."))
+          this.showRecentLogs()
           this.gracefulShutdown()
           return
         }
@@ -365,25 +423,28 @@ export class DevEnvironment {
           }
           console.log(chalk.yellow("💡 Check your server command configuration and project setup"))
           console.log(chalk.yellow(`   Command: ${this.options.serverCommand}`))
+          this.showRecentLogs()
           this.gracefulShutdown()
           return
         }
 
-        // For later exits, use the original logic for build failures vs fatal errors
-        // Common exit codes that indicate temporary issues, not fatal errors:
-        // - Code 1: Generic build failure or restart
+        // For later exits, any non-zero exit code should be treated as fatal
+        // Only ignore successful exit and specific signal-based exit codes:
+        // - Code 0: Success (not fatal)
         // - Code 130: Ctrl+C (SIGINT)
         // - Code 143: SIGTERM
-        const isFatalExit = code !== 1 && code !== 130 && code !== 143
+        const isFatalExit = code !== 0 && code !== 130 && code !== 143
 
         if (isFatalExit) {
-          // Stop spinner and show error for fatal exits only
+          // Stop spinner and show error for fatal exits
           if (this.spinner?.isSpinning) {
-            this.spinner.fail(`Server process fatally exited with code ${code}`)
+            this.spinner.fail(`Server process exited with code ${code}`)
           } else {
-            console.log(chalk.red(`\n❌ Server process fatally exited with code ${code}`))
+            console.log(chalk.red(`\n❌ Server process exited with code ${code}`))
           }
-          console.log(chalk.yellow("💡 Check your server command and logs for details"))
+
+          // Show recent log entries to help with debugging
+          this.showRecentLogs()
           this.gracefulShutdown()
         } else {
           // For non-fatal exits (like build failures), just log and continue
@@ -406,6 +467,33 @@ export class DevEnvironment {
       } else {
         console.log(chalk.gray(`[DEBUG] ${message}`))
       }
+    }
+  }
+
+  private showRecentLogs() {
+    try {
+      if (existsSync(this.options.logFile)) {
+        const logContent = readFileSync(this.options.logFile, "utf8")
+        const lines = logContent
+          .trim()
+          .split("\n")
+          .filter((line) => line.trim())
+
+        if (lines.length > 0) {
+          // Show last 10 lines, or fewer if log is shorter
+          const recentLines = lines.slice(-10)
+          console.log(chalk.yellow("\n📋 Recent log entries:"))
+          for (const line of recentLines) {
+            console.log(chalk.gray(`   ${line}`))
+          }
+        }
+      }
+
+      console.log(chalk.cyan(`\n📄 Full logs: ${this.options.logFile}`))
+      console.log(chalk.cyan(`   Quick access: tail -f /tmp/d3k.log`))
+    } catch (_error) {
+      // Fallback if we can't read the log file
+      console.log(chalk.yellow(`💡 Check logs for details: ${this.options.logFile}`))
     }
   }
 
@@ -731,6 +819,9 @@ export class DevEnvironment {
     if (this.isShuttingDown) return // Prevent multiple shutdown attempts
     this.isShuttingDown = true
 
+    // Stop health monitoring
+    this.stopHealthCheck()
+
     // Stop spinner if it's running
     if (this.spinner?.isSpinning) {
       this.spinner.fail("Critical failure detected")
@@ -783,6 +874,9 @@ export class DevEnvironment {
     process.on("SIGINT", async () => {
       if (this.isShuttingDown) return // Prevent multiple shutdown attempts
       this.isShuttingDown = true
+
+      // Stop health monitoring
+      this.stopHealthCheck()
 
       // Stop spinner if it's running
       if (this.spinner?.isSpinning) {

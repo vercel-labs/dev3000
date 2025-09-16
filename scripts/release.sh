@@ -76,9 +76,13 @@ node -e "
     fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
 "
 
-# Commit version change
-echo "📝 Committing version change..."
-git add package.json
+# Update changelog
+echo "📝 Updating changelog..."
+node scripts/update-changelog.js "v$NEXT_VERSION"
+
+# Commit version change and changelog
+echo "📝 Committing version change and changelog..."
+git add package.json www/app/changelog/page.tsx
 git commit -m "Release v$NEXT_VERSION
 
 🤖 Generated with [Claude Code](https://claude.ai/code)
