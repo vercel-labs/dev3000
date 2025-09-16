@@ -683,12 +683,16 @@ export class CDPMonitor {
       throw new Error("No CDP connection available")
     }
 
+    const navigationStartTime = Date.now()
     this.debugLog(`Navigating to http://localhost:${port}`)
+    
     // Navigate to the app
     await this.sendCDPCommand("Page.navigate", {
       url: `http://localhost:${port}`
     })
-    this.debugLog("Navigation command sent successfully")
+    
+    const navigationTime = Date.now() - navigationStartTime
+    this.debugLog(`Navigation command sent successfully (${navigationTime}ms)`)
 
     // Take an immediate screenshot after navigation command
     setTimeout(() => {
@@ -704,20 +708,21 @@ export class CDPMonitor {
       this.takeScreenshot("navigation-3s")
     }, 3000)
 
+    // Set up interaction tracking - but be more efficient about it
+    const trackingStartTime = Date.now()
     this.debugLog("Setting up interaction tracking")
-    // Enable interaction tracking via Runtime.evaluate - inject with delays to ensure it works
+    
+    // Initial setup - this should be enough for most cases
     await this.setupInteractionTracking()
-
-    // Also inject on DOM content loaded and page loaded events to ensure it gets set up
+    
+    // Only add one backup setup with a shorter delay (removing redundant 2s delay)
     setTimeout(async () => {
+      this.debugLog("Running backup interaction tracking setup")
       await this.setupInteractionTracking()
-    }, 1000)
-
-    setTimeout(async () => {
-      await this.setupInteractionTracking()
-    }, 2000)
-
-    this.debugLog("Interaction tracking setup completed")
+    }, 500) // Reduced from 1000ms
+    
+    const trackingTime = Date.now() - trackingStartTime
+    this.debugLog(`Interaction tracking setup completed (${trackingTime}ms)`)
 
     // Start polling for interactions from the injected script
     this.startInteractionPolling()
@@ -727,6 +732,19 @@ export class CDPMonitor {
 
   private async setupInteractionTracking(): Promise<void> {
     try {
+      // First check if tracking is already set up to avoid redundant injections
+      this.debugLog("About to check if tracking is already set up...")
+      const checkResult = await this.sendCDPCommand("Runtime.evaluate", {
+        expression: "!!window.__dev3000_cdp_tracking",
+        returnByValue: true
+      }) as any
+      
+      if (checkResult.result?.value === true) {
+        this.debugLog("Interaction tracking already set up, skipping")
+        return
+      }
+      
+      this.debugLog("About to inject tracking script...")
       // Full interaction tracking script with element details for replay
       const trackingScript = `
         try {
