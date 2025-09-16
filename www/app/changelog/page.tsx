@@ -8,6 +8,16 @@ import { Card } from "@/components/ui/card"
 const changelog = [
   {
     version: "0.0.60",
+    date: "2025-09-16",
+    type: "minor" as const,
+    highlights: [
+      "Fix linting issues from biome",
+      "Add comprehensive changelog system and enhance MCP server homepage"
+    ]
+  },
+
+  {
+    version: "0.0.60",
     date: "2025-01-16",
     type: "patch" as const,
     highlights: [
