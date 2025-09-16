@@ -112,6 +112,7 @@ dev3000 [options]
   -p, --port <port>         Your app's port (default: 3000)
   --mcp-port <port>         MCP server port (default: 3684)
   -s, --script <script>     Package.json script to run (default: dev)
+  --browser <path>          Full path to browser executable (e.g. Arc, custom Chrome)
   --servers-only            Run servers only, skip browser launch (use with Chrome extension)
   --profile-dir <dir>       Chrome profile directory (default: /tmp/dev3000-chrome-profile)
 ```
@@ -121,6 +122,9 @@ Examples:
 ```bash
 # Custom port
 dev3000 --port 5173
+
+# Use Arc browser
+dev3000 --browser '/Applications/Arc.app/Contents/MacOS/Arc'
 
 # Use with Chrome extension (no Playwright)
 dev3000 --servers-only
