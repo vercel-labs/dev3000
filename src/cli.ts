@@ -11,8 +11,26 @@ import { createPersistentLogFile, startDevEnvironment } from "./dev-environment.
 interface ProjectConfig {
   type: "node" | "python"
   packageManager?: string // Only for node projects
+  pythonCommand?: string // Only for python projects
   defaultScript: string
   defaultPort: string
+}
+
+function detectPythonCommand(): string {
+  // Check if we're in a virtual environment
+  if (process.env.VIRTUAL_ENV) {
+    // In virtual env, prefer the activated python
+    return "python"
+  }
+  
+  // Check if python3 is available and prefer it
+  try {
+    require("child_process").execSync("python3 --version", { stdio: "ignore" })
+    return "python3"
+  } catch {
+    // Fall back to python
+    return "python"
+  }
 }
 
 function detectProjectType(): ProjectConfig {
@@ -21,7 +39,8 @@ function detectProjectType(): ProjectConfig {
     return {
       type: "python",
       defaultScript: "main.py",
-      defaultPort: "8000" // Common Python web server port
+      defaultPort: "8000", // Common Python web server port
+      pythonCommand: detectPythonCommand()
     }
   }
 
@@ -120,7 +139,7 @@ program
     // Generate server command based on project type
     let serverCommand: string
     if (projectConfig.type === "python") {
-      serverCommand = `python ${script}`
+      serverCommand = `${projectConfig.pythonCommand} ${script}`
     } else {
       // Node.js project
       serverCommand = `${projectConfig.packageManager} run ${script}`

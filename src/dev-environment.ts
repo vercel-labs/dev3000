@@ -654,6 +654,13 @@ export class DevEnvironment {
     // Continue anyway if health check fails
   }
 
+  private detectPackageManagerInDir(dir: string): string {
+    if (existsSync(join(dir, "pnpm-lock.yaml"))) return "pnpm"
+    if (existsSync(join(dir, "yarn.lock"))) return "yarn"  
+    if (existsSync(join(dir, "package-lock.json"))) return "npm"
+    return "npm" // fallback
+  }
+
   private async installMcpServerDeps(mcpServerPath: string): Promise<void> {
     return new Promise<void>((resolve, reject) => {
       // For global installs, we need to install to a writable location
@@ -678,7 +685,8 @@ export class DevEnvironment {
         workingDir = tmpDirPath
       }
 
-      const packageManager = detectPackageManagerForRun()
+      // Detect package manager from MCP server directory, not current directory
+      const packageManager = this.detectPackageManagerInDir(mcpServerPath)
 
       // Don't show any console output during dependency installation
       // All status will be handled by the progress bar
