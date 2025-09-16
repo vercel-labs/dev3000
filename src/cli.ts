@@ -16,36 +16,50 @@ interface ProjectConfig {
   defaultPort: string
 }
 
-function detectPythonCommand(): string {
+function detectPythonCommand(debug = false): string {
   // Check if we're in a virtual environment
   if (process.env.VIRTUAL_ENV) {
-    // In virtual env, prefer the activated python
+    if (debug) {
+      console.log(`[PYTHON DEBUG] Virtual environment detected: ${process.env.VIRTUAL_ENV}`)
+      console.log(`[PYTHON DEBUG] Using activated python command`)
+    }
     return "python"
   }
-  
+
   // Check if python3 is available and prefer it
   try {
     require("child_process").execSync("python3 --version", { stdio: "ignore" })
+    if (debug) {
+      console.log(`[PYTHON DEBUG] python3 is available, using python3`)
+    }
     return "python3"
   } catch {
-    // Fall back to python
+    if (debug) {
+      console.log(`[PYTHON DEBUG] python3 not available, falling back to python`)
+    }
     return "python"
   }
 }
 
-function detectProjectType(): ProjectConfig {
+function detectProjectType(debug = false): ProjectConfig {
   // Check for Python project
   if (existsSync("requirements.txt") || existsSync("pyproject.toml")) {
+    if (debug) {
+      console.log(`[PROJECT DEBUG] Python project detected (found requirements.txt or pyproject.toml)`)
+    }
     return {
       type: "python",
       defaultScript: "main.py",
       defaultPort: "8000", // Common Python web server port
-      pythonCommand: detectPythonCommand()
+      pythonCommand: detectPythonCommand(debug)
     }
   }
 
   // Check for Node.js project
   if (existsSync("pnpm-lock.yaml")) {
+    if (debug) {
+      console.log(`[PROJECT DEBUG] Node.js project detected (found pnpm-lock.yaml)`)
+    }
     return {
       type: "node",
       packageManager: "pnpm",
@@ -54,6 +68,9 @@ function detectProjectType(): ProjectConfig {
     }
   }
   if (existsSync("yarn.lock")) {
+    if (debug) {
+      console.log(`[PROJECT DEBUG] Node.js project detected (found yarn.lock)`)
+    }
     return {
       type: "node",
       packageManager: "yarn",
@@ -62,6 +79,9 @@ function detectProjectType(): ProjectConfig {
     }
   }
   if (existsSync("package-lock.json")) {
+    if (debug) {
+      console.log(`[PROJECT DEBUG] Node.js project detected (found package-lock.json)`)
+    }
     return {
       type: "node",
       packageManager: "npm",
@@ -71,6 +91,9 @@ function detectProjectType(): ProjectConfig {
   }
 
   // Fallback to npm for Node.js
+  if (debug) {
+    console.log(`[PROJECT DEBUG] No project files detected, defaulting to Node.js with npm`)
+  }
   return {
     type: "node",
     packageManager: "npm",
@@ -130,7 +153,7 @@ program
   .option("--debug", "Enable debug logging to console")
   .action(async (options) => {
     // Detect project type and configuration
-    const projectConfig = detectProjectType()
+    const projectConfig = detectProjectType(options.debug)
 
     // Use defaults from project detection if not explicitly provided
     const port = options.port || projectConfig.defaultPort
@@ -143,6 +166,13 @@ program
     } else {
       // Node.js project
       serverCommand = `${projectConfig.packageManager} run ${script}`
+    }
+
+    if (options.debug) {
+      console.log(`[CLI DEBUG] Project type: ${projectConfig.type}`)
+      console.log(`[CLI DEBUG] Port: ${port} (${options.port ? 'explicit' : 'auto-detected'})`)
+      console.log(`[CLI DEBUG] Script: ${script} (${options.script ? 'explicit' : 'auto-detected'})`)
+      console.log(`[CLI DEBUG] Server command: ${serverCommand}`)
     }
 
     // Detect which command name was used (dev3000 or d3k)

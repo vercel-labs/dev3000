@@ -656,7 +656,7 @@ export class DevEnvironment {
 
   private detectPackageManagerInDir(dir: string): string {
     if (existsSync(join(dir, "pnpm-lock.yaml"))) return "pnpm"
-    if (existsSync(join(dir, "yarn.lock"))) return "yarn"  
+    if (existsSync(join(dir, "yarn.lock"))) return "yarn"
     if (existsSync(join(dir, "package-lock.json"))) return "npm"
     return "npm" // fallback
   }
@@ -688,15 +688,23 @@ export class DevEnvironment {
       // Detect package manager from MCP server directory, not current directory
       const packageManager = this.detectPackageManagerInDir(mcpServerPath)
 
-      // Don't show any console output during dependency installation
-      // All status will be handled by the progress bar
-
       // For pnpm, use --dev flag to include devDependencies
       const installArgs =
         packageManager === "pnpm"
           ? ["install", "--prod=false"] // Install both prod and dev dependencies
           : ["install", "--include=dev"] // npm/yarn syntax
 
+      const fullCommand = `${packageManager} ${installArgs.join(" ")}`
+      
+      if (this.options.debug) {
+        console.log(`[MCP DEBUG] Installing MCP server dependencies...`)
+        console.log(`[MCP DEBUG] Working directory: ${workingDir}`)
+        console.log(`[MCP DEBUG] Package manager detected: ${packageManager}`)
+        console.log(`[MCP DEBUG] Command: ${fullCommand}`)
+        console.log(`[MCP DEBUG] Is global install: ${isGlobalInstall}`)
+      }
+
+      const installStartTime = Date.now()
       const installProcess = spawn(packageManager, installArgs, {
         stdio: ["ignore", "pipe", "pipe"],
         shell: true,
@@ -706,28 +714,55 @@ export class DevEnvironment {
       // Add timeout (3 minutes)
       const timeout = setTimeout(
         () => {
+          if (this.options.debug) {
+            console.log(`[MCP DEBUG] Installation timed out after 3 minutes`)
+          }
           installProcess.kill("SIGKILL")
           reject(new Error("MCP server dependency installation timed out after 3 minutes"))
         },
         3 * 60 * 1000
       )
 
-      // Suppress all output to prevent progress bar interference
-      installProcess.stdout?.on("data", (_data) => {
-        // Silently consume output
+      // Capture output for debugging, but suppress for normal operation
+      let debugOutput = ""
+      let debugErrors = ""
+
+      installProcess.stdout?.on("data", (data) => {
+        const text = data.toString()
+        if (this.options.debug) {
+          debugOutput += text
+        }
       })
 
-      installProcess.stderr?.on("data", (_data) => {
-        // Silently consume output
+      installProcess.stderr?.on("data", (data) => {
+        const text = data.toString()
+        if (this.options.debug) {
+          debugErrors += text
+        }
       })
 
       installProcess.on("exit", (code) => {
         clearTimeout(timeout)
+        const installTime = Date.now() - installStartTime
+
+        if (this.options.debug) {
+          console.log(`[MCP DEBUG] Installation completed in ${installTime}ms with exit code: ${code}`)
+          if (debugOutput) {
+            console.log(`[MCP DEBUG] stdout:`, debugOutput.trim())
+          }
+          if (debugErrors) {
+            console.log(`[MCP DEBUG] stderr:`, debugErrors.trim())
+          }
+        }
 
         if (code === 0) {
           resolve()
         } else {
-          reject(new Error(`MCP server dependency installation failed with exit code ${code}`))
+          const errorMsg = `MCP server dependency installation failed with exit code ${code}`
+          const fullError = this.options.debug && debugErrors 
+            ? `${errorMsg}\nstderr: ${debugErrors.trim()}`
+            : errorMsg
+          reject(new Error(fullError))
         }
       })
 
