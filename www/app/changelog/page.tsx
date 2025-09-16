@@ -10,10 +10,7 @@ const changelog = [
     version: "0.0.60",
     date: "2025-09-16",
     type: "minor" as const,
-    highlights: [
-      "Fix linting issues from biome",
-      "Add comprehensive changelog system and enhance MCP server homepage"
-    ]
+    highlights: ["Fix linting issues from biome", "Add comprehensive changelog system and enhance MCP server homepage"]
   },
 
   {
