@@ -106,12 +106,12 @@ function determineVersionType(highlights, versionBump) {
   return "patch"
 }
 
-// Function to update the changelog page
+// Function to update the changelog data file
 function updateChangelogPage(version, highlights, versionType) {
-  const changelogPath = path.join(__dirname, "../www/app/changelog/page.tsx")
+  const changelogPath = path.join(__dirname, "../www/lib/changelog.ts")
 
   if (!fs.existsSync(changelogPath)) {
-    console.log("⚠️ Changelog page not found, skipping update")
+    console.log("⚠️ Changelog data file not found, skipping update")
     return
   }
 
@@ -127,7 +127,7 @@ function updateChangelogPage(version, highlights, versionType) {
   }
 
   // Find the changelog array in the file
-  const changelogStartRegex = /const changelog = \[([\s\S]*?)\]/
+  const changelogStartRegex = /export const changelog: Release\[\] = \[([\s\S]*?)\]/
   const match = content.match(changelogStartRegex)
 
   if (!match) {
@@ -142,7 +142,7 @@ function updateChangelogPage(version, highlights, versionType) {
   const newEntryText = `  {
     version: "${newEntry.version}",
     date: "${newEntry.date}",
-    type: "${newEntry.type}" as const,
+    type: "${newEntry.type}",
     highlights: [
 ${newEntry.highlights.map((h) => `      "${h.replace(/"/g, '\\"')}"`).join(",\n")}
     ]
@@ -152,19 +152,19 @@ ${newEntry.highlights.map((h) => `      "${h.replace(/"/g, '\\"')}"`).join(",\n"
   let updatedContent
   if (existingChangelogText.trim() === "") {
     // Empty array
-    updatedContent = content.replace("const changelog = []", `const changelog = [\n${newEntryText}\n]`)
+    updatedContent = content.replace("export const changelog: Release[] = []", `export const changelog: Release[] = [\n${newEntryText}\n]`)
   } else {
     // Add to beginning of existing array
     updatedContent = content.replace(
       changelogStartRegex,
-      `const changelog = [
+      `export const changelog: Release[] = [
 ${newEntryText},
 $1]`
     )
   }
 
   fs.writeFileSync(changelogPath, updatedContent)
-  console.log("✅ Updated changelog page")
+  console.log("✅ Updated changelog data file")
 }
 
 // Main function

@@ -1,46 +1,7 @@
 import { ImageResponse } from "next/og"
+import { changelog } from "@/lib/changelog"
 
 export const runtime = "edge"
-
-type ReleaseType = "major" | "minor" | "patch"
-
-interface Release {
-  version: string
-  date: string
-  type: ReleaseType
-  highlights: string[]
-}
-
-const changelog: Release[] = [
-  {
-    version: "0.0.62",
-    date: "2025-09-17",
-    type: "minor",
-    highlights: [
-      "Fix linter formatting in next-env.d.ts",
-      "Clean up code formatting and bump to v0.0.62-canary",
-      "Fix server readiness check for FastAPI/Python servers",
-      "Add comprehensive server startup debug logging"
-    ]
-  },
-
-  {
-    version: "0.0.61",
-    date: "2025-09-16",
-    type: "minor",
-    highlights: [
-      "Update README with --browser flag documentation",
-      "Add --browser flag to support custom browser executables"
-    ]
-  },
-
-  {
-    version: "0.0.60",
-    date: "2025-09-16",
-    type: "minor",
-    highlights: ["Fix linting issues from biome", "Add comprehensive changelog system and enhance MCP server homepage"]
-  }
-]
 
 export async function GET() {
   try {
