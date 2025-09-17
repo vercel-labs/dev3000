@@ -7,6 +7,18 @@ import { Card } from "@/components/ui/card"
 // Changelog data structure - this will be updated by the release script
 const changelog = [
   {
+    version: "0.0.62",
+    date: "2025-09-17",
+    type: "minor" as const,
+    highlights: [
+      "Fix linter formatting in next-env.d.ts",
+      "Clean up code formatting and bump to v0.0.62-canary",
+      "Fix server readiness check for FastAPI/Python servers",
+      "Add comprehensive server startup debug logging"
+    ]
+  },
+
+  {
     version: "0.0.61",
     date: "2025-09-16",
     type: "minor" as const,
