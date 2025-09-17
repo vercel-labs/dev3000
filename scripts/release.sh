@@ -78,11 +78,11 @@ node -e "
 
 # Update changelog
 echo "📝 Updating changelog..."
-node scripts/update-changelog.js "v$NEXT_VERSION"
+npx tsx scripts/update-changelog.ts "v$NEXT_VERSION"
 
 # Commit version change and changelog
 echo "📝 Committing version change and changelog..."
-git add package.json www/app/changelog/page.tsx
+git add package.json www/lib/changelog.ts
 git commit -m "Release v$NEXT_VERSION
 
 🤖 Generated with [Claude Code](https://claude.ai/code)

@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env tsx
 
 import { execSync } from "child_process"
 import fs from "fs"
@@ -8,8 +8,24 @@ import { fileURLToPath } from "url"
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
+interface Commit {
+  hash: string
+  subject: string
+  author: string
+  date: string
+}
+
+type ReleaseType = "major" | "minor" | "patch"
+
+interface Release {
+  version: string
+  date: string
+  type: ReleaseType
+  highlights: string[]
+}
+
 // Function to get git commits since last release
-function getCommitsSinceLastRelease() {
+function getCommitsSinceLastRelease(): Commit[] {
   try {
     // Get the last release tag
     const lastTag = execSync('git describe --tags --abbrev=0 --match="v*" HEAD~1 2>/dev/null || echo "HEAD~10"', {
@@ -27,15 +43,15 @@ function getCommitsSinceLastRelease() {
       const [hash, subject, author, date] = line.split("|")
       return { hash, subject, author, date }
     })
-  } catch (error) {
+  } catch (_error) {
     console.log("⚠️ Could not get git commits, using empty list")
     return []
   }
 }
 
 // Function to extract highlights from commits
-function extractHighlights(commits) {
-  const highlights = []
+function extractHighlights(commits: Commit[]): string[] {
+  const highlights: string[] = []
   const skipPatterns = [
     /^Merge/i,
     /^Bump to v.*canary/i,
@@ -45,7 +61,7 @@ function extractHighlights(commits) {
     /generated with.*claude code/i
   ]
 
-  const importantPatterns = [
+  const _importantPatterns = [
     { pattern: /add/i, prefix: "Added" },
     { pattern: /implement/i, prefix: "Implemented" },
     { pattern: /create/i, prefix: "Created" },
@@ -83,7 +99,7 @@ function extractHighlights(commits) {
 }
 
 // Function to determine version type based on changes
-function determineVersionType(highlights, versionBump) {
+function determineVersionType(highlights: string[], versionBump: string): ReleaseType {
   // Check if it's a major version (x.0.0)
   if (versionBump.includes("major") || highlights.some((h) => h.toLowerCase().includes("breaking"))) {
     return "major"
@@ -107,7 +123,7 @@ function determineVersionType(highlights, versionBump) {
 }
 
 // Function to update the changelog data file
-function updateChangelogPage(version, highlights, versionType) {
+function updateChangelogPage(version: string, highlights: string[], versionType: ReleaseType): void {
   const changelogPath = path.join(__dirname, "../www/lib/changelog.ts")
 
   if (!fs.existsSync(changelogPath)) {
@@ -119,7 +135,7 @@ function updateChangelogPage(version, highlights, versionType) {
 
   // Create new changelog entry
   const today = new Date().toISOString().split("T")[0]
-  const newEntry = {
+  const newEntry: Release = {
     version: version.replace("v", ""),
     date: today,
     type: versionType,
@@ -149,7 +165,7 @@ ${newEntry.highlights.map((h) => `      "${h.replace(/"/g, '\\"')}"`).join(",\n"
   }`
 
   // Insert at the beginning of the array
-  let updatedContent
+  let updatedContent: string
   if (existingChangelogText.trim() === "") {
     // Empty array
     updatedContent = content.replace(
@@ -171,11 +187,12 @@ $1]`
 }
 
 // Main function
-function main() {
+function main(): void {
   const args = process.argv.slice(2)
-  if (args.length < 1) {
-    console.log("Usage: node update-changelog.js <version>")
-    process.exit(1)
+  if (args.length < 1 || args[0] === '--help' || args[0] === '-h') {
+    console.log("Usage: tsx update-changelog.ts <version>")
+    console.log("Example: tsx update-changelog.ts v0.0.63")
+    process.exit(args[0] === '--help' || args[0] === '-h' ? 0 : 1)
   }
 
   const version = args[0]
