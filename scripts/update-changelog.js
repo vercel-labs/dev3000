@@ -152,7 +152,10 @@ ${newEntry.highlights.map((h) => `      "${h.replace(/"/g, '\\"')}"`).join(",\n"
   let updatedContent
   if (existingChangelogText.trim() === "") {
     // Empty array
-    updatedContent = content.replace("export const changelog: Release[] = []", `export const changelog: Release[] = [\n${newEntryText}\n]`)
+    updatedContent = content.replace(
+      "export const changelog: Release[] = []",
+      `export const changelog: Release[] = [\n${newEntryText}\n]`
+    )
   } else {
     // Add to beginning of existing array
     updatedContent = content.replace(

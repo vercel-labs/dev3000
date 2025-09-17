@@ -1,4 +1,4 @@
-export type ReleaseType = 'major' | 'minor' | 'patch'
+export type ReleaseType = "major" | "minor" | "patch"
 
 export interface Release {
   version: string
