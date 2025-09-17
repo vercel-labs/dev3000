@@ -134,7 +134,7 @@ export default function ChangelogPage() {
             <div className="space-y-6">
               {changelog.map((release, index) => (
                 <Card
-                  key={release.version}
+                  key={`${release.version}-${release.date}`}
                   className="bg-card/50 backdrop-blur-sm border-2 border-gray-700/40 card-hover shadow-lg"
                 >
                   <div className="p-6">
