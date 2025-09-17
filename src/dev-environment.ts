@@ -659,7 +659,9 @@ export class DevEnvironment {
         if (response.ok || response.status === 404 || response.status === 405) {
           const totalTime = Date.now() - startTime
           this.debugLog(`Server is ready! Total wait time: ${totalTime}ms (${attempts + 1} attempts)`)
-          this.debugLog(`Status ${response.status} indicates server is running (200=OK, 404=Not Found, 405=Method Not Allowed)`)
+          this.debugLog(
+            `Status ${response.status} indicates server is running (200=OK, 404=Not Found, 405=Method Not Allowed)`
+          )
           return
         } else {
           this.debugLog(`Server responded with non-OK status: ${response.status}, continuing to wait`)

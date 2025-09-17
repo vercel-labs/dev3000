@@ -170,8 +170,8 @@ program
 
     if (options.debug) {
       console.log(`[CLI DEBUG] Project type: ${projectConfig.type}`)
-      console.log(`[CLI DEBUG] Port: ${port} (${options.port ? 'explicit' : 'auto-detected'})`)
-      console.log(`[CLI DEBUG] Script: ${script} (${options.script ? 'explicit' : 'auto-detected'})`)
+      console.log(`[CLI DEBUG] Port: ${port} (${options.port ? "explicit" : "auto-detected"})`)
+      console.log(`[CLI DEBUG] Script: ${script} (${options.script ? "explicit" : "auto-detected"})`)
       console.log(`[CLI DEBUG] Server command: ${serverCommand}`)
     }
 
