@@ -182,7 +182,7 @@ export default function HomePage() {
                   <span className="w-6 h-6 bg-green-500 text-white rounded-full flex items-center justify-center text-sm font-bold">
                     3
                   </span>
-                  Connect to Claude/Cursor
+                  Connect to Claude/Cursor/Codex
                 </h3>
                 <div className="space-y-3">
                   <div className="text-sm text-muted-foreground mb-2">Add the MCP server to claude:</div>
@@ -198,6 +198,17 @@ export default function HomePage() {
                   <code>
                     <pre>{JSON.stringify(cursorConfig, null, 2)}</pre>
                   </code>
+                  
+                  <div className="text-xs text-blue-400 mt-2">For OpenAI Codex:</div>
+                  <div className="bg-secondary/50 rounded p-3 font-mono text-xs border-2 border-gray-700/35 shadow-sm overflow-x-auto">
+                    <div className="text-muted-foreground mb-1">Add to ~/.codex/config.toml:</div>
+                    <div className="text-foreground whitespace-pre-wrap">
+{`[mcp_servers]
+
+  [mcp_servers.dev3000]
+  url = "http://localhost:3684/api/mcp/mcp"`}
+                    </div>
+                  </div>
                 </div>
               </div>
             </Card>
