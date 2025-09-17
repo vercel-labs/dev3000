@@ -189,10 +189,10 @@ $1]`
 // Main function
 function main(): void {
   const args = process.argv.slice(2)
-  if (args.length < 1 || args[0] === '--help' || args[0] === '-h') {
+  if (args.length < 1 || args[0] === "--help" || args[0] === "-h") {
     console.log("Usage: tsx update-changelog.ts <version>")
     console.log("Example: tsx update-changelog.ts v0.0.63")
-    process.exit(args[0] === '--help' || args[0] === '-h' ? 0 : 1)
+    process.exit(args[0] === "--help" || args[0] === "-h" ? 0 : 1)
   }
 
   const version = args[0]
