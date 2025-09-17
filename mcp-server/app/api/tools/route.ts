@@ -19,7 +19,7 @@ export async function GET() {
           },
           {
             name: "mode",
-            type: "enum", 
+            type: "enum",
             optional: true,
             description: "Debug mode: 'snapshot' (immediate), 'bisect' (timestamp-based), 'monitor' (continuous)"
           },

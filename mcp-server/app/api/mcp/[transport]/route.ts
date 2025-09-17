@@ -22,16 +22,19 @@ const handler = createMcpHandler(
           .boolean()
           .optional()
           .describe("In bisect mode: capture timestamp, wait for user testing, then analyze (default: false)"),
-        timeRangeMinutes: z
-          .number()
-          .optional()
-          .describe("Minutes to analyze back from now (default: 10)"),
+        timeRangeMinutes: z.number().optional().describe("Minutes to analyze back from now (default: 10)"),
         includeTimestampInstructions: z
           .boolean()
           .optional()
           .describe("Show timestamp-based debugging instructions for manual workflow (default: true)")
       },
-      async ({ focusArea = "all", mode = "snapshot", waitForUserInteraction = false, timeRangeMinutes = 10, includeTimestampInstructions = true }) => {
+      async ({
+        focusArea = "all",
+        mode = "snapshot",
+        waitForUserInteraction = false,
+        timeRangeMinutes = 10,
+        includeTimestampInstructions = true
+      }) => {
         const logPath = process.env.LOG_FILE_PATH || "/tmp/d3k.log"
         const results: string[] = []
         const currentTimestamp = new Date().toISOString()
@@ -64,34 +67,51 @@ const handler = createMcpHandler(
             results.push("")
             results.push("💡 **This eliminates the need for separate timestamp tools!**")
             results.push("🎪 **The magic happens when you return - I'll have everything ready to fix!**")
-            
+
             return {
-              content: [{
-                type: "text",
-                text: results.join("\n")
-              }]
+              content: [
+                {
+                  type: "text",
+                  text: results.join("\n")
+                }
+              ]
             }
           }
 
           // Determine time range for analysis
           const cutoffTime = new Date(Date.now() - timeRangeMinutes * 60 * 1000)
-          
+
           // For monitor mode, show longer time range
           if (mode === "monitor") {
             results.push(`🔄 **CONTINUOUS MONITORING MODE** (last ${timeRangeMinutes} minutes)`)
           } else {
             results.push(`🔍 **COMPREHENSIVE DEBUG ANALYSIS** (last ${timeRangeMinutes} minutes)`)
           }
-          
+
           results.push(`📊 Analysis timestamp: ${currentTimestamp}`)
           results.push("")
 
           // COMPREHENSIVE ERROR DETECTION - combines all previous tools
           const errorPatterns = [
-            /ERROR/i, /Exception/i, /FATAL/i, /CRASH/i, /Failed to compile/i,
-            /Build failed/i, /Type error/i, /Syntax error/i, /Module not found/i,
-            /500/, /404/, /ECONNREFUSED/i, /NETWORK.*failed/i, /timeout.*error/i,
-            /WARN/i, /WARNING/i, /deprecated/i, /slow/i, /retry/i
+            /ERROR/i,
+            /Exception/i,
+            /FATAL/i,
+            /CRASH/i,
+            /Failed to compile/i,
+            /Build failed/i,
+            /Type error/i,
+            /Syntax error/i,
+            /Module not found/i,
+            /500/,
+            /404/,
+            /ECONNREFUSED/i,
+            /NETWORK.*failed/i,
+            /timeout.*error/i,
+            /WARN/i,
+            /WARNING/i,
+            /deprecated/i,
+            /slow/i,
+            /retry/i
           ]
 
           // Filter logs by time range (replaces get_logs_between_timestamps)
@@ -111,11 +131,23 @@ const handler = createMcpHandler(
 
           // Categorize errors for better analysis
           const categorizedErrors = {
-            serverErrors: allErrors.filter(line => line.includes("[SERVER]") && (line.includes("ERROR") || line.includes("Exception"))),
-            browserErrors: allErrors.filter(line => line.includes("[BROWSER]") && (line.includes("ERROR") || line.includes("CONSOLE ERROR"))),
-            buildErrors: allErrors.filter(line => line.includes("Failed to compile") || line.includes("Type error") || line.includes("Build failed")),
-            networkErrors: allErrors.filter(line => line.includes("NETWORK") || line.includes("404") || line.includes("500") || line.includes("timeout")),
-            warnings: allErrors.filter(line => /WARN|WARNING|deprecated/i.test(line) && !/ERROR|Exception|FAIL/i.test(line))
+            serverErrors: allErrors.filter(
+              (line) => line.includes("[SERVER]") && (line.includes("ERROR") || line.includes("Exception"))
+            ),
+            browserErrors: allErrors.filter(
+              (line) => line.includes("[BROWSER]") && (line.includes("ERROR") || line.includes("CONSOLE ERROR"))
+            ),
+            buildErrors: allErrors.filter(
+              (line) =>
+                line.includes("Failed to compile") || line.includes("Type error") || line.includes("Build failed")
+            ),
+            networkErrors: allErrors.filter(
+              (line) =>
+                line.includes("NETWORK") || line.includes("404") || line.includes("500") || line.includes("timeout")
+            ),
+            warnings: allErrors.filter(
+              (line) => /WARN|WARNING|deprecated/i.test(line) && !/ERROR|Exception|FAIL/i.test(line)
+            )
           }
 
           const totalErrors = allErrors.length
@@ -124,7 +156,7 @@ const handler = createMcpHandler(
           if (totalErrors === 0) {
             results.push(`✅ **SYSTEM HEALTHY** - No errors found in last ${timeRangeMinutes} minutes`)
             results.push("🎯 App appears to be running smoothly!")
-            
+
             if (includeTimestampInstructions && mode !== "monitor") {
               results.push("")
               results.push("💡 **PROACTIVE MONITORING TIPS:**")
@@ -133,7 +165,9 @@ const handler = createMcpHandler(
               results.push("• Increase timeRangeMinutes to analyze longer periods")
             }
           } else {
-            results.push(`🚨 **${totalErrors} ISSUES DETECTED** (${criticalErrors} critical, ${categorizedErrors.warnings.length} warnings)`)
+            results.push(
+              `🚨 **${totalErrors} ISSUES DETECTED** (${criticalErrors} critical, ${categorizedErrors.warnings.length} warnings)`
+            )
             results.push("")
 
             // Show categorized errors (replaces individual error tools)
@@ -142,32 +176,30 @@ const handler = createMcpHandler(
               results.push(categorizedErrors.serverErrors.slice(-5).join("\n"))
               results.push("")
             }
-            
+
             if (categorizedErrors.browserErrors.length > 0) {
               results.push("🌐 **BROWSER/CONSOLE ERRORS:**")
               results.push(categorizedErrors.browserErrors.slice(-5).join("\n"))
               results.push("")
             }
-            
+
             if (categorizedErrors.buildErrors.length > 0) {
               results.push("🔨 **BUILD/COMPILATION ERRORS:**")
               results.push(categorizedErrors.buildErrors.slice(-5).join("\n"))
               results.push("")
             }
-            
+
             if (categorizedErrors.networkErrors.length > 0) {
               results.push("🌐 **NETWORK/API ERRORS:**")
               results.push(categorizedErrors.networkErrors.slice(-5).join("\n"))
               results.push("")
             }
-            
+
             if (categorizedErrors.warnings.length > 0 && focusArea === "all") {
-              results.push(`⚠️ **WARNINGS** (${categorizedErrors.warnings.length} found, showing recent):`)  
+              results.push(`⚠️ **WARNINGS** (${categorizedErrors.warnings.length} found, showing recent):`)
               results.push(categorizedErrors.warnings.slice(-3).join("\n"))
               results.push("")
             }
-
-
 
             // Show the magical dev3000 fix workflow
             results.push("🪄 **ULTIMATE DEV3000 MAGIC READY:**")
@@ -184,7 +216,6 @@ const handler = createMcpHandler(
             results.push("• Real-time proof that every issue is resolved")
           }
 
-
           // Add usage instructions based on mode
           if (includeTimestampInstructions && mode !== "monitor") {
             results.push("")
@@ -193,11 +224,11 @@ const handler = createMcpHandler(
             results.push("• **Bisect**: Use waitForUserInteraction=true for timestamp-based debugging")
             results.push("• **Monitor**: Continuous monitoring mode for ongoing development")
           }
-          
+
           results.push("")
           results.push(`📁 Full logs: ${logPath}`)
           results.push(`⚡ Quick access: tail -f ${logPath}`)
-          
+
           if (mode === "monitor") {
             results.push("")
             results.push("🔄 **MONITORING ACTIVE** - Run this tool again to check for new issues")
@@ -223,13 +254,6 @@ const handler = createMcpHandler(
         }
       }
     )
-
-
-
-
-
-
-
 
     // Tool to execute browser actions via CDP
     server.tool(
