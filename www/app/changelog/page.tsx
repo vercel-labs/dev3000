@@ -1,4 +1,5 @@
 import { Bug, Calendar, Github, Package, Sparkles, Zap } from "lucide-react"
+import type { Metadata } from "next"
 import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -87,6 +88,33 @@ const changelog = [
     ]
   }
 ]
+
+// Get the latest release for metadata
+const latestRelease = changelog[0]
+
+export const metadata: Metadata = {
+  title: `dev3000 Changelog - v${latestRelease.version}`,
+  description: `Latest updates and features in dev3000 v${latestRelease.version}: ${latestRelease.highlights.slice(0, 2).join(", ")}${latestRelease.highlights.length > 2 ? ", and more" : ""}.`,
+  openGraph: {
+    title: `dev3000 v${latestRelease.version} - AI-Powered Development Tools`,
+    description: `New release: ${latestRelease.highlights.slice(0, 3).join(" • ")}${latestRelease.highlights.length > 3 ? " and more" : ""}.`,
+    type: "website",
+    images: [
+      {
+        url: "/api/og",
+        width: 1200,
+        height: 630,
+        alt: `dev3000 v${latestRelease.version} changelog`
+      }
+    ]
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: `dev3000 v${latestRelease.version} - Changelog`,
+    description: `Latest features: ${latestRelease.highlights.slice(0, 2).join(" • ")}${latestRelease.highlights.length > 2 ? " and more" : ""}.`,
+    images: ["/api/og"]
+  }
+}
 
 const getVersionTypeIcon = (type: string) => {
   switch (type) {
