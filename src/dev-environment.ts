@@ -355,7 +355,7 @@ export class DevEnvironment {
     const [command, ...args] = this.options.serverCommand.split(" ")
 
     this.debugLog(`Starting server process: ${this.options.serverCommand}`)
-    this.debugLog(`Command: ${command}, Args: [${args.join(', ')}]`)
+    this.debugLog(`Command: ${command}, Args: [${args.join(", ")}]`)
 
     this.serverStartTime = Date.now()
     this.serverProcess = spawn(command, args, {
@@ -647,25 +647,28 @@ export class DevEnvironment {
       const attemptStartTime = Date.now()
       try {
         this.debugLog(`Server check attempt ${attempts + 1}/${maxAttempts}: ${serverUrl}`)
-        
+
         const response = await fetch(serverUrl, {
           method: "HEAD",
           signal: AbortSignal.timeout(2000)
         })
-        
+
         const attemptTime = Date.now() - attemptStartTime
         this.debugLog(`Server responded with status ${response.status} in ${attemptTime}ms`)
-        
-        if (response.ok || response.status === 404) {
+
+        if (response.ok || response.status === 404 || response.status === 405) {
           const totalTime = Date.now() - startTime
           this.debugLog(`Server is ready! Total wait time: ${totalTime}ms (${attempts + 1} attempts)`)
+          this.debugLog(`Status ${response.status} indicates server is running (200=OK, 404=Not Found, 405=Method Not Allowed)`)
           return
         } else {
           this.debugLog(`Server responded with non-OK status: ${response.status}, continuing to wait`)
         }
       } catch (error) {
         const attemptTime = Date.now() - attemptStartTime
-        this.debugLog(`Server check failed in ${attemptTime}ms: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        this.debugLog(
+          `Server check failed in ${attemptTime}ms: ${error instanceof Error ? error.message : "Unknown error"}`
+        )
       }
 
       attempts++
