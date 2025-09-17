@@ -354,12 +354,17 @@ export class DevEnvironment {
   private async startServer() {
     const [command, ...args] = this.options.serverCommand.split(" ")
 
+    this.debugLog(`Starting server process: ${this.options.serverCommand}`)
+    this.debugLog(`Command: ${command}, Args: [${args.join(', ')}]`)
+
     this.serverStartTime = Date.now()
     this.serverProcess = spawn(command, args, {
       stdio: ["ignore", "pipe", "pipe"],
       shell: true,
       detached: true // Run independently
     })
+
+    this.debugLog(`Server process spawned with PID: ${this.serverProcess.pid}`)
 
     // Log server output (to file only, reduce stdout noise)
     this.serverProcess.stdout?.on("data", (data) => {
@@ -633,25 +638,45 @@ export class DevEnvironment {
   private async waitForServer() {
     const maxAttempts = 30
     let attempts = 0
+    const serverUrl = `http://localhost:${this.options.port}`
+    const startTime = Date.now()
+
+    this.debugLog(`Starting server readiness check for ${serverUrl}`)
 
     while (attempts < maxAttempts) {
+      const attemptStartTime = Date.now()
       try {
-        const response = await fetch(`http://localhost:${this.options.port}`, {
+        this.debugLog(`Server check attempt ${attempts + 1}/${maxAttempts}: ${serverUrl}`)
+        
+        const response = await fetch(serverUrl, {
           method: "HEAD",
           signal: AbortSignal.timeout(2000)
         })
+        
+        const attemptTime = Date.now() - attemptStartTime
+        this.debugLog(`Server responded with status ${response.status} in ${attemptTime}ms`)
+        
         if (response.ok || response.status === 404) {
+          const totalTime = Date.now() - startTime
+          this.debugLog(`Server is ready! Total wait time: ${totalTime}ms (${attempts + 1} attempts)`)
           return
+        } else {
+          this.debugLog(`Server responded with non-OK status: ${response.status}, continuing to wait`)
         }
-      } catch (_error) {
-        // Server not ready yet, continue waiting
+      } catch (error) {
+        const attemptTime = Date.now() - attemptStartTime
+        this.debugLog(`Server check failed in ${attemptTime}ms: ${error instanceof Error ? error.message : 'Unknown error'}`)
       }
 
       attempts++
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      if (attempts < maxAttempts) {
+        this.debugLog(`Waiting 1 second before next attempt...`)
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+      }
     }
 
-    // Continue anyway if health check fails
+    const totalTime = Date.now() - startTime
+    this.debugLog(`Server readiness check timed out after ${totalTime}ms (${maxAttempts} attempts), continuing anyway`)
   }
 
   private detectPackageManagerInDir(dir: string): string {
@@ -695,7 +720,7 @@ export class DevEnvironment {
           : ["install", "--include=dev"] // npm/yarn syntax
 
       const fullCommand = `${packageManager} ${installArgs.join(" ")}`
-      
+
       if (this.options.debug) {
         console.log(`[MCP DEBUG] Installing MCP server dependencies...`)
         console.log(`[MCP DEBUG] Working directory: ${workingDir}`)
@@ -759,9 +784,7 @@ export class DevEnvironment {
           resolve()
         } else {
           const errorMsg = `MCP server dependency installation failed with exit code ${code}`
-          const fullError = this.options.debug && debugErrors 
-            ? `${errorMsg}\nstderr: ${debugErrors.trim()}`
-            : errorMsg
+          const fullError = this.options.debug && debugErrors ? `${errorMsg}\nstderr: ${debugErrors.trim()}` : errorMsg
           reject(new Error(fullError))
         }
       })
