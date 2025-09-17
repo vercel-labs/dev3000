@@ -10,6 +10,18 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.63",
+    date: "2025-09-17",
+    type: "minor",
+    highlights: [
+      "Apply linter formatting to changelog OG route",
+      "Improve MCP tool guidance and fix React key duplication error",
+      "Fix broken changelog OG image API endpoint",
+      "Add OpenAI Codex configuration to homepage"
+    ]
+  },
+
+  {
     version: "0.0.62",
     date: "2025-09-17",
     type: "minor",
