@@ -4,9 +4,23 @@ import { changelog } from "@/lib/changelog"
 export const runtime = "nodejs"
 export const revalidate = 3600 // Revalidate every hour
 
-export async function GET() {
+export async function GET(
+  _request: Request,
+  { params }: { params: { version: string } }
+) {
   try {
-    const latestRelease = changelog[0]
+    const version = params.version
+    
+    // Find the release by version, or use latest if version is "latest"
+    const release = version === "latest" 
+      ? changelog[0]
+      : changelog.find(r => `v${r.version}` === version || r.version === version)
+    
+    if (!release) {
+      return new Response(`Version ${version} not found`, {
+        status: 404
+      })
+    }
 
     return new ImageResponse(
       <div
@@ -79,7 +93,7 @@ export async function GET() {
               color: "#ffffff"
             }}
           >
-            {`v${latestRelease.version} Highlights`}
+            {`v${release.version} Highlights`}
           </div>
         </div>
 
@@ -93,7 +107,7 @@ export async function GET() {
             marginBottom: "32px"
           }}
         >
-          {latestRelease.highlights.slice(0, 3).map((highlight, index) => (
+          {release.highlights.slice(0, 3).map((highlight, index) => (
             <div
               key={index}
               style={{
@@ -115,7 +129,7 @@ export async function GET() {
             color: "#9ca3af"
           }}
         >
-          {`Released ${latestRelease.date}`}
+          {`Released ${release.date}`}
         </div>
       </div>,
       {

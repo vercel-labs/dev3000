@@ -18,7 +18,7 @@ export const metadata: Metadata = {
     type: "website",
     images: [
       {
-        url: "/api/og/changelog",
+        url: "/api/og/changelog/latest",
         width: 1200,
         height: 630,
         alt: `dev3000 v${latestRelease.version} changelog`
@@ -29,7 +29,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: `dev3000 v${latestRelease.version} - Changelog`,
     description: `Latest features: ${latestRelease.highlights.slice(0, 2).join(" • ")}${latestRelease.highlights.length > 2 ? " and more" : ""}.`,
-    images: ["/api/og/changelog"]
+    images: ["/api/og/changelog/latest"]
   }
 }
 
@@ -142,12 +142,14 @@ export default function ChangelogPage() {
                       <div className="flex items-center gap-3">
                         {getVersionTypeIcon(release.type)}
                         <div>
-                          <h2 className="text-xl font-bold flex items-center gap-2">
-                            Version {release.version}
-                            {index === 0 && (
-                              <Badge className="bg-green-400/20 text-green-400 border-green-400/30">Latest</Badge>
-                            )}
-                          </h2>
+                          <Link href={`/changelog/v${release.version}`}>
+                            <h2 className="text-xl font-bold flex items-center gap-2 hover:text-primary transition-colors">
+                              Version {release.version}
+                              {index === 0 && (
+                                <Badge className="bg-green-400/20 text-green-400 border-green-400/30">Latest</Badge>
+                              )}
+                            </h2>
+                          </Link>
                           <div className="flex items-center gap-2 mt-1">
                             <span className="text-sm text-muted-foreground">{release.date}</span>
                             {getVersionTypeBadge(release.type)}
@@ -156,16 +158,36 @@ export default function ChangelogPage() {
                       </div>
                     </div>
 
-                    <div className="space-y-2">
-                      <h3 className="font-semibold text-sm mb-3">Key Highlights:</h3>
-                      <ul className="space-y-2">
-                        {release.highlights.map((highlight, idx) => (
-                          <li key={idx} className="flex items-start gap-3 text-sm">
-                            <div className="w-1.5 h-1.5 bg-blue-400 rounded-full mt-2 flex-shrink-0" />
-                            <span className="text-foreground leading-relaxed">{highlight}</span>
-                          </li>
-                        ))}
-                      </ul>
+                    <div className="space-y-4">
+                      <div>
+                        <h3 className="font-semibold text-sm mb-3">Key Highlights:</h3>
+                        <ul className="space-y-2">
+                          {release.highlights.map((highlight, idx) => (
+                            <li key={idx} className="flex items-start gap-3 text-sm">
+                              <div className="w-1.5 h-1.5 bg-blue-400 rounded-full mt-2 flex-shrink-0" />
+                              <span className="text-foreground leading-relaxed">{highlight}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      
+                      <div className="pt-4 flex items-center justify-between border-t border-border/40">
+                        <Link href={`/changelog/v${release.version}`}>
+                          <Button variant="ghost" size="sm" className="gap-2">
+                            View Full Release Notes →
+                          </Button>
+                        </Link>
+                        <Link 
+                          href={`https://github.com/vercel-labs/dev3000/releases/tag/v${release.version}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground">
+                            <Github className="w-4 h-4" />
+                            GitHub
+                          </Button>
+                        </Link>
+                      </div>
                     </div>
                   </div>
                 </Card>
