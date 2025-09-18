@@ -206,13 +206,18 @@ const handler = createMcpHandler(
             results.push("🎯 **I don't just find errors - I FIX them instantly!**")
             results.push("• Analyze error patterns and identify root causes automatically")
             results.push("• Edit problematic code files to resolve each issue")
-            results.push("• Use execute_browser_action to verify fixes work in real-time")
-            results.push("• Take screenshots to prove improvements")
-            results.push("• This is the magical dev3000 experience!")
+            results.push("• Use execute_browser_action to reproduce user workflows")
+            results.push("• Dev3000 AUTO-CAPTURES screenshots during all interactions!")
+            results.push("• No manual screenshots needed - dev3000 handles it all!")
+            results.push("")
+            results.push("📸 **AUTO-SCREENSHOT MAGIC:**")
+            results.push("• Screenshots captured automatically on errors, page loads, scrolls")
+            results.push("• Just reproduce the user actions - screenshots happen magically")
+            results.push("• Check logs for [SCREENSHOT] entries with filenames")
             results.push("")
             results.push("🚀 **SAY 'FIX THESE ISSUES' TO START THE MAGIC:**")
             results.push("• Critical errors fixed first, then warnings")
-            results.push("• Each fix tested immediately with browser automation")
+            results.push("• Each fix tested with browser interactions (no manual screenshots!)")
             results.push("• Real-time proof that every issue is resolved")
           }
 
@@ -223,6 +228,21 @@ const handler = createMcpHandler(
             results.push("• **Snapshot** (current): Immediate comprehensive analysis")
             results.push("• **Bisect**: Use waitForUserInteraction=true for timestamp-based debugging")
             results.push("• **Monitor**: Continuous monitoring mode for ongoing development")
+          }
+
+          // Show recent screenshots if any exist
+          const screenshotLines = timeFilteredLines.filter(line => line.includes("[SCREENSHOT]"))
+          if (screenshotLines.length > 0) {
+            results.push("")
+            results.push("📸 **RECENT AUTO-CAPTURED SCREENSHOTS:**")
+            const recentScreenshots = screenshotLines.slice(-5)
+            recentScreenshots.forEach(line => {
+              const match = line.match(/\[SCREENSHOT\]\s+([^\s]+\.png)/)
+              if (match) {
+                results.push(`• ${match[1]}`)
+              }
+            })
+            results.push("💡 Tip: Dev3000 captures these automatically during interactions!")
           }
 
           results.push("")
@@ -258,7 +278,7 @@ const handler = createMcpHandler(
     // Tool to execute browser actions via CDP
     server.tool(
       "execute_browser_action",
-      "🪄 **SMART INTERACTION TESTING** - Use for targeted user workflow verification! 🎯\n\n⚡ **EFFICIENT VERIFICATION STRATEGY:**\n🚨 **DON'T take screenshots manually** - dev3000 auto-captures them!\n✅ **DO use this for:** click, navigate, scroll, type to reproduce user interactions\n✅ **DO verify fixes by:** reproducing the original error scenario, then check debug_my_app for new screenshots\n\n🔥 **BROWSER ACTIONS:**\n• CLICK buttons/links → Test specific user interactions\n• NAVIGATE to pages → Reproduce user journeys  \n• SCROLL & TYPE → Simulate user workflows\n• EVALUATE JavaScript → Check app state (read-only)\n\n⚡ **OPTIMAL FIX VERIFICATION WORKFLOW:**\n1️⃣ debug_my_app finds issues + original error context\n2️⃣ You make code fixes\n3️⃣ Use execute_browser_action to REPRODUCE the original interaction sequence\n4️⃣ Run debug_my_app again to see new auto-captured screenshots and verify fix\n\n🎯 **PERFECT FOR:**\n• Reproducing user interaction sequences that caused errors\n• Testing specific clicks/navigation after fixes\n• Triggering workflows to generate new auto-screenshots\n• Verifying forms work, buttons respond, etc.\n\n🚫 **AVOID:** Manual screenshot action (dev3000 auto-captures)\n✅ **USE:** Interaction reproduction + debug_my_app for verification\n\n🛡️ **SAFETY:** Safe operations only, read-only JS evaluation",
+      "🎯 **BROWSER INTERACTION TOOL** - For testing user workflows and reproducing issues!\n\n⚡ **KEY STRATEGY:**\n🚨 **NEVER use 'screenshot' action** - dev3000 automatically captures screenshots on:\n• Page loads and navigation\n• Errors and exceptions\n• After scrolling settles\n• Network idle states\n\n✅ **CORRECT USAGE:**\n1. Use click/navigate/scroll/type to reproduce user actions\n2. Dev3000 will AUTOMATICALLY capture screenshots during these actions\n3. Check logs or use debug_my_app to see the auto-captured screenshots\n\n🔥 **AVAILABLE ACTIONS:**\n• **click** → Click buttons/links (requires x,y coordinates)\n• **navigate** → Go to URLs (requires url)\n• **scroll** → Scroll pages (optional deltaX, deltaY)\n• **type** → Type text in forms (requires text)\n• **evaluate** → Read page state with JS (limited safe expressions only)\n\n❌ **DO NOT USE:**\n• **screenshot** → This is for manual capture which dev3000 handles automatically\n\n💡 **BEST PRACTICE WORKFLOW:**\n1. Use debug_my_app to find issues and see existing screenshots\n2. Make code fixes\n3. Use click/navigate/type to reproduce the original user flow\n4. Dev3000 auto-captures new screenshots during your interactions\n5. Use debug_my_app again to verify fixes worked\n\n🎪 **WHY THIS WORKS BETTER:**\n• Screenshots are captured at optimal times automatically\n• You focus on reproducing user actions, not timing screenshots\n• Dev3000 handles all the screenshot complexity for you\n\n🛡️ **SAFETY:** Only safe operations allowed, whitelisted JavaScript expressions",
       {
         action: z.enum(["click", "navigate", "screenshot", "evaluate", "scroll", "type"]).describe("Action to perform"),
         params: z
@@ -336,11 +356,14 @@ const handler = createMcpHandler(
                     break
 
                   case "screenshot":
-                    cdpResult = await sendCDPCommand(ws, messageId++, "Page.captureScreenshot", {
-                      format: "png",
-                      quality: 80
+                    // Discourage manual screenshots - dev3000 handles this automatically
+                    ws.close()
+                    resolve({
+                      warning: "Screenshot action is not recommended!",
+                      advice: "Dev3000 automatically captures screenshots during interactions. Instead of manual screenshots, use click/navigate/scroll/type actions to reproduce user workflows, and dev3000 will capture screenshots at optimal times.",
+                      suggestion: "Run debug_my_app to see all auto-captured screenshots from your session."
                     })
-                    break
+                    return
 
                   case "evaluate": {
                     if (!params.expression) {

@@ -1,7 +1,8 @@
 import { ImageResponse } from "next/og"
 import { changelog } from "@/lib/changelog"
 
-export const runtime = "edge"
+export const runtime = "nodejs"
+export const revalidate = 3600 // Revalidate every hour
 
 export async function GET() {
   try {
