@@ -231,12 +231,12 @@ const handler = createMcpHandler(
           }
 
           // Show recent screenshots if any exist
-          const screenshotLines = timeFilteredLines.filter(line => line.includes("[SCREENSHOT]"))
+          const screenshotLines = timeFilteredLines.filter((line) => line.includes("[SCREENSHOT]"))
           if (screenshotLines.length > 0) {
             results.push("")
             results.push("📸 **RECENT AUTO-CAPTURED SCREENSHOTS:**")
             const recentScreenshots = screenshotLines.slice(-5)
-            recentScreenshots.forEach(line => {
+            recentScreenshots.forEach((line) => {
               const match = line.match(/\[SCREENSHOT\]\s+([^\s]+\.png)/)
               if (match) {
                 results.push(`• ${match[1]}`)
@@ -360,7 +360,8 @@ const handler = createMcpHandler(
                     ws.close()
                     resolve({
                       warning: "Screenshot action is not recommended!",
-                      advice: "Dev3000 automatically captures screenshots during interactions. Instead of manual screenshots, use click/navigate/scroll/type actions to reproduce user workflows, and dev3000 will capture screenshots at optimal times.",
+                      advice:
+                        "Dev3000 automatically captures screenshots during interactions. Instead of manual screenshots, use click/navigate/scroll/type actions to reproduce user workflows, and dev3000 will capture screenshots at optimal times.",
                       suggestion: "Run debug_my_app to see all auto-captured screenshots from your session."
                     })
                     return
