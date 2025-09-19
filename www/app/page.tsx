@@ -44,10 +44,10 @@ export default function HomePage() {
                   Quick Start
                 </a>
               </div>
-              <Button asChild>
+              <Button variant="ghost" size="sm" className="border border-gray-600/50" asChild>
                 <a href="https://github.com/vercel-labs/dev3000" target="_blank" rel="noopener noreferrer">
                   <Github className="w-4 h-4 mr-2" />
-                  View on GitHub
+                  GitHub
                 </a>
               </Button>
             </nav>
