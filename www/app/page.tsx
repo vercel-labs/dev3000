@@ -147,7 +147,7 @@ export default function HomePage() {
                     <div className="text-2xl self-center">→</div>
                     <div className="bg-green-50 dark:bg-green-900/20 rounded p-2 font-mono text-sm flex-1 border border-green-200 dark:border-green-800">
                       <span className="text-muted-foreground">Run:</span>{" "}
-                      <span className="text-foreground">dev3000 --port 5000</span>
+                      <span className="text-foreground">dev3000 -p 5000</span>
                     </div>
                   </div>
 
@@ -159,7 +159,7 @@ export default function HomePage() {
                     <div className="text-2xl self-center">→</div>
                     <div className="bg-green-50 dark:bg-green-900/20 rounded p-2 font-mono text-sm flex-1 border border-green-200 dark:border-green-800">
                       <span className="text-muted-foreground">Run:</span>{" "}
-                      <span className="text-foreground">dev3000 --script build-start</span>
+                      <span className="text-foreground">dev3000 -s build-start</span>
                     </div>
                   </div>
 
@@ -321,7 +321,9 @@ export default function HomePage() {
           <Card className="max-w-5xl mx-auto bg-card/50 backdrop-blur-sm border-2 border-gray-700/40 overflow-hidden shadow-xl">
             <div className="bg-secondary/30 px-3 py-1 border-b-2 border-gray-700/35 flex items-center gap-2">
               <Clock className="w-4 h-4 text-muted-foreground" />
-              <span className="text-sm text-muted-foreground font-mono">/var/log/dev3000/dev3000-myapp-2025-09-19T12-54-03.log</span>
+              <span className="text-sm text-muted-foreground font-mono">
+                /var/log/dev3000/dev3000-myapp-2025-09-19T12-54-03.log
+              </span>
               <div className="ml-auto flex items-center gap-2">
                 <div className="w-2 h-2 bg-red-400 rounded-full" />
                 <div className="w-2 h-2 bg-yellow-400 rounded-full" />
