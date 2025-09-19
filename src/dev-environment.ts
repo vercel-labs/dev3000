@@ -10,7 +10,6 @@ import {
   readdirSync,
   readFileSync,
   statSync,
-  symlinkSync,
   unlinkSync,
   writeFileSync
 } from "fs"
@@ -127,19 +126,6 @@ function createLogFileInDir(baseDir: string): string {
 
   // Create the log file
   writeFileSync(logFilePath, "")
-
-  // Create or update symlinks to /tmp/dev3000.log and /tmp/d3k.log
-  const symlinkPaths = ["/tmp/dev3000.log", "/tmp/d3k.log"]
-  for (const symlinkPath of symlinkPaths) {
-    try {
-      if (existsSync(symlinkPath)) {
-        unlinkSync(symlinkPath)
-      }
-      symlinkSync(logFilePath, symlinkPath)
-    } catch (error) {
-      console.warn(chalk.yellow(`⚠️ Could not create symlink ${symlinkPath}: ${error}`))
-    }
-  }
 
   return logFilePath
 }
@@ -394,7 +380,7 @@ export class DevEnvironment {
     // Complete startup
     this.spinner.succeed("Development environment ready!")
 
-    console.log(chalk.cyan(`Logs: /tmp/d3k.log -> ${this.options.logFile}`))
+    console.log(chalk.cyan(`Logs: ${this.options.logFile}`))
     console.log(chalk.cyan("☝️ Give this to an AI to auto debug and fix your app\n"))
     console.log(chalk.cyan(`🌐 Your App: http://localhost:${this.options.port}`))
     console.log(chalk.cyan(`🤖 MCP Server: http://localhost:${this.options.mcpPort}/api/mcp/mcp`))

@@ -35,7 +35,7 @@ const handler = createMcpHandler(
         timeRangeMinutes = 10,
         includeTimestampInstructions = true
       }) => {
-        const logPath = process.env.LOG_FILE_PATH || "/tmp/d3k.log"
+        const logPath = process.env.LOG_FILE_PATH || "/var/log/dev3000/dev3000.log"
         const results: string[] = []
         const currentTimestamp = new Date().toISOString()
 
@@ -45,7 +45,7 @@ const handler = createMcpHandler(
               content: [
                 {
                   type: "text",
-                  text: `❌ No dev3000 logs found at /tmp/d3k.log. Make sure dev3000 is running (d3k start).`
+                  text: `❌ No dev3000 logs found at ${logPath}. Make sure dev3000 is running (d3k start).`
                 }
               ]
             }
@@ -246,8 +246,8 @@ const handler = createMcpHandler(
           }
 
           results.push("")
-          results.push(`📁 Full logs: /tmp/d3k.log`)
-          results.push(`⚡ Quick access: tail -f /tmp/d3k.log`)
+          results.push(`📁 Full logs: ${logPath}`)
+          results.push(`⚡ Quick access: tail -f ${logPath}`)
 
           if (mode === "monitor") {
             results.push("")
