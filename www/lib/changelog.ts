@@ -10,6 +10,18 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.64",
+    date: "2025-09-19",
+    type: "minor",
+    highlights: [
+      "Apply linter formatting to all modified files",
+      "Simplify log path references in MCP server to use /tmp/d3k.log",
+      "Increase recent log entries display from 10 to 20 lines",
+      "Implement versioned changelog pages with ISR OG images"
+    ]
+  },
+
+  {
     version: "0.0.63",
     date: "2025-09-17",
     type: "minor",
