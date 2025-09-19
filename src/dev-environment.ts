@@ -235,6 +235,25 @@ export class DevEnvironment {
     const userSetAppPort = this.options.userSetPort || false
     const userSetMcpPort = this.options.userSetMcpPort || false
 
+    // If user didn't set ports, find available ones first (before checking)
+    if (!userSetAppPort) {
+      const startPort = parseInt(this.options.port, 10)
+      const availablePort = await findAvailablePort(startPort)
+      if (availablePort !== this.options.port) {
+        console.log(chalk.yellow(`Port ${this.options.port} is in use, using port ${availablePort} for app server`))
+        this.options.port = availablePort
+      }
+    }
+
+    if (!userSetMcpPort && this.options.mcpPort) {
+      const startPort = parseInt(this.options.mcpPort, 10)
+      const availablePort = await findAvailablePort(startPort)
+      if (availablePort !== this.options.mcpPort) {
+        console.log(chalk.yellow(`Port ${this.options.mcpPort} is in use, using port ${availablePort} for MCP server`))
+        this.options.mcpPort = availablePort
+      }
+    }
+
     // If user set explicit ports, fail if they're not available
     if (userSetAppPort) {
       const available = await isPortAvailable(this.options.port)
@@ -261,25 +280,6 @@ export class DevEnvironment {
           )
         )
         throw new Error(`Port ${this.options.mcpPort} is already in use. Please free the port and try again.`)
-      }
-    }
-
-    // If user didn't set ports, find available ones
-    if (!userSetAppPort) {
-      const startPort = parseInt(this.options.port)
-      const availablePort = await findAvailablePort(startPort)
-      if (availablePort !== this.options.port) {
-        this.debugLog(`Port ${this.options.port} in use, using port ${availablePort} for app server`)
-        this.options.port = availablePort
-      }
-    }
-
-    if (!userSetMcpPort && this.options.mcpPort) {
-      const startPort = parseInt(this.options.mcpPort)
-      const availablePort = await findAvailablePort(startPort)
-      if (availablePort !== this.options.mcpPort) {
-        this.debugLog(`Port ${this.options.mcpPort} in use, using port ${availablePort} for MCP server`)
-        this.options.mcpPort = availablePort
       }
     }
   }
