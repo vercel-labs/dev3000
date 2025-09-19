@@ -1,6 +1,6 @@
-import { createCliRenderer, BoxRenderable, TextRenderable, ScrollBoxRenderable, type CliRenderer } from "@opentui/core"
+import { BoxRenderable, type CliRenderer, createCliRenderer, ScrollBoxRenderable, TextRenderable } from "@opentui/core"
 import chalk from "chalk"
-import { createReadStream, watchFile, unwatchFile } from "fs"
+import { createReadStream, unwatchFile, watchFile } from "fs"
 import type { Readable } from "stream"
 
 export interface TUIOptions {
@@ -51,20 +51,25 @@ export class DevTUI {
     if (process.stdin.setRawMode) {
       process.stdin.setRawMode(true)
     }
-    
+
     process.stdin.on("data", (data) => {
       const key = data.toString()
-      
+
       // Handle scrolling
-      if (key === "\u001b[A") { // Up arrow
+      if (key === "\u001b[A") {
+        // Up arrow
         this.scrollUp()
-      } else if (key === "\u001b[B") { // Down arrow
+      } else if (key === "\u001b[B") {
+        // Down arrow
         this.scrollDown()
-      } else if (key === "\u001b[H") { // Home
+      } else if (key === "\u001b[H") {
+        // Home
         this.scrollToTop()
-      } else if (key === "\u001b[F") { // End
+      } else if (key === "\u001b[F") {
+        // End
         this.scrollToBottom()
-      } else if (key === "\u0003") { // Ctrl+C
+      } else if (key === "\u0003") {
+        // Ctrl+C
         // Let parent process handle this
         process.emit("SIGINT", "SIGINT")
       }
@@ -138,7 +143,7 @@ export class DevTUI {
       this.options.serversOnly ? chalk.cyan("🖥️  Servers-only mode - use Chrome extension for browser monitoring") : "",
       "",
       chalk.gray(`💡 To stop: Ctrl-C | Logs: ${this.options.logFile}`)
-    ].filter(line => line !== "")
+    ].filter((line) => line !== "")
 
     // Create a text component for each line
     infoLines.forEach((line, index) => {
@@ -184,10 +189,10 @@ export class DevTUI {
     this.logStream.on("data", (chunk) => {
       buffer += chunk.toString()
       const lines = buffer.split("\n")
-      
+
       // Keep the last incomplete line in buffer
       buffer = lines.pop() || ""
-      
+
       // Add complete lines to log content
       for (const line of lines) {
         if (line.trim()) {
@@ -218,7 +223,7 @@ export class DevTUI {
           buffer += chunk.toString()
           const lines = buffer.split("\n")
           buffer = lines.pop() || ""
-          
+
           for (const line of lines) {
             if (line.trim()) {
               this.appendLog(line)
@@ -238,22 +243,22 @@ export class DevTUI {
       content: line
       // wrap is not available in TextOptions
     })
-    
+
     // Add to log content
     this.logContent.add(logText)
-    
+
     // Update the height of the content box to fit all logs
     this.logContent.height = this.logLineY + 1
-    
+
     // Limit the number of log lines to prevent memory issues
     const children = this.logContent.getChildren()
     if (children.length > 1000) {
       // Remove oldest log lines
       const toRemove = children.slice(0, 100)
-      toRemove.forEach(child => {
+      toRemove.forEach((child) => {
         this.logContent.remove(child.id)
       })
-      
+
       // Reposition remaining lines
       this.logContent.getChildren().forEach((child: any, index: number) => {
         child.top = index
@@ -261,10 +266,10 @@ export class DevTUI {
       this.logLineY = this.logContent.getChildren().length
       this.logContent.height = this.logLineY + 1
     }
-    
+
     // Auto-scroll to bottom if sticky scroll is enabled
     this.scrollToBottom()
-    
+
     // Request re-render
     this.renderer.requestRender()
   }
@@ -277,7 +282,7 @@ export class DevTUI {
     if (process.stdin.setRawMode) {
       process.stdin.setRawMode(false)
     }
-    
+
     // Stop watching file
     unwatchFile(this.options.logFile)
 

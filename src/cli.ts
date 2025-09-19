@@ -145,7 +145,7 @@ program
   .option("--servers-only", "Run servers only, skip browser launch (use with Chrome extension)")
   .option("--debug", "Enable debug logging to console")
   .option("-t, --tail", "Output consolidated logfile to terminal (like tail -f)")
-  .option("-x, --no-tui", "Disable TUI mode and use regular console output")
+  .option("--no-tui", "Disable TUI mode and use regular console output")
   .option("--kill-mcp", "Kill the MCP server on port 3684 and exit")
   .action(async (options) => {
     // Handle --kill-mcp option

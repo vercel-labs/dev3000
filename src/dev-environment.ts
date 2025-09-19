@@ -260,8 +260,8 @@ export class DevEnvironment {
     }
 
     // Initialize spinner for clean output management (only if not in TUI mode)
-    this.spinner = ora({ 
-      text: "Initializing...", 
+    this.spinner = ora({
+      text: "Initializing...",
       spinner: "dots",
       isEnabled: !options.tui || options.tail // Disable spinner in TUI mode unless tail is active
     })
@@ -431,7 +431,7 @@ export class DevEnvironment {
         serversOnly: this.options.serversOnly,
         version: this.version
       })
-      
+
       await this.tui.start()
     } else {
       // Regular console output (when TUI is disabled or tail is enabled)
@@ -1138,16 +1138,16 @@ export class DevEnvironment {
             killProcess.on("exit", (code) => {
               if (code === 0) {
                 if (!this.options.tui || this.options.tail) {
-                console.log(chalk.green(`✅ Killed ${name} on port ${port}`))
-              }
+                  console.log(chalk.green(`✅ Killed ${name} on port ${port}`))
+                }
               }
               resolve()
             })
           })
         } catch (_error) {
           if (!this.options.tui || this.options.tail) {
-          console.log(chalk.gray(`⚠️ Could not kill ${name} on port ${port}`))
-        }
+            console.log(chalk.gray(`⚠️ Could not kill ${name} on port ${port}`))
+          }
         }
       }
 
@@ -1159,16 +1159,16 @@ export class DevEnvironment {
       if (this.cdpMonitor) {
         try {
           if (!this.options.tui || this.options.tail) {
-          console.log(chalk.cyan("🔄 Closing CDP monitor..."))
-        }
+            console.log(chalk.cyan("🔄 Closing CDP monitor..."))
+          }
           await this.cdpMonitor.shutdown()
           if (!this.options.tui || this.options.tail) {
-          console.log(chalk.green("✅ CDP monitor closed"))
-        }
+            console.log(chalk.green("✅ CDP monitor closed"))
+          }
         } catch (_error) {
           if (!this.options.tui || this.options.tail) {
-          console.log(chalk.gray("⚠️ CDP monitor shutdown failed"))
-        }
+            console.log(chalk.gray("⚠️ CDP monitor shutdown failed"))
+          }
         }
       }
 
