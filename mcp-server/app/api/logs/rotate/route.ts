@@ -1,4 +1,4 @@
-import { existsSync, renameSync, symlinkSync, unlinkSync, writeFileSync } from "fs"
+import { existsSync, renameSync, writeFileSync } from "fs"
 import { type NextRequest, NextResponse } from "next/server"
 import { dirname, join } from "path"
 
@@ -33,12 +33,7 @@ export async function POST(request: NextRequest) {
     // Create new empty log file
     writeFileSync(currentLogPath, "")
 
-    // Update symlink to point to new log file
-    const symlinkPath = "/tmp/dev3000.log"
-    if (existsSync(symlinkPath)) {
-      unlinkSync(symlinkPath)
-    }
-    symlinkSync(currentLogPath, symlinkPath)
+    // No symlink update needed - each instance uses its own log file
 
     return NextResponse.json({
       success: true,

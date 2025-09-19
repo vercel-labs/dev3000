@@ -177,7 +177,7 @@ program
     const commandName = executablePath.endsWith("/d3k") || executablePath.includes("/d3k") ? "d3k" : "dev3000"
 
     try {
-      // Create persistent log file and setup symlink
+      // Create persistent log file
       const logFile = createPersistentLogFile()
 
       await startDevEnvironment({

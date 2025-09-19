@@ -10,7 +10,7 @@ interface PageProps {
 
 async function getLogFiles() {
   try {
-    const currentLogPath = process.env.LOG_FILE_PATH || "/tmp/dev3000.log"
+    const currentLogPath = process.env.LOG_FILE_PATH || "/var/log/dev3000/dev3000.log"
 
     if (!existsSync(currentLogPath)) {
       return { files: [], currentFile: "", projectName: "unknown" }

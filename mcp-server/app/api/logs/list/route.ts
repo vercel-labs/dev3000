@@ -5,7 +5,7 @@ import type { LogFile, LogListError, LogListResponse } from "@/types"
 
 export async function GET(_request: NextRequest): Promise<Response> {
   try {
-    const currentLogPath = process.env.LOG_FILE_PATH || "/tmp/dev3000.log"
+    const currentLogPath = process.env.LOG_FILE_PATH || "/var/log/dev3000/dev3000.log"
 
     if (!existsSync(currentLogPath)) {
       const errorResponse: LogListError = { error: "Current log file not found" }

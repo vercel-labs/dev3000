@@ -39,7 +39,7 @@ The tool monitors your app in a real browser and captures:
 
 ![dev3000 Logs Viewer](logs.jpg)
 
-Logs are automatically saved with timestamps in `/var/log/dev3000/` (or temp directory) and rotated to keep the 10 most recent per project. The current session is always symlinked to `/tmp/d3k.log` for easy access.
+Logs are automatically saved with timestamps in `/var/log/dev3000/` (or temp directory) and rotated to keep the 10 most recent per project. Each instance has its own timestamped log file displayed when starting dev3000.
 
 ### MCP Integration Notes
 

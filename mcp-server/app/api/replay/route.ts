@@ -206,7 +206,7 @@ export async function GET(request: NextRequest) {
     const endTime = searchParams.get("endTime")
 
     // Get log file path from environment
-    const logFilePath = process.env.LOG_FILE_PATH || "/tmp/dev3000.log"
+    const logFilePath = process.env.LOG_FILE_PATH || "/var/log/dev3000/dev3000.log"
 
     if (!existsSync(logFilePath)) {
       return NextResponse.json({ error: "Log file not found" }, { status: 404 })

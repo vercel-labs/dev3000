@@ -4,7 +4,7 @@ A Chrome extension that captures unified development logs via the `chrome.debugg
 
 ## Features
 
-- **🔄 Unified Logging**: Sends browser logs to the same `/tmp/dev3000.log` file as Playwright implementation
+- **🔄 Unified Logging**: Sends browser logs to the MCP server for centralized logging
 - **🎯 Automatic Detection**: Auto-detects and attaches to development servers (configurable ports)
 - **📊 Real-time Monitoring**: Console logs, network requests, navigation, errors, and performance data
 - **🏷️ Multi-Tab Identification**: Each tab gets a unique identifier (e.g., `[TAB-1.0]`, `[TAB-1.1]`)
@@ -25,7 +25,7 @@ A Chrome extension that captures unified development logs via the `chrome.debugg
 2. Navigate to your app (e.g., `http://localhost:3031`)
 3. Extension auto-attaches (or click "Attach to Tab")
 4. **View unified logs**: [localhost:3684/logs](http://localhost:3684/logs)
-5. **AI debugging**: `Read /tmp/dev3000.log` in Claude
+5. **AI debugging**: Use dev3000's MCP tools for comprehensive debugging
 
 ### **Extension Only Mode**
 - Works without MCP server running
@@ -55,7 +55,7 @@ A Chrome extension that captures unified development logs via the `chrome.debugg
 
 ## Unified Log Format
 
-Browser logs from the extension are interleaved with server logs in `/tmp/dev3000.log`:
+Browser logs from the extension are interleaved with server logs in the centralized log file:
 
 ```
 [2025-09-08T21:45:37.434Z] [SERVER] Ready on http://localhost:3031

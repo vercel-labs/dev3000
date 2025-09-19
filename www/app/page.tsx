@@ -321,7 +321,7 @@ export default function HomePage() {
           <Card className="max-w-5xl mx-auto bg-card/50 backdrop-blur-sm border-2 border-gray-700/40 overflow-hidden shadow-xl">
             <div className="bg-secondary/30 px-3 py-1 border-b-2 border-gray-700/35 flex items-center gap-2">
               <Clock className="w-4 h-4 text-muted-foreground" />
-              <span className="text-sm text-muted-foreground font-mono">/tmp/d3k.log</span>
+              <span className="text-sm text-muted-foreground font-mono">/var/log/dev3000/dev3000-myapp-2025-09-19T12-54-03.log</span>
               <div className="ml-auto flex items-center gap-2">
                 <div className="w-2 h-2 bg-red-400 rounded-full" />
                 <div className="w-2 h-2 bg-yellow-400 rounded-full" />

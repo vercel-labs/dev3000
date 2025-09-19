@@ -1269,14 +1269,10 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                           style={{ width: "220px" }}
                         />
                       ) : currentLogFile ? (
-                        // Show symlink name for current file, basename for others
-                        availableLogs.find((log) => log.path === currentLogFile)?.isCurrent ? (
-                          "d3k.log"
-                        ) : (
-                          currentLogFile.split("/").pop()
-                        )
+                        // Show basename for all files
+                        currentLogFile.split("/").pop()
                       ) : (
-                        "d3k.log"
+                        "No log file"
                       )}
                     </span>
                     <svg
@@ -1326,14 +1322,10 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                     {isInitialLoading && !currentLogFile ? (
                       <div className="h-4 bg-gray-200 rounded animate-pulse" style={{ width: "220px" }} />
                     ) : currentLogFile ? (
-                      // Show symlink name for current file, basename for others
-                      availableLogs.find((log) => log.path === currentLogFile)?.isCurrent ? (
-                        "d3k.log"
-                      ) : (
-                        currentLogFile.split("/").pop()
-                      )
+                      // Show basename for all files
+                      currentLogFile.split("/").pop()
                     ) : (
-                      "d3k.log"
+                      "No log file"
                     )}
                   </span>
                 </div>
