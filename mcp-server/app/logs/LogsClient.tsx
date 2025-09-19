@@ -1270,7 +1270,9 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                         />
                       ) : currentLogFile ? (
                         // Show basename for all files
-                        currentLogFile.split("/").pop()
+                        currentLogFile
+                          .split("/")
+                          .pop()
                       ) : (
                         "No log file"
                       )}
@@ -1323,7 +1325,9 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                       <div className="h-4 bg-gray-200 rounded animate-pulse" style={{ width: "220px" }} />
                     ) : currentLogFile ? (
                       // Show basename for all files
-                      currentLogFile.split("/").pop()
+                      currentLogFile
+                        .split("/")
+                        .pop()
                     ) : (
                       "No log file"
                     )}
