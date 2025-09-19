@@ -45,7 +45,7 @@ const handler = createMcpHandler(
               content: [
                 {
                   type: "text",
-                  text: `❌ No dev3000 logs found at ${logPath}. Make sure dev3000 is running (d3k start). If not using dev3000, specify log file paths manually.`
+                  text: `❌ No dev3000 logs found at /tmp/d3k.log. Make sure dev3000 is running (d3k start).`
                 }
               ]
             }
@@ -246,8 +246,8 @@ const handler = createMcpHandler(
           }
 
           results.push("")
-          results.push(`📁 Full logs: ${logPath}`)
-          results.push(`⚡ Quick access: tail -f ${logPath}`)
+          results.push(`📁 Full logs: /tmp/d3k.log`)
+          results.push(`⚡ Quick access: tail -f /tmp/d3k.log`)
 
           if (mode === "monitor") {
             results.push("")
