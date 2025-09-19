@@ -549,17 +549,6 @@ export default function HomePage() {
             <ul className="space-y-4 text-sm">
               <li>
                 <div className="mb-1">
-                  <strong>Q: Getting a pnpm "approve-builds" warning?</strong>
-                </div>
-                <div className="text-muted-foreground mb-2">
-                  <strong>A:</strong> If you're using pnpm 10+, run{" "}
-                  <code className="bg-secondary/50 px-1 rounded font-mono text-xs">pnpm approve-builds -g</code> and
-                  approve dev3000.
-                </div>
-              </li>
-
-              <li>
-                <div className="mb-1">
                   <strong>Q: Does dev3000 save my login state?</strong>
                 </div>
                 <div className="text-muted-foreground">
