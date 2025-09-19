@@ -14,7 +14,7 @@ import {
   writeFileSync
 } from "fs"
 import ora from "ora"
-import { tmpdir } from "os"
+import { homedir, tmpdir } from "os"
 import { basename, dirname, join } from "path"
 import { fileURLToPath } from "url"
 import { CDPMonitor } from "./cdp-monitor.js"
@@ -108,6 +108,36 @@ export function createPersistentLogFile(): string {
   }
 
   return createLogFileInDir(logBaseDir)
+}
+
+// Write session info for MCP server to discover
+function writeSessionInfo(projectName: string, logFilePath: string, appPort: string, mcpPort?: string): void {
+  const sessionDir = join(homedir(), ".d3k")
+  
+  try {
+    // Create ~/.d3k directory if it doesn't exist
+    if (!existsSync(sessionDir)) {
+      mkdirSync(sessionDir, { recursive: true })
+    }
+
+    // Session file contains project info
+    const sessionInfo = {
+      projectName,
+      logFilePath,
+      appPort,
+      mcpPort: mcpPort || null,
+      startTime: new Date().toISOString(),
+      pid: process.pid,
+      cwd: process.cwd()
+    }
+
+    // Write session file - use project name as filename for easy lookup
+    const sessionFile = join(sessionDir, `${projectName}.json`)
+    writeFileSync(sessionFile, JSON.stringify(sessionInfo, null, 2))
+  } catch (error) {
+    // Non-fatal - just log a warning
+    console.warn(chalk.yellow(`⚠️ Could not write session info: ${error}`))
+  }
 }
 
 function createLogFileInDir(baseDir: string): string {
@@ -379,6 +409,10 @@ export class DevEnvironment {
 
     // Complete startup
     this.spinner.succeed("Development environment ready!")
+
+    // Write session info for MCP server discovery
+    const projectName = basename(process.cwd()).replace(/[^a-zA-Z0-9-_]/g, "_")
+    writeSessionInfo(projectName, this.options.logFile, this.options.port, this.options.mcpPort)
 
     console.log(chalk.cyan(`Logs: ${this.options.logFile}`))
     console.log(chalk.cyan("☝️ Give this to an AI to auto debug and fix your app\n"))
@@ -935,6 +969,17 @@ export class DevEnvironment {
     // Stop health monitoring
     this.stopHealthCheck()
 
+    // Clean up session file
+    try {
+      const projectName = basename(process.cwd()).replace(/[^a-zA-Z0-9-_]/g, "_")
+      const sessionFile = join(homedir(), ".d3k", `${projectName}.json`)
+      if (existsSync(sessionFile)) {
+        unlinkSync(sessionFile)
+      }
+    } catch (_error) {
+      // Non-fatal - ignore cleanup errors
+    }
+
     // Stop spinner if it's running
     if (this.spinner?.isSpinning) {
       this.spinner.fail("Critical failure detected")
@@ -992,6 +1037,17 @@ export class DevEnvironment {
 
       // Stop health monitoring
       this.stopHealthCheck()
+
+      // Clean up session file
+      try {
+        const projectName = basename(process.cwd()).replace(/[^a-zA-Z0-9-_]/g, "_")
+        const sessionFile = join(homedir(), ".d3k", `${projectName}.json`)
+        if (existsSync(sessionFile)) {
+          unlinkSync(sessionFile)
+        }
+      } catch (_error) {
+        // Non-fatal - ignore cleanup errors
+      }
 
       // Stop spinner if it's running
       if (this.spinner?.isSpinning) {

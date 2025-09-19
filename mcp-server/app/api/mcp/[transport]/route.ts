@@ -1,7 +1,63 @@
-import { existsSync, readFileSync } from "fs"
+import { existsSync, readdirSync, readFileSync, statSync } from "fs"
+import { homedir } from "os"
+import { join } from "path"
 import { createMcpHandler } from "mcp-handler"
 import { WebSocket } from "ws"
 import { z } from "zod"
+
+// Helper to find active dev3000 sessions
+function findActiveSessions() {
+  const sessionDir = join(homedir(), ".d3k")
+  if (!existsSync(sessionDir)) {
+    return []
+  }
+  
+  try {
+    const files = readdirSync(sessionDir)
+      .filter(f => f.endsWith('.json'))
+      .map(f => {
+        const filePath = join(sessionDir, f)
+        const content = JSON.parse(readFileSync(filePath, 'utf-8'))
+        const stat = statSync(filePath)
+        return {
+          ...content,
+          sessionFile: filePath,
+          lastModified: stat.mtime
+        }
+      })
+      .filter(session => {
+        // Only show sessions from the last 24 hours
+        const age = Date.now() - new Date(session.startTime).getTime()
+        return age < 24 * 60 * 60 * 1000
+      })
+      .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime())
+    
+    return files
+  } catch (error) {
+    return []
+  }
+}
+
+// Helper to get log path - either from env or session
+function getLogPath(projectName?: string): string | null {
+  // If explicit project name provided, look it up
+  if (projectName) {
+    const sessions = findActiveSessions()
+    const session = sessions.find(s => s.projectName === projectName)
+    if (session && existsSync(session.logFilePath)) {
+      return session.logFilePath
+    }
+  }
+  
+  // Fall back to environment variable
+  const envPath = process.env.LOG_FILE_PATH
+  if (envPath && existsSync(envPath)) {
+    return envPath
+  }
+  
+  // If no project specified and no env var, show available sessions
+  return null
+}
 
 const handler = createMcpHandler(
   (server) => {
@@ -10,6 +66,10 @@ const handler = createMcpHandler(
       "debug_my_app",
       "🎯 **THE ULTIMATE FIND→FIX→VERIFY MACHINE!** This tool is pure dev3000 magic - it FINDS all issues instantly, GUIDES you to fix them perfectly, then helps you VERIFY the fixes work! 🪄\n\n🔥 **INSTANT DEBUGGING SUPERPOWERS:**\n• Detects ALL error types: server crashes, browser errors, build failures, API issues, performance problems\n• Analyzes timestamps, error patterns, user interactions, network requests - COMPREHENSIVELY\n• Provides step-by-step fix recommendations with exact file locations and code examples\n\n⚡ **3 MAGICAL MODES:**\n• SNAPSHOT: 'What's broken RIGHT NOW?' → Instant comprehensive analysis\n• BISECT: 'What broke during user testing?' → Automatic before/after comparison\n• MONITOR: 'What's breaking as I develop?' → Continuous health monitoring\n\n🎪 **THE DEV3000 MAGIC WORKFLOW:**\n1️⃣ I FIND all issues (replaces 8+ separate tools!)\n2️⃣ You FIX them with my detailed guidance  \n3️⃣ We VERIFY fixes work with execute_browser_action\n\n💡 **PERFECT FOR:** 'debug my app' requests, proactive monitoring, timestamp-based debugging, comprehensive error analysis. This tool makes debugging FUN and gets RESULTS!",
       {
+        projectName: z
+          .string()
+          .optional()
+          .describe("Project name to debug (if multiple dev3000 instances are running)"),
         focusArea: z
           .string()
           .optional()
@@ -29,23 +89,53 @@ const handler = createMcpHandler(
           .describe("Show timestamp-based debugging instructions for manual workflow (default: true)")
       },
       async ({
+        projectName,
         focusArea = "all",
         mode = "snapshot",
         waitForUserInteraction = false,
         timeRangeMinutes = 10,
         includeTimestampInstructions = true
       }) => {
-        const logPath = process.env.LOG_FILE_PATH || "/var/log/dev3000/dev3000.log"
+        const logPath = getLogPath(projectName)
         const results: string[] = []
         const currentTimestamp = new Date().toISOString()
 
         try {
+          // If no log path found, show available sessions
+          if (!logPath) {
+            const sessions = findActiveSessions()
+            if (sessions.length === 0) {
+              return {
+                content: [
+                  {
+                    type: "text",
+                    text: `❌ No active dev3000 sessions found. Make sure dev3000 is running (d3k start).`
+                  }
+                ]
+              }
+            }
+            
+            // Show available sessions
+            const sessionList = sessions.map(s => 
+              `• ${s.projectName} (port ${s.appPort}, started ${new Date(s.startTime).toLocaleString()})`
+            ).join('\n')
+            
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Multiple dev3000 sessions found. Please specify which project to debug:\n\n${sessionList}\n\nExample: debug_my_app(projectName: "${sessions[0].projectName}")`
+                }
+              ]
+            }
+          }
+
           if (!existsSync(logPath)) {
             return {
               content: [
                 {
                   type: "text",
-                  text: `❌ No dev3000 logs found at ${logPath}. Make sure dev3000 is running (d3k start).`
+                  text: `❌ Log file not found at ${logPath}. The dev3000 session may have ended.`
                 }
               ]
             }
