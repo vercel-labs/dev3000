@@ -4,18 +4,14 @@ import { changelog } from "@/lib/changelog"
 export const runtime = "nodejs"
 export const revalidate = 3600 // Revalidate every hour
 
-export async function GET(
-  _request: Request,
-  { params }: { params: { version: string } }
-) {
+export async function GET(_request: Request, { params }: { params: { version: string } }) {
   try {
     const version = params.version
-    
+
     // Find the release by version, or use latest if version is "latest"
-    const release = version === "latest" 
-      ? changelog[0]
-      : changelog.find(r => `v${r.version}` === version || r.version === version)
-    
+    const release =
+      version === "latest" ? changelog[0] : changelog.find((r) => `v${r.version}` === version || r.version === version)
+
     if (!release) {
       return new Response(`Version ${version} not found`, {
         status: 404

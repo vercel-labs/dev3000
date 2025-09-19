@@ -170,14 +170,14 @@ export default function ChangelogPage() {
                           ))}
                         </ul>
                       </div>
-                      
+
                       <div className="pt-4 flex items-center justify-between border-t border-border/40">
                         <Link href={`/changelog/v${release.version}`}>
                           <Button variant="ghost" size="sm" className="gap-2">
                             View Full Release Notes →
                           </Button>
                         </Link>
-                        <Link 
+                        <Link
                           href={`https://github.com/vercel-labs/dev3000/releases/tag/v${release.version}`}
                           target="_blank"
                           rel="noopener noreferrer"

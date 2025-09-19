@@ -15,10 +15,8 @@ export async function generateStaticParams() {
 
 export async function generateMetadata({ params }: { params: Promise<{ version: string }> }): Promise<Metadata> {
   const { version } = await params
-  const release = changelog.find(
-    (r) => `v${r.version}` === version || r.version === version
-  )
-  
+  const release = changelog.find((r) => `v${r.version}` === version || r.version === version)
+
   if (!release) {
     return {
       title: "Version Not Found"
@@ -90,9 +88,7 @@ const getVersionTypeBadge = (type: string) => {
 
 export default async function VersionPage({ params }: { params: Promise<{ version: string }> }) {
   const { version } = await params
-  const release = changelog.find(
-    (r) => `v${r.version}` === version || r.version === version
-  )
+  const release = changelog.find((r) => `v${r.version}` === version || r.version === version)
 
   if (!release) {
     notFound()
@@ -112,7 +108,7 @@ export default async function VersionPage({ params }: { params: Promise<{ versio
             ← All Releases
           </Button>
         </Link>
-        
+
         <div className="flex gap-2">
           {previousRelease && (
             <Link href={`/changelog/v${previousRelease.version}`}>
@@ -137,9 +133,7 @@ export default async function VersionPage({ params }: { params: Promise<{ versio
           <h1 className="text-4xl font-bold">v{release.version}</h1>
           {getVersionTypeBadge(release.type)}
         </div>
-        <p className="text-lg text-foreground-secondary mb-4">
-          dev3000 Release Notes
-        </p>
+        <p className="text-lg text-foreground-secondary mb-4">dev3000 Release Notes</p>
         <div className="flex items-center justify-center gap-2 text-sm text-foreground-secondary">
           <Calendar className="w-4 h-4" />
           {release.date}
@@ -164,12 +158,11 @@ export default async function VersionPage({ params }: { params: Promise<{ versio
               ))}
             </ul>
           </div>
-
         </div>
 
         {/* Footer Actions */}
         <div className="mt-8 pt-6 border-t flex items-center justify-between">
-          <Link 
+          <Link
             href={`https://github.com/elsigh/dev3000/releases/tag/v${release.version}`}
             target="_blank"
             rel="noopener noreferrer"
@@ -181,7 +174,7 @@ export default async function VersionPage({ params }: { params: Promise<{ versio
           </Link>
 
           <div className="text-sm text-foreground-secondary">
-            Share this release: 
+            Share this release:
             <code className="ml-2 px-2 py-1 bg-secondary rounded text-xs">
               https://dev3000.ai/changelog/v{release.version}
             </code>
