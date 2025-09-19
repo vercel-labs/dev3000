@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "fs"
+import { createMcpHandler } from "mcp-handler"
 import { homedir } from "os"
 import { join } from "path"
-import { createMcpHandler } from "mcp-handler"
 import { WebSocket } from "ws"
 import { z } from "zod"
 
@@ -11,13 +11,13 @@ function findActiveSessions() {
   if (!existsSync(sessionDir)) {
     return []
   }
-  
+
   try {
     const files = readdirSync(sessionDir)
-      .filter(f => f.endsWith('.json'))
-      .map(f => {
+      .filter((f) => f.endsWith(".json"))
+      .map((f) => {
         const filePath = join(sessionDir, f)
-        const content = JSON.parse(readFileSync(filePath, 'utf-8'))
+        const content = JSON.parse(readFileSync(filePath, "utf-8"))
         const stat = statSync(filePath)
         return {
           ...content,
@@ -25,13 +25,13 @@ function findActiveSessions() {
           lastModified: stat.mtime
         }
       })
-      .filter(session => {
+      .filter((session) => {
         // Only show sessions from the last 24 hours
         const age = Date.now() - new Date(session.startTime).getTime()
         return age < 24 * 60 * 60 * 1000
       })
       .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime())
-    
+
     return files
   } catch (error) {
     return []
@@ -43,18 +43,18 @@ function getLogPath(projectName?: string): string | null {
   // If explicit project name provided, look it up
   if (projectName) {
     const sessions = findActiveSessions()
-    const session = sessions.find(s => s.projectName === projectName)
+    const session = sessions.find((s) => s.projectName === projectName)
     if (session && existsSync(session.logFilePath)) {
       return session.logFilePath
     }
   }
-  
+
   // Fall back to environment variable
   const envPath = process.env.LOG_FILE_PATH
   if (envPath && existsSync(envPath)) {
     return envPath
   }
-  
+
   // If no project specified and no env var, show available sessions
   return null
 }
@@ -114,12 +114,12 @@ const handler = createMcpHandler(
                 ]
               }
             }
-            
+
             // Show available sessions
-            const sessionList = sessions.map(s => 
-              `• ${s.projectName} (port ${s.appPort}, started ${new Date(s.startTime).toLocaleString()})`
-            ).join('\n')
-            
+            const sessionList = sessions
+              .map((s) => `• ${s.projectName} (port ${s.appPort}, started ${new Date(s.startTime).toLocaleString()})`)
+              .join("\n")
+
             return {
               content: [
                 {

@@ -34,13 +34,16 @@ interface DevEnvironmentOptions {
   defaultPort?: string // Default port from project type detection
   userSetPort?: boolean // Whether user explicitly set the port
   userSetMcpPort?: boolean // Whether user explicitly set the MCP port
+  tail?: boolean // Whether to tail the log file to terminal
 }
 
 class Logger {
   private logFile: string
+  private tail: boolean
 
-  constructor(logFile: string) {
+  constructor(logFile: string, tail: boolean = false) {
     this.logFile = logFile
+    this.tail = tail
     // Ensure directory exists
     const logDir = dirname(logFile)
     if (!existsSync(logDir)) {
@@ -54,6 +57,11 @@ class Logger {
     const timestamp = new Date().toISOString()
     const logEntry = `[${timestamp}] [${source.toUpperCase()}] ${message}\n`
     appendFileSync(this.logFile, logEntry)
+    
+    // If tail is enabled, also output to console
+    if (this.tail) {
+      process.stdout.write(logEntry)
+    }
   }
 }
 
@@ -113,7 +121,7 @@ export function createPersistentLogFile(): string {
 // Write session info for MCP server to discover
 function writeSessionInfo(projectName: string, logFilePath: string, appPort: string, mcpPort?: string): void {
   const sessionDir = join(homedir(), ".d3k")
-  
+
   try {
     // Create ~/.d3k directory if it doesn't exist
     if (!existsSync(sessionDir)) {
@@ -210,7 +218,7 @@ export class DevEnvironment {
       ...options,
       mcpPort: options.portMcp || options.mcpPort || "3684"
     }
-    this.logger = new Logger(options.logFile)
+    this.logger = new Logger(options.logFile, options.tail || false)
     this.outputProcessor = new OutputProcessor(new StandardLogParser(), new NextJsErrorDetector())
 
     // Set up MCP server public directory for web-accessible screenshots
@@ -422,7 +430,8 @@ export class DevEnvironment {
     if (this.options.serversOnly) {
       console.log(chalk.cyan("🖥️  Servers-only mode - use Chrome extension for browser monitoring"))
     }
-    console.log(chalk.gray(`\n💡 To stop all servers and kill ${this.options.commandName}: Ctrl-C`))
+    console.log(chalk.gray(`\n💡 MCP server runs as singleton - persists across dev3000 sessions`))
+    console.log(chalk.gray(`💡 To stop app server: Ctrl-C (MCP server continues running for other sessions)`))
 
     // Start health monitoring after everything is ready
     this.startHealthCheck()
@@ -579,6 +588,25 @@ export class DevEnvironment {
 
   private async startMcpServer() {
     this.debugLog("Starting MCP server setup")
+
+    // Kill any existing MCP server on this port first
+    try {
+      await new Promise<void>((resolve) => {
+        const killProcess = spawn("sh", ["-c", `lsof -ti:${this.options.mcpPort} | xargs kill -9`], { 
+          stdio: "ignore",
+          shell: true 
+        })
+        killProcess.on("exit", () => {
+          this.debugLog(`Cleaned up any existing MCP server on port ${this.options.mcpPort}`)
+          resolve()
+        })
+      })
+      // Give it a moment to fully release the port
+      await new Promise(resolve => setTimeout(resolve, 500))
+    } catch (_error) {
+      // Ignore errors - no existing server is fine
+    }
+
     // Get the path to our bundled MCP server
     const currentFile = fileURLToPath(import.meta.url)
     const packageRoot = dirname(dirname(currentFile)) // Go up from dist/ to package root
@@ -662,10 +690,11 @@ export class DevEnvironment {
     this.debugLog(`MCP server working directory: ${actualWorkingDir}`)
     this.debugLog(`MCP server port: ${this.options.mcpPort}`)
 
+    // Start MCP server as a true background singleton process
     this.mcpServerProcess = spawn(packageManagerForRun, ["run", "dev"], {
       stdio: ["ignore", "pipe", "pipe"],
       shell: true,
-      detached: true, // Run independently
+      detached: true, // Run independently of parent process
       cwd: actualWorkingDir,
       env: {
         ...process.env,
@@ -675,7 +704,10 @@ export class DevEnvironment {
       }
     })
 
-    this.debugLog("MCP server process spawned")
+    // Unref the process so it continues running after parent exits
+    this.mcpServerProcess.unref()
+
+    this.debugLog("MCP server process spawned as singleton background service")
 
     // Log MCP server output to separate file for debugging
     const mcpLogFile = join(dirname(this.options.logFile), "dev3000-mcp.log")
@@ -1005,14 +1037,9 @@ export class DevEnvironment {
       }
     }
 
-    // Kill servers
-    console.log(chalk.cyan("🔄 Killing servers..."))
-    await Promise.all([
-      killPortProcess(this.options.port, "your app server"),
-      this.options.mcpPort
-        ? killPortProcess(this.options.mcpPort, `${this.options.commandName} MCP server`)
-        : Promise.resolve()
-    ])
+    // Kill app server only (MCP server remains as singleton)
+    console.log(chalk.cyan("🔄 Killing app server..."))
+    await killPortProcess(this.options.port, "your app server")
 
     // Shutdown CDP monitor if it was started
     if (this.cdpMonitor) {
@@ -1074,14 +1101,9 @@ export class DevEnvironment {
         }
       }
 
-      // Kill servers immediately - don't wait for browser cleanup
-      console.log(chalk.yellow("🔄 Killing servers..."))
-      await Promise.all([
-        killPortProcess(this.options.port, "your app server"),
-        this.options.mcpPort
-          ? killPortProcess(this.options.mcpPort, `${this.options.commandName} MCP server`)
-          : Promise.resolve()
-      ])
+      // Kill app server immediately (MCP server remains as singleton)
+      console.log(chalk.yellow("🔄 Killing app server..."))
+      await killPortProcess(this.options.port, "your app server")
 
       // Shutdown CDP monitor if it was started
       if (this.cdpMonitor) {
