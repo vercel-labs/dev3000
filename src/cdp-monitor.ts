@@ -546,7 +546,10 @@ export class CDPMonitor {
       const importantHeaders = ["content-type", "authorization", "cookie"]
       const headerInfo = importantHeaders
         .filter((h) => headers?.[h])
-        .map((h) => `${h}: ${headers?.[h]?.slice(0, 50) || ""}${(headers?.[h]?.length || 0) > 50 ? "..." : ""}`)
+        .map((h) => {
+          const maxLength = h === 'authorization' ? 10 : 50;
+          return `${h}: ${headers?.[h]?.slice(0, maxLength) || ""}${(headers?.[h]?.length || 0) > maxLength ? "..." : ""}`;
+        })
         .join(", ")
 
       if (headerInfo) logMsg += ` [${headerInfo}]`
