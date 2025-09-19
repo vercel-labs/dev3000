@@ -312,7 +312,7 @@ class Dev3000Popup {
     switch (status) {
       case "connected":
         mcpStatusIndicator.className = "status-indicator active"
-        mcpStatusText.textContent = "MCP Server: Connected ✓ (logs → /tmp/dev3000.log)"
+        mcpStatusText.textContent = "MCP Server: Connected ✓"
         break
       case "disconnected":
         mcpStatusIndicator.className = "status-indicator inactive"

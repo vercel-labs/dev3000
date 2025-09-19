@@ -145,6 +145,7 @@ program
   .option("--servers-only", "Run servers only, skip browser launch (use with Chrome extension)")
   .option("--debug", "Enable debug logging to console")
   .option("-t, --tail", "Output consolidated logfile to terminal (like tail -f)")
+  .option("-x, --no-tui", "Disable TUI mode and use regular console output")
   .option("--kill-mcp", "Kill the MCP server on port 3684 and exit")
   .action(async (options) => {
     // Handle --kill-mcp option
@@ -210,7 +211,8 @@ program
         debug: options.debug,
         serversOnly: options.serversOnly,
         commandName,
-        tail: options.tail
+        tail: options.tail,
+        tui: options.tui !== false // TUI is on by default unless --no-tui is used
       })
     } catch (error) {
       console.error(chalk.red("❌ Failed to start development environment:"), error)
