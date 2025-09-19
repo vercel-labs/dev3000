@@ -4,12 +4,13 @@ import chalk from "chalk"
 import { Command } from "commander"
 import { existsSync, readFileSync } from "fs"
 import { tmpdir } from "os"
+import { detect } from "package-manager-detector"
 import { dirname, join } from "path"
 import { fileURLToPath } from "url"
 import { createPersistentLogFile, startDevEnvironment } from "./dev-environment.js"
 
 interface ProjectConfig {
-  type: "node" | "python"
+  type: "node" | "python" | "rails"
   packageManager?: string // Only for node projects
   pythonCommand?: string // Only for python projects
   defaultScript: string
@@ -41,7 +42,7 @@ function detectPythonCommand(debug = false): string {
   }
 }
 
-function detectProjectType(debug = false): ProjectConfig {
+async function detectProjectType(debug = false): Promise<ProjectConfig> {
   // Check for Python project
   if (existsSync("requirements.txt") || existsSync("pyproject.toml")) {
     if (debug) {
@@ -55,36 +56,28 @@ function detectProjectType(debug = false): ProjectConfig {
     }
   }
 
-  // Check for Node.js project
-  if (existsSync("pnpm-lock.yaml")) {
+  // Check for Rails project
+  if (existsSync("Gemfile") && existsSync("config/application.rb")) {
     if (debug) {
-      console.log(`[PROJECT DEBUG] Node.js project detected (found pnpm-lock.yaml)`)
+      console.log(`[PROJECT DEBUG] Rails project detected (found Gemfile and config/application.rb)`)
     }
     return {
-      type: "node",
-      packageManager: "pnpm",
-      defaultScript: "dev",
-      defaultPort: "3000"
+      type: "rails",
+      defaultScript: "server",
+      defaultPort: "3000" // Rails default port
     }
   }
-  if (existsSync("yarn.lock")) {
+
+  // Check for Node.js project using package-manager-detector
+  const detected = await detect()
+
+  if (detected) {
     if (debug) {
-      console.log(`[PROJECT DEBUG] Node.js project detected (found yarn.lock)`)
+      console.log(`[PROJECT DEBUG] Node.js project detected with ${detected.agent} package manager`)
     }
     return {
       type: "node",
-      packageManager: "yarn",
-      defaultScript: "dev",
-      defaultPort: "3000"
-    }
-  }
-  if (existsSync("package-lock.json")) {
-    if (debug) {
-      console.log(`[PROJECT DEBUG] Node.js project detected (found package-lock.json)`)
-    }
-    return {
-      type: "node",
-      packageManager: "npm",
+      packageManager: detected.agent,
       defaultScript: "dev",
       defaultPort: "3000"
     }
@@ -153,7 +146,7 @@ program
   .option("--debug", "Enable debug logging to console")
   .action(async (options) => {
     // Detect project type and configuration
-    const projectConfig = detectProjectType(options.debug)
+    const projectConfig = await detectProjectType(options.debug)
 
     // Use defaults from project detection if not explicitly provided
     const port = options.port || projectConfig.defaultPort
@@ -163,6 +156,8 @@ program
     let serverCommand: string
     if (projectConfig.type === "python") {
       serverCommand = `${projectConfig.pythonCommand} ${script}`
+    } else if (projectConfig.type === "rails") {
+      serverCommand = `bundle exec rails ${script}`
     } else {
       // Node.js project
       serverCommand = `${projectConfig.packageManager} run ${script}`

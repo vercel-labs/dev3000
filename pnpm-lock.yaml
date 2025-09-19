@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@antfu/ni':
+        specifier: ^26.0.1
+        version: 26.0.1
       '@biomejs/biome':
         specifier: ^2.2.4
         version: 2.2.4
@@ -26,6 +29,9 @@ importers:
       ora:
         specifier: ^8.2.0
         version: 8.2.0
+      package-manager-detector:
+        specifier: ^1.3.0
+        version: 1.3.0
       ws:
         specifier: ^8.18.0
         version: 8.18.3
@@ -56,6 +62,11 @@ importers:
         version: 1.6.1(@types/node@22.18.0)
 
 packages:
+
+  '@antfu/ni@26.0.1':
+    resolution: {integrity: sha512-yGtjrmEVziDXW/7ggkzDtJkiJ8e8a9j+CtYBhT6gnvVoIXHtTc+iL+ZDMfUDe1wxRvYJrLpmHLJb5HjA5Hskyg==}
+    engines: {node: '>=20'}
+    hasBin: true
 
   '@biomejs/biome@2.2.4':
     resolution: {integrity: sha512-TBHU5bUy/Ok6m8c0y3pZiuO/BZoY/OcGxoLlrfQof5s8ISVwbVBdFINPQZyFfKwil8XibYWb7JMwnT8wT4WVPg==}
@@ -607,6 +618,10 @@ packages:
     resolution: {integrity: sha512-Cxwpt2SfTzTtXcfOlzGEee8O+c+MmUgGrNiBcXnuWxuFJHe6a5Hz7qwhwe5OgaSYI0IJvkLqWX1ASG+cJOkEiA==}
     engines: {node: '>=10'}
 
+  ansis@4.1.0:
+    resolution: {integrity: sha512-BGcItUBWSMRgOCe+SVZJ+S7yTRG0eGt9cXAHev72yuGcY23hnLA7Bky5L/xLyPINoSN95geovfBkqoTlNZYa7w==}
+    engines: {node: '>=14'}
+
   assertion-error@1.1.0:
     resolution: {integrity: sha512-jgsaNduz+ndvGyFt3uSuWqvy4lCnIJiovtouQN5JZHOKCS2QuhEdbcQHFhVksz2N2U9hXJo8odG7ETyWlEeuDw==}
 
@@ -786,6 +801,15 @@ packages:
   fast-json-stable-stringify@2.1.0:
     resolution: {integrity: sha512-lhd/wF+Lk98HZoTCtlVraHtfh5XYijIjalXck7saUtuanSDyLMxnHhSXEDJqHxD7msR8D0uCmqlkwjCV8xvwHw==}
 
+  fdir@6.5.0:
+    resolution: {integrity: sha512-tIbYtZbucOs0BRGqPJkshJUYdL+SDH7dVM8gjy+ERp3WAUjLEFJE+02kanyHtwjWOnwrKYBiwAmM0p4kLJAnXg==}
+    engines: {node: '>=12.0.0'}
+    peerDependencies:
+      picomatch: ^3 || ^4
+    peerDependenciesMeta:
+      picomatch:
+        optional: true
+
   finalhandler@2.1.0:
     resolution: {integrity: sha512-/t88Ty3d5JWQbWYgaOGCCYfXRwV1+be02WqYYlL6h0lEiUAMPM8o8qKGO01YIkOHzka2up08wvgYD0mDiI+q3Q==}
     engines: {node: '>= 0.8'}
@@ -805,6 +829,9 @@ packages:
 
   function-bind@1.1.2:
     resolution: {integrity: sha512-7XHNxH7qX9xG5mIwxkhumTox/MIRNcOgDrxWsMt2pAr23WHp6MrRlN7FBSFpCpr+oVO0F744iUgR82nJMfG2SA==}
+
+  fzf@0.5.2:
+    resolution: {integrity: sha512-Tt4kuxLXFKHy8KT40zwsUPUkg1CrsgY25FxA2U/j/0WgEDCk3ddc/zLTCCcbSHX9FcKtLuVaDGtGE/STWC+j3Q==}
 
   generic-pool@3.9.0:
     resolution: {integrity: sha512-hymDOu5B53XvN4QT9dBmZxPX4CWhBPPLguTZ9MMFeFa/Kg0xWVfylOVNlJji/E7yTZWFd/q9GO5TxDLq156D7g==}
@@ -1005,6 +1032,9 @@ packages:
     resolution: {integrity: sha512-/Eaoq+QyLSiXQ4lyYV23f14mZRQcXnxfHrN0vCai+ak9G0pp9iEQukIIZq5NccEvwRB8PUnZT0KsOoDCINS1qQ==}
     engines: {node: '>=18'}
 
+  package-manager-detector@1.3.0:
+    resolution: {integrity: sha512-ZsEbbZORsyHuO00lY1kV3/t72yp6Ysay6Pd17ZAlNGuGwmWDLCJxFpRs0IzfXfj1o4icJOkUEioexFHzyPurSQ==}
+
   parseurl@1.3.3:
     resolution: {integrity: sha512-CiyeOxFT/JZyN5m0z9PfXw4SCBJ6Sygz1Dpl0wqjlhDEGGBP1GnsUVEL0p63hoG1fcj3fHynXi9NYO4nWOL+qQ==}
     engines: {node: '>= 0.8'}
@@ -1032,6 +1062,10 @@ packages:
 
   picocolors@1.1.1:
     resolution: {integrity: sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA==}
+
+  picomatch@4.0.3:
+    resolution: {integrity: sha512-5gTmgEY/sqK6gFXLIsQNH19lWb4ebPDLA4SdLP7dsWkIXHWlG66oPuVvXSGFPppYZz8ZDZq0dYYrbHfBCVUb1Q==}
+    engines: {node: '>=12'}
 
   pkce-challenge@5.0.0:
     resolution: {integrity: sha512-ueGLflrrnvwB3xuo/uGob5pd5FN7l0MsLf0Z87o/UQmRtwjvfylfc9MurIxRAWywCYTgrvpXBcqjV4OfCYGCIQ==}
@@ -1186,6 +1220,13 @@ packages:
   tinybench@2.9.0:
     resolution: {integrity: sha512-0+DUvqWMValLmha6lr4kD8iAMK1HzV0/aKnCtWb9v9641TnP/MFb7Pc2bxoxQjTXAErryXVgUOfv2YqNllqGeg==}
 
+  tinyexec@1.0.1:
+    resolution: {integrity: sha512-5uC6DDlmeqiOwCPmK9jMSdOuZTh8bU39Ys6yidB+UTt5hfZUPGAypSgFRiEp+jbi9qH40BLDvy85jIU88wKSqw==}
+
+  tinyglobby@0.2.15:
+    resolution: {integrity: sha512-j2Zq4NyQYG5XMST4cbs02Ak8iJUdxRM0XI5QyxXuZOzKOINmWurp3smXu3y5wDcJrptwpSjgXHzIQxR0omXljQ==}
+    engines: {node: '>=12.0.0'}
+
   tinypool@0.8.4:
     resolution: {integrity: sha512-i11VH5gS6IFeLY3gMBQ00/MmLncVP7JLXOw1vlgkytLmJK7QnEr7NXf0LBdxfmNPAeyetukOk0bOYrJrFGjYJQ==}
     engines: {node: '>=14.0.0'}
@@ -1335,6 +1376,14 @@ packages:
     resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
 
 snapshots:
+
+  '@antfu/ni@26.0.1':
+    dependencies:
+      ansis: 4.1.0
+      fzf: 0.5.2
+      package-manager-detector: 1.3.0
+      tinyexec: 1.0.1
+      tinyglobby: 0.2.15
 
   '@biomejs/biome@2.2.4':
     optionalDependencies:
@@ -1699,6 +1748,8 @@ snapshots:
 
   ansi-styles@5.2.0: {}
 
+  ansis@4.1.0: {}
+
   assertion-error@1.1.0: {}
 
   body-parser@2.2.0:
@@ -1937,6 +1988,10 @@ snapshots:
 
   fast-json-stable-stringify@2.1.0: {}
 
+  fdir@6.5.0(picomatch@4.0.3):
+    optionalDependencies:
+      picomatch: 4.0.3
+
   finalhandler@2.1.0:
     dependencies:
       debug: 4.4.1
@@ -1956,6 +2011,8 @@ snapshots:
     optional: true
 
   function-bind@1.1.2: {}
+
+  fzf@0.5.2: {}
 
   generic-pool@3.9.0: {}
 
@@ -2129,6 +2186,8 @@ snapshots:
     dependencies:
       yocto-queue: 1.2.1
 
+  package-manager-detector@1.3.0: {}
+
   parseurl@1.3.3: {}
 
   path-key@3.1.1: {}
@@ -2144,6 +2203,8 @@ snapshots:
   pathval@1.1.1: {}
 
   picocolors@1.1.1: {}
+
+  picomatch@4.0.3: {}
 
   pkce-challenge@5.0.0: {}
 
@@ -2348,6 +2409,13 @@ snapshots:
       js-tokens: 9.0.1
 
   tinybench@2.9.0: {}
+
+  tinyexec@1.0.1: {}
+
+  tinyglobby@0.2.15:
+    dependencies:
+      fdir: 6.5.0(picomatch@4.0.3)
+      picomatch: 4.0.3
 
   tinypool@0.8.4: {}
 
