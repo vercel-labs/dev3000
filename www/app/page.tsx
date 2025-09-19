@@ -34,7 +34,7 @@ export default function HomePage() {
             </div>
             <nav className="flex items-center gap-4">
               <div className="md:flex items-center gap-6">
-                <Link href="/changelog" className="text-muted-foreground hover:text-foreground transition-colors">
+                <Link href="/changelog" className="text-foreground hover:text-foreground/80 transition-colors">
                   Changelog
                 </Link>
                 <a
@@ -44,10 +44,10 @@ export default function HomePage() {
                   Quick Start
                 </a>
               </div>
-              <Button variant="outline" size="sm" className="border-gray-600/50" asChild>
+              <Button asChild>
                 <a href="https://github.com/vercel-labs/dev3000" target="_blank" rel="noopener noreferrer">
-                  <Github className="w-4 h-4 md:mr-2" />
-                  <span className="hidden md:inline">GitHub</span>
+                  <Github className="w-4 h-4 mr-2" />
+                  View on GitHub
                 </a>
               </Button>
             </nav>
