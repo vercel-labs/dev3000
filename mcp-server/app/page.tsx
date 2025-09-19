@@ -57,7 +57,7 @@ export default function HomePage() {
                       Server Running
                     </span>
                     <span className="text-gray-300">•</span>
-                    <span className="text-sm text-gray-600">Port 3684</span>
+                    <span className="text-sm text-gray-600">Port {process.env.PORT || '3684'}</span>
                   </div>
                 </div>
               </div>

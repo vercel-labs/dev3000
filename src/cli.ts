@@ -152,7 +152,7 @@ program
     const port = options.port || projectConfig.defaultPort
     const script = options.script || projectConfig.defaultScript
     const userSetPort = options.port !== undefined
-    const userSetMcpPort = process.argv.includes('--port-mcp') || process.argv.includes('-p-mcp')
+    const userSetMcpPort = process.argv.includes("--port-mcp") || process.argv.includes("-p-mcp")
 
     // Generate server command based on project type
     let serverCommand: string
