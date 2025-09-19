@@ -23,7 +23,8 @@ import { type LogEntry, NextJsErrorDetector, OutputProcessor, StandardLogParser 
 
 interface DevEnvironmentOptions {
   port: string
-  mcpPort: string
+  mcpPort?: string // Make optional since we'll handle portMcp
+  portMcp?: string // New option from CLI
   serverCommand: string
   profileDir: string
   logFile: string
@@ -31,6 +32,9 @@ interface DevEnvironmentOptions {
   serversOnly?: boolean
   commandName: string
   browser?: string
+  defaultPort?: string // Default port from project type detection
+  userSetPort?: boolean // Whether user explicitly set the port
+  userSetMcpPort?: boolean // Whether user explicitly set the MCP port
 }
 
 class Logger {
@@ -59,6 +63,33 @@ function detectPackageManagerForRun(): string {
   if (existsSync("yarn.lock")) return "yarn"
   if (existsSync("package-lock.json")) return "npm"
   return "npm" // fallback
+}
+
+async function isPortAvailable(port: string): Promise<boolean> {
+  try {
+    const result = await new Promise<string>((resolve) => {
+      const proc = spawn("lsof", ["-ti", `:${port}`], { stdio: "pipe" })
+      let output = ""
+      proc.stdout?.on("data", (data) => {
+        output += data.toString()
+      })
+      proc.on("exit", () => resolve(output.trim()))
+    })
+    return !result // If no output, port is available
+  } catch {
+    return true // Assume port is available if check fails
+  }
+}
+
+async function findAvailablePort(startPort: number): Promise<string> {
+  let port = startPort
+  while (port < 65535) {
+    if (await isPortAvailable(port.toString())) {
+      return port.toString()
+    }
+    port++
+  }
+  throw new Error(`No available ports found starting from ${startPort}`)
 }
 
 export function createPersistentLogFile(): string {
@@ -158,7 +189,11 @@ export class DevEnvironment {
   private healthCheckTimer: NodeJS.Timeout | null = null
 
   constructor(options: DevEnvironmentOptions) {
-    this.options = options
+    // Handle portMcp vs mcpPort naming
+    this.options = {
+      ...options,
+      mcpPort: options.portMcp || options.mcpPort || "3684"
+    }
     this.logger = new Logger(options.logFile)
     this.outputProcessor = new OutputProcessor(new StandardLogParser(), new NextJsErrorDetector())
 
@@ -210,33 +245,55 @@ export class DevEnvironment {
   }
 
   private async checkPortsAvailable() {
-    const ports = [this.options.port, this.options.mcpPort]
+    // Check if user explicitly set ports via CLI flags
+    const userSetAppPort = this.options.userSetPort || false
+    const userSetMcpPort = this.options.userSetMcpPort || false
 
-    for (const port of ports) {
-      try {
-        const result = await new Promise<string>((resolve) => {
-          const proc = spawn("lsof", ["-ti", `:${port}`], { stdio: "pipe" })
-          let output = ""
-          // biome-ignore lint/suspicious/noAssignInExpressions: whatever
-          proc.stdout?.on("data", (data) => (output += data.toString()))
-          proc.on("exit", () => resolve(output.trim()))
-        })
-
-        if (result) {
-          result.split("\n").filter((line) => line.trim())
-
-          // Stop spinner and show error
-          if (this.spinner?.isSpinning) {
-            this.spinner.fail(`Port ${port} is already in use`)
-          }
-          console.log(chalk.yellow(`💡 To free up port ${port}, run: lsof -ti:${port} | xargs kill -9`))
-          throw new Error(`Port ${port} is already in use. Please free the port and try again.`)
+    // If user set explicit ports, fail if they're not available
+    if (userSetAppPort) {
+      const available = await isPortAvailable(this.options.port)
+      if (!available) {
+        if (this.spinner?.isSpinning) {
+          this.spinner.fail(`Port ${this.options.port} is already in use`)
         }
-      } catch (error) {
-        if (error instanceof Error && error.message.includes("Port")) {
-          throw error // Re-throw our custom error
+        console.log(
+          chalk.yellow(`💡 To free up port ${this.options.port}, run: lsof -ti:${this.options.port} | xargs kill -9`)
+        )
+        throw new Error(`Port ${this.options.port} is already in use. Please free the port and try again.`)
+      }
+    }
+
+    if (userSetMcpPort && this.options.mcpPort) {
+      const available = await isPortAvailable(this.options.mcpPort)
+      if (!available) {
+        if (this.spinner?.isSpinning) {
+          this.spinner.fail(`Port ${this.options.mcpPort} is already in use`)
         }
-        // Ignore other errors - port might just be free
+        console.log(
+          chalk.yellow(
+            `💡 To free up port ${this.options.mcpPort}, run: lsof -ti:${this.options.mcpPort} | xargs kill -9`
+          )
+        )
+        throw new Error(`Port ${this.options.mcpPort} is already in use. Please free the port and try again.`)
+      }
+    }
+
+    // If user didn't set ports, find available ones
+    if (!userSetAppPort) {
+      const startPort = parseInt(this.options.port)
+      const availablePort = await findAvailablePort(startPort)
+      if (availablePort !== this.options.port) {
+        this.debugLog(`Port ${this.options.port} in use, using port ${availablePort} for app server`)
+        this.options.port = availablePort
+      }
+    }
+
+    if (!userSetMcpPort && this.options.mcpPort) {
+      const startPort = parseInt(this.options.mcpPort)
+      const availablePort = await findAvailablePort(startPort)
+      if (availablePort !== this.options.mcpPort) {
+        this.debugLog(`Port ${this.options.mcpPort} in use, using port ${availablePort} for MCP server`)
+        this.options.mcpPort = availablePort
       }
     }
   }
@@ -921,7 +978,9 @@ export class DevEnvironment {
     console.log(chalk.cyan("🔄 Killing servers..."))
     await Promise.all([
       killPortProcess(this.options.port, "your app server"),
-      killPortProcess(this.options.mcpPort, `${this.options.commandName} MCP server`)
+      this.options.mcpPort
+        ? killPortProcess(this.options.mcpPort, `${this.options.commandName} MCP server`)
+        : Promise.resolve()
     ])
 
     // Shutdown CDP monitor if it was started
@@ -977,7 +1036,9 @@ export class DevEnvironment {
       console.log(chalk.yellow("🔄 Killing servers..."))
       await Promise.all([
         killPortProcess(this.options.port, "your app server"),
-        killPortProcess(this.options.mcpPort, `${this.options.commandName} MCP server`)
+        this.options.mcpPort
+          ? killPortProcess(this.options.mcpPort, `${this.options.commandName} MCP server`)
+          : Promise.resolve()
       ])
 
       // Shutdown CDP monitor if it was started
