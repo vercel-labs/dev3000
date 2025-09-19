@@ -483,8 +483,8 @@ export class DevEnvironment {
           .filter((line) => line.trim())
 
         if (lines.length > 0) {
-          // Show last 10 lines, or fewer if log is shorter
-          const recentLines = lines.slice(-10)
+          // Show last 20 lines, or fewer if log is shorter
+          const recentLines = lines.slice(-20)
           console.log(chalk.yellow("\n📋 Recent log entries:"))
           for (const line of recentLines) {
             console.log(chalk.gray(`   ${line}`))
