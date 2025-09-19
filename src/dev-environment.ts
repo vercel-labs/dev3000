@@ -19,7 +19,7 @@ import { basename, dirname, join } from "path"
 import { fileURLToPath } from "url"
 import { CDPMonitor } from "./cdp-monitor.js"
 import { type LogEntry, NextJsErrorDetector, OutputProcessor, StandardLogParser } from "./services/parsers/index.js"
-import { DevTUI } from "./tui-interface.js"
+// import { DevTUI } from "./tui-interface.js" // Removed due to bun:ffi dependency
 
 interface DevEnvironmentOptions {
   port: string
@@ -36,7 +36,6 @@ interface DevEnvironmentOptions {
   userSetPort?: boolean // Whether user explicitly set the port
   userSetMcpPort?: boolean // Whether user explicitly set the MCP port
   tail?: boolean // Whether to tail the log file to terminal
-  tui?: boolean // Whether to use TUI mode (default true)
 }
 
 class Logger {
@@ -213,7 +212,6 @@ export class DevEnvironment {
   private isShuttingDown: boolean = false
   private serverStartTime: number | null = null
   private healthCheckTimer: NodeJS.Timeout | null = null
-  private tui: DevTUI | null = null
 
   constructor(options: DevEnvironmentOptions) {
     // Handle portMcp vs mcpPort naming
@@ -263,7 +261,7 @@ export class DevEnvironment {
     this.spinner = ora({
       text: "Initializing...",
       spinner: "dots",
-      isEnabled: !options.tui || options.tail // Disable spinner in TUI mode unless tail is active
+      isEnabled: true
     })
 
     // Ensure directories exist
@@ -420,32 +418,16 @@ export class DevEnvironment {
     const projectName = basename(process.cwd()).replace(/[^a-zA-Z0-9-_]/g, "_")
     writeSessionInfo(projectName, this.options.logFile, this.options.port, this.options.mcpPort)
 
-    // Check if TUI mode is enabled (default) and not using tail mode
-    if (this.options.tui && !this.options.tail) {
-      // Start TUI interface
-      this.tui = new DevTUI({
-        appPort: this.options.port,
-        mcpPort: this.options.mcpPort || "3684",
-        logFile: this.options.logFile,
-        commandName: this.options.commandName,
-        serversOnly: this.options.serversOnly,
-        version: this.version
-      })
-
-      await this.tui.start()
-    } else {
-      // Regular console output (when TUI is disabled or tail is enabled)
-      console.log(chalk.cyan(`Logs: ${this.options.logFile}`))
-      console.log(chalk.cyan("☝️ Give this to an AI to auto debug and fix your app\n"))
-      console.log(chalk.cyan(`🌐 Your App: http://localhost:${this.options.port}`))
-      console.log(chalk.cyan(`🤖 MCP Server: http://localhost:${this.options.mcpPort}/api/mcp/mcp`))
-      console.log(chalk.cyan(`📸 Visual Timeline: http://localhost:${this.options.mcpPort}/logs`))
-      if (this.options.serversOnly) {
-        console.log(chalk.cyan("🖥️  Servers-only mode - use Chrome extension for browser monitoring"))
-      }
-      console.log(chalk.gray(`\n💡 MCP server runs as singleton - persists across dev3000 sessions`))
-      console.log(chalk.gray(`💡 To stop app server: Ctrl-C (MCP server continues running for other sessions)`))
+    // Regular console output (TUI removed due to bun:ffi dependency)
+    console.log(chalk.cyan(`Logs: ${this.options.logFile}`))
+    console.log(chalk.cyan("☝️ Give this to an AI to auto debug and fix your app\n"))
+    console.log(chalk.cyan(`🌐 Your App: http://localhost:${this.options.port}`))
+    console.log(chalk.cyan(`🤖 MCP Server: http://localhost:${this.options.mcpPort}/api/mcp/mcp`))
+    console.log(chalk.cyan(`📸 Visual Timeline: http://localhost:${this.options.mcpPort}/logs`))
+    if (this.options.serversOnly) {
+      console.log(chalk.cyan("🖥️  Servers-only mode - use Chrome extension for browser monitoring"))
     }
+    console.log(chalk.cyan("\nUse Ctrl-C to stop.\n"))
 
     // Start health monitoring after everything is ready
     this.startHealthCheck()
@@ -1026,21 +1008,14 @@ export class DevEnvironment {
       // Non-fatal - ignore cleanup errors
     }
 
-    // Stop TUI if it's running
-    if (this.tui) {
-      await this.tui.shutdown()
-      this.tui = null
-    }
+    // TUI removed due to bun:ffi dependency
 
     // Stop spinner if it's running
     if (this.spinner?.isSpinning) {
       this.spinner.fail("Critical failure detected")
     }
 
-    // Only show console messages if not in TUI mode
-    if (!this.options.tui || this.options.tail) {
-      console.log(chalk.yellow(`🛑 Shutting down ${this.options.commandName} due to critical failure...`))
-    }
+    console.log(chalk.yellow(`🛑 Shutting down ${this.options.commandName} due to critical failure...`))
 
     // Kill processes on both ports
     const killPortProcess = async (port: string, name: string) => {
@@ -1050,46 +1025,32 @@ export class DevEnvironment {
         return new Promise<void>((resolve) => {
           killProcess.on("exit", (code) => {
             if (code === 0) {
-              if (!this.options.tui || this.options.tail) {
-                console.log(chalk.green(`✅ Killed ${name} on port ${port}`))
-              }
+              console.log(chalk.green(`✅ Killed ${name} on port ${port}`))
             }
             resolve()
           })
         })
       } catch (_error) {
-        if (!this.options.tui || this.options.tail) {
-          console.log(chalk.gray(`⚠️ Could not kill ${name} on port ${port}`))
-        }
+        console.log(chalk.gray(`⚠️ Could not kill ${name} on port ${port}`))
       }
     }
 
     // Kill app server only (MCP server remains as singleton)
-    if (!this.options.tui || this.options.tail) {
-      console.log(chalk.cyan("🔄 Killing app server..."))
-    }
+    console.log(chalk.cyan("🔄 Killing app server..."))
     await killPortProcess(this.options.port, "your app server")
 
     // Shutdown CDP monitor if it was started
     if (this.cdpMonitor) {
       try {
-        if (!this.options.tui || this.options.tail) {
-          console.log(chalk.cyan("🔄 Closing CDP monitor..."))
-        }
+        console.log(chalk.cyan("🔄 Closing CDP monitor..."))
         await this.cdpMonitor.shutdown()
-        if (!this.options.tui || this.options.tail) {
-          console.log(chalk.green("✅ CDP monitor closed"))
-        }
+        console.log(chalk.green("✅ CDP monitor closed"))
       } catch (_error) {
-        if (!this.options.tui || this.options.tail) {
-          console.log(chalk.gray("⚠️ CDP monitor shutdown failed"))
-        }
+        console.log(chalk.gray("⚠️ CDP monitor shutdown failed"))
       }
     }
 
-    if (!this.options.tui || this.options.tail) {
-      console.log(chalk.red(`❌ ${this.options.commandName} exited due to server failure`))
-    }
+    console.log(chalk.red(`❌ ${this.options.commandName} exited due to server failure`))
     process.exit(1)
   }
 
@@ -1113,21 +1074,14 @@ export class DevEnvironment {
         // Non-fatal - ignore cleanup errors
       }
 
-      // Stop TUI if it's running
-      if (this.tui) {
-        await this.tui.shutdown()
-        this.tui = null
-      }
+      // TUI removed due to bun:ffi dependency
 
       // Stop spinner if it's running
       if (this.spinner?.isSpinning) {
         this.spinner.fail("Interrupted")
       }
 
-      // Only show console messages if not in TUI mode
-      if (!this.options.tui || this.options.tail) {
-        console.log(chalk.yellow("\n🛑 Received interrupt signal. Cleaning up processes..."))
-      }
+      console.log(chalk.yellow("\n🛑 Received interrupt signal. Cleaning up processes..."))
 
       // Kill processes on both ports FIRST - this is most important
       const killPortProcess = async (port: string, name: string) => {
@@ -1137,7 +1091,7 @@ export class DevEnvironment {
           return new Promise<void>((resolve) => {
             killProcess.on("exit", (code) => {
               if (code === 0) {
-                if (!this.options.tui || this.options.tail) {
+                if (!false && this.options.tail || this.options.tail) {
                   console.log(chalk.green(`✅ Killed ${name} on port ${port}`))
                 }
               }
@@ -1145,7 +1099,7 @@ export class DevEnvironment {
             })
           })
         } catch (_error) {
-          if (!this.options.tui || this.options.tail) {
+          if (!false && this.options.tail || this.options.tail) {
             console.log(chalk.gray(`⚠️ Could not kill ${name} on port ${port}`))
           }
         }
@@ -1158,23 +1112,21 @@ export class DevEnvironment {
       // Shutdown CDP monitor if it was started
       if (this.cdpMonitor) {
         try {
-          if (!this.options.tui || this.options.tail) {
+          if (!false && this.options.tail || this.options.tail) {
             console.log(chalk.cyan("🔄 Closing CDP monitor..."))
           }
           await this.cdpMonitor.shutdown()
-          if (!this.options.tui || this.options.tail) {
+          if (!false && this.options.tail || this.options.tail) {
             console.log(chalk.green("✅ CDP monitor closed"))
           }
         } catch (_error) {
-          if (!this.options.tui || this.options.tail) {
+          if (!false && this.options.tail || this.options.tail) {
             console.log(chalk.gray("⚠️ CDP monitor shutdown failed"))
           }
         }
       }
 
-      if (!this.options.tui || this.options.tail) {
-        console.log(chalk.green("✅ Cleanup complete"))
-      }
+      console.log(chalk.green("✅ Cleanup complete"))
       process.exit(0)
     })
   }
