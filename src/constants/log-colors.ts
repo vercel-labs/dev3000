@@ -9,7 +9,7 @@ export const LOG_COLORS = {
   SERVER: "#32CD32", // Lime green
 
   // Log type colors
-  NETWORK: "#FFD700", // Gold
+  NETWORK: "#4A7C7E", // Soft teal
   CONSOLE_ERROR: "#FF6B6B", // Red
   CONSOLE_WARN: "#FFA500", // Orange
   CONSOLE_INFO: "#87CEEB", // Sky blue
@@ -28,7 +28,6 @@ export const LOG_COLORS = {
 export function getTextColor(bgColor: string): string {
   // Light backgrounds need dark text
   const lightColors: string[] = [
-    LOG_COLORS.NETWORK,
     LOG_COLORS.CONSOLE_INFO,
     LOG_COLORS.SCREENSHOT,
     LOG_COLORS.PAGE,
@@ -38,14 +37,21 @@ export function getTextColor(bgColor: string): string {
   return lightColors.includes(bgColor) ? "#000" : "#FFF"
 }
 
-// Map old TUI type names to color keys
+// Map log type names to color keys
 export const TYPE_COLOR_MAP = {
-  "NETWORK RESPONSE": "NETWORK",
-  "CONSOLE ERROR": "CONSOLE_ERROR",
-  "CONSOLE WARN": "CONSOLE_WARN",
-  "CONSOLE INFO": "CONSOLE_INFO",
-  "CONSOLE LOG": "CONSOLE_LOG",
-  "CONSOLE DEBUG": "CONSOLE_DEBUG",
+  NETWORK: "NETWORK",
+  "NETWORK.REQUEST": "NETWORK",
+  "CONSOLE.ERROR": "CONSOLE_ERROR",
+  "CONSOLE.WARN": "CONSOLE_WARN",
+  "CONSOLE.INFO": "CONSOLE_INFO",
+  "CONSOLE.LOG": "CONSOLE_LOG",
+  "CONSOLE.DEBUG": "CONSOLE_DEBUG",
+  "RUNTIME.ERROR": "ERROR",
+  "CDP.ERROR": "CDP",
+  "CHROME.ERROR": "ERROR",
+  "CHROME.CRASH": "CRITICAL_ERROR",
+  NAVIGATION: "PAGE",
+  INTERACTION: "DOM",
   SCREENSHOT: "SCREENSHOT",
   PAGE: "PAGE",
   DOM: "DOM",

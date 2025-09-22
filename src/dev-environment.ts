@@ -277,49 +277,12 @@ export class DevEnvironment {
   }
 
   private async checkPortsAvailable(silent: boolean = false) {
-    // Kill any existing MCP server FIRST (before checking ports)
-    // This ensures we always run the latest version
+    // Always kill any existing MCP server to ensure clean state
     if (this.options.mcpPort) {
-      try {
-        this.debugLog(`Killing any existing MCP server on port ${this.options.mcpPort}`)
-
-        // First, get the PIDs
-        const getPidsProcess = spawn("lsof", ["-ti", `:${this.options.mcpPort}`], {
-          stdio: "pipe"
-        })
-
-        const pids = await new Promise<string>((resolve) => {
-          let output = ""
-          getPidsProcess.stdout?.on("data", (data) => {
-            output += data.toString()
-          })
-          getPidsProcess.on("exit", () => resolve(output.trim()))
-        })
-
-        if (pids) {
-          this.debugLog(`Found processes on port ${this.options.mcpPort}: ${pids}`)
-
-          // Kill each PID individually with kill -9
-          const pidList = pids.split("\n").filter(Boolean)
-          for (const pid of pidList) {
-            await new Promise<void>((resolve) => {
-              const killCmd = spawn("kill", ["-9", pid.trim()], { stdio: "ignore" })
-              killCmd.on("exit", (code) => {
-                this.debugLog(`Kill command for PID ${pid} exited with code ${code}`)
-                resolve()
-              })
-            })
-          }
-
-          // Give it more time to fully release the port
-          this.debugLog(`Waiting for port ${this.options.mcpPort} to be released...`)
-          await new Promise((resolve) => setTimeout(resolve, 1000))
-        } else {
-          this.debugLog(`No existing processes found on port ${this.options.mcpPort}`)
-        }
-      } catch (error) {
-        this.debugLog(`Error during MCP cleanup: ${error}`)
-        // Continue anyway - we'll check port availability next
+      const isPortInUse = !(await isPortAvailable(this.options.mcpPort.toString()))
+      if (isPortInUse) {
+        this.debugLog(`Killing existing process on port ${this.options.mcpPort}`)
+        await this.killMcpServer()
       }
     }
 
@@ -378,6 +341,45 @@ export class DevEnvironment {
         }
         throw new Error(`Port ${this.options.mcpPort} is still in use. Please free the port and try again.`)
       }
+    }
+  }
+
+  private async killMcpServer(): Promise<void> {
+    try {
+      // First, get the PIDs
+      const getPidsProcess = spawn("lsof", ["-ti", `:${this.options.mcpPort}`], {
+        stdio: "pipe"
+      })
+
+      const pids = await new Promise<string>((resolve) => {
+        let output = ""
+        getPidsProcess.stdout?.on("data", (data) => {
+          output += data.toString()
+        })
+        getPidsProcess.on("exit", () => resolve(output.trim()))
+      })
+
+      if (pids) {
+        this.debugLog(`Found MCP server processes: ${pids}`)
+
+        // Kill each PID individually with kill -9
+        const pidList = pids.split("\n").filter(Boolean)
+        for (const pid of pidList) {
+          await new Promise<void>((resolve) => {
+            const killCmd = spawn("kill", ["-9", pid.trim()], { stdio: "ignore" })
+            killCmd.on("exit", (code) => {
+              this.debugLog(`Kill command for PID ${pid} exited with code ${code}`)
+              resolve()
+            })
+          })
+        }
+
+        // Give it time to fully release the port
+        this.debugLog(`Waiting for port ${this.options.mcpPort} to be released...`)
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+      }
+    } catch (error) {
+      this.debugLog(`Error killing MCP server: ${error}`)
     }
   }
 
@@ -752,9 +754,14 @@ export class DevEnvironment {
       }
     }
 
-    // Always install dependencies to ensure they're up to date
-    this.debugLog("Installing/updating MCP server dependencies")
-    await this.installMcpServerDeps(mcpServerPath)
+    // Check if .next build directory exists - if so, skip dependency installation
+    const nextBuildPath = join(mcpServerPath, ".next")
+    if (existsSync(nextBuildPath)) {
+      this.debugLog("MCP server is pre-built (.next directory exists), skipping dependency installation")
+    } else {
+      this.debugLog("Installing/updating MCP server dependencies")
+      await this.installMcpServerDeps(mcpServerPath)
+    }
 
     // Use version already read in constructor
 

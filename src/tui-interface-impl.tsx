@@ -210,17 +210,29 @@ const TUIApp = ({
               const parts = log.content.match(/^\[(.*?)\] \[(.*?)\] (?:\[(.*?)\] )?(.*)$/)
 
               if (parts) {
-                const [, timestamp, source, type, message] = parts
+                let [, timestamp, source, type, message] = parts
+
+                // Replace specific emoji in common port-in-use error to avoid terminal width issues
+                if (message?.includes("ERROR: ⚠ Port") && message.includes("is in use by process")) {
+                  message = message.replace("ERROR: ⚠ Port", "ERROR: [!] Port")
+                }
 
                 // Use shared color constants
                 const sourceColor = source === "BROWSER" ? LOG_COLORS.BROWSER : LOG_COLORS.SERVER
                 const typeColors: Record<string, string> = {
-                  "NETWORK RESPONSE": LOG_COLORS.NETWORK,
-                  "CONSOLE ERROR": LOG_COLORS.CONSOLE_ERROR,
-                  "CONSOLE WARN": LOG_COLORS.CONSOLE_WARN,
-                  "CONSOLE INFO": LOG_COLORS.CONSOLE_INFO,
-                  "CONSOLE LOG": LOG_COLORS.CONSOLE_LOG,
-                  "CONSOLE DEBUG": LOG_COLORS.CONSOLE_DEBUG,
+                  NETWORK: LOG_COLORS.NETWORK,
+                  "NETWORK.REQUEST": LOG_COLORS.NETWORK,
+                  "CONSOLE.ERROR": LOG_COLORS.CONSOLE_ERROR,
+                  "CONSOLE.WARN": LOG_COLORS.CONSOLE_WARN,
+                  "CONSOLE.INFO": LOG_COLORS.CONSOLE_INFO,
+                  "CONSOLE.LOG": LOG_COLORS.CONSOLE_LOG,
+                  "CONSOLE.DEBUG": LOG_COLORS.CONSOLE_DEBUG,
+                  "RUNTIME.ERROR": LOG_COLORS.ERROR,
+                  "CDP.ERROR": LOG_COLORS.CDP,
+                  "CHROME.ERROR": LOG_COLORS.ERROR,
+                  "CHROME.CRASH": LOG_COLORS.CRITICAL_ERROR,
+                  NAVIGATION: LOG_COLORS.PAGE,
+                  INTERACTION: LOG_COLORS.DOM,
                   SCREENSHOT: LOG_COLORS.SCREENSHOT,
                   PAGE: LOG_COLORS.PAGE,
                   DOM: LOG_COLORS.DOM,
@@ -229,6 +241,12 @@ const TUIApp = ({
                   "CRITICAL ERROR": LOG_COLORS.CRITICAL_ERROR
                 }
 
+                // Calculate padding for source (BROWSER is 7, SERVER is 6)
+                const sourceSpacing = " ".repeat(7 - source.length)
+
+                // Calculate padding for type (NETWORK.REQUEST is longest at 15)
+                const typeSpacing = type ? " ".repeat(15 - type.length) : ""
+
                 return (
                   <Text key={log.id} wrap="truncate-end">
                     <Text dimColor>[{timestamp}]</Text>
@@ -236,13 +254,14 @@ const TUIApp = ({
                     <Text color={sourceColor} bold>
                       [{source}]
                     </Text>
+                    <Text>{sourceSpacing} </Text>
                     {type && (
                       <>
-                        <Text> </Text>
                         <Text color={typeColors[type] || "#A0A0A0"}>[{type}]</Text>
+                        <Text>{typeSpacing} </Text>
                       </>
                     )}
-                    <Text> {message}</Text>
+                    <Text>{message}</Text>
                   </Text>
                 )
               }
