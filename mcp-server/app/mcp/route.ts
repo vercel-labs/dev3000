@@ -584,7 +584,7 @@ const handler = createMcpHandler(
     // Tool that returns monitoring code for Claude to execute
     server.tool(
       "start_error_monitoring",
-      "🔍 **ERROR MONITORING SETUP** - Returns Python code that Claude can execute to continuously monitor your app for errors.\n\n⚡ **HOW IT WORKS:**\n• Returns a Python script that monitors the d3k log file\n• Script watches for critical errors in real-time\n• When errors are detected, it prompts you to let Claude fix them\n• Creates a proactive debugging experience\n\n💡 **USAGE:**\n• User: 'monitor my app' or 'watch for errors'\n• Claude runs the returned Python code\n• Code monitors logs and alerts on new errors\n• You decide when to let Claude investigate\n\n🎯 **PERFECT FOR:**\n• Long development sessions\n• Testing phases where errors might occur\n• Proactive error detection and fixing",
+      "🔍 **LIVE ERROR MONITORING** - Starts a background process that continuously watches your app for critical errors and alerts you in real-time.\n\n⚡ **IMMEDIATE ACTION:**\n• Claude will offer to run the monitoring script right away\n• No manual setup needed - just say yes!\n• Script starts watching your logs immediately\n• Get instant alerts when errors occur\n\n💡 **SMART MONITORING:**\n• Detects crashes, exceptions, and fatal errors\n• Shows color-coded alerts with error details\n• Tracks seen errors to avoid duplicate alerts\n• Prompts you when Claude should investigate\n\n🎯 **PERFECT FOR:**\n• Active development sessions\n• Testing new features\n• Background error detection\n• Hands-free debugging workflow",
       {
         projectName: z
           .string()
@@ -725,22 +725,22 @@ if __name__ == "__main__":
             content: [
               {
                 type: "text",
-                text: `I'll help you monitor your app for errors! Here's a Python script that will continuously watch your dev3000 logs and alert you when critical errors occur.
+                text: `I'm ready to start monitoring your app's debug logs. I'll run a background process that watches ${logPath} for critical errors.
 
-**To start monitoring, run this Python code:**
+Here's what the monitoring script will do:
+- Watch your dev3000 logs every ${checkInterval} seconds
+- Parse and detect critical errors (crashes, exceptions, fatal errors)
+- Display color-coded alerts when new errors appear
+- Track which errors you've already seen to avoid duplicates
+- Show clear prompts when you should let me debug
 
-\`\`\`python
+Should I start the monitoring now?`
+              },
+              {
+                type: "text",
+                text: `\`\`\`python
 ${monitoringCode}
-\`\`\`
-
-This script will:
-- Monitor your dev3000 logs every ${checkInterval} seconds
-- Detect critical errors (crashes, exceptions, fatal errors)
-- Alert you immediately when new errors appear
-- Track which errors you've already seen
-- Prompt you to let me fix any issues
-
-When errors are detected, just tell me to "debug my app" and I'll analyze and fix them!`
+\`\`\``
               }
             ]
           }
