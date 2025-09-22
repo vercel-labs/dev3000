@@ -15,7 +15,7 @@ export const changelog: Release[] = [
     type: "minor",
     highlights: [
       "Apply linter formatting to all modified files",
-      "Simplify log path references in MCP server to use /tmp/d3k.log",
+      "Simplify log path references in MCP server to use dynamic log paths",
       "Increase recent log entries display from 10 to 20 lines",
       "Implement versioned changelog pages with ISR OG images"
     ]

@@ -8,7 +8,7 @@ const cursorConfig = {
   mcpServers: {
     dev3000: {
       type: "http",
-      url: "http://localhost:3684/api/mcp/mcp"
+      url: "http://localhost:3684/mcp"
     }
   }
 }
@@ -191,7 +191,7 @@ export default function HomePage() {
                   <div className="text-sm text-muted-foreground mb-2">Add the MCP server to claude:</div>
                   <div className="bg-secondary/50 rounded p-3 font-mono text-xs border-2 border-gray-700/35 shadow-sm overflow-x-auto">
                     <div className="text-foreground whitespace-nowrap">
-                      claude mcp add --transport http dev3000 http://localhost:3684/api/mcp/mcp
+                      claude mcp add -t http -s user dev3000 http://localhost:3684/mcp
                     </div>
                   </div>
                   <div className="text-xs text-muted-foreground">
@@ -209,7 +209,7 @@ export default function HomePage() {
                       {`[mcp_servers]
 
   [mcp_servers.dev3000]
-  url = "http://localhost:3684/api/mcp/mcp"`}
+  url = "http://localhost:3684/mcp"`}
                     </div>
                   </div>
                 </div>
@@ -433,7 +433,7 @@ export default function HomePage() {
                   <div className="text-muted-foreground mb-2"># Give AI your logs</div>
                   <div className="text-foreground">Read /var/log/dev3000/dev3000*.log</div>
                   <div className="text-muted-foreground mt-4 mb-2"># Or use MCP tools at</div>
-                  <div className="text-foreground text-xs">http://localhost:3684/api/mcp/mcp</div>
+                  <div className="text-foreground text-xs">http://localhost:3684/mcp</div>
                   <div className="text-muted-foreground mt-4 mb-1"># Visual timeline at</div>
                   <div className="text-foreground text-xs">http://localhost:3684/logs</div>
                 </div>

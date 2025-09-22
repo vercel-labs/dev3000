@@ -119,13 +119,14 @@ export class CDPMonitor {
     this.browser.on("exit", (code, signal) => {
       if (!this.isShuttingDown) {
         const crashMsg = `[CHROME CRASH] Chrome process exited unexpectedly - Code: ${code}, Signal: ${signal}`
-        this.logger("browser", `${crashMsg} [PLAYWRIGHT]`)
+        // this.logger("browser", `${crashMsg} `)  // [PLAYWRIGHT] tag removed
+        this.logger("browser", `${crashMsg}`)
         this.debugLog(`Chrome crashed: code=${code}, signal=${signal}`)
 
         // Log context for crash correlation
         this.logger(
           "browser",
-          "[CRASH CONTEXT] Chrome crashed - check recent server/browser logs for correlation [PLAYWRIGHT]"
+          "[CRASH CONTEXT] Chrome crashed - check recent server/browser logs for correlation" // [PLAYWRIGHT] tag removed
         )
 
         // Take screenshot if still connected (for crash context)
@@ -137,7 +138,7 @@ export class CDPMonitor {
 
     this.browser.on("error", (error) => {
       if (!this.isShuttingDown) {
-        this.logger("browser", `[CHROME ERROR] Chrome process error: ${error.message} [PLAYWRIGHT]`)
+        this.logger("browser", `[CHROME ERROR] Chrome process error: ${error.message} `) // [PLAYWRIGHT] tag removed
         this.debugLog(`Chrome process error during runtime: ${error}`)
       }
     })
@@ -286,7 +287,7 @@ export class CDPMonitor {
               const message = JSON.parse(data.toString())
               this.handleCDPMessage(message)
             } catch (error) {
-              this.logger("browser", `[CDP ERROR] Failed to parse message: ${error} [PLAYWRIGHT]`)
+              this.logger("browser", `[CDP ERROR] Failed to parse message: ${error} `) // [PLAYWRIGHT] tag removed
             }
           })
 
@@ -295,18 +296,18 @@ export class CDPMonitor {
             if (!this.isShuttingDown) {
               this.logger(
                 "browser",
-                `[CDP DISCONNECT] Connection lost unexpectedly (code: ${code}, reason: ${reason}) [PLAYWRIGHT]`
+                `[CDP DISCONNECT] Connection lost unexpectedly (code: ${code}, reason: ${reason})` // [PLAYWRIGHT] tag removed
               )
               this.logger(
                 "browser",
-                "[DISCONNECT CONTEXT] CDP connection lost - check for Chrome crash or server issues [PLAYWRIGHT]"
+                "[DISCONNECT CONTEXT] CDP connection lost - check for Chrome crash or server issues" // [PLAYWRIGHT] tag removed
               )
 
               // Log current Chrome process status
               if (this.browser && !this.browser.killed) {
-                this.logger("browser", "[CHROME STATUS] Chrome process still running after CDP disconnect [PLAYWRIGHT]")
+                this.logger("browser", "[CHROME STATUS] Chrome process still running after CDP disconnect") // [PLAYWRIGHT] tag removed
               } else {
-                this.logger("browser", "[CHROME STATUS] Chrome process not available after CDP disconnect [PLAYWRIGHT]")
+                this.logger("browser", "[CHROME STATUS] Chrome process not available after CDP disconnect") // [PLAYWRIGHT] tag removed
               }
             }
           })
@@ -409,13 +410,13 @@ export class CDPMonitor {
         await this.sendCDPCommand(`${domain}.enable`)
         this.debugLog(`Successfully enabled CDP domain: ${domain}`)
         if (this.debug) {
-          this.logger("browser", `[CDP] Enabled ${domain} domain [PLAYWRIGHT]`)
+          this.logger("browser", `[CDP] Enabled ${domain} domain `) // [PLAYWRIGHT] tag removed
         }
       } catch (error) {
         this.debugLog(`Failed to enable CDP domain ${domain}: ${error}`)
         // Only log CDP errors when debug mode is enabled
         if (this.debug) {
-          this.logger("browser", `[CDP ERROR] Failed to enable ${domain}: ${error} [PLAYWRIGHT]`)
+          this.logger("browser", `[CDP ERROR] Failed to enable ${domain}: ${error} `) // [PLAYWRIGHT] tag removed
         }
         // Continue with other domains instead of throwing
       }
@@ -449,7 +450,7 @@ export class CDPMonitor {
       // Debug: Log all console messages to see if tracking script is even running
       if (args && args.length > 0 && args[0].value?.includes("CDP tracking initialized")) {
         if (this.debug) {
-          this.logger("browser", `[DEBUG] Interaction tracking script loaded successfully [PLAYWRIGHT]`)
+          this.logger("browser", `[DEBUG] Interaction tracking script loaded successfully `) // [PLAYWRIGHT] tag removed
         }
       }
 
@@ -476,7 +477,7 @@ export class CDPMonitor {
           .join(" -> ")}`
       }
 
-      this.logger("browser", `${logMsg} [PLAYWRIGHT]`)
+      this.logger("browser", `${logMsg} `) // [PLAYWRIGHT] tag removed
     })
 
     // Runtime exceptions with full stack traces
@@ -506,7 +507,7 @@ export class CDPMonitor {
           .join(" -> ")}`
       }
 
-      this.logger("browser", `${errorMsg} [PLAYWRIGHT]`)
+      this.logger("browser", `${errorMsg} `) // [PLAYWRIGHT] tag removed
 
       // Take screenshot immediately on errors (no delay needed)
       this.takeScreenshot("error")
@@ -524,7 +525,7 @@ export class CDPMonitor {
 
       // Only log if it's an error/warning or if we're not already capturing it via Runtime
       if (level === "error" || level === "warning") {
-        this.logger("browser", `${logMsg} [PLAYWRIGHT]`)
+        this.logger("browser", `${logMsg} `) // [PLAYWRIGHT] tag removed
       }
     })
 
@@ -552,7 +553,7 @@ export class CDPMonitor {
       if (headerInfo) logMsg += ` [${headerInfo}]`
       if (postData) logMsg += ` body: ${postData.slice(0, 100)}${postData.length > 100 ? "..." : ""}`
 
-      this.logger("browser", `${logMsg} [PLAYWRIGHT]`)
+      this.logger("browser", `${logMsg} `) // [PLAYWRIGHT] tag removed
     })
 
     // Network responses with full details
@@ -581,7 +582,7 @@ export class CDPMonitor {
         if (totalTime > 0) logMsg += ` (${totalTime}ms)`
       }
 
-      this.logger("browser", `${logMsg} [PLAYWRIGHT]`)
+      this.logger("browser", `${logMsg} `) // [PLAYWRIGHT] tag removed
     })
 
     // Page navigation with full context
@@ -590,7 +591,7 @@ export class CDPMonitor {
       const { frame } = params
       if (frame?.parentId) return // Only log main frame navigation
 
-      this.logger("browser", `[NAVIGATION] ${frame?.url || "unknown"} [PLAYWRIGHT]`)
+      this.logger("browser", `[NAVIGATION] ${frame?.url || "unknown"} `) // [PLAYWRIGHT] tag removed
 
       // Take screenshot on navigation to catch initial render
       setTimeout(() => {
@@ -600,14 +601,14 @@ export class CDPMonitor {
 
     // Page load events for better screenshot timing
     this.onCDPEvent("Page.loadEventFired", async (_event) => {
-      this.logger("browser", "[PAGE] Load event fired [PLAYWRIGHT]")
+      this.logger("browser", "[PAGE] Load event fired") // [PLAYWRIGHT] tag removed
       this.takeScreenshot("page-loaded")
       // Reinject interaction tracking on page load
       await this.setupInteractionTracking()
     })
 
     this.onCDPEvent("Page.domContentEventFired", async (_event) => {
-      this.logger("browser", "[PAGE] DOM content loaded [PLAYWRIGHT]")
+      this.logger("browser", "[PAGE] DOM content loaded") // [PLAYWRIGHT] tag removed
       // Take screenshot on DOM content loaded too for earlier capture
       this.takeScreenshot("dom-content-loaded")
       // Reinject interaction tracking on DOM content loaded
@@ -636,7 +637,7 @@ export class CDPMonitor {
     // DOM mutations for interaction context
     this.onCDPEvent("DOM.documentUpdated", () => {
       // Document structure changed - useful for SPA routing
-      this.logger("browser", "[DOM] Document updated [PLAYWRIGHT]")
+      this.logger("browser", "[DOM] Document updated") // [PLAYWRIGHT] tag removed
     })
 
     // Note: Input.dispatchMouseEvent and Input.dispatchKeyEvent are for SENDING events, not capturing them
@@ -687,12 +688,56 @@ export class CDPMonitor {
     this.debugLog(`Navigating to http://localhost:${port}`)
 
     // Navigate to the app
-    await this.sendCDPCommand("Page.navigate", {
-      url: `http://localhost:${port}`
-    })
+    try {
+      const result = await this.sendCDPCommand("Page.navigate", {
+        url: `http://localhost:${port}`
+      })
 
-    const navigationTime = Date.now() - navigationStartTime
-    this.debugLog(`Navigation command sent successfully (${navigationTime}ms)`)
+      const navigationTime = Date.now() - navigationStartTime
+      this.debugLog(`Navigation command sent successfully (${navigationTime}ms)`)
+      this.debugLog(`Navigation result: ${JSON.stringify(result)}`)
+
+      // Check if navigation was successful
+      if (result.errorText) {
+        this.debugLog(`Navigation error: ${result.errorText}`)
+        this.logger("browser", `[CDP ERROR] Navigation failed: ${result.errorText}`)
+      }
+
+      // Wait for navigation to complete
+      if (result.frameId) {
+        this.debugLog(`Waiting for frame ${result.frameId} to finish loading...`)
+        try {
+          // Enable Page events if not already enabled
+          await this.sendCDPCommand("Page.enable")
+
+          // Wait for frameStoppedLoading event
+          await new Promise<void>((resolve) => {
+            const timeout = setTimeout(() => {
+              this.debugLog("Navigation wait timed out after 10s")
+              resolve()
+            }, 10000)
+
+            const handler = (data: Buffer) => {
+              const message = JSON.parse(data.toString())
+              if (message.method === "Page.frameStoppedLoading" && message.params.frameId === result.frameId) {
+                clearTimeout(timeout)
+                this.connection?.ws.removeListener("message", handler)
+                this.debugLog(`Frame ${result.frameId} finished loading`)
+                resolve()
+              }
+            }
+
+            this.connection?.ws.on("message", handler)
+          })
+        } catch (waitError) {
+          this.debugLog(`Error waiting for navigation: ${waitError}`)
+        }
+      }
+    } catch (error) {
+      this.debugLog(`Navigation failed: ${error}`)
+      this.logger("browser", `[CDP ERROR] Navigation failed: ${error}`)
+      throw error
+    }
 
     // Take an immediate screenshot after navigation command
     setTimeout(() => {
@@ -919,7 +964,7 @@ export class CDPMonitor {
       } catch (syntaxError) {
         const errorMessage = syntaxError instanceof Error ? syntaxError.message : String(syntaxError)
         this.debugLog(`JavaScript syntax error detected: ${errorMessage}`)
-        this.logger("browser", `[CDP ERROR] Tracking script syntax error: ${errorMessage} [PLAYWRIGHT]`)
+        this.logger("browser", `[CDP ERROR] Tracking script syntax error: ${errorMessage} `) // [PLAYWRIGHT] tag removed
         throw new Error(`Invalid tracking script syntax: ${errorMessage}`)
       }
 
@@ -941,7 +986,7 @@ export class CDPMonitor {
       }
     } catch (error) {
       this.debugLog(`Failed to inject interaction tracking: ${error}`)
-      this.logger("browser", `[CDP ERROR] Interaction tracking failed: ${error} [PLAYWRIGHT]`)
+      this.logger("browser", `[CDP ERROR] Interaction tracking failed: ${error} `) // [PLAYWRIGHT] tag removed
     }
   }
 
@@ -968,7 +1013,7 @@ export class CDPMonitor {
         const interactions = result.result?.value || []
 
         for (const interaction of interactions) {
-          this.logger("browser", `[INTERACTION] ${interaction.message} [PLAYWRIGHT]`)
+          this.logger("browser", `[INTERACTION] ${interaction.message} `) // [PLAYWRIGHT] tag removed
 
           // Take screenshot when scroll settles
           if (interaction.message.startsWith("SCROLL_SETTLED")) {
@@ -1025,11 +1070,11 @@ export class CDPMonitor {
       writeFileSync(screenshotPath, buffer)
 
       // Log screenshot with proper format that dev3000 expects
-      this.logger("browser", `[SCREENSHOT] ${filename} [PLAYWRIGHT]`)
+      this.logger("browser", `[SCREENSHOT] ${filename} `) // [PLAYWRIGHT] tag removed
 
       return filename
     } catch (error) {
-      this.logger("browser", `[CDP ERROR] Screenshot failed: ${error} [PLAYWRIGHT]`)
+      this.logger("browser", `[CDP ERROR] Screenshot failed: ${error} `) // [PLAYWRIGHT] tag removed
       return null
     }
   }
@@ -1090,10 +1135,10 @@ export class CDPMonitor {
           break
 
         default:
-          this.logger("browser", `[REPLAY] Unknown interaction type: ${interaction.type} [PLAYWRIGHT]`)
+          this.logger("browser", `[REPLAY] Unknown interaction type: ${interaction.type} `) // [PLAYWRIGHT] tag removed
       }
     } catch (error) {
-      this.logger("browser", `[REPLAY ERROR] Failed to execute ${interaction.type}: ${error} [PLAYWRIGHT]`)
+      this.logger("browser", `[REPLAY ERROR] Failed to execute ${interaction.type}: ${error} `) // [PLAYWRIGHT] tag removed
     }
   }
 

@@ -234,8 +234,9 @@ myapp:dev: }
     expect(entries[3].screenshot).toBe("2025-09-10T21-26-00-789Z-navigation.png")
   })
 
-  it("should remove browser type markers from displayed message but keep in original", () => {
-    const playwrightLog = `[2025-09-10T21:24:42.976Z] [BROWSER] [CONSOLE LOG] App initialized [PLAYWRIGHT]`
+  it("should only remove CHROME_EXTENSION markers from displayed message", () => {
+    // Note: [PLAYWRIGHT] tags are no longer generated in the source logs
+    const playwrightLog = `[2025-09-10T21:24:42.976Z] [BROWSER] [CONSOLE LOG] App initialized`
     const extensionLog = `[2025-09-10T21:24:42.976Z] [TAB-123.456] [BROWSER] [CONSOLE ERROR] Script error [CHROME_EXTENSION]`
 
     const entries1 = parseLogEntries(playwrightLog)
@@ -243,11 +244,10 @@ myapp:dev: }
 
     expect(entries1).toHaveLength(1)
     expect(entries1[0].message).toBe("[CONSOLE LOG] App initialized")
-    expect(entries1[0].message).not.toContain("[PLAYWRIGHT]")
-    expect(entries1[0].original).toContain("[PLAYWRIGHT]")
+    expect(entries1[0].original).not.toContain("[PLAYWRIGHT]")
 
     expect(entries2).toHaveLength(1)
-    expect(entries2[0].message).toBe("[CONSOLE ERROR] Script error")
+    expect(entries2[0].message).toBe("[CONSOLE ERROR] Script error") // CHROME_EXTENSION removed
     expect(entries2[0].message).not.toContain("[CHROME_EXTENSION]")
     expect(entries2[0].original).toContain("[CHROME_EXTENSION]")
     expect(entries2[0].tabIdentifier).toBe("TAB-123.456")

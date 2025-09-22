@@ -14,7 +14,7 @@ dev3000
 **You should connect claude code or any AI tool to the mcp-server to have it issue commands to the browser.**
 
 ```bash
-claude mcp add dev3000 http://localhost:3684/api/mcp/mcp
+claude mcp add -t http -s user dev3000 http://localhost:3684/mcp
 ```
 
 Then issue the following prompt:
@@ -43,7 +43,7 @@ Logs are automatically saved with timestamps in `/var/log/dev3000/` (or temp dir
 
 ### MCP Integration Notes
 
-The MCP server at `http://localhost:3684/api/mcp/mcp` supports the HTTP prototcol (not stdio) as well as the following commands for advanced querying:
+The MCP server at `http://localhost:3684/mcp` supports the HTTP prototcol (not stdio) as well as the following commands for advanced querying:
 
 - `read_consolidated_logs` - Get recent logs with filtering
 - `search_logs` - Regex search with context
@@ -57,7 +57,7 @@ The MCP server at `http://localhost:3684/api/mcp/mcp` supports the HTTP prototco
   "mcpServers": {
       "dev3000": {
           "type": "http",
-          "url": "http://localhost:3684/api/mcp/mcp"
+          "url": "http://localhost:3684/mcp"
       }
   }
 }

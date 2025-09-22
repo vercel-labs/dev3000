@@ -65,11 +65,11 @@ export async function GET() {
 
     return NextResponse.json({
       tools,
-      endpoint: "http://localhost:3684/api/mcp/mcp",
+      endpoint: `http://localhost:${process.env.PORT || "3684"}/mcp`,
       totalTools: tools.length,
       categories: [...new Set(tools.map((t) => t.category))]
     })
-  } catch (error) {
+  } catch (_error) {
     return NextResponse.json({ error: "Failed to extract tools documentation" }, { status: 500 })
   }
 }

@@ -58,7 +58,26 @@ program
   )
   .option("--servers-only", "Run servers only, skip browser launch (use with Chrome extension)")
   .option("--debug", "Enable debug logging to console")
+  .option("-t, --tail", "Output consolidated logfile to terminal (like tail -f)")
+  .option("--no-tui", "Disable TUI mode and use standard terminal output")
+  .option("--kill-mcp", "Kill the MCP server on port 3684 and exit")
   .action(async (options) => {
+    // Handle --kill-mcp option
+    if (options.killMcp) {
+      console.log(chalk.yellow("🛑 Killing MCP server on port 3684..."))
+      try {
+        const { spawn } = require("child_process")
+        await new Promise<void>((resolve) => {
+          const killProcess = spawn("sh", ["-c", "lsof -ti:3684 | xargs kill -9"], { stdio: "inherit" })
+          killProcess.on("exit", () => resolve())
+        })
+        console.log(chalk.green("✅ MCP server killed"))
+      } catch (_error) {
+        console.log(chalk.gray("⚠️ No MCP server found on port 3684"))
+      }
+      process.exit(0)
+    }
+
     // Detect project type and configuration
     const frameworkDetector = new FrameworkDetectorService()
     const projectConfig = await frameworkDetector.detect({ debug: options.debug })
@@ -67,7 +86,7 @@ program
     const port = options.port || projectConfig.defaultPort
     const script = options.script || projectConfig.defaultScript
     const userSetPort = options.port !== undefined
-    const userSetMcpPort = options.portMcp !== undefined
+    const userSetMcpPort = process.argv.includes("--port-mcp") || process.argv.includes("-p-mcp")
 
     // Generate server command based on project type
     const serverCommand = projectConfig.baseCommand ? `${projectConfig.baseCommand} ${script}`.trim() : script
@@ -98,7 +117,9 @@ program
         serverCommand,
         debug: options.debug,
         serversOnly: options.serversOnly,
-        commandName
+        commandName,
+        tail: options.tail,
+        tui: options.noTui !== true // TUI is default unless --no-tui is specified
       })
     } catch (error) {
       console.error(chalk.red("❌ Failed to start development environment:"), error)
