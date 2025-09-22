@@ -30,9 +30,7 @@ describe("RailsDetector", () => {
   describe("canDetect", () => {
     test("detects Rails project with Gemfile and config/application.rb", async () => {
       const existsSyncMock = fs.existsSync as vi.MockedFunction<typeof fs.existsSync>
-      existsSyncMock.mockImplementation(
-        (path) => path === "Gemfile" || path === "config/application.rb"
-      )
+      existsSyncMock.mockImplementation((path) => path === "Gemfile" || path === "config/application.rb")
 
       const canDetect = await detector.canDetect()
 
@@ -111,9 +109,7 @@ describe("RailsDetector", () => {
 
       detector.getConfig(true)
 
-      expect(consoleSpy).toHaveBeenCalledWith(
-        "[RAILS DEBUG] Standard Rails setup - using bundle exec rails"
-      )
+      expect(consoleSpy).toHaveBeenCalledWith("[RAILS DEBUG] Standard Rails setup - using bundle exec rails")
 
       consoleSpy.mockRestore()
     })

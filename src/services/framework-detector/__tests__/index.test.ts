@@ -58,9 +58,7 @@ describe("FrameworkDetectorService", () => {
 
     test("detects Rails project when both Gemfile and config/application.rb exist", async () => {
       const existsSyncMock = fs.existsSync as vi.MockedFunction<typeof fs.existsSync>
-      existsSyncMock.mockImplementation(
-        (path) => path === "Gemfile" || path === "config/application.rb"
-      )
+      existsSyncMock.mockImplementation((path) => path === "Gemfile" || path === "config/application.rb")
 
       const config = await service.detect()
 
@@ -96,9 +94,7 @@ describe("FrameworkDetectorService", () => {
 
       await service.detect({ debug: true })
 
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining("[PROJECT DEBUG] Python project detected")
-      )
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("[PROJECT DEBUG] Python project detected"))
 
       consoleSpy.mockRestore()
     })
@@ -122,5 +118,4 @@ describe("FrameworkDetectorService", () => {
       expect(config.type).toBe("python")
     })
   })
-
 })

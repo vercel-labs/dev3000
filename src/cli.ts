@@ -70,9 +70,7 @@ program
     const userSetMcpPort = options.portMcp !== undefined
 
     // Generate server command based on project type
-    const serverCommand = projectConfig.baseCommand
-      ? `${projectConfig.baseCommand} ${script}`.trim()
-      : script
+    const serverCommand = projectConfig.baseCommand ? `${projectConfig.baseCommand} ${script}`.trim() : script
 
     if (options.debug) {
       console.log(`[CLI DEBUG] Project type: ${projectConfig.type}`)

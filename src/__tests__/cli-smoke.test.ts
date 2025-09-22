@@ -56,9 +56,10 @@ describe("CLI Smoke Tests", () => {
         timeout: 2000,
         stdio: "pipe" // Capture both stdout and stderr
       })
-    } catch (e: any) {
+    } catch (e) {
       // Command might fail (no actual server), but we still get debug output
-      output = e.stdout || e.stderr || e.output?.join("") || ""
+      const error = e as { stdout?: string; stderr?: string; output?: Buffer[] }
+      output = error.stdout || error.stderr || error.output?.join("") || ""
     }
 
     expect(output).toContain("[PROJECT DEBUG] Python project detected")
@@ -80,8 +81,9 @@ describe("CLI Smoke Tests", () => {
         timeout: 2000,
         stdio: "pipe"
       })
-    } catch (e: any) {
-      output = e.stdout || e.stderr || e.output?.join("") || ""
+    } catch (e) {
+      const error = e as { stdout?: string; stderr?: string; output?: Buffer[] }
+      output = error.stdout || error.stderr || error.output?.join("") || ""
     }
 
     expect(output).toContain("[PROJECT DEBUG] Rails project detected")
@@ -101,8 +103,9 @@ describe("CLI Smoke Tests", () => {
         timeout: 2000,
         stdio: "pipe"
       })
-    } catch (e: any) {
-      output = e.stdout || e.stderr || e.output?.join("") || ""
+    } catch (e) {
+      const error = e as { stdout?: string; stderr?: string; output?: Buffer[] }
+      output = error.stdout || error.stderr || error.output?.join("") || ""
     }
 
     expect(output).toContain("[CLI DEBUG] Project type: node")
@@ -121,8 +124,9 @@ describe("CLI Smoke Tests", () => {
         timeout: 2000,
         stdio: "pipe"
       })
-    } catch (e: any) {
-      output = e.stdout || e.stderr || e.output?.join("") || ""
+    } catch (e) {
+      const error = e as { stdout?: string; stderr?: string; output?: Buffer[] }
+      output = error.stdout || error.stderr || error.output?.join("") || ""
     }
 
     expect(output).toContain("[CLI DEBUG] Port: 8080 (explicit)")
