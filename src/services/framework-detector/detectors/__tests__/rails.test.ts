@@ -68,14 +68,14 @@ describe("RailsDetector", () => {
   })
 
   describe("getConfig", () => {
-    test("returns bin/dev for Rails with Procfile.dev", () => {
+    test("returns bin/dev as base command for Rails with Procfile.dev", () => {
       const existsSyncMock = fs.existsSync as vi.MockedFunction<typeof fs.existsSync>
       existsSyncMock.mockImplementation((path) => path === "Procfile.dev")
 
       const config = detector.getConfig()
 
-      expect(config.baseCommand).toBe("")
-      expect(config.defaultScript).toBe("bin/dev")
+      expect(config.baseCommand).toBe("bin/dev")
+      expect(config.defaultScript).toBe("")
     })
 
     test("returns bundle exec rails for standard Rails setup", () => {
@@ -96,7 +96,7 @@ describe("RailsDetector", () => {
       detector.getConfig(true)
 
       expect(consoleSpy).toHaveBeenCalledWith(
-        "[RAILS DEBUG] Found Procfile.dev - using bin/dev directly for process management"
+        "[RAILS DEBUG] Found Procfile.dev - using bin/dev for process management"
       )
 
       consoleSpy.mockRestore()
@@ -130,6 +130,29 @@ describe("RailsDetector", () => {
   describe("getDebugMessage", () => {
     test("returns correct debug message", () => {
       expect(detector.getDebugMessage()).toBe("Rails project detected (found Gemfile and config/application.rb)")
+    })
+  })
+
+  describe("Procfile.dev command generation", () => {
+    test("generates correct commands with custom scripts", () => {
+      const existsSyncMock = fs.existsSync as vi.MockedFunction<typeof fs.existsSync>
+      existsSyncMock.mockImplementation((path) => path === "Procfile.dev")
+
+      const config = detector.getConfig()
+
+      // Simulate what CLI does with different script arguments
+      const testCases = [
+        { userScript: undefined, expected: "bin/dev" }, // No script: runs all processes
+        { userScript: "server", expected: "bin/dev server" }, // Custom script: passed as argument
+        { userScript: "web", expected: "bin/dev web" }, // Another process name
+        { userScript: "worker", expected: "bin/dev worker" } // Worker process
+      ]
+
+      testCases.forEach(({ userScript, expected }) => {
+        const script = userScript || config.defaultScript
+        const command = config.baseCommand ? `${config.baseCommand} ${script}`.trim() : script
+        expect(command).toBe(expected)
+      })
     })
   })
 })

@@ -14,11 +14,11 @@ export class RailsDetector implements FrameworkDetector {
     // Check for Procfile.dev, which indicates foreman/overmind setup with bin/dev
     if (existsSync("Procfile.dev")) {
       if (debug) {
-        console.log(`[RAILS DEBUG] Found Procfile.dev - using bin/dev directly for process management`)
+        console.log(`[RAILS DEBUG] Found Procfile.dev - using bin/dev for process management`)
       }
       return {
-        baseCommand: "", // bin/dev is executable, no base command needed
-        defaultScript: "bin/dev"
+        baseCommand: "bin/dev", // bin/dev is the command that accepts process names as arguments
+        defaultScript: "" // No argument needed - bin/dev runs all processes by default
       }
     }
 

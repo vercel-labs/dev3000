@@ -132,4 +132,28 @@ describe("CLI Smoke Tests", () => {
     expect(output).toContain("[CLI DEBUG] Port: 8080 (explicit)")
     expect(output).toContain("[CLI DEBUG] Script: app.py (explicit)")
   })
+
+  test("Rails with Procfile.dev uses bin/dev with custom scripts", () => {
+    const railsDir = join(testDir, "rails-procfile-test")
+    mkdirSync(railsDir)
+    mkdirSync(join(railsDir, "config"))
+    writeFileSync(join(railsDir, "Gemfile"), 'gem "rails"')
+    writeFileSync(join(railsDir, "config", "application.rb"), "# Rails app")
+    writeFileSync(join(railsDir, "Procfile.dev"), "web: rails server\nworker: sidekiq")
+
+    let output = ""
+    try {
+      output = execSync(`node ${cliPath} --debug --script server --servers-only`, {
+        cwd: railsDir,
+        encoding: "utf8",
+        timeout: 2000,
+        stdio: "pipe"
+      })
+    } catch (e) {
+      const error = e as { stdout?: string; stderr?: string; output?: Buffer[] }
+      output = error.stdout || error.stderr || error.output?.join("") || ""
+    }
+
+    expect(output).toContain("[CLI DEBUG] Server command: bin/dev server")
+  })
 })
