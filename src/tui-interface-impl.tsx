@@ -247,10 +247,10 @@ const TUIApp = ({
                 }
 
                 // Calculate padding for source (BROWSER is 7, SERVER is 6)
-                const sourceSpacing = " ".repeat(7 - source.length)
+                const sourceSpacing = " ".repeat(Math.max(0, 7 - source.length))
 
                 // Calculate padding for type (NETWORK.REQUEST is longest at 15)
-                const typeSpacing = type ? " ".repeat(15 - type.length) : ""
+                const typeSpacing = type ? " ".repeat(Math.max(0, 15 - type.length)) : ""
 
                 return (
                   <Text key={log.id} wrap="truncate-end">
