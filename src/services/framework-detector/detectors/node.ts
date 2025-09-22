@@ -20,7 +20,7 @@ export class NodeDetector implements FrameworkDetector {
     return true
   }
 
-  async getConfig(): Promise<FrameworkConfig> {
+  async getConfig(_debug = false): Promise<FrameworkConfig> {
     // Re-detect if we haven't already
     if (this.detectedAgent === null) {
       const detected = await detect()
