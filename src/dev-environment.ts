@@ -445,6 +445,9 @@ export class DevEnvironment {
       // Clear console and start TUI
       console.clear()
 
+      // Get project name from current directory
+      const projectName = basename(process.cwd()).replace(/[^a-zA-Z0-9-_]/g, "_")
+
       // Start TUI interface with initial status and updated port
       this.tui = new DevTUI({
         appPort: this.options.port, // This may have been updated by checkPortsAvailable
@@ -452,7 +455,8 @@ export class DevEnvironment {
         logFile: this.options.logFile,
         commandName: this.options.commandName,
         serversOnly: this.options.serversOnly,
-        version: this.version
+        version: this.version,
+        projectName
       })
 
       await this.tui.start()
@@ -502,7 +506,6 @@ export class DevEnvironment {
       }
 
       // Write session info for MCP server discovery
-      const projectName = basename(process.cwd()).replace(/[^a-zA-Z0-9-_]/g, "_")
       writeSessionInfo(projectName, this.options.logFile, this.options.port, this.options.mcpPort)
 
       // Clear status - ready!
@@ -547,7 +550,7 @@ export class DevEnvironment {
         this.debugLog("Browser monitoring disabled via --servers-only flag")
       }
 
-      // Write session info for MCP server discovery
+      // Get project name for session info and Visual Timeline URL
       const projectName = basename(process.cwd()).replace(/[^a-zA-Z0-9-_]/g, "_")
       writeSessionInfo(projectName, this.options.logFile, this.options.port, this.options.mcpPort)
 
@@ -559,7 +562,11 @@ export class DevEnvironment {
       console.log(chalk.cyan("☝️ Give this to an AI to auto debug and fix your app\n"))
       console.log(chalk.cyan(`🌐 Your App: http://localhost:${this.options.port}`))
       console.log(chalk.cyan(`🤖 MCP Server: http://localhost:${this.options.mcpPort}/mcp`))
-      console.log(chalk.cyan(`📸 Visual Timeline: http://localhost:${this.options.mcpPort}/logs`))
+      console.log(
+        chalk.cyan(
+          `📸 Visual Timeline: http://localhost:${this.options.mcpPort}/logs?project=${encodeURIComponent(projectName)}`
+        )
+      )
       if (this.options.serversOnly) {
         console.log(chalk.cyan("🖥️  Servers-only mode - use Chrome extension for browser monitoring"))
       }

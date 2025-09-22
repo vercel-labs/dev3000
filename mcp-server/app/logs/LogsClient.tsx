@@ -3,8 +3,8 @@
 import Image from "next/image"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { getTextColor, LOG_COLORS } from "@/../../src/constants/log-colors"
 import type { LogEntry, LogFile, LogListResponse, LogsApiResponse } from "@/types"
+import { getTextColor, LOG_COLORS } from "../../../src/constants/log-colors"
 
 // Define interfaces for object property rendering
 interface PropertyData {

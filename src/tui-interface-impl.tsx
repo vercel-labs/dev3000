@@ -12,6 +12,7 @@ export interface TUIOptions {
   commandName: string
   serversOnly?: boolean
   version: string
+  projectName?: string
 }
 
 interface LogEntry {
@@ -26,6 +27,7 @@ const TUIApp = ({
   commandName,
   serversOnly,
   version,
+  projectName,
   onShutdown,
   onStatusUpdate
 }: TUIOptions & { onShutdown: () => void; onStatusUpdate: (fn: (status: string | null) => void) => void }) => {
@@ -182,7 +184,10 @@ const TUIApp = ({
             <Text> </Text>
             <Text color="cyan">🌐 Your App: http://localhost:{appPort}</Text>
             <Text color="cyan">🤖 MCP Server: http://localhost:{mcpPort}/mcp</Text>
-            <Text color="cyan">📸 Visual Timeline: http://localhost:{mcpPort}/logs</Text>
+            <Text color="cyan">
+              📸 Visual Timeline: http://localhost:{mcpPort}/logs
+              {projectName ? `?project=${encodeURIComponent(projectName)}` : ""}
+            </Text>
             {serversOnly && <Text color="cyan">🖥️ Servers-only mode - use Chrome extension for browser monitoring</Text>}
           </Box>
         </Box>
