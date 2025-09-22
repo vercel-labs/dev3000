@@ -2,98 +2,12 @@
 
 import chalk from "chalk"
 import { Command } from "commander"
-import { existsSync, readFileSync } from "fs"
+import { readFileSync } from "fs"
 import { tmpdir } from "os"
-import { detect } from "package-manager-detector"
 import { dirname, join } from "path"
 import { fileURLToPath } from "url"
 import { createPersistentLogFile, startDevEnvironment } from "./dev-environment.js"
-
-interface ProjectConfig {
-  type: "node" | "python" | "rails"
-  packageManager?: string // Only for node projects
-  pythonCommand?: string // Only for python projects
-  defaultScript: string
-  defaultPort: string
-}
-
-function detectPythonCommand(debug = false): string {
-  // Check if we're in a virtual environment
-  if (process.env.VIRTUAL_ENV) {
-    if (debug) {
-      console.log(`[PYTHON DEBUG] Virtual environment detected: ${process.env.VIRTUAL_ENV}`)
-      console.log(`[PYTHON DEBUG] Using activated python command`)
-    }
-    return "python"
-  }
-
-  // Check if python3 is available and prefer it
-  try {
-    require("child_process").execSync("python3 --version", { stdio: "ignore" })
-    if (debug) {
-      console.log(`[PYTHON DEBUG] python3 is available, using python3`)
-    }
-    return "python3"
-  } catch {
-    if (debug) {
-      console.log(`[PYTHON DEBUG] python3 not available, falling back to python`)
-    }
-    return "python"
-  }
-}
-
-async function detectProjectType(debug = false): Promise<ProjectConfig> {
-  // Check for Python project
-  if (existsSync("requirements.txt") || existsSync("pyproject.toml")) {
-    if (debug) {
-      console.log(`[PROJECT DEBUG] Python project detected (found requirements.txt or pyproject.toml)`)
-    }
-    return {
-      type: "python",
-      defaultScript: "main.py",
-      defaultPort: "8000", // Common Python web server port
-      pythonCommand: detectPythonCommand(debug)
-    }
-  }
-
-  // Check for Rails project
-  if (existsSync("Gemfile") && existsSync("config/application.rb")) {
-    if (debug) {
-      console.log(`[PROJECT DEBUG] Rails project detected (found Gemfile and config/application.rb)`)
-    }
-    return {
-      type: "rails",
-      defaultScript: "server",
-      defaultPort: "3000" // Rails default port
-    }
-  }
-
-  // Check for Node.js project using package-manager-detector
-  const detected = await detect()
-
-  if (detected) {
-    if (debug) {
-      console.log(`[PROJECT DEBUG] Node.js project detected with ${detected.agent} package manager`)
-    }
-    return {
-      type: "node",
-      packageManager: detected.agent,
-      defaultScript: "dev",
-      defaultPort: "3000"
-    }
-  }
-
-  // Fallback to npm for Node.js
-  if (debug) {
-    console.log(`[PROJECT DEBUG] No project files detected, defaulting to Node.js with npm`)
-  }
-  return {
-    type: "node",
-    packageManager: "npm",
-    defaultScript: "dev",
-    defaultPort: "3000"
-  }
-}
+import { FrameworkDetectorService } from "./services/framework-detector/index.js"
 
 // Read version from package.json
 function getVersion(): string {
@@ -146,7 +60,8 @@ program
   .option("--debug", "Enable debug logging to console")
   .action(async (options) => {
     // Detect project type and configuration
-    const projectConfig = await detectProjectType(options.debug)
+    const frameworkDetector = new FrameworkDetectorService()
+    const projectConfig = await frameworkDetector.detect({ debug: options.debug })
 
     // Use defaults from project detection if not explicitly provided
     const port = options.port || projectConfig.defaultPort
@@ -155,15 +70,9 @@ program
     const userSetMcpPort = options.portMcp !== undefined
 
     // Generate server command based on project type
-    let serverCommand: string
-    if (projectConfig.type === "python") {
-      serverCommand = `${projectConfig.pythonCommand} ${script}`
-    } else if (projectConfig.type === "rails") {
-      serverCommand = `bundle exec rails ${script}`
-    } else {
-      // Node.js project
-      serverCommand = `${projectConfig.packageManager} run ${script}`
-    }
+    const serverCommand = projectConfig.baseCommand
+      ? `${projectConfig.baseCommand} ${script}`.trim()
+      : script
 
     if (options.debug) {
       console.log(`[CLI DEBUG] Project type: ${projectConfig.type}`)
