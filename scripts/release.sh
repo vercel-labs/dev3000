@@ -5,6 +5,10 @@ echo "🚀 Starting release process..."
 
 # Build and test first
 echo "📦 Building..."
+# Clean old build artifacts to ensure fresh build
+echo "🧹 Cleaning old build artifacts..."
+rm -rf dist
+rm -rf mcp-server/.next
 pnpm run build
 
 echo "🧪 Running tests..."
