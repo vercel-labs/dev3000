@@ -569,13 +569,11 @@ export class DevEnvironment {
   }
 
   private async startServer() {
-    const [command, ...args] = this.options.serverCommand.split(" ")
-
     this.debugLog(`Starting server process: ${this.options.serverCommand}`)
-    this.debugLog(`Command: ${command}, Args: [${args.join(", ")}]`)
 
     this.serverStartTime = Date.now()
-    this.serverProcess = spawn(command, args, {
+    // Use the full command string with shell: true to properly handle complex commands
+    this.serverProcess = spawn(this.options.serverCommand, {
       stdio: ["ignore", "pipe", "pipe"],
       shell: true,
       detached: true // Run independently
@@ -814,7 +812,6 @@ export class DevEnvironment {
     // Start MCP server as a true background singleton process
     this.mcpServerProcess = spawn(mcpCommand[0], mcpCommand.slice(1), {
       stdio: ["ignore", "pipe", "pipe"],
-      shell: true,
       detached: true, // Run independently of parent process
       cwd: actualWorkingDir,
       env: {
@@ -967,7 +964,6 @@ export class DevEnvironment {
       const installStartTime = Date.now()
       const installProcess = spawn(packageManager, installArgs, {
         stdio: ["ignore", "pipe", "pipe"],
-        shell: true,
         cwd: workingDir
       })
 
