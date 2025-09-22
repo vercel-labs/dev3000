@@ -3,13 +3,8 @@ set -e
 
 echo "🚀 Starting release process..."
 
-# Build and test first
-echo "📦 Building..."
-# Clean old build artifacts to ensure fresh build
-echo "🧹 Cleaning old build artifacts..."
-rm -rf dist
-rm -rf mcp-server/.next
-pnpm run build
+# Build using shared build script
+./scripts/build.sh
 
 echo "🧪 Running tests..."
 pnpm run test

@@ -702,7 +702,7 @@ function LogEntryComponent({ entry }: { entry: LogEntry }) {
       {entry.screenshot && (
         <div className="mt-2">
           <Image
-            src={`/screenshots/${entry.screenshot}`}
+            src={`/api/screenshots/${entry.screenshot}`}
             alt="Screenshot"
             width={0}
             height={0}

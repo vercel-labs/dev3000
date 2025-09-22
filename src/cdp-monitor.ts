@@ -571,7 +571,7 @@ export class CDPMonitor {
       const { url, status, statusText, mimeType } = params.response
       const { type } = params
 
-      let logMsg = `[NETWORK RESPONSE] ${status} ${statusText} ${url}`
+      let logMsg = `[NETWORK] ${status} ${statusText} ${url}`
       if (type) logMsg += ` (${type})`
       if (mimeType) logMsg += ` [${mimeType}]`
 

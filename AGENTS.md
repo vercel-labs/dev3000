@@ -6,7 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Core Development Rules
 
-**NEVER RUN**: Do not run `pnpm build` during development - the user tests manually.
+**NEVER RUN**: 
+- Do not run `pnpm build` during development - the user tests manually.
+- Do not run any of the scripts in the scripts/ directory. The user will run these to build and test.
 
 **ALWAYS RUN**: When completing any code changes, you MUST run:
 - `pnpm run lint` - Fix all linting errors before committing

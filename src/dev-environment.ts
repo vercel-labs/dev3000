@@ -762,7 +762,7 @@ export class DevEnvironment {
 
     // For global installs, ensure all necessary files are copied to temp directory
     if (isGlobalInstall && actualWorkingDir !== mcpServerPath) {
-      const requiredFiles = ["app", "public", "next.config.ts", "next-env.d.ts", "tsconfig.json"]
+      const requiredFiles = ["app", "public", "next.config.ts", "next-env.d.ts", "tsconfig.json", ".next"]
       for (const file of requiredFiles) {
         const srcPath = join(mcpServerPath, file)
         const destPath = join(actualWorkingDir, file)
@@ -806,8 +806,13 @@ export class DevEnvironment {
     this.debugLog(`MCP server working directory: ${actualWorkingDir}`)
     this.debugLog(`MCP server port: ${this.options.mcpPort}`)
 
+    // Use production mode for MCP server (non-standalone)
+    // This provides proper CSS and still allows dynamic screenshot serving
+    const mcpCommand = [packageManagerForRun, "run", "start"]
+    this.debugLog(`MCP server mode: production (using ${packageManagerForRun} run start)`)
+
     // Start MCP server as a true background singleton process
-    this.mcpServerProcess = spawn(packageManagerForRun, ["run", "dev"], {
+    this.mcpServerProcess = spawn(mcpCommand[0], mcpCommand.slice(1), {
       stdio: ["ignore", "pipe", "pipe"],
       shell: true,
       detached: true, // Run independently of parent process
