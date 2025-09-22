@@ -145,7 +145,7 @@ program
   .option("--servers-only", "Run servers only, skip browser launch (use with Chrome extension)")
   .option("--debug", "Enable debug logging to console")
   .option("-t, --tail", "Output consolidated logfile to terminal (like tail -f)")
-  .option("--tui", "Enable TUI mode (experimental, may have compatibility issues)")
+  .option("--no-tui", "Disable TUI mode and use standard terminal output")
   .option("--kill-mcp", "Kill the MCP server on port 3684 and exit")
   .action(async (options) => {
     // Handle --kill-mcp option
@@ -158,7 +158,7 @@ program
           killProcess.on("exit", () => resolve())
         })
         console.log(chalk.green("✅ MCP server killed"))
-      } catch (error) {
+      } catch (_error) {
         console.log(chalk.gray("⚠️ No MCP server found on port 3684"))
       }
       process.exit(0)
@@ -212,7 +212,7 @@ program
         serversOnly: options.serversOnly,
         commandName,
         tail: options.tail,
-        tui: options.tui === true // TUI is opt-in due to bun: protocol issue
+        tui: options.noTui !== true // TUI is default unless --no-tui is specified
       })
     } catch (error) {
       console.error(chalk.red("❌ Failed to start development environment:"), error)

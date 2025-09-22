@@ -19,7 +19,7 @@ import { basename, dirname, join } from "path"
 import { fileURLToPath } from "url"
 import { CDPMonitor } from "./cdp-monitor.js"
 import { type LogEntry, NextJsErrorDetector, OutputProcessor, StandardLogParser } from "./services/parsers/index.js"
-// import { DevTUI } from "./tui-interface.js" // Removed due to bun:ffi dependency
+import { DevTUI } from "./tui-interface.js"
 
 interface DevEnvironmentOptions {
   port: string
@@ -36,6 +36,7 @@ interface DevEnvironmentOptions {
   userSetPort?: boolean // Whether user explicitly set the port
   userSetMcpPort?: boolean // Whether user explicitly set the MCP port
   tail?: boolean // Whether to tail the log file to terminal
+  tui?: boolean // Whether to use TUI mode (default true)
 }
 
 class Logger {
@@ -212,6 +213,8 @@ export class DevEnvironment {
   private isShuttingDown: boolean = false
   private serverStartTime: number | null = null
   private healthCheckTimer: NodeJS.Timeout | null = null
+  private tui: DevTUI | null = null
+  private portChangeMessage: string | null = null
 
   constructor(options: DevEnvironmentOptions) {
     // Handle portMcp vs mcpPort naming
@@ -261,7 +264,7 @@ export class DevEnvironment {
     this.spinner = ora({
       text: "Initializing...",
       spinner: "dots",
-      isEnabled: true
+      isEnabled: !options.tui // Disable spinner in TUI mode
     })
 
     // Ensure directories exist
@@ -273,7 +276,53 @@ export class DevEnvironment {
     }
   }
 
-  private async checkPortsAvailable() {
+  private async checkPortsAvailable(silent: boolean = false) {
+    // Kill any existing MCP server FIRST (before checking ports)
+    // This ensures we always run the latest version
+    if (this.options.mcpPort) {
+      try {
+        this.debugLog(`Killing any existing MCP server on port ${this.options.mcpPort}`)
+
+        // First, get the PIDs
+        const getPidsProcess = spawn("lsof", ["-ti", `:${this.options.mcpPort}`], {
+          stdio: "pipe"
+        })
+
+        const pids = await new Promise<string>((resolve) => {
+          let output = ""
+          getPidsProcess.stdout?.on("data", (data) => {
+            output += data.toString()
+          })
+          getPidsProcess.on("exit", () => resolve(output.trim()))
+        })
+
+        if (pids) {
+          this.debugLog(`Found processes on port ${this.options.mcpPort}: ${pids}`)
+
+          // Kill each PID individually with kill -9
+          const pidList = pids.split("\n").filter(Boolean)
+          for (const pid of pidList) {
+            await new Promise<void>((resolve) => {
+              const killCmd = spawn("kill", ["-9", pid.trim()], { stdio: "ignore" })
+              killCmd.on("exit", (code) => {
+                this.debugLog(`Kill command for PID ${pid} exited with code ${code}`)
+                resolve()
+              })
+            })
+          }
+
+          // Give it more time to fully release the port
+          this.debugLog(`Waiting for port ${this.options.mcpPort} to be released...`)
+          await new Promise((resolve) => setTimeout(resolve, 1000))
+        } else {
+          this.debugLog(`No existing processes found on port ${this.options.mcpPort}`)
+        }
+      } catch (error) {
+        this.debugLog(`Error during MCP cleanup: ${error}`)
+        // Continue anyway - we'll check port availability next
+      }
+    }
+
     // Check if user explicitly set ports via CLI flags
     const userSetAppPort = this.options.userSetPort || false
 
@@ -282,7 +331,11 @@ export class DevEnvironment {
       const startPort = parseInt(this.options.port, 10)
       const availablePort = await findAvailablePort(startPort)
       if (availablePort !== this.options.port) {
-        console.log(chalk.yellow(`Port ${this.options.port} is in use, using port ${availablePort} for app server`))
+        if (!silent) {
+          console.log(chalk.yellow(`Port ${this.options.port} is in use, using port ${availablePort} for app server`))
+        }
+        // Store message for TUI display
+        this.portChangeMessage = `Port ${this.options.port} is in use, using port ${availablePort} for app server`
         this.options.port = availablePort
       }
     }
@@ -294,26 +347,36 @@ export class DevEnvironment {
         if (this.spinner?.isSpinning) {
           this.spinner.fail(`Port ${this.options.port} is already in use`)
         }
-        console.log(
-          chalk.yellow(`💡 To free up port ${this.options.port}, run: lsof -ti:${this.options.port} | xargs kill -9`)
-        )
+        if (!silent) {
+          console.log(
+            chalk.yellow(`💡 To free up port ${this.options.port}, run: lsof -ti:${this.options.port} | xargs kill -9`)
+          )
+        }
+        if (this.tui) {
+          await this.tui.shutdown()
+        }
         throw new Error(`Port ${this.options.port} is already in use. Please free the port and try again.`)
       }
     }
 
-    // Always check MCP port availability (no auto-increment)
+    // Now check MCP port availability (it should be free after killing)
     if (this.options.mcpPort) {
       const available = await isPortAvailable(this.options.mcpPort)
       if (!available) {
         if (this.spinner?.isSpinning) {
-          this.spinner.fail(`Port ${this.options.mcpPort} is already in use`)
+          this.spinner.fail(`Port ${this.options.mcpPort} is still in use after cleanup`)
         }
-        console.log(
-          chalk.yellow(
-            `💡 To free up port ${this.options.mcpPort}, run: lsof -ti:${this.options.mcpPort} | xargs kill -9`
+        if (!silent) {
+          console.log(
+            chalk.yellow(
+              `💡 To force kill port ${this.options.mcpPort}, run: lsof -ti:${this.options.mcpPort} | xargs kill -9`
+            )
           )
-        )
-        throw new Error(`Port ${this.options.mcpPort} is already in use. Please free the port and try again.`)
+        }
+        if (this.tui) {
+          await this.tui.shutdown()
+        }
+        throw new Error(`Port ${this.options.mcpPort} is still in use. Please free the port and try again.`)
       }
     }
   }
@@ -372,62 +435,134 @@ export class DevEnvironment {
   }
 
   async start() {
-    // Show startup message first
-    console.log(chalk.greenBright(`Starting ${this.options.commandName} (v${this.version})`))
+    // Check if TUI mode is enabled (default)
+    if (this.options.tui) {
+      // Check ports BEFORE starting TUI to avoid console output conflicts
+      await this.checkPortsAvailable(true) // silent mode for TUI
 
-    // Start spinner
-    this.spinner.start("Checking ports...")
+      // Clear console and start TUI
+      console.clear()
 
-    // Check if ports are available first
-    await this.checkPortsAvailable()
+      // Start TUI interface with initial status and updated port
+      this.tui = new DevTUI({
+        appPort: this.options.port, // This may have been updated by checkPortsAvailable
+        mcpPort: this.options.mcpPort || "3684",
+        logFile: this.options.logFile,
+        commandName: this.options.commandName,
+        serversOnly: this.options.serversOnly,
+        version: this.version
+      })
 
-    this.spinner.text = "Setting up environment..."
-    // Write our process group ID to PID file for cleanup
-    writeFileSync(this.pidFile, process.pid.toString())
+      await this.tui.start()
 
-    // Setup cleanup handlers
-    this.setupCleanupHandlers()
+      // Give TUI a moment to fully initialize
+      await new Promise((resolve) => setTimeout(resolve, 200))
 
-    // Start user's dev server
-    this.spinner.text = "Starting your dev server..."
-    await this.startServer()
+      // Show port change message if needed
+      if (this.portChangeMessage) {
+        await this.tui.updateStatus(this.portChangeMessage)
+        // Clear the message after a moment
+        setTimeout(async () => {
+          if (this.tui) {
+            await this.tui.updateStatus("Setting up environment...")
+          }
+        }, 2000)
+      } else {
+        await this.tui.updateStatus("Setting up environment...")
+      }
+      // Write our process group ID to PID file for cleanup
+      writeFileSync(this.pidFile, process.pid.toString())
 
-    // Start MCP server
-    this.spinner.text = `Starting ${this.options.commandName} services...`
-    await this.startMcpServer()
+      // Setup cleanup handlers
+      this.setupCleanupHandlers()
 
-    // Wait for servers to be ready
-    this.spinner.text = "Waiting for your app server..."
-    await this.waitForServer()
+      // Start user's dev server
+      await this.tui.updateStatus("Starting your dev server...")
+      await this.startServer()
 
-    this.spinner.text = `Waiting for ${this.options.commandName} services...`
-    await this.waitForMcpServer()
+      // Start MCP server
+      await this.tui.updateStatus(`Starting ${this.options.commandName} services...`)
+      await this.startMcpServer()
 
-    // Start CDP monitoring if not in servers-only mode
-    if (!this.options.serversOnly) {
-      this.spinner.text = "Launching browser monitor..."
-      this.startCDPMonitoringAsync()
+      // Wait for servers to be ready
+      await this.tui.updateStatus("Waiting for your app server...")
+      await this.waitForServer()
+
+      await this.tui.updateStatus(`Waiting for ${this.options.commandName} services...`)
+      await this.waitForMcpServer()
+
+      // Start CDP monitoring if not in servers-only mode
+      if (!this.options.serversOnly) {
+        await this.tui.updateStatus("Launching browser monitor...")
+        this.startCDPMonitoringAsync()
+      } else {
+        this.debugLog("Browser monitoring disabled via --servers-only flag")
+      }
+
+      // Write session info for MCP server discovery
+      const projectName = basename(process.cwd()).replace(/[^a-zA-Z0-9-_]/g, "_")
+      writeSessionInfo(projectName, this.options.logFile, this.options.port, this.options.mcpPort)
+
+      // Clear status - ready!
+      await this.tui.updateStatus(null)
     } else {
-      this.debugLog("Browser monitoring disabled via --servers-only flag")
+      // Non-TUI mode - original flow
+      console.log(chalk.hex("#A18CE5")(`Starting ${this.options.commandName} (v${this.version})`))
+
+      // Start spinner
+      this.spinner.start("Checking ports...")
+
+      // Check if ports are available first
+      await this.checkPortsAvailable(false) // normal mode with console output
+
+      this.spinner.text = "Setting up environment..."
+      // Write our process group ID to PID file for cleanup
+      writeFileSync(this.pidFile, process.pid.toString())
+
+      // Setup cleanup handlers
+      this.setupCleanupHandlers()
+
+      // Start user's dev server
+      this.spinner.text = "Starting your dev server..."
+      await this.startServer()
+
+      // Start MCP server
+      this.spinner.text = `Starting ${this.options.commandName} services...`
+      await this.startMcpServer()
+
+      // Wait for servers to be ready
+      this.spinner.text = "Waiting for your app server..."
+      await this.waitForServer()
+
+      this.spinner.text = `Waiting for ${this.options.commandName} services...`
+      await this.waitForMcpServer()
+
+      // Start CDP monitoring if not in servers-only mode
+      if (!this.options.serversOnly) {
+        this.spinner.text = "Launching browser monitor..."
+        this.startCDPMonitoringAsync()
+      } else {
+        this.debugLog("Browser monitoring disabled via --servers-only flag")
+      }
+
+      // Write session info for MCP server discovery
+      const projectName = basename(process.cwd()).replace(/[^a-zA-Z0-9-_]/g, "_")
+      writeSessionInfo(projectName, this.options.logFile, this.options.port, this.options.mcpPort)
+
+      // Complete startup with success message only in non-TUI mode
+      this.spinner.succeed("Development environment ready!")
+
+      // Regular console output (when TUI is disabled with --no-tui)
+      console.log(chalk.cyan(`Logs: ${this.options.logFile}`))
+      console.log(chalk.cyan("☝️ Give this to an AI to auto debug and fix your app\n"))
+      console.log(chalk.cyan(`🌐 Your App: http://localhost:${this.options.port}`))
+      console.log(chalk.cyan(`🤖 MCP Server: http://localhost:${this.options.mcpPort}/api/mcp/mcp`))
+      console.log(chalk.cyan(`📸 Visual Timeline: http://localhost:${this.options.mcpPort}/logs`))
+      if (this.options.serversOnly) {
+        console.log(chalk.cyan("🖥️  Servers-only mode - use Chrome extension for browser monitoring"))
+      }
+      console.log(chalk.cyan("\nUse Ctrl-C to stop.\n"))
     }
-
-    // Complete startup
-    this.spinner.succeed("Development environment ready!")
-
-    // Write session info for MCP server discovery
-    const projectName = basename(process.cwd()).replace(/[^a-zA-Z0-9-_]/g, "_")
-    writeSessionInfo(projectName, this.options.logFile, this.options.port, this.options.mcpPort)
-
-    // Regular console output (TUI removed due to bun:ffi dependency)
-    console.log(chalk.cyan(`Logs: ${this.options.logFile}`))
-    console.log(chalk.cyan("☝️ Give this to an AI to auto debug and fix your app\n"))
-    console.log(chalk.cyan(`🌐 Your App: http://localhost:${this.options.port}`))
-    console.log(chalk.cyan(`🤖 MCP Server: http://localhost:${this.options.mcpPort}/api/mcp/mcp`))
-    console.log(chalk.cyan(`📸 Visual Timeline: http://localhost:${this.options.mcpPort}/logs`))
-    if (this.options.serversOnly) {
-      console.log(chalk.cyan("🖥️  Servers-only mode - use Chrome extension for browser monitoring"))
-    }
-    console.log(chalk.cyan("\nUse Ctrl-C to stop.\n"))
 
     // Start health monitoring after everything is ready
     this.startHealthCheck()
@@ -585,23 +720,8 @@ export class DevEnvironment {
   private async startMcpServer() {
     this.debugLog("Starting MCP server setup")
 
-    // Kill any existing MCP server on this port first
-    try {
-      await new Promise<void>((resolve) => {
-        const killProcess = spawn("sh", ["-c", `lsof -ti:${this.options.mcpPort} | xargs kill -9`], {
-          stdio: "ignore",
-          shell: true
-        })
-        killProcess.on("exit", () => {
-          this.debugLog(`Cleaned up any existing MCP server on port ${this.options.mcpPort}`)
-          resolve()
-        })
-      })
-      // Give it a moment to fully release the port
-      await new Promise((resolve) => setTimeout(resolve, 500))
-    } catch (_error) {
-      // Ignore errors - no existing server is fine
-    }
+    // Note: MCP server cleanup now happens earlier in checkPortsAvailable()
+    // to ensure the port is free before we check availability
 
     // Get the path to our bundled MCP server
     const currentFile = fileURLToPath(import.meta.url)
@@ -1008,14 +1128,21 @@ export class DevEnvironment {
       // Non-fatal - ignore cleanup errors
     }
 
-    // TUI removed due to bun:ffi dependency
+    // Stop TUI if it's running
+    if (this.tui) {
+      await this.tui.shutdown()
+      this.tui = null
+    }
 
     // Stop spinner if it's running
     if (this.spinner?.isSpinning) {
       this.spinner.fail("Critical failure detected")
     }
 
-    console.log(chalk.yellow(`🛑 Shutting down ${this.options.commandName} due to critical failure...`))
+    // Only show console messages if not in TUI mode
+    if (!this.options.tui) {
+      console.log(chalk.yellow(`🛑 Shutting down ${this.options.commandName} due to critical failure...`))
+    }
 
     // Kill processes on both ports
     const killPortProcess = async (port: string, name: string) => {
@@ -1074,14 +1201,21 @@ export class DevEnvironment {
         // Non-fatal - ignore cleanup errors
       }
 
-      // TUI removed due to bun:ffi dependency
+      // Stop TUI if it's running
+      if (this.tui) {
+        await this.tui.shutdown()
+        this.tui = null
+      }
 
       // Stop spinner if it's running
       if (this.spinner?.isSpinning) {
         this.spinner.fail("Interrupted")
       }
 
-      console.log(chalk.yellow("\n🛑 Received interrupt signal. Cleaning up processes..."))
+      // Only show console messages if not in TUI mode
+      if (!this.options.tui) {
+        console.log(chalk.yellow("\n🛑 Received interrupt signal. Cleaning up processes..."))
+      }
 
       // Kill processes on both ports FIRST - this is most important
       const killPortProcess = async (port: string, name: string) => {
@@ -1090,43 +1224,45 @@ export class DevEnvironment {
           const killProcess = spawn("sh", ["-c", `lsof -ti:${port} | xargs kill -9`], { stdio: "inherit" })
           return new Promise<void>((resolve) => {
             killProcess.on("exit", (code) => {
-              if (code === 0) {
-                if (!false && this.options.tail || this.options.tail) {
-                  console.log(chalk.green(`✅ Killed ${name} on port ${port}`))
-                }
+              if (code === 0 && !this.options.tui) {
+                console.log(chalk.green(`✅ Killed ${name} on port ${port}`))
               }
               resolve()
             })
           })
         } catch (_error) {
-          if (!false && this.options.tail || this.options.tail) {
+          if (!this.options.tui) {
             console.log(chalk.gray(`⚠️ Could not kill ${name} on port ${port}`))
           }
         }
       }
 
       // Kill app server immediately (MCP server remains as singleton)
-      console.log(chalk.yellow("🔄 Killing app server..."))
+      if (!this.options.tui) {
+        console.log(chalk.yellow("🔄 Killing app server..."))
+      }
       await killPortProcess(this.options.port, "your app server")
 
       // Shutdown CDP monitor if it was started
       if (this.cdpMonitor) {
         try {
-          if (!false && this.options.tail || this.options.tail) {
+          if (!this.options.tui) {
             console.log(chalk.cyan("🔄 Closing CDP monitor..."))
           }
           await this.cdpMonitor.shutdown()
-          if (!false && this.options.tail || this.options.tail) {
+          if (!this.options.tui) {
             console.log(chalk.green("✅ CDP monitor closed"))
           }
         } catch (_error) {
-          if (!false && this.options.tail || this.options.tail) {
+          if (!this.options.tui) {
             console.log(chalk.gray("⚠️ CDP monitor shutdown failed"))
           }
         }
       }
 
-      console.log(chalk.green("✅ Cleanup complete"))
+      if (!this.options.tui) {
+        console.log(chalk.green("✅ Cleanup complete"))
+      }
       process.exit(0)
     })
   }

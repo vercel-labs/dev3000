@@ -93,7 +93,8 @@ export function parseLogEntries(logContent: string): LogEntry[] {
       let cleanedMessage = cleanConsoleFormatting(message)
 
       // Remove browser type markers from displayed message (they'll show as pills instead)
-      cleanedMessage = cleanedMessage.replace(/ \[PLAYWRIGHT\]$/, "").replace(/ \[CHROME_EXTENSION\]$/, "")
+      // cleanedMessage = cleanedMessage.replace(/ \[PLAYWRIGHT\]$/, "").replace(/ \[CHROME_EXTENSION\]$/, "")
+      cleanedMessage = cleanedMessage.replace(/ \[CHROME_EXTENSION\]$/, "") // Only remove Chrome Extension tag
 
       // Filter out noisy WebSocket logs from Next.js dev server
       const isNoisyWebSocketLog =

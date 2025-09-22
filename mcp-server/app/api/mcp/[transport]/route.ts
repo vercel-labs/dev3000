@@ -33,7 +33,7 @@ function findActiveSessions() {
       .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime())
 
     return files
-  } catch (error) {
+  } catch (_error) {
     return []
   }
 }

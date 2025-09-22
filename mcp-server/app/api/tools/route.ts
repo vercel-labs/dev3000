@@ -69,7 +69,7 @@ export async function GET() {
       totalTools: tools.length,
       categories: [...new Set(tools.map((t) => t.category))]
     })
-  } catch (error) {
+  } catch (_error) {
     return NextResponse.json({ error: "Failed to extract tools documentation" }, { status: 500 })
   }
 }
