@@ -3,6 +3,7 @@ import { createReadStream, unwatchFile, watchFile } from "fs"
 import { Box, render, Text, useApp, useInput, useStdout } from "ink"
 import { useEffect, useRef, useState } from "react"
 import type { Readable } from "stream"
+import { LOG_COLORS } from "./constants/log-colors.js"
 
 export interface TUIOptions {
   appPort: string
@@ -211,21 +212,21 @@ const TUIApp = ({
               if (parts) {
                 const [, timestamp, source, type, message] = parts
 
-                // Color scheme
-                const sourceColor = source === "BROWSER" ? "#00CED1" : "#32CD32" // Cyan for browser, lime for server
+                // Use shared color constants
+                const sourceColor = source === "BROWSER" ? LOG_COLORS.BROWSER : LOG_COLORS.SERVER
                 const typeColors: Record<string, string> = {
-                  "NETWORK RESPONSE": "#FFD700",
-                  "CONSOLE ERROR": "#FF6B6B",
-                  "CONSOLE WARN": "#FFA500",
-                  "CONSOLE INFO": "#87CEEB",
-                  "CONSOLE LOG": "#B0B0B0",
-                  "CONSOLE DEBUG": "#9370DB",
-                  SCREENSHOT: "#FF69B4",
-                  PAGE: "#98FB98",
-                  DOM: "#DDA0DD",
-                  CDP: "#F0E68C",
-                  ERROR: "#FF6B6B",
-                  "CRITICAL ERROR": "#DC143C"
+                  "NETWORK RESPONSE": LOG_COLORS.NETWORK,
+                  "CONSOLE ERROR": LOG_COLORS.CONSOLE_ERROR,
+                  "CONSOLE WARN": LOG_COLORS.CONSOLE_WARN,
+                  "CONSOLE INFO": LOG_COLORS.CONSOLE_INFO,
+                  "CONSOLE LOG": LOG_COLORS.CONSOLE_LOG,
+                  "CONSOLE DEBUG": LOG_COLORS.CONSOLE_DEBUG,
+                  SCREENSHOT: LOG_COLORS.SCREENSHOT,
+                  PAGE: LOG_COLORS.PAGE,
+                  DOM: LOG_COLORS.DOM,
+                  CDP: LOG_COLORS.CDP,
+                  ERROR: LOG_COLORS.ERROR,
+                  "CRITICAL ERROR": LOG_COLORS.CRITICAL_ERROR
                 }
 
                 return (
