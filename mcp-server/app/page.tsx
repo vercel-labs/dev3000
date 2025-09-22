@@ -93,7 +93,7 @@ export default function HomePage() {
                 <div>
                   <span className="text-sm font-medium text-blue-800">MCP Endpoint:</span>
                   <code className="ml-3 px-4 py-2 bg-blue-100 text-blue-800 text-sm font-mono rounded">
-                    {tools?.endpoint || "http://localhost:3684/api/mcp/mcp"}
+                    {tools?.endpoint || "http://localhost:3684/mcp"}
                   </code>
                 </div>
                 <div className="text-sm text-blue-700">

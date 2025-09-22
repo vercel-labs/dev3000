@@ -7,7 +7,7 @@ export async function GET() {
   const health = {
     status: "healthy",
     timestamp: new Date().toISOString(),
-    mcpEndpoint: "/api/mcp/mcp",
+    mcpEndpoint: "/mcp",
     logFile: {
       path: logFilePath,
       exists: existsSync(logFilePath)

@@ -165,21 +165,12 @@ const TUIApp = ({
       <Box borderStyle="round" borderColor="#A18CE5" paddingX={2} paddingY={1} marginBottom={1} flexDirection="column">
         <Box flexDirection="row" gap={3}>
           {/* ASCII Logo on the left */}
+          {/* biome-ignore format: preserve ASCII art alignment */}
           <Box flexDirection="column" alignItems="flex-start">
-            <Text color="#A18CE5" bold>
-              {" "}
-              ▐▌▄▄▄▄ █ ▄{" "}
-            </Text>
-            <Text color="#A18CE5" bold>
-              {" "}
-              ▐▌ █ █▄▀{" "}
-            </Text>
-            <Text color="#A18CE5" bold>
-              ▗▞▀▜▌▀▀▀█ █ ▀▄{" "}
-            </Text>
-            <Text color="#A18CE5" bold>
-              ▝▚▄▟▌▄▄▄█ █ █{" "}
-            </Text>
+            <Text color="#A18CE5" bold>   ▐▌▄▄▄▄ █  ▄ </Text>
+            <Text color="#A18CE5" bold>   ▐▌   █ █▄▀  </Text>
+            <Text color="#A18CE5" bold>▗▞▀▜▌▀▀▀█ █ ▀▄ </Text>
+            <Text color="#A18CE5" bold>▝▚▄▟▌▄▄▄█ █  █ </Text>
           </Box>
 
           {/* Info on the right */}
@@ -189,7 +180,7 @@ const TUIApp = ({
             </Text>
             <Text> </Text>
             <Text color="cyan">🌐 Your App: http://localhost:{appPort}</Text>
-            <Text color="cyan">🤖 MCP Server: http://localhost:{mcpPort}/api/mcp/mcp</Text>
+            <Text color="cyan">🤖 MCP Server: http://localhost:{mcpPort}/mcp</Text>
             <Text color="cyan">📸 Visual Timeline: http://localhost:{mcpPort}/logs</Text>
             {serversOnly && <Text color="cyan">🖥️ Servers-only mode - use Chrome extension for browser monitoring</Text>}
           </Box>

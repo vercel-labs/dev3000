@@ -43,7 +43,7 @@ dev3000 is a TypeScript npm package that provides AI assistants with deep visibi
 
 5. **Project Setup (`src/setup.ts`)**
    - Installs MCP API routes in Next.js app directory
-   - Creates `app/api/mcp/[transport]/route.ts`
+   - Creates simplified MCP endpoint at `/mcp`
    - Updates package.json with dependencies and scripts
 
 ### Log Format

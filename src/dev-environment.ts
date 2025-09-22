@@ -556,7 +556,7 @@ export class DevEnvironment {
       console.log(chalk.cyan(`Logs: ${this.options.logFile}`))
       console.log(chalk.cyan("☝️ Give this to an AI to auto debug and fix your app\n"))
       console.log(chalk.cyan(`🌐 Your App: http://localhost:${this.options.port}`))
-      console.log(chalk.cyan(`🤖 MCP Server: http://localhost:${this.options.mcpPort}/api/mcp/mcp`))
+      console.log(chalk.cyan(`🤖 MCP Server: http://localhost:${this.options.mcpPort}/mcp`))
       console.log(chalk.cyan(`📸 Visual Timeline: http://localhost:${this.options.mcpPort}/logs`))
       if (this.options.serversOnly) {
         console.log(chalk.cyan("🖥️  Servers-only mode - use Chrome extension for browser monitoring"))
