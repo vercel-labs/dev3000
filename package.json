@@ -24,7 +24,8 @@
   "scripts": {
     "build": "tsc && mkdir -p dist/src && cp src/loading.html dist/src/ && cp src/tui-interface-impl.tsx dist/src/",
     "dev": "tsc --watch",
-    "typecheck": "tsc --noEmit",
+    "typegen": "./scripts/typegen.sh",
+    "typecheck": "./scripts/typegen.sh && tsc --noEmit",
     "format": "biome format --write .",
     "lint": "biome check src mcp-server www scripts",
     "lint:fix": "biome check --write src mcp-server www scripts",
