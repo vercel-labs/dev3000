@@ -10,6 +10,18 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.65",
+    date: "2025-09-22",
+    type: "minor",
+    highlights: [
+      "formatting",
+      "update next-env ts",
+      "chore: clean up workspace structure and remove demo apps",
+      "feat: add project-specific Chrome profiles and Visual Timeline project parameter"
+    ]
+  },
+
+  {
     version: "0.0.64",
     date: "2025-09-19",
     type: "minor",
