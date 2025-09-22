@@ -1,28 +1,17 @@
-import {
-  Camera,
-  Clock,
-  ExternalLink,
-  Eye,
-  Github,
-  HelpCircle,
-  Network,
-  Play,
-  Terminal,
-  Zap,
-} from "lucide-react";
-import Link from "next/link";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Camera, Clock, ExternalLink, Eye, Github, HelpCircle, Network, Play, Terminal, Zap } from "lucide-react"
+import Link from "next/link"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
 
 const cursorConfig = {
   mcpServers: {
     dev3000: {
       type: "http",
-      url: "http://localhost:3684/mcp",
-    },
-  },
-};
+      url: "http://localhost:3684/mcp"
+    }
+  }
+}
 
 export default function HomePage() {
   return (
@@ -36,9 +25,7 @@ export default function HomePage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 bg-foreground rounded flex items-center justify-center">
-                <span className="text-background font-mono font-bold text-sm">
-                  d3k
-                </span>
+                <span className="text-background font-mono font-bold text-sm">d3k</span>
               </div>
               <span className="font-semibold text-xl">dev3000</span>
               <Badge variant="secondary" className="ml-2">
@@ -47,10 +34,7 @@ export default function HomePage() {
             </div>
             <nav className="flex items-center gap-4">
               <div className="md:flex items-center gap-6">
-                <Link
-                  href="/changelog"
-                  className="text-foreground hover:text-foreground/80 transition-colors"
-                >
+                <Link href="/changelog" className="text-foreground hover:text-foreground/80 transition-colors">
                   Changelog
                 </Link>
                 <a
@@ -60,17 +44,8 @@ export default function HomePage() {
                   Quick Start
                 </a>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="border border-gray-600/50"
-                asChild
-              >
-                <a
-                  href="https://github.com/vercel-labs/dev3000"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
+              <Button variant="ghost" size="sm" className="border border-gray-600/50" asChild>
+                <a href="https://github.com/vercel-labs/dev3000" target="_blank" rel="noopener noreferrer">
                   <Github className="w-4 h-4 mr-0" />
                   GitHub
                 </a>
@@ -93,32 +68,18 @@ export default function HomePage() {
               <span className="block">AI-based development</span>
             </h1>
             <p className="text-base text-muted-foreground mb-4 text-pretty max-w-2xl mx-auto leading-relaxed">
-              Captures server + browser logs, events, and network requests.
-              Takes automatic screenshots and stiches it all into a unified,
-              timestamped feed for AI and you.
+              Captures server + browser logs, events, and network requests. Takes automatic screenshots and stiches it
+              all into a unified, timestamped feed for AI and you.
             </p>
             <div className="flex flex-col sm:flex-row gap-2 justify-center items-center">
-              <Button
-                size="lg"
-                className="bg-foreground text-background hover:bg-foreground/90"
-                asChild
-              >
+              <Button size="lg" className="bg-foreground text-background hover:bg-foreground/90" asChild>
                 <a href="#quickstart">
                   <Terminal className="w-4 h-4 mr-2" />
                   Get Started
                 </a>
               </Button>
-              <Button
-                variant="outline"
-                size="lg"
-                className="border-2 !border-gray-700/30 p-5"
-                asChild
-              >
-                <a
-                  href="https://github.com/vercel-labs/dev3000"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
+              <Button variant="outline" size="lg" className="border-2 !border-gray-700/30 p-5" asChild>
+                <a href="https://github.com/vercel-labs/dev3000" target="_blank" rel="noopener noreferrer">
                   <Github className="w-4 h-4 mr-2" />
                   View on GitHub
                   <ExternalLink className="w-3 h-3 ml-1" />
@@ -131,16 +92,11 @@ export default function HomePage() {
 
       {/* Quick Start */}
       {/* biome-ignore lint/correctness/useUniqueElementIds: page section IDs are intentionally static for navigation */}
-      <section
-        id="quickstart"
-        className="relative py-6 border-b border-gray-700/30"
-      >
+      <section id="quickstart" className="relative py-6 border-b border-gray-700/30">
         <div className="container mx-auto px-4">
           <div className="max-w-2xl mx-auto text-center mb-5">
             <h2 className="text-2xl font-bold mb-2">Quick Start</h2>
-            <p className="text-muted-foreground">
-              Get up and running in seconds
-            </p>
+            <p className="text-muted-foreground">Get up and running in seconds</p>
           </div>
 
           <div className="max-w-5xl mx-auto space-y-4">
@@ -203,25 +159,18 @@ export default function HomePage() {
                     <div className="text-2xl self-center">→</div>
                     <div className="bg-green-50 dark:bg-green-900/20 rounded p-2 font-mono text-sm flex-1 border border-green-200 dark:border-green-800">
                       <span className="text-muted-foreground">Run:</span>{" "}
-                      <span className="text-foreground">
-                        dev3000 -s build-start
-                      </span>
+                      <span className="text-foreground">dev3000 -s build-start</span>
                     </div>
                   </div>
 
                   {/* Quick shortcut */}
                   <div className="bg-blue-50 dark:bg-blue-900/20 rounded p-3 border border-blue-200 dark:border-blue-800">
-                    <div className="text-sm text-muted-foreground mb-1">
-                      Pro tip: Use the shortcut
-                    </div>
+                    <div className="text-sm text-muted-foreground mb-1">Pro tip: Use the shortcut</div>
                     <div className="font-mono text-sm text-foreground">d3k</div>
                   </div>
                   <p>
                     More details in the{" "}
-                    <Link
-                      href="https://github.com/vercel-labs/dev3000"
-                      className="text-sm text-muted-foreground"
-                    >
+                    <Link href="https://github.com/vercel-labs/dev3000" className="text-sm text-muted-foreground">
                       README
                     </Link>
                   </p>
@@ -239,34 +188,21 @@ export default function HomePage() {
                   Connect to Claude/Cursor/Codex
                 </h3>
                 <div className="space-y-3">
-                  <div className="text-sm text-muted-foreground mb-2 text-purple-400">
-                    For claude code:
-                  </div>
+                  <div className="text-sm text-muted-foreground mb-2 text-purple-400">For claude code:</div>
                   <div className="bg-secondary/50 rounded p-3 font-mono text-xs border-2 border-gray-700/35 shadow-sm overflow-x-auto">
                     <div className="text-foreground whitespace-nowrap">
-                      claude mcp add -t http -s user dev3000
-                      http://localhost:3684/mcp
+                      claude mcp add -t http -s user dev3000 http://localhost:3684/mcp
                     </div>
                   </div>
-                  <div className="text-xs text-yellow-400 mt-2">
-                    For Cursor:
-                  </div>
+                  <div className="text-xs text-yellow-400 mt-2">For Cursor:</div>
                   <div className="bg-secondary/50 rounded p-3 font-mono text-xs border-2 border-gray-700/35 shadow-sm overflow-x-auto">
-                    <div className="text-muted-foreground mb-1">
-                      Add to ~/.codex/config.toml:
-                    </div>
-                    <div className="text-foreground whitespace-pre-wrap">
-                      {JSON.stringify(cursorConfig, null, 2)}
-                    </div>
+                    <div className="text-muted-foreground mb-1">Add to ~/.codex/config.toml:</div>
+                    <div className="text-foreground whitespace-pre-wrap">{JSON.stringify(cursorConfig, null, 2)}</div>
                   </div>
 
-                  <div className="text-xs text-blue-400 mt-2">
-                    For OpenAI Codex:
-                  </div>
+                  <div className="text-xs text-blue-400 mt-2">For OpenAI Codex:</div>
                   <div className="bg-secondary/50 rounded p-3 font-mono text-xs border-2 border-gray-700/35 shadow-sm overflow-x-auto">
-                    <div className="text-muted-foreground mb-1">
-                      Add to ~/.codex/config.toml:
-                    </div>
+                    <div className="text-muted-foreground mb-1">Add to ~/.codex/config.toml:</div>
                     <div className="text-foreground whitespace-pre-wrap">
                       {`[mcp_servers]
 
@@ -296,29 +232,24 @@ export default function HomePage() {
                   </div>
                   <div className="flex items-start gap-2">
                     <div className="w-6 h-6 bg-emerald-400/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <span className="text-emerald-400 text-xs font-bold">
-                        2
-                      </span>
+                      <span className="text-emerald-400 text-xs font-bold">2</span>
                     </div>
                     <div>
                       <div className="font-medium mb-1">Browser Opens</div>
                       <div className="text-muted-foreground text-xs">
-                        Automated CDP-connected browser starts capturing events
-                        and screenshots
+                        Automated CDP-connected browser starts capturing events and screenshots
                       </div>
                     </div>
                   </div>
                   <div className="flex items-start gap-2">
                     <div className="w-6 h-6 bg-purple-400/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <span className="text-purple-400 text-xs font-bold">
-                        3
-                      </span>
+                      <span className="text-purple-400 text-xs font-bold">3</span>
                     </div>
                     <div>
                       <div className="font-medium mb-1">Build Better</div>
                       <div className="text-muted-foreground text-xs">
-                        Just type "debug my app" into your AI tool and it should
-                        use the dev3000 MCP to get into an agentic loop of joy.
+                        Just type "debug my app" into your AI tool and it should use the dev3000 MCP to get into an
+                        agentic loop of joy.
                       </div>
                     </div>
                   </div>
@@ -331,18 +262,12 @@ export default function HomePage() {
 
       {/* Features */}
       {/* biome-ignore lint/correctness/useUniqueElementIds: page section IDs are intentionally static for navigation */}
-      <section
-        id="features"
-        className="relative py-6 border-b border-gray-700/30"
-      >
+      <section id="features" className="relative py-6 border-b border-gray-700/30">
         <div className="container mx-auto px-4">
           <div className="max-w-2xl mx-auto text-center mb-6">
-            <h2 className="text-2xl font-bold mb-2">
-              Everything AI Needs to Debug
-            </h2>
+            <h2 className="text-2xl font-bold mb-2">Everything AI Needs to Debug</h2>
             <p className="text-muted-foreground text-pretty text-sm">
-              Comprehensive monitoring that captures your entire development
-              context in one unified timeline
+              Comprehensive monitoring that captures your entire development context in one unified timeline
             </p>
           </div>
 
@@ -358,25 +283,19 @@ export default function HomePage() {
             <Card className="bg-card/50 backdrop-blur-sm border-2 border-gray-700/40 p-3 card-hover shadow-lg hover:shadow-xl transition-all">
               <Eye className="w-5 h-5 text-emerald-400 mb-2 animate-pulse-soft" />
               <h3 className="font-semibold mb-1 text-sm">Browser Events</h3>
-              <p className="text-sm text-muted-foreground">
-                Console messages, errors, clicks, scrolls, and key events
-              </p>
+              <p className="text-sm text-muted-foreground">Console messages, errors, clicks, scrolls, and key events</p>
             </Card>
 
             <Card className="bg-card/50 backdrop-blur-sm border-2 border-gray-700/40 p-3 card-hover shadow-lg hover:shadow-xl transition-all">
               <Network className="w-5 h-5 text-purple-400 mb-2 animate-pulse-soft" />
               <h3 className="font-semibold mb-1 text-sm">Network Requests</h3>
-              <p className="text-sm text-muted-foreground">
-                All HTTP requests and responses with full details
-              </p>
+              <p className="text-sm text-muted-foreground">All HTTP requests and responses with full details</p>
             </Card>
 
             <Card className="bg-card/50 backdrop-blur-sm border-2 border-gray-700/40 p-3 card-hover shadow-lg hover:shadow-xl transition-all">
               <Camera className="w-5 h-5 text-orange-400 mb-2 animate-pulse-soft" />
               <h3 className="font-semibold mb-1 text-sm">Auto Screenshots</h3>
-              <p className="text-sm text-muted-foreground">
-                Automatic captures on navigation, errors, and key events
-              </p>
+              <p className="text-sm text-muted-foreground">Automatic captures on navigation, errors, and key events</p>
             </Card>
           </div>
         </div>
@@ -387,20 +306,14 @@ export default function HomePage() {
         <div className="container mx-auto px-4">
           <div className="max-w-2xl mx-auto text-center mb-5">
             <h2 className="text-2xl font-bold mb-2">See It In Action</h2>
-            <p className="text-muted-foreground text-sm">
-              Watch how dev3000 captures everything in a unified timeline
-            </p>
+            <p className="text-muted-foreground text-sm">Watch how dev3000 captures everything in a unified timeline</p>
           </div>
 
           {/* CLI GIF */}
           <div className="max-w-4xl mx-auto mb-8">
             <Card className="bg-card/50 backdrop-blur-sm border-2 border-gray-700/40 overflow-hidden shadow-xl">
               {/* biome-ignore lint/performance/noImgElement: GIF animation not supported by next/image */}
-              <img
-                src="/cli.gif"
-                alt="dev3000 CLI in action"
-                className="w-full h-auto"
-              />
+              <img src="/cli.gif" alt="dev3000 CLI in action" className="w-full h-auto" />
             </Card>
           </div>
 
@@ -418,76 +331,44 @@ export default function HomePage() {
             </div>
             <div className="p-3 font-mono text-sm space-y-1 max-h-52 overflow-y-auto">
               <div className="flex items-start gap-2">
-                <span className="text-muted-foreground text-xs whitespace-nowrap">
-                  12:54:03.033
-                </span>
+                <span className="text-muted-foreground text-xs whitespace-nowrap">12:54:03.033</span>
                 <span className="text-blue-400 text-xs">[SERVER]</span>
-                <span className="text-foreground">
-                  ✓ Ready on http://localhost:3000
-                </span>
+                <span className="text-foreground">✓ Ready on http://localhost:3000</span>
               </div>
               <div className="flex items-start gap-2">
-                <span className="text-muted-foreground text-xs whitespace-nowrap">
-                  12:54:03.435
-                </span>
+                <span className="text-muted-foreground text-xs whitespace-nowrap">12:54:03.435</span>
                 <span className="text-emerald-400 text-xs">[BROWSER]</span>
-                <span className="text-foreground">
-                  [CONSOLE LOG] App initialized successfully
-                </span>
+                <span className="text-foreground">[CONSOLE LOG] App initialized successfully</span>
               </div>
               <div className="flex items-start gap-2">
-                <span className="text-muted-foreground text-xs whitespace-nowrap">
-                  12:54:04.120
-                </span>
+                <span className="text-muted-foreground text-xs whitespace-nowrap">12:54:04.120</span>
                 <span className="text-purple-400 text-xs">[NETWORK]</span>
-                <span className="text-foreground">
-                  GET /api/users → 200 (142ms)
-                </span>
+                <span className="text-foreground">GET /api/users → 200 (142ms)</span>
               </div>
               <div className="flex items-start gap-2">
-                <span className="text-muted-foreground text-xs whitespace-nowrap">
-                  12:54:05.234
-                </span>
+                <span className="text-muted-foreground text-xs whitespace-nowrap">12:54:05.234</span>
                 <span className="text-orange-400 text-xs">[SCREENSHOT]</span>
-                <span className="text-foreground">
-                  📷 Captured: /login → /dashboard navigation
-                </span>
+                <span className="text-foreground">📷 Captured: /login → /dashboard navigation</span>
               </div>
               <div className="flex items-start gap-2">
-                <span className="text-muted-foreground text-xs whitespace-nowrap">
-                  12:54:06.891
-                </span>
+                <span className="text-muted-foreground text-xs whitespace-nowrap">12:54:06.891</span>
                 <span className="text-emerald-400 text-xs">[BROWSER]</span>
-                <span className="text-foreground">
-                  [USER ACTION] Click: #submit-button
-                </span>
+                <span className="text-foreground">[USER ACTION] Click: #submit-button</span>
               </div>
               <div className="flex items-start gap-2">
-                <span className="text-muted-foreground text-xs whitespace-nowrap">
-                  12:54:07.012
-                </span>
+                <span className="text-muted-foreground text-xs whitespace-nowrap">12:54:07.012</span>
                 <span className="text-red-400 text-xs">[ERROR]</span>
-                <span className="text-red-300">
-                  TypeError: Cannot read property 'id' of undefined
-                </span>
+                <span className="text-red-300">TypeError: Cannot read property 'id' of undefined</span>
               </div>
               <div className="flex items-start gap-2">
-                <span className="text-muted-foreground text-xs whitespace-nowrap">
-                  12:54:07.013
-                </span>
+                <span className="text-muted-foreground text-xs whitespace-nowrap">12:54:07.013</span>
                 <span className="text-orange-400 text-xs">[SCREENSHOT]</span>
-                <span className="text-foreground">
-                  📷 Auto-captured: Error state
-                </span>
+                <span className="text-foreground">📷 Auto-captured: Error state</span>
               </div>
               <div className="flex items-start gap-2">
-                <span className="text-muted-foreground text-xs whitespace-nowrap">
-                  12:54:07.256
-                </span>
+                <span className="text-muted-foreground text-xs whitespace-nowrap">12:54:07.256</span>
                 <span className="text-purple-400 text-xs">[NETWORK]</span>
-                <span className="text-foreground">
-                  POST /api/submit → 500 (23ms)
-                </span>
+                <span className="text-foreground">POST /api/submit → 500 (23ms)</span>
               </div>
             </div>
             <div className="bg-secondary/20 px-4 py-3 border-t border-border/50">
@@ -502,8 +383,7 @@ export default function HomePage() {
 
           <div className="mt-8 text-center">
             <p className="text-sm text-muted-foreground mb-4">
-              Everything is timestamped and unified - server logs, browser
-              events, network requests, and screenshots
+              Everything is timestamped and unified - server logs, browser events, network requests, and screenshots
             </p>
             {/*
             <Button variant="outline" className="border-gray-600/50" asChild>
@@ -528,14 +408,10 @@ export default function HomePage() {
             <Card className="bg-card/50 backdrop-blur-sm border-2 border-gray-700/40 p-4 shadow-xl">
               <div className="grid md:grid-cols-2 gap-4 items-center">
                 <div>
-                  <h3 className="text-xl font-bold mb-2">
-                    Built for AI Assistants
-                  </h3>
+                  <h3 className="text-xl font-bold mb-2">Built for AI Assistants</h3>
                   <p className="text-muted-foreground mb-3 leading-relaxed text-sm">
-                    When you have a bug, Claude can see your server output,
-                    browser console, network requests, and screenshots all in
-                    chronological order. No more context switching or missing
-                    details.
+                    When you have a bug, Claude can see your server output, browser console, network requests, and
+                    screenshots all in chronological order. No more context switching or missing details.
                   </p>
                   <div className="space-y-1">
                     <div className="flex items-center gap-3">
@@ -548,31 +424,17 @@ export default function HomePage() {
                     </div>
                     <div className="flex items-center gap-3">
                       <div className="w-2 h-2 bg-purple-400 rounded-full" />
-                      <span className="text-sm">
-                        Visual timeline at localhost:3684/logs
-                      </span>
+                      <span className="text-sm">Visual timeline at localhost:3684/logs</span>
                     </div>
                   </div>
                 </div>
                 <div className="bg-secondary/30 rounded p-3 font-mono text-sm border-2 border-gray-700/35 shadow-md">
-                  <div className="text-muted-foreground mb-2">
-                    # Give AI your logs
-                  </div>
-                  <div className="text-foreground">
-                    Read /var/log/dev3000/dev3000*.log
-                  </div>
-                  <div className="text-muted-foreground mt-4 mb-2">
-                    # Or use MCP tools at
-                  </div>
-                  <div className="text-foreground text-xs">
-                    http://localhost:3684/mcp
-                  </div>
-                  <div className="text-muted-foreground mt-4 mb-1">
-                    # Visual timeline at
-                  </div>
-                  <div className="text-foreground text-xs">
-                    http://localhost:3684/logs
-                  </div>
+                  <div className="text-muted-foreground mb-2"># Give AI your logs</div>
+                  <div className="text-foreground">Read /var/log/dev3000/dev3000*.log</div>
+                  <div className="text-muted-foreground mt-4 mb-2"># Or use MCP tools at</div>
+                  <div className="text-foreground text-xs">http://localhost:3684/mcp</div>
+                  <div className="text-muted-foreground mt-4 mb-1"># Visual timeline at</div>
+                  <div className="text-foreground text-xs">http://localhost:3684/logs</div>
                 </div>
               </div>
             </Card>
@@ -662,11 +524,7 @@ export default function HomePage() {
           <div className="max-w-4xl mx-auto">
             <Card className="bg-card/50 backdrop-blur-sm border-2 border-gray-700/40 overflow-hidden shadow-2xl">
               <div className="relative aspect-video">
-                <video
-                  controls
-                  className="w-full h-full object-cover rounded"
-                  preload="metadata"
-                >
+                <video controls className="w-full h-full object-cover rounded" preload="metadata">
                   <source src="/d3k.mp4#t=0.25" type="video/mp4" />
                   Your browser does not support the video tag.
                 </video>
@@ -693,8 +551,8 @@ export default function HomePage() {
                   <strong>Q: Does dev3000 save my login state?</strong>
                 </div>
                 <div className="text-muted-foreground">
-                  <strong>A:</strong> Yes, login state is saved automatically in
-                  the browser profile. No need to re-login.
+                  <strong>A:</strong> Yes, login state is saved automatically in the browser profile. No need to
+                  re-login.
                 </div>
               </li>
 
@@ -703,27 +561,19 @@ export default function HomePage() {
                   <strong>Q: How do I stop a dev3000 session?</strong>
                 </div>
                 <div className="text-muted-foreground">
-                  <strong>A:</strong> Press{" "}
-                  <kbd className="bg-secondary/50 px-1 rounded text-xs">
-                    Ctrl+C
-                  </kbd>{" "}
-                  to stop everything (server, browser, and MCP server).
+                  <strong>A:</strong> Press <kbd className="bg-secondary/50 px-1 rounded text-xs">Ctrl+C</kbd> to stop
+                  everything (server, browser, and MCP server).
                 </div>
               </li>
 
               <li>
                 <div className="mb-1">
-                  <strong>
-                    Q: Does dev3000 work with other frameworks besides Next.js?
-                  </strong>
+                  <strong>Q: Does dev3000 work with other frameworks besides Next.js?</strong>
                 </div>
                 <div className="text-muted-foreground">
-                  <strong>A:</strong> Yes, it works with React, Vue, Vite, etc.
-                  Use{" "}
-                  <code className="bg-secondary/50 px-1 rounded font-mono text-xs">
-                    --script
-                  </code>{" "}
-                  to specify your dev command.
+                  <strong>A:</strong> Yes, it works with React, Vue, Vite, etc. Use{" "}
+                  <code className="bg-secondary/50 px-1 rounded font-mono text-xs">--script</code> to specify your dev
+                  command.
                 </div>
               </li>
             </ul>
@@ -737,37 +587,21 @@ export default function HomePage() {
           <div className="flex flex-col md:flex-row justify-between items-center gap-2">
             <div className="flex items-center gap-2">
               <div className="w-6 h-6 bg-foreground rounded flex items-center justify-center">
-                <span className="text-background font-mono font-bold text-xs">
-                  d3k
-                </span>
+                <span className="text-background font-mono font-bold text-xs">d3k</span>
               </div>
               <span className="font-semibold">dev3000</span>
-              <span className="text-muted-foreground text-xs">
-                by Vercel Labs
-              </span>
+              <span className="text-muted-foreground text-xs">by Vercel Labs</span>
             </div>
             <div className="flex items-center gap-3">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="border border-gray-600/50"
-                asChild
-              >
-                <a
-                  href="https://github.com/vercel-labs/dev3000"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
+              <Button variant="ghost" size="sm" className="border border-gray-600/50" asChild>
+                <a href="https://github.com/vercel-labs/dev3000" target="_blank" rel="noopener noreferrer">
                   <Github className="w-4 h-4 mr-0" />
                   GitHub
                 </a>
               </Button>
               <span className="text-xs text-muted-foreground">
                 Made with ❤️ by{" "}
-                <a
-                  href="https://github.com/elsigh"
-                  className="hover:text-foreground transition-colors"
-                >
+                <a href="https://github.com/elsigh" className="hover:text-foreground transition-colors">
                   elsigh
                 </a>
               </span>
@@ -776,5 +610,5 @@ export default function HomePage() {
         </div>
       </footer>
     </div>
-  );
+  )
 }
