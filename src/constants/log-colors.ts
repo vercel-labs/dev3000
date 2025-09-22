@@ -6,22 +6,22 @@
 export const LOG_COLORS = {
   // Source colors
   BROWSER: "#00CED1", // Cyan
-  SERVER: "#32CD32",  // Lime green
-  
+  SERVER: "#32CD32", // Lime green
+
   // Log type colors
-  NETWORK: "#FFD700",          // Gold
-  CONSOLE_ERROR: "#FF6B6B",    // Red
-  CONSOLE_WARN: "#FFA500",     // Orange  
-  CONSOLE_INFO: "#87CEEB",     // Sky blue
-  CONSOLE_LOG: "#B0B0B0",      // Gray
-  CONSOLE_DEBUG: "#9370DB",    // Purple
-  SCREENSHOT: "#FF69B4",       // Hot pink
-  PAGE: "#98FB98",             // Pale green
-  DOM: "#DDA0DD",              // Plum
-  CDP: "#F0E68C",              // Khaki
-  ERROR: "#FF6B6B",            // Red
-  CRITICAL_ERROR: "#DC143C",   // Crimson
-  DEFAULT: "#A0A0A0"           // Dark gray
+  NETWORK: "#FFD700", // Gold
+  CONSOLE_ERROR: "#FF6B6B", // Red
+  CONSOLE_WARN: "#FFA500", // Orange
+  CONSOLE_INFO: "#87CEEB", // Sky blue
+  CONSOLE_LOG: "#B0B0B0", // Gray
+  CONSOLE_DEBUG: "#9370DB", // Purple
+  SCREENSHOT: "#FF69B4", // Hot pink
+  PAGE: "#98FB98", // Pale green
+  DOM: "#DDA0DD", // Plum
+  CDP: "#F0E68C", // Khaki
+  ERROR: "#FF6B6B", // Red
+  CRITICAL_ERROR: "#DC143C", // Crimson
+  DEFAULT: "#A0A0A0" // Dark gray
 } as const
 
 // Helper to determine text color based on background
@@ -46,10 +46,10 @@ export const TYPE_COLOR_MAP = {
   "CONSOLE INFO": "CONSOLE_INFO",
   "CONSOLE LOG": "CONSOLE_LOG",
   "CONSOLE DEBUG": "CONSOLE_DEBUG",
-  "SCREENSHOT": "SCREENSHOT",
-  "PAGE": "PAGE",
-  "DOM": "DOM",
-  "CDP": "CDP",
-  "ERROR": "ERROR",
+  SCREENSHOT: "SCREENSHOT",
+  PAGE: "PAGE",
+  DOM: "DOM",
+  CDP: "CDP",
+  ERROR: "ERROR",
   "CRITICAL ERROR": "CRITICAL_ERROR"
 } as const

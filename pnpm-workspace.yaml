@@ -1,2 +1,29 @@
+packages:
+  - "www"
+  - "mcp-server"
+
 onlyBuiltDependencies:
   - core-js
+  
+catalog:
+  # Shared React/Next.js versions
+  next: "15.5.1-canary.30"
+  react: "19.2.0-canary-de5a1b20-20250905"
+  react-dom: "19.2.0-canary-de5a1b20-20250905"
+  
+  # Shared Tailwind CSS v4
+  tailwindcss: "^4.1.9"
+  "@tailwindcss/postcss": "^4.1.9"
+  
+  # Shared PostCSS
+  postcss: "^8.5"
+  autoprefixer: "^10.4.20"
+  
+  # Shared TypeScript types
+  typescript: "^5.0.0"
+  "@types/node": "^22.0.0"
+  "@types/react": "^19.0.0"
+  "@types/react-dom": "^19.0.0"
+  
+  # Other shared deps
+  zod: "^3.22.4"

@@ -65,6 +65,7 @@
     "@types/react": "^19.1.13",
     "@types/ws": "^8.5.12",
     "husky": "^9.0.0",
+    "js-yaml": "^4.1.0",
     "tsx": "^4.20.3",
     "typescript": "^5.0.0",
     "vitest": "^1.0.0"

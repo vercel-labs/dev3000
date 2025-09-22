@@ -3,8 +3,8 @@
 import Image from "next/image"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { getTextColor, LOG_COLORS } from "@/../../src/constants/log-colors"
 import type { LogEntry, LogFile, LogListResponse, LogsApiResponse } from "@/types"
-import { LOG_COLORS, getTextColor } from "@/../../src/constants/log-colors"
 
 // Define interfaces for object property rendering
 interface PropertyData {
@@ -299,7 +299,6 @@ function ObjectRenderer({ content }: { content: string }) {
 function LogEntryComponent({ entry }: { entry: LogEntry }) {
   // Parse log type from message patterns - using shared TUI colors
   const parseLogType = (message: string) => {
-
     if (message.includes("[INTERACTION]"))
       return {
         type: "INTERACTION",
