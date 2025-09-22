@@ -566,8 +566,8 @@ export class CDPMonitor {
       const headerInfo = importantHeaders
         .filter((h) => headers?.[h])
         .map((h) => {
-          const maxLength = h === 'authorization' ? 10 : 50;
-          return `${h}: ${headers?.[h]?.slice(0, maxLength) || ""}${(headers?.[h]?.length || 0) > maxLength ? "..." : ""}`;
+          const maxLength = h === "authorization" ? 10 : 50
+          return `${h}: ${headers?.[h]?.slice(0, maxLength) || ""}${(headers?.[h]?.length || 0) > maxLength ? "..." : ""}`
         })
         .join(", ")
 
