@@ -95,9 +95,7 @@ describe("RailsDetector", () => {
 
       detector.getConfig(true)
 
-      expect(consoleSpy).toHaveBeenCalledWith(
-        "[RAILS DEBUG] Found Procfile.dev - using bin/dev for process management"
-      )
+      expect(consoleSpy).toHaveBeenCalledWith("[RAILS DEBUG] Found Procfile.dev - using bin/dev for process management")
 
       consoleSpy.mockRestore()
     })
