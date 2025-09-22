@@ -1,1 +1,5 @@
-{"scripts":{"dev":"echo Test server running && sleep 10"}}
+{
+  "scripts": {
+    "dev": "echo Test server running && sleep 10"
+  }
+}
