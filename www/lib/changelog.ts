@@ -14,10 +14,11 @@ export const changelog: Release[] = [
     date: "2025-09-22",
     type: "minor",
     highlights: [
-      "formatting",
-      "update next-env ts",
-      "chore: clean up workspace structure and remove demo apps",
-      "feat: add project-specific Chrome profiles and Visual Timeline project parameter"
+      "Introduced gorgeous Terminal UI (TUI) as the default experience - a complete visual overhaul",
+      "Revolutionized MCP server architecture: now a persistent singleton at localhost:3684/mcp",
+      "Added multi-project support with project-specific Chrome profiles and session tracking",
+      "Enhanced Visual Timeline with project parameter for seamless multi-project workflows",
+      "Improved process management with better port handling and auto-increment capabilities"
     ]
   },
 
@@ -26,10 +27,10 @@ export const changelog: Release[] = [
     date: "2025-09-19",
     type: "minor",
     highlights: [
-      "Apply linter formatting to all modified files",
-      "Simplify log path references in MCP server to use dynamic log paths",
-      "Increase recent log entries display from 10 to 20 lines",
-      "Implement versioned changelog pages with ISR OG images"
+      "Enhanced error debugging with 2x more context (20 lines of recent logs)",
+      "Improved MCP server with dynamic log path handling for better flexibility",
+      "Added beautiful changelog pages with auto-generated social media preview images",
+      "Code quality improvements across the entire codebase"
     ]
   },
 
@@ -38,10 +39,10 @@ export const changelog: Release[] = [
     date: "2025-09-17",
     type: "minor",
     highlights: [
-      "Apply linter formatting to changelog OG route",
-      "Improve MCP tool guidance and fix React key duplication error",
-      "Fix broken changelog OG image API endpoint",
-      "Add OpenAI Codex configuration to homepage"
+      "Enhanced MCP tools with better AI guidance for improved debugging workflows",
+      "Fixed changelog social media preview generation",
+      "Added OpenAI Codex configuration support",
+      "Improved React component stability"
     ]
   },
 
@@ -50,10 +51,10 @@ export const changelog: Release[] = [
     date: "2025-09-17",
     type: "minor",
     highlights: [
-      "Fix linter formatting in next-env.d.ts",
-      "Clean up code formatting and bump to v0.0.62-canary",
-      "Fix server readiness check for FastAPI/Python servers",
-      "Add comprehensive server startup debug logging"
+      "Fixed Python/FastAPI server detection for better framework support",
+      "Added comprehensive debug logging for troubleshooting server startup issues",
+      "Improved server readiness detection across all frameworks",
+      "Enhanced code quality and consistency"
     ]
   },
 
@@ -62,8 +63,8 @@ export const changelog: Release[] = [
     date: "2025-09-16",
     type: "minor",
     highlights: [
-      "Update README with --browser flag documentation",
-      "Add --browser flag to support custom browser executables"
+      "Added --browser flag for custom browser support (Chrome, Chromium, Edge, etc.)",
+      "Enhanced documentation with comprehensive usage examples"
     ]
   },
 
@@ -71,7 +72,11 @@ export const changelog: Release[] = [
     version: "0.0.60",
     date: "2025-09-16",
     type: "minor",
-    highlights: ["Fix linting issues from biome", "Add comprehensive changelog system and enhance MCP server homepage"]
+    highlights: [
+      "Launched comprehensive changelog system with version history",
+      "Redesigned MCP server homepage with better developer experience",
+      "Improved code quality with enhanced linting rules"
+    ]
   },
 
   {
