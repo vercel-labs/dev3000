@@ -60,6 +60,26 @@ export async function GET() {
             description: "Parameters for the action (coordinates, URL, selector, text, expression, etc.)"
           }
         ]
+      },
+      {
+        name: "start_error_monitoring",
+        description:
+          "🔍 **ERROR MONITORING SETUP** - Returns Python code that Claude can execute to continuously monitor your app for errors.\n\n⚡ **HOW IT WORKS:**\n• Returns a Python script that monitors the d3k log file\n• Script watches for critical errors in real-time  \n• When errors are detected, it prompts you to let Claude fix them\n• Creates a proactive debugging experience\n\n💡 **USAGE FLOW:**\n1. User: 'monitor my app' or 'watch for errors'\n2. Claude calls this tool and gets monitoring code\n3. Claude runs the Python script\n4. Script continuously watches logs\n5. When errors appear, it prompts: 'Tell Claude to debug my app'\n6. User can then ask Claude to fix the errors\n\n🎯 **PERFECT FOR:**\n• Long development sessions\n• Testing phases where errors might occur  \n• Proactive error detection\n• Hands-free error monitoring\n\n✨ **THE MAGIC:**\n• No need to manually check for errors\n• Get alerted only when something breaks\n• Decide when to let Claude investigate\n• Seamless integration with debug_my_app workflow",
+        category: "Monitoring",
+        parameters: [
+          {
+            name: "projectName",
+            type: "string",
+            optional: true,
+            description: "Project name to monitor (if multiple dev3000 instances are running)"
+          },
+          {
+            name: "checkInterval",
+            type: "number",
+            optional: true,
+            description: "How often to check for new errors in seconds (default: 5)"
+          }
+        ]
       }
     ]
 
