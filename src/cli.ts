@@ -5,9 +5,10 @@ import { Command } from "commander"
 import { existsSync, readFileSync } from "fs"
 import { homedir, tmpdir } from "os"
 import { detect } from "package-manager-detector"
-import { basename, dirname, join } from "path"
+import { dirname, join } from "path"
 import { fileURLToPath } from "url"
 import { createPersistentLogFile, startDevEnvironment } from "./dev-environment.js"
+import { getProjectName } from "./utils/project-name.js"
 
 interface ProjectConfig {
   type: "node" | "python" | "rails"
@@ -204,8 +205,8 @@ program
       // Create persistent log file
       const logFile = createPersistentLogFile()
 
-      // Get project name from current directory to create unique profile dir
-      const projectName = basename(process.cwd()).replace(/[^a-zA-Z0-9-_]/g, "_")
+      // Get unique project name to create profile dir
+      const projectName = getProjectName()
       const profileDir = join(homedir(), ".d3k", "chrome-profiles", projectName)
 
       await startDevEnvironment({

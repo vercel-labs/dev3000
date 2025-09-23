@@ -15,11 +15,12 @@ import {
 } from "fs"
 import ora from "ora"
 import { homedir, tmpdir } from "os"
-import { basename, dirname, join } from "path"
+import { dirname, join } from "path"
 import { fileURLToPath } from "url"
 import { CDPMonitor } from "./cdp-monitor.js"
 import { type LogEntry, NextJsErrorDetector, OutputProcessor, StandardLogParser } from "./services/parsers/index.js"
 import { DevTUI } from "./tui-interface.js"
+import { getProjectDisplayName, getProjectName } from "./utils/project-name.js"
 import { formatTimestamp } from "./utils/timestamp.js"
 
 interface DevEnvironmentOptions {
@@ -106,6 +107,9 @@ async function findAvailablePort(startPort: number): Promise<string> {
 }
 
 export function createPersistentLogFile(): string {
+  // Get unique project name
+  const projectName = getProjectName()
+
   // Create /var/log/dev3000 directory
   const logBaseDir = "/var/log/dev3000"
   try {
@@ -118,10 +122,10 @@ export function createPersistentLogFile(): string {
     if (!existsSync(fallbackDir)) {
       mkdirSync(fallbackDir, { recursive: true })
     }
-    return createLogFileInDir(fallbackDir)
+    return createLogFileInDir(fallbackDir, projectName)
   }
 
-  return createLogFileInDir(logBaseDir)
+  return createLogFileInDir(logBaseDir, projectName)
 }
 
 // Write session info for MCP server to discover
@@ -154,19 +158,16 @@ function writeSessionInfo(projectName: string, logFilePath: string, appPort: str
   }
 }
 
-function createLogFileInDir(baseDir: string): string {
-  // Get current working directory name
-  const cwdName = basename(process.cwd()).replace(/[^a-zA-Z0-9-_]/g, "_")
-
+function createLogFileInDir(baseDir: string, projectName: string): string {
   // Create timestamp
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-")
 
   // Create log file path
-  const logFileName = `dev3000-${cwdName}-${timestamp}.log`
+  const logFileName = `dev3000-${projectName}-${timestamp}.log`
   const logFilePath = join(baseDir, logFileName)
 
   // Prune old logs for this project (keep only 10 most recent)
-  pruneOldLogs(baseDir, cwdName)
+  pruneOldLogs(baseDir, projectName)
 
   // Create the log file
   writeFileSync(logFilePath, "")
@@ -174,11 +175,11 @@ function createLogFileInDir(baseDir: string): string {
   return logFilePath
 }
 
-function pruneOldLogs(baseDir: string, cwdName: string): void {
+function pruneOldLogs(baseDir: string, projectName: string): void {
   try {
     // Find all log files for this project
     const files = readdirSync(baseDir)
-      .filter((file) => file.startsWith(`dev3000-${cwdName}-`) && file.endsWith(".log"))
+      .filter((file) => file.startsWith(`dev3000-${projectName}-`) && file.endsWith(".log"))
       .map((file) => ({
         name: file,
         path: join(baseDir, file),
@@ -449,8 +450,9 @@ export class DevEnvironment {
       // Clear console and start TUI
       console.clear()
 
-      // Get project name from current directory
-      const projectName = basename(process.cwd()).replace(/[^a-zA-Z0-9-_]/g, "_")
+      // Get unique project name
+      const projectName = getProjectName()
+      const projectDisplayName = getProjectDisplayName()
 
       // Start TUI interface with initial status and updated port
       this.tui = new DevTUI({
@@ -460,7 +462,7 @@ export class DevEnvironment {
         commandName: this.options.commandName,
         serversOnly: this.options.serversOnly,
         version: this.version,
-        projectName
+        projectName: projectDisplayName
       })
 
       await this.tui.start()
@@ -555,7 +557,7 @@ export class DevEnvironment {
       }
 
       // Get project name for session info and Visual Timeline URL
-      const projectName = basename(process.cwd()).replace(/[^a-zA-Z0-9-_]/g, "_")
+      const projectName = getProjectName()
       writeSessionInfo(projectName, this.options.logFile, this.options.port, this.options.mcpPort)
 
       // Complete startup with success message only in non-TUI mode
@@ -1138,7 +1140,7 @@ export class DevEnvironment {
 
     // Clean up session file
     try {
-      const projectName = basename(process.cwd()).replace(/[^a-zA-Z0-9-_]/g, "_")
+      const projectName = getProjectName()
       const sessionFile = join(homedir(), ".d3k", `${projectName}.json`)
       if (existsSync(sessionFile)) {
         unlinkSync(sessionFile)
@@ -1211,7 +1213,7 @@ export class DevEnvironment {
 
       // Clean up session file
       try {
-        const projectName = basename(process.cwd()).replace(/[^a-zA-Z0-9-_]/g, "_")
+        const projectName = getProjectName()
         const sessionFile = join(homedir(), ".d3k", `${projectName}.json`)
         if (existsSync(sessionFile)) {
           unlinkSync(sessionFile)

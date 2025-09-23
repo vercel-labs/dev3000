@@ -1,6 +1,6 @@
 import { createMcpHandler } from "mcp-handler"
 import { z } from "zod"
-import { executeBrowserAction, findActiveSessions, fixMyApp, getLogPath } from "./tools"
+import { executeBrowserAction, fixMyApp } from "./tools"
 
 const handler = createMcpHandler(
   (server) => {

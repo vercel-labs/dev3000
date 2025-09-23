@@ -30,7 +30,7 @@ program
       projectName: options.project,
       focusArea: options.area,
       mode: options.mode as "snapshot" | "bisect" | "monitor",
-      timeRangeMinutes: parseInt(options.time),
+      timeRangeMinutes: parseInt(options.time, 10),
       waitForUserInteraction: options.wait,
       includeTimestampInstructions: true
     })

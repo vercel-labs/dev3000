@@ -261,13 +261,13 @@ importers:
         version: 2.17.1(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905)(typescript@5.9.2)
       '@sveltejs/kit':
         specifier: latest
-        version: 2.43.1(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.4)(vite@5.4.20(@types/node@22.18.6)(lightningcss@1.30.1)))(svelte@5.39.4)(vite@5.4.20(@types/node@22.18.6)(lightningcss@1.30.1))
+        version: 2.43.2(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.5)(vite@5.4.20(@types/node@22.18.6)(lightningcss@1.30.1)))(svelte@5.39.5)(vite@5.4.20(@types/node@22.18.6)(lightningcss@1.30.1))
       '@vercel/analytics':
         specifier: latest
-        version: 1.5.0(@remix-run/react@2.17.1(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905)(typescript@5.9.2))(@sveltejs/kit@2.43.1(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.4)(vite@5.4.20(@types/node@22.18.6)(lightningcss@1.30.1)))(svelte@5.39.4)(vite@5.4.20(@types/node@22.18.6)(lightningcss@1.30.1)))(next@15.5.1-canary.30(babel-plugin-react-compiler@19.1.0-rc.3)(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905)(svelte@5.39.4)(vue-router@4.5.1(vue@3.5.21(typescript@5.9.2)))(vue@3.5.21(typescript@5.9.2))
+        version: 1.5.0(@remix-run/react@2.17.1(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905)(typescript@5.9.2))(@sveltejs/kit@2.43.2(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.5)(vite@5.4.20(@types/node@22.18.6)(lightningcss@1.30.1)))(svelte@5.39.5)(vite@5.4.20(@types/node@22.18.6)(lightningcss@1.30.1)))(next@15.5.1-canary.30(babel-plugin-react-compiler@19.1.0-rc.3)(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905)(svelte@5.39.5)(vue-router@4.5.1(vue@3.5.21(typescript@5.9.2)))(vue@3.5.21(typescript@5.9.2))
       '@vercel/speed-insights':
         specifier: ^1.2.0
-        version: 1.2.0(@sveltejs/kit@2.43.1(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.4)(vite@5.4.20(@types/node@22.18.6)(lightningcss@1.30.1)))(svelte@5.39.4)(vite@5.4.20(@types/node@22.18.6)(lightningcss@1.30.1)))(next@15.5.1-canary.30(babel-plugin-react-compiler@19.1.0-rc.3)(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905)(svelte@5.39.4)(vue-router@4.5.1(vue@3.5.21(typescript@5.9.2)))(vue@3.5.21(typescript@5.9.2))
+        version: 1.2.0(@sveltejs/kit@2.43.2(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.5)(vite@5.4.20(@types/node@22.18.6)(lightningcss@1.30.1)))(svelte@5.39.5)(vite@5.4.20(@types/node@22.18.6)(lightningcss@1.30.1)))(next@15.5.1-canary.30(babel-plugin-react-compiler@19.1.0-rc.3)(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905)(svelte@5.39.5)(vue-router@4.5.1(vue@3.5.21(typescript@5.9.2)))(vue@3.5.21(typescript@5.9.2))
       autoprefixer:
         specifier: 'catalog:'
         version: 10.4.21(postcss@8.5.6)
@@ -316,6 +316,9 @@ importers:
       react-resizable-panels:
         specifier: ^2.1.7
         version: 2.1.9(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905)
+      react-wrap-balancer:
+        specifier: ^1.1.1
+        version: 1.1.1(react@19.2.0-canary-de5a1b20-20250905)
       recharts:
         specifier: 2.15.4
         version: 2.15.4(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905)
@@ -324,7 +327,7 @@ importers:
         version: 1.7.4(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905)
       svelte:
         specifier: latest
-        version: 5.39.4
+        version: 5.39.5
       tailwind-merge:
         specifier: ^2.5.5
         version: 2.6.0
@@ -1819,8 +1822,8 @@ packages:
     peerDependencies:
       acorn: ^8.9.0
 
-  '@sveltejs/kit@2.43.1':
-    resolution: {integrity: sha512-H8eXW5TSziSvt9d5IJ5pPyWGhXQLdmq+17H9j7aofA/TsfSvG8ZIpTjObphFRNagfIyoFGyoB3lOzdsGHKiKpw==}
+  '@sveltejs/kit@2.43.2':
+    resolution: {integrity: sha512-M27eBoqWmU7dEpotMGBaA1CK6Y/wK1b176mVOkrSJZwt17bk6Z1IjLQv0iuVYm7D8d1Z/I4HzJ3hSqy8auj1Sw==}
     engines: {node: '>=18.13'}
     hasBin: true
     peerDependencies:
@@ -3137,6 +3140,11 @@ packages:
       react: '>=16.6.0'
       react-dom: '>=16.6.0'
 
+  react-wrap-balancer@1.1.1:
+    resolution: {integrity: sha512-AB+l7FPRWl6uZ28VcJ8skkwLn2+UC62bjiw8tQUrZPlEWDVnR9MG0lghyn7EyxuJSsFEpht4G+yh2WikEqQ/5Q==}
+    peerDependencies:
+      react: '>=16.8.0 || ^17.0.0 || ^18'
+
   react@19.1.1:
     resolution: {integrity: sha512-w8nqGImo45dmMIfljjMwOGtbmC/mk4CMYhWIicdSflH91J9TyCyczcPFXJzrZ/ZXcgGRFeP6BU0BEJTw6tZdfQ==}
     engines: {node: '>=0.10.0'}
@@ -3335,8 +3343,8 @@ packages:
       babel-plugin-macros:
         optional: true
 
-  svelte@5.39.4:
-    resolution: {integrity: sha512-VU729KzEau1l6d6d25EnRQhdkwwYdTQxQrF8gdUfjZ3dCjrG7VmRMylMxx92ayO9/z5PKWpDrShJdzc4PGW1uA==}
+  svelte@5.39.5:
+    resolution: {integrity: sha512-YrTmQAgJNB5He5t14g+BH76xTjskcx0Dg3p6qKqfPcgha+9Rzdgkoazdk18ahzNfkFYgykZIjfnBvlPcp3NpYg==}
     engines: {node: '>=18'}
 
   tailwind-merge@2.6.0:
@@ -4836,11 +4844,11 @@ snapshots:
     dependencies:
       acorn: 8.15.0
 
-  '@sveltejs/kit@2.43.1(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.4)(vite@5.4.20(@types/node@22.18.6)(lightningcss@1.30.1)))(svelte@5.39.4)(vite@5.4.20(@types/node@22.18.6)(lightningcss@1.30.1))':
+  '@sveltejs/kit@2.43.2(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.5)(vite@5.4.20(@types/node@22.18.6)(lightningcss@1.30.1)))(svelte@5.39.5)(vite@5.4.20(@types/node@22.18.6)(lightningcss@1.30.1))':
     dependencies:
       '@standard-schema/spec': 1.0.0
       '@sveltejs/acorn-typescript': 1.0.5(acorn@8.15.0)
-      '@sveltejs/vite-plugin-svelte': 6.2.0(svelte@5.39.4)(vite@5.4.20(@types/node@22.18.6)(lightningcss@1.30.1))
+      '@sveltejs/vite-plugin-svelte': 6.2.0(svelte@5.39.5)(vite@5.4.20(@types/node@22.18.6)(lightningcss@1.30.1))
       '@types/cookie': 0.6.0
       acorn: 8.15.0
       cookie: 0.6.0
@@ -4852,25 +4860,25 @@ snapshots:
       sade: 1.8.1
       set-cookie-parser: 2.7.1
       sirv: 3.0.2
-      svelte: 5.39.4
+      svelte: 5.39.5
       vite: 5.4.20(@types/node@22.18.6)(lightningcss@1.30.1)
 
-  '@sveltejs/vite-plugin-svelte-inspector@5.0.1(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.4)(vite@5.4.20(@types/node@22.18.6)(lightningcss@1.30.1)))(svelte@5.39.4)(vite@5.4.20(@types/node@22.18.6)(lightningcss@1.30.1))':
+  '@sveltejs/vite-plugin-svelte-inspector@5.0.1(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.5)(vite@5.4.20(@types/node@22.18.6)(lightningcss@1.30.1)))(svelte@5.39.5)(vite@5.4.20(@types/node@22.18.6)(lightningcss@1.30.1))':
     dependencies:
-      '@sveltejs/vite-plugin-svelte': 6.2.0(svelte@5.39.4)(vite@5.4.20(@types/node@22.18.6)(lightningcss@1.30.1))
+      '@sveltejs/vite-plugin-svelte': 6.2.0(svelte@5.39.5)(vite@5.4.20(@types/node@22.18.6)(lightningcss@1.30.1))
       debug: 4.4.3
-      svelte: 5.39.4
+      svelte: 5.39.5
       vite: 5.4.20(@types/node@22.18.6)(lightningcss@1.30.1)
     transitivePeerDependencies:
       - supports-color
 
-  '@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.4)(vite@5.4.20(@types/node@22.18.6)(lightningcss@1.30.1))':
+  '@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.5)(vite@5.4.20(@types/node@22.18.6)(lightningcss@1.30.1))':
     dependencies:
-      '@sveltejs/vite-plugin-svelte-inspector': 5.0.1(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.4)(vite@5.4.20(@types/node@22.18.6)(lightningcss@1.30.1)))(svelte@5.39.4)(vite@5.4.20(@types/node@22.18.6)(lightningcss@1.30.1))
+      '@sveltejs/vite-plugin-svelte-inspector': 5.0.1(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.5)(vite@5.4.20(@types/node@22.18.6)(lightningcss@1.30.1)))(svelte@5.39.5)(vite@5.4.20(@types/node@22.18.6)(lightningcss@1.30.1))
       debug: 4.4.3
       deepmerge: 4.3.1
       magic-string: 0.30.19
-      svelte: 5.39.4
+      svelte: 5.39.5
       vite: 5.4.20(@types/node@22.18.6)(lightningcss@1.30.1)
       vitefu: 1.1.1(vite@5.4.20(@types/node@22.18.6)(lightningcss@1.30.1))
     transitivePeerDependencies:
@@ -5000,22 +5008,22 @@ snapshots:
     dependencies:
       '@types/node': 22.18.6
 
-  '@vercel/analytics@1.5.0(@remix-run/react@2.17.1(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905)(typescript@5.9.2))(@sveltejs/kit@2.43.1(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.4)(vite@5.4.20(@types/node@22.18.6)(lightningcss@1.30.1)))(svelte@5.39.4)(vite@5.4.20(@types/node@22.18.6)(lightningcss@1.30.1)))(next@15.5.1-canary.30(babel-plugin-react-compiler@19.1.0-rc.3)(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905)(svelte@5.39.4)(vue-router@4.5.1(vue@3.5.21(typescript@5.9.2)))(vue@3.5.21(typescript@5.9.2))':
+  '@vercel/analytics@1.5.0(@remix-run/react@2.17.1(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905)(typescript@5.9.2))(@sveltejs/kit@2.43.2(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.5)(vite@5.4.20(@types/node@22.18.6)(lightningcss@1.30.1)))(svelte@5.39.5)(vite@5.4.20(@types/node@22.18.6)(lightningcss@1.30.1)))(next@15.5.1-canary.30(babel-plugin-react-compiler@19.1.0-rc.3)(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905)(svelte@5.39.5)(vue-router@4.5.1(vue@3.5.21(typescript@5.9.2)))(vue@3.5.21(typescript@5.9.2))':
     optionalDependencies:
       '@remix-run/react': 2.17.1(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905)(typescript@5.9.2)
-      '@sveltejs/kit': 2.43.1(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.4)(vite@5.4.20(@types/node@22.18.6)(lightningcss@1.30.1)))(svelte@5.39.4)(vite@5.4.20(@types/node@22.18.6)(lightningcss@1.30.1))
+      '@sveltejs/kit': 2.43.2(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.5)(vite@5.4.20(@types/node@22.18.6)(lightningcss@1.30.1)))(svelte@5.39.5)(vite@5.4.20(@types/node@22.18.6)(lightningcss@1.30.1))
       next: 15.5.1-canary.30(babel-plugin-react-compiler@19.1.0-rc.3)(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905)
       react: 19.2.0-canary-de5a1b20-20250905
-      svelte: 5.39.4
+      svelte: 5.39.5
       vue: 3.5.21(typescript@5.9.2)
       vue-router: 4.5.1(vue@3.5.21(typescript@5.9.2))
 
-  '@vercel/speed-insights@1.2.0(@sveltejs/kit@2.43.1(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.4)(vite@5.4.20(@types/node@22.18.6)(lightningcss@1.30.1)))(svelte@5.39.4)(vite@5.4.20(@types/node@22.18.6)(lightningcss@1.30.1)))(next@15.5.1-canary.30(babel-plugin-react-compiler@19.1.0-rc.3)(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905)(svelte@5.39.4)(vue-router@4.5.1(vue@3.5.21(typescript@5.9.2)))(vue@3.5.21(typescript@5.9.2))':
+  '@vercel/speed-insights@1.2.0(@sveltejs/kit@2.43.2(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.5)(vite@5.4.20(@types/node@22.18.6)(lightningcss@1.30.1)))(svelte@5.39.5)(vite@5.4.20(@types/node@22.18.6)(lightningcss@1.30.1)))(next@15.5.1-canary.30(babel-plugin-react-compiler@19.1.0-rc.3)(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905)(svelte@5.39.5)(vue-router@4.5.1(vue@3.5.21(typescript@5.9.2)))(vue@3.5.21(typescript@5.9.2))':
     optionalDependencies:
-      '@sveltejs/kit': 2.43.1(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.4)(vite@5.4.20(@types/node@22.18.6)(lightningcss@1.30.1)))(svelte@5.39.4)(vite@5.4.20(@types/node@22.18.6)(lightningcss@1.30.1))
+      '@sveltejs/kit': 2.43.2(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.5)(vite@5.4.20(@types/node@22.18.6)(lightningcss@1.30.1)))(svelte@5.39.5)(vite@5.4.20(@types/node@22.18.6)(lightningcss@1.30.1))
       next: 15.5.1-canary.30(babel-plugin-react-compiler@19.1.0-rc.3)(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905)
       react: 19.2.0-canary-de5a1b20-20250905
-      svelte: 5.39.4
+      svelte: 5.39.5
       vue: 3.5.21(typescript@5.9.2)
       vue-router: 4.5.1(vue@3.5.21(typescript@5.9.2))
 
@@ -6100,6 +6108,10 @@ snapshots:
       react: 19.2.0-canary-de5a1b20-20250905
       react-dom: 19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905)
 
+  react-wrap-balancer@1.1.1(react@19.2.0-canary-de5a1b20-20250905):
+    dependencies:
+      react: 19.2.0-canary-de5a1b20-20250905
+
   react@19.1.1: {}
 
   react@19.2.0-canary-de5a1b20-20250905: {}
@@ -6364,7 +6376,7 @@ snapshots:
       client-only: 0.0.1
       react: 19.2.0-canary-de5a1b20-20250905
 
-  svelte@5.39.4:
+  svelte@5.39.5:
     dependencies:
       '@jridgewell/remapping': 2.3.5
       '@jridgewell/sourcemap-codec': 1.5.5
