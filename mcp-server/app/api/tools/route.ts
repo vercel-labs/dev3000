@@ -60,8 +60,10 @@ export async function GET() {
             description: "Parameters for the action (coordinates, URL, selector, text, expression, etc.)"
           }
         ]
-      },
-      {
+      }
+      // TODO: Commenting out for now - need to figure out the right approach for proactive monitoring
+      /*
+      ,{
         name: "start_error_monitoring",
         description:
           "🔍 **SIMPLE ERROR MONITORING** - Starts a lightweight background process that watches your app for errors and alerts you in real-time.\n\n⚡ **INSTANT ACTIVATION:**\n• Claude offers to run the monitoring script immediately\n• Just say 'yes' or 'monitor my app' to start\n• Simple 15-line Python script that just works\n• Real-time alerts when errors occur\n\n💡 **WHAT IT DOES:**\n• Watches for ERROR, FAIL, Exception, TypeError, CRASH keywords\n• Shows the error line when detected\n• Prompts you to let Claude debug\n• That's it - simple and effective!\n\n🎯 **USAGE FLOW:**\n1. User: 'monitor my app'\n2. Claude: 'Should I start monitoring now?'\n3. User: 'yes'\n4. Claude runs the script → monitoring active\n5. When errors appear → 'Tell me: debug my app'\n\n✨ **THE BEAUTY:**\n• No complex features - just works\n• Lightweight and fast\n• Perfect for quick error detection",
@@ -75,6 +77,7 @@ export async function GET() {
           }
         ]
       }
+      */
     ]
 
     return NextResponse.json({

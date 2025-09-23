@@ -582,6 +582,8 @@ const handler = createMcpHandler(
     )
 
     // Tool that returns monitoring code for Claude to execute
+    // TODO: Commenting out for now - need to figure out the right approach for proactive monitoring
+    /*
     server.tool(
       "start_error_monitoring",
       "🔍 **SIMPLE ERROR MONITORING** - Starts a lightweight background process that watches your app for errors and alerts you in real-time.\n\n⚡ **INSTANT ACTION:**\n• Claude will offer to run the monitoring script right away\n• No manual setup needed - just say yes!\n• Simple 15-line Python script\n• Alerts when errors appear in logs\n\n💡 **WHAT IT DOES:**\n• Watches for ERROR, FAIL, Exception, TypeError, CRASH keywords\n• Shows the error line when detected\n• Prompts you to let Claude debug\n• That's it - simple and effective!\n\n🎯 **PERFECT FOR:**\n• Quick error detection during development\n• Lightweight background monitoring\n• No complex features - just works",
@@ -670,6 +672,7 @@ ${monitoringCode}
         }
       }
     )
+    */
   },
   {
     // dev3000 MCP Server - Advanced development debugging tools
