@@ -3,10 +3,10 @@
 import Image from "next/image"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { DarkModeToggle } from "@/components/dark-mode-toggle"
+import { useDarkMode } from "@/hooks/use-dark-mode"
 import type { LogEntry, LogFile, LogListResponse, LogsApiResponse } from "@/types"
 import { getTextColor, LOG_COLORS } from "../../../src/constants/log-colors"
-import { useDarkMode } from "@/hooks/use-dark-mode"
-import { DarkModeToggle } from "@/components/dark-mode-toggle"
 
 // Define interfaces for object property rendering
 interface PropertyData {

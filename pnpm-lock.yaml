@@ -6,6 +6,9 @@ settings:
 
 catalogs:
   default:
+    '@radix-ui/react-slot':
+      specifier: ^1.1.1
+      version: 1.1.1
     '@tailwindcss/postcss':
       specifier: ^4.1.9
       version: 4.1.13
@@ -21,6 +24,15 @@ catalogs:
     autoprefixer:
       specifier: ^10.4.20
       version: 10.4.21
+    class-variance-authority:
+      specifier: ^0.7.1
+      version: 0.7.1
+    clsx:
+      specifier: ^2.1.1
+      version: 2.1.1
+    lucide-react:
+      specifier: ^0.454.0
+      version: 0.454.0
     next:
       specifier: 15.5.1-canary.30
       version: 15.5.1-canary.30
@@ -33,6 +45,9 @@ catalogs:
     react-dom:
       specifier: 19.2.0-canary-de5a1b20-20250905
       version: 19.2.0-canary-de5a1b20-20250905
+    tailwind-merge:
+      specifier: ^2.5.5
+      version: 2.6.0
     tailwindcss:
       specifier: ^4.1.9
       version: 4.1.13
@@ -114,12 +129,24 @@ importers:
 
   mcp-server:
     dependencies:
+      '@radix-ui/react-slot':
+        specifier: 'catalog:'
+        version: 1.1.1(@types/react@19.1.13)(react@19.2.0-canary-de5a1b20-20250905)
       autoprefixer:
         specifier: 'catalog:'
         version: 10.4.21(postcss@8.5.6)
+      class-variance-authority:
+        specifier: 'catalog:'
+        version: 0.7.1
+      clsx:
+        specifier: 'catalog:'
+        version: 2.1.1
       commander:
         specifier: ^11.1.0
         version: 11.1.0
+      lucide-react:
+        specifier: 'catalog:'
+        version: 0.454.0(react@19.2.0-canary-de5a1b20-20250905)
       mcp-handler:
         specifier: ^1.0.2
         version: 1.0.2(@modelcontextprotocol/sdk@1.18.1)(next@15.5.1-canary.30(babel-plugin-react-compiler@19.1.0-rc.3)(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905))
@@ -132,6 +159,9 @@ importers:
       react-dom:
         specifier: 'catalog:'
         version: 19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905)
+      tailwind-merge:
+        specifier: 'catalog:'
+        version: 2.6.0
       ws:
         specifier: ^8.18.3
         version: 8.18.3

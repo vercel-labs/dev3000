@@ -3,7 +3,7 @@ import path from "path"
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  experimental: { reactCompiler: true },
+  experimental: { reactCompiler: true, turbopackPersistentCaching: true, },
   devIndicators: false,
   turbopack: {
     root: path.join(__dirname, "..")

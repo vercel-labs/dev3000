@@ -11,12 +11,17 @@
     "tools": "tsx tools-cli.ts"
   },
   "dependencies": {
+    "@radix-ui/react-slot": "catalog:",
     "autoprefixer": "catalog:",
+    "class-variance-authority": "catalog:",
+    "clsx": "catalog:",
     "commander": "^11.1.0",
+    "lucide-react": "catalog:",
     "mcp-handler": "^1.0.2",
     "next": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
+    "tailwind-merge": "catalog:",
     "ws": "^8.18.3",
     "zod": "catalog:"
   },
