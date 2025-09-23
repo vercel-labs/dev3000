@@ -20,6 +20,17 @@ interface LogEntry {
   content: string
 }
 
+// Compact ASCII logo for very small terminals
+const COMPACT_LOGO = "d3k"
+
+// Full ASCII logo lines as array for easier rendering
+const FULL_LOGO = [
+  "   ▐▌▄▄▄▄ █  ▄ ",
+  "   ▐▌   █ █▄▀  ",
+  "▗▞▀▜▌▀▀▀█ █ ▀▄ ",
+  "▝▚▄▟▌▄▄▄█ █  █ "
+]
+
 const TUIApp = ({
   appPort,
   mcpPort,
@@ -37,24 +48,40 @@ const TUIApp = ({
   const logIdCounter = useRef(0)
   const { exit } = useApp()
   const { stdout } = useStdout()
+  
+  // Get terminal dimensions with fallbacks
+  const termWidth = stdout?.columns || 80
+  const termHeight = stdout?.rows || 24
+  
+  // Determine if we should use compact mode
+  const isCompact = termWidth < 80 || termHeight < 20
+  const isVeryCompact = termWidth < 60 || termHeight < 15
 
   // Provide status update function to parent
   useEffect(() => {
     onStatusUpdate(setInitStatus)
   }, [onStatusUpdate])
 
-  // Calculate available lines for logs dynamically based on terminal height
-  // Header box content: 4 (logo height) + 1 (margin) + 1 (controls) = 6 lines
-  // Plus: 2 (top/bottom borders) + 2 (padding) + 1 (margin bottom) = 5 lines
-  // Total header: 11 lines
-  // Log box header: 1 (border) + 1 (title) + 1 (empty) = 3 lines
-  // Log box footer: 1 (border) + 2 (scroll indicator if present) = 1-3 lines
-  const headerLines = 12
-  const logBoxHeaderLines = 3
-  const logBoxFooterLines = scrollOffset > 0 ? 3 : 1
-  const safetyBuffer = 1 // Extra line to ensure we don't overflow
-  const totalReservedLines = headerLines + logBoxHeaderLines + logBoxFooterLines + safetyBuffer
-  const maxVisibleLogs = Math.max(3, (stdout?.rows || 24) - totalReservedLines)
+  // Calculate available lines for logs dynamically based on terminal height and mode
+  const calculateMaxVisibleLogs = () => {
+    if (isVeryCompact) {
+      // In very compact mode, use most of the screen for logs
+      return Math.max(3, termHeight - 8)
+    } else if (isCompact) {
+      // In compact mode, reduce header size
+      return Math.max(3, termHeight - 10)
+    } else {
+      // Normal mode calculation
+      const headerLines = 12
+      const logBoxHeaderLines = 3
+      const logBoxFooterLines = scrollOffset > 0 ? 3 : 1
+      const safetyBuffer = 1
+      const totalReservedLines = headerLines + logBoxHeaderLines + logBoxFooterLines + safetyBuffer
+      return Math.max(3, termHeight - totalReservedLines)
+    }
+  }
+  
+  const maxVisibleLogs = calculateMaxVisibleLogs()
 
   useEffect(() => {
     let logStream: Readable | undefined
@@ -162,48 +189,75 @@ const TUIApp = ({
   // Calculate visible logs
   const visibleLogs = logs.slice(Math.max(0, logs.length - maxVisibleLogs - scrollOffset), logs.length - scrollOffset)
 
-  return (
-    <Box flexDirection="column" height="100%">
-      {/* Header Box */}
-      <Box borderStyle="round" borderColor="#A18CE5" paddingX={2} paddingY={1} marginBottom={1} flexDirection="column">
-        <Box flexDirection="row" gap={3}>
-          {/* ASCII Logo on the left */}
-          {/* biome-ignore format: preserve ASCII art alignment */}
-          <Box flexDirection="column" alignItems="flex-start">
-            <Text color="#A18CE5" bold>   ▐▌▄▄▄▄ █  ▄ </Text>
-            <Text color="#A18CE5" bold>   ▐▌   █ █▄▀  </Text>
-            <Text color="#A18CE5" bold>▗▞▀▜▌▀▀▀█ █ ▀▄ </Text>
-            <Text color="#A18CE5" bold>▝▚▄▟▌▄▄▄█ █  █ </Text>
-          </Box>
+  // Render compact header for small terminals
+  const renderCompactHeader = () => (
+    <Box borderStyle="single" borderColor="#A18CE5" paddingX={1} marginBottom={1}>
+      <Box flexDirection="column" width="100%">
+        <Box>
+          <Text color="#A18CE5" bold>{COMPACT_LOGO}</Text>
+          <Text> v{version} </Text>
+          {initStatus && <Text dimColor>- {initStatus}</Text>}
+        </Box>
+        {!isVeryCompact && (
+          <>
+            <Text dimColor>App: localhost:{appPort} | MCP: localhost:{mcpPort}</Text>
+            <Text dimColor>↑/↓ scroll | Ctrl-C quit</Text>
+          </>
+        )}
+      </Box>
+    </Box>
+  )
 
-          {/* Info on the right */}
-          <Box flexDirection="column" flexGrow={1}>
-            <Text color="#A18CE5" bold>
-              {commandName} v{version} {initStatus ? `- ${initStatus}` : "is running!"}
-            </Text>
-            <Text> </Text>
-            <Text color="cyan">🌐 Your App: http://localhost:{appPort}</Text>
-            <Text color="cyan">🤖 MCP Server: http://localhost:{mcpPort}/mcp</Text>
-            <Text color="cyan">
-              📸 Visual Timeline: http://localhost:{mcpPort}/logs
-              {projectName ? `?project=${encodeURIComponent(projectName)}` : ""}
-            </Text>
-            {serversOnly && <Text color="cyan">🖥️ Servers-only mode - use Chrome extension for browser monitoring</Text>}
-          </Box>
+  // Render normal header
+  const renderNormalHeader = () => (
+    <Box borderStyle="round" borderColor="#A18CE5" paddingX={2} paddingY={1} marginBottom={1} flexDirection="column">
+      <Box flexDirection="row" gap={3}>
+        {/* ASCII Logo on the left */}
+        {/* biome-ignore format: preserve ASCII art alignment */}
+        <Box flexDirection="column" alignItems="flex-start">
+          {FULL_LOGO.map((line, i) => (
+            <Text key={i} color="#A18CE5" bold>{line}</Text>
+          ))}
         </Box>
 
-        {/* Controls at the bottom of header box */}
-        <Box marginTop={1}>
-          <Text dimColor>💡 Controls: ↑/↓ scroll | PgUp/PgDn page | g/G start/end | Ctrl-C quit</Text>
+        {/* Info on the right */}
+        <Box flexDirection="column" flexGrow={1}>
+          <Text color="#A18CE5" bold>
+            {commandName} v{version} {initStatus ? `- ${initStatus}` : "is running!"}
+          </Text>
+          <Text> </Text>
+          <Text color="cyan">🌐 Your App: http://localhost:{appPort}</Text>
+          <Text color="cyan">🤖 MCP Server: http://localhost:{mcpPort}/mcp</Text>
+          <Text color="cyan">
+            📸 Visual Timeline: http://localhost:{mcpPort}/logs
+            {projectName ? `?project=${encodeURIComponent(projectName)}` : ""}
+          </Text>
+          {serversOnly && <Text color="cyan">🖥️ Servers-only mode - use Chrome extension for browser monitoring</Text>}
         </Box>
       </Box>
 
+      {/* Controls at the bottom of header box */}
+      <Box marginTop={1}>
+        <Text dimColor>💡 Controls: ↑/↓ scroll | PgUp/PgDn page | g/G start/end | Ctrl-C quit</Text>
+      </Box>
+    </Box>
+  )
+
+  return (
+    <Box flexDirection="column" height="100%">
+      {/* Header Box - responsive to terminal size */}
+      {isCompact ? renderCompactHeader() : renderNormalHeader()}
+
       {/* Logs Box - flexGrow makes it expand to fill available height */}
       <Box flexDirection="column" borderStyle="single" borderColor="gray" paddingX={1} flexGrow={1} minHeight={0}>
-        <Text color="gray" dimColor>
-          Logs ({logs.length} total{scrollOffset > 0 && `, scrolled up ${scrollOffset} lines`})
-        </Text>
-        <Text> </Text>
+        {!isVeryCompact && (
+          <>
+            <Text color="gray" dimColor>
+              Logs ({logs.length} total{scrollOffset > 0 && `, scrolled up ${scrollOffset} lines`})
+            </Text>
+            <Text> </Text>
+          </>
+        )}
 
         {/* Logs content area - also uses flexGrow to expand */}
         <Box flexDirection="column" flexGrow={1}>
@@ -220,6 +274,19 @@ const TUIApp = ({
                 // Replace specific emoji in common port-in-use error to avoid terminal width issues
                 if (message?.includes("ERROR: ⚠ Port") && message.includes("is in use by process")) {
                   message = message.replace("ERROR: ⚠ Port", "ERROR: [!] Port")
+                }
+
+                // In very compact mode, simplify the output
+                if (isVeryCompact) {
+                  const shortSource = source === "BROWSER" ? "B" : "S"
+                  const shortType = type ? type.split(".")[0].charAt(0) : ""
+                  return (
+                    <Text key={log.id} wrap="truncate-end">
+                      <Text dimColor>[{shortSource}]</Text>
+                      {shortType && <Text dimColor>[{shortType}]</Text>}
+                      <Text> {message}</Text>
+                    </Text>
+                  )
                 }
 
                 // Use shared color constants
@@ -246,6 +313,25 @@ const TUIApp = ({
                   "CRITICAL ERROR": LOG_COLORS.CRITICAL_ERROR
                 }
 
+                // In compact mode, skip padding
+                if (isCompact) {
+                  return (
+                    <Text key={log.id} wrap="truncate-end">
+                      <Text dimColor>[{timestamp}]</Text>
+                      <Text> </Text>
+                      <Text color={sourceColor} bold>[{source.charAt(0)}]</Text>
+                      {type && (
+                        <>
+                          <Text> </Text>
+                          <Text color={typeColors[type] || "#A0A0A0"}>[{type}]</Text>
+                        </>
+                      )}
+                      <Text> {message}</Text>
+                    </Text>
+                  )
+                }
+
+                // Normal mode with padding
                 // Calculate padding for source (BROWSER is 7, SERVER is 6)
                 const sourceSpacing = " ".repeat(Math.max(0, 7 - source.length))
 
@@ -281,8 +367,8 @@ const TUIApp = ({
           )}
         </Box>
 
-        {/* Scroll indicator - only show when scrolled up */}
-        {logs.length > maxVisibleLogs && scrollOffset > 0 && (
+        {/* Scroll indicator - only show when scrolled up and not in very compact mode */}
+        {!isVeryCompact && logs.length > maxVisibleLogs && scrollOffset > 0 && (
           <>
             <Text> </Text>
             <Text dimColor>({scrollOffset} lines below)</Text>
