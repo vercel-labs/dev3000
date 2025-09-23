@@ -8,5 +8,5 @@ tsconfig.json
 .git/
 mcp-server/.next/
 mcp-server/node_modules/
-mcp-server/public/screenshots/
+mcp-server/public/screenshots/*
 pnpm-lock.yaml
