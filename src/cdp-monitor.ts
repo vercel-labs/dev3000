@@ -31,19 +31,22 @@ export class CDPMonitor {
   private isShuttingDown = false
   private pendingRequests = 0
   private networkIdleTimer: NodeJS.Timeout | null = null
+  private pluginReactScan: boolean = false
 
   constructor(
     profileDir: string,
     screenshotDir: string,
     logger: (source: string, message: string) => void,
     debug: boolean = false,
-    browserPath?: string
+    browserPath?: string,
+    pluginReactScan: boolean = false
   ) {
     this.profileDir = profileDir
     this.screenshotDir = screenshotDir
     this.logger = logger
     this.debug = debug
     this.browserPath = browserPath
+    this.pluginReactScan = pluginReactScan
   }
 
   private debugLog(message: string) {
@@ -816,6 +819,35 @@ export class CDPMonitor {
         try {
           if (!window.__dev3000_cdp_tracking) {
             window.__dev3000_cdp_tracking = true;
+            
+            ${
+              this.pluginReactScan
+                ? `
+            // Inject react-scan for React performance monitoring
+            if (!window.__REACT_SCAN_INJECTED__) {
+              const script = document.createElement('script');
+              script.src = 'https://unpkg.com/react-scan@latest/dist/auto.global.js';
+              script.onload = () => {
+                console.debug('[DEV3000] react-scan loaded successfully');
+                window.__REACT_SCAN_INJECTED__ = true;
+                
+                // Optional: Configure react-scan
+                if (window.ReactScan && window.ReactScan.configure) {
+                  window.ReactScan.configure({
+                    // Add any configuration options here
+                    playSound: false,
+                    showToolbar: true
+                  });
+                }
+              };
+              script.onerror = (err) => {
+                console.debug('[DEV3000] Failed to load react-scan:', err);
+              };
+              document.head.appendChild(script);
+            }
+            `
+                : ""
+            }
             
             // Helper function to generate CSS selector for element
             function getElementSelector(el) {

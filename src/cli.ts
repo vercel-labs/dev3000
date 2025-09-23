@@ -144,7 +144,7 @@ program
     "Full path to browser executable (e.g. for Arc: '/Applications/Arc.app/Contents/MacOS/Arc')"
   )
   .option("--servers-only", "Run servers only, skip browser launch (use with Chrome extension)")
-  .option("--debug", "Enable debug logging to console")
+  .option("--debug", "Enable debug logging to console (automatically disables TUI)")
   .option("-t, --tail", "Output consolidated logfile to terminal (like tail -f)")
   .option("--no-tui", "Disable TUI mode and use standard terminal output")
   .option(
@@ -152,6 +152,7 @@ program
     "Timestamp format: 'local' (default, e.g. 12:54:03 PM) or 'utc' (ISO string)",
     "local"
   )
+  .option("--plugin-react-scan", "Enable react-scan performance monitoring for React applications")
   .option("--kill-mcp", "Kill the MCP server on port 3684 and exit")
   .action(async (options) => {
     // Handle --kill-mcp option
@@ -223,8 +224,9 @@ program
         serversOnly: options.serversOnly,
         commandName,
         tail: options.tail,
-        tui: options.noTui !== true, // TUI is default unless --no-tui is specified
-        dateTimeFormat: options.dateTime || "local"
+        tui: options.noTui !== true && !options.debug, // TUI is default unless --no-tui or --debug is specified
+        dateTimeFormat: options.dateTime || "local",
+        pluginReactScan: options.pluginReactScan || false
       })
     } catch (error) {
       console.error(chalk.red("❌ Failed to start development environment:"), error)

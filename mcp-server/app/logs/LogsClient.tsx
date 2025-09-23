@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { LogEntry, LogFile, LogListResponse, LogsApiResponse } from "@/types"
 import { getTextColor, LOG_COLORS } from "../../../src/constants/log-colors"
+import { useDarkMode } from "@/hooks/use-dark-mode"
+import { DarkModeToggle } from "@/components/dark-mode-toggle"
 
 // Define interfaces for object property rendering
 interface PropertyData {
@@ -28,51 +30,6 @@ interface ReplayEvent {
 }
 
 import { parseLogEntries } from "./utils"
-
-// Hook for dark mode with system preference detection
-function useDarkMode() {
-  const [darkMode, setDarkMode] = useState<boolean>(() => {
-    if (typeof window !== "undefined") {
-      // Check localStorage first
-      const saved = localStorage.getItem("dev3000-dark-mode")
-      if (saved !== null) {
-        return JSON.parse(saved)
-      }
-      // Default to system preference
-      return window.matchMedia("(prefers-color-scheme: dark)").matches
-    }
-    return false
-  })
-
-  useEffect(() => {
-    // Save to localStorage
-    localStorage.setItem("dev3000-dark-mode", JSON.stringify(darkMode))
-
-    // Apply dark class to document
-    if (darkMode) {
-      document.documentElement.classList.add("dark")
-    } else {
-      document.documentElement.classList.remove("dark")
-    }
-  }, [darkMode])
-
-  // Listen for system theme changes
-  useEffect(() => {
-    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)")
-    const handler = (e: MediaQueryListEvent) => {
-      // Only update if no explicit choice has been made
-      const saved = localStorage.getItem("dev3000-dark-mode")
-      if (saved === null) {
-        setDarkMode(e.matches)
-      }
-    }
-
-    mediaQuery.addEventListener("change", handler)
-    return () => mediaQuery.removeEventListener("change", handler)
-  }, [])
-
-  return [darkMode, setDarkMode] as const
-}
 
 // Keep this for backwards compatibility, but it's not used anymore
 function _parseLogLine(line: string): LogEntry | null {
@@ -1141,8 +1098,9 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
         setTimeout(scrollToBottom, 300)
       }
     }
-  }, [mode, initialData, logs.length, hasLoadedInitial]) // eslint-disable-line react-hooks/exhaustive-deps
-  // Note: loadInitialLogs is intentionally not in dependencies to prevent infinite loops
+  }, [mode, initialData, logs.length, hasLoadedInitial, loadInitialLogs]) // eslint-disable-line react-hooks/exhaustive-deps
+  // CRITICAL: loadInitialLogs must NEVER be added to dependencies - it will cause infinite loops
+  // The linter will complain but this is intentional. DO NOT "FIX" THIS.
 
   // Separate effect to handle scrolling after logs are rendered
   useEffect(() => {
@@ -1789,34 +1747,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                 </button>
               </div>
               {/* Dark Mode Toggle - moved to last item */}
-              <button
-                type="button"
-                onClick={() => setDarkMode(!darkMode)}
-                className="p-2 rounded-md text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors ml-2"
-                title={darkMode ? "Switch to light mode" : "Switch to dark mode"}
-              >
-                {darkMode ? (
-                  // Sun icon for light mode
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
-                    />
-                  </svg>
-                ) : (
-                  // Moon icon for dark mode
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
-                    />
-                  </svg>
-                )}
-              </button>
+              <DarkModeToggle darkMode={darkMode} setDarkMode={setDarkMode} className="ml-2" />
             </div>
           </div>
         </div>
@@ -1883,9 +1814,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
               </span>
             )}
             {currentLogFile && (
-              <span className="text-xs text-gray-500 dark:text-gray-400 font-mono">
-                {currentLogFile}
-              </span>
+              <span className="text-xs text-gray-500 dark:text-gray-400 font-mono">{currentLogFile}</span>
             )}
           </div>
 

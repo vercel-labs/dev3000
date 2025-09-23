@@ -2,6 +2,8 @@
 
 import Link from "next/link"
 import { useEffect, useState } from "react"
+import { DarkModeToggle } from "@/components/dark-mode-toggle"
+import { useDarkMode } from "@/hooks/use-dark-mode"
 
 interface MCPTool {
   name: string
@@ -47,12 +49,12 @@ function formatToolDescription(description: string) {
         const items = content.split("•").filter((item) => item.trim())
         return (
           <div key={idx}>
-            <h5 className="font-semibold text-gray-800 mb-2">{cleanHeader}</h5>
+            <h5 className="font-semibold mb-2">{cleanHeader}</h5>
             <ul className="space-y-1 ml-4">
               {items.map((item, itemIdx) => (
                 <li key={itemIdx} className="flex items-start">
-                  <span className="text-gray-400 mr-2">•</span>
-                  <span className="text-gray-600 text-sm">{item.trim()}</span>
+                  <span className="text-muted-foreground mr-2">•</span>
+                  <span className="text-muted-foreground text-sm">{item.trim()}</span>
                 </li>
               ))}
             </ul>
@@ -62,8 +64,8 @@ function formatToolDescription(description: string) {
 
       return (
         <div key={idx}>
-          <h5 className="font-semibold text-gray-800 mb-1">{cleanHeader}</h5>
-          <p className="text-gray-600 text-sm ml-4">{content}</p>
+          <h5 className="font-semibold mb-1">{cleanHeader}</h5>
+          <p className="text-muted-foreground text-sm ml-4">{content}</p>
         </div>
       )
     }
@@ -80,7 +82,7 @@ function formatToolDescription(description: string) {
               .replace(/^\d+\.\s*/, "")
               .trim()
             return (
-              <li key={itemIdx} className="text-gray-600 text-sm">
+              <li key={itemIdx} className="text-muted-foreground text-sm">
                 {itemIdx + 1}. {cleanItem}
               </li>
             )
@@ -91,7 +93,7 @@ function formatToolDescription(description: string) {
 
     // Default paragraph
     return (
-      <p key={idx} className="text-gray-600 text-sm leading-relaxed">
+      <p key={idx} className="text-muted-foreground text-sm leading-relaxed">
         {section}
       </p>
     )
@@ -101,6 +103,7 @@ function formatToolDescription(description: string) {
 export default function HomePage() {
   const [tools, setTools] = useState<ToolsResponse | null>(null)
   const [loading, setLoading] = useState(true)
+  const [darkMode, setDarkMode] = useDarkMode()
 
   useEffect(() => {
     fetch("/api/tools")
@@ -115,25 +118,25 @@ export default function HomePage() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-background text-foreground">
       {/* Header */}
-      <header className="bg-gray-50 border-b border-gray-200">
+      <header className="bg-muted/30 border-b border-border">
         <div className="max-w-7xl mx-auto px-6 py-8">
           <div className="flex items-center justify-between">
             <div>
               <div className="flex items-center gap-4 mb-3">
-                <div className="w-12 h-12 bg-black rounded flex items-center justify-center">
-                  <span className="text-white font-mono font-bold">d3k</span>
+                <div className="w-12 h-12 bg-foreground rounded flex items-center justify-center">
+                  <span className="text-background font-mono font-bold">d3k</span>
                 </div>
                 <div>
-                  <h1 className="text-3xl font-bold text-gray-900">dev3000 MCP Server</h1>
+                  <h1 className="text-3xl font-bold">dev3000 MCP Server</h1>
                   <div className="flex items-center gap-3 mt-2">
                     <span className="inline-flex items-center gap-2 text-sm text-green-600 font-medium">
                       <span className="w-2 h-2 bg-green-500 rounded-full"></span>
                       Server Running
                     </span>
-                    <span className="text-gray-300">•</span>
-                    <span className="text-sm text-gray-600">Port {process.env.PORT || "3684"}</span>
+                    <span className="text-muted-foreground">•</span>
+                    <span className="text-sm text-muted-foreground">Port {process.env.PORT || "3684"}</span>
                   </div>
                 </div>
               </div>
@@ -141,7 +144,7 @@ export default function HomePage() {
             <div className="flex items-center gap-4">
               <Link
                 href="/logs"
-                className="inline-flex items-center gap-2 px-5 py-3 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700 transition-colors"
+                className="inline-flex items-center gap-2 px-5 py-3 bg-primary text-primary-foreground text-sm font-medium rounded hover:bg-primary/90 transition-colors"
               >
                 📊 View Logs
               </Link>
@@ -149,10 +152,11 @@ export default function HomePage() {
                 href="https://github.com/vercel-labs/dev3000#setup"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 px-5 py-3 border border-gray-300 text-gray-700 text-sm font-medium rounded hover:bg-gray-50 transition-colors"
+                className="inline-flex items-center gap-2 px-5 py-3 border border-border text-foreground text-sm font-medium rounded hover:bg-accent hover:text-accent-foreground transition-colors"
               >
                 📖 Setup Guide
               </a>
+              <DarkModeToggle darkMode={darkMode} setDarkMode={setDarkMode} />
             </div>
           </div>
         </div>
@@ -162,23 +166,23 @@ export default function HomePage() {
       <main className="max-w-7xl mx-auto px-6 py-8">
         {/* Quick Start */}
         <section className="mb-16">
-          <div className="bg-blue-50 border border-blue-200 rounded p-8">
-            <h2 className="text-xl font-semibold text-blue-900 mb-4">🚀 Quick Start</h2>
+          <div className="bg-primary/10 border border-primary/20 rounded p-8">
+            <h2 className="text-xl font-semibold mb-4">🚀 Quick Start</h2>
             <div className="space-y-4">
               <div>
-                <span className="text-sm font-medium text-blue-800">MCP Endpoint:</span>
-                <code className="ml-3 px-4 py-2 bg-blue-100 text-blue-800 text-sm font-mono rounded">
+                <span className="text-sm font-medium">MCP Endpoint:</span>
+                <code className="ml-3 px-4 py-2 bg-primary/20 text-foreground text-sm font-mono rounded">
                   {tools?.endpoint || "http://localhost:3684/mcp"}
                 </code>
               </div>
-              <div className="text-sm text-blue-700">
+              <div className="text-sm">
                 <p className="mb-3">Connect your AI tools to this MCP server for real-time development debugging:</p>
                 <div className="flex gap-6">
                   <a
                     href="https://github.com/vercel-labs/dev3000#claude-desktop"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-blue-600 hover:text-blue-800 font-medium"
+                    className="text-primary hover:text-primary/80 font-medium"
                   >
                     Claude Desktop Setup →
                   </a>
@@ -186,7 +190,7 @@ export default function HomePage() {
                     href="https://github.com/vercel-labs/dev3000#cursor"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-blue-600 hover:text-blue-800 font-medium"
+                    className="text-primary hover:text-primary/80 font-medium"
                   >
                     Cursor Setup →
                   </a>
@@ -200,8 +204,8 @@ export default function HomePage() {
         <section>
           <div className="mb-12">
             <div>
-              <h2 className="text-3xl font-bold text-gray-900 mb-3">Available Tools</h2>
-              <p className="text-gray-600 text-lg">
+              <h2 className="text-3xl font-bold mb-3">Available Tools</h2>
+              <p className="text-muted-foreground text-lg">
                 {loading
                   ? "Loading MCP tools..."
                   : `${tools?.totalTools || 0} tools across ${
@@ -213,8 +217,8 @@ export default function HomePage() {
 
           {loading ? (
             <div className="text-center py-16">
-              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              <p className="mt-6 text-gray-600">Loading tool documentation...</p>
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              <p className="mt-6 text-muted-foreground">Loading tool documentation...</p>
             </div>
           ) : tools ? (
             <div className="grid gap-6 lg:grid-cols-2">
@@ -222,27 +226,27 @@ export default function HomePage() {
                 <div
                   key={tool.name}
                   id={tool.name}
-                  className="border border-gray-200 rounded-lg p-6 hover:border-gray-300 transition-colors"
+                  className="border border-border rounded-lg p-6 hover:border-muted-foreground/50 transition-colors"
                 >
                   <div className="mb-4">
-                    <h4 className="text-xl font-semibold text-gray-900 font-mono mb-3">{tool.name}</h4>
-                    <div className="text-gray-600 space-y-3">{formatToolDescription(tool.description)}</div>
+                    <h4 className="text-xl font-semibold font-mono mb-3">{tool.name}</h4>
+                    <div className="text-muted-foreground space-y-3">{formatToolDescription(tool.description)}</div>
                   </div>
                   {tool.parameters.length > 0 && (
                     <div>
-                      <h5 className="text-sm font-semibold text-gray-800 mb-3">Parameters:</h5>
+                      <h5 className="text-sm font-semibold mb-3">Parameters:</h5>
                       <div className="space-y-2">
                         {tool.parameters.map((param) => (
                           <div key={param.name} className="text-sm">
                             <div className="flex items-start gap-2">
-                              <span className="font-mono text-blue-600 font-medium">{param.name}</span>
-                              <span className="text-gray-500 text-xs">
+                              <span className="font-mono text-primary font-medium">{param.name}</span>
+                              <span className="text-muted-foreground text-xs">
                                 {param.optional ? "(optional)" : "(required)"}
                               </span>
-                              <span className="text-gray-400 text-xs">- {param.type}</span>
+                              <span className="text-muted-foreground/70 text-xs">- {param.type}</span>
                             </div>
                             {param.description && (
-                              <div className="text-gray-600 ml-1 mt-1 text-sm">{param.description}</div>
+                              <div className="text-muted-foreground ml-1 mt-1 text-sm">{param.description}</div>
                             )}
                           </div>
                         ))}
@@ -254,10 +258,10 @@ export default function HomePage() {
             </div>
           ) : (
             <div className="text-center py-16">
-              <p className="text-red-600 mb-6">Failed to load tool documentation</p>
+              <p className="text-destructive mb-6">Failed to load tool documentation</p>
               <button
                 onClick={() => window.location.reload()}
-                className="px-6 py-3 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition-colors"
+                className="px-6 py-3 bg-primary text-primary-foreground text-sm rounded hover:bg-primary/90 transition-colors"
                 type="button"
               >
                 Retry
@@ -267,33 +271,33 @@ export default function HomePage() {
         </section>
 
         {/* Magic Workflow */}
-        <section className="mt-20 bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-lg p-10">
-          <h2 className="text-2xl font-semibold text-gray-900 mb-6 flex items-center gap-3">🪄 The Magic Workflow</h2>
+        <section className="mt-20 bg-gradient-to-r from-primary/10 to-secondary/10 border border-border rounded-lg p-10">
+          <h2 className="text-2xl font-semibold mb-6 flex items-center gap-3">🪄 The Magic Workflow</h2>
           <div className="grid md:grid-cols-3 gap-8">
             <div className="text-center">
-              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4 shadow-md">
-                <span className="text-blue-600 font-bold text-2xl">1</span>
+              <div className="w-16 h-16 bg-primary/20 rounded-full flex items-center justify-center mx-auto mb-4 shadow-md">
+                <span className="text-primary font-bold text-2xl">1</span>
               </div>
               <h3 className="font-semibold mb-3 text-lg">AI Finds Issues</h3>
-              <p className="text-gray-600 leading-relaxed">
+              <p className="text-muted-foreground leading-relaxed">
                 fix_my_app automatically detects all types of errors and problems in your app
               </p>
             </div>
             <div className="text-center">
-              <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4 shadow-md">
-                <span className="text-purple-600 font-bold text-2xl">2</span>
+              <div className="w-16 h-16 bg-accent/20 rounded-full flex items-center justify-center mx-auto mb-4 shadow-md">
+                <span className="text-accent-foreground font-bold text-2xl">2</span>
               </div>
               <h3 className="font-semibold mb-3 text-lg">AI Fixes Code</h3>
-              <p className="text-gray-600 leading-relaxed">
+              <p className="text-muted-foreground leading-relaxed">
                 AI analyzes errors and edits your code files to resolve issues
               </p>
             </div>
             <div className="text-center">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4 shadow-md">
-                <span className="text-green-600 font-bold text-2xl">3</span>
+              <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4 shadow-md">
+                <span className="text-green-600 dark:text-green-400 font-bold text-2xl">3</span>
               </div>
               <h3 className="font-semibold mb-3 text-lg">AI Verifies Fixes</h3>
-              <p className="text-gray-600 leading-relaxed">
+              <p className="text-muted-foreground leading-relaxed">
                 execute_browser_action tests the fixes in real-time with screenshots
               </p>
             </div>
@@ -302,9 +306,9 @@ export default function HomePage() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-gray-200 mt-20">
+      <footer className="border-t border-border mt-20">
         <div className="max-w-7xl mx-auto px-6 py-8">
-          <div className="flex items-center justify-between text-sm text-gray-600">
+          <div className="flex items-center justify-between text-sm text-muted-foreground">
             <div>
               <span className="font-semibold">dev3000 MCP Server</span> - AI-powered development monitoring
             </div>
@@ -313,7 +317,7 @@ export default function HomePage() {
                 href="https://github.com/vercel-labs/dev3000"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="hover:text-gray-900 transition-colors"
+                className="hover:text-foreground transition-colors"
               >
                 GitHub
               </a>
@@ -321,7 +325,7 @@ export default function HomePage() {
                 href="https://dev3000.ai"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="hover:text-gray-900 transition-colors"
+                className="hover:text-foreground transition-colors"
               >
                 Homepage
               </a>

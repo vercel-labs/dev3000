@@ -23,7 +23,6 @@
   ],
   "scripts": {
     "build": "tsc && mkdir -p dist/src && cp src/loading.html dist/src/ && cp src/tui-interface-impl.tsx dist/src/",
-    "dev": "tsc --watch",
     "typegen": "./scripts/typegen.sh",
     "typecheck": "./scripts/typegen.sh && tsc --noEmit",
     "format": "biome format --write .",

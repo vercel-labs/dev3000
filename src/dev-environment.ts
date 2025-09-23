@@ -40,6 +40,7 @@ interface DevEnvironmentOptions {
   tail?: boolean // Whether to tail the log file to terminal
   tui?: boolean // Whether to use TUI mode (default true)
   dateTimeFormat?: "local" | "utc" // Timestamp format option
+  pluginReactScan?: boolean // Whether to enable react-scan performance monitoring
 }
 
 class Logger {
@@ -493,19 +494,19 @@ export class DevEnvironment {
       await this.startServer()
 
       // Start MCP server
-      await this.tui.updateStatus(`Starting ${this.options.commandName} services...`)
+      await this.tui.updateStatus(`Starting ${this.options.commandName} MCP server...`)
       await this.startMcpServer()
 
       // Wait for servers to be ready
       await this.tui.updateStatus("Waiting for your app server...")
       await this.waitForServer()
 
-      await this.tui.updateStatus(`Waiting for ${this.options.commandName} services...`)
+      await this.tui.updateStatus(`Waiting for ${this.options.commandName} MCP server...`)
       await this.waitForMcpServer()
 
       // Start CDP monitoring if not in servers-only mode
       if (!this.options.serversOnly) {
-        await this.tui.updateStatus("Launching browser monitor...")
+        await this.tui.updateStatus(`Starting ${this.options.commandName} browser...`)
         this.startCDPMonitoringAsync()
       } else {
         this.debugLog("Browser monitoring disabled via --servers-only flag")
@@ -538,19 +539,19 @@ export class DevEnvironment {
       await this.startServer()
 
       // Start MCP server
-      this.spinner.text = `Starting ${this.options.commandName} services...`
+      this.spinner.text = `Starting ${this.options.commandName} MCP server...`
       await this.startMcpServer()
 
       // Wait for servers to be ready
       this.spinner.text = "Waiting for your app server..."
       await this.waitForServer()
 
-      this.spinner.text = `Waiting for ${this.options.commandName} services...`
+      this.spinner.text = `Waiting for ${this.options.commandName} MCP server...`
       await this.waitForMcpServer()
 
       // Start CDP monitoring if not in servers-only mode
       if (!this.options.serversOnly) {
-        this.spinner.text = "Launching browser monitor..."
+        this.spinner.text = `Starting ${this.options.commandName} browser...`
         this.startCDPMonitoringAsync()
       } else {
         this.debugLog("Browser monitoring disabled via --servers-only flag")
@@ -851,6 +852,11 @@ export class DevEnvironment {
     const mcpLogFile = join(dirname(this.options.logFile), "dev3000-mcp.log")
     writeFileSync(mcpLogFile, "") // Clear the file
 
+    // In debug mode, output the MCP log file path
+    if (this.options.debug) {
+      console.log(chalk.gray(`[DEBUG] MCP server logs: ${mcpLogFile}`))
+    }
+
     this.mcpServerProcess.stdout?.on("data", (data) => {
       const message = data.toString().trim()
       if (message) {
@@ -1113,7 +1119,8 @@ export class DevEnvironment {
         this.logger.log("browser", message)
       },
       this.options.debug,
-      this.options.browser
+      this.options.browser,
+      this.options.pluginReactScan
     )
 
     try {

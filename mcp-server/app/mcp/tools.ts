@@ -198,6 +198,22 @@ export async function fixMyApp({
       return errorPatterns.some((pattern) => pattern.test(line))
     })
 
+    // Extract react-scan performance data
+    const reactScanLines = timeFilteredLines.filter(
+      (line) => line.includes("react-scan") || line.includes("ReactScan") || line.includes("React render")
+    )
+
+    // Parse react-scan performance metrics
+    const reactScanMetrics = {
+      unnecessaryRenders: reactScanLines.filter(
+        (line) => line.includes("unnecessary") || line.includes("re-render") || line.includes("wasted")
+      ),
+      slowComponents: reactScanLines.filter(
+        (line) => line.includes("slow") || line.includes("performance") || /\d+ms/.test(line)
+      ),
+      totalRenders: reactScanLines.filter((line) => line.includes("render")).length
+    }
+
     // Categorize errors for better analysis
     const categorizedErrors = {
       serverErrors: allErrors.filter(
@@ -295,6 +311,36 @@ export async function fixMyApp({
           results.push(`• ${match[1]}`)
         }
       })
+    }
+
+    // React-scan performance data (if available)
+    if (reactScanMetrics.totalRenders > 0 || focusArea === "performance" || focusArea === "all") {
+      if (reactScanMetrics.unnecessaryRenders.length > 0 || reactScanMetrics.slowComponents.length > 0) {
+        results.push("")
+        results.push("⚛️ **REACT PERFORMANCE ANALYSIS (react-scan):**")
+
+        if (reactScanMetrics.unnecessaryRenders.length > 0) {
+          results.push(`🔄 **Unnecessary Re-renders Detected (${reactScanMetrics.unnecessaryRenders.length}):**`)
+          reactScanMetrics.unnecessaryRenders.slice(-5).forEach((line) => {
+            results.push(`• ${line}`)
+          })
+          results.push("")
+        }
+
+        if (reactScanMetrics.slowComponents.length > 0) {
+          results.push(`🐌 **Slow Components Found (${reactScanMetrics.slowComponents.length}):**`)
+          reactScanMetrics.slowComponents.slice(-5).forEach((line) => {
+            results.push(`• ${line}`)
+          })
+          results.push("")
+        }
+
+        results.push("💡 **REACT OPTIMIZATION TIPS:**")
+        results.push("• Use React.memo() for components with expensive renders")
+        results.push("• Use useMemo/useCallback to prevent unnecessary re-renders")
+        results.push("• Check for unstable prop references (objects/arrays created in render)")
+        results.push("• Consider using React DevTools Profiler for deeper analysis")
+      }
     }
 
     // Performance insights (if no errors but looking at performance)

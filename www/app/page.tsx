@@ -5,10 +5,12 @@ import Image from "next/image"
 import Link from "next/link"
 import { useEffect, useState } from "react"
 import Balancer from "react-wrap-balancer"
+import { DarkModeToggle } from "@/components/dark-mode-toggle"
 import { GitHubLink } from "@/components/github-link"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import { useDarkMode } from "@/hooks/use-dark-mode"
 
 const cursorConfig = {
   mcpServers: {
@@ -21,6 +23,7 @@ const cursorConfig = {
 
 export default function HomePage() {
   const [isScrolled, setIsScrolled] = useState(false)
+  const [darkMode, setDarkMode] = useDarkMode()
 
   useEffect(() => {
     const handleScroll = () => {
@@ -34,9 +37,6 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Grid Pattern Background */}
-      <div className="absolute inset-0 grid-pattern" />
-
       {/* Header */}
       <header className="fixed top-0 left-0 right-0 z-50 border-b bg-background/80 backdrop-blur-md">
         <div className="container mx-auto px-6 py-4">
@@ -64,6 +64,9 @@ export default function HomePage() {
               >
                 Changelog
               </Link>
+
+              {/* Dark mode toggle */}
+              <DarkModeToggle darkMode={darkMode} setDarkMode={setDarkMode} />
             </nav>
           </div>
         </div>

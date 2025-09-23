@@ -44,9 +44,36 @@ const TUIApp = ({
   const { exit } = useApp()
   const { stdout } = useStdout()
 
+  const getTerminalSize = () => ({
+    width: stdout?.columns || 80,
+    height: stdout?.rows || 24
+  })
+
+  const [terminalSize, setTerminalSize] = useState(getTerminalSize)
+
+  useEffect(() => {
+    if (!stdout) {
+      return
+    }
+
+    const handleResize = () => {
+      setTerminalSize(getTerminalSize())
+    }
+
+    stdout.on("resize", handleResize)
+
+    return () => {
+      if (typeof stdout.off === "function") {
+        stdout.off("resize", handleResize)
+      } else {
+        stdout.removeListener("resize", handleResize)
+      }
+    }
+  }, [stdout])
+
   // Get terminal dimensions with fallbacks
-  const termWidth = stdout?.columns || 80
-  const termHeight = stdout?.rows || 24
+  const termWidth = terminalSize.width
+  const termHeight = terminalSize.height
 
   // Determine if we should use compact mode
   const isCompact = termWidth < 80 || termHeight < 20
