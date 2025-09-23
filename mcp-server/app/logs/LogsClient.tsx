@@ -349,7 +349,7 @@ function LogEntryComponent({ entry }: { entry: LogEntry }) {
       }
     return {
       type: "DEFAULT",
-      color: "border-gray-200 dark:border-gray-700",
+      color: "bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700",
       backgroundColor: LOG_COLORS.DEFAULT,
       textColor: getTextColor(LOG_COLORS.DEFAULT)
     }
