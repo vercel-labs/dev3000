@@ -7,10 +7,12 @@
     "build": "next build --turbopack",
     "start": "next start",
     "typegen": "next typegen",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "tools": "tsx tools-cli.ts"
   },
   "dependencies": {
     "autoprefixer": "catalog:",
+    "commander": "^11.1.0",
     "mcp-handler": "^1.0.2",
     "next": "catalog:",
     "react": "catalog:",
