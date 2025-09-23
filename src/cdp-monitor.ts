@@ -32,6 +32,7 @@ export class CDPMonitor {
   private pendingRequests = 0
   private networkIdleTimer: NodeJS.Timeout | null = null
   private pluginReactScan: boolean = false
+  private cdpUrl: string | null = null
 
   constructor(
     profileDir: string,
@@ -75,6 +76,10 @@ export class CDPMonitor {
     this.debugLog("Setting up CDP event handlers")
     this.setupEventHandlers()
     this.debugLog("CDP event handlers setup completed")
+  }
+
+  getCdpUrl(): string | null {
+    return this.cdpUrl
   }
 
   private createLoadingPage(): string {
@@ -260,6 +265,7 @@ export class CDPMonitor {
         }
 
         const wsUrl = pageTarget.webSocketDebuggerUrl
+        this.cdpUrl = wsUrl // Store the CDP URL
         this.debugLog(`Found page target: ${pageTarget.title || "Unknown"} - ${pageTarget.url}`)
         this.debugLog(`Got CDP WebSocket URL: ${wsUrl}`)
 

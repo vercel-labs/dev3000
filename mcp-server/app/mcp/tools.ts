@@ -180,7 +180,11 @@ export async function fixMyApp({
       /WARNING/i,
       /deprecated/i,
       /slow/i,
-      /retry/i
+      /retry/i,
+      /RUNTIME\.ERROR/,
+      /hydration.*mismatch/i,
+      /Uncaught/i,
+      /throwOnHydrationMismatch/i
     ]
 
     // Filter logs by time range (replaces get_logs_between_timestamps)
@@ -220,7 +224,9 @@ export async function fixMyApp({
         (line) => line.includes("[SERVER]") && (line.includes("ERROR") || line.includes("Exception"))
       ),
       browserErrors: allErrors.filter(
-        (line) => line.includes("[BROWSER]") && (line.includes("ERROR") || line.includes("CONSOLE ERROR"))
+        (line) =>
+          line.includes("[BROWSER]") &&
+          (line.includes("ERROR") || line.includes("CONSOLE ERROR") || line.includes("RUNTIME.ERROR"))
       ),
       buildErrors: allErrors.filter(
         (line) => line.includes("Failed to compile") || line.includes("Type error") || line.includes("Build failed")

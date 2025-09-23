@@ -130,7 +130,13 @@ export function createPersistentLogFile(): string {
 }
 
 // Write session info for MCP server to discover
-function writeSessionInfo(projectName: string, logFilePath: string, appPort: string, mcpPort?: string): void {
+function writeSessionInfo(
+  projectName: string,
+  logFilePath: string,
+  appPort: string,
+  mcpPort?: string,
+  cdpUrl?: string
+): void {
   const sessionDir = join(homedir(), ".d3k")
 
   try {
@@ -145,6 +151,7 @@ function writeSessionInfo(projectName: string, logFilePath: string, appPort: str
       logFilePath,
       appPort,
       mcpPort: mcpPort || null,
+      cdpUrl: cdpUrl || null,
       startTime: new Date().toISOString(),
       pid: process.pid,
       cwd: process.cwd()
@@ -1127,6 +1134,14 @@ export class DevEnvironment {
       // Start CDP monitoring
       await this.cdpMonitor.start()
       this.logger.log("browser", "[CDP] Chrome launched with DevTools Protocol monitoring")
+
+      // Update session info with CDP URL now that we have it
+      const projectName = getProjectName()
+      const cdpUrl = this.cdpMonitor.getCdpUrl()
+      if (cdpUrl) {
+        writeSessionInfo(projectName, this.options.logFile, this.options.port, this.options.mcpPort, cdpUrl)
+        this.debugLog(`Updated session info with CDP URL: ${cdpUrl}`)
+      }
 
       // Navigate to the app
       await this.cdpMonitor.navigateToApp(this.options.port)

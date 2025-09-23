@@ -1354,17 +1354,15 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
   }, [logs, filters, userAgentFilters, availableUserAgents])
 
   return (
-    <div className="h-screen bg-gray-50 dark:bg-gray-900 flex flex-col transition-colors">
+    <div className="h-screen bg-background text-foreground flex flex-col transition-colors">
       {/* Header - Fixed */}
-      <div className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 flex-none z-10">
+      <div className="bg-card shadow-sm border-b border-border flex-none z-10">
         <div className="max-w-7xl mx-auto px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 sm:gap-4">
               <div className="flex items-center gap-1">
-                <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white whitespace-nowrap">
-                  dev3000
-                </h1>
-                <span className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">(v{version})</span>
+                <h1 className="text-xl sm:text-2xl font-bold whitespace-nowrap">dev3000</h1>
+                <span className="text-xs text-muted-foreground whitespace-nowrap">(v{version})</span>
               </div>
               {/* Log File Selector */}
               {availableLogs.length > 1 ? (
@@ -1372,14 +1370,11 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                   <button
                     type="button"
                     onClick={() => setShowLogSelector(!showLogSelector)}
-                    className="flex items-center gap-2 px-3 py-1 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-700 rounded-md transition-colors"
+                    className="flex items-center gap-2 px-3 py-1 text-sm text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition-colors"
                   >
                     <span className="font-mono text-xs whitespace-nowrap">
                       {isInitialLoading && !currentLogFile ? (
-                        <div
-                          className="h-4 bg-gray-200 dark:bg-gray-700 rounded animate-pulse"
-                          style={{ width: "220px" }}
-                        />
+                        <div className="h-4 bg-muted rounded animate-pulse" style={{ width: "220px" }} />
                       ) : currentLogFile ? (
                         // Show basename for all files
                         currentLogFile
@@ -1400,9 +1395,9 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                   </button>
                   {/* Dropdown */}
                   {showLogSelector && availableLogs.length > 1 && (
-                    <div className="absolute top-full left-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md shadow-lg z-20 min-w-80">
+                    <div className="absolute top-full left-0 mt-1 bg-card border border-border rounded-md shadow-lg z-20 min-w-80">
                       <div className="py-1 max-h-60 overflow-y-auto">
-                        <div className="px-3 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-600">
+                        <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border">
                           {projectName} logs ({availableLogs.length})
                         </div>
                         {availableLogs.map((logFile) => (
@@ -1413,8 +1408,8 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                               setShowLogSelector(false)
                               router.push(`/logs?file=${encodeURIComponent(logFile.name)}&mode=${mode}`)
                             }}
-                            className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center justify-between ${
-                              logFile.isCurrent ? "bg-blue-50 text-blue-900" : "text-gray-700"
+                            className={`w-full text-left px-3 py-2 text-sm hover:bg-accent flex items-center justify-between ${
+                              logFile.isCurrent ? "bg-primary/10 text-primary" : "text-foreground"
                             }`}
                           >
                             <div className="flex flex-col">
@@ -1712,7 +1707,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                   </div>
                 )}
               </div>
-              <div className="flex items-center bg-gray-100 rounded-md p-1">
+              <div className="flex items-center bg-muted rounded-md p-1">
                 <button
                   type="button"
                   onClick={() => {
@@ -1724,7 +1719,9 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                     }
                   }}
                   className={`px-2 sm:px-3 py-1 rounded text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
-                    mode === "head" ? "bg-white text-gray-900 shadow-sm" : "text-gray-600 hover:text-gray-900"
+                    mode === "head"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
                   Head
@@ -1740,7 +1737,9 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                     }
                   }}
                   className={`px-2 sm:px-3 py-1 rounded text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
-                    mode === "tail" ? "bg-white text-gray-900 shadow-sm" : "text-gray-600 hover:text-gray-900"
+                    mode === "tail"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
                   Tail
@@ -1758,13 +1757,13 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
         <div ref={containerRef} className="max-w-7xl mx-auto px-4 py-6 h-full overflow-y-auto" onScroll={handleScroll}>
           {isInitialLoading ? (
             <div className="text-center py-12">
-              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              <div className="text-gray-500 text-sm mt-4">Loading logs...</div>
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              <div className="text-muted-foreground text-sm mt-4">Loading logs...</div>
             </div>
           ) : logs.length === 0 ? (
             <div className="text-center py-12">
-              <div className="text-gray-400 dark:text-gray-500 text-lg">📝 No logs yet</div>
-              <div className="text-gray-500 dark:text-gray-400 text-sm mt-2">
+              <div className="text-muted-foreground text-lg">📝 No logs yet</div>
+              <div className="text-muted-foreground text-sm mt-2">
                 {retryCount >= maxRetries ? (
                   <>
                     <p className="text-red-500 mb-2">Failed to load logs after {maxRetries} attempts.</p>
