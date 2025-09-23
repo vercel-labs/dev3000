@@ -1,10 +1,9 @@
 import type React from "react"
 import "./globals.css"
-import "./compiled.css"
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="h-full dark">
+    <html lang="en" className="h-full">
       <head>
         <title>🎯 dev3000</title>
         <link rel="icon" href="/favicon.ico" sizes="32x32" />

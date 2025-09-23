@@ -147,7 +147,7 @@ export default function HomePage() {
                   <div
                     key={tool.name}
                     id={tool.name}
-                    className="border border-gray-200 rounded p-6 hover:border-gray-300 transition-colors"
+                    className="border border-gray-200 rounded-lg p-6 hover:border-gray-300 transition-colors"
                   >
                     <div className="mb-4">
                       <h4 className="text-xl font-semibold text-gray-900 font-mono mb-3">{tool.name}</h4>
@@ -194,12 +194,12 @@ export default function HomePage() {
           </section>
 
           {/* Magic Workflow */}
-          <section className="mt-20 bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded p-10">
+          <section className="mt-20 bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-lg p-10">
             <h2 className="text-2xl font-semibold text-gray-900 mb-6 flex items-center gap-3">🪄 The Magic Workflow</h2>
             <div className="grid md:grid-cols-3 gap-8">
               <div className="text-center">
-                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <span className="text-blue-600 font-bold text-lg">1</span>
+                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4 shadow-md">
+                  <span className="text-blue-600 font-bold text-2xl">1</span>
                 </div>
                 <h3 className="font-semibold mb-3 text-lg">AI Finds Issues</h3>
                 <p className="text-gray-600 leading-relaxed">
@@ -207,8 +207,8 @@ export default function HomePage() {
                 </p>
               </div>
               <div className="text-center">
-                <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <span className="text-purple-600 font-bold text-lg">2</span>
+                <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4 shadow-md">
+                  <span className="text-purple-600 font-bold text-2xl">2</span>
                 </div>
                 <h3 className="font-semibold mb-3 text-lg">AI Fixes Code</h3>
                 <p className="text-gray-600 leading-relaxed">
@@ -216,8 +216,8 @@ export default function HomePage() {
                 </p>
               </div>
               <div className="text-center">
-                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <span className="text-green-600 font-bold text-lg">3</span>
+                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4 shadow-md">
+                  <span className="text-green-600 font-bold text-2xl">3</span>
                 </div>
                 <h3 className="font-semibold mb-3 text-lg">AI Verifies Fixes</h3>
                 <p className="text-gray-600 leading-relaxed">

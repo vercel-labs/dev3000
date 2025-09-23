@@ -3,31 +3,31 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "next dev",
     "build": "next build --turbopack",
     "start": "next start",
     "typegen": "next typegen",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "autoprefixer": "^10.4.20",
+    "autoprefixer": "catalog:",
     "mcp-handler": "^1.0.2",
-    "next": "15.5.1-canary.30",
-    "react": "19.2.0-canary-de5a1b20-20250905",
-    "react-dom": "19.2.0-canary-de5a1b20-20250905",
+    "next": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
     "ws": "^8.18.3",
-    "zod": "^3.22.4"
+    "zod": "catalog:"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4.1.9",
-    "@types/node": "^22.0.0",
-    "@types/react": "^19.0.0",
-    "@types/react-dom": "^19.0.0",
+    "@tailwindcss/postcss": "catalog:",
+    "@types/node": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
     "@types/ws": "^8.5.12",
     "babel-plugin-react-compiler": "19.1.0-rc.3",
-    "postcss": "^8.5",
-    "tailwindcss": "^4.1.9",
+    "postcss": "catalog:",
+    "tailwindcss": "catalog:",
     "tw-animate-css": "1.3.3",
-    "typescript": "^5.0.0"
+    "typescript": "catalog:"
   }
 }

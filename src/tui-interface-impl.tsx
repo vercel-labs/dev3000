@@ -3,6 +3,7 @@ import { createReadStream, unwatchFile, watchFile } from "fs"
 import { Box, render, Text, useApp, useInput, useStdout } from "ink"
 import { useEffect, useRef, useState } from "react"
 import type { Readable } from "stream"
+import { LOG_COLORS } from "./constants/log-colors.js"
 
 export interface TUIOptions {
   appPort: string
@@ -11,6 +12,7 @@ export interface TUIOptions {
   commandName: string
   serversOnly?: boolean
   version: string
+  projectName?: string
 }
 
 interface LogEntry {
@@ -25,6 +27,7 @@ const TUIApp = ({
   commandName,
   serversOnly,
   version,
+  projectName,
   onShutdown,
   onStatusUpdate
 }: TUIOptions & { onShutdown: () => void; onStatusUpdate: (fn: (status: string | null) => void) => void }) => {
@@ -181,7 +184,10 @@ const TUIApp = ({
             <Text> </Text>
             <Text color="cyan">🌐 Your App: http://localhost:{appPort}</Text>
             <Text color="cyan">🤖 MCP Server: http://localhost:{mcpPort}/mcp</Text>
-            <Text color="cyan">📸 Visual Timeline: http://localhost:{mcpPort}/logs</Text>
+            <Text color="cyan">
+              📸 Visual Timeline: http://localhost:{mcpPort}/logs
+              {projectName ? `?project=${encodeURIComponent(projectName)}` : ""}
+            </Text>
             {serversOnly && <Text color="cyan">🖥️ Servers-only mode - use Chrome extension for browser monitoring</Text>}
           </Box>
         </Box>
@@ -209,24 +215,42 @@ const TUIApp = ({
               const parts = log.content.match(/^\[(.*?)\] \[(.*?)\] (?:\[(.*?)\] )?(.*)$/)
 
               if (parts) {
-                const [, timestamp, source, type, message] = parts
+                let [, timestamp, source, type, message] = parts
 
-                // Color scheme
-                const sourceColor = source === "BROWSER" ? "#00CED1" : "#32CD32" // Cyan for browser, lime for server
-                const typeColors: Record<string, string> = {
-                  "NETWORK RESPONSE": "#FFD700",
-                  "CONSOLE ERROR": "#FF6B6B",
-                  "CONSOLE WARN": "#FFA500",
-                  "CONSOLE INFO": "#87CEEB",
-                  "CONSOLE LOG": "#B0B0B0",
-                  "CONSOLE DEBUG": "#9370DB",
-                  SCREENSHOT: "#FF69B4",
-                  PAGE: "#98FB98",
-                  DOM: "#DDA0DD",
-                  CDP: "#F0E68C",
-                  ERROR: "#FF6B6B",
-                  "CRITICAL ERROR": "#DC143C"
+                // Replace specific emoji in common port-in-use error to avoid terminal width issues
+                if (message?.includes("ERROR: ⚠ Port") && message.includes("is in use by process")) {
+                  message = message.replace("ERROR: ⚠ Port", "ERROR: [!] Port")
                 }
+
+                // Use shared color constants
+                const sourceColor = source === "BROWSER" ? LOG_COLORS.BROWSER : LOG_COLORS.SERVER
+                const typeColors: Record<string, string> = {
+                  NETWORK: LOG_COLORS.NETWORK,
+                  "NETWORK.REQUEST": LOG_COLORS.NETWORK,
+                  "CONSOLE.ERROR": LOG_COLORS.CONSOLE_ERROR,
+                  "CONSOLE.WARN": LOG_COLORS.CONSOLE_WARN,
+                  "CONSOLE.INFO": LOG_COLORS.CONSOLE_INFO,
+                  "CONSOLE.LOG": LOG_COLORS.CONSOLE_LOG,
+                  "CONSOLE.DEBUG": LOG_COLORS.CONSOLE_DEBUG,
+                  "RUNTIME.ERROR": LOG_COLORS.ERROR,
+                  "CDP.ERROR": LOG_COLORS.CDP,
+                  "CHROME.ERROR": LOG_COLORS.ERROR,
+                  "CHROME.CRASH": LOG_COLORS.CRITICAL_ERROR,
+                  NAVIGATION: LOG_COLORS.PAGE,
+                  INTERACTION: LOG_COLORS.DOM,
+                  SCREENSHOT: LOG_COLORS.SCREENSHOT,
+                  PAGE: LOG_COLORS.PAGE,
+                  DOM: LOG_COLORS.DOM,
+                  CDP: LOG_COLORS.CDP,
+                  ERROR: LOG_COLORS.ERROR,
+                  "CRITICAL ERROR": LOG_COLORS.CRITICAL_ERROR
+                }
+
+                // Calculate padding for source (BROWSER is 7, SERVER is 6)
+                const sourceSpacing = " ".repeat(Math.max(0, 7 - source.length))
+
+                // Calculate padding for type (NETWORK.REQUEST is longest at 15)
+                const typeSpacing = type ? " ".repeat(Math.max(0, 15 - type.length)) : ""
 
                 return (
                   <Text key={log.id} wrap="truncate-end">
@@ -235,13 +259,14 @@ const TUIApp = ({
                     <Text color={sourceColor} bold>
                       [{source}]
                     </Text>
+                    <Text>{sourceSpacing} </Text>
                     {type && (
                       <>
-                        <Text> </Text>
                         <Text color={typeColors[type] || "#A0A0A0"}>[{type}]</Text>
+                        <Text>{typeSpacing} </Text>
                       </>
                     )}
-                    <Text> {message}</Text>
+                    <Text>{message}</Text>
                   </Text>
                 )
               }

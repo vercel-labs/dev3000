@@ -3,9 +3,8 @@ set -e
 
 echo "🚀 Starting release process..."
 
-# Build and test first
-echo "📦 Building..."
-pnpm run build
+# Build using shared build script
+./scripts/build.sh
 
 echo "🧪 Running tests..."
 pnpm run test

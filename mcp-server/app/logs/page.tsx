@@ -5,7 +5,7 @@ import LogsClient from "./LogsClient"
 import { parseLogEntries } from "./utils"
 
 interface PageProps {
-  searchParams: Promise<{ file?: string; mode?: "head" | "tail" }>
+  searchParams: Promise<{ file?: string; mode?: "head" | "tail"; project?: string }>
 }
 
 async function getLogFiles() {
@@ -82,6 +82,14 @@ export default async function LogsPage({ searchParams }: PageProps) {
 
   // Get available log files
   const { files, currentFile } = await getLogFiles()
+
+  // If project parameter is provided, find latest file for that project
+  if (params.project && !params.file) {
+    const projectFiles = files.filter((f) => f.name.includes(`dev3000-${params.project}-`))
+    if (projectFiles.length > 0) {
+      redirect(`/logs?file=${encodeURIComponent(projectFiles[0].name)}&mode=tail`)
+    }
+  }
 
   // If no file specified and we have files, redirect to latest with tail mode
   if (!params.file && files.length > 0) {

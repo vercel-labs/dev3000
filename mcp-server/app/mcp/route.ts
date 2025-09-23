@@ -587,7 +587,7 @@ const handler = createMcpHandler(
     // browser monitoring data, and timestamp-based debugging workflows
   },
   {
-    basePath: "/mcp",
+    basePath: "/",
     maxDuration: 60,
     verboseLogs: true
   }

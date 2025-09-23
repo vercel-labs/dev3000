@@ -188,19 +188,17 @@ export default function HomePage() {
                   Connect to Claude/Cursor/Codex
                 </h3>
                 <div className="space-y-3">
-                  <div className="text-sm text-muted-foreground mb-2">Add the MCP server to claude:</div>
+                  <div className="text-sm text-muted-foreground mb-2 text-purple-400">For claude code:</div>
                   <div className="bg-secondary/50 rounded p-3 font-mono text-xs border-2 border-gray-700/35 shadow-sm overflow-x-auto">
                     <div className="text-foreground whitespace-nowrap">
                       claude mcp add -t http -s user dev3000 http://localhost:3684/mcp
                     </div>
                   </div>
-                  <div className="text-xs text-muted-foreground">
-                    Now Claude can read your logs, search for errors, and help debug in real-time!
-                  </div>
                   <div className="text-xs text-yellow-400 mt-2">For Cursor:</div>
-                  <code>
-                    <pre>{JSON.stringify(cursorConfig, null, 2)}</pre>
-                  </code>
+                  <div className="bg-secondary/50 rounded p-3 font-mono text-xs border-2 border-gray-700/35 shadow-sm overflow-x-auto">
+                    <div className="text-muted-foreground mb-1">Add to ~/.codex/config.toml:</div>
+                    <div className="text-foreground whitespace-pre-wrap">{JSON.stringify(cursorConfig, null, 2)}</div>
+                  </div>
 
                   <div className="text-xs text-blue-400 mt-2">For OpenAI Codex:</div>
                   <div className="bg-secondary/50 rounded p-3 font-mono text-xs border-2 border-gray-700/35 shadow-sm overflow-x-auto">
@@ -248,9 +246,10 @@ export default function HomePage() {
                       <span className="text-purple-400 text-xs font-bold">3</span>
                     </div>
                     <div>
-                      <div className="font-medium mb-1">Logs Available</div>
+                      <div className="font-medium mb-1">Build Better</div>
                       <div className="text-muted-foreground text-xs">
-                        Visit localhost:3684/logs to see your unified timeline
+                        Just type "debug my app" into your AI tool and it should use the dev3000 MCP to get into an
+                        agentic loop of joy.
                       </div>
                     </div>
                   </div>

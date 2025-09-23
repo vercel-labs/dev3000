@@ -1,3 +1,0 @@
-# This file makes this Next.js app standalone, not part of the parent workspace
-packages:
-  - '.'

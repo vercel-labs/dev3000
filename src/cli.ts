@@ -3,8 +3,8 @@
 import chalk from "chalk"
 import { Command } from "commander"
 import { readFileSync } from "fs"
-import { tmpdir } from "os"
-import { dirname, join } from "path"
+import { homedir, tmpdir } from "os"
+import { basename, dirname, join } from "path"
 import { fileURLToPath } from "url"
 import { createPersistentLogFile, startDevEnvironment } from "./dev-environment.js"
 import { FrameworkDetectorService } from "./services/framework-detector/index.js"
@@ -106,6 +106,10 @@ program
       // Create persistent log file
       const logFile = createPersistentLogFile()
 
+      // Get project name from current directory to create unique profile dir
+      const projectName = basename(process.cwd()).replace(/[^a-zA-Z0-9-_]/g, "_")
+      const profileDir = join(homedir(), ".d3k", "chrome-profiles", projectName)
+
       await startDevEnvironment({
         ...options,
         port,
@@ -114,6 +118,7 @@ program
         userSetPort,
         userSetMcpPort,
         logFile,
+        profileDir,
         serverCommand,
         debug: options.debug,
         serversOnly: options.serversOnly,

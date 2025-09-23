@@ -5,6 +5,7 @@ export interface TUIOptions {
   commandName: string
   serversOnly?: boolean
   version: string
+  projectName?: string
 }
 
 type InkApp = { unmount: () => void }

@@ -277,49 +277,12 @@ export class DevEnvironment {
   }
 
   private async checkPortsAvailable(silent: boolean = false) {
-    // Kill any existing MCP server FIRST (before checking ports)
-    // This ensures we always run the latest version
+    // Always kill any existing MCP server to ensure clean state
     if (this.options.mcpPort) {
-      try {
-        this.debugLog(`Killing any existing MCP server on port ${this.options.mcpPort}`)
-
-        // First, get the PIDs
-        const getPidsProcess = spawn("lsof", ["-ti", `:${this.options.mcpPort}`], {
-          stdio: "pipe"
-        })
-
-        const pids = await new Promise<string>((resolve) => {
-          let output = ""
-          getPidsProcess.stdout?.on("data", (data) => {
-            output += data.toString()
-          })
-          getPidsProcess.on("exit", () => resolve(output.trim()))
-        })
-
-        if (pids) {
-          this.debugLog(`Found processes on port ${this.options.mcpPort}: ${pids}`)
-
-          // Kill each PID individually with kill -9
-          const pidList = pids.split("\n").filter(Boolean)
-          for (const pid of pidList) {
-            await new Promise<void>((resolve) => {
-              const killCmd = spawn("kill", ["-9", pid.trim()], { stdio: "ignore" })
-              killCmd.on("exit", (code) => {
-                this.debugLog(`Kill command for PID ${pid} exited with code ${code}`)
-                resolve()
-              })
-            })
-          }
-
-          // Give it more time to fully release the port
-          this.debugLog(`Waiting for port ${this.options.mcpPort} to be released...`)
-          await new Promise((resolve) => setTimeout(resolve, 1000))
-        } else {
-          this.debugLog(`No existing processes found on port ${this.options.mcpPort}`)
-        }
-      } catch (error) {
-        this.debugLog(`Error during MCP cleanup: ${error}`)
-        // Continue anyway - we'll check port availability next
+      const isPortInUse = !(await isPortAvailable(this.options.mcpPort.toString()))
+      if (isPortInUse) {
+        this.debugLog(`Killing existing process on port ${this.options.mcpPort}`)
+        await this.killMcpServer()
       }
     }
 
@@ -378,6 +341,45 @@ export class DevEnvironment {
         }
         throw new Error(`Port ${this.options.mcpPort} is still in use. Please free the port and try again.`)
       }
+    }
+  }
+
+  private async killMcpServer(): Promise<void> {
+    try {
+      // First, get the PIDs
+      const getPidsProcess = spawn("lsof", ["-ti", `:${this.options.mcpPort}`], {
+        stdio: "pipe"
+      })
+
+      const pids = await new Promise<string>((resolve) => {
+        let output = ""
+        getPidsProcess.stdout?.on("data", (data) => {
+          output += data.toString()
+        })
+        getPidsProcess.on("exit", () => resolve(output.trim()))
+      })
+
+      if (pids) {
+        this.debugLog(`Found MCP server processes: ${pids}`)
+
+        // Kill each PID individually with kill -9
+        const pidList = pids.split("\n").filter(Boolean)
+        for (const pid of pidList) {
+          await new Promise<void>((resolve) => {
+            const killCmd = spawn("kill", ["-9", pid.trim()], { stdio: "ignore" })
+            killCmd.on("exit", (code) => {
+              this.debugLog(`Kill command for PID ${pid} exited with code ${code}`)
+              resolve()
+            })
+          })
+        }
+
+        // Give it time to fully release the port
+        this.debugLog(`Waiting for port ${this.options.mcpPort} to be released...`)
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+      }
+    } catch (error) {
+      this.debugLog(`Error killing MCP server: ${error}`)
     }
   }
 
@@ -443,6 +445,9 @@ export class DevEnvironment {
       // Clear console and start TUI
       console.clear()
 
+      // Get project name from current directory
+      const projectName = basename(process.cwd()).replace(/[^a-zA-Z0-9-_]/g, "_")
+
       // Start TUI interface with initial status and updated port
       this.tui = new DevTUI({
         appPort: this.options.port, // This may have been updated by checkPortsAvailable
@@ -450,7 +455,8 @@ export class DevEnvironment {
         logFile: this.options.logFile,
         commandName: this.options.commandName,
         serversOnly: this.options.serversOnly,
-        version: this.version
+        version: this.version,
+        projectName
       })
 
       await this.tui.start()
@@ -500,7 +506,6 @@ export class DevEnvironment {
       }
 
       // Write session info for MCP server discovery
-      const projectName = basename(process.cwd()).replace(/[^a-zA-Z0-9-_]/g, "_")
       writeSessionInfo(projectName, this.options.logFile, this.options.port, this.options.mcpPort)
 
       // Clear status - ready!
@@ -545,7 +550,7 @@ export class DevEnvironment {
         this.debugLog("Browser monitoring disabled via --servers-only flag")
       }
 
-      // Write session info for MCP server discovery
+      // Get project name for session info and Visual Timeline URL
       const projectName = basename(process.cwd()).replace(/[^a-zA-Z0-9-_]/g, "_")
       writeSessionInfo(projectName, this.options.logFile, this.options.port, this.options.mcpPort)
 
@@ -557,7 +562,11 @@ export class DevEnvironment {
       console.log(chalk.cyan("☝️ Give this to an AI to auto debug and fix your app\n"))
       console.log(chalk.cyan(`🌐 Your App: http://localhost:${this.options.port}`))
       console.log(chalk.cyan(`🤖 MCP Server: http://localhost:${this.options.mcpPort}/mcp`))
-      console.log(chalk.cyan(`📸 Visual Timeline: http://localhost:${this.options.mcpPort}/logs`))
+      console.log(
+        chalk.cyan(
+          `📸 Visual Timeline: http://localhost:${this.options.mcpPort}/logs?project=${encodeURIComponent(projectName)}`
+        )
+      )
       if (this.options.serversOnly) {
         console.log(chalk.cyan("🖥️  Servers-only mode - use Chrome extension for browser monitoring"))
       }
@@ -569,13 +578,11 @@ export class DevEnvironment {
   }
 
   private async startServer() {
-    const [command, ...args] = this.options.serverCommand.split(" ")
-
     this.debugLog(`Starting server process: ${this.options.serverCommand}`)
-    this.debugLog(`Command: ${command}, Args: [${args.join(", ")}]`)
 
     this.serverStartTime = Date.now()
-    this.serverProcess = spawn(command, args, {
+    // Use the full command string with shell: true to properly handle complex commands
+    this.serverProcess = spawn(this.options.serverCommand, {
       stdio: ["ignore", "pipe", "pipe"],
       shell: true,
       detached: true // Run independently
@@ -754,15 +761,20 @@ export class DevEnvironment {
       }
     }
 
-    // Always install dependencies to ensure they're up to date
-    this.debugLog("Installing/updating MCP server dependencies")
-    await this.installMcpServerDeps(mcpServerPath)
+    // Check if .next build directory exists - if so, skip dependency installation
+    const nextBuildPath = join(mcpServerPath, ".next")
+    if (existsSync(nextBuildPath)) {
+      this.debugLog("MCP server is pre-built (.next directory exists), skipping dependency installation")
+    } else {
+      this.debugLog("Installing/updating MCP server dependencies")
+      await this.installMcpServerDeps(mcpServerPath)
+    }
 
     // Use version already read in constructor
 
     // For global installs, ensure all necessary files are copied to temp directory
     if (isGlobalInstall && actualWorkingDir !== mcpServerPath) {
-      const requiredFiles = ["app", "public", "next.config.ts", "next-env.d.ts", "tsconfig.json"]
+      const requiredFiles = ["app", "public", "next.config.ts", "next-env.d.ts", "tsconfig.json", ".next"]
       for (const file of requiredFiles) {
         const srcPath = join(mcpServerPath, file)
         const destPath = join(actualWorkingDir, file)
@@ -806,10 +818,14 @@ export class DevEnvironment {
     this.debugLog(`MCP server working directory: ${actualWorkingDir}`)
     this.debugLog(`MCP server port: ${this.options.mcpPort}`)
 
+    // Use production mode for MCP server (non-standalone)
+    // This provides proper CSS and still allows dynamic screenshot serving
+    const mcpCommand = [packageManagerForRun, "run", "start"]
+    this.debugLog(`MCP server mode: production (using ${packageManagerForRun} run start)`)
+
     // Start MCP server as a true background singleton process
-    this.mcpServerProcess = spawn(packageManagerForRun, ["run", "dev"], {
+    this.mcpServerProcess = spawn(mcpCommand[0], mcpCommand.slice(1), {
       stdio: ["ignore", "pipe", "pipe"],
-      shell: true,
       detached: true, // Run independently of parent process
       cwd: actualWorkingDir,
       env: {
@@ -962,7 +978,6 @@ export class DevEnvironment {
       const installStartTime = Date.now()
       const installProcess = spawn(packageManager, installArgs, {
         stdio: ["ignore", "pipe", "pipe"],
-        shell: true,
         cwd: workingDir
       })
 

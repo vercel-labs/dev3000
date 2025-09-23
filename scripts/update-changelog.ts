@@ -49,53 +49,134 @@ function getCommitsSinceLastRelease(): Commit[] {
   }
 }
 
-// Function to extract highlights from commits
-function extractHighlights(commits: Commit[]): string[] {
-  const highlights: string[] = []
+// Categories for grouping commits
+const FEATURE_CATEGORIES = {
+  tui: { keywords: ["tui", "terminal ui", "terminal user interface", "ink", "console ui"], name: "Terminal UI" },
+  mcp: { keywords: ["mcp", "model context protocol", "mcp server"], name: "MCP Server" },
+  browser: { keywords: ["chrome", "browser", "cdp", "devtools", "profile"], name: "Browser Integration" },
+  process: { keywords: ["process", "spawn", "port", "health check", "singleton"], name: "Process Management" },
+  logs: { keywords: ["log", "logging", "visual timeline", "timeline"], name: "Logging & Timeline" },
+  dx: { keywords: ["cli", "command", "flag", "install", "setup"], name: "Developer Experience" },
+  ai: { keywords: ["ai", "claude", "tool", "debug"], name: "AI Integration" }
+}
+
+// Function to categorize and analyze commits
+function analyzeCommits(commits: Commit[]): Map<string, Set<string>> {
+  const categorizedChanges = new Map<string, Set<string>>()
+
   const skipPatterns = [
     /^Merge/i,
     /^Bump to v.*canary/i,
     /^Release v/i,
     /^Fix formatting/i,
     /^Update changelog/i,
+    /^Apply linter/i,
+    /^formatting$/i,
     /generated with.*claude code/i
   ]
 
-  const _importantPatterns = [
-    { pattern: /add/i, prefix: "Added" },
-    { pattern: /implement/i, prefix: "Implemented" },
-    { pattern: /create/i, prefix: "Created" },
-    { pattern: /fix/i, prefix: "Fixed" },
-    { pattern: /improve/i, prefix: "Improved" },
-    { pattern: /enhance/i, prefix: "Enhanced" },
-    { pattern: /update/i, prefix: "Updated" },
-    { pattern: /remove/i, prefix: "Removed" },
-    { pattern: /refactor/i, prefix: "Refactored" }
-  ]
-
   for (const commit of commits) {
-    const subject = commit.subject
+    const subject = commit.subject.toLowerCase()
 
     // Skip certain types of commits
-    if (skipPatterns.some((pattern) => pattern.test(subject))) {
+    if (skipPatterns.some((pattern) => pattern.test(commit.subject))) {
       continue
     }
 
-    // Clean up the subject
-    const cleanSubject = subject
-      .replace(/🤖.*$/g, "") // Remove bot signatures
-      .replace(/Co-Authored-By:.*$/g, "")
-      .trim()
-
-    // Skip if too short or generic
-    if (cleanSubject.length < 10) continue
-
-    // Add to highlights
-    highlights.push(cleanSubject)
+    // Check each category
+    for (const [categoryKey, category] of Object.entries(FEATURE_CATEGORIES)) {
+      if (category.keywords.some((keyword) => subject.includes(keyword))) {
+        if (!categorizedChanges.has(categoryKey)) {
+          categorizedChanges.set(categoryKey, new Set())
+        }
+        categorizedChanges.get(categoryKey)?.add(commit.subject)
+        break // Only categorize in the first matching category
+      }
+    }
   }
 
-  // Limit to top 4-5 most important
-  return highlights.slice(0, 4)
+  return categorizedChanges
+}
+
+// Function to extract highlights from commits with intelligent analysis
+function extractHighlights(commits: Commit[]): string[] {
+  const highlights: string[] = []
+  const categorized = analyzeCommits(commits)
+
+  // Check for major feature additions
+  if (categorized.has("tui")) {
+    const tuiCommits = Array.from(categorized.get("tui") || new Set())
+    if (tuiCommits.some((c) => c.toLowerCase().includes("add") && c.toLowerCase().includes("default"))) {
+      highlights.push("Introduced gorgeous Terminal UI (TUI) as the default experience - a complete visual overhaul")
+    } else if (tuiCommits.length > 2) {
+      highlights.push("Major Terminal UI improvements with enhanced visuals and user experience")
+    }
+  }
+
+  // Check for MCP server changes
+  if (categorized.has("mcp")) {
+    const mcpCommits = Array.from(categorized.get("mcp") || new Set())
+    if (mcpCommits.some((c) => c.toLowerCase().includes("singleton") || c.toLowerCase().includes("persistent"))) {
+      highlights.push("Revolutionized MCP server architecture: now a persistent singleton for better performance")
+    } else if (mcpCommits.some((c) => c.toLowerCase().includes("multi-project"))) {
+      highlights.push("Added multi-project support for MCP server with intelligent session tracking")
+    } else if (mcpCommits.length > 2) {
+      highlights.push("Significant MCP server improvements for better AI integration")
+    }
+  }
+
+  // Check for browser/Chrome improvements
+  if (categorized.has("browser")) {
+    const browserCommits = Array.from(categorized.get("browser") || new Set())
+    if (browserCommits.some((c) => c.toLowerCase().includes("profile") && c.toLowerCase().includes("project"))) {
+      highlights.push("Added project-specific Chrome profiles for isolated development environments")
+    } else if (browserCommits.some((c) => c.toLowerCase().includes("custom browser"))) {
+      highlights.push("Added support for custom browser executables with --browser flag")
+    }
+  }
+
+  // Check for process management improvements
+  if (categorized.has("process")) {
+    const processCommits = Array.from(categorized.get("process") || new Set())
+    if (processCommits.some((c) => c.toLowerCase().includes("health check"))) {
+      highlights.push("Enhanced process monitoring with automatic health checks and recovery")
+    } else if (processCommits.some((c) => c.toLowerCase().includes("port"))) {
+      highlights.push("Improved port management with intelligent auto-increment and conflict resolution")
+    }
+  }
+
+  // Check for logging improvements
+  if (categorized.has("logs")) {
+    const logCommits = Array.from(categorized.get("logs") || new Set())
+    if (logCommits.some((c) => c.toLowerCase().includes("visual timeline"))) {
+      highlights.push("Enhanced Visual Timeline with better navigation and multi-project support")
+    } else if (logCommits.some((c) => c.toLowerCase().includes("format") || c.toLowerCase().includes("align"))) {
+      highlights.push("Improved log formatting with better alignment and readability")
+    }
+  }
+
+  // If we don't have enough highlights, add some generic ones based on commit count
+  if (highlights.length < 3) {
+    const fixCommits = commits.filter((c) => c.subject.toLowerCase().includes("fix"))
+    const addCommits = commits.filter(
+      (c) => c.subject.toLowerCase().includes("add") || c.subject.toLowerCase().includes("implement")
+    )
+
+    if (fixCommits.length > 5) {
+      highlights.push(`Fixed ${fixCommits.length} bugs for improved stability and reliability`)
+    }
+    if (addCommits.length > 3) {
+      highlights.push("Added several new features and enhancements")
+    }
+  }
+
+  // Ensure we have at least one highlight
+  if (highlights.length === 0) {
+    highlights.push("Various improvements and bug fixes")
+  }
+
+  // Return top 5 most impactful highlights
+  return highlights.slice(0, 5)
 }
 
 // Function to determine version type based on changes

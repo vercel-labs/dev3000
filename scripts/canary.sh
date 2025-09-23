@@ -3,15 +3,8 @@ set -e
 
 echo "🧪 Starting canary test process..."
 
-# Build main package
-echo "📦 Building main package..."
-pnpm run build
-
-# Build and typecheck mcp-server
-echo "🏗️ Building and typechecking mcp-server..."
-cd mcp-server
-pnpm run build
-cd ..
+# Use shared build script
+./scripts/build.sh
 
 # Pack and install
 echo "📦 Packing and installing globally..."
