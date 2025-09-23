@@ -803,6 +803,9 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
   const [showReplayPreview, setShowReplayPreview] = useState(false)
   const [replayEvents, setReplayEvents] = useState<ReplayEvent[]>([])
   const [isRotatingLog, setIsRotatingLog] = useState(false)
+  const [retryCount, setRetryCount] = useState(0)
+  const [maxRetries] = useState(5)
+  const [lastFailedUrl, setLastFailedUrl] = useState<string | null>(null)
   const [filters, setFilters] = useState({
     browser: true,
     server: true,
@@ -861,9 +864,26 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
         ? `/api/logs/tail?lines=50&logPath=${encodeURIComponent(logPath)}`
         : `/api/logs/tail?lines=50`
 
+      // Check if we've exceeded retry limit for this specific URL
+      if (lastFailedUrl === apiUrl && retryCount >= maxRetries) {
+        console.error(`Maximum retry attempts (${maxRetries}) reached for ${apiUrl}. Stopping polling.`)
+        // Clear the polling interval to stop further attempts
+        if (pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current)
+          pollIntervalRef.current = null
+        }
+        return
+      }
+
       const response = await fetch(apiUrl)
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      // Reset retry count on successful fetch
+      if (lastFailedUrl === apiUrl || retryCount > 0) {
+        setRetryCount(0)
+        setLastFailedUrl(null)
       }
 
       const data: LogsApiResponse = await response.json()
@@ -906,13 +926,55 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
       }
     } catch (error) {
       console.error("Error polling logs:", error)
-      // Don't spam console on network errors during polling
+
+      // Build the failed URL for tracking
+      const requestedFile = searchParams.get("file")
+      let logPath = ""
+      if (requestedFile && availableLogs.length > 0) {
+        const foundFile = availableLogs.find((f) => f.name === requestedFile)
+        logPath = foundFile?.path || currentLogFile
+      } else {
+        logPath = currentLogFile
+      }
+      const failedUrl = logPath
+        ? `/api/logs/tail?lines=50&logPath=${encodeURIComponent(logPath)}`
+        : `/api/logs/tail?lines=50`
+
+      // Increment retry count if it's the same URL, otherwise reset
+      if (lastFailedUrl === failedUrl) {
+        const newRetryCount = retryCount + 1
+        setRetryCount(newRetryCount)
+
+        if (newRetryCount >= maxRetries) {
+          console.error(`Maximum retry attempts (${maxRetries}) reached for ${failedUrl}. Stopping polling.`)
+          // Clear the polling interval to stop further attempts
+          if (pollIntervalRef.current) {
+            clearInterval(pollIntervalRef.current)
+            pollIntervalRef.current = null
+          }
+        }
+      } else {
+        setLastFailedUrl(failedUrl)
+        setRetryCount(1)
+      }
     }
-  }, [mode, isAtBottom, searchParams, availableLogs, currentLogFile, lastLogCount, logBuffer, logs])
+  }, [
+    mode,
+    isAtBottom,
+    searchParams,
+    availableLogs,
+    currentLogFile,
+    lastLogCount,
+    logBuffer,
+    logs,
+    retryCount,
+    lastFailedUrl,
+    maxRetries
+  ])
 
   // Start/stop polling based on mode (always poll in tail mode, but buffer when not at bottom)
   useEffect(() => {
-    if (mode === "tail") {
+    if (mode === "tail" && retryCount < maxRetries) {
       pollIntervalRef.current = setInterval(pollForNewLogs, 3000) // Poll every 3 seconds
       return () => {
         if (pollIntervalRef.current) {
@@ -924,7 +986,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
         clearInterval(pollIntervalRef.current)
       }
     }
-  }, [mode, pollForNewLogs]) // Removed isAtBottom - now always poll in tail mode
+  }, [mode, pollForNewLogs, retryCount, maxRetries]) // Removed isAtBottom - now always poll in tail mode
 
   // Handle returning to live mode - ONLY flush buffer when user explicitly clicks "Live" button
   // This effect is removed to prevent race conditions - buffer flushing now happens only on explicit user action
@@ -954,9 +1016,23 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
         ? `/api/logs/${mode}?lines=1000&logPath=${encodeURIComponent(logPath)}`
         : `/api/logs/${mode}?lines=1000`
 
+      // Check if we've exceeded retry limit for this specific URL
+      if (lastFailedUrl === apiUrl && retryCount >= maxRetries) {
+        console.error(`Maximum retry attempts (${maxRetries}) reached for ${apiUrl}. Not attempting to load.`)
+        setLogs([])
+        setIsInitialLoading(false)
+        return
+      }
+
       const response = await fetch(apiUrl)
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      // Reset retry count on successful fetch
+      if (lastFailedUrl === apiUrl || retryCount > 0) {
+        setRetryCount(0)
+        setLastFailedUrl(null)
       }
 
       const data: LogsApiResponse = await response.json()
@@ -991,9 +1067,38 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
       }
     } catch (error) {
       console.error("Error loading logs:", error)
+
+      // Build the failed URL for tracking
+      const requestedFile = searchParams.get("file")
+      let logPath = ""
+      if (requestedFile && availableLogs.length > 0) {
+        const foundFile = availableLogs.find((f) => f.name === requestedFile)
+        logPath = foundFile?.path || currentLogFile
+      } else {
+        logPath = currentLogFile
+      }
+      const failedUrl = logPath
+        ? `/api/logs/${mode}?lines=1000&logPath=${encodeURIComponent(logPath)}`
+        : `/api/logs/${mode}?lines=1000`
+
+      // Track retry attempts
+      if (lastFailedUrl === failedUrl) {
+        const newRetryCount = retryCount + 1
+        setRetryCount(newRetryCount)
+
+        if (newRetryCount >= maxRetries) {
+          console.error(`Maximum retry attempts (${maxRetries}) reached for initial load of ${failedUrl}.`)
+        }
+      } else {
+        setLastFailedUrl(failedUrl)
+        setRetryCount(1)
+      }
+
       setLogs([])
+    } finally {
+      setIsInitialLoading(false)
     }
-  }, [loadAvailableLogs, searchParams, availableLogs, currentLogFile, mode])
+  }, [loadAvailableLogs, searchParams, availableLogs, currentLogFile, mode, retryCount, lastFailedUrl, maxRetries])
 
   useEffect(() => {
     // Only load logs if we don't have initial data or mode actually changed
@@ -1729,7 +1834,24 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
             <div className="text-center py-12">
               <div className="text-gray-400 dark:text-gray-500 text-lg">📝 No logs yet</div>
               <div className="text-gray-500 dark:text-gray-400 text-sm mt-2">
-                Logs will appear here as your development server runs
+                {retryCount >= maxRetries ? (
+                  <>
+                    <p className="text-red-500 mb-2">Failed to load logs after {maxRetries} attempts.</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRetryCount(0)
+                        setLastFailedUrl(null)
+                        loadInitialLogs()
+                      }}
+                      className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                    >
+                      Retry
+                    </button>
+                  </>
+                ) : (
+                  "Logs will appear here as your development server runs"
+                )}
               </div>
             </div>
           ) : filteredLogs.length === 0 ? (
