@@ -806,6 +806,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
   const [retryCount, setRetryCount] = useState(0)
   const [maxRetries] = useState(5)
   const [lastFailedUrl, setLastFailedUrl] = useState<string | null>(null)
+  const [hasLoadedInitial, setHasLoadedInitial] = useState(false)
   const [filters, setFilters] = useState({
     browser: true,
     server: true,
@@ -829,9 +830,12 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
         setAvailableLogs(data.files)
         setCurrentLogFile(data.currentFile)
         setProjectName(data.projectName)
+        return true
       }
+      return false
     } catch (error) {
       console.error("Error loading available logs:", error)
+      return false
     }
   }, [])
 
@@ -992,10 +996,19 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
   // This effect is removed to prevent race conditions - buffer flushing now happens only on explicit user action
 
   const loadInitialLogs = useCallback(async () => {
+    if (retryCount >= maxRetries) {
+      console.log("Max retries reached, not attempting to load")
+      return
+    }
+
     setIsInitialLoading(true)
 
     // Load available logs list first
-    await loadAvailableLogs()
+    const logsListLoaded = await loadAvailableLogs()
+    if (!logsListLoaded) {
+      setIsInitialLoading(false)
+      return
+    }
 
     try {
       // Determine which log file to load
@@ -1101,12 +1114,12 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
   }, [loadAvailableLogs, searchParams, availableLogs, currentLogFile, mode, retryCount, lastFailedUrl, maxRetries])
 
   useEffect(() => {
-    // Only load logs if we don't have initial data or mode actually changed
-    const _currentMode = searchParams.get("mode") || "tail"
+    // Only load logs if we don't have initial data and haven't tried loading yet
     const hasInitialData = initialData?.logs && initialData?.logs.length > 0
 
-    if (!hasInitialData && !logs.length) {
+    if (!hasLoadedInitial && !hasInitialData && !logs.length) {
       // No server-side data and no client data - load fresh
+      setHasLoadedInitial(true)
       loadInitialLogs()
     } else if (hasInitialData && logs.length === 0) {
       // We have server-side data but client state is empty - use server data
@@ -1127,22 +1140,8 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
         setTimeout(scrollToBottom, 100)
         setTimeout(scrollToBottom, 300)
       }
-    } else if (mode === "tail" && isAtBottom) {
-      // Set up polling timer for new logs if we're in tail mode
-      setIsInitialLoading(false)
-      pollIntervalRef.current = setInterval(() => {
-        pollForNewLogs()
-      }, 3000)
     }
-  }, [
-    mode,
-    initialData?.logs,
-    isAtBottom, // No server-side data and no client data - load fresh
-    loadInitialLogs,
-    logs.length,
-    pollForNewLogs,
-    searchParams.get
-  ]) // Only depend on mode to avoid infinite loops
+  }, [mode, initialData, logs.length, hasLoadedInitial])
 
   // Separate effect to handle scrolling after logs are rendered
   useEffect(() => {
@@ -1842,6 +1841,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                       onClick={() => {
                         setRetryCount(0)
                         setLastFailedUrl(null)
+                        setHasLoadedInitial(false)
                         loadInitialLogs()
                       }}
                       className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
