@@ -22,8 +22,8 @@ This MCP tool returns a Python script that:
 4. **Claude**: Executes the Python script
 5. **Script**: Continuously monitors logs
 6. **On Error**: Displays alert and prompts user
-7. **User**: "Debug my app"
-8. **Claude**: Uses existing tools to analyze and fix
+7. **User**: "Fix my app" or "Debug my app"
+8. **Claude**: Uses fix_my_app tool to analyze and fix
 
 ### What Errors Are Detected
 
@@ -58,7 +58,7 @@ Error 2 - Reference Error:
   [2025-01-22T14:23:45.456Z] [SERVER] ReferenceError: myVariable is not defined
 
 🔧 ========================================================
-💡 To fix these errors, tell me: 'debug my app'
+💡 To fix these errors, tell me: 'fix my app' or 'debug my app'
    I'll analyze the full context and fix the issues!
 ============================================================
 ```

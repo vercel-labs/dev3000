@@ -73,7 +73,12 @@ export default function HomePage() {
             </p>
             <div className="flex flex-col sm:flex-row gap-2 justify-center items-center">
               <Button size="lg" className="bg-foreground text-background hover:bg-foreground/90" asChild>
-                <a href="#quickstart">
+                <a
+                  href="#quickstart"
+                  onClick={() => {
+                    throw new Error("I broke")
+                  }}
+                >
                   <Terminal className="w-4 h-4 mr-2" />
                   Get Started
                 </a>

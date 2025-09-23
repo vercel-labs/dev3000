@@ -61,10 +61,10 @@ function getLogPath(projectName?: string): string | null {
 
 const handler = createMcpHandler(
   (server) => {
-    // Enhanced debug_my_app - the ultimate debugging tool
+    // Enhanced fix_my_app - the ultimate error fixing tool
     server.tool(
-      "debug_my_app",
-      "🎯 **THE ULTIMATE FIND→FIX→VERIFY MACHINE!** This tool is pure dev3000 magic - it FINDS all issues instantly, GUIDES you to fix them perfectly, then helps you VERIFY the fixes work! 🪄\n\n🔥 **INSTANT DEBUGGING SUPERPOWERS:**\n• Detects ALL error types: server crashes, browser errors, build failures, API issues, performance problems\n• Analyzes timestamps, error patterns, user interactions, network requests - COMPREHENSIVELY\n• Provides step-by-step fix recommendations with exact file locations and code examples\n\n⚡ **3 MAGICAL MODES:**\n• SNAPSHOT: 'What's broken RIGHT NOW?' → Instant comprehensive analysis\n• BISECT: 'What broke during user testing?' → Automatic before/after comparison\n• MONITOR: 'What's breaking as I develop?' → Continuous health monitoring\n\n🎪 **THE DEV3000 MAGIC WORKFLOW:**\n1️⃣ I FIND all issues (replaces 8+ separate tools!)\n2️⃣ You FIX them with my detailed guidance  \n3️⃣ We VERIFY fixes work with execute_browser_action\n\n💡 **PERFECT FOR:** 'debug my app' requests, proactive monitoring, timestamp-based debugging, comprehensive error analysis. This tool makes debugging FUN and gets RESULTS!",
+      "fix_my_app",
+      "🔧 **THE ULTIMATE FIND→FIX→VERIFY MACHINE!** This tool doesn't just find bugs - it FIXES them! Pure dev3000 magic that identifies issues, provides exact fixes, and verifies everything works! 🪄\n\n🔥 **INSTANT FIXING SUPERPOWERS:**\n• Detects ALL error types: server crashes, browser errors, build failures, API issues, performance problems\n• Provides EXACT fix code with file locations and line numbers\n• Guides you through implementing fixes step-by-step\n• Verifies fixes actually resolve the issues\n\n⚡ **3 ACTION MODES:**\n• FIX NOW: 'What's broken RIGHT NOW?' → Find and fix immediately\n• FIX REGRESSION: 'What broke during testing?' → Compare before/after and fix\n• FIX CONTINUOUSLY: 'Fix issues as they appear' → Monitor and fix proactively\n\n🎪 **THE FIX-IT WORKFLOW:**\n1️⃣ I FIND all issues instantly\n2️⃣ I provide EXACT FIXES with code snippets\n3️⃣ You implement the fixes\n4️⃣ We VERIFY everything works\n\n💡 **PERFECT FOR:** 'fix my app' or 'debug my app' requests, error resolution, code repairs, making broken apps work again. This tool doesn't just identify problems - it SOLVES them!",
       {
         projectName: z
           .string()
@@ -77,7 +77,7 @@ const handler = createMcpHandler(
         mode: z
           .enum(["snapshot", "bisect", "monitor"])
           .optional()
-          .describe("Debug mode: 'snapshot' (immediate), 'bisect' (timestamp-based), 'monitor' (continuous)"),
+          .describe("Fix mode: 'snapshot' (fix now), 'bisect' (fix regression), 'monitor' (fix continuously)"),
         waitForUserInteraction: z
           .boolean()
           .optional()
@@ -292,11 +292,11 @@ const handler = createMcpHandler(
             }
 
             // Show the magical dev3000 fix workflow
-            results.push("🪄 **ULTIMATE DEV3000 MAGIC READY:**")
+            results.push("🪄 **ULTIMATE DEV3000 FIX-IT MAGIC READY:**")
             results.push("🎯 **I don't just find errors - I FIX them instantly!**")
-            results.push("• Analyze error patterns and identify root causes automatically")
-            results.push("• Edit problematic code files to resolve each issue")
-            results.push("• Use execute_browser_action to reproduce user workflows")
+            results.push("• Analyze error patterns and provide exact fix code")
+            results.push("• Guide you through implementing the fixes")
+            results.push("• Use execute_browser_action to verify fixes work")
             results.push("• Dev3000 AUTO-CAPTURES screenshots during all interactions!")
             results.push("• No manual screenshots needed - dev3000 handles it all!")
             results.push("")
@@ -452,7 +452,7 @@ const handler = createMcpHandler(
                       warning: "Screenshot action is not recommended!",
                       advice:
                         "Dev3000 automatically captures screenshots during interactions. Instead of manual screenshots, use click/navigate/scroll/type actions to reproduce user workflows, and dev3000 will capture screenshots at optimal times.",
-                      suggestion: "Run debug_my_app to see all auto-captured screenshots from your session."
+                      suggestion: "Run fix_my_app to see all auto-captured screenshots from your session."
                     })
                     return
 
@@ -584,15 +584,14 @@ const handler = createMcpHandler(
     // Tool that returns monitoring code for Claude to execute
     server.tool(
       "start_error_monitoring",
-      "🔍 **LIVE ERROR MONITORING** - Starts a background process that continuously watches your app for critical errors and alerts you in real-time.\n\n⚡ **IMMEDIATE ACTION:**\n• Claude will offer to run the monitoring script right away\n• No manual setup needed - just say yes!\n• Script starts watching your logs immediately\n• Get instant alerts when errors occur\n\n💡 **SMART MONITORING:**\n• Detects crashes, exceptions, and fatal errors\n• Shows color-coded alerts with error details\n• Tracks seen errors to avoid duplicate alerts\n• Prompts you when Claude should investigate\n\n🎯 **PERFECT FOR:**\n• Active development sessions\n• Testing new features\n• Background error detection\n• Hands-free debugging workflow",
+      "🔍 **SIMPLE ERROR MONITORING** - Starts a lightweight background process that watches your app for errors and alerts you in real-time.\n\n⚡ **INSTANT ACTION:**\n• Claude will offer to run the monitoring script right away\n• No manual setup needed - just say yes!\n• Simple 15-line Python script\n• Alerts when errors appear in logs\n\n💡 **WHAT IT DOES:**\n• Watches for ERROR, FAIL, Exception, TypeError, CRASH keywords\n• Shows the error line when detected\n• Prompts you to let Claude debug\n• That's it - simple and effective!\n\n🎯 **PERFECT FOR:**\n• Quick error detection during development\n• Lightweight background monitoring\n• No complex features - just works",
       {
         projectName: z
           .string()
           .optional()
-          .describe("Project name to monitor (if multiple dev3000 instances are running)"),
-        checkInterval: z.number().optional().describe("How often to check for new errors in seconds (default: 5)")
+          .describe("Project name to monitor (if multiple dev3000 instances are running)")
       },
-      async ({ projectName, checkInterval = 5 }) => {
+      async ({ projectName }) => {
         try {
           const logPath = getLogPath(projectName)
           if (!logPath) {
@@ -620,121 +619,36 @@ const handler = createMcpHandler(
             }
           }
 
-          // Return Python monitoring code
-          const monitoringCode = `#!/usr/bin/env python3
-"""
-Dev3000 Error Monitor - Watches for critical errors and prompts for fixes
-Generated by dev3000 MCP server
-"""
+          // Return simple Python monitoring code
+          const monitoringCode = `import time
 
-import time
-import os
-import re
-from datetime import datetime
+log_file = "${logPath}"
+pos = 0
 
-def monitor_d3k_logs(log_file="${logPath}", check_interval=${checkInterval}):
-    """Monitor d3k logs for critical errors and prompt for action"""
-    seen_errors = set()
-    last_position = 0
-    error_count = 0
-    
-    print("🔍 Starting dev3000 error monitoring...")
-    print(f"📁 Watching: {log_file}")
-    print(f"⏱️  Check interval: {check_interval} seconds")
-    print("🛑 Press Ctrl+C to stop monitoring")
-    print("-" * 60)
-    
-    # Critical error patterns to watch for
-    critical_patterns = [
-        (r'\\[RUNTIME\\.ERROR\\]', 'Runtime Error'),
-        (r'\\[CHROME\\.CRASH\\]', 'Browser Crash'),
-        (r'\\[CRITICAL ERROR\\]', 'Critical Error'),
-        (r'FATAL ERROR:', 'Fatal Error'),
-        (r'TypeError:', 'Type Error'),
-        (r'ReferenceError:', 'Reference Error'),
-        (r'SyntaxError:', 'Syntax Error'),
-        (r'Cannot find module', 'Module Not Found'),
-        (r'Unhandled Promise Rejection', 'Unhandled Promise'),
-        (r'JavaScript heap out of memory', 'Out of Memory')
-    ]
-    
-    try:
-        while True:
-            try:
-                if os.path.exists(log_file):
-                    current_size = os.path.getsize(log_file)
-                    
-                    if current_size > last_position:
-                        with open(log_file, 'r', encoding='utf-8', errors='ignore') as f:
-                            f.seek(last_position)
-                            new_lines = f.readlines()
-                            last_position = f.tell()
-                        
-                        # Check each new line for errors
-                        new_errors = []
-                        for line in new_lines:
-                            for pattern, error_type in critical_patterns:
-                                if re.search(pattern, line, re.IGNORECASE):
-                                    # Use line content hash to track unique errors
-                                    error_hash = hash(line.strip())
-                                    if error_hash not in seen_errors:
-                                        seen_errors.add(error_hash)
-                                        error_count += 1
-                                        new_errors.append((error_type, line.strip()))
-                                    break
-                        
-                        # Alert on new errors
-                        if new_errors:
-                            print(f"\\n{'='*60}")
-                            print(f"🚨 {len(new_errors)} NEW CRITICAL ERROR{'S' if len(new_errors) > 1 else ''} DETECTED!")
-                            print(f"⏰ Time: {datetime.now().strftime('%H:%M:%S')}")
-                            print(f"📊 Total errors this session: {error_count}")
-                            print("="*60)
-                            
-                            for i, (error_type, error_line) in enumerate(new_errors, 1):
-                                print(f"\\nError {i} - {error_type}:")
-                                # Truncate long lines
-                                if len(error_line) > 150:
-                                    print(f"  {error_line[:150]}...")
-                                else:
-                                    print(f"  {error_line}")
-                            
-                            print("\\n" + "🔧 " + "="*56)
-                            print("💡 To fix these errors, tell me: 'debug my app'")
-                            print("   I'll analyze the full context and fix the issues!")
-                            print("="*60 + "\\n")
-                
-                time.sleep(check_interval)
-                
-            except Exception as e:
-                print(f"\\n⚠️  Monitoring error: {e}")
-                print("   Retrying in {check_interval} seconds...")
-                time.sleep(check_interval)
-                
-    except KeyboardInterrupt:
-        print("\\n\\n✋ Monitoring stopped by user")
-        print(f"📊 Final stats: {error_count} errors detected this session")
-        print("\\n💡 Remember: You can always run 'debug my app' to analyze any issues!")
+print("🔍 Monitoring:", log_file)
+print("Press Ctrl+C to stop\\n")
 
-# Start monitoring
-if __name__ == "__main__":
-    monitor_d3k_logs()
+while True:
+    with open(log_file, 'r') as f:
+        f.seek(pos)
+        new = f.read()
+        pos = f.tell()
+    
+    for line in new.split('\\n'):
+        if any(err in line for err in ['ERROR', 'FAIL', 'Exception', 'TypeError', 'CRASH']):
+            print(f"\\n🚨 ERROR DETECTED:\\n{line[:200]}\\n")
+            print("💡 Tell me: 'fix my app' or 'debug my app' to fix this!\\n")
+    
+    time.sleep(2)
 `
 
           return {
             content: [
               {
                 type: "text",
-                text: `I'm ready to start monitoring your app's debug logs. I'll run a background process that watches ${logPath} for critical errors.
+                text: `I'm ready to monitor your app for errors. I'll watch ${logPath} and alert you when errors occur.
 
-Here's what the monitoring script will do:
-- Watch your dev3000 logs every ${checkInterval} seconds
-- Parse and detect critical errors (crashes, exceptions, fatal errors)
-- Display color-coded alerts when new errors appear
-- Track which errors you've already seen to avoid duplicates
-- Show clear prompts when you should let me debug
-
-Should I start the monitoring now?`
+Should I start monitoring now?`
               },
               {
                 type: "text",
