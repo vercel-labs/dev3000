@@ -1,22 +1,20 @@
-import { Bug, Calendar, Github, Package, Sparkles, Zap } from "lucide-react";
-import type { Metadata } from "next";
-import Link from "next/link";
-import { GitHubLink } from "@/components/github-link";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { changelog } from "@/lib/changelog";
+import { Bug, Calendar, Github, Package, Sparkles, Zap } from "lucide-react"
+import type { Metadata } from "next"
+import Link from "next/link"
+import { GitHubLink } from "@/components/github-link"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
+import { changelog } from "@/lib/changelog"
 
 // Get the latest release for metadata
-const latestRelease = changelog[0];
+const latestRelease = changelog[0]
 
 export const metadata: Metadata = {
   title: `dev3000 Changelog - v${latestRelease.version}`,
   description: `Latest updates and features in dev3000 v${
     latestRelease.version
-  }: ${latestRelease.highlights.slice(0, 2).join(", ")}${
-    latestRelease.highlights.length > 2 ? ", and more" : ""
-  }.`,
+  }: ${latestRelease.highlights.slice(0, 2).join(", ")}${latestRelease.highlights.length > 2 ? ", and more" : ""}.`,
   openGraph: {
     title: `dev3000 v${latestRelease.version} - AI-Powered Development Tools`,
     description: `New release: ${latestRelease.highlights
@@ -28,9 +26,9 @@ export const metadata: Metadata = {
         url: "/api/og/changelog/latest",
         width: 1200,
         height: 630,
-        alt: `dev3000 v${latestRelease.version} changelog`,
-      },
-    ],
+        alt: `dev3000 v${latestRelease.version} changelog`
+      }
+    ]
   },
   twitter: {
     card: "summary_large_image",
@@ -38,47 +36,35 @@ export const metadata: Metadata = {
     description: `Latest features: ${latestRelease.highlights
       .slice(0, 2)
       .join(" • ")}${latestRelease.highlights.length > 2 ? " and more" : ""}.`,
-    images: ["/api/og/changelog/latest"],
-  },
-};
+    images: ["/api/og/changelog/latest"]
+  }
+}
 
 const getVersionTypeIcon = (type: string) => {
   switch (type) {
     case "major":
-      return <Sparkles className="w-4 h-4 text-yellow-400" />;
+      return <Sparkles className="w-4 h-4 text-yellow-400" />
     case "minor":
-      return <Zap className="w-4 h-4 text-blue-400" />;
+      return <Zap className="w-4 h-4 text-blue-400" />
     case "patch":
-      return <Bug className="w-4 h-4 text-green-400" />;
+      return <Bug className="w-4 h-4 text-green-400" />
     default:
-      return <Package className="w-4 h-4 text-gray-400" />;
+      return <Package className="w-4 h-4 text-gray-400" />
   }
-};
+}
 
 const getVersionTypeBadge = (type: string) => {
   switch (type) {
     case "major":
-      return (
-        <Badge className="bg-yellow-400/20 text-yellow-400 border-yellow-400/30">
-          Major
-        </Badge>
-      );
+      return <Badge className="bg-yellow-400/20 text-yellow-400 border-yellow-400/30">Major</Badge>
     case "minor":
-      return (
-        <Badge className="bg-blue-400/20 text-blue-400 border-blue-400/30">
-          Minor
-        </Badge>
-      );
+      return <Badge className="bg-blue-400/20 text-blue-400 border-blue-400/30">Minor</Badge>
     case "patch":
-      return (
-        <Badge className="bg-green-400/20 text-green-400 border-green-400/30">
-          Patch
-        </Badge>
-      );
+      return <Badge className="bg-green-400/20 text-green-400 border-green-400/30">Patch</Badge>
     default:
-      return <Badge variant="secondary">Release</Badge>;
+      return <Badge variant="secondary">Release</Badge>
   }
-};
+}
 
 export default function ChangelogPage() {
   return (
@@ -93,9 +79,7 @@ export default function ChangelogPage() {
             <div className="flex items-center gap-2">
               <Link href="/" className="flex items-center gap-2">
                 <div className="w-8 h-8 bg-foreground rounded flex items-center justify-center">
-                  <span className="text-background font-mono font-bold text-sm">
-                    d3k
-                  </span>
+                  <span className="text-background font-mono font-bold text-sm">d3k</span>
                 </div>
                 <span className="font-semibold text-xl">dev3000</span>
               </Link>
@@ -119,19 +103,15 @@ export default function ChangelogPage() {
               <h1 className="text-3xl md:text-4xl font-bold">Changelog</h1>
             </div>
             <p className="text-base text-muted-foreground mb-6 text-pretty leading-relaxed">
-              Track the latest updates, features, and improvements to dev3000.
-              We're continuously enhancing the AI-powered debugging experience.
+              Track the latest updates, features, and improvements to dev3000. We're continuously enhancing the
+              AI-powered debugging experience.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center items-center">
               <Button variant="outline" className="border-gray-600/50" asChild>
                 <Link href="/">← Back to Home</Link>
               </Button>
               <Button variant="outline" className="border-gray-600/50" asChild>
-                <a
-                  href="https://www.npmjs.com/package/dev3000"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
+                <a href="https://www.npmjs.com/package/dev3000" target="_blank" rel="noopener noreferrer">
                   <Package className="w-4 h-4 mr-2" />
                   View on npm
                 </a>
@@ -160,16 +140,12 @@ export default function ChangelogPage() {
                             <h2 className="text-xl font-bold flex items-center gap-2 hover:text-primary transition-colors">
                               Version {release.version}
                               {index === 0 && (
-                                <Badge className="bg-green-400/20 text-green-400 border-green-400/30">
-                                  Latest
-                                </Badge>
+                                <Badge className="bg-green-400/20 text-green-400 border-green-400/30">Latest</Badge>
                               )}
                             </h2>
                           </Link>
                           <div className="flex items-center gap-2 mt-1">
-                            <span className="text-sm text-muted-foreground">
-                              {release.date}
-                            </span>
+                            <span className="text-sm text-muted-foreground">{release.date}</span>
                             {getVersionTypeBadge(release.type)}
                           </div>
                         </div>
@@ -178,19 +154,12 @@ export default function ChangelogPage() {
 
                     <div className="space-y-4">
                       <div>
-                        <h3 className="font-semibold text-sm mb-3">
-                          Key Highlights:
-                        </h3>
+                        <h3 className="font-semibold text-sm mb-3">Key Highlights:</h3>
                         <ul className="space-y-2">
                           {release.highlights.map((highlight, idx) => (
-                            <li
-                              key={idx}
-                              className="flex items-start gap-3 text-sm"
-                            >
+                            <li key={idx} className="flex items-start gap-3 text-sm">
                               <div className="w-1.5 h-1.5 bg-blue-400 rounded-full mt-2 flex-shrink-0" />
-                              <span className="text-foreground leading-relaxed">
-                                {highlight}
-                              </span>
+                              <span className="text-foreground leading-relaxed">{highlight}</span>
                             </li>
                           ))}
                         </ul>
@@ -207,11 +176,7 @@ export default function ChangelogPage() {
                           target="_blank"
                           rel="noopener noreferrer"
                         >
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="gap-2 text-muted-foreground"
-                          >
+                          <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground">
                             <Github className="w-4 h-4" />
                             GitHub
                           </Button>
@@ -226,19 +191,9 @@ export default function ChangelogPage() {
             {/* More Versions Available */}
             <div className="mt-8 text-center">
               <Card className="bg-card/30 backdrop-blur-sm border-2 border-gray-700/40 p-6">
-                <p className="text-muted-foreground mb-4">
-                  Want to see the complete version history?
-                </p>
-                <Button
-                  variant="outline"
-                  className="border-gray-600/50"
-                  asChild
-                >
-                  <a
-                    href="https://github.com/vercel-labs/dev3000/releases"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
+                <p className="text-muted-foreground mb-4">Want to see the complete version history?</p>
+                <Button variant="outline" className="border-gray-600/50" asChild>
+                  <a href="https://github.com/vercel-labs/dev3000/releases" target="_blank" rel="noopener noreferrer">
                     <Github className="w-4 h-4 mr-2" />
                     View All Releases on GitHub
                   </a>
@@ -255,9 +210,7 @@ export default function ChangelogPage() {
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 bg-foreground rounded-md flex items-center justify-center">
-                <span className="text-background font-mono font-bold text-sm">
-                  d3k
-                </span>
+                <span className="text-background font-mono font-bold text-sm">d3k</span>
               </div>
               <div>
                 <p className="font-semibold">dev3000</p>
@@ -274,10 +227,7 @@ export default function ChangelogPage() {
               <GitHubLink />
               <span className="text-sm text-muted-foreground">
                 Made by{" "}
-                <a
-                  href="https://github.com/elsigh"
-                  className="hover:text-foreground hover:underline transition-colors"
-                >
+                <a href="https://github.com/elsigh" className="hover:text-foreground hover:underline transition-colors">
                   elsigh
                 </a>
               </span>
@@ -286,5 +236,5 @@ export default function ChangelogPage() {
         </div>
       </footer>
     </div>
-  );
+  )
 }
