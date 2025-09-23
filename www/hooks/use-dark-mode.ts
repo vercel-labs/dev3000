@@ -1,18 +1,24 @@
 import { useEffect, useState } from "react"
 
 export function useDarkMode() {
-  const [darkMode, setDarkMode] = useState<boolean>(() => {
-    if (typeof window !== "undefined") {
+  // Initialize with false to avoid hydration mismatch
+  const [darkMode, setDarkMode] = useState<boolean>(false)
+  const [isInitialized, setIsInitialized] = useState(false)
+
+  // Initialize after hydration
+  useEffect(() => {
+    if (!isInitialized) {
       // Check localStorage first
       const saved = localStorage.getItem("dev3000-dark-mode")
       if (saved !== null) {
-        return JSON.parse(saved)
+        setDarkMode(JSON.parse(saved))
+      } else {
+        // Default to system preference
+        setDarkMode(window.matchMedia("(prefers-color-scheme: dark)").matches)
       }
-      // Default to system preference
-      return window.matchMedia("(prefers-color-scheme: dark)").matches
+      setIsInitialized(true)
     }
-    return false
-  })
+  }, [isInitialized])
 
   useEffect(() => {
     // Save to localStorage

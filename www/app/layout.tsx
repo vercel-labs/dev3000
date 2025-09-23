@@ -5,6 +5,7 @@ import { GeistSans } from "geist/font/sans"
 import type { Metadata } from "next"
 import type React from "react"
 import { Suspense } from "react"
+import { ThemeProvider } from "@/components/theme-provider"
 import "./globals.css"
 
 const BASE_URL = "https://dev3000.ai"
@@ -73,9 +74,11 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body className={`font-sans ${GeistSans.variable} ${GeistMono.variable}`}>
-        <Suspense fallback={null}>{children}</Suspense>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          <Suspense fallback={null}>{children}</Suspense>
+        </ThemeProvider>
         <Analytics />
         <SpeedInsights />
       </body>

@@ -3,6 +3,7 @@
 import { ArrowRight, Github } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
+import { useTheme } from "next-themes"
 import { useEffect, useState } from "react"
 import Balancer from "react-wrap-balancer"
 import { DarkModeToggle } from "@/components/dark-mode-toggle"
@@ -10,7 +11,6 @@ import { GitHubLink } from "@/components/github-link"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { useDarkMode } from "@/hooks/use-dark-mode"
 
 const cursorConfig = {
   mcpServers: {
@@ -23,7 +23,12 @@ const cursorConfig = {
 
 export default function HomePage() {
   const [isScrolled, setIsScrolled] = useState(false)
-  const [darkMode, setDarkMode] = useDarkMode()
+  const { theme, setTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   useEffect(() => {
     const handleScroll = () => {
@@ -66,7 +71,9 @@ export default function HomePage() {
               </Link>
 
               {/* Dark mode toggle */}
-              <DarkModeToggle darkMode={darkMode} setDarkMode={setDarkMode} />
+              {mounted && (
+                <DarkModeToggle darkMode={theme === "dark"} setDarkMode={(dark) => setTheme(dark ? "dark" : "light")} />
+              )}
             </nav>
           </div>
         </div>
