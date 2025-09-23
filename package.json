@@ -14,7 +14,6 @@
     "mcp-server/app/",
     "mcp-server/.next/",
     "mcp-server/package.json",
-    "mcp-server/pnpm-lock.yaml",
     "mcp-server/tsconfig.json",
     "mcp-server/next.config.ts",
     "mcp-server/next-env.d.ts",
