@@ -103,9 +103,9 @@ export async function GET(_request: Request, { params }: { params: { version: st
             marginBottom: "32px"
           }}
         >
-          {release.highlights.slice(0, 3).map((highlight, index) => (
+          {release.highlights.slice(0, 3).map((highlight) => (
             <div
-              key={index}
+              key={`${release.version}-highlight-${highlight}`}
               style={{
                 display: "block",
                 fontSize: "16px",
@@ -133,8 +133,8 @@ export async function GET(_request: Request, { params }: { params: { version: st
         height: 630
       }
     )
-  } catch (e: any) {
-    console.log(`Failed to generate the image`, e)
+  } catch (error: unknown) {
+    console.log(`Failed to generate the image`, error)
     return new Response(`Failed to generate the image`, {
       status: 500
     })

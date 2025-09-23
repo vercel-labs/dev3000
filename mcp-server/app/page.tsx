@@ -26,10 +26,26 @@ interface ToolsResponse {
 
 // Format tool descriptions by parsing markdown-style sections
 function formatToolDescription(description: string) {
+  const slugify = (value: string) =>
+    value
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "")
+
   // Split by double newline to get sections
   const sections = description.split("\n\n").filter((section) => section.trim())
+  const keyCounts = new Map<string, number>()
 
-  return sections.map((section, idx) => {
+  const getUniqueKey = (base: string) => {
+    const count = keyCounts.get(base) ?? 0
+    keyCounts.set(base, count + 1)
+    return count === 0 ? base : `${base}-${count}`
+  }
+
+  return sections.map((rawSection, _idx) => {
+    const normalizedKey = getUniqueKey(slugify(rawSection) || "section")
+    let section = rawSection
+
     // Remove excessive emojis
     // Simple emoji reduction - just remove most emojis except the first in sequences
     section = section.replace(/(\u{1F300}-\u{1F9FF}|\u{2600}-\u{26FF}|\u{1F900}-\u{1F9FF})+/gu, (match) => {
@@ -47,23 +63,27 @@ function formatToolDescription(description: string) {
       // Check if content has bullet points
       if (content.includes("•")) {
         const items = content.split("•").filter((item) => item.trim())
+        const sectionKey = `${normalizedKey}-bullets`
         return (
-          <div key={idx}>
+          <div key={sectionKey}>
             <h5 className="font-semibold mb-2">{cleanHeader}</h5>
             <ul className="space-y-1 ml-4">
-              {items.map((item, itemIdx) => (
-                <li key={itemIdx} className="flex items-start">
-                  <span className="text-muted-foreground mr-2">•</span>
-                  <span className="text-muted-foreground text-sm">{item.trim()}</span>
-                </li>
-              ))}
+              {items.map((item) => {
+                const itemKey = getUniqueKey(`${sectionKey}-item-${slugify(item).slice(0, 40) || "bullet"}`)
+                return (
+                  <li key={itemKey} className="flex items-start">
+                    <span className="text-muted-foreground mr-2">•</span>
+                    <span className="text-muted-foreground text-sm">{item.trim()}</span>
+                  </li>
+                )
+              })}
             </ul>
           </div>
         )
       }
 
       return (
-        <div key={idx}>
+        <div key={`${normalizedKey}-content`}>
           <h5 className="font-semibold mb-1">{cleanHeader}</h5>
           <p className="text-muted-foreground text-sm ml-4">{content}</p>
         </div>
@@ -74,7 +94,7 @@ function formatToolDescription(description: string) {
     if (section.match(/^\d+[\ud83c-\ud83e][\udc00-\udfff]|^\d+\./m)) {
       const items = section.split(/\n/).filter((item) => item.trim())
       return (
-        <ol className="space-y-1 ml-4" key={idx}>
+        <ol className="space-y-1 ml-4" key={`${normalizedKey}-steps`}>
           {items.map((item, itemIdx) => {
             // Clean up the item text
             const cleanItem = item
@@ -82,7 +102,10 @@ function formatToolDescription(description: string) {
               .replace(/^\d+\.\s*/, "")
               .trim()
             return (
-              <li key={itemIdx} className="text-muted-foreground text-sm">
+              <li
+                key={getUniqueKey(`${normalizedKey}-step-${slugify(cleanItem).slice(0, 40) || "step"}`)}
+                className="text-muted-foreground text-sm"
+              >
                 {itemIdx + 1}. {cleanItem}
               </li>
             )
@@ -93,7 +116,7 @@ function formatToolDescription(description: string) {
 
     // Default paragraph
     return (
-      <p key={idx} className="text-muted-foreground text-sm leading-relaxed">
+      <p key={`${normalizedKey}-paragraph`} className="text-muted-foreground text-sm leading-relaxed">
         {section}
       </p>
     )

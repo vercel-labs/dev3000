@@ -806,7 +806,7 @@ export class CDPMonitor {
       const checkResult = (await this.sendCDPCommand("Runtime.evaluate", {
         expression: "!!window.__dev3000_cdp_tracking",
         returnByValue: true
-      })) as any
+      })) as { result?: { value?: unknown } }
 
       if (checkResult.result?.value === true) {
         this.debugLog("Interaction tracking already set up, skipping")

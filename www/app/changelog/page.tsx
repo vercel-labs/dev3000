@@ -7,6 +7,12 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { changelog } from "@/lib/changelog"
 
+const slugify = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "")
+
 // Get the latest release for metadata
 const latestRelease = changelog[0]
 
@@ -156,8 +162,11 @@ export default function ChangelogPage() {
                       <div>
                         <h3 className="font-semibold text-sm mb-3">Key Highlights:</h3>
                         <ul className="space-y-2">
-                          {release.highlights.map((highlight, idx) => (
-                            <li key={idx} className="flex items-start gap-3 text-sm">
+                          {release.highlights.map((highlight) => (
+                            <li
+                              key={`highlight-${release.version}-${slugify(highlight) || highlight}`}
+                              className="flex items-start gap-3 text-sm"
+                            >
                               <div className="w-1.5 h-1.5 bg-blue-400 rounded-full mt-2 flex-shrink-0" />
                               <span className="text-foreground leading-relaxed">{highlight}</span>
                             </li>

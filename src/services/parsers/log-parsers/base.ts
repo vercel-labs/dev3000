@@ -10,7 +10,7 @@ export interface ParsedLogLine {
   formatted: string // Display format (e.g., "[WEB] Started GET /")
   message: string // Raw message for error detection (e.g., "Started GET /")
   processName?: string // Optional process identifier (e.g., "web", "js")
-  metadata?: Record<string, any> // Additional metadata from parsing
+  metadata?: Record<string, unknown> // Additional metadata from parsing
 }
 
 /**

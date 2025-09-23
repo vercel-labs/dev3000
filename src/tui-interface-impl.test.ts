@@ -24,7 +24,7 @@ describe("TUI ASCII Logo", () => {
     expect(fileContent).toContain('const COMPACT_LOGO = "d3k"')
 
     // Check that the logo is rendered with map
-    expect(fileContent).toContain("FULL_LOGO.map((line, i) =>")
+    expect(fileContent).toContain("FULL_LOGO.map((line) =>")
   })
 
   it("should have consistent spacing in the logo", () => {

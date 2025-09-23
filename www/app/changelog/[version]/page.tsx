@@ -1,4 +1,4 @@
-import { Bug, Calendar, Github, Package, Sparkles, Zap } from "lucide-react"
+import { Calendar, Github, Sparkles } from "lucide-react"
 import type { Metadata } from "next"
 import Link from "next/link"
 import { notFound } from "next/navigation"
@@ -6,6 +6,12 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { changelog } from "@/lib/changelog"
+
+const slugify = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "")
 
 export async function generateStaticParams() {
   return changelog.map((release) => ({
@@ -45,19 +51,6 @@ export async function generateMetadata({ params }: { params: Promise<{ version: 
       description: `Features: ${release.highlights.slice(0, 2).join(" • ")}${release.highlights.length > 2 ? " and more" : ""}.`,
       images: [`/api/og/changelog/${version}`]
     }
-  }
-}
-
-const getVersionTypeIcon = (type: string) => {
-  switch (type) {
-    case "major":
-      return <Sparkles className="w-4 h-4 text-yellow-400" />
-    case "minor":
-      return <Zap className="w-4 h-4 text-blue-400" />
-    case "patch":
-      return <Bug className="w-4 h-4 text-green-400" />
-    default:
-      return <Package className="w-4 h-4 text-gray-400" />
   }
 }
 
@@ -150,8 +143,11 @@ export default async function VersionPage({ params }: { params: Promise<{ versio
               Key Highlights
             </h2>
             <ul className="space-y-3">
-              {release.highlights.map((highlight, idx) => (
-                <li key={`highlight-${idx}`} className="flex items-start gap-3">
+              {release.highlights.map((highlight) => (
+                <li
+                  key={`highlight-${release.version}-${slugify(highlight) || highlight}`}
+                  className="flex items-start gap-3"
+                >
                   <div className="w-2 h-2 bg-primary rounded-full mt-2 flex-shrink-0" />
                   <span className="text-foreground leading-relaxed">{highlight}</span>
                 </li>

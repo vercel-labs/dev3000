@@ -44,12 +44,10 @@ const TUIApp = ({
   const { exit } = useApp()
   const { stdout } = useStdout()
 
-  const getTerminalSize = () => ({
+  const [terminalSize, setTerminalSize] = useState(() => ({
     width: stdout?.columns || 80,
     height: stdout?.rows || 24
-  })
-
-  const [terminalSize, setTerminalSize] = useState(getTerminalSize)
+  }))
 
   useEffect(() => {
     if (!stdout) {
@@ -57,7 +55,10 @@ const TUIApp = ({
     }
 
     const handleResize = () => {
-      setTerminalSize(getTerminalSize())
+      setTerminalSize({
+        width: stdout.columns || 80,
+        height: stdout.rows || 24
+      })
     }
 
     stdout.on("resize", handleResize)
@@ -241,8 +242,8 @@ const TUIApp = ({
         {/* ASCII Logo on the left */}
         {/* biome-ignore format: preserve ASCII art alignment */}
         <Box flexDirection="column" alignItems="flex-start">
-          {FULL_LOGO.map((line, i) => (
-            <Text key={i} color="#A18CE5" bold>{line}</Text>
+          {FULL_LOGO.map((line) => (
+            <Text key={line} color="#A18CE5" bold>{line}</Text>
           ))}
         </Box>
 
