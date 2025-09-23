@@ -38,10 +38,11 @@ function cleanConsoleFormatting(message: string): string {
 }
 
 export function parseLogEntries(logContent: string): LogEntry[] {
-  // Enhanced pattern to handle both formats:
+  // Enhanced pattern to handle multiple timestamp formats:
   // Format 1 (CDP): [timestamp] [SOURCE] message
   // Format 2 (Extension): [timestamp] [TAB-id] [SOURCE] [event] message
-  const timestampPattern = /\[(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z)\] \[([^\]]+)\] /
+  // Format 3 (Short): [HH:MM:SS.mmm] [SOURCE] message
+  const timestampPattern = /\[(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z|\d{2}:\d{2}:\d{2}\.\d{3})\] \[([^\]]+)\] /
 
   const entries: LogEntry[] = []
   const lines = logContent.split("\n")
@@ -112,8 +113,19 @@ export function parseLogEntries(logContent: string): LogEntry[] {
         continue
       }
 
+      // Normalize timestamp to full ISO format if it's just time
+      let normalizedTimestamp = timestamp
+      if (/^\d{2}:\d{2}:\d{2}\.\d{3}$/.test(timestamp)) {
+        // It's just HH:MM:SS.mmm, convert to today's date with this time
+        const today = new Date()
+        const [hours, minutes, secondsMs] = timestamp.split(':')
+        const [seconds, ms] = secondsMs.split('.')
+        today.setHours(parseInt(hours, 10), parseInt(minutes, 10), parseInt(seconds, 10), parseInt(ms, 10))
+        normalizedTimestamp = today.toISOString()
+      }
+
       currentEntry = {
-        timestamp,
+        timestamp: normalizedTimestamp,
         source,
         message: cleanedMessage,
         screenshot,

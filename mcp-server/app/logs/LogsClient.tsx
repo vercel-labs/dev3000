@@ -1141,7 +1141,8 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
         setTimeout(scrollToBottom, 300)
       }
     }
-  }, [mode, initialData, logs.length, hasLoadedInitial])
+  }, [mode, initialData, logs.length, hasLoadedInitial]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Note: loadInitialLogs is intentionally not in dependencies to prevent infinite loops
 
   // Separate effect to handle scrolling after logs are rendered
   useEffect(() => {
