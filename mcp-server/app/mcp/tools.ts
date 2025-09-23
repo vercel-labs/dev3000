@@ -445,7 +445,7 @@ export async function executeBrowserAction({
                   if (typeof params.expression !== "string") {
                     throw new Error("Evaluate action requires expression parameter as string")
                   }
-                  const expression = params.expression;
+                  const expression = params.expression
                   // Whitelist safe expressions only
                   const safeExpressions = [
                     /^document\.title$/,
