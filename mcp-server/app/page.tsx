@@ -22,6 +22,75 @@ interface ToolsResponse {
   categories: string[]
 }
 
+// Format tool descriptions by parsing markdown-style sections
+function formatToolDescription(description: string) {
+  // Split by double newline to get sections
+  const sections = description.split('\n\n').filter(section => section.trim())
+  
+  return sections.map((section, idx) => {
+    // Remove excessive emojis
+    // Simple emoji reduction - just remove most emojis except the first in sequences
+    section = section.replace(/(\u{1F300}-\u{1F9FF}|\u{2600}-\u{26FF}|\u{1F900}-\u{1F9FF})+/gu, (match) => {
+      // Keep only the first emoji in a sequence
+      return match.charAt(0)
+    })
+    
+    // Handle different section types
+    if (section.includes('**') && section.includes(':')) {
+      // This is a header with content
+      const [header, ...contentParts] = section.split(':')
+      const cleanHeader = header.replace(/\*\*/g, '').trim()
+      const content = contentParts.join(':').trim()
+      
+      // Check if content has bullet points
+      if (content.includes('•')) {
+        const items = content.split('•').filter(item => item.trim())
+        return (
+          <div key={idx}>
+            <h5 className="font-semibold text-gray-800 mb-2">{cleanHeader}</h5>
+            <ul className="space-y-1 ml-4">
+              {items.map((item, itemIdx) => (
+                <li key={itemIdx} className="flex items-start">
+                  <span className="text-gray-400 mr-2">•</span>
+                  <span className="text-gray-600 text-sm">{item.trim()}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )
+      }
+      
+      return (
+        <div key={idx}>
+          <h5 className="font-semibold text-gray-800 mb-1">{cleanHeader}</h5>
+          <p className="text-gray-600 text-sm ml-4">{content}</p>
+        </div>
+      )
+    }
+    
+    // Handle numbered lists (like workflow steps)
+    if (section.match(/^\d+[\ud83c-\ud83e][\udc00-\udfff]|^\d+\./m)) {
+      const items = section.split(/\n/).filter(item => item.trim())
+      return (
+        <ol className="space-y-1 ml-4" key={idx}>
+          {items.map((item, itemIdx) => {
+            // Clean up the item text
+            const cleanItem = item.replace(/^\d+[\ud83c-\ud83e][\udc00-\udfff]\s*/, '').replace(/^\d+\.\s*/, '').trim()
+            return (
+              <li key={itemIdx} className="text-gray-600 text-sm">
+                {itemIdx + 1}. {cleanItem}
+              </li>
+            )
+          })}
+        </ol>
+      )
+    }
+    
+    // Default paragraph
+    return <p key={idx} className="text-gray-600 text-sm leading-relaxed">{section}</p>
+  })
+}
+
 export default function HomePage() {
   const [tools, setTools] = useState<ToolsResponse | null>(null)
   const [loading, setLoading] = useState(true)
@@ -82,9 +151,8 @@ export default function HomePage() {
         </div>
       </header>
 
-      <div className="flex max-w-7xl mx-auto">
-        {/* Main Content */}
-        <main className="flex-1 px-6 py-8 min-w-0 lg:pr-80">
+      {/* Main Content - no sidebar needed with only 2 tools */}
+      <main className="max-w-7xl mx-auto px-6 py-8">
           {/* Quick Start */}
           <section className="mb-16">
             <div className="bg-blue-50 border border-blue-200 rounded p-8">
@@ -151,9 +219,9 @@ export default function HomePage() {
                   >
                     <div className="mb-4">
                       <h4 className="text-xl font-semibold text-gray-900 font-mono mb-3">{tool.name}</h4>
-                      <p className="text-gray-600 leading-relaxed">
-                        {tool.description.replace(/🚨|⏰|🔍|🪄|📊|🌐|⚙️/g, "").trim()}
-                      </p>
+                      <div className="text-gray-600 space-y-3">
+                        {formatToolDescription(tool.description)}
+                      </div>
                     </div>
                     {tool.parameters.length > 0 && (
                       <div>
@@ -203,7 +271,7 @@ export default function HomePage() {
                 </div>
                 <h3 className="font-semibold mb-3 text-lg">AI Finds Issues</h3>
                 <p className="text-gray-600 leading-relaxed">
-                  Tools like debug_my_app and monitor_for_new_errors automatically detect problems
+                  fix_my_app automatically detects all types of errors and problems in your app
                 </p>
               </div>
               <div className="text-center">
@@ -227,31 +295,6 @@ export default function HomePage() {
             </div>
           </section>
         </main>
-
-        {/* Table of Contents - Sticky Sidebar (Right) */}
-        <aside className="lg:block w-72 flex-shrink-0 fixed right-0 top-0 h-screen overflow-y-auto z-10">
-          <div className="p-6 bg-gray-50 border-l border-gray-200 h-full">
-            <h3 className="text-sm font-semibold text-gray-900 mb-4">Tools</h3>
-            {loading ? (
-              <div className="text-sm text-gray-500">Loading tools...</div>
-            ) : tools ? (
-              <nav className="space-y-1 text-sm">
-                {tools.tools.map((tool) => (
-                  <a
-                    key={tool.name}
-                    href={`#${tool.name}`}
-                    className="text-gray-600 hover:text-blue-600 transition-colors block py-2 px-3 rounded hover:bg-white"
-                  >
-                    {tool.name}
-                  </a>
-                ))}
-              </nav>
-            ) : (
-              <div className="text-sm text-gray-500">Failed to load tools</div>
-            )}
-          </div>
-        </aside>
-      </div>
 
       {/* Footer */}
       <footer className="border-t border-gray-200 mt-20">

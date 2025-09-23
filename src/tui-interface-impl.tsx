@@ -24,12 +24,7 @@ interface LogEntry {
 const COMPACT_LOGO = "d3k"
 
 // Full ASCII logo lines as array for easier rendering
-const FULL_LOGO = [
-  "   ▐▌▄▄▄▄ █  ▄ ",
-  "   ▐▌   █ █▄▀  ",
-  "▗▞▀▜▌▀▀▀█ █ ▀▄ ",
-  "▝▚▄▟▌▄▄▄█ █  █ "
-]
+const FULL_LOGO = ["   ▐▌▄▄▄▄ █  ▄ ", "   ▐▌   █ █▄▀  ", "▗▞▀▜▌▀▀▀█ █ ▀▄ ", "▝▚▄▟▌▄▄▄█ █  █ "]
 
 const TUIApp = ({
   appPort,
@@ -48,11 +43,11 @@ const TUIApp = ({
   const logIdCounter = useRef(0)
   const { exit } = useApp()
   const { stdout } = useStdout()
-  
+
   // Get terminal dimensions with fallbacks
   const termWidth = stdout?.columns || 80
   const termHeight = stdout?.rows || 24
-  
+
   // Determine if we should use compact mode
   const isCompact = termWidth < 80 || termHeight < 20
   const isVeryCompact = termWidth < 60 || termHeight < 15
@@ -80,7 +75,7 @@ const TUIApp = ({
       return Math.max(3, termHeight - totalReservedLines)
     }
   }
-  
+
   const maxVisibleLogs = calculateMaxVisibleLogs()
 
   useEffect(() => {
@@ -194,13 +189,17 @@ const TUIApp = ({
     <Box borderStyle="single" borderColor="#A18CE5" paddingX={1} marginBottom={1}>
       <Box flexDirection="column" width="100%">
         <Box>
-          <Text color="#A18CE5" bold>{COMPACT_LOGO}</Text>
+          <Text color="#A18CE5" bold>
+            {COMPACT_LOGO}
+          </Text>
           <Text> v{version} </Text>
           {initStatus && <Text dimColor>- {initStatus}</Text>}
         </Box>
         {!isVeryCompact && (
           <>
-            <Text dimColor>App: localhost:{appPort} | MCP: localhost:{mcpPort}</Text>
+            <Text dimColor>
+              App: localhost:{appPort} | MCP: localhost:{mcpPort}
+            </Text>
             <Text dimColor>↑/↓ scroll | Ctrl-C quit</Text>
           </>
         )}
@@ -319,7 +318,9 @@ const TUIApp = ({
                     <Text key={log.id} wrap="truncate-end">
                       <Text dimColor>[{timestamp}]</Text>
                       <Text> </Text>
-                      <Text color={sourceColor} bold>[{source.charAt(0)}]</Text>
+                      <Text color={sourceColor} bold>
+                        [{source.charAt(0)}]
+                      </Text>
                       {type && (
                         <>
                           <Text> </Text>

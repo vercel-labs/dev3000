@@ -93,7 +93,7 @@ export default async function LogsPage({ searchParams }: PageProps) {
       if (match) {
         const fileProject = match[1]
         // Check if the file project contains the requested project as substring
-        return fileProject.includes(params.project)
+        return fileProject.includes(params.project!)
       }
       return false
     })

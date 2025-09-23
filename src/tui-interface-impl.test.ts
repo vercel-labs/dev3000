@@ -12,15 +12,10 @@ describe("TUI ASCII Logo", () => {
     const fileContent = readFileSync(tuiFilePath, "utf-8")
 
     // Expected logo lines as defined in FULL_LOGO constant
-    const expectedLogoLines = [
-      '"   ▐▌▄▄▄▄ █  ▄ "',
-      '"   ▐▌   █ █▄▀  "',
-      '"▗▞▀▜▌▀▀▀█ █ ▀▄ "',
-      '"▝▚▄▟▌▄▄▄█ █  █ "'
-    ]
+    const expectedLogoLines = ['"   ▐▌▄▄▄▄ █  ▄ "', '"   ▐▌   █ █▄▀  "', '"▗▞▀▜▌▀▀▀█ █ ▀▄ "', '"▝▚▄▟▌▄▄▄█ █  █ "']
 
     // Check that FULL_LOGO constant exists and contains the expected lines
-    expect(fileContent).toContain('const FULL_LOGO = [')
+    expect(fileContent).toContain("const FULL_LOGO = [")
     expectedLogoLines.forEach((line) => {
       expect(fileContent).toContain(line)
     })
@@ -29,7 +24,7 @@ describe("TUI ASCII Logo", () => {
     expect(fileContent).toContain('const COMPACT_LOGO = "d3k"')
 
     // Check that the logo is rendered with map
-    expect(fileContent).toContain('FULL_LOGO.map((line, i) =>')
+    expect(fileContent).toContain("FULL_LOGO.map((line, i) =>")
   })
 
   it("should have consistent spacing in the logo", () => {
@@ -42,10 +37,10 @@ describe("TUI ASCII Logo", () => {
 
     // Parse the logo lines from the array
     const logoLines = logoArrayMatch?.[1]
-      .split(',')
-      .map(line => line.trim())
-      .filter(line => line.startsWith('"') && line.endsWith('"'))
-      .map(line => line.slice(1, -1)) // Remove quotes
+      .split(",")
+      .map((line) => line.trim())
+      .filter((line) => line.startsWith('"') && line.endsWith('"'))
+      .map((line) => line.slice(1, -1)) // Remove quotes
 
     expect(logoLines).toBeTruthy()
     expect(logoLines?.length).toBe(4)
