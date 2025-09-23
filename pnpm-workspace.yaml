@@ -3,6 +3,7 @@ packages:
   - mcp-server
 
 catalog:
+  "@modelcontextprotocol/sdk": ^1.11.0
   "@radix-ui/react-slot": ^1.1.1
   "@tailwindcss/postcss": ^4.1.9
   "@types/node": ^22.0.0

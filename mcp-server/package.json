@@ -11,6 +11,7 @@
     "tools": "tsx tools-cli.ts"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "catalog:",
     "@radix-ui/react-slot": "catalog:",
     "autoprefixer": "catalog:",
     "class-variance-authority": "catalog:",
