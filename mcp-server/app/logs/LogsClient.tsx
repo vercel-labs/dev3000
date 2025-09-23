@@ -253,97 +253,84 @@ function ObjectRenderer({ content }: { content: string }) {
   }
 }
 
-function LogEntryComponent({ entry }: { entry: LogEntry }) {
+function LogEntryComponent({ entry, darkMode }: { entry: LogEntry; darkMode: boolean }) {
   // Parse log type from message patterns - using shared TUI colors
   const parseLogType = (message: string) => {
     if (message.includes("[INTERACTION]"))
       return {
         type: "INTERACTION",
-        color: "bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800",
         backgroundColor: LOG_COLORS.CONSOLE_DEBUG,
         textColor: getTextColor(LOG_COLORS.CONSOLE_DEBUG)
       }
     if (message.includes("[CONSOLE ERROR]"))
       return {
         type: "CONSOLE ERROR",
-        color: "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800",
         backgroundColor: LOG_COLORS.CONSOLE_ERROR,
         textColor: getTextColor(LOG_COLORS.CONSOLE_ERROR)
       }
     if (message.includes("[CONSOLE WARN]"))
       return {
         type: "CONSOLE WARN",
-        color: "bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800",
         backgroundColor: LOG_COLORS.CONSOLE_WARN,
         textColor: getTextColor(LOG_COLORS.CONSOLE_WARN)
       }
     if (message.includes("[CONSOLE INFO]"))
       return {
         type: "CONSOLE INFO",
-        color: "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800",
         backgroundColor: LOG_COLORS.CONSOLE_INFO,
         textColor: getTextColor(LOG_COLORS.CONSOLE_INFO)
       }
     if (message.includes("[CONSOLE LOG]"))
       return {
         type: "CONSOLE LOG",
-        color: "bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700",
         backgroundColor: LOG_COLORS.CONSOLE_LOG,
         textColor: getTextColor(LOG_COLORS.CONSOLE_LOG)
       }
     if (message.includes("[CONSOLE DEBUG]"))
       return {
         type: "CONSOLE DEBUG",
-        color: "bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800",
         backgroundColor: LOG_COLORS.CONSOLE_DEBUG,
         textColor: getTextColor(LOG_COLORS.CONSOLE_DEBUG)
       }
     if (message.includes("[SCREENSHOT]"))
       return {
         type: "SCREENSHOT",
-        color: "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800",
         backgroundColor: LOG_COLORS.SCREENSHOT,
         textColor: getTextColor(LOG_COLORS.SCREENSHOT)
       }
     if (message.includes("[NAVIGATION]") || message.includes("[PAGE]"))
       return {
         type: "PAGE",
-        color: "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800",
         backgroundColor: LOG_COLORS.PAGE,
         textColor: getTextColor(LOG_COLORS.PAGE)
       }
     if (message.includes("[DOM]"))
       return {
         type: "DOM",
-        color: "bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800",
         backgroundColor: LOG_COLORS.DOM,
         textColor: getTextColor(LOG_COLORS.DOM)
       }
     if (message.includes("[CDP]"))
       return {
         type: "CDP",
-        color: "bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800",
         backgroundColor: LOG_COLORS.CDP,
         textColor: getTextColor(LOG_COLORS.CDP)
       }
     if (message.includes("[NETWORK]"))
       return {
         type: "NETWORK",
-        color: "bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800",
         backgroundColor: LOG_COLORS.NETWORK,
         textColor: getTextColor(LOG_COLORS.NETWORK)
       }
     if (message.includes("[ERROR]") || message.includes("[PAGE ERROR]") || message.includes("[NETWORK ERROR]"))
       return {
         type: "ERROR",
-        color: "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800",
         backgroundColor: LOG_COLORS.ERROR,
         textColor: getTextColor(LOG_COLORS.ERROR)
       }
     if (message.includes("[CRITICAL ERROR]"))
       return {
         type: "CRITICAL ERROR",
-        color: "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800",
         backgroundColor: LOG_COLORS.CRITICAL_ERROR,
         textColor: getTextColor(LOG_COLORS.CRITICAL_ERROR)
       }
@@ -450,8 +437,89 @@ function LogEntryComponent({ entry }: { entry: LogEntry }) {
     return parts.length > 0 ? parts : message
   }
 
+  // Determine the background color based on log type and dark mode
+  const getBackgroundStyle = () => {
+    const type = logTypeInfo.type
+    if (darkMode) {
+      // Dark mode colors
+      switch (type) {
+        case "INTERACTION":
+        case "CONSOLE DEBUG":
+        case "DOM":
+          return { backgroundColor: "rgba(88, 28, 135, 0.3)" } // purple-950/30
+        case "CONSOLE ERROR":
+        case "ERROR":
+        case "CRITICAL ERROR":
+          return { backgroundColor: "rgba(127, 29, 29, 0.3)" } // red-950/30
+        case "CONSOLE WARN":
+        case "CDP":
+        case "NETWORK":
+          return { backgroundColor: "rgba(133, 77, 14, 0.3)" } // yellow-950/30
+        case "CONSOLE INFO":
+        case "SCREENSHOT":
+          return { backgroundColor: "rgba(30, 58, 138, 0.3)" } // blue-950/30
+        case "PAGE":
+          return { backgroundColor: "rgba(20, 83, 45, 0.3)" } // green-950/30
+        case "CONSOLE LOG":
+        default:
+          return { backgroundColor: "rgba(17, 24, 39, 0.3)" } // gray-900/30
+      }
+    } else {
+      // Light mode colors
+      switch (type) {
+        case "INTERACTION":
+        case "CONSOLE DEBUG":
+        case "DOM":
+          return { backgroundColor: "rgba(250, 245, 255, 0.5)" } // purple-50/50
+        case "CONSOLE ERROR":
+        case "ERROR":
+        case "CRITICAL ERROR":
+          return { backgroundColor: "rgba(254, 242, 242, 0.5)" } // red-50/50
+        case "CONSOLE WARN":
+        case "CDP":
+        case "NETWORK":
+          return { backgroundColor: "rgba(254, 252, 232, 0.5)" } // yellow-50/50
+        case "CONSOLE INFO":
+        case "SCREENSHOT":
+          return { backgroundColor: "rgba(239, 246, 255, 0.5)" } // blue-50/50
+        case "PAGE":
+          return { backgroundColor: "rgba(240, 253, 244, 0.5)" } // green-50/50
+        case "CONSOLE LOG":
+        default:
+          return { backgroundColor: "transparent" }
+      }
+    }
+  }
+
+  // Determine the border class based on log type
+  const getBorderClass = () => {
+    const type = logTypeInfo.type
+    switch (type) {
+      case "INTERACTION":
+      case "CONSOLE DEBUG":
+      case "DOM":
+        return "border-purple-200 dark:border-purple-800"
+      case "CONSOLE ERROR":
+      case "ERROR":
+      case "CRITICAL ERROR":
+        return "border-red-200 dark:border-red-800"
+      case "CONSOLE WARN":
+      case "CDP":
+      case "NETWORK":
+        return "border-yellow-200 dark:border-yellow-800"
+      case "CONSOLE INFO":
+      case "SCREENSHOT":
+        return "border-blue-200 dark:border-blue-800"
+      case "PAGE":
+        return "border-green-200 dark:border-green-800"
+      case "CONSOLE LOG":
+      default:
+        return "border-gray-200 dark:border-gray-700"
+    }
+  }
+
   return (
-    <div className={`border-l-4 ${logTypeInfo.color} pl-4 py-2`}>
+    <div className={`border-l-4 ${getBorderClass()} pl-4 py-2`} style={getBackgroundStyle()}>
       {/* Table-like layout using CSS Grid */}
       <div className="grid grid-cols-[auto_auto_1fr] gap-3 items-start">
         {/* Column 1: Timestamp */}
@@ -1704,7 +1772,8 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                   </div>
                 )}
               </div>
-              <div className="flex items-center bg-muted rounded-md p-1">
+              {/* Head/Tail toggle - commented out for now as it's too noisy */}
+              {/* <div className="flex items-center bg-muted rounded-md p-1">
                 <button
                   type="button"
                   onClick={() => {
@@ -1741,7 +1810,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                 >
                   Tail
                 </button>
-              </div>
+              </div> */}
               {/* Dark Mode Toggle - moved to last item */}
               <DarkModeToggle darkMode={darkMode} setDarkMode={setDarkMode} className="ml-2" />
             </div>
@@ -1792,7 +1861,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
           ) : (
             <div className="space-y-1 pb-4">
               {filteredLogs.map((entry, index) => (
-                <LogEntryComponent key={`${entry.timestamp}-${index}`} entry={entry} />
+                <LogEntryComponent key={`${entry.timestamp}-${index}`} entry={entry} darkMode={darkMode} />
               ))}
               <div ref={bottomRef} />
             </div>
