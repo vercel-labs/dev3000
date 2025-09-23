@@ -4,9 +4,9 @@ import { changelog } from "@/lib/changelog"
 export const runtime = "nodejs"
 export const revalidate = 3600 // Revalidate every hour
 
-export async function GET(_request: Request, { params }: { params: { version: string } }) {
+export async function GET(_request: Request, { params }: { params: Promise<{ version: string }> }) {
   try {
-    const version = params.version
+    const { version } = await params
 
     // Find the release by version, or use latest if version is "latest"
     const release =
