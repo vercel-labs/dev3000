@@ -20,6 +20,7 @@ import { fileURLToPath } from "url"
 import { CDPMonitor } from "./cdp-monitor.js"
 import { type LogEntry, NextJsErrorDetector, OutputProcessor, StandardLogParser } from "./services/parsers/index.js"
 import { DevTUI } from "./tui-interface.js"
+import { formatTimestamp } from "./utils/timestamp.js"
 
 interface DevEnvironmentOptions {
   port: string
@@ -37,15 +38,18 @@ interface DevEnvironmentOptions {
   userSetMcpPort?: boolean // Whether user explicitly set the MCP port
   tail?: boolean // Whether to tail the log file to terminal
   tui?: boolean // Whether to use TUI mode (default true)
+  dateTimeFormat?: "local" | "utc" // Timestamp format option
 }
 
 class Logger {
   private logFile: string
   private tail: boolean
+  private dateTimeFormat: "local" | "utc"
 
-  constructor(logFile: string, tail: boolean = false) {
+  constructor(logFile: string, tail: boolean = false, dateTimeFormat: "local" | "utc" = "local") {
     this.logFile = logFile
     this.tail = tail
+    this.dateTimeFormat = dateTimeFormat
     // Ensure directory exists
     const logDir = dirname(logFile)
     if (!existsSync(logDir)) {
@@ -56,7 +60,7 @@ class Logger {
   }
 
   log(source: "server" | "browser", message: string) {
-    const timestamp = new Date().toISOString()
+    const timestamp = formatTimestamp(new Date(), this.dateTimeFormat)
     const logEntry = `[${timestamp}] [${source.toUpperCase()}] ${message}\n`
     appendFileSync(this.logFile, logEntry)
 
@@ -222,7 +226,7 @@ export class DevEnvironment {
       ...options,
       mcpPort: options.portMcp || options.mcpPort || "3684"
     }
-    this.logger = new Logger(options.logFile, options.tail || false)
+    this.logger = new Logger(options.logFile, options.tail || false, options.dateTimeFormat || "local")
     this.outputProcessor = new OutputProcessor(new StandardLogParser(), new NextJsErrorDetector())
 
     // Set up MCP server public directory for web-accessible screenshots

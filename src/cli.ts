@@ -146,6 +146,11 @@ program
   .option("--debug", "Enable debug logging to console")
   .option("-t, --tail", "Output consolidated logfile to terminal (like tail -f)")
   .option("--no-tui", "Disable TUI mode and use standard terminal output")
+  .option(
+    "--date-time <format>",
+    "Timestamp format: 'local' (default, e.g. 12:54:03 PM) or 'utc' (ISO string)",
+    "local"
+  )
   .option("--kill-mcp", "Kill the MCP server on port 3684 and exit")
   .action(async (options) => {
     // Handle --kill-mcp option
@@ -217,7 +222,8 @@ program
         serversOnly: options.serversOnly,
         commandName,
         tail: options.tail,
-        tui: options.noTui !== true // TUI is default unless --no-tui is specified
+        tui: options.noTui !== true, // TUI is default unless --no-tui is specified
+        dateTimeFormat: options.dateTime || "local"
       })
     } catch (error) {
       console.error(chalk.red("❌ Failed to start development environment:"), error)

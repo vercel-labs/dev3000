@@ -1,4 +1,4 @@
-import { Camera, Clock, ExternalLink, Eye, Github, HelpCircle, Network, Play, Terminal, Zap } from "lucide-react"
+import { ArrowRight, Github, Terminal } from "lucide-react"
 import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -17,36 +17,28 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-background">
       {/* Grid Pattern Background */}
-      <div className="absolute inset-0 grid-pattern opacity-50" />
+      <div className="absolute inset-0 grid-pattern" />
 
       {/* Header */}
-      <header className="relative border-b border-border/40">
-        <div className="container mx-auto px-4 py-3">
+      <header className="relative border-b">
+        <div className="container mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-foreground rounded flex items-center justify-center">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-foreground rounded-md flex items-center justify-center">
                 <span className="text-background font-mono font-bold text-sm">d3k</span>
               </div>
-              <span className="font-semibold text-xl">dev3000</span>
-              <Badge variant="secondary" className="ml-2">
-                Vercel Labs
-              </Badge>
+              <span className="font-semibold text-lg">dev3000</span>
             </div>
-            <nav className="flex items-center gap-4">
-              <div className="md:flex items-center gap-6">
-                <Link href="/changelog" className="text-foreground hover:text-foreground/80 transition-colors">
-                  Changelog
-                </Link>
-                <a
-                  href="#quickstart"
-                  className="hidden md:visible text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  Quick Start
-                </a>
-              </div>
-              <Button variant="ghost" size="sm" className="border border-gray-600/50" asChild>
+            <nav className="flex items-center gap-8">
+              <Link href="/changelog" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                Changelog
+              </Link>
+              <a href="#quickstart" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                Quick Start
+              </a>
+              <Button variant="ghost" size="sm" asChild>
                 <a href="https://github.com/vercel-labs/dev3000" target="_blank" rel="noopener noreferrer">
-                  <Github className="w-4 h-4 mr-0" />
+                  <Github className="w-4 h-4 mr-2" />
                   GitHub
                 </a>
               </Button>
@@ -56,35 +48,37 @@ export default function HomePage() {
       </header>
 
       {/* Hero Section */}
-      <section className="relative py-8 md:py-10 border-b border-gray-700/30">
-        <div className="container mx-auto px-4 text-center">
-          <div className="max-w-4xl mx-auto">
-            <Badge variant="secondary" className="mb-3">
-              <Zap className="w-3 h-3 mr-1" />
-              AI-Powered Debugging
+      <section className="relative py-20 md:py-28">
+        <div className="container mx-auto px-6 text-center">
+          <div className="max-w-3xl mx-auto">
+            <Badge variant="secondary" className="mb-6 font-medium">
+              By Vercel Labs
             </Badge>
-            <h1 className="text-3xl md:text-5xl font-bold mb-3 text-balance animate-fade-in-up">
-              <span className="block">The browser for</span>
-              <span className="block">AI-based development</span>
-            </h1>
-            <p className="text-base text-muted-foreground mb-4 text-pretty max-w-2xl mx-auto leading-relaxed">
-              Captures server + browser logs, events, and network requests. Takes automatic screenshots and stiches it
+            <h1 className="text-5xl md:text-7xl font-bold mb-6 tracking-tight">The browser for AI-based development</h1>
+            <p className="text-xl text-muted-foreground mb-10 max-w-2xl mx-auto leading-relaxed">
+              Captures server + browser logs, events, and network requests. Takes automatic screenshots and stitches it
               all into a unified, timestamped feed for AI and you.
             </p>
-            <div className="flex flex-col sm:flex-row gap-2 justify-center items-center">
-              <Button size="lg" className="bg-foreground text-background hover:bg-foreground/90" asChild>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-16">
+              <Button size="lg" className="text-base px-8 py-6" asChild>
                 <a href="#quickstart">
-                  <Terminal className="w-4 h-4 mr-2" />
                   Get Started
+                  <ArrowRight className="w-4 h-4 ml-2" />
                 </a>
               </Button>
-              <Button variant="outline" size="lg" className="border-2 !border-gray-700/30 p-5" asChild>
+              <Button variant="outline" size="lg" className="text-base px-8 py-6" asChild>
                 <a href="https://github.com/vercel-labs/dev3000" target="_blank" rel="noopener noreferrer">
                   <Github className="w-4 h-4 mr-2" />
                   View on GitHub
-                  <ExternalLink className="w-3 h-3 ml-1" />
                 </a>
               </Button>
+            </div>
+
+            {/* Placeholder for screenshot */}
+            <div className="relative mx-auto max-w-6xl">
+              <div className="bg-gradient-to-b from-muted/50 to-muted/20 rounded-lg border p-8 min-h-[600px] flex items-center justify-center">
+                <p className="text-muted-foreground text-lg">CLI + Browser Screenshot Goes Here</p>
+              </div>
             </div>
           </div>
         </div>
@@ -92,166 +86,96 @@ export default function HomePage() {
 
       {/* Quick Start */}
       {/* biome-ignore lint/correctness/useUniqueElementIds: page section IDs are intentionally static for navigation */}
-      <section id="quickstart" className="relative py-6 border-b border-gray-700/30">
-        <div className="container mx-auto px-4">
-          <div className="max-w-2xl mx-auto text-center mb-5">
-            <h2 className="text-2xl font-bold mb-2">Quick Start</h2>
-            <p className="text-muted-foreground">Get up and running in seconds</p>
+      <section id="quickstart" className="relative py-20 border-b">
+        <div className="container mx-auto px-6">
+          <div className="max-w-2xl mx-auto text-center mb-12">
+            <h2 className="text-3xl font-bold mb-4">Quick Start</h2>
+            <p className="text-lg text-muted-foreground">Get up and running in seconds</p>
           </div>
 
-          <div className="max-w-5xl mx-auto space-y-4">
+          <div className="max-w-3xl mx-auto space-y-6">
             {/* Step 1: Install */}
-            <Card className="bg-card/50 backdrop-blur-sm border-2 border-gray-700/40 card-hover shadow-lg hover:shadow-xl transition-all">
-              <div className="p-4">
-                <h3 className="font-semibold mb-3 text-lg flex items-center gap-2">
-                  <span className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-bold">
-                    1
-                  </span>
-                  Install dev3000
-                </h3>
-                <div className="bg-secondary/50 rounded p-3 font-mono text-sm border-2 border-gray-700/35 shadow-sm">
-                  <div className="text-foreground">pnpm i -g dev3000</div>
+            <Card className="bg-card border p-6">
+              <div className="flex items-start gap-4">
+                <div className="w-8 h-8 bg-foreground text-background rounded-full flex items-center justify-center flex-shrink-0 font-semibold">
+                  1
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-semibold mb-3 text-lg">Install dev3000</h3>
+                  <div className="bg-muted rounded-md p-4 font-mono text-sm">pnpm i -g dev3000</div>
                 </div>
               </div>
             </Card>
 
             {/* Step 2: Replace your dev command */}
-            <Card className="bg-card/50 backdrop-blur-sm border-2 border-gray-700/40 card-hover shadow-lg hover:shadow-xl transition-all">
-              <div className="p-4">
-                <h3 className="font-semibold mb-3 text-lg flex items-center gap-2">
-                  <span className="w-6 h-6 bg-purple-500 text-white rounded-full flex items-center justify-center text-sm font-bold">
-                    2
-                  </span>
-                  Replace your dev command
-                </h3>
-                <div className="space-y-3">
-                  {/* Visual example 1 */}
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-                    <div className="bg-red-50 dark:bg-red-900/20 rounded p-2 font-mono text-sm flex-1 border border-red-200 dark:border-red-800">
-                      <span className="text-muted-foreground">Instead of:</span>{" "}
-                      <span className="text-foreground">pnpm dev</span>
-                    </div>
-                    <div className="text-2xl self-center">→</div>
-                    <div className="bg-green-50 dark:bg-green-900/20 rounded p-2 font-mono text-sm flex-1 border border-green-200 dark:border-green-800">
-                      <span className="text-muted-foreground">Run:</span>{" "}
-                      <span className="text-foreground">dev3000</span>
-                    </div>
-                  </div>
-
-                  {/* Visual example 2 */}
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-                    <div className="bg-red-50 dark:bg-red-900/20 rounded p-2 font-mono text-sm flex-1 border border-red-200 dark:border-red-800">
-                      <span className="text-muted-foreground">Instead of:</span>{" "}
-                      <span className="text-foreground">next dev -p 5000</span>
-                    </div>
-                    <div className="text-2xl self-center">→</div>
-                    <div className="bg-green-50 dark:bg-green-900/20 rounded p-2 font-mono text-sm flex-1 border border-green-200 dark:border-green-800">
-                      <span className="text-muted-foreground">Run:</span>{" "}
-                      <span className="text-foreground">dev3000 -p 5000</span>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-                    <div className="bg-red-50 dark:bg-red-900/20 rounded p-2 font-mono text-sm flex-1 border border-red-200 dark:border-red-800">
-                      <span className="text-muted-foreground">Instead of:</span>{" "}
-                      <span className="text-foreground">pnpm build-start</span>
-                    </div>
-                    <div className="text-2xl self-center">→</div>
-                    <div className="bg-green-50 dark:bg-green-900/20 rounded p-2 font-mono text-sm flex-1 border border-green-200 dark:border-green-800">
-                      <span className="text-muted-foreground">Run:</span>{" "}
-                      <span className="text-foreground">dev3000 -s build-start</span>
-                    </div>
-                  </div>
-
-                  {/* Quick shortcut */}
-                  <div className="bg-blue-50 dark:bg-blue-900/20 rounded p-3 border border-blue-200 dark:border-blue-800">
-                    <div className="text-sm text-muted-foreground mb-1">Pro tip: Use the shortcut</div>
-                    <div className="font-mono text-sm text-foreground">d3k</div>
-                  </div>
-                  <p>
-                    More details in the{" "}
-                    <Link href="https://github.com/vercel-labs/dev3000" className="text-sm text-muted-foreground">
-                      README
-                    </Link>
-                  </p>
+            <Card className="bg-card border p-6">
+              <div className="flex items-start gap-4">
+                <div className="w-8 h-8 bg-foreground text-background rounded-full flex items-center justify-center flex-shrink-0 font-semibold">
+                  2
                 </div>
-              </div>
-            </Card>
-
-            {/* Step 3: Connect to Claude */}
-            <Card className="bg-card/50 backdrop-blur-sm border-2 border-gray-700/40 card-hover shadow-lg hover:shadow-xl transition-all">
-              <div className="p-4">
-                <h3 className="font-semibold mb-3 text-lg flex items-center gap-2">
-                  <span className="w-6 h-6 bg-green-500 text-white rounded-full flex items-center justify-center text-sm font-bold">
-                    3
-                  </span>
-                  Connect to Claude/Cursor/Codex
-                </h3>
-                <div className="space-y-3">
-                  <div className="text-sm text-muted-foreground mb-2 text-purple-400">For claude code:</div>
-                  <div className="bg-secondary/50 rounded p-3 font-mono text-xs border-2 border-gray-700/35 shadow-sm overflow-x-auto">
-                    <div className="text-foreground whitespace-nowrap">
-                      claude mcp add -t http -s user dev3000 http://localhost:3684/mcp
+                <div className="flex-1">
+                  <h3 className="font-semibold mb-3 text-lg">Replace your dev command</h3>
+                  <div className="space-y-3">
+                    <div className="bg-muted rounded-md p-4">
+                      <div className="flex items-center gap-4 font-mono text-sm">
+                        <span className="text-muted-foreground">Instead of:</span>
+                        <code className="text-foreground">pnpm dev</code>
+                        <span className="text-muted-foreground mx-2">→</span>
+                        <span className="text-muted-foreground">Run:</span>
+                        <code className="text-foreground font-semibold">dev3000</code>
+                      </div>
                     </div>
-                  </div>
-                  <div className="text-xs text-yellow-400 mt-2">For Cursor:</div>
-                  <div className="bg-secondary/50 rounded p-3 font-mono text-xs border-2 border-gray-700/35 shadow-sm overflow-x-auto">
-                    <div className="text-muted-foreground mb-1">Add to ~/.codex/config.toml:</div>
-                    <div className="text-foreground whitespace-pre-wrap">{JSON.stringify(cursorConfig, null, 2)}</div>
-                  </div>
 
-                  <div className="text-xs text-blue-400 mt-2">For OpenAI Codex:</div>
-                  <div className="bg-secondary/50 rounded p-3 font-mono text-xs border-2 border-gray-700/35 shadow-sm overflow-x-auto">
-                    <div className="text-muted-foreground mb-1">Add to ~/.codex/config.toml:</div>
-                    <div className="text-foreground whitespace-pre-wrap">
-                      {`[mcp_servers]
-
-  [mcp_servers.dev3000]
-  url = "http://localhost:3684/mcp"`}
+                    <div className="text-sm text-muted-foreground">
+                      <p className="mb-2">Works with any dev command:</p>
+                      <ul className="space-y-1 font-mono text-xs">
+                        <li>
+                          • <code>next dev -p 5000</code> → <code className="font-semibold">dev3000 -p 5000</code>
+                        </li>
+                        <li>
+                          • <code>pnpm build-start</code> →{" "}
+                          <code className="font-semibold">dev3000 -s build-start</code>
+                        </li>
+                        <li>
+                          • Or use the shortcut: <code className="font-semibold">d3k</code>
+                        </li>
+                      </ul>
                     </div>
                   </div>
                 </div>
               </div>
             </Card>
 
-            {/* What Happens Next */}
-            <Card className="bg-card/50 backdrop-blur-sm border-2 border-gray-700/40 card-hover shadow-lg hover:shadow-xl transition-all">
-              <div className="p-3">
-                <h3 className="font-semibold mb-4">What happens next?</h3>
-                <div className="grid md:grid-cols-3 gap-6 text-sm">
-                  <div className="flex items-start gap-2">
-                    <div className="w-6 h-6 bg-blue-400/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <span className="text-blue-400 text-xs font-bold">1</span>
-                    </div>
+            {/* Step 3: Connect to Claude */}
+            <Card className="bg-card border p-6">
+              <div className="flex items-start gap-4">
+                <div className="w-8 h-8 bg-foreground text-background rounded-full flex items-center justify-center flex-shrink-0 font-semibold">
+                  3
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-semibold mb-3 text-lg">Connect to your AI tool</h3>
+                  <div className="space-y-4">
                     <div>
-                      <div className="font-medium mb-1">Server Starts</div>
-                      <div className="text-muted-foreground text-xs">
-                        Your dev server launches and dev3000 begins monitoring
+                      <p className="text-sm text-muted-foreground mb-2">For Claude Code:</p>
+                      <div className="bg-muted rounded-md p-3 font-mono text-xs overflow-x-auto">
+                        claude mcp add -t http -s user dev3000 http://localhost:3684/mcp
                       </div>
                     </div>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <div className="w-6 h-6 bg-emerald-400/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <span className="text-emerald-400 text-xs font-bold">2</span>
-                    </div>
-                    <div>
-                      <div className="font-medium mb-1">Browser Opens</div>
-                      <div className="text-muted-foreground text-xs">
-                        Automated CDP-connected browser starts capturing events and screenshots
+                    <details className="group">
+                      <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground">
+                        Other AI tools (Cursor, OpenAI Codex)
+                      </summary>
+                      <div className="mt-3 space-y-3">
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-1">
+                            For Cursor - Add to ~/.codex/config.toml:
+                          </p>
+                          <div className="bg-muted rounded-md p-3 font-mono text-xs">
+                            <pre>{JSON.stringify(cursorConfig, null, 2)}</pre>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <div className="w-6 h-6 bg-purple-400/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <span className="text-purple-400 text-xs font-bold">3</span>
-                    </div>
-                    <div>
-                      <div className="font-medium mb-1">Build Better</div>
-                      <div className="text-muted-foreground text-xs">
-                        Just type "debug my app" into your AI tool and it should use the dev3000 MCP to get into an
-                        agentic loop of joy.
-                      </div>
-                    </div>
+                    </details>
                   </div>
                 </div>
               </div>
