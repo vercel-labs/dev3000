@@ -3,6 +3,15 @@ import { homedir } from "os"
 import { join } from "path"
 import { WebSocket } from "ws"
 
+// Tool descriptions
+export const TOOL_DESCRIPTIONS = {
+  fix_my_app:
+    "🔧 **THE ULTIMATE FIND→FIX→VERIFY MACHINE!** This tool doesn't just find bugs - it FIXES them! Pure dev3000 magic that identifies issues, provides exact fixes, and verifies everything works! 🪄\n\n🔥 **INSTANT FIXING SUPERPOWERS:**\n• Detects ALL error types: server crashes, browser errors, build failures, API issues, performance problems\n• Shows EXACT user interactions that triggered each error (clicks, navigation, etc.)\n• Provides EXACT fix code with file locations and line numbers\n• Guides you through implementing fixes step-by-step\n• Verifies fixes by replaying the same interactions that caused the error!\n\n📍 **INTERACTION-BASED VERIFICATION:**\n• Every error includes the user interactions that led to it\n• Use execute_browser_action to replay these exact interactions\n• Verify your fix works by confirming the error doesn't reoccur\n• Example: Error shows '[INTERACTION] Click at (450,300)' → After fix, use execute_browser_action(action='click', params={x:450, y:300}) to verify\n\n⚡ **3 ACTION MODES:**\n• FIX NOW: 'What's broken RIGHT NOW?' → Find and fix immediately\n• FIX REGRESSION: 'What broke during testing?' → Compare before/after and fix\n• FIX CONTINUOUSLY: 'Fix issues as they appear' → Monitor and fix proactively\n\n🎪 **THE FIX-IT WORKFLOW:**\n1️⃣ I FIND all issues with their triggering interactions\n2️⃣ I provide EXACT FIXES with code snippets\n3️⃣ You implement the fixes\n4️⃣ We REPLAY the interactions to VERIFY everything works\n\n💡 **PERFECT FOR:** 'fix my app' or 'debug my app' requests, error resolution, code repairs, making broken apps work again. This tool doesn't just identify problems - it SOLVES them with precise reproduction steps!",
+
+  execute_browser_action:
+    "🌐 **BROWSER INTERACTION TOOL** - Execute actions in the browser to verify fixes and reproduce issues. Use this after implementing fixes to ensure they work correctly."
+}
+
 // Types
 export interface Session {
   projectName: string
@@ -189,12 +198,39 @@ export async function fixMyApp({
 
     // Filter logs by time range (replaces get_logs_between_timestamps)
     const timeFilteredLines = logLines.filter((line) => {
-      const timestampMatch = line.match(/\[(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z)\]/)
-      if (timestampMatch) {
-        const logTime = new Date(timestampMatch[1])
+      // Try ISO format first (e.g., 2025-09-23T22:03:55.068Z)
+      const isoMatch = line.match(/\[(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z)\]/)
+      if (isoMatch) {
+        const logTime = new Date(isoMatch[1])
         return logTime >= cutoffTime
       }
-      return false
+
+      // Try time-only format (e.g., 15:04:03.987)
+      const timeMatch = line.match(/\[(\d{2}):(\d{2}):(\d{2})\.(\d{3})\]/)
+      if (timeMatch) {
+        // For time-only format, assume it's from today
+        const now = new Date()
+        const logTime = new Date(
+          now.getFullYear(),
+          now.getMonth(),
+          now.getDate(),
+          parseInt(timeMatch[1], 10),
+          parseInt(timeMatch[2], 10),
+          parseInt(timeMatch[3], 10),
+          parseInt(timeMatch[4], 10)
+        )
+
+        // If the time is in the future (e.g., log shows 15:04 but now is 14:00),
+        // assume it was from yesterday
+        if (logTime > now) {
+          logTime.setDate(logTime.getDate() - 1)
+        }
+
+        return logTime >= cutoffTime
+      }
+
+      // If no timestamp found, include the line (better to show more than miss errors)
+      return true
     })
 
     // Extract ALL error types (replaces multiple error detection tools)
@@ -240,7 +276,32 @@ export async function fixMyApp({
     const totalErrors = allErrors.length
     const criticalErrors = totalErrors - categorizedErrors.warnings.length
 
-    if (totalErrors === 0) {
+    // Also check for any errors in the entire log file (not just time filtered)
+    const allLogErrors = logLines.filter((line) => {
+      return errorPatterns.some((pattern) => pattern.test(line))
+    })
+    const recentErrorsOutsideTimeRange = allLogErrors.length > totalErrors
+
+    // Helper function to find preceding interaction events for any error
+    const findInteractionsBeforeError = (errorLine: string, allLines: string[]): string[] => {
+      const errorIndex = allLines.indexOf(errorLine)
+      if (errorIndex === -1) return []
+
+      const interactions: string[] = []
+      // Look back up to 20 lines or 5 interactions
+      for (let i = errorIndex - 1; i >= Math.max(0, errorIndex - 20) && interactions.length < 5; i--) {
+        if (
+          allLines[i].includes("[INTERACTION]") ||
+          allLines[i].includes("[NAVIGATION]") ||
+          allLines[i].includes("[PAGE]")
+        ) {
+          interactions.unshift(allLines[i])
+        }
+      }
+      return interactions
+    }
+
+    if (totalErrors === 0 && !recentErrorsOutsideTimeRange) {
       results.push(`✅ **SYSTEM HEALTHY** - No errors found in last ${timeRangeMinutes} minutes`)
       results.push("🎯 App appears to be running smoothly!")
 
@@ -251,35 +312,91 @@ export async function fixMyApp({
         results.push("• Use mode='monitor' for continuous background monitoring")
         results.push("• Increase timeRangeMinutes to analyze longer periods")
       }
+    } else if (totalErrors === 0 && recentErrorsOutsideTimeRange) {
+      results.push(
+        `⚠️ **NO ERRORS IN LAST ${timeRangeMinutes} MINUTES** - But found ${allLogErrors.length} errors in the full log`
+      )
+      results.push("")
+      results.push("📋 **RECENT ERRORS (outside time range):**")
+      // Show last 5 errors from the full log with their interactions
+      allLogErrors.slice(-5).forEach((error) => {
+        const interactions = findInteractionsBeforeError(error, logLines)
+        if (interactions.length > 0) {
+          results.push("  📍 Preceding interactions:")
+          for (const interaction of interactions) {
+            results.push(`    ${interaction}`)
+          }
+        }
+        results.push(`  ❌ ${error}`)
+        results.push("")
+      })
+      results.push("💡 **TIP:** Increase timeRangeMinutes parameter to analyze these errors")
+      results.push("💡 **TIP:** Or use timeRangeMinutes=60 to check the last hour")
     } else {
       results.push(
         `🚨 **${totalErrors} ISSUES DETECTED** (${criticalErrors} critical, ${categorizedErrors.warnings.length} warnings)`
       )
       results.push("")
 
-      // Show categorized errors (replaces individual error tools)
+      // Show categorized errors with their preceding interactions
       if (categorizedErrors.serverErrors.length > 0) {
         results.push("🔥 **SERVER ERRORS:**")
-        results.push(categorizedErrors.serverErrors.slice(-5).join("\n"))
-        results.push("")
+        categorizedErrors.serverErrors.slice(-5).forEach((error) => {
+          const interactions = findInteractionsBeforeError(error, logLines)
+          if (interactions.length > 0) {
+            results.push("  📍 Preceding interactions:")
+            for (const interaction of interactions) {
+              results.push(`    ${interaction}`)
+            }
+          }
+          results.push(`  ❌ ${error}`)
+          results.push("")
+        })
       }
 
       if (categorizedErrors.browserErrors.length > 0) {
         results.push("🌐 **BROWSER/CONSOLE ERRORS:**")
-        results.push(categorizedErrors.browserErrors.slice(-5).join("\n"))
-        results.push("")
+        categorizedErrors.browserErrors.slice(-5).forEach((error) => {
+          const interactions = findInteractionsBeforeError(error, logLines)
+          if (interactions.length > 0) {
+            results.push("  📍 Preceding interactions:")
+            for (const interaction of interactions) {
+              results.push(`    ${interaction}`)
+            }
+          }
+          results.push(`  ❌ ${error}`)
+          results.push("")
+        })
       }
 
       if (categorizedErrors.buildErrors.length > 0) {
         results.push("🔨 **BUILD/COMPILATION ERRORS:**")
-        results.push(categorizedErrors.buildErrors.slice(-5).join("\n"))
-        results.push("")
+        categorizedErrors.buildErrors.slice(-5).forEach((error) => {
+          const interactions = findInteractionsBeforeError(error, logLines)
+          if (interactions.length > 0) {
+            results.push("  📍 Preceding interactions:")
+            for (const interaction of interactions) {
+              results.push(`    ${interaction}`)
+            }
+          }
+          results.push(`  ❌ ${error}`)
+          results.push("")
+        })
       }
 
       if (categorizedErrors.networkErrors.length > 0) {
         results.push("🌐 **NETWORK/API ERRORS:**")
-        results.push(categorizedErrors.networkErrors.slice(-5).join("\n"))
-        results.push("")
+        categorizedErrors.networkErrors.slice(-5).forEach((error) => {
+          const interactions = findInteractionsBeforeError(error, logLines)
+          if (interactions.length > 0) {
+            results.push("  📍 Preceding interactions:")
+            for (const interaction of interactions) {
+              results.push(`    ${interaction}`)
+            }
+          }
+          results.push(`  ❌ ${error}`)
+          results.push("")
+        })
       }
 
       if (categorizedErrors.warnings.length > 0 && focusArea === "all") {
@@ -291,9 +408,20 @@ export async function fixMyApp({
       // Show the magical dev3000 fix workflow
       results.push("🪄 **ULTIMATE DEV3000 FIX-IT MAGIC READY:**")
       results.push("🎯 **I don't just find errors - I FIX them instantly!**")
-      results.push("• Analyze error patterns and provide exact fix code")
-      results.push("• Guide you through implementing the fixes")
-      results.push("• Use execute_browser_action to verify fixes work")
+      results.push("")
+      results.push("📍 **INTERACTION-BASED VERIFICATION WORKFLOW:**")
+      results.push("• Each error shows the EXACT user interactions that triggered it")
+      results.push("• Use these interactions to reproduce the error with execute_browser_action")
+      results.push("• After fixing, replay the SAME interactions to verify the fix works")
+      results.push("• Example: If error shows [INTERACTION] Click at (x:450, y:300), use:")
+      results.push("  execute_browser_action(action='click', params={x:450, y:300})")
+      results.push("")
+      results.push("🔧 **FIX WORKFLOW:**")
+      results.push("1. Analyze error patterns and preceding interactions")
+      results.push("2. Provide exact fix code with file locations")
+      results.push("3. Guide you through implementing the fixes")
+      results.push("4. Use execute_browser_action to replay the interactions")
+      results.push("5. Verify the error no longer occurs!")
       results.push("• Dev3000 AUTO-CAPTURES screenshots during all interactions!")
       results.push("• No manual screenshots needed - dev3000 handles it all!")
       results.push("")

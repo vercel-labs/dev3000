@@ -1,13 +1,13 @@
 import { createMcpHandler } from "mcp-handler"
 import { z } from "zod"
-import { executeBrowserAction, fixMyApp } from "./tools"
+import { executeBrowserAction, fixMyApp, TOOL_DESCRIPTIONS } from "./tools"
 
 const handler = createMcpHandler(
   (server) => {
     // Enhanced fix_my_app - the ultimate error fixing tool
     server.tool(
       "fix_my_app",
-      "🔧 **THE ULTIMATE FIND→FIX→VERIFY MACHINE!** This tool doesn't just find bugs - it FIXES them! Pure dev3000 magic that identifies issues, provides exact fixes, and verifies everything works! 🪄\n\n🔥 **INSTANT FIXING SUPERPOWERS:**\n• Detects ALL error types: server crashes, browser errors, build failures, API issues, performance problems\n• Provides EXACT fix code with file locations and line numbers\n• Guides you through implementing fixes step-by-step\n• Verifies fixes actually resolve the issues\n\n⚡ **3 ACTION MODES:**\n• FIX NOW: 'What's broken RIGHT NOW?' → Find and fix immediately\n• FIX REGRESSION: 'What broke during testing?' → Compare before/after and fix\n• FIX CONTINUOUSLY: 'Fix issues as they appear' → Monitor and fix proactively\n\n🎪 **THE FIX-IT WORKFLOW:**\n1️⃣ I FIND all issues instantly\n2️⃣ I provide EXACT FIXES with code snippets\n3️⃣ You implement the fixes\n4️⃣ We VERIFY everything works\n\n💡 **PERFECT FOR:** 'fix my app' or 'debug my app' requests, error resolution, code repairs, making broken apps work again. This tool doesn't just identify problems - it SOLVES them!",
+      TOOL_DESCRIPTIONS.fix_my_app,
       {
         projectName: z
           .string()
@@ -39,7 +39,7 @@ const handler = createMcpHandler(
     // Browser interaction tool
     server.tool(
       "execute_browser_action",
-      "🌐 **BROWSER INTERACTION TOOL** - Execute actions in the browser to verify fixes and reproduce issues. Use this after implementing fixes to ensure they work correctly.",
+      TOOL_DESCRIPTIONS.execute_browser_action,
       {
         action: z
           .enum(["click", "navigate", "screenshot", "evaluate", "scroll", "type"])
