@@ -25,7 +25,8 @@ async function getLogFiles() {
 
     const dirContents = readdirSync(logDir)
     const logFiles = dirContents
-      .filter((file) => file.startsWith(`dev3000-${projectName}-`) && file.endsWith(".log"))
+      // Get all dev3000 log files
+      .filter((file) => file.startsWith("dev3000-") && file.endsWith(".log"))
       .map((file) => {
         const filePath = join(logDir, file)
         const stats = statSync(filePath)
@@ -85,14 +86,29 @@ export default async function LogsPage({ searchParams }: PageProps) {
 
   // If project parameter is provided, find latest file for that project
   if (params.project && !params.file) {
-    const projectFiles = files.filter((f) => f.name.includes(`dev3000-${params.project}-`))
+    // Look for files that contain the project name (could be partial match)
+    const projectFiles = files.filter((f) => {
+      // Extract the project part from filename: dev3000-<project>-timestamp.log
+      const match = f.name.match(/^dev3000-(.+?)-\d{4}-\d{2}-\d{2}T/)
+      if (match) {
+        const fileProject = match[1]
+        // Check if the file project contains the requested project as substring
+        return fileProject.includes(params.project)
+      }
+      return false
+    })
     if (projectFiles.length > 0) {
       redirect(`/logs?file=${encodeURIComponent(projectFiles[0].name)}&mode=tail`)
     }
+    // If no matching project files found but we have other files, show the latest
+    else if (files.length > 0) {
+      redirect(`/logs?file=${encodeURIComponent(files[0].name)}&mode=tail`)
+    }
+    // Otherwise fall through to render empty state
   }
 
   // If no file specified and we have files, redirect to latest with tail mode
-  if (!params.file && files.length > 0) {
+  else if (!params.file && files.length > 0) {
     const latestFile = files[0].name
     redirect(`/logs?file=${encodeURIComponent(latestFile)}&mode=tail`)
   }
