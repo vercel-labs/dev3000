@@ -1883,14 +1883,9 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
               </span>
             )}
             {currentLogFile && (
-              <a
-                href={`file://${currentLogFile}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1"
-              >
-                Raw Log ↗
-              </a>
+              <span className="text-xs text-gray-500 dark:text-gray-400 font-mono">
+                {currentLogFile}
+              </span>
             )}
           </div>
 

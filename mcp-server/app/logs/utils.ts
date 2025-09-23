@@ -118,8 +118,8 @@ export function parseLogEntries(logContent: string): LogEntry[] {
       if (/^\d{2}:\d{2}:\d{2}\.\d{3}$/.test(timestamp)) {
         // It's just HH:MM:SS.mmm, convert to today's date with this time
         const today = new Date()
-        const [hours, minutes, secondsMs] = timestamp.split(':')
-        const [seconds, ms] = secondsMs.split('.')
+        const [hours, minutes, secondsMs] = timestamp.split(":")
+        const [seconds, ms] = secondsMs.split(".")
         today.setHours(parseInt(hours, 10), parseInt(minutes, 10), parseInt(seconds, 10), parseInt(ms, 10))
         normalizedTimestamp = today.toISOString()
       }
