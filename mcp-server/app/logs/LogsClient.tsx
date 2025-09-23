@@ -82,7 +82,7 @@ function URLRenderer({ url, maxLength = 60 }: { url: string; maxLength?: number 
           <button
             type="button"
             onClick={() => setIsExpanded(false)}
-            className="ml-2 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 px-1 py-0.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+            className="ml-2 text-xs text-muted-foreground hover:text-foreground px-1 py-0.5 rounded hover:bg-muted"
           >
             [collapse]
           </button>
@@ -100,7 +100,7 @@ function URLRenderer({ url, maxLength = 60 }: { url: string; maxLength?: number 
           <button
             type="button"
             onClick={() => setIsExpanded(true)}
-            className="ml-1 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 px-1 py-0.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+            className="ml-1 text-xs text-muted-foreground hover:text-foreground px-1 py-0.5 rounded hover:bg-muted"
           >
             [expand]
           </button>
@@ -242,7 +242,7 @@ function ObjectRenderer({ content }: { content: string }) {
 
         {isExpanded && (
           <div className="mt-1 ml-4 border-l-2 border-gray-200 pl-3">
-            <pre className="font-mono text-sm text-gray-700 whitespace-pre-wrap">{JSON.stringify(obj, null, 2)}</pre>
+            <pre className="font-mono text-sm text-foreground whitespace-pre-wrap">{JSON.stringify(obj, null, 2)}</pre>
           </div>
         )}
       </div>
@@ -455,7 +455,7 @@ function LogEntryComponent({ entry }: { entry: LogEntry }) {
       {/* Table-like layout using CSS Grid */}
       <div className="grid grid-cols-[auto_auto_1fr] gap-3 items-start">
         {/* Column 1: Timestamp */}
-        <div className="text-xs text-gray-500 dark:text-gray-400 font-mono whitespace-nowrap pt-1">
+        <div className="text-xs text-muted-foreground font-mono whitespace-nowrap pt-1">
           {new Date(entry.timestamp).toLocaleTimeString()}
         </div>
 
@@ -471,13 +471,13 @@ function LogEntryComponent({ entry }: { entry: LogEntry }) {
         </div>
 
         {/* Column 3: Message content with user agent info */}
-        <div className="font-mono text-sm min-w-0 text-gray-900 dark:text-gray-100">
+        <div className="font-mono text-sm min-w-0 text-foreground">
           <div className="flex flex-wrap items-start gap-2">
             <div className="flex-1 min-w-0">{renderMessage(entry.message)}</div>
             {/* User Agent and Tab Identifier Pills */}
             <div className="flex items-center gap-1 flex-shrink-0">
               {entry.tabIdentifier && (
-                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-muted text-muted-foreground">
                   {entry.tabIdentifier}
                 </span>
               )}
@@ -1376,10 +1376,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                       {isInitialLoading && !currentLogFile ? (
                         <div className="h-4 bg-muted rounded animate-pulse" style={{ width: "220px" }} />
                       ) : currentLogFile ? (
-                        // Show basename for all files
-                        currentLogFile
-                          .split("/")
-                          .pop()
+                        "Current"
                       ) : (
                         "No log file"
                       )}
@@ -1414,7 +1411,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                           >
                             <div className="flex flex-col">
                               <span className="font-mono text-xs">{logFile.name}</span>
-                              <span className="text-xs text-gray-500">
+                              <span className="text-xs text-muted-foreground">
                                 {new Date(logFile.mtime).toLocaleString()} • {Math.round(logFile.size / 1024)}KB
                               </span>
                             </div>
@@ -1530,7 +1527,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                                         ? "bg-blue-100 text-blue-800"
                                         : event.type === "SCROLL"
                                           ? "bg-green-100 text-green-800"
-                                          : "bg-gray-100 text-gray-700"
+                                          : "bg-muted text-muted-foreground"
                                     }`}
                                   >
                                     {event.type}
@@ -1559,7 +1556,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                 <button
                   type="button"
                   onClick={() => setShowFilters(!showFilters)}
-                  className="flex items-center gap-1 px-3 py-1 rounded text-sm font-medium transition-colors whitespace-nowrap bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  className="flex items-center gap-1 px-3 py-1 rounded text-sm font-medium transition-colors whitespace-nowrap bg-muted text-muted-foreground hover:bg-muted/80"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
@@ -1573,14 +1570,14 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                 </button>
                 {/* Filter Dropdown */}
                 {showFilters && (
-                  <div className="absolute top-full right-0 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg z-20 min-w-48">
+                  <div className="absolute top-full right-0 mt-1 bg-card border border-border rounded-md shadow-lg z-20 min-w-48">
                     <div className="py-2">
-                      <div className="px-3 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
+                      <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border">
                         Log Types
                       </div>
 
                       {/* Server Logs */}
-                      <label className="flex items-center justify-between px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer">
+                      <label className="flex items-center justify-between px-3 py-2 text-sm hover:bg-accent cursor-pointer">
                         <div className="flex items-center gap-2">
                           <input
                             type="checkbox"
@@ -1591,17 +1588,17 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                                 server: e.target.checked
                               }))
                             }
-                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            className="rounded border-input text-primary focus:ring-ring"
                           />
-                          <span className="text-gray-900 dark:text-gray-100">Server</span>
+                          <span className="text-foreground">Server</span>
                         </div>
-                        <span className="text-xs text-gray-400">
+                        <span className="text-xs text-muted-foreground">
                           {logs.filter((l) => l.source === "SERVER").length}
                         </span>
                       </label>
 
                       {/* Browser Logs */}
-                      <label className="flex items-center justify-between px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer">
+                      <label className="flex items-center justify-between px-3 py-2 text-sm hover:bg-accent cursor-pointer">
                         <div className="flex items-center gap-2">
                           <input
                             type="checkbox"
@@ -1612,18 +1609,18 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                                 browser: e.target.checked
                               }))
                             }
-                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            className="rounded border-input text-primary focus:ring-ring"
                           />
-                          <span className="text-gray-900 dark:text-gray-100">Browser</span>
+                          <span className="text-foreground">Browser</span>
                         </div>
-                        <span className="text-xs text-gray-400">
+                        <span className="text-xs text-muted-foreground">
                           {logs.filter((l) => l.source === "BROWSER").length}
                         </span>
                       </label>
 
                       {/* User Agent Sub-filters */}
                       {availableUserAgents.length > 1 && filters.browser && (
-                        <div className="ml-6 border-l border-gray-200 dark:border-gray-600 pl-2">
+                        <div className="ml-6 border-l border-border pl-2">
                           {availableUserAgents.map((ua) => {
                             const shortUA = ua.includes("Chrome")
                               ? "Chrome"
@@ -1637,7 +1634,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                             return (
                               <label
                                 key={ua}
-                                className="flex items-center justify-between px-2 py-1 text-xs hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
+                                className="flex items-center justify-between px-2 py-1 text-xs hover:bg-accent cursor-pointer"
                               >
                                 <div className="flex items-center gap-2">
                                   <input
@@ -1649,11 +1646,11 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                                         [ua]: e.target.checked
                                       }))
                                     }
-                                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-3 h-3"
+                                    className="rounded border-input text-primary focus:ring-ring w-3 h-3"
                                   />
-                                  <span className="text-gray-700 dark:text-gray-300">{shortUA}</span>
+                                  <span className="text-foreground">{shortUA}</span>
                                 </div>
-                                <span className="text-xs text-gray-400">
+                                <span className="text-xs text-muted-foreground">
                                   {logs.filter((l) => l.source === "BROWSER" && l.userAgent === ua).length}
                                 </span>
                               </label>
@@ -1663,7 +1660,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                       )}
 
                       {/* Interaction Logs */}
-                      <label className="flex items-center justify-between px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer">
+                      <label className="flex items-center justify-between px-3 py-2 text-sm hover:bg-accent cursor-pointer">
                         <div className="flex items-center gap-2">
                           <input
                             type="checkbox"
@@ -1674,17 +1671,17 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                                 interaction: e.target.checked
                               }))
                             }
-                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            className="rounded border-input text-primary focus:ring-ring"
                           />
-                          <span className="text-gray-900 dark:text-gray-100">Interaction</span>
+                          <span className="text-foreground">Interaction</span>
                         </div>
-                        <span className="text-xs text-gray-400">
+                        <span className="text-xs text-muted-foreground">
                           {logs.filter((l) => l.message.includes("[INTERACTION]")).length}
                         </span>
                       </label>
 
                       {/* Screenshot Logs */}
-                      <label className="flex items-center justify-between px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer">
+                      <label className="flex items-center justify-between px-3 py-2 text-sm hover:bg-accent cursor-pointer">
                         <div className="flex items-center gap-2">
                           <input
                             type="checkbox"
@@ -1695,11 +1692,11 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                                 screenshot: e.target.checked
                               }))
                             }
-                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            className="rounded border-input text-primary focus:ring-ring"
                           />
-                          <span className="text-gray-900 dark:text-gray-100">Screenshot</span>
+                          <span className="text-foreground">Screenshot</span>
                         </div>
-                        <span className="text-xs text-gray-400">
+                        <span className="text-xs text-muted-foreground">
                           {logs.filter((l) => l.message.includes("[SCREENSHOT]")).length}
                         </span>
                       </label>
@@ -1787,8 +1784,8 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
             </div>
           ) : filteredLogs.length === 0 ? (
             <div className="text-center py-12">
-              <div className="text-gray-400 dark:text-gray-500 text-lg">🔍 No logs match current filters</div>
-              <div className="text-gray-500 dark:text-gray-400 text-sm mt-2">
+              <div className="text-muted-foreground text-lg">🔍 No logs match current filters</div>
+              <div className="text-muted-foreground text-sm mt-2">
                 Try adjusting your filter settings to see more logs
               </div>
             </div>
@@ -1804,16 +1801,16 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
       </div>
 
       {/* Footer - Fixed */}
-      <div className="border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex-none">
+      <div className="border-t border-border bg-muted/50 flex-none">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             {lastFetched && (
-              <span className="text-xs text-gray-400 dark:text-gray-500 font-mono">
+              <span className="text-xs text-muted-foreground font-mono">
                 Last updated {lastFetched.toLocaleTimeString()}
               </span>
             )}
             {currentLogFile && (
-              <span className="text-xs text-gray-500 dark:text-gray-400 font-mono">{currentLogFile}</span>
+              <span className="text-xs text-muted-foreground font-mono break-all">{currentLogFile}</span>
             )}
           </div>
 
