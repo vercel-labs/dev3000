@@ -87,7 +87,7 @@ export async function fixMyApp({
   waitForUserInteraction = false,
   timeRangeMinutes = 10,
   includeTimestampInstructions = true
-}: FixMyAppParams): Promise<{ content: Array<{ type: string; text: string }> }> {
+}: FixMyAppParams): Promise<{ content: Array<{ type: "text"; text: string }> }> {
   const logPath = getLogPath(projectName)
   if (!logPath) {
     const sessions = findActiveSessions()
@@ -327,7 +327,7 @@ export async function fixMyApp({
 export async function executeBrowserAction({
   action,
   params = {}
-}: ExecuteBrowserActionParams): Promise<{ content: Array<{ type: string; text: string }> }> {
+}: ExecuteBrowserActionParams): Promise<{ content: Array<{ type: "text"; text: string }> }> {
   try {
     // First, find active session to get CDP URL
     const sessions = findActiveSessions()
@@ -404,8 +404,8 @@ export async function executeBrowserAction({
 
               switch (action) {
                 case "click": {
-                  if (!params.x || !params.y) {
-                    throw new Error("Click action requires x and y coordinates")
+                  if (typeof params.x !== "number" || typeof params.y !== "number") {
+                    throw new Error("Click action requires x and y coordinates as numbers")
                   }
                   cdpResult = await sendCDPCommand(ws, messageId++, "Input.dispatchMouseEvent", {
                     type: "mousePressed",
@@ -425,8 +425,8 @@ export async function executeBrowserAction({
                 }
 
                 case "navigate":
-                  if (!params.url) {
-                    throw new Error("Navigate action requires url parameter")
+                  if (typeof params.url !== "string") {
+                    throw new Error("Navigate action requires url parameter as string")
                   }
                   cdpResult = await sendCDPCommand(ws, messageId++, "Page.navigate", { url: params.url })
                   break
@@ -442,9 +442,10 @@ export async function executeBrowserAction({
                   return
 
                 case "evaluate": {
-                  if (!params.expression) {
-                    throw new Error("Evaluate action requires expression parameter")
+                  if (typeof params.expression !== "string") {
+                    throw new Error("Evaluate action requires expression parameter as string")
                   }
+                  const expression = params.expression;
                   // Whitelist safe expressions only
                   const safeExpressions = [
                     /^document\.title$/,
@@ -455,28 +456,24 @@ export async function executeBrowserAction({
                     /^window\.scrollX$/
                   ]
 
-                  if (!params.expression) {
-                    throw new Error("Evaluate action requires expression parameter")
-                  }
-
-                  if (!safeExpressions.some((regex) => regex.test(params.expression as string))) {
+                  if (!safeExpressions.some((regex) => regex.test(expression))) {
                     throw new Error("Expression not in whitelist. Only safe read-only expressions allowed.")
                   }
 
                   cdpResult = await sendCDPCommand(ws, messageId++, "Runtime.evaluate", {
-                    expression: params.expression,
+                    expression: expression,
                     returnByValue: true
                   })
                   break
                 }
 
                 case "scroll": {
-                  const scrollX = params.deltaX || 0
-                  const scrollY = params.deltaY || 0
+                  const scrollX = typeof params.deltaX === "number" ? params.deltaX : 0
+                  const scrollY = typeof params.deltaY === "number" ? params.deltaY : 0
                   cdpResult = await sendCDPCommand(ws, messageId++, "Input.dispatchMouseEvent", {
                     type: "mouseWheel",
-                    x: params.x || 500,
-                    y: params.y || 500,
+                    x: typeof params.x === "number" ? params.x : 500,
+                    y: typeof params.y === "number" ? params.y : 500,
                     deltaX: scrollX,
                     deltaY: scrollY
                   })
@@ -484,8 +481,8 @@ export async function executeBrowserAction({
                 }
 
                 case "type":
-                  if (!params.text) {
-                    throw new Error("Type action requires text parameter")
+                  if (typeof params.text !== "string") {
+                    throw new Error("Type action requires text parameter as string")
                   }
                   // Type each character
                   for (const char of params.text) {
