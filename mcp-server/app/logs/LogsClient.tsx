@@ -460,7 +460,6 @@ function LogEntryComponent({ entry, darkMode }: { entry: LogEntry; darkMode: boo
           return { backgroundColor: "rgba(30, 58, 138, 0.3)" } // blue-950/30
         case "PAGE":
           return { backgroundColor: "rgba(20, 83, 45, 0.3)" } // green-950/30
-        case "CONSOLE LOG":
         default:
           return { backgroundColor: "rgba(17, 24, 39, 0.3)" } // gray-900/30
       }
@@ -484,7 +483,6 @@ function LogEntryComponent({ entry, darkMode }: { entry: LogEntry; darkMode: boo
           return { backgroundColor: "rgba(239, 246, 255, 0.5)" } // blue-50/50
         case "PAGE":
           return { backgroundColor: "rgba(240, 253, 244, 0.5)" } // green-50/50
-        case "CONSOLE LOG":
         default:
           return { backgroundColor: "transparent" }
       }
@@ -512,7 +510,6 @@ function LogEntryComponent({ entry, darkMode }: { entry: LogEntry; darkMode: boo
         return "border-blue-200 dark:border-blue-800"
       case "PAGE":
         return "border-green-200 dark:border-green-800"
-      case "CONSOLE LOG":
       default:
         return "border-gray-200 dark:border-gray-700"
     }
@@ -1507,27 +1504,35 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
                 </div>
               )}
 
-              {/* Entries count */}
-              {logs.length > 0 && <span className="text-sm text-gray-500 hidden sm:inline">{logs.length} entries</span>}
+              {/* Entries count with clear button */}
+              {logs.length > 0 && (
+                <div className="flex items-center gap-1 hidden sm:flex">
+                  <span className="text-sm text-muted-foreground">{logs.length} entries</span>
+                  {currentLogFile && !isInitialLoading && (
+                    <button
+                      type="button"
+                      onClick={handleRotateLog}
+                      disabled={isRotatingLog}
+                      className="p-0.5 text-muted-foreground hover:text-foreground hover:bg-accent rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Clear logs (rotate current log to archive and start fresh)"
+                    >
+                      {isRotatingLog ? (
+                        <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      )}
+                    </button>
+                  )}
+                </div>
+              )}
 
               {/* Buffered logs indicator */}
               {logBuffer.length > 0 && !isAtBottom && (
                 <span className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-2 py-1 rounded-full">
                   +{logBuffer.length} buffered
                 </span>
-              )}
-
-              {/* Clear button - always visible when we have a current log file */}
-              {currentLogFile && !isInitialLoading && (
-                <button
-                  type="button"
-                  onClick={handleRotateLog}
-                  disabled={isRotatingLog}
-                  className="px-2 py-1 text-xs bg-orange-100 text-orange-700 hover:bg-orange-200 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Clear logs (rotate current log to archive and start fresh)"
-                >
-                  {isRotatingLog ? "..." : "Clear"}
-                </button>
               )}
             </div>
 

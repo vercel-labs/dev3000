@@ -86,7 +86,10 @@ export default function HomePage() {
       <section className="relative py-20 md:py-28">
         <div className="container mx-auto px-6 text-center">
           <div className="max-w-3xl mx-auto">
-            <Badge variant="secondary" className="mb-6 font-medium">
+            <Badge
+              variant="secondary"
+              className="mb-6 font-medium dark:bg-secondary/50 dark:border dark:border-secondary"
+            >
               By Vercel Labs
             </Badge>
             <h1 className="text-5xl md:text-7xl font-bold mb-6 tracking-tight">
@@ -105,7 +108,12 @@ export default function HomePage() {
                   <ArrowRight className="w-4 h-4 ml-2" />
                 </a>
               </Button>
-              <Button variant="outline" size="lg" className="text-base px-8 py-6" asChild>
+              <Button
+                variant="outline"
+                size="lg"
+                className="text-base px-8 py-6 dark:border-zinc-700 dark:bg-zinc-900/50 dark:hover:bg-zinc-800 dark:shadow-sm"
+                asChild
+              >
                 <a href="https://github.com/vercel-labs/dev3000" target="_blank" rel="noopener noreferrer">
                   <Github className="w-4 h-4" />
                   View on GitHub
