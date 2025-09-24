@@ -19,6 +19,7 @@
     "mcp-server/next.config.ts",
     "mcp-server/next-env.d.ts",
     "mcp-server/postcss.config.mjs",
+    "mcp-server/start-production.js",
     "README.md"
   ],
   "scripts": {
@@ -56,8 +57,11 @@
     "commander": "catalog:",
     "ink": "^6.3.1",
     "mcp-handler": "catalog:",
+    "next": "catalog:",
     "ora": "^9.0.0",
     "package-manager-detector": "^1.3.0",
+    "react": "catalog:",
+    "react-dom": "catalog:",
     "ws": "catalog:",
     "zod": "catalog:"
   },
@@ -68,7 +72,6 @@
     "@types/ws": "catalog:",
     "husky": "^9.0.0",
     "js-yaml": "^4.1.0",
-    "react": "catalog:",
     "tsx": "^4.20.3",
     "typescript": "catalog:",
     "vitest": "^3.2.4"

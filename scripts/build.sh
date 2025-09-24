@@ -12,6 +12,7 @@ pnpm run build
 # Build MCP server (production mode without standalone)
 echo "🏗️ Building MCP server..."
 cd mcp-server
+# Build without turbopack for better compatibility with global installs
 pnpm run build
 cd ..
 

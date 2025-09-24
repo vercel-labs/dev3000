@@ -313,25 +313,52 @@ RUN d3k --version
       })
 
       let output = ""
-      let _errorOutput = ""
+      let errorOutput = ""
+      let hasError = false
 
       d3kProcess.stdout.on("data", (data) => {
         output += data.toString()
       })
 
       d3kProcess.stderr.on("data", (data) => {
-        _errorOutput += data.toString()
+        errorOutput += data.toString()
       })
 
-      // Wait for startup or timeout
-      const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 30000))
+      // Wait for successful startup or failure
+      const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 35000)) // Slightly longer than MCP timeout
       const startupPromise = new Promise((resolve) => {
         const checkInterval = setInterval(() => {
-          if (output.includes("MCP") || output.includes("server") || output.includes("running on port")) {
+          // Check for successful MCP server startup
+          if (
+            output.includes("MCP server process spawned") ||
+            output.includes("Waiting for MCP server to be ready") ||
+            output.includes("Starting dev3000 MCP server")
+          ) {
+            // Keep waiting for actual server ready status
+          }
+
+          // Check for errors that indicate startup failure
+          if (
+            output.includes("MCP server failed to start") ||
+            output.includes("dev3000 exited due to") ||
+            output.includes("Failed to start development environment") ||
+            errorOutput.includes("Error:")
+          ) {
+            hasError = true
+            clearInterval(checkInterval)
+            resolve(false)
+          }
+
+          // Check for successful completion
+          if (
+            output.includes("MCP server ready") ||
+            output.includes("MCP server health check: 200") ||
+            output.includes("MCP server health check: 404")
+          ) {
             clearInterval(checkInterval)
             resolve(true)
           }
-        }, 1000)
+        }, 500)
       })
 
       const result = await Promise.race([startupPromise, timeoutPromise])
@@ -339,13 +366,20 @@ RUN d3k --version
       // Kill the process
       d3kProcess.kill()
 
+      // Log debug info on failure
+      if (result !== true || hasError) {
+        log(`Test failed. Output captured:`, YELLOW)
+        log(`STDOUT: ${output.slice(-500)}`, YELLOW)
+        log(`STDERR: ${errorOutput.slice(-500)}`, YELLOW)
+      }
+
       // Cleanup
       rmSync(testDir, { recursive: true })
 
       return {
         name: testName,
-        passed: result === true,
-        error: result !== true ? "MCP server failed to start" : undefined,
+        passed: result === true && !hasError,
+        error: result !== true ? "MCP server failed to start or errored during startup" : undefined,
         duration: Date.now() - startTime
       }
     } catch (error) {

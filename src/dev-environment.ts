@@ -876,11 +876,33 @@ export class DevEnvironment {
     let mcpCwd = actualWorkingDir
 
     if (isGlobalInstall && isPreBuilt) {
-      // For global installs with pre-built servers, use npx to find and run next
-      // This works because npx can resolve binaries from the global pnpm store
-      this.debugLog(`Global install with pre-built server - using npx next start`)
-      mcpCommand = ["npx", "--yes", "next@15.5.1-canary.30", "start"]
-      mcpCwd = mcpServerPath
+      // For global installs with pre-built servers, check for start-production.js first
+      const startProdScript = join(mcpServerPath, "start-production.js")
+
+      if (existsSync(startProdScript)) {
+        // Use the standalone production script
+        this.debugLog(`Global install with start-production.js script`)
+        mcpCommand = ["node", startProdScript]
+        mcpCwd = mcpServerPath
+      } else {
+        // Fallback to finding Next.js binary
+        const dev3000NodeModules = join(mcpServerPath, "..", "..", "node_modules")
+        const nextBinPath = join(dev3000NodeModules, ".bin", "next")
+
+        this.debugLog(`Looking for Next.js at: ${nextBinPath}`)
+
+        if (existsSync(nextBinPath)) {
+          // Found Next.js in the dev3000 package
+          this.debugLog(`Global install with Next.js found at ${nextBinPath}`)
+          mcpCommand = [nextBinPath, "start"]
+          mcpCwd = mcpServerPath
+        } else {
+          // Fallback to npx with the exact version we built with
+          this.debugLog(`Global install with pre-built server - using npx next start`)
+          mcpCommand = ["npx", "--yes", "next@15.5.1-canary.30", "start"]
+          mcpCwd = mcpServerPath
+        }
+      }
     } else {
       // Non-global or non-pre-built: use package manager
       const packageManagerForRun = detectPackageManagerForRun()
