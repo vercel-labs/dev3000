@@ -16,10 +16,15 @@ pnpm run test
 # Build and pack
 echo -e "${YELLOW}Building and packing...${NC}"
 ./scripts/build.sh
+
+# Clean up old tarballs
+rm -f dev3000-*.tgz
+
+# Create fresh tarball
 pnpm pack
 
 # Get the tarball name
-TARBALL=$(ls -1 dev3000-*.tgz | head -1)
+TARBALL=$(ls -1t dev3000-*.tgz | head -1)
 
 # Test 1: Clean pnpm global install
 echo -e "${YELLOW}Testing clean pnpm global install...${NC}"

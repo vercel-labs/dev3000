@@ -5,7 +5,7 @@
  */
 
 import { execSync, spawn } from "child_process"
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "fs"
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "fs"
 import { tmpdir } from "os"
 import { join } from "path"
 
@@ -160,8 +160,13 @@ RUN d3k --version
 
       // Install pnpm in isolated location
       log("Installing pnpm in isolated environment...", YELLOW)
-      execSync("curl -fsSL https://get.pnpm.io/install.sh | sh -", {
-        env: cleanEnv,
+      // Use SHELL=/bin/sh to prevent modification of user's shell config
+      execSync("curl -fsSL https://get.pnpm.io/install.sh | SHELL=/bin/sh sh -", {
+        env: {
+          ...cleanEnv,
+          SHELL: "/bin/sh",
+          PNPM_HOME: pnpmHome
+        },
         cwd: testDir,
         stdio: "inherit"
       })
@@ -176,6 +181,20 @@ RUN d3k --version
 
       // Test that it runs
       log("Testing d3k command...", YELLOW)
+
+      // First check if d3k was installed
+      try {
+        const whichOutput = execSync(`${pnpmHome}/pnpm exec which d3k`, {
+          env: cleanEnv,
+          cwd: testDir,
+          encoding: "utf-8"
+        })
+        log(`d3k installed at: ${whichOutput.trim()}`, YELLOW)
+      } catch (e) {
+        log("Failed to find d3k executable", RED)
+        throw e
+      }
+
       const output = execSync(`${pnpmHome}/pnpm exec d3k --version`, {
         env: cleanEnv,
         cwd: testDir,
@@ -214,15 +233,25 @@ RUN d3k --version
 
       // Create a test script that runs with minimal PATH
       const testScript = `
+        set -e
         export PATH="/usr/local/bin:/usr/bin:/bin"
+        export PNPM_HOME="$HOME/.local/share/pnpm"
+        
         # Install pnpm if not available
         if ! command -v pnpm &> /dev/null; then
-          curl -fsSL https://get.pnpm.io/install.sh | sh -
-          export PNPM_HOME="$HOME/.local/share/pnpm"
-          export PATH="$PNPM_HOME:$PATH"
+          echo "Installing pnpm..."
+          curl -fsSL https://get.pnpm.io/install.sh | SHELL=/bin/sh sh -
         fi
+        
+        # Add pnpm to PATH after installation
+        export PATH="$PNPM_HOME:$PATH"
+        
+        # Verify pnpm is available
+        which pnpm || (echo "pnpm not found in PATH" && exit 1)
+        
+        # Install and test dev3000
         pnpm install -g ${tarballPath}
-        d3k --version
+        pnpm exec d3k --version
       `
 
       const output = execSync(testScript, {
@@ -361,14 +390,22 @@ RUN d3k --version
 
 // Main execution
 async function main() {
-  // First, ensure we have a tarball to test
-  if (!existsSync("dev3000-*.tgz")) {
-    log("No tarball found. Running pnpm pack first...", YELLOW)
-    execSync("pnpm pack", { stdio: "inherit" })
+  // Clean up any old tarballs first
+  try {
+    execSync("rm -f dev3000-*.tgz", { stdio: "ignore" })
+  } catch {
+    // Ignore errors
   }
 
-  const tarballPath = execSync("ls -1 dev3000-*.tgz | head -1", { encoding: "utf-8" }).trim()
+  // Create fresh tarball
+  log("Creating fresh tarball...", YELLOW)
+  execSync("pnpm pack", { stdio: "inherit" })
+
+  // Get the newly created tarball
+  const tarballPath = execSync("ls -1t dev3000-*.tgz | head -1", { encoding: "utf-8" }).trim()
   const fullPath = join(process.cwd(), tarballPath)
+
+  log(`Using tarball: ${tarballPath}`, YELLOW)
 
   const tester = new CleanEnvironmentTester()
   const exitCode = await tester.runAllTests(fullPath)
