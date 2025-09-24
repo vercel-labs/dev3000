@@ -303,20 +303,14 @@ export class CDPMonitor {
           ws.on("close", (code, reason) => {
             this.debugLog(`WebSocket closed with code ${code}, reason: ${reason}`)
             if (!this.isShuttingDown) {
-              this.logger(
-                "browser",
-                `[CDP DISCONNECT] Connection lost unexpectedly (code: ${code}, reason: ${reason})` // [PLAYWRIGHT] tag removed
-              )
-              this.logger(
-                "browser",
-                "[DISCONNECT CONTEXT] CDP connection lost - check for Chrome crash or server issues" // [PLAYWRIGHT] tag removed
-              )
+              this.logger("browser", `[CDP] Connection lost unexpectedly (code: ${code}, reason: ${reason})`)
+              this.logger("browser", "[CDP] CDP connection lost - check for Chrome crash or server issues")
 
               // Log current Chrome process status
               if (this.browser && !this.browser.killed) {
-                this.logger("browser", "[CHROME STATUS] Chrome process still running after CDP disconnect") // [PLAYWRIGHT] tag removed
+                this.logger("browser", "[CDP] Chrome process still running after CDP disconnect")
               } else {
-                this.logger("browser", "[CHROME STATUS] Chrome process not available after CDP disconnect") // [PLAYWRIGHT] tag removed
+                this.logger("browser", "[CDP] Chrome process not available after CDP disconnect")
               }
             }
           })
