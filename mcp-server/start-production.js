@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+const path = require("path")
+const { existsSync } = require("fs")
 const { spawn } = require("child_process")
 
 // Set up the environment
@@ -8,22 +10,51 @@ process.env.PORT = process.env.PORT || "3684"
 // Change to the MCP server directory
 process.chdir(__dirname)
 
-// For turbopack builds, we need to use the exact Next.js version that built it
-// Since turbopack runtime files are version-specific, we'll use npx to ensure compatibility
-const child = spawn("npx", ["--yes", "next@15.5.1-canary.30", "start"], {
-  stdio: "inherit",
-  cwd: __dirname,
-  env: {
-    ...process.env,
-    NODE_ENV: "production"
+// Check if we're in a global install by looking for Next.js in parent directories
+const findNext = () => {
+  let currentDir = __dirname
+  const maxLevels = 5 // Prevent infinite loop
+  let levels = 0
+
+  while (levels < maxLevels) {
+    const nextBin = path.join(currentDir, "node_modules", ".bin", "next")
+    if (existsSync(nextBin)) {
+      return nextBin
+    }
+
+    const parentDir = path.dirname(currentDir)
+    if (parentDir === currentDir) break // Reached root
+    currentDir = parentDir
+    levels++
   }
-})
 
-child.on("error", (err) => {
-  console.error("Failed to start server:", err)
+  return null
+}
+
+const nextBin = findNext()
+
+if (nextBin) {
+  // Use the bundled Next.js
+  console.log("Starting MCP server using bundled Next.js...")
+  const child = spawn(nextBin, ["start"], {
+    stdio: "inherit",
+    cwd: __dirname,
+    env: {
+      ...process.env,
+      NODE_ENV: "production"
+    }
+  })
+
+  child.on("error", (err) => {
+    console.error("Failed to start server:", err)
+    process.exit(1)
+  })
+
+  child.on("exit", (code) => {
+    process.exit(code || 0)
+  })
+} else {
+  console.error("Error: Next.js binary not found. The package may not have been built correctly.")
+  console.error("Please reinstall dev3000 or report this issue.")
   process.exit(1)
-})
-
-child.on("exit", (code) => {
-  process.exit(code || 0)
-})
+}

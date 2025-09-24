@@ -9,11 +9,17 @@ echo "🧹 Cleaning old build artifacts..."
 rm -rf dist
 pnpm run build
 
-# Build MCP server (production mode without standalone)
+# Build MCP server with standalone output
 echo "🏗️ Building MCP server..."
 cd mcp-server
-# Build without turbopack for better compatibility with global installs
+
+# Clean previous build (this also removes the turbopack cache)
+rm -rf .next
+
+# Build with turbopack
+echo "📦 Creating build with turbopack..."
 pnpm run build
+
 cd ..
 
 echo "✅ Build completed successfully!"
