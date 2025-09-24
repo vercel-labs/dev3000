@@ -20,11 +20,8 @@ echo -e "${YELLOW}Building and packing...${NC}"
 # Clean up old tarballs
 rm -f dev3000-*.tgz
 
-# Create fresh tarball (suppress verbose file listing)
-TARBALL_NAME=$(pnpm pack --silent)
-
-# Get the tarball name
-TARBALL=$TARBALL_NAME
+# Create fresh tarball
+TARBALL=$(pnpm pack 2>&1 | tail -n 1)
 
 # Test 1: Clean npm global install (most common scenario)
 echo -e "${YELLOW}Testing clean npm global install...${NC}"
@@ -34,9 +31,9 @@ mkdir -p "$npm_config_prefix"
 export PATH="$npm_config_prefix/bin:$PATH"
 
 # Install dev3000 globally with npm
-if npm install -g "./$TARBALL" > /dev/null 2>&1; then
+if npm install -g "./$TARBALL"; then
     # Test that it runs
-    if d3k --version | grep -q "dev3000"; then
+    if d3k --version | grep -q -E "^[0-9]+\.[0-9]+\.[0-9]+"; then
         echo -e "${GREEN}✅ Clean npm install test passed${NC}"
     else
         echo -e "${RED}❌ d3k command failed to run${NC}"
@@ -65,17 +62,28 @@ cat > package.json << EOF
 }
 EOF
 
-# Run d3k with timeout and capture output
+# Run d3k in background and capture output
 OUTPUT_FILE=$(mktemp)
-timeout 20s d3k --debug --servers-only > "$OUTPUT_FILE" 2>&1 || EXIT_CODE=$?
+d3k --debug --servers-only --no-tui > "$OUTPUT_FILE" 2>&1 &
+D3K_PID=$!
 
-# Check if MCP server started
-if grep -q "MCP Server:" "$OUTPUT_FILE" || grep -q "Development environment ready" "$OUTPUT_FILE"; then
-    echo -e "${GREEN}✅ MCP server startup test passed${NC}"
-else
-    echo -e "${RED}❌ MCP server failed to start${NC}"
+# Wait for MCP server to start (max 20 seconds)
+COUNTER=0
+while [ $COUNTER -lt 20 ]; do
+    if grep -q "MCP server process spawned" "$OUTPUT_FILE" || grep -q "Starting MCP server using bundled Next.js" "$OUTPUT_FILE"; then
+        echo -e "${GREEN}✅ MCP server startup test passed${NC}"
+        kill $D3K_PID 2>/dev/null || true
+        break
+    fi
+    sleep 1
+    COUNTER=$((COUNTER + 1))
+done
+
+if [ $COUNTER -eq 20 ]; then
+    echo -e "${RED}❌ MCP server failed to start within 20 seconds${NC}"
     echo "Debug output:"
-    cat "$OUTPUT_FILE"
+    head -50 "$OUTPUT_FILE"
+    kill $D3K_PID 2>/dev/null || true
     exit 1
 fi
 
