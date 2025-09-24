@@ -13,17 +13,23 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     }
 
     // For global installs, screenshots are saved to temp directory
-    // Check if running from global install location
-    const isGlobalInstall = __dirname.includes(".pnpm")
-
+    // First check if SCREENSHOT_DIR is set (passed by dev3000 for global installs)
     let screenshotPath: string
-    if (isGlobalInstall) {
-      // Global install - check temp directory
-      const tmpDir = join(require("os").tmpdir(), "dev3000-mcp-deps", "public", "screenshots", filename)
-      screenshotPath = tmpDir
+    if (process.env.SCREENSHOT_DIR) {
+      // Use the directory specified by dev3000
+      screenshotPath = join(process.env.SCREENSHOT_DIR, filename)
     } else {
-      // Local install - use current working directory
-      screenshotPath = join(process.cwd(), "public", "screenshots", filename)
+      // Fallback: Check if running from global install location
+      const isGlobalInstall = __dirname.includes(".pnpm")
+
+      if (isGlobalInstall) {
+        // Global install - check temp directory
+        const tmpDir = join(require("os").tmpdir(), "dev3000-mcp-deps", "public", "screenshots", filename)
+        screenshotPath = tmpDir
+      } else {
+        // Local install - use current working directory
+        screenshotPath = join(process.cwd(), "public", "screenshots", filename)
+      }
     }
 
     // Check if file exists

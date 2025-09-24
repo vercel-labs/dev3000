@@ -796,25 +796,24 @@ export class DevEnvironment {
     const nextBuildPath = join(mcpServerPath, ".next")
     this.debugLog(`Checking for pre-built MCP server at: ${nextBuildPath}`)
 
+    let isPreBuilt = false
+
     if (existsSync(nextBuildPath)) {
       this.debugLog("MCP server is pre-built (.next directory exists), skipping dependency installation")
+      isPreBuilt = true
 
-      // For global installs, we still need to ensure the temp directory has package.json for npm start
+      // For global installs with pre-built servers, we'll run from the original location
+      // No need to copy anything to temp directory
       if (isGlobalInstall) {
+        this.debugLog("Global install with pre-built server - will run from original location")
+        actualWorkingDir = mcpServerPath
+
+        // Still need to set up screenshot directory in temp
         const tmpDirPath = join(tmpdir(), "dev3000-mcp-deps")
-        if (!existsSync(tmpDirPath)) {
-          mkdirSync(tmpDirPath, { recursive: true })
-        }
-
-        // Copy just the package.json for npm start to work
-        const sourcePackageJson = join(mcpServerPath, "package.json")
-        const tmpPackageJson = join(tmpDirPath, "package.json")
-
-        if (existsSync(sourcePackageJson)) {
-          this.debugLog(`Copying package.json to temp dir for global install: ${tmpPackageJson}`)
-          copyFileSync(sourcePackageJson, tmpPackageJson)
-        } else {
-          this.debugLog(`WARNING: package.json not found at ${sourcePackageJson}`)
+        this.screenshotDir = join(tmpDirPath, "public", "screenshots")
+        this.mcpPublicDir = join(tmpDirPath, "public", "screenshots")
+        if (!existsSync(this.mcpPublicDir)) {
+          mkdirSync(this.mcpPublicDir, { recursive: true })
         }
       }
     } else {
@@ -825,8 +824,9 @@ export class DevEnvironment {
 
     // Use version already read in constructor
 
-    // For global installs, ensure all necessary files are copied to temp directory
-    if (isGlobalInstall && actualWorkingDir !== mcpServerPath) {
+    // For global installs, only copy files if NOT pre-built
+    // Pre-built servers run from their original location
+    if (isGlobalInstall && actualWorkingDir !== mcpServerPath && !isPreBuilt) {
       const requiredFiles = ["app", "public", "next.config.ts", "next-env.d.ts", "tsconfig.json", ".next"]
       for (const file of requiredFiles) {
         const srcPath = join(mcpServerPath, file)
@@ -870,6 +870,9 @@ export class DevEnvironment {
     this.debugLog(`Using package manager: ${packageManagerForRun}`)
     this.debugLog(`MCP server working directory: ${actualWorkingDir}`)
     this.debugLog(`MCP server port: ${this.options.mcpPort}`)
+    this.debugLog(`Screenshot directory: ${this.screenshotDir}`)
+    this.debugLog(`Is pre-built: ${isPreBuilt}`)
+    this.debugLog(`Is global install: ${isGlobalInstall}`)
 
     // Use production mode for MCP server (non-standalone)
     // This provides proper CSS and still allows dynamic screenshot serving
@@ -885,7 +888,8 @@ export class DevEnvironment {
         ...process.env,
         PORT: this.options.mcpPort,
         LOG_FILE_PATH: this.options.logFile, // Pass log file path to MCP server
-        DEV3000_VERSION: this.version // Pass version to MCP server
+        DEV3000_VERSION: this.version, // Pass version to MCP server
+        SCREENSHOT_DIR: this.screenshotDir // Pass screenshot directory for global installs
       }
     })
 
