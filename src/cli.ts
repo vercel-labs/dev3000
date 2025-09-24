@@ -136,7 +136,7 @@ program
 program
   .description("AI-powered development tools with browser monitoring and MCP server")
   .option("-p, --port <port>", "Development server port (auto-detected by project type)")
-  .option("-p-mcp, --port-mcp <port>", "MCP server port", "3684")
+  .option("-m, --port-mcp <port>", "MCP server port", "3684")
   .option("-s, --script <script>", "Script to run (e.g. dev, main.py) - auto-detected by project type")
   .option("--profile-dir <dir>", "Chrome profile directory", join(tmpdir(), "dev3000-chrome-profile"))
   .option(

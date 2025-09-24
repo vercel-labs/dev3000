@@ -6,7 +6,7 @@ catalog:
   # SDK and Core Dependencies
   "@modelcontextprotocol/sdk": ^1.11.0
   mcp-handler: ^1.0.2
-  commander: ^11.1.0
+  commander: ^14.0.1
   ws: ^8.18.3
   zod: ^3.22.4
   
