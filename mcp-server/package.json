@@ -16,14 +16,14 @@
     "autoprefixer": "catalog:",
     "class-variance-authority": "catalog:",
     "clsx": "catalog:",
-    "commander": "^11.1.0",
+    "commander": "catalog:",
     "lucide-react": "catalog:",
-    "mcp-handler": "^1.0.2",
+    "mcp-handler": "catalog:",
     "next": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
     "tailwind-merge": "catalog:",
-    "ws": "^8.18.3",
+    "ws": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
@@ -31,11 +31,11 @@
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
-    "@types/ws": "^8.5.12",
-    "babel-plugin-react-compiler": "19.1.0-rc.3",
+    "@types/ws": "catalog:",
+    "babel-plugin-react-compiler": "catalog:",
     "postcss": "catalog:",
     "tailwindcss": "catalog:",
-    "tw-animate-css": "1.3.3",
+    "tw-animate-css": "catalog:",
     "typescript": "catalog:"
   }
 }
