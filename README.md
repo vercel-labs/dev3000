@@ -139,16 +139,55 @@ _Made by [elsigh](https://github.com/elsigh)_
 
 ## Contributing
 
-We welcome pull requests (PRs) from the community!
+We welcome contributions! Here's how to get started:
 
-Before submitting a PR:
+### Testing Your Changes Locally
 
-- **Pull the latest changes** from `main`.
-- **Run** `scripts/canary.sh` to test your feature locally and verify what is already in the canary build.
-- **Tip** `dev3000 --version` to verify you're on the canary locally
-- **FYI** .husky/pre-commit.sh runs `pnpm format` to apply biome.json rules to all code
-- Please run and test the canary build locally to avoid duplicating work that may already be done.
+Use the canary script to build and test your changes on your machine:
 
-### For Maintainers
+```bash
+./scripts/canary.sh
+```
 
-See [docs/RELEASE_PROCESS.md](docs/RELEASE_PROCESS.md) for detailed release instructions.
+This will:
+- Build the project (including MCP server)
+- Create a local package
+- Install it globally for testing
+- You can verify with `dev3000 --version` (should show canary version)
+
+### Before Submitting a PR
+
+- **Pull the latest changes** from `main`
+- **Run the canary build** to test your changes: `./scripts/canary.sh`
+- **Ensure tests pass**: `pnpm test`
+- **Note**: Pre-commit hooks will automatically format your code with Biome
+
+### Development Tips
+
+- Use `pnpm run lint` to check code style
+- Use `pnpm run typecheck` for TypeScript validation
+- The canary script is the best way to test the full user experience locally
+
+## Releasing (Maintainers Only)
+
+We use a semi-automated release process that handles testing while accommodating npm's 2FA requirement:
+
+### Option 1: GitHub Actions + Manual Publish (Recommended)
+
+1. Go to [Actions](https://github.com/vercel-labs/dev3000/actions) → "Prepare Release"
+2. Select release type (patch/minor/major) and run
+3. Wait for tests to pass on all platforms
+4. Download the release artifact (tarball)
+5. Publish locally: `./scripts/publish.sh dev3000-*.tgz`
+
+### Option 2: Local Release
+
+```bash
+./scripts/release.sh  # Creates tag and updates version
+./scripts/publish.sh  # Publishes to npm (requires 2FA)
+git push origin main --tags
+```
+
+The release script automatically handles re-releases by cleaning up existing tags if needed.
+
+For detailed instructions, see [docs/RELEASE_PROCESS.md](docs/RELEASE_PROCESS.md).
