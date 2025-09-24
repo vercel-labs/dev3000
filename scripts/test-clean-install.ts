@@ -33,8 +33,18 @@ class CleanEnvironmentTester {
    * Create a minimal PATH that simulates a fresh system
    */
   private getCleanPath(): string {
-    // Only include system essentials, no dev tools
-    const essentialPaths = ["/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"]
+    // Include system essentials and Node.js location
+    const nodePath = process.execPath
+    const nodeDir = nodePath.substring(0, nodePath.lastIndexOf("/"))
+
+    const essentialPaths = [
+      nodeDir, // Include Node.js binary location
+      "/usr/local/bin",
+      "/usr/bin",
+      "/bin",
+      "/usr/sbin",
+      "/sbin"
+    ]
     return essentialPaths.join(":")
   }
 
@@ -214,10 +224,15 @@ RUN d3k --version
     try {
       log(`\n🛤️ Testing ${testName}...`, BLUE)
 
+      // Get Node.js binary location
+      const nodePath = process.execPath
+      const nodeDir = nodePath.substring(0, nodePath.lastIndexOf("/"))
+
       // Create a test script that runs with minimal PATH
       const testScript = `
         set -e
-        export PATH="/usr/local/bin:/usr/bin:/bin"
+        # Include Node.js in minimal PATH
+        export PATH="${nodeDir}:/usr/local/bin:/usr/bin:/bin"
         
         # Create temporary directory for npm global installs
         TEMP_DIR=$(mktemp -d)
@@ -355,12 +370,19 @@ RUN d3k --version
         # Create temporary directory
         TEMP_DIR=$(mktemp -d)
         export PNPM_HOME="$TEMP_DIR/.pnpm"
+        mkdir -p "$PNPM_HOME"
         export PATH="$PNPM_HOME:$PATH"
         
         # Install pnpm
         echo "Installing pnpm..."
         npm install -g --prefix "$TEMP_DIR" pnpm
+        
+        # Link pnpm to PNPM_HOME
         ln -sf "$TEMP_DIR/node_modules/.bin/pnpm" "$PNPM_HOME/pnpm"
+        
+        # Verify pnpm works
+        which pnpm
+        pnpm --version
         
         # Install dev3000 with pnpm
         echo "Installing dev3000 with pnpm..."
