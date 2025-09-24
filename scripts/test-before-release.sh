@@ -26,26 +26,24 @@ pnpm pack
 # Get the tarball name
 TARBALL=$(ls -1t dev3000-*.tgz | head -1)
 
-# Test 1: Clean pnpm global install
-echo -e "${YELLOW}Testing clean pnpm global install...${NC}"
+# Test 1: Clean npm global install (most common scenario)
+echo -e "${YELLOW}Testing clean npm global install...${NC}"
 TEST_HOME=$(mktemp -d)
-export PNPM_HOME="$TEST_HOME/.pnpm"
-export PATH="$PNPM_HOME:$PATH"
+export npm_config_prefix="$TEST_HOME/npm-global"
+mkdir -p "$npm_config_prefix"
+export PATH="$npm_config_prefix/bin:$PATH"
 
-# Install pnpm in isolated location
-curl -fsSL https://get.pnpm.io/install.sh | sh - > /dev/null 2>&1
-
-# Install dev3000 globally
-if $PNPM_HOME/pnpm install -g "./$TARBALL" > /dev/null 2>&1; then
+# Install dev3000 globally with npm
+if npm install -g "./$TARBALL" > /dev/null 2>&1; then
     # Test that it runs
-    if $PNPM_HOME/pnpm exec d3k --version | grep -q "dev3000"; then
-        echo -e "${GREEN}✅ Clean pnpm install test passed${NC}"
+    if d3k --version | grep -q "dev3000"; then
+        echo -e "${GREEN}✅ Clean npm install test passed${NC}"
     else
         echo -e "${RED}❌ d3k command failed to run${NC}"
         exit 1
     fi
 else
-    echo -e "${RED}❌ Failed to install with pnpm${NC}"
+    echo -e "${RED}❌ Failed to install with npm${NC}"
     exit 1
 fi
 

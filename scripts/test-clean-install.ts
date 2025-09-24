@@ -86,11 +86,10 @@ class CleanEnvironmentTester {
         dockerfilePath,
         `
 FROM node:20-slim
-RUN apt-get update && apt-get install -y curl
-RUN npm install -g pnpm
 WORKDIR /test
 COPY *.tgz ./
-RUN pnpm install -g ./$(ls *.tgz)
+# Test with npm (most common)
+RUN npm install -g ./$(ls *.tgz)
 # Test that d3k command exists
 RUN which d3k
 # Test running with --version
@@ -133,47 +132,31 @@ RUN d3k --version
   }
 
   /**
-   * Test installation in isolated directory with clean environment
+   * Test installation in isolated directory with clean environment using npm
    */
   async testCleanEnvInstall(tarballPath: string): Promise<TestResult> {
     const startTime = Date.now()
-    const testName = "Clean Environment Install"
+    const testName = "Clean Environment Install (npm)"
 
     try {
-      log(`\n🧪 Testing ${testName}...`, BLUE)
+      log(`\n📦 Testing ${testName}...`, BLUE)
 
       // Create isolated temp directory
       const testDir = mkdtempSync(join(tmpdir(), "d3k-clean-test-"))
-      const pnpmHome = join(testDir, "pnpm")
-      const nodeModules = join(testDir, "node_modules")
+      const npmPrefix = join(testDir, "npm-global")
 
-      mkdirSync(pnpmHome, { recursive: true })
-      mkdirSync(nodeModules, { recursive: true })
+      mkdirSync(npmPrefix, { recursive: true })
 
-      // Set up clean environment
+      // Set up clean environment with minimal PATH
       const cleanEnv = {
         ...this.getCleanEnv(),
-        PNPM_HOME: pnpmHome,
-        npm_config_prefix: testDir,
-        PATH: `${pnpmHome}:${nodeModules}/.bin:${this.getCleanPath()}`
+        npm_config_prefix: npmPrefix,
+        PATH: `${join(npmPrefix, "bin")}:${this.getCleanPath()}`
       }
 
-      // Install pnpm in isolated location
-      log("Installing pnpm in isolated environment...", YELLOW)
-      // Use SHELL=/bin/sh to prevent modification of user's shell config
-      execSync("curl -fsSL https://get.pnpm.io/install.sh | SHELL=/bin/sh sh -", {
-        env: {
-          ...cleanEnv,
-          SHELL: "/bin/sh",
-          PNPM_HOME: pnpmHome
-        },
-        cwd: testDir,
-        stdio: "inherit"
-      })
-
-      // Install dev3000 globally
-      log("Installing dev3000 globally...", YELLOW)
-      execSync(`${pnpmHome}/pnpm install -g ${tarballPath}`, {
+      // Install dev3000 globally using npm
+      log("Installing dev3000 globally with npm...", YELLOW)
+      execSync(`npm install -g ${tarballPath}`, {
         env: cleanEnv,
         cwd: testDir,
         stdio: "inherit"
@@ -184,9 +167,8 @@ RUN d3k --version
 
       // First check if d3k was installed
       try {
-        const whichOutput = execSync(`${pnpmHome}/pnpm exec which d3k`, {
+        const whichOutput = execSync(`which d3k`, {
           env: cleanEnv,
-          cwd: testDir,
           encoding: "utf-8"
         })
         log(`d3k installed at: ${whichOutput.trim()}`, YELLOW)
@@ -195,7 +177,8 @@ RUN d3k --version
         throw e
       }
 
-      const output = execSync(`${pnpmHome}/pnpm exec d3k --version`, {
+      // Run d3k --version
+      const output = execSync(`d3k --version`, {
         env: cleanEnv,
         cwd: testDir,
         encoding: "utf-8"
@@ -222,11 +205,11 @@ RUN d3k --version
   }
 
   /**
-   * Test with minimal PATH
+   * Test with minimal PATH using npm
    */
   async testMinimalPath(tarballPath: string): Promise<TestResult> {
     const startTime = Date.now()
-    const testName = "Minimal PATH Test"
+    const testName = "Minimal PATH Test (npm)"
 
     try {
       log(`\n🛤️ Testing ${testName}...`, BLUE)
@@ -235,23 +218,27 @@ RUN d3k --version
       const testScript = `
         set -e
         export PATH="/usr/local/bin:/usr/bin:/bin"
-        export PNPM_HOME="$HOME/.local/share/pnpm"
         
-        # Install pnpm if not available
-        if ! command -v pnpm &> /dev/null; then
-          echo "Installing pnpm..."
-          curl -fsSL https://get.pnpm.io/install.sh | SHELL=/bin/sh sh -
-        fi
+        # Create temporary directory for npm global installs
+        TEMP_DIR=$(mktemp -d)
+        export npm_config_prefix="$TEMP_DIR/npm-global"
+        mkdir -p "$npm_config_prefix"
         
-        # Add pnpm to PATH after installation
-        export PATH="$PNPM_HOME:$PATH"
-        
-        # Verify pnpm is available
-        which pnpm || (echo "pnpm not found in PATH" && exit 1)
+        # Add npm global bin to PATH
+        export PATH="$npm_config_prefix/bin:$PATH"
         
         # Install and test dev3000
-        pnpm install -g ${tarballPath}
-        pnpm exec d3k --version
+        echo "Installing dev3000 with npm..."
+        npm install -g ${tarballPath}
+        
+        # Verify d3k is available
+        which d3k || (echo "d3k not found in PATH" && exit 1)
+        
+        # Test it runs
+        d3k --version
+        
+        # Cleanup
+        rm -rf "$TEMP_DIR"
       `
 
       const output = execSync(testScript, {
@@ -351,6 +338,63 @@ RUN d3k --version
     }
   }
 
+  /**
+   * Test pnpm installation specifically
+   */
+  async testPnpmInstall(tarballPath: string): Promise<TestResult> {
+    const startTime = Date.now()
+    const testName = "pnpm Global Install Test"
+
+    try {
+      log(`\n🔷 Testing ${testName}...`, BLUE)
+
+      // Create a test script that installs pnpm first, then dev3000
+      const testScript = `
+        set -e
+        
+        # Create temporary directory
+        TEMP_DIR=$(mktemp -d)
+        export PNPM_HOME="$TEMP_DIR/.pnpm"
+        export PATH="$PNPM_HOME:$PATH"
+        
+        # Install pnpm
+        echo "Installing pnpm..."
+        npm install -g --prefix "$TEMP_DIR" pnpm
+        ln -sf "$TEMP_DIR/node_modules/.bin/pnpm" "$PNPM_HOME/pnpm"
+        
+        # Install dev3000 with pnpm
+        echo "Installing dev3000 with pnpm..."
+        pnpm install -g ${tarballPath}
+        
+        # Test it runs
+        pnpm exec d3k --version
+        
+        # Cleanup
+        rm -rf "$TEMP_DIR"
+      `
+
+      const output = execSync(testScript, {
+        shell: "/bin/bash",
+        encoding: "utf-8"
+      })
+
+      const passed = output.includes("dev3000")
+
+      return {
+        name: testName,
+        passed,
+        duration: Date.now() - startTime
+      }
+    } catch (error) {
+      return {
+        name: testName,
+        passed: false,
+        error: error instanceof Error ? error.message : String(error),
+        duration: Date.now() - startTime
+      }
+    }
+  }
+
   async runAllTests(tarballPath: string) {
     log("🧹 Starting Clean Environment Tests", GREEN)
     log(`📦 Testing with: ${tarballPath}`, YELLOW)
@@ -359,6 +403,7 @@ RUN d3k --version
     this.results.push(await this.testDockerInstall(tarballPath))
     this.results.push(await this.testCleanEnvInstall(tarballPath))
     this.results.push(await this.testMinimalPath(tarballPath))
+    this.results.push(await this.testPnpmInstall(tarballPath))
     this.results.push(await this.testServerStartup(tarballPath))
 
     // Summary
