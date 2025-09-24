@@ -30,6 +30,7 @@
     "lint:fix": "biome check --write src mcp-server www scripts",
     "test": "vitest run",
     "test-postinstall": "tsx scripts/test-postinstall.ts",
+    "test-global-install": "tsx scripts/test-global-install.ts",
     "prepare": "husky",
     "release": "./scripts/release.sh",
     "canary": "./scripts/canary.sh"
