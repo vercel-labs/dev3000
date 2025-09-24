@@ -21,6 +21,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **RELEASE PROCESS**: When releasing, ONLY use `pnpm run release` - this handles everything automatically. Never manually run `pnpm publish` or `pnpm version`.
 
+**TURBOPACK**: NEVER disable turbopack in favor of webpack. This project uses turbopack exclusively for Next.js builds. Do not switch to webpack under any circumstances.
+
 ## Testing
 
 For local testing, use:
