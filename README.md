@@ -168,6 +168,12 @@ This will:
 - Use `pnpm run typecheck` for TypeScript validation
 - The canary script is the best way to test the full user experience locally
 
+### Testing
+
+- `pnpm test` - Run unit tests
+- `pnpm run test-clean-install` - Test clean installations in isolated environments
+- `pnpm run test-release` - Run comprehensive release tests (includes all of the above plus build, pack, and MCP server tests)
+
 ## Releasing (Maintainers Only)
 
 We use a semi-automated release process that handles testing while accommodating npm's 2FA requirement:
