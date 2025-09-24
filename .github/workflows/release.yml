@@ -1,0 +1,188 @@
+name: Prepare Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: 'Release type'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+jobs:
+  test:
+    name: Test Before Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Need full history for changelog
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: 'https://registry.npmjs.org'
+      
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+      
+      - name: Install dependencies
+        run: pnpm install
+      
+      - name: Run all pre-release tests
+        run: pnpm run test-before-release
+  
+  test-matrix:
+    name: Test on Multiple Environments
+    needs: test
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        node: [18, 20]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+      
+      - name: Install and build
+        run: |
+          pnpm install
+          pnpm run build
+          pnpm run build:mcp
+      
+      - name: Pack
+        run: pnpm pack
+      
+      - name: Test global install
+        run: |
+          npm install -g ./dev3000-*.tgz
+          d3k --version
+  
+  test-docker:
+    name: Test in Docker
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+      
+      - name: Build and test in Docker
+        run: |
+          pnpm install
+          pnpm run build
+          pnpm run build:mcp
+          pnpm pack
+          
+          # Test in minimal Docker environment
+          cat > Dockerfile.test << EOF
+          FROM node:20-alpine
+          WORKDIR /test
+          COPY dev3000-*.tgz ./
+          RUN npm install -g ./dev3000-*.tgz
+          RUN d3k --version
+          EOF
+          
+          docker build -f Dockerfile.test -t d3k-release-test .
+          docker run --rm d3k-release-test
+  
+  prepare-release:
+    name: Prepare Release
+    needs: [test, test-matrix, test-docker]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+      
+      - name: Configure Git
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+      
+      - name: Install dependencies
+        run: pnpm install
+      
+      - name: Run release script
+        run: ./scripts/release.sh
+      
+      - name: Build and pack
+        run: |
+          pnpm run build
+          pnpm run build:mcp
+          pnpm pack
+      
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-package
+          path: dev3000-*.tgz
+      
+      - name: Get version
+        id: version
+        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+      
+      - name: Create release instructions
+        run: |
+          cat > release-instructions.md << EOF
+          # Release Instructions for v${{ steps.version.outputs.version }}
+          
+          All tests have passed! To complete the release:
+          
+          1. Pull the latest changes:
+             \`\`\`bash
+             git pull origin main --tags
+             \`\`\`
+          
+          2. Download the release artifact from this workflow run
+          
+          3. Publish to npm (requires 2FA):
+             \`\`\`bash
+             npm publish dev3000-${{ steps.version.outputs.version }}.tgz
+             \`\`\`
+          
+          4. Create GitHub release:
+             - Go to https://github.com/vercel-labs/dev3000/releases/new
+             - Choose tag: v${{ steps.version.outputs.version }}
+             - Release title: v${{ steps.version.outputs.version }}
+             - Copy changelog entries from CHANGELOG.md
+             - Publish release
+          EOF
+      
+      - name: Display instructions
+        run: cat release-instructions.md
+      
+      - name: Upload instructions
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-instructions
+          path: release-instructions.md

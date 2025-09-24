@@ -148,3 +148,7 @@ Before submitting a PR:
 - **Tip** `dev3000 --version` to verify you're on the canary locally
 - **FYI** .husky/pre-commit.sh runs `pnpm format` to apply biome.json rules to all code
 - Please run and test the canary build locally to avoid duplicating work that may already be done.
+
+### For Maintainers
+
+See [docs/RELEASE_PROCESS.md](docs/RELEASE_PROCESS.md) for detailed release instructions.
