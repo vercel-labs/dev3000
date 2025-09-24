@@ -865,25 +865,40 @@ export class DevEnvironment {
       }
     }
 
-    // Start the MCP server using detected package manager
-    const packageManagerForRun = detectPackageManagerForRun()
-    this.debugLog(`Using package manager: ${packageManagerForRun}`)
+    // Start the MCP server
     this.debugLog(`MCP server working directory: ${actualWorkingDir}`)
     this.debugLog(`MCP server port: ${this.options.mcpPort}`)
     this.debugLog(`Screenshot directory: ${this.screenshotDir}`)
     this.debugLog(`Is pre-built: ${isPreBuilt}`)
     this.debugLog(`Is global install: ${isGlobalInstall}`)
 
-    // Use production mode for MCP server (non-standalone)
-    // This provides proper CSS and still allows dynamic screenshot serving
-    const mcpCommand = [packageManagerForRun, "run", "start"]
-    this.debugLog(`MCP server mode: production (using ${packageManagerForRun} run start)`)
+    let mcpCommand: string[]
+    let mcpCwd = actualWorkingDir
+
+    // Always use package manager to run the server - it handles path resolution better
+    const packageManagerForRun = detectPackageManagerForRun()
+    this.debugLog(`Using package manager: ${packageManagerForRun}`)
+
+    if (isGlobalInstall && isPreBuilt) {
+      // For global installs with pre-built servers, we still use the package manager
+      // but run from the original mcpServerPath location
+      this.debugLog(`Global install with pre-built server - using ${packageManagerForRun} run start`)
+      mcpCommand = [packageManagerForRun, "run", "start"]
+      mcpCwd = mcpServerPath
+    } else {
+      // Non-global or non-pre-built: use package manager
+      mcpCommand = [packageManagerForRun, "run", "start"]
+      mcpCwd = actualWorkingDir
+    }
+
+    this.debugLog(`MCP server command: ${mcpCommand.join(" ")}`)
+    this.debugLog(`MCP server cwd: ${mcpCwd}`)
 
     // Start MCP server as a true background singleton process
     this.mcpServerProcess = spawn(mcpCommand[0], mcpCommand.slice(1), {
       stdio: ["ignore", "pipe", "pipe"],
       detached: true, // Run independently of parent process
-      cwd: actualWorkingDir,
+      cwd: mcpCwd,
       env: {
         ...process.env,
         PORT: this.options.mcpPort,
