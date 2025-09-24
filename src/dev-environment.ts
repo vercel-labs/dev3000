@@ -875,18 +875,16 @@ export class DevEnvironment {
     let mcpCommand: string[]
     let mcpCwd = actualWorkingDir
 
-    // Always use package manager to run the server - it handles path resolution better
-    const packageManagerForRun = detectPackageManagerForRun()
-    this.debugLog(`Using package manager: ${packageManagerForRun}`)
-
     if (isGlobalInstall && isPreBuilt) {
-      // For global installs with pre-built servers, we still use the package manager
-      // but run from the original mcpServerPath location
-      this.debugLog(`Global install with pre-built server - using ${packageManagerForRun} run start`)
-      mcpCommand = [packageManagerForRun, "run", "start"]
+      // For global installs with pre-built servers, use npx to find and run next
+      // This works because npx can resolve binaries from the global pnpm store
+      this.debugLog(`Global install with pre-built server - using npx next start`)
+      mcpCommand = ["npx", "--yes", "next@15.5.1-canary.30", "start"]
       mcpCwd = mcpServerPath
     } else {
       // Non-global or non-pre-built: use package manager
+      const packageManagerForRun = detectPackageManagerForRun()
+      this.debugLog(`Using package manager: ${packageManagerForRun}`)
       mcpCommand = [packageManagerForRun, "run", "start"]
       mcpCwd = actualWorkingDir
     }
