@@ -9,6 +9,7 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   statSync,
   unlinkSync,
   writeFileSync
@@ -747,8 +748,24 @@ export class DevEnvironment {
     // Get the path to our bundled MCP server
     const currentFile = fileURLToPath(import.meta.url)
     const packageRoot = dirname(dirname(currentFile)) // Go up from dist/ to package root
-    const mcpServerPath = join(packageRoot, "mcp-server")
-    this.debugLog(`MCP server path: ${mcpServerPath}`)
+    let mcpServerPath = join(packageRoot, "mcp-server")
+    this.debugLog(`Initial MCP server path: ${mcpServerPath}`)
+
+    // For pnpm global installs, resolve symlinks to get the real path
+    if (existsSync(mcpServerPath)) {
+      try {
+        const realPath = realpathSync(mcpServerPath)
+        if (realPath !== mcpServerPath) {
+          this.debugLog(`MCP server path resolved from symlink: ${mcpServerPath} -> ${realPath}`)
+          mcpServerPath = realPath
+        }
+      } catch (e) {
+        // Error resolving path, continue with original
+        this.debugLog(`Error resolving real path: ${e}`)
+      }
+    }
+
+    this.debugLog(`Final MCP server path: ${mcpServerPath}`)
 
     if (!existsSync(mcpServerPath)) {
       throw new Error(`MCP server directory not found at ${mcpServerPath}`)
@@ -777,10 +794,32 @@ export class DevEnvironment {
 
     // Check if .next build directory exists - if so, skip dependency installation
     const nextBuildPath = join(mcpServerPath, ".next")
+    this.debugLog(`Checking for pre-built MCP server at: ${nextBuildPath}`)
+
     if (existsSync(nextBuildPath)) {
       this.debugLog("MCP server is pre-built (.next directory exists), skipping dependency installation")
+
+      // For global installs, we still need to ensure the temp directory has package.json for npm start
+      if (isGlobalInstall) {
+        const tmpDirPath = join(tmpdir(), "dev3000-mcp-deps")
+        if (!existsSync(tmpDirPath)) {
+          mkdirSync(tmpDirPath, { recursive: true })
+        }
+
+        // Copy just the package.json for npm start to work
+        const sourcePackageJson = join(mcpServerPath, "package.json")
+        const tmpPackageJson = join(tmpDirPath, "package.json")
+
+        if (existsSync(sourcePackageJson)) {
+          this.debugLog(`Copying package.json to temp dir for global install: ${tmpPackageJson}`)
+          copyFileSync(sourcePackageJson, tmpPackageJson)
+        } else {
+          this.debugLog(`WARNING: package.json not found at ${sourcePackageJson}`)
+        }
+      }
     } else {
-      this.debugLog("Installing/updating MCP server dependencies")
+      this.debugLog("No .next directory found, installing/updating MCP server dependencies")
+      this.debugLog(`WARNING: MCP server appears to not be pre-built. This is unexpected for a published package.`)
       await this.installMcpServerDeps(mcpServerPath)
     }
 
@@ -970,6 +1009,44 @@ export class DevEnvironment {
         // Always copy package.json to temp directory to ensure it's up to date
         const tmpPackageJson = join(tmpDirPath, "package.json")
         const sourcePackageJson = join(mcpServerPath, "package.json")
+
+        // Debug: Check if source package.json exists
+        if (!existsSync(sourcePackageJson)) {
+          const errorDetails = [
+            `ERROR: package.json not found at ${sourcePackageJson}`,
+            `MCP server path: ${mcpServerPath}`,
+            `Contents of MCP server directory:`
+          ]
+
+          try {
+            const files = readdirSync(mcpServerPath)
+            files.forEach((file) => {
+              errorDetails.push(`  - ${file}`)
+            })
+          } catch (e) {
+            errorDetails.push(`  Error listing directory: ${e}`)
+          }
+
+          // Additional debug: Check parent directories
+          errorDetails.push(`Parent directory: ${dirname(mcpServerPath)}`)
+          try {
+            const parentFiles = readdirSync(dirname(mcpServerPath))
+            parentFiles.forEach((file) => {
+              errorDetails.push(`  Parent dir file: ${file}`)
+            })
+          } catch (e) {
+            errorDetails.push(`  Error listing parent directory: ${e}`)
+          }
+
+          // Log all error details
+          errorDetails.forEach((detail) => {
+            this.debugLog(detail)
+          })
+
+          reject(new Error(`MCP server package.json not found at ${sourcePackageJson}`))
+          return
+        }
+
         copyFileSync(sourcePackageJson, tmpPackageJson)
 
         workingDir = tmpDirPath
