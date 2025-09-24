@@ -8,8 +8,8 @@ echo "🧪 Starting canary test process..."
 
 # Pack and install
 echo "📦 Packing and installing globally..."
-pnpm pack
-PACKAGE_FILE="dev3000-$(node -p "require('./package.json').version").tgz"
+PACKAGE_FILE=$(pnpm pack --silent)
+echo "✅ Created: $PACKAGE_FILE"
 pnpm install -g "file:$(pwd)/$PACKAGE_FILE"
 
 echo "✅ Canary test completed successfully!"

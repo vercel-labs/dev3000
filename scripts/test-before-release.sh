@@ -20,11 +20,11 @@ echo -e "${YELLOW}Building and packing...${NC}"
 # Clean up old tarballs
 rm -f dev3000-*.tgz
 
-# Create fresh tarball
-pnpm pack
+# Create fresh tarball (suppress verbose file listing)
+TARBALL_NAME=$(pnpm pack --silent)
 
 # Get the tarball name
-TARBALL=$(ls -1t dev3000-*.tgz | head -1)
+TARBALL=$TARBALL_NAME
 
 # Test 1: Clean npm global install (most common scenario)
 echo -e "${YELLOW}Testing clean npm global install...${NC}"

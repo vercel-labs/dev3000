@@ -464,15 +464,17 @@ async function main() {
     // Ignore errors
   }
 
-  // Create fresh tarball
-  log("Creating fresh tarball...", YELLOW)
-  execSync("pnpm pack", { stdio: "inherit" })
+  // Build using shared build script (same as canary.sh)
+  log("Building project...", YELLOW)
+  execSync("./scripts/build.sh", { stdio: "inherit" })
 
-  // Get the newly created tarball
-  const tarballPath = execSync("ls -1t dev3000-*.tgz | head -1", { encoding: "utf-8" }).trim()
-  const fullPath = join(process.cwd(), tarballPath)
+  // Create fresh tarball (suppress verbose file listing)
+  log("Creating tarball...", YELLOW)
+  const packOutput = execSync("pnpm pack --silent", { encoding: "utf-8" })
+  const tarballName = packOutput.trim()
+  const fullPath = join(process.cwd(), tarballName)
 
-  log(`Using tarball: ${tarballPath}`, YELLOW)
+  log(`Created: ${tarballName}`, GREEN)
 
   const tester = new CleanEnvironmentTester()
   const exitCode = await tester.runAllTests(fullPath)
