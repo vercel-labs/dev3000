@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "🧪 Running pre-release tests..."
+echo "🧪 Running comprehensive release tests..."
 
 # Colors for output
 GREEN='\033[0;32m'
@@ -104,5 +104,5 @@ fi
 # Cleanup tarball
 rm -f "$TARBALL"
 
-echo -e "${GREEN}✨ All pre-release tests passed!${NC}"
-echo "Safe to proceed with release."
+echo -e "${GREEN}✨ All release tests passed!${NC}"
+echo "Package is ready for release."

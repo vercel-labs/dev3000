@@ -5,7 +5,7 @@ echo "🚀 Starting release process..."
 
 # Run comprehensive pre-release tests
 echo "🧪 Running pre-release tests (including clean install tests)..."
-./scripts/test-before-release.sh
+pnpm run test-release
 
 # Get current version and check if it's a canary version
 CURRENT_VERSION=$(node -p "require('./package.json').version")
