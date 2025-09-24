@@ -68,7 +68,7 @@
     "react": "catalog:",
     "tsx": "^4.20.3",
     "typescript": "catalog:",
-    "vitest": "^1.0.0"
+    "vitest": "^3.2.4"
   },
   "engines": {
     "node": ">=18.0.0"
