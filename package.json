@@ -31,6 +31,8 @@
     "test": "vitest run",
     "test-postinstall": "tsx scripts/test-postinstall.ts",
     "test-global-install": "tsx scripts/test-global-install.ts",
+    "test-clean-install": "tsx scripts/test-clean-install.ts",
+    "test-before-release": "./scripts/test-before-release.sh",
     "prepare": "husky",
     "release": "./scripts/release.sh",
     "canary": "./scripts/canary.sh"

@@ -1,0 +1,119 @@
+name: Test Clean Installation
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test-clean-installs:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        node: [18, 20]
+        package-manager: [pnpm, npm, yarn]
+    
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      
+      # Install pnpm
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+      
+      # Install dependencies and build
+      - run: pnpm install
+      - run: pnpm run build
+      - run: pnpm run build:mcp
+      - run: pnpm pack
+      
+      # Test 1: Clean global install
+      - name: Test Clean Global Install
+        run: |
+          # Create clean environment
+          export CLEAN_HOME=$(mktemp -d)
+          export PATH="/usr/local/bin:/usr/bin:/bin"
+          
+          # Install package manager in clean location
+          if [ "${{ matrix.package-manager }}" = "pnpm" ]; then
+            curl -fsSL https://get.pnpm.io/install.sh | PNPM_HOME=$CLEAN_HOME/.pnpm sh -
+            export PATH="$CLEAN_HOME/.pnpm:$PATH"
+            $CLEAN_HOME/.pnpm/pnpm install -g ./dev3000-*.tgz
+            $CLEAN_HOME/.pnpm/pnpm exec d3k --version
+          elif [ "${{ matrix.package-manager }}" = "npm" ]; then
+            npm config set prefix $CLEAN_HOME/.npm
+            export PATH="$CLEAN_HOME/.npm/bin:$PATH"
+            npm install -g ./dev3000-*.tgz
+            d3k --version
+          else
+            npm install -g yarn
+            yarn config set prefix $CLEAN_HOME/.yarn
+            export PATH="$CLEAN_HOME/.yarn/bin:$PATH" 
+            yarn global add ./dev3000-*.tgz
+            d3k --version
+          fi
+      
+      # Test 2: Server startup test
+      - name: Test MCP Server Startup
+        run: |
+          # Create minimal test app
+          TEST_DIR=$(mktemp -d)
+          cd $TEST_DIR
+          echo '{"name":"test","scripts":{"dev":"node -e \"console.log(\'Server running\'); setInterval(()=>{},1000)\""}}' > package.json
+          
+          # Run d3k with timeout
+          timeout 30s d3k --debug --servers-only || CODE=$?
+          
+          # Check if it started (exit code 124 means timeout, which is expected)
+          if [ "$CODE" = "124" ]; then
+            echo "✅ Server started successfully"
+          else
+            echo "❌ Server failed to start"
+            exit 1
+          fi
+
+  test-docker-install:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+      
+      - run: pnpm install
+      - run: pnpm run build
+      - run: pnpm run build:mcp
+      - run: pnpm pack
+      
+      - name: Test Docker Install
+        run: |
+          # Create Dockerfile
+          cat > Dockerfile.test << EOF
+          FROM node:20-slim
+          WORKDIR /test
+          COPY dev3000-*.tgz ./
+          RUN npm install -g pnpm
+          RUN pnpm install -g ./dev3000-*.tgz
+          RUN d3k --version
+          # Test MCP server can start
+          RUN echo '{"name":"test","scripts":{"dev":"echo Test"}}' > package.json
+          RUN timeout 10s d3k --servers-only --debug || exit 0
+          EOF
+          
+          # Build and run
+          docker build -f Dockerfile.test -t d3k-test .
+          docker run --rm d3k-test

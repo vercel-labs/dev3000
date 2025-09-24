@@ -3,11 +3,9 @@ set -e
 
 echo "🚀 Starting release process..."
 
-# Build using shared build script
-./scripts/build.sh
-
-echo "🧪 Running tests..."
-pnpm run test
+# Run comprehensive pre-release tests
+echo "🧪 Running pre-release tests (including clean install tests)..."
+./scripts/test-before-release.sh
 
 # Get current version and check if it's a canary version
 CURRENT_VERSION=$(node -p "require('./package.json').version")
