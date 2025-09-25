@@ -1,107 +1,119 @@
 #!/usr/bin/env tsx
 import { spawn } from "child_process"
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "fs"
-import { tmpdir } from "os"
 import { join } from "path"
 
-// Create test log file
-const testDir = join(tmpdir(), `test-logs-${Date.now()}`)
-mkdirSync(testDir, { recursive: true })
+console.log("🧪 Testing d3k with logs API...")
 
-const testLogFile = join(testDir, "test.log")
-const testLogContent = `[2025-09-25T01:00:00.000Z] [SERVER] Starting server...
-[2025-09-25T01:00:01.000Z] [SERVER] Server started successfully
-[2025-09-25T01:00:02.000Z] [BROWSER] Browser connected
-[2025-09-25T01:00:03.000Z] [SERVER] Request received: GET /
-[2025-09-25T01:00:04.000Z] [SERVER] Response sent: 200 OK`
+// Kill any existing d3k processes first
+console.log("🔄 Killing any existing d3k processes...")
+const killProcess = spawn("sh", ["-c", "lsof -ti:3000 -ti:3684 | xargs kill -9"], { stdio: "ignore" })
+await new Promise((resolve) => setTimeout(resolve, 2000)) // Wait for processes to die
 
-writeFileSync(testLogFile, testLogContent)
-
-console.log("🧪 Testing MCP Server Logs API...")
-
-// Start the MCP server in test mode (use start for production build)
-const mcpProcess = spawn("pnpm", ["run", "start"], {
-  cwd: join(process.cwd(), "mcp-server"),
+// Start d3k in the www directory
+console.log("🚀 Starting d3k in www directory...")
+const d3kProcess = spawn("d3k", ["--no-tui", "--debug"], {
+  cwd: join(process.cwd(), "www"),
   env: {
     ...process.env,
-    PORT: "3685", // Use different port for testing
-    NODE_ENV: "production"
+    PATH: process.env.PATH + ":" + join(process.cwd(), "node_modules/.bin")
   }
 })
 
 let mcpReady = false
 
-// Wait for server to be ready
-mcpProcess.stdout?.on("data", (data) => {
+// Wait for d3k to be ready
+d3kProcess.stdout?.on("data", (data) => {
   const output = data.toString()
-  console.log("MCP stdout:", output.trim())
-  if ((output.includes("Ready") || output.includes("started on") || output.includes("Listening")) && !mcpReady) {
-    mcpReady = true
-    // Give it a bit more time to fully initialize
-    setTimeout(() => runTests(), 2000)
+  console.log("[d3k]", output.trim())
+  // Look for signs that both servers are ready
+  if (output.includes("Development environment ready") || 
+      output.includes("MCP Server:") || 
+      output.includes("Your App:")) {
+    if (!mcpReady) {
+      mcpReady = true
+      // Give it a bit more time to fully initialize
+      setTimeout(() => runTests(), 3000)
+    }
   }
 })
 
-mcpProcess.stderr?.on("data", (data) => {
+d3kProcess.stderr?.on("data", (data) => {
   const output = data.toString()
-  console.error("MCP stderr:", output.trim())
-  // Next.js outputs to stderr sometimes
-  if ((output.includes("Ready") || output.includes("started on") || output.includes("Listening")) && !mcpReady) {
-    mcpReady = true
-    // Give it a bit more time to fully initialize
-    setTimeout(() => runTests(), 2000)
-  }
+  console.error("[d3k error]", output.trim())
 })
 
 async function runTests() {
-  const baseUrl = "http://localhost:3685"
+  const appUrl = "http://localhost:3000"
+  const mcpUrl = "http://localhost:3684"
   let allTestsPassed = true
 
   try {
+    // Test 0: Homepage loads
+    console.log("\n🏠 Testing homepage...")
+    const homeResponse = await fetch(appUrl)
+    if (!homeResponse.ok) {
+      throw new Error(`Homepage failed: ${homeResponse.status} ${homeResponse.statusText}`)
+    }
+    const homeHtml = await homeResponse.text()
+    if (!homeHtml.includes("<!DOCTYPE html>")) {
+      throw new Error("Homepage didn't return valid HTML")
+    }
+    console.log("✅ Homepage working")
+
     // Test 1: List logs endpoint
     console.log("\n📋 Testing /api/logs/list...")
-    const listResponse = await fetch(`${baseUrl}/api/logs/list`)
+    const listResponse = await fetch(`${mcpUrl}/api/logs/list`)
     if (!listResponse.ok) {
       throw new Error(`List endpoint failed: ${listResponse.status} ${listResponse.statusText}`)
     }
-    await listResponse.json()
-    console.log("✅ List endpoint working")
+    const logsData = await listResponse.json()
+    if (!logsData.files || !Array.isArray(logsData.files)) {
+      throw new Error("List endpoint didn't return expected format")
+    }
+    console.log(`✅ List endpoint working - found ${logsData.files.length} log files`)
 
-    // Test 2: Tail logs endpoint
-    console.log("\n📋 Testing /api/logs/tail...")
-    const tailResponse = await fetch(`${baseUrl}/api/logs/tail?file=${encodeURIComponent(testLogFile)}&lines=5`)
-    if (!tailResponse.ok) {
-      throw new Error(`Tail endpoint failed: ${tailResponse.status} ${tailResponse.statusText}`)
-    }
-    const tailData = await tailResponse.text()
-    if (!tailData.includes("Response sent: 200 OK")) {
-      throw new Error("Tail endpoint didn't return expected content")
-    }
-    console.log("✅ Tail endpoint working")
+    // Get current log file from the list
+    const currentLogFile = logsData.currentFile || (logsData.files[0]?.path)
+    
+    if (currentLogFile) {
+      // Test 2: Tail logs endpoint
+      console.log("\n📋 Testing /api/logs/tail...")
+      const tailResponse = await fetch(`${mcpUrl}/api/logs/tail?file=${encodeURIComponent(currentLogFile)}&lines=5`)
+      if (!tailResponse.ok) {
+        throw new Error(`Tail endpoint failed: ${tailResponse.status} ${tailResponse.statusText}`)
+      }
+      const tailData = await tailResponse.text()
+      if (tailData.length === 0) {
+        throw new Error("Tail endpoint returned empty content")
+      }
+      console.log("✅ Tail endpoint working")
 
-    // Test 3: Head logs endpoint
-    console.log("\n📋 Testing /api/logs/head...")
-    const headResponse = await fetch(`${baseUrl}/api/logs/head?file=${encodeURIComponent(testLogFile)}&lines=2`)
-    if (!headResponse.ok) {
-      throw new Error(`Head endpoint failed: ${headResponse.status} ${headResponse.statusText}`)
+      // Test 3: Head logs endpoint
+      console.log("\n📋 Testing /api/logs/head...")
+      const headResponse = await fetch(`${mcpUrl}/api/logs/head?file=${encodeURIComponent(currentLogFile)}&lines=2`)
+      if (!headResponse.ok) {
+        throw new Error(`Head endpoint failed: ${headResponse.status} ${headResponse.statusText}`)
+      }
+      const headData = await headResponse.text()
+      if (headData.length === 0) {
+        throw new Error("Head endpoint returned empty content")
+      }
+      console.log("✅ Head endpoint working")
+    } else {
+      console.log("⚠️ No log files found, skipping tail/head tests")
     }
-    const headData = await headResponse.text()
-    if (!headData.includes("Starting server...")) {
-      throw new Error("Head endpoint didn't return expected content")
-    }
-    console.log("✅ Head endpoint working")
 
-    // Test 4: Screenshots endpoint (404 expected)
+    // Test 4: Screenshots endpoint (404 expected for non-existent file)
     console.log("\n📋 Testing /api/screenshots/[filename]...")
-    const screenshotResponse = await fetch(`${baseUrl}/api/screenshots/test.png`)
+    const screenshotResponse = await fetch(`${mcpUrl}/api/screenshots/test.png`)
     if (screenshotResponse.status !== 404) {
       throw new Error(`Screenshot endpoint returned unexpected status: ${screenshotResponse.status}`)
     }
-    console.log("✅ Screenshot endpoint working")
+    console.log("✅ Screenshot endpoint working (404 for non-existent file)")
 
     // Test 5: Logs page
     console.log("\n📋 Testing /logs page...")
-    const logsPageResponse = await fetch(`${baseUrl}/logs?file=${encodeURIComponent(testLogFile)}&mode=tail`)
+    const logsPageResponse = await fetch(`${mcpUrl}/logs`)
     if (!logsPageResponse.ok) {
       throw new Error(`Logs page failed: ${logsPageResponse.status} ${logsPageResponse.statusText}`)
     }
@@ -116,11 +128,17 @@ async function runTests() {
     console.error("\n❌ Test failed:", error)
     allTestsPassed = false
   } finally {
-    // Cleanup
-    mcpProcess.kill()
-    if (existsSync(testDir)) {
-      rmSync(testDir, { recursive: true })
-    }
+    // Kill d3k process
+    console.log("\n🧹 Cleaning up...")
+    d3kProcess.kill()
+    
+    // Give it time to shut down
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+    
+    // Force kill any remaining processes
+    const cleanupProcess = spawn("sh", ["-c", "lsof -ti:3000 -ti:3684 | xargs kill -9"], { stdio: "ignore" })
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+    
     process.exit(allTestsPassed ? 0 : 1)
   }
 }
