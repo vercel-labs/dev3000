@@ -42,8 +42,8 @@
     "test-global-install": "tsx scripts/test-global-install.ts",
     "test-clean-install": "tsx scripts/test-clean-install.ts",
     "test-release": "./scripts/test-release.sh",
-    "postinstall": "node scripts/check-install.js || exit 0",
-    "prepare": "husky",
+    "_postinstall": "node scripts/check-install.js || exit 0",
+    "_prepare": "husky",
     "release": "./scripts/release.sh",
     "canary": "./scripts/canary.sh"
   },

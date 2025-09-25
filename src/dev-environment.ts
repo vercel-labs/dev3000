@@ -136,7 +136,8 @@ function writeSessionInfo(
   logFilePath: string,
   appPort: string,
   mcpPort?: string,
-  cdpUrl?: string
+  cdpUrl?: string | null,
+  chromePids?: number[]
 ): void {
   const sessionDir = join(homedir(), ".d3k")
 
@@ -155,7 +156,8 @@ function writeSessionInfo(
       cdpUrl: cdpUrl || null,
       startTime: new Date().toISOString(),
       pid: process.pid,
-      cwd: process.cwd()
+      cwd: process.cwd(),
+      chromePids: chromePids || []
     }
 
     // Write session file - use project name as filename for easy lookup
@@ -165,6 +167,22 @@ function writeSessionInfo(
     // Non-fatal - just log a warning
     console.warn(chalk.yellow(`⚠️ Could not write session info: ${error}`))
   }
+}
+
+// Get Chrome PIDs for this instance
+function getSessionChromePids(projectName: string): number[] {
+  const sessionDir = join(homedir(), ".d3k")
+  const sessionFile = join(sessionDir, `${projectName}.json`)
+
+  try {
+    if (existsSync(sessionFile)) {
+      const sessionInfo = JSON.parse(readFileSync(sessionFile, "utf8"))
+      return sessionInfo.chromePids || []
+    }
+  } catch (_error) {
+    // Non-fatal - return empty array
+  }
+  return []
 }
 
 function createLogFileInDir(baseDir: string, projectName: string): string {
@@ -229,6 +247,7 @@ export class DevEnvironment {
   private healthCheckTimer: NodeJS.Timeout | null = null
   private tui: DevTUI | null = null
   private portChangeMessage: string | null = null
+  private firstSigintTime: number | null = null
 
   constructor(options: DevEnvironmentOptions) {
     // Handle portMcp vs mcpPort naming
@@ -471,7 +490,21 @@ export class DevEnvironment {
         commandName: this.options.commandName,
         serversOnly: this.options.serversOnly,
         version: this.version,
-        projectName: projectDisplayName
+        projectName: projectDisplayName,
+        onShutdown: () => {
+          // TUI requested shutdown - trigger graceful shutdown directly
+          if (!this.isShuttingDown) {
+            this.debugLog("TUI requested shutdown via Ctrl-C or 'q'")
+            this.isShuttingDown = true
+            this.handleShutdown()
+              .then(() => {
+                process.exit(0)
+              })
+              .catch(() => {
+                process.exit(1)
+              })
+          }
+        }
       })
 
       await this.tui.start()
@@ -1258,16 +1291,33 @@ export class DevEnvironment {
     )
 
     try {
+      // Set up callback for when Chrome window is manually closed
+      this.cdpMonitor.setOnWindowClosedCallback(() => {
+        this.debugLog("Chrome window closed callback triggered, initiating graceful shutdown")
+        this.logger.log("browser", "[CDP] Chrome window was manually closed, shutting down d3k")
+        // Trigger graceful shutdown
+        this.gracefulShutdown()
+      })
+
       // Start CDP monitoring
       await this.cdpMonitor.start()
       this.logger.log("browser", "[CDP] Chrome launched with DevTools Protocol monitoring")
 
-      // Update session info with CDP URL now that we have it
+      // Update session info with CDP URL and Chrome PIDs now that we have them
       const projectName = getProjectName()
       const cdpUrl = this.cdpMonitor.getCdpUrl()
-      if (cdpUrl) {
-        writeSessionInfo(projectName, this.options.logFile, this.options.port, this.options.mcpPort, cdpUrl)
-        this.debugLog(`Updated session info with CDP URL: ${cdpUrl}`)
+      const chromePids = this.cdpMonitor.getChromePids()
+
+      if (cdpUrl || chromePids.length > 0) {
+        writeSessionInfo(
+          projectName,
+          this.options.logFile,
+          this.options.port,
+          this.options.mcpPort,
+          cdpUrl || undefined,
+          chromePids
+        )
+        this.debugLog(`Updated session info with CDP URL: ${cdpUrl}, Chrome PIDs: [${chromePids.join(", ")}]`)
       }
 
       // Navigate to the app
@@ -1352,20 +1402,34 @@ export class DevEnvironment {
   }
 
   private setupCleanupHandlers() {
-    // Handle Ctrl+C to kill all processes
-    process.on("SIGINT", () => {
-      if (this.isShuttingDown) return // Prevent multiple shutdown attempts
-      this.isShuttingDown = true
+    // Only set up SIGINT handler if NOT using TUI mode
+    // TUI handles Ctrl+C directly via onShutdown callback
+    if (!this.options.tui) {
+      // Handle Ctrl+C to kill all processes
+      process.on("SIGINT", () => {
+        const now = Date.now()
 
-      // Call async cleanup in a non-blocking way
-      this.handleShutdown()
-        .then(() => {
-          process.exit(0)
-        })
-        .catch(() => {
-          process.exit(1)
-        })
-    })
+        // If first Ctrl+C or more than 3 seconds since last one
+        if (!this.firstSigintTime || now - this.firstSigintTime > 3000) {
+          this.firstSigintTime = now
+          console.log(chalk.yellow("\n⚠️ Press Ctrl+C again to quit"))
+          return
+        }
+
+        // Second Ctrl+C - proceed with shutdown
+        if (this.isShuttingDown) return // Prevent multiple shutdown attempts
+        this.isShuttingDown = true
+
+        // Call async cleanup in a non-blocking way
+        this.handleShutdown()
+          .then(() => {
+            process.exit(0)
+          })
+          .catch(() => {
+            process.exit(1)
+          })
+      })
+    }
 
     // Also handle SIGTERM
     process.on("SIGTERM", () => {
@@ -1426,6 +1490,29 @@ export class DevEnvironment {
       } catch (_error) {
         if (!this.options.tui) {
           console.log(chalk.gray("⚠️ Chrome shutdown failed"))
+        }
+
+        // Fallback: force kill any remaining Chrome processes for THIS instance only
+        try {
+          const projectName = getProjectName()
+          const chromePids = getSessionChromePids(projectName)
+
+          if (chromePids.length > 0) {
+            this.debugLog(`Fallback cleanup: killing Chrome PIDs for this instance: [${chromePids.join(", ")}]`)
+            const { spawn } = await import("child_process")
+
+            for (const pid of chromePids) {
+              try {
+                spawn("kill", ["-9", pid.toString()], { stdio: "ignore" })
+              } catch {
+                // Ignore individual kill errors
+              }
+            }
+          } else {
+            this.debugLog("Fallback cleanup: no Chrome PIDs found for this instance")
+          }
+        } catch {
+          // Ignore errors in fallback cleanup
         }
       }
     }

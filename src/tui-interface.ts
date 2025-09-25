@@ -6,6 +6,7 @@ export interface TUIOptions {
   serversOnly?: boolean
   version: string
   projectName?: string
+  onShutdown?: () => void
 }
 
 type InkApp = { unmount: () => void }
@@ -27,7 +28,7 @@ export class DevTUI {
     this.updateStatusFn = updateStatus
   }
 
-  async updateStatus(status: string | null): Promise<void> {
+  updateStatus(status: string | null): void {
     if (this.updateStatusFn) {
       this.updateStatusFn(status)
     }

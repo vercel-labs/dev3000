@@ -13,6 +13,7 @@ export interface TUIOptions {
   serversOnly?: boolean
   version: string
   projectName?: string
+  onShutdown?: () => void
 }
 
 interface LogEntry {
@@ -36,10 +37,12 @@ const TUIApp = ({
   projectName,
   onShutdown,
   onStatusUpdate
-}: TUIOptions & { onShutdown: () => void; onStatusUpdate: (fn: (status: string | null) => void) => void }) => {
+}: TUIOptions & { onStatusUpdate: (fn: (status: string | null) => void) => void }) => {
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [scrollOffset, setScrollOffset] = useState(0)
   const [initStatus, setInitStatus] = useState<string | null>("Initializing...")
+  const [ctrlCPressed, setCtrlCPressed] = useState<number | null>(null) // Track first Ctrl-C time
+  const [showWarning, setShowWarning] = useState<string | null>(null) // Warning message to display
   const logIdCounter = useRef(0)
   const { exit } = useApp()
   const { stdout } = useStdout()
@@ -88,18 +91,19 @@ const TUIApp = ({
   // Calculate available lines for logs dynamically based on terminal height and mode
   const calculateMaxVisibleLogs = () => {
     if (isVeryCompact) {
-      // In very compact mode, use most of the screen for logs
+      // In very compact mode, use most of the screen for logs, account for bottom status line
       return Math.max(3, termHeight - 8)
     } else if (isCompact) {
-      // In compact mode, reduce header size
+      // In compact mode, reduce header size, account for bottom status line
       return Math.max(3, termHeight - 10)
     } else {
       // Normal mode calculation
       const headerLines = 12
       const logBoxHeaderLines = 3
       const logBoxFooterLines = scrollOffset > 0 ? 3 : 1
+      const bottomStatusLine = 1 // Just one line for the status
       const safetyBuffer = 1
-      const totalReservedLines = headerLines + logBoxHeaderLines + logBoxFooterLines + safetyBuffer
+      const totalReservedLines = headerLines + logBoxHeaderLines + logBoxFooterLines + bottomStatusLine + safetyBuffer
       return Math.max(3, termHeight - totalReservedLines)
     }
   }
@@ -189,8 +193,29 @@ const TUIApp = ({
 
   // Handle keyboard input
   useInput((input, key) => {
-    if (input === "q" || (key.ctrl && input === "c")) {
-      onShutdown()
+    if (input === "q") {
+      onShutdown?.()
+      exit()
+    } else if (key.ctrl && input === "c") {
+      const now = Date.now()
+
+      // If first Ctrl-C or more than 3 seconds since last one
+      if (!ctrlCPressed || now - ctrlCPressed > 3000) {
+        setCtrlCPressed(now)
+        setShowWarning("⚠️ Press Ctrl+C again to quit")
+
+        // Clear warning after 3 seconds
+        setTimeout(() => {
+          setShowWarning(null)
+          setCtrlCPressed(null)
+        }, 3000)
+
+        return
+      }
+
+      // Second Ctrl-C within 3 seconds - shutdown immediately
+      setShowWarning("Shutting down...")
+      onShutdown?.()
       exit()
     } else if (key.upArrow) {
       setScrollOffset((prev) => Math.min(prev + 1, Math.max(0, logs.length - maxVisibleLogs)))
@@ -404,6 +429,19 @@ const TUIApp = ({
           </>
         )}
       </Box>
+
+      {/* Bottom status line - no border, just text */}
+      <Box paddingX={1}>
+        <Text color="#A18CE5">
+          ⏵⏵ {logFile}
+          {showWarning && (
+            <Text color="yellow" bold>
+              {" — "}
+              {showWarning}
+            </Text>
+          )}
+        </Text>
+      </Box>
     </Box>
   )
 }
@@ -417,9 +455,13 @@ export async function runTUI(
     const app = render(
       <TUIApp
         {...options}
-        onShutdown={() => {
-          // Don't resolve here, just trigger shutdown
-        }}
+        onShutdown={
+          options.onShutdown ||
+          (() => {
+            // Fallback: if no shutdown callback provided, do nothing
+            // This should not happen in normal operation
+          })
+        }
         onStatusUpdate={(fn) => {
           statusUpdater = fn
         }}

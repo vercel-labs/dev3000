@@ -33,6 +33,10 @@ export class CDPMonitor {
   private networkIdleTimer: NodeJS.Timeout | null = null
   private pluginReactScan: boolean = false
   private cdpUrl: string | null = null
+  private lastScreenshotTime: number = 0
+  private minScreenshotInterval: number = 1000 // Minimum 1 second between screenshots
+  private chromePids: Set<number> = new Set() // Track all Chrome PIDs for this instance
+  private onWindowClosedCallback: (() => void) | null = null // Callback for when window is manually closed
 
   constructor(
     profileDir: string,
@@ -80,6 +84,57 @@ export class CDPMonitor {
 
   getCdpUrl(): string | null {
     return this.cdpUrl
+  }
+
+  getChromePids(): number[] {
+    return Array.from(this.chromePids)
+  }
+
+  setOnWindowClosedCallback(callback: (() => void) | null): void {
+    this.onWindowClosedCallback = callback
+  }
+
+  private async discoverChromePids(): Promise<void> {
+    try {
+      const { spawn } = await import("child_process")
+
+      // Find all Chrome processes with our profile directory
+      const profileDirEscaped = this.profileDir.replace(/'/g, "'\\''")
+      const pidsOutput = await new Promise<string>((resolve) => {
+        const proc = spawn("sh", ["-c", `pgrep -f '${profileDirEscaped}'`], { stdio: "pipe" })
+        let output = ""
+        proc.stdout?.on("data", (data) => {
+          output += data.toString()
+        })
+        proc.on("exit", () => resolve(output.trim()))
+      })
+
+      const pids = pidsOutput
+        .split("\n")
+        .filter(Boolean)
+        .map((pid) => parseInt(pid.trim(), 10))
+        .filter((pid) => !Number.isNaN(pid))
+
+      // Add main browser PID if we have it
+      if (this.browser?.pid) {
+        pids.push(this.browser.pid)
+      }
+
+      // Store unique PIDs
+      for (const pid of pids) {
+        this.chromePids.add(pid)
+      }
+
+      this.debugLog(
+        `Discovered ${this.chromePids.size} Chrome PIDs for this instance: [${Array.from(this.chromePids).join(", ")}]`
+      )
+    } catch (error) {
+      this.debugLog(`Failed to discover Chrome PIDs: ${error}`)
+      // Fallback to just the main browser PID if we have it
+      if (this.browser?.pid) {
+        this.chromePids.add(this.browser.pid)
+      }
+    }
   }
 
   private createLoadingPage(): string {
@@ -233,9 +288,12 @@ export class CDPMonitor {
         })
 
         // Give Chrome time to start up
-        setTimeout(() => {
+        setTimeout(async () => {
           if (!processExited) {
             this.debugLog(`Chrome successfully started with path: ${chromePath}`)
+
+            // Discover all Chrome PIDs for this instance
+            await this.discoverChromePids()
 
             // Set up runtime crash monitoring after successful launch
             this.setupRuntimeCrashMonitoring()
@@ -318,6 +376,24 @@ export class CDPMonitor {
               } else {
                 this.logger("browser", "[CDP] Chrome process not available after CDP disconnect")
               }
+
+              // If Chrome process is gone or connection loss seems permanent, trigger shutdown
+              // Use a small delay to distinguish between temporary reconnects and permanent failures
+              setTimeout(() => {
+                if (!this.isShuttingDown && this.onWindowClosedCallback) {
+                  // Check if Chrome process is still alive
+                  if (!this.browser || this.browser.killed || !this.browser.pid) {
+                    this.debugLog("Chrome process is dead and CDP connection lost, triggering d3k shutdown")
+                    this.logger("browser", "[CDP] Chrome process terminated, shutting down d3k")
+                    this.onWindowClosedCallback()
+                  } else {
+                    // Chrome is alive but CDP connection is lost - this could be recoverable
+                    this.debugLog("Chrome process alive but CDP connection lost - attempting recovery")
+                    this.logger("browser", "[CDP] Attempting to recover from connection loss")
+                    // Could add reconnection logic here in the future
+                  }
+                }
+              }, 2000) // Wait 2 seconds to see if it's a temporary disconnect
             }
           })
 
@@ -409,7 +485,8 @@ export class CDPMonitor {
       "DOM", // DOM mutations
       "Performance", // Performance metrics
       "Security", // Security events
-      "Log" // Browser console logs
+      "Log", // Browser console logs
+      "Target" // Target events (window/tab creation/destruction)
       // Note: Input domain is for dispatching events, not monitoring them - we use JS injection instead
     ]
 
@@ -623,10 +700,7 @@ export class CDPMonitor {
 
       this.logger("browser", `[NAVIGATION] ${frame?.url || "unknown"} `) // [PLAYWRIGHT] tag removed
 
-      // Take screenshot on navigation to catch initial render
-      setTimeout(() => {
-        this.takeScreenshot("frame-navigated")
-      }, 200)
+      // Don't take a screenshot here - wait for page load
     })
 
     // Page load events for better screenshot timing
@@ -639,8 +713,7 @@ export class CDPMonitor {
 
     this.onCDPEvent("Page.domContentEventFired", async (_event) => {
       this.logger("browser", "[PAGE] DOM content loaded") // [PLAYWRIGHT] tag removed
-      // Take screenshot on DOM content loaded too for earlier capture
-      this.takeScreenshot("dom-content-loaded")
+      // Skip screenshot on DOM content loaded - we'll get one on page-loaded
       // Reinject interaction tracking on DOM content loaded
       await this.setupInteractionTracking()
     })
@@ -688,6 +761,20 @@ export class CDPMonitor {
     //     this.logger('browser', `[PERFORMANCE] ${metricsStr}`);
     //   }
     // });
+
+    // Target events - handle window/tab destruction
+    this.onCDPEvent("Target.targetDestroyed", (event) => {
+      const params = event.params as { targetId: string }
+      this.debugLog(`Target destroyed: ${params.targetId}`)
+      this.logger("browser", `[TARGET] Window/tab closed: ${params.targetId}`)
+
+      // If this is our main tab/window being closed, trigger shutdown callback
+      if (this.onWindowClosedCallback && !this.isShuttingDown) {
+        this.debugLog("Chrome window was manually closed, triggering d3k shutdown")
+        this.logger("browser", "[TARGET] Chrome window manually closed, shutting down d3k")
+        this.onWindowClosedCallback()
+      }
+    })
   }
 
   private onCDPEvent(method: string, handler: (event: CDPEvent) => void): void {
@@ -769,19 +856,10 @@ export class CDPMonitor {
       throw error
     }
 
-    // Take an immediate screenshot after navigation command
+    // Take a delayed screenshot to catch dynamic content
     setTimeout(() => {
-      this.takeScreenshot("navigation-immediate")
-    }, 100)
-
-    // Take backup screenshots with increasing delays to catch different loading states
-    setTimeout(() => {
-      this.takeScreenshot("navigation-1s")
-    }, 1000)
-
-    setTimeout(() => {
-      this.takeScreenshot("navigation-3s")
-    }, 3000)
+      this.takeScreenshot("navigation-delayed")
+    }, 2000)
 
     // Set up interaction tracking - but be more efficient about it
     const trackingStartTime = Date.now()
@@ -1112,6 +1190,21 @@ export class CDPMonitor {
 
   private async takeScreenshot(event: string): Promise<string | null> {
     try {
+      // Throttle screenshots to avoid spam
+      const now = Date.now()
+      const timeSinceLastScreenshot = now - this.lastScreenshotTime
+
+      // Special cases that should always take screenshots
+      const priorityEvents = ["error", "crash"]
+
+      // If not a priority event and we took a screenshot recently, skip it
+      if (!priorityEvents.includes(event) && timeSinceLastScreenshot < this.minScreenshotInterval) {
+        this.debugLog(`Skipping screenshot for ${event} - only ${timeSinceLastScreenshot}ms since last screenshot`)
+        return null
+      }
+
+      // Update last screenshot time
+      this.lastScreenshotTime = now
       const result = await this.sendCDPCommand("Page.captureScreenshot", {
         format: "png",
         quality: 80,
@@ -1204,7 +1297,42 @@ export class CDPMonitor {
   async shutdown(): Promise<void> {
     this.isShuttingDown = true
 
-    // Close CDP connection first
+    // Try to close the page first, then the tab
+    if (this.connection?.sessionId) {
+      try {
+        // Try to close the page
+        await this.sendCDPCommand("Page.close")
+        this.debugLog("Sent Page.close command")
+        await new Promise((resolve) => setTimeout(resolve, 100))
+      } catch (_e) {
+        this.debugLog("Page.close failed, trying Target.closeTarget")
+      }
+
+      try {
+        // Get the list of targets to find our specific tab
+        const targets = (await this.sendCDPCommand("Target.getTargets")) as {
+          targetInfos: Array<{ targetId: string; type: string }>
+        }
+        this.debugLog(`Found ${targets.targetInfos?.length || 0} targets`)
+
+        // Find our page target
+        const pageTarget = targets.targetInfos?.find((t) => t.type === "page")
+        if (pageTarget) {
+          this.debugLog(`Closing page target: ${pageTarget.targetId}`)
+          await this.sendCDPCommand("Target.closeTarget", {
+            targetId: pageTarget.targetId
+          })
+          this.debugLog("Closed Chrome tab via CDP")
+        }
+
+        // Give it more time for the tab to close
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+      } catch (_e) {
+        this.debugLog("Failed to close tab via CDP, will force close Chrome")
+      }
+    }
+
+    // Close CDP connection
     if (this.connection) {
       try {
         this.connection.ws.close()
@@ -1214,37 +1342,55 @@ export class CDPMonitor {
       this.connection = null
     }
 
-    // Close browser
-    if (this.browser && !this.browser.killed) {
-      const browserPid = this.browser.pid
-      const browserProcess = this.browser
-      this.browser = null
+    // Kill only the Chrome processes for THIS instance
+    await this.killInstanceChromeProcesses()
+  }
 
-      // Kill the browser process
-      try {
-        browserProcess.kill("SIGTERM")
+  private async killInstanceChromeProcesses(): Promise<void> {
+    try {
+      // Re-discover PIDs in case any new processes spawned
+      await this.discoverChromePids()
 
-        // Give it a moment to close gracefully
-        await new Promise((resolve) => setTimeout(resolve, 200))
-
-        // Force kill if still alive
-        if (!browserProcess.killed) {
-          browserProcess.kill("SIGKILL")
-
-          // On macOS, also try to kill by PID specifically
-          if (process.platform === "darwin" && browserPid) {
-            try {
-              const { execSync } = require("child_process")
-              // Kill the process and all its children
-              execSync(`kill -9 ${browserPid}`, { stdio: "ignore" })
-            } catch (_e) {
-              // Ignore errors
-            }
-          }
-        }
-      } catch (_e) {
-        // Process might already be dead
+      if (this.chromePids.size === 0) {
+        this.debugLog("No Chrome PIDs to kill for this instance")
+        return
       }
+
+      const pidsArray = Array.from(this.chromePids)
+      this.debugLog(`Killing Chrome PIDs for this instance: [${pidsArray.join(", ")}]`)
+
+      // Kill each PID individually with proper error handling
+      for (const pid of pidsArray) {
+        try {
+          // Check if process still exists
+          process.kill(pid, 0)
+
+          // Process exists, kill it
+          this.debugLog(`Killing Chrome process ${pid}`)
+          process.kill(pid, "SIGTERM")
+
+          // Give it a moment to close gracefully
+          await new Promise((resolve) => setTimeout(resolve, 200))
+
+          // Check if it's still alive and force kill if needed
+          try {
+            process.kill(pid, 0)
+            this.debugLog(`Chrome process ${pid} didn't die from SIGTERM, sending SIGKILL`)
+            process.kill(pid, "SIGKILL")
+          } catch {
+            this.debugLog(`Chrome process ${pid} terminated after SIGTERM`)
+          }
+        } catch {
+          this.debugLog(`Chrome process ${pid} is already dead`)
+        }
+      }
+
+      // Clear our PID tracking
+      this.chromePids.clear()
+
+      this.debugLog("Completed killing Chrome processes for this instance")
+    } catch (error) {
+      this.debugLog(`Error killing instance Chrome processes: ${error}`)
     }
   }
 }
