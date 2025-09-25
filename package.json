@@ -72,7 +72,8 @@
     "react": "19.2.0-canary-de5a1b20-20250905",
     "react-dom": "19.2.0-canary-de5a1b20-20250905",
     "ws": "^8.18.3",
-    "zod": "^3.22.4"
+    "zod": "^3.22.4",
+    "typescript": "^5.0.0"
   },
   "devDependencies": {
     "@types/cli-progress": "^3.11.6",
@@ -82,7 +83,6 @@
     "husky": "^9.0.0",
     "js-yaml": "^4.1.0",
     "tsx": "^4.20.3",
-    "typescript": "^5.0.0",
     "vitest": "^3.2.4"
   },
   "engines": {

@@ -50,6 +50,9 @@ importers:
       zod:
         specifier: ^3.22.4
         version: 3.25.76
+      typescript:
+        specifier: ^5.0.0
+        version: 5.9.2
     devDependencies:
       '@types/cli-progress':
         specifier: ^3.11.6
@@ -72,9 +75,6 @@ importers:
       tsx:
         specifier: ^4.20.3
         version: 4.20.5
-      typescript:
-        specifier: ^5.0.0
-        version: 5.9.2
       vitest:
         specifier: ^3.2.4
         version: 3.2.4(@types/node@24.5.2)(lightningcss@1.30.1)
