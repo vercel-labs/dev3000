@@ -32,7 +32,7 @@ jobs:
       # Install dependencies and build
       - run: pnpm install
       - run: pnpm run build
-      - run: pnpm run build:mcp
+      - run: cd mcp-server && pnpm run build
       - run: pnpm pack
       
       # Test 1: Clean global install

@@ -60,7 +60,7 @@ jobs:
         run: |
           pnpm install
           pnpm run build
-          pnpm run build:mcp
+          cd mcp-server && pnpm run build
       
       - name: Pack
         run: pnpm pack
@@ -89,7 +89,7 @@ jobs:
         run: |
           pnpm install
           pnpm run build
-          pnpm run build:mcp
+          cd mcp-server && pnpm run build
           pnpm pack
           
           # Test in minimal Docker environment
@@ -138,7 +138,7 @@ jobs:
       - name: Build and pack
         run: |
           pnpm run build
-          pnpm run build:mcp
+          cd mcp-server && pnpm run build
           pnpm pack
       
       - name: Upload release artifacts

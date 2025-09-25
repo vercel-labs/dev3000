@@ -55,7 +55,7 @@ async function runTests() {
     if (!listResponse.ok) {
       throw new Error(`List endpoint failed: ${listResponse.status} ${listResponse.statusText}`)
     }
-    const logs = await listResponse.json()
+    await listResponse.json()
     console.log("✅ List endpoint working")
 
     // Test 2: Tail logs endpoint
