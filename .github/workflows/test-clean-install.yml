@@ -38,6 +38,9 @@ jobs:
       # Test 1: Clean global install
       - name: Test Clean Global Install
         run: |
+          # Save current directory
+          WORK_DIR=$(pwd)
+          
           # Create clean environment
           export CLEAN_HOME=$(mktemp -d)
           # Unset existing PNPM_HOME to avoid conflicts
@@ -46,23 +49,35 @@ jobs:
           export NODE_PATH=$(dirname $(which node))
           export PATH="$NODE_PATH:/usr/local/bin:/usr/bin:/bin"
           
+          # Get full path to tarball
+          TARBALL=$(ls $WORK_DIR/dev3000-*.tgz)
+          echo "Installing from tarball: $TARBALL"
+          
           # Install package manager in clean location
           if [ "${{ matrix.package-manager }}" = "pnpm" ]; then
             curl -fsSL https://get.pnpm.io/install.sh | PNPM_HOME=$CLEAN_HOME/.pnpm sh -
             export PNPM_HOME="$CLEAN_HOME/.pnpm"
             export PATH="$CLEAN_HOME/.pnpm:$PATH"
-            $CLEAN_HOME/.pnpm/pnpm install -g ./dev3000-*.tgz
+            echo "pnpm version: $($CLEAN_HOME/.pnpm/pnpm --version)"
+            $CLEAN_HOME/.pnpm/pnpm install -g "$TARBALL"
+            echo "Checking installation..."
+            ls -la $CLEAN_HOME/.pnpm/global/5/node_modules/.bin/ || true
             $CLEAN_HOME/.pnpm/pnpm exec d3k --version
           elif [ "${{ matrix.package-manager }}" = "npm" ]; then
             npm config set prefix $CLEAN_HOME/.npm
             export PATH="$CLEAN_HOME/.npm/bin:$PATH"
-            npm install -g ./dev3000-*.tgz
+            npm install -g "$TARBALL"
+            echo "Checking installation..."
+            ls -la $CLEAN_HOME/.npm/bin/ || true
             d3k --version
           else
             npm install -g yarn
             yarn config set prefix $CLEAN_HOME/.yarn
             export PATH="$CLEAN_HOME/.yarn/bin:$PATH" 
-            yarn global add ./dev3000-*.tgz
+            echo "yarn version: $(yarn --version)"
+            yarn global add "$TARBALL"
+            echo "Checking installation..."
+            ls -la $CLEAN_HOME/.yarn/bin/ || true
             d3k --version
           fi
       
