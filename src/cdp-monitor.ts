@@ -192,7 +192,6 @@ export class CDPMonitor {
             "--disable-sync",
             "--metrics-recording-only",
             "--disable-default-apps",
-            "--enable-features=DestroyProfileOnBrowserClose",
             this.createLoadingPage()
           ],
           {
@@ -1217,20 +1216,31 @@ export class CDPMonitor {
 
     // Close browser
     if (this.browser && !this.browser.killed) {
+      const browserPid = this.browser.pid
       const browserProcess = this.browser
       this.browser = null
 
-      // Since Chrome is not detached, it should die with parent process
-      // But we'll kill it explicitly to be sure
+      // Kill the browser process
       try {
         browserProcess.kill("SIGTERM")
 
         // Give it a moment to close gracefully
-        await new Promise((resolve) => setTimeout(resolve, 100))
+        await new Promise((resolve) => setTimeout(resolve, 200))
 
         // Force kill if still alive
         if (!browserProcess.killed) {
           browserProcess.kill("SIGKILL")
+
+          // On macOS, also try to kill by PID specifically
+          if (process.platform === "darwin" && browserPid) {
+            try {
+              const { execSync } = require("child_process")
+              // Kill the process and all its children
+              execSync(`kill -9 ${browserPid}`, { stdio: "ignore" })
+            } catch (_e) {
+              // Ignore errors
+            }
+          }
         }
       } catch (_e) {
         // Process might already be dead
