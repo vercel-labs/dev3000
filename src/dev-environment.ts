@@ -1353,88 +1353,112 @@ export class DevEnvironment {
 
   private setupCleanupHandlers() {
     // Handle Ctrl+C to kill all processes
-    process.on("SIGINT", async () => {
+    process.on("SIGINT", () => {
       if (this.isShuttingDown) return // Prevent multiple shutdown attempts
       this.isShuttingDown = true
 
-      // Stop health monitoring
-      this.stopHealthCheck()
+      // Call async cleanup in a non-blocking way
+      this.handleShutdown()
+        .then(() => {
+          process.exit(0)
+        })
+        .catch(() => {
+          process.exit(1)
+        })
+    })
 
-      // Clean up session file
+    // Also handle SIGTERM
+    process.on("SIGTERM", () => {
+      if (this.isShuttingDown) return
+      this.isShuttingDown = true
+
+      this.handleShutdown()
+        .then(() => {
+          process.exit(0)
+        })
+        .catch(() => {
+          process.exit(1)
+        })
+    })
+  }
+
+  private async handleShutdown() {
+    // Stop health monitoring
+    this.stopHealthCheck()
+
+    // Clean up session file
+    try {
+      const projectName = getProjectName()
+      const sessionFile = join(homedir(), ".d3k", `${projectName}.json`)
+      if (existsSync(sessionFile)) {
+        unlinkSync(sessionFile)
+      }
+    } catch (_error) {
+      // Non-fatal - ignore cleanup errors
+    }
+
+    // Stop TUI if it's running
+    if (this.tui) {
+      await this.tui.shutdown()
+      this.tui = null
+    }
+
+    // Stop spinner if it's running
+    if (this.spinner?.isSpinning) {
+      this.spinner.fail("Interrupted")
+    }
+
+    // Only show console messages if not in TUI mode
+    if (!this.options.tui) {
+      console.log(chalk.yellow("\n🛑 Received interrupt signal. Cleaning up processes..."))
+    }
+
+    // Shutdown CDP monitor FIRST - this should close Chrome
+    if (this.cdpMonitor) {
       try {
-        const projectName = getProjectName()
-        const sessionFile = join(homedir(), ".d3k", `${projectName}.json`)
-        if (existsSync(sessionFile)) {
-          unlinkSync(sessionFile)
+        if (!this.options.tui) {
+          console.log(chalk.cyan("🔄 Closing Chrome browser..."))
+        }
+        await this.cdpMonitor.shutdown()
+        if (!this.options.tui) {
+          console.log(chalk.green("✅ Chrome browser closed"))
         }
       } catch (_error) {
-        // Non-fatal - ignore cleanup errors
+        if (!this.options.tui) {
+          console.log(chalk.gray("⚠️ Chrome shutdown failed"))
+        }
       }
+    }
 
-      // Stop TUI if it's running
-      if (this.tui) {
-        await this.tui.shutdown()
-        this.tui = null
-      }
-
-      // Stop spinner if it's running
-      if (this.spinner?.isSpinning) {
-        this.spinner.fail("Interrupted")
-      }
-
-      // Only show console messages if not in TUI mode
-      if (!this.options.tui) {
-        console.log(chalk.yellow("\n🛑 Received interrupt signal. Cleaning up processes..."))
-      }
-
-      // Kill processes on both ports FIRST - this is most important
-      const killPortProcess = async (port: string, name: string) => {
-        try {
-          const { spawn } = await import("child_process")
-          const killProcess = spawn("sh", ["-c", `lsof -ti:${port} | xargs kill -9`], { stdio: "inherit" })
-          return new Promise<void>((resolve) => {
-            killProcess.on("exit", (code) => {
-              if (code === 0 && !this.options.tui) {
-                console.log(chalk.green(`✅ Killed ${name} on port ${port}`))
-              }
-              resolve()
-            })
+    // Kill processes on both ports
+    const killPortProcess = async (port: string, name: string) => {
+      try {
+        const { spawn } = await import("child_process")
+        const killProcess = spawn("sh", ["-c", `lsof -ti:${port} | xargs kill -9`], { stdio: "inherit" })
+        return new Promise<void>((resolve) => {
+          killProcess.on("exit", (code) => {
+            if (code === 0 && !this.options.tui) {
+              console.log(chalk.green(`✅ Killed ${name} on port ${port}`))
+            }
+            resolve()
           })
-        } catch (_error) {
-          if (!this.options.tui) {
-            console.log(chalk.gray(`⚠️ Could not kill ${name} on port ${port}`))
-          }
+        })
+      } catch (_error) {
+        if (!this.options.tui) {
+          console.log(chalk.gray(`⚠️ Could not kill ${name} on port ${port}`))
         }
       }
+    }
 
-      // Kill app server immediately (MCP server remains as singleton)
-      if (!this.options.tui) {
-        console.log(chalk.yellow("🔄 Killing app server..."))
-      }
-      await killPortProcess(this.options.port, "your app server")
+    // Kill app server (MCP server remains as singleton)
+    if (!this.options.tui) {
+      console.log(chalk.yellow("🔄 Killing app server..."))
+    }
+    await killPortProcess(this.options.port, "your app server")
 
-      // Shutdown CDP monitor if it was started
-      if (this.cdpMonitor) {
-        try {
-          if (!this.options.tui) {
-            console.log(chalk.cyan("🔄 Closing CDP monitor..."))
-          }
-          await this.cdpMonitor.shutdown()
-          if (!this.options.tui) {
-            console.log(chalk.green("✅ CDP monitor closed"))
-          }
-        } catch (_error) {
-          if (!this.options.tui) {
-            console.log(chalk.gray("⚠️ CDP monitor shutdown failed"))
-          }
-        }
-      }
-
-      if (!this.options.tui) {
-        console.log(chalk.green("✅ Cleanup complete"))
-      }
-      process.exit(0)
-    })
+    if (!this.options.tui) {
+      console.log(chalk.green("✅ Cleanup complete"))
+    }
   }
 }
 

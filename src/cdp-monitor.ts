@@ -192,11 +192,12 @@ export class CDPMonitor {
             "--disable-sync",
             "--metrics-recording-only",
             "--disable-default-apps",
+            "--enable-features=DestroyProfileOnBrowserClose",
             this.createLoadingPage()
           ],
           {
             stdio: "pipe",
-            detached: process.platform !== "win32" // Detach on Unix to create process group
+            detached: false // Keep it attached so it dies with parent
           }
         )
 
@@ -1204,64 +1205,36 @@ export class CDPMonitor {
   async shutdown(): Promise<void> {
     this.isShuttingDown = true
 
-    // Close CDP connection
+    // Close CDP connection first
     if (this.connection) {
-      this.connection.ws.close()
+      try {
+        this.connection.ws.close()
+      } catch (_e) {
+        // Ignore close errors
+      }
       this.connection = null
     }
 
     // Close browser
-    if (this.browser) {
+    if (this.browser && !this.browser.killed) {
       const browserProcess = this.browser
-
-      // Wait for browser to exit
-      await new Promise<void>((resolve) => {
-        let resolved = false
-
-        const cleanup = () => {
-          if (!resolved) {
-            resolved = true
-            resolve()
-          }
-        }
-
-        browserProcess.once("exit", cleanup)
-        browserProcess.once("error", cleanup)
-
-        // Try graceful shutdown first
-        try {
-          // Kill the entire process group on Unix-like systems
-          if (process.platform !== "win32" && browserProcess.pid) {
-            process.kill(-browserProcess.pid, "SIGTERM")
-          } else {
-            browserProcess.kill("SIGTERM")
-          }
-        } catch (_e) {
-          // Fallback to regular kill
-          browserProcess.kill("SIGTERM")
-        }
-
-        // Force kill after 2 seconds if not closed
-        setTimeout(() => {
-          if (browserProcess.killed === false) {
-            try {
-              // Kill the entire process group on Unix-like systems
-              if (process.platform !== "win32" && browserProcess.pid) {
-                process.kill(-browserProcess.pid, "SIGKILL")
-              } else {
-                browserProcess.kill("SIGKILL")
-              }
-            } catch (_e) {
-              // Fallback to regular kill
-              browserProcess.kill("SIGKILL")
-            }
-          }
-          // Ensure we resolve even if kill fails
-          setTimeout(cleanup, 100)
-        }, 2000)
-      })
-
       this.browser = null
+
+      // Since Chrome is not detached, it should die with parent process
+      // But we'll kill it explicitly to be sure
+      try {
+        browserProcess.kill("SIGTERM")
+
+        // Give it a moment to close gracefully
+        await new Promise((resolve) => setTimeout(resolve, 100))
+
+        // Force kill if still alive
+        if (!browserProcess.killed) {
+          browserProcess.kill("SIGKILL")
+        }
+      } catch (_e) {
+        // Process might already be dead
+      }
     }
   }
 }
