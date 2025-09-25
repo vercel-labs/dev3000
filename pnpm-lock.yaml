@@ -4,159 +4,6 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
-catalogs:
-  default:
-    '@modelcontextprotocol/sdk':
-      specifier: ^1.11.0
-      version: 1.18.1
-    '@radix-ui/react-accordion':
-      specifier: ^1.2.2
-      version: 1.2.2
-    '@radix-ui/react-alert-dialog':
-      specifier: ^1.1.4
-      version: 1.1.4
-    '@radix-ui/react-aspect-ratio':
-      specifier: ^1.1.1
-      version: 1.1.1
-    '@radix-ui/react-avatar':
-      specifier: ^1.1.2
-      version: 1.1.2
-    '@radix-ui/react-checkbox':
-      specifier: ^1.1.3
-      version: 1.1.3
-    '@radix-ui/react-collapsible':
-      specifier: ^1.1.2
-      version: 1.1.2
-    '@radix-ui/react-context-menu':
-      specifier: ^2.2.4
-      version: 2.2.4
-    '@radix-ui/react-dialog':
-      specifier: ^1.1.4
-      version: 1.1.4
-    '@radix-ui/react-dropdown-menu':
-      specifier: ^2.1.4
-      version: 2.1.4
-    '@radix-ui/react-hover-card':
-      specifier: ^1.1.4
-      version: 1.1.4
-    '@radix-ui/react-label':
-      specifier: ^2.1.1
-      version: 2.1.1
-    '@radix-ui/react-menubar':
-      specifier: ^1.1.4
-      version: 1.1.4
-    '@radix-ui/react-navigation-menu':
-      specifier: ^1.2.3
-      version: 1.2.3
-    '@radix-ui/react-popover':
-      specifier: ^1.1.4
-      version: 1.1.4
-    '@radix-ui/react-progress':
-      specifier: ^1.1.1
-      version: 1.1.1
-    '@radix-ui/react-radio-group':
-      specifier: ^1.2.2
-      version: 1.2.2
-    '@radix-ui/react-scroll-area':
-      specifier: ^1.2.2
-      version: 1.2.2
-    '@radix-ui/react-select':
-      specifier: ^2.1.4
-      version: 2.1.4
-    '@radix-ui/react-separator':
-      specifier: ^1.1.1
-      version: 1.1.1
-    '@radix-ui/react-slider':
-      specifier: ^1.2.2
-      version: 1.2.2
-    '@radix-ui/react-slot':
-      specifier: ^1.1.1
-      version: 1.1.1
-    '@radix-ui/react-switch':
-      specifier: ^1.1.2
-      version: 1.1.2
-    '@radix-ui/react-tabs':
-      specifier: ^1.1.2
-      version: 1.1.2
-    '@radix-ui/react-toast':
-      specifier: ^1.2.4
-      version: 1.2.4
-    '@radix-ui/react-toggle':
-      specifier: ^1.1.1
-      version: 1.1.1
-    '@radix-ui/react-toggle-group':
-      specifier: ^1.1.1
-      version: 1.1.1
-    '@radix-ui/react-tooltip':
-      specifier: ^1.1.6
-      version: 1.1.6
-    '@tailwindcss/postcss':
-      specifier: ^4.1.9
-      version: 4.1.13
-    '@types/node':
-      specifier: ^24.5.2
-      version: 24.5.2
-    '@types/react':
-      specifier: ^19.0.0
-      version: 19.1.13
-    '@types/react-dom':
-      specifier: ^19.0.0
-      version: 19.1.9
-    '@types/ws':
-      specifier: ^8.5.12
-      version: 8.18.1
-    autoprefixer:
-      specifier: ^10.4.20
-      version: 10.4.21
-    babel-plugin-react-compiler:
-      specifier: ^19.1.0-rc.3
-      version: 19.1.0-rc.3
-    class-variance-authority:
-      specifier: ^0.7.1
-      version: 0.7.1
-    clsx:
-      specifier: ^2.1.1
-      version: 2.1.1
-    commander:
-      specifier: ^14.0.1
-      version: 14.0.1
-    lucide-react:
-      specifier: ^0.544.0
-      version: 0.544.0
-    mcp-handler:
-      specifier: ^1.0.2
-      version: 1.0.2
-    next:
-      specifier: 15.5.1-canary.30
-      version: 15.5.1-canary.30
-    postcss:
-      specifier: ^8.5
-      version: 8.5.6
-    react:
-      specifier: 19.2.0-canary-de5a1b20-20250905
-      version: 19.2.0-canary-de5a1b20-20250905
-    react-dom:
-      specifier: 19.2.0-canary-de5a1b20-20250905
-      version: 19.2.0-canary-de5a1b20-20250905
-    tailwind-merge:
-      specifier: ^2.5.5
-      version: 2.6.0
-    tailwindcss:
-      specifier: ^4.1.9
-      version: 4.1.13
-    tw-animate-css:
-      specifier: ^1.3.8
-      version: 1.3.8
-    typescript:
-      specifier: ^5.0.0
-      version: 5.9.2
-    ws:
-      specifier: ^8.18.3
-      version: 8.18.3
-    zod:
-      specifier: ^3.22.4
-      version: 3.25.76
-
 importers:
 
   .:
@@ -174,16 +21,16 @@ importers:
         specifier: ^3.12.0
         version: 3.12.0
       commander:
-        specifier: 'catalog:'
+        specifier: ^14.0.1
         version: 14.0.1
       ink:
         specifier: ^6.3.1
         version: 6.3.1(@types/react@19.1.13)(react@19.2.0-canary-de5a1b20-20250905)
       mcp-handler:
-        specifier: 'catalog:'
+        specifier: ^1.0.2
         version: 1.0.2(@modelcontextprotocol/sdk@1.18.1)(next@15.5.1-canary.30(babel-plugin-react-compiler@19.1.0-rc.3)(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905))
       next:
-        specifier: 'catalog:'
+        specifier: 15.5.1-canary.30
         version: 15.5.1-canary.30(babel-plugin-react-compiler@19.1.0-rc.3)(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905)
       ora:
         specifier: ^9.0.0
@@ -192,29 +39,29 @@ importers:
         specifier: ^1.3.0
         version: 1.3.0
       react:
-        specifier: 'catalog:'
+        specifier: 19.2.0-canary-de5a1b20-20250905
         version: 19.2.0-canary-de5a1b20-20250905
       react-dom:
-        specifier: 'catalog:'
+        specifier: 19.2.0-canary-de5a1b20-20250905
         version: 19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905)
       ws:
-        specifier: 'catalog:'
+        specifier: ^8.18.3
         version: 8.18.3
       zod:
-        specifier: 'catalog:'
+        specifier: ^3.22.4
         version: 3.25.76
     devDependencies:
       '@types/cli-progress':
         specifier: ^3.11.6
         version: 3.11.6
       '@types/node':
-        specifier: 'catalog:'
+        specifier: ^24.5.2
         version: 24.5.2
       '@types/react':
-        specifier: 'catalog:'
+        specifier: ^19.0.0
         version: 19.1.13
       '@types/ws':
-        specifier: 'catalog:'
+        specifier: ^8.5.12
         version: 8.18.1
       husky:
         specifier: ^9.0.0
@@ -226,7 +73,7 @@ importers:
         specifier: ^4.20.3
         version: 4.20.5
       typescript:
-        specifier: 'catalog:'
+        specifier: ^5.0.0
         version: 5.9.2
       vitest:
         specifier: ^3.2.4
@@ -235,77 +82,77 @@ importers:
   mcp-server:
     dependencies:
       '@modelcontextprotocol/sdk':
-        specifier: 'catalog:'
+        specifier: ^1.11.0
         version: 1.18.1
       '@radix-ui/react-slot':
-        specifier: 'catalog:'
-        version: 1.1.1(@types/react@19.1.13)(react@19.2.0-canary-de5a1b20-20250905)
+        specifier: ^1.1.1
+        version: 1.2.3(@types/react@19.1.13)(react@19.2.0-canary-de5a1b20-20250905)
       autoprefixer:
-        specifier: 'catalog:'
+        specifier: ^10.4.20
         version: 10.4.21(postcss@8.5.6)
       class-variance-authority:
-        specifier: 'catalog:'
+        specifier: ^0.7.1
         version: 0.7.1
       clsx:
-        specifier: 'catalog:'
+        specifier: ^2.1.1
         version: 2.1.1
       commander:
-        specifier: 'catalog:'
+        specifier: ^14.0.1
         version: 14.0.1
       lucide-react:
-        specifier: 'catalog:'
+        specifier: ^0.544.0
         version: 0.544.0(react@19.2.0-canary-de5a1b20-20250905)
       mcp-handler:
-        specifier: 'catalog:'
+        specifier: ^1.0.2
         version: 1.0.2(@modelcontextprotocol/sdk@1.18.1)(next@15.5.1-canary.30(babel-plugin-react-compiler@19.1.0-rc.3)(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905))
       next:
-        specifier: 'catalog:'
+        specifier: 15.5.1-canary.30
         version: 15.5.1-canary.30(babel-plugin-react-compiler@19.1.0-rc.3)(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905)
       react:
-        specifier: 'catalog:'
+        specifier: 19.2.0-canary-de5a1b20-20250905
         version: 19.2.0-canary-de5a1b20-20250905
       react-dom:
-        specifier: 'catalog:'
+        specifier: 19.2.0-canary-de5a1b20-20250905
         version: 19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905)
       tailwind-merge:
-        specifier: 'catalog:'
+        specifier: ^2.5.5
         version: 2.6.0
       ws:
-        specifier: 'catalog:'
+        specifier: ^8.18.3
         version: 8.18.3
       zod:
-        specifier: 'catalog:'
+        specifier: ^3.22.4
         version: 3.25.76
     devDependencies:
       '@tailwindcss/postcss':
-        specifier: 'catalog:'
+        specifier: ^4.1.9
         version: 4.1.13
       '@types/node':
-        specifier: 'catalog:'
+        specifier: ^24.5.2
         version: 24.5.2
       '@types/react':
-        specifier: 'catalog:'
+        specifier: ^19.0.0
         version: 19.1.13
       '@types/react-dom':
-        specifier: 'catalog:'
+        specifier: ^19.0.0
         version: 19.1.9(@types/react@19.1.13)
       '@types/ws':
-        specifier: 'catalog:'
+        specifier: ^8.5.12
         version: 8.18.1
       babel-plugin-react-compiler:
-        specifier: 'catalog:'
+        specifier: ^19.1.0-rc.3
         version: 19.1.0-rc.3
       postcss:
-        specifier: 'catalog:'
+        specifier: ^8.5
         version: 8.5.6
       tailwindcss:
-        specifier: 'catalog:'
+        specifier: ^4.1.9
         version: 4.1.13
       tw-animate-css:
-        specifier: 'catalog:'
+        specifier: ^1.3.8
         version: 1.3.8
       typescript:
-        specifier: 'catalog:'
+        specifier: ^5.0.0
         version: 5.9.2
 
   www:
@@ -314,85 +161,85 @@ importers:
         specifier: ^3.10.0
         version: 3.10.0(react-hook-form@7.63.0(react@19.2.0-canary-de5a1b20-20250905))
       '@radix-ui/react-accordion':
-        specifier: 'catalog:'
+        specifier: ^1.2.2
         version: 1.2.2(@types/react-dom@19.1.9(@types/react@19.1.13))(@types/react@19.1.13)(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905)
       '@radix-ui/react-alert-dialog':
-        specifier: 'catalog:'
+        specifier: ^1.1.4
         version: 1.1.4(@types/react-dom@19.1.9(@types/react@19.1.13))(@types/react@19.1.13)(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905)
       '@radix-ui/react-aspect-ratio':
-        specifier: 'catalog:'
+        specifier: ^1.1.1
         version: 1.1.1(@types/react-dom@19.1.9(@types/react@19.1.13))(@types/react@19.1.13)(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905)
       '@radix-ui/react-avatar':
-        specifier: 'catalog:'
+        specifier: ^1.1.2
         version: 1.1.2(@types/react-dom@19.1.9(@types/react@19.1.13))(@types/react@19.1.13)(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905)
       '@radix-ui/react-checkbox':
-        specifier: 'catalog:'
+        specifier: ^1.1.3
         version: 1.1.3(@types/react-dom@19.1.9(@types/react@19.1.13))(@types/react@19.1.13)(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905)
       '@radix-ui/react-collapsible':
-        specifier: 'catalog:'
+        specifier: ^1.1.2
         version: 1.1.2(@types/react-dom@19.1.9(@types/react@19.1.13))(@types/react@19.1.13)(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905)
       '@radix-ui/react-context-menu':
-        specifier: 'catalog:'
+        specifier: ^2.2.4
         version: 2.2.4(@types/react-dom@19.1.9(@types/react@19.1.13))(@types/react@19.1.13)(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905)
       '@radix-ui/react-dialog':
-        specifier: 'catalog:'
+        specifier: ^1.1.4
         version: 1.1.4(@types/react-dom@19.1.9(@types/react@19.1.13))(@types/react@19.1.13)(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905)
       '@radix-ui/react-dropdown-menu':
-        specifier: 'catalog:'
+        specifier: ^2.1.4
         version: 2.1.4(@types/react-dom@19.1.9(@types/react@19.1.13))(@types/react@19.1.13)(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905)
       '@radix-ui/react-hover-card':
-        specifier: 'catalog:'
+        specifier: ^1.1.4
         version: 1.1.4(@types/react-dom@19.1.9(@types/react@19.1.13))(@types/react@19.1.13)(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905)
       '@radix-ui/react-label':
-        specifier: 'catalog:'
+        specifier: ^2.1.1
         version: 2.1.1(@types/react-dom@19.1.9(@types/react@19.1.13))(@types/react@19.1.13)(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905)
       '@radix-ui/react-menubar':
-        specifier: 'catalog:'
+        specifier: ^1.1.4
         version: 1.1.4(@types/react-dom@19.1.9(@types/react@19.1.13))(@types/react@19.1.13)(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905)
       '@radix-ui/react-navigation-menu':
-        specifier: 'catalog:'
+        specifier: ^1.2.3
         version: 1.2.3(@types/react-dom@19.1.9(@types/react@19.1.13))(@types/react@19.1.13)(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905)
       '@radix-ui/react-popover':
-        specifier: 'catalog:'
+        specifier: ^1.1.4
         version: 1.1.4(@types/react-dom@19.1.9(@types/react@19.1.13))(@types/react@19.1.13)(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905)
       '@radix-ui/react-progress':
-        specifier: 'catalog:'
+        specifier: ^1.1.1
         version: 1.1.1(@types/react-dom@19.1.9(@types/react@19.1.13))(@types/react@19.1.13)(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905)
       '@radix-ui/react-radio-group':
-        specifier: 'catalog:'
+        specifier: ^1.2.2
         version: 1.2.2(@types/react-dom@19.1.9(@types/react@19.1.13))(@types/react@19.1.13)(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905)
       '@radix-ui/react-scroll-area':
-        specifier: 'catalog:'
+        specifier: ^1.2.2
         version: 1.2.2(@types/react-dom@19.1.9(@types/react@19.1.13))(@types/react@19.1.13)(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905)
       '@radix-ui/react-select':
-        specifier: 'catalog:'
+        specifier: ^2.1.4
         version: 2.1.4(@types/react-dom@19.1.9(@types/react@19.1.13))(@types/react@19.1.13)(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905)
       '@radix-ui/react-separator':
-        specifier: 'catalog:'
+        specifier: ^1.1.1
         version: 1.1.1(@types/react-dom@19.1.9(@types/react@19.1.13))(@types/react@19.1.13)(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905)
       '@radix-ui/react-slider':
-        specifier: 'catalog:'
+        specifier: ^1.2.2
         version: 1.2.2(@types/react-dom@19.1.9(@types/react@19.1.13))(@types/react@19.1.13)(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905)
       '@radix-ui/react-slot':
-        specifier: 'catalog:'
-        version: 1.1.1(@types/react@19.1.13)(react@19.2.0-canary-de5a1b20-20250905)
+        specifier: ^1.1.1
+        version: 1.2.3(@types/react@19.1.13)(react@19.2.0-canary-de5a1b20-20250905)
       '@radix-ui/react-switch':
-        specifier: 'catalog:'
+        specifier: ^1.1.2
         version: 1.1.2(@types/react-dom@19.1.9(@types/react@19.1.13))(@types/react@19.1.13)(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905)
       '@radix-ui/react-tabs':
-        specifier: 'catalog:'
+        specifier: ^1.1.2
         version: 1.1.2(@types/react-dom@19.1.9(@types/react@19.1.13))(@types/react@19.1.13)(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905)
       '@radix-ui/react-toast':
-        specifier: 'catalog:'
+        specifier: ^1.2.4
         version: 1.2.4(@types/react-dom@19.1.9(@types/react@19.1.13))(@types/react@19.1.13)(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905)
       '@radix-ui/react-toggle':
-        specifier: 'catalog:'
+        specifier: ^1.1.1
         version: 1.1.1(@types/react-dom@19.1.9(@types/react@19.1.13))(@types/react@19.1.13)(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905)
       '@radix-ui/react-toggle-group':
-        specifier: 'catalog:'
+        specifier: ^1.1.1
         version: 1.1.1(@types/react-dom@19.1.9(@types/react@19.1.13))(@types/react@19.1.13)(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905)
       '@radix-ui/react-tooltip':
-        specifier: 'catalog:'
+        specifier: ^1.1.6
         version: 1.1.6(@types/react-dom@19.1.9(@types/react@19.1.13))(@types/react@19.1.13)(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905)
       '@remix-run/react':
         specifier: latest
@@ -407,13 +254,13 @@ importers:
         specifier: ^1.2.0
         version: 1.2.0(@sveltejs/kit@2.43.2(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.5)(vite@5.4.20(@types/node@24.5.2)(lightningcss@1.30.1)))(svelte@5.39.5)(vite@5.4.20(@types/node@24.5.2)(lightningcss@1.30.1)))(next@15.5.1-canary.30(babel-plugin-react-compiler@19.1.0-rc.3)(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905)(svelte@5.39.5)(vue-router@4.5.1(vue@3.5.21(typescript@5.9.2)))(vue@3.5.21(typescript@5.9.2))
       autoprefixer:
-        specifier: 'catalog:'
+        specifier: ^10.4.20
         version: 10.4.21(postcss@8.5.6)
       class-variance-authority:
-        specifier: 'catalog:'
+        specifier: ^0.7.1
         version: 0.7.1
       clsx:
-        specifier: 'catalog:'
+        specifier: ^2.1.1
         version: 2.1.1
       cmdk:
         specifier: 1.0.4
@@ -431,22 +278,22 @@ importers:
         specifier: 1.4.1
         version: 1.4.1(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905)
       lucide-react:
-        specifier: 'catalog:'
+        specifier: ^0.544.0
         version: 0.544.0(react@19.2.0-canary-de5a1b20-20250905)
       next:
-        specifier: 'catalog:'
+        specifier: 15.5.1-canary.30
         version: 15.5.1-canary.30(babel-plugin-react-compiler@19.1.0-rc.3)(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905)
       next-themes:
         specifier: ^0.4.6
         version: 0.4.6(react-dom@19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905))(react@19.2.0-canary-de5a1b20-20250905)
       react:
-        specifier: 'catalog:'
+        specifier: 19.2.0-canary-de5a1b20-20250905
         version: 19.2.0-canary-de5a1b20-20250905
       react-day-picker:
         specifier: 9.8.0
         version: 9.8.0(react@19.2.0-canary-de5a1b20-20250905)
       react-dom:
-        specifier: 'catalog:'
+        specifier: 19.2.0-canary-de5a1b20-20250905
         version: 19.2.0-canary-de5a1b20-20250905(react@19.2.0-canary-de5a1b20-20250905)
       react-hook-form:
         specifier: ^7.60.0
@@ -467,7 +314,7 @@ importers:
         specifier: latest
         version: 5.39.5
       tailwind-merge:
-        specifier: 'catalog:'
+        specifier: ^2.5.5
         version: 2.6.0
       tailwindcss-animate:
         specifier: ^1.0.7
@@ -482,35 +329,35 @@ importers:
         specifier: latest
         version: 4.5.1(vue@3.5.21(typescript@5.9.2))
       zod:
-        specifier: 'catalog:'
+        specifier: ^3.22.4
         version: 3.25.76
     devDependencies:
       '@tailwindcss/postcss':
-        specifier: 'catalog:'
+        specifier: ^4.1.9
         version: 4.1.13
       '@types/node':
-        specifier: 'catalog:'
+        specifier: ^24.5.2
         version: 24.5.2
       '@types/react':
-        specifier: 'catalog:'
+        specifier: ^19.0.0
         version: 19.1.13
       '@types/react-dom':
-        specifier: 'catalog:'
+        specifier: ^19.0.0
         version: 19.1.9(@types/react@19.1.13)
       babel-plugin-react-compiler:
-        specifier: 'catalog:'
+        specifier: ^19.1.0-rc.3
         version: 19.1.0-rc.3
       postcss:
-        specifier: 'catalog:'
+        specifier: ^8.5
         version: 8.5.6
       tailwindcss:
-        specifier: 'catalog:'
+        specifier: ^4.1.9
         version: 4.1.13
       tw-animate-css:
-        specifier: 'catalog:'
+        specifier: ^1.3.8
         version: 1.3.8
       typescript:
-        specifier: 'catalog:'
+        specifier: ^5.0.0
         version: 5.9.2
 
 packages:

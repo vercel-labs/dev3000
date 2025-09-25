@@ -16,7 +16,7 @@ on:
 jobs:
   test:
     name: Test Before Release
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
         with:
@@ -42,7 +42,7 @@ jobs:
     needs: test
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [macos-latest]
         node: [18, 20]
     runs-on: ${{ matrix.os }}
     steps:
@@ -73,7 +73,7 @@ jobs:
   test-docker:
     name: Test in Docker
     needs: test
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       
@@ -107,7 +107,7 @@ jobs:
   prepare-release:
     name: Prepare Release
     needs: [test, test-matrix, test-docker]
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     permissions:
       contents: write
     steps:

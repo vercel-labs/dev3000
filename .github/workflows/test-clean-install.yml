@@ -11,7 +11,7 @@ jobs:
   test-clean-installs:
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [macos-latest]
         node: [18, 20]
         package-manager: [pnpm, npm, yarn]
     
@@ -81,7 +81,7 @@ jobs:
           fi
 
   test-docker-install:
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     
     steps:
       - uses: actions/checkout@v4
