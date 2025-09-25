@@ -718,7 +718,7 @@ export class DevEnvironment {
 
   private debugLog(message: string) {
     const timestamp = formatTimestamp(new Date(), this.options.dateTimeFormat || "local")
-    
+
     if (this.options.debug) {
       if (this.spinner?.isSpinning) {
         // Temporarily stop the spinner, show debug message, then restart
@@ -730,14 +730,14 @@ export class DevEnvironment {
         console.log(chalk.gray(`[DEBUG] ${message}`))
       }
     }
-    
+
     // Always write to d3k debug log file (even when not in debug mode)
     try {
       const debugLogDir = join(homedir(), ".d3k")
       if (!existsSync(debugLogDir)) {
         mkdirSync(debugLogDir, { recursive: true })
       }
-      
+
       const debugLogFile = join(debugLogDir, "d3k.log")
       const logEntry = `[${timestamp}] [DEBUG] ${message}\n`
       appendFileSync(debugLogFile, logEntry)
@@ -1403,8 +1403,8 @@ export class DevEnvironment {
   }
 
   private setupCleanupHandlers() {
-    this.debugLog(`Setting up cleanup handlers for ${this.options.tui ? 'TUI' : 'debug'} mode`)
-    
+    this.debugLog(`Setting up cleanup handlers for ${this.options.tui ? "TUI" : "debug"} mode`)
+
     // Handle Ctrl+C to kill all processes
     process.on("SIGINT", () => {
       this.debugLog("SIGINT received")
