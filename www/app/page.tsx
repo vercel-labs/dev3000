@@ -221,7 +221,7 @@ export default function HomePage() {
                     </div>
                     <details className="group">
                       <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground">
-                        Other AI tools (Cursor, OpenAI Codex)
+                        Other AI tools (Cursor, Codex)
                       </summary>
                       <div className="mt-3 space-y-3">
                         <div>
@@ -233,12 +233,14 @@ export default function HomePage() {
                           </div>
                         </div>
                         <div>
-                          <p className="text-xs text-muted-foreground mb-1">For OpenAI Codex (~/.codex/config.toml)</p>
+                          <p className="text-xs text-muted-foreground mb-1">For OpenAI Codex</p>
                           <div className="bg-muted rounded-md p-3 font-mono text-xs">
-                            <pre>{`[mcp_servers]
-
-  [mcp_servers.dev3000]
-  url = "http://localhost:3684/mcp"`}</pre>
+                            <p className="text-xs text-muted-foreground mb-1">Install mcp-proxy</p>
+                            <pre>{`pnpm i -g mcp-proxy`}</pre>
+                            <p className="mt-2 text-xs text-muted-foreground mb-1">Add to ~/.codex/config.toml</p>
+                            <pre>{`[mcp_servers.dev3000]
+command = "npx"   # or "uvx", "python", etc.
+args = ["-y", "mcp-proxy", "--mode", "stdio-to-http", "--url", "http://localhost:3684/mcp"]`}</pre>
                           </div>
                         </div>
                       </div>

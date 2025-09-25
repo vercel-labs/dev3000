@@ -1399,6 +1399,11 @@ export class DevEnvironment {
     }
 
     console.log(chalk.red(`❌ ${this.options.commandName} exited due to server failure`))
+    console.log(
+      chalk.yellow(
+        "Check the logs at ~/.d3k/d3k.log for errors. Feeling like helping? Run dev3000 --debug and file an issue at https://github.com/vercel-labs/dev3000/issues"
+      )
+    )
     process.exit(1)
   }
 
