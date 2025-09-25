@@ -64,6 +64,11 @@ if git tag -l "$TAG_NAME" | grep -q "^$TAG_NAME$" || git ls-remote --tags origin
     cleanup_existing_tag
 fi
 
+# Resolve catalog: dependencies before version bump
+echo "📦 Resolving catalog: dependencies..."
+npx tsx scripts/resolve-catalog-versions.ts
+echo "✅ Catalog dependencies resolved"
+
 # Update version in package.json manually to avoid pnpm version creating tags automatically
 echo "⬆️ Bumping version to $NEXT_VERSION..."
 node -e "
@@ -79,7 +84,7 @@ npx tsx scripts/update-changelog.ts "v$NEXT_VERSION"
 
 # Commit version change and changelog
 echo "📝 Committing version change and changelog..."
-git add package.json www/lib/changelog.ts
+git add package.json mcp-server/package.json www/package.json www/lib/changelog.ts
 git commit -m "Release v$NEXT_VERSION
 
 🤖 Generated with [Claude Code](https://claude.ai/code)
