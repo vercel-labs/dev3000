@@ -42,7 +42,9 @@ jobs:
           export CLEAN_HOME=$(mktemp -d)
           # Unset existing PNPM_HOME to avoid conflicts
           unset PNPM_HOME
-          export PATH="/usr/local/bin:/usr/bin:/bin"
+          # Keep Node.js in PATH while removing pnpm
+          export NODE_PATH=$(dirname $(which node))
+          export PATH="$NODE_PATH:/usr/local/bin:/usr/bin:/bin"
           
           # Install package manager in clean location
           if [ "${{ matrix.package-manager }}" = "pnpm" ]; then
@@ -72,14 +74,19 @@ jobs:
           cd $TEST_DIR
           echo '{"name":"test","scripts":{"dev":"node -e \"console.log(\'Server running\'); setInterval(()=>{},1000)\""}}' > package.json
           
-          # Run d3k with timeout
-          timeout 30s d3k --debug --servers-only || CODE=$?
+          # Run d3k with timeout and capture output
+          timeout 30s d3k --debug --servers-only > d3k.log 2>&1 || CODE=$?
+          
+          # Show output for debugging
+          echo "=== d3k output ==="
+          cat d3k.log || true
+          echo "=== end output ==="
           
           # Check if it started (exit code 124 means timeout, which is expected)
           if [ "$CODE" = "124" ]; then
             echo "✅ Server started successfully"
           else
-            echo "❌ Server failed to start"
+            echo "❌ Server failed to start with exit code: $CODE"
             exit 1
           fi
 
