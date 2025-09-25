@@ -1,0 +1,31 @@
+name: Test Release
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test-release:
+    runs-on: macos-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      
+      # Install pnpm
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9
+      
+      # Install dependencies
+      - run: pnpm install
+      
+      # Run the full release test suite
+      - name: Run Release Tests
+        run: ./scripts/test-release.sh
