@@ -64,10 +64,29 @@ jobs:
       # Test 2: Server startup test
       - name: Test MCP Server Startup
         run: |
+          # Need to re-export the npm bin path since this is a new step
+          export CLEAN_HOME=$(mktemp -d)
+          npm config set prefix $CLEAN_HOME/.npm
+          export PATH="$CLEAN_HOME/.npm/bin:$PATH"
+          
+          # Re-install to this step's environment
+          TARBALL=$(ls dev3000-*.tgz)
+          npm install -g "$TARBALL"
+          
           # Create minimal test app
           TEST_DIR=$(mktemp -d)
           cd $TEST_DIR
-          echo '{"name":"test","scripts":{"dev":"node -e \"console.log(\'Server running\'); setInterval(()=>{},1000)\""}}' > package.json
+          cat > package.json << 'EOF'
+          {
+            "name": "test",
+            "scripts": {
+              "dev": "node -e \"console.log('Server running'); setInterval(()=>{},1000)\""
+            }
+          }
+          EOF
+          
+          # Verify d3k is available
+          which d3k || echo "d3k not found in PATH"
           
           # Run d3k with timeout and capture output
           timeout 30s d3k --debug --servers-only > d3k.log 2>&1 || CODE=$?
