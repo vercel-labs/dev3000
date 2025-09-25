@@ -47,6 +47,7 @@ d3kProcess.stderr?.on("data", (data) => {
 async function runTests() {
   const mcpUrl = "http://localhost:3684"
   let allTestsPassed = true
+  let testError: Error | null = null
 
   try {
     // Test 1: List logs endpoint
@@ -105,29 +106,29 @@ async function runTests() {
   } catch (error) {
     console.error("\n❌ Test failed:", error)
     allTestsPassed = false
+    testError = error as Error
   } finally {
     // Kill d3k process
     console.log("\n🧹 Cleaning up...")
-    
+
     // Kill with SIGTERM first (graceful)
-    d3kProcess.kill('SIGTERM')
-    
+    d3kProcess.kill("SIGTERM")
+
     // Give it time to shut down gracefully
     await new Promise((resolve) => setTimeout(resolve, 2000))
-    
+
     // Force kill any remaining processes (ignore errors)
     spawn("sh", ["-c", "lsof -ti:3000 -ti:3684 | xargs kill -9 2>/dev/null || true"], { stdio: "ignore" })
     await new Promise((resolve) => setTimeout(resolve, 1000))
-    
-    // Exit with appropriate code
-    if (allTestsPassed) {
-      console.log("\n✅ Test completed successfully")
-      process.exit(0)
-    } else {
-      console.log("\n❌ Test failed")
-      process.exit(1)
-    }
   }
+  
+  // Handle result after cleanup
+  if (!allTestsPassed) {
+    console.log("\n❌ Test failed")
+    throw testError || new Error("Tests failed")
+  }
+  
+  console.log("\n✅ Test completed successfully")
 }
 
 // Try to connect after 5 seconds if we haven't seen a ready message
