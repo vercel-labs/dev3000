@@ -13,7 +13,7 @@ const d3kProcess = spawn("d3k", ["--no-tui", "--debug"], {
   cwd: join(process.cwd(), "www"),
   env: {
     ...process.env,
-    PATH: process.env.PATH + ":" + join(process.cwd(), "node_modules/.bin")
+    PATH: `${process.env.PATH}:${join(process.cwd(), "node_modules/.bin")}`
   }
 })
 
@@ -43,6 +43,9 @@ d3kProcess.stderr?.on("data", (data) => {
 })
 
 async function runTests() {
+  // Clear the timeouts since we're now running tests
+  clearTimeout(connectTimeout)
+  clearTimeout(testTimeout)
   const mcpUrl = "http://localhost:3684"
   let allTestsPassed = true
   let testError: Error | null = null
@@ -111,33 +114,33 @@ async function runTests() {
 
     // Send SIGINT (Ctrl+C) to d3k - this should trigger its cleanup handlers
     d3kProcess.kill("SIGINT")
-    
+
     console.log("⏳ Waiting for d3k to clean up...")
-    
+
     // Wait for d3k to handle cleanup (it should kill Chrome and its servers)
     let waitTime = 0
     const maxWait = 5000 // 5 seconds max
-    
+
     while (waitTime < maxWait) {
       try {
         // Check if process is still alive
-        process.kill(d3kProcess.pid!, 0)
+        process.kill(d3kProcess.pid as number, 0)
         // If no error, process is still running
         await new Promise((resolve) => setTimeout(resolve, 500))
         waitTime += 500
-      } catch (e) {
+      } catch (_e) {
         // Process is dead
         console.log("✅ d3k process terminated")
         break
       }
     }
-    
+
     // If still running after timeout, force kill
     if (waitTime >= maxWait) {
       console.log("⚠️ d3k didn't terminate gracefully, force killing...")
       try {
         d3kProcess.kill("SIGKILL")
-      } catch (e) {
+      } catch (_e) {
         // Already dead
       }
     }
@@ -152,8 +155,12 @@ async function runTests() {
   console.log("\n✅ Test completed successfully")
 }
 
+// Store timeout IDs so we can cancel them
+let connectTimeout: NodeJS.Timeout
+let testTimeout: NodeJS.Timeout
+
 // Try to connect after 5 seconds if we haven't seen a ready message
-setTimeout(() => {
+connectTimeout = setTimeout(() => {
   if (!mcpReady) {
     console.log("No ready message detected, attempting to connect anyway...")
     mcpReady = true
@@ -162,8 +169,8 @@ setTimeout(() => {
 }, 5000)
 
 // Timeout after 30 seconds
-setTimeout(() => {
+testTimeout = setTimeout(() => {
   console.error("\n❌ Test timeout - MCP server didn't start")
-  mcpProcess.kill()
+  d3kProcess.kill()
   process.exit(1)
 }, 30000)
