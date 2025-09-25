@@ -1,8 +1,8 @@
 #!/usr/bin/env tsx
-import { join } from "path"
-import { mkdirSync, writeFileSync, existsSync, rmSync } from "fs"
-import { tmpdir } from "os"
 import { spawn } from "child_process"
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "fs"
+import { tmpdir } from "os"
+import { join } from "path"
 
 // Create test log file
 const testDir = join(tmpdir(), `test-logs-${Date.now()}`)
@@ -103,7 +103,6 @@ async function runTests() {
     console.log("✅ Logs page working")
 
     console.log("\n🎉 All tests passed!")
-
   } catch (error) {
     console.error("\n❌ Test failed:", error)
     allTestsPassed = false
