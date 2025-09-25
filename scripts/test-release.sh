@@ -92,7 +92,16 @@ cd - > /dev/null
 rm -rf "$TEST_DIR"
 rm -f "$OUTPUT_FILE"
 
-# Test 3: Run the TypeScript clean install test
+# Test 3: Test MCP Server logs API
+echo -e "${YELLOW}Testing MCP Server logs functionality...${NC}"
+if pnpm exec tsx scripts/test-logs-api.ts; then
+    echo -e "${GREEN}✅ MCP Server logs tests passed${NC}"
+else
+    echo -e "${RED}❌ MCP Server logs tests failed${NC}"
+    exit 1
+fi
+
+# Test 4: Run the TypeScript clean install test
 echo -e "${YELLOW}Running comprehensive clean install tests...${NC}"
 if pnpm exec tsx scripts/test-clean-install.ts; then
     echo -e "${GREEN}✅ All clean install tests passed${NC}"
