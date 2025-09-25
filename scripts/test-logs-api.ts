@@ -112,7 +112,12 @@ async function runTests() {
     // Kill the specific d3k process we started
     console.log("\n🧹 Cleaning up...")
 
-    // Send SIGINT (Ctrl+C) to d3k - this should trigger its cleanup handlers
+    // Send two SIGINTs (like Ctrl+C twice) to d3k - this triggers its graceful cleanup
+    console.log("Sending first SIGINT (Ctrl+C) to d3k...")
+    d3kProcess.kill("SIGINT")
+    // Wait a moment then send second SIGINT
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+    console.log("Sending second SIGINT (Ctrl+C) to d3k...")
     d3kProcess.kill("SIGINT")
 
     console.log("⏳ Waiting for d3k to clean up...")

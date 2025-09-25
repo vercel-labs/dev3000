@@ -72,6 +72,12 @@ COUNTER=0
 while [ $COUNTER -lt 20 ]; do
     if grep -q "MCP server process spawned as singleton background service" "$OUTPUT_FILE" || grep -q "Starting MCP server using bundled Next.js" "$OUTPUT_FILE" || grep -q "MCP server logs:" "$OUTPUT_FILE"; then
         echo -e "${GREEN}✅ MCP server startup test passed${NC}"
+        # Send two SIGINTs for graceful shutdown (like Ctrl-C twice)
+        kill -INT $D3K_PID 2>/dev/null || true
+        sleep 1
+        kill -INT $D3K_PID 2>/dev/null || true
+        sleep 2
+        # If it's still running after graceful shutdown attempt, force kill
         kill $D3K_PID 2>/dev/null || true
         break
     fi
@@ -83,6 +89,11 @@ if [ $COUNTER -eq 20 ]; then
     echo -e "${RED}❌ MCP server failed to start within 20 seconds${NC}"
     echo "Debug output:"
     head -50 "$OUTPUT_FILE"
+    # Send two SIGINTs for graceful shutdown, then force kill if needed
+    kill -INT $D3K_PID 2>/dev/null || true
+    sleep 1
+    kill -INT $D3K_PID 2>/dev/null || true
+    sleep 2
     kill $D3K_PID 2>/dev/null || true
     exit 1
 fi

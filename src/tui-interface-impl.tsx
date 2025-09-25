@@ -41,6 +41,10 @@ const TUIApp = ({
   const [initStatus, setInitStatus] = useState<string | null>("Initializing...")
   const logIdCounter = useRef(0)
   const { stdout } = useStdout()
+  const ctrlCMessageDefault = "^C quit"
+  const ctrlCMessageActive = "^C again to quit"
+  const [ctrlCMessage, setCtrlCMessage] = useState(ctrlCMessageDefault)
+  const ctrlCResetTimeout = useRef<NodeJS.Timeout | null>(null)
 
   const [terminalSize, setTerminalSize] = useState(() => ({
     width: stdout?.columns || 80,
@@ -82,6 +86,15 @@ const TUIApp = ({
   useEffect(() => {
     onStatusUpdate(setInitStatus)
   }, [onStatusUpdate])
+
+  useEffect(() => {
+    return () => {
+      if (ctrlCResetTimeout.current) {
+        clearTimeout(ctrlCResetTimeout.current)
+        ctrlCResetTimeout.current = null
+      }
+    }
+  }, [])
 
   // Calculate available lines for logs dynamically based on terminal height and mode
   const calculateMaxVisibleLogs = () => {
@@ -190,6 +203,16 @@ const TUIApp = ({
   useInput((input, key) => {
     if (input === "q") {
       // For 'q', trigger graceful shutdown
+      process.kill(process.pid, "SIGINT")
+    } else if (key.ctrl && input === "c") {
+      setCtrlCMessage(ctrlCMessageActive)
+      if (ctrlCResetTimeout.current) {
+        clearTimeout(ctrlCResetTimeout.current)
+      }
+      ctrlCResetTimeout.current = setTimeout(() => {
+        setCtrlCMessage(ctrlCMessageDefault)
+        ctrlCResetTimeout.current = null
+      }, 3000)
       process.kill(process.pid, "SIGINT")
     } else if (key.upArrow) {
       setScrollOffset((prev) => Math.min(prev + 1, Math.max(0, logs.length - maxVisibleLogs)))
@@ -405,8 +428,11 @@ const TUIApp = ({
       </Box>
 
       {/* Bottom status line - no border, just text */}
-      <Box paddingX={1}>
+      <Box paddingX={1} justifyContent="space-between">
         <Text color="#A18CE5">⏵⏵ {logFile}</Text>
+        <Text color="#A18CE5" dimColor>
+          {ctrlCMessage}
+        </Text>
       </Box>
     </Box>
   )
@@ -424,7 +450,8 @@ export async function runTUI(
         onStatusUpdate={(fn) => {
           statusUpdater = fn
         }}
-      />
+      />,
+      { exitOnCtrlC: false }
     )
 
     // Give React time to set up the status updater
