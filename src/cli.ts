@@ -126,6 +126,55 @@ function getVersion(): string {
   }
 }
 
+// Check if installed globally before proceeding
+function checkGlobalInstall() {
+  const currentFile = fileURLToPath(import.meta.url)
+  const packageRoot = dirname(dirname(currentFile))
+
+  // Check common global install paths
+  const globalPaths = [
+    "/usr/local/lib/node_modules",
+    "/usr/lib/node_modules",
+    process.env.NPM_CONFIG_PREFIX && join(process.env.NPM_CONFIG_PREFIX, "lib/node_modules"),
+    process.env.PNPM_HOME,
+    process.platform === "win32" && process.env.APPDATA && join(process.env.APPDATA, "npm/node_modules"),
+    process.env.HOME && join(process.env.HOME, ".npm-global/lib/node_modules"),
+    process.env.HOME && join(process.env.HOME, ".pnpm"),
+    process.env.HOME && join(process.env.HOME, ".yarn/global/node_modules")
+  ].filter(Boolean) as string[]
+
+  // Check if our package path contains any of these global paths
+  for (const globalPath of globalPaths) {
+    if (packageRoot.includes(globalPath)) {
+      return true
+    }
+  }
+
+  // Additional check: if we're in node_modules but not in a project's node_modules
+  if (packageRoot.includes("node_modules") && !existsSync(join(packageRoot, "..", "..", "..", "package.json"))) {
+    return true
+  }
+
+  // If we're in dev (running from source), that's fine
+  if (!packageRoot.includes("node_modules")) {
+    return true
+  }
+
+  return false
+}
+
+// Perform the check
+if (!checkGlobalInstall()) {
+  console.error(chalk.red("\n❌ Error: dev3000 must be installed globally.\n"))
+  console.error(chalk.white("This package won't work correctly as a local dependency.\n"))
+  console.error(chalk.cyan("To install globally, use one of these commands:"))
+  console.error(chalk.gray("  pnpm install -g dev3000"))
+  console.error(chalk.gray("  npm install -g dev3000"))
+  console.error(chalk.gray("  yarn global add dev3000\n"))
+  console.error(chalk.white("Then run 'd3k' or 'dev3000' from any project directory.\n"))
+  process.exit(1)
+}
+
 const program = new Command()
 
 program
