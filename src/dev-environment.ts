@@ -112,22 +112,21 @@ export function createPersistentLogFile(): string {
   // Get unique project name
   const projectName = getProjectName()
 
-  // Create /var/log/dev3000 directory
-  const logBaseDir = "/var/log/dev3000"
+  // Use ~/.d3k/logs directory for persistent, accessible logs
+  const logBaseDir = join(homedir(), ".d3k", "logs")
   try {
     if (!existsSync(logBaseDir)) {
       mkdirSync(logBaseDir, { recursive: true })
     }
+    return createLogFileInDir(logBaseDir, projectName)
   } catch (_error) {
-    // Fallback to user's temp directory if /var/log is not writable
+    // Fallback to user's temp directory if ~/.d3k is not writable
     const fallbackDir = join(tmpdir(), "dev3000-logs")
     if (!existsSync(fallbackDir)) {
       mkdirSync(fallbackDir, { recursive: true })
     }
     return createLogFileInDir(fallbackDir, projectName)
   }
-
-  return createLogFileInDir(logBaseDir, projectName)
 }
 
 // Write session info for MCP server to discover
@@ -490,21 +489,7 @@ export class DevEnvironment {
         commandName: this.options.commandName,
         serversOnly: this.options.serversOnly,
         version: this.version,
-        projectName: projectDisplayName,
-        onShutdown: () => {
-          // TUI requested shutdown - trigger graceful shutdown directly
-          if (!this.isShuttingDown) {
-            this.debugLog("TUI requested shutdown via Ctrl-C or 'q'")
-            this.isShuttingDown = true
-            this.handleShutdown()
-              .then(() => {
-                process.exit(0)
-              })
-              .catch(() => {
-                process.exit(1)
-              })
-          }
-        }
+        projectName: projectDisplayName
       })
 
       await this.tui.start()
@@ -527,7 +512,7 @@ export class DevEnvironment {
       // Write our process group ID to PID file for cleanup
       writeFileSync(this.pidFile, process.pid.toString())
 
-      // Setup cleanup handlers
+      // Setup cleanup handlers BEFORE starting TUI to ensure they work
       this.setupCleanupHandlers()
 
       // Start user's dev server
@@ -732,6 +717,8 @@ export class DevEnvironment {
   }
 
   private debugLog(message: string) {
+    const timestamp = formatTimestamp(new Date(), this.options.dateTimeFormat || "local")
+    
     if (this.options.debug) {
       if (this.spinner?.isSpinning) {
         // Temporarily stop the spinner, show debug message, then restart
@@ -742,6 +729,20 @@ export class DevEnvironment {
       } else {
         console.log(chalk.gray(`[DEBUG] ${message}`))
       }
+    }
+    
+    // Always write to d3k debug log file (even when not in debug mode)
+    try {
+      const debugLogDir = join(homedir(), ".d3k")
+      if (!existsSync(debugLogDir)) {
+        mkdirSync(debugLogDir, { recursive: true })
+      }
+      
+      const debugLogFile = join(debugLogDir, "d3k.log")
+      const logEntry = `[${timestamp}] [DEBUG] ${message}\n`
+      appendFileSync(debugLogFile, logEntry)
+    } catch {
+      // Ignore debug log write errors
     }
   }
 
@@ -1402,34 +1403,66 @@ export class DevEnvironment {
   }
 
   private setupCleanupHandlers() {
-    // Only set up SIGINT handler if NOT using TUI mode
-    // TUI handles Ctrl+C directly via onShutdown callback
-    if (!this.options.tui) {
-      // Handle Ctrl+C to kill all processes
-      process.on("SIGINT", () => {
-        const now = Date.now()
+    this.debugLog(`Setting up cleanup handlers for ${this.options.tui ? 'TUI' : 'debug'} mode`)
+    
+    // Handle Ctrl+C to kill all processes
+    process.on("SIGINT", () => {
+      this.debugLog("SIGINT received")
+      const now = Date.now()
 
-        // If first Ctrl+C or more than 3 seconds since last one
-        if (!this.firstSigintTime || now - this.firstSigintTime > 3000) {
-          this.firstSigintTime = now
+      // If first Ctrl+C or more than 3 seconds since last one
+      if (!this.firstSigintTime || now - this.firstSigintTime > 3000) {
+        this.firstSigintTime = now
+        this.debugLog("First Ctrl+C detected")
+
+        if (this.options.tui && this.tui) {
+          // In TUI mode, update the TUI status to show warning
+          this.debugLog("Updating TUI status with warning")
+          this.tui.updateStatus("⚠️ Press Ctrl+C again to quit")
+
+          // Clear the message after 3 seconds
+          setTimeout(() => {
+            if (this.tui && !this.isShuttingDown) {
+              this.debugLog("Clearing TUI warning message")
+              this.tui.updateStatus(null)
+            }
+          }, 3000)
+        } else {
           console.log(chalk.yellow("\n⚠️ Press Ctrl+C again to quit"))
-          return
         }
+        return
+      }
 
-        // Second Ctrl+C - proceed with shutdown
-        if (this.isShuttingDown) return // Prevent multiple shutdown attempts
-        this.isShuttingDown = true
+      // Second Ctrl+C - proceed with shutdown
+      if (this.isShuttingDown) return // Prevent multiple shutdown attempts
+      this.isShuttingDown = true
+      this.debugLog("Second Ctrl+C detected, starting shutdown")
 
-        // Call async cleanup in a non-blocking way
-        this.handleShutdown()
-          .then(() => {
-            process.exit(0)
-          })
-          .catch(() => {
-            process.exit(1)
-          })
-      })
-    }
+      if (this.options.tui && this.tui) {
+        // In TUI mode, show shutting down message
+        this.debugLog("Updating TUI status with shutdown message")
+        this.tui.updateStatus("Shutting down...")
+      }
+
+      // Set a timeout to force exit if shutdown takes too long
+      const forceExitTimeout = setTimeout(() => {
+        this.debugLog("Shutdown timeout reached, forcing exit")
+        process.exit(1)
+      }, 5000) // 5 second timeout
+
+      // Call async cleanup in a non-blocking way
+      this.handleShutdown()
+        .then(() => {
+          clearTimeout(forceExitTimeout)
+          this.debugLog("Graceful shutdown completed")
+          process.exit(0)
+        })
+        .catch((error) => {
+          clearTimeout(forceExitTimeout)
+          this.debugLog(`Shutdown error: ${error}`)
+          process.exit(1)
+        })
+    })
 
     // Also handle SIGTERM
     process.on("SIGTERM", () => {
@@ -1521,16 +1554,48 @@ export class DevEnvironment {
     const killPortProcess = async (port: string, name: string) => {
       try {
         const { spawn } = await import("child_process")
-        const killProcess = spawn("sh", ["-c", `lsof -ti:${port} | xargs kill -9`], { stdio: "inherit" })
+
+        // First, find PIDs on the port
+        const findPids = spawn("lsof", ["-ti", `:${port}`], { stdio: "pipe" })
+        let pidsOutput = ""
+
+        findPids.stdout?.on("data", (data) => {
+          pidsOutput += data.toString()
+        })
+
         return new Promise<void>((resolve) => {
-          killProcess.on("exit", (code) => {
-            if (code === 0 && !this.options.tui) {
-              console.log(chalk.green(`✅ Killed ${name} on port ${port}`))
+          findPids.on("exit", (code) => {
+            if (code === 0 && pidsOutput.trim()) {
+              // Found PIDs, now kill them
+              const pids = pidsOutput.trim().split("\n").filter(Boolean)
+              this.debugLog(`Found PIDs on port ${port}: [${pids.join(", ")}]`)
+
+              // Kill each PID individually
+              let killedCount = 0
+              for (const pid of pids) {
+                try {
+                  process.kill(parseInt(pid.trim(), 10), "SIGKILL")
+                  killedCount++
+                  this.debugLog(`Killed PID ${pid} on port ${port}`)
+                } catch (error) {
+                  this.debugLog(`Failed to kill PID ${pid}: ${error}`)
+                }
+              }
+
+              if (killedCount > 0 && !this.options.tui) {
+                console.log(chalk.green(`✅ Killed ${killedCount} ${name} process(es) on port ${port}`))
+              }
+            } else {
+              this.debugLog(`No processes found on port ${port} (exit code: ${code})`)
+              if (!this.options.tui) {
+                console.log(chalk.gray(`ℹ️ No ${name} running on port ${port}`))
+              }
             }
             resolve()
           })
         })
-      } catch (_error) {
+      } catch (error) {
+        this.debugLog(`Error killing processes on port ${port}: ${error}`)
         if (!this.options.tui) {
           console.log(chalk.gray(`⚠️ Could not kill ${name} on port ${port}`))
         }
@@ -1542,6 +1607,18 @@ export class DevEnvironment {
       console.log(chalk.yellow("🔄 Killing app server..."))
     }
     await killPortProcess(this.options.port, "your app server")
+
+    // Add a small delay to let the kill process complete
+    await new Promise((resolve) => setTimeout(resolve, 100))
+
+    // Double-check: try to kill any remaining processes on the app port
+    try {
+      const { spawn } = await import("child_process")
+      spawn("sh", ["-c", `pkill -f ":${this.options.port}"`], { stdio: "ignore" })
+      this.debugLog(`Sent pkill signal for port ${this.options.port}`)
+    } catch {
+      // Ignore pkill errors
+    }
 
     if (!this.options.tui) {
       console.log(chalk.green("✅ Cleanup complete"))
