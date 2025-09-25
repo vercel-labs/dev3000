@@ -186,11 +186,17 @@ export class CDPMonitor {
             `--remote-debugging-port=${this.debugPort}`,
             `--user-data-dir=${this.profileDir}`,
             "--no-first-run",
+            "--no-default-browser-check",
+            "--disable-component-extensions-with-background-pages",
+            "--disable-background-networking",
+            "--disable-sync",
+            "--metrics-recording-only",
+            "--disable-default-apps",
             this.createLoadingPage()
           ],
           {
             stdio: "pipe",
-            detached: false
+            detached: process.platform !== "win32" // Detach on Unix to create process group
           }
         )
 
@@ -1206,14 +1212,54 @@ export class CDPMonitor {
 
     // Close browser
     if (this.browser) {
-      this.browser.kill("SIGTERM")
+      const browserProcess = this.browser
 
-      // Force kill after 2 seconds if not closed
-      setTimeout(() => {
-        if (this.browser) {
-          this.browser.kill("SIGKILL")
+      // Wait for browser to exit
+      await new Promise<void>((resolve) => {
+        let resolved = false
+
+        const cleanup = () => {
+          if (!resolved) {
+            resolved = true
+            resolve()
+          }
         }
-      }, 2000)
+
+        browserProcess.once("exit", cleanup)
+        browserProcess.once("error", cleanup)
+
+        // Try graceful shutdown first
+        try {
+          // Kill the entire process group on Unix-like systems
+          if (process.platform !== "win32" && browserProcess.pid) {
+            process.kill(-browserProcess.pid, "SIGTERM")
+          } else {
+            browserProcess.kill("SIGTERM")
+          }
+        } catch (_e) {
+          // Fallback to regular kill
+          browserProcess.kill("SIGTERM")
+        }
+
+        // Force kill after 2 seconds if not closed
+        setTimeout(() => {
+          if (browserProcess.killed === false) {
+            try {
+              // Kill the entire process group on Unix-like systems
+              if (process.platform !== "win32" && browserProcess.pid) {
+                process.kill(-browserProcess.pid, "SIGKILL")
+              } else {
+                browserProcess.kill("SIGKILL")
+              }
+            } catch (_e) {
+              // Fallback to regular kill
+              browserProcess.kill("SIGKILL")
+            }
+          }
+          // Ensure we resolve even if kill fails
+          setTimeout(cleanup, 100)
+        }, 2000)
+      })
 
       this.browser = null
     }
