@@ -10,6 +10,17 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.69",
+    date: "2025-09-25",
+    type: "patch",
+    highlights: [
+      "Significant MCP server improvements for better AI integration",
+      "Improved port management with intelligent auto-increment and conflict resolution",
+      "Fixed 19 bugs for improved stability and reliability"
+    ]
+  },
+
+  {
     version: "0.0.68",
     date: "2025-09-25",
     type: "minor",
