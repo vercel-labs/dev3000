@@ -88,8 +88,28 @@ jobs:
           # Verify d3k is available
           which d3k || echo "d3k not found in PATH"
           
-          # Run d3k with timeout and capture output
-          timeout 30s d3k --debug --servers-only > d3k.log 2>&1 || CODE=$?
+          # Run d3k in background and capture output
+          d3k --debug --servers-only > d3k.log 2>&1 &
+          D3K_PID=$!
+          
+          # Wait for up to 30 seconds
+          COUNTER=0
+          while [ $COUNTER -lt 30 ]; do
+            if ! kill -0 $D3K_PID 2>/dev/null; then
+              # Process died
+              wait $D3K_PID
+              CODE=$?
+              break
+            fi
+            sleep 1
+            COUNTER=$((COUNTER + 1))
+          done
+          
+          # If still running after 30 seconds, kill it (this is success)
+          if [ $COUNTER -eq 30 ]; then
+            kill $D3K_PID 2>/dev/null || true
+            CODE=124  # Simulate timeout exit code
+          fi
           
           # Show output for debugging
           echo "=== d3k output ==="
