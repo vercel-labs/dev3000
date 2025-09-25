@@ -108,16 +108,25 @@ async function runTests() {
   } finally {
     // Kill d3k process
     console.log("\n🧹 Cleaning up...")
-    d3kProcess.kill()
-
-    // Give it time to shut down
+    
+    // Kill with SIGTERM first (graceful)
+    d3kProcess.kill('SIGTERM')
+    
+    // Give it time to shut down gracefully
+    await new Promise((resolve) => setTimeout(resolve, 2000))
+    
+    // Force kill any remaining processes (ignore errors)
+    spawn("sh", ["-c", "lsof -ti:3000 -ti:3684 | xargs kill -9 2>/dev/null || true"], { stdio: "ignore" })
     await new Promise((resolve) => setTimeout(resolve, 1000))
-
-    // Force kill any remaining processes
-    const cleanupProcess = spawn("sh", ["-c", "lsof -ti:3000 -ti:3684 | xargs kill -9"], { stdio: "ignore" })
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-
-    process.exit(allTestsPassed ? 0 : 1)
+    
+    // Exit with appropriate code
+    if (allTestsPassed) {
+      console.log("\n✅ Test completed successfully")
+      process.exit(0)
+    } else {
+      console.log("\n❌ Test failed")
+      process.exit(1)
+    }
   }
 }
 
