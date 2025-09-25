@@ -20,7 +20,7 @@ claude mcp add -t http -s user dev3000 http://localhost:3684/mcp
 Then issue the following prompt:
 
 ```
-Use dev3000 to debug my app
+fix my app
 ```
 
 ![dev3000 CLI](www/public/cli.gif)
@@ -62,6 +62,20 @@ The MCP server at `http://localhost:3684/mcp` supports the HTTP prototcol (not s
   }
 }
 ```
+
+**Codex**:
+
+First, codex needs a stdio -> http wrapper
+```sh
+pnpm i -g mcp-proxy
+```
+
+Then add to ~/.codex/config.toml:
+```[mcp_servers.dev3000]
+command = "npx"
+args = ["-y", "mcp-proxy", "--mode", "stdio-to-http", "--url", "http://localhost:3684/mcp"]```
+
+
 
 ## Using the Chrome Extension vs Playwright
 

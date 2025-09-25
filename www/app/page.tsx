@@ -239,7 +239,7 @@ export default function HomePage() {
                             <pre>{`pnpm i -g mcp-proxy`}</pre>
                             <p className="mt-2 text-xs text-muted-foreground mb-1">Add to ~/.codex/config.toml</p>
                             <pre>{`[mcp_servers.dev3000]
-command = "npx"   # or "uvx", "python", etc.
+command = "npx"
 args = ["-y", "mcp-proxy", "--mode", "stdio-to-http", "--url", "http://localhost:3684/mcp"]`}</pre>
                           </div>
                         </div>
