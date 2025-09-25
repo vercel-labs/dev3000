@@ -4,10 +4,8 @@ import { join } from "path"
 
 console.log("🧪 Testing d3k with logs API...")
 
-// Kill any existing d3k processes first
-console.log("🔄 Killing any existing d3k processes...")
-const killProcess = spawn("sh", ["-c", "lsof -ti:3000 -ti:3684 | xargs kill -9"], { stdio: "ignore" })
-await new Promise((resolve) => setTimeout(resolve, 2000)) // Wait for processes to die
+// Don't kill existing processes - let d3k handle port conflicts
+console.log("🚀 Starting d3k test...")
 
 // Start d3k in the www directory
 console.log("🚀 Starting d3k in www directory...")
@@ -108,26 +106,49 @@ async function runTests() {
     allTestsPassed = false
     testError = error as Error
   } finally {
-    // Kill d3k process
+    // Kill the specific d3k process we started
     console.log("\n🧹 Cleaning up...")
 
-    // Kill with SIGTERM first (graceful)
-    d3kProcess.kill("SIGTERM")
-
-    // Give it time to shut down gracefully
-    await new Promise((resolve) => setTimeout(resolve, 2000))
-
-    // Force kill any remaining processes (ignore errors)
-    spawn("sh", ["-c", "lsof -ti:3000 -ti:3684 | xargs kill -9 2>/dev/null || true"], { stdio: "ignore" })
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+    // Send SIGINT (Ctrl+C) to d3k - this should trigger its cleanup handlers
+    d3kProcess.kill("SIGINT")
+    
+    console.log("⏳ Waiting for d3k to clean up...")
+    
+    // Wait for d3k to handle cleanup (it should kill Chrome and its servers)
+    let waitTime = 0
+    const maxWait = 5000 // 5 seconds max
+    
+    while (waitTime < maxWait) {
+      try {
+        // Check if process is still alive
+        process.kill(d3kProcess.pid!, 0)
+        // If no error, process is still running
+        await new Promise((resolve) => setTimeout(resolve, 500))
+        waitTime += 500
+      } catch (e) {
+        // Process is dead
+        console.log("✅ d3k process terminated")
+        break
+      }
+    }
+    
+    // If still running after timeout, force kill
+    if (waitTime >= maxWait) {
+      console.log("⚠️ d3k didn't terminate gracefully, force killing...")
+      try {
+        d3kProcess.kill("SIGKILL")
+      } catch (e) {
+        // Already dead
+      }
+    }
   }
-  
+
   // Handle result after cleanup
   if (!allTestsPassed) {
     console.log("\n❌ Test failed")
     throw testError || new Error("Tests failed")
   }
-  
+
   console.log("\n✅ Test completed successfully")
 }
 
