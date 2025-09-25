@@ -90,10 +90,6 @@ fi
 
 echo "✅ Successfully published dev3000@$CURRENT_VERSION to npm!"
 
-# Restore catalog: versions for local development
-echo "🔄 Restoring catalog: versions..."
-npx tsx scripts/restore-catalog-versions.ts
-
 # Increment to next canary version for development
 NEXT_VERSION=$(echo $CURRENT_VERSION | awk -F. '{$NF = $NF + 1; print}' OFS=.)
 NEXT_CANARY_VERSION="$NEXT_VERSION-canary"

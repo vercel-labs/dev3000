@@ -64,11 +64,6 @@ if git tag -l "$TAG_NAME" | grep -q "^$TAG_NAME$" || git ls-remote --tags origin
     cleanup_existing_tag
 fi
 
-# Resolve catalog: dependencies before version bump
-echo "📦 Resolving catalog: dependencies..."
-npx tsx scripts/resolve-catalog-versions.ts
-echo "✅ Catalog dependencies resolved"
-
 # Update version in package.json manually to avoid pnpm version creating tags automatically
 echo "⬆️ Bumping version to $NEXT_VERSION..."
 node -e "
