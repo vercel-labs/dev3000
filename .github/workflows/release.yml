@@ -43,7 +43,7 @@ jobs:
     strategy:
       matrix:
         os: [macos-latest]
-        node: [18, 20]
+        node: [20]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
