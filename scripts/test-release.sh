@@ -44,8 +44,7 @@ else
     exit 1
 fi
 
-# Cleanup
-rm -rf "$TEST_HOME"
+# Don't cleanup yet - we need the installed d3k for the next test
 
 # Test 2: MCP server startup with minimal environment
 echo -e "${YELLOW}Testing MCP server startup...${NC}"
@@ -64,13 +63,14 @@ EOF
 
 # Run d3k in background and capture output
 OUTPUT_FILE=$(mktemp)
+# d3k should be available in PATH from the npm install
 d3k --debug --servers-only --no-tui > "$OUTPUT_FILE" 2>&1 &
 D3K_PID=$!
 
 # Wait for MCP server to start (max 20 seconds)
 COUNTER=0
 while [ $COUNTER -lt 20 ]; do
-    if grep -q "MCP server process spawned" "$OUTPUT_FILE" || grep -q "Starting MCP server using bundled Next.js" "$OUTPUT_FILE"; then
+    if grep -q "MCP server process spawned as singleton background service" "$OUTPUT_FILE" || grep -q "Starting MCP server using bundled Next.js" "$OUTPUT_FILE" || grep -q "MCP server logs:" "$OUTPUT_FILE"; then
         echo -e "${GREEN}✅ MCP server startup test passed${NC}"
         kill $D3K_PID 2>/dev/null || true
         break
@@ -103,6 +103,9 @@ fi
 
 # Cleanup tarball
 rm -f "$TARBALL"
+
+# Cleanup test home
+rm -rf "$TEST_HOME"
 
 echo -e "${GREEN}✨ All release tests passed!${NC}"
 echo "Package is ready for release."
