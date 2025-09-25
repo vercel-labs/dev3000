@@ -19,13 +19,13 @@ writeFileSync(testLogFile, testLogContent)
 
 console.log("🧪 Testing MCP Server Logs API...")
 
-// Start the MCP server in test mode
-const mcpProcess = spawn("pnpm", ["run", "dev"], {
+// Start the MCP server in test mode (use start for production build)
+const mcpProcess = spawn("pnpm", ["run", "start"], {
   cwd: join(process.cwd(), "mcp-server"),
   env: {
     ...process.env,
     PORT: "3685", // Use different port for testing
-    NODE_ENV: "development"
+    NODE_ENV: "production"
   }
 })
 
@@ -34,14 +34,23 @@ let mcpReady = false
 // Wait for server to be ready
 mcpProcess.stdout?.on("data", (data) => {
   const output = data.toString()
-  if (output.includes("Ready") && !mcpReady) {
+  console.log("MCP stdout:", output.trim())
+  if ((output.includes("Ready") || output.includes("started on") || output.includes("Listening")) && !mcpReady) {
     mcpReady = true
-    runTests()
+    // Give it a bit more time to fully initialize
+    setTimeout(() => runTests(), 2000)
   }
 })
 
 mcpProcess.stderr?.on("data", (data) => {
-  console.error("MCP Error:", data.toString())
+  const output = data.toString()
+  console.error("MCP stderr:", output.trim())
+  // Next.js outputs to stderr sometimes
+  if ((output.includes("Ready") || output.includes("started on") || output.includes("Listening")) && !mcpReady) {
+    mcpReady = true
+    // Give it a bit more time to fully initialize
+    setTimeout(() => runTests(), 2000)
+  }
 })
 
 async function runTests() {
@@ -115,6 +124,15 @@ async function runTests() {
     process.exit(allTestsPassed ? 0 : 1)
   }
 }
+
+// Try to connect after 5 seconds if we haven't seen a ready message
+setTimeout(() => {
+  if (!mcpReady) {
+    console.log("No ready message detected, attempting to connect anyway...")
+    mcpReady = true
+    runTests()
+  }
+}, 5000)
 
 // Timeout after 30 seconds
 setTimeout(() => {
