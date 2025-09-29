@@ -24,6 +24,13 @@ import { DevTUI } from "./tui-interface.js"
 import { getProjectDisplayName, getProjectName } from "./utils/project-name.js"
 import { formatTimestamp } from "./utils/timestamp.js"
 
+// MCP names
+const MCP_NAMES = {
+  DEV3000: "dev3000",
+  CHROME_DEVTOOLS: "dev3000-chrome-devtools",
+  NEXTJS_DEV: "dev3000-nextjs-dev"
+} as const
+
 interface DevEnvironmentOptions {
   port: string
   mcpPort?: string // Make optional since we'll handle portMcp
@@ -115,7 +122,7 @@ async function findAvailablePort(startPort: number): Promise<string> {
 interface AiCliTool {
   binary: string
   name: string
-  addMcpCommand: (name: string, config: object) => string[]
+  addMcpCommand: (name: string, command: string, ...args: string[]) => string[]
   addHttpMcpCommand: (name: string, url: string) => string[]
   removeMcpCommand: (name: string) => string[]
 }
@@ -124,33 +131,66 @@ const AI_CLI_TOOLS: AiCliTool[] = [
   {
     binary: "claude",
     name: "Claude Code",
-    addMcpCommand: (name, config) => ["claude", "mcp", "add-json", name, JSON.stringify(config)],
+    addMcpCommand: (name, command, ...args) => ["claude", "mcp", "add", name, command, ...args],
     addHttpMcpCommand: (name, url) => ["claude", "mcp", "add", "-t", "http", name, url],
     removeMcpCommand: (name) => ["claude", "mcp", "remove", name]
+  },
+  {
+    binary: "gemini",
+    name: "Gemini CLI",
+    addMcpCommand: (name, command, ...args) => ["gemini", "mcp", "add", name, command, ...args],
+    addHttpMcpCommand: (name, url) => ["gemini", "mcp", "add", "-t", "http", name, url],
+    removeMcpCommand: (name) => ["gemini", "mcp", "remove", name]
   }
   // TODO: Research and add other AI CLI tools once we verify their MCP capabilities
   // {
   //   binary: "cursor-agent",
   //   name: "Cursor Agent",
-  //   addMcpCommand: (name, config) => ["cursor-agent", "mcp", "add-json", name, JSON.stringify(config)],
+  //   addMcpCommand: (name, command, ...args) => ["cursor-agent", "mcp", "add", name, command, ...args],
   //   addHttpMcpCommand: (name, url) => ["cursor-agent", "mcp", "add", "-t", "http", name, url],
   //   removeMcpCommand: (name) => ["cursor-agent", "mcp", "remove", name]
   // },
   // {
   //   binary: "codex",
   //   name: "Codex CLI",
-  //   addMcpCommand: (name, config) => ["codex", "mcp", "add-json", name, JSON.stringify(config)],
+  //   addMcpCommand: (name, command, ...args) => ["codex", "mcp", "add", name, command, ...args],
   //   addHttpMcpCommand: (name, url) => ["codex", "mcp", "add", "-t", "http", name, url],
   //   removeMcpCommand: (name) => ["codex", "mcp", "remove", name]
-  // },
-  // {
-  //   binary: "gemini",
-  //   name: "Gemini CLI",
-  //   addMcpCommand: (name, config) => ["gemini", "mcp", "add-json", name, JSON.stringify(config)],
-  //   addHttpMcpCommand: (name, url) => ["gemini", "mcp", "add", "-t", "http", name, url],
-  //   removeMcpCommand: (name) => ["gemini", "mcp", "remove", name]
   // }
 ]
+
+/**
+ * Check if Next.js MCP server is enabled in the project configuration
+ */
+async function isNextjsMcpEnabled(): Promise<boolean> {
+  try {
+    const configFiles = ["next.config.js", "next.config.ts", "next.config.mjs", "next.config.cjs"]
+
+    for (const configFile of configFiles) {
+      if (existsSync(configFile)) {
+        try {
+          // Read the config file content
+          const configContent = readFileSync(configFile, "utf8")
+
+          // Look for experimental.mcpServer: true or experimental.mcpServer = true
+          // This is a simple string-based check that should work for most cases
+          const hasMcpServerConfig =
+            /experimental\s*:\s*{[^}]*mcpServer\s*:\s*true|experimental\.mcpServer\s*[=:]\s*true/s.test(configContent)
+
+          if (hasMcpServerConfig) {
+            return true
+          }
+        } catch {
+          // If we can't read the file, continue checking other config files
+        }
+      }
+    }
+
+    return false
+  } catch {
+    return false
+  }
+}
 
 /**
  * Check if Chrome version supports chrome-devtools MCP (>= 140.0.7339.214)
@@ -268,17 +308,20 @@ async function detectAvailableAiCliTools(): Promise<AiCliTool[]> {
 async function configureMcpsForCliTool(
   tool: AiCliTool,
   mcpPort: string,
+  appPort: string,
   enableChromeDevtools: boolean,
-  chromeDevtoolsSupported: boolean
-): Promise<{ dev3000: boolean; chromeDevtools: boolean; chromeSkipped?: string }> {
-  const results: { dev3000: boolean; chromeDevtools: boolean; chromeSkipped?: string } = {
+  chromeDevtoolsSupported: boolean,
+  enableNextjsMcp: boolean
+): Promise<{ dev3000: boolean; chromeDevtools: boolean; nextjsDev: boolean; chromeSkipped?: string }> {
+  const results: { dev3000: boolean; chromeDevtools: boolean; nextjsDev: boolean; chromeSkipped?: string } = {
     dev3000: false,
-    chromeDevtools: false
+    chromeDevtools: false,
+    nextjsDev: false
   }
 
   // Configure main dev3000 MCP
   try {
-    const dev3000Command = tool.addHttpMcpCommand("dev3000", `http://localhost:${mcpPort}/mcp`)
+    const dev3000Command = tool.addHttpMcpCommand(MCP_NAMES.DEV3000, `http://localhost:${mcpPort}/mcp`)
 
     await new Promise<void>((resolve, reject) => {
       const configProcess = spawn(dev3000Command[0], dev3000Command.slice(1), {
@@ -308,10 +351,13 @@ async function configureMcpsForCliTool(
   // Configure chrome-devtools MCP if enabled and Chrome version is supported
   if (enableChromeDevtools && chromeDevtoolsSupported) {
     try {
-      const chromeDevtoolsCommand = tool.addMcpCommand("dev3000-chrome-devtools", {
-        command: "npx",
-        args: ["chrome-devtools-mcp@latest", "--browserUrl", "http://127.0.0.1:9222"]
-      })
+      const chromeDevtoolsCommand = tool.addMcpCommand(
+        MCP_NAMES.CHROME_DEVTOOLS,
+        "npx",
+        "chrome-devtools-mcp@latest",
+        "--browserUrl",
+        "http://127.0.0.1:9222"
+      )
 
       await new Promise<void>((resolve, reject) => {
         const configProcess = spawn(chromeDevtoolsCommand[0], chromeDevtoolsCommand.slice(1), {
@@ -342,16 +388,51 @@ async function configureMcpsForCliTool(
     results.chromeSkipped = "Chrome < 140.0.7339.214"
   }
 
+  // Configure nextjs-dev MCP if enabled
+  if (enableNextjsMcp) {
+    try {
+      const nextjsDevCommand = tool.addHttpMcpCommand(MCP_NAMES.NEXTJS_DEV, `http://localhost:${appPort}/_next/mcp`)
+
+      await new Promise<void>((resolve, reject) => {
+        const configProcess = spawn(nextjsDevCommand[0], nextjsDevCommand.slice(1), {
+          stdio: ["inherit", "pipe", "pipe"]
+        })
+
+        let errorOutput = ""
+        configProcess.stderr?.on("data", (data) => {
+          errorOutput += data.toString()
+        })
+
+        configProcess.on("close", (code) => {
+          if (code === 0 || errorOutput.includes("already exists")) {
+            results.nextjsDev = true
+            resolve()
+          } else {
+            reject(new Error(`Failed to configure nextjs-dev MCP: ${errorOutput}`))
+          }
+        })
+
+        configProcess.on("error", reject)
+      })
+    } catch (error) {
+      console.log(`⚠️ Failed to configure nextjs-dev MCP for ${tool.name}:`, error)
+    }
+  }
+
   return results
 }
 
 /**
  * Clean up MCP configurations for a specific AI CLI tool
  */
-async function cleanupMcpsForCliTool(tool: AiCliTool, enableChromeDevtools: boolean): Promise<void> {
+async function cleanupMcpsForCliTool(
+  tool: AiCliTool,
+  enableChromeDevtools: boolean,
+  enableNextjsMcp: boolean
+): Promise<void> {
   // Clean up dev3000 MCP
   try {
-    const dev3000Command = tool.removeMcpCommand("dev3000")
+    const dev3000Command = tool.removeMcpCommand(MCP_NAMES.DEV3000)
     await new Promise<void>((resolve) => {
       const cleanupProcess = spawn(dev3000Command[0], dev3000Command.slice(1), {
         stdio: ["inherit", "pipe", "pipe"]
@@ -366,9 +447,25 @@ async function cleanupMcpsForCliTool(tool: AiCliTool, enableChromeDevtools: bool
   // Clean up chrome-devtools MCP if it was enabled
   if (enableChromeDevtools) {
     try {
-      const chromeDevtoolsCommand = tool.removeMcpCommand("dev3000-chrome-devtools")
+      const chromeDevtoolsCommand = tool.removeMcpCommand(MCP_NAMES.CHROME_DEVTOOLS)
       await new Promise<void>((resolve) => {
         const cleanupProcess = spawn(chromeDevtoolsCommand[0], chromeDevtoolsCommand.slice(1), {
+          stdio: ["inherit", "pipe", "pipe"]
+        })
+        cleanupProcess.on("close", () => resolve())
+        cleanupProcess.on("error", () => resolve()) // Don't fail on cleanup errors
+      })
+    } catch {
+      // Ignore cleanup errors
+    }
+  }
+
+  // Clean up nextjs-dev MCP if it was enabled
+  if (enableNextjsMcp) {
+    try {
+      const nextjsDevCommand = tool.removeMcpCommand(MCP_NAMES.NEXTJS_DEV)
+      await new Promise<void>((resolve) => {
+        const cleanupProcess = spawn(nextjsDevCommand[0], nextjsDevCommand.slice(1), {
           stdio: ["inherit", "pipe", "pipe"]
         })
         cleanupProcess.on("close", () => resolve())
@@ -385,6 +482,7 @@ async function cleanupMcpsForCliTool(tool: AiCliTool, enableChromeDevtools: bool
  */
 async function configureAiCliIntegrations(
   mcpPort: string,
+  appPort: string,
   enableChromeDevtools: boolean,
   silent: boolean = false
 ): Promise<AiCliTool[]> {
@@ -407,21 +505,37 @@ async function configureAiCliIntegrations(
     }
   }
 
+  // Check if NextJS MCP is enabled in project configuration
+  const enableNextjsMcp = await isNextjsMcpEnabled()
+  if (enableNextjsMcp && !silent) {
+    console.log("🔍 Next.js MCP server detected in project configuration")
+  }
+
   if (!silent) console.log(`🔧 Configuring MCPs for ${availableTools.length} detected AI CLI tools...`)
 
   for (const tool of availableTools) {
     if (!silent) console.log(`   Configuring ${tool.name}...`)
 
-    const results = await configureMcpsForCliTool(tool, mcpPort, enableChromeDevtools, chromeDevtoolsSupported)
+    const results = await configureMcpsForCliTool(
+      tool,
+      mcpPort,
+      appPort,
+      enableChromeDevtools,
+      chromeDevtoolsSupported,
+      enableNextjsMcp
+    )
 
     let status = ""
     if (results.dev3000) status += "✅ dev3000"
     if (results.chromeDevtools) status += results.dev3000 ? " + chrome-devtools" : "✅ chrome-devtools"
+    if (results.nextjsDev) status += results.dev3000 || results.chromeDevtools ? " + nextjs-dev" : "✅ nextjs-dev"
     if (results.chromeSkipped)
-      status += results.dev3000
-        ? ` (chrome-devtools skipped: ${results.chromeSkipped})`
-        : `⚠️ chrome-devtools skipped: ${results.chromeSkipped}`
-    if (!results.dev3000 && !results.chromeDevtools && !results.chromeSkipped) status = "❌ failed"
+      status +=
+        results.dev3000 || results.nextjsDev
+          ? ` (chrome-devtools skipped: ${results.chromeSkipped})`
+          : `⚠️ chrome-devtools skipped: ${results.chromeSkipped}`
+    if (!results.dev3000 && !results.chromeDevtools && !results.nextjsDev && !results.chromeSkipped)
+      status = "❌ failed"
 
     if (!silent) console.log(`   ${tool.name}: ${status}`)
   }
@@ -435,6 +549,7 @@ async function configureAiCliIntegrations(
 async function cleanupAiCliIntegrations(
   availableTools: AiCliTool[],
   enableChromeDevtools: boolean,
+  enableNextjsMcp: boolean,
   silent: boolean = false
 ): Promise<void> {
   if (availableTools.length === 0) return
@@ -442,7 +557,7 @@ async function cleanupAiCliIntegrations(
   if (!silent) console.log("🧹 Cleaning up AI CLI MCP configurations...")
 
   for (const tool of availableTools) {
-    await cleanupMcpsForCliTool(tool, enableChromeDevtools)
+    await cleanupMcpsForCliTool(tool, enableChromeDevtools, enableNextjsMcp)
   }
 }
 
@@ -586,6 +701,7 @@ export class DevEnvironment {
   private portChangeMessage: string | null = null
   private firstSigintTime: number | null = null
   private configuredAiCliTools: AiCliTool[] = []
+  private enableNextjsMcp: boolean = false
 
   constructor(options: DevEnvironmentOptions) {
     // Handle portMcp vs mcpPort naming
@@ -879,8 +995,11 @@ export class DevEnvironment {
       // Configure AI CLI integrations (both dev3000 and chrome-devtools MCPs)
       if (!this.options.serversOnly) {
         await this.tui.updateStatus("Configuring AI CLI integrations...")
+        // Check if NextJS MCP is enabled and store the result
+        this.enableNextjsMcp = await isNextjsMcpEnabled()
         this.configuredAiCliTools = await configureAiCliIntegrations(
           this.options.mcpPort || "3684",
+          this.options.port,
           this.options.chromeDevtoolsMcp !== false, // Default to true unless explicitly disabled
           true // Silent mode when TUI is active
         )
@@ -949,8 +1068,11 @@ export class DevEnvironment {
       // Configure AI CLI integrations (both dev3000 and chrome-devtools MCPs)
       if (!this.options.serversOnly) {
         this.spinner.text = "Configuring AI CLI integrations..."
+        // Check if NextJS MCP is enabled and store the result
+        this.enableNextjsMcp = await isNextjsMcpEnabled()
         this.configuredAiCliTools = await configureAiCliIntegrations(
           this.options.mcpPort || "3684",
+          this.options.port,
           this.options.chromeDevtoolsMcp !== false, // Default to true unless explicitly disabled
           false // Show output in non-TUI mode
         )
@@ -2240,6 +2362,7 @@ export class DevEnvironment {
       await cleanupAiCliIntegrations(
         this.configuredAiCliTools,
         this.options.chromeDevtoolsMcp !== false,
+        this.enableNextjsMcp,
         this.options.tui
       )
     }
