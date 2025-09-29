@@ -6,3 +6,4 @@ dist/
 *.tgz
 mcp-server/public/screenshots/*
 mcp-server/.next/*
+.gemini/
