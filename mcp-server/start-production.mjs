@@ -1,7 +1,10 @@
 #!/usr/bin/env node
-const path = require("path")
-const { existsSync } = require("fs")
-const { spawn } = require("child_process")
+import { spawn } from "child_process"
+import { existsSync } from "fs"
+import path from "path"
+import { fileURLToPath } from "url"
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 // Set up the environment
 process.env.NODE_ENV = "production"

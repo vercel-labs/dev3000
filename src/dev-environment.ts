@@ -355,6 +355,7 @@ async function configureMcpsForCliTool(
         MCP_NAMES.CHROME_DEVTOOLS,
         "npx",
         "chrome-devtools-mcp@latest",
+        "--",
         "--browserUrl",
         "http://127.0.0.1:9222"
       )
@@ -430,47 +431,38 @@ async function cleanupMcpsForCliTool(
   enableChromeDevtools: boolean,
   enableNextjsMcp: boolean
 ): Promise<void> {
-  // Clean up dev3000 MCP
+  // Clean up dev3000 MCP (fire and forget)
   try {
     const dev3000Command = tool.removeMcpCommand(MCP_NAMES.DEV3000)
-    await new Promise<void>((resolve) => {
-      const cleanupProcess = spawn(dev3000Command[0], dev3000Command.slice(1), {
-        stdio: ["inherit", "pipe", "pipe"]
-      })
-      cleanupProcess.on("close", () => resolve())
-      cleanupProcess.on("error", () => resolve()) // Don't fail on cleanup errors
-    })
+    spawn(dev3000Command[0], dev3000Command.slice(1), {
+      stdio: "ignore",
+      detached: true
+    }).unref()
   } catch {
     // Ignore cleanup errors
   }
 
-  // Clean up chrome-devtools MCP if it was enabled
+  // Clean up chrome-devtools MCP if it was enabled (fire and forget)
   if (enableChromeDevtools) {
     try {
       const chromeDevtoolsCommand = tool.removeMcpCommand(MCP_NAMES.CHROME_DEVTOOLS)
-      await new Promise<void>((resolve) => {
-        const cleanupProcess = spawn(chromeDevtoolsCommand[0], chromeDevtoolsCommand.slice(1), {
-          stdio: ["inherit", "pipe", "pipe"]
-        })
-        cleanupProcess.on("close", () => resolve())
-        cleanupProcess.on("error", () => resolve()) // Don't fail on cleanup errors
-      })
+      spawn(chromeDevtoolsCommand[0], chromeDevtoolsCommand.slice(1), {
+        stdio: "ignore",
+        detached: true
+      }).unref()
     } catch {
       // Ignore cleanup errors
     }
   }
 
-  // Clean up nextjs-dev MCP if it was enabled
+  // Clean up nextjs-dev MCP if it was enabled (fire and forget)
   if (enableNextjsMcp) {
     try {
       const nextjsDevCommand = tool.removeMcpCommand(MCP_NAMES.NEXTJS_DEV)
-      await new Promise<void>((resolve) => {
-        const cleanupProcess = spawn(nextjsDevCommand[0], nextjsDevCommand.slice(1), {
-          stdio: ["inherit", "pipe", "pipe"]
-        })
-        cleanupProcess.on("close", () => resolve())
-        cleanupProcess.on("error", () => resolve()) // Don't fail on cleanup errors
-      })
+      spawn(nextjsDevCommand[0], nextjsDevCommand.slice(1), {
+        stdio: "ignore",
+        detached: true
+      }).unref()
     } catch {
       // Ignore cleanup errors
     }
@@ -557,7 +549,7 @@ async function cleanupAiCliIntegrations(
   if (!silent) console.log("🧹 Cleaning up AI CLI MCP configurations...")
 
   for (const tool of availableTools) {
-    await cleanupMcpsForCliTool(tool, enableChromeDevtools, enableNextjsMcp)
+    cleanupMcpsForCliTool(tool, enableChromeDevtools, enableNextjsMcp) // Fire and forget
   }
 }
 
@@ -1434,12 +1426,12 @@ export class DevEnvironment {
         mcpCommand = ["node", serverJsPath]
         mcpCwd = dirname(serverJsPath)
       } else {
-        // Check for start-production.js script
-        const startProdScript = join(mcpServerPath, "start-production.js")
+        // Check for start-production.mjs script
+        const startProdScript = join(mcpServerPath, "start-production.mjs")
 
         if (existsSync(startProdScript)) {
           // Use the production script
-          this.debugLog(`Global install with start-production.js script`)
+          this.debugLog(`Global install with start-production.mjs script`)
           mcpCommand = ["node", startProdScript]
           mcpCwd = mcpServerPath
         } else {

@@ -42,9 +42,7 @@ const TUIApp = ({
   const logIdCounter = useRef(0)
   const { stdout } = useStdout()
   const ctrlCMessageDefault = "^C quit"
-  const ctrlCMessageActive = "^C again to quit"
-  const [ctrlCMessage, setCtrlCMessage] = useState(ctrlCMessageDefault)
-  const ctrlCResetTimeout = useRef<NodeJS.Timeout | null>(null)
+  const [ctrlCMessage] = useState(ctrlCMessageDefault)
 
   const [terminalSize, setTerminalSize] = useState(() => ({
     width: stdout?.columns || 80,
@@ -86,15 +84,6 @@ const TUIApp = ({
   useEffect(() => {
     onStatusUpdate(setInitStatus)
   }, [onStatusUpdate])
-
-  useEffect(() => {
-    return () => {
-      if (ctrlCResetTimeout.current) {
-        clearTimeout(ctrlCResetTimeout.current)
-        ctrlCResetTimeout.current = null
-      }
-    }
-  }, [])
 
   // Calculate available lines for logs dynamically based on terminal height and mode
   const calculateMaxVisibleLogs = () => {
@@ -201,18 +190,8 @@ const TUIApp = ({
 
   // Handle keyboard input
   useInput((input, key) => {
-    if (input === "q") {
-      // For 'q', trigger graceful shutdown
-      process.kill(process.pid, "SIGINT")
-    } else if (key.ctrl && input === "c") {
-      setCtrlCMessage(ctrlCMessageActive)
-      if (ctrlCResetTimeout.current) {
-        clearTimeout(ctrlCResetTimeout.current)
-      }
-      ctrlCResetTimeout.current = setTimeout(() => {
-        setCtrlCMessage(ctrlCMessageDefault)
-        ctrlCResetTimeout.current = null
-      }, 3000)
+    if (key.ctrl && input === "c") {
+      // Send SIGINT to trigger main process shutdown handler
       process.kill(process.pid, "SIGINT")
     } else if (key.upArrow) {
       setScrollOffset((prev) => Math.min(prev + 1, Math.max(0, logs.length - maxVisibleLogs)))

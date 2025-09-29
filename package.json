@@ -24,10 +24,10 @@
     "mcp-server/public/",
     "mcp-server/package.json",
     "mcp-server/tsconfig.json",
-    "mcp-server/next.config.ts",
+    "mcp-server/next.config.mjs",
     "mcp-server/next-env.d.ts",
     "mcp-server/postcss.config.mjs",
-    "mcp-server/start-production.js",
+    "mcp-server/start-production.mjs",
     "README.md"
   ],
   "scripts": {

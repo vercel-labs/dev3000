@@ -175,6 +175,11 @@ export async function fixMyApp({
   integrateChromeDevtools = false,
   returnRawData = false
 }: FixMyAppParams): Promise<{ content: Array<{ type: "text"; text: string }> }> {
+  // 🎯 INTELLIGENT DELEGATION: Check if nextjs-dev MCP is available for Next.js-specific analysis
+  const canDelegateNextjs = await canDelegateToNextjs()
+  if (canDelegateNextjs) {
+    logToDevFile(`Fix My App: Recommending dev3000-nextjs-dev MCP for Next.js-specific analysis`)
+  }
   const logPath = getLogPath(projectName)
   if (!logPath) {
     const sessions = findActiveSessions()
@@ -829,6 +834,15 @@ const value = data?.property?.nestedProperty`,
       }
     }
 
+    // Add nextjs-dev delegation recommendation if available
+    if (canDelegateNextjs) {
+      results.push("")
+      results.push("🔗 **ENHANCED NEXT.JS ANALYSIS AVAILABLE**")
+      results.push("")
+      const delegationResponse = await delegateToNextjs()
+      results.push(delegationResponse.content[0].text)
+    }
+
     return {
       content: [{ type: "text", text: results.join("\n") }]
     }
@@ -868,23 +882,49 @@ const CHROME_DEVTOOLS_CAPABILITY_MAP: Record<
   // scroll and type don't have direct chrome-devtools equivalents, fall back to dev3000
 }
 
+// Capability mapping for nextjs-dev MCP delegation
+const NEXTJS_DEV_CAPABILITY_MAP: Record<string, { function: string; reason: string }> = {
+  get_build_status: {
+    function: "get_build_status",
+    reason: "Get comprehensive Next.js build information and status"
+  },
+  get_server_logs: {
+    function: "get_server_logs",
+    reason: "Access Next.js server-side logs and runtime information"
+  },
+  analyze_performance: {
+    function: "analyze_performance",
+    reason: "Get Next.js-specific performance metrics and optimization suggestions"
+  },
+  check_routes: {
+    function: "check_routes",
+    reason: "Validate Next.js routing configuration and detect issues"
+  }
+}
+
 /**
  * Check if chrome-devtools MCP is available and can handle the requested action
  */
 async function canDelegateToChromeDevtools(action: string): Promise<boolean> {
-  try {
-    // First check if the action is mappable to chrome-devtools
-    if (!CHROME_DEVTOOLS_CAPABILITY_MAP[action]) {
-      return false
-    }
-
-    // Try to discover chrome-devtools MCP
-    const availableMcps = await discoverAvailableMcps()
-    return availableMcps.includes("chrome-devtools")
-  } catch (error) {
-    logToDevFile(`Chrome DevTools delegation check failed: ${error}`)
+  // First check if the action is mappable to chrome-devtools
+  if (!CHROME_DEVTOOLS_CAPABILITY_MAP[action]) {
     return false
   }
+
+  // dev3000 cannot reliably detect its own configured MCPs in Claude Code
+  // Return false to disable auto-delegation - users can manually use the MCPs
+  logToDevFile(`Chrome DevTools delegation disabled - cannot verify dev3000-chrome-devtools MCP configuration`)
+  return false
+}
+
+/**
+ * Check if nextjs-dev MCP is available
+ */
+async function canDelegateToNextjs(): Promise<boolean> {
+  // dev3000 cannot reliably detect its own configured MCPs in Claude Code
+  // Return false to disable auto-delegation - users can manually use the MCPs
+  logToDevFile(`NextJS delegation disabled - cannot verify dev3000-nextjs-dev MCP configuration`)
+  return false
 }
 
 /**
@@ -900,27 +940,56 @@ async function delegateToChromeDevtools(
   }
 
   // Transform parameters if needed
-  const chromeParams = mapping.paramMap ? mapping.paramMap(params) : {}
+  const chromeParams = mapping.paramMap ? mapping.paramMap(params) : params
 
   return {
     content: [
       {
         type: "text",
-        text: `🔗 **DELEGATED TO CHROME-DEVTOOLS MCP**
+        text: `🔗 **USE DEV3000-CHROME-DEVTOOLS MCP**
 
-Action: ${action} → ${mapping.function}
-Parameters: ${JSON.stringify(chromeParams, null, 2)}
+If you have chrome-devtools MCP configured, please use the \`dev3000-chrome-devtools\` MCP directly:
 
-💡 **Why this is better:**
-• Chrome-devtools MCP has more sophisticated browser automation
-• Uses the same Chrome instance (no conflicts)  
-• Better error handling and debugging features
-• More reliable screenshot and navigation capabilities
+\`\`\`
+dev3000-chrome-devtools:${mapping.function}(${JSON.stringify(chromeParams, null, 2)})
+\`\`\`
 
-🎯 **Next Steps:**
-Claude will now use the chrome-devtools MCP to execute this action. The enhanced chrome-devtools capabilities will provide better results than dev3000's basic execute_browser_action.
+💡 **If the MCP is not available:**
+• Make sure chrome-devtools MCP is configured in your Claude Code client
+• Claude Code should auto-configure it as \`dev3000-chrome-devtools\`
+• Alternatively, dev3000 will fallback to its basic browser automation
 
-⚡ **Auto-delegation**: Future ${action} actions will automatically route to chrome-devtools when available.`
+⚡ **Note:** dev3000 detected chrome-devtools activity but cannot verify MCP configuration`
+      }
+    ]
+  }
+}
+
+/**
+ * Delegate to nextjs-dev MCP with suggested functions
+ */
+async function delegateToNextjs(): Promise<{ content: Array<{ type: "text"; text: string }> }> {
+  const availableFunctions = Object.entries(NEXTJS_DEV_CAPABILITY_MAP)
+    .map(([_key, { function: func, reason }]) => `• \`dev3000-nextjs-dev:${func}()\` - ${reason}`)
+    .join("\n")
+
+  return {
+    content: [
+      {
+        type: "text",
+        text: `🔗 **USE DEV3000-NEXTJS-DEV MCP**
+
+Please use the \`dev3000-nextjs-dev\` MCP directly for Next.js-specific analysis:
+
+**Available Functions:**
+${availableFunctions}
+
+💡 **Why this approach:**
+• nextjs-dev is a stdio MCP server that Claude calls directly
+• Provides Next.js-specific build, server, and performance insights
+• Direct MCP calls give better framework-specific context
+
+⚡ **Auto-configured as:** \`dev3000-nextjs-dev\` in your MCP client`
       }
     ]
   }
