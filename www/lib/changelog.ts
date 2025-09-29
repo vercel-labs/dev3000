@@ -13,9 +13,7 @@ export const changelog: Release[] = [
     version: "0.0.73",
     date: "2025-09-29",
     type: "patch",
-    highlights: [
-      "Browser automation now shares instances between tools, eliminating conflicts"
-    ]
+    highlights: ["Browser automation now shares instances between tools, eliminating conflicts"]
   },
 
   {
