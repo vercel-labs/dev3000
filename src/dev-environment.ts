@@ -42,6 +42,7 @@ interface DevEnvironmentOptions {
   tui?: boolean // Whether to use TUI mode (default true)
   dateTimeFormat?: "local" | "utc" // Timestamp format option
   pluginReactScan?: boolean // Whether to enable react-scan performance monitoring
+  chromeDevtoolsMcp?: boolean // Whether to enable chrome-devtools MCP integration
 }
 
 class Logger {
@@ -106,6 +107,343 @@ async function findAvailablePort(startPort: number): Promise<string> {
     port++
   }
   throw new Error(`No available ports found starting from ${startPort}`)
+}
+
+/**
+ * AI CLI tools that support MCP integration
+ */
+interface AiCliTool {
+  binary: string
+  name: string
+  addMcpCommand: (name: string, config: object) => string[]
+  addHttpMcpCommand: (name: string, url: string) => string[]
+  removeMcpCommand: (name: string) => string[]
+}
+
+const AI_CLI_TOOLS: AiCliTool[] = [
+  {
+    binary: "claude",
+    name: "Claude Code",
+    addMcpCommand: (name, config) => ["claude", "mcp", "add-json", name, JSON.stringify(config)],
+    addHttpMcpCommand: (name, url) => ["claude", "mcp", "add", "-t", "http", name, url],
+    removeMcpCommand: (name) => ["claude", "mcp", "remove", name]
+  }
+  // TODO: Research and add other AI CLI tools once we verify their MCP capabilities
+  // {
+  //   binary: "cursor-agent",
+  //   name: "Cursor Agent",
+  //   addMcpCommand: (name, config) => ["cursor-agent", "mcp", "add-json", name, JSON.stringify(config)],
+  //   addHttpMcpCommand: (name, url) => ["cursor-agent", "mcp", "add", "-t", "http", name, url],
+  //   removeMcpCommand: (name) => ["cursor-agent", "mcp", "remove", name]
+  // },
+  // {
+  //   binary: "codex",
+  //   name: "Codex CLI",
+  //   addMcpCommand: (name, config) => ["codex", "mcp", "add-json", name, JSON.stringify(config)],
+  //   addHttpMcpCommand: (name, url) => ["codex", "mcp", "add", "-t", "http", name, url],
+  //   removeMcpCommand: (name) => ["codex", "mcp", "remove", name]
+  // },
+  // {
+  //   binary: "gemini",
+  //   name: "Gemini CLI",
+  //   addMcpCommand: (name, config) => ["gemini", "mcp", "add-json", name, JSON.stringify(config)],
+  //   addHttpMcpCommand: (name, url) => ["gemini", "mcp", "add", "-t", "http", name, url],
+  //   removeMcpCommand: (name) => ["gemini", "mcp", "remove", name]
+  // }
+]
+
+/**
+ * Check if Chrome version supports chrome-devtools MCP (>= 140.0.7339.214)
+ */
+async function isChromeDevtoolsMcpSupported(): Promise<boolean> {
+  try {
+    // Try different Chrome binary paths
+    const chromePaths = [
+      "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", // macOS
+      "/opt/google/chrome/chrome", // Linux
+      "chrome", // PATH
+      "google-chrome", // Linux PATH
+      "google-chrome-stable" // Linux PATH
+    ]
+
+    for (const chromePath of chromePaths) {
+      try {
+        const versionOutput = await new Promise<string>((resolve, reject) => {
+          const chromeProcess = spawn(chromePath, ["--version"], {
+            stdio: ["ignore", "pipe", "ignore"]
+          })
+
+          let output = ""
+          chromeProcess.stdout?.on("data", (data) => {
+            output += data.toString()
+          })
+
+          chromeProcess.on("close", (code) => {
+            if (code === 0) {
+              resolve(output.trim())
+            } else {
+              reject(new Error(`Chrome version check failed with code ${code}`))
+            }
+          })
+
+          chromeProcess.on("error", reject)
+
+          // Timeout after 3 seconds
+          setTimeout(() => {
+            chromeProcess.kill()
+            reject(new Error("Chrome version check timeout"))
+          }, 3000)
+        })
+
+        // Parse version from output like "Google Chrome 140.0.7339.214"
+        const versionMatch = versionOutput.match(/(\d+)\.(\d+)\.(\d+)\.(\d+)/)
+        if (versionMatch) {
+          const [, major, minor, build, patch] = versionMatch.map(Number)
+          const currentVersion = [major, minor, build, patch]
+          const requiredVersion = [140, 0, 7339, 214]
+
+          // Compare version numbers
+          for (let i = 0; i < 4; i++) {
+            if (currentVersion[i] > requiredVersion[i]) return true
+            if (currentVersion[i] < requiredVersion[i]) return false
+          }
+          return true // Versions are equal
+        }
+        break // Found Chrome but couldn't parse version - continue with other paths
+      } catch {
+        // Try next Chrome path
+      }
+    }
+
+    return false // Chrome not found or version not supported
+  } catch {
+    return false // Any error means not supported
+  }
+}
+
+/**
+ * Detect which AI CLI tools are available on the system
+ */
+async function detectAvailableAiCliTools(): Promise<AiCliTool[]> {
+  const availableTools: AiCliTool[] = []
+
+  for (const tool of AI_CLI_TOOLS) {
+    try {
+      // Try to run the binary with --version to check if it exists
+      await new Promise<void>((resolve, reject) => {
+        const testProcess = spawn(tool.binary, ["--version"], {
+          stdio: ["ignore", "pipe", "pipe"]
+        })
+
+        testProcess.on("close", (_code) => {
+          // Most CLIs return 0 for --version, but some might return other codes
+          // We just check if the binary exists and runs
+          resolve()
+        })
+
+        testProcess.on("error", (error) => {
+          // Binary not found or not executable
+          reject(error)
+        })
+
+        // Timeout after 2 seconds
+        setTimeout(() => {
+          testProcess.kill()
+          reject(new Error("Timeout"))
+        }, 2000)
+      })
+
+      availableTools.push(tool)
+    } catch {
+      // Tool not available - continue checking others
+    }
+  }
+
+  return availableTools
+}
+
+/**
+ * Configure MCPs for a specific AI CLI tool
+ */
+async function configureMcpsForCliTool(
+  tool: AiCliTool,
+  mcpPort: string,
+  enableChromeDevtools: boolean,
+  chromeDevtoolsSupported: boolean
+): Promise<{ dev3000: boolean; chromeDevtools: boolean; chromeSkipped?: string }> {
+  const results: { dev3000: boolean; chromeDevtools: boolean; chromeSkipped?: string } = {
+    dev3000: false,
+    chromeDevtools: false
+  }
+
+  // Configure main dev3000 MCP
+  try {
+    const dev3000Command = tool.addHttpMcpCommand("dev3000", `http://localhost:${mcpPort}/mcp`)
+
+    await new Promise<void>((resolve, reject) => {
+      const configProcess = spawn(dev3000Command[0], dev3000Command.slice(1), {
+        stdio: ["inherit", "pipe", "pipe"]
+      })
+
+      let errorOutput = ""
+      configProcess.stderr?.on("data", (data) => {
+        errorOutput += data.toString()
+      })
+
+      configProcess.on("close", (code) => {
+        if (code === 0 || errorOutput.includes("already exists")) {
+          results.dev3000 = true
+          resolve()
+        } else {
+          reject(new Error(`Failed to configure dev3000 MCP: ${errorOutput}`))
+        }
+      })
+
+      configProcess.on("error", reject)
+    })
+  } catch (error) {
+    console.log(`⚠️ Failed to configure dev3000 MCP for ${tool.name}:`, error)
+  }
+
+  // Configure chrome-devtools MCP if enabled and Chrome version is supported
+  if (enableChromeDevtools && chromeDevtoolsSupported) {
+    try {
+      const chromeDevtoolsCommand = tool.addMcpCommand("dev3000-chrome-devtools", {
+        command: "npx",
+        args: ["chrome-devtools-mcp@latest", "--browserUrl", "http://127.0.0.1:9222"]
+      })
+
+      await new Promise<void>((resolve, reject) => {
+        const configProcess = spawn(chromeDevtoolsCommand[0], chromeDevtoolsCommand.slice(1), {
+          stdio: ["inherit", "pipe", "pipe"]
+        })
+
+        let errorOutput = ""
+        configProcess.stderr?.on("data", (data) => {
+          errorOutput += data.toString()
+        })
+
+        configProcess.on("close", (code) => {
+          if (code === 0 || errorOutput.includes("already exists")) {
+            results.chromeDevtools = true
+            resolve()
+          } else {
+            reject(new Error(`Failed to configure chrome-devtools MCP: ${errorOutput}`))
+          }
+        })
+
+        configProcess.on("error", reject)
+      })
+    } catch (error) {
+      console.log(`⚠️ Failed to configure chrome-devtools MCP for ${tool.name}:`, error)
+    }
+  } else if (enableChromeDevtools && !chromeDevtoolsSupported) {
+    // Chrome version doesn't support chrome-devtools MCP
+    results.chromeSkipped = "Chrome < 140.0.7339.214"
+  }
+
+  return results
+}
+
+/**
+ * Clean up MCP configurations for a specific AI CLI tool
+ */
+async function cleanupMcpsForCliTool(tool: AiCliTool, enableChromeDevtools: boolean): Promise<void> {
+  // Clean up dev3000 MCP
+  try {
+    const dev3000Command = tool.removeMcpCommand("dev3000")
+    await new Promise<void>((resolve) => {
+      const cleanupProcess = spawn(dev3000Command[0], dev3000Command.slice(1), {
+        stdio: ["inherit", "pipe", "pipe"]
+      })
+      cleanupProcess.on("close", () => resolve())
+      cleanupProcess.on("error", () => resolve()) // Don't fail on cleanup errors
+    })
+  } catch {
+    // Ignore cleanup errors
+  }
+
+  // Clean up chrome-devtools MCP if it was enabled
+  if (enableChromeDevtools) {
+    try {
+      const chromeDevtoolsCommand = tool.removeMcpCommand("dev3000-chrome-devtools")
+      await new Promise<void>((resolve) => {
+        const cleanupProcess = spawn(chromeDevtoolsCommand[0], chromeDevtoolsCommand.slice(1), {
+          stdio: ["inherit", "pipe", "pipe"]
+        })
+        cleanupProcess.on("close", () => resolve())
+        cleanupProcess.on("error", () => resolve()) // Don't fail on cleanup errors
+      })
+    } catch {
+      // Ignore cleanup errors
+    }
+  }
+}
+
+/**
+ * Configure MCPs for all detected AI CLI tools
+ */
+async function configureAiCliIntegrations(
+  mcpPort: string,
+  enableChromeDevtools: boolean,
+  silent: boolean = false
+): Promise<AiCliTool[]> {
+  if (!silent) console.log("🔍 Detecting available AI CLI tools...")
+
+  const availableTools = await detectAvailableAiCliTools()
+
+  if (availableTools.length === 0) {
+    if (!silent) console.log("📝 No AI CLI tools detected - dev3000 will work when CLIs are installed later")
+    return []
+  }
+
+  // Check Chrome version if chrome-devtools MCP is requested
+  let chromeDevtoolsSupported = false
+  if (enableChromeDevtools) {
+    if (!silent) console.log("🔍 Checking Chrome version for chrome-devtools MCP compatibility...")
+    chromeDevtoolsSupported = await isChromeDevtoolsMcpSupported()
+    if (!chromeDevtoolsSupported && !silent) {
+      console.log("⚠️  Chrome version < 140.0.7339.214 detected - chrome-devtools MCP will be skipped")
+    }
+  }
+
+  if (!silent) console.log(`🔧 Configuring MCPs for ${availableTools.length} detected AI CLI tools...`)
+
+  for (const tool of availableTools) {
+    if (!silent) console.log(`   Configuring ${tool.name}...`)
+
+    const results = await configureMcpsForCliTool(tool, mcpPort, enableChromeDevtools, chromeDevtoolsSupported)
+
+    let status = ""
+    if (results.dev3000) status += "✅ dev3000"
+    if (results.chromeDevtools) status += results.dev3000 ? " + chrome-devtools" : "✅ chrome-devtools"
+    if (results.chromeSkipped)
+      status += results.dev3000
+        ? ` (chrome-devtools skipped: ${results.chromeSkipped})`
+        : `⚠️ chrome-devtools skipped: ${results.chromeSkipped}`
+    if (!results.dev3000 && !results.chromeDevtools && !results.chromeSkipped) status = "❌ failed"
+
+    if (!silent) console.log(`   ${tool.name}: ${status}`)
+  }
+
+  return availableTools
+}
+
+/**
+ * Clean up MCP configurations for all detected AI CLI tools
+ */
+async function cleanupAiCliIntegrations(
+  availableTools: AiCliTool[],
+  enableChromeDevtools: boolean,
+  silent: boolean = false
+): Promise<void> {
+  if (availableTools.length === 0) return
+
+  if (!silent) console.log("🧹 Cleaning up AI CLI MCP configurations...")
+
+  for (const tool of availableTools) {
+    await cleanupMcpsForCliTool(tool, enableChromeDevtools)
+  }
 }
 
 export function createPersistentLogFile(): string {
@@ -247,6 +585,7 @@ export class DevEnvironment {
   private tui: DevTUI | null = null
   private portChangeMessage: string | null = null
   private firstSigintTime: number | null = null
+  private configuredAiCliTools: AiCliTool[] = []
 
   constructor(options: DevEnvironmentOptions) {
     // Handle portMcp vs mcpPort naming
@@ -306,6 +645,9 @@ export class DevEnvironment {
     if (!existsSync(this.mcpPublicDir)) {
       mkdirSync(this.mcpPublicDir, { recursive: true })
     }
+
+    // Initialize project-specific D3K log file (clear for new session)
+    this.initializeD3KLog()
   }
 
   private async checkPortsAvailable(silent: boolean = false) {
@@ -530,10 +872,35 @@ export class DevEnvironment {
       await this.tui.updateStatus(`Waiting for ${this.options.commandName} MCP server...`)
       await this.waitForMcpServer()
 
+      // Progressive MCP discovery - after dev server is ready
+      await this.tui.updateStatus("Discovering available MCPs...")
+      await this.discoverMcpsAfterServerStart()
+
+      // Configure AI CLI integrations (both dev3000 and chrome-devtools MCPs)
+      if (!this.options.serversOnly) {
+        await this.tui.updateStatus("Configuring AI CLI integrations...")
+        this.configuredAiCliTools = await configureAiCliIntegrations(
+          this.options.mcpPort || "3684",
+          this.options.chromeDevtoolsMcp !== false, // Default to true unless explicitly disabled
+          true // Silent mode when TUI is active
+        )
+        if (this.configuredAiCliTools.length > 0) {
+          this.logD3K(
+            `AI CLI Integration: Configured ${this.configuredAiCliTools.length} AI CLI tools for seamless dev3000 access`
+          )
+        } else {
+          this.logD3K("AI CLI Integration: No AI CLIs detected, manual configuration will be needed")
+        }
+      }
+
       // Start CDP monitoring if not in servers-only mode
       if (!this.options.serversOnly) {
         await this.tui.updateStatus(`Starting ${this.options.commandName} browser...`)
-        this.startCDPMonitoringAsync()
+        await this.startCDPMonitoringSync()
+
+        // Progressive MCP discovery - after browser is ready
+        await this.tui.updateStatus("Final MCP discovery scan...")
+        await this.discoverMcpsAfterBrowserStart()
       } else {
         this.debugLog("Browser monitoring disabled via --servers-only flag")
       }
@@ -575,10 +942,35 @@ export class DevEnvironment {
       this.spinner.text = `Waiting for ${this.options.commandName} MCP server...`
       await this.waitForMcpServer()
 
+      // Progressive MCP discovery - after dev server is ready
+      this.spinner.text = "Discovering available MCPs..."
+      await this.discoverMcpsAfterServerStart()
+
+      // Configure AI CLI integrations (both dev3000 and chrome-devtools MCPs)
+      if (!this.options.serversOnly) {
+        this.spinner.text = "Configuring AI CLI integrations..."
+        this.configuredAiCliTools = await configureAiCliIntegrations(
+          this.options.mcpPort || "3684",
+          this.options.chromeDevtoolsMcp !== false, // Default to true unless explicitly disabled
+          false // Show output in non-TUI mode
+        )
+        if (this.configuredAiCliTools.length > 0) {
+          this.logD3K(
+            `AI CLI Integration: Configured ${this.configuredAiCliTools.length} AI CLI tools for seamless dev3000 access`
+          )
+        } else {
+          this.logD3K("AI CLI Integration: No AI CLIs detected, manual configuration will be needed")
+        }
+      }
+
       // Start CDP monitoring if not in servers-only mode
       if (!this.options.serversOnly) {
         this.spinner.text = `Starting ${this.options.commandName} browser...`
-        this.startCDPMonitoringAsync()
+        await this.startCDPMonitoringSync()
+
+        // Progressive MCP discovery - after browser is ready
+        this.spinner.text = "Final MCP discovery scan..."
+        await this.discoverMcpsAfterBrowserStart()
       } else {
         this.debugLog("Browser monitoring disabled via --servers-only flag")
       }
@@ -1253,18 +1645,306 @@ export class DevEnvironment {
     throw new Error(`MCP server failed to start after ${maxAttempts} seconds. Check the logs for errors.`)
   }
 
-  private startCDPMonitoringAsync() {
+  private async discoverMcpsAfterServerStart() {
+    try {
+      this.debugLog("Starting MCP discovery after dev server startup")
+
+      // Call the MCP discovery function - make HTTP request to our own MCP server
+      const mcpUrl = `http://localhost:${this.options.mcpPort}/mcp`
+      const projectName = getProjectName()
+
+      this.debugLog(`Running MCP discovery for project: ${projectName} via ${mcpUrl}`)
+
+      const requestPayload = {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/call",
+        params: {
+          name: "discover_available_mcps",
+          arguments: {
+            projectName: projectName
+          }
+        }
+      }
+
+      const response = await fetch(mcpUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json, text/event-stream"
+        },
+        body: JSON.stringify(requestPayload)
+      })
+
+      if (!response.ok) {
+        throw new Error(`MCP request failed: ${response.status} ${response.statusText}`)
+      }
+
+      // Handle both JSON and SSE responses
+      const contentType = response.headers.get("content-type") || ""
+      let result: { error?: { message: string }; result?: { content?: Array<{ text?: string }> } }
+
+      if (contentType.includes("text/event-stream")) {
+        // Parse Server-Sent Events format
+        const sseText = await response.text()
+        const dataLine = sseText.split("\n").find((line) => line.startsWith("data: "))
+        if (dataLine) {
+          result = JSON.parse(dataLine.substring(6)) // Remove "data: " prefix
+        } else {
+          throw new Error("No data found in SSE response")
+        }
+      } else {
+        // Parse regular JSON
+        result = await response.json()
+      }
+
+      if (result.error) {
+        throw new Error(`MCP error: ${result.error.message}`)
+      }
+
+      // Parse the discovered MCPs from the response
+      const responseText = result.result?.content?.[0]?.text || ""
+      const discoveredMcps = this.parseMcpDiscoveryResult(responseText)
+
+      if (discoveredMcps.length > 0) {
+        this.debugLog(`MCP discovery found: ${discoveredMcps.join(", ")}`)
+
+        // Log discovery results to the main log file with [D3K] tags
+        const discoveryMessage = `MCP Discovery: Found ${discoveredMcps.join(", ")} after dev server startup`
+        this.logD3K(discoveryMessage)
+
+        // Additional logging for each MCP
+        for (const mcp of discoveredMcps) {
+          this.logD3K(`MCP Integration: ${mcp} MCP detected via process/port scanning`)
+        }
+      } else {
+        this.debugLog("MCP discovery found no MCPs after dev server startup")
+        this.logD3K("MCP Discovery: No MCPs detected after dev server startup")
+      }
+    } catch (error) {
+      this.debugLog(`MCP discovery error after server start: ${error}`)
+      // Non-fatal - just log the error
+      this.logD3K(`MCP Discovery Error: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
+  private async discoverMcpsAfterBrowserStart() {
+    try {
+      this.debugLog("Starting MCP discovery after browser startup")
+
+      // Call the MCP discovery function - make HTTP request to our own MCP server
+      const mcpUrl = `http://localhost:${this.options.mcpPort}/mcp`
+      const projectName = getProjectName()
+
+      this.debugLog(`Running final MCP discovery for project: ${projectName} via ${mcpUrl}`)
+
+      const requestPayload = {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/call",
+        params: {
+          name: "discover_available_mcps",
+          arguments: {
+            projectName: projectName
+          }
+        }
+      }
+
+      const response = await fetch(mcpUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json, text/event-stream"
+        },
+        body: JSON.stringify(requestPayload)
+      })
+
+      if (!response.ok) {
+        throw new Error(`MCP request failed: ${response.status} ${response.statusText}`)
+      }
+
+      // Handle both JSON and SSE responses
+      const contentType = response.headers.get("content-type") || ""
+      let result: { error?: { message: string }; result?: { content?: Array<{ text?: string }> } }
+
+      if (contentType.includes("text/event-stream")) {
+        // Parse Server-Sent Events format
+        const sseText = await response.text()
+        const dataLine = sseText.split("\n").find((line) => line.startsWith("data: "))
+        if (dataLine) {
+          result = JSON.parse(dataLine.substring(6)) // Remove "data: " prefix
+        } else {
+          throw new Error("No data found in SSE response")
+        }
+      } else {
+        // Parse regular JSON
+        result = await response.json()
+      }
+
+      if (result.error) {
+        throw new Error(`MCP error: ${result.error.message}`)
+      }
+
+      // Parse the discovered MCPs from the response
+      const responseText = result.result?.content?.[0]?.text || ""
+      const discoveredMcps = this.parseMcpDiscoveryResult(responseText)
+
+      if (discoveredMcps.length > 0) {
+        this.debugLog(`Final MCP discovery found: ${discoveredMcps.join(", ")}`)
+
+        // Log discovery results to the main log file with [D3K] tags
+        const discoveryMessage = `MCP Discovery: Final scan found ${discoveredMcps.join(", ")} after browser startup`
+        this.logD3K(discoveryMessage)
+
+        // Log integration summary
+        const integrationTypes = []
+        if (discoveredMcps.includes("nextjs-dev")) integrationTypes.push("Next.js")
+        if (discoveredMcps.includes("chrome-devtools")) integrationTypes.push("Chrome DevTools")
+
+        if (integrationTypes.length > 0) {
+          this.logD3K(`MCP Integration: Activated integrations [${integrationTypes.join(", ")}]`)
+          this.logD3K(
+            `Orchestrator Mode: dev3000 is now running as debugging orchestrator with ${integrationTypes.length} MCP integration(s)`
+          )
+
+          // If chrome-devtools is detected, share CDP URL for coordination
+          if (discoveredMcps.includes("chrome-devtools")) {
+            this.shareCdpUrlWithChromeDevtools()
+          }
+        }
+      } else {
+        this.debugLog("Final MCP discovery found no MCPs")
+        this.logD3K("MCP Discovery: Final scan completed - running in standalone mode")
+      }
+    } catch (error) {
+      this.debugLog(`MCP discovery error after browser start: ${error}`)
+      // Non-fatal - just log the error
+      this.logD3K(`MCP Discovery Error: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
+  private initializeD3KLog() {
+    try {
+      const debugLogDir = join(homedir(), ".d3k", "logs")
+      if (!existsSync(debugLogDir)) {
+        mkdirSync(debugLogDir, { recursive: true })
+      }
+
+      // Create project-specific D3K log file and clear it for new session
+      const projectName = getProjectName()
+      const d3kLogFile = join(debugLogDir, `dev3000-${projectName}-d3k.log`)
+      writeFileSync(d3kLogFile, "")
+    } catch {
+      // Ignore D3K log initialization errors - non-critical
+    }
+  }
+
+  private logD3K(message: string) {
+    // Write [D3K] logs to project-specific dev3000 debug log, NOT to main project log
+    // This prevents Claude from thinking dev3000's orchestration logic needs to be "fixed"
+    const timestamp = formatTimestamp(new Date(), this.options.dateTimeFormat || "local")
+    const logEntry = `[${timestamp}] [D3K] ${message}\n`
+
+    try {
+      const debugLogDir = join(homedir(), ".d3k", "logs")
+      if (!existsSync(debugLogDir)) {
+        mkdirSync(debugLogDir, { recursive: true })
+      }
+
+      // Create project-specific D3K log file to avoid confusion between multiple instances
+      const projectName = getProjectName()
+      const d3kLogFile = join(debugLogDir, `dev3000-${projectName}-d3k.log`)
+      appendFileSync(d3kLogFile, logEntry)
+    } catch {
+      // Ignore D3K log write errors - non-critical
+    }
+  }
+
+  private shareCdpUrlWithChromeDevtools() {
+    if (!this.cdpMonitor) return
+
+    const cdpUrl = this.cdpMonitor.getCdpUrl()
+    if (cdpUrl) {
+      this.logD3K(`CDP Integration: Chrome DevTools can connect to existing browser at ${cdpUrl}`)
+      this.logD3K(`CDP Coordination: Use this URL to avoid launching duplicate Chrome instances`)
+      this.logD3K(
+        `CDP Enhanced Workflow: chrome-devtools can now take screenshots, inject JS, and debug using dev3000's browser`
+      )
+      this.logD3K(`CDP Claude Suggestion: When using chrome-devtools MCP, connect to: ${cdpUrl}`)
+
+      // Also update session info to make CDP URL immediately available
+      const projectName = getProjectName()
+      writeSessionInfo(
+        projectName,
+        this.options.logFile,
+        this.options.port,
+        this.options.mcpPort,
+        cdpUrl,
+        this.cdpMonitor.getChromePids()
+      )
+    } else {
+      this.logD3K("CDP Integration: CDP URL not yet available - browser may still be starting")
+
+      // Retry after a short delay since browser might still be initializing
+      setTimeout(() => {
+        if (this.cdpMonitor) {
+          const delayedCdpUrl = this.cdpMonitor.getCdpUrl()
+          if (delayedCdpUrl) {
+            this.logD3K(`CDP Integration: Chrome DevTools can now connect to ${delayedCdpUrl}`)
+            this.logD3K(`CDP Delayed Coordination: Browser initialization complete`)
+
+            const projectName = getProjectName()
+            writeSessionInfo(
+              projectName,
+              this.options.logFile,
+              this.options.port,
+              this.options.mcpPort,
+              delayedCdpUrl,
+              this.cdpMonitor.getChromePids()
+            )
+          }
+        }
+      }, 2000) // Wait 2 seconds for browser to fully initialize
+    }
+  }
+
+  private parseMcpDiscoveryResult(responseText: string): string[] {
+    // Parse the MCP discovery response text to extract discovered MCPs
+    // Example: "🔍 **MCP DISCOVERY RESULTS**\n\nDiscovered MCPs: chrome-devtools, nextjs-dev"
+    const mcps: string[] = []
+
+    // Look for the "Discovered MCPs:" line
+    const match = responseText.match(/Discovered MCPs:\s*([^\n]+)/i)
+    if (match?.[1]) {
+      const mcpList = match[1].trim()
+      if (mcpList !== "none") {
+        // Split by comma and clean up each MCP name
+        mcps.push(
+          ...mcpList
+            .split(",")
+            .map((name) => name.trim())
+            .filter(Boolean)
+        )
+      }
+    }
+
+    return mcps
+  }
+
+  private async startCDPMonitoringSync() {
     // Skip if in servers-only mode
     if (this.options.serversOnly) {
       return
     }
 
-    // Start CDP monitoring in background without blocking completion
-    this.startCDPMonitoring().catch((error) => {
+    try {
+      await this.startCDPMonitoring()
+    } catch (error) {
       console.error(chalk.red("⚠️ CDP monitoring setup failed:"), error)
       // CDP monitoring is critical - shutdown if it fails
       this.gracefulShutdown()
-    })
+      throw error
+    }
   }
 
   private async startCDPMonitoring() {
@@ -1553,6 +2233,15 @@ export class DevEnvironment {
           // Ignore errors in fallback cleanup
         }
       }
+    }
+
+    // Clean up AI CLI MCP configurations
+    if (this.configuredAiCliTools.length > 0) {
+      await cleanupAiCliIntegrations(
+        this.configuredAiCliTools,
+        this.options.chromeDevtoolsMcp !== false,
+        this.options.tui
+      )
     }
 
     // Kill processes on both ports

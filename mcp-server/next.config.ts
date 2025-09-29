@@ -11,6 +11,10 @@ const nextConfig: NextConfig = {
   // Optimize for minimal MCP server
   eslint: {
     ignoreDuringBuilds: true
+  },
+  // Disable image optimization to avoid sharp dependency issues
+  images: {
+    unoptimized: true
   }
 }
 

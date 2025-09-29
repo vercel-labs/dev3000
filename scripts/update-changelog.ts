@@ -1,5 +1,34 @@
 #!/usr/bin/env tsx
 
+/**
+ * Enhanced Changelog Generator for dev3000
+ *
+ * Uses Vercel-style changelog writing principles:
+ *
+ * ✍️ STYLE & TONE:
+ * - Get to the point. Always choose the shorter, simpler word (help, use, start)
+ * - Cut filler. Remove "just," "very," "actually," etc.
+ * - Be confident. Avoid "I think," "maybe," "sort of."
+ * - Use inclusive language. No jargon or idioms.
+ * - Write short, declarative sentences. Fewer commas. More periods.
+ * - Vary sentence length for impact—mix one-liners and longer lines.
+ * - Use Oxford commas.
+ * - Active voice, present tense.
+ *
+ * 🏗️ STRUCTURE:
+ * - Promise the core benefit
+ * - Be concrete, visual, and falsifiable
+ * - Focus on what changed and why it matters—focus on the product or user, not "we"
+ * - Single feature: 1–2 short paragraphs explaining use cases and benefits
+ * - Multiple updates: bullet format with bold feature names
+ *
+ * ✅ BEST PRACTICES:
+ * - Link to docs, not jargon
+ * - No fluff: if a competitor could write it, cut it
+ * - Rewrite ruthlessly—remove every unnecessary word
+ * - Treat the reader as if they know nothing
+ */
+
 import { execSync } from "child_process"
 import fs from "fs"
 import path from "path"
@@ -49,134 +78,148 @@ function getCommitsSinceLastRelease(): Commit[] {
   }
 }
 
-// Categories for grouping commits
-const FEATURE_CATEGORIES = {
-  tui: { keywords: ["tui", "terminal ui", "terminal user interface", "ink", "console ui"], name: "Terminal UI" },
-  mcp: { keywords: ["mcp", "model context protocol", "mcp server"], name: "MCP Server" },
-  browser: { keywords: ["chrome", "browser", "cdp", "devtools", "profile"], name: "Browser Integration" },
-  process: { keywords: ["process", "spawn", "port", "health check", "singleton"], name: "Process Management" },
-  logs: { keywords: ["log", "logging", "visual timeline", "timeline"], name: "Logging & Timeline" },
-  dx: { keywords: ["cli", "command", "flag", "install", "setup"], name: "Developer Experience" },
-  ai: { keywords: ["ai", "claude", "tool", "debug"], name: "AI Integration" }
+// Enhanced pattern matching for casual commit messages
+const CASUAL_PATTERNS = {
+  fixes: [
+    /fix(es|ed|ing)?\s+#\d+/i, // "fixes #34"
+    /resolve(s|d)?\s+#\d+/i,
+    /close(s|d)?\s+#\d+/i,
+    /fix(es|ed)?\s+.*(bug|issue|problem|error)/i,
+    /^fix/i
+  ],
+  improvements: [
+    /^lil\s+/i, // "lil README fix"
+    /^more\s+lil/i, // "more lil changes"
+    /improv/i,
+    /better/i,
+    /enhance/i,
+    /update/i,
+    /refactor/i,
+    /clean/i
+  ],
+  builds: [/typegen/i, /build/i, /compile/i, /bundl/i],
+  features: [/^add/i, /implement/i, /create/i, /new\s+/i, /introduce/i],
+  dx: [/ctrl[+-]c/i, /canary/i, /script/i, /cli/i, /command/i]
 }
 
-// Function to categorize and analyze commits
-function analyzeCommits(commits: Commit[]): Map<string, Set<string>> {
-  const categorizedChanges = new Map<string, Set<string>>()
-
-  const skipPatterns = [
-    /^Merge/i,
-    /^Bump to v.*canary/i,
-    /^Release v/i,
-    /^Fix formatting/i,
-    /^Update changelog/i,
-    /^Apply linter/i,
-    /^formatting$/i,
-    /generated with.*claude code/i
-  ]
-
-  for (const commit of commits) {
-    const subject = commit.subject.toLowerCase()
-
-    // Skip certain types of commits
-    if (skipPatterns.some((pattern) => pattern.test(commit.subject))) {
-      continue
-    }
-
-    // Check each category
-    for (const [categoryKey, category] of Object.entries(FEATURE_CATEGORIES)) {
-      if (category.keywords.some((keyword) => subject.includes(keyword))) {
-        if (!categorizedChanges.has(categoryKey)) {
-          categorizedChanges.set(categoryKey, new Set())
-        }
-        categorizedChanges.get(categoryKey)?.add(commit.subject)
-        break // Only categorize in the first matching category
-      }
-    }
-  }
-
-  return categorizedChanges
-}
-
-// Function to extract highlights from commits with intelligent analysis
+// Function to extract highlights using Vercel-style changelog writing
+// Based on: https://vercel.com/blog style guide
+// Style: Get to the point, cut filler, be confident, short declarative sentences
 function extractHighlights(commits: Commit[]): string[] {
   const highlights: string[] = []
-  const categorized = analyzeCommits(commits)
 
-  // Check for major feature additions
-  if (categorized.has("tui")) {
-    const tuiCommits = Array.from(categorized.get("tui") || new Set())
-    if (tuiCommits.some((c) => c.toLowerCase().includes("add") && c.toLowerCase().includes("default"))) {
-      highlights.push("Introduced gorgeous Terminal UI (TUI) as the default experience - a complete visual overhaul")
-    } else if (tuiCommits.length > 2) {
-      highlights.push("Major Terminal UI improvements with enhanced visuals and user experience")
+  // Filter out noise commits first
+  const meaningfulCommits = commits.filter((commit) => {
+    const skipPatterns = [
+      /^merge/i,
+      /^bump to v.*canary/i,
+      /^release v/i,
+      /^fix formatting/i,
+      /^update changelog/i,
+      /^apply linter/i,
+      /^formatting$/i,
+      /generated with.*claude code/i
+    ]
+    return !skipPatterns.some((pattern) => pattern.test(commit.subject))
+  })
+
+  if (meaningfulCommits.length === 0) {
+    return ["Performance and stability improvements"]
+  }
+
+  // Analyze commit patterns with flexible matching
+  const analysis = {
+    fixes: meaningfulCommits.filter((c) => CASUAL_PATTERNS.fixes.some((pattern) => pattern.test(c.subject))),
+    improvements: meaningfulCommits.filter((c) =>
+      CASUAL_PATTERNS.improvements.some((pattern) => pattern.test(c.subject))
+    ),
+    builds: meaningfulCommits.filter((c) => CASUAL_PATTERNS.builds.some((pattern) => pattern.test(c.subject))),
+    features: meaningfulCommits.filter((c) => CASUAL_PATTERNS.features.some((pattern) => pattern.test(c.subject))),
+    dx: meaningfulCommits.filter((c) => CASUAL_PATTERNS.dx.some((pattern) => pattern.test(c.subject)))
+  }
+
+  // Generate Vercel-style highlights (concrete, benefit-focused, short)
+
+  if (analysis.features.length > 0) {
+    if (analysis.features.some((c) => c.subject.toLowerCase().includes("mcp"))) {
+      highlights.push("MCP server now supports cross-tool coordination for seamless debugging workflows")
+    }
+    if (
+      analysis.features.some(
+        (c) => c.subject.toLowerCase().includes("browser") || c.subject.toLowerCase().includes("chrome")
+      )
+    ) {
+      highlights.push("Browser automation now shares instances between tools, eliminating conflicts")
+    }
+    if (
+      analysis.features.some(
+        (c) => c.subject.toLowerCase().includes("tui") || c.subject.toLowerCase().includes("terminal")
+      )
+    ) {
+      highlights.push("Terminal interface gets visual enhancements for better development experience")
+    }
+    // Generic feature highlight if no specific patterns match
+    if (highlights.length === 0) {
+      highlights.push("New development tools make debugging faster and more reliable")
     }
   }
 
-  // Check for MCP server changes
-  if (categorized.has("mcp")) {
-    const mcpCommits = Array.from(categorized.get("mcp") || new Set())
-    if (mcpCommits.some((c) => c.toLowerCase().includes("singleton") || c.toLowerCase().includes("persistent"))) {
-      highlights.push("Revolutionized MCP server architecture: now a persistent singleton for better performance")
-    } else if (mcpCommits.some((c) => c.toLowerCase().includes("multi-project"))) {
-      highlights.push("Added multi-project support for MCP server with intelligent session tracking")
-    } else if (mcpCommits.length > 2) {
-      highlights.push("Significant MCP server improvements for better AI integration")
+  if (analysis.fixes.length > 0) {
+    // Check for GitHub issue fixes first
+    const githubIssues = analysis.fixes
+      .filter((c) => /#\d+/.test(c.subject))
+      .flatMap((c) => {
+        // Extract all issue numbers from the commit subject
+        const matches = c.subject.match(/#(\d+)/g)
+        return matches ? matches.map((match) => match.replace("#", "")) : []
+      })
+      .filter(Boolean)
+
+    if (githubIssues.length > 0) {
+      const uniqueIssues = [...new Set(githubIssues)] // Remove duplicates
+      const issueLinks = uniqueIssues
+        .map((issue) => `[#${issue}](https://github.com/anthropics/claude-code/issues/${issue})`)
+        .join(", ")
+      highlights.push(`Resolved GitHub issues ${issueLinks}`)
+    } else if (analysis.fixes.length >= 3) {
+      highlights.push(`Fixed ${analysis.fixes.length} bugs for improved stability`)
+    } else {
+      highlights.push("Bug fixes improve overall reliability")
     }
   }
 
-  // Check for browser/Chrome improvements
-  if (categorized.has("browser")) {
-    const browserCommits = Array.from(categorized.get("browser") || new Set())
-    if (browserCommits.some((c) => c.toLowerCase().includes("profile") && c.toLowerCase().includes("project"))) {
-      highlights.push("Added project-specific Chrome profiles for isolated development environments")
-    } else if (browserCommits.some((c) => c.toLowerCase().includes("custom browser"))) {
-      highlights.push("Added support for custom browser executables with --browser flag")
+  if (analysis.builds.length > 0) {
+    if (analysis.builds.some((c) => c.subject.toLowerCase().includes("typegen"))) {
+      highlights.push("Build process optimized to prevent duplicate type generation")
+    } else {
+      highlights.push("Build system improvements reduce compilation time")
     }
   }
 
-  // Check for process management improvements
-  if (categorized.has("process")) {
-    const processCommits = Array.from(categorized.get("process") || new Set())
-    if (processCommits.some((c) => c.toLowerCase().includes("health check"))) {
-      highlights.push("Enhanced process monitoring with automatic health checks and recovery")
-    } else if (processCommits.some((c) => c.toLowerCase().includes("port"))) {
-      highlights.push("Improved port management with intelligent auto-increment and conflict resolution")
+  if (analysis.dx.length > 0) {
+    if (analysis.dx.some((c) => c.subject.toLowerCase().includes("ctrl"))) {
+      highlights.push("Keyboard shortcuts now work consistently across all modes")
+    }
+    if (analysis.dx.some((c) => c.subject.toLowerCase().includes("canary"))) {
+      highlights.push("Canary builds streamlined for faster testing and deployment")
     }
   }
 
-  // Check for logging improvements
-  if (categorized.has("logs")) {
-    const logCommits = Array.from(categorized.get("logs") || new Set())
-    if (logCommits.some((c) => c.toLowerCase().includes("visual timeline"))) {
-      highlights.push("Enhanced Visual Timeline with better navigation and multi-project support")
-    } else if (logCommits.some((c) => c.toLowerCase().includes("format") || c.toLowerCase().includes("align"))) {
-      highlights.push("Improved log formatting with better alignment and readability")
-    }
+  if (analysis.improvements.length > 0) {
+    highlights.push("Developer experience improvements across CLI and interface")
   }
 
-  // If we don't have enough highlights, add some generic ones based on commit count
-  if (highlights.length < 3) {
-    const fixCommits = commits.filter((c) => c.subject.toLowerCase().includes("fix"))
-    const addCommits = commits.filter(
-      (c) => c.subject.toLowerCase().includes("add") || c.subject.toLowerCase().includes("implement")
-    )
-
-    if (fixCommits.length > 5) {
-      highlights.push(`Fixed ${fixCommits.length} bugs for improved stability and reliability`)
-    }
-    if (addCommits.length > 3) {
-      highlights.push("Added several new features and enhancements")
-    }
-  }
-
-  // Ensure we have at least one highlight
+  // Fallback for when we can't categorize commits meaningfully
   if (highlights.length === 0) {
-    highlights.push("Various improvements and bug fixes")
+    if (meaningfulCommits.length >= 5) {
+      highlights.push("Performance and stability improvements across all systems")
+    } else {
+      highlights.push("Quality improvements and bug fixes")
+    }
   }
 
-  // Return top 5 most impactful highlights
-  return highlights.slice(0, 5)
+  // Return top 3 highlights (Vercel style - keep it focused)
+  return highlights.slice(0, 3)
 }
 
 // Function to determine version type based on changes

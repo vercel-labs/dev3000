@@ -7,8 +7,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Core Development Rules
 
 **NEVER RUN**: 
-- Do not run `pnpm build` during development - the user tests manually.
-- Do not run any of the scripts in the scripts/ directory. The user will run these to build and test.
+- Do not run `pnpm build` or `pnpm dev` during development - the user tests manually.
+- Do not run any of the scripts in the scripts/ directory unless explicitly asked to.
 
 **ALWAYS RUN**: When completing any code changes, you MUST run:
 - `pnpm run lint` - Fix all linting errors before committing
@@ -16,10 +16,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Never bypass pre-commit hooks or use --no-verify. Fix all issues until the code passes.
 
 **PACKAGE MANAGER**: This project uses pnpm exclusively. Never use npm or yarn.
-
-**CRITICAL**: NEVER run `pnpm run release` or any publish commands unless the user explicitly says "release" or "publish". Always wait for explicit permission before releasing versions.
-
-**RELEASE PROCESS**: When releasing, ONLY use `pnpm run release` - this handles everything automatically. Never manually run `pnpm publish` or `pnpm version`.
 
 **TURBOPACK**: NEVER disable turbopack in favor of webpack. This project uses turbopack exclusively for Next.js builds. Do not switch to webpack under any circumstances.
 
@@ -30,11 +26,6 @@ For local testing, use:
 pnpm run canary
 ```
 
-## User Preferences
-
-- Always suggest pnpm for installations: `pnpm install -g dev3000`
-- Default server command is `pnpm dev` (can be overridden with `--server-command`)
-
 ## Quick Architecture Reference
 
 **Main Files**:
@@ -44,7 +35,9 @@ pnpm run canary
 - `mcp-server/app/mcp/route.ts` - MCP endpoint with debug tools
 
 **Key Features**:
-- Unified log format with timestamps: `[2025-08-30T12:54:03.033Z] [SERVER] Message`
 - Automatic screenshots on errors and navigation
 - Works with any web framework (Next.js, Vite, Rails, etc.)
-- TUI mode is default (disable with --no-tui)
+
+## Memories
+
+- number 3 sounds pretty reliable, number 2 sounds second best and those are better than the other two I think

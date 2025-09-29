@@ -13,21 +13,33 @@ export const changelog: Release[] = [
     version: "0.0.72",
     date: "2025-09-25",
     type: "patch",
-    highlights: ["Various improvements and bug fixes"]
+    highlights: [
+      "Resolved GitHub issues [#34](https://github.com/anthropics/claude-code/issues/34)",
+      "Build process optimized to prevent duplicate type generation",
+      "Keyboard shortcuts now work consistently across all modes"
+    ]
   },
 
   {
     version: "0.0.71",
     date: "2025-09-25",
     type: "patch",
-    highlights: ["Various improvements and bug fixes"]
+    highlights: [
+      "Improved Chrome browser shutdown and cleanup reliability",
+      "Keyboard shortcuts now work consistently across all modes",
+      "Developer experience improvements across CLI and interface"
+    ]
   },
 
   {
     version: "0.0.70",
     date: "2025-09-25",
     type: "patch",
-    highlights: ["Various improvements and bug fixes"]
+    highlights: [
+      "Added GitHub Actions for automated release testing",
+      "Global installation detection ensures dev3000 runs from correct location",
+      "Bug fixes improve overall reliability"
+    ]
   },
 
   {

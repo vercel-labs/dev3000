@@ -12,15 +12,6 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 
-const cursorConfig = {
-  mcpServers: {
-    dev3000: {
-      type: "http",
-      url: "http://localhost:3684/mcp"
-    }
-  }
-}
-
 export default function HomePage() {
   const [isScrolled, setIsScrolled] = useState(false)
   const { theme, setTheme } = useTheme()
@@ -204,47 +195,27 @@ export default function HomePage() {
               </div>
             </Card>
 
-            {/* Step 3: Connect to Claude */}
+            {/* Step 3: AI Integration */}
             <Card className="bg-card border p-6">
               <div className="flex items-start gap-4">
                 <div className="w-8 h-8 bg-foreground text-background rounded-full flex items-center justify-center flex-shrink-0 font-semibold">
                   3
                 </div>
                 <div className="flex-1">
-                  <h3 className="font-semibold mb-3 text-lg">Connect your AI tool</h3>
-                  <div className="space-y-4">
-                    <div>
-                      <p className="text-sm text-muted-foreground mb-2">For Claude Code:</p>
-                      <div className="bg-muted rounded-md p-3 font-mono text-xs overflow-x-auto">
-                        claude mcp add -t http -s user dev3000 http://localhost:3684/mcp
-                      </div>
+                  <h3 className="font-semibold mb-3 text-lg">AI integration configured automatically</h3>
+                  <div className="space-y-3">
+                    <p className="text-sm text-muted-foreground">
+                      dev3000 automatically configures MCP connections for Claude Code and chrome-devtools browser
+                      automation. No manual setup required!
+                    </p>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                      <span>dev3000 MCP configured automatically</span>
                     </div>
-                    <details className="group">
-                      <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground">
-                        Other AI tools (Cursor, Codex)
-                      </summary>
-                      <div className="mt-3 space-y-3">
-                        <div>
-                          <p className="text-xs text-muted-foreground mb-1">
-                            For Cursor (Settings &gt; Cursor Settings &gt; MCP)
-                          </p>
-                          <div className="bg-muted rounded-md p-3 font-mono text-xs">
-                            <pre>{JSON.stringify(cursorConfig, null, 2)}</pre>
-                          </div>
-                        </div>
-                        <div>
-                          <p className="text-xs text-muted-foreground mb-1">For OpenAI Codex</p>
-                          <div className="bg-muted rounded-md p-3 font-mono text-xs">
-                            <p className="text-xs text-muted-foreground mb-1">Install mcp-proxy</p>
-                            <pre>{`pnpm i -g mcp-proxy`}</pre>
-                            <p className="mt-2 text-xs text-muted-foreground mb-1">Add to ~/.codex/config.toml</p>
-                            <pre>{`[mcp_servers.dev3000]
-command = "npx"
-args = ["-y", "mcp-proxy", "--mode", "stdio-to-http", "--url", "http://localhost:3684/mcp"]`}</pre>
-                          </div>
-                        </div>
-                      </div>
-                    </details>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                      <span>chrome-devtools MCP configured automatically</span>
+                    </div>
                   </div>
                 </div>
               </div>

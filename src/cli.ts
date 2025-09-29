@@ -202,6 +202,7 @@ program
     "local"
   )
   .option("--plugin-react-scan", "Enable react-scan performance monitoring for React applications")
+  .option("--no-chrome-devtools-mcp", "Disable chrome-devtools MCP integration (enabled by default)")
   .option("--kill-mcp", "Kill the MCP server on port 3684 and exit")
   .action(async (options) => {
     // Handle --kill-mcp option
@@ -275,7 +276,8 @@ program
         tail: options.tail,
         tui: options.noTui !== true && !options.debug, // TUI is default unless --no-tui or --debug is specified
         dateTimeFormat: options.dateTime || "local",
-        pluginReactScan: options.pluginReactScan || false
+        pluginReactScan: options.pluginReactScan || false,
+        chromeDevtoolsMcp: options.chromeDevtoolsMcp !== false // Default to true unless explicitly disabled
       })
     } catch (error) {
       console.error(chalk.red("❌ Failed to start development environment:"), error)

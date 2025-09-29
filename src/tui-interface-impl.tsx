@@ -105,12 +105,12 @@ const TUIApp = ({
       // In compact mode, reduce header size, account for bottom status line
       return Math.max(3, termHeight - 10)
     } else {
-      // Normal mode calculation
-      const headerLines = 12
+      // Normal mode calculation - reduced header lines since we removed Controls section
+      const headerLines = 10 // Reduced from 12 since Controls section is commented out
       const logBoxHeaderLines = 3
       const logBoxFooterLines = scrollOffset > 0 ? 3 : 1
       const bottomStatusLine = 1 // Just one line for the log path
-      const safetyBuffer = 1
+      const safetyBuffer = 0 // Removed safety buffer to use more space
       const totalReservedLines = headerLines + logBoxHeaderLines + logBoxFooterLines + bottomStatusLine + safetyBuffer
       return Math.max(3, termHeight - totalReservedLines)
     }
@@ -286,9 +286,11 @@ const TUIApp = ({
       </Box>
 
       {/* Controls at the bottom of header box */}
+      {/* 
       <Box marginTop={1}>
         <Text dimColor>💡 Controls: ↑/↓ scroll | PgUp/PgDn page | g/G start/end | Ctrl-C quit</Text>
       </Box>
+      */}
     </Box>
   )
 
@@ -429,10 +431,8 @@ const TUIApp = ({
 
       {/* Bottom status line - no border, just text */}
       <Box paddingX={1} justifyContent="space-between">
-        <Text color="#A18CE5">⏵⏵ {logFile}</Text>
-        <Text color="#A18CE5" dimColor>
-          {ctrlCMessage}
-        </Text>
+        <Text color="#A18CE5">⏵⏵ {logFile.replace(process.env.HOME || "", "~")}</Text>
+        <Text color="#A18CE5">{ctrlCMessage}</Text>
       </Box>
     </Box>
   )
@@ -441,29 +441,34 @@ const TUIApp = ({
 export async function runTUI(
   options: TUIOptions
 ): Promise<{ app: { unmount: () => void }; updateStatus: (status: string | null) => void }> {
-  return new Promise((resolve) => {
-    let statusUpdater: ((status: string | null) => void) | null = null
+  return new Promise((resolve, reject) => {
+    try {
+      let statusUpdater: ((status: string | null) => void) | null = null
 
-    const app = render(
-      <TUIApp
-        {...options}
-        onStatusUpdate={(fn) => {
-          statusUpdater = fn
-        }}
-      />,
-      { exitOnCtrlC: false }
-    )
+      const app = render(
+        <TUIApp
+          {...options}
+          onStatusUpdate={(fn) => {
+            statusUpdater = fn
+          }}
+        />,
+        { exitOnCtrlC: false }
+      )
 
-    // Give React time to set up the status updater
-    setTimeout(() => {
-      resolve({
-        app,
-        updateStatus: (status: string | null) => {
-          if (statusUpdater) {
-            statusUpdater(status)
+      // Give React time to set up the status updater
+      setTimeout(() => {
+        resolve({
+          app,
+          updateStatus: (status: string | null) => {
+            if (statusUpdater) {
+              statusUpdater(status)
+            }
           }
-        }
-      })
-    }, 100)
+        })
+      }, 100)
+    } catch (error) {
+      console.error("Error in runTUI render:", error)
+      reject(error)
+    }
   })
 }

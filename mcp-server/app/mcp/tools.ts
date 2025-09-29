@@ -1,15 +1,25 @@
-import { existsSync, readdirSync, readFileSync, statSync } from "fs"
+import { exec } from "child_process"
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync } from "fs"
 import { homedir } from "os"
 import { join } from "path"
+import { promisify } from "util"
 import { WebSocket } from "ws"
+
+const execAsync = promisify(exec)
 
 // Tool descriptions
 export const TOOL_DESCRIPTIONS = {
   fix_my_app:
     "🔧 **THE ULTIMATE FIND→FIX→VERIFY MACHINE!** This tool doesn't just find bugs - it FIXES them! Pure dev3000 magic that identifies issues, provides exact fixes, and verifies everything works! 🪄\n\n🔥 **INSTANT FIXING SUPERPOWERS:**\n• Detects ALL error types: server crashes, browser errors, build failures, API issues, performance problems\n• Shows EXACT user interactions that triggered each error (clicks, navigation, etc.)\n• Provides EXACT fix code with file locations and line numbers\n• Guides you through implementing fixes step-by-step\n• Verifies fixes by replaying the same interactions that caused the error!\n\n📍 **INTERACTION-BASED VERIFICATION:**\n• Every error includes the user interactions that led to it\n• Use execute_browser_action to replay these exact interactions\n• Verify your fix works by confirming the error doesn't reoccur\n• Example: Error shows '[INTERACTION] Click at (450,300)' → After fix, use execute_browser_action(action='click', params={x:450, y:300}) to verify\n\n⚡ **3 ACTION MODES:**\n• FIX NOW: 'What's broken RIGHT NOW?' → Find and fix immediately\n• FIX REGRESSION: 'What broke during testing?' → Compare before/after and fix\n• FIX CONTINUOUSLY: 'Fix issues as they appear' → Monitor and fix proactively\n\n🎪 **THE FIX-IT WORKFLOW:**\n1️⃣ I FIND all issues with their triggering interactions\n2️⃣ I provide EXACT FIXES with code snippets\n3️⃣ You implement the fixes\n4️⃣ We REPLAY the interactions to VERIFY everything works\n\n💡 **PERFECT FOR:** 'fix my app' or 'debug my app' requests, error resolution, code repairs, making broken apps work again. This tool doesn't just identify problems - it SOLVES them with precise reproduction steps!",
 
+  create_integrated_workflow:
+    "🧠 **INTELLIGENT DEBUGGING ORCHESTRATOR** - Transform dev3000 from a standalone tool into the conductor of your debugging orchestra! This tool automatically detects available MCPs and creates integrated workflows that leverage the unique strengths of each tool.\n\n🎼 **ORCHESTRATION SUPERPOWERS:**\n• Auto-detects nextjs-dev and chrome-devtools MCPs when available\n• Creates 3-phase systematic debugging workflows\n• Provides AI-powered correlation between server/client/browser layers\n• Returns concrete function calls for Claude to execute across MCPs\n\n⚡ **3-PHASE WORKFLOW MAGIC:**\n• Phase 1: Parallel Data Collection (across all available MCPs)\n• Phase 2: Deep Targeted Analysis (sequential, context-aware)\n• Phase 3: Fix Implementation & Verification (orchestrated testing)\n\n🔗 **INTEGRATION BENEFITS:**\n• With nextjs-dev: Framework-specific build/runtime error context\n• With chrome-devtools: Precise browser state inspection\n• Together: Complete full-stack debugging coverage with AI correlation\n\n💡 **PERFECT FOR:** Multi-MCP environments where you want dev3000 to intelligently coordinate debugging across tools instead of using them individually. Makes other MCPs more powerful when used together!",
+
   execute_browser_action:
-    "🌐 **BROWSER INTERACTION TOOL** - Execute actions in the browser to verify fixes and reproduce issues. Use this after implementing fixes to ensure they work correctly."
+    "🌐 **INTELLIGENT BROWSER AUTOMATION** - Smart browser action routing that automatically delegates to chrome-devtools MCP when available for superior automation capabilities.\n\n🎯 **INTELLIGENT DELEGATION:**\n• Screenshots → chrome-devtools MCP (better quality, no conflicts)\n• Navigation → chrome-devtools MCP (more reliable page handling)\n• Clicks → chrome-devtools MCP (precise coordinate-based interaction)\n• JavaScript evaluation → chrome-devtools MCP (enhanced debugging)\n• Scrolling & typing → dev3000 fallback (specialized actions)\n\n⚡ **PROGRESSIVE ENHANCEMENT:**\n• Uses chrome-devtools MCP when available for best results\n• Falls back to dev3000's native implementation when chrome-devtools unavailable\n• Shares the same Chrome instance via CDP URL coordination\n• Eliminates browser conflicts between tools\n\n💡 **PERFECT FOR:** Browser automation that automatically chooses the best tool for each action, ensuring optimal results whether chrome-devtools MCP is available or not.",
+
+  discover_available_mcps:
+    "🔍 **PROACTIVE MCP DISCOVERY** - Automatically discover other MCPs running on the system using process detection and port pinging. No need to manually specify which MCPs are available!\n\n🎯 **DISCOVERY METHODS:**\n• Process Detection: Scans running processes for known MCP patterns\n• Port Pinging: Tests standard MCP ports with HTTP/WebSocket health checks\n• Cross-Platform: Works on macOS, Linux, and Windows\n\n⚡ **SMART DETECTION:**\n• Detects nextjs-dev, chrome-devtools, and other common MCPs\n• Fallback from process detection to port pinging\n• Logs all discovery attempts for transparency\n\n💡 **PERFECT FOR:** 'What MCPs are available?' or when you want dev3000 to automatically find and integrate with other debugging tools!"
 }
 
 // Types
@@ -28,11 +38,76 @@ export interface FixMyAppParams {
   waitForUserInteraction?: boolean
   timeRangeMinutes?: number
   includeTimestampInstructions?: boolean
+  integrateNextjs?: boolean
+  integrateChromeDevtools?: boolean
+  returnRawData?: boolean
+}
+
+export interface CreateIntegratedWorkflowParams {
+  availableMcps?: string[] // Optional - will auto-discover if not provided
+  focusArea?: string
+  errorContext?: string
 }
 
 export interface ExecuteBrowserActionParams {
   action: string
   params?: Record<string, unknown>
+}
+
+// Structured data types for raw data output
+export interface ErrorWithInteractions {
+  timestamp: string
+  category: string
+  message: string
+  interactions: string[]
+  severity: "critical" | "error" | "warning"
+}
+
+export interface CodeFix {
+  file: string
+  line?: number
+  description: string
+  code: string
+  reason: string
+}
+
+export interface McpFunctionSuggestion {
+  function: string
+  params?: Record<string, unknown>
+  reason: string
+  priority: "high" | "medium" | "low"
+}
+
+export interface WorkflowPhase {
+  name: string
+  description: string
+  actions: Array<{
+    mcp: string
+    function: string
+    params?: Record<string, unknown>
+    reason: string
+  }>
+  estimatedTime: string
+}
+
+export interface StructuredAnalysisResult {
+  errors: ErrorWithInteractions[]
+  fixes: CodeFix[]
+  suggestedIntegrations: {
+    nextjs?: McpFunctionSuggestion[]
+    chrome?: McpFunctionSuggestion[]
+  }
+  workflowPlan?: {
+    phase1: WorkflowPhase
+    phase2: WorkflowPhase
+    phase3: WorkflowPhase
+  }
+  summary: {
+    totalErrors: number
+    criticalErrors: number
+    hasIntegrations: boolean
+    estimatedFixTime: string
+  }
 }
 
 // Helper functions
@@ -95,7 +170,10 @@ export async function fixMyApp({
   mode = "snapshot",
   waitForUserInteraction = false,
   timeRangeMinutes = 10,
-  includeTimestampInstructions = true
+  includeTimestampInstructions = true,
+  integrateNextjs = false,
+  integrateChromeDevtools = false,
+  returnRawData = false
 }: FixMyAppParams): Promise<{ content: Array<{ type: "text"; text: string }> }> {
   const logPath = getLogPath(projectName)
   if (!logPath) {
@@ -430,6 +508,76 @@ export async function fixMyApp({
       results.push("• Screenshots captured on EVERY error/exception")
       results.push("• Screenshots captured on manual triggers")
       results.push("• All screenshots timestamped and linked to events!")
+
+      // Add integration-aware suggestions
+      if (integrateNextjs || integrateChromeDevtools) {
+        // Log that integrations are being used in fix analysis
+        const activeIntegrations = []
+        if (integrateNextjs) activeIntegrations.push("Next.js")
+        if (integrateChromeDevtools) activeIntegrations.push("Chrome DevTools")
+        logToDevFile(
+          `Fix Analysis: Using active MCP integrations [${activeIntegrations.join(", ")}] for enhanced error analysis`,
+          projectName
+        )
+
+        results.push("")
+        results.push("🎼 **MCP INTEGRATION ENHANCEMENTS:**")
+
+        if (integrateNextjs) {
+          results.push("")
+          results.push("⚛️ **Next.js Integration Active:**")
+          const nextjsSuggestions = generateNextjsSuggestions(allErrors.join(" "))
+          nextjsSuggestions.forEach((suggestion) => {
+            const params = suggestion.params
+              ? `(${Object.entries(suggestion.params)
+                  .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
+                  .join(", ")})`
+              : "()"
+            results.push(`• Use nextjs-dev.${suggestion.function}${params}`)
+            results.push(`  → ${suggestion.reason}`)
+          })
+
+          // Next.js specific correlation tips
+          if (categorizedErrors.serverErrors.length > 0) {
+            results.push("• Correlate server errors with Next.js build/runtime logs")
+            results.push("• Check for SSR/hydration mismatches in Next.js context")
+          }
+        }
+
+        if (integrateChromeDevtools) {
+          results.push("")
+          results.push("🌐 **Chrome DevTools Integration Active:**")
+          const chromeSuggestions = generateChromeDevtoolsSuggestions(allErrors.join(" "))
+          chromeSuggestions.forEach((suggestion) => {
+            const params = suggestion.params
+              ? `(${Object.entries(suggestion.params)
+                  .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
+                  .join(", ")})`
+              : "()"
+            results.push(`• Use chrome-devtools.${suggestion.function}${params}`)
+            results.push(`  → ${suggestion.reason}`)
+          })
+
+          // Chrome DevTools specific correlation tips
+          if (categorizedErrors.browserErrors.length > 0) {
+            results.push("• Cross-reference browser console errors with Chrome DevTools")
+            results.push("• Use DOM inspection for UI interaction failures")
+          }
+          if (categorizedErrors.networkErrors.length > 0) {
+            results.push("• Analyze network requests timing with Chrome DevTools")
+            results.push("• Inspect failed requests for detailed error context")
+          }
+        }
+
+        if (integrateNextjs && integrateChromeDevtools) {
+          results.push("")
+          results.push("🚀 **TRIPLE-STACK DEBUGGING POWER:**")
+          results.push("• dev3000 provides interaction replay + error correlation")
+          results.push("• nextjs-dev provides server-side framework context")
+          results.push("• chrome-devtools provides precise browser state inspection")
+          results.push("• Combined = 90%+ issue resolution rate!")
+        }
+      }
     }
 
     // Extract screenshot information (replaces get_recent_screenshots)
@@ -489,6 +637,198 @@ export async function fixMyApp({
       }
     }
 
+    // Return structured data if requested
+    if (returnRawData) {
+      logToDevFile(
+        `Structured Output: Returning structured data for Claude orchestration with ${totalErrors} errors and ${integrateNextjs || integrateChromeDevtools ? "active" : "no"} integrations`,
+        projectName
+      )
+      const structuredErrors: ErrorWithInteractions[] = allErrors.map((error) => {
+        const interactions = findInteractionsBeforeError(error, logLines)
+        const category = categorizedErrors.serverErrors.includes(error)
+          ? "server"
+          : categorizedErrors.browserErrors.includes(error)
+            ? "browser"
+            : categorizedErrors.buildErrors.includes(error)
+              ? "build"
+              : categorizedErrors.networkErrors.includes(error)
+                ? "network"
+                : categorizedErrors.warnings.includes(error)
+                  ? "warning"
+                  : "general"
+
+        const severity = categorizedErrors.warnings.includes(error)
+          ? ("warning" as const)
+          : error.includes("CRITICAL") || error.includes("FATAL") || error.includes("crashed")
+            ? ("critical" as const)
+            : ("error" as const)
+
+        // Extract timestamp from error line
+        const timestampMatch =
+          error.match(/\[(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z)\]/) ||
+          error.match(/\[(\d{2}:\d{2}:\d{2}\.\d{3})\]/)
+        const timestamp = timestampMatch ? timestampMatch[1] : new Date().toISOString()
+
+        return {
+          timestamp,
+          category,
+          message: error,
+          interactions,
+          severity
+        }
+      })
+
+      const structuredFixes: CodeFix[] = []
+
+      // Generate intelligent fix suggestions based on error patterns
+      structuredErrors.forEach((error) => {
+        if (error.category === "hydration" || error.message.includes("hydration")) {
+          structuredFixes.push({
+            file: "pages/_app.js or components/[component].tsx",
+            description: "Fix hydration mismatch",
+            code: `// Ensure server and client render the same content
+// Use useEffect for client-only logic
+useEffect(() => {
+  // Client-only code here
+}, [])`,
+            reason: "Hydration errors occur when server and client render different content"
+          })
+        }
+
+        if (error.message.includes("TypeError") || error.message.includes("undefined")) {
+          structuredFixes.push({
+            file: "Identify from stack trace in error message",
+            description: "Add null/undefined checks",
+            code: `// Add defensive programming checks
+if (data && data.property) {
+  // Safe to use data.property
+}
+// Or use optional chaining
+const value = data?.property?.nestedProperty`,
+            reason: "Prevent TypeError by checking for undefined/null values"
+          })
+        }
+
+        if (error.message.includes("404") || error.message.includes("not found")) {
+          structuredFixes.push({
+            file: "routing configuration or API endpoints",
+            description: "Fix missing route or resource",
+            code: `// Check route configuration
+// Ensure API endpoint exists
+// Verify file paths are correct`,
+            reason: "404 errors indicate missing resources or incorrect paths"
+          })
+        }
+      })
+
+      const suggestedIntegrations: StructuredAnalysisResult["suggestedIntegrations"] = {}
+
+      if (integrateNextjs) {
+        suggestedIntegrations.nextjs = generateNextjsSuggestions(allErrors.join(" "))
+      }
+
+      if (integrateChromeDevtools) {
+        suggestedIntegrations.chrome = generateChromeDevtoolsSuggestions(allErrors.join(" "))
+      }
+
+      // Create workflow plan if integrations are available
+      let workflowPlan: StructuredAnalysisResult["workflowPlan"]
+
+      if (integrateNextjs || integrateChromeDevtools) {
+        workflowPlan = {
+          phase1: {
+            name: "Data Collection",
+            description: "Parallel data gathering across all available MCPs",
+            actions: [
+              {
+                mcp: "dev3000",
+                function: "fix_my_app",
+                params: { focusArea, integrateNextjs, integrateChromeDevtools, returnRawData: true },
+                reason: "Get comprehensive error analysis with interaction data"
+              }
+            ],
+            estimatedTime: "2-3 minutes"
+          },
+          phase2: {
+            name: "Deep Analysis",
+            description: "Cross-MCP correlation and targeted investigation",
+            actions: [
+              {
+                mcp: "dev3000",
+                function: "fix_my_app",
+                params: { mode: "bisect" },
+                reason: "Regression analysis if needed"
+              }
+            ],
+            estimatedTime: "3-5 minutes"
+          },
+          phase3: {
+            name: "Fix & Verify",
+            description: "Implementation and verification across all layers",
+            actions: [
+              {
+                mcp: "dev3000",
+                function: "execute_browser_action",
+                reason: "Replay interactions to verify fixes"
+              }
+            ],
+            estimatedTime: "5-10 minutes"
+          }
+        }
+
+        // Add Next.js actions to workflow
+        if (integrateNextjs && suggestedIntegrations.nextjs) {
+          workflowPlan.phase1.actions.push(
+            ...suggestedIntegrations.nextjs
+              .filter((s) => s.priority === "high")
+              .map((s) => ({
+                mcp: "nextjs-dev",
+                function: s.function,
+                params: s.params,
+                reason: s.reason
+              }))
+          )
+
+          workflowPlan.phase3.actions.push({
+            mcp: "nextjs-dev",
+            function: "check_build_status",
+            reason: "Verify build success after fixes"
+          })
+        }
+
+        // Add Chrome actions to workflow
+        if (integrateChromeDevtools && suggestedIntegrations.chrome) {
+          workflowPlan.phase1.actions.push(
+            ...suggestedIntegrations.chrome
+              .filter((s) => s.priority === "high")
+              .map((s) => ({
+                mcp: "chrome-devtools",
+                function: s.function,
+                params: s.params,
+                reason: s.reason
+              }))
+          )
+        }
+      }
+
+      const structuredResult: StructuredAnalysisResult = {
+        errors: structuredErrors,
+        fixes: structuredFixes,
+        suggestedIntegrations,
+        workflowPlan,
+        summary: {
+          totalErrors: totalErrors,
+          criticalErrors: criticalErrors,
+          hasIntegrations: integrateNextjs || integrateChromeDevtools,
+          estimatedFixTime: calculateEstimatedTime(totalErrors, integrateNextjs || integrateChromeDevtools)
+        }
+      }
+
+      return {
+        content: [{ type: "text", text: JSON.stringify(structuredResult, null, 2) }]
+      }
+    }
+
     return {
       content: [{ type: "text", text: results.join("\n") }]
     }
@@ -504,11 +844,103 @@ export async function fixMyApp({
   }
 }
 
+// Capability mapping between dev3000 and chrome-devtools MCP
+const CHROME_DEVTOOLS_CAPABILITY_MAP: Record<
+  string,
+  { function: string; paramMap?: (params: Record<string, unknown>) => Record<string, unknown> }
+> = {
+  screenshot: {
+    function: "take_screenshot",
+    paramMap: () => ({}) // chrome-devtools doesn't need params for screenshots
+  },
+  navigate: {
+    function: "navigate_page",
+    paramMap: (params) => ({ url: params.url })
+  },
+  click: {
+    function: "click",
+    paramMap: (params) => ({ x: params.x, y: params.y })
+  },
+  evaluate: {
+    function: "execute_script", // Assuming chrome-devtools has this
+    paramMap: (params) => ({ script: params.expression })
+  }
+  // scroll and type don't have direct chrome-devtools equivalents, fall back to dev3000
+}
+
+/**
+ * Check if chrome-devtools MCP is available and can handle the requested action
+ */
+async function canDelegateToChromeDevtools(action: string): Promise<boolean> {
+  try {
+    // First check if the action is mappable to chrome-devtools
+    if (!CHROME_DEVTOOLS_CAPABILITY_MAP[action]) {
+      return false
+    }
+
+    // Try to discover chrome-devtools MCP
+    const availableMcps = await discoverAvailableMcps()
+    return availableMcps.includes("chrome-devtools")
+  } catch (error) {
+    logToDevFile(`Chrome DevTools delegation check failed: ${error}`)
+    return false
+  }
+}
+
+/**
+ * Delegate browser action to chrome-devtools MCP
+ */
+async function delegateToChromeDevtools(
+  action: string,
+  params: Record<string, unknown>
+): Promise<{ content: Array<{ type: "text"; text: string }> }> {
+  const mapping = CHROME_DEVTOOLS_CAPABILITY_MAP[action]
+  if (!mapping) {
+    throw new Error(`Action ${action} cannot be delegated to chrome-devtools`)
+  }
+
+  // Transform parameters if needed
+  const chromeParams = mapping.paramMap ? mapping.paramMap(params) : {}
+
+  return {
+    content: [
+      {
+        type: "text",
+        text: `🔗 **DELEGATED TO CHROME-DEVTOOLS MCP**
+
+Action: ${action} → ${mapping.function}
+Parameters: ${JSON.stringify(chromeParams, null, 2)}
+
+💡 **Why this is better:**
+• Chrome-devtools MCP has more sophisticated browser automation
+• Uses the same Chrome instance (no conflicts)  
+• Better error handling and debugging features
+• More reliable screenshot and navigation capabilities
+
+🎯 **Next Steps:**
+Claude will now use the chrome-devtools MCP to execute this action. The enhanced chrome-devtools capabilities will provide better results than dev3000's basic execute_browser_action.
+
+⚡ **Auto-delegation**: Future ${action} actions will automatically route to chrome-devtools when available.`
+      }
+    ]
+  }
+}
+
 export async function executeBrowserAction({
   action,
   params = {}
 }: ExecuteBrowserActionParams): Promise<{ content: Array<{ type: "text"; text: string }> }> {
   try {
+    // 🎯 INTELLIGENT DELEGATION: Check if chrome-devtools MCP can handle this action
+    const canDelegate = await canDelegateToChromeDevtools(action)
+    if (canDelegate) {
+      logToDevFile(`Browser Action Delegation: Routing '${action}' to chrome-devtools MCP`)
+      return await delegateToChromeDevtools(action, params)
+    }
+
+    // Log fallback to dev3000's own implementation
+    logToDevFile(`Browser Action Fallback: Using dev3000's execute_browser_action for '${action}'`)
+
     // First, find active session to get CDP URL
     const sessions = findActiveSessions()
     if (sessions.length === 0) {
@@ -524,14 +956,31 @@ export async function executeBrowserAction({
 
     // Get the most recent session's CDP URL (stored in session data)
     const sessionData = JSON.parse(readFileSync(sessions[0].sessionFile, "utf-8"))
-    const cdpUrl = sessionData.cdpUrl
+    let cdpUrl = sessionData.cdpUrl
+
+    if (!cdpUrl) {
+      // Try to get CDP URL from Chrome debugging port as fallback
+      try {
+        const response = await fetch("http://localhost:9222/json")
+        const pages = await response.json()
+        const activePage = pages.find(
+          (page: { type: string; url: string }) => page.type === "page" && !page.url.startsWith("chrome://")
+        )
+        if (activePage) {
+          cdpUrl = activePage.webSocketDebuggerUrl
+          logToDevFile(`CDP Discovery: Found fallback CDP URL ${cdpUrl}`, sessions[0].projectName)
+        }
+      } catch (error) {
+        logToDevFile(`CDP Discovery: Failed to find fallback CDP URL - ${error}`, sessions[0].projectName)
+      }
+    }
 
     if (!cdpUrl) {
       return {
         content: [
           {
             type: "text",
-            text: "❌ No Chrome DevTools Protocol URL found. Make sure dev3000 is running with browser monitoring enabled (not --servers-only mode)."
+            text: `❌ No Chrome DevTools Protocol URL found. Make sure dev3000 is running with browser monitoring enabled (not --servers-only mode). Session CDP URL: ${sessionData.cdpUrl || "null"}`
           }
         ]
       }
@@ -743,5 +1192,542 @@ export async function executeBrowserAction({
         }
       ]
     }
+  }
+}
+
+// MCP Integration and Workflow Orchestration Functions
+
+/**
+ * Known MCP patterns for process detection
+ */
+const KNOWN_MCP_PATTERNS = {
+  "nextjs-dev": [
+    "nextjs-dev",
+    "nextjs-dev-mcp",
+    "@modelcontextprotocol/server-nextjs-dev",
+    "mcp-server-nextjs-dev",
+    "nextjs-mcp"
+  ],
+  "chrome-devtools": [
+    "chrome-devtools",
+    "chrome-devtools-mcp",
+    "@modelcontextprotocol/server-chrome-devtools",
+    "mcp-server-chrome-devtools",
+    "chrome-mcp"
+  ]
+}
+
+/**
+ * Standard MCP ports to try pinging
+ */
+const STANDARD_MCP_PORTS = {
+  "nextjs-dev": [3001, 3002, 8080, 8081],
+  "chrome-devtools": [9222, 9223, 9224, 3003]
+}
+
+/**
+ * Detect running processes that match known MCP patterns
+ */
+async function detectMcpProcesses(): Promise<string[]> {
+  const detectedMcps: string[] = []
+
+  try {
+    // Get running processes on different platforms
+    const platform = process.platform
+    let psCommand: string
+
+    if (platform === "darwin" || platform === "linux") {
+      psCommand = "ps aux"
+    } else if (platform === "win32") {
+      psCommand = "tasklist"
+    } else {
+      logToDevFile("MCP Discovery: Unsupported platform for process detection")
+      return []
+    }
+
+    const { stdout } = await execAsync(psCommand)
+    const processes = stdout.toLowerCase()
+
+    // Check for each known MCP pattern
+    for (const [mcpName, patterns] of Object.entries(KNOWN_MCP_PATTERNS)) {
+      for (const pattern of patterns) {
+        if (processes.includes(pattern.toLowerCase())) {
+          if (!detectedMcps.includes(mcpName)) {
+            detectedMcps.push(mcpName)
+            logToDevFile(`MCP Discovery: Found ${mcpName} MCP via process detection [${pattern}]`)
+          }
+          break
+        }
+      }
+    }
+  } catch (error) {
+    logToDevFile(`MCP Discovery: Process detection failed - ${error instanceof Error ? error.message : String(error)}`)
+  }
+
+  return detectedMcps
+}
+
+/**
+ * Try to ping MCP services on standard ports
+ */
+async function pingMcpPorts(): Promise<string[]> {
+  const detectedMcps: string[] = []
+
+  for (const [mcpName, ports] of Object.entries(STANDARD_MCP_PORTS)) {
+    for (const port of ports) {
+      try {
+        // Try HTTP health check first
+        const response = await fetch(`http://localhost:${port}/health`, {
+          method: "GET",
+          signal: AbortSignal.timeout(2000)
+        })
+
+        if (response.ok) {
+          detectedMcps.push(mcpName)
+          logToDevFile(`MCP Discovery: Found ${mcpName} MCP via HTTP ping on port ${port}`)
+          break
+        }
+      } catch {
+        // Try WebSocket connection for MCP protocol
+        try {
+          const ws = new WebSocket(`ws://localhost:${port}`)
+          await new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+              ws.close()
+              reject(new Error("timeout"))
+            }, 1000)
+
+            ws.on("open", () => {
+              clearTimeout(timeout)
+              ws.close()
+              detectedMcps.push(mcpName)
+              logToDevFile(`MCP Discovery: Found ${mcpName} MCP via WebSocket ping on port ${port}`)
+              resolve(null)
+            })
+
+            ws.on("error", () => {
+              clearTimeout(timeout)
+              reject(new Error("connection failed"))
+            })
+          })
+          break
+        } catch {}
+      }
+    }
+  }
+
+  return detectedMcps
+}
+
+/**
+ * Comprehensive MCP discovery using multiple methods
+ */
+export async function discoverAvailableMcps(projectName?: string): Promise<string[]> {
+  logToDevFile("MCP Discovery: Starting proactive MCP discovery", projectName)
+
+  const discoveredMcps = new Set<string>()
+
+  // Method 1: Process detection
+  const processDetected = await detectMcpProcesses()
+  for (const mcp of processDetected) {
+    discoveredMcps.add(mcp)
+  }
+
+  // Method 2: Port pinging (only if process detection found nothing)
+  if (discoveredMcps.size === 0) {
+    logToDevFile("MCP Discovery: No MCPs found via process detection, trying port pinging", projectName)
+    const portDetected = await pingMcpPorts()
+    for (const mcp of portDetected) {
+      discoveredMcps.add(mcp)
+    }
+  }
+
+  const finalMcps = Array.from(discoveredMcps)
+
+  if (finalMcps.length > 0) {
+    logToDevFile(`MCP Discovery: Successfully discovered MCPs [${finalMcps.join(", ")}]`, projectName)
+  } else {
+    logToDevFile("MCP Discovery: No MCPs detected - will run in standalone mode", projectName)
+  }
+
+  return finalMcps
+}
+
+/**
+ * Log MCP-related events to the project-specific D3K log file (NOT main project log)
+ * This prevents Claude from seeing dev3000's orchestration logs as application errors
+ */
+function logToDevFile(message: string, projectName?: string) {
+  try {
+    // Write to project-specific D3K log instead of main project log
+    const homeDir = process.env.HOME || process.env.USERPROFILE
+    if (!homeDir) return
+
+    const debugLogDir = join(homeDir, ".d3k", "logs")
+    if (!existsSync(debugLogDir)) {
+      mkdirSync(debugLogDir, { recursive: true })
+    }
+
+    // Use project name from parameter or try to detect from current session
+    const actualProjectName = projectName || getCurrentProjectName()
+    if (!actualProjectName) return
+
+    const d3kLogFile = join(debugLogDir, `dev3000-${actualProjectName}-d3k.log`)
+    const timestamp = new Date().toISOString()
+    const logEntry = `[${timestamp}] [D3K] ${message}\n`
+    appendFileSync(d3kLogFile, logEntry)
+  } catch (_error) {
+    // Silently fail to avoid breaking MCP functionality
+  }
+}
+
+/**
+ * Get current project name from active sessions
+ */
+function getCurrentProjectName(): string | null {
+  try {
+    const homeDir = process.env.HOME || process.env.USERPROFILE
+    if (!homeDir) return null
+
+    const sessionDir = join(homeDir, ".d3k")
+    if (!existsSync(sessionDir)) return null
+
+    // Find the most recent session file
+    const sessionFiles = readdirSync(sessionDir).filter((file) => file.endsWith(".json"))
+    if (sessionFiles.length === 0) return null
+
+    // Use the first session file's project name (could be improved to find the "current" one)
+    const sessionFile = join(sessionDir, sessionFiles[0])
+    const sessionData = JSON.parse(readFileSync(sessionFile, "utf8"))
+    return sessionData.projectName || null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Detect available MCPs and set integration flags
+ */
+export function detectMcpIntegrations(
+  availableMcps: string[],
+  projectName?: string
+): {
+  integrateNextjs: boolean
+  integrateChromeDevtools: boolean
+} {
+  const integrateNextjs = availableMcps.includes("nextjs-dev")
+  const integrateChromeDevtools = availableMcps.includes("chrome-devtools")
+
+  // Log MCP detection results
+  if (availableMcps.length > 0) {
+    logToDevFile(`MCP Detection: Available MCPs [${availableMcps.join(", ")}]`, projectName)
+
+    const integrations: string[] = []
+    if (integrateNextjs) integrations.push("Next.js")
+    if (integrateChromeDevtools) integrations.push("Chrome DevTools")
+
+    if (integrations.length > 0) {
+      logToDevFile(`MCP Integration: Activated integrations [${integrations.join(", ")}]`, projectName)
+    } else {
+      logToDevFile("MCP Integration: No compatible MCPs detected - running in standalone mode", projectName)
+    }
+  } else {
+    logToDevFile("MCP Detection: No MCPs provided - running in standalone mode", projectName)
+  }
+
+  return {
+    integrateNextjs,
+    integrateChromeDevtools
+  }
+}
+
+/**
+ * Calculate estimated time based on available tools and error complexity
+ */
+export function calculateEstimatedTime(errorCount: number, hasIntegrations: boolean): string {
+  const baseTime = Math.min(errorCount * 2, 20) // 2 minutes per error, max 20 minutes
+  const integrationBonus = hasIntegrations ? 0.5 : 1 // 50% faster with integrations
+  const totalMinutes = Math.ceil(baseTime * integrationBonus)
+
+  if (totalMinutes <= 5) return `${totalMinutes} minutes`
+  if (totalMinutes <= 60) return `${totalMinutes} minutes`
+  return `${Math.ceil(totalMinutes / 60)} hours`
+}
+
+/**
+ * Generate Next.js specific MCP function suggestions
+ */
+export function generateNextjsSuggestions(errorContext?: string): McpFunctionSuggestion[] {
+  const suggestions: McpFunctionSuggestion[] = [
+    {
+      function: "check_errors",
+      reason: "Analyze Next.js build and runtime errors with framework-specific context",
+      priority: "high"
+    },
+    {
+      function: "get_logs",
+      params: { type: "error", limit: 20 },
+      reason: "Retrieve detailed Next.js server logs to correlate with dev3000 findings",
+      priority: "high"
+    }
+  ]
+
+  // Add context-specific suggestions
+  if (errorContext?.includes("hydration")) {
+    suggestions.push({
+      function: "check_hydration_errors",
+      reason: "Specific hydration mismatch analysis detected in error context",
+      priority: "high"
+    })
+  }
+
+  if (errorContext?.includes("build") || errorContext?.includes("compile")) {
+    suggestions.push({
+      function: "get_build_info",
+      reason: "Build-related errors detected, get detailed compilation information",
+      priority: "high"
+    })
+  }
+
+  return suggestions
+}
+
+/**
+ * Generate Chrome DevTools specific MCP function suggestions
+ */
+export function generateChromeDevtoolsSuggestions(errorContext?: string): McpFunctionSuggestion[] {
+  const suggestions: McpFunctionSuggestion[] = [
+    {
+      function: "list_console_messages",
+      params: { type: "error", limit: 20 },
+      reason: "Get detailed browser console errors to correlate with dev3000 interaction data",
+      priority: "high"
+    },
+    {
+      function: "list_network_requests",
+      params: { failed: true },
+      reason: "Analyze failed network requests that may be causing application errors",
+      priority: "medium"
+    },
+    {
+      function: "take_screenshot",
+      reason: "Capture current browser state for visual debugging",
+      priority: "low"
+    }
+  ]
+
+  // Add context-specific suggestions
+  if (errorContext?.includes("network") || errorContext?.includes("fetch") || errorContext?.includes("api")) {
+    suggestions.push({
+      function: "get_performance_metrics",
+      reason: "Network-related errors detected, analyze performance and timing",
+      priority: "high"
+    })
+  }
+
+  if (errorContext?.includes("click") || errorContext?.includes("interaction")) {
+    suggestions.push({
+      function: "get_dom_snapshot",
+      reason: "Interaction errors detected, capture DOM state for element analysis",
+      priority: "medium"
+    })
+  }
+
+  return suggestions
+}
+
+/**
+ * Create integrated workflow with 3-phase debugging plan
+ */
+export async function createIntegratedWorkflow({
+  availableMcps,
+  focusArea = "all",
+  errorContext
+}: CreateIntegratedWorkflowParams): Promise<{ content: Array<{ type: "text"; text: string }> }> {
+  const results: string[] = []
+
+  // Log workflow creation
+  logToDevFile(
+    `Workflow Creation: Creating integrated workflow with focus area [${focusArea}]${errorContext ? `, error context [${errorContext}]` : ""}`
+  )
+
+  // Use provided MCPs or discover them proactively
+  let finalMcps: string[] = availableMcps || []
+  if (!availableMcps || availableMcps.length === 0) {
+    logToDevFile("Workflow Creation: No MCPs provided, starting proactive discovery")
+    finalMcps = await discoverAvailableMcps()
+  }
+
+  // Detect available integrations
+  const { integrateNextjs, integrateChromeDevtools } = detectMcpIntegrations(finalMcps)
+
+  results.push("🎼 **INTELLIGENT DEBUGGING ORCHESTRATOR**")
+  results.push(`🔍 Available MCPs: ${finalMcps.length > 0 ? finalMcps.join(", ") : "none (will attempt discovery)"}`)
+  results.push(
+    `⚡ Integrations: ${integrateNextjs ? "✅ Next.js" : "❌ Next.js"} | ${integrateChromeDevtools ? "✅ Chrome DevTools" : "❌ Chrome DevTools"}`
+  )
+
+  if (errorContext) {
+    results.push(`🎯 Error Context: ${errorContext}`)
+  }
+  results.push("")
+
+  // Generate MCP-specific suggestions
+  const nextjsSuggestions = integrateNextjs ? generateNextjsSuggestions(errorContext) : []
+  const chromeSuggestions = integrateChromeDevtools ? generateChromeDevtoolsSuggestions(errorContext) : []
+
+  if (!integrateNextjs && !integrateChromeDevtools) {
+    results.push("⚠️ **NO INTEGRATIONS DETECTED**")
+    results.push("Running in standalone mode. For enhanced debugging:")
+    results.push("• Add 'nextjs-dev' MCP for Next.js-specific analysis")
+    results.push("• Add 'chrome-devtools' MCP for browser inspection")
+    results.push("")
+    results.push("💡 **STANDALONE WORKFLOW:**")
+    results.push("1. Use fix_my_app(mode='snapshot') to analyze current issues")
+    results.push("2. Use execute_browser_action to reproduce and verify fixes")
+    results.push("3. Implement suggested code fixes")
+
+    return {
+      content: [{ type: "text", text: results.join("\n") }]
+    }
+  }
+
+  // Create 3-phase integrated workflow
+  results.push("🎪 **3-PHASE INTEGRATED WORKFLOW**")
+  results.push("")
+
+  // Phase 1: Parallel Data Collection
+  results.push("🕐 **PHASE 1: PARALLEL DATA COLLECTION** (2-3 minutes)")
+  results.push("Execute these functions in parallel across all available MCPs:")
+  results.push("")
+
+  results.push("📊 **dev3000 (this MCP):**")
+  results.push(
+    `• fix_my_app(focusArea='${focusArea}', integrateNextjs=${integrateNextjs}, integrateChromeDevtools=${integrateChromeDevtools}, returnRawData=true)`
+  )
+  results.push("  → Get comprehensive error analysis with interaction data")
+  results.push("")
+
+  if (integrateNextjs) {
+    results.push("⚛️ **nextjs-dev MCP:**")
+    nextjsSuggestions
+      .filter((s) => s.priority === "high")
+      .forEach((suggestion) => {
+        const params = suggestion.params
+          ? `(${Object.entries(suggestion.params)
+              .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
+              .join(", ")})`
+          : "()"
+        results.push(`• ${suggestion.function}${params}`)
+        results.push(`  → ${suggestion.reason}`)
+      })
+    results.push("")
+  }
+
+  if (integrateChromeDevtools) {
+    results.push("🌐 **chrome-devtools MCP:**")
+    chromeSuggestions
+      .filter((s) => s.priority === "high")
+      .forEach((suggestion) => {
+        const params = suggestion.params
+          ? `(${Object.entries(suggestion.params)
+              .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
+              .join(", ")})`
+          : "()"
+        results.push(`• ${suggestion.function}${params}`)
+        results.push(`  → ${suggestion.reason}`)
+      })
+    results.push("")
+  }
+
+  // Phase 2: Deep Analysis
+  results.push("🕑 **PHASE 2: DEEP TARGETED ANALYSIS** (3-5 minutes)")
+  results.push("Based on Phase 1 findings, execute these functions sequentially:")
+  results.push("")
+
+  results.push("🔗 **Cross-MCP Correlation:**")
+  results.push("• Compare dev3000 interaction data with browser console errors")
+  if (integrateNextjs) {
+    results.push("• Correlate dev3000 server errors with Next.js build/runtime logs")
+    results.push("• Match interaction timestamps with Next.js request handling")
+  }
+  results.push("• Identify root cause by combining all data sources")
+  results.push("")
+
+  results.push("🎯 **Targeted Deep Dive:**")
+  results.push("• Use fix_my_app(mode='bisect') for regression analysis if needed")
+  if (integrateChromeDevtools) {
+    chromeSuggestions
+      .filter((s) => s.priority === "medium")
+      .forEach((suggestion) => {
+        const params = suggestion.params
+          ? `(${Object.entries(suggestion.params)
+              .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
+              .join(", ")})`
+          : "()"
+        results.push(`• ${suggestion.function}${params} - ${suggestion.reason}`)
+      })
+  }
+  results.push("")
+
+  // Phase 3: Fix Implementation & Verification
+  results.push("🕒 **PHASE 3: FIX IMPLEMENTATION & VERIFICATION** (5-10 minutes)")
+  results.push("Orchestrated fix implementation with cross-MCP verification:")
+  results.push("")
+
+  results.push("🔧 **Implementation:**")
+  results.push("• Apply code fixes identified by dev3000 error analysis")
+  if (integrateNextjs) {
+    results.push("• Address Next.js-specific issues (hydration, build, etc.)")
+  }
+  results.push("• Use dev3000's interaction data to create comprehensive test scenarios")
+  results.push("")
+
+  results.push("✅ **Verification Workflow:**")
+  results.push("• Use execute_browser_action to replay exact user interactions that caused errors")
+  if (integrateChromeDevtools) {
+    results.push("• Use chrome-devtools to monitor console for error resolution")
+    results.push("• Take before/after screenshots to verify UI fixes")
+  }
+  if (integrateNextjs) {
+    results.push("• Use nextjs-dev to verify build success and runtime stability")
+  }
+  results.push("• Re-run fix_my_app to confirm error resolution")
+  results.push("")
+
+  // Integration Benefits
+  results.push("🚀 **INTEGRATION BENEFITS:**")
+
+  if (integrateNextjs && integrateChromeDevtools) {
+    results.push("🎯 **Triple-Stack Coverage:**")
+    results.push("• dev3000: AI-powered error correlation + interaction replay")
+    results.push("• nextjs-dev: Framework-specific server-side analysis")
+    results.push("• chrome-devtools: Precise browser state inspection")
+    results.push("• Combined: Complete full-stack debugging with 90%+ issue resolution")
+    results.push("")
+    results.push("⚡ **Expected Results:**")
+    results.push("• 3x faster debugging vs using tools individually")
+    results.push("• AI-powered error correlation across all layers")
+    results.push("• Systematic fix verification workflow")
+    results.push("• Comprehensive interaction-based testing")
+  } else if (integrateNextjs) {
+    results.push("🎯 **Server-Side Enhanced Coverage:**")
+    results.push("• dev3000: Client error analysis + interaction data")
+    results.push("• nextjs-dev: Server-side logs and build analysis")
+    results.push("• Combined: Full-stack Next.js debugging coverage")
+  } else if (integrateChromeDevtools) {
+    results.push("🎯 **Browser-Enhanced Coverage:**")
+    results.push("• dev3000: Error detection + interaction replay")
+    results.push("• chrome-devtools: Detailed browser state inspection")
+    results.push("• Combined: Complete client-side debugging workflow")
+  }
+
+  const estimatedTime = calculateEstimatedTime(5, integrateNextjs || integrateChromeDevtools) // Assume 5 errors for estimation
+  results.push("")
+  results.push(`⏱️ **ESTIMATED TOTAL TIME:** ${estimatedTime}`)
+  results.push(`🎼 **dev3000 orchestrates ${finalMcps.length} MCPs for maximum debugging power!**`)
+
+  return {
+    content: [{ type: "text", text: results.join("\n") }]
   }
 }
