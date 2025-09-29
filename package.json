@@ -93,8 +93,5 @@
     "url": "git+https://github.com/vercel-labs/dev3000.git"
   },
   "author": "Lindsey Simon <lindsey@vercel.com>",
-  "license": "MIT",
-  "vercel": {
-    "installCommand": "pnpm install --no-frozen-lockfile"
-  }
+  "license": "MIT"
 }
