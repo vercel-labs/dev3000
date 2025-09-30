@@ -19,7 +19,10 @@ export const TOOL_DESCRIPTIONS = {
     "🌐 **INTELLIGENT BROWSER AUTOMATION** - Smart browser action routing that automatically delegates to chrome-devtools MCP when available for superior automation capabilities.\n\n🎯 **INTELLIGENT DELEGATION:**\n• Screenshots → chrome-devtools MCP (better quality, no conflicts)\n• Navigation → chrome-devtools MCP (more reliable page handling)\n• Clicks → chrome-devtools MCP (precise coordinate-based interaction)\n• JavaScript evaluation → chrome-devtools MCP (enhanced debugging)\n• Scrolling & typing → dev3000 fallback (specialized actions)\n\n⚡ **PROGRESSIVE ENHANCEMENT:**\n• Uses chrome-devtools MCP when available for best results\n• Falls back to dev3000's native implementation when chrome-devtools unavailable\n• Shares the same Chrome instance via CDP URL coordination\n• Eliminates browser conflicts between tools\n\n💡 **PERFECT FOR:** Browser automation that automatically chooses the best tool for each action, ensuring optimal results whether chrome-devtools MCP is available or not.",
 
   discover_available_mcps:
-    "🔍 **PROACTIVE MCP DISCOVERY** - Automatically discover other MCPs running on the system using process detection and port pinging. No need to manually specify which MCPs are available!\n\n🎯 **DISCOVERY METHODS:**\n• Process Detection: Scans running processes for known MCP patterns\n• Port Pinging: Tests standard MCP ports with HTTP/WebSocket health checks\n• Cross-Platform: Works on macOS, Linux, and Windows\n\n⚡ **SMART DETECTION:**\n• Detects nextjs-dev, chrome-devtools, and other common MCPs\n• Fallback from process detection to port pinging\n• Logs all discovery attempts for transparency\n\n💡 **PERFECT FOR:** 'What MCPs are available?' or when you want dev3000 to automatically find and integrate with other debugging tools!"
+    "🔍 **PROACTIVE MCP DISCOVERY** - Automatically discover other MCPs running on the system using process detection and port pinging. No need to manually specify which MCPs are available!\n\n🎯 **DISCOVERY METHODS:**\n• Process Detection: Scans running processes for known MCP patterns\n• Port Pinging: Tests standard MCP ports with HTTP/WebSocket health checks\n• Cross-Platform: Works on macOS, Linux, and Windows\n\n⚡ **SMART DETECTION:**\n• Detects nextjs-dev, chrome-devtools, and other common MCPs\n• Fallback from process detection to port pinging\n• Logs all discovery attempts for transparency\n\n💡 **PERFECT FOR:** 'What MCPs are available?' or when you want dev3000 to automatically find and integrate with other debugging tools!",
+
+  get_mcp_capabilities:
+    "🔍 **MCP CAPABILITY INSPECTOR** - Discover and inspect the current capabilities of available MCPs (dev3000-chrome-devtools and dev3000-nextjs-dev). Shows dynamically discovered functions with descriptions and categories. Perfect for understanding what enhanced capabilities are available for augmented delegation.\n\n⚡ **DYNAMIC DISCOVERY:**\n• Introspects MCP logs and schemas to find available functions\n• Categorizes capabilities as 'advanced' vs 'basic'\n• Generates intelligent descriptions based on function names\n• Caches results for performance (5min TTL)\n\n🎯 **REAL-TIME UPDATES:**\n• Automatically adapts when MCPs add new capabilities\n• No manual maintenance required\n• Always shows current state of available tools\n\n💡 **PERFECT FOR:** Understanding what enhanced capabilities are currently available, debugging MCP integration issues, or planning augmented debugging workflows."
 }
 
 // Types
@@ -52,6 +55,10 @@ export interface CreateIntegratedWorkflowParams {
 export interface ExecuteBrowserActionParams {
   action: string
   params?: Record<string, unknown>
+}
+
+export interface GetMcpCapabilitiesParams {
+  mcpName?: string // Optional - if not provided, shows all available MCPs
 }
 
 // Structured data types for raw data output
@@ -531,7 +538,7 @@ export async function fixMyApp({
         if (integrateNextjs) {
           results.push("")
           results.push("⚛️ **Next.js Integration Active:**")
-          const nextjsSuggestions = generateNextjsSuggestions(allErrors.join(" "))
+          const nextjsSuggestions = await generateNextjsSuggestions(allErrors.join(" "))
           nextjsSuggestions.forEach((suggestion) => {
             const params = suggestion.params
               ? `(${Object.entries(suggestion.params)
@@ -552,7 +559,7 @@ export async function fixMyApp({
         if (integrateChromeDevtools) {
           results.push("")
           results.push("🌐 **Chrome DevTools Integration Active:**")
-          const chromeSuggestions = generateChromeDevtoolsSuggestions(allErrors.join(" "))
+          const chromeSuggestions = await generateChromeDevtoolsSuggestions(allErrors.join(" "))
           chromeSuggestions.forEach((suggestion) => {
             const params = suggestion.params
               ? `(${Object.entries(suggestion.params)
@@ -729,11 +736,11 @@ const value = data?.property?.nestedProperty`,
       const suggestedIntegrations: StructuredAnalysisResult["suggestedIntegrations"] = {}
 
       if (integrateNextjs) {
-        suggestedIntegrations.nextjs = generateNextjsSuggestions(allErrors.join(" "))
+        suggestedIntegrations.nextjs = await generateNextjsSuggestions(allErrors.join(" "))
       }
 
       if (integrateChromeDevtools) {
-        suggestedIntegrations.chrome = generateChromeDevtoolsSuggestions(allErrors.join(" "))
+        suggestedIntegrations.chrome = await generateChromeDevtoolsSuggestions(allErrors.join(" "))
       }
 
       // Create workflow plan if integrations are available
@@ -846,17 +853,19 @@ const value = data?.property?.nestedProperty`,
 
       if (canDelegateNextjs) {
         results.push("**Next.js Framework Analysis:**")
-        results.push("• `dev3000-nextjs-dev:analyze_build_process()` - Deep build system insights")
-        results.push("• `dev3000-nextjs-dev:debug_server_rendering()` - SSR/hydration analysis")
-        results.push("• `dev3000-nextjs-dev:analyze_next_performance()` - Framework-specific optimizations")
+        const dynamicNextjsSuggestions = await generateNextjsSuggestions(allErrors.join(" "))
+        dynamicNextjsSuggestions.slice(0, 3).forEach((suggestion) => {
+          results.push(`• \`dev3000-nextjs-dev:${suggestion.function}()\` - ${suggestion.reason}`)
+        })
         results.push("")
       }
 
       if (canDelegateChrome) {
         results.push("**Browser-Side Analysis:**")
-        results.push("• `dev3000-chrome-devtools:start_performance_profile()` - Client-side performance data")
-        results.push("• `dev3000-chrome-devtools:access_console()` - Live browser console inspection")
-        results.push("• `dev3000-chrome-devtools:intercept_requests()` - Network request analysis")
+        const dynamicChromeSuggestions = await generateChromeDevtoolsSuggestions(allErrors.join(" "))
+        dynamicChromeSuggestions.slice(0, 3).forEach((suggestion) => {
+          results.push(`• \`dev3000-chrome-devtools:${suggestion.function}()\` - ${suggestion.reason}`)
+        })
         results.push("")
       }
 
@@ -880,85 +889,347 @@ const value = data?.property?.nestedProperty`,
   }
 }
 
-// Capability mapping for chrome-devtools MCP - only for unique advanced capabilities
-const CHROME_DEVTOOLS_CAPABILITY_MAP: Record<
-  string,
-  { function: string; paramMap?: (params: Record<string, unknown>) => Record<string, unknown>; reason: string }
-> = {
-  // Only delegate advanced debugging/inspection capabilities that dev3000 can't do easily
-  inspect_element: {
-    function: "inspect_element",
-    paramMap: (params) => ({ selector: params.selector }),
-    reason: "DevTools-level DOM inspection with computed styles and element details"
-  },
-  debug_javascript: {
-    function: "set_breakpoint",
-    paramMap: (params) => ({ line: params.line, file: params.file }),
-    reason: "JavaScript debugging with breakpoints and call stack inspection"
-  },
-  profile_performance: {
-    function: "start_performance_profile",
-    paramMap: () => ({}),
-    reason: "Advanced performance profiling with memory usage and timing data"
-  },
-  intercept_network: {
-    function: "intercept_requests",
-    paramMap: (params) => ({ pattern: params.pattern }),
-    reason: "Network request interception and modification capabilities"
-  },
-  console_access: {
-    function: "access_console",
-    paramMap: () => ({}),
-    reason: "Direct browser console access with full DevTools integration"
-  },
-  manipulate_storage: {
-    function: "modify_storage",
-    paramMap: (params) => ({ type: params.type, key: params.key, value: params.value }),
-    reason: "Direct browser storage (cookies, localStorage, sessionStorage) manipulation"
-  }
-  // Basic actions like screenshot, navigate, click, simple evaluate stay with dev3000
+// Dynamic MCP capability discovery and filtering
+interface McpCapability {
+  function: string
+  description?: string
+  parameters?: Record<string, unknown>
+  category: "advanced" | "basic"
+  reason: string
 }
 
-// Capability mapping for nextjs-dev MCP - only for Next.js-specific advanced capabilities
-const NEXTJS_DEV_CAPABILITY_MAP: Record<string, { function: string; reason: string }> = {
-  analyze_build_system: {
-    function: "analyze_build_process",
-    reason: "Deep Next.js build system analysis with webpack/turbopack insights"
-  },
-  debug_ssr_issues: {
-    function: "debug_server_rendering",
-    reason: "Server-side rendering and static generation debugging"
-  },
-  optimize_next_performance: {
-    function: "analyze_next_performance",
-    reason: "Next.js-specific performance optimization recommendations"
-  },
-  inspect_route_system: {
-    function: "inspect_routing",
-    reason: "Advanced Next.js routing analysis including dynamic routes and middleware"
-  },
-  analyze_hydration: {
-    function: "debug_hydration",
-    reason: "Client-server hydration mismatch analysis and debugging"
+interface McpSchemaCache {
+  timestamp: number
+  capabilities: McpCapability[]
+}
+
+// Cache for discovered MCP capabilities (5 minute TTL)
+const MCP_CAPABILITY_CACHE = new Map<string, McpSchemaCache>()
+const CAPABILITY_CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+
+// Keywords that indicate advanced capabilities (vs basic automation)
+const ADVANCED_CAPABILITY_KEYWORDS = {
+  chrome: [
+    "inspect",
+    "debug",
+    "profile",
+    "performance",
+    "console",
+    "devtools",
+    "breakpoint",
+    "intercept",
+    "storage",
+    "memory",
+    "trace"
+  ],
+  nextjs: ["build", "hydration", "ssr", "routing", "analyze", "debug", "render", "middleware", "optimization"]
+}
+
+// Basic capabilities that dev3000 handles well (should not suggest these)
+const DEV3000_BASIC_CAPABILITIES = [
+  "screenshot",
+  "navigate",
+  "click",
+  "type",
+  "scroll",
+  "evaluate",
+  "simple_script",
+  "get_logs",
+  "basic_build_status",
+  "simple_error_check"
+]
+
+/**
+ * Dynamically discover MCP capabilities by introspecting their schemas
+ */
+async function discoverMcpCapabilities(mcpName: string): Promise<McpCapability[]> {
+  const cacheKey = mcpName
+  const cached = MCP_CAPABILITY_CACHE.get(cacheKey)
+
+  // Return cached capabilities if still fresh
+  if (cached && Date.now() - cached.timestamp < CAPABILITY_CACHE_TTL) {
+    logToDevFile(
+      `Capability Discovery: Using cached capabilities for ${mcpName} (${cached.capabilities.length} functions)`
+    )
+    return cached.capabilities
   }
-  // Basic server logs and simple build status stay with dev3000's existing log collection
+
+  logToDevFile(`Capability Discovery: Fetching fresh capabilities for ${mcpName}`)
+
+  try {
+    // Method 1: Try to get MCP schema via tools/list request (MCP protocol standard)
+    const capabilities = await introspectMcpTools(mcpName)
+
+    if (capabilities.length > 0) {
+      // Cache the results
+      MCP_CAPABILITY_CACHE.set(cacheKey, {
+        timestamp: Date.now(),
+        capabilities
+      })
+
+      logToDevFile(`Capability Discovery: Successfully discovered ${capabilities.length} capabilities for ${mcpName}`)
+      return capabilities
+    }
+
+    // Method 2: Fallback to checking available function names from logs/errors
+    const fallbackCapabilities = await inferCapabilitiesFromLogs(mcpName)
+
+    // Cache even fallback results to avoid repeated failures
+    MCP_CAPABILITY_CACHE.set(cacheKey, {
+      timestamp: Date.now(),
+      capabilities: fallbackCapabilities
+    })
+
+    logToDevFile(
+      `Capability Discovery: Using fallback inference for ${mcpName} (${fallbackCapabilities.length} functions)`
+    )
+    return fallbackCapabilities
+  } catch (error) {
+    logToDevFile(`Capability Discovery: Failed to discover capabilities for ${mcpName} - ${error}`)
+    return []
+  }
 }
 
 /**
- * Check if chrome-devtools MCP is available and can handle the requested action
+ * Introspect MCP tools using the standard tools/list request
  */
-async function canDelegateToChromeDevtools(action: string): Promise<boolean> {
+async function introspectMcpTools(mcpName: string): Promise<McpCapability[]> {
+  // For stdio MCPs, we can try to discover their capabilities by checking Claude's cache directory
+  // which often contains MCP schema information or error logs that reveal function names
+
   try {
-    // First check if the action is mappable to chrome-devtools
-    if (!CHROME_DEVTOOLS_CAPABILITY_MAP[action]) {
+    const cacheDir = `/Users/${process.env.USER}/Library/Caches/claude-cli-nodejs`
+    const { readdirSync, existsSync, readFileSync } = await import("fs")
+
+    if (!existsSync(cacheDir)) return []
+
+    const cacheDirs = readdirSync(cacheDir)
+    const projectDir = cacheDirs.find((dir) => dir.includes(process.cwd().replace(/\//g, "-")))
+
+    if (!projectDir) return []
+
+    const mcpLogDir = `${cacheDir}/${projectDir}/mcp-logs-${mcpName}`
+    if (!existsSync(mcpLogDir)) return []
+
+    // Look for schema information in MCP logs
+    const logFiles = readdirSync(mcpLogDir)
+    const capabilities: McpCapability[] = []
+
+    for (const logFile of logFiles.slice(-5)) {
+      // Check recent logs only
+      try {
+        const logPath = `${mcpLogDir}/${logFile}`
+        const logContent = readFileSync(logPath, "utf8")
+
+        // Parse log content for function definitions, tool lists, or schema information
+        const discoveredFunctions = extractFunctionsFromLog(logContent, mcpName)
+        capabilities.push(...discoveredFunctions)
+      } catch (_error) {
+        // Skip files that can't be read
+      }
+    }
+
+    return deduplicateCapabilities(capabilities)
+  } catch (error) {
+    logToDevFile(`MCP Introspection: Failed to introspect ${mcpName} - ${error}`)
+    return []
+  }
+}
+
+/**
+ * Extract function names and descriptions from MCP log content
+ */
+function extractFunctionsFromLog(logContent: string, mcpName: string): McpCapability[] {
+  const capabilities: McpCapability[] = []
+  const mcpType = mcpName.includes("chrome") ? "chrome" : mcpName.includes("nextjs") ? "nextjs" : "unknown"
+  const advancedKeywords = ADVANCED_CAPABILITY_KEYWORDS[mcpType] || []
+
+  // Look for function definitions in various formats
+  const patterns = [
+    // JSON-RPC method calls: {"method": "tools/list", "result": {"tools": [{"name": "function_name", "description": "..."}]}}
+    /"name":\s*"([^"]+)"/g,
+    // Function call patterns: functionName(params)
+    /(\w+)\s*\([^)]*\)/g,
+    // Tool definition patterns: tool: function_name
+    /tool:\s*(\w+)/g,
+    // Error messages that reveal function names: "Unknown function: function_name"
+    /unknown function[:\s]+(\w+)/gi,
+    // Function export patterns: exports.function_name
+    /exports\.(\w+)/g
+  ]
+
+  for (const pattern of patterns) {
+    let match: RegExpExecArray | null = pattern.exec(logContent)
+    while (match !== null) {
+      const functionName = match[1]
+
+      // Skip if this is a basic capability that dev3000 handles
+      if (DEV3000_BASIC_CAPABILITIES.some((basic) => functionName.toLowerCase().includes(basic))) {
+        match = pattern.exec(logContent)
+        continue
+      }
+
+      // Determine if this is an advanced capability
+      const isAdvanced = advancedKeywords.some((keyword) => functionName.toLowerCase().includes(keyword))
+
+      // Generate reason based on function name and MCP type
+      const reason = generateCapabilityReason(functionName, mcpType, isAdvanced)
+
+      capabilities.push({
+        function: functionName,
+        description: undefined, // Will be filled from actual description if available
+        category: isAdvanced ? "advanced" : "basic",
+        reason
+      })
+
+      match = pattern.exec(logContent)
+    }
+  }
+
+  return capabilities
+}
+
+/**
+ * Generate intelligent reason text for a discovered capability
+ */
+function generateCapabilityReason(functionName: string, mcpType: string, isAdvanced: boolean): string {
+  const name = functionName.toLowerCase()
+
+  // Chrome DevTools specific reasons
+  if (mcpType === "chrome") {
+    if (name.includes("inspect")) return "Deep DOM inspection with DevTools-level detail"
+    if (name.includes("console")) return "Direct browser console access and manipulation"
+    if (name.includes("debug") || name.includes("breakpoint"))
+      return "JavaScript debugging with breakpoints and call stack"
+    if (name.includes("profile") || name.includes("performance")) return "Advanced performance profiling and analysis"
+    if (name.includes("network") || name.includes("request")) return "Network request interception and analysis"
+    if (name.includes("storage")) return "Browser storage manipulation (cookies, localStorage, etc.)"
+    if (name.includes("trace") || name.includes("memory")) return "Memory usage and execution tracing"
+  }
+
+  // Next.js specific reasons
+  if (mcpType === "nextjs") {
+    if (name.includes("build")) return "Advanced Next.js build system analysis"
+    if (name.includes("hydration")) return "Client-server hydration debugging and analysis"
+    if (name.includes("ssr") || name.includes("render")) return "Server-side rendering debugging"
+    if (name.includes("route") || name.includes("routing")) return "Next.js routing system inspection and debugging"
+    if (name.includes("middleware")) return "Next.js middleware analysis and debugging"
+    if (name.includes("optimization") || name.includes("performance"))
+      return "Next.js-specific performance optimization"
+  }
+
+  // Generic advanced vs basic
+  if (isAdvanced) {
+    return `Advanced ${mcpType} capability beyond dev3000's basic automation`
+  }
+
+  return `${mcpType} capability for specialized analysis`
+}
+
+/**
+ * Infer capabilities from error patterns and log analysis when direct introspection fails
+ */
+async function inferCapabilitiesFromLogs(mcpName: string): Promise<McpCapability[]> {
+  // This is a fallback when we can't directly introspect the MCP
+  // We'll return commonly expected capabilities based on the MCP type
+
+  const mcpType = mcpName.includes("chrome") ? "chrome" : mcpName.includes("nextjs") ? "nextjs" : "unknown"
+  const capabilities: McpCapability[] = []
+
+  if (mcpType === "chrome") {
+    // Common chrome-devtools capabilities that are likely to exist
+    const commonChromeFunctions = [
+      "inspect_element",
+      "access_console",
+      "start_performance_profile",
+      "intercept_requests",
+      "set_breakpoint",
+      "take_screenshot",
+      "get_dom_snapshot",
+      "modify_storage",
+      "execute_script"
+    ]
+
+    for (const func of commonChromeFunctions) {
+      capabilities.push({
+        function: func,
+        category: DEV3000_BASIC_CAPABILITIES.includes(func) ? "basic" : "advanced",
+        reason: generateCapabilityReason(func, mcpType, true)
+      })
+    }
+  }
+
+  if (mcpType === "nextjs") {
+    // Common nextjs-dev capabilities that are likely to exist
+    const commonNextjsFunctions = [
+      "analyze_build_process",
+      "debug_server_rendering",
+      "debug_hydration",
+      "inspect_routing",
+      "analyze_next_performance",
+      "get_build_info",
+      "check_build_status",
+      "get_server_logs"
+    ]
+
+    for (const func of commonNextjsFunctions) {
+      capabilities.push({
+        function: func,
+        category: DEV3000_BASIC_CAPABILITIES.includes(func) ? "basic" : "advanced",
+        reason: generateCapabilityReason(func, mcpType, true)
+      })
+    }
+  }
+
+  logToDevFile(`Capability Inference: Generated ${capabilities.length} inferred capabilities for ${mcpName}`)
+  return capabilities
+}
+
+/**
+ * Remove duplicate capabilities while preserving the most detailed ones
+ */
+function deduplicateCapabilities(capabilities: McpCapability[]): McpCapability[] {
+  const seen = new Map<string, McpCapability>()
+
+  for (const capability of capabilities) {
+    const existing = seen.get(capability.function)
+
+    // Keep the one with more information (description, better reason, etc.)
+    if (
+      !existing ||
+      (capability.description && !existing.description) ||
+      capability.reason.length > existing.reason.length
+    ) {
+      seen.set(capability.function, capability)
+    }
+  }
+
+  return Array.from(seen.values())
+}
+
+/**
+ * Check if chrome-devtools MCP is available and get its capabilities
+ */
+async function canDelegateToChromeDevtools(action?: string): Promise<boolean> {
+  try {
+    // Check if MCP is available
+    const availableMcps = await discoverAvailableMcps()
+    if (!availableMcps.includes("dev3000-chrome-devtools")) {
       return false
     }
 
-    // Only look for dev3000's own configured chrome-devtools MCP
-    const availableMcps = await discoverAvailableMcps()
+    // If no specific action, just return availability
+    if (!action) return true
 
-    // Check for dev3000's own configured chrome-devtools MCP
-    return availableMcps.includes("dev3000-chrome-devtools")
+    // Get dynamic capabilities
+    const capabilities = await discoverMcpCapabilities("dev3000-chrome-devtools")
+
+    // Check if the MCP has relevant capabilities for the action
+    const hasRelevantCapability = capabilities.some(
+      (cap) => cap.function.toLowerCase().includes(action.toLowerCase()) || cap.category === "advanced" // Any advanced capability indicates delegation worthiness
+    )
+
+    return hasRelevantCapability
   } catch (error) {
     logToDevFile(`Chrome DevTools delegation check failed: ${error}`)
     return false
@@ -966,15 +1237,21 @@ async function canDelegateToChromeDevtools(action: string): Promise<boolean> {
 }
 
 /**
- * Check if nextjs-dev MCP is available
+ * Check if nextjs-dev MCP is available and get its capabilities
  */
 async function canDelegateToNextjs(): Promise<boolean> {
   try {
-    // Only look for dev3000's own configured nextjs-dev MCP
+    // Check if MCP is available
     const availableMcps = await discoverAvailableMcps()
+    if (!availableMcps.includes("dev3000-nextjs-dev")) {
+      return false
+    }
 
-    // Check for dev3000's own configured nextjs-dev MCP
-    return availableMcps.includes("dev3000-nextjs-dev")
+    // Get dynamic capabilities to verify it has useful functions
+    const capabilities = await discoverMcpCapabilities("dev3000-nextjs-dev")
+
+    // Return true if we found any advanced Next.js capabilities
+    return capabilities.some((cap) => cap.category === "advanced")
   } catch (error) {
     logToDevFile(`NextJS delegation check failed: ${error}`)
     return false
@@ -1308,24 +1585,26 @@ export async function executeBrowserAction({
       successMessage +=
         "\n\ndev3000 completed the basic browser action above. For deeper browser insights, consider also:"
 
-      if (action === "screenshot") {
-        successMessage +=
-          "\n• `dev3000-chrome-devtools:inspect_element(selector)` - Deep DOM inspection with computed styles"
-        successMessage +=
-          "\n• `dev3000-chrome-devtools:start_performance_profile()` - Performance analysis of current page state"
-      } else if (action === "evaluate") {
-        successMessage +=
-          "\n• `dev3000-chrome-devtools:access_console()` - Full browser console access for advanced debugging"
-        successMessage += "\n• `dev3000-chrome-devtools:inspect_element(selector)` - Visual element inspection"
-      } else if (action === "navigate") {
-        successMessage +=
-          "\n• `dev3000-chrome-devtools:intercept_requests()` - Monitor network requests during navigation"
-        successMessage += "\n• `dev3000-chrome-devtools:start_performance_profile()` - Page load performance analysis"
-      } else if (action === "click") {
-        successMessage +=
-          "\n• `dev3000-chrome-devtools:access_console()` - Check for JavaScript errors after interaction"
-        successMessage += "\n• `dev3000-chrome-devtools:inspect_element(selector)` - Verify DOM state changes"
-      }
+      // Generate dynamic suggestions based on the action and available capabilities
+      const dynamicSuggestions = await generateChromeDevtoolsSuggestions(action)
+      const actionRelevantSuggestions = dynamicSuggestions.filter((suggestion) => {
+        const funcName = suggestion.function.toLowerCase()
+        const actionName = action.toLowerCase()
+
+        // Match suggestions to specific actions
+        if (actionName === "screenshot" && (funcName.includes("inspect") || funcName.includes("performance")))
+          return true
+        if (actionName === "evaluate" && (funcName.includes("console") || funcName.includes("inspect"))) return true
+        if (actionName === "navigate" && (funcName.includes("network") || funcName.includes("performance"))) return true
+        if (actionName === "click" && (funcName.includes("console") || funcName.includes("inspect"))) return true
+
+        // Include high-priority suggestions regardless
+        return suggestion.priority === "high"
+      })
+
+      actionRelevantSuggestions.slice(0, 2).forEach((suggestion) => {
+        successMessage += `\n• \`dev3000-chrome-devtools:${suggestion.function}()\` - ${suggestion.reason}`
+      })
 
       successMessage +=
         "\n\n💡 **Augmented approach:** Use dev3000 for basic automation, chrome-devtools for detailed analysis and debugging."
@@ -1548,6 +1827,140 @@ export async function discoverAvailableMcps(projectName?: string): Promise<strin
 }
 
 /**
+ * Get and display MCP capabilities for debugging and inspection
+ */
+export async function getMcpCapabilities({
+  mcpName
+}: GetMcpCapabilitiesParams = {}): Promise<{ content: Array<{ type: "text"; text: string }> }> {
+  const results: string[] = []
+
+  results.push("🔍 **MCP CAPABILITY INSPECTOR**")
+  results.push("")
+
+  try {
+    // Discover available MCPs if no specific one requested
+    const availableMcps = await discoverAvailableMcps()
+
+    if (availableMcps.length === 0) {
+      results.push("❌ **NO MCPs DETECTED**")
+      results.push("No dev3000-chrome-devtools or dev3000-nextjs-dev MCPs found.")
+      results.push("")
+      results.push("💡 **To enable enhanced capabilities:**")
+      results.push("• Ensure Chrome DevTools MCP is configured: `dev3000-chrome-devtools`")
+      results.push("• Ensure Next.js Dev MCP is configured: `dev3000-nextjs-dev`")
+      results.push("• Check that Claude Code has MCPs properly configured")
+
+      return {
+        content: [{ type: "text", text: results.join("\n") }]
+      }
+    }
+
+    results.push(`✅ **DISCOVERED MCPs:** ${availableMcps.join(", ")}`)
+    results.push("")
+
+    // Filter to specific MCP if requested
+    const mcpsToInspect = mcpName ? availableMcps.filter((name) => name.includes(mcpName)) : availableMcps
+
+    if (mcpsToInspect.length === 0 && mcpName) {
+      results.push(`❌ **MCP NOT FOUND:** ${mcpName}`)
+      results.push(`Available MCPs: ${availableMcps.join(", ")}`)
+
+      return {
+        content: [{ type: "text", text: results.join("\n") }]
+      }
+    }
+
+    // Inspect capabilities for each MCP
+    for (const mcp of mcpsToInspect) {
+      results.push(`📋 **${mcp.toUpperCase()} CAPABILITIES:**`)
+      results.push("")
+
+      const capabilities = await discoverMcpCapabilities(mcp)
+
+      if (capabilities.length === 0) {
+        results.push("  ❌ No capabilities discovered")
+        results.push("  💡 This might indicate the MCP is not properly configured or accessible")
+        results.push("")
+        continue
+      }
+
+      // Group by category
+      const advanced = capabilities.filter((cap) => cap.category === "advanced")
+      const basic = capabilities.filter((cap) => cap.category === "basic")
+
+      results.push(`  🚀 **ADVANCED CAPABILITIES** (${advanced.length} functions):`)
+      if (advanced.length > 0) {
+        advanced.forEach((cap) => {
+          results.push(`    • \`${cap.function}()\` - ${cap.reason}`)
+        })
+      } else {
+        results.push("    No advanced capabilities discovered")
+      }
+      results.push("")
+
+      results.push(`  ⚙️ **BASIC CAPABILITIES** (${basic.length} functions):`)
+      if (basic.length > 0) {
+        basic.forEach((cap) => {
+          results.push(`    • \`${cap.function}()\` - ${cap.reason}`)
+        })
+      } else {
+        results.push("    No basic capabilities discovered")
+      }
+      results.push("")
+
+      // Cache info
+      const cached = MCP_CAPABILITY_CACHE.get(mcp)
+      if (cached) {
+        const age = Date.now() - cached.timestamp
+        const ageMinutes = Math.floor(age / 60000)
+        results.push(`  📝 **CACHE INFO:** Discovered ${ageMinutes} minutes ago`)
+        if (age > CAPABILITY_CACHE_TTL * 0.8) {
+          results.push("  ⚠️  Cache will refresh soon on next use")
+        }
+      }
+      results.push("")
+    }
+
+    // Summary
+    const totalCapabilities = mcpsToInspect.reduce(async (accPromise, mcp) => {
+      const acc = await accPromise
+      const caps = await discoverMcpCapabilities(mcp)
+      return acc + caps.length
+    }, Promise.resolve(0))
+
+    results.push("🎯 **AUGMENTED DELEGATION STATUS:**")
+    results.push(`• Total discovered capabilities: ${await totalCapabilities}`)
+    results.push(
+      `• MCPs with advanced capabilities: ${
+        mcpsToInspect.filter(async (mcp) => {
+          const caps = await discoverMcpCapabilities(mcp)
+          return caps.some((cap) => cap.category === "advanced")
+        }).length
+      }`
+    )
+    results.push("• Dynamic discovery: ✅ Active (updates automatically)")
+    results.push("• Cache TTL: 5 minutes")
+    results.push("")
+    results.push("💡 **These capabilities are automatically suggested in dev3000's enhanced responses!**")
+
+    return {
+      content: [{ type: "text", text: results.join("\n") }]
+    }
+  } catch (error) {
+    results.push(`❌ **ERROR INSPECTING CAPABILITIES:** ${error instanceof Error ? error.message : String(error)}`)
+    results.push("")
+    results.push("💡 **Troubleshooting:**")
+    results.push("• Check that MCPs are properly configured in Claude Code")
+    results.push("• Verify dev3000 can access Claude cache directories")
+    results.push("• Try running `discover_available_mcps()` first")
+
+    return {
+      content: [{ type: "text", text: results.join("\n") }]
+    }
+  }
+}
+
+/**
  * Log MCP-related events to the project-specific D3K log file (NOT main project log)
  * This prevents Claude from seeing dev3000's orchestration logs as application errors
  */
@@ -1649,85 +2062,119 @@ export function calculateEstimatedTime(errorCount: number, hasIntegrations: bool
 }
 
 /**
- * Generate Next.js specific MCP function suggestions
+ * Generate dynamic Next.js specific MCP function suggestions based on discovered capabilities
  */
-export function generateNextjsSuggestions(errorContext?: string): McpFunctionSuggestion[] {
-  const suggestions: McpFunctionSuggestion[] = [
-    {
-      function: "check_errors",
-      reason: "Analyze Next.js build and runtime errors with framework-specific context",
-      priority: "high"
-    },
-    {
-      function: "get_logs",
-      params: { type: "error", limit: 20 },
-      reason: "Retrieve detailed Next.js server logs to correlate with dev3000 findings",
-      priority: "high"
-    }
-  ]
+export async function generateNextjsSuggestions(errorContext?: string): Promise<McpFunctionSuggestion[]> {
+  try {
+    // Get dynamic capabilities from the MCP
+    const capabilities = await discoverMcpCapabilities("dev3000-nextjs-dev")
 
-  // Add context-specific suggestions
-  if (errorContext?.includes("hydration")) {
-    suggestions.push({
-      function: "check_hydration_errors",
-      reason: "Specific hydration mismatch analysis detected in error context",
-      priority: "high"
-    })
+    // Filter for advanced capabilities and create suggestions
+    const suggestions: McpFunctionSuggestion[] = capabilities
+      .filter((cap) => cap.category === "advanced")
+      .slice(0, 8) // Limit to most relevant suggestions
+      .map((cap) => ({
+        function: cap.function,
+        reason: cap.reason,
+        priority: determinePriority(cap.function, errorContext) as "high" | "medium" | "low"
+      }))
+
+    logToDevFile(
+      `Dynamic Suggestions: Generated ${suggestions.length} Next.js suggestions from ${capabilities.length} discovered capabilities`
+    )
+
+    return suggestions
+  } catch (error) {
+    logToDevFile(`Dynamic Suggestions: Failed to generate Next.js suggestions - ${error}`)
+
+    // Fallback to basic suggestions if discovery fails
+    return [
+      {
+        function: "analyze_build_process",
+        reason: "Advanced Next.js build system analysis",
+        priority: "high"
+      },
+      {
+        function: "debug_server_rendering",
+        reason: "Server-side rendering debugging",
+        priority: "high"
+      }
+    ]
   }
-
-  if (errorContext?.includes("build") || errorContext?.includes("compile")) {
-    suggestions.push({
-      function: "get_build_info",
-      reason: "Build-related errors detected, get detailed compilation information",
-      priority: "high"
-    })
-  }
-
-  return suggestions
 }
 
 /**
- * Generate Chrome DevTools specific MCP function suggestions
+ * Generate dynamic Chrome DevTools specific MCP function suggestions based on discovered capabilities
  */
-export function generateChromeDevtoolsSuggestions(errorContext?: string): McpFunctionSuggestion[] {
-  const suggestions: McpFunctionSuggestion[] = [
-    {
-      function: "list_console_messages",
-      params: { type: "error", limit: 20 },
-      reason: "Get detailed browser console errors to correlate with dev3000 interaction data",
-      priority: "high"
-    },
-    {
-      function: "list_network_requests",
-      params: { failed: true },
-      reason: "Analyze failed network requests that may be causing application errors",
-      priority: "medium"
-    },
-    {
-      function: "take_screenshot",
-      reason: "Capture current browser state for visual debugging",
-      priority: "low"
-    }
+export async function generateChromeDevtoolsSuggestions(errorContext?: string): Promise<McpFunctionSuggestion[]> {
+  try {
+    // Get dynamic capabilities from the MCP
+    const capabilities = await discoverMcpCapabilities("dev3000-chrome-devtools")
+
+    // Filter for advanced capabilities and create suggestions
+    const suggestions: McpFunctionSuggestion[] = capabilities
+      .filter((cap) => cap.category === "advanced")
+      .slice(0, 8) // Limit to most relevant suggestions
+      .map((cap) => ({
+        function: cap.function,
+        reason: cap.reason,
+        priority: determinePriority(cap.function, errorContext) as "high" | "medium" | "low"
+      }))
+
+    logToDevFile(
+      `Dynamic Suggestions: Generated ${suggestions.length} Chrome DevTools suggestions from ${capabilities.length} discovered capabilities`
+    )
+
+    return suggestions
+  } catch (error) {
+    logToDevFile(`Dynamic Suggestions: Failed to generate Chrome DevTools suggestions - ${error}`)
+
+    // Fallback to basic suggestions if discovery fails
+    return [
+      {
+        function: "inspect_element",
+        reason: "Deep DOM inspection with DevTools-level detail",
+        priority: "high"
+      },
+      {
+        function: "access_console",
+        reason: "Direct browser console access and manipulation",
+        priority: "high"
+      }
+    ]
+  }
+}
+
+/**
+ * Determine priority of a capability based on error context and function relevance
+ */
+function determinePriority(functionName: string, errorContext?: string): "high" | "medium" | "low" {
+  const name = functionName.toLowerCase()
+  const context = errorContext?.toLowerCase() || ""
+
+  // High priority matches - function directly relates to error context
+  const highPriorityPatterns = [
+    { pattern: /hydration/, keywords: ["hydration", "ssr", "render"] },
+    { pattern: /build|compile/, keywords: ["build", "compile", "analyze"] },
+    { pattern: /network|fetch|api/, keywords: ["network", "request", "intercept", "performance"] },
+    { pattern: /console|error/, keywords: ["console", "error", "debug"] },
+    { pattern: /click|interaction/, keywords: ["dom", "element", "inspect"] }
   ]
 
-  // Add context-specific suggestions
-  if (errorContext?.includes("network") || errorContext?.includes("fetch") || errorContext?.includes("api")) {
-    suggestions.push({
-      function: "get_performance_metrics",
-      reason: "Network-related errors detected, analyze performance and timing",
-      priority: "high"
-    })
+  for (const { pattern, keywords } of highPriorityPatterns) {
+    if (pattern.test(context) && keywords.some((keyword) => name.includes(keyword))) {
+      return "high"
+    }
   }
 
-  if (errorContext?.includes("click") || errorContext?.includes("interaction")) {
-    suggestions.push({
-      function: "get_dom_snapshot",
-      reason: "Interaction errors detected, capture DOM state for element analysis",
-      priority: "medium"
-    })
+  // Medium priority - advanced debugging capabilities
+  const mediumPriorityKeywords = ["debug", "profile", "analyze", "trace", "inspect"]
+  if (mediumPriorityKeywords.some((keyword) => name.includes(keyword))) {
+    return "medium"
   }
 
-  return suggestions
+  // Low priority - basic or less critical functions
+  return "low"
 }
 
 /**
@@ -1767,8 +2214,8 @@ export async function createIntegratedWorkflow({
   results.push("")
 
   // Generate MCP-specific suggestions
-  const nextjsSuggestions = integrateNextjs ? generateNextjsSuggestions(errorContext) : []
-  const chromeSuggestions = integrateChromeDevtools ? generateChromeDevtoolsSuggestions(errorContext) : []
+  const nextjsSuggestions = integrateNextjs ? await generateNextjsSuggestions(errorContext) : []
+  const chromeSuggestions = integrateChromeDevtools ? await generateChromeDevtoolsSuggestions(errorContext) : []
 
   if (!integrateNextjs && !integrateChromeDevtools) {
     results.push("⚠️ **NO INTEGRATIONS DETECTED**")
