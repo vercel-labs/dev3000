@@ -287,20 +287,47 @@ export class CDPMonitor {
           this.debugLog(`Chrome stdout: ${data.toString().trim()}`)
         })
 
-        // Give Chrome time to start up
-        setTimeout(async () => {
-          if (!processExited) {
-            this.debugLog(`Chrome successfully started with path: ${chromePath}`)
+        // Poll for Chrome readiness instead of fixed timeout
+        const checkChromeReady = async (attempts = 0): Promise<void> => {
+          const maxAttempts = 30 // 30 attempts = 15 seconds max
 
-            // Discover all Chrome PIDs for this instance
-            await this.discoverChromePids()
-
-            // Set up runtime crash monitoring after successful launch
-            this.setupRuntimeCrashMonitoring()
-
-            resolve()
+          if (processExited) {
+            return
           }
-        }, 3000)
+
+          if (attempts >= maxAttempts) {
+            this.debugLog(`Chrome readiness check timed out after ${maxAttempts * 500}ms`)
+            processExited = true
+            setTimeout(tryNextChrome, 100)
+            return
+          }
+
+          try {
+            // Try to connect to CDP to verify Chrome is ready
+            const response = await fetch(`http://localhost:${this.debugPort}/json`, {
+              signal: AbortSignal.timeout(500)
+            })
+            if (response.ok) {
+              this.debugLog(`Chrome successfully started with path: ${chromePath} (after ${attempts * 500}ms)`)
+
+              // Discover all Chrome PIDs for this instance
+              await this.discoverChromePids()
+
+              // Set up runtime crash monitoring after successful launch
+              this.setupRuntimeCrashMonitoring()
+
+              resolve()
+              return
+            }
+          } catch (_error) {
+            // Chrome not ready yet, retry
+          }
+
+          setTimeout(() => checkChromeReady(attempts + 1), 500)
+        }
+
+        // Start checking after a small delay
+        setTimeout(() => checkChromeReady(), 500)
       }
 
       tryNextChrome()
