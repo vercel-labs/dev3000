@@ -89,7 +89,10 @@ export default function HomePage() {
             <p className="text-xl text-muted-foreground mb-10 max-w-2xl mx-auto leading-relaxed">
               <Balancer>
                 Captures server + browser logs, events, and network requests. Takes automatic screenshots and stitches
-                it all into a unified, timestamped feed for AI debugging. <span className="font-medium text-foreground">Gracefully enhances with chrome-devtools and nextjs-dev MCPs when available.</span>
+                it all into a unified, timestamped feed for AI debugging.{" "}
+                <span className="font-medium text-foreground">
+                  Gracefully enhances with chrome-devtools and nextjs-dev MCPs when available.
+                </span>
               </Balancer>
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-16">
@@ -205,7 +208,9 @@ export default function HomePage() {
                   <h3 className="font-semibold mb-3 text-lg">AI integration with dynamic capability enhancement</h3>
                   <div className="space-y-3">
                     <p className="text-sm text-muted-foreground">
-                      dev3000 automatically configures MCP connections for Claude Code. When chrome-devtools and nextjs-dev MCPs are also available, dev3000 dynamically discovers their capabilities and suggests enhanced debugging workflows.
+                      dev3000 automatically configures MCP connections for Claude Code. When chrome-devtools and
+                      nextjs-dev MCPs are also available, dev3000 dynamically discovers their capabilities and suggests
+                      enhanced debugging workflows.
                     </p>
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <div className="w-2 h-2 bg-green-500 rounded-full"></div>
@@ -220,7 +225,8 @@ export default function HomePage() {
                       <span>nextjs-dev MCP - Enhances Next.js debugging</span>
                     </div>
                     <p className="text-xs text-muted-foreground italic">
-                      💡 Enhanced MCPs are optional - dev3000 works great on its own and gracefully improves when they're available
+                      💡 Enhanced MCPs are optional - dev3000 works great on its own and gracefully improves when
+                      they're available
                     </p>
                   </div>
                 </div>
@@ -313,7 +319,8 @@ export default function HomePage() {
               <h3 className="font-bold text-lg mb-4">🎯 Dynamic Capability Discovery</h3>
               <div className="max-w-2xl mx-auto space-y-3">
                 <p className="text-sm">
-                  dev3000 automatically discovers what MCP capabilities are available and suggests the best tools for each debugging scenario
+                  dev3000 automatically discovers what MCP capabilities are available and suggests the best tools for
+                  each debugging scenario
                 </p>
                 <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground">
                   <span>• Real-time capability detection</span>
