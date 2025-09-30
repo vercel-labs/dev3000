@@ -1041,8 +1041,12 @@ async function introspectMcpTools(mcpName: string): Promise<McpCapability[]> {
  */
 function extractFunctionsFromLog(logContent: string, mcpName: string): McpCapability[] {
   const capabilities: McpCapability[] = []
-  const mcpType = mcpName.includes("chrome") ? "chrome" : mcpName.includes("nextjs") ? "nextjs" : "unknown"
-  const advancedKeywords = ADVANCED_CAPABILITY_KEYWORDS[mcpType] || []
+  const mcpType: "chrome" | "nextjs" = mcpName.includes("chrome")
+    ? "chrome"
+    : mcpName.includes("nextjs")
+      ? "nextjs"
+      : "chrome" // default to chrome if unknown
+  const advancedKeywords = ADVANCED_CAPABILITY_KEYWORDS[mcpType]
 
   // Look for function definitions in various formats
   const patterns = [
@@ -1265,13 +1269,19 @@ async function delegateToChromeDevtools(
   action: string,
   params: Record<string, unknown>
 ): Promise<{ content: Array<{ type: "text"; text: string }> }> {
-  const mapping = CHROME_DEVTOOLS_CAPABILITY_MAP[action]
-  if (!mapping) {
+  // Get dynamic capabilities from chrome-devtools MCP
+  const capabilities = await discoverMcpCapabilities("dev3000-chrome-devtools")
+
+  // Find a relevant capability for this action
+  const relevantCap = capabilities.find(
+    (cap) =>
+      cap.function.toLowerCase().includes(action.toLowerCase()) ||
+      cap.description?.toLowerCase().includes(action.toLowerCase())
+  )
+
+  if (!relevantCap) {
     throw new Error(`Action ${action} cannot be delegated to chrome-devtools`)
   }
-
-  // Transform parameters if needed
-  const chromeParams = mapping.paramMap ? mapping.paramMap(params) : params
 
   return {
     content: [
@@ -1282,13 +1292,13 @@ async function delegateToChromeDevtools(
 For advanced debugging capabilities, use the \`dev3000-chrome-devtools\` MCP:
 
 \`\`\`
-dev3000-chrome-devtools:${mapping.function}(${JSON.stringify(chromeParams, null, 2)})
+dev3000-chrome-devtools:${relevantCap.function}(${JSON.stringify(params, null, 2)})
 \`\`\`
 
-🎯 **Why use chrome-devtools for this:** ${mapping.reason}
+🎯 **Why use chrome-devtools for this:** ${relevantCap.reason}
 
 💡 **When to use each tool:**
-• **dev3000**: Basic browser automation (screenshots, navigation, clicks, simple scripts)  
+• **dev3000**: Basic browser automation (screenshots, navigation, clicks, simple scripts)
 • **dev3000-chrome-devtools**: Advanced debugging (DOM inspection, breakpoints, performance profiling, network interception)
 
 ⚡ **Both tools share the same Chrome instance** - no conflicts or duplicate browsers`
@@ -1301,8 +1311,11 @@ dev3000-chrome-devtools:${mapping.function}(${JSON.stringify(chromeParams, null,
  * Delegate to nextjs-dev MCP with suggested functions
  */
 async function _delegateToNextjs(): Promise<{ content: Array<{ type: "text"; text: string }> }> {
-  const availableFunctions = Object.entries(NEXTJS_DEV_CAPABILITY_MAP)
-    .map(([_key, { function: func, reason }]) => `• \`dev3000-nextjs-dev:${func}()\` - ${reason}`)
+  // Get dynamic capabilities from nextjs-dev MCP
+  const capabilities = await discoverMcpCapabilities("dev3000-nextjs-dev")
+
+  const availableFunctions = capabilities
+    .map((cap) => `• \`dev3000-nextjs-dev:${cap.function}()\` - ${cap.reason}`)
     .join("\n")
 
   return {

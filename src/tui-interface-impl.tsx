@@ -42,7 +42,7 @@ const TUIApp = ({
   const logIdCounter = useRef(0)
   const { stdout } = useStdout()
   const ctrlCMessageDefault = "^C quit"
-  const [ctrlCMessage] = useState(ctrlCMessageDefault)
+  const [ctrlCMessage, setCtrlCMessage] = useState(ctrlCMessageDefault)
 
   const [terminalSize, setTerminalSize] = useState(() => ({
     width: stdout?.columns || 80,
@@ -82,7 +82,21 @@ const TUIApp = ({
 
   // Provide status update function to parent
   useEffect(() => {
-    onStatusUpdate(setInitStatus)
+    onStatusUpdate((status: string | null) => {
+      // Check if this is the "Press Ctrl+C again" warning
+      if (status?.includes("Press Ctrl+C again")) {
+        // Update the bottom Ctrl+C message with warning emoji
+        setCtrlCMessage("⚠️ ^C again to quit")
+        // Clear the init status since we don't want it in the header anymore
+        setInitStatus(null)
+        // Reset after 3 seconds
+        setTimeout(() => {
+          setCtrlCMessage(ctrlCMessageDefault)
+        }, 3000)
+      } else {
+        setInitStatus(status)
+      }
+    })
   }, [onStatusUpdate])
 
   // Calculate available lines for logs dynamically based on terminal height and mode
@@ -94,13 +108,22 @@ const TUIApp = ({
       // In compact mode, reduce header size, account for bottom status line
       return Math.max(3, termHeight - 10)
     } else {
-      // Normal mode calculation - reduced header lines since we removed Controls section
-      const headerLines = 10 // Reduced from 12 since Controls section is commented out
-      const logBoxHeaderLines = 3
-      const logBoxFooterLines = scrollOffset > 0 ? 3 : 1
-      const bottomStatusLine = 1 // Just one line for the log path
-      const safetyBuffer = 0 // Removed safety buffer to use more space
-      const totalReservedLines = headerLines + logBoxHeaderLines + logBoxFooterLines + bottomStatusLine + safetyBuffer
+      // Normal mode calculation - account for all UI elements
+      const headerBorderLines = 2 // Top border (with title) + bottom border
+      const headerContentLines = 5 // Logo is 4 lines tall, +1 for padding
+      const logBoxBorderLines = 2 // Top and bottom border of log box
+      const logBoxHeaderLines = 2 // "Logs (X total)" text (no blank line after)
+      const logBoxFooterLines = scrollOffset > 0 ? 2 : 0 // "(X lines below)" when scrolled
+      const bottomStatusLine = 1 // Log path and quit message
+      const safetyBuffer = 1 // Small buffer to prevent header from being pushed up
+      const totalReservedLines =
+        headerBorderLines +
+        headerContentLines +
+        logBoxBorderLines +
+        logBoxHeaderLines +
+        logBoxFooterLines +
+        bottomStatusLine +
+        safetyBuffer
       return Math.max(3, termHeight - totalReservedLines)
     }
   }
@@ -237,41 +260,52 @@ const TUIApp = ({
   )
 
   // Render normal header
-  const renderNormalHeader = () => (
-    <Box borderStyle="round" borderColor="#A18CE5" paddingX={2} paddingY={1} marginBottom={1} flexDirection="column">
-      <Box flexDirection="row" gap={3}>
-        {/* ASCII Logo on the left */}
-        {/* biome-ignore format: preserve ASCII art alignment */}
-        <Box flexDirection="column" alignItems="flex-start">
-          {FULL_LOGO.map((line) => (
-            <Text key={line} color="#A18CE5" bold>{line}</Text>
-          ))}
-        </Box>
+  const renderNormalHeader = () => {
+    // Create custom top border with title embedded (like Claude Code)
+    const title = ` ${commandName} v${version} ${initStatus ? `- ${initStatus} ` : ""}`
+    const borderChar = "─"
+    const leftPadding = 2
+    // Account for border characters and padding
+    const availableWidth = termWidth - 2 // -2 for corner characters
+    const titleLength = title.length
+    const rightBorderLength = Math.max(0, availableWidth - titleLength - leftPadding)
+    const topBorderLine = `╭${borderChar.repeat(leftPadding)}${title}${borderChar.repeat(rightBorderLength)}╮`
 
-        {/* Info on the right */}
-        <Box flexDirection="column" flexGrow={1}>
-          <Text color="#A18CE5" bold>
-            {commandName} v{version} {initStatus ? `- ${initStatus}` : "is running!"}
-          </Text>
-          <Text> </Text>
-          <Text color="cyan">🌐 Your App: http://localhost:{appPort}</Text>
-          <Text color="cyan">🤖 MCP Server: http://localhost:{mcpPort}/mcp</Text>
-          <Text color="cyan">
-            📸 Visual Timeline: http://localhost:{mcpPort}/logs
-            {projectName ? `?project=${encodeURIComponent(projectName)}` : ""}
-          </Text>
-          {serversOnly && <Text color="cyan">🖥️ Servers-only mode - use Chrome extension for browser monitoring</Text>}
+    return (
+      <Box flexDirection="column">
+        {/* Custom top border with embedded title */}
+        <Text color="#A18CE5">{topBorderLine}</Text>
+
+        {/* Content with side borders only */}
+        <Box borderStyle="round" borderColor="#A18CE5" borderTop={false} paddingX={2} paddingY={1}>
+          <Box flexDirection="row" gap={3}>
+            {/* ASCII Logo on the left */}
+            {/* biome-ignore format: preserve ASCII art alignment */}
+            <Box flexDirection="column" alignItems="flex-start">
+              {FULL_LOGO.map((line) => (
+                <Text key={line} color="#A18CE5" bold>
+                  {line}
+                </Text>
+              ))}
+            </Box>
+
+            {/* Info on the right */}
+            <Box flexDirection="column" flexGrow={1}>
+              <Text color="cyan">🌐 Your App: http://localhost:{appPort}</Text>
+              <Text color="cyan">🤖 MCP Server: http://localhost:{mcpPort}/mcp</Text>
+              <Text color="cyan">
+                📸 Visual Timeline: http://localhost:{mcpPort}/logs
+                {projectName ? `?project=${encodeURIComponent(projectName)}` : ""}
+              </Text>
+              {serversOnly && (
+                <Text color="cyan">🖥️ Servers-only mode - use Chrome extension for browser monitoring</Text>
+              )}
+            </Box>
+          </Box>
         </Box>
       </Box>
-
-      {/* Controls at the bottom of header box */}
-      {/* 
-      <Box marginTop={1}>
-        <Text dimColor>💡 Controls: ↑/↓ scroll | PgUp/PgDn page | g/G start/end | Ctrl-C quit</Text>
-      </Box>
-      */}
-    </Box>
-  )
+    )
+  }
 
   return (
     <Box flexDirection="column" height="100%">
@@ -281,12 +315,9 @@ const TUIApp = ({
       {/* Logs Box - flexGrow makes it expand to fill available height */}
       <Box flexDirection="column" borderStyle="single" borderColor="gray" paddingX={1} flexGrow={1} minHeight={0}>
         {!isVeryCompact && (
-          <>
-            <Text color="gray" dimColor>
-              Logs ({logs.length} total{scrollOffset > 0 && `, scrolled up ${scrollOffset} lines`})
-            </Text>
-            <Text> </Text>
-          </>
+          <Text color="gray" dimColor>
+            Logs ({logs.length} total{scrollOffset > 0 && `, scrolled up ${scrollOffset} lines`})
+          </Text>
         )}
 
         {/* Logs content area - also uses flexGrow to expand */}
@@ -401,10 +432,7 @@ const TUIApp = ({
 
         {/* Scroll indicator - only show when scrolled up and not in very compact mode */}
         {!isVeryCompact && logs.length > maxVisibleLogs && scrollOffset > 0 && (
-          <>
-            <Text> </Text>
-            <Text dimColor>({scrollOffset} lines below)</Text>
-          </>
+          <Text dimColor>({scrollOffset} lines below)</Text>
         )}
       </Box>
 
