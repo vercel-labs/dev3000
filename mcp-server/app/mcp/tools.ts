@@ -906,25 +906,37 @@ const NEXTJS_DEV_CAPABILITY_MAP: Record<string, { function: string; reason: stri
  * Check if chrome-devtools MCP is available and can handle the requested action
  */
 async function canDelegateToChromeDevtools(action: string): Promise<boolean> {
-  // First check if the action is mappable to chrome-devtools
-  if (!CHROME_DEVTOOLS_CAPABILITY_MAP[action]) {
+  try {
+    // First check if the action is mappable to chrome-devtools
+    if (!CHROME_DEVTOOLS_CAPABILITY_MAP[action]) {
+      return false
+    }
+
+    // Only look for dev3000's own configured chrome-devtools MCP
+    const availableMcps = await discoverAvailableMcps()
+
+    // Check for dev3000's own configured chrome-devtools MCP
+    return availableMcps.includes("dev3000-chrome-devtools")
+  } catch (error) {
+    logToDevFile(`Chrome DevTools delegation check failed: ${error}`)
     return false
   }
-
-  // dev3000 cannot reliably detect its own configured MCPs in Claude Code
-  // Return false to disable auto-delegation - users can manually use the MCPs
-  logToDevFile(`Chrome DevTools delegation disabled - cannot verify dev3000-chrome-devtools MCP configuration`)
-  return false
 }
 
 /**
  * Check if nextjs-dev MCP is available
  */
 async function canDelegateToNextjs(): Promise<boolean> {
-  // dev3000 cannot reliably detect its own configured MCPs in Claude Code
-  // Return false to disable auto-delegation - users can manually use the MCPs
-  logToDevFile(`NextJS delegation disabled - cannot verify dev3000-nextjs-dev MCP configuration`)
-  return false
+  try {
+    // Only look for dev3000's own configured nextjs-dev MCP
+    const availableMcps = await discoverAvailableMcps()
+
+    // Check for dev3000's own configured nextjs-dev MCP
+    return availableMcps.includes("dev3000-nextjs-dev")
+  } catch (error) {
+    logToDevFile(`NextJS delegation check failed: ${error}`)
+    return false
+  }
 }
 
 /**
@@ -1402,9 +1414,47 @@ export async function discoverAvailableMcps(projectName?: string): Promise<strin
     discoveredMcps.add(mcp)
   }
 
-  // Method 2: Port pinging (only if process detection found nothing)
+  // Method 2: Check for dev3000-configured MCPs by testing their functionality
+  try {
+    // Test if dev3000-chrome-devtools MCP is working by checking Claude logs
+    const cacheDir = `/Users/${process.env.USER}/Library/Caches/claude-cli-nodejs`
+    const { readdirSync, existsSync } = await import("fs")
+
+    if (existsSync(cacheDir)) {
+      const cacheDirs = readdirSync(cacheDir)
+      const projectDir = cacheDirs.find((dir) => dir.includes(process.cwd().replace(/\//g, "-")))
+
+      if (projectDir) {
+        const projectCacheDir = `${cacheDir}/${projectDir}`
+
+        // Check for chrome-devtools MCP logs
+        const chromeDevtoolsLogDir = `${projectCacheDir}/mcp-logs-dev3000-chrome-devtools`
+        if (existsSync(chromeDevtoolsLogDir)) {
+          const chromeDevtoolsLogs = readdirSync(chromeDevtoolsLogDir)
+          if (chromeDevtoolsLogs.length > 0) {
+            discoveredMcps.add("dev3000-chrome-devtools")
+            logToDevFile("MCP Discovery: Found dev3000-chrome-devtools via Claude cache logs", projectName)
+          }
+        }
+
+        // Check for nextjs-dev MCP logs
+        const nextjsDevLogDir = `${projectCacheDir}/mcp-logs-dev3000-nextjs-dev`
+        if (existsSync(nextjsDevLogDir)) {
+          const nextjsDevLogs = readdirSync(nextjsDevLogDir)
+          if (nextjsDevLogs.length > 0) {
+            discoveredMcps.add("dev3000-nextjs-dev")
+            logToDevFile("MCP Discovery: Found dev3000-nextjs-dev via Claude cache logs", projectName)
+          }
+        }
+      }
+    }
+  } catch (_error) {
+    logToDevFile("MCP Discovery: Claude cache check failed, falling back to port detection", projectName)
+  }
+
+  // Method 3: Port pinging (fallback)
   if (discoveredMcps.size === 0) {
-    logToDevFile("MCP Discovery: No MCPs found via process detection, trying port pinging", projectName)
+    logToDevFile("MCP Discovery: No MCPs found via process or cache detection, trying port pinging", projectName)
     const portDetected = await pingMcpPorts()
     for (const mcp of portDetected) {
       discoveredMcps.add(mcp)
