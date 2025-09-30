@@ -257,6 +257,24 @@ dev3000 --servers-only
 dev3000 --profile-dir ./chrome-profile
 ```
 
+## Frequently Asked Questions
+
+### Does dev3000 save my login state?
+
+Yes, login state is saved automatically in a unique browser profile for each project. No need to re-login.
+
+### How do I stop a dev3000 session?
+
+Press `Ctrl+C` to stop everything (server, browser, and MCP server).
+
+### Does dev3000 work with other frameworks besides Next.js?
+
+Yes, it works with React, Vue, Vite, etc. Use `--script` to specify your dev command.
+
+### Why do I see a warning about "sharp" during installation?
+
+This warning is harmless and can be safely ignored. Sharp is an optional image optimization library used by Next.js, but dev3000 has image optimization disabled (`images: { unoptimized: true }` in next.config.mjs) since all images are served locally. The warning appears because pnpm wants to run sharp's build script, but the library is never actually used at runtime.
+
 ---
 
 _Made by [elsigh](https://github.com/elsigh)_

@@ -615,6 +615,16 @@ export default function HomePage() {
                 command.
               </p>
             </div>
+
+            <div className="border rounded-lg p-6">
+              <h3 className="font-semibold mb-2">Why do I see a warning about "sharp" during installation?</h3>
+              <p className="text-muted-foreground">
+                This warning is harmless and can be safely ignored. Sharp is an optional image optimization library used
+                by Next.js, but dev3000 has image optimization disabled since all images are served locally. The warning
+                appears because pnpm wants to run sharp's build script, but the library is never actually used at
+                runtime.
+              </p>
+            </div>
           </div>
         </div>
       </section>
