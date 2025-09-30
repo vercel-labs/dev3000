@@ -834,13 +834,35 @@ const value = data?.property?.nestedProperty`,
       }
     }
 
-    // Add nextjs-dev delegation recommendation if available
-    if (canDelegateNextjs) {
+    // Add augmented analysis suggestions when specialized MCPs are available
+    const canDelegateChrome = await canDelegateToChromeDevtools("profile_performance")
+
+    if (canDelegateNextjs || canDelegateChrome) {
       results.push("")
-      results.push("🔗 **ENHANCED NEXT.JS ANALYSIS AVAILABLE**")
+      results.push("🔗 **AUGMENTED ANALYSIS AVAILABLE**")
       results.push("")
-      const delegationResponse = await delegateToNextjs()
-      results.push(delegationResponse.content[0].text)
+      results.push("dev3000 provided the core log analysis above. For deeper insights, consider also gathering:")
+      results.push("")
+
+      if (canDelegateNextjs) {
+        results.push("**Next.js Framework Analysis:**")
+        results.push("• `dev3000-nextjs-dev:analyze_build_process()` - Deep build system insights")
+        results.push("• `dev3000-nextjs-dev:debug_server_rendering()` - SSR/hydration analysis")
+        results.push("• `dev3000-nextjs-dev:analyze_next_performance()` - Framework-specific optimizations")
+        results.push("")
+      }
+
+      if (canDelegateChrome) {
+        results.push("**Browser-Side Analysis:**")
+        results.push("• `dev3000-chrome-devtools:start_performance_profile()` - Client-side performance data")
+        results.push("• `dev3000-chrome-devtools:access_console()` - Live browser console inspection")
+        results.push("• `dev3000-chrome-devtools:intercept_requests()` - Network request analysis")
+        results.push("")
+      }
+
+      results.push(
+        "💡 **Best approach:** Use dev3000's log analysis as your foundation, then gather specific additional data as needed for a complete picture."
+      )
     }
 
     return {
@@ -858,48 +880,68 @@ const value = data?.property?.nestedProperty`,
   }
 }
 
-// Capability mapping between dev3000 and chrome-devtools MCP
+// Capability mapping for chrome-devtools MCP - only for unique advanced capabilities
 const CHROME_DEVTOOLS_CAPABILITY_MAP: Record<
   string,
-  { function: string; paramMap?: (params: Record<string, unknown>) => Record<string, unknown> }
+  { function: string; paramMap?: (params: Record<string, unknown>) => Record<string, unknown>; reason: string }
 > = {
-  screenshot: {
-    function: "take_screenshot",
-    paramMap: () => ({}) // chrome-devtools doesn't need params for screenshots
+  // Only delegate advanced debugging/inspection capabilities that dev3000 can't do easily
+  inspect_element: {
+    function: "inspect_element",
+    paramMap: (params) => ({ selector: params.selector }),
+    reason: "DevTools-level DOM inspection with computed styles and element details"
   },
-  navigate: {
-    function: "navigate_page",
-    paramMap: (params) => ({ url: params.url })
+  debug_javascript: {
+    function: "set_breakpoint",
+    paramMap: (params) => ({ line: params.line, file: params.file }),
+    reason: "JavaScript debugging with breakpoints and call stack inspection"
   },
-  click: {
-    function: "click",
-    paramMap: (params) => ({ x: params.x, y: params.y })
+  profile_performance: {
+    function: "start_performance_profile",
+    paramMap: () => ({}),
+    reason: "Advanced performance profiling with memory usage and timing data"
   },
-  evaluate: {
-    function: "execute_script", // Assuming chrome-devtools has this
-    paramMap: (params) => ({ script: params.expression })
+  intercept_network: {
+    function: "intercept_requests",
+    paramMap: (params) => ({ pattern: params.pattern }),
+    reason: "Network request interception and modification capabilities"
+  },
+  console_access: {
+    function: "access_console",
+    paramMap: () => ({}),
+    reason: "Direct browser console access with full DevTools integration"
+  },
+  manipulate_storage: {
+    function: "modify_storage",
+    paramMap: (params) => ({ type: params.type, key: params.key, value: params.value }),
+    reason: "Direct browser storage (cookies, localStorage, sessionStorage) manipulation"
   }
-  // scroll and type don't have direct chrome-devtools equivalents, fall back to dev3000
+  // Basic actions like screenshot, navigate, click, simple evaluate stay with dev3000
 }
 
-// Capability mapping for nextjs-dev MCP delegation
+// Capability mapping for nextjs-dev MCP - only for Next.js-specific advanced capabilities
 const NEXTJS_DEV_CAPABILITY_MAP: Record<string, { function: string; reason: string }> = {
-  get_build_status: {
-    function: "get_build_status",
-    reason: "Get comprehensive Next.js build information and status"
+  analyze_build_system: {
+    function: "analyze_build_process",
+    reason: "Deep Next.js build system analysis with webpack/turbopack insights"
   },
-  get_server_logs: {
-    function: "get_server_logs",
-    reason: "Access Next.js server-side logs and runtime information"
+  debug_ssr_issues: {
+    function: "debug_server_rendering",
+    reason: "Server-side rendering and static generation debugging"
   },
-  analyze_performance: {
-    function: "analyze_performance",
-    reason: "Get Next.js-specific performance metrics and optimization suggestions"
+  optimize_next_performance: {
+    function: "analyze_next_performance",
+    reason: "Next.js-specific performance optimization recommendations"
   },
-  check_routes: {
-    function: "check_routes",
-    reason: "Validate Next.js routing configuration and detect issues"
+  inspect_route_system: {
+    function: "inspect_routing",
+    reason: "Advanced Next.js routing analysis including dynamic routes and middleware"
+  },
+  analyze_hydration: {
+    function: "debug_hydration",
+    reason: "Client-server hydration mismatch analysis and debugging"
   }
+  // Basic server logs and simple build status stay with dev3000's existing log collection
 }
 
 /**
@@ -958,20 +1000,21 @@ async function delegateToChromeDevtools(
     content: [
       {
         type: "text",
-        text: `🔗 **USE DEV3000-CHROME-DEVTOOLS MCP**
+        text: `🔗 **ADVANCED BROWSER DEBUGGING AVAILABLE**
 
-If you have chrome-devtools MCP configured, please use the \`dev3000-chrome-devtools\` MCP directly:
+For advanced debugging capabilities, use the \`dev3000-chrome-devtools\` MCP:
 
 \`\`\`
 dev3000-chrome-devtools:${mapping.function}(${JSON.stringify(chromeParams, null, 2)})
 \`\`\`
 
-💡 **If the MCP is not available:**
-• Make sure chrome-devtools MCP is configured in your Claude Code client
-• Claude Code should auto-configure it as \`dev3000-chrome-devtools\`
-• Alternatively, dev3000 will fallback to its basic browser automation
+🎯 **Why use chrome-devtools for this:** ${mapping.reason}
 
-⚡ **Note:** dev3000 detected chrome-devtools activity but cannot verify MCP configuration`
+💡 **When to use each tool:**
+• **dev3000**: Basic browser automation (screenshots, navigation, clicks, simple scripts)  
+• **dev3000-chrome-devtools**: Advanced debugging (DOM inspection, breakpoints, performance profiling, network interception)
+
+⚡ **Both tools share the same Chrome instance** - no conflicts or duplicate browsers`
       }
     ]
   }
@@ -980,7 +1023,7 @@ dev3000-chrome-devtools:${mapping.function}(${JSON.stringify(chromeParams, null,
 /**
  * Delegate to nextjs-dev MCP with suggested functions
  */
-async function delegateToNextjs(): Promise<{ content: Array<{ type: "text"; text: string }> }> {
+async function _delegateToNextjs(): Promise<{ content: Array<{ type: "text"; text: string }> }> {
   const availableFunctions = Object.entries(NEXTJS_DEV_CAPABILITY_MAP)
     .map(([_key, { function: func, reason }]) => `• \`dev3000-nextjs-dev:${func}()\` - ${reason}`)
     .join("\n")
@@ -989,19 +1032,18 @@ async function delegateToNextjs(): Promise<{ content: Array<{ type: "text"; text
     content: [
       {
         type: "text",
-        text: `🔗 **USE DEV3000-NEXTJS-DEV MCP**
+        text: `🔗 **ADVANCED NEXT.JS ANALYSIS AVAILABLE**
 
-Please use the \`dev3000-nextjs-dev\` MCP directly for Next.js-specific analysis:
+For Next.js-specific advanced analysis, use the \`dev3000-nextjs-dev\` MCP:
 
-**Available Functions:**
+**Available Advanced Functions:**
 ${availableFunctions}
 
-💡 **Why this approach:**
-• nextjs-dev is a stdio MCP server that Claude calls directly
-• Provides Next.js-specific build, server, and performance insights
-• Direct MCP calls give better framework-specific context
+💡 **When to use each tool:**
+• **dev3000**: General log analysis, basic error detection, simple build monitoring
+• **dev3000-nextjs-dev**: Advanced Next.js debugging (SSR issues, hydration problems, build system analysis, routing inspection)
 
-⚡ **Auto-configured as:** \`dev3000-nextjs-dev\` in your MCP client`
+⚡ **Best of both worlds:** Use dev3000 for general monitoring and nextjs-dev for framework-specific deep dives`
       }
     ]
   }
@@ -1256,11 +1298,44 @@ export async function executeBrowserAction({
       ws.on("error", reject)
     })
 
+    // Build success message with augmented suggestions
+    let successMessage = `Browser action '${action}' executed successfully. Result: ${JSON.stringify(result, null, 2)}`
+
+    // Add augmented suggestions for enhanced capabilities
+    const canDelegateChrome = await canDelegateToChromeDevtools("inspect_element")
+    if (canDelegateChrome) {
+      successMessage += "\n\n🔗 **ENHANCED BROWSER ANALYSIS AVAILABLE**"
+      successMessage +=
+        "\n\ndev3000 completed the basic browser action above. For deeper browser insights, consider also:"
+
+      if (action === "screenshot") {
+        successMessage +=
+          "\n• `dev3000-chrome-devtools:inspect_element(selector)` - Deep DOM inspection with computed styles"
+        successMessage +=
+          "\n• `dev3000-chrome-devtools:start_performance_profile()` - Performance analysis of current page state"
+      } else if (action === "evaluate") {
+        successMessage +=
+          "\n• `dev3000-chrome-devtools:access_console()` - Full browser console access for advanced debugging"
+        successMessage += "\n• `dev3000-chrome-devtools:inspect_element(selector)` - Visual element inspection"
+      } else if (action === "navigate") {
+        successMessage +=
+          "\n• `dev3000-chrome-devtools:intercept_requests()` - Monitor network requests during navigation"
+        successMessage += "\n• `dev3000-chrome-devtools:start_performance_profile()` - Page load performance analysis"
+      } else if (action === "click") {
+        successMessage +=
+          "\n• `dev3000-chrome-devtools:access_console()` - Check for JavaScript errors after interaction"
+        successMessage += "\n• `dev3000-chrome-devtools:inspect_element(selector)` - Verify DOM state changes"
+      }
+
+      successMessage +=
+        "\n\n💡 **Augmented approach:** Use dev3000 for basic automation, chrome-devtools for detailed analysis and debugging."
+    }
+
     return {
       content: [
         {
           type: "text",
-          text: `Browser action '${action}' executed successfully. Result: ${JSON.stringify(result, null, 2)}`
+          text: successMessage
         }
       ]
     }
