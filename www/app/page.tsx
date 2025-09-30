@@ -89,7 +89,7 @@ export default function HomePage() {
             <p className="text-xl text-muted-foreground mb-10 max-w-2xl mx-auto leading-relaxed">
               <Balancer>
                 Captures server + browser logs, events, and network requests. Takes automatic screenshots and stitches
-                it all into a unified, timestamped feed for AI and you.
+                it all into a unified, timestamped feed for AI debugging. <span className="font-medium text-foreground">Gracefully enhances with chrome-devtools and nextjs-dev MCPs when available.</span>
               </Balancer>
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-16">
@@ -202,20 +202,26 @@ export default function HomePage() {
                   3
                 </div>
                 <div className="flex-1">
-                  <h3 className="font-semibold mb-3 text-lg">AI integration configured automatically</h3>
+                  <h3 className="font-semibold mb-3 text-lg">AI integration with dynamic capability enhancement</h3>
                   <div className="space-y-3">
                     <p className="text-sm text-muted-foreground">
-                      dev3000 automatically configures MCP connections for Claude Code and chrome-devtools browser
-                      automation. No manual setup required!
+                      dev3000 automatically configures MCP connections for Claude Code. When chrome-devtools and nextjs-dev MCPs are also available, dev3000 dynamically discovers their capabilities and suggests enhanced debugging workflows.
                     </p>
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                      <span>dev3000 MCP configured automatically</span>
+                      <span>Core dev3000 MCP - Always configured</span>
                     </div>
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                      <span>chrome-devtools MCP configured automatically</span>
+                      <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                      <span>chrome-devtools MCP - Enhances browser automation</span>
                     </div>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+                      <span>nextjs-dev MCP - Enhances Next.js debugging</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground italic">
+                      💡 Enhanced MCPs are optional - dev3000 works great on its own and gracefully improves when they're available
+                    </p>
                   </div>
                 </div>
               </div>
@@ -238,6 +244,85 @@ export default function HomePage() {
                     </p>
                   </div>
                 </div>
+              </div>
+            </Card>
+          </div>
+        </div>
+      </section>
+
+      {/* MCP Enhancement Section */}
+      <section className="relative py-20 border-b">
+        <div className="container mx-auto px-6">
+          <div className="max-w-2xl mx-auto text-center mb-12">
+            <h2 className="text-3xl font-bold mb-4">Smart MCP Integration</h2>
+            <p className="text-lg text-muted-foreground">
+              Gracefully enhances capabilities when specialized MCPs are available
+            </p>
+          </div>
+
+          <div className="max-w-4xl mx-auto">
+            <div className="grid md:grid-cols-3 gap-6 mb-12">
+              <Card className="bg-card border p-6 text-center">
+                <div className="w-16 h-16 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
+                    <span className="text-white font-bold text-sm">d3k</span>
+                  </div>
+                </div>
+                <h3 className="font-semibold mb-2">Core dev3000</h3>
+                <p className="text-sm text-muted-foreground">
+                  Complete log analysis, browser automation, error detection, and interaction replay - always available
+                </p>
+              </Card>
+
+              <Card className="bg-card border p-6 text-center">
+                <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"
+                    />
+                  </svg>
+                </div>
+                <h3 className="font-semibold mb-2">+ Chrome DevTools</h3>
+                <p className="text-sm text-muted-foreground">
+                  Adds DOM inspection, performance profiling, network interception, and advanced browser debugging
+                </p>
+              </Card>
+
+              <Card className="bg-card border p-6 text-center">
+                <div className="w-16 h-16 bg-purple-100 dark:bg-purple-900 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"
+                    />
+                  </svg>
+                </div>
+                <h3 className="font-semibold mb-2">+ Next.js Dev</h3>
+                <p className="text-sm text-muted-foreground">
+                  Adds build system analysis, SSR/hydration debugging, and Next.js-specific performance optimization
+                </p>
+              </Card>
+            </div>
+
+            <Card className="bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-950 dark:to-blue-950 border-2 border-dashed border-green-300 dark:border-green-700 p-8 text-center">
+              <h3 className="font-bold text-lg mb-4">🎯 Dynamic Capability Discovery</h3>
+              <div className="max-w-2xl mx-auto space-y-3">
+                <p className="text-sm">
+                  dev3000 automatically discovers what MCP capabilities are available and suggests the best tools for each debugging scenario
+                </p>
+                <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground">
+                  <span>• Real-time capability detection</span>
+                  <span>• Context-aware suggestions</span>
+                  <span>• Zero manual configuration</span>
+                </div>
+                <p className="text-sm font-medium">
+                  🚀 Result: Always get the most comprehensive debugging capabilities available in your environment
+                </p>
               </div>
             </Card>
           </div>
