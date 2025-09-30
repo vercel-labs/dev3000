@@ -1272,7 +1272,7 @@ export class DevEnvironment {
       }
 
       console.log(chalk.cyan(`\n📄 Full logs: ${this.options.logFile}`))
-      console.log(chalk.cyan(`   Quick access: tail -f /tmp/d3k.log`))
+      console.log(chalk.cyan(`   Quick access: tail -f ${this.options.logFile}`))
     } catch (_error) {
       // Fallback if we can't read the log file
       console.log(chalk.yellow(`💡 Check logs for details: ${this.options.logFile}`))
@@ -2193,9 +2193,10 @@ export class DevEnvironment {
     }
 
     console.log(chalk.red(`❌ ${this.options.commandName} exited due to server failure`))
+    const projectName = getProjectName()
     console.log(
       chalk.yellow(
-        "Check the logs at ~/.d3k/d3k.log for errors. Feeling like helping? Run dev3000 --debug and file an issue at https://github.com/vercel-labs/dev3000/issues"
+        `Check the logs at ~/.d3k/logs/dev3000-${projectName}-d3k.log for errors. Feeling like helping? Run dev3000 --debug and file an issue at https://github.com/vercel-labs/dev3000/issues`
       )
     )
     process.exit(1)
