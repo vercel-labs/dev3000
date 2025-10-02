@@ -88,8 +88,8 @@ export default function HomePage() {
             </h1>
             <p className="text-xl text-muted-foreground mb-10 max-w-2xl mx-auto leading-relaxed">
               <Balancer>
-                Captures server + browser logs, events, and network requests. Takes automatic screenshots and stitches
-                it all into a unified, timestamped feed for AI debugging.{" "}
+                Starts your dev server, opens a monitored browser, and captures everything: server logs, browser events,
+                network requests, and automatic screenshots - all unified and timestamped for AI debugging.{" "}
                 <span className="font-medium text-foreground">
                   Gracefully enhances with chrome-devtools and nextjs-dev MCPs when available.
                 </span>
@@ -155,15 +155,19 @@ export default function HomePage() {
               </div>
             </Card>
 
-            {/* Step 2: Replace your dev command */}
+            {/* Step 2: Start your dev server with dev3000 */}
             <Card className="bg-card border p-6">
               <div className="flex items-start gap-4">
                 <div className="w-8 h-8 bg-foreground text-background rounded-full flex items-center justify-center flex-shrink-0 font-semibold">
                   2
                 </div>
                 <div className="flex-1">
-                  <h3 className="font-semibold mb-3 text-lg">Replace your dev command</h3>
+                  <h3 className="font-semibold mb-3 text-lg">Start your dev server with dev3000</h3>
                   <div className="space-y-3">
+                    <p className="text-sm text-muted-foreground">
+                      dev3000 replaces your normal dev command - it <strong>starts your dev server</strong> and opens a
+                      monitored browser automatically:
+                    </p>
                     <div className="bg-muted rounded-md p-4">
                       <div className="flex items-center gap-4 font-mono text-sm">
                         <span className="text-muted-foreground">Instead of:</span>
@@ -198,17 +202,21 @@ export default function HomePage() {
               </div>
             </Card>
 
-            {/* Step 3: AI Integration */}
+            {/* Step 3: Use the monitored browser */}
             <Card className="bg-card border p-6">
               <div className="flex items-start gap-4">
                 <div className="w-8 h-8 bg-foreground text-background rounded-full flex items-center justify-center flex-shrink-0 font-semibold">
                   3
                 </div>
                 <div className="flex-1">
-                  <h3 className="font-semibold mb-3 text-lg">AI integration with dynamic capability enhancement</h3>
+                  <h3 className="font-semibold mb-3 text-lg">Test your app in the monitored browser</h3>
                   <div className="space-y-3">
                     <p className="text-sm text-muted-foreground">
-                      dev3000 automatically configures MCP connections for Claude Code. When chrome-devtools and
+                      A Chrome window opens automatically. Browse your app, click around, trigger errors - everything is
+                      captured to a unified log file with timestamps.
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      dev3000 also automatically configures MCP connections for Claude Code. When chrome-devtools and
                       nextjs-dev MCPs are also available, dev3000 dynamically discovers their capabilities and suggests
                       enhanced debugging workflows.
                     </p>
@@ -218,16 +226,14 @@ export default function HomePage() {
                     </div>
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                      <span>chrome-devtools MCP - Enhances browser automation</span>
+                      <span>chrome-devtools MCP - Enhances browser automation (optional)</span>
                     </div>
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                      <span>nextjs-dev MCP - Enhances Next.js debugging</span>
+                      <span>
+                        nextjs-dev MCP - Enhances Next.js debugging (optional, auto-configured for Next.js canary)
+                      </span>
                     </div>
-                    <p className="text-xs text-muted-foreground italic">
-                      💡 Enhanced MCPs are optional - dev3000 works great on its own and gracefully improves when
-                      they're available
-                    </p>
                   </div>
                 </div>
               </div>
@@ -454,10 +460,11 @@ export default function HomePage() {
                   1
                 </div>
                 <div>
-                  <h3 className="font-semibold mb-2">Automatic capture</h3>
+                  <h3 className="font-semibold mb-2">Starts your dev server & monitored browser</h3>
                   <p className="text-muted-foreground">
-                    dev3000 monitors your dev server, browser console, network requests, and takes automatic screenshots
-                    - all synchronized with timestamps.
+                    dev3000 launches your dev server (detects npm/pnpm/yarn automatically) and opens a Chrome window
+                    that captures server logs, browser console, network requests, and takes automatic screenshots - all
+                    synchronized with timestamps.
                   </p>
                 </div>
               </div>
