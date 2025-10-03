@@ -260,12 +260,15 @@ const TUIApp = ({
           {initStatus && <Text dimColor>- {initStatus}</Text>}
         </Box>
         {!isVeryCompact && (
-          <>
+          <Box flexDirection="column">
             <Text dimColor>
               App: localhost:{appPort} | MCP: localhost:{mcpPort}
             </Text>
-            <Text dimColor>↑/↓ scroll | Ctrl-C quit</Text>
-          </>
+            <Text dimColor>
+              📸 http://localhost:{mcpPort}/logs
+              {projectName ? `?project=${encodeURIComponent(projectName)}` : ""}
+            </Text>
+          </Box>
         )}
       </Box>
     </Box>
@@ -450,7 +453,12 @@ const TUIApp = ({
 
       {/* Bottom status line - no border, just text */}
       <Box paddingX={1} justifyContent="space-between">
-        <Text color="#A18CE5">⏵⏵ {logFile.replace(process.env.HOME || "", "~")}</Text>
+        <Text color="#A18CE5">
+          ⏵⏵{" "}
+          {isVeryCompact
+            ? logFile.split("/").slice(-2, -1)[0] || "logs" // Just show directory name
+            : logFile.replace(process.env.HOME || "", "~")}
+        </Text>
         <Text color="#A18CE5">{ctrlCMessage}</Text>
       </Box>
     </Box>
