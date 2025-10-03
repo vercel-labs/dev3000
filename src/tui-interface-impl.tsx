@@ -27,18 +27,23 @@ const COMPACT_LOGO = "d3k"
 const FULL_LOGO = ["   ▐▌▄▄▄▄ █  ▄ ", "   ▐▌   █ █▄▀  ", "▗▞▀▜▌▀▀▀█ █ ▀▄ ", "▝▚▄▟▌▄▄▄█ █  █ "]
 
 const TUIApp = ({
-  appPort,
+  appPort: initialAppPort,
   mcpPort,
   logFile,
   commandName,
   serversOnly,
   version,
   projectName,
-  onStatusUpdate
-}: TUIOptions & { onStatusUpdate: (fn: (status: string | null) => void) => void }) => {
+  onStatusUpdate,
+  onAppPortUpdate
+}: TUIOptions & {
+  onStatusUpdate: (fn: (status: string | null) => void) => void
+  onAppPortUpdate: (fn: (port: string) => void) => void
+}) => {
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [scrollOffset, setScrollOffset] = useState(0)
   const [initStatus, setInitStatus] = useState<string | null>("Initializing...")
+  const [appPort, setAppPort] = useState<string>(initialAppPort)
   const logIdCounter = useRef(0)
   const { stdout } = useStdout()
   const ctrlCMessageDefault = "^C quit"
@@ -98,6 +103,13 @@ const TUIApp = ({
       }
     })
   }, [onStatusUpdate])
+
+  // Provide app port update function to parent
+  useEffect(() => {
+    onAppPortUpdate((port: string) => {
+      setAppPort(port)
+    })
+  }, [onAppPortUpdate])
 
   // Calculate available lines for logs dynamically based on terminal height and mode
   const calculateMaxVisibleLogs = () => {
@@ -445,12 +457,15 @@ const TUIApp = ({
   )
 }
 
-export async function runTUI(
-  options: TUIOptions
-): Promise<{ app: { unmount: () => void }; updateStatus: (status: string | null) => void }> {
+export async function runTUI(options: TUIOptions): Promise<{
+  app: { unmount: () => void }
+  updateStatus: (status: string | null) => void
+  updateAppPort: (port: string) => void
+}> {
   return new Promise((resolve, reject) => {
     try {
       let statusUpdater: ((status: string | null) => void) | null = null
+      let appPortUpdater: ((port: string) => void) | null = null
 
       const app = render(
         <TUIApp
@@ -458,17 +473,25 @@ export async function runTUI(
           onStatusUpdate={(fn) => {
             statusUpdater = fn
           }}
+          onAppPortUpdate={(fn) => {
+            appPortUpdater = fn
+          }}
         />,
         { exitOnCtrlC: false }
       )
 
-      // Give React time to set up the status updater
+      // Give React time to set up the updaters
       setTimeout(() => {
         resolve({
           app,
           updateStatus: (status: string | null) => {
             if (statusUpdater) {
               statusUpdater(status)
+            }
+          },
+          updateAppPort: (port: string) => {
+            if (appPortUpdater) {
+              appPortUpdater(port)
             }
           }
         })

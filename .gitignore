@@ -7,3 +7,5 @@ dist/
 mcp-server/public/screenshots/*
 mcp-server/.next/*
 .gemini/
+.cursor/
+.mcp.json

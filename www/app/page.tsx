@@ -169,7 +169,7 @@ export default function HomePage() {
                       monitored browser automatically:
                     </p>
                     <div className="bg-muted rounded-md p-4">
-                      <div className="flex items-center gap-4 font-mono text-sm">
+                      <div className="flex items-center gap-1 font-mono text-sm">
                         <span className="text-muted-foreground">Instead of:</span>
                         <code className="text-foreground">pnpm dev</code>
                         <span className="text-muted-foreground mx-2">→</span>
