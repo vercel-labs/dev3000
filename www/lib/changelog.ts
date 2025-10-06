@@ -13,10 +13,7 @@ export const changelog: Release[] = [
     version: "0.0.80",
     date: "2025-10-06",
     type: "minor",
-    highlights: [
-      "New development tools make debugging faster and more reliable",
-      "Developer experience improvements across CLI and interface"
-    ]
+    highlights: ["🌐 **Browser Support**: Added support for Arc and Comet browsers"]
   },
 
   {

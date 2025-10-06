@@ -109,7 +109,8 @@ const FEATURE_PATTERNS = {
   chrome: [/chrome.*launch|intelligent.*polling|chrome.*timeout/i],
   delegation: [/delegat|orchestrat|coordinate/i],
   cdp: [/CDP.*URL|chrome.*devtools.*protocol/i],
-  tui: [/TUI|terminal.*UI|header.*status/i]
+  tui: [/TUI|terminal.*UI|header.*status/i],
+  browserSupport: [/arc|comet|edge|brave|browser.*support|browser.*path/i]
 }
 
 // Function to extract highlights using Vercel-style changelog writing
@@ -155,7 +156,10 @@ function extractHighlights(commits: Commit[]): string[] {
     chrome: meaningfulCommits.some((c) => FEATURE_PATTERNS.chrome.some((pattern) => pattern.test(c.subject))),
     delegation: meaningfulCommits.some((c) => FEATURE_PATTERNS.delegation.some((pattern) => pattern.test(c.subject))),
     cdp: meaningfulCommits.some((c) => FEATURE_PATTERNS.cdp.some((pattern) => pattern.test(c.subject))),
-    tui: meaningfulCommits.some((c) => FEATURE_PATTERNS.tui.some((pattern) => pattern.test(c.subject)))
+    tui: meaningfulCommits.some((c) => FEATURE_PATTERNS.tui.some((pattern) => pattern.test(c.subject))),
+    browserSupport: meaningfulCommits.some((c) =>
+      FEATURE_PATTERNS.browserSupport.some((pattern) => pattern.test(c.subject))
+    )
   }
 
   // Generate concrete highlights based on detected features
@@ -192,6 +196,21 @@ function extractHighlights(commits: Commit[]): string[] {
 
   if (detectedFeatures.tui) {
     highlights.push("🎨 **Improved TUI**: Better header and status line rendering for narrow terminal windows")
+  }
+
+  if (detectedFeatures.browserSupport) {
+    // Extract browser names from commits for concrete description
+    const browserNames = meaningfulCommits
+      .filter((c) => FEATURE_PATTERNS.browserSupport.some((pattern) => pattern.test(c.subject)))
+      .flatMap((c) => c.subject.match(/arc|comet|edge|brave/gi))
+      .filter(Boolean)
+      .map((name) => name.charAt(0).toUpperCase() + name.slice(1).toLowerCase())
+    const uniqueBrowsers = [...new Set(browserNames)]
+    if (uniqueBrowsers.length > 0) {
+      highlights.push(`🌐 **Browser Support**: Added support for ${uniqueBrowsers.join(", ")} browsers`)
+    } else {
+      highlights.push("🌐 **Expanded Browser Support**: Added support for additional Chromium-based browsers")
+    }
   }
 
   // Add fix highlights
