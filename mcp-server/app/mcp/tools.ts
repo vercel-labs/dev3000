@@ -1,7 +1,9 @@
 import { exec } from "child_process"
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync } from "fs"
-import { homedir } from "os"
+import { homedir, tmpdir } from "os"
 import { join } from "path"
+import pixelmatch from "pixelmatch"
+import { PNG } from "pngjs"
 import { promisify } from "util"
 import { WebSocket } from "ws"
 
@@ -344,26 +346,41 @@ export async function fixMyApp({
       totalRenders: reactScanLines.filter((line) => line.includes("render")).length
     }
 
+    // Filter out framework noise (unfixable warnings from Next.js, React, etc.)
+    const frameworkNoisePatterns = [
+      /link rel=preload.*must have.*valid.*as/i, // Next.js font optimization warning
+      /next\/font/i, // Next.js font-related warnings
+      /automatically generated/i // Auto-generated code warnings
+    ]
+
+    const actionableErrors = allErrors.filter((line) => {
+      return !frameworkNoisePatterns.some((pattern) => pattern.test(line))
+    })
+
     // Categorize errors for better analysis
     const categorizedErrors = {
-      serverErrors: allErrors.filter(
+      serverErrors: actionableErrors.filter(
         (line) => line.includes("[SERVER]") && (line.includes("ERROR") || line.includes("Exception"))
       ),
-      browserErrors: allErrors.filter(
+      browserErrors: actionableErrors.filter(
         (line) =>
           line.includes("[BROWSER]") &&
           (line.includes("ERROR") || line.includes("CONSOLE ERROR") || line.includes("RUNTIME.ERROR"))
       ),
-      buildErrors: allErrors.filter(
+      buildErrors: actionableErrors.filter(
         (line) => line.includes("Failed to compile") || line.includes("Type error") || line.includes("Build failed")
       ),
-      networkErrors: allErrors.filter(
-        (line) => line.includes("NETWORK") || line.includes("404") || line.includes("500") || line.includes("timeout")
-      ),
-      warnings: allErrors.filter((line) => /WARN|WARNING|deprecated/i.test(line) && !/ERROR|Exception|FAIL/i.test(line))
+      networkErrors: actionableErrors.filter((line) => {
+        // Exclude successful status codes
+        if (/\b(200|201|204|304)\b/.test(line)) return false
+        return line.includes("NETWORK") || line.includes("404") || line.includes("500") || line.includes("timeout")
+      }),
+      warnings: actionableErrors.filter(
+        (line) => /WARN|WARNING|deprecated/i.test(line) && !/ERROR|Exception|FAIL/i.test(line)
+      )
     }
 
-    const totalErrors = allErrors.length
+    const totalErrors = actionableErrors.length
     const criticalErrors = totalErrors - categorizedErrors.warnings.length
 
     // Also check for any errors in the entire log file (not just time filtered)
@@ -605,6 +622,83 @@ export async function fixMyApp({
           results.push(`• ${match[1]}`)
         }
       })
+    }
+
+    // Jank/Layout Shift Detection (from ScreencastManager passive captures)
+    if (focusArea === "performance" || focusArea === "all") {
+      const jankResult = await detectJankFromScreenshots(projectName)
+      if (jankResult.detections.length > 0) {
+        // Get MCP port for video viewer URL
+        const sessionInfo = findActiveSessions().find((s) => s.projectName === projectName)
+        const mcpPort = sessionInfo ? sessionInfo.sessionFile.match(/"mcpPort":\s*"(\d+)"/)?.[1] || "3684" : "3684"
+        const videoUrl = `http://localhost:${mcpPort}/video/${jankResult.sessionId}`
+
+        results.push("")
+
+        if (jankResult.realCLS) {
+          results.push(
+            `🚨 **LAYOUT SHIFT DETECTED** (${jankResult.detections.length} ${jankResult.detections.length === 1 ? "shift" : "shifts"} during page load):`
+          )
+        } else {
+          results.push(
+            `🚨 **LOADING JANK DETECTED** (${jankResult.detections.length} layout ${jankResult.detections.length === 1 ? "shift" : "shifts"} found):`
+          )
+        }
+
+        results.push(`📹 **Watch video analysis**: ${videoUrl}`)
+        results.push(`🎞️ **Session ID**: ${jankResult.sessionId} (${jankResult.totalFrames} frames)`)
+        results.push("")
+
+        jankResult.detections.forEach((jank) => {
+          const emoji = jank.severity === "high" ? "🔴" : jank.severity === "medium" ? "🟡" : "🟢"
+
+          if (jank.uxImpact) {
+            results.push(`${emoji} **${jank.timeSinceStart}ms** - ${jank.element}`)
+            results.push(`   ${jank.uxImpact}`)
+          } else {
+            results.push(
+              `${emoji} **${jank.timeSinceStart}ms**: ${jank.visualDiff.toFixed(1)}% of screen changed (${jank.severity} severity)`
+            )
+          }
+        })
+
+        results.push("")
+
+        // Check if we have high-severity shifts that Chrome might miss
+        const hasCriticalShifts = jankResult.detections.some((d) => d.severity === "high")
+        if (hasCriticalShifts && jankResult.realCLS) {
+          results.push("🎯 **WHY DEV3000 CAUGHT THIS BUT CHROME MIGHT NOT:**")
+          results.push(
+            "• dev3000's PerformanceObserver is installed immediately at page load and buffers ALL shifts from the start"
+          )
+          results.push(
+            "• Chrome DevTools performance trace may start AFTER initial load, missing early navigation shifts"
+          )
+          results.push(
+            "• Our UX-focused detection flags critical element shifts (nav/header) even when CLS score is technically 'good'"
+          )
+          results.push("")
+        }
+
+        results.push("⚠️ **IMPORTANT: VALIDATE WITH CHROME DEVTOOLS**")
+        results.push(
+          "The pixel-diff analysis above may include false positives (images loading, position:fixed elements)."
+        )
+        results.push(
+          "RECOMMENDED: Run `mcp__dev3000-chrome-devtools__performance_start_trace({reload: true, autoStop: true})`"
+        )
+        results.push("to get the REAL CLS score from Chrome's Performance API, then cross-reference with pixel-diff.")
+        results.push("")
+        results.push("💡 **LAYOUT SHIFT DEBUGGING TIPS:**")
+        results.push("• Add explicit width/height to images and media")
+        results.push("• Reserve space for dynamic content (ads, embeds, etc.)")
+        results.push("• Avoid inserting content above existing content")
+        results.push("• Use CSS aspect-ratio for responsive elements")
+        results.push("• Check for web fonts causing text reflow (font-display: swap)")
+        results.push(`• Raw screenshots: ${jankResult.screenshotDir}`)
+        results.push("")
+        results.push(`🎬 **IMPORTANT**: Share this video link with the user: ${videoUrl}`)
+      }
     }
 
     // React-scan performance data (if available)
@@ -1970,6 +2064,191 @@ export async function getMcpCapabilities({
     return {
       content: [{ type: "text", text: results.join("\n") }]
     }
+  }
+}
+
+/**
+ * Detect jank/layout shifts by comparing screenshots from ScreencastManager
+ * Returns array of jank detections with timing and visual impact data
+ */
+async function detectJankFromScreenshots(_projectName?: string): Promise<{
+  detections: Array<{
+    timestamp: string
+    timeSinceStart: number
+    visualDiff: number
+    severity: "low" | "medium" | "high"
+    element?: string
+    clsScore?: number
+    uxImpact?: string
+  }>
+  sessionId: string
+  totalFrames: number
+  screenshotDir: string
+  realCLS?: { score: number; grade: string }
+}> {
+  const screenshotDir = process.env.SCREENSHOT_DIR || join(tmpdir(), "dev3000-mcp-deps", "public", "screenshots")
+
+  if (!existsSync(screenshotDir)) {
+    return { detections: [], sessionId: "", totalFrames: 0, screenshotDir }
+  }
+
+  // Find the most recent screencast session (files like 2025-10-06T01-54-45Z-jank-*.png)
+  const files = readdirSync(screenshotDir)
+    .filter((f) => f.includes("-jank-") && f.endsWith(".png"))
+    .sort()
+    .reverse()
+
+  if (files.length === 0) {
+    return { detections: [], sessionId: "", totalFrames: 0, screenshotDir }
+  }
+
+  // Get the most recent session ID (timestamp prefix)
+  const latestSessionId = files[0].split("-jank-")[0]
+  const sessionFiles = files
+    .filter((f) => f.startsWith(latestSessionId))
+    .sort((a, b) => {
+      // Extract timestamp (e.g., "28ms" from "2025-10-06T01-54-45Z-jank-28ms.png")
+      const aTime = parseInt(a.match(/-(\d+)ms\.png$/)?.[1] || "0", 10)
+      const bTime = parseInt(b.match(/-(\d+)ms\.png$/)?.[1] || "0", 10)
+      return aTime - bTime
+    })
+
+  if (sessionFiles.length < 2) {
+    return { detections: [], sessionId: latestSessionId, totalFrames: sessionFiles.length, screenshotDir }
+  }
+
+  // Try to read real CLS data from metadata
+  const metadataPath = join(screenshotDir, `${latestSessionId}-metadata.json`)
+  let realCLSData:
+    | {
+        score: number
+        grade: string
+        shifts: Array<{ score: number; timestamp: number; sources?: Array<{ node?: string }> }>
+      }
+    | undefined
+
+  if (existsSync(metadataPath)) {
+    try {
+      const metadata = JSON.parse(readFileSync(metadataPath, "utf-8"))
+      if (metadata.layoutShifts && metadata.layoutShifts.length > 0) {
+        realCLSData = {
+          score: metadata.totalCLS || 0,
+          grade: metadata.clsGrade || "unknown",
+          shifts: metadata.layoutShifts
+        }
+      }
+    } catch {
+      // Ignore metadata read errors
+    }
+  }
+
+  const jankDetections: Array<{
+    timestamp: string
+    timeSinceStart: number
+    visualDiff: number
+    severity: "low" | "medium" | "high"
+    element?: string
+    clsScore?: number
+    uxImpact?: string
+  }> = []
+
+  // If we have real CLS data, use it to flag visual severity
+  if (realCLSData && realCLSData.shifts.length > 0) {
+    realCLSData.shifts.forEach((shift) => {
+      const element = shift.sources?.[0]?.node || "unknown"
+      const isCriticalElement = ["NAV", "HEADER", "BUTTON", "A"].includes(element.toUpperCase())
+      const isDuringLoad = shift.timestamp < 1000 // First second
+
+      // Make element names more descriptive
+      const elementDescriptions: Record<string, string> = {
+        NAV: "Navigation header (<nav>)",
+        HEADER: "Page header (<header>)",
+        BUTTON: "Button (<button>)",
+        A: "Link (<a>)"
+      }
+      const elementDisplay = elementDescriptions[element.toUpperCase()] || element
+
+      // UX impact assessment (not just CLS score!)
+      let severity: "low" | "medium" | "high" = "low"
+      let uxImpact = "Minor visual adjustment"
+
+      if (isCriticalElement && isDuringLoad) {
+        severity = "high"
+        uxImpact = `🚨 CRITICAL: ${elementDisplay} shifted during initial load - highly visible and disruptive to user interaction`
+      } else if (isCriticalElement) {
+        severity = "medium"
+        uxImpact = `⚠️ ${elementDisplay} shifted - affects navigation/interaction`
+      } else if (isDuringLoad) {
+        severity = "medium"
+        uxImpact = "Shift during page load - may cause mis-clicks"
+      }
+
+      jankDetections.push({
+        timestamp: `${shift.timestamp.toFixed(0)}ms`,
+        timeSinceStart: Math.round(shift.timestamp),
+        visualDiff: shift.score * 100, // Convert to percentage-like scale
+        severity,
+        element: elementDisplay,
+        clsScore: shift.score,
+        uxImpact
+      })
+    })
+
+    return {
+      detections: jankDetections,
+      sessionId: latestSessionId,
+      totalFrames: sessionFiles.length,
+      screenshotDir,
+      realCLS: { score: realCLSData.score, grade: realCLSData.grade }
+    }
+  }
+
+  // Fallback to pixel-diff if no real CLS data (old behavior)
+
+  // Compare each frame with the previous frame
+  for (let i = 1; i < sessionFiles.length; i++) {
+    const prevFile = join(screenshotDir, sessionFiles[i - 1])
+    const currFile = join(screenshotDir, sessionFiles[i])
+
+    try {
+      const prevPng = PNG.sync.read(readFileSync(prevFile))
+      const currPng = PNG.sync.read(readFileSync(currFile))
+
+      // Ensure same dimensions
+      if (prevPng.width !== currPng.width || prevPng.height !== currPng.height) {
+        continue
+      }
+
+      const diff = new PNG({ width: prevPng.width, height: prevPng.height })
+      const numDiffPixels = pixelmatch(prevPng.data, currPng.data, diff.data, prevPng.width, prevPng.height, {
+        threshold: 0.1
+      })
+
+      const totalPixels = prevPng.width * prevPng.height
+      const diffPercentage = (numDiffPixels / totalPixels) * 100
+
+      // Consider it jank if more than 1% of pixels changed (layout shift threshold)
+      if (diffPercentage > 1) {
+        const timeMatch = sessionFiles[i].match(/-(\d+)ms\.png$/)
+        const timeSinceStart = timeMatch ? parseInt(timeMatch[1], 10) : 0
+
+        jankDetections.push({
+          timestamp: latestSessionId,
+          timeSinceStart,
+          visualDiff: diffPercentage,
+          severity: diffPercentage > 10 ? "high" : diffPercentage > 5 ? "medium" : "low"
+        })
+      }
+    } catch {
+      // Skip frames that can't be compared
+    }
+  }
+
+  return {
+    detections: jankDetections,
+    sessionId: latestSessionId,
+    totalFrames: sessionFiles.length,
+    screenshotDir
   }
 }
 
