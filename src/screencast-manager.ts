@@ -32,7 +32,6 @@ export class ScreencastManager {
   private appPort: string
   private layoutShifts: Array<{ score: number; timestamp: number; sources?: unknown[] }> = []
   private viewportInfo: Record<string, number> = {}
-  private clsObserverInstalled = false
 
   constructor(
     private cdpUrl: string,
@@ -189,6 +188,11 @@ export class ScreencastManager {
   private onNavigationStart(): void {
     // this.logFn("[CDP] Navigation started, beginning screencast capture")
 
+    // Stop any existing capture first
+    if (this.isCapturing) {
+      this.send("Page.stopScreencast", {})
+    }
+
     this.navigationStartTime = Date.now()
     this.currentSessionId = new Date()
       .toISOString()
@@ -264,7 +268,7 @@ export class ScreencastManager {
       }
 
       this.logFn(
-        `[CDP] View jank analysis: http://localhost:${process.env.MCP_PORT || "3684"}/video/${this.currentSessionId}`
+        `[CDP] View navigation frames: http://localhost:${process.env.MCP_PORT || "3684"}/video/${this.currentSessionId}`
       )
 
       await this.stopScreencast()
@@ -312,19 +316,21 @@ export class ScreencastManager {
    * Install PerformanceObserver for layout shifts (passive, no reload needed)
    */
   private installCLSObserver(): void {
-    if (this.clsObserverInstalled) return
-
     const observerScript = `
       (function() {
-        if (window.__dev3000_cls_observer__) return; // Already installed
-
-        window.__dev3000_cls_observer__ = true;
+        // Reset layout shifts array for new navigation
         window.__dev3000_layout_shifts__ = [];
+
+        // Update viewport info for current navigation
         window.__dev3000_viewport__ = {
           width: window.innerWidth,
           height: window.innerHeight,
           devicePixelRatio: window.devicePixelRatio || 1
         };
+
+        // Install observer if not already present
+        if (window.__dev3000_cls_observer__) return;
+        window.__dev3000_cls_observer__ = true;
 
         try {
           const observer = new PerformanceObserver((list) => {
@@ -386,14 +392,12 @@ export class ScreencastManager {
       })();
     `
 
-    // Inject observer via Runtime.evaluate
+    // Inject observer via Runtime.evaluate (reinstall on each navigation to reset)
     const evalId = this.messageId++
     this.send("Runtime.evaluate", { expression: observerScript, returnByValue: false }, evalId)
 
     // Set up periodic polling to retrieve layout shift data
     this.pollLayoutShifts()
-
-    this.clsObserverInstalled = true
     // this.logFn("Installed CLS observer")
   }
 
