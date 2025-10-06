@@ -102,6 +102,16 @@ const CASUAL_PATTERNS = {
   dx: [/ctrl[+-]c/i, /canary/i, /script/i, /cli/i, /command/i]
 }
 
+// Specific feature patterns for concrete changelog entries
+const FEATURE_PATTERNS = {
+  cls: [/CLS|cumulative layout shift|screencast|video|jank/i],
+  mcp: [/MCP|auto-config|\.mcp\.json|cursor\.mcp/i],
+  chrome: [/chrome.*launch|intelligent.*polling|chrome.*timeout/i],
+  delegation: [/delegat|orchestrat|coordinate/i],
+  cdp: [/CDP.*URL|chrome.*devtools.*protocol/i],
+  tui: [/TUI|terminal.*UI|header.*status/i]
+}
+
 // Function to extract highlights using Vercel-style changelog writing
 // Based on: https://vercel.com/blog style guide
 // Style: Get to the point, cut filler, be confident, short declarative sentences
@@ -138,32 +148,53 @@ function extractHighlights(commits: Commit[]): string[] {
     dx: meaningfulCommits.filter((c) => CASUAL_PATTERNS.dx.some((pattern) => pattern.test(c.subject)))
   }
 
-  // Generate Vercel-style highlights (concrete, benefit-focused, short)
-
-  if (analysis.features.length > 0) {
-    if (analysis.features.some((c) => c.subject.toLowerCase().includes("mcp"))) {
-      highlights.push("MCP server now supports cross-tool coordination for seamless debugging workflows")
-    }
-    if (
-      analysis.features.some(
-        (c) => c.subject.toLowerCase().includes("browser") || c.subject.toLowerCase().includes("chrome")
-      )
-    ) {
-      highlights.push("Browser automation now shares instances between tools, eliminating conflicts")
-    }
-    if (
-      analysis.features.some(
-        (c) => c.subject.toLowerCase().includes("tui") || c.subject.toLowerCase().includes("terminal")
-      )
-    ) {
-      highlights.push("Terminal interface gets visual enhancements for better development experience")
-    }
-    // Generic feature highlight if no specific patterns match
-    if (highlights.length === 0) {
-      highlights.push("New development tools make debugging faster and more reliable")
-    }
+  // Detect specific features across ALL commits (not just features category)
+  const detectedFeatures = {
+    cls: meaningfulCommits.some((c) => FEATURE_PATTERNS.cls.some((pattern) => pattern.test(c.subject))),
+    mcp: meaningfulCommits.some((c) => FEATURE_PATTERNS.mcp.some((pattern) => pattern.test(c.subject))),
+    chrome: meaningfulCommits.some((c) => FEATURE_PATTERNS.chrome.some((pattern) => pattern.test(c.subject))),
+    delegation: meaningfulCommits.some((c) => FEATURE_PATTERNS.delegation.some((pattern) => pattern.test(c.subject))),
+    cdp: meaningfulCommits.some((c) => FEATURE_PATTERNS.cdp.some((pattern) => pattern.test(c.subject))),
+    tui: meaningfulCommits.some((c) => FEATURE_PATTERNS.tui.some((pattern) => pattern.test(c.subject)))
   }
 
+  // Generate concrete highlights based on detected features
+  if (detectedFeatures.cls) {
+    highlights.push(
+      "🎬 **Passive Screencast Capture**: Automatically records page loads and navigations for performance analysis"
+    )
+    highlights.push("🎯 **CLS Detection**: Watch frame-by-frame video of layout shifts with precise element tracking")
+  }
+
+  if (detectedFeatures.mcp) {
+    highlights.push(
+      "🔧 **Auto-Configuration for AI CLIs**: Automatically writes `.mcp.json` (Claude Code) and `.cursor/mcp.json` (Cursor) so MCP servers are instantly available"
+    )
+  }
+
+  if (detectedFeatures.chrome) {
+    highlights.push(
+      "⚡ **Intelligent Chrome Launch**: Replaced fixed timeout with smart polling - dev3000 starts as soon as Chrome is ready instead of waiting arbitrarily"
+    )
+  }
+
+  if (detectedFeatures.delegation) {
+    highlights.push(
+      "🤖 **Augmented Delegation**: dev3000 now intelligently delegates to chrome-devtools MCP when detected, creating a powerful debugging orchestration layer"
+    )
+  }
+
+  if (detectedFeatures.cdp) {
+    highlights.push(
+      "📡 **CDP URL Sharing**: Shares Chrome DevTools Protocol URL with other MCPs to prevent duplicate browser instances"
+    )
+  }
+
+  if (detectedFeatures.tui) {
+    highlights.push("🎨 **Improved TUI**: Better header and status line rendering for narrow terminal windows")
+  }
+
+  // Add fix highlights
   if (analysis.fixes.length > 0) {
     // Check for GitHub issue fixes first
     const githubIssues = analysis.fixes
@@ -182,20 +213,20 @@ function extractHighlights(commits: Commit[]): string[] {
         .join(", ")
       highlights.push(`Resolved GitHub issues ${issueLinks}`)
     } else if (analysis.fixes.length >= 3) {
-      highlights.push(`Fixed ${analysis.fixes.length} bugs for improved stability`)
+      highlights.push(`🐛 **Fixed ${analysis.fixes.length} bugs for improved stability**`)
     } else {
       highlights.push("Bug fixes improve overall reliability")
     }
   }
 
+  // Add build improvements if significant
   if (analysis.builds.length > 0) {
     if (analysis.builds.some((c) => c.subject.toLowerCase().includes("typegen"))) {
       highlights.push("Build process optimized to prevent duplicate type generation")
-    } else {
-      highlights.push("Build system improvements reduce compilation time")
     }
   }
 
+  // Add DX improvements
   if (analysis.dx.length > 0) {
     if (analysis.dx.some((c) => c.subject.toLowerCase().includes("ctrl"))) {
       highlights.push("Keyboard shortcuts now work consistently across all modes")
@@ -205,11 +236,17 @@ function extractHighlights(commits: Commit[]): string[] {
     }
   }
 
-  if (analysis.improvements.length > 0) {
-    highlights.push("Developer experience improvements across CLI and interface")
+  // Generic fallback only if no specific features detected
+  if (highlights.length === 0) {
+    if (analysis.features.length > 0) {
+      highlights.push("New development tools make debugging faster and more reliable")
+    }
+    if (analysis.improvements.length > 0) {
+      highlights.push("Developer experience improvements across CLI and interface")
+    }
   }
 
-  // Fallback for when we can't categorize commits meaningfully
+  // Final fallback for when we really can't categorize
   if (highlights.length === 0) {
     if (meaningfulCommits.length >= 5) {
       highlights.push("Performance and stability improvements across all systems")
@@ -218,8 +255,8 @@ function extractHighlights(commits: Commit[]): string[] {
     }
   }
 
-  // Return top 3 highlights (Vercel style - keep it focused)
-  return highlights.slice(0, 3)
+  // Return top 5 highlights (expanded from 3 to capture more detail for feature-rich releases)
+  return highlights.slice(0, 5)
 }
 
 // Function to determine version type based on changes

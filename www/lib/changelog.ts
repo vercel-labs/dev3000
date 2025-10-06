@@ -14,9 +14,11 @@ export const changelog: Release[] = [
     date: "2025-10-06",
     type: "minor",
     highlights: [
-      "New development tools make debugging faster and more reliable",
-      "Bug fixes improve overall reliability",
-      "Developer experience improvements across CLI and interface"
+      "🎬 **Passive Screencast Capture**: Automatically records page loads and navigations without slowing down your dev server",
+      "🎯 **CLS Detection Video Viewer**: Watch frame-by-frame video of layout shifts with red bounding boxes highlighting exactly which elements shifted",
+      "🔍 **Real PerformanceObserver Integration**: Uses browser APIs to detect actual layout shifts (not just pixel-diff guessing), with querySelector to find precise element positions",
+      "⚡ **fix_my_jank Tool**: New MCP command automatically analyzes performance issues and CLS problems, flagging critical UI shifts in NAV/HEADER elements",
+      "🎨 **Improved TUI**: Better header and status line rendering for narrow terminal windows"
     ]
   },
 
@@ -25,9 +27,10 @@ export const changelog: Release[] = [
     date: "2025-10-03",
     type: "patch",
     highlights: [
-      "MCP server now supports cross-tool coordination for seamless debugging workflows",
-      "Bug fixes improve overall reliability",
-      "Developer experience improvements across CLI and interface"
+      "🔧 **Auto-Configuration for AI CLIs**: Automatically writes `.mcp.json` (Claude Code) and `.cursor/mcp.json` (Cursor) so MCP servers are instantly available",
+      "⚡ **Intelligent Chrome Launch**: Replaced fixed timeout with smart polling - dev3000 starts as soon as Chrome is ready instead of waiting arbitrarily",
+      "📚 **FAQ Section**: Added comprehensive FAQ explaining sharp module warnings and other common questions",
+      "🐛 **Fixed Log Paths**: Corrected outdated log file paths in error messages for easier debugging"
     ]
   },
 
@@ -36,8 +39,10 @@ export const changelog: Release[] = [
     date: "2025-09-30",
     type: "patch",
     highlights: [
-      "MCP server now supports cross-tool coordination for seamless debugging workflows",
-      "Developer experience improvements across CLI and interface"
+      "🤖 **Augmented Delegation**: dev3000 now intelligently delegates to chrome-devtools MCP when detected, creating a powerful debugging orchestration layer",
+      "🔍 **Dynamic MCP Discovery**: Automatically discovers and integrates with chrome-devtools MCP server via process detection and port scanning",
+      "📡 **CDP URL Sharing**: Shares Chrome DevTools Protocol URL with other MCPs to prevent duplicate browser instances",
+      "🎨 **Enhanced TUI**: Improved layout and dynamic capability display when MCP integrations are active"
     ]
   },
 
@@ -45,14 +50,20 @@ export const changelog: Release[] = [
     version: "0.0.76",
     date: "2025-09-30",
     type: "patch",
-    highlights: ["Quality improvements and bug fixes"]
+    highlights: [
+      "🧠 **Smart Auto-Delegation**: Re-enabled intelligent MCP delegation with Claude prompt caching detection to avoid token waste",
+      "⚙️ **MCP Integration Refinements**: Improved how dev3000 coordinates with chrome-devtools MCP for seamless workflows"
+    ]
   },
 
   {
     version: "0.0.75",
     date: "2025-09-29",
     type: "patch",
-    highlights: ["Bug fixes improve overall reliability"]
+    highlights: [
+      "🔧 **MCP Integration Fixes**: Resolved issues with MCP server coordination and shutdown behavior",
+      "🛡️ **Stability Improvements**: Fixed edge cases in MCP integration that could cause unexpected behavior"
+    ]
   },
 
   {
