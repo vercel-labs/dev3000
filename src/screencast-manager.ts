@@ -257,9 +257,7 @@ export class ScreencastManager {
       try {
         writeFileSync(metadataPath, JSON.stringify(metadata, null, 2))
         if (totalCLS > 0) {
-          this.logFn(
-            `[CDP] Detected ${this.layoutShifts.length} layout shifts (CLS: ${totalCLS.toFixed(4)})`
-          )
+          this.logFn(`[CDP] Detected ${this.layoutShifts.length} layout shifts (CLS: ${totalCLS.toFixed(4)})`)
         }
       } catch (error) {
         this.logFn(`[CDP] Failed to save metadata - ${error}`)
