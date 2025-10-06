@@ -82,8 +82,7 @@ const TUIApp = ({
   const termHeight = terminalSize.height
 
   // Determine if we should use compact mode
-  // Use 88 as breakpoint since the full logo + content needs ~85-87 chars minimum
-  const isCompact = termWidth < 88 || termHeight < 20
+  const isCompact = termWidth < 80 || termHeight < 20
   const isVeryCompact = termWidth < 60 || termHeight < 15
 
   // Provide status update function to parent
@@ -293,8 +292,8 @@ const TUIApp = ({
         <Text color="#A18CE5">{topBorderLine}</Text>
 
         {/* Content with side borders only */}
-        <Box borderStyle="round" borderColor="#A18CE5" borderTop={false} paddingX={2} paddingY={1}>
-          <Box flexDirection="row" gap={3}>
+        <Box borderStyle="round" borderColor="#A18CE5" borderTop={false} paddingX={1} paddingY={1}>
+          <Box flexDirection="row" gap={1}>
             {/* ASCII Logo on the left */}
             {/* biome-ignore format: preserve ASCII art alignment */}
             <Box flexDirection="column" alignItems="flex-start">
