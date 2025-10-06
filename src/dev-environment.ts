@@ -19,6 +19,7 @@ import { homedir, tmpdir } from "os"
 import { dirname, join } from "path"
 import { fileURLToPath } from "url"
 import { CDPMonitor } from "./cdp-monitor.js"
+import { ScreencastManager } from "./screencast-manager.js"
 import { type LogEntry, NextJsErrorDetector, OutputProcessor, StandardLogParser } from "./services/parsers/index.js"
 import { DevTUI } from "./tui-interface.js"
 import { getProjectDisplayName, getProjectName } from "./utils/project-name.js"
@@ -583,6 +584,7 @@ export class DevEnvironment {
   private serverProcess: ChildProcess | null = null
   private mcpServerProcess: ChildProcess | null = null
   private cdpMonitor: CDPMonitor | null = null
+  private screencastManager: ScreencastManager | null = null
   private logger: Logger
   private outputProcessor: OutputProcessor
   private options: DevEnvironmentOptions
@@ -936,8 +938,10 @@ export class DevEnvironment {
         this.debugLog("Browser monitoring disabled via --servers-only flag")
       }
 
-      // Write session info for MCP server discovery
-      writeSessionInfo(projectName, this.options.logFile, this.options.port, this.options.mcpPort)
+      // Write session info for MCP server discovery (include CDP URL if browser monitoring was started)
+      const cdpUrl = this.cdpMonitor?.getCdpUrl() || null
+      const chromePids = this.cdpMonitor?.getChromePids() || []
+      writeSessionInfo(projectName, this.options.logFile, this.options.port, this.options.mcpPort, cdpUrl, chromePids)
 
       // Clear status - ready!
       await this.tui.updateStatus(null)
@@ -1022,7 +1026,10 @@ export class DevEnvironment {
 
       // Get project name for session info and Visual Timeline URL
       const projectName = getProjectName()
-      writeSessionInfo(projectName, this.options.logFile, this.options.port, this.options.mcpPort)
+      // Include CDP URL if browser monitoring was started
+      const cdpUrl = this.cdpMonitor?.getCdpUrl() || null
+      const chromePids = this.cdpMonitor?.getChromePids() || []
+      writeSessionInfo(projectName, this.options.logFile, this.options.port, this.options.mcpPort, cdpUrl, chromePids)
 
       // Complete startup with success message only in non-TUI mode
       this.spinner.succeed("Development environment ready!")
@@ -2034,6 +2041,24 @@ export class DevEnvironment {
       const cdpUrl = this.cdpMonitor.getCdpUrl()
       const chromePids = this.cdpMonitor.getChromePids()
 
+      // Start screencast manager for automatic jank detection
+      if (cdpUrl) {
+        this.screencastManager = new ScreencastManager(
+          cdpUrl,
+          (msg: string) => {
+            // Pass through [SCREENCAST] messages directly so they can be linkified in logs UI
+            if (msg.includes("[SCREENCAST]")) {
+              this.logger.log("browser", msg)
+            } else {
+              this.logger.log("browser", `[Screencast] ${msg}`)
+            }
+          },
+          this.options.port.toString()
+        )
+        await this.screencastManager.start()
+        this.logger.log("browser", "[Screencast] Auto-capture enabled for navigation events")
+      }
+
       if (cdpUrl || chromePids.length > 0) {
         writeSessionInfo(
           projectName,
@@ -2062,6 +2087,12 @@ export class DevEnvironment {
 
     // Stop health monitoring
     this.stopHealthCheck()
+
+    // Stop screencast manager
+    if (this.screencastManager) {
+      await this.screencastManager.stop()
+      this.screencastManager = null
+    }
 
     // Clean up session file
     try {

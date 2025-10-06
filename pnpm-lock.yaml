@@ -91,6 +91,12 @@ importers:
       '@radix-ui/react-slot':
         specifier: ^1.1.1
         version: 1.2.3(@types/react@19.1.17)(react@19.1.1)
+      '@types/pixelmatch':
+        specifier: ^5.2.6
+        version: 5.2.6
+      '@types/pngjs':
+        specifier: ^6.0.5
+        version: 6.0.5
       autoprefixer:
         specifier: ^10.4.20
         version: 10.4.21(postcss@8.5.6)
@@ -112,6 +118,12 @@ importers:
       next:
         specifier: 15.6.0-canary.31
         version: 15.6.0-canary.31(babel-plugin-react-compiler@19.1.0-rc.3)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
+      pixelmatch:
+        specifier: ^7.1.0
+        version: 7.1.0
+      pngjs:
+        specifier: ^7.0.0
+        version: 7.0.0
       react:
         specifier: 19.1.1
         version: 19.1.1
@@ -250,13 +262,13 @@ importers:
         version: 2.17.1(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(typescript@5.9.2)
       '@sveltejs/kit':
         specifier: latest
-        version: 2.43.7(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.8)(vite@5.4.20(@types/node@24.5.2)(lightningcss@1.30.1)))(svelte@5.39.8)(vite@5.4.20(@types/node@24.5.2)(lightningcss@1.30.1))
+        version: 2.43.8(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.8)(vite@5.4.20(@types/node@24.5.2)(lightningcss@1.30.1)))(svelte@5.39.8)(vite@5.4.20(@types/node@24.5.2)(lightningcss@1.30.1))
       '@vercel/analytics':
         specifier: latest
-        version: 1.5.0(@remix-run/react@2.17.1(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(typescript@5.9.2))(@sveltejs/kit@2.43.7(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.8)(vite@5.4.20(@types/node@24.5.2)(lightningcss@1.30.1)))(svelte@5.39.8)(vite@5.4.20(@types/node@24.5.2)(lightningcss@1.30.1)))(next@15.6.0-canary.38(babel-plugin-react-compiler@19.1.0-rc.3)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react@19.1.1)(svelte@5.39.8)(vue-router@4.5.1(vue@3.5.22(typescript@5.9.2)))(vue@3.5.22(typescript@5.9.2))
+        version: 1.5.0(@remix-run/react@2.17.1(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(typescript@5.9.2))(@sveltejs/kit@2.43.8(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.8)(vite@5.4.20(@types/node@24.5.2)(lightningcss@1.30.1)))(svelte@5.39.8)(vite@5.4.20(@types/node@24.5.2)(lightningcss@1.30.1)))(next@15.6.0-canary.38(babel-plugin-react-compiler@19.1.0-rc.3)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react@19.1.1)(svelte@5.39.8)(vue-router@4.5.1(vue@3.5.22(typescript@5.9.2)))(vue@3.5.22(typescript@5.9.2))
       '@vercel/speed-insights':
         specifier: ^1.2.0
-        version: 1.2.0(@sveltejs/kit@2.43.7(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.8)(vite@5.4.20(@types/node@24.5.2)(lightningcss@1.30.1)))(svelte@5.39.8)(vite@5.4.20(@types/node@24.5.2)(lightningcss@1.30.1)))(next@15.6.0-canary.38(babel-plugin-react-compiler@19.1.0-rc.3)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react@19.1.1)(svelte@5.39.8)(vue-router@4.5.1(vue@3.5.22(typescript@5.9.2)))(vue@3.5.22(typescript@5.9.2))
+        version: 1.2.0(@sveltejs/kit@2.43.8(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.8)(vite@5.4.20(@types/node@24.5.2)(lightningcss@1.30.1)))(svelte@5.39.8)(vite@5.4.20(@types/node@24.5.2)(lightningcss@1.30.1)))(next@15.6.0-canary.38(babel-plugin-react-compiler@19.1.0-rc.3)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react@19.1.1)(svelte@5.39.8)(vue-router@4.5.1(vue@3.5.22(typescript@5.9.2)))(vue@3.5.22(typescript@5.9.2))
       autoprefixer:
         specifier: ^10.4.20
         version: 10.4.21(postcss@8.5.6)
@@ -1906,8 +1918,8 @@ packages:
     peerDependencies:
       acorn: ^8.9.0
 
-  '@sveltejs/kit@2.43.7':
-    resolution: {integrity: sha512-6trpyltB9XZNkM8cfVHG9U2urAH4NPD7UeO0wiBvZjD8gHj6w9bVeWnBQgnO8LPNpzOhSlwnZDk355OOAa/9Zw==}
+  '@sveltejs/kit@2.43.8':
+    resolution: {integrity: sha512-z21dG8W4g6XtAnK8bMpaSahtPOV6JVhghhco1+GR4H39XEgIxrjIpRoT1Js84c7TmhBzbTkVpZVVPFNNPFsXkQ==}
     engines: {node: '>=18.13'}
     hasBin: true
     peerDependencies:
@@ -2069,6 +2081,12 @@ packages:
 
   '@types/node@24.5.2':
     resolution: {integrity: sha512-FYxk1I7wPv3K2XBaoyH2cTnocQEu8AOZ60hPbsyukMPLv5/5qr7V1i8PLHdl6Zf87I+xZXFvPCXYjiTFq+YSDQ==}
+
+  '@types/pixelmatch@5.2.6':
+    resolution: {integrity: sha512-wC83uexE5KGuUODn6zkm9gMzTwdY5L0chiK+VrKcDfEjzxh1uadlWTvOmAbCpnM9zx/Ww3f8uKlYQVnO/TrqVg==}
+
+  '@types/pngjs@6.0.5':
+    resolution: {integrity: sha512-0k5eKfrA83JOZPppLtS2C7OUtyNAl2wKNxfyYl9Q5g9lPkgBl/9hNyAu6HuEH2J4XmIv2znEpkDd0SaZVxW6iQ==}
 
   '@types/react-dom@19.1.11':
     resolution: {integrity: sha512-3BKc/yGdNTYQVVw4idqHtSOcFsgGuBbMveKCOgF8wQ5QtrYOc3jDIlzg3jef04zcXFIHLelyGlj0T+BJ8+KN+w==}
@@ -3094,9 +3112,17 @@ packages:
     resolution: {integrity: sha512-5gTmgEY/sqK6gFXLIsQNH19lWb4ebPDLA4SdLP7dsWkIXHWlG66oPuVvXSGFPppYZz8ZDZq0dYYrbHfBCVUb1Q==}
     engines: {node: '>=12'}
 
+  pixelmatch@7.1.0:
+    resolution: {integrity: sha512-1wrVzJ2STrpmONHKBy228LM1b84msXDUoAzVEl0R8Mz4Ce6EPr+IVtxm8+yvrqLYMHswREkjYFaMxnyGnaY3Ng==}
+    hasBin: true
+
   pkce-challenge@5.0.0:
     resolution: {integrity: sha512-ueGLflrrnvwB3xuo/uGob5pd5FN7l0MsLf0Z87o/UQmRtwjvfylfc9MurIxRAWywCYTgrvpXBcqjV4OfCYGCIQ==}
     engines: {node: '>=16.20.0'}
+
+  pngjs@7.0.0:
+    resolution: {integrity: sha512-LKWqWJRhstyYo9pGvgor/ivk2w94eSjE3RGVuzLGlr3NmD8bf7RcYGze1mNdEHRP6TRP6rMuDHk5t44hnTRyow==}
+    engines: {node: '>=14.19.0'}
 
   postcss-value-parser@4.2.0:
     resolution: {integrity: sha512-1NNCs6uurfkVbeXG4S8JFT9t19m45ICnif8zWLd5oPSZ50QnwMfK+H3jv408d4jw/7Bttv5axS5IiHoLaVNHeQ==}
@@ -4968,7 +4994,7 @@ snapshots:
     dependencies:
       acorn: 8.15.0
 
-  '@sveltejs/kit@2.43.7(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.8)(vite@5.4.20(@types/node@24.5.2)(lightningcss@1.30.1)))(svelte@5.39.8)(vite@5.4.20(@types/node@24.5.2)(lightningcss@1.30.1))':
+  '@sveltejs/kit@2.43.8(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.8)(vite@5.4.20(@types/node@24.5.2)(lightningcss@1.30.1)))(svelte@5.39.8)(vite@5.4.20(@types/node@24.5.2)(lightningcss@1.30.1))':
     dependencies:
       '@standard-schema/spec': 1.0.0
       '@sveltejs/acorn-typescript': 1.0.5(acorn@8.15.0)
@@ -5126,6 +5152,14 @@ snapshots:
     dependencies:
       undici-types: 7.12.0
 
+  '@types/pixelmatch@5.2.6':
+    dependencies:
+      '@types/node': 24.5.2
+
+  '@types/pngjs@6.0.5':
+    dependencies:
+      '@types/node': 24.5.2
+
   '@types/react-dom@19.1.11(@types/react@19.1.17)':
     dependencies:
       '@types/react': 19.1.17
@@ -5138,19 +5172,19 @@ snapshots:
     dependencies:
       '@types/node': 24.5.2
 
-  '@vercel/analytics@1.5.0(@remix-run/react@2.17.1(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(typescript@5.9.2))(@sveltejs/kit@2.43.7(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.8)(vite@5.4.20(@types/node@24.5.2)(lightningcss@1.30.1)))(svelte@5.39.8)(vite@5.4.20(@types/node@24.5.2)(lightningcss@1.30.1)))(next@15.6.0-canary.38(babel-plugin-react-compiler@19.1.0-rc.3)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react@19.1.1)(svelte@5.39.8)(vue-router@4.5.1(vue@3.5.22(typescript@5.9.2)))(vue@3.5.22(typescript@5.9.2))':
+  '@vercel/analytics@1.5.0(@remix-run/react@2.17.1(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(typescript@5.9.2))(@sveltejs/kit@2.43.8(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.8)(vite@5.4.20(@types/node@24.5.2)(lightningcss@1.30.1)))(svelte@5.39.8)(vite@5.4.20(@types/node@24.5.2)(lightningcss@1.30.1)))(next@15.6.0-canary.38(babel-plugin-react-compiler@19.1.0-rc.3)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react@19.1.1)(svelte@5.39.8)(vue-router@4.5.1(vue@3.5.22(typescript@5.9.2)))(vue@3.5.22(typescript@5.9.2))':
     optionalDependencies:
       '@remix-run/react': 2.17.1(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(typescript@5.9.2)
-      '@sveltejs/kit': 2.43.7(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.8)(vite@5.4.20(@types/node@24.5.2)(lightningcss@1.30.1)))(svelte@5.39.8)(vite@5.4.20(@types/node@24.5.2)(lightningcss@1.30.1))
+      '@sveltejs/kit': 2.43.8(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.8)(vite@5.4.20(@types/node@24.5.2)(lightningcss@1.30.1)))(svelte@5.39.8)(vite@5.4.20(@types/node@24.5.2)(lightningcss@1.30.1))
       next: 15.6.0-canary.38(babel-plugin-react-compiler@19.1.0-rc.3)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
       react: 19.1.1
       svelte: 5.39.8
       vue: 3.5.22(typescript@5.9.2)
       vue-router: 4.5.1(vue@3.5.22(typescript@5.9.2))
 
-  '@vercel/speed-insights@1.2.0(@sveltejs/kit@2.43.7(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.8)(vite@5.4.20(@types/node@24.5.2)(lightningcss@1.30.1)))(svelte@5.39.8)(vite@5.4.20(@types/node@24.5.2)(lightningcss@1.30.1)))(next@15.6.0-canary.38(babel-plugin-react-compiler@19.1.0-rc.3)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react@19.1.1)(svelte@5.39.8)(vue-router@4.5.1(vue@3.5.22(typescript@5.9.2)))(vue@3.5.22(typescript@5.9.2))':
+  '@vercel/speed-insights@1.2.0(@sveltejs/kit@2.43.8(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.8)(vite@5.4.20(@types/node@24.5.2)(lightningcss@1.30.1)))(svelte@5.39.8)(vite@5.4.20(@types/node@24.5.2)(lightningcss@1.30.1)))(next@15.6.0-canary.38(babel-plugin-react-compiler@19.1.0-rc.3)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react@19.1.1)(svelte@5.39.8)(vue-router@4.5.1(vue@3.5.22(typescript@5.9.2)))(vue@3.5.22(typescript@5.9.2))':
     optionalDependencies:
-      '@sveltejs/kit': 2.43.7(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.8)(vite@5.4.20(@types/node@24.5.2)(lightningcss@1.30.1)))(svelte@5.39.8)(vite@5.4.20(@types/node@24.5.2)(lightningcss@1.30.1))
+      '@sveltejs/kit': 2.43.8(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.8)(vite@5.4.20(@types/node@24.5.2)(lightningcss@1.30.1)))(svelte@5.39.8)(vite@5.4.20(@types/node@24.5.2)(lightningcss@1.30.1))
       next: 15.6.0-canary.38(babel-plugin-react-compiler@19.1.0-rc.3)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
       react: 19.1.1
       svelte: 5.39.8
@@ -6101,7 +6135,13 @@ snapshots:
 
   picomatch@4.0.3: {}
 
+  pixelmatch@7.1.0:
+    dependencies:
+      pngjs: 7.0.0
+
   pkce-challenge@5.0.0: {}
+
+  pngjs@7.0.0: {}
 
   postcss-value-parser@4.2.0: {}
 

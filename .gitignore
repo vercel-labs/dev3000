@@ -8,4 +8,5 @@ mcp-server/public/screenshots/*
 mcp-server/.next/*
 .gemini/
 .cursor/
+.claude/
 .mcp.json

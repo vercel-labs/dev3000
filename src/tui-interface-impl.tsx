@@ -347,9 +347,9 @@ const TUIApp = ({
               if (parts) {
                 let [, timestamp, source, type, message] = parts
 
-                // Replace specific emoji in common port-in-use error to avoid terminal width issues
-                if (message?.includes("ERROR: ⚠ Port") && message.includes("is in use by process")) {
-                  message = message.replace("ERROR: ⚠ Port", "ERROR: [!] Port")
+                // Replace warning emoji in ERROR/WARNING messages for consistent terminal rendering
+                if (message && (type === "ERROR" || type === "WARNING")) {
+                  message = message.replace(/⚠/g, "[!]")
                 }
 
                 // In very compact mode, simplify the output
