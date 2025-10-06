@@ -82,7 +82,8 @@ const TUIApp = ({
   const termHeight = terminalSize.height
 
   // Determine if we should use compact mode
-  const isCompact = termWidth < 80 || termHeight < 20
+  // Use 88 as breakpoint since the full logo + content needs ~85-87 chars minimum
+  const isCompact = termWidth < 88 || termHeight < 20
   const isVeryCompact = termWidth < 60 || termHeight < 15
 
   // Provide status update function to parent
@@ -309,7 +310,7 @@ const TUIApp = ({
               <Text color="cyan">🌐 Your App: http://localhost:{appPort}</Text>
               <Text color="cyan">🤖 MCP Server: http://localhost:{mcpPort}/mcp</Text>
               <Text color="cyan">
-                📸 Visual Timeline: http://localhost:{mcpPort}/logs
+                📸 LogsViz: http://localhost:{mcpPort}/logs
                 {projectName ? `?project=${encodeURIComponent(projectName)}` : ""}
               </Text>
               {serversOnly && (
