@@ -298,13 +298,7 @@ function LogEntryComponent({ entry, darkMode }: { entry: LogEntry; darkMode: boo
         backgroundColor: LOG_COLORS.SCREENSHOT,
         textColor: getTextColor(LOG_COLORS.SCREENSHOT)
       }
-    if (message.includes("[NAVIGATION]") || message.includes("[PAGE]"))
-      return {
-        type: "PAGE",
-        backgroundColor: LOG_COLORS.PAGE,
-        textColor: getTextColor(LOG_COLORS.PAGE)
-      }
-    if (message.includes("[DOM]"))
+    if (message.includes("[NAVIGATION]") || message.includes("[PAGE]") || message.includes("[DOM]"))
       return {
         type: "DOM",
         backgroundColor: LOG_COLORS.DOM,
