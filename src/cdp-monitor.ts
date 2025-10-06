@@ -769,14 +769,14 @@ export class CDPMonitor {
 
     // Page load events for better screenshot timing
     this.onCDPEvent("Page.loadEventFired", async (_event) => {
-      this.logger("browser", "[PAGE] Load event fired") // [PLAYWRIGHT] tag removed
+      this.logger("browser", "[DOM] Load event fired") // [PLAYWRIGHT] tag removed
       this.takeScreenshot("page-loaded")
       // Reinject interaction tracking on page load
       await this.setupInteractionTracking()
     })
 
     this.onCDPEvent("Page.domContentEventFired", async (_event) => {
-      this.logger("browser", "[PAGE] DOM content loaded") // [PLAYWRIGHT] tag removed
+      this.logger("browser", "[DOM] DOM content loaded") // [PLAYWRIGHT] tag removed
       // Skip screenshot on DOM content loaded - we'll get one on page-loaded
       // Reinject interaction tracking on DOM content loaded
       await this.setupInteractionTracking()

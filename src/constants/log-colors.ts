@@ -16,7 +16,6 @@ export const LOG_COLORS = {
   CONSOLE_LOG: "#B0B0B0", // Gray
   CONSOLE_DEBUG: "#9370DB", // Purple
   SCREENSHOT: "#FF69B4", // Hot pink
-  PAGE: "#98FB98", // Pale green
   DOM: "#DDA0DD", // Plum
   CDP: "#F0E68C", // Khaki
   ERROR: "#FF6B6B", // Red
@@ -27,13 +26,7 @@ export const LOG_COLORS = {
 // Helper to determine text color based on background
 export function getTextColor(bgColor: string): string {
   // Light backgrounds need dark text
-  const lightColors: string[] = [
-    LOG_COLORS.CONSOLE_INFO,
-    LOG_COLORS.SCREENSHOT,
-    LOG_COLORS.PAGE,
-    LOG_COLORS.DOM,
-    LOG_COLORS.CDP
-  ]
+  const lightColors: string[] = [LOG_COLORS.CONSOLE_INFO, LOG_COLORS.SCREENSHOT, LOG_COLORS.DOM, LOG_COLORS.CDP]
   return lightColors.includes(bgColor) ? "#000" : "#FFF"
 }
 
@@ -50,10 +43,9 @@ export const TYPE_COLOR_MAP = {
   "CDP.ERROR": "CDP",
   "CHROME.ERROR": "ERROR",
   "CHROME.CRASH": "CRITICAL_ERROR",
-  NAVIGATION: "PAGE",
+  NAVIGATION: "DOM",
   INTERACTION: "DOM",
   SCREENSHOT: "SCREENSHOT",
-  PAGE: "PAGE",
   DOM: "DOM",
   CDP: "CDP",
   ERROR: "ERROR",
