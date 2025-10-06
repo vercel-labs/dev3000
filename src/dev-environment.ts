@@ -2046,12 +2046,8 @@ export class DevEnvironment {
         this.screencastManager = new ScreencastManager(
           cdpUrl,
           (msg: string) => {
-            // Pass through [SCREENCAST] messages directly so they can be linkified in logs UI
-            if (msg.includes("[SCREENCAST]")) {
-              this.logger.log("browser", msg)
-            } else {
-              this.logger.log("browser", `[Screencast] ${msg}`)
-            }
+            // Pass through CDP messages directly - they already have their own category tags
+            this.logger.log("browser", msg)
           },
           this.options.port.toString()
         )
