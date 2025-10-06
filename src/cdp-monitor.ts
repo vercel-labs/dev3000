@@ -610,7 +610,18 @@ export class CDPMonitor {
         .filter((v) => v !== null) // Remove skipped style strings
         .join(" ")
 
-      let logMsg = `[CONSOLE.${(type || "log").toUpperCase()}] ${values}`
+      // Simplify console tags - we already have [BROWSER] prefix
+      const typeTag =
+        type === "error"
+          ? "ERROR"
+          : type === "warn"
+            ? "WARNING"
+            : type === "info"
+              ? "INFO"
+              : type === "debug"
+                ? "DEBUG"
+                : "LOG"
+      let logMsg = `[${typeTag}] ${values}`
 
       // Add stack trace for errors
       if (stackTrace && (type === "error" || type === "assert")) {

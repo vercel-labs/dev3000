@@ -2052,7 +2052,7 @@ export class DevEnvironment {
           this.options.port.toString()
         )
         await this.screencastManager.start()
-        this.logger.log("browser", "[Screencast] Auto-capture enabled for navigation events")
+        // this.logger.log("browser", "[Screencast] Auto-capture enabled for navigation events")
       }
 
       if (cdpUrl || chromePids.length > 0) {
