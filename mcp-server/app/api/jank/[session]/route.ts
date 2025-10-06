@@ -222,7 +222,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
           console.log("[JANK API] Pixel-diff bounding box:", {
             boundingBox,
-            areaPercentage: areaPercentage.toFixed(2) + "%",
+            areaPercentage: `${areaPercentage.toFixed(2)}%`,
             rejected: !boundingBoxToUse,
             reason: !boundingBoxToUse ? "too large (>50% of screen)" : "accepted"
           })

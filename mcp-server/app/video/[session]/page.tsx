@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import { use, useEffect, useState } from "react"
 
 export default function VideoPlayer({ params }: { params: Promise<{ session: string }> }) {
@@ -133,12 +134,13 @@ export default function VideoPlayer({ params }: { params: Promise<{ session: str
   return (
     <div className="flex flex-col h-screen bg-black">
       <div className="flex-1 flex items-center justify-center relative overflow-hidden">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
+        <Image
           ref={setImgRef}
           src={`/api/screenshots/${currentFrameFile}`}
           alt={`Frame ${currentFrame}`}
           className="w-full h-full object-contain"
+          fill
+          unoptimized
         />
         {clsAtFrame?.boundingBox && imgRef && (
           <div className="absolute border-2 border-red-500 pointer-events-none" style={imgStyle} />
