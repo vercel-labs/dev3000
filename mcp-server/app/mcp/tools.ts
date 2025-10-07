@@ -1592,7 +1592,9 @@ export async function executeBrowserAction({
                     /^document\.querySelector\(['"][^'"]*['"]\)\.textContent$/,
                     /^document\.body\.scrollHeight$/,
                     /^window\.scrollY$/,
-                    /^window\.scrollX$/
+                    /^window\.scrollX$/,
+                    // Allow React Fiber inspection (read-only introspection)
+                    /^\s*\(function\(\)\s*\{[\s\S]*__reactFiber\$[\s\S]*\}\)\(\)\s*$/
                   ]
 
                   if (!safeExpressions.some((regex) => regex.test(expression))) {
