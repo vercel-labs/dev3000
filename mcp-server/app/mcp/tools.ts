@@ -1447,7 +1447,10 @@ async function evaluateInBrowser(expression: string): Promise<unknown> {
   }
 
   const sessionData = JSON.parse(readFileSync(sessions[0].sessionFile, "utf-8"))
+  const projectName = sessions[0].projectName
   let cdpUrl = sessionData.cdpUrl
+
+  logToDevFile(`[evaluateInBrowser] Starting evaluation for project: ${projectName}`, projectName)
 
   if (!cdpUrl) {
     try {
@@ -1458,6 +1461,7 @@ async function evaluateInBrowser(expression: string): Promise<unknown> {
       )
       if (activePage) {
         cdpUrl = activePage.webSocketDebuggerUrl
+        logToDevFile(`[evaluateInBrowser] Found CDP URL via fallback: ${cdpUrl}`, projectName)
       }
     } catch {
       throw new Error("Failed to find CDP URL")
@@ -1468,28 +1472,50 @@ async function evaluateInBrowser(expression: string): Promise<unknown> {
     throw new Error("No Chrome DevTools Protocol URL found")
   }
 
+  logToDevFile(`[evaluateInBrowser] Using CDP URL: ${cdpUrl}`, projectName)
+
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(cdpUrl)
     let evalId: number | null = null
+    let resolved = false
+
+    // Add timeout to prevent hanging
+    const timeout = setTimeout(() => {
+      if (!resolved) {
+        resolved = true
+        ws.close()
+        logToDevFile(`[evaluateInBrowser] TIMEOUT after 5s`, projectName)
+        reject(new Error("CDP evaluation timeout after 5 seconds"))
+      }
+    }, 5000)
 
     ws.on("open", async () => {
       try {
+        logToDevFile(`[evaluateInBrowser] WebSocket opened, getting targets`, projectName)
         ws.send(JSON.stringify({ id: 1, method: "Target.getTargets", params: {} }))
 
         let messageId = 2
 
         ws.on("message", async (data) => {
           const message = JSON.parse(data.toString())
+          logToDevFile(
+            `[evaluateInBrowser] Received message: ${JSON.stringify(message).substring(0, 200)}`,
+            projectName
+          )
 
           // Handle getTargets response
           if (message.id === 1) {
             const pageTarget = message.result.targetInfos.find((t: Record<string, unknown>) => t.type === "page")
             if (!pageTarget) {
+              clearTimeout(timeout)
+              resolved = true
               ws.close()
+              logToDevFile(`[evaluateInBrowser] No page targets found`, projectName)
               reject(new Error("No page targets found"))
               return
             }
 
+            logToDevFile(`[evaluateInBrowser] Found page target: ${pageTarget.targetId}`, projectName)
             ws.send(
               JSON.stringify({
                 id: messageId++,
@@ -1504,6 +1530,10 @@ async function evaluateInBrowser(expression: string): Promise<unknown> {
           if (message.method === "Target.attachedToTarget") {
             // Send evaluation command
             evalId = messageId++
+            logToDevFile(
+              `[evaluateInBrowser] Attached to target, sending evaluate command (id: ${evalId})`,
+              projectName
+            )
             ws.send(
               JSON.stringify({
                 id: evalId,
@@ -1516,23 +1546,48 @@ async function evaluateInBrowser(expression: string): Promise<unknown> {
 
           // Handle evaluate response
           if (evalId !== null && message.id === evalId) {
+            clearTimeout(timeout)
+            resolved = true
             ws.close()
             if (message.error) {
+              logToDevFile(`[evaluateInBrowser] Evaluation error: ${message.error.message}`, projectName)
               reject(new Error(message.error.message))
             } else {
-              resolve(message.result?.value)
+              const value = message.result?.value
+              logToDevFile(
+                `[evaluateInBrowser] Evaluation success, result: ${JSON.stringify(value)?.substring(0, 200)}`,
+                projectName
+              )
+              resolve(value)
             }
           }
         })
 
-        ws.on("error", reject)
+        ws.on("error", (err) => {
+          clearTimeout(timeout)
+          if (!resolved) {
+            resolved = true
+            logToDevFile(`[evaluateInBrowser] WebSocket error: ${err}`, projectName)
+            reject(err)
+          }
+        })
       } catch (error) {
+        clearTimeout(timeout)
+        resolved = true
         ws.close()
+        logToDevFile(`[evaluateInBrowser] Exception: ${error}`, projectName)
         reject(error)
       }
     })
 
-    ws.on("error", reject)
+    ws.on("error", (err) => {
+      clearTimeout(timeout)
+      if (!resolved) {
+        resolved = true
+        logToDevFile(`[evaluateInBrowser] WebSocket connection error: ${err}`, projectName)
+        reject(err)
+      }
+    })
   })
 }
 
