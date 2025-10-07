@@ -48,8 +48,8 @@ export default function HomePage() {
             </div>
             <p className="text-base text-muted-foreground leading-relaxed max-w-2xl text-pretty">
               Run your dev server through dev3000 to capture server logs, browser events, network requests, and
-              screenshots in a unified timeline. Claude Code gets complete context without you manually copying and
-              pasting.
+              screenshots in a unified timeline. Your coding agent gets complete context without you manually copying
+              and pasting.
             </p>
           </div>
           <div className="flex flex-col sm:flex-row gap-4">
@@ -101,10 +101,12 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/** biome-ignore lint/correctness/useUniqueElementIds: page section IDs are intentionally static for navigation */}
-      <section id="quickstart" className="py-40">
+      <section className="py-40">
         <div className="doc-container">
-          <h2 className="text-headline">Quick Start</h2>
+          {/** biome-ignore lint/correctness/useUniqueElementIds: page section IDs are intentionally static for navigation */}
+          <h2 className="text-headline scroll-mt-8" id="quickstart">
+            Quick Start
+          </h2>
 
           <ol className="space-y-6 list-decimal list-inside">
             <li className="space-y-2 marker:tabular-nums">
@@ -147,12 +149,9 @@ export default function HomePage() {
               </div>
             </li>
             <li className="space-y-2 marker:tabular-nums">
-              <span className="pl-2 font-medium">Ask Claude Code to debug</span>
-              <div className="pl-6 pt-2 text-muted-foreground">
-                <p>
-                  Claude sees your full development timeline—server output, client-side events & visual state at every
-                  step.
-                </p>
+              <span className="pl-2 font-medium">Ask your coding agent to debug</span>
+              <div className="pl-6 pt-2 text-muted-foreground text-pretty">
+                <p>Your agent sees everything: server output, client-side events & visual state at every step.</p>
               </div>
             </li>
           </ol>
@@ -233,7 +232,7 @@ export default function HomePage() {
         <VercelWordmarkSVG />
 
         <section className="flex flex-col gap-1 *:hover:underline *:w-fit">
-          <a href="/changelog">Changelog</a>
+          <Link href="/changelog">Changelog</Link>
           <a href="https://github.com/vercel-labs/dev3000">GitHub</a>
           <a href="https://github.com/elsigh">Made by elsigh</a>
         </section>
@@ -343,8 +342,24 @@ const FAQs: {
   answer: React.ReactNode
 }[] = [
   {
+    question: "Which coding agents work with dev3000?",
+    answer:
+      "All of them. dev3000 works with any AI coding assistant that supports MCP (Model Context Protocol)—including Claude Code, Cursor, Windsurf, Codex, and others. It also works standalone in your terminal without any agent."
+  },
+  {
     question: "Does dev3000 persist browser state between sessions?",
     answer: "Yes. Each project gets a dedicated Chrome profile that preserves login state, cookies, and local storage."
+  },
+  {
+    question: "Does this only work with Next.js?",
+    answer: (
+      <>
+        No. Works with any framework that runs a dev server—Next.js, Vite, Create React App, Rails, Django, etc. Use{" "}
+        <code className="bg-muted px-2 py-1 rounded text-sm font-mono">--script</code> to specify your package.json dev
+        command or <code className="bg-muted px-2 py-1 rounded text-sm font-mono">--port</code> to connect to an
+        existing server.
+      </>
+    )
   },
   {
     question: "How do I stop dev3000?",
@@ -356,12 +371,29 @@ const FAQs: {
     )
   },
   {
-    question: "Does this only work with Next.js?",
+    question: "Does dev3000 affect my app's performance?",
+    answer:
+      "Minimal impact. dev3000 observes browser events passively through Chrome DevTools Protocol. The only overhead is capturing screenshots on errors and navigation, which happens asynchronously."
+  },
+  {
+    question: "Where is my data stored?",
     answer: (
       <>
-        No. Works with any framework that runs a dev server. Use{" "}
-        <code className="bg-muted px-2 py-1 rounded text-sm font-mono">--script</code> to specify your package.json dev
-        command.
+        All data stays local on your machine. Browser profiles are stored in{" "}
+        <code className="bg-muted px-2 py-1 rounded text-sm font-mono">~/.dev3000/profiles</code>, and captured events
+        are kept in memory during your session. Nothing is sent to external servers.
+      </>
+    )
+  },
+  {
+    question: "Can I use dev3000 with my existing dev workflow?",
+    answer: (
+      <>
+        Yes. Replace your normal dev command (
+        <code className="bg-muted px-2 py-1 rounded text-sm font-mono">pnpm dev</code>,{" "}
+        <code className="bg-muted px-2 py-1 rounded text-sm font-mono">npm run dev</code>, etc.) with{" "}
+        <code className="bg-muted px-2 py-1 rounded text-sm font-mono">d3k</code>. Everything else works exactly the
+        same—hot reload, environment variables, custom ports, etc.
       </>
     )
   },
