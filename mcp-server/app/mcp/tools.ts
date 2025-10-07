@@ -1553,7 +1553,8 @@ async function evaluateInBrowser(expression: string): Promise<unknown> {
               logToDevFile(`[evaluateInBrowser] Evaluation error: ${message.error.message}`, projectName)
               reject(new Error(message.error.message))
             } else {
-              const value = message.result?.value
+              // CDP response structure: { result: { result: { type, value } } }
+              const value = message.result?.result?.value
               logToDevFile(
                 `[evaluateInBrowser] Evaluation success, result: ${JSON.stringify(value)?.substring(0, 200)}`,
                 projectName
