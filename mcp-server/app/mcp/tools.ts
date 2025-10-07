@@ -1436,6 +1436,104 @@ ${availableFunctions}
   }
 }
 
+/**
+ * Internal helper: Evaluates JavaScript in the browser via CDP and returns the raw result
+ * @internal Use this for internal tool implementations that need clean data
+ */
+async function evaluateInBrowser(expression: string): Promise<unknown> {
+  const sessions = findActiveSessions()
+  if (sessions.length === 0) {
+    throw new Error("No active dev3000 sessions found")
+  }
+
+  const sessionData = JSON.parse(readFileSync(sessions[0].sessionFile, "utf-8"))
+  let cdpUrl = sessionData.cdpUrl
+
+  if (!cdpUrl) {
+    try {
+      const response = await fetch("http://localhost:9222/json")
+      const pages = await response.json()
+      const activePage = pages.find(
+        (page: { type: string; url: string }) => page.type === "page" && !page.url.startsWith("chrome://")
+      )
+      if (activePage) {
+        cdpUrl = activePage.webSocketDebuggerUrl
+      }
+    } catch {
+      throw new Error("Failed to find CDP URL")
+    }
+  }
+
+  if (!cdpUrl) {
+    throw new Error("No Chrome DevTools Protocol URL found")
+  }
+
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(cdpUrl)
+
+    ws.on("open", async () => {
+      try {
+        ws.send(JSON.stringify({ id: 1, method: "Target.getTargets", params: {} }))
+
+        let messageId = 2
+
+        ws.on("message", async (data) => {
+          const message = JSON.parse(data.toString())
+
+          if (message.id === 1) {
+            const pageTarget = message.result.targetInfos.find((t: Record<string, unknown>) => t.type === "page")
+            if (!pageTarget) {
+              ws.close()
+              reject(new Error("No page targets found"))
+              return
+            }
+
+            ws.send(
+              JSON.stringify({
+                id: messageId++,
+                method: "Target.attachToTarget",
+                params: { targetId: pageTarget.targetId, flatten: true }
+              })
+            )
+            return
+          }
+
+          if (message.method === "Target.attachedToTarget") {
+            // Send evaluation command
+            const evalId = messageId++
+            ws.send(
+              JSON.stringify({
+                id: evalId,
+                method: "Runtime.evaluate",
+                params: { expression, returnByValue: true }
+              })
+            )
+
+            ws.on("message", (data) => {
+              const msg = JSON.parse(data.toString())
+              if (msg.id === evalId) {
+                ws.close()
+                if (msg.error) {
+                  reject(new Error(msg.error.message))
+                } else {
+                  resolve(msg.result?.value)
+                }
+              }
+            })
+          }
+        })
+
+        ws.on("error", reject)
+      } catch (error) {
+        ws.close()
+        reject(error)
+      }
+    })
+
+    ws.on("error", reject)
+  })
+}
+
 export async function executeBrowserAction({
   action,
   params = {}
@@ -2771,153 +2869,116 @@ export async function getReactComponentInfo(params: {
   const { selector } = params
 
   try {
-    // Use browser automation to inspect React Fiber properties
-    const result = await executeBrowserAction({
-      action: "evaluate",
-      params: {
-        expression: `
-          (function() {
-            try {
-              // Find the DOM element
-              const element = document.querySelector(${JSON.stringify(selector)});
-              if (!element) {
-                return { error: "Element not found with selector: ${selector}" };
-              }
+    // Evaluate React Fiber inspection directly via CDP
+    const evalResult = (await evaluateInBrowser(`
+      (function() {
+        try {
+          // Find the DOM element
+          const element = document.querySelector(${JSON.stringify(selector)});
+          if (!element) {
+            return { error: "Element not found with selector: ${selector}" };
+          }
 
-              // Find the React Fiber key
-              const fiberKey = Object.keys(element).find(k => k.startsWith("__reactFiber$"));
-              if (!fiberKey) {
-                return { error: "React Fiber not found - element may not be a React component" };
-              }
+          // Find the React Fiber key
+          const fiberKey = Object.keys(element).find(k => k.startsWith("__reactFiber$"));
+          if (!fiberKey) {
+            return { error: "React Fiber not found - element may not be a React component" };
+          }
 
-              // Get the fiber object
-              const fiber = element[fiberKey];
-              if (!fiber) {
-                return { error: "React Fiber object is empty" };
-              }
+          // Get the fiber object
+          const fiber = element[fiberKey];
+          if (!fiber) {
+            return { error: "React Fiber object is empty" };
+          }
 
-              // Extract component information
-              const componentName = fiber.type?.name || fiber.elementType?.name || fiber.type?.displayName || "Anonymous";
-              const fileName = fiber._debugSource?.fileName;
-              const lineNumber = fiber._debugSource?.lineNumber;
-              const columnNumber = fiber._debugSource?.columnNumber;
+          // Extract component information
+          const componentName = fiber.type?.name || fiber.elementType?.name || fiber.type?.displayName || "Anonymous";
+          const fileName = fiber._debugSource?.fileName;
+          const lineNumber = fiber._debugSource?.lineNumber;
+          const columnNumber = fiber._debugSource?.columnNumber;
 
-              return {
-                success: true,
-                selector: ${JSON.stringify(selector)},
-                componentName,
-                fileName,
-                lineNumber,
-                columnNumber,
-                element: element.tagName.toLowerCase(),
-                hasDebugInfo: !!(fileName && lineNumber)
-              };
-            } catch (error) {
-              return { error: error.message };
-            }
-          })()
-        `
-      }
-    })
-
-    // Parse the result
-    if (result.content?.[0] && result.content[0].type === "text") {
-      const text = result.content[0].text
-
-      // Extract the JSON result from the executeBrowserAction response
-      // Format: "Browser action 'evaluate' executed successfully. Result: { result: { type, value } }"
-      const resultMatch = text.match(/Result:\s*(\{[\s\S]*\})/)
-      if (!resultMatch) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `❌ **FAILED TO PARSE RESULT**\n\nCould not extract JSON from browser action response.\n\nRaw response:\n${text}`
-            }
-          ]
+          return {
+            success: true,
+            selector: ${JSON.stringify(selector)},
+            componentName,
+            fileName,
+            lineNumber,
+            columnNumber,
+            element: element.tagName.toLowerCase(),
+            hasDebugInfo: !!(fileName && lineNumber)
+          };
+        } catch (error) {
+          return { error: error.message };
         }
-      }
-
-      // The CDP Runtime.evaluate result has the format: { result: { type, value } }
-      const cdpResponse = JSON.parse(resultMatch[1])
-      const evalResult = cdpResponse.result?.value
-
-      if (!evalResult) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `❌ **NO RESULT**\n\nThe browser evaluation returned no value.\n\nCDP Response:\n${JSON.stringify(cdpResponse, null, 2)}`
-            }
-          ]
+      })()
+    `)) as
+      | { error: string }
+      | {
+          success: true
+          selector: string
+          componentName: string
+          fileName?: string
+          lineNumber?: number
+          columnNumber?: number
+          element: string
+          hasDebugInfo: boolean
         }
-      }
 
-      if (evalResult.error) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `❌ **ERROR INSPECTING REACT COMPONENT**\n\n${evalResult.error}\n\n💡 **TIPS:**\n• Make sure the selector matches an element on the page\n• Ensure the element is rendered by a React component\n• React must be running in development mode for debug info\n• Try a simpler selector like 'nav' or '.header'`
-            }
-          ]
-        }
-      }
-
-      if (!evalResult.success) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `❌ **FAILED TO INSPECT COMPONENT**\n\nUnexpected result format. The evaluation did not return success.`
-            }
-          ]
-        }
-      }
-
-      // Build the response
-      const lines: string[] = []
-      lines.push("⚛️ **REACT COMPONENT INFO**")
-      lines.push("")
-      lines.push(`**Selector:** \`${evalResult.selector}\``)
-      lines.push(`**Element:** \`<${evalResult.element}>\``)
-      lines.push(`**Component:** ${evalResult.componentName}`)
-      lines.push("")
-
-      if (evalResult.hasDebugInfo) {
-        lines.push("📍 **SOURCE CODE LOCATION:**")
-        lines.push(`• **File:** ${evalResult.fileName}`)
-        lines.push(`• **Line:** ${evalResult.lineNumber}`)
-        if (evalResult.columnNumber) {
-          lines.push(`• **Column:** ${evalResult.columnNumber}`)
-        }
-        lines.push("")
-        lines.push(
-          `💡 **NEXT STEP:** Use the Read tool to open ${evalResult.fileName}:${evalResult.lineNumber} and inspect the component code.`
-        )
-      } else {
-        lines.push("⚠️ **NO DEBUG INFO AVAILABLE**")
-        lines.push("")
-        lines.push("React debug info is not available. This usually means:")
-        lines.push("• React is running in production mode (not development)")
-        lines.push("• The build doesn't include source maps")
-        lines.push("• The component is a built-in HTML element, not a React component")
-        lines.push("")
-        lines.push(`💡 Make sure you're running in development mode to get file and line number info.`)
-      }
-
+    if ("error" in evalResult) {
       return {
-        content: [{ type: "text", text: lines.join("\n") }]
+        content: [
+          {
+            type: "text",
+            text: `❌ **ERROR INSPECTING REACT COMPONENT**\n\n${evalResult.error}\n\n💡 **TIPS:**\n• Make sure the selector matches an element on the page\n• Ensure the element is rendered by a React component\n• React must be running in development mode for debug info\n• Try a simpler selector like 'nav' or '.header'`
+          }
+        ]
       }
     }
 
+    if (!evalResult.success) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `❌ **FAILED TO INSPECT COMPONENT**\n\nUnexpected result format. The evaluation did not return success.`
+          }
+        ]
+      }
+    }
+
+    // Build the response
+    const lines: string[] = []
+    lines.push("⚛️ **REACT COMPONENT INFO**")
+    lines.push("")
+    lines.push(`**Selector:** \`${evalResult.selector}\``)
+    lines.push(`**Element:** \`<${evalResult.element}>\``)
+    lines.push(`**Component:** ${evalResult.componentName}`)
+    lines.push("")
+
+    if (evalResult.hasDebugInfo) {
+      lines.push("📍 **SOURCE CODE LOCATION:**")
+      lines.push(`• **File:** ${evalResult.fileName}`)
+      lines.push(`• **Line:** ${evalResult.lineNumber}`)
+      if (evalResult.columnNumber) {
+        lines.push(`• **Column:** ${evalResult.columnNumber}`)
+      }
+      lines.push("")
+      lines.push(
+        `💡 **NEXT STEP:** Use the Read tool to open ${evalResult.fileName}:${evalResult.lineNumber} and inspect the component code.`
+      )
+    } else {
+      lines.push("⚠️ **NO DEBUG INFO AVAILABLE**")
+      lines.push("")
+      lines.push("React debug info is not available. This usually means:")
+      lines.push("• React is running in production mode (not development)")
+      lines.push("• The build doesn't include source maps")
+      lines.push("• The component is a built-in HTML element, not a React component")
+      lines.push("")
+      lines.push(`💡 Make sure you're running in development mode to get file and line number info.`)
+    }
+
     return {
-      content: [
-        {
-          type: "text",
-          text: `❌ **UNEXPECTED RESULT**\n\nThe browser evaluation returned an unexpected format.`
-        }
-      ]
+      content: [{ type: "text", text: lines.join("\n") }]
     }
   } catch (error) {
     return {
