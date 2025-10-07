@@ -16,9 +16,5 @@ declare module "asciinema-player" {
     startAt?: number | string
   }
 
-  export function create(
-    src: string,
-    container: HTMLElement,
-    options?: PlayerOptions
-  ): void
+  export function create(src: string, container: HTMLElement, options?: PlayerOptions): void
 }

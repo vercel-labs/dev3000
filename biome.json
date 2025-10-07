@@ -63,7 +63,8 @@
       },
       "suspicious": {
         "noArrayIndexKey": "warn",
-        "noDocumentCookie": "off"
+        "noDocumentCookie": "off",
+        "noUnknownAtRules": "off"
       },
       "security": {
         "noDangerouslySetInnerHtml": "warn",

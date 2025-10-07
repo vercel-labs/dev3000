@@ -39,8 +39,6 @@
     "@radix-ui/react-toggle": "^1.1.1",
     "@radix-ui/react-toggle-group": "^1.1.1",
     "@radix-ui/react-tooltip": "^1.1.6",
-    "@remix-run/react": "latest",
-    "@sveltejs/kit": "latest",
     "@vercel/analytics": "latest",
     "@vercel/speed-insights": "^1.2.0",
     "asciinema-player": "^3.11.1",
@@ -63,12 +61,9 @@
     "react-wrap-balancer": "^1.1.1",
     "recharts": "2.15.4",
     "sonner": "^1.7.4",
-    "svelte": "latest",
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^1.1.2",
-    "vue": "latest",
-    "vue-router": "latest",
     "zod": "^3.22.4"
   },
   "devDependencies": {
