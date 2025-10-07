@@ -20,8 +20,8 @@ export const TOOL_DESCRIPTIONS = {
   analyze_visual_diff:
     "🔍 **VISUAL DIFF ANALYZER** - Analyzes two screenshots to identify and describe visual differences. Returns detailed instructions for Claude to load and compare the images, focusing on what changed that could cause layout shifts.\n\n🎯 **WHAT IT PROVIDES:**\n• Direct instructions to load both images via Read tool\n• Context about what to look for\n• Guidance on identifying layout shift causes\n• Structured format for easy analysis\n\n💡 **PERFECT FOR:** Understanding what visual changes occurred between before/after frames in CLS detection, identifying elements that appeared/moved/resized.",
 
-  get_react_component_info:
-    "⚛️ **REACT COMPONENT INSPECTOR** - Maps DOM elements to React component source code by inspecting React Fiber internals. Returns component name, file path, and line number.\n\n🎯 **WHAT IT PROVIDES:**\n• Component name (e.g., 'Header', 'Navigation')\n• Source file path (e.g., 'src/components/Header.tsx')\n• Line number where component is defined\n• Direct link to the exact code that renders the element\n\n💡 **PERFECT FOR:** CLS debugging - when layout shifts are detected in elements like <nav> or <header>, instantly find which React component to fix. Eliminates the 'where is this code?' step."
+  find_component_source:
+    "🔍 **COMPONENT SOURCE FINDER** - Maps DOM elements to their source code by extracting the React component function and finding unique patterns to search for.\n\n🎯 **HOW IT WORKS:**\n• Inspects the element via Chrome DevTools Protocol\n• Extracts the React component function source using .toString()\n• Identifies unique code patterns (specific JSX, classNames, imports)\n• Returns targeted grep patterns to find the exact source file\n\n💡 **PERFECT FOR:** Finding which file contains the code for a specific element, especially useful for CLS debugging when you need to fix layout shifts in specific components."
 }
 
 // Types
@@ -665,6 +665,17 @@ export async function fixMyApp({
             results.push(
               `   💡 Use analyze_visual_diff tool with these URLs to get a detailed description of what changed`
             )
+
+            // Extract CSS selector from element description (e.g., "Navigation header (<nav>)" -> "nav")
+            if (jank.element) {
+              const selectorMatch = jank.element.match(/<(\w+)>/)
+              if (selectorMatch) {
+                const selector = selectorMatch[1].toLowerCase()
+                results.push(
+                  `   💡 Use find_component_source tool with selector "${selector}" to locate the source code`
+                )
+              }
+            }
           }
         })
 
@@ -1434,162 +1445,6 @@ ${availableFunctions}
       }
     ]
   }
-}
-
-/**
- * Internal helper: Evaluates JavaScript in the browser via CDP and returns the raw result
- * @internal Use this for internal tool implementations that need clean data
- */
-async function evaluateInBrowser(expression: string): Promise<unknown> {
-  const sessions = findActiveSessions()
-  if (sessions.length === 0) {
-    throw new Error("No active dev3000 sessions found")
-  }
-
-  const sessionData = JSON.parse(readFileSync(sessions[0].sessionFile, "utf-8"))
-  const projectName = sessions[0].projectName
-  let cdpUrl = sessionData.cdpUrl
-
-  logToDevFile(`[evaluateInBrowser] Starting evaluation for project: ${projectName}`, projectName)
-
-  if (!cdpUrl) {
-    try {
-      const response = await fetch("http://localhost:9222/json")
-      const pages = await response.json()
-      const activePage = pages.find(
-        (page: { type: string; url: string }) => page.type === "page" && !page.url.startsWith("chrome://")
-      )
-      if (activePage) {
-        cdpUrl = activePage.webSocketDebuggerUrl
-        logToDevFile(`[evaluateInBrowser] Found CDP URL via fallback: ${cdpUrl}`, projectName)
-      }
-    } catch {
-      throw new Error("Failed to find CDP URL")
-    }
-  }
-
-  if (!cdpUrl) {
-    throw new Error("No Chrome DevTools Protocol URL found")
-  }
-
-  logToDevFile(`[evaluateInBrowser] Using CDP URL: ${cdpUrl}`, projectName)
-
-  return new Promise((resolve, reject) => {
-    const ws = new WebSocket(cdpUrl)
-    let evalId: number | null = null
-    let resolved = false
-
-    // Add timeout to prevent hanging
-    const timeout = setTimeout(() => {
-      if (!resolved) {
-        resolved = true
-        ws.close()
-        logToDevFile(`[evaluateInBrowser] TIMEOUT after 5s`, projectName)
-        reject(new Error("CDP evaluation timeout after 5 seconds"))
-      }
-    }, 5000)
-
-    ws.on("open", async () => {
-      try {
-        logToDevFile(`[evaluateInBrowser] WebSocket opened, getting targets`, projectName)
-        ws.send(JSON.stringify({ id: 1, method: "Target.getTargets", params: {} }))
-
-        let messageId = 2
-
-        ws.on("message", async (data) => {
-          const message = JSON.parse(data.toString())
-          logToDevFile(
-            `[evaluateInBrowser] Received message: ${JSON.stringify(message).substring(0, 200)}`,
-            projectName
-          )
-
-          // Handle getTargets response
-          if (message.id === 1) {
-            const pageTarget = message.result.targetInfos.find((t: Record<string, unknown>) => t.type === "page")
-            if (!pageTarget) {
-              clearTimeout(timeout)
-              resolved = true
-              ws.close()
-              logToDevFile(`[evaluateInBrowser] No page targets found`, projectName)
-              reject(new Error("No page targets found"))
-              return
-            }
-
-            logToDevFile(`[evaluateInBrowser] Found page target: ${pageTarget.targetId}`, projectName)
-            ws.send(
-              JSON.stringify({
-                id: messageId++,
-                method: "Target.attachToTarget",
-                params: { targetId: pageTarget.targetId, flatten: true }
-              })
-            )
-            return
-          }
-
-          // Handle attachToTarget event
-          if (message.method === "Target.attachedToTarget") {
-            // Send evaluation command
-            evalId = messageId++
-            logToDevFile(
-              `[evaluateInBrowser] Attached to target, sending evaluate command (id: ${evalId})`,
-              projectName
-            )
-            ws.send(
-              JSON.stringify({
-                id: evalId,
-                method: "Runtime.evaluate",
-                params: { expression, returnByValue: true }
-              })
-            )
-            return
-          }
-
-          // Handle evaluate response
-          if (evalId !== null && message.id === evalId) {
-            clearTimeout(timeout)
-            resolved = true
-            ws.close()
-            if (message.error) {
-              logToDevFile(`[evaluateInBrowser] Evaluation error: ${message.error.message}`, projectName)
-              reject(new Error(message.error.message))
-            } else {
-              // CDP response structure: { result: { result: { type, value } } }
-              const value = message.result?.result?.value
-              logToDevFile(
-                `[evaluateInBrowser] Evaluation success, result: ${JSON.stringify(value)?.substring(0, 200)}`,
-                projectName
-              )
-              resolve(value)
-            }
-          }
-        })
-
-        ws.on("error", (err) => {
-          clearTimeout(timeout)
-          if (!resolved) {
-            resolved = true
-            logToDevFile(`[evaluateInBrowser] WebSocket error: ${err}`, projectName)
-            reject(err)
-          }
-        })
-      } catch (error) {
-        clearTimeout(timeout)
-        resolved = true
-        ws.close()
-        logToDevFile(`[evaluateInBrowser] Exception: ${error}`, projectName)
-        reject(error)
-      }
-    })
-
-    ws.on("error", (err) => {
-      clearTimeout(timeout)
-      if (!resolved) {
-        resolved = true
-        logToDevFile(`[evaluateInBrowser] WebSocket connection error: ${err}`, projectName)
-        reject(err)
-      }
-    })
-  })
 }
 
 export async function executeBrowserAction({
@@ -2920,79 +2775,209 @@ export async function analyzeVisualDiff(params: {
   }
 }
 
-export async function getReactComponentInfo(params: {
+export async function findComponentSource(params: {
   selector: string
   projectName?: string
 }): Promise<{ content: Array<{ type: "text"; text: string }> }> {
   const { selector } = params
 
   try {
-    // Evaluate React Fiber inspection directly via CDP
-    const rawResult = await evaluateInBrowser(`
-      (function() {
-        try {
-          // Find the DOM element
-          const element = document.querySelector(${JSON.stringify(selector)});
-          if (!element) {
-            return { error: "Element not found with selector: ${selector}" };
-          }
-
-          // Find the React Fiber key
-          const fiberKey = Object.keys(element).find(k => k.startsWith("__reactFiber$"));
-          if (!fiberKey) {
-            return { error: "React Fiber not found - element may not be a React component" };
-          }
-
-          // Get the fiber object
-          const fiber = element[fiberKey];
-          if (!fiber) {
-            return { error: "React Fiber object is empty" };
-          }
-
-          // Extract component information
-          const componentName = fiber.type?.name || fiber.elementType?.name || fiber.type?.displayName || "Anonymous";
-          const fileName = fiber._debugSource?.fileName;
-          const lineNumber = fiber._debugSource?.lineNumber;
-          const columnNumber = fiber._debugSource?.columnNumber;
-
-          return {
-            success: true,
-            selector: ${JSON.stringify(selector)},
-            componentName,
-            fileName,
-            lineNumber,
-            columnNumber,
-            element: element.tagName.toLowerCase(),
-            hasDebugInfo: !!(fileName && lineNumber)
-          };
-        } catch (error) {
-          return { error: error.message };
-        }
-      })()
-    `)
-
-    if (!rawResult) {
+    const sessions = findActiveSessions()
+    if (sessions.length === 0) {
       return {
         content: [
           {
             type: "text",
-            text: `❌ **NO RESULT FROM BROWSER**\n\nThe browser evaluation returned undefined. This may mean:\n• The page hasn't fully loaded\n• The expression was blocked\n• CDP connection issue\n\nTry again in a moment.`
+            text: "❌ **NO ACTIVE SESSIONS**\n\nNo active dev3000 sessions found. Make sure your app is running with dev3000."
           }
         ]
       }
     }
 
-    const evalResult = rawResult as
+    const sessionData = JSON.parse(readFileSync(sessions[0].sessionFile, "utf-8"))
+    let cdpUrl = sessionData.cdpUrl
+
+    if (!cdpUrl) {
+      try {
+        const response = await fetch("http://localhost:9222/json")
+        const pages = await response.json()
+        const activePage = pages.find(
+          (page: { type: string; url: string }) => page.type === "page" && !page.url.startsWith("chrome://")
+        )
+        if (activePage) {
+          cdpUrl = activePage.webSocketDebuggerUrl
+        }
+      } catch {
+        return {
+          content: [
+            {
+              type: "text",
+              text: "❌ **NO CDP CONNECTION**\n\nFailed to find Chrome DevTools Protocol URL."
+            }
+          ]
+        }
+      }
+    }
+
+    if (!cdpUrl) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "❌ **NO CDP CONNECTION**\n\nNo Chrome DevTools Protocol URL found."
+          }
+        ]
+      }
+    }
+
+    // Execute the component extraction script
+    const extractScript = `
+      (function() {
+        try {
+          const element = document.querySelector(${JSON.stringify(selector)});
+          if (!element) {
+            return { error: "Element not found with selector: ${selector}" };
+          }
+
+          // Try to find React Fiber
+          const fiberKey = Object.keys(element).find(k => k.startsWith("__reactFiber$"));
+          if (!fiberKey) {
+            return { error: "No React internals found - element may not be a React component" };
+          }
+
+          const fiber = element[fiberKey];
+          let componentFunction = null;
+          let componentName = "Unknown";
+
+          // Walk up the fiber tree to find a function component
+          let current = fiber;
+          let depth = 0;
+
+          while (current && depth < 10) {
+            if (typeof current.type === 'function') {
+              componentFunction = current.type;
+              componentName = current.type.name || current.type.displayName || "Anonymous";
+              break;
+            }
+            current = current.return;
+            depth++;
+          }
+
+          if (!componentFunction) {
+            return { error: "Could not find component function in fiber tree" };
+          }
+
+          // Get the source code
+          const sourceCode = componentFunction.toString();
+
+          return {
+            success: true,
+            componentName,
+            sourceCode
+          };
+        } catch (error) {
+          return { error: error.message };
+        }
+      })()
+    `
+
+    const result = await new Promise<unknown>((resolve, reject) => {
+      const ws = new WebSocket(cdpUrl)
+      let evalId: number | null = null
+      let resolved = false
+
+      const timeout = setTimeout(() => {
+        if (!resolved) {
+          resolved = true
+          ws.close()
+          reject(new Error("CDP evaluation timeout after 5 seconds"))
+        }
+      }, 5000)
+
+      ws.on("open", async () => {
+        try {
+          ws.send(JSON.stringify({ id: 1, method: "Target.getTargets", params: {} }))
+
+          let messageId = 2
+
+          ws.on("message", async (data) => {
+            const message = JSON.parse(data.toString())
+
+            if (message.id === 1) {
+              const pageTarget = message.result.targetInfos.find((t: Record<string, unknown>) => t.type === "page")
+              if (!pageTarget) {
+                clearTimeout(timeout)
+                resolved = true
+                ws.close()
+                reject(new Error("No page targets found"))
+                return
+              }
+
+              ws.send(
+                JSON.stringify({
+                  id: messageId++,
+                  method: "Target.attachToTarget",
+                  params: { targetId: pageTarget.targetId, flatten: true }
+                })
+              )
+              return
+            }
+
+            if (message.method === "Target.attachedToTarget") {
+              evalId = messageId++
+              ws.send(
+                JSON.stringify({
+                  id: evalId,
+                  method: "Runtime.evaluate",
+                  params: { expression: extractScript, returnByValue: true }
+                })
+              )
+              return
+            }
+
+            if (evalId !== null && message.id === evalId) {
+              clearTimeout(timeout)
+              resolved = true
+              ws.close()
+              if (message.error) {
+                reject(new Error(message.error.message))
+              } else {
+                const value = message.result?.result?.value
+                resolve(value)
+              }
+            }
+          })
+
+          ws.on("error", (err) => {
+            clearTimeout(timeout)
+            if (!resolved) {
+              resolved = true
+              reject(err)
+            }
+          })
+        } catch (error) {
+          clearTimeout(timeout)
+          resolved = true
+          ws.close()
+          reject(error)
+        }
+      })
+
+      ws.on("error", (err) => {
+        clearTimeout(timeout)
+        if (!resolved) {
+          resolved = true
+          reject(err)
+        }
+      })
+    })
+
+    const evalResult = result as
       | { error: string }
       | {
           success: true
-          selector: string
           componentName: string
-          fileName?: string
-          lineNumber?: number
-          columnNumber?: number
-          element: string
-          hasDebugInfo: boolean
+          sourceCode: string
         }
 
     if ("error" in evalResult) {
@@ -3000,7 +2985,7 @@ export async function getReactComponentInfo(params: {
         content: [
           {
             type: "text",
-            text: `❌ **ERROR INSPECTING REACT COMPONENT**\n\n${evalResult.error}\n\n💡 **TIPS:**\n• Make sure the selector matches an element on the page\n• Ensure the element is rendered by a React component\n• React must be running in development mode for debug info\n• Try a simpler selector like 'nav' or '.header'`
+            text: `❌ **ERROR EXTRACTING COMPONENT**\n\n${evalResult.error}\n\n💡 **TIPS:**\n• Make sure the selector matches an element on the page\n• Ensure the element is rendered by a React component\n• Try a simpler selector like 'nav' or '.header'`
           }
         ]
       }
@@ -3011,42 +2996,94 @@ export async function getReactComponentInfo(params: {
         content: [
           {
             type: "text",
-            text: `❌ **FAILED TO INSPECT COMPONENT**\n\nUnexpected result format. The evaluation did not return success.`
+            text: "❌ **FAILED TO EXTRACT COMPONENT**\n\nUnexpected result format."
           }
         ]
       }
     }
 
-    // Build the response
+    // Extract unique patterns from the source code
+    const { componentName, sourceCode } = evalResult
+    const patterns: string[] = []
+
+    // Look for unique JSX patterns (excluding common ones like <div>, <span>)
+    const jsxPattern = /<([A-Z][a-zA-Z0-9]*)/g
+    const customComponents = new Set<string>()
+    let jsxMatch = jsxPattern.exec(sourceCode)
+
+    while (jsxMatch !== null) {
+      customComponents.add(jsxMatch[1])
+      jsxMatch = jsxPattern.exec(sourceCode)
+    }
+
+    // Look for unique className patterns
+    const classNamePattern = /className=["']([^"']+)["']/g
+    const classNames = new Set<string>()
+    let classNameMatch = classNamePattern.exec(sourceCode)
+
+    while (classNameMatch !== null) {
+      classNames.add(classNameMatch[1])
+      classNameMatch = classNamePattern.exec(sourceCode)
+    }
+
+    // Build search patterns
     const lines: string[] = []
-    lines.push("⚛️ **REACT COMPONENT INFO**")
+    lines.push("🔍 **COMPONENT SOURCE FINDER**")
     lines.push("")
-    lines.push(`**Selector:** \`${evalResult.selector}\``)
-    lines.push(`**Element:** \`<${evalResult.element}>\``)
-    lines.push(`**Component:** ${evalResult.componentName}`)
+    lines.push(`**Selector:** \`${selector}\``)
+    lines.push(`**Component:** ${componentName}`)
     lines.push("")
 
-    if (evalResult.hasDebugInfo) {
-      lines.push("📍 **SOURCE CODE LOCATION:**")
-      lines.push(`• **File:** ${evalResult.fileName}`)
-      lines.push(`• **Line:** ${evalResult.lineNumber}`)
-      if (evalResult.columnNumber) {
-        lines.push(`• **Column:** ${evalResult.columnNumber}`)
-      }
-      lines.push("")
-      lines.push(
-        `💡 **NEXT STEP:** Use the Read tool to open ${evalResult.fileName}:${evalResult.lineNumber} and inspect the component code.`
-      )
-    } else {
-      lines.push("⚠️ **NO DEBUG INFO AVAILABLE**")
-      lines.push("")
-      lines.push("React debug info is not available. This usually means:")
-      lines.push("• React is running in production mode (not development)")
-      lines.push("• The build doesn't include source maps")
-      lines.push("• The component is a built-in HTML element, not a React component")
-      lines.push("")
-      lines.push(`💡 Make sure you're running in development mode to get file and line number info.`)
+    if (componentName !== "Anonymous") {
+      patterns.push(`function ${componentName}`)
+      patterns.push(`const ${componentName} =`)
+      patterns.push(`export default function ${componentName}`)
     }
+
+    // Add unique component references
+    if (customComponents.size > 0) {
+      const uniqueComponents = Array.from(customComponents).filter(
+        (name) => !["Fragment", "Suspense", "ErrorBoundary"].includes(name)
+      )
+      if (uniqueComponents.length > 0) {
+        patterns.push(`<${uniqueComponents[0]}`)
+      }
+    }
+
+    // Add unique classNames
+    if (classNames.size > 0) {
+      const firstClassName = Array.from(classNames)[0]
+      patterns.push(`className="${firstClassName}"`)
+    }
+
+    if (patterns.length === 0) {
+      lines.push("⚠️ **NO UNIQUE PATTERNS FOUND**")
+      lines.push("")
+      lines.push("The component source code doesn't contain distinctive patterns to search for.")
+      lines.push("You may need to manually search for the component.")
+    } else {
+      lines.push("📍 **SEARCH PATTERNS**")
+      lines.push("")
+      lines.push("Use these grep patterns to find the source file:")
+      lines.push("")
+
+      for (const pattern of patterns.slice(0, 3)) {
+        lines.push(`\`\`\``)
+        lines.push(`grep -r "${pattern.replace(/"/g, '\\"')}" .`)
+        lines.push(`\`\`\``)
+        lines.push("")
+      }
+
+      lines.push("💡 **TIP:** Start with the first pattern. If it returns multiple results, try combining patterns.")
+    }
+
+    // Show a preview of the source code
+    const preview = sourceCode.substring(0, 300)
+    lines.push("")
+    lines.push("**Source Code Preview:**")
+    lines.push("```javascript")
+    lines.push(`${preview}...`)
+    lines.push("```")
 
     return {
       content: [{ type: "text", text: lines.join("\n") }]
