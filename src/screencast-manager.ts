@@ -15,6 +15,13 @@ interface BufferedFrame {
   absoluteTime: number // Date.now()
 }
 
+interface LayoutShiftSource {
+  node?: string
+  previousRect?: { x: number; y: number; width: number; height: number }
+  currentRect?: { x: number; y: number; width: number; height: number }
+  actualRect?: { x: number; y: number; width: number; height: number } | null
+}
+
 /**
  * ScreencastManager - Passive screencast capture for navigation events
  *
@@ -30,7 +37,7 @@ export class ScreencastManager {
   private screenshotDir: string
   private messageId = 1000 // Start high to avoid conflicts
   private appPort: string
-  private layoutShifts: Array<{ score: number; timestamp: number; sources?: unknown[] }> = []
+  private layoutShifts: Array<{ score: number; timestamp: number; sources?: LayoutShiftSource[] }> = []
   private viewportInfo: Record<string, number> = {}
 
   constructor(
@@ -262,13 +269,55 @@ export class ScreencastManager {
         writeFileSync(metadataPath, JSON.stringify(metadata, null, 2))
         if (totalCLS > 0) {
           this.logFn(`[CDP] Detected ${this.layoutShifts.length} layout shifts (CLS: ${totalCLS.toFixed(4)})`)
+
+          // Generate detailed CLS analysis for each shift
+          this.layoutShifts.forEach((shift, index) => {
+            // Find the frame closest to this shift timestamp
+            const shiftFrame = this.buffer.find((f) => Math.abs(f.timestamp - shift.timestamp) < 500)
+            const previousFrame = this.buffer.find(
+              (f) => f.timestamp < shift.timestamp && Math.abs(f.timestamp - shift.timestamp) < 1000
+            )
+
+            if (shiftFrame && shift.sources && shift.sources.length > 0) {
+              const mcpPort = process.env.MCP_PORT || "3684"
+              const shiftFilename = `${this.currentSessionId}-jank-${shiftFrame.timestamp}ms.png`
+              const previousFilename = previousFrame
+                ? `${this.currentSessionId}-jank-${previousFrame.timestamp}ms.png`
+                : null
+
+              // Generate human-readable description of the shift
+              const descriptions: string[] = []
+              shift.sources.forEach((source) => {
+                if (source.node && source.previousRect && source.currentRect) {
+                  const deltaX = source.currentRect.x - source.previousRect.x
+                  const deltaY = source.currentRect.y - source.previousRect.y
+                  const direction = deltaY > 0 ? "down" : deltaY < 0 ? "up" : deltaX > 0 ? "right" : "left"
+                  const distance = Math.abs(deltaY || deltaX)
+                  descriptions.push(`<${source.node}> shifted ${direction} by ${distance.toFixed(0)}px`)
+                }
+              })
+
+              this.logFn(
+                `[CDP] CLS #${index + 1} (score: ${shift.score.toFixed(4)}, time: ${shift.timestamp.toFixed(0)}ms):`
+              )
+              descriptions.forEach((desc) => {
+                this.logFn(`[CDP]   - ${desc}`)
+              })
+
+              if (previousFilename) {
+                this.logFn(`[CDP]   Before: http://localhost:${mcpPort}/api/screenshots/${previousFilename}`)
+              }
+              this.logFn(`[CDP]   After:  http://localhost:${mcpPort}/api/screenshots/${shiftFilename}`)
+              this.logFn(`[CDP]   💡 Analyze both images to identify visual differences causing the layout shift`)
+            }
+          })
         }
       } catch (error) {
         this.logFn(`[CDP] Failed to save metadata - ${error}`)
       }
 
       this.logFn(
-        `[CDP] View navigation frames: http://localhost:${process.env.MCP_PORT || "3684"}/video/${this.currentSessionId}`
+        `[CDP] View all frames: http://localhost:${process.env.MCP_PORT || "3684"}/video/${this.currentSessionId}`
       )
 
       await this.stopScreencast()
@@ -435,7 +484,11 @@ export class ScreencastManager {
       result?: { result?: { value?: unknown[] | Record<string, number> } }
     }): void => {
       if (message.id === pollId && message.result?.result?.value) {
-        const shifts = message.result.result.value as Array<{ score: number; timestamp: number; sources?: unknown[] }>
+        const shifts = message.result.result.value as Array<{
+          score: number
+          timestamp: number
+          sources?: LayoutShiftSource[]
+        }>
         if (shifts.length > this.layoutShifts.length) {
           // New shifts detected
           const newShifts = shifts.slice(this.layoutShifts.length)
