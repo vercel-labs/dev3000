@@ -16,9 +16,16 @@ export default function HomePage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 bg-foreground rounded-md flex items-center justify-center">
-                <span className="text-background font-mono font-bold text-sm">d3k</span>
+                <span className="text-background font-mono font-bold text-xs">d3k</span>
               </div>
-              <span className="font-semibold text-lg">dev3000</span>
+              <span
+                className="font-semibold text-lg font-mono tracking-tighter"
+                style={{
+                  fontFeatureSettings: "ss09 off"
+                }}
+              >
+                dev3000
+              </span>
             </div>
             <nav className="flex items-center gap-4">
               {/* Show GitHub button when scrolled */}
