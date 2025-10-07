@@ -109,7 +109,7 @@ export default function ChangelogPage() {
               <h1 className="text-3xl md:text-4xl font-bold">Changelog</h1>
             </div>
             <p className="text-base text-muted-foreground mb-6 text-pretty leading-relaxed">
-              Track the latest updates, features, and improvements to dev3000. We're continuously enhancing the
+              Track the latest updates, features, and improvements to dev3000. We&apos;re continuously enhancing the
               AI-powered debugging experience.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center items-center">

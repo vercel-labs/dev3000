@@ -1,41 +1,18 @@
-"use client"
-
-import { ArrowRight, Github } from "lucide-react"
+import { clsx } from "clsx"
 import Image from "next/image"
 import Link from "next/link"
-import { useTheme } from "next-themes"
-import { useEffect, useState } from "react"
-import Balancer from "react-wrap-balancer"
-import { DarkModeToggle } from "@/components/dark-mode-toggle"
 import { GitHubLink } from "@/components/github-link"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
+import HeroAppImage from "@/public/hero-app.png"
+import HeroTerminalImage from "@/public/hero-terminal.png"
+import { TerminalRecording } from "./components.client"
 
 export default function HomePage() {
-  const [isScrolled, setIsScrolled] = useState(false)
-  const { theme, setTheme } = useTheme()
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  useEffect(() => {
-    const handleScroll = () => {
-      // Check if the hero buttons are out of viewport (roughly after hero section)
-      setIsScrolled(window.scrollY > 400)
-    }
-
-    window.addEventListener("scroll", handleScroll)
-    return () => window.removeEventListener("scroll", handleScroll)
-  }, [])
-
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="fixed top-0 left-0 right-0 z-50 border-b bg-background/80 backdrop-blur-md">
-        <div className="container mx-auto px-6 py-4">
+      <header className={clsx("top-0 left-0 right-0 z-50 bg-background doc-container")}>
+        <div className="container mx-auto py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 bg-foreground rounded-md flex items-center justify-center">
@@ -45,11 +22,7 @@ export default function HomePage() {
             </div>
             <nav className="flex items-center gap-4">
               {/* Show GitHub button when scrolled */}
-              <div
-                className={`transition-all duration-300 ${
-                  isScrolled ? "opacity-100" : "opacity-0 pointer-events-none"
-                }`}
-              >
+              <div className={`transition-all duration-300`}>
                 <GitHubLink />
               </div>
 
@@ -60,613 +33,377 @@ export default function HomePage() {
               >
                 Changelog
               </Link>
-
-              {/* Dark mode toggle */}
-              {mounted && (
-                <DarkModeToggle darkMode={theme === "dark"} setDarkMode={(dark) => setTheme(dark ? "dark" : "light")} />
-              )}
             </nav>
           </div>
         </div>
       </header>
 
-      {/* Spacer for fixed header */}
-      <div className="h-[73px]" />
-
       {/* Hero Section */}
-      <section className="relative py-20 md:py-28">
-        <div className="container mx-auto px-6 text-center">
-          <div className="max-w-3xl mx-auto">
-            <Badge
-              variant="secondary"
-              className="mb-6 font-medium dark:bg-secondary/50 dark:border dark:border-secondary"
-            >
-              By Vercel Labs
-            </Badge>
-            <h1 className="text-5xl md:text-7xl font-bold mb-6 tracking-tight">
-              <Balancer>The browser for AI-based development</Balancer>
-            </h1>
-            <p className="text-xl text-muted-foreground mb-10 max-w-2xl mx-auto leading-relaxed">
-              <Balancer>
-                Starts your dev server, opens a monitored browser, and captures everything: server logs, browser events,
-                network requests, and automatic screenshots - all unified and timestamped for AI debugging.{" "}
-                <span className="font-medium text-foreground">
-                  Gracefully enhances with chrome-devtools and nextjs-dev MCPs when available.
-                </span>
-              </Balancer>
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-16">
-              <Button size="lg" className="text-base px-8 py-6" asChild>
-                <a href="#quickstart">
-                  Get Started
-                  <ArrowRight className="w-4 h-4 ml-2" />
-                </a>
-              </Button>
-              <Button
-                variant="outline"
-                size="lg"
-                className="text-base px-8 py-6 dark:border-zinc-700 dark:bg-zinc-900/50 dark:hover:bg-zinc-800 dark:shadow-sm"
-                asChild
-              >
-                <a href="https://github.com/vercel-labs/dev3000" target="_blank" rel="noopener noreferrer">
-                  <Github className="w-4 h-4" />
-                  View on GitHub
-                </a>
-              </Button>
+      <section className="relative pt-8 max-w-2xl mx-auto">
+        <div className="doc-container">
+          <div>
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-muted-foreground">By Vercel Labs</p>
+              <h1 className="text-h1 font-semibold mb-3 text-balance">The AI-enabled browser for development</h1>
             </div>
-
-            {/* Hero Screenshot */}
-            <div className="relative mx-auto max-w-6xl">
-              <div className="rounded-xl border shadow-2xl overflow-hidden">
-                <Image
-                  src="/d3k-hero.jpg"
-                  alt="dev3000 CLI and browser interface"
-                  width={1200}
-                  height={675}
-                  className="w-full h-auto"
-                  priority
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Quick Start */}
-      {/* biome-ignore lint/correctness/useUniqueElementIds: page section IDs are intentionally static for navigation */}
-      <section id="quickstart" className="relative py-20 border-b">
-        <div className="container mx-auto px-6">
-          <div className="max-w-2xl mx-auto text-center mb-12">
-            <h2 className="text-3xl font-bold mb-4">Quick Start</h2>
-            <p className="text-lg text-muted-foreground">Get up and running in seconds</p>
-          </div>
-
-          <div className="max-w-3xl mx-auto space-y-6">
-            {/* Step 1: Install */}
-            <Card className="bg-card border p-6">
-              <div className="flex items-start gap-4">
-                <div className="w-8 h-8 bg-foreground text-background rounded-full flex items-center justify-center flex-shrink-0 font-semibold">
-                  1
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-semibold mb-3 text-lg">Install dev3000</h3>
-                  <div className="bg-muted rounded-md p-4 font-mono text-sm">pnpm i -g dev3000</div>
-                </div>
-              </div>
-            </Card>
-
-            {/* Step 2: Start your dev server with dev3000 */}
-            <Card className="bg-card border p-6">
-              <div className="flex items-start gap-4">
-                <div className="w-8 h-8 bg-foreground text-background rounded-full flex items-center justify-center flex-shrink-0 font-semibold">
-                  2
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-semibold mb-3 text-lg">Start your dev server with dev3000</h3>
-                  <div className="space-y-3">
-                    <p className="text-sm text-muted-foreground">
-                      dev3000 replaces your normal dev command - it <strong>starts your dev server</strong> and opens a
-                      monitored browser automatically:
-                    </p>
-                    <div className="bg-muted rounded-md p-4">
-                      <div className="flex items-center gap-1 font-mono text-sm">
-                        <span className="text-muted-foreground">Instead of:</span>
-                        <code className="text-foreground">pnpm dev</code>
-                        <span className="text-muted-foreground mx-2">→</span>
-                        <span className="text-muted-foreground">Run:</span>
-                        <code className="text-foreground font-semibold">dev3000</code>
-                      </div>
-                    </div>
-
-                    <details className="group">
-                      <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground">
-                        Works with any dev command
-                      </summary>
-                      <div className="mt-3 text-sm text-muted-foreground">
-                        <ul className="space-y-1 font-mono text-xs">
-                          <li>
-                            • <code>next dev -p 5000</code> → <code className="font-semibold">dev3000 -p 5000</code>
-                          </li>
-                          <li>
-                            • <code>pnpm build-start</code> →{" "}
-                            <code className="font-semibold">dev3000 -s build-start</code>
-                          </li>
-                          <li>
-                            • Or use the shortcut: <code className="font-semibold">d3k</code>
-                          </li>
-                        </ul>
-                      </div>
-                    </details>
-                  </div>
-                </div>
-              </div>
-            </Card>
-
-            {/* Step 3: Use the monitored browser */}
-            <Card className="bg-card border p-6">
-              <div className="flex items-start gap-4">
-                <div className="w-8 h-8 bg-foreground text-background rounded-full flex items-center justify-center flex-shrink-0 font-semibold">
-                  3
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-semibold mb-3 text-lg">Test your app in the monitored browser</h3>
-                  <div className="space-y-3">
-                    <p className="text-sm text-muted-foreground">
-                      A Chrome window opens automatically. Browse your app, click around, trigger errors - everything is
-                      captured to a unified log file with timestamps.
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      dev3000 also automatically configures MCP connections for Claude Code. When chrome-devtools and
-                      nextjs-dev MCPs are also available, dev3000 dynamically discovers their capabilities and suggests
-                      enhanced debugging workflows.
-                    </p>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                      <span>Core dev3000 MCP - Always configured</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                      <span>chrome-devtools MCP - Enhances browser automation (optional)</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-                      <span>
-                        nextjs-dev MCP - Enhances Next.js debugging (optional, auto-configured for Next.js canary)
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </Card>
-
-            {/* Step 4: Fix my app */}
-            <Card className="bg-card border p-6">
-              <div className="flex items-start gap-4">
-                <div className="w-8 h-8 bg-foreground text-background rounded-full flex items-center justify-center flex-shrink-0 font-semibold">
-                  4
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-semibold mb-3 text-lg">AI fixes your bugs with complete context</h3>
-                  <div className="space-y-3">
-                    <p className="text-sm text-muted-foreground">Type this into Claude Code:</p>
-                    <div className="bg-muted rounded-md p-4 font-mono text-sm">fix my app</div>
-                    <p className="text-sm text-muted-foreground">
-                      Watch as the MCP tools start an agentic loop to automatically find, fix, and verify bugs in your
-                      application.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </Card>
-          </div>
-        </div>
-      </section>
-
-      {/* MCP Enhancement Section */}
-      <section className="relative py-20 border-b">
-        <div className="container mx-auto px-6">
-          <div className="max-w-2xl mx-auto text-center mb-12">
-            <h2 className="text-3xl font-bold mb-4">Smart MCP Integration</h2>
-            <p className="text-lg text-muted-foreground">
-              Gracefully enhances capabilities when specialized MCPs are available
+            <p className="text-base text-muted-foreground leading-relaxed max-w-2xl text-pretty">
+              Run your dev server through dev3000 to capture server logs, browser events, network requests, and
+              screenshots in a unified timeline. Your coding agent gets complete context without you manually copying
+              and pasting.
             </p>
           </div>
-
-          <div className="max-w-4xl mx-auto">
-            <div className="grid md:grid-cols-3 gap-6 mb-12">
-              <Card className="bg-card border p-6 text-center">
-                <div className="w-16 h-16 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
-                    <span className="text-white font-bold text-sm">d3k</span>
-                  </div>
-                </div>
-                <h3 className="font-semibold mb-2">Core dev3000</h3>
-                <p className="text-sm text-muted-foreground">
-                  Complete log analysis, browser automation, error detection, and interaction replay - always available
-                </p>
-              </Card>
-
-              <Card className="bg-card border p-6 text-center">
-                <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"
-                    />
-                  </svg>
-                </div>
-                <h3 className="font-semibold mb-2">+ Chrome DevTools</h3>
-                <p className="text-sm text-muted-foreground">
-                  Adds DOM inspection, performance profiling, network interception, and advanced browser debugging
-                </p>
-              </Card>
-
-              <Card className="bg-card border p-6 text-center">
-                <div className="w-16 h-16 bg-purple-100 dark:bg-purple-900 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-8 h-8 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"
-                    />
-                  </svg>
-                </div>
-                <h3 className="font-semibold mb-2">+ Next.js Dev</h3>
-                <p className="text-sm text-muted-foreground">
-                  Adds build system analysis, SSR/hydration debugging, and Next.js-specific performance optimization
-                </p>
-              </Card>
-            </div>
-
-            <Card className="bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-950 dark:to-blue-950 border-2 border-dashed border-green-300 dark:border-green-700 p-8 text-center">
-              <h3 className="font-bold text-lg mb-4">🎯 Dynamic Capability Discovery</h3>
-              <div className="max-w-2xl mx-auto space-y-3">
-                <p className="text-sm">
-                  dev3000 automatically discovers what MCP capabilities are available and suggests the best tools for
-                  each debugging scenario
-                </p>
-                <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground">
-                  <span>• Real-time capability detection</span>
-                  <span>• Context-aware suggestions</span>
-                  <span>• Zero manual configuration</span>
-                </div>
-                <p className="text-sm font-medium">
-                  🚀 Result: Always get the most comprehensive debugging capabilities available in your environment
-                </p>
-              </div>
-            </Card>
-          </div>
-        </div>
-      </section>
-
-      {/* Features */}
-      <section className="relative py-20 bg-muted/30">
-        <div className="container mx-auto px-6">
-          <div className="max-w-2xl mx-auto text-center mb-12">
-            <h2 className="text-3xl font-bold mb-4">Everything your AI needs</h2>
-            <p className="text-lg text-muted-foreground">Comprehensive monitoring in one unified timeline</p>
+          <div className="flex flex-col sm:flex-row gap-4">
+            <Button size="lg" className="text-base" asChild>
+              <a href="#quickstart">Get Started</a>
+            </Button>
           </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-5xl mx-auto">
-            <div className="text-center">
-              <div className="w-12 h-12 bg-foreground text-background rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                  />
-                </svg>
-              </div>
-              <h3 className="font-semibold mb-2">Server Logs</h3>
-              <p className="text-sm text-muted-foreground">Complete server output with timestamps</p>
-            </div>
-
-            <div className="text-center">
-              <div className="w-12 h-12 bg-foreground text-background rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                  />
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                  />
-                </svg>
-              </div>
-              <h3 className="font-semibold mb-2">Browser Events</h3>
-              <p className="text-sm text-muted-foreground">Console, errors, clicks, and interactions</p>
-            </div>
-
-            <div className="text-center">
-              <div className="w-12 h-12 bg-foreground text-background rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-              </div>
-              <h3 className="font-semibold mb-2">Network Requests</h3>
-              <p className="text-sm text-muted-foreground">HTTP requests with full details</p>
-            </div>
-
-            <div className="text-center">
-              <div className="w-12 h-12 bg-foreground text-background rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
-                  />
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
-                  />
-                </svg>
-              </div>
-              <h3 className="font-semibold mb-2">Auto Screenshots</h3>
-              <p className="text-sm text-muted-foreground">Captures on errors and navigation</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* CLI Demo */}
-      <section className="relative py-20 border-b">
-        <div className="container mx-auto px-6">
-          <div className="max-w-2xl mx-auto text-center mb-12">
-            <h2 className="text-3xl font-bold mb-4">See it in action</h2>
-            <p className="text-lg text-muted-foreground">Watch how dev3000 captures everything in a unified timeline</p>
-          </div>
-
-          {/* CLI GIF */}
-          <div className="max-w-4xl mx-auto">
-            <Card className="bg-card border overflow-hidden">
+          {/* Hero Screenshot */}
+          <BleedContainer className="relative mt-16">
+            <div className="relative isolate">
               <Image
-                src="/cli.gif"
-                alt="dev3000 CLI in action"
-                width={1024}
-                height={640}
-                className="w-full h-auto"
-                unoptimized // GIFs need unoptimized flag
+                src={HeroTerminalImage}
+                alt=""
+                className="w-full"
+                priority
+                sizes="(max-width: 768px) 100vw, 940px"
+                loading="eager"
               />
-            </Card>
-          </div>
-        </div>
-      </section>
-
-      {/* How it works */}
-      <section className="relative py-20">
-        <div className="container mx-auto px-6">
-          <div className="max-w-4xl mx-auto">
-            <div className="text-center mb-12">
-              <h2 className="text-3xl font-bold mb-4">How it works</h2>
-              <p className="text-lg text-muted-foreground">dev3000 gives your AI the complete picture</p>
+              <Image
+                src={HeroAppImage}
+                alt=""
+                className="w-1/2 absolute -right-8 -bottom-8 drop-shadow-sm"
+                priority
+                sizes="(max-width: 768px) 100vw, 600px"
+                loading="eager"
+              />
             </div>
+          </BleedContainer>
 
-            <div className="space-y-8">
-              <div className="flex items-start gap-4">
-                <div className="w-8 h-8 bg-muted rounded-full flex items-center justify-center flex-shrink-0 font-semibold">
-                  1
-                </div>
-                <div>
-                  <h3 className="font-semibold mb-2">Starts your dev server & monitored browser</h3>
-                  <p className="text-muted-foreground">
-                    dev3000 launches your dev server (detects npm/pnpm/yarn automatically) and opens a Chrome window
-                    that captures server logs, browser console, network requests, and takes automatic screenshots - all
-                    synchronized with timestamps.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-4">
-                <div className="w-8 h-8 bg-muted rounded-full flex items-center justify-center flex-shrink-0 font-semibold">
-                  2
-                </div>
-                <div>
-                  <h3 className="font-semibold mb-2">Unified timeline</h3>
-                  <p className="text-muted-foreground">
-                    Everything is merged into a single chronological log file, making it easy to see what happened when.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-4">
-                <div className="w-8 h-8 bg-muted rounded-full flex items-center justify-center flex-shrink-0 font-semibold">
-                  3
-                </div>
-                <div>
-                  <h3 className="font-semibold mb-2">AI-ready context</h3>
-                  <p className="text-muted-foreground">
-                    Just type "fix my app" and your AI assistant gets the complete context through MCP tools or by
-                    reading the log files directly.
-                  </p>
-                </div>
-              </div>
+          <div className="border-t-[0.5px] mt-18 pt-8 border-gray-200 dark:border-gray-800 grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] text-sm gap-3">
+            <div className="space-y-2">
+              <p className="font-medium">Server Logs</p>
+              <p className="text-muted-foreground text-balance leading-relaxed">Timestamped server logs</p>
+            </div>
+            <div className="space-y-2">
+              <p className="font-medium">Browser Events</p>
+              <p className="text-muted-foreground text-balance leading-relaxed">Logs, errors & user interactions</p>
+            </div>
+            <div className="space-y-2">
+              <p className="font-medium">Screenshots</p>
+              <p className="text-muted-foreground text-balance leading-relaxed">Captured on errors & navigation</p>
+            </div>
+            <div className="space-y-2">
+              <p className="font-medium">Network Requests</p>
+              <p className="text-muted-foreground text-balance leading-relaxed">Complete HTTP requests & responses</p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Testimonials 
-      <section className="relative py-16 bg-gradient-to-b from-secondary/10 to-transparent">
-        <div className="container mx-auto px-4">
-          <div className="max-w-2xl mx-auto text-center mb-16">
-            <h2 className="text-3xl font-bold mb-4">Loved by Developers</h2>
-            <p className="text-muted-foreground">
-              See what developers are saying about dev3000
-            </p>
-          </div>
+      <section className="py-40">
+        <div className="doc-container">
+          {/** biome-ignore lint/correctness/useUniqueElementIds: page section IDs are intentionally static for navigation */}
+          <h2 className="text-headline scroll-mt-8" id="quickstart">
+            Quick Start
+          </h2>
 
-          
-          <div className="grid sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8 max-w-6xl mx-auto">
-            <Card className="bg-card/50 backdrop-blur-sm border-2 border-gray-700/40 p-3 card-hover shadow-lg hover:shadow-xl transition-all">
-              <Quote className="w-8 h-8 text-blue-400 mb-4 opacity-60" />
-              <p className="text-sm leading-relaxed mb-4">
-                "Finally! A tool that gives me the complete picture when
-                debugging. The unified timeline saved me hours tracking down a
-                race condition."
-              </p>
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-gradient-to-r from-blue-400 to-purple-400 rounded-full flex items-center justify-center">
-                  <span className="text-xs font-bold text-white">SJ</span>
-                </div>
-                <div>
-                  <div className="font-medium text-sm">Sarah Johnson</div>
-                  <div className="text-xs text-muted-foreground">
-                    Senior Frontend Engineer
-                  </div>
-                </div>
+          <ol className="space-y-6 list-decimal list-inside">
+            <li className="space-y-2 marker:tabular-nums">
+              <span className="pl-2 font-medium">Install dev3000</span>
+              <div className="pl-6 pt-2">
+                <pre className="block w-full">
+                  <code className="code-block">pnpm i -g dev3000</code>
+                </pre>
               </div>
-            </Card>
-
-            <Card className="bg-card/50 backdrop-blur-sm border-2 border-gray-700/40 p-3 card-hover shadow-lg hover:shadow-xl transition-all">
-              <Quote className="w-8 h-8 text-emerald-400 mb-4 opacity-60" />
-              <p className="text-sm leading-relaxed mb-4">
-                "Game changer for debugging Next.js apps. The automatic
-                screenshots when errors occur are incredibly helpful."
-              </p>
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-gradient-to-r from-emerald-400 to-teal-400 rounded-full flex items-center justify-center">
-                  <span className="text-xs font-bold text-white">MR</span>
-                </div>
-                <div>
-                  <div className="font-medium text-sm">Mike Rodriguez</div>
-                  <div className="text-xs text-muted-foreground">
-                    Full Stack Developer
-                  </div>
-                </div>
+            </li>
+            <li className="space-y-2 marker:tabular-nums">
+              <span className="pl-2 font-medium">Start your dev server</span>
+              <div className="pl-6 pt-2 space-y-2">
+                <p className="text-muted-foreground">
+                  Replaces your normal dev command. Starts your dev server & launches a monitored Chrome instance.
+                </p>
+                <pre className="block w-full">
+                  <code className="code-block">
+                    <span className="block code-comment"># Instead of running pnpm dev</span>
+                    <span className="block">
+                      d3k <span className="code-comment"># or dev3000</span>
+                    </span>
+                    <span className="block h-[1lh]" />
+                    <span className="block code-comment"># Setting a port</span>
+                    <span className="block">d3k -p 5000</span>
+                    <span className="block h-[1lh]" />
+                    <span className="block code-comment"># Custom pnpm script</span>
+                    <span className="block">d3k -s build-start</span>
+                  </code>
+                </pre>
               </div>
-            </Card>
-
-            <Card className="bg-card/50 backdrop-blur-sm border-2 border-gray-700/40 p-3 card-hover shadow-lg hover:shadow-xl transition-all">
-              <Quote className="w-8 h-8 text-purple-400 mb-4 opacity-60" />
-              <p className="text-sm leading-relaxed mb-4">
-                "The MCP integration with Claude is brilliant. I can just ask
-                'what went wrong?' and get instant insights."
-              </p>
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-gradient-to-r from-purple-400 to-pink-400 rounded-full flex items-center justify-center">
-                  <span className="text-xs font-bold text-white">AK</span>
-                </div>
-                <div>
-                  <div className="font-medium text-sm">Alex Kim</div>
-                  <div className="text-xs text-muted-foreground">Tech Lead</div>
-                </div>
+            </li>
+            <li className="space-y-2 marker:tabular-nums">
+              <span className="pl-2 font-medium">Use your app normally</span>
+              <div className="pl-6 pt-2">
+                <p className="text-muted-foreground">
+                  Interact with your app in the monitored browser. Every log, request, error & page state is captured
+                  automatically.
+                </p>
               </div>
-            </Card>
-          </div>
-        </div>
-      </section>
-      */}
-
-      {/* Video Demo */}
-      <section className="relative py-20 bg-muted/30">
-        <div className="container mx-auto px-6">
-          <div className="max-w-2xl mx-auto text-center mb-12">
-            <h2 className="text-3xl font-bold">Vibes</h2>
-          </div>
-
-          <div className="max-w-4xl mx-auto">
-            <Card className="bg-card border overflow-hidden">
-              <div className="relative aspect-video">
-                <video controls className="w-full h-full object-cover" preload="metadata">
-                  <source src="/d3k.mp4#t=0.25" type="video/mp4" />
-                  Your browser does not support the video tag.
-                </video>
+            </li>
+            <li className="space-y-2 marker:tabular-nums">
+              <span className="pl-2 font-medium">Ask your coding agent to debug</span>
+              <div className="pl-6 pt-2 text-muted-foreground text-pretty">
+                <p>Your agent sees everything: server output, client-side events & visual state at every step.</p>
               </div>
-            </Card>
-          </div>
+            </li>
+          </ol>
         </div>
       </section>
 
-      {/* FAQ */}
-      <section className="relative py-20 border-b">
-        <div className="container mx-auto px-6">
-          <div className="max-w-2xl mx-auto text-center mb-12">
-            <h2 className="text-3xl font-bold">Frequently Asked Questions</h2>
+      <section className="pb-40">
+        <div className="doc-container">
+          <h2 className="text-headline">MCP Integrations</h2>
+
+          <p className="text-base text-muted-foreground leading-relaxed max-w-2xl text-pretty">
+            Works standalone or automatically detects compatible MCPs in your environment. When available,{" "}
+            <a
+              href="https://github.com/ChromeDevTools/chrome-devtools-mcp/#chrome-devtools-mcp"
+              target="_blank"
+              rel="noopener"
+              className="group whitespace-nowrap"
+            >
+              <ChromeSVG />{" "}
+              <span className="underline font-mono underline-offset-2 decoration-gray-300 group-hover:decoration-gray-500">
+                chrome-devtools-mcp
+              </span>
+            </a>{" "}
+            adds DOM inspection & performance profiling, while{" "}
+            <span>
+              <NextJSSVG />
+              &nbsp;<span className="font-mono">nextjs-dev-mcp</span> adds framework-specific build analysis and
+              hydration debugging.
+            </span>
+          </p>
+        </div>
+      </section>
+
+      <section className="pb-40">
+        <div className="doc-container">
+          <h2 className="text-headline">Demo</h2>
+
+          <BleedContainer>
+            <TerminalRecording />
+          </BleedContainer>
+
+          <div className="border-t-[0.5px] mt-10 pt-8 border-gray-200 dark:border-gray-800 grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] text-sm gap-3">
+            <div className="space-y-2">
+              <p className="font-medium">Server Logs</p>
+              <p className="text-muted-foreground text-balance leading-relaxed">Timestamped server logs</p>
+            </div>
+            <div className="space-y-2">
+              <p className="font-medium">Browser Events</p>
+              <p className="text-muted-foreground text-balance leading-relaxed">Logs, errors & user interactions</p>
+            </div>
+            <div className="space-y-2">
+              <p className="font-medium">Screenshots</p>
+              <p className="text-muted-foreground text-balance leading-relaxed">Captured on errors & navigation</p>
+            </div>
+            <div className="space-y-2">
+              <p className="font-medium">Network Requests</p>
+              <p className="text-muted-foreground text-balance leading-relaxed">Complete HTTP requests & responses</p>
+            </div>
           </div>
+        </div>
+      </section>
 
-          <div className="max-w-3xl mx-auto space-y-6">
-            <div className="border rounded-lg p-6">
-              <h3 className="font-semibold mb-2">Does dev3000 save my login state?</h3>
-              <p className="text-muted-foreground">
-                Yes, login state is saved automatically in a unique browser profile for each project. No need to
-                re-login.
-              </p>
-            </div>
+      <section className="pb-40">
+        <div className="doc-container">
+          <h2 className="text-headline">Frequently Asked Questions</h2>
 
-            <div className="border rounded-lg p-6">
-              <h3 className="font-semibold mb-2">How do I stop a dev3000 session?</h3>
-              <p className="text-muted-foreground">
-                Press <kbd className="bg-muted px-2 py-1 rounded text-sm font-mono">Ctrl+C</kbd> to stop everything
-                (server, browser, and MCP server).
-              </p>
+          {FAQs.map((faq) => (
+            <div key={faq.question}>
+              <h3 className="font-medium mb-2">{faq.question}</h3>
+              <p className="text-muted-foreground leading-normal">{faq.answer}</p>
             </div>
-
-            <div className="border rounded-lg p-6">
-              <h3 className="font-semibold mb-2">Does dev3000 work with other frameworks besides Next.js?</h3>
-              <p className="text-muted-foreground">
-                Yes, it works with React, Vue, Vite, etc. Use{" "}
-                <code className="bg-muted px-2 py-1 rounded text-sm font-mono">--script</code> to specify your dev
-                command.
-              </p>
-            </div>
-
-            <div className="border rounded-lg p-6">
-              <h3 className="font-semibold mb-2">Why do I see a warning about "sharp" during installation?</h3>
-              <p className="text-muted-foreground">
-                This warning is harmless and can be safely ignored. Sharp is an optional image optimization library used
-                by Next.js, but dev3000 has image optimization disabled since all images are served locally. The warning
-                appears because pnpm wants to run sharp's build script, but the library is never actually used at
-                runtime.
-              </p>
-            </div>
-          </div>
+          ))}
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="relative py-12">
-        <div className="container mx-auto px-6">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-foreground rounded-md flex items-center justify-center">
-                <span className="text-background font-mono font-bold text-sm">d3k</span>
-              </div>
-              <div>
-                <p className="font-semibold">dev3000</p>
-                <p className="text-sm text-muted-foreground">By Vercel Labs</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-6">
-              <a
-                href="/changelog"
-                className="text-sm text-muted-foreground hover:text-foreground hover:underline transition-colors"
-              >
-                Changelog
-              </a>
-              <GitHubLink />
-              <span className="text-sm text-muted-foreground">
-                Made by{" "}
-                <a href="https://github.com/elsigh" className="hover:text-foreground hover:underline transition-colors">
-                  elsigh
-                </a>
-              </span>
-            </div>
-          </div>
-        </div>
+      <footer className="doc-container relative pb-16 text-sm font-mono">
+        <VercelWordmarkSVG />
+
+        <section className="flex flex-col gap-1 *:hover:underline *:w-fit">
+          <Link href="/changelog">Changelog</Link>
+          <a href="https://github.com/vercel-labs/dev3000">GitHub</a>
+          <a href="https://github.com/elsigh">Made by elsigh</a>
+        </section>
+
+        <p>© {new Date().getFullYear()} Vercel</p>
       </footer>
     </div>
   )
+}
+
+const ChromeSVG = () => {
+  return (
+    <svg strokeLinejoin="round" viewBox="0 0 16 16" className="inline-block h-4 -translate-y-px leading-normal">
+      <path
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M8.53216 11.3333L6.77086 14.3839C3.76871 13.8094 1.5 11.1696 1.5 8C1.5 6.86643 1.79018 5.80063 2.3003 4.87284L5.006 9.55925C5.56913 10.6383 6.69854 11.375 8 11.375C8.18107 11.375 8.35881 11.3607 8.53216 11.3333ZM10.8505 9.80787L8.14234 14.4985C11.6665 14.4228 14.5 11.5423 14.5 8C14.5 7.2549 14.3746 6.53909 14.1438 5.8725L10.6201 5.8725C11.0921 6.45305 11.375 7.19349 11.375 8C11.375 8.66509 11.1826 9.28525 10.8505 9.80787ZM8.13109 4.6275L13.5577 4.6275C12.4175 2.7524 10.355 1.5 8 1.5C6.0376 1.5 4.27831 2.36964 3.08649 3.74456L4.84694 6.79376C5.33242 5.52553 6.56104 4.625 8 4.625C8.0439 4.625 8.0876 4.62584 8.13109 4.6275ZM8 16C12.4183 16 16 12.4183 16 8C16 3.58172 12.4183 0 8 0C3.58172 0 0 3.58172 0 8C0 12.4183 3.58172 16 8 16ZM5.875 8C5.875 6.8264 6.8264 5.875 8 5.875C9.1736 5.875 10.125 6.8264 10.125 8C10.125 9.1736 9.1736 10.125 8 10.125C6.8264 10.125 5.875 9.1736 5.875 8Z"
+        fill="currentColor"
+      ></path>
+    </svg>
+  )
+}
+
+const NextJSSVG = () => {
+  return (
+    <svg strokeLinejoin="round" viewBox="0 0 16 16" className="inline-block h-4 -translate-y-px leading-normal">
+      <g clipPath="url(#clip0_53_108)">
+        <circle
+          cx="8"
+          cy="8"
+          r="7.375"
+          fill="black"
+          stroke="var(--ds-gray-1000)"
+          strokeWidth="1.25"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        ></circle>
+        <path
+          d="M10.63 11V5"
+          stroke="url(#paint0_linear_53_108_r_gt_)"
+          strokeWidth="1.25"
+          strokeMiterlimit="1.41421"
+        ></path>
+        <path
+          fillRule="evenodd"
+          clipRule="evenodd"
+          d="M5.995 5.00087V5H4.745V11H5.995V6.96798L12.3615 14.7076C12.712 14.4793 13.0434 14.2242 13.353 13.9453L5.99527 5.00065L5.995 5.00087Z"
+          fill="url(#paint1_linear_53_108_r_gt_)"
+        ></path>
+      </g>
+      <defs>
+        {/** biome-ignore lint/correctness/useUniqueElementIds: False positive */}
+        <linearGradient
+          id="paint0_linear_53_108_r_gt_"
+          x1="11.13"
+          y1="5"
+          x2="11.13"
+          y2="11"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop stopColor="white"></stop>
+          <stop offset="0.609375" stopColor="white" stopOpacity="0.57"></stop>
+          <stop offset="0.796875" stopColor="white" stopOpacity="0"></stop>
+          <stop offset="1" stopColor="white" stopOpacity="0"></stop>
+        </linearGradient>
+        {/** biome-ignore lint/correctness/useUniqueElementIds: False positive */}
+        <linearGradient
+          id="paint1_linear_53_108_r_gt_"
+          x1="9.9375"
+          y1="9.0625"
+          x2="13.5574"
+          y2="13.3992"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop stopColor="white"></stop>
+          <stop offset="1" stopColor="white" stopOpacity="0"></stop>
+        </linearGradient>
+
+        {/** biome-ignore lint/correctness/useUniqueElementIds: False positive */}
+        <clipPath id="clip0_53_108">
+          <rect width="16" height="16" fill="white"></rect>
+        </clipPath>
+      </defs>
+    </svg>
+  )
+}
+
+const VercelWordmarkSVG = () => {
+  return (
+    <svg
+      aria-label="Vercel logotype"
+      role="img"
+      viewBox="0 0 262 52"
+      xmlns="http://www.w3.org/2000/svg"
+      className="h-5"
+    >
+      <path
+        d="M59.8019 52L29.9019 0L0.00190544 52H59.8019ZM89.9593 49.6328L114.947 2.36365H104.139L86.9018 36.6921L69.6647 2.36365H58.8564L83.8442 49.6328H89.9593ZM260.25 2.36365V49.6329H251.302V2.36365H260.25ZM210.442 31.99C210.442 28.3062 211.211 25.0661 212.749 22.2699C214.287 19.4737 216.431 17.321 219.181 15.812C221.93 14.3029 225.146 13.5484 228.828 13.5484C232.09 13.5484 235.026 14.2585 237.636 15.6788C240.245 17.0991 242.319 19.2074 243.857 22.0036C245.395 24.7998 246.187 28.2174 246.234 32.2564V34.3202H219.88C220.066 37.2496 220.928 39.5576 222.466 41.2442C224.051 42.8864 226.171 43.7075 228.828 43.7075C230.505 43.7075 232.043 43.2637 233.441 42.376C234.839 41.4883 235.888 40.2899 236.587 38.7808L245.745 39.4466C244.626 42.7754 242.529 45.4385 239.453 47.4358C236.377 49.4331 232.835 50.4317 228.828 50.4317C225.146 50.4317 221.93 49.6772 219.181 48.1681C216.431 46.6591 214.287 44.5064 212.749 41.7102C211.211 38.914 210.442 35.6739 210.442 31.99ZM237.006 28.6612C236.68 25.7762 235.771 23.668 234.28 22.3365C232.789 20.9606 230.971 20.2726 228.828 20.2726C226.358 20.2726 224.354 21.0049 222.816 22.4696C221.278 23.9343 220.322 25.9982 219.95 28.6612H237.006ZM195.347 22.3365C196.838 23.5348 197.77 25.1993 198.143 27.3297L207.371 26.8637C207.044 24.1562 206.089 21.8039 204.505 19.8066C202.92 17.8093 200.869 16.278 198.353 15.2128C195.883 14.1032 193.157 13.5484 190.174 13.5484C186.492 13.5484 183.277 14.3029 180.527 15.812C177.777 17.321 175.634 19.4737 174.096 22.2699C172.558 25.0661 171.789 28.3062 171.789 31.99C171.789 35.6739 172.558 38.914 174.096 41.7102C175.634 44.5064 177.777 46.6591 180.527 48.1681C183.277 49.6772 186.492 50.4317 190.174 50.4317C193.25 50.4317 196.046 49.8769 198.563 48.7673C201.079 47.6133 203.13 45.9933 204.714 43.9072C206.299 41.8212 207.254 39.38 207.58 36.5838L198.283 36.1844C197.957 38.5367 197.048 40.3565 195.557 41.6436C194.065 42.8864 192.271 43.5078 190.174 43.5078C187.285 43.5078 185.048 42.5091 183.463 40.5118C181.879 38.5145 181.086 35.6739 181.086 31.99C181.086 28.3062 181.879 25.4656 183.463 23.4683C185.048 21.471 187.285 20.4723 190.174 20.4723C192.178 20.4723 193.902 21.0937 195.347 22.3365ZM149.955 14.3457H158.281L158.522 21.1369C159.113 19.2146 159.935 17.7218 160.988 16.6585C162.514 15.1166 164.642 14.3457 167.371 14.3457H170.771V21.6146H167.302C165.359 21.6146 163.763 21.8789 162.514 22.4075C161.311 22.9362 160.386 23.7732 159.739 24.9186C159.137 26.064 158.837 27.5178 158.837 29.2799V49.6328H149.955V14.3457ZM111.548 22.2699C110.01 25.0661 109.241 28.3062 109.241 31.99C109.241 35.6739 110.01 38.914 111.548 41.7102C113.086 44.5064 115.229 46.6591 117.979 48.1681C120.729 49.6772 123.944 50.4317 127.626 50.4317C131.634 50.4317 135.176 49.4331 138.252 47.4358C141.327 45.4385 143.425 42.7754 144.543 39.4466L135.385 38.7808C134.686 40.2899 133.638 41.4883 132.24 42.376C130.842 43.2637 129.304 43.7075 127.626 43.7075C124.97 43.7075 122.849 42.8864 121.265 41.2442C119.727 39.5576 118.865 37.2496 118.678 34.3202H145.032V32.2564C144.986 28.2174 144.194 24.7998 142.656 22.0036C141.118 19.2074 139.044 17.0991 136.434 15.6788C133.824 14.2585 130.888 13.5484 127.626 13.5484C123.944 13.5484 120.729 14.3029 117.979 15.812C115.229 17.321 113.086 19.4737 111.548 22.2699ZM133.079 22.3365C134.57 23.668 135.479 25.7762 135.805 28.6612H118.748C119.121 25.9982 120.076 23.9343 121.614 22.4696C123.152 21.0049 125.156 20.2726 127.626 20.2726C129.77 20.2726 131.587 20.9606 133.079 22.3365Z"
+        fill="currentColor"
+      ></path>
+    </svg>
+  )
+}
+
+const FAQs: {
+  question: string
+  answer: React.ReactNode
+}[] = [
+  {
+    question: "Which coding agents work with dev3000?",
+    answer:
+      "All of them. dev3000 works with any AI coding assistant that supports MCP (Model Context Protocol)—including Claude Code, Cursor, Windsurf, Codex, and others. It also works standalone in your terminal without any agent."
+  },
+  {
+    question: "Does dev3000 persist browser state between sessions?",
+    answer: "Yes. Each project gets a dedicated Chrome profile that preserves login state, cookies, and local storage."
+  },
+  {
+    question: "Does this only work with Next.js?",
+    answer: (
+      <>
+        No. Works with any framework that runs a dev server—Next.js, Vite, Create React App, Rails, Django, etc. Use{" "}
+        <code className="bg-muted px-2 py-1 rounded text-sm font-mono">--script</code> to specify your package.json dev
+        command or <code className="bg-muted px-2 py-1 rounded text-sm font-mono">--port</code> to connect to an
+        existing server.
+      </>
+    )
+  },
+  {
+    question: "How do I stop dev3000?",
+    answer: (
+      <>
+        <kbd className="bg-muted px-2 py-1 rounded text-sm font-mono">Ctrl+C</kbd> terminates the dev server, browser,
+        and MCP server simultaneously.
+      </>
+    )
+  },
+  {
+    question: "Does dev3000 affect my app's performance?",
+    answer:
+      "Minimal impact. dev3000 observes browser events passively through Chrome DevTools Protocol. The only overhead is capturing screenshots on errors and navigation, which happens asynchronously."
+  },
+  {
+    question: "Where is my data stored?",
+    answer: (
+      <>
+        All data stays local on your machine. Browser profiles are stored in{" "}
+        <code className="bg-muted px-2 py-1 rounded text-sm font-mono">~/.dev3000/profiles</code>, and captured events
+        are kept in memory during your session. Nothing is sent to external servers.
+      </>
+    )
+  },
+  {
+    question: "Can I use dev3000 with my existing dev workflow?",
+    answer: (
+      <>
+        Yes. Replace your normal dev command (
+        <code className="bg-muted px-2 py-1 rounded text-sm font-mono">pnpm dev</code>,{" "}
+        <code className="bg-muted px-2 py-1 rounded text-sm font-mono">npm run dev</code>, etc.) with{" "}
+        <code className="bg-muted px-2 py-1 rounded text-sm font-mono">d3k</code>. Everything else works exactly the
+        same—hot reload, environment variables, custom ports, etc.
+      </>
+    )
+  },
+  {
+    question: "What's the 'sharp' warning during installation?",
+    answer:
+      "Ignore it. Sharp is a Next.js image optimization dependency that dev3000 doesn't use. The warning appears because pnpm runs install scripts for all dependencies, but sharp is never invoked at runtime."
+  }
+] as const
+
+const BleedContainer = ({ children, className }: { children: React.ReactNode; className?: string }) => {
+  return <div className={clsx("md:-mx-40 px-6", className)}>{children}</div>
 }
