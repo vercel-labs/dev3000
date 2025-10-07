@@ -2822,7 +2822,36 @@ export async function getReactComponentInfo(params: {
 
     // Parse the result
     if (result.content?.[0] && result.content[0].type === "text") {
-      const evalResult = JSON.parse(result.content[0].text)
+      const text = result.content[0].text
+
+      // Extract the JSON result from the executeBrowserAction response
+      // Format: "Browser action 'evaluate' executed successfully. Result: { result: { type, value } }"
+      const resultMatch = text.match(/Result:\s*(\{[\s\S]*\})/)
+      if (!resultMatch) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `❌ **FAILED TO PARSE RESULT**\n\nCould not extract JSON from browser action response.\n\nRaw response:\n${text}`
+            }
+          ]
+        }
+      }
+
+      // The CDP Runtime.evaluate result has the format: { result: { type, value } }
+      const cdpResponse = JSON.parse(resultMatch[1])
+      const evalResult = cdpResponse.result?.value
+
+      if (!evalResult) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `❌ **NO RESULT**\n\nThe browser evaluation returned no value.\n\nCDP Response:\n${JSON.stringify(cdpResponse, null, 2)}`
+            }
+          ]
+        }
+      }
 
       if (evalResult.error) {
         return {
