@@ -669,7 +669,7 @@ function createLogFileInDir(baseDir: string, projectName: string): string {
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-")
 
   // Create log file path
-  const logFileName = `dev3000-${projectName}-${timestamp}.log`
+  const logFileName = `${projectName}-${timestamp}.log`
   const logFilePath = join(baseDir, logFileName)
 
   // Prune old logs for this project (keep only 10 most recent)
@@ -685,7 +685,7 @@ function pruneOldLogs(baseDir: string, projectName: string): void {
   try {
     // Find all log files for this project
     const files = readdirSync(baseDir)
-      .filter((file) => file.startsWith(`dev3000-${projectName}-`) && file.endsWith(".log"))
+      .filter((file) => file.startsWith(`${projectName}-`) && file.endsWith(".log"))
       .map((file) => ({
         name: file,
         path: join(baseDir, file),
@@ -1564,7 +1564,7 @@ export class DevEnvironment {
     this.debugLog("MCP server process spawned as singleton background service")
 
     // Log MCP server output to separate file for debugging
-    const mcpLogFile = join(dirname(this.options.logFile), "dev3000-mcp.log")
+    const mcpLogFile = join(dirname(this.options.logFile), "mcp.log")
     writeFileSync(mcpLogFile, "") // Clear the file
 
     // In debug mode, output the MCP log file path
@@ -2025,7 +2025,7 @@ export class DevEnvironment {
 
       // Create project-specific D3K log file and clear it for new session
       const projectName = getProjectName()
-      const d3kLogFile = join(debugLogDir, `dev3000-${projectName}-d3k.log`)
+      const d3kLogFile = join(debugLogDir, `${projectName}-d3k.log`)
       writeFileSync(d3kLogFile, "")
     } catch {
       // Ignore D3K log initialization errors - non-critical
@@ -2046,7 +2046,7 @@ export class DevEnvironment {
 
       // Create project-specific D3K log file to avoid confusion between multiple instances
       const projectName = getProjectName()
-      const d3kLogFile = join(debugLogDir, `dev3000-${projectName}-d3k.log`)
+      const d3kLogFile = join(debugLogDir, `${projectName}-d3k.log`)
       appendFileSync(d3kLogFile, logEntry)
     } catch {
       // Ignore D3K log write errors - non-critical
@@ -2295,7 +2295,7 @@ export class DevEnvironment {
     const projectName = getProjectName()
     console.log(
       chalk.yellow(
-        `Check the logs at ~/.d3k/logs/dev3000-${projectName}-d3k.log for errors. Feeling like helping? Run dev3000 --debug and file an issue at https://github.com/vercel-labs/dev3000/issues`
+        `Check the logs at ~/.d3k/logs/${projectName}-d3k.log for errors. Feeling like helping? Run dev3000 --debug and file an issue at https://github.com/vercel-labs/dev3000/issues`
       )
     )
     process.exit(1)
