@@ -10,6 +10,17 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.82",
+    date: "2025-10-07",
+    type: "patch",
+    highlights: [
+      "**Auto-Configuration for AI CLIs**: Automatically writes `.mcp.json` (Claude Code) and `.cursor/mcp.json` (Cursor) so MCP servers are instantly available",
+      "**New find_component_source MCP tool**: Maps DOM elements to React component source code by extracting the component function and providing targeted grep patterns to locate source files",
+      "**Removed get_react_component_info tool**: React 19 removed `__reactFiber$` properties from DOM nodes, making the old approach obsolete"
+    ]
+  },
+
+  {
     version: "0.0.81",
     date: "2025-10-07",
     type: "minor",
