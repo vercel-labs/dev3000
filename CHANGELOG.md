@@ -4,6 +4,14 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.84] - 2025-10-07
+
+**Patch Release**
+
+- Shorter log file names: Removed dev3000- prefix from log files (saves 8 characters in terminal output)
+- CHANGELOG.md generation: Auto-generates CHANGELOG.md from TypeScript changelog data during releases
+- Log file paths now: project-timestamp.log, mcp.log, and project-d3k.log
+
 ## [0.0.83] - 2025-10-07
 
 **Patch Release**
