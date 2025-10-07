@@ -14,9 +14,9 @@ export const changelog: Release[] = [
     date: "2025-10-07",
     type: "patch",
     highlights: [
-      "**OpenCode MCP Support**: Added auto-configuration for `.opencode.json` alongside Claude Code and Cursor",
-      '**OpenCode uses different format**: `type: "local"` with command arrays, proxied via `@modelcontextprotocol/inspector` for HTTP MCP servers',
-      "**All three AI CLIs now auto-configured**: Claude Code (`.mcp.json`), Cursor (`.cursor/mcp.json`), and OpenCode (`.opencode.json`)"
+      "OpenCode MCP Support: Added auto-configuration for .opencode.json alongside Claude Code and Cursor",
+      "OpenCode uses different format: type local with command arrays, proxied via @modelcontextprotocol/inspector for HTTP MCP servers",
+      "All three AI CLIs now auto-configured: Claude Code (.mcp.json), Cursor (.cursor/mcp.json), and OpenCode (.opencode.json)"
     ]
   },
 
@@ -25,9 +25,9 @@ export const changelog: Release[] = [
     date: "2025-10-07",
     type: "patch",
     highlights: [
-      "**Auto-Configuration for AI CLIs**: Automatically writes `.mcp.json` (Claude Code) and `.cursor/mcp.json` (Cursor) so MCP servers are instantly available",
-      "**New find_component_source MCP tool**: Maps DOM elements to React component source code by extracting the component function and providing targeted grep patterns to locate source files",
-      "**Removed get_react_component_info tool**: React 19 removed `__reactFiber$` properties from DOM nodes, making the old approach obsolete"
+      "Auto-Configuration for AI CLIs: Automatically writes .mcp.json (Claude Code) and .cursor/mcp.json (Cursor) so MCP servers are instantly available",
+      "New find_component_source MCP tool: Maps DOM elements to React component source code by extracting the component function and providing targeted grep patterns to locate source files",
+      "Removed get_react_component_info tool: React 19 removed __reactFiber$ properties from DOM nodes, making the old approach obsolete"
     ]
   },
 
