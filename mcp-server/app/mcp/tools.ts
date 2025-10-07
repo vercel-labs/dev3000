@@ -1470,6 +1470,7 @@ async function evaluateInBrowser(expression: string): Promise<unknown> {
 
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(cdpUrl)
+    let evalId: number | null = null
 
     ws.on("open", async () => {
       try {
@@ -1480,6 +1481,7 @@ async function evaluateInBrowser(expression: string): Promise<unknown> {
         ws.on("message", async (data) => {
           const message = JSON.parse(data.toString())
 
+          // Handle getTargets response
           if (message.id === 1) {
             const pageTarget = message.result.targetInfos.find((t: Record<string, unknown>) => t.type === "page")
             if (!pageTarget) {
@@ -1498,9 +1500,10 @@ async function evaluateInBrowser(expression: string): Promise<unknown> {
             return
           }
 
+          // Handle attachToTarget event
           if (message.method === "Target.attachedToTarget") {
             // Send evaluation command
-            const evalId = messageId++
+            evalId = messageId++
             ws.send(
               JSON.stringify({
                 id: evalId,
@@ -1508,18 +1511,17 @@ async function evaluateInBrowser(expression: string): Promise<unknown> {
                 params: { expression, returnByValue: true }
               })
             )
+            return
+          }
 
-            ws.on("message", (data) => {
-              const msg = JSON.parse(data.toString())
-              if (msg.id === evalId) {
-                ws.close()
-                if (msg.error) {
-                  reject(new Error(msg.error.message))
-                } else {
-                  resolve(msg.result?.value)
-                }
-              }
-            })
+          // Handle evaluate response
+          if (evalId !== null && message.id === evalId) {
+            ws.close()
+            if (message.error) {
+              reject(new Error(message.error.message))
+            } else {
+              resolve(message.result?.value)
+            }
           }
         })
 
@@ -2870,7 +2872,7 @@ export async function getReactComponentInfo(params: {
 
   try {
     // Evaluate React Fiber inspection directly via CDP
-    const evalResult = (await evaluateInBrowser(`
+    const rawResult = await evaluateInBrowser(`
       (function() {
         try {
           // Find the DOM element
@@ -2911,7 +2913,20 @@ export async function getReactComponentInfo(params: {
           return { error: error.message };
         }
       })()
-    `)) as
+    `)
+
+    if (!rawResult) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `❌ **NO RESULT FROM BROWSER**\n\nThe browser evaluation returned undefined. This may mean:\n• The page hasn't fully loaded\n• The expression was blocked\n• CDP connection issue\n\nTry again in a moment.`
+          }
+        ]
+      }
+    }
+
+    const evalResult = rawResult as
       | { error: string }
       | {
           success: true
