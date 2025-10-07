@@ -259,38 +259,38 @@ function LogEntryComponent({ entry, darkMode }: { entry: LogEntry; darkMode: boo
     if (message.includes("[INTERACTION]"))
       return {
         type: "INTERACTION",
-        backgroundColor: LOG_COLORS.CONSOLE_DEBUG,
-        textColor: getTextColor(LOG_COLORS.CONSOLE_DEBUG)
+        backgroundColor: LOG_COLORS.INTERACTION,
+        textColor: getTextColor(LOG_COLORS.INTERACTION)
       }
-    if (message.includes("[CONSOLE ERROR]"))
+    if (message.includes("[ERROR]"))
       return {
-        type: "CONSOLE ERROR",
-        backgroundColor: LOG_COLORS.CONSOLE_ERROR,
-        textColor: getTextColor(LOG_COLORS.CONSOLE_ERROR)
+        type: "ERROR",
+        backgroundColor: LOG_COLORS.ERROR,
+        textColor: getTextColor(LOG_COLORS.ERROR)
       }
-    if (message.includes("[CONSOLE WARN]"))
+    if (message.includes("[WARNING]"))
       return {
-        type: "CONSOLE WARN",
-        backgroundColor: LOG_COLORS.CONSOLE_WARN,
-        textColor: getTextColor(LOG_COLORS.CONSOLE_WARN)
+        type: "WARNING",
+        backgroundColor: LOG_COLORS.WARNING,
+        textColor: getTextColor(LOG_COLORS.WARNING)
       }
-    if (message.includes("[CONSOLE INFO]"))
+    if (message.includes("[INFO]"))
       return {
-        type: "CONSOLE INFO",
-        backgroundColor: LOG_COLORS.CONSOLE_INFO,
-        textColor: getTextColor(LOG_COLORS.CONSOLE_INFO)
+        type: "INFO",
+        backgroundColor: LOG_COLORS.INFO,
+        textColor: getTextColor(LOG_COLORS.INFO)
       }
-    if (message.includes("[CONSOLE LOG]"))
+    if (message.includes("[LOG]"))
       return {
-        type: "CONSOLE LOG",
-        backgroundColor: LOG_COLORS.CONSOLE_LOG,
-        textColor: getTextColor(LOG_COLORS.CONSOLE_LOG)
+        type: "LOG",
+        backgroundColor: LOG_COLORS.LOG,
+        textColor: getTextColor(LOG_COLORS.LOG)
       }
-    if (message.includes("[CONSOLE DEBUG]"))
+    if (message.includes("[DEBUG]"))
       return {
-        type: "CONSOLE DEBUG",
-        backgroundColor: LOG_COLORS.CONSOLE_DEBUG,
-        textColor: getTextColor(LOG_COLORS.CONSOLE_DEBUG)
+        type: "DEBUG",
+        backgroundColor: LOG_COLORS.DEBUG,
+        textColor: getTextColor(LOG_COLORS.DEBUG)
       }
     if (message.includes("[SCREENSHOT]"))
       return {
@@ -316,17 +316,23 @@ function LogEntryComponent({ entry, darkMode }: { entry: LogEntry; darkMode: boo
         backgroundColor: LOG_COLORS.NETWORK,
         textColor: getTextColor(LOG_COLORS.NETWORK)
       }
-    if (message.includes("[ERROR]") || message.includes("[PAGE ERROR]") || message.includes("[NETWORK ERROR]"))
+    if (message.includes("[CRASH]"))
       return {
-        type: "ERROR",
-        backgroundColor: LOG_COLORS.ERROR,
-        textColor: getTextColor(LOG_COLORS.ERROR)
+        type: "CRASH",
+        backgroundColor: LOG_COLORS.CRASH,
+        textColor: getTextColor(LOG_COLORS.CRASH)
       }
-    if (message.includes("[CRITICAL ERROR]"))
+    if (message.includes("[CHROME]"))
       return {
-        type: "CRITICAL ERROR",
-        backgroundColor: LOG_COLORS.CRITICAL_ERROR,
-        textColor: getTextColor(LOG_COLORS.CRITICAL_ERROR)
+        type: "CHROME",
+        backgroundColor: LOG_COLORS.CHROME,
+        textColor: getTextColor(LOG_COLORS.CHROME)
+      }
+    if (message.includes("[REPLAY]"))
+      return {
+        type: "REPLAY",
+        backgroundColor: LOG_COLORS.REPLAY,
+        textColor: getTextColor(LOG_COLORS.REPLAY)
       }
     return {
       type: "DEFAULT",
