@@ -25,3 +25,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# AI CLI configs
+.mcp.json
+.cursor/
+.opencode.json

@@ -89,6 +89,7 @@ export function parseLogEntries(logContent: string): LogEntry[] {
       }
 
       const screenshot = message.match(/\[SCREENSHOT\] ([^\s[]+)/)?.[1]
+      const screencast = message.match(/\[SCREENCAST\] View jank analysis: ([^\s]+)/)?.[1]
 
       // Clean up CSS formatting directives in console log messages
       let cleanedMessage = cleanConsoleFormatting(message)
@@ -129,6 +130,7 @@ export function parseLogEntries(logContent: string): LogEntry[] {
         source,
         message: cleanedMessage,
         screenshot,
+        screencast,
         original: line,
         tabIdentifier,
         userAgent

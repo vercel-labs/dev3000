@@ -260,12 +260,15 @@ const TUIApp = ({
           {initStatus && <Text dimColor>- {initStatus}</Text>}
         </Box>
         {!isVeryCompact && (
-          <>
+          <Box flexDirection="column">
             <Text dimColor>
               App: localhost:{appPort} | MCP: localhost:{mcpPort}
             </Text>
-            <Text dimColor>↑/↓ scroll | Ctrl-C quit</Text>
-          </>
+            <Text dimColor>
+              📸 http://localhost:{mcpPort}/logs
+              {projectName ? `?project=${encodeURIComponent(projectName)}` : ""}
+            </Text>
+          </Box>
         )}
       </Box>
     </Box>
@@ -289,8 +292,8 @@ const TUIApp = ({
         <Text color="#A18CE5">{topBorderLine}</Text>
 
         {/* Content with side borders only */}
-        <Box borderStyle="round" borderColor="#A18CE5" borderTop={false} paddingX={2} paddingY={1}>
-          <Box flexDirection="row" gap={3}>
+        <Box borderStyle="round" borderColor="#A18CE5" borderTop={false} paddingX={1} paddingY={1}>
+          <Box flexDirection="row" gap={1}>
             {/* ASCII Logo on the left */}
             {/* biome-ignore format: preserve ASCII art alignment */}
             <Box flexDirection="column" alignItems="flex-start">
@@ -303,10 +306,10 @@ const TUIApp = ({
 
             {/* Info on the right */}
             <Box flexDirection="column" flexGrow={1}>
-              <Text color="cyan">🌐 Your App: http://localhost:{appPort}</Text>
-              <Text color="cyan">🤖 MCP Server: http://localhost:{mcpPort}/mcp</Text>
+              <Text color="cyan">🌐 App: http://localhost:{appPort}</Text>
+              <Text color="cyan">🤖 MCP: http://localhost:{mcpPort}/mcp</Text>
               <Text color="cyan">
-                📸 Visual Timeline: http://localhost:{mcpPort}/logs
+                📸 Logs: http://localhost:{mcpPort}/logs
                 {projectName ? `?project=${encodeURIComponent(projectName)}` : ""}
               </Text>
               {serversOnly && (
@@ -344,9 +347,18 @@ const TUIApp = ({
               if (parts) {
                 let [, timestamp, source, type, message] = parts
 
-                // Replace specific emoji in common port-in-use error to avoid terminal width issues
-                if (message?.includes("ERROR: ⚠ Port") && message.includes("is in use by process")) {
-                  message = message.replace("ERROR: ⚠ Port", "ERROR: [!] Port")
+                // Extract HTTP method from SERVER logs as a secondary tag
+                if (source === "SERVER" && !type && message) {
+                  const methodMatch = message.match(/^(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\s/)
+                  if (methodMatch) {
+                    type = methodMatch[1]
+                    message = message.slice(type.length + 1) // Remove method from message
+                  }
+                }
+
+                // Replace warning emoji in ERROR/WARNING messages for consistent terminal rendering
+                if (message && (type === "ERROR" || type === "WARNING")) {
+                  message = message.replace(/⚠/g, "[!]")
                 }
 
                 // In very compact mode, simplify the output
@@ -366,24 +378,26 @@ const TUIApp = ({
                 const sourceColor = source === "BROWSER" ? LOG_COLORS.BROWSER : LOG_COLORS.SERVER
                 const typeColors: Record<string, string> = {
                   NETWORK: LOG_COLORS.NETWORK,
-                  "NETWORK.REQUEST": LOG_COLORS.NETWORK,
-                  "CONSOLE.ERROR": LOG_COLORS.CONSOLE_ERROR,
-                  "CONSOLE.WARN": LOG_COLORS.CONSOLE_WARN,
-                  "CONSOLE.INFO": LOG_COLORS.CONSOLE_INFO,
-                  "CONSOLE.LOG": LOG_COLORS.CONSOLE_LOG,
-                  "CONSOLE.DEBUG": LOG_COLORS.CONSOLE_DEBUG,
-                  "RUNTIME.ERROR": LOG_COLORS.ERROR,
-                  "CDP.ERROR": LOG_COLORS.CDP,
-                  "CHROME.ERROR": LOG_COLORS.ERROR,
-                  "CHROME.CRASH": LOG_COLORS.CRITICAL_ERROR,
-                  NAVIGATION: LOG_COLORS.PAGE,
-                  INTERACTION: LOG_COLORS.DOM,
+                  ERROR: LOG_COLORS.ERROR,
+                  WARNING: LOG_COLORS.WARNING,
+                  INFO: LOG_COLORS.INFO,
+                  LOG: LOG_COLORS.LOG,
+                  DEBUG: LOG_COLORS.DEBUG,
                   SCREENSHOT: LOG_COLORS.SCREENSHOT,
-                  PAGE: LOG_COLORS.PAGE,
                   DOM: LOG_COLORS.DOM,
                   CDP: LOG_COLORS.CDP,
-                  ERROR: LOG_COLORS.ERROR,
-                  "CRITICAL ERROR": LOG_COLORS.CRITICAL_ERROR
+                  CHROME: LOG_COLORS.CHROME,
+                  CRASH: LOG_COLORS.CRASH,
+                  REPLAY: LOG_COLORS.REPLAY,
+                  NAVIGATION: LOG_COLORS.NAVIGATION,
+                  INTERACTION: LOG_COLORS.INTERACTION,
+                  GET: LOG_COLORS.SERVER,
+                  POST: LOG_COLORS.SERVER,
+                  PUT: LOG_COLORS.SERVER,
+                  DELETE: LOG_COLORS.SERVER,
+                  PATCH: LOG_COLORS.SERVER,
+                  HEAD: LOG_COLORS.SERVER,
+                  OPTIONS: LOG_COLORS.SERVER
                 }
 
                 // In compact mode, skip padding
@@ -406,12 +420,16 @@ const TUIApp = ({
                   )
                 }
 
-                // Normal mode with padding
-                // Calculate padding for source (BROWSER is 7, SERVER is 6)
-                const sourceSpacing = " ".repeat(Math.max(0, 7 - source.length))
+                // Normal mode with minimal padding
+                // Single space after source
+                const sourceSpacing = ""
 
-                // Calculate padding for type (NETWORK.REQUEST is longest at 15)
-                const typeSpacing = type ? " ".repeat(Math.max(0, 15 - type.length)) : ""
+                // Single space after type
+                const typeSpacing = ""
+
+                // For alignment: if no type tag, add spacing equivalent to a tag
+                // This aligns SERVER logs without tags with those that have tags
+                const alignmentSpacing = !type ? "       " : "" // ~7 chars for average tag like [GET]
 
                 return (
                   <Text key={log.id} wrap="truncate-end">
@@ -421,11 +439,13 @@ const TUIApp = ({
                       [{source}]
                     </Text>
                     <Text>{sourceSpacing} </Text>
-                    {type && (
+                    {type ? (
                       <>
                         <Text color={typeColors[type] || "#A0A0A0"}>[{type}]</Text>
                         <Text>{typeSpacing} </Text>
                       </>
+                    ) : (
+                      <Text>{alignmentSpacing}</Text>
                     )}
                     <Text>{message}</Text>
                   </Text>
@@ -450,7 +470,12 @@ const TUIApp = ({
 
       {/* Bottom status line - no border, just text */}
       <Box paddingX={1} justifyContent="space-between">
-        <Text color="#A18CE5">⏵⏵ {logFile.replace(process.env.HOME || "", "~")}</Text>
+        <Text color="#A18CE5">
+          ⏵⏵{" "}
+          {isVeryCompact
+            ? logFile.split("/").slice(-2, -1)[0] || "logs" // Just show directory name
+            : logFile.replace(process.env.HOME || "", "~")}
+        </Text>
         <Text color="#A18CE5">{ctrlCMessage}</Text>
       </Box>
     </Box>

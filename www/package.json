@@ -1,11 +1,11 @@
 {
   "name": "dev3000-www",
   "version": "0.1.0",
-  "private": true,
+  "type": "module",
   "scripts": {
     "build": "next build --turbopack",
     "dev": "next dev --turbopack",
-    "lint": "next lint",
+    "lint": "eslint .",
     "start": "next start",
     "typegen": "next typegen",
     "typecheck": "tsc --noEmit"
@@ -72,11 +72,14 @@
     "zod": "^3.22.4"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.3.1",
     "@tailwindcss/postcss": "^4.1.9",
     "@types/node": "^24.5.2",
     "@types/react": "19.1.17",
     "@types/react-dom": "19.1.11",
     "babel-plugin-react-compiler": "^19.1.0-rc.3",
+    "eslint": "^9.37.0",
+    "eslint-config-next": "15.6.0-canary.38",
     "postcss": "^8.5",
     "tailwindcss": "^4.1.9",
     "tw-animate-css": "^1.3.8",

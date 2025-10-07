@@ -31,10 +31,10 @@ export async function generateMetadata({ params }: { params: Promise<{ version: 
 
   return {
     title: `dev3000 ${version} Changelog`,
-    description: `dev3000 ${version} release: ${release.highlights.slice(0, 2).join(", ")}${release.highlights.length > 2 ? ", and more" : ""}.`,
+    description: `Release notes for dev3000 ${version}.`,
     openGraph: {
       title: `dev3000 ${version} - AI-Powered Development Tools`,
-      description: `Release highlights: ${release.highlights.slice(0, 3).join(" • ")}${release.highlights.length > 3 ? " and more" : ""}.`,
+      description: `New release: dev3000 ${version}`,
       type: "website",
       images: [
         {
@@ -48,7 +48,7 @@ export async function generateMetadata({ params }: { params: Promise<{ version: 
     twitter: {
       card: "summary_large_image",
       title: `dev3000 ${version} - Changelog`,
-      description: `Features: ${release.highlights.slice(0, 2).join(" • ")}${release.highlights.length > 2 ? " and more" : ""}.`,
+      description: `New release: dev3000 ${version}`,
       images: [`/api/og/changelog/${version}`]
     }
   }

@@ -77,9 +77,13 @@ node -e "
 echo "📝 Updating changelog..."
 npx tsx scripts/update-changelog.ts "v$NEXT_VERSION"
 
+# Generate CHANGELOG.md from changelog.ts
+echo "📝 Generating CHANGELOG.md..."
+npx tsx scripts/generate-changelog-md.ts
+
 # Commit version change and changelog
 echo "📝 Committing version change and changelog..."
-git add package.json mcp-server/package.json www/package.json www/lib/changelog.ts
+git add package.json mcp-server/package.json www/package.json www/lib/changelog.ts CHANGELOG.md
 git commit -m "Release v$NEXT_VERSION
 
 🤖 Generated with [Claude Code](https://claude.ai/code)

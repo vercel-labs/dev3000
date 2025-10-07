@@ -6,9 +6,9 @@ const currentDir = path.dirname(fileURLToPath(import.meta.url))
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  reactCompiler: true,
   experimental: {
-    reactCompiler: true,
-    turbopackPersistentCaching: true,
+    turbopackPersistentCachingForDev: true,
     mcpServer: true
   },
   outputFileTracingRoot: path.join(currentDir, ".."),

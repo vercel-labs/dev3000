@@ -19,6 +19,7 @@ import { homedir, tmpdir } from "os"
 import { dirname, join } from "path"
 import { fileURLToPath } from "url"
 import { CDPMonitor } from "./cdp-monitor.js"
+import { ScreencastManager } from "./screencast-manager.js"
 import { type LogEntry, NextJsErrorDetector, OutputProcessor, StandardLogParser } from "./services/parsers/index.js"
 import { DevTUI } from "./tui-interface.js"
 import { getProjectDisplayName, getProjectName } from "./utils/project-name.js"
@@ -359,6 +360,85 @@ async function ensureCursorMcpServers(
 }
 
 /**
+ * Ensure MCP server configurations are added to project's .opencode.json
+ * OpenCode uses a different structure: "mcp" instead of "mcpServers" and "type": "local" for stdio servers
+ */
+async function ensureOpenCodeMcpServers(
+  mcpPort: string,
+  appPort: string,
+  enableChromeDevtools: boolean,
+  enableNextjsMcp: boolean
+): Promise<void> {
+  try {
+    const settingsPath = join(process.cwd(), ".opencode.json")
+
+    // Read or create settings - OpenCode uses "mcp" not "mcpServers"
+    let settings: {
+      mcp?: Record<
+        string,
+        {
+          type: "local"
+          command: string[]
+          enabled?: boolean
+          environment?: Record<string, string>
+        }
+      >
+      [key: string]: unknown
+    }
+    if (existsSync(settingsPath)) {
+      const settingsContent = readFileSync(settingsPath, "utf-8")
+      settings = JSON.parse(settingsContent)
+    } else {
+      settings = {}
+    }
+
+    // Ensure mcp structure exists
+    if (!settings.mcp) {
+      settings.mcp = {}
+    }
+
+    let added = false
+
+    // Add dev3000 MCP server - use npx with mcp-client to connect to HTTP server
+    if (!settings.mcp[MCP_NAMES.DEV3000]) {
+      settings.mcp[MCP_NAMES.DEV3000] = {
+        type: "local",
+        command: ["npx", "@modelcontextprotocol/inspector", `http://localhost:${mcpPort}/mcp`],
+        enabled: true
+      }
+      added = true
+    }
+
+    // Add chrome-devtools MCP server if enabled
+    if (enableChromeDevtools && !settings.mcp[MCP_NAMES.CHROME_DEVTOOLS]) {
+      settings.mcp[MCP_NAMES.CHROME_DEVTOOLS] = {
+        type: "local",
+        command: ["npx", "chrome-devtools-mcp@latest", "--browserUrl", "http://127.0.0.1:9222"],
+        enabled: true
+      }
+      added = true
+    }
+
+    // Add nextjs-dev MCP server if enabled - use npx with mcp-client for HTTP
+    if (enableNextjsMcp && !settings.mcp[MCP_NAMES.NEXTJS_DEV]) {
+      settings.mcp[MCP_NAMES.NEXTJS_DEV] = {
+        type: "local",
+        command: ["npx", "@modelcontextprotocol/inspector", `http://localhost:${appPort}/_next/mcp`],
+        enabled: true
+      }
+      added = true
+    }
+
+    // Write if we added anything
+    if (added) {
+      writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, "utf-8")
+    }
+  } catch (_error) {
+    // Ignore errors - settings file manipulation is optional
+  }
+}
+
+/**
  * Clean up MCP server configurations from project's .cursor/mcp.json
  */
 async function cleanupCursorMcpServers(enableChromeDevtools: boolean, enableNextjsMcp: boolean): Promise<void> {
@@ -396,6 +476,56 @@ async function cleanupCursorMcpServers(enableChromeDevtools: boolean, enableNext
     // Remove nextjs-dev MCP server if it was enabled
     if (enableNextjsMcp && settings.mcpServers[MCP_NAMES.NEXTJS_DEV]) {
       delete settings.mcpServers[MCP_NAMES.NEXTJS_DEV]
+      removed = true
+    }
+
+    // Only write if we actually removed something
+    if (removed) {
+      writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, "utf-8")
+    }
+  } catch (_error) {
+    // Ignore cleanup errors
+  }
+}
+
+/**
+ * Clean up MCP server configurations from project's .opencode.json
+ */
+async function cleanupOpenCodeMcpServers(enableChromeDevtools: boolean, enableNextjsMcp: boolean): Promise<void> {
+  try {
+    const settingsPath = join(process.cwd(), ".opencode.json")
+
+    // Check if file exists
+    if (!existsSync(settingsPath)) {
+      return // No settings file to clean up
+    }
+
+    // Read current settings
+    const settingsContent = readFileSync(settingsPath, "utf-8")
+    const settings = JSON.parse(settingsContent)
+
+    // Ensure mcp structure exists (OpenCode uses "mcp" not "mcpServers")
+    if (!settings.mcp) {
+      return // No MCP servers to clean up
+    }
+
+    let removed = false
+
+    // Remove dev3000 MCP server
+    if (settings.mcp[MCP_NAMES.DEV3000]) {
+      delete settings.mcp[MCP_NAMES.DEV3000]
+      removed = true
+    }
+
+    // Remove chrome-devtools MCP server if it was enabled
+    if (enableChromeDevtools && settings.mcp[MCP_NAMES.CHROME_DEVTOOLS]) {
+      delete settings.mcp[MCP_NAMES.CHROME_DEVTOOLS]
+      removed = true
+    }
+
+    // Remove nextjs-dev MCP server if it was enabled
+    if (enableNextjsMcp && settings.mcp[MCP_NAMES.NEXTJS_DEV]) {
+      delete settings.mcp[MCP_NAMES.NEXTJS_DEV]
       removed = true
     }
 
@@ -539,7 +669,7 @@ function createLogFileInDir(baseDir: string, projectName: string): string {
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-")
 
   // Create log file path
-  const logFileName = `dev3000-${projectName}-${timestamp}.log`
+  const logFileName = `${projectName}-${timestamp}.log`
   const logFilePath = join(baseDir, logFileName)
 
   // Prune old logs for this project (keep only 10 most recent)
@@ -555,7 +685,7 @@ function pruneOldLogs(baseDir: string, projectName: string): void {
   try {
     // Find all log files for this project
     const files = readdirSync(baseDir)
-      .filter((file) => file.startsWith(`dev3000-${projectName}-`) && file.endsWith(".log"))
+      .filter((file) => file.startsWith(`${projectName}-`) && file.endsWith(".log"))
       .map((file) => ({
         name: file,
         path: join(baseDir, file),
@@ -583,6 +713,7 @@ export class DevEnvironment {
   private serverProcess: ChildProcess | null = null
   private mcpServerProcess: ChildProcess | null = null
   private cdpMonitor: CDPMonitor | null = null
+  private screencastManager: ScreencastManager | null = null
   private logger: Logger
   private outputProcessor: OutputProcessor
   private options: DevEnvironmentOptions
@@ -920,8 +1051,14 @@ export class DevEnvironment {
           this.chromeDevtoolsSupported,
           this.enableNextjsMcp
         )
+        await ensureOpenCodeMcpServers(
+          this.options.mcpPort || "3684",
+          this.options.port,
+          this.chromeDevtoolsSupported,
+          this.enableNextjsMcp
+        )
 
-        this.logD3K(`AI CLI Integration: Configured MCP servers in .mcp.json and .cursor/mcp.json`)
+        this.logD3K(`AI CLI Integration: Configured MCP servers in .mcp.json, .cursor/mcp.json, and .opencode.json`)
       }
 
       // Start CDP monitoring if not in servers-only mode
@@ -936,8 +1073,10 @@ export class DevEnvironment {
         this.debugLog("Browser monitoring disabled via --servers-only flag")
       }
 
-      // Write session info for MCP server discovery
-      writeSessionInfo(projectName, this.options.logFile, this.options.port, this.options.mcpPort)
+      // Write session info for MCP server discovery (include CDP URL if browser monitoring was started)
+      const cdpUrl = this.cdpMonitor?.getCdpUrl() || null
+      const chromePids = this.cdpMonitor?.getChromePids() || []
+      writeSessionInfo(projectName, this.options.logFile, this.options.port, this.options.mcpPort, cdpUrl, chromePids)
 
       // Clear status - ready!
       await this.tui.updateStatus(null)
@@ -1004,8 +1143,14 @@ export class DevEnvironment {
           this.chromeDevtoolsSupported,
           this.enableNextjsMcp
         )
+        await ensureOpenCodeMcpServers(
+          this.options.mcpPort || "3684",
+          this.options.port,
+          this.chromeDevtoolsSupported,
+          this.enableNextjsMcp
+        )
 
-        this.logD3K(`AI CLI Integration: Configured MCP servers in .mcp.json and .cursor/mcp.json`)
+        this.logD3K(`AI CLI Integration: Configured MCP servers in .mcp.json, .cursor/mcp.json, and .opencode.json`)
       }
 
       // Start CDP monitoring if not in servers-only mode
@@ -1022,7 +1167,10 @@ export class DevEnvironment {
 
       // Get project name for session info and Visual Timeline URL
       const projectName = getProjectName()
-      writeSessionInfo(projectName, this.options.logFile, this.options.port, this.options.mcpPort)
+      // Include CDP URL if browser monitoring was started
+      const cdpUrl = this.cdpMonitor?.getCdpUrl() || null
+      const chromePids = this.cdpMonitor?.getChromePids() || []
+      writeSessionInfo(projectName, this.options.logFile, this.options.port, this.options.mcpPort, cdpUrl, chromePids)
 
       // Complete startup with success message only in non-TUI mode
       this.spinner.succeed("Development environment ready!")
@@ -1079,7 +1227,7 @@ export class DevEnvironment {
 
         // Show critical errors to console (parser determines what's critical)
         if (entry.isCritical && entry.rawMessage) {
-          console.error(chalk.red("[CRITICAL ERROR]"), entry.rawMessage)
+          console.error(chalk.red("[ERROR]"), entry.rawMessage)
         }
       })
     })
@@ -1416,7 +1564,7 @@ export class DevEnvironment {
     this.debugLog("MCP server process spawned as singleton background service")
 
     // Log MCP server output to separate file for debugging
-    const mcpLogFile = join(dirname(this.options.logFile), "dev3000-mcp.log")
+    const mcpLogFile = join(dirname(this.options.logFile), "mcp.log")
     writeFileSync(mcpLogFile, "") // Clear the file
 
     // In debug mode, output the MCP log file path
@@ -1439,7 +1587,7 @@ export class DevEnvironment {
         appendFileSync(mcpLogFile, `[${timestamp}] [MCP-STDERR] ${message}\n`)
         // Only show critical errors in stdout for debugging
         if (message.includes("FATAL") || message.includes("Error:")) {
-          console.error(chalk.red("[LOG VIEWER ERROR]"), message)
+          console.error(chalk.red("[ERROR]"), message)
         }
       }
     })
@@ -1585,11 +1733,11 @@ export class DevEnvironment {
       const fullCommand = `${packageManager} ${installArgs.join(" ")}`
 
       if (this.options.debug) {
-        console.log(`[MCP DEBUG] Installing MCP server dependencies...`)
-        console.log(`[MCP DEBUG] Working directory: ${workingDir}`)
-        console.log(`[MCP DEBUG] Package manager detected: ${packageManager}`)
-        console.log(`[MCP DEBUG] Command: ${fullCommand}`)
-        console.log(`[MCP DEBUG] Is global install: ${isGlobalInstall}`)
+        console.log(`[DEBUG] Installing MCP server dependencies...`)
+        console.log(`[DEBUG] Working directory: ${workingDir}`)
+        console.log(`[DEBUG] Package manager detected: ${packageManager}`)
+        console.log(`[DEBUG] Command: ${fullCommand}`)
+        console.log(`[DEBUG] Is global install: ${isGlobalInstall}`)
       }
 
       const installStartTime = Date.now()
@@ -1602,7 +1750,7 @@ export class DevEnvironment {
       const timeout = setTimeout(
         () => {
           if (this.options.debug) {
-            console.log(`[MCP DEBUG] Installation timed out after 3 minutes`)
+            console.log(`[DEBUG] Installation timed out after 3 minutes`)
           }
           installProcess.kill("SIGKILL")
           reject(new Error("MCP server dependency installation timed out after 3 minutes"))
@@ -1633,12 +1781,12 @@ export class DevEnvironment {
         const installTime = Date.now() - installStartTime
 
         if (this.options.debug) {
-          console.log(`[MCP DEBUG] Installation completed in ${installTime}ms with exit code: ${code}`)
+          console.log(`[DEBUG] Installation completed in ${installTime}ms with exit code: ${code}`)
           if (debugOutput) {
-            console.log(`[MCP DEBUG] stdout:`, debugOutput.trim())
+            console.log(`[DEBUG] stdout:`, debugOutput.trim())
           }
           if (debugErrors) {
-            console.log(`[MCP DEBUG] stderr:`, debugErrors.trim())
+            console.log(`[DEBUG] stderr:`, debugErrors.trim())
           }
         }
 
@@ -1877,7 +2025,7 @@ export class DevEnvironment {
 
       // Create project-specific D3K log file and clear it for new session
       const projectName = getProjectName()
-      const d3kLogFile = join(debugLogDir, `dev3000-${projectName}-d3k.log`)
+      const d3kLogFile = join(debugLogDir, `${projectName}-d3k.log`)
       writeFileSync(d3kLogFile, "")
     } catch {
       // Ignore D3K log initialization errors - non-critical
@@ -1898,7 +2046,7 @@ export class DevEnvironment {
 
       // Create project-specific D3K log file to avoid confusion between multiple instances
       const projectName = getProjectName()
-      const d3kLogFile = join(debugLogDir, `dev3000-${projectName}-d3k.log`)
+      const d3kLogFile = join(debugLogDir, `${projectName}-d3k.log`)
       appendFileSync(d3kLogFile, logEntry)
     } catch {
       // Ignore D3K log write errors - non-critical
@@ -2034,6 +2182,20 @@ export class DevEnvironment {
       const cdpUrl = this.cdpMonitor.getCdpUrl()
       const chromePids = this.cdpMonitor.getChromePids()
 
+      // Start screencast manager for automatic jank detection
+      if (cdpUrl) {
+        this.screencastManager = new ScreencastManager(
+          cdpUrl,
+          (msg: string) => {
+            // Pass through CDP messages directly - they already have their own category tags
+            this.logger.log("browser", msg)
+          },
+          this.options.port.toString()
+        )
+        await this.screencastManager.start()
+        // this.logger.log("browser", "[Screencast] Auto-capture enabled for navigation events")
+      }
+
       if (cdpUrl || chromePids.length > 0) {
         writeSessionInfo(
           projectName,
@@ -2051,7 +2213,7 @@ export class DevEnvironment {
       this.logger.log("browser", `[CDP] Navigated to http://localhost:${this.options.port}`)
     } catch (error) {
       // Log error and throw to trigger graceful shutdown
-      this.logger.log("browser", `[CDP ERROR] Failed to start CDP monitoring: ${error}`)
+      this.logger.log("browser", `[CDP] Failed to start CDP monitoring: ${error}`)
       throw error
     }
   }
@@ -2062,6 +2224,12 @@ export class DevEnvironment {
 
     // Stop health monitoring
     this.stopHealthCheck()
+
+    // Stop screencast manager
+    if (this.screencastManager) {
+      await this.screencastManager.stop()
+      this.screencastManager = null
+    }
 
     // Clean up session file
     try {
@@ -2127,7 +2295,7 @@ export class DevEnvironment {
     const projectName = getProjectName()
     console.log(
       chalk.yellow(
-        `Check the logs at ~/.d3k/logs/dev3000-${projectName}-d3k.log for errors. Feeling like helping? Run dev3000 --debug and file an issue at https://github.com/vercel-labs/dev3000/issues`
+        `Check the logs at ~/.d3k/logs/${projectName}-d3k.log for errors. Feeling like helping? Run dev3000 --debug and file an issue at https://github.com/vercel-labs/dev3000/issues`
       )
     )
     process.exit(1)
@@ -2284,6 +2452,7 @@ export class DevEnvironment {
     // Clean up MCP server configurations from project settings files (instant)
     await cleanupMcpServers(this.chromeDevtoolsSupported, this.enableNextjsMcp)
     await cleanupCursorMcpServers(this.chromeDevtoolsSupported, this.enableNextjsMcp)
+    await cleanupOpenCodeMcpServers(this.chromeDevtoolsSupported, this.enableNextjsMcp)
 
     // Kill processes on both ports
     const killPortProcess = async (port: string, name: string) => {

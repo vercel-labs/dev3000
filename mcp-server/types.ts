@@ -5,6 +5,7 @@ export interface LogEntry {
   source: string
   message: string
   screenshot?: string
+  screencast?: string
   original: string
   tabIdentifier?: string
   userAgent?: string

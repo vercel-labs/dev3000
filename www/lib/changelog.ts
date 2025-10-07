@@ -10,13 +10,81 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.84",
+    date: "2025-10-07",
+    type: "patch",
+    highlights: [
+      "Shorter log file names: Removed dev3000- prefix from log files (saves 8 characters in terminal output)",
+      "CHANGELOG.md generation: Auto-generates CHANGELOG.md from TypeScript changelog data during releases",
+      "Log file paths now: project-timestamp.log, mcp.log, and project-d3k.log"
+    ]
+  },
+
+  {
+    version: "0.0.83",
+    date: "2025-10-07",
+    type: "patch",
+    highlights: [
+      "OpenCode MCP Support: Added auto-configuration for .opencode.json alongside Claude Code and Cursor",
+      "OpenCode uses different format: type local with command arrays, proxied via @modelcontextprotocol/inspector for HTTP MCP servers",
+      "All three AI CLIs now auto-configured: Claude Code (.mcp.json), Cursor (.cursor/mcp.json), and OpenCode (.opencode.json)"
+    ]
+  },
+
+  {
+    version: "0.0.82",
+    date: "2025-10-07",
+    type: "patch",
+    highlights: [
+      "Auto-Configuration for AI CLIs: Automatically writes .mcp.json (Claude Code) and .cursor/mcp.json (Cursor) so MCP servers are instantly available",
+      "New find_component_source MCP tool: Maps DOM elements to React component source code by extracting the component function and providing targeted grep patterns to locate source files",
+      "Removed get_react_component_info tool: React 19 removed __reactFiber$ properties from DOM nodes, making the old approach obsolete"
+    ]
+  },
+
+  {
+    version: "0.0.81",
+    date: "2025-10-07",
+    type: "minor",
+    highlights: [
+      "New analyze_visual_diff MCP tool provides detailed descriptions of before/after screenshot differences for CLS debugging",
+      "Fixed CLS frame detection to show exact frames where layout shifts occur (N-2 and N-1), not just nearby frames",
+      "fix_my_jank now includes direct links to screenshots showing the visual change that caused each layout shift",
+      "Consolidated log tags (CONSOLE.ERROR → ERROR) and removed padding to maximize horizontal space for narrow terminals",
+      "SERVER logs now extract and display HTTP methods (GET, POST, etc.) as secondary tags with smart alignment",
+      "Changed 'video' to 'frame sequence' throughout to match actual functionality"
+    ]
+  },
+
+  {
+    version: "0.0.80",
+    date: "2025-10-06",
+    type: "minor",
+    highlights: ["Added support for Arc and Comet browsers"]
+  },
+
+  {
+    version: "0.0.79",
+    date: "2025-10-06",
+    type: "minor",
+    highlights: [
+      "Passive screencast capture automatically records page loads and navigations without slowing down your dev server",
+      "CLS detection video viewer shows frame-by-frame video of layout shifts with red bounding boxes highlighting exactly which elements shifted",
+      "Real PerformanceObserver integration uses browser APIs to detect actual layout shifts (not just pixel-diff guessing), with querySelector to find precise element positions",
+      "New fix_my_jank MCP tool automatically analyzes performance issues and CLS problems, flagging critical UI shifts in NAV/HEADER elements",
+      "Better header and status line rendering for narrow terminal windows"
+    ]
+  },
+
+  {
     version: "0.0.78",
     date: "2025-10-03",
     type: "patch",
     highlights: [
-      "MCP server now supports cross-tool coordination for seamless debugging workflows",
-      "Bug fixes improve overall reliability",
-      "Developer experience improvements across CLI and interface"
+      "Auto-configuration for AI CLIs: automatically writes .mcp.json (Claude Code) and .cursor/mcp.json (Cursor) so MCP servers are instantly available",
+      "Intelligent Chrome launch: replaced fixed timeout with smart polling - dev3000 starts as soon as Chrome is ready instead of waiting arbitrarily",
+      "Added comprehensive FAQ explaining sharp module warnings and other common questions",
+      "Fixed log paths: corrected outdated log file paths in error messages for easier debugging"
     ]
   },
 
@@ -25,8 +93,10 @@ export const changelog: Release[] = [
     date: "2025-09-30",
     type: "patch",
     highlights: [
-      "MCP server now supports cross-tool coordination for seamless debugging workflows",
-      "Developer experience improvements across CLI and interface"
+      "Augmented delegation: dev3000 now intelligently delegates to chrome-devtools MCP when detected, creating a powerful debugging orchestration layer",
+      "Dynamic MCP discovery: automatically discovers and integrates with chrome-devtools MCP server via process detection and port scanning",
+      "CDP URL sharing: shares Chrome DevTools Protocol URL with other MCPs to prevent duplicate browser instances",
+      "Enhanced TUI: improved layout and dynamic capability display when MCP integrations are active"
     ]
   },
 
@@ -34,14 +104,20 @@ export const changelog: Release[] = [
     version: "0.0.76",
     date: "2025-09-30",
     type: "patch",
-    highlights: ["Quality improvements and bug fixes"]
+    highlights: [
+      "Smart auto-delegation: re-enabled intelligent MCP delegation with Claude prompt caching detection to avoid token waste",
+      "MCP integration refinements: improved how dev3000 coordinates with chrome-devtools MCP for seamless workflows"
+    ]
   },
 
   {
     version: "0.0.75",
     date: "2025-09-29",
     type: "patch",
-    highlights: ["Bug fixes improve overall reliability"]
+    highlights: [
+      "MCP integration fixes: resolved issues with MCP server coordination and shutdown behavior",
+      "Stability improvements: fixed edge cases in MCP integration that could cause unexpected behavior"
+    ]
   },
 
   {

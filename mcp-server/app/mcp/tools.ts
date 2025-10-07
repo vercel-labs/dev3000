@@ -1,7 +1,9 @@
 import { exec } from "child_process"
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync } from "fs"
-import { homedir } from "os"
+import { homedir, tmpdir } from "os"
 import { join } from "path"
+import pixelmatch from "pixelmatch"
+import { PNG } from "pngjs"
 import { promisify } from "util"
 import { WebSocket } from "ws"
 
@@ -12,17 +14,14 @@ export const TOOL_DESCRIPTIONS = {
   fix_my_app:
     "🔧 **THE ULTIMATE FIND→FIX→VERIFY MACHINE!** This tool doesn't just find bugs - it FIXES them! Pure dev3000 magic that identifies issues, provides exact fixes, and verifies everything works! 🪄\n\n🔥 **INSTANT FIXING SUPERPOWERS:**\n• Detects ALL error types: server crashes, browser errors, build failures, API issues, performance problems\n• Shows EXACT user interactions that triggered each error (clicks, navigation, etc.)\n• Provides EXACT fix code with file locations and line numbers\n• Guides you through implementing fixes step-by-step\n• Verifies fixes by replaying the same interactions that caused the error!\n\n📍 **INTERACTION-BASED VERIFICATION:**\n• Every error includes the user interactions that led to it\n• Use execute_browser_action to replay these exact interactions\n• Verify your fix works by confirming the error doesn't reoccur\n• Example: Error shows '[INTERACTION] Click at (450,300)' → After fix, use execute_browser_action(action='click', params={x:450, y:300}) to verify\n\n⚡ **3 ACTION MODES:**\n• FIX NOW: 'What's broken RIGHT NOW?' → Find and fix immediately\n• FIX REGRESSION: 'What broke during testing?' → Compare before/after and fix\n• FIX CONTINUOUSLY: 'Fix issues as they appear' → Monitor and fix proactively\n\n🎪 **THE FIX-IT WORKFLOW:**\n1️⃣ I FIND all issues with their triggering interactions\n2️⃣ I provide EXACT FIXES with code snippets\n3️⃣ You implement the fixes\n4️⃣ We REPLAY the interactions to VERIFY everything works\n\n💡 **PERFECT FOR:** 'fix my app' or 'debug my app' requests, error resolution, code repairs, making broken apps work again. This tool doesn't just identify problems - it SOLVES them with precise reproduction steps!",
 
-  create_integrated_workflow:
-    "🧠 **INTELLIGENT DEBUGGING ORCHESTRATOR** - Transform dev3000 from a standalone tool into the conductor of your debugging orchestra! This tool automatically detects available MCPs and creates integrated workflows that leverage the unique strengths of each tool.\n\n🎼 **ORCHESTRATION SUPERPOWERS:**\n• Auto-detects nextjs-dev and chrome-devtools MCPs when available\n• Creates 3-phase systematic debugging workflows\n• Provides AI-powered correlation between server/client/browser layers\n• Returns concrete function calls for Claude to execute across MCPs\n\n⚡ **3-PHASE WORKFLOW MAGIC:**\n• Phase 1: Parallel Data Collection (across all available MCPs)\n• Phase 2: Deep Targeted Analysis (sequential, context-aware)\n• Phase 3: Fix Implementation & Verification (orchestrated testing)\n\n🔗 **INTEGRATION BENEFITS:**\n• With nextjs-dev: Framework-specific build/runtime error context\n• With chrome-devtools: Precise browser state inspection\n• Together: Complete full-stack debugging coverage with AI correlation\n\n💡 **PERFECT FOR:** Multi-MCP environments where you want dev3000 to intelligently coordinate debugging across tools instead of using them individually. Makes other MCPs more powerful when used together!",
-
   execute_browser_action:
     "🌐 **INTELLIGENT BROWSER AUTOMATION** - Smart browser action routing that automatically delegates to chrome-devtools MCP when available for superior automation capabilities.\n\n🎯 **INTELLIGENT DELEGATION:**\n• Screenshots → chrome-devtools MCP (better quality, no conflicts)\n• Navigation → chrome-devtools MCP (more reliable page handling)\n• Clicks → chrome-devtools MCP (precise coordinate-based interaction)\n• JavaScript evaluation → chrome-devtools MCP (enhanced debugging)\n• Scrolling & typing → dev3000 fallback (specialized actions)\n\n⚡ **PROGRESSIVE ENHANCEMENT:**\n• Uses chrome-devtools MCP when available for best results\n• Falls back to dev3000's native implementation when chrome-devtools unavailable\n• Shares the same Chrome instance via CDP URL coordination\n• Eliminates browser conflicts between tools\n\n💡 **PERFECT FOR:** Browser automation that automatically chooses the best tool for each action, ensuring optimal results whether chrome-devtools MCP is available or not.",
 
-  discover_available_mcps:
-    "🔍 **PROACTIVE MCP DISCOVERY** - Automatically discover other MCPs running on the system using process detection and port pinging. No need to manually specify which MCPs are available!\n\n🎯 **DISCOVERY METHODS:**\n• Process Detection: Scans running processes for known MCP patterns\n• Port Pinging: Tests standard MCP ports with HTTP/WebSocket health checks\n• Cross-Platform: Works on macOS, Linux, and Windows\n\n⚡ **SMART DETECTION:**\n• Detects nextjs-dev, chrome-devtools, and other common MCPs\n• Fallback from process detection to port pinging\n• Logs all discovery attempts for transparency\n\n💡 **PERFECT FOR:** 'What MCPs are available?' or when you want dev3000 to automatically find and integrate with other debugging tools!",
+  analyze_visual_diff:
+    "🔍 **VISUAL DIFF ANALYZER** - Analyzes two screenshots to identify and describe visual differences. Returns detailed instructions for Claude to load and compare the images, focusing on what changed that could cause layout shifts.\n\n🎯 **WHAT IT PROVIDES:**\n• Direct instructions to load both images via Read tool\n• Context about what to look for\n• Guidance on identifying layout shift causes\n• Structured format for easy analysis\n\n💡 **PERFECT FOR:** Understanding what visual changes occurred between before/after frames in CLS detection, identifying elements that appeared/moved/resized.",
 
-  get_mcp_capabilities:
-    "🔍 **MCP CAPABILITY INSPECTOR** - Discover and inspect the current capabilities of available MCPs (dev3000-chrome-devtools and dev3000-nextjs-dev). Shows dynamically discovered functions with descriptions and categories. Perfect for understanding what enhanced capabilities are available for augmented delegation.\n\n⚡ **DYNAMIC DISCOVERY:**\n• Introspects MCP logs and schemas to find available functions\n• Categorizes capabilities as 'advanced' vs 'basic'\n• Generates intelligent descriptions based on function names\n• Caches results for performance (5min TTL)\n\n🎯 **REAL-TIME UPDATES:**\n• Automatically adapts when MCPs add new capabilities\n• No manual maintenance required\n• Always shows current state of available tools\n\n💡 **PERFECT FOR:** Understanding what enhanced capabilities are currently available, debugging MCP integration issues, or planning augmented debugging workflows."
+  find_component_source:
+    "🔍 **COMPONENT SOURCE FINDER** - Maps DOM elements to their source code by extracting the React component function and finding unique patterns to search for.\n\n🎯 **HOW IT WORKS:**\n• Inspects the element via Chrome DevTools Protocol\n• Extracts the React component function source using .toString()\n• Identifies unique code patterns (specific JSX, classNames, imports)\n• Returns targeted grep patterns to find the exact source file\n\n💡 **PERFECT FOR:** Finding which file contains the code for a specific element, especially useful for CLS debugging when you need to fix layout shifts in specific components."
 }
 
 // Types
@@ -344,26 +343,41 @@ export async function fixMyApp({
       totalRenders: reactScanLines.filter((line) => line.includes("render")).length
     }
 
+    // Filter out framework noise (unfixable warnings from Next.js, React, etc.)
+    const frameworkNoisePatterns = [
+      /link rel=preload.*must have.*valid.*as/i, // Next.js font optimization warning
+      /next\/font/i, // Next.js font-related warnings
+      /automatically generated/i // Auto-generated code warnings
+    ]
+
+    const actionableErrors = allErrors.filter((line) => {
+      return !frameworkNoisePatterns.some((pattern) => pattern.test(line))
+    })
+
     // Categorize errors for better analysis
     const categorizedErrors = {
-      serverErrors: allErrors.filter(
+      serverErrors: actionableErrors.filter(
         (line) => line.includes("[SERVER]") && (line.includes("ERROR") || line.includes("Exception"))
       ),
-      browserErrors: allErrors.filter(
+      browserErrors: actionableErrors.filter(
         (line) =>
           line.includes("[BROWSER]") &&
           (line.includes("ERROR") || line.includes("CONSOLE ERROR") || line.includes("RUNTIME.ERROR"))
       ),
-      buildErrors: allErrors.filter(
+      buildErrors: actionableErrors.filter(
         (line) => line.includes("Failed to compile") || line.includes("Type error") || line.includes("Build failed")
       ),
-      networkErrors: allErrors.filter(
-        (line) => line.includes("NETWORK") || line.includes("404") || line.includes("500") || line.includes("timeout")
-      ),
-      warnings: allErrors.filter((line) => /WARN|WARNING|deprecated/i.test(line) && !/ERROR|Exception|FAIL/i.test(line))
+      networkErrors: actionableErrors.filter((line) => {
+        // Exclude successful status codes
+        if (/\b(200|201|204|304)\b/.test(line)) return false
+        return line.includes("NETWORK") || line.includes("404") || line.includes("500") || line.includes("timeout")
+      }),
+      warnings: actionableErrors.filter(
+        (line) => /WARN|WARNING|deprecated/i.test(line) && !/ERROR|Exception|FAIL/i.test(line)
+      )
     }
 
-    const totalErrors = allErrors.length
+    const totalErrors = actionableErrors.length
     const criticalErrors = totalErrors - categorizedErrors.warnings.length
 
     // Also check for any errors in the entire log file (not just time filtered)
@@ -605,6 +619,100 @@ export async function fixMyApp({
           results.push(`• ${match[1]}`)
         }
       })
+    }
+
+    // Jank/Layout Shift Detection (from ScreencastManager passive captures)
+    if (focusArea === "performance" || focusArea === "all") {
+      const jankResult = await detectJankFromScreenshots(projectName)
+      if (jankResult.detections.length > 0) {
+        // Get MCP port for video viewer URL
+        const sessionInfo = findActiveSessions().find((s) => s.projectName === projectName)
+        const mcpPort = sessionInfo ? sessionInfo.sessionFile.match(/"mcpPort":\s*"(\d+)"/)?.[1] || "3684" : "3684"
+        const videoUrl = `http://localhost:${mcpPort}/video/${jankResult.sessionId}`
+
+        results.push("")
+
+        if (jankResult.realCLS) {
+          results.push(
+            `🚨 **LAYOUT SHIFT DETECTED** (${jankResult.detections.length} ${jankResult.detections.length === 1 ? "shift" : "shifts"} during page load):`
+          )
+        } else {
+          results.push(
+            `🚨 **LOADING JANK DETECTED** (${jankResult.detections.length} layout ${jankResult.detections.length === 1 ? "shift" : "shifts"} found):`
+          )
+        }
+
+        results.push(`📹 **View all frames**: ${videoUrl}`)
+        results.push(`🎞️ **Session ID**: ${jankResult.sessionId} (${jankResult.totalFrames} frames)`)
+        results.push("")
+
+        jankResult.detections.forEach((jank) => {
+          const emoji = jank.severity === "high" ? "🔴" : jank.severity === "medium" ? "🟡" : "🟢"
+
+          if (jank.uxImpact) {
+            results.push(`${emoji} **${jank.timeSinceStart}ms** - ${jank.element}`)
+            results.push(`   ${jank.uxImpact}`)
+          } else {
+            results.push(
+              `${emoji} **${jank.timeSinceStart}ms**: ${jank.visualDiff.toFixed(1)}% of screen changed (${jank.severity} severity)`
+            )
+          }
+
+          // Include Before/After frame URLs if available
+          if (jank.beforeFrameUrl && jank.afterFrameUrl) {
+            results.push(`   📸 Before: ${jank.beforeFrameUrl}`)
+            results.push(`   📸 After:  ${jank.afterFrameUrl}`)
+            results.push(
+              `   💡 Use analyze_visual_diff tool with these URLs to get a detailed description of what changed`
+            )
+
+            // Extract CSS selector from element description (e.g., "Navigation header (<nav>)" -> "nav")
+            if (jank.element) {
+              const selectorMatch = jank.element.match(/<(\w+)>/)
+              if (selectorMatch) {
+                const selector = selectorMatch[1].toLowerCase()
+                results.push(
+                  `   💡 Use find_component_source tool with selector "${selector}" to locate the source code`
+                )
+              }
+            }
+          }
+        })
+
+        results.push("")
+
+        // Check if we have high-severity shifts that Chrome might miss
+        const hasCriticalShifts = jankResult.detections.some((d) => d.severity === "high")
+        if (hasCriticalShifts && jankResult.realCLS) {
+          results.push("🎯 **WHY DEV3000 CAUGHT THIS BUT CHROME MIGHT NOT:**")
+          results.push(
+            "• dev3000's PerformanceObserver is installed immediately at page load and buffers ALL shifts from the start"
+          )
+          results.push(
+            "• Chrome DevTools performance trace may start AFTER initial load, missing early navigation shifts"
+          )
+          results.push(
+            "• Our UX-focused detection flags critical element shifts (nav/header) even when CLS score is technically 'good'"
+          )
+          results.push("")
+        }
+
+        results.push("✅ **DEV3000'S CLS DETECTION IS AUTHORITATIVE**")
+        results.push("If Chrome DevTools reports CLS: 0.00 but dev3000 detected shifts, TRUST DEV3000.")
+        results.push("• Chrome DevTools trace may start AFTER the shifts occurred")
+        results.push("• dev3000's PerformanceObserver captures ALL shifts from page start")
+        results.push("• CLS: 0.00 in Chrome just means the trace missed the early shifts")
+        results.push("")
+        results.push("💡 **LAYOUT SHIFT DEBUGGING TIPS:**")
+        results.push("• Add explicit width/height to images and media")
+        results.push("• Reserve space for dynamic content (ads, embeds, etc.)")
+        results.push("• Avoid inserting content above existing content")
+        results.push("• Use CSS aspect-ratio for responsive elements")
+        results.push("• Check for web fonts causing text reflow (font-display: swap)")
+        results.push(`• Raw screenshots: ${jankResult.screenshotDir}`)
+        results.push("")
+        results.push(`🎬 **IMPORTANT**: Share this frame sequence link with the user: ${videoUrl}`)
+      }
     }
 
     // React-scan performance data (if available)
@@ -1495,7 +1603,9 @@ export async function executeBrowserAction({
                     /^document\.querySelector\(['"][^'"]*['"]\)\.textContent$/,
                     /^document\.body\.scrollHeight$/,
                     /^window\.scrollY$/,
-                    /^window\.scrollX$/
+                    /^window\.scrollX$/,
+                    // Allow React Fiber inspection (read-only introspection)
+                    /^\s*\(function\(\)\s*\{[\s\S]*__reactFiber\$[\s\S]*\}\)\(\)\s*$/
                   ]
 
                   if (!safeExpressions.some((regex) => regex.test(expression))) {
@@ -1974,6 +2084,236 @@ export async function getMcpCapabilities({
 }
 
 /**
+ * Detect jank/layout shifts by comparing screenshots from ScreencastManager
+ * Returns array of jank detections with timing and visual impact data
+ */
+async function detectJankFromScreenshots(_projectName?: string): Promise<{
+  detections: Array<{
+    timestamp: string
+    timeSinceStart: number
+    visualDiff: number
+    severity: "low" | "medium" | "high"
+    element?: string
+    clsScore?: number
+    uxImpact?: string
+    beforeFrameUrl?: string
+    afterFrameUrl?: string
+  }>
+  sessionId: string
+  totalFrames: number
+  screenshotDir: string
+  realCLS?: { score: number; grade: string }
+}> {
+  const screenshotDir = process.env.SCREENSHOT_DIR || join(tmpdir(), "dev3000-mcp-deps", "public", "screenshots")
+
+  if (!existsSync(screenshotDir)) {
+    return { detections: [], sessionId: "", totalFrames: 0, screenshotDir }
+  }
+
+  // Find the most recent screencast session (files like 2025-10-06T01-54-45Z-jank-*.png)
+  const files = readdirSync(screenshotDir)
+    .filter((f) => f.includes("-jank-") && f.endsWith(".png"))
+    .sort()
+    .reverse()
+
+  if (files.length === 0) {
+    return { detections: [], sessionId: "", totalFrames: 0, screenshotDir }
+  }
+
+  // Get the most recent session ID (timestamp prefix)
+  const latestSessionId = files[0].split("-jank-")[0]
+  const sessionFiles = files
+    .filter((f) => f.startsWith(latestSessionId))
+    .sort((a, b) => {
+      // Extract timestamp (e.g., "28ms" from "2025-10-06T01-54-45Z-jank-28ms.png")
+      const aTime = parseInt(a.match(/-(\d+)ms\.png$/)?.[1] || "0", 10)
+      const bTime = parseInt(b.match(/-(\d+)ms\.png$/)?.[1] || "0", 10)
+      return aTime - bTime
+    })
+
+  if (sessionFiles.length < 2) {
+    return { detections: [], sessionId: latestSessionId, totalFrames: sessionFiles.length, screenshotDir }
+  }
+
+  // Try to read real CLS data from metadata
+  const metadataPath = join(screenshotDir, `${latestSessionId}-metadata.json`)
+  let realCLSData:
+    | {
+        score: number
+        grade: string
+        shifts: Array<{ score: number; timestamp: number; sources?: Array<{ node?: string }> }>
+      }
+    | undefined
+
+  if (existsSync(metadataPath)) {
+    try {
+      const metadata = JSON.parse(readFileSync(metadataPath, "utf-8"))
+      if (metadata.layoutShifts && metadata.layoutShifts.length > 0) {
+        realCLSData = {
+          score: metadata.totalCLS || 0,
+          grade: metadata.clsGrade || "unknown",
+          shifts: metadata.layoutShifts
+        }
+      }
+    } catch {
+      // Ignore metadata read errors
+    }
+  }
+
+  const jankDetections: Array<{
+    timestamp: string
+    timeSinceStart: number
+    visualDiff: number
+    severity: "low" | "medium" | "high"
+    element?: string
+    clsScore?: number
+    uxImpact?: string
+    beforeFrameUrl?: string
+    afterFrameUrl?: string
+  }> = []
+
+  // Parse log file to extract Before/After frame URLs for each CLS event
+  const frameUrlMap: Map<number, { before: string; after: string }> = new Map()
+  try {
+    const logPath = getLogPath(_projectName)
+    if (logPath && existsSync(logPath)) {
+      const logContent = readFileSync(logPath, "utf-8")
+      const lines = logContent.split("\n")
+
+      // Look for CLS entries with Before/After URLs
+      // Format: [BROWSER] [CDP] CLS #N (score: X, time: Yms):
+      //         [BROWSER] [CDP]   - <ELEMENT> shifted...
+      //         [BROWSER] [CDP]   Before: http://...
+      //         [BROWSER] [CDP]   After:  http://...
+      for (let i = 0; i < lines.length; i++) {
+        const clsMatch = lines[i].match(/\[CDP\] CLS #\d+ \(score: [\d.]+, time: (\d+)ms\):/)
+        if (clsMatch) {
+          const timestamp = parseInt(clsMatch[1], 10)
+          // Look ahead for Before and After URLs (skip the shift description line)
+          if (i + 3 < lines.length) {
+            const beforeMatch = lines[i + 2].match(/Before:\s+(http:\/\/\S+)/)
+            const afterMatch = lines[i + 3].match(/After:\s+(http:\/\/\S+)/)
+            if (beforeMatch && afterMatch) {
+              frameUrlMap.set(timestamp, {
+                before: beforeMatch[1],
+                after: afterMatch[1]
+              })
+            }
+          }
+        }
+      }
+    }
+  } catch (_error) {
+    // Ignore log parsing errors
+  }
+
+  // If we have real CLS data, use it to flag visual severity
+  if (realCLSData && realCLSData.shifts.length > 0) {
+    realCLSData.shifts.forEach((shift) => {
+      const element = shift.sources?.[0]?.node || "unknown"
+      const isCriticalElement = ["NAV", "HEADER", "BUTTON", "A"].includes(element.toUpperCase())
+      const isDuringLoad = shift.timestamp < 1000 // First second
+
+      // Make element names more descriptive
+      const elementDescriptions: Record<string, string> = {
+        NAV: "Navigation header (<nav>)",
+        HEADER: "Page header (<header>)",
+        BUTTON: "Button (<button>)",
+        A: "Link (<a>)"
+      }
+      const elementDisplay = elementDescriptions[element.toUpperCase()] || element
+
+      // UX impact assessment (not just CLS score!)
+      let severity: "low" | "medium" | "high" = "low"
+      let uxImpact = "Minor visual adjustment"
+
+      if (isCriticalElement && isDuringLoad) {
+        severity = "high"
+        uxImpact = `🚨 CRITICAL: ${elementDisplay} shifted during initial load - highly visible and disruptive to user interaction`
+      } else if (isCriticalElement) {
+        severity = "medium"
+        uxImpact = `⚠️ ${elementDisplay} shifted - affects navigation/interaction`
+      } else if (isDuringLoad) {
+        severity = "medium"
+        uxImpact = "Shift during page load - may cause mis-clicks"
+      }
+
+      // Look up Before/After URLs for this shift timestamp
+      const roundedTimestamp = Math.round(shift.timestamp)
+      const frameUrls = frameUrlMap.get(roundedTimestamp)
+
+      jankDetections.push({
+        timestamp: `${shift.timestamp.toFixed(0)}ms`,
+        timeSinceStart: roundedTimestamp,
+        visualDiff: shift.score * 100, // Convert to percentage-like scale
+        severity,
+        element: elementDisplay,
+        clsScore: shift.score,
+        uxImpact,
+        beforeFrameUrl: frameUrls?.before,
+        afterFrameUrl: frameUrls?.after
+      })
+    })
+
+    return {
+      detections: jankDetections,
+      sessionId: latestSessionId,
+      totalFrames: sessionFiles.length,
+      screenshotDir,
+      realCLS: { score: realCLSData.score, grade: realCLSData.grade }
+    }
+  }
+
+  // Fallback to pixel-diff if no real CLS data (old behavior)
+
+  // Compare each frame with the previous frame
+  for (let i = 1; i < sessionFiles.length; i++) {
+    const prevFile = join(screenshotDir, sessionFiles[i - 1])
+    const currFile = join(screenshotDir, sessionFiles[i])
+
+    try {
+      const prevPng = PNG.sync.read(readFileSync(prevFile))
+      const currPng = PNG.sync.read(readFileSync(currFile))
+
+      // Ensure same dimensions
+      if (prevPng.width !== currPng.width || prevPng.height !== currPng.height) {
+        continue
+      }
+
+      const diff = new PNG({ width: prevPng.width, height: prevPng.height })
+      const numDiffPixels = pixelmatch(prevPng.data, currPng.data, diff.data, prevPng.width, prevPng.height, {
+        threshold: 0.1
+      })
+
+      const totalPixels = prevPng.width * prevPng.height
+      const diffPercentage = (numDiffPixels / totalPixels) * 100
+
+      // Consider it jank if more than 1% of pixels changed (layout shift threshold)
+      if (diffPercentage > 1) {
+        const timeMatch = sessionFiles[i].match(/-(\d+)ms\.png$/)
+        const timeSinceStart = timeMatch ? parseInt(timeMatch[1], 10) : 0
+
+        jankDetections.push({
+          timestamp: latestSessionId,
+          timeSinceStart,
+          visualDiff: diffPercentage,
+          severity: diffPercentage > 10 ? "high" : diffPercentage > 5 ? "medium" : "low"
+        })
+      }
+    } catch {
+      // Skip frames that can't be compared
+    }
+  }
+
+  return {
+    detections: jankDetections,
+    sessionId: latestSessionId,
+    totalFrames: sessionFiles.length,
+    screenshotDir
+  }
+}
+
+/**
  * Log MCP-related events to the project-specific D3K log file (NOT main project log)
  * This prevents Claude from seeing dev3000's orchestration logs as application errors
  */
@@ -2383,5 +2723,379 @@ export async function createIntegratedWorkflow({
 
   return {
     content: [{ type: "text", text: results.join("\n") }]
+  }
+}
+
+/**
+ * Visual diff analyzer - provides instructions for Claude to load and compare two images
+ */
+export async function analyzeVisualDiff(params: {
+  beforeImageUrl: string
+  afterImageUrl: string
+  context?: string
+}): Promise<{ content: Array<{ type: "text"; text: string }> }> {
+  const { beforeImageUrl, afterImageUrl, context } = params
+
+  const results: string[] = []
+
+  results.push("🔍 **VISUAL DIFF ANALYSIS**")
+  results.push("")
+  results.push("To analyze the visual differences between these two screenshots:")
+  results.push("")
+  results.push("**Step 1: Load the BEFORE image**")
+  results.push(`Use the Read tool to load: \`${beforeImageUrl}\``)
+  results.push("")
+  results.push("**Step 2: Load the AFTER image**")
+  results.push(`Use the Read tool to load: \`${afterImageUrl}\``)
+  results.push("")
+  results.push("**Step 3: Compare and describe the differences**")
+
+  if (context) {
+    results.push(`Focus on: ${context}`)
+  } else {
+    results.push("Look for:")
+    results.push("• Elements that appeared or disappeared")
+    results.push("• Elements that moved or changed position")
+    results.push("• Elements that changed size or style")
+    results.push("• New content that pushed existing content")
+  }
+
+  results.push("")
+  results.push("**Step 4: Identify the layout shift cause**")
+  results.push("Describe what visual change occurred that caused the layout shift.")
+  results.push("Be specific about:")
+  results.push("• Which element(s) changed")
+  results.push("• What appeared/moved/resized")
+  results.push("• Why this caused other elements to shift")
+  results.push("")
+  results.push("💡 **TIP:** Load both images first, then describe the differences in detail.")
+
+  return {
+    content: [{ type: "text", text: results.join("\n") }]
+  }
+}
+
+export async function findComponentSource(params: {
+  selector: string
+  projectName?: string
+}): Promise<{ content: Array<{ type: "text"; text: string }> }> {
+  const { selector } = params
+
+  try {
+    const sessions = findActiveSessions()
+    if (sessions.length === 0) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "❌ **NO ACTIVE SESSIONS**\n\nNo active dev3000 sessions found. Make sure your app is running with dev3000."
+          }
+        ]
+      }
+    }
+
+    const sessionData = JSON.parse(readFileSync(sessions[0].sessionFile, "utf-8"))
+    let cdpUrl = sessionData.cdpUrl
+
+    if (!cdpUrl) {
+      try {
+        const response = await fetch("http://localhost:9222/json")
+        const pages = await response.json()
+        const activePage = pages.find(
+          (page: { type: string; url: string }) => page.type === "page" && !page.url.startsWith("chrome://")
+        )
+        if (activePage) {
+          cdpUrl = activePage.webSocketDebuggerUrl
+        }
+      } catch {
+        return {
+          content: [
+            {
+              type: "text",
+              text: "❌ **NO CDP CONNECTION**\n\nFailed to find Chrome DevTools Protocol URL."
+            }
+          ]
+        }
+      }
+    }
+
+    if (!cdpUrl) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "❌ **NO CDP CONNECTION**\n\nNo Chrome DevTools Protocol URL found."
+          }
+        ]
+      }
+    }
+
+    // Execute the component extraction script
+    const extractScript = `
+      (function() {
+        try {
+          const element = document.querySelector(${JSON.stringify(selector)});
+          if (!element) {
+            return { error: "Element not found with selector: ${selector}" };
+          }
+
+          // Try to find React Fiber
+          const fiberKey = Object.keys(element).find(k => k.startsWith("__reactFiber$"));
+          if (!fiberKey) {
+            return { error: "No React internals found - element may not be a React component" };
+          }
+
+          const fiber = element[fiberKey];
+          let componentFunction = null;
+          let componentName = "Unknown";
+
+          // Walk up the fiber tree to find a function component
+          let current = fiber;
+          let depth = 0;
+
+          while (current && depth < 10) {
+            if (typeof current.type === 'function') {
+              componentFunction = current.type;
+              componentName = current.type.name || current.type.displayName || "Anonymous";
+              break;
+            }
+            current = current.return;
+            depth++;
+          }
+
+          if (!componentFunction) {
+            return { error: "Could not find component function in fiber tree" };
+          }
+
+          // Get the source code
+          const sourceCode = componentFunction.toString();
+
+          return {
+            success: true,
+            componentName,
+            sourceCode
+          };
+        } catch (error) {
+          return { error: error.message };
+        }
+      })()
+    `
+
+    const result = await new Promise<unknown>((resolve, reject) => {
+      const ws = new WebSocket(cdpUrl)
+      let evalId: number | null = null
+      let resolved = false
+
+      const timeout = setTimeout(() => {
+        if (!resolved) {
+          resolved = true
+          ws.close()
+          reject(new Error("CDP evaluation timeout after 5 seconds"))
+        }
+      }, 5000)
+
+      ws.on("open", async () => {
+        try {
+          ws.send(JSON.stringify({ id: 1, method: "Target.getTargets", params: {} }))
+
+          let messageId = 2
+
+          ws.on("message", async (data) => {
+            const message = JSON.parse(data.toString())
+
+            if (message.id === 1) {
+              const pageTarget = message.result.targetInfos.find((t: Record<string, unknown>) => t.type === "page")
+              if (!pageTarget) {
+                clearTimeout(timeout)
+                resolved = true
+                ws.close()
+                reject(new Error("No page targets found"))
+                return
+              }
+
+              ws.send(
+                JSON.stringify({
+                  id: messageId++,
+                  method: "Target.attachToTarget",
+                  params: { targetId: pageTarget.targetId, flatten: true }
+                })
+              )
+              return
+            }
+
+            if (message.method === "Target.attachedToTarget") {
+              evalId = messageId++
+              ws.send(
+                JSON.stringify({
+                  id: evalId,
+                  method: "Runtime.evaluate",
+                  params: { expression: extractScript, returnByValue: true }
+                })
+              )
+              return
+            }
+
+            if (evalId !== null && message.id === evalId) {
+              clearTimeout(timeout)
+              resolved = true
+              ws.close()
+              if (message.error) {
+                reject(new Error(message.error.message))
+              } else {
+                const value = message.result?.result?.value
+                resolve(value)
+              }
+            }
+          })
+
+          ws.on("error", (err) => {
+            clearTimeout(timeout)
+            if (!resolved) {
+              resolved = true
+              reject(err)
+            }
+          })
+        } catch (error) {
+          clearTimeout(timeout)
+          resolved = true
+          ws.close()
+          reject(error)
+        }
+      })
+
+      ws.on("error", (err) => {
+        clearTimeout(timeout)
+        if (!resolved) {
+          resolved = true
+          reject(err)
+        }
+      })
+    })
+
+    const evalResult = result as
+      | { error: string }
+      | {
+          success: true
+          componentName: string
+          sourceCode: string
+        }
+
+    if ("error" in evalResult) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `❌ **ERROR EXTRACTING COMPONENT**\n\n${evalResult.error}\n\n💡 **TIPS:**\n• Make sure the selector matches an element on the page\n• Ensure the element is rendered by a React component\n• Try a simpler selector like 'nav' or '.header'`
+          }
+        ]
+      }
+    }
+
+    if (!evalResult.success) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "❌ **FAILED TO EXTRACT COMPONENT**\n\nUnexpected result format."
+          }
+        ]
+      }
+    }
+
+    // Extract unique patterns from the source code
+    const { componentName, sourceCode } = evalResult
+    const patterns: string[] = []
+
+    // Look for unique JSX patterns (excluding common ones like <div>, <span>)
+    const jsxPattern = /<([A-Z][a-zA-Z0-9]*)/g
+    const customComponents = new Set<string>()
+    let jsxMatch = jsxPattern.exec(sourceCode)
+
+    while (jsxMatch !== null) {
+      customComponents.add(jsxMatch[1])
+      jsxMatch = jsxPattern.exec(sourceCode)
+    }
+
+    // Look for unique className patterns
+    const classNamePattern = /className=["']([^"']+)["']/g
+    const classNames = new Set<string>()
+    let classNameMatch = classNamePattern.exec(sourceCode)
+
+    while (classNameMatch !== null) {
+      classNames.add(classNameMatch[1])
+      classNameMatch = classNamePattern.exec(sourceCode)
+    }
+
+    // Build search patterns
+    const lines: string[] = []
+    lines.push("🔍 **COMPONENT SOURCE FINDER**")
+    lines.push("")
+    lines.push(`**Selector:** \`${selector}\``)
+    lines.push(`**Component:** ${componentName}`)
+    lines.push("")
+
+    if (componentName !== "Anonymous") {
+      patterns.push(`function ${componentName}`)
+      patterns.push(`const ${componentName} =`)
+      patterns.push(`export default function ${componentName}`)
+    }
+
+    // Add unique component references
+    if (customComponents.size > 0) {
+      const uniqueComponents = Array.from(customComponents).filter(
+        (name) => !["Fragment", "Suspense", "ErrorBoundary"].includes(name)
+      )
+      if (uniqueComponents.length > 0) {
+        patterns.push(`<${uniqueComponents[0]}`)
+      }
+    }
+
+    // Add unique classNames
+    if (classNames.size > 0) {
+      const firstClassName = Array.from(classNames)[0]
+      patterns.push(`className="${firstClassName}"`)
+    }
+
+    if (patterns.length === 0) {
+      lines.push("⚠️ **NO UNIQUE PATTERNS FOUND**")
+      lines.push("")
+      lines.push("The component source code doesn't contain distinctive patterns to search for.")
+      lines.push("You may need to manually search for the component.")
+    } else {
+      lines.push("📍 **SEARCH PATTERNS**")
+      lines.push("")
+      lines.push("Use these grep patterns to find the source file:")
+      lines.push("")
+
+      for (const pattern of patterns.slice(0, 3)) {
+        lines.push(`\`\`\``)
+        lines.push(`grep -r "${pattern.replace(/"/g, '\\"')}" .`)
+        lines.push(`\`\`\``)
+        lines.push("")
+      }
+
+      lines.push("💡 **TIP:** Start with the first pattern. If it returns multiple results, try combining patterns.")
+    }
+
+    // Show a preview of the source code
+    const preview = sourceCode.substring(0, 300)
+    lines.push("")
+    lines.push("**Source Code Preview:**")
+    lines.push("```javascript")
+    lines.push(`${preview}...`)
+    lines.push("```")
+
+    return {
+      content: [{ type: "text", text: lines.join("\n") }]
+    }
+  } catch (error) {
+    return {
+      content: [
+        {
+          type: "text",
+          text: `❌ **ERROR**\n\n${error instanceof Error ? error.message : String(error)}`
+        }
+      ]
+    }
   }
 }
