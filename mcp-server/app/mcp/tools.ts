@@ -2832,10 +2832,10 @@ export async function analyzeVisualDiff(params: {
   results.push("To analyze the visual differences between these two screenshots:")
   results.push("")
   results.push("**Step 1: Load the BEFORE image**")
-  results.push(`Use the Read tool to load: ${beforeImageUrl}`)
+  results.push(`Use the Read tool to load: \`${beforeImageUrl}\``)
   results.push("")
   results.push("**Step 2: Load the AFTER image**")
-  results.push(`Use the Read tool to load: ${afterImageUrl}`)
+  results.push(`Use the Read tool to load: \`${afterImageUrl}\``)
   results.push("")
   results.push("**Step 3: Compare and describe the differences**")
 
