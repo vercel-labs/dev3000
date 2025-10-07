@@ -14,12 +14,12 @@ export const changelog: Release[] = [
     date: "2025-10-07",
     type: "minor",
     highlights: [
-      "🔍 **Visual Diff Analysis**: New analyze_visual_diff MCP tool provides detailed descriptions of before/after screenshot differences for CLS debugging",
-      "🎯 **Accurate Frame Selection**: Fixed CLS frame detection to show exact frames where layout shifts occur (N-2 and N-1), not just nearby frames",
-      "📸 **Before/After Frame URLs**: fix_my_jank now includes direct links to screenshots showing the visual change that caused each layout shift",
-      "🎨 **Compact TUI Logs**: Consolidated log tags (CONSOLE.ERROR → ERROR) and removed padding to maximize horizontal space for narrow terminals",
-      "🏷️ **HTTP Method Tags**: SERVER logs now extract and display HTTP methods (GET, POST, etc.) as secondary tags with smart alignment",
-      "📺 **Improved Terminology**: Changed 'video' to 'frame sequence' throughout to match actual functionality"
+      "New analyze_visual_diff MCP tool provides detailed descriptions of before/after screenshot differences for CLS debugging",
+      "Fixed CLS frame detection to show exact frames where layout shifts occur (N-2 and N-1), not just nearby frames",
+      "fix_my_jank now includes direct links to screenshots showing the visual change that caused each layout shift",
+      "Consolidated log tags (CONSOLE.ERROR → ERROR) and removed padding to maximize horizontal space for narrow terminals",
+      "SERVER logs now extract and display HTTP methods (GET, POST, etc.) as secondary tags with smart alignment",
+      "Changed 'video' to 'frame sequence' throughout to match actual functionality"
     ]
   },
 
@@ -27,7 +27,7 @@ export const changelog: Release[] = [
     version: "0.0.80",
     date: "2025-10-06",
     type: "minor",
-    highlights: ["🌐 **Browser Support**: Added support for Arc and Comet browsers"]
+    highlights: ["Added support for Arc and Comet browsers"]
   },
 
   {
@@ -35,11 +35,11 @@ export const changelog: Release[] = [
     date: "2025-10-06",
     type: "minor",
     highlights: [
-      "🎬 **Passive Screencast Capture**: Automatically records page loads and navigations without slowing down your dev server",
-      "🎯 **CLS Detection Video Viewer**: Watch frame-by-frame video of layout shifts with red bounding boxes highlighting exactly which elements shifted",
-      "🔍 **Real PerformanceObserver Integration**: Uses browser APIs to detect actual layout shifts (not just pixel-diff guessing), with querySelector to find precise element positions",
-      "⚡ **fix_my_jank Tool**: New MCP command automatically analyzes performance issues and CLS problems, flagging critical UI shifts in NAV/HEADER elements",
-      "🎨 **Improved TUI**: Better header and status line rendering for narrow terminal windows"
+      "Passive screencast capture automatically records page loads and navigations without slowing down your dev server",
+      "CLS detection video viewer shows frame-by-frame video of layout shifts with red bounding boxes highlighting exactly which elements shifted",
+      "Real PerformanceObserver integration uses browser APIs to detect actual layout shifts (not just pixel-diff guessing), with querySelector to find precise element positions",
+      "New fix_my_jank MCP tool automatically analyzes performance issues and CLS problems, flagging critical UI shifts in NAV/HEADER elements",
+      "Better header and status line rendering for narrow terminal windows"
     ]
   },
 
@@ -48,10 +48,10 @@ export const changelog: Release[] = [
     date: "2025-10-03",
     type: "patch",
     highlights: [
-      "🔧 **Auto-Configuration for AI CLIs**: Automatically writes `.mcp.json` (Claude Code) and `.cursor/mcp.json` (Cursor) so MCP servers are instantly available",
-      "⚡ **Intelligent Chrome Launch**: Replaced fixed timeout with smart polling - dev3000 starts as soon as Chrome is ready instead of waiting arbitrarily",
-      "📚 **FAQ Section**: Added comprehensive FAQ explaining sharp module warnings and other common questions",
-      "🐛 **Fixed Log Paths**: Corrected outdated log file paths in error messages for easier debugging"
+      "Auto-configuration for AI CLIs: automatically writes .mcp.json (Claude Code) and .cursor/mcp.json (Cursor) so MCP servers are instantly available",
+      "Intelligent Chrome launch: replaced fixed timeout with smart polling - dev3000 starts as soon as Chrome is ready instead of waiting arbitrarily",
+      "Added comprehensive FAQ explaining sharp module warnings and other common questions",
+      "Fixed log paths: corrected outdated log file paths in error messages for easier debugging"
     ]
   },
 
@@ -60,10 +60,10 @@ export const changelog: Release[] = [
     date: "2025-09-30",
     type: "patch",
     highlights: [
-      "🤖 **Augmented Delegation**: dev3000 now intelligently delegates to chrome-devtools MCP when detected, creating a powerful debugging orchestration layer",
-      "🔍 **Dynamic MCP Discovery**: Automatically discovers and integrates with chrome-devtools MCP server via process detection and port scanning",
-      "📡 **CDP URL Sharing**: Shares Chrome DevTools Protocol URL with other MCPs to prevent duplicate browser instances",
-      "🎨 **Enhanced TUI**: Improved layout and dynamic capability display when MCP integrations are active"
+      "Augmented delegation: dev3000 now intelligently delegates to chrome-devtools MCP when detected, creating a powerful debugging orchestration layer",
+      "Dynamic MCP discovery: automatically discovers and integrates with chrome-devtools MCP server via process detection and port scanning",
+      "CDP URL sharing: shares Chrome DevTools Protocol URL with other MCPs to prevent duplicate browser instances",
+      "Enhanced TUI: improved layout and dynamic capability display when MCP integrations are active"
     ]
   },
 
@@ -72,8 +72,8 @@ export const changelog: Release[] = [
     date: "2025-09-30",
     type: "patch",
     highlights: [
-      "🧠 **Smart Auto-Delegation**: Re-enabled intelligent MCP delegation with Claude prompt caching detection to avoid token waste",
-      "⚙️ **MCP Integration Refinements**: Improved how dev3000 coordinates with chrome-devtools MCP for seamless workflows"
+      "Smart auto-delegation: re-enabled intelligent MCP delegation with Claude prompt caching detection to avoid token waste",
+      "MCP integration refinements: improved how dev3000 coordinates with chrome-devtools MCP for seamless workflows"
     ]
   },
 
@@ -82,8 +82,8 @@ export const changelog: Release[] = [
     date: "2025-09-29",
     type: "patch",
     highlights: [
-      "🔧 **MCP Integration Fixes**: Resolved issues with MCP server coordination and shutdown behavior",
-      "🛡️ **Stability Improvements**: Fixed edge cases in MCP integration that could cause unexpected behavior"
+      "MCP integration fixes: resolved issues with MCP server coordination and shutdown behavior",
+      "Stability improvements: fixed edge cases in MCP integration that could cause unexpected behavior"
     ]
   },
 
