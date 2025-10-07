@@ -14,11 +14,12 @@ export const changelog: Release[] = [
     date: "2025-10-07",
     type: "minor",
     highlights: [
-      "🎬 **Passive Screencast Capture**: Automatically records page loads and navigations for performance analysis",
-      "🎯 **CLS Detection**: Watch frame-by-frame video of layout shifts with precise element tracking",
-      "🎨 **Improved TUI**: Better header and status line rendering for narrow terminal windows",
-      "🌐 **Expanded Browser Support**: Added support for additional Chromium-based browsers",
-      "🐛 **Fixed 7 bugs for improved stability**"
+      "🔍 **Visual Diff Analysis**: New analyze_visual_diff MCP tool provides detailed descriptions of before/after screenshot differences for CLS debugging",
+      "🎯 **Accurate Frame Selection**: Fixed CLS frame detection to show exact frames where layout shifts occur (N-2 and N-1), not just nearby frames",
+      "📸 **Before/After Frame URLs**: fix_my_jank now includes direct links to screenshots showing the visual change that caused each layout shift",
+      "🎨 **Compact TUI Logs**: Consolidated log tags (CONSOLE.ERROR → ERROR) and removed padding to maximize horizontal space for narrow terminals",
+      "🏷️ **HTTP Method Tags**: SERVER logs now extract and display HTTP methods (GET, POST, etc.) as secondary tags with smart alignment",
+      "📺 **Improved Terminology**: Changed 'video' to 'frame sequence' throughout to match actual functionality"
     ]
   },
 
