@@ -10,6 +10,19 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.81",
+    date: "2025-10-07",
+    type: "minor",
+    highlights: [
+      "🎬 **Passive Screencast Capture**: Automatically records page loads and navigations for performance analysis",
+      "🎯 **CLS Detection**: Watch frame-by-frame video of layout shifts with precise element tracking",
+      "🎨 **Improved TUI**: Better header and status line rendering for narrow terminal windows",
+      "🌐 **Expanded Browser Support**: Added support for additional Chromium-based browsers",
+      "🐛 **Fixed 7 bugs for improved stability**"
+    ]
+  },
+
+  {
     version: "0.0.80",
     date: "2025-10-06",
     type: "minor",
