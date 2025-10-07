@@ -272,18 +272,22 @@ export class ScreencastManager {
 
           // Generate detailed CLS analysis for each shift
           this.layoutShifts.forEach((shift, index) => {
-            // Find the frame closest to this shift timestamp
-            const shiftFrame = this.buffer.find((f) => Math.abs(f.timestamp - shift.timestamp) < 500)
-            const previousFrame = this.buffer.find(
-              (f) => f.timestamp < shift.timestamp && Math.abs(f.timestamp - shift.timestamp) < 1000
-            )
+            // Find frames immediately before and after the shift timestamp
+            // Sort frames by timestamp
+            const sortedFrames = [...this.buffer].sort((a, b) => a.timestamp - b.timestamp)
 
-            if (shiftFrame && shift.sources && shift.sources.length > 0) {
+            // Find the frame immediately before the shift
+            const beforeFrames = sortedFrames.filter((f) => f.timestamp < shift.timestamp)
+            const previousFrame =
+              beforeFrames.length >= 2 ? beforeFrames[beforeFrames.length - 2] : beforeFrames[beforeFrames.length - 1]
+
+            // Find the frame immediately after the previous frame
+            const shiftFrame = beforeFrames[beforeFrames.length - 1]
+
+            if (previousFrame && shiftFrame && shift.sources && shift.sources.length > 0) {
               const mcpPort = process.env.MCP_PORT || "3684"
+              const previousFilename = `${this.currentSessionId}-jank-${previousFrame.timestamp}ms.png`
               const shiftFilename = `${this.currentSessionId}-jank-${shiftFrame.timestamp}ms.png`
-              const previousFilename = previousFrame
-                ? `${this.currentSessionId}-jank-${previousFrame.timestamp}ms.png`
-                : null
 
               // Generate human-readable description of the shift
               const descriptions: string[] = []
@@ -304,9 +308,7 @@ export class ScreencastManager {
                 this.logFn(`[CDP]   - ${desc}`)
               })
 
-              if (previousFilename) {
-                this.logFn(`[CDP]   Before: http://localhost:${mcpPort}/api/screenshots/${previousFilename}`)
-              }
+              this.logFn(`[CDP]   Before: http://localhost:${mcpPort}/api/screenshots/${previousFilename}`)
               this.logFn(`[CDP]   After:  http://localhost:${mcpPort}/api/screenshots/${shiftFilename}`)
               this.logFn(`[CDP]   💡 Analyze both images to identify visual differences causing the layout shift`)
             }

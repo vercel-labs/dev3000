@@ -24,7 +24,10 @@ export const TOOL_DESCRIPTIONS = {
     "🔍 **PROACTIVE MCP DISCOVERY** - Automatically discover other MCPs running on the system using process detection and port pinging. No need to manually specify which MCPs are available!\n\n🎯 **DISCOVERY METHODS:**\n• Process Detection: Scans running processes for known MCP patterns\n• Port Pinging: Tests standard MCP ports with HTTP/WebSocket health checks\n• Cross-Platform: Works on macOS, Linux, and Windows\n\n⚡ **SMART DETECTION:**\n• Detects nextjs-dev, chrome-devtools, and other common MCPs\n• Fallback from process detection to port pinging\n• Logs all discovery attempts for transparency\n\n💡 **PERFECT FOR:** 'What MCPs are available?' or when you want dev3000 to automatically find and integrate with other debugging tools!",
 
   get_mcp_capabilities:
-    "🔍 **MCP CAPABILITY INSPECTOR** - Discover and inspect the current capabilities of available MCPs (dev3000-chrome-devtools and dev3000-nextjs-dev). Shows dynamically discovered functions with descriptions and categories. Perfect for understanding what enhanced capabilities are available for augmented delegation.\n\n⚡ **DYNAMIC DISCOVERY:**\n• Introspects MCP logs and schemas to find available functions\n• Categorizes capabilities as 'advanced' vs 'basic'\n• Generates intelligent descriptions based on function names\n• Caches results for performance (5min TTL)\n\n🎯 **REAL-TIME UPDATES:**\n• Automatically adapts when MCPs add new capabilities\n• No manual maintenance required\n• Always shows current state of available tools\n\n💡 **PERFECT FOR:** Understanding what enhanced capabilities are currently available, debugging MCP integration issues, or planning augmented debugging workflows."
+    "🔍 **MCP CAPABILITY INSPECTOR** - Discover and inspect the current capabilities of available MCPs (dev3000-chrome-devtools and dev3000-nextjs-dev). Shows dynamically discovered functions with descriptions and categories. Perfect for understanding what enhanced capabilities are available for augmented delegation.\n\n⚡ **DYNAMIC DISCOVERY:**\n• Introspects MCP logs and schemas to find available functions\n• Categorizes capabilities as 'advanced' vs 'basic'\n• Generates intelligent descriptions based on function names\n• Caches results for performance (5min TTL)\n\n🎯 **REAL-TIME UPDATES:**\n• Automatically adapts when MCPs add new capabilities\n• No manual maintenance required\n• Always shows current state of available tools\n\n💡 **PERFECT FOR:** Understanding what enhanced capabilities are currently available, debugging MCP integration issues, or planning augmented debugging workflows.",
+
+  analyze_visual_diff:
+    "🔍 **VISUAL DIFF ANALYZER** - Analyzes two screenshots to identify and describe visual differences. Returns detailed instructions for Claude to load and compare the images, focusing on what changed that could cause layout shifts.\n\n🎯 **WHAT IT PROVIDES:**\n• Direct instructions to load both images via Read tool\n• Context about what to look for\n• Guidance on identifying layout shift causes\n• Structured format for easy analysis\n\n💡 **PERFECT FOR:** Understanding what visual changes occurred between before/after frames in CLS detection, identifying elements that appeared/moved/resized."
 }
 
 // Types
@@ -645,7 +648,7 @@ export async function fixMyApp({
           )
         }
 
-        results.push(`📹 **Watch video analysis**: ${videoUrl}`)
+        results.push(`📹 **View all frames**: ${videoUrl}`)
         results.push(`🎞️ **Session ID**: ${jankResult.sessionId} (${jankResult.totalFrames} frames)`)
         results.push("")
 
@@ -658,6 +661,15 @@ export async function fixMyApp({
           } else {
             results.push(
               `${emoji} **${jank.timeSinceStart}ms**: ${jank.visualDiff.toFixed(1)}% of screen changed (${jank.severity} severity)`
+            )
+          }
+
+          // Include Before/After frame URLs if available
+          if (jank.beforeFrameUrl && jank.afterFrameUrl) {
+            results.push(`   📸 Before: ${jank.beforeFrameUrl}`)
+            results.push(`   📸 After:  ${jank.afterFrameUrl}`)
+            results.push(
+              `   💡 Use analyze_visual_diff tool with these URLs to get a detailed description of what changed`
             )
           }
         })
@@ -694,7 +706,7 @@ export async function fixMyApp({
         results.push("• Check for web fonts causing text reflow (font-display: swap)")
         results.push(`• Raw screenshots: ${jankResult.screenshotDir}`)
         results.push("")
-        results.push(`🎬 **IMPORTANT**: Share this video link with the user: ${videoUrl}`)
+        results.push(`🎬 **IMPORTANT**: Share this frame sequence link with the user: ${videoUrl}`)
       }
     }
 
@@ -2077,6 +2089,8 @@ async function detectJankFromScreenshots(_projectName?: string): Promise<{
     element?: string
     clsScore?: number
     uxImpact?: string
+    beforeFrameUrl?: string
+    afterFrameUrl?: string
   }>
   sessionId: string
   totalFrames: number
@@ -2147,7 +2161,44 @@ async function detectJankFromScreenshots(_projectName?: string): Promise<{
     element?: string
     clsScore?: number
     uxImpact?: string
+    beforeFrameUrl?: string
+    afterFrameUrl?: string
   }> = []
+
+  // Parse log file to extract Before/After frame URLs for each CLS event
+  const frameUrlMap: Map<number, { before: string; after: string }> = new Map()
+  try {
+    const logPath = getLogPath(_projectName)
+    if (logPath && existsSync(logPath)) {
+      const logContent = readFileSync(logPath, "utf-8")
+      const lines = logContent.split("\n")
+
+      // Look for CLS entries with Before/After URLs
+      // Format: [BROWSER] [CDP] CLS #N (score: X, time: Yms):
+      //         [BROWSER] [CDP]   - <ELEMENT> shifted...
+      //         [BROWSER] [CDP]   Before: http://...
+      //         [BROWSER] [CDP]   After:  http://...
+      for (let i = 0; i < lines.length; i++) {
+        const clsMatch = lines[i].match(/\[CDP\] CLS #\d+ \(score: [\d.]+, time: (\d+)ms\):/)
+        if (clsMatch) {
+          const timestamp = parseInt(clsMatch[1], 10)
+          // Look ahead for Before and After URLs (skip the shift description line)
+          if (i + 3 < lines.length) {
+            const beforeMatch = lines[i + 2].match(/Before:\s+(http:\/\/\S+)/)
+            const afterMatch = lines[i + 3].match(/After:\s+(http:\/\/\S+)/)
+            if (beforeMatch && afterMatch) {
+              frameUrlMap.set(timestamp, {
+                before: beforeMatch[1],
+                after: afterMatch[1]
+              })
+            }
+          }
+        }
+      }
+    }
+  } catch (_error) {
+    // Ignore log parsing errors
+  }
 
   // If we have real CLS data, use it to flag visual severity
   if (realCLSData && realCLSData.shifts.length > 0) {
@@ -2180,14 +2231,20 @@ async function detectJankFromScreenshots(_projectName?: string): Promise<{
         uxImpact = "Shift during page load - may cause mis-clicks"
       }
 
+      // Look up Before/After URLs for this shift timestamp
+      const roundedTimestamp = Math.round(shift.timestamp)
+      const frameUrls = frameUrlMap.get(roundedTimestamp)
+
       jankDetections.push({
         timestamp: `${shift.timestamp.toFixed(0)}ms`,
-        timeSinceStart: Math.round(shift.timestamp),
+        timeSinceStart: roundedTimestamp,
         visualDiff: shift.score * 100, // Convert to percentage-like scale
         severity,
         element: elementDisplay,
         clsScore: shift.score,
-        uxImpact
+        uxImpact,
+        beforeFrameUrl: frameUrls?.before,
+        afterFrameUrl: frameUrls?.after
       })
     })
 
@@ -2656,6 +2713,55 @@ export async function createIntegratedWorkflow({
   results.push("")
   results.push(`⏱️ **ESTIMATED TOTAL TIME:** ${estimatedTime}`)
   results.push(`🎼 **dev3000 orchestrates ${finalMcps.length} MCPs for maximum debugging power!**`)
+
+  return {
+    content: [{ type: "text", text: results.join("\n") }]
+  }
+}
+
+/**
+ * Visual diff analyzer - provides instructions for Claude to load and compare two images
+ */
+export async function analyzeVisualDiff(params: {
+  beforeImageUrl: string
+  afterImageUrl: string
+  context?: string
+}): Promise<{ content: Array<{ type: "text"; text: string }> }> {
+  const { beforeImageUrl, afterImageUrl, context } = params
+
+  const results: string[] = []
+
+  results.push("🔍 **VISUAL DIFF ANALYSIS**")
+  results.push("")
+  results.push("To analyze the visual differences between these two screenshots:")
+  results.push("")
+  results.push("**Step 1: Load the BEFORE image**")
+  results.push(`Use the Read tool to load: ${beforeImageUrl}`)
+  results.push("")
+  results.push("**Step 2: Load the AFTER image**")
+  results.push(`Use the Read tool to load: ${afterImageUrl}`)
+  results.push("")
+  results.push("**Step 3: Compare and describe the differences**")
+
+  if (context) {
+    results.push(`Focus on: ${context}`)
+  } else {
+    results.push("Look for:")
+    results.push("• Elements that appeared or disappeared")
+    results.push("• Elements that moved or changed position")
+    results.push("• Elements that changed size or style")
+    results.push("• New content that pushed existing content")
+  }
+
+  results.push("")
+  results.push("**Step 4: Identify the layout shift cause**")
+  results.push("Describe what visual change occurred that caused the layout shift.")
+  results.push("Be specific about:")
+  results.push("• Which element(s) changed")
+  results.push("• What appeared/moved/resized")
+  results.push("• Why this caused other elements to shift")
+  results.push("")
+  results.push("💡 **TIP:** Load both images first, then describe the differences in detail.")
 
   return {
     content: [{ type: "text", text: results.join("\n") }]

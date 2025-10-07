@@ -205,6 +205,24 @@ const handler = createMcpHandler(
       }
     )
 
+    // Visual diff analysis tool
+    server.tool(
+      "analyze_visual_diff",
+      "🔍 **VISUAL DIFF ANALYZER** - Analyzes two screenshots and provides a verbal description of the visual differences. Perfect for understanding what changed between before/after frames in layout shift detection.\n\n💡 This tool loads both images and describes what elements appeared, moved, or changed that could have caused the layout shift.",
+      {
+        beforeImageUrl: z.string().describe("URL of the 'before' screenshot"),
+        afterImageUrl: z.string().describe("URL of the 'after' screenshot"),
+        context: z
+          .string()
+          .optional()
+          .describe("Optional context about what to look for (e.g., 'navigation header shift')")
+      },
+      async (params) => {
+        const { analyzeVisualDiff } = await import("./tools")
+        return analyzeVisualDiff(params)
+      }
+    )
+
     // Tool that returns monitoring code for Claude to execute
     // TODO: Commenting out for now - need to figure out the right approach for proactive monitoring
     /*
