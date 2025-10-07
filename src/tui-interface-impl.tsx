@@ -347,6 +347,15 @@ const TUIApp = ({
               if (parts) {
                 let [, timestamp, source, type, message] = parts
 
+                // Extract HTTP method from SERVER logs as a secondary tag
+                if (source === "SERVER" && !type && message) {
+                  const methodMatch = message.match(/^(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\s/)
+                  if (methodMatch) {
+                    type = methodMatch[1]
+                    message = message.slice(type.length + 1) // Remove method from message
+                  }
+                }
+
                 // Replace warning emoji in ERROR/WARNING messages for consistent terminal rendering
                 if (message && (type === "ERROR" || type === "WARNING")) {
                   message = message.replace(/⚠/g, "[!]")
@@ -381,7 +390,14 @@ const TUIApp = ({
                   CRASH: LOG_COLORS.CRASH,
                   REPLAY: LOG_COLORS.REPLAY,
                   NAVIGATION: LOG_COLORS.NAVIGATION,
-                  INTERACTION: LOG_COLORS.INTERACTION
+                  INTERACTION: LOG_COLORS.INTERACTION,
+                  GET: LOG_COLORS.SERVER,
+                  POST: LOG_COLORS.SERVER,
+                  PUT: LOG_COLORS.SERVER,
+                  DELETE: LOG_COLORS.SERVER,
+                  PATCH: LOG_COLORS.SERVER,
+                  HEAD: LOG_COLORS.SERVER,
+                  OPTIONS: LOG_COLORS.SERVER
                 }
 
                 // In compact mode, skip padding
@@ -411,6 +427,10 @@ const TUIApp = ({
                 // Single space after type
                 const typeSpacing = ""
 
+                // For alignment: if no type tag, add spacing equivalent to a tag
+                // This aligns SERVER logs without tags with those that have tags
+                const alignmentSpacing = !type ? "       " : "" // ~7 chars for average tag like [GET]
+
                 return (
                   <Text key={log.id} wrap="truncate-end">
                     <Text dimColor>[{timestamp}]</Text>
@@ -419,11 +439,13 @@ const TUIApp = ({
                       [{source}]
                     </Text>
                     <Text>{sourceSpacing} </Text>
-                    {type && (
+                    {type ? (
                       <>
                         <Text color={typeColors[type] || "#A0A0A0"}>[{type}]</Text>
                         <Text>{typeSpacing} </Text>
                       </>
+                    ) : (
+                      <Text>{alignmentSpacing}</Text>
                     )}
                     <Text>{message}</Text>
                   </Text>
