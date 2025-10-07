@@ -10,6 +10,17 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.83",
+    date: "2025-10-07",
+    type: "patch",
+    highlights: [
+      "**OpenCode MCP Support**: Added auto-configuration for `.opencode.json` alongside Claude Code and Cursor",
+      "**OpenCode uses different format**: `type: \"local\"` with command arrays, proxied via `@modelcontextprotocol/inspector` for HTTP MCP servers",
+      "**All three AI CLIs now auto-configured**: Claude Code (`.mcp.json`), Cursor (`.cursor/mcp.json`), and OpenCode (`.opencode.json`)"
+    ]
+  },
+
+  {
     version: "0.0.82",
     date: "2025-10-07",
     type: "patch",
