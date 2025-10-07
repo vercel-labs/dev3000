@@ -61,8 +61,22 @@ export default function HomePage() {
           {/* Hero Screenshot */}
           <BleedContainer className="relative mt-16">
             <div className="relative isolate">
-              <Image src={HeroTerminalImage} alt="" className="w-full" priority />
-              <Image src={HeroAppImage} alt="" className="w-1/2 absolute -right-8 -bottom-8 drop-shadow-sm" priority />
+              <Image
+                src={HeroTerminalImage}
+                alt=""
+                className="w-full"
+                priority
+                sizes="(max-width: 768px) 100vw, 940px"
+                loading="eager"
+              />
+              <Image
+                src={HeroAppImage}
+                alt=""
+                className="w-1/2 absolute -right-8 -bottom-8 drop-shadow-sm"
+                priority
+                sizes="(max-width: 768px) 100vw, 600px"
+                loading="eager"
+              />
             </div>
           </BleedContainer>
 
