@@ -1,6 +1,6 @@
 import { createMcpHandler } from "mcp-handler"
 import { z } from "zod"
-import { executeBrowserAction, fixMyApp, TOOL_DESCRIPTIONS } from "./tools"
+import { executeBrowserAction, fixMyApp, getReactComponentInfo, TOOL_DESCRIPTIONS } from "./tools"
 
 const handler = createMcpHandler(
   (server) => {
@@ -101,6 +101,23 @@ const handler = createMcpHandler(
       async (params) => {
         const { analyzeVisualDiff } = await import("./tools")
         return analyzeVisualDiff(params)
+      }
+    )
+
+    // React component info tool
+    server.tool(
+      "get_react_component_info",
+      TOOL_DESCRIPTIONS.get_react_component_info,
+      {
+        selector: z
+          .string()
+          .describe(
+            "CSS selector for the DOM element (e.g., 'nav', '.header', '#main'). Use lowercase for tag names like 'nav'."
+          ),
+        projectName: z.string().optional().describe("Project name (if multiple dev3000 instances are running)")
+      },
+      async (params) => {
+        return getReactComponentInfo(params)
       }
     )
 

@@ -18,7 +18,10 @@ export const TOOL_DESCRIPTIONS = {
     "🌐 **INTELLIGENT BROWSER AUTOMATION** - Smart browser action routing that automatically delegates to chrome-devtools MCP when available for superior automation capabilities.\n\n🎯 **INTELLIGENT DELEGATION:**\n• Screenshots → chrome-devtools MCP (better quality, no conflicts)\n• Navigation → chrome-devtools MCP (more reliable page handling)\n• Clicks → chrome-devtools MCP (precise coordinate-based interaction)\n• JavaScript evaluation → chrome-devtools MCP (enhanced debugging)\n• Scrolling & typing → dev3000 fallback (specialized actions)\n\n⚡ **PROGRESSIVE ENHANCEMENT:**\n• Uses chrome-devtools MCP when available for best results\n• Falls back to dev3000's native implementation when chrome-devtools unavailable\n• Shares the same Chrome instance via CDP URL coordination\n• Eliminates browser conflicts between tools\n\n💡 **PERFECT FOR:** Browser automation that automatically chooses the best tool for each action, ensuring optimal results whether chrome-devtools MCP is available or not.",
 
   analyze_visual_diff:
-    "🔍 **VISUAL DIFF ANALYZER** - Analyzes two screenshots to identify and describe visual differences. Returns detailed instructions for Claude to load and compare the images, focusing on what changed that could cause layout shifts.\n\n🎯 **WHAT IT PROVIDES:**\n• Direct instructions to load both images via Read tool\n• Context about what to look for\n• Guidance on identifying layout shift causes\n• Structured format for easy analysis\n\n💡 **PERFECT FOR:** Understanding what visual changes occurred between before/after frames in CLS detection, identifying elements that appeared/moved/resized."
+    "🔍 **VISUAL DIFF ANALYZER** - Analyzes two screenshots to identify and describe visual differences. Returns detailed instructions for Claude to load and compare the images, focusing on what changed that could cause layout shifts.\n\n🎯 **WHAT IT PROVIDES:**\n• Direct instructions to load both images via Read tool\n• Context about what to look for\n• Guidance on identifying layout shift causes\n• Structured format for easy analysis\n\n💡 **PERFECT FOR:** Understanding what visual changes occurred between before/after frames in CLS detection, identifying elements that appeared/moved/resized.",
+
+  get_react_component_info:
+    "⚛️ **REACT COMPONENT INSPECTOR** - Maps DOM elements to React component source code by inspecting React Fiber internals. Returns component name, file path, and line number.\n\n🎯 **WHAT IT PROVIDES:**\n• Component name (e.g., 'Header', 'Navigation')\n• Source file path (e.g., 'src/components/Header.tsx')\n• Line number where component is defined\n• Direct link to the exact code that renders the element\n\n💡 **PERFECT FOR:** CLS debugging - when layout shifts are detected in elements like <nav> or <header>, instantly find which React component to fix. Eliminates the 'where is this code?' step."
 }
 
 // Types
@@ -2756,5 +2759,143 @@ export async function analyzeVisualDiff(params: {
 
   return {
     content: [{ type: "text", text: results.join("\n") }]
+  }
+}
+
+export async function getReactComponentInfo(params: {
+  selector: string
+  projectName?: string
+}): Promise<{ content: Array<{ type: "text"; text: string }> }> {
+  const { selector } = params
+
+  try {
+    // Use browser automation to inspect React Fiber properties
+    const result = await executeBrowserAction({
+      action: "evaluate",
+      params: {
+        expression: `
+          (function() {
+            try {
+              // Find the DOM element
+              const element = document.querySelector(${JSON.stringify(selector)});
+              if (!element) {
+                return { error: "Element not found with selector: ${selector}" };
+              }
+
+              // Find the React Fiber key
+              const fiberKey = Object.keys(element).find(k => k.startsWith("__reactFiber$"));
+              if (!fiberKey) {
+                return { error: "React Fiber not found - element may not be a React component" };
+              }
+
+              // Get the fiber object
+              const fiber = element[fiberKey];
+              if (!fiber) {
+                return { error: "React Fiber object is empty" };
+              }
+
+              // Extract component information
+              const componentName = fiber.type?.name || fiber.elementType?.name || fiber.type?.displayName || "Anonymous";
+              const fileName = fiber._debugSource?.fileName;
+              const lineNumber = fiber._debugSource?.lineNumber;
+              const columnNumber = fiber._debugSource?.columnNumber;
+
+              return {
+                success: true,
+                selector: ${JSON.stringify(selector)},
+                componentName,
+                fileName,
+                lineNumber,
+                columnNumber,
+                element: element.tagName.toLowerCase(),
+                hasDebugInfo: !!(fileName && lineNumber)
+              };
+            } catch (error) {
+              return { error: error.message };
+            }
+          })()
+        `
+      }
+    })
+
+    // Parse the result
+    if (result.content?.[0] && result.content[0].type === "text") {
+      const evalResult = JSON.parse(result.content[0].text)
+
+      if (evalResult.error) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `❌ **ERROR INSPECTING REACT COMPONENT**\n\n${evalResult.error}\n\n💡 **TIPS:**\n• Make sure the selector matches an element on the page\n• Ensure the element is rendered by a React component\n• React must be running in development mode for debug info\n• Try a simpler selector like 'nav' or '.header'`
+            }
+          ]
+        }
+      }
+
+      if (!evalResult.success) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `❌ **FAILED TO INSPECT COMPONENT**\n\nUnexpected result format. The evaluation did not return success.`
+            }
+          ]
+        }
+      }
+
+      // Build the response
+      const lines: string[] = []
+      lines.push("⚛️ **REACT COMPONENT INFO**")
+      lines.push("")
+      lines.push(`**Selector:** \`${evalResult.selector}\``)
+      lines.push(`**Element:** \`<${evalResult.element}>\``)
+      lines.push(`**Component:** ${evalResult.componentName}`)
+      lines.push("")
+
+      if (evalResult.hasDebugInfo) {
+        lines.push("📍 **SOURCE CODE LOCATION:**")
+        lines.push(`• **File:** ${evalResult.fileName}`)
+        lines.push(`• **Line:** ${evalResult.lineNumber}`)
+        if (evalResult.columnNumber) {
+          lines.push(`• **Column:** ${evalResult.columnNumber}`)
+        }
+        lines.push("")
+        lines.push(
+          `💡 **NEXT STEP:** Use the Read tool to open ${evalResult.fileName}:${evalResult.lineNumber} and inspect the component code.`
+        )
+      } else {
+        lines.push("⚠️ **NO DEBUG INFO AVAILABLE**")
+        lines.push("")
+        lines.push("React debug info is not available. This usually means:")
+        lines.push("• React is running in production mode (not development)")
+        lines.push("• The build doesn't include source maps")
+        lines.push("• The component is a built-in HTML element, not a React component")
+        lines.push("")
+        lines.push(`💡 Make sure you're running in development mode to get file and line number info.`)
+      }
+
+      return {
+        content: [{ type: "text", text: lines.join("\n") }]
+      }
+    }
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: `❌ **UNEXPECTED RESULT**\n\nThe browser evaluation returned an unexpected format.`
+        }
+      ]
+    }
+  } catch (error) {
+    return {
+      content: [
+        {
+          type: "text",
+          text: `❌ **ERROR**\n\n${error instanceof Error ? error.message : String(error)}`
+        }
+      ]
+    }
   }
 }
