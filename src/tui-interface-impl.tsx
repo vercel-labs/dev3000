@@ -306,10 +306,10 @@ const TUIApp = ({
 
             {/* Info on the right */}
             <Box flexDirection="column" flexGrow={1}>
-              <Text color="cyan">🌐 Your App: http://localhost:{appPort}</Text>
-              <Text color="cyan">🤖 MCP Server: http://localhost:{mcpPort}/mcp</Text>
+              <Text color="cyan">🌐 App: http://localhost:{appPort}</Text>
+              <Text color="cyan">🤖 MCP: http://localhost:{mcpPort}/mcp</Text>
               <Text color="cyan">
-                📸 LogsViz: http://localhost:{mcpPort}/logs
+                📸 Logs: http://localhost:{mcpPort}/logs
                 {projectName ? `?project=${encodeURIComponent(projectName)}` : ""}
               </Text>
               {serversOnly && (
