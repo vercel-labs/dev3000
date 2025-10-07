@@ -404,12 +404,12 @@ const TUIApp = ({
                   )
                 }
 
-                // Normal mode with padding
-                // Calculate padding for source (BROWSER is 7, SERVER is 6)
-                const sourceSpacing = " ".repeat(Math.max(0, 7 - source.length))
+                // Normal mode with minimal padding
+                // Single space after source
+                const sourceSpacing = ""
 
-                // Calculate padding for type (NETWORK.REQUEST is longest at 15)
-                const typeSpacing = type ? " ".repeat(Math.max(0, 15 - type.length)) : ""
+                // Single space after type
+                const typeSpacing = ""
 
                 return (
                   <Text key={log.id} wrap="truncate-end">

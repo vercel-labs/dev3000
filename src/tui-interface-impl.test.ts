@@ -52,15 +52,14 @@ describe("TUI ASCII Logo", () => {
     expect(logoLines[3]).toBe("▝▚▄▟▌▄▄▄█ █  █ ")
   })
 
-  it("should handle long source names without crashing", () => {
-    // This test ensures that the padding calculation doesn't produce negative values
-    // when source names are longer than expected
+  it("should handle log formatting with minimal padding", () => {
+    // This test ensures that we use minimal padding to maximize horizontal space
     const tuiFilePath = join(__dirname, "tui-interface-impl.tsx")
     const fileContent = readFileSync(tuiFilePath, "utf-8")
 
-    // Check that Math.max(0, ...) is used to prevent negative repeat values
-    expect(fileContent).toContain("Math.max(0, 7 - source.length)")
-    expect(fileContent).toContain("Math.max(0, 15 - type.length)")
+    // Check that we use minimal padding
+    expect(fileContent).toContain('const sourceSpacing = ""')
+    expect(fileContent).toContain('const typeSpacing = ""')
 
     // Verify the regex pattern that could allow various source names
     const logParseRegex = /\^\\\[\(.*\?\)\\\] \\\[\(.*\?\)\\\]/
