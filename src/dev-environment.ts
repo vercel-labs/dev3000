@@ -360,6 +360,85 @@ async function ensureCursorMcpServers(
 }
 
 /**
+ * Ensure MCP server configurations are added to project's .opencode.json
+ * OpenCode uses a different structure: "mcp" instead of "mcpServers" and "type": "local" for stdio servers
+ */
+async function ensureOpenCodeMcpServers(
+  mcpPort: string,
+  appPort: string,
+  enableChromeDevtools: boolean,
+  enableNextjsMcp: boolean
+): Promise<void> {
+  try {
+    const settingsPath = join(process.cwd(), ".opencode.json")
+
+    // Read or create settings - OpenCode uses "mcp" not "mcpServers"
+    let settings: {
+      mcp?: Record<
+        string,
+        {
+          type: "local"
+          command: string[]
+          enabled?: boolean
+          environment?: Record<string, string>
+        }
+      >
+      [key: string]: unknown
+    }
+    if (existsSync(settingsPath)) {
+      const settingsContent = readFileSync(settingsPath, "utf-8")
+      settings = JSON.parse(settingsContent)
+    } else {
+      settings = {}
+    }
+
+    // Ensure mcp structure exists
+    if (!settings.mcp) {
+      settings.mcp = {}
+    }
+
+    let added = false
+
+    // Add dev3000 MCP server - use npx with mcp-client to connect to HTTP server
+    if (!settings.mcp[MCP_NAMES.DEV3000]) {
+      settings.mcp[MCP_NAMES.DEV3000] = {
+        type: "local",
+        command: ["npx", "@modelcontextprotocol/inspector", `http://localhost:${mcpPort}/mcp`],
+        enabled: true
+      }
+      added = true
+    }
+
+    // Add chrome-devtools MCP server if enabled
+    if (enableChromeDevtools && !settings.mcp[MCP_NAMES.CHROME_DEVTOOLS]) {
+      settings.mcp[MCP_NAMES.CHROME_DEVTOOLS] = {
+        type: "local",
+        command: ["npx", "chrome-devtools-mcp@latest", "--browserUrl", "http://127.0.0.1:9222"],
+        enabled: true
+      }
+      added = true
+    }
+
+    // Add nextjs-dev MCP server if enabled - use npx with mcp-client for HTTP
+    if (enableNextjsMcp && !settings.mcp[MCP_NAMES.NEXTJS_DEV]) {
+      settings.mcp[MCP_NAMES.NEXTJS_DEV] = {
+        type: "local",
+        command: ["npx", "@modelcontextprotocol/inspector", `http://localhost:${appPort}/_next/mcp`],
+        enabled: true
+      }
+      added = true
+    }
+
+    // Write if we added anything
+    if (added) {
+      writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, "utf-8")
+    }
+  } catch (_error) {
+    // Ignore errors - settings file manipulation is optional
+  }
+}
+
+/**
  * Clean up MCP server configurations from project's .cursor/mcp.json
  */
 async function cleanupCursorMcpServers(enableChromeDevtools: boolean, enableNextjsMcp: boolean): Promise<void> {
@@ -397,6 +476,56 @@ async function cleanupCursorMcpServers(enableChromeDevtools: boolean, enableNext
     // Remove nextjs-dev MCP server if it was enabled
     if (enableNextjsMcp && settings.mcpServers[MCP_NAMES.NEXTJS_DEV]) {
       delete settings.mcpServers[MCP_NAMES.NEXTJS_DEV]
+      removed = true
+    }
+
+    // Only write if we actually removed something
+    if (removed) {
+      writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, "utf-8")
+    }
+  } catch (_error) {
+    // Ignore cleanup errors
+  }
+}
+
+/**
+ * Clean up MCP server configurations from project's .opencode.json
+ */
+async function cleanupOpenCodeMcpServers(enableChromeDevtools: boolean, enableNextjsMcp: boolean): Promise<void> {
+  try {
+    const settingsPath = join(process.cwd(), ".opencode.json")
+
+    // Check if file exists
+    if (!existsSync(settingsPath)) {
+      return // No settings file to clean up
+    }
+
+    // Read current settings
+    const settingsContent = readFileSync(settingsPath, "utf-8")
+    const settings = JSON.parse(settingsContent)
+
+    // Ensure mcp structure exists (OpenCode uses "mcp" not "mcpServers")
+    if (!settings.mcp) {
+      return // No MCP servers to clean up
+    }
+
+    let removed = false
+
+    // Remove dev3000 MCP server
+    if (settings.mcp[MCP_NAMES.DEV3000]) {
+      delete settings.mcp[MCP_NAMES.DEV3000]
+      removed = true
+    }
+
+    // Remove chrome-devtools MCP server if it was enabled
+    if (enableChromeDevtools && settings.mcp[MCP_NAMES.CHROME_DEVTOOLS]) {
+      delete settings.mcp[MCP_NAMES.CHROME_DEVTOOLS]
+      removed = true
+    }
+
+    // Remove nextjs-dev MCP server if it was enabled
+    if (enableNextjsMcp && settings.mcp[MCP_NAMES.NEXTJS_DEV]) {
+      delete settings.mcp[MCP_NAMES.NEXTJS_DEV]
       removed = true
     }
 
@@ -922,8 +1051,14 @@ export class DevEnvironment {
           this.chromeDevtoolsSupported,
           this.enableNextjsMcp
         )
+        await ensureOpenCodeMcpServers(
+          this.options.mcpPort || "3684",
+          this.options.port,
+          this.chromeDevtoolsSupported,
+          this.enableNextjsMcp
+        )
 
-        this.logD3K(`AI CLI Integration: Configured MCP servers in .mcp.json and .cursor/mcp.json`)
+        this.logD3K(`AI CLI Integration: Configured MCP servers in .mcp.json, .cursor/mcp.json, and .opencode.json`)
       }
 
       // Start CDP monitoring if not in servers-only mode
@@ -1008,8 +1143,14 @@ export class DevEnvironment {
           this.chromeDevtoolsSupported,
           this.enableNextjsMcp
         )
+        await ensureOpenCodeMcpServers(
+          this.options.mcpPort || "3684",
+          this.options.port,
+          this.chromeDevtoolsSupported,
+          this.enableNextjsMcp
+        )
 
-        this.logD3K(`AI CLI Integration: Configured MCP servers in .mcp.json and .cursor/mcp.json`)
+        this.logD3K(`AI CLI Integration: Configured MCP servers in .mcp.json, .cursor/mcp.json, and .opencode.json`)
       }
 
       // Start CDP monitoring if not in servers-only mode
@@ -2311,6 +2452,7 @@ export class DevEnvironment {
     // Clean up MCP server configurations from project settings files (instant)
     await cleanupMcpServers(this.chromeDevtoolsSupported, this.enableNextjsMcp)
     await cleanupCursorMcpServers(this.chromeDevtoolsSupported, this.enableNextjsMcp)
+    await cleanupOpenCodeMcpServers(this.chromeDevtoolsSupported, this.enableNextjsMcp)
 
     // Kill processes on both ports
     const killPortProcess = async (port: string, name: string) => {
