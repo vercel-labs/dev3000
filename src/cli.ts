@@ -22,8 +22,8 @@ function detectPythonCommand(debug = false): string {
   // Check if we're in a virtual environment
   if (process.env.VIRTUAL_ENV) {
     if (debug) {
-      console.log(`[PYTHON DEBUG] Virtual environment detected: ${process.env.VIRTUAL_ENV}`)
-      console.log(`[PYTHON DEBUG] Using activated python command`)
+      console.log(`[DEBUG] Virtual environment detected: ${process.env.VIRTUAL_ENV}`)
+      console.log(`[DEBUG] Using activated python command`)
     }
     return "python"
   }
@@ -32,12 +32,12 @@ function detectPythonCommand(debug = false): string {
   try {
     require("child_process").execSync("python3 --version", { stdio: "ignore" })
     if (debug) {
-      console.log(`[PYTHON DEBUG] python3 is available, using python3`)
+      console.log(`[DEBUG] python3 is available, using python3`)
     }
     return "python3"
   } catch {
     if (debug) {
-      console.log(`[PYTHON DEBUG] python3 not available, falling back to python`)
+      console.log(`[DEBUG] python3 not available, falling back to python`)
     }
     return "python"
   }
@@ -47,7 +47,7 @@ async function detectProjectType(debug = false): Promise<ProjectConfig> {
   // Check for Python project
   if (existsSync("requirements.txt") || existsSync("pyproject.toml")) {
     if (debug) {
-      console.log(`[PROJECT DEBUG] Python project detected (found requirements.txt or pyproject.toml)`)
+      console.log(`[DEBUG] Python project detected (found requirements.txt or pyproject.toml)`)
     }
     return {
       type: "python",
@@ -60,7 +60,7 @@ async function detectProjectType(debug = false): Promise<ProjectConfig> {
   // Check for Rails project
   if (existsSync("Gemfile") && existsSync("config/application.rb")) {
     if (debug) {
-      console.log(`[PROJECT DEBUG] Rails project detected (found Gemfile and config/application.rb)`)
+      console.log(`[DEBUG] Rails project detected (found Gemfile and config/application.rb)`)
     }
     return {
       type: "rails",
@@ -74,7 +74,7 @@ async function detectProjectType(debug = false): Promise<ProjectConfig> {
 
   if (detected) {
     if (debug) {
-      console.log(`[PROJECT DEBUG] Node.js project detected with ${detected.agent} package manager`)
+      console.log(`[DEBUG] Node.js project detected with ${detected.agent} package manager`)
     }
     return {
       type: "node",
@@ -86,7 +86,7 @@ async function detectProjectType(debug = false): Promise<ProjectConfig> {
 
   // Fallback to npm for Node.js
   if (debug) {
-    console.log(`[PROJECT DEBUG] No project files detected, defaulting to Node.js with npm`)
+    console.log(`[DEBUG] No project files detected, defaulting to Node.js with npm`)
   }
   return {
     type: "node",
@@ -242,10 +242,10 @@ program
     }
 
     if (options.debug) {
-      console.log(`[CLI DEBUG] Project type: ${projectConfig.type}`)
-      console.log(`[CLI DEBUG] Port: ${port} (${options.port ? "explicit" : "auto-detected"})`)
-      console.log(`[CLI DEBUG] Script: ${script} (${options.script ? "explicit" : "auto-detected"})`)
-      console.log(`[CLI DEBUG] Server command: ${serverCommand}`)
+      console.log(`[DEBUG] Project type: ${projectConfig.type}`)
+      console.log(`[DEBUG] Port: ${port} (${options.port ? "explicit" : "auto-detected"})`)
+      console.log(`[DEBUG] Script: ${script} (${options.script ? "explicit" : "auto-detected"})`)
+      console.log(`[DEBUG] Server command: ${serverCommand}`)
     }
 
     // Detect which command name was used (dev3000 or d3k)

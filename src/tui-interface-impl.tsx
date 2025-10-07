@@ -369,23 +369,19 @@ const TUIApp = ({
                 const sourceColor = source === "BROWSER" ? LOG_COLORS.BROWSER : LOG_COLORS.SERVER
                 const typeColors: Record<string, string> = {
                   NETWORK: LOG_COLORS.NETWORK,
-                  "NETWORK.REQUEST": LOG_COLORS.NETWORK,
-                  "CONSOLE.ERROR": LOG_COLORS.CONSOLE_ERROR,
-                  "CONSOLE.WARN": LOG_COLORS.CONSOLE_WARN,
-                  "CONSOLE.INFO": LOG_COLORS.CONSOLE_INFO,
-                  "CONSOLE.LOG": LOG_COLORS.CONSOLE_LOG,
-                  "CONSOLE.DEBUG": LOG_COLORS.CONSOLE_DEBUG,
-                  "RUNTIME.ERROR": LOG_COLORS.ERROR,
-                  "CDP.ERROR": LOG_COLORS.CDP,
-                  "CHROME.ERROR": LOG_COLORS.ERROR,
-                  "CHROME.CRASH": LOG_COLORS.CRITICAL_ERROR,
-                  NAVIGATION: LOG_COLORS.DOM,
-                  INTERACTION: LOG_COLORS.DOM,
+                  ERROR: LOG_COLORS.ERROR,
+                  WARNING: LOG_COLORS.WARNING,
+                  INFO: LOG_COLORS.INFO,
+                  LOG: LOG_COLORS.LOG,
+                  DEBUG: LOG_COLORS.DEBUG,
                   SCREENSHOT: LOG_COLORS.SCREENSHOT,
                   DOM: LOG_COLORS.DOM,
                   CDP: LOG_COLORS.CDP,
-                  ERROR: LOG_COLORS.ERROR,
-                  "CRITICAL ERROR": LOG_COLORS.CRITICAL_ERROR
+                  CHROME: LOG_COLORS.CHROME,
+                  CRASH: LOG_COLORS.CRASH,
+                  REPLAY: LOG_COLORS.REPLAY,
+                  NAVIGATION: LOG_COLORS.NAVIGATION,
+                  INTERACTION: LOG_COLORS.INTERACTION
                 }
 
                 // In compact mode, skip padding

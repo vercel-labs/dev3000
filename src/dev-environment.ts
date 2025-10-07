@@ -1086,7 +1086,7 @@ export class DevEnvironment {
 
         // Show critical errors to console (parser determines what's critical)
         if (entry.isCritical && entry.rawMessage) {
-          console.error(chalk.red("[CRITICAL ERROR]"), entry.rawMessage)
+          console.error(chalk.red("[ERROR]"), entry.rawMessage)
         }
       })
     })
@@ -1446,7 +1446,7 @@ export class DevEnvironment {
         appendFileSync(mcpLogFile, `[${timestamp}] [MCP-STDERR] ${message}\n`)
         // Only show critical errors in stdout for debugging
         if (message.includes("FATAL") || message.includes("Error:")) {
-          console.error(chalk.red("[LOG VIEWER ERROR]"), message)
+          console.error(chalk.red("[ERROR]"), message)
         }
       }
     })
@@ -1592,11 +1592,11 @@ export class DevEnvironment {
       const fullCommand = `${packageManager} ${installArgs.join(" ")}`
 
       if (this.options.debug) {
-        console.log(`[MCP DEBUG] Installing MCP server dependencies...`)
-        console.log(`[MCP DEBUG] Working directory: ${workingDir}`)
-        console.log(`[MCP DEBUG] Package manager detected: ${packageManager}`)
-        console.log(`[MCP DEBUG] Command: ${fullCommand}`)
-        console.log(`[MCP DEBUG] Is global install: ${isGlobalInstall}`)
+        console.log(`[DEBUG] Installing MCP server dependencies...`)
+        console.log(`[DEBUG] Working directory: ${workingDir}`)
+        console.log(`[DEBUG] Package manager detected: ${packageManager}`)
+        console.log(`[DEBUG] Command: ${fullCommand}`)
+        console.log(`[DEBUG] Is global install: ${isGlobalInstall}`)
       }
 
       const installStartTime = Date.now()
@@ -1609,7 +1609,7 @@ export class DevEnvironment {
       const timeout = setTimeout(
         () => {
           if (this.options.debug) {
-            console.log(`[MCP DEBUG] Installation timed out after 3 minutes`)
+            console.log(`[DEBUG] Installation timed out after 3 minutes`)
           }
           installProcess.kill("SIGKILL")
           reject(new Error("MCP server dependency installation timed out after 3 minutes"))
@@ -1640,12 +1640,12 @@ export class DevEnvironment {
         const installTime = Date.now() - installStartTime
 
         if (this.options.debug) {
-          console.log(`[MCP DEBUG] Installation completed in ${installTime}ms with exit code: ${code}`)
+          console.log(`[DEBUG] Installation completed in ${installTime}ms with exit code: ${code}`)
           if (debugOutput) {
-            console.log(`[MCP DEBUG] stdout:`, debugOutput.trim())
+            console.log(`[DEBUG] stdout:`, debugOutput.trim())
           }
           if (debugErrors) {
-            console.log(`[MCP DEBUG] stderr:`, debugErrors.trim())
+            console.log(`[DEBUG] stderr:`, debugErrors.trim())
           }
         }
 
@@ -2072,7 +2072,7 @@ export class DevEnvironment {
       this.logger.log("browser", `[CDP] Navigated to http://localhost:${this.options.port}`)
     } catch (error) {
       // Log error and throw to trigger graceful shutdown
-      this.logger.log("browser", `[CDP ERROR] Failed to start CDP monitoring: ${error}`)
+      this.logger.log("browser", `[CDP] Failed to start CDP monitoring: ${error}`)
       throw error
     }
   }
