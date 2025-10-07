@@ -15,7 +15,7 @@ export const changelog: Release[] = [
     type: "patch",
     highlights: [
       "**OpenCode MCP Support**: Added auto-configuration for `.opencode.json` alongside Claude Code and Cursor",
-      "**OpenCode uses different format**: `type: \"local\"` with command arrays, proxied via `@modelcontextprotocol/inspector` for HTTP MCP servers",
+      '**OpenCode uses different format**: `type: "local"` with command arrays, proxied via `@modelcontextprotocol/inspector` for HTTP MCP servers',
       "**All three AI CLIs now auto-configured**: Claude Code (`.mcp.json`), Cursor (`.cursor/mcp.json`), and OpenCode (`.opencode.json`)"
     ]
   },
