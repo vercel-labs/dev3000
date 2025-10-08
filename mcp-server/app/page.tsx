@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { useEffect, useState } from "react"
 import { DarkModeToggle } from "@/components/dark-mode-toggle"
+import { ChromeIcon, NextJsIcon } from "@/components/mcp-icons"
 import { useDarkMode } from "@/hooks/use-dark-mode"
 
 interface MCPTool {
@@ -22,6 +23,22 @@ interface ToolsResponse {
   endpoint: string
   totalTools: number
   categories: string[]
+}
+
+interface OrchestratorResponse {
+  orchestratorEnabled: boolean
+  connectedMCPs: string[]
+  totalConnections: number
+  mcpDetails: Array<{
+    name: string
+    connected: boolean
+    toolCount: number
+    tools: string[]
+    projects: string[]
+  }>
+  totalProjects: number
+  projects: string[]
+  message: string
 }
 
 // Format tool descriptions by parsing markdown-style sections
@@ -46,18 +63,19 @@ function formatToolDescription(description: string) {
     const normalizedKey = getUniqueKey(slugify(rawSection) || "section")
     let section = rawSection
 
+    // Remove markdown formatting
+    section = section.replace(/\*\*/g, "").trim()
+
     // Remove excessive emojis
-    // Simple emoji reduction - just remove most emojis except the first in sequences
     section = section.replace(/(\u{1F300}-\u{1F9FF}|\u{2600}-\u{26FF}|\u{1F900}-\u{1F9FF})+/gu, (match) => {
-      // Keep only the first emoji in a sequence
       return match.charAt(0)
     })
 
     // Handle different section types
-    if (section.includes("**") && section.includes(":")) {
+    if (section.includes(":")) {
       // This is a header with content
       const [header, ...contentParts] = section.split(":")
-      const cleanHeader = header.replace(/\*\*/g, "").trim()
+      const cleanHeader = header.trim()
       const content = contentParts.join(":").trim()
 
       // Check if content has bullet points
@@ -96,7 +114,6 @@ function formatToolDescription(description: string) {
       return (
         <ol className="space-y-1 ml-4" key={`${normalizedKey}-steps`}>
           {items.map((item, itemIdx) => {
-            // Clean up the item text
             const cleanItem = item
               .replace(/^\d+[\ud83c-\ud83e][\udc00-\udfff]\s*/, "")
               .replace(/^\d+\.\s*/, "")
@@ -125,14 +142,17 @@ function formatToolDescription(description: string) {
 
 export default function HomePage() {
   const [tools, setTools] = useState<ToolsResponse | null>(null)
+  const [orchestrator, setOrchestrator] = useState<OrchestratorResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [darkMode, setDarkMode] = useDarkMode()
 
   useEffect(() => {
-    fetch("/api/tools")
-      .then((res) => res.json())
-      .then((data) => {
-        setTools(data)
+    // Fetch both tools and orchestrator status in parallel
+    Promise.all([fetch("/api/tools"), fetch("/api/orchestrator")])
+      .then(([toolsRes, orchRes]) => Promise.all([toolsRes.json(), orchRes.json()]))
+      .then(([toolsData, orchData]) => {
+        setTools(toolsData)
+        setOrchestrator(orchData)
         setLoading(false)
       })
       .catch(() => {
@@ -165,12 +185,6 @@ export default function HomePage() {
               </div>
             </div>
             <div className="flex items-center gap-4">
-              <Link
-                href="/logs"
-                className="inline-flex items-center gap-2 px-5 py-3 bg-primary text-primary-foreground text-sm font-medium rounded hover:bg-primary/90 transition-colors"
-              >
-                📊 View Logs
-              </Link>
               <a
                 href="https://github.com/vercel-labs/dev3000#setup"
                 target="_blank"
@@ -187,56 +201,59 @@ export default function HomePage() {
 
       {/* Main Content - no sidebar needed with only 2 tools */}
       <main className="max-w-7xl mx-auto px-6 py-8">
-        {/* Quick Start */}
-        <section className="mb-16">
-          <div className="bg-primary/10 border border-primary/20 rounded p-8">
-            <h2 className="text-xl font-semibold mb-4">🚀 Quick Start</h2>
-            <div className="space-y-4">
-              <div>
-                <span className="text-sm font-medium">MCP Endpoint:</span>
-                <code className="ml-3 px-4 py-2 bg-primary/20 text-foreground text-sm font-mono rounded">
-                  {tools?.endpoint || "http://localhost:3684/mcp"}
-                </code>
-              </div>
-              <div className="text-sm">
-                <p className="mb-3">Connect your AI tools to this MCP server for real-time development debugging:</p>
-                <div className="flex gap-6">
-                  <a
-                    href="https://github.com/vercel-labs/dev3000#claude-desktop"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-primary hover:text-primary/80 font-medium"
-                  >
-                    Claude Desktop Setup →
-                  </a>
-                  <a
-                    href="https://github.com/vercel-labs/dev3000#cursor"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-primary hover:text-primary/80 font-medium"
-                  >
-                    Cursor Setup →
-                  </a>
+        {/* MCP Connections Status */}
+        {!loading && orchestrator && (
+          <section className="mb-16">
+            <div className="bg-accent/10 border border-accent/20 rounded p-8">
+              <h2 className="text-xl font-semibold mb-4">🔌 MCP Connections</h2>
+              <p className="text-sm text-muted-foreground mb-4">{orchestrator.message}</p>
+
+              {orchestrator.totalConnections > 0 ? (
+                <>
+                  <div className="flex flex-wrap gap-3 mb-4">
+                    {orchestrator.mcpDetails.map((mcp) => {
+                      const Icon =
+                        mcp.name === "chrome-devtools" ? ChromeIcon : mcp.name === "nextjs-dev" ? NextJsIcon : null
+                      return (
+                        <div
+                          key={mcp.name}
+                          className="inline-flex items-center gap-2 bg-background/50 border border-border rounded px-3 py-2"
+                        >
+                          {Icon && <Icon className="shrink-0" />}
+                          <span className="font-semibold font-mono text-sm">{mcp.name}</span>
+                          <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  {orchestrator.totalProjects > 0 && (
+                    <div className="text-sm text-muted-foreground">
+                      <span className="font-medium">Active projects:</span>{" "}
+                      {orchestrator.projects.map((project, idx) => (
+                        <span key={project}>
+                          <code className="text-foreground bg-background/50 px-1.5 py-0.5 rounded">{project}</code>
+                          {idx < orchestrator.projects.length - 1 && ", "}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="text-sm text-muted-foreground bg-background/50 border border-border rounded p-4">
+                  <p className="mb-2">⏳ Waiting for downstream MCPs to become available...</p>
+                  <p className="text-xs">
+                    dev3000 will automatically connect to <code className="text-foreground">chrome-devtools</code> and{" "}
+                    <code className="text-foreground">nextjs-dev</code> MCPs when Chrome and your dev server start.
+                  </p>
                 </div>
-              </div>
+              )}
             </div>
-          </div>
-        </section>
+          </section>
+        )}
 
         {/* Tools Documentation */}
-        <section>
-          <div className="mb-12">
-            <div>
-              <h2 className="text-3xl font-bold mb-3">Available Tools</h2>
-              <p className="text-muted-foreground text-lg">
-                {loading
-                  ? "Loading MCP tools..."
-                  : `${tools?.totalTools || 0} tools across ${
-                      tools?.categories.length || 0
-                    } categories for AI-powered development debugging`}
-              </p>
-            </div>
-          </div>
+        <section className="bg-accent/10 border border-accent/20 rounded p-8">
+          <h2 className="text-xl font-semibold mb-4">🛠️ dev3000 Tools</h2>
 
           {loading ? (
             <div className="text-center py-16">
@@ -249,7 +266,7 @@ export default function HomePage() {
                 <div
                   key={tool.name}
                   id={tool.name}
-                  className="border border-border rounded-lg p-6 hover:border-muted-foreground/50 transition-colors"
+                  className="bg-background/50 border border-border rounded-lg p-6 hover:border-muted-foreground/50 transition-colors"
                 >
                   <div className="mb-4">
                     <h4 className="text-xl font-semibold font-mono mb-3">{tool.name}</h4>
@@ -352,9 +369,6 @@ export default function HomePage() {
               >
                 Homepage
               </a>
-              <Link href="/logs" className="hover:text-gray-900 transition-colors">
-                Logs
-              </Link>
             </div>
           </div>
         </div>

@@ -45,7 +45,6 @@
   --ring: oklch(0.4 0 0);
 }
 
-/* biome-ignore lint/suspicious/noUnknownAtRules: Tailwind CSS theme configuration */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

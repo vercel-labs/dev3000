@@ -224,9 +224,9 @@ async function isChromeDevtoolsMcpSupported(): Promise<boolean> {
  */
 async function ensureMcpServers(
   mcpPort: string,
-  appPort: string,
-  enableChromeDevtools: boolean,
-  enableNextjsMcp: boolean
+  _appPort: string,
+  _enableChromeDevtools: boolean,
+  _enableNextjsMcp: boolean
 ): Promise<void> {
   try {
     const settingsPath = join(process.cwd(), ".mcp.json")
@@ -251,6 +251,9 @@ async function ensureMcpServers(
     let added = false
 
     // Add dev3000 MCP server (HTTP type)
+    // NOTE: dev3000 now acts as an MCP orchestrator/gateway that internally
+    // connects to chrome-devtools and nextjs-dev MCPs, so users only need to
+    // configure dev3000 once!
     if (!settings.mcpServers[MCP_NAMES.DEV3000]) {
       settings.mcpServers[MCP_NAMES.DEV3000] = {
         type: "http",
@@ -259,23 +262,8 @@ async function ensureMcpServers(
       added = true
     }
 
-    // Add chrome-devtools MCP server if enabled (stdio - no type needed)
-    if (enableChromeDevtools && !settings.mcpServers[MCP_NAMES.CHROME_DEVTOOLS]) {
-      settings.mcpServers[MCP_NAMES.CHROME_DEVTOOLS] = {
-        command: "npx",
-        args: ["chrome-devtools-mcp@latest", "--browserUrl", "http://127.0.0.1:9222"]
-      }
-      added = true
-    }
-
-    // Add nextjs-dev MCP server if enabled (HTTP type - connects to Next.js dev server)
-    if (enableNextjsMcp && !settings.mcpServers[MCP_NAMES.NEXTJS_DEV]) {
-      settings.mcpServers[MCP_NAMES.NEXTJS_DEV] = {
-        type: "http",
-        url: `http://localhost:${appPort}/_next/mcp`
-      }
-      added = true
-    }
+    // REMOVED: No longer auto-configure chrome-devtools and nextjs-dev
+    // dev3000 MCP server now orchestrates these internally via the gateway pattern
 
     // Write if we added anything
     if (added) {
@@ -291,9 +279,9 @@ async function ensureMcpServers(
  */
 async function ensureCursorMcpServers(
   mcpPort: string,
-  appPort: string,
-  enableChromeDevtools: boolean,
-  enableNextjsMcp: boolean
+  _appPort: string,
+  _enableChromeDevtools: boolean,
+  _enableNextjsMcp: boolean
 ): Promise<void> {
   try {
     const cursorDir = join(process.cwd(), ".cursor")
@@ -324,6 +312,8 @@ async function ensureCursorMcpServers(
     let added = false
 
     // Add dev3000 MCP server
+    // NOTE: dev3000 now acts as an MCP orchestrator/gateway that internally
+    // connects to chrome-devtools and nextjs-dev MCPs
     if (!settings.mcpServers[MCP_NAMES.DEV3000]) {
       settings.mcpServers[MCP_NAMES.DEV3000] = {
         type: "http",
@@ -332,23 +322,8 @@ async function ensureCursorMcpServers(
       added = true
     }
 
-    // Add chrome-devtools MCP server if enabled
-    if (enableChromeDevtools && !settings.mcpServers[MCP_NAMES.CHROME_DEVTOOLS]) {
-      settings.mcpServers[MCP_NAMES.CHROME_DEVTOOLS] = {
-        command: "npx",
-        args: ["chrome-devtools-mcp@latest", "--browserUrl", "http://127.0.0.1:9222"]
-      }
-      added = true
-    }
-
-    // Add nextjs-dev MCP server if enabled (HTTP type - connects to Next.js dev server)
-    if (enableNextjsMcp && !settings.mcpServers[MCP_NAMES.NEXTJS_DEV]) {
-      settings.mcpServers[MCP_NAMES.NEXTJS_DEV] = {
-        type: "http",
-        url: `http://localhost:${appPort}/_next/mcp`
-      }
-      added = true
-    }
+    // REMOVED: No longer auto-configure chrome-devtools and nextjs-dev
+    // dev3000 MCP server now orchestrates these internally via the gateway pattern
 
     // Write if we added anything
     if (added) {
@@ -365,9 +340,9 @@ async function ensureCursorMcpServers(
  */
 async function ensureOpenCodeMcpServers(
   mcpPort: string,
-  appPort: string,
-  enableChromeDevtools: boolean,
-  enableNextjsMcp: boolean
+  _appPort: string,
+  _enableChromeDevtools: boolean,
+  _enableNextjsMcp: boolean
 ): Promise<void> {
   try {
     const settingsPath = join(process.cwd(), ".opencode.json")
@@ -400,6 +375,8 @@ async function ensureOpenCodeMcpServers(
     let added = false
 
     // Add dev3000 MCP server - use npx with mcp-client to connect to HTTP server
+    // NOTE: dev3000 now acts as an MCP orchestrator/gateway that internally
+    // connects to chrome-devtools and nextjs-dev MCPs
     if (!settings.mcp[MCP_NAMES.DEV3000]) {
       settings.mcp[MCP_NAMES.DEV3000] = {
         type: "local",
@@ -409,25 +386,8 @@ async function ensureOpenCodeMcpServers(
       added = true
     }
 
-    // Add chrome-devtools MCP server if enabled
-    if (enableChromeDevtools && !settings.mcp[MCP_NAMES.CHROME_DEVTOOLS]) {
-      settings.mcp[MCP_NAMES.CHROME_DEVTOOLS] = {
-        type: "local",
-        command: ["npx", "chrome-devtools-mcp@latest", "--browserUrl", "http://127.0.0.1:9222"],
-        enabled: true
-      }
-      added = true
-    }
-
-    // Add nextjs-dev MCP server if enabled - use npx with mcp-client for HTTP
-    if (enableNextjsMcp && !settings.mcp[MCP_NAMES.NEXTJS_DEV]) {
-      settings.mcp[MCP_NAMES.NEXTJS_DEV] = {
-        type: "local",
-        command: ["npx", "@modelcontextprotocol/inspector", `http://localhost:${appPort}/_next/mcp`],
-        enabled: true
-      }
-      added = true
-    }
+    // REMOVED: No longer auto-configure chrome-devtools and nextjs-dev
+    // dev3000 MCP server now orchestrates these internally via the gateway pattern
 
     // Write if we added anything
     if (added) {
@@ -438,155 +398,8 @@ async function ensureOpenCodeMcpServers(
   }
 }
 
-/**
- * Clean up MCP server configurations from project's .cursor/mcp.json
- */
-async function cleanupCursorMcpServers(enableChromeDevtools: boolean, enableNextjsMcp: boolean): Promise<void> {
-  try {
-    const settingsPath = join(process.cwd(), ".cursor", "mcp.json")
-
-    // Check if file exists
-    if (!existsSync(settingsPath)) {
-      return // No settings file to clean up
-    }
-
-    // Read current settings
-    const settingsContent = readFileSync(settingsPath, "utf-8")
-    const settings = JSON.parse(settingsContent)
-
-    // Ensure mcpServers structure exists
-    if (!settings.mcpServers) {
-      return // No MCP servers to clean up
-    }
-
-    let removed = false
-
-    // Remove dev3000 MCP server
-    if (settings.mcpServers[MCP_NAMES.DEV3000]) {
-      delete settings.mcpServers[MCP_NAMES.DEV3000]
-      removed = true
-    }
-
-    // Remove chrome-devtools MCP server if it was enabled
-    if (enableChromeDevtools && settings.mcpServers[MCP_NAMES.CHROME_DEVTOOLS]) {
-      delete settings.mcpServers[MCP_NAMES.CHROME_DEVTOOLS]
-      removed = true
-    }
-
-    // Remove nextjs-dev MCP server if it was enabled
-    if (enableNextjsMcp && settings.mcpServers[MCP_NAMES.NEXTJS_DEV]) {
-      delete settings.mcpServers[MCP_NAMES.NEXTJS_DEV]
-      removed = true
-    }
-
-    // Only write if we actually removed something
-    if (removed) {
-      writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, "utf-8")
-    }
-  } catch (_error) {
-    // Ignore cleanup errors
-  }
-}
-
-/**
- * Clean up MCP server configurations from project's .opencode.json
- */
-async function cleanupOpenCodeMcpServers(enableChromeDevtools: boolean, enableNextjsMcp: boolean): Promise<void> {
-  try {
-    const settingsPath = join(process.cwd(), ".opencode.json")
-
-    // Check if file exists
-    if (!existsSync(settingsPath)) {
-      return // No settings file to clean up
-    }
-
-    // Read current settings
-    const settingsContent = readFileSync(settingsPath, "utf-8")
-    const settings = JSON.parse(settingsContent)
-
-    // Ensure mcp structure exists (OpenCode uses "mcp" not "mcpServers")
-    if (!settings.mcp) {
-      return // No MCP servers to clean up
-    }
-
-    let removed = false
-
-    // Remove dev3000 MCP server
-    if (settings.mcp[MCP_NAMES.DEV3000]) {
-      delete settings.mcp[MCP_NAMES.DEV3000]
-      removed = true
-    }
-
-    // Remove chrome-devtools MCP server if it was enabled
-    if (enableChromeDevtools && settings.mcp[MCP_NAMES.CHROME_DEVTOOLS]) {
-      delete settings.mcp[MCP_NAMES.CHROME_DEVTOOLS]
-      removed = true
-    }
-
-    // Remove nextjs-dev MCP server if it was enabled
-    if (enableNextjsMcp && settings.mcp[MCP_NAMES.NEXTJS_DEV]) {
-      delete settings.mcp[MCP_NAMES.NEXTJS_DEV]
-      removed = true
-    }
-
-    // Only write if we actually removed something
-    if (removed) {
-      writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, "utf-8")
-    }
-  } catch (_error) {
-    // Ignore cleanup errors
-  }
-}
-
-/**
- * Clean up MCP server configurations from project's .mcp.json (Claude Code)
- */
-async function cleanupMcpServers(enableChromeDevtools: boolean, enableNextjsMcp: boolean): Promise<void> {
-  try {
-    const settingsPath = join(process.cwd(), ".mcp.json")
-
-    // Check if file exists
-    if (!existsSync(settingsPath)) {
-      return // No settings file to clean up
-    }
-
-    // Read current settings
-    const settingsContent = readFileSync(settingsPath, "utf-8")
-    const settings = JSON.parse(settingsContent)
-
-    // Ensure mcpServers structure exists
-    if (!settings.mcpServers) {
-      return // No MCP servers to clean up
-    }
-
-    let removed = false
-
-    // Remove dev3000 MCP server
-    if (settings.mcpServers[MCP_NAMES.DEV3000]) {
-      delete settings.mcpServers[MCP_NAMES.DEV3000]
-      removed = true
-    }
-
-    // Remove chrome-devtools MCP server if it was enabled
-    if (enableChromeDevtools && settings.mcpServers[MCP_NAMES.CHROME_DEVTOOLS]) {
-      delete settings.mcpServers[MCP_NAMES.CHROME_DEVTOOLS]
-      removed = true
-    }
-
-    // Remove nextjs-dev MCP server if it was enabled
-    if (enableNextjsMcp && settings.mcpServers[MCP_NAMES.NEXTJS_DEV]) {
-      delete settings.mcpServers[MCP_NAMES.NEXTJS_DEV]
-      removed = true
-    }
-
-    // Only write if we actually removed something
-    if (removed) {
-      writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, "utf-8")
-    }
-  } catch (_error) {
-    // Ignore cleanup errors
-  }
-}
+// REMOVED: cleanup functions are no longer needed
+// MCP config files are now kept persistent across dev3000 restarts
 
 export function createPersistentLogFile(): string {
   // Get unique project name
@@ -1179,7 +992,7 @@ export class DevEnvironment {
       console.log(chalk.cyan(`Logs: ${this.options.logFile}`))
       console.log(chalk.cyan("☝️ Give this to an AI to auto debug and fix your app\n"))
       console.log(chalk.cyan(`🌐 Your App: http://localhost:${this.options.port}`))
-      console.log(chalk.cyan(`🤖 MCP Server: http://localhost:${this.options.mcpPort}/mcp`))
+      console.log(chalk.cyan(`🤖 MCP Server: http://localhost:${this.options.mcpPort}`))
       console.log(
         chalk.cyan(
           `📸 Visual Timeline: http://localhost:${this.options.mcpPort}/logs?project=${encodeURIComponent(projectName)}`
@@ -1544,6 +1357,10 @@ export class DevEnvironment {
     this.debugLog(`MCP server command: ${mcpCommand.join(" ")}`)
     this.debugLog(`MCP server cwd: ${mcpCwd}`)
 
+    // Get CDP URL and app port for MCP orchestration
+    const cdpUrl = this.cdpMonitor?.getCdpUrl() || null
+    const appPort = this.options.port
+
     // Start MCP server as a true background singleton process
     this.mcpServerProcess = spawn(mcpCommand[0], mcpCommand.slice(1), {
       stdio: ["ignore", "pipe", "pipe"],
@@ -1554,7 +1371,9 @@ export class DevEnvironment {
         PORT: this.options.mcpPort,
         LOG_FILE_PATH: this.options.logFile, // Pass log file path to MCP server
         DEV3000_VERSION: this.version, // Pass version to MCP server
-        SCREENSHOT_DIR: this.screenshotDir // Pass screenshot directory for global installs
+        SCREENSHOT_DIR: this.screenshotDir, // Pass screenshot directory for global installs
+        CDP_URL: cdpUrl || "", // Pass CDP URL for chrome-devtools MCP orchestration
+        APP_PORT: appPort // Pass app port for nextjs-dev MCP orchestration
       }
     })
 
@@ -1586,7 +1405,8 @@ export class DevEnvironment {
         const timestamp = new Date().toISOString()
         appendFileSync(mcpLogFile, `[${timestamp}] [MCP-STDERR] ${message}\n`)
         // Only show critical errors in stdout for debugging
-        if (message.includes("FATAL") || message.includes("Error:")) {
+        // Exclude MCP Orchestrator connection errors (they're expected and non-critical)
+        if ((message.includes("FATAL") || message.includes("Error:")) && !message.includes("[MCP Orchestrator]")) {
           console.error(chalk.red("[ERROR]"), message)
         }
       }
@@ -2449,10 +2269,10 @@ export class DevEnvironment {
       }
     }
 
-    // Clean up MCP server configurations from project settings files (instant)
-    await cleanupMcpServers(this.chromeDevtoolsSupported, this.enableNextjsMcp)
-    await cleanupCursorMcpServers(this.chromeDevtoolsSupported, this.enableNextjsMcp)
-    await cleanupOpenCodeMcpServers(this.chromeDevtoolsSupported, this.enableNextjsMcp)
+    // REMOVED: No longer clean up MCP config files on shutdown
+    // This was causing Claude Code instances to crash when dev3000 was killed
+    // Now we keep .mcp.json, .cursor/mcp.json, and .opencode.json configured
+    // for the next dev3000 run, providing a better developer experience
 
     // Kill processes on both ports
     const killPortProcess = async (port: string, name: string) => {

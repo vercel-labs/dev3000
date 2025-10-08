@@ -1,9 +1,175 @@
+import { readFileSync } from "node:fs"
+import { homedir } from "node:os"
+import { join } from "node:path"
 import { createMcpHandler } from "mcp-handler"
 import { z } from "zod"
+import { getMCPClientManager } from "./client-manager"
 import { executeBrowserAction, findComponentSource, fixMyApp, TOOL_DESCRIPTIONS } from "./tools"
+
+// Detect available package runner (npx, pnpm dlx, or fail)
+const getPackageRunner = (): { command: string; args: string[] } | null => {
+  try {
+    const { execSync } = require("node:child_process")
+
+    // Try npx first (most common)
+    try {
+      execSync("npx --version", { stdio: "ignore" })
+      return { command: "npx", args: ["-y"] }
+    } catch {
+      // npx not available or is aliased to pnpm dlx
+    }
+
+    // Try pnpm dlx as fallback
+    try {
+      execSync("pnpm --version", { stdio: "ignore" })
+      return { command: "pnpm", args: ["dlx"] }
+    } catch {
+      // pnpm not available
+    }
+
+    console.error("[MCP Orchestrator] Neither npx nor pnpm found - cannot spawn chrome-devtools MCP")
+    return null
+  } catch (error) {
+    console.error("[MCP Orchestrator] Failed to detect package runner:", error)
+    return null
+  }
+}
+
+// Initialize MCP client manager for orchestration
+// This will connect to chrome-devtools and nextjs-dev MCPs when available
+const initializeOrchestration = async () => {
+  const clientManager = getMCPClientManager()
+
+  // Helper to get config from session files in ~/.d3k/
+  const getConfigFromSessions = () => {
+    const config: Parameters<typeof clientManager.initialize>[0] = {}
+    const sessionDir = join(homedir(), ".d3k")
+
+    try {
+      // Read all *.json session files
+      const { readdirSync, existsSync } = require("node:fs")
+      if (!existsSync(sessionDir)) return config
+
+      const sessionFiles = readdirSync(sessionDir).filter((f: string) => f.endsWith(".json"))
+
+      // Use the most recent session with CDP URL
+      for (const file of sessionFiles) {
+        try {
+          const sessionPath = join(sessionDir, file)
+          const sessionData = JSON.parse(readFileSync(sessionPath, "utf-8"))
+
+          // Configure chrome-devtools MCP if CDP URL is available
+          if (sessionData.cdpUrl && !config.chromeDevtools) {
+            const cdpUrl = sessionData.cdpUrl.replace("ws://", "http://") // Convert ws:// to http:// for browser URL
+            const runner = getPackageRunner()
+
+            if (runner) {
+              config.chromeDevtools = {
+                command: runner.command,
+                args: [...runner.args, "chrome-devtools-mcp@latest", "--browserUrl", cdpUrl],
+                enabled: true
+              }
+            } else {
+              console.warn("[MCP Orchestrator] Cannot configure chrome-devtools MCP: no package runner available")
+            }
+          }
+
+          // Configure nextjs-dev MCP if app port is available
+          if (sessionData.appPort && !config.nextjsDev) {
+            config.nextjsDev = {
+              url: `http://localhost:${sessionData.appPort}/_next/mcp`,
+              enabled: true
+            }
+          }
+
+          // Break if we have both MCPs
+          if (config.chromeDevtools && config.nextjsDev) break
+        } catch {
+          // Skip invalid session files
+        }
+      }
+    } catch (error) {
+      console.warn("[MCP Orchestrator] Failed to read session files:", error)
+    }
+
+    return config
+  }
+
+  try {
+    // Initial attempt to connect
+    const config = getConfigFromSessions()
+    if (Object.keys(config).length > 0) {
+      await clientManager.initialize(config)
+      console.log(`[MCP Orchestrator] Initialized with ${Object.keys(config).join(", ")}`)
+    } else {
+      console.log("[MCP Orchestrator] No downstream MCPs found yet (will retry)")
+    }
+
+    // Since MCP server starts before Chrome, periodically retry connection
+    // This allows late-binding to chrome-devtools MCP after Chrome launches
+    let retryCount = 0
+    const maxRetries = 10
+    const retryInterval = setInterval(async () => {
+      retryCount++
+
+      const newConfig = getConfigFromSessions()
+      const hasChromeDevtools = !!newConfig.chromeDevtools
+      const hasNextjs = !!newConfig.nextjsDev
+      const alreadyConnectedChrome = clientManager.isConnected("chrome-devtools")
+      const alreadyConnectedNextjs = clientManager.isConnected("nextjs-dev")
+
+      // Check if we have new MCPs to connect to
+      const needsChrome = hasChromeDevtools && !alreadyConnectedChrome
+      const needsNextjs = hasNextjs && !alreadyConnectedNextjs
+
+      if (needsChrome || needsNextjs) {
+        const toConnect = [needsChrome && "chrome-devtools", needsNextjs && "nextjs-dev"].filter(Boolean)
+        console.log(`[MCP Orchestrator] Retry ${retryCount}: Attempting to connect to ${toConnect.join(", ")}`)
+        try {
+          await clientManager.initialize(newConfig)
+          console.log("[MCP Orchestrator] Successfully connected to downstream MCPs")
+        } catch (error) {
+          console.warn(`[MCP Orchestrator] Retry ${retryCount} failed:`, error)
+        }
+      }
+
+      // Stop retrying after max attempts or when both are connected
+      if (retryCount >= maxRetries || (alreadyConnectedChrome && alreadyConnectedNextjs)) {
+        clearInterval(retryInterval)
+        const connected = clientManager.getConnectedMCPs()
+        console.log(`[MCP Orchestrator] Stopped retry loop (connected: ${connected.join(", ") || "none"})`)
+      }
+    }, 2000) // Retry every 2 seconds
+  } catch (error) {
+    console.warn("[MCP Orchestrator] Failed to initialize downstream MCPs:", error)
+  }
+}
+
+// Initialize on module load
+initializeOrchestration().catch(console.error)
 
 const handler = createMcpHandler(
   (server) => {
+    // Dynamically register proxied tools from downstream MCPs
+    const clientManager = getMCPClientManager()
+    const downstreamTools = clientManager.getAllTools()
+
+    for (const { mcpName, tool } of downstreamTools) {
+      // Add prefix to avoid conflicts with dev3000's own tools
+      const proxiedToolName = `${mcpName}_${tool.name}`
+
+      server.tool(
+        proxiedToolName,
+        `[${mcpName}] ${tool.description || ""}`,
+        tool.inputSchema as any,
+        async (params: Record<string, unknown>) => {
+          // Proxy the call to the downstream MCP
+          return clientManager.callTool(mcpName, tool.name, params)
+        }
+      )
+    }
+
+    // Dev3000's own tools below:
     // Enhanced fix_my_app - the ultimate error fixing tool
     server.tool(
       "fix_my_app",

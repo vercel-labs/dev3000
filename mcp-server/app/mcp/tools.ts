@@ -181,7 +181,27 @@ export async function fixMyApp({
   integrateChromeDevtools = false,
   returnRawData = false
 }: FixMyAppParams): Promise<{ content: Array<{ type: "text"; text: string }> }> {
-  // 🎯 INTELLIGENT DELEGATION: Check if nextjs-dev MCP is available for Next.js-specific analysis
+  // 🎯 MCP ORCHESTRATION: Check which downstream MCPs are available
+  const { getMCPClientManager } = await import("./client-manager")
+  const clientManager = getMCPClientManager()
+  const connectedMCPs = clientManager.getConnectedMCPs()
+
+  const hasNextjsDev = connectedMCPs.includes("nextjs-dev")
+  const hasChromeDevtools = connectedMCPs.includes("chrome-devtools")
+
+  if (connectedMCPs.length > 0) {
+    logToDevFile(`Fix My App: Connected to downstream MCPs: ${connectedMCPs.join(", ")}`)
+  }
+
+  // Auto-detect integration flags based on connected MCPs
+  if (hasNextjsDev && integrateNextjs === false) {
+    integrateNextjs = true
+  }
+  if (hasChromeDevtools && integrateChromeDevtools === false) {
+    integrateChromeDevtools = true
+  }
+
+  // Legacy delegation check (keeping for backwards compatibility)
   const canDelegateNextjs = await canDelegateToNextjs()
   if (canDelegateNextjs) {
     logToDevFile(`Fix My App: Recommending dev3000-nextjs-dev MCP for Next.js-specific analysis`)
@@ -619,6 +639,9 @@ export async function fixMyApp({
           results.push(`• ${match[1]}`)
         }
       })
+      results.push("")
+      results.push("💡 **TIP**: Use analyze_visual_diff tool to compare screenshots and identify changes")
+      results.push("   (Advanced: screenshots are also accessible via curl if needed)")
     }
 
     // Jank/Layout Shift Detection (from ScreencastManager passive captures)
@@ -710,6 +733,11 @@ export async function fixMyApp({
         results.push("• Use CSS aspect-ratio for responsive elements")
         results.push("• Check for web fonts causing text reflow (font-display: swap)")
         results.push(`• Raw screenshots: ${jankResult.screenshotDir}`)
+        results.push("")
+        results.push("📸 **ANALYZING SCREENSHOTS:**")
+        results.push("• RECOMMENDED: Use analyze_visual_diff tool with before/after URLs (shown above)")
+        results.push("• The tool provides structured instructions for comparing frames")
+        results.push("• Advanced: Screenshots are also accessible via curl if needed")
         results.push("")
         results.push(`🎬 **IMPORTANT**: Share this frame sequence link with the user: ${videoUrl}`)
       }
@@ -2148,7 +2176,8 @@ async function detectJankFromScreenshots(_projectName?: string): Promise<{
   if (existsSync(metadataPath)) {
     try {
       const metadata = JSON.parse(readFileSync(metadataPath, "utf-8"))
-      if (metadata.layoutShifts && metadata.layoutShifts.length > 0) {
+      // Set realCLSData even if there are zero shifts - this tells us Chrome ran and found nothing
+      if (metadata.layoutShifts !== undefined) {
         realCLSData = {
           score: metadata.totalCLS || 0,
           grade: metadata.clsGrade || "unknown",
@@ -2182,22 +2211,33 @@ async function detectJankFromScreenshots(_projectName?: string): Promise<{
 
       // Look for CLS entries with Before/After URLs
       // Format: [BROWSER] [CDP] CLS #N (score: X, time: Yms):
-      //         [BROWSER] [CDP]   - <ELEMENT> shifted...
+      //         [BROWSER] [CDP]   - <ELEMENT> shifted... (variable number of these)
       //         [BROWSER] [CDP]   Before: http://...
       //         [BROWSER] [CDP]   After:  http://...
       for (let i = 0; i < lines.length; i++) {
         const clsMatch = lines[i].match(/\[CDP\] CLS #\d+ \(score: [\d.]+, time: (\d+)ms\):/)
         if (clsMatch) {
           const timestamp = parseInt(clsMatch[1], 10)
-          // Look ahead for Before and After URLs (skip the shift description line)
-          if (i + 3 < lines.length) {
-            const beforeMatch = lines[i + 2].match(/Before:\s+(http:\/\/\S+)/)
-            const afterMatch = lines[i + 3].match(/After:\s+(http:\/\/\S+)/)
-            if (beforeMatch && afterMatch) {
+          // Look ahead for Before and After URLs (scan next 10 lines for them)
+          let beforeUrl: string | null = null
+          let afterUrl: string | null = null
+
+          for (let j = i + 1; j < Math.min(i + 10, lines.length); j++) {
+            if (!beforeUrl) {
+              const beforeMatch = lines[j].match(/Before:\s+(http:\/\/\S+)/)
+              if (beforeMatch) beforeUrl = beforeMatch[1]
+            }
+            if (!afterUrl) {
+              const afterMatch = lines[j].match(/After:\s+(http:\/\/\S+)/)
+              if (afterMatch) afterUrl = afterMatch[1]
+            }
+            // Stop if we found both
+            if (beforeUrl && afterUrl) {
               frameUrlMap.set(timestamp, {
-                before: beforeMatch[1],
-                after: afterMatch[1]
+                before: beforeUrl,
+                after: afterUrl
               })
+              break
             }
           }
         }
@@ -2207,8 +2247,21 @@ async function detectJankFromScreenshots(_projectName?: string): Promise<{
     // Ignore log parsing errors
   }
 
-  // If we have real CLS data, use it to flag visual severity
-  if (realCLSData && realCLSData.shifts.length > 0) {
+  // If we have real CLS data from Chrome's PerformanceObserver, trust it completely
+  if (realCLSData) {
+    // If Chrome says there are no shifts, return immediately - don't fall back to pixel diff
+    if (realCLSData.shifts.length === 0) {
+      return {
+        detections: [],
+        sessionId: latestSessionId,
+        totalFrames: sessionFiles.length,
+        screenshotDir,
+        realCLS: { score: 0, grade: realCLSData.grade }
+      }
+    }
+
+    // Process actual layout shifts detected by Chrome
+    // Trust Chrome's Layout Instability API completely - if Chrome reports it, it's real
     realCLSData.shifts.forEach((shift) => {
       const element = shift.sources?.[0]?.node || "unknown"
       const isCriticalElement = ["NAV", "HEADER", "BUTTON", "A"].includes(element.toUpperCase())
@@ -2742,11 +2795,13 @@ export async function analyzeVisualDiff(params: {
   results.push("")
   results.push("To analyze the visual differences between these two screenshots:")
   results.push("")
-  results.push("**Step 1: Load the BEFORE image**")
-  results.push(`Use the Read tool to load: \`${beforeImageUrl}\``)
+  results.push("**Step 1: Fetch and analyze the BEFORE image**")
+  results.push(`Use WebFetch with URL: \`${beforeImageUrl}\``)
+  results.push(`Prompt: "Describe this screenshot in detail, focusing on layout and visible elements"`)
   results.push("")
-  results.push("**Step 2: Load the AFTER image**")
-  results.push(`Use the Read tool to load: \`${afterImageUrl}\``)
+  results.push("**Step 2: Fetch and analyze the AFTER image**")
+  results.push(`Use WebFetch with URL: \`${afterImageUrl}\``)
+  results.push(`Prompt: "Describe this screenshot in detail, focusing on layout and visible elements"`)
   results.push("")
   results.push("**Step 3: Compare and describe the differences**")
 
@@ -2767,8 +2822,6 @@ export async function analyzeVisualDiff(params: {
   results.push("• Which element(s) changed")
   results.push("• What appeared/moved/resized")
   results.push("• Why this caused other elements to shift")
-  results.push("")
-  results.push("💡 **TIP:** Load both images first, then describe the differences in detail.")
 
   return {
     content: [{ type: "text", text: results.join("\n") }]

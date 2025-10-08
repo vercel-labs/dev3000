@@ -11,7 +11,7 @@
     "tools": "tsx tools-cli.ts"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.11.0",
+    "@modelcontextprotocol/sdk": "catalog:",
     "@radix-ui/react-slot": "^1.1.1",
     "@types/pixelmatch": "^5.2.6",
     "@types/pngjs": "^6.0.5",

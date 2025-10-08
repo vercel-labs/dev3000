@@ -60,7 +60,7 @@ describe("LogsClient Infinite Loop Prevention", () => {
     let retryCount = 0
     const maxRetries = 5
     const failedUrl = "/api/logs/tail?test=1"
-    let lastFailedUrl = null
+    let lastFailedUrl: string | null = null
 
     // Simulate retry logic
     const attemptFetch = (url: string): boolean => {
