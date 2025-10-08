@@ -4,6 +4,21 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+catalogs:
+  default:
+    '@tailwindcss/postcss':
+      specifier: ^4.1.13
+      version: 4.1.13
+    autoprefixer:
+      specifier: ^10.4.21
+      version: 10.4.21
+    postcss:
+      specifier: ^8.5.6
+      version: 8.5.6
+    tailwindcss:
+      specifier: ^4.1.13
+      version: 4.1.13
+
 overrides:
   '@types/react': 19.1.17
   '@types/react-dom': 19.1.11
@@ -119,15 +134,27 @@ importers:
         specifier: ^3.22.4
         version: 3.25.76
     devDependencies:
+      '@tailwindcss/postcss':
+        specifier: 'catalog:'
+        version: 4.1.13
       '@types/node':
         specifier: ^24.5.2
         version: 24.5.2
       '@types/react':
         specifier: 19.1.17
         version: 19.1.17
+      autoprefixer:
+        specifier: 'catalog:'
+        version: 10.4.21(postcss@8.5.6)
       babel-plugin-react-compiler:
         specifier: ^19.1.0-rc.3
         version: 19.1.0-rc.3
+      postcss:
+        specifier: 'catalog:'
+        version: 8.5.6
+      tailwindcss:
+        specifier: 'catalog:'
+        version: 4.1.13
       typescript:
         specifier: ^5.0.0
         version: 5.9.2

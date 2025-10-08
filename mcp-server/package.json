@@ -30,9 +30,13 @@
     "zod": "^3.22.4"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "catalog:",
     "@types/node": "^24.5.2",
     "@types/react": "19.1.13",
+    "autoprefixer": "catalog:",
     "babel-plugin-react-compiler": "^19.1.0-rc.3",
+    "postcss": "catalog:",
+    "tailwindcss": "catalog:",
     "typescript": "^5.0.0",
     "vitest": "^3.2.4"
   }
