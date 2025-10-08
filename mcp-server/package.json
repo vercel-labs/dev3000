@@ -15,7 +15,6 @@
     "@radix-ui/react-slot": "^1.1.1",
     "@types/pixelmatch": "^5.2.6",
     "@types/pngjs": "^6.0.5",
-    "autoprefixer": "^10.4.20",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "commander": "^14.0.1",
@@ -31,15 +30,10 @@
     "zod": "^3.22.4"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4.1.9",
     "@types/node": "^24.5.2",
     "@types/react": "19.1.13",
-    "@types/react-dom": "19.1.9",
-    "@types/ws": "^8.5.12",
     "babel-plugin-react-compiler": "^19.1.0-rc.3",
-    "postcss": "^8.5",
-    "tailwindcss": "^4.1.9",
-    "tw-animate-css": "^1.3.8",
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "vitest": "^3.2.4"
   }
 }
