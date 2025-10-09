@@ -298,10 +298,23 @@ RUN d3k --version
       const packageJson = {
         name: "test-app",
         scripts: {
-          dev: "echo 'Test server running on port 3000'"
+          dev: "node server.js"
         }
       }
       writeFileSync(join(testDir, "package.json"), JSON.stringify(packageJson, null, 2))
+
+      // Create a simple HTTP server that actually listens on port 3000
+      const serverCode = `
+const http = require('http');
+const server = http.createServer((req, res) => {
+  res.writeHead(200);
+  res.end('Test server running');
+});
+server.listen(3000, () => {
+  console.log('Test server running on port 3000');
+});
+`
+      writeFileSync(join(testDir, "server.js"), serverCode)
 
       // Run d3k with clean environment
       const d3kProcess = spawn("d3k", ["--debug", "--servers-only"], {
