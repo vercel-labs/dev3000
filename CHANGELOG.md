@@ -6,9 +6,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.0.87] - 2025-10-09
 
-**Patch Release**
+**Critical Bug Fix Release**
 
-- Bug fixes improve overall reliability
+This release fixes a severe production bug where multiple dev3000 instances could spawn simultaneously, each opening browsers endlessly when the server failed to start.
+
+### Fixed
+- **🔒 Singleton Lock**: Prevents multiple dev3000 instances from running for the same project
+  - Uses per-project lock files in `/tmp/dev3000-{projectName}.lock`
+  - Automatically detects and removes stale locks
+  - Shows clear error message if another instance is already running
+
+- **🚫 No Browser on Server Failure**: Exit immediately if server fails to start after 30 seconds
+  - Previously would continue and open browsers despite server never starting
+  - Now shows helpful error with log file location
+  - Prevents cascading failures and resource exhaustion
+
+- **🖥️ TTY Detection**: Gracefully handles non-TTY environments
+  - Checks `process.stdin.isTTY` before using Ink TUI
+  - Falls back to spinner mode if TTY unavailable
+  - Prevents "Raw mode is not supported" errors in CI/nested processes
+
+- **🔧 Chrome Session Restoration**: Prevents Chrome from restoring previous tabs
+  - Adds `--disable-session-crashed-bubble` and `--disable-restore-session-state` flags
+  - Ensures only one loading page opens per launch
+
+### Impact
+This completely eliminates the infinite tab opening loop where 40+ Chrome processes could be spawned. The singleton lock prevents multiple instances, server failure detection prevents browsers from launching when nothing is running, and TTY detection prevents crashes in non-interactive environments.
 
 ## [0.0.86] - 2025-10-09
 
