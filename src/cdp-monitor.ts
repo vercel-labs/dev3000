@@ -253,6 +253,8 @@ export class CDPMonitor {
             "--disable-sync",
             "--metrics-recording-only",
             "--disable-default-apps",
+            "--disable-session-crashed-bubble",
+            "--disable-restore-session-state",
             this.createLoadingPage()
           ],
           {
