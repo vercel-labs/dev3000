@@ -30,6 +30,31 @@ class CleanEnvironmentTester {
   private results: TestResult[] = []
 
   /**
+   * Find an available port starting from a given port number
+   */
+  private async findAvailablePort(startPort: number): Promise<number> {
+    const { createServer } = await import("net")
+
+    return new Promise((resolve, reject) => {
+      const server = createServer()
+
+      server.listen(startPort, () => {
+        const port = (server.address() as { port: number }).port
+        server.close(() => resolve(port))
+      })
+
+      server.on("error", (err: NodeJS.ErrnoException) => {
+        if (err.code === "EADDRINUSE") {
+          // Port is in use, try the next one
+          resolve(this.findAvailablePort(startPort + 1))
+        } else {
+          reject(err)
+        }
+      })
+    })
+  }
+
+  /**
    * Create a minimal PATH that simulates a fresh system
    */
   private getCleanPath(): string {
@@ -303,21 +328,24 @@ RUN d3k --version
       }
       writeFileSync(join(testDir, "package.json"), JSON.stringify(packageJson, null, 2))
 
-      // Create a simple HTTP server that actually listens on port 3000
+      // Find an available port for testing
+      const testPort = await this.findAvailablePort(3500)
+
+      // Create a simple HTTP server that actually listens on the test port
       const serverCode = `
 const http = require('http');
 const server = http.createServer((req, res) => {
   res.writeHead(200);
   res.end('Test server running');
 });
-server.listen(3000, () => {
-  console.log('Test server running on port 3000');
+server.listen(${testPort}, () => {
+  console.log('Test server running on port ${testPort}');
 });
 `
       writeFileSync(join(testDir, "server.js"), serverCode)
 
-      // Run d3k with clean environment
-      const d3kProcess = spawn("d3k", ["--debug", "--servers-only"], {
+      // Run d3k with clean environment, specifying the port
+      const d3kProcess = spawn("d3k", ["--debug", "--servers-only", "--port", testPort.toString()], {
         cwd: testDir,
         env: {
           ...this.getCleanEnv(),

@@ -1521,11 +1521,17 @@ export class DevEnvironment {
         const attemptTime = Date.now() - attemptStartTime
         this.debugLog(`Server responded with status ${response.status} in ${attemptTime}ms`)
 
-        if (response.ok || response.status === 404 || response.status === 405) {
+        if (
+          response.ok ||
+          response.status === 404 ||
+          response.status === 405 ||
+          response.status === 500 ||
+          response.status === 503
+        ) {
           const totalTime = Date.now() - startTime
           this.debugLog(`Server is ready! Total wait time: ${totalTime}ms (${attempts + 1} attempts)`)
           this.debugLog(
-            `Status ${response.status} indicates server is running (200=OK, 404=Not Found, 405=Method Not Allowed)`
+            `Status ${response.status} indicates server is running (200=OK, 404=Not Found, 405=Method Not Allowed, 500=App Error, 503=Service Unavailable)`
           )
           return true
         } else {

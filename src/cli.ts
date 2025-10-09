@@ -241,6 +241,38 @@ program
       serverCommand = `${projectConfig.packageManager} run ${script}`
     }
 
+    // Check for circular dependency - detect if the script would invoke dev3000 itself
+    if (projectConfig.type === "node") {
+      try {
+        const packageJson = JSON.parse(readFileSync(join(process.cwd(), "package.json"), "utf-8"))
+        const scriptContent = packageJson.scripts?.[script]
+
+        // Check if the script invokes dev3000 or d3k
+        if (scriptContent && (scriptContent.includes("dev3000") || /\bd3k\b/.test(scriptContent))) {
+          console.error(chalk.red(`\n❌ Circular dependency detected!`))
+          console.error(
+            chalk.yellow(
+              `   The "${script}" script in package.json calls dev3000, which would create an infinite loop.`
+            )
+          )
+          console.error(chalk.yellow(`   Current script content: "${scriptContent}"`))
+          console.error(chalk.yellow(`\n💡 Fix this by either:`))
+          console.error(chalk.yellow(`   1. Change the "${script}" script to call your actual dev server`))
+          console.error(
+            chalk.yellow(`   2. Use dev3000 globally (run 'd3k' directly) instead of via package.json scripts`)
+          )
+          console.error(
+            chalk.yellow(
+              `   3. Use a different script name that doesn't invoke dev3000 (e.g., '${script === "dev" ? "dev:next" : "dev:server"}')`
+            )
+          )
+          process.exit(1)
+        }
+      } catch (_error) {
+        // Ignore errors reading package.json
+      }
+    }
+
     if (options.debug) {
       console.log(`[DEBUG] Project type: ${projectConfig.type}`)
       console.log(`[DEBUG] Port: ${port} (${options.port ? "explicit" : "auto-detected"})`)
