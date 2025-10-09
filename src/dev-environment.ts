@@ -533,6 +533,7 @@ export class DevEnvironment {
   private screenshotDir: string
   private mcpPublicDir: string
   private pidFile: string
+  private lockFile: string
   private spinner: ReturnType<typeof ora>
   private version: string
   private isShuttingDown: boolean = false
@@ -560,7 +561,10 @@ export class DevEnvironment {
     // Always use MCP server's public directory for screenshots to ensure they're web-accessible
     // and avoid permission issues with /var/log paths
     this.screenshotDir = join(packageRoot, "mcp-server", "public", "screenshots")
-    this.pidFile = join(tmpdir(), "dev3000.pid")
+    // Use project-specific PID and lock files to allow multiple projects to run simultaneously
+    const projectName = getProjectName()
+    this.pidFile = join(tmpdir(), `dev3000-${projectName}.pid`)
+    this.lockFile = join(tmpdir(), `dev3000-${projectName}.lock`)
     this.mcpPublicDir = join(packageRoot, "mcp-server", "public", "screenshots")
 
     // Read version from package.json for startup message
@@ -768,8 +772,21 @@ export class DevEnvironment {
   }
 
   async start() {
-    // Check if TUI mode is enabled (default)
-    if (this.options.tui) {
+    // Check if another instance is already running for this project
+    if (!this.acquireLock()) {
+      console.error(chalk.red(`\n❌ Another dev3000 instance is already running for this project.`))
+      console.error(chalk.yellow(`   If you're sure no other instance is running, remove: ${this.lockFile}`))
+      process.exit(1)
+    }
+
+    // Check if TUI mode is enabled (default) and stdin supports it
+    const canUseTUI = this.options.tui && process.stdin.isTTY
+
+    if (!canUseTUI && this.options.tui) {
+      this.debugLog("TTY not available, falling back to non-TUI mode")
+    }
+
+    if (canUseTUI) {
       // Clear console and start TUI immediately for fast render
       console.clear()
 
@@ -828,7 +845,15 @@ export class DevEnvironment {
 
       // Wait for servers to be ready
       await this.tui.updateStatus("Waiting for your app server...")
-      await this.waitForServer()
+      const serverStarted = await this.waitForServer()
+
+      if (!serverStarted) {
+        await this.tui.updateStatus("❌ Server failed to start")
+        console.error(chalk.red("\n❌ Your app server failed to start after 30 seconds."))
+        console.error(chalk.yellow(`Check the logs at ~/.d3k/logs/${getProjectName()}-d3k.log for errors.`))
+        console.error(chalk.yellow("Exiting without launching browser."))
+        process.exit(1)
+      }
 
       await this.tui.updateStatus(`Waiting for ${this.options.commandName} MCP server...`)
       await this.waitForMcpServer()
@@ -874,14 +899,16 @@ export class DevEnvironment {
         this.logD3K(`AI CLI Integration: Configured MCP servers in .mcp.json, .cursor/mcp.json, and .opencode.json`)
       }
 
-      // Start CDP monitoring if not in servers-only mode
-      if (!this.options.serversOnly) {
+      // Start CDP monitoring only if server started successfully and not in servers-only mode
+      if (!this.options.serversOnly && serverStarted) {
         await this.tui.updateStatus(`Starting ${this.options.commandName} browser...`)
         await this.startCDPMonitoringSync()
 
         // Progressive MCP discovery - after browser is ready
         await this.tui.updateStatus("Final MCP discovery scan...")
         await this.discoverMcpsAfterBrowserStart()
+      } else if (!this.options.serversOnly) {
+        this.debugLog("Browser monitoring skipped - server failed to start")
       } else {
         this.debugLog("Browser monitoring disabled via --servers-only flag")
       }
@@ -920,7 +947,15 @@ export class DevEnvironment {
 
       // Wait for servers to be ready
       this.spinner.text = "Waiting for your app server..."
-      await this.waitForServer()
+      const serverStarted = await this.waitForServer()
+
+      if (!serverStarted) {
+        this.spinner.fail("Server failed to start")
+        console.error(chalk.red("\n❌ Your app server failed to start after 30 seconds."))
+        console.error(chalk.yellow(`Check the logs at ~/.d3k/logs/${getProjectName()}-d3k.log for errors.`))
+        console.error(chalk.yellow("Exiting without launching browser."))
+        process.exit(1)
+      }
 
       this.spinner.text = `Waiting for ${this.options.commandName} MCP server...`
       await this.waitForMcpServer()
@@ -966,14 +1001,16 @@ export class DevEnvironment {
         this.logD3K(`AI CLI Integration: Configured MCP servers in .mcp.json, .cursor/mcp.json, and .opencode.json`)
       }
 
-      // Start CDP monitoring if not in servers-only mode
-      if (!this.options.serversOnly) {
+      // Start CDP monitoring only if server started successfully and not in servers-only mode
+      if (!this.options.serversOnly && serverStarted) {
         this.spinner.text = `Starting ${this.options.commandName} browser...`
         await this.startCDPMonitoringSync()
 
         // Progressive MCP discovery - after browser is ready
         this.spinner.text = "Final MCP discovery scan..."
         await this.discoverMcpsAfterBrowserStart()
+      } else if (!this.options.serversOnly) {
+        this.debugLog("Browser monitoring skipped - server failed to start")
       } else {
         this.debugLog("Browser monitoring disabled via --servers-only flag")
       }
@@ -1112,6 +1149,46 @@ export class DevEnvironment {
         }
       }
     })
+  }
+
+  private acquireLock(): boolean {
+    try {
+      // Check if lock file exists
+      if (existsSync(this.lockFile)) {
+        const lockContent = readFileSync(this.lockFile, "utf8")
+        const oldPID = parseInt(lockContent, 10)
+
+        // Check if the process is still running
+        try {
+          process.kill(oldPID, 0) // Signal 0 just checks if process exists
+          // Process is running, lock is valid
+          return false
+        } catch {
+          // Process doesn't exist, remove stale lock
+          this.debugLog(`Removing stale lock file for PID ${oldPID}`)
+          unlinkSync(this.lockFile)
+        }
+      }
+
+      // Create lock file with our PID
+      writeFileSync(this.lockFile, process.pid.toString())
+      this.debugLog(`Acquired lock file: ${this.lockFile}`)
+      return true
+    } catch (error) {
+      this.debugLog(`Failed to acquire lock: ${error}`)
+      return false
+    }
+  }
+
+  private releaseLock() {
+    try {
+      if (existsSync(this.lockFile)) {
+        unlinkSync(this.lockFile)
+        this.debugLog(`Released lock file: ${this.lockFile}`)
+      }
+    } catch (error) {
+      this.debugLog(`Failed to release lock: ${error}`)
+    }
   }
 
   private debugLog(message: string) {
@@ -1423,7 +1500,7 @@ export class DevEnvironment {
     this.debugLog("MCP server event handlers setup complete")
   }
 
-  private async waitForServer() {
+  private async waitForServer(): Promise<boolean> {
     const maxAttempts = 30
     let attempts = 0
     const serverUrl = `http://localhost:${this.options.port}`
@@ -1450,7 +1527,7 @@ export class DevEnvironment {
           this.debugLog(
             `Status ${response.status} indicates server is running (200=OK, 404=Not Found, 405=Method Not Allowed)`
           )
-          return
+          return true
         } else {
           this.debugLog(`Server responded with non-OK status: ${response.status}, continuing to wait`)
         }
@@ -1469,7 +1546,8 @@ export class DevEnvironment {
     }
 
     const totalTime = Date.now() - startTime
-    this.debugLog(`Server readiness check timed out after ${totalTime}ms (${maxAttempts} attempts), continuing anyway`)
+    this.debugLog(`Server readiness check timed out after ${totalTime}ms (${maxAttempts} attempts)`)
+    return false
   }
 
   private detectPackageManagerInDir(dir: string): string {
@@ -2201,6 +2279,9 @@ export class DevEnvironment {
   private async handleShutdown() {
     // Stop health monitoring
     this.stopHealthCheck()
+
+    // Release the lock file
+    this.releaseLock()
 
     // Clean up session file
     try {
