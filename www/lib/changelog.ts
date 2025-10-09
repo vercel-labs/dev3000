@@ -13,9 +13,7 @@ export const changelog: Release[] = [
     version: "0.0.88",
     date: "2025-10-09",
     type: "patch",
-    highlights: [
-      "Quality improvements and bug fixes"
-    ]
+    highlights: ["Quality improvements and bug fixes"]
   },
 
   {
