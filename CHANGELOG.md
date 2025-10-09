@@ -4,6 +4,16 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.85] - 2025-10-09
+
+**Patch Release**
+
+- 🎬 **Passive Screencast Capture**: Automatically records page loads and navigations for performance analysis
+- 🎯 **CLS Detection**: Watch frame-by-frame video of layout shifts with precise element tracking
+- 🔧 **Auto-Configuration for AI CLIs**: Automatically writes `.mcp.json` (Claude Code) and `.cursor/mcp.json` (Cursor) so MCP servers are instantly available
+- 🤖 **Augmented Delegation**: dev3000 now intelligently delegates to chrome-devtools MCP when detected, creating a powerful debugging orchestration layer
+- 🐛 **Fixed 3 bugs for improved stability**
+
 ## [0.0.84] - 2025-10-07
 
 **Patch Release**

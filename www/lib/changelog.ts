@@ -10,6 +10,19 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.85",
+    date: "2025-10-09",
+    type: "patch",
+    highlights: [
+      "🎬 **Passive Screencast Capture**: Automatically records page loads and navigations for performance analysis",
+      "🎯 **CLS Detection**: Watch frame-by-frame video of layout shifts with precise element tracking",
+      "🔧 **Auto-Configuration for AI CLIs**: Automatically writes `.mcp.json` (Claude Code) and `.cursor/mcp.json` (Cursor) so MCP servers are instantly available",
+      "🤖 **Augmented Delegation**: dev3000 now intelligently delegates to chrome-devtools MCP when detected, creating a powerful debugging orchestration layer",
+      "🐛 **Fixed 3 bugs for improved stability**"
+    ]
+  },
+
+  {
     version: "0.0.84",
     date: "2025-10-07",
     type: "patch",
