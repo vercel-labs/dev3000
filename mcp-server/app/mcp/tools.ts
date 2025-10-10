@@ -1,4 +1,4 @@
-import { exec } from "child_process"
+import { exec, spawn } from "child_process"
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync } from "fs"
 import { homedir, tmpdir } from "os"
 import { join } from "path"
@@ -21,7 +21,10 @@ export const TOOL_DESCRIPTIONS = {
     "🔍 **VISUAL DIFF ANALYZER** - Analyzes two screenshots to identify and describe visual differences. Returns detailed instructions for Claude to load and compare the images, focusing on what changed that could cause layout shifts.\n\n🎯 **WHAT IT PROVIDES:**\n• Direct instructions to load both images via Read tool\n• Context about what to look for\n• Guidance on identifying layout shift causes\n• Structured format for easy analysis\n\n💡 **PERFECT FOR:** Understanding what visual changes occurred between before/after frames in CLS detection, identifying elements that appeared/moved/resized.",
 
   find_component_source:
-    "🔍 **COMPONENT SOURCE FINDER** - Maps DOM elements to their source code by extracting the React component function and finding unique patterns to search for.\n\n🎯 **HOW IT WORKS:**\n• Inspects the element via Chrome DevTools Protocol\n• Extracts the React component function source using .toString()\n• Identifies unique code patterns (specific JSX, classNames, imports)\n• Returns targeted grep patterns to find the exact source file\n\n💡 **PERFECT FOR:** Finding which file contains the code for a specific element, especially useful for CLS debugging when you need to fix layout shifts in specific components."
+    "🔍 **COMPONENT SOURCE FINDER** - Maps DOM elements to their source code by extracting the React component function and finding unique patterns to search for.\n\n🎯 **HOW IT WORKS:**\n• Inspects the element via Chrome DevTools Protocol\n• Extracts the React component function source using .toString()\n• Identifies unique code patterns (specific JSX, classNames, imports)\n• Returns targeted grep patterns to find the exact source file\n\n💡 **PERFECT FOR:** Finding which file contains the code for a specific element, especially useful for CLS debugging when you need to fix layout shifts in specific components.",
+
+  restart_dev_server:
+    "🔄 **DEV SERVER RESTART** - Safely restarts the development server while preserving dev3000's monitoring, logs, and browser connection.\n\n🎯 **SMART RESTART LOGIC:**\n• First tries nextjs-dev MCP restart (if available and user has Next.js canary)\n• Falls back to dev3000's own restart mechanism:\n  - Kills the old server process on the app port\n  - Waits for clean shutdown\n  - Spawns a new server with the same command that was originally used\n  - Keeps dev3000's MCP server, browser monitoring, and screenshot capture running\n• All logging continues seamlessly - no data loss\n• Browser monitoring stays connected - no need to relaunch Chrome\n\n⚡ **WHEN TO USE:**\n• After modifying next.config.js, middleware, or environment variables\n• When you need a clean restart to clear server state\n• After significant code changes that Next.js HMR can't handle\n• When debugging persistent state or memory issues\n\n⚠️ **CRITICAL - DO NOT:**\n• ❌ NEVER manually run kill commands on the dev server like `pkill -f \"next dev\"` or `lsof -ti :3000 | xargs kill`\n• ❌ NEVER manually start the dev server with `npm run dev`, `pnpm dev`, `next dev`, etc.\n• ✅ ALWAYS use this tool for dev server restarts - it preserves all dev3000 infrastructure\n\n⚠️ **IMPORTANT:**\n• AVOID using this unnecessarily - Next.js HMR handles most changes automatically\n• Only restart when truly needed for config changes or state issues\n• The server will be offline for a few seconds during restart\n• Browser may show connection error briefly while server restarts\n\n💡 **PERFECT FOR:** 'restart the dev server', 'clean restart', 'reload the server' - but only when actually needed, not for regular code changes."
 }
 
 // Types
@@ -3256,6 +3259,216 @@ export async function findComponentSource(params: {
       content: [{ type: "text", text: lines.join("\n") }]
     }
   } catch (error) {
+    return {
+      content: [
+        {
+          type: "text",
+          text: `❌ **ERROR**\n\n${error instanceof Error ? error.message : String(error)}`
+        }
+      ]
+    }
+  }
+}
+
+/**
+ * Restart the development server while preserving logs and monitoring
+ */
+export async function restartDevServer(params: {
+  projectName?: string
+}): Promise<{ content: Array<{ type: "text"; text: string }> }> {
+  const { projectName } = params
+
+  try {
+    // Find active session
+    const sessions = findActiveSessions()
+    if (sessions.length === 0) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "❌ **NO ACTIVE SESSIONS**\n\nNo active dev3000 sessions found. Make sure your app is running with dev3000."
+          }
+        ]
+      }
+    }
+
+    // Use specified project or first available session
+    let targetSession = sessions[0]
+    if (projectName) {
+      const found = sessions.find((s) => s.projectName === projectName)
+      if (found) {
+        targetSession = found
+      }
+    }
+
+    const sessionData = JSON.parse(readFileSync(targetSession.sessionFile, "utf-8"))
+    const appPort = sessionData.appPort
+    const serverCommand = sessionData.serverCommand
+    const cwd = sessionData.cwd
+
+    if (!appPort) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "❌ **NO APP PORT FOUND**\n\nSession file doesn't contain app port information."
+          }
+        ]
+      }
+    }
+
+    if (!serverCommand) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "❌ **NO SERVER COMMAND FOUND**\n\nSession file doesn't contain the original server command. This session may have been created with an older version of dev3000."
+          }
+        ]
+      }
+    }
+
+    logToDevFile(
+      `Restart Dev Server: Starting restart for project [${targetSession.projectName}] on port ${appPort} with command [${serverCommand}]`
+    )
+
+    // Check if nextjs-dev MCP is available
+    const availableMcps = await discoverAvailableMcps(targetSession.projectName)
+    const hasNextjsDev = availableMcps.includes("nextjs-dev")
+
+    logToDevFile(`Restart Dev Server: Has nextjs-dev MCP: ${hasNextjsDev}`)
+
+    // Try nextjs-dev MCP first if available
+    if (hasNextjsDev) {
+      try {
+        logToDevFile("Restart Dev Server: Attempting to use nextjs-dev MCP restart")
+
+        // Check if nextjs-dev has restart capability
+        const capabilities = await getMcpCapabilities({ mcpName: "nextjs-dev" })
+        const capabilitiesText =
+          capabilities.content[0] && "text" in capabilities.content[0] ? capabilities.content[0].text : ""
+
+        if (capabilitiesText.includes("restart") || capabilitiesText.includes("reload")) {
+          logToDevFile("Restart Dev Server: nextjs-dev MCP has restart capability, delegating")
+
+          return {
+            content: [
+              {
+                type: "text",
+                text: "✅ **DELEGATING TO NEXTJS-DEV MCP**\n\nThe nextjs-dev MCP has restart capabilities. Please use the nextjs-dev MCP restart tool directly for better integration with Next.js."
+              }
+            ]
+          }
+        }
+
+        logToDevFile("Restart Dev Server: nextjs-dev MCP doesn't have restart capability, falling back")
+      } catch (error) {
+        logToDevFile(`Restart Dev Server: Failed to check nextjs-dev capabilities - ${error}`)
+      }
+    }
+
+    // Fallback: Use dev3000's own restart mechanism
+    logToDevFile("Restart Dev Server: Using dev3000 restart mechanism")
+
+    // Kill processes on the app port
+    const killCommand = `lsof -ti :${appPort} | xargs kill 2>/dev/null || true`
+    logToDevFile(`Restart Dev Server: Executing kill command: ${killCommand}`)
+
+    try {
+      await execAsync(killCommand)
+      logToDevFile("Restart Dev Server: Kill command executed successfully")
+    } catch (error) {
+      logToDevFile(`Restart Dev Server: Kill command failed (may be ok) - ${error}`)
+    }
+
+    // Wait for clean shutdown
+    await new Promise((resolve) => setTimeout(resolve, 2000))
+
+    // Check if port is now free
+    const checkCommand = `lsof -ti :${appPort}`
+    let portFree = false
+    try {
+      const { stdout } = await execAsync(checkCommand)
+      portFree = stdout.trim() === ""
+      logToDevFile(`Restart Dev Server: Port check result - free: ${portFree}`)
+    } catch {
+      // Command failed means no process on port (port is free)
+      portFree = true
+      logToDevFile("Restart Dev Server: Port is free (lsof returned no results)")
+    }
+
+    if (!portFree) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `⚠️ **PORT STILL IN USE**\n\nFailed to free port ${appPort}. There may be a process that couldn't be killed.\n\nTry manually killing the process:\n\`\`\`bash\nlsof -ti :${appPort} | xargs kill -9\n\`\`\``
+          }
+        ]
+      }
+    }
+
+    logToDevFile("Restart Dev Server: Port is now free, spawning new server process")
+
+    // Spawn new server process
+    try {
+      const serverProcess = spawn(serverCommand, {
+        stdio: "inherit", // Inherit stdio so output goes to dev3000's logs
+        shell: true,
+        detached: true, // Run independently
+        cwd: cwd || process.cwd() // Use original working directory
+      })
+
+      // Unref so this process doesn't keep MCP server alive
+      serverProcess.unref()
+
+      logToDevFile(`Restart Dev Server: Spawned new server process with PID ${serverProcess.pid}`)
+
+      // Wait a moment for server to start
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+
+      // Check if server is actually running on the port
+      try {
+        const { stdout: checkResult } = await execAsync(`lsof -ti :${appPort}`)
+        const isRunning = checkResult.trim() !== ""
+
+        if (isRunning) {
+          logToDevFile("Restart Dev Server: Server successfully restarted and running on port")
+          return {
+            content: [
+              {
+                type: "text",
+                text: `✅ **DEV SERVER RESTARTED**\n\nSuccessfully restarted the development server on port ${appPort}.\n\n🎯 **STATUS:**\n• Old server process: Killed\n• New server process: Running (PID ${serverProcess.pid})\n• Port ${appPort}: Active\n• Browser monitoring: Unchanged\n• Logs: Still being captured\n\n💡 The server has been restarted while keeping dev3000's monitoring, screenshots, and logging intact.`
+              }
+            ]
+          }
+        }
+        logToDevFile("Restart Dev Server: Server process spawned but not yet listening on port (may still be starting)")
+      } catch {
+        logToDevFile("Restart Dev Server: Server process spawned but not yet listening on port (may still be starting)")
+      }
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: `🔄 **DEV SERVER RESTARTING**\n\nStarted a new server process (PID ${serverProcess.pid}).\n\n⏳ **STATUS:**\n• Old server: Killed\n• New server: Starting (may take a few moments)\n• Command: \`${serverCommand}\`\n• Port: ${appPort}\n\nThe server is restarting. Check the dev3000 logs to see when it's ready.`
+          }
+        ]
+      }
+    } catch (spawnError) {
+      logToDevFile(`Restart Dev Server: Failed to spawn new server process - ${spawnError}`)
+      return {
+        content: [
+          {
+            type: "text",
+            text: `❌ **RESTART FAILED**\n\nFailed to start new server process.\n\n**Error:** ${spawnError instanceof Error ? spawnError.message : String(spawnError)}\n\n**Command:** \`${serverCommand}\`\n\nThe old server was killed but the new one failed to start. You may need to manually restart dev3000.`
+          }
+        ]
+      }
+    }
+  } catch (error) {
+    logToDevFile(`Restart Dev Server: Error - ${error}`)
     return {
       content: [
         {

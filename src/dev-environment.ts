@@ -429,7 +429,8 @@ function writeSessionInfo(
   appPort: string,
   mcpPort?: string,
   cdpUrl?: string | null,
-  chromePids?: number[]
+  chromePids?: number[],
+  serverCommand?: string
 ): void {
   const sessionDir = join(homedir(), ".d3k")
 
@@ -449,7 +450,8 @@ function writeSessionInfo(
       startTime: new Date().toISOString(),
       pid: process.pid,
       cwd: process.cwd(),
-      chromePids: chromePids || []
+      chromePids: chromePids || [],
+      serverCommand: serverCommand || null
     }
 
     // Write session file - use project name as filename for easy lookup
@@ -916,7 +918,15 @@ export class DevEnvironment {
       // Write session info for MCP server discovery (include CDP URL if browser monitoring was started)
       const cdpUrl = this.cdpMonitor?.getCdpUrl() || null
       const chromePids = this.cdpMonitor?.getChromePids() || []
-      writeSessionInfo(projectName, this.options.logFile, this.options.port, this.options.mcpPort, cdpUrl, chromePids)
+      writeSessionInfo(
+        projectName,
+        this.options.logFile,
+        this.options.port,
+        this.options.mcpPort,
+        cdpUrl,
+        chromePids,
+        this.options.serverCommand
+      )
 
       // Clear status - ready!
       await this.tui.updateStatus(null)
@@ -1020,7 +1030,15 @@ export class DevEnvironment {
       // Include CDP URL if browser monitoring was started
       const cdpUrl = this.cdpMonitor?.getCdpUrl() || null
       const chromePids = this.cdpMonitor?.getChromePids() || []
-      writeSessionInfo(projectName, this.options.logFile, this.options.port, this.options.mcpPort, cdpUrl, chromePids)
+      writeSessionInfo(
+        projectName,
+        this.options.logFile,
+        this.options.port,
+        this.options.mcpPort,
+        cdpUrl,
+        chromePids,
+        this.options.serverCommand
+      )
 
       // Complete startup with success message only in non-TUI mode
       this.spinner.succeed("Development environment ready!")
@@ -1977,7 +1995,8 @@ export class DevEnvironment {
         this.options.port,
         this.options.mcpPort,
         cdpUrl,
-        this.cdpMonitor.getChromePids()
+        this.cdpMonitor.getChromePids(),
+        this.options.serverCommand
       )
     } else {
       this.logD3K("CDP Integration: CDP URL not yet available - browser may still be starting")
@@ -1997,7 +2016,8 @@ export class DevEnvironment {
               this.options.port,
               this.options.mcpPort,
               delayedCdpUrl,
-              this.cdpMonitor.getChromePids()
+              this.cdpMonitor.getChromePids(),
+              this.options.serverCommand
             )
           }
         }
@@ -2109,7 +2129,8 @@ export class DevEnvironment {
           this.options.port,
           this.options.mcpPort,
           cdpUrl || undefined,
-          chromePids
+          chromePids,
+          this.options.serverCommand
         )
         this.debugLog(`Updated session info with CDP URL: ${cdpUrl}, Chrome PIDs: [${chromePids.join(", ")}]`)
       }

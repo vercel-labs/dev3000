@@ -4,7 +4,7 @@ import { join } from "node:path"
 import { createMcpHandler } from "mcp-handler"
 import { z } from "zod"
 import { getMCPClientManager } from "./client-manager"
-import { executeBrowserAction, findComponentSource, fixMyApp, TOOL_DESCRIPTIONS } from "./tools"
+import { executeBrowserAction, findComponentSource, fixMyApp, restartDevServer, TOOL_DESCRIPTIONS } from "./tools"
 
 // Detect available package runner (npx, pnpm dlx, or fail)
 const getPackageRunner = (): { command: string; args: string[] } | null => {
@@ -282,6 +282,18 @@ const handler = createMcpHandler(
       },
       async (params) => {
         return findComponentSource(params)
+      }
+    )
+
+    // Dev server restart tool
+    server.tool(
+      "restart_dev_server",
+      TOOL_DESCRIPTIONS.restart_dev_server,
+      {
+        projectName: z.string().optional().describe("Project name (if multiple dev3000 instances are running)")
+      },
+      async (params) => {
+        return restartDevServer(params)
       }
     )
 
