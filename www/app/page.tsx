@@ -5,7 +5,7 @@ import { GitHubLink } from "@/components/github-link"
 import { Button } from "@/components/ui/button"
 import HeroAppImage from "@/public/hero-app.png"
 import HeroTerminalImage from "@/public/hero-terminal.png"
-import { TerminalRecording } from "./components.client"
+import { TerminalRecording, ChangelogLink } from "./components.client"
 
 export default function HomePage() {
   return (
@@ -33,13 +33,8 @@ export default function HomePage() {
                 <GitHubLink />
               </div>
 
-              {/* Changelog stays on the far right */}
-              <Link
-                href="/changelog"
-                className="text-sm text-muted-foreground hover:text-foreground hover:underline transition-colors"
-              >
-                Changelog
-              </Link>
+              {/* Changelog link - CLS BUG: hydration mismatch causes pop-in! */}
+              <ChangelogLink />
             </nav>
           </div>
         </div>
