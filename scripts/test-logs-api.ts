@@ -7,9 +7,10 @@ console.log("🧪 Testing d3k with logs API...")
 // Don't kill existing processes - let d3k handle port conflicts
 console.log("🚀 Starting d3k test...")
 
-// Start d3k in the www directory
-console.log("🚀 Starting d3k in www directory...")
-const d3kProcess = spawn("d3k", ["--no-tui", "--debug"], {
+// Start d3k in the www directory with a random high port to avoid conflicts
+const TEST_PORT = "3210"
+console.log(`🚀 Starting d3k in www directory on port ${TEST_PORT}...`)
+const d3kProcess = spawn("d3k", ["--no-tui", "--debug", "--port", TEST_PORT], {
   cwd: join(process.cwd(), "www"),
   env: {
     ...process.env,
@@ -148,6 +149,27 @@ async function runTests() {
       } catch (_e) {
         // Already dead
       }
+    }
+
+    // IMPORTANT: Force kill any remaining processes on the test port
+    // This prevents zombie Next.js worker processes (next-server) from lingering
+    console.log(`🧹 Force cleaning up any remaining processes on port ${TEST_PORT}...`)
+    try {
+      const { execSync } = await import("child_process")
+      execSync(`lsof -ti :${TEST_PORT} | xargs kill -9 2>/dev/null || true`, { stdio: "ignore" })
+      console.log(`✅ Cleaned up any remaining processes on port ${TEST_PORT}`)
+    } catch (_e) {
+      // Port was already clean or lsof failed - not critical
+    }
+
+    // Also kill any orphaned next-server processes that might be consuming CPU
+    try {
+      const { execSync } = await import("child_process")
+      // Only kill next-server processes that are using high CPU (likely orphaned)
+      execSync('pkill -9 -f "next-server.*v15" 2>/dev/null || true', { stdio: "ignore" })
+      console.log("✅ Cleaned up any orphaned next-server processes")
+    } catch (_e) {
+      // No orphaned processes - not critical
     }
   }
 
