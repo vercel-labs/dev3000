@@ -4,16 +4,19 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.90] - 2025-10-10
+
+**Patch Release**
+
+- 🎬 **Passive Screencast Capture**: Automatically records page loads and navigations for performance analysis
+- 🎯 **CLS Detection**: Watch frame-by-frame video of layout shifts with precise element tracking
+- Bug fixes improve overall reliability
+
 ## [0.0.89] - 2025-10-10
 
 **Patch Release**
 
-### Fixed
-- **🔒 Privacy-Focused CDP Monitoring**: Browser monitoring now only tracks localhost app server
-  - Filters out dev3000's MCP server (localhost:3684) to prevent logging internal pages
-  - Filters out external domains (google.com, CDNs, etc.) to respect user privacy
-  - Only monitors localhost on the app server port - no more polluted logs when browsing elsewhere
-  - Prevents consolidated log from showing MCP server requests, navigations, and interactions
+- 🔧 **Auto-Configuration for AI CLIs**: Automatically writes `.mcp.json` (Claude Code) and `.cursor/mcp.json` (Cursor) so MCP servers are instantly available
 
 ## [0.0.88] - 2025-10-09
 
