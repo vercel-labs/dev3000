@@ -365,9 +365,10 @@ export async function fixMyApp({
 
     // Filter out framework noise (unfixable warnings from Next.js, React, etc.)
     const frameworkNoisePatterns = [
-      /link rel=preload.*must have.*valid.*as/i, // Next.js font optimization warning
+      /link rel=preload.*must have.*valid.*as/i, // Next.js font optimization warning - not actionable
       /next\/font/i, // Next.js font-related warnings
-      /automatically generated/i // Auto-generated code warnings
+      /automatically generated/i, // Auto-generated code warnings
+      /\[NETWORK\].*\b(200|201|204|304)\b\s+(OK|Created|No Content|Not Modified)/i // Successful HTTP responses - not errors
     ]
 
     const actionableErrors = allErrors.filter((line) => {
