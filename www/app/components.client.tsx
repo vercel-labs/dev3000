@@ -31,5 +31,5 @@ export function TerminalRecording() {
     }
   }, [])
 
-  return <div ref={containerRef} />
+  return <div ref={containerRef} className="min-h-[600px]" />
 }
