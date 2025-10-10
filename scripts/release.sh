@@ -115,10 +115,22 @@ fi
 echo "⬇️ Pulling latest changes from origin/main..."
 git pull origin main
 
+# Final check: commit any remaining uncommitted changes (e.g., from pre-commit hooks)
+if ! git diff --quiet || ! git diff --staged --quiet; then
+    echo "📝 Committing any remaining changes from pre-commit hooks..."
+    git add -A
+    git commit -m "Fix remaining formatting after release
+
+🤖 Generated with [Claude Code](https://claude.ai/code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>"
+    echo "✅ Remaining changes committed"
+fi
+
 # Create and push tag manually for better control
 echo "🏷️ Creating git tag $TAG_NAME..."
 git tag -a "$TAG_NAME" -m "Release v$NEXT_VERSION"
-echo "⬆️ Pushing version commit to main..."
+echo "⬆️ Pushing all commits to main..."
 git push origin main
 echo "⬆️ Pushing tag to origin..."
 git push origin "$TAG_NAME"
