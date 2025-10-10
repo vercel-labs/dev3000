@@ -1,6 +1,5 @@
 "use client"
 
-import Link from "next/link"
 import { useEffect, useState } from "react"
 import { DarkModeToggle } from "@/components/dark-mode-toggle"
 import { ChromeIcon, NextJsIcon } from "@/components/mcp-icons"

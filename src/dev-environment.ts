@@ -2440,6 +2440,12 @@ export class DevEnvironment {
 }
 
 export async function startDevEnvironment(options: DevEnvironmentOptions) {
+  // Clear terminal before starting TUI (unless in servers-only or debug mode)
+  if (options.tui && !options.serversOnly && !options.debug) {
+    // ANSI escape codes: clear screen + move cursor to top-left
+    process.stdout.write("\x1b[2J\x1b[0f")
+  }
+
   const devEnv = new DevEnvironment(options)
   await devEnv.start()
 }

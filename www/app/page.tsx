@@ -3,11 +3,13 @@ import Image from "next/image"
 import Link from "next/link"
 import { GitHubLink } from "@/components/github-link"
 import { Button } from "@/components/ui/button"
+import { demoCLSBugsFlag } from "@/lib/flags"
 import HeroAppImage from "@/public/hero-app.png"
 import HeroTerminalImage from "@/public/hero-terminal.png"
-import { TerminalRecording, ChangelogLink } from "./components.client"
+import { ChangelogLink, TerminalRecording } from "./components.client"
 
-export default function HomePage() {
+export default async function HomePage() {
+  const showDemoCLSBugs = await demoCLSBugsFlag()
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -33,8 +35,8 @@ export default function HomePage() {
                 <GitHubLink />
               </div>
 
-              {/* Changelog link - CLS BUG: hydration mismatch causes pop-in! */}
-              <ChangelogLink />
+              {/* Changelog link - controlled by demo-cls-bugs flag */}
+              <ChangelogLink enableCLSBug={showDemoCLSBugs} />
             </nav>
           </div>
         </div>

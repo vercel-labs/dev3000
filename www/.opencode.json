@@ -1,0 +1,9 @@
+{
+  "mcp": {
+    "dev3000": {
+      "type": "local",
+      "command": ["npx", "@modelcontextprotocol/inspector", "http://localhost:3684/mcp"],
+      "enabled": true
+    }
+  }
+}

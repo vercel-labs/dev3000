@@ -134,7 +134,7 @@ export class MCPClientManager {
         this.tools.set(config.name, [])
         console.log(`[MCP Orchestrator] No tools discovered from ${config.name} (will retry on first use)`)
       }
-    } catch (error) {
+    } catch (_error) {
       // Tool discovery failed but connection succeeded - tools will be discovered on first use
       this.tools.set(config.name, [])
       console.log(`[MCP Orchestrator] Tool discovery deferred for ${config.name} (will discover on first tool call)`)

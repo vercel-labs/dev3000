@@ -6,7 +6,7 @@ import { getMCPClientManager } from "@/app/mcp/client-manager"
 
 export const dynamic = "force-dynamic"
 
-export async function GET(request: Request) {
+export async function GET(_request: Request) {
   const clientManager = getMCPClientManager()
   const connectedMCPs = clientManager.getConnectedMCPs()
   const allTools = clientManager.getAllTools()
