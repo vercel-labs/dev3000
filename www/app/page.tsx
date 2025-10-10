@@ -28,7 +28,7 @@ export default function HomePage() {
               </span>
             </div>
             <nav className="flex items-center gap-4">
-              {/* Show GitHub button when scrolled */}
+              {/* Show GitHub button when scrolled - CLS BUG: no height reserved! */}
               <div className={`transition-all duration-300`}>
                 <GitHubLink />
               </div>
@@ -72,6 +72,7 @@ export default function HomePage() {
                 src={HeroTerminalImage}
                 alt=""
                 className="w-full"
+                priority
                 sizes="(max-width: 768px) 100vw, 940px"
                 loading="eager"
               />
@@ -79,6 +80,7 @@ export default function HomePage() {
                 src={HeroAppImage}
                 alt=""
                 className="w-1/2 absolute -right-8 -bottom-8 drop-shadow-sm"
+                priority
                 sizes="(max-width: 768px) 100vw, 600px"
                 loading="eager"
               />
