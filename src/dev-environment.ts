@@ -2065,7 +2065,9 @@ export class DevEnvironment {
       },
       this.options.debug,
       this.options.browser,
-      this.options.pluginReactScan
+      this.options.pluginReactScan,
+      this.options.port, // App server port to monitor
+      this.options.mcpPort // MCP server port to ignore
     )
 
     try {

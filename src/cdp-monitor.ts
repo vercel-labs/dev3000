@@ -37,6 +37,8 @@ export class CDPMonitor {
   private minScreenshotInterval: number = 1000 // Minimum 1 second between screenshots
   private chromePids: Set<number> = new Set() // Track all Chrome PIDs for this instance
   private onWindowClosedCallback: (() => void) | null = null // Callback for when window is manually closed
+  private appServerPort?: string // Port of the user's app server to monitor
+  private mcpServerPort?: string // Port of dev3000's MCP server to ignore
 
   constructor(
     profileDir: string,
@@ -44,10 +46,14 @@ export class CDPMonitor {
     logger: (source: string, message: string) => void,
     debug: boolean = false,
     browserPath?: string,
-    pluginReactScan: boolean = false
+    pluginReactScan: boolean = false,
+    appServerPort?: string,
+    mcpServerPort?: string
   ) {
     this.profileDir = profileDir
     this.screenshotDir = screenshotDir
+    this.appServerPort = appServerPort
+    this.mcpServerPort = mcpServerPort
     this.logger = logger
     this.debug = debug
     this.browserPath = browserPath
@@ -57,6 +63,38 @@ export class CDPMonitor {
   private debugLog(message: string) {
     if (this.debug) {
       console.log(`[CDP DEBUG] ${message}`)
+    }
+  }
+
+  /**
+   * Check if a URL should be monitored (i.e., it's from the user's app server, not dev3000's MCP server or external sites)
+   */
+  private shouldMonitorUrl(url: string): boolean {
+    try {
+      const urlObj = new URL(url)
+      const hostname = urlObj.hostname
+      const port = urlObj.port || (urlObj.protocol === "https:" ? "443" : "80")
+
+      // Only monitor localhost/127.0.0.1 (the user's local dev server)
+      const isLocalhost = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "0.0.0.0"
+      if (!isLocalhost) {
+        return false
+      }
+
+      // Skip dev3000's MCP server port
+      if (this.mcpServerPort && port === this.mcpServerPort) {
+        return false
+      }
+
+      // If we have an app server port specified, only monitor that specific port
+      if (this.appServerPort && port !== this.appServerPort) {
+        return false
+      }
+
+      return true
+    } catch {
+      // If URL parsing fails, skip it (safer to under-monitor than over-monitor)
+      return false
     }
   }
 
@@ -713,6 +751,11 @@ export class CDPMonitor {
       const { url, method, headers, postData } = params.request
       const { type, initiator } = params
 
+      // Skip requests to dev3000's MCP server
+      if (!this.shouldMonitorUrl(url)) {
+        return
+      }
+
       let logMsg = `[NETWORK] ${method} ${url}`
       if (type) logMsg += ` (${type})`
       if (initiator?.type) logMsg += ` initiated by ${initiator.type}`
@@ -750,6 +793,11 @@ export class CDPMonitor {
       const { url, status, statusText, mimeType } = params.response
       const { type } = params
 
+      // Skip responses from dev3000's MCP server
+      if (!this.shouldMonitorUrl(url)) {
+        return
+      }
+
       let logMsg = `[NETWORK] ${status} ${statusText} ${url}`
       if (type) logMsg += ` (${type})`
       if (mimeType) logMsg += ` [${mimeType}]`
@@ -772,7 +820,14 @@ export class CDPMonitor {
       const { frame } = params
       if (frame?.parentId) return // Only log main frame navigation
 
-      this.logger("browser", `[NAVIGATION] ${frame?.url || "unknown"}`)
+      const url = frame?.url || "unknown"
+
+      // Skip navigation to dev3000's MCP server
+      if (!this.shouldMonitorUrl(url)) {
+        return
+      }
+
+      this.logger("browser", `[NAVIGATION] ${url}`)
 
       // Don't take a screenshot here - wait for page load
     })
