@@ -4,24 +4,17 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.89] - 2025-10-10
+
+**Patch Release**
+
+- 🔧 **Auto-Configuration for AI CLIs**: Automatically writes `.mcp.json` (Claude Code) and `.cursor/mcp.json` (Cursor) so MCP servers are instantly available
+
 ## [0.0.88] - 2025-10-09
 
 **Patch Release**
 
-### Fixed
-- **🟢 Accept 500/503 Status Codes**: Server readiness check now treats 500 and 503 HTTP status codes as "server is running"
-  - Allows dev3000 to open the browser even when the app has bugs, enabling immediate debugging
-  - Previously would wait 30 seconds and exit without launching browser
-  - Perfect for cases where the server starts but the homepage has errors
-
-- **🔄 Circular Dependency Detection**: Prevents infinite loops when package.json scripts call dev3000
-  - Detects when scripts like `"dev": "dev3000"` would create recursion
-  - Shows clear error message with 3 solutions before attempting to start
-  - Saves developers from the "40+ Chrome tabs opening" scenario
-
-- **🔧 Dynamic Port Testing**: Test suite now uses dynamic port finding instead of hardcoded ports
-  - Prevents test failures when default ports are in use
-  - Makes CI/CD more reliable
+- Quality improvements and bug fixes
 
 ## [0.0.87] - 2025-10-09
 
