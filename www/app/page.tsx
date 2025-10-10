@@ -3,11 +3,13 @@ import Image from "next/image"
 import Link from "next/link"
 import { GitHubLink } from "@/components/github-link"
 import { Button } from "@/components/ui/button"
+import { demoCLSBugsFlag } from "@/lib/flags"
 import HeroAppImage from "@/public/hero-app.png"
 import HeroTerminalImage from "@/public/hero-terminal.png"
-import { TerminalRecording } from "./components.client"
+import { ChangelogLink, TerminalRecording } from "./components.client"
 
-export default function HomePage() {
+export default async function HomePage() {
+  const showDemoCLSBugs = await demoCLSBugsFlag()
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -28,18 +30,13 @@ export default function HomePage() {
               </span>
             </div>
             <nav className="flex items-center gap-4">
-              {/* Show GitHub button when scrolled */}
+              {/* Show GitHub button when scrolled - CLS BUG: no height reserved! */}
               <div className={`transition-all duration-300`}>
                 <GitHubLink />
               </div>
 
-              {/* Changelog stays on the far right */}
-              <Link
-                href="/changelog"
-                className="text-sm text-muted-foreground hover:text-foreground hover:underline transition-colors"
-              >
-                Changelog
-              </Link>
+              {/* Changelog link - controlled by demo-cls-bugs flag */}
+              <ChangelogLink enableCLSBug={showDemoCLSBugs} />
             </nav>
           </div>
         </div>
@@ -72,6 +69,7 @@ export default function HomePage() {
                 src={HeroTerminalImage}
                 alt=""
                 className="w-full"
+                priority
                 sizes="(max-width: 768px) 100vw, 940px"
                 loading="eager"
               />
@@ -79,6 +77,7 @@ export default function HomePage() {
                 src={HeroAppImage}
                 alt=""
                 className="w-1/2 absolute -right-8 -bottom-8 drop-shadow-sm"
+                priority
                 sizes="(max-width: 768px) 100vw, 600px"
                 loading="eager"
               />

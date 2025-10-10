@@ -2113,6 +2113,57 @@ export async function getMcpCapabilities({
 }
 
 /**
+ * Detect if pixel changes represent a layout shift (elements moving) vs content change (images loading)
+ *
+ * Key distinction:
+ * - Layout shifts: Elements move to new positions (top region changes while bottom stays same)
+ * - Content changes: Same regions change in-place (image loads with pixels appearing)
+ */
+function detectLayoutShiftVsContentChange(prevPng: PNG, currPng: PNG): { isLayoutShift: boolean; shiftScore: number } {
+  const width = prevPng.width
+  const height = prevPng.height
+
+  // Divide screen into horizontal bands (top, middle, bottom)
+  const bandHeight = Math.floor(height / 8)
+  const bands = Array(8).fill(0)
+
+  // Count changed pixels in each band
+  for (let y = 0; y < height; y++) {
+    const bandIndex = Math.min(Math.floor(y / bandHeight), 7)
+    for (let x = 0; x < width; x++) {
+      const idx = (width * y + x) << 2
+      const rDiff = Math.abs(prevPng.data[idx] - currPng.data[idx])
+      const gDiff = Math.abs(prevPng.data[idx + 1] - currPng.data[idx + 1])
+      const bDiff = Math.abs(prevPng.data[idx + 2] - currPng.data[idx + 2])
+
+      // If any channel differs significantly, count as changed pixel
+      if (rDiff > 30 || gDiff > 30 || bDiff > 30) {
+        bands[bandIndex]++
+      }
+    }
+  }
+
+  // Calculate percentage of pixels changed in each band
+  const pixelsPerBand = width * bandHeight
+  const bandPercentages = bands.map((count) => (count / pixelsPerBand) * 100)
+
+  // Layout shift pattern: High change in top bands (nav/header area), low change in bottom
+  // Content change pattern: Evenly distributed or contained to specific regions
+  const topBandChange = (bandPercentages[0] + bandPercentages[1]) / 2
+  const bottomBandChange = (bandPercentages[6] + bandPercentages[7]) / 2
+
+  // If top 25% of screen has >5% pixel change but bottom has <2% change = layout shift
+  const isLayoutShift = topBandChange > 5 && bottomBandChange < 2 && topBandChange > bottomBandChange * 2
+
+  // Calculate shift score (similar to CLS score)
+  const totalChanged = bands.reduce((sum, count) => sum + count, 0)
+  const totalPixels = width * height
+  const shiftScore = (totalChanged / totalPixels) * 0.1 // Rough CLS equivalent
+
+  return { isLayoutShift, shiftScore }
+}
+
+/**
  * Detect jank/layout shifts by comparing screenshots from ScreencastManager
  * Returns array of jank detections with timing and visual impact data
  */
@@ -2250,8 +2301,70 @@ async function detectJankFromScreenshots(_projectName?: string): Promise<{
 
   // If we have real CLS data from Chrome's PerformanceObserver, trust it completely
   if (realCLSData) {
-    // If Chrome says there are no shifts, return immediately - don't fall back to pixel diff
+    // If Chrome says there are no shifts, validate with pixel diff as backup
+    // Chrome's PerformanceObserver can miss very fast hydration shifts
     if (realCLSData.shifts.length === 0) {
+      // Run pixel diff validation on early frames (first 1500ms) to catch hydration issues
+      const earlyFrames = sessionFiles.filter((f) => {
+        const timeMatch = f.match(/-(\d+)ms\.png$/)
+        const time = timeMatch ? parseInt(timeMatch[1], 10) : 0
+        return time < 1500 // Hydration window
+      })
+
+      let foundHydrationShift = false
+
+      // Only check consecutive early frames
+      for (let i = 1; i < earlyFrames.length && i < 10; i++) {
+        const prevFile = join(screenshotDir, earlyFrames[i - 1])
+        const currFile = join(screenshotDir, earlyFrames[i])
+
+        try {
+          const prevPng = PNG.sync.read(readFileSync(prevFile))
+          const currPng = PNG.sync.read(readFileSync(currFile))
+
+          if (prevPng.width !== currPng.width || prevPng.height !== currPng.height) {
+            continue
+          }
+
+          // Detect if this is a layout shift vs content change
+          const shiftAnalysis = detectLayoutShiftVsContentChange(prevPng, currPng)
+
+          // If we detect a layout shift (not just content loading), flag it
+          if (shiftAnalysis.isLayoutShift) {
+            foundHydrationShift = true
+            const timeMatch = earlyFrames[i].match(/-(\d+)ms\.png$/)
+            const timeSinceStart = timeMatch ? parseInt(timeMatch[1], 10) : 0
+
+            const mcpPort = process.env.MCP_PORT || "3684"
+            jankDetections.push({
+              timestamp: `${timeSinceStart}ms`,
+              timeSinceStart,
+              visualDiff: shiftAnalysis.shiftScore * 100,
+              severity: "high", // Hydration shifts are always high severity
+              element: "Hydration-related element",
+              clsScore: shiftAnalysis.shiftScore,
+              uxImpact: "🚨 CRITICAL: Fast hydration shift detected - Chrome's observer missed this early shift",
+              beforeFrameUrl: `http://localhost:${mcpPort}/api/screenshots/${earlyFrames[i - 1]}`,
+              afterFrameUrl: `http://localhost:${mcpPort}/api/screenshots/${earlyFrames[i]}`
+            })
+          }
+        } catch {
+          // Skip frames that can't be compared
+        }
+      }
+
+      // If we found hydration shifts, return them with a note
+      if (foundHydrationShift) {
+        return {
+          detections: jankDetections,
+          sessionId: latestSessionId,
+          totalFrames: sessionFiles.length,
+          screenshotDir,
+          realCLS: { score: 0.05, grade: "good" } // Estimate CLS for hydration shifts
+        }
+      }
+
+      // Chrome is correct - no shifts detected
       return {
         detections: [],
         sessionId: latestSessionId,
