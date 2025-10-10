@@ -4,6 +4,13 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.91] - 2025-10-10
+
+**Patch Release**
+
+- 🔧 **Auto-Configuration for AI CLIs**: Automatically writes `.mcp.json` (Claude Code) and `.cursor/mcp.json` (Cursor) so MCP servers are instantly available
+- Resolved GitHub issues [#12](https://github.com/anthropics/claude-code/issues/12)
+
 ## [0.0.90] - 2025-10-10
 
 **Patch Release**

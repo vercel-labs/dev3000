@@ -10,6 +10,16 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.91",
+    date: "2025-10-10",
+    type: "patch",
+    highlights: [
+      "🔧 **Auto-Configuration for AI CLIs**: Automatically writes `.mcp.json` (Claude Code) and `.cursor/mcp.json` (Cursor) so MCP servers are instantly available",
+      "Resolved GitHub issues [#12](https://github.com/anthropics/claude-code/issues/12)"
+    ]
+  },
+
+  {
     version: "0.0.90",
     date: "2025-10-10",
     type: "patch",
