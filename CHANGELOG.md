@@ -4,6 +4,14 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.92] - 2025-10-11
+
+**Patch Release**
+
+- 🎬 **Passive Screencast Capture**: Automatically records page loads and navigations for performance analysis
+- 🎯 **CLS Detection**: Watch frame-by-frame video of layout shifts with precise element tracking
+- 🎨 **Improved TUI**: Better header and status line rendering for narrow terminal windows
+
 ## [0.0.91] - 2025-10-10
 
 **Patch Release**
