@@ -45,8 +45,9 @@ const TUIApp = ({
   const [initStatus, setInitStatus] = useState<string | null>("Initializing...")
   const [appPort, setAppPort] = useState<string>(initialAppPort)
   const logIdCounter = useRef(0)
+  const [clearFromLogId, setClearFromLogId] = useState<number>(0) // Track log ID to clear from
   const { stdout } = useStdout()
-  const ctrlCMessageDefault = "^C quit"
+  const ctrlCMessageDefault = "^L clear ^C quit"
   const [ctrlCMessage, setCtrlCMessage] = useState(ctrlCMessageDefault)
 
   const [terminalSize, setTerminalSize] = useState(() => ({
@@ -228,12 +229,19 @@ const TUIApp = ({
     if (key.ctrl && input === "c") {
       // Send SIGINT to trigger main process shutdown handler
       process.kill(process.pid, "SIGINT")
+    } else if (key.ctrl && input === "l") {
+      // Ctrl-L: Clear logs box - set clear point to last log ID
+      const lastLogId = logs.length > 0 ? logs[logs.length - 1].id : logIdCounter.current
+      setClearFromLogId(lastLogId)
+      setScrollOffset(0) // Reset scroll to bottom
     } else if (key.upArrow) {
-      setScrollOffset((prev) => Math.min(prev + 1, Math.max(0, logs.length - maxVisibleLogs)))
+      const filteredCount = logs.filter((log) => log.id > clearFromLogId).length
+      setScrollOffset((prev) => Math.min(prev + 1, Math.max(0, filteredCount - maxVisibleLogs)))
     } else if (key.downArrow) {
       setScrollOffset((prev) => Math.max(0, prev - 1))
     } else if (key.pageUp) {
-      setScrollOffset((prev) => Math.min(prev + maxVisibleLogs, Math.max(0, logs.length - maxVisibleLogs)))
+      const filteredCount = logs.filter((log) => log.id > clearFromLogId).length
+      setScrollOffset((prev) => Math.min(prev + maxVisibleLogs, Math.max(0, filteredCount - maxVisibleLogs)))
     } else if (key.pageDown) {
       setScrollOffset((prev) => Math.max(0, prev - maxVisibleLogs))
     } else if (input === "g" && key.shift) {
@@ -241,12 +249,17 @@ const TUIApp = ({
       setScrollOffset(0)
     } else if (input === "g" && !key.shift) {
       // g to go to beginning
-      setScrollOffset(Math.max(0, logs.length - maxVisibleLogs))
+      const filteredCount = logs.filter((log) => log.id > clearFromLogId).length
+      setScrollOffset(Math.max(0, filteredCount - maxVisibleLogs))
     }
   })
 
-  // Calculate visible logs
-  const visibleLogs = logs.slice(Math.max(0, logs.length - maxVisibleLogs - scrollOffset), logs.length - scrollOffset)
+  // Calculate visible logs - filter to only show logs after the clear point
+  const filteredLogs = logs.filter((log) => log.id > clearFromLogId)
+  const visibleLogs = filteredLogs.slice(
+    Math.max(0, filteredLogs.length - maxVisibleLogs - scrollOffset),
+    filteredLogs.length - scrollOffset
+  )
 
   // Render compact header for small terminals
   const renderCompactHeader = () => (
@@ -331,7 +344,7 @@ const TUIApp = ({
       <Box flexDirection="column" borderStyle="single" borderColor="gray" paddingX={1} flexGrow={1} minHeight={0}>
         {!isVeryCompact && (
           <Text color="gray" dimColor>
-            Logs ({logs.length} total{scrollOffset > 0 && `, scrolled up ${scrollOffset} lines`})
+            Logs ({filteredLogs.length} total{scrollOffset > 0 && `, scrolled up ${scrollOffset} lines`})
           </Text>
         )}
 
@@ -427,10 +440,6 @@ const TUIApp = ({
                 // Single space after type
                 const typeSpacing = ""
 
-                // For alignment: if no type tag, add spacing equivalent to a tag
-                // This aligns SERVER logs without tags with those that have tags
-                const alignmentSpacing = !type ? "       " : "" // ~7 chars for average tag like [GET]
-
                 return (
                   <Text key={log.id} wrap="truncate-end">
                     <Text dimColor>[{timestamp}]</Text>
@@ -438,14 +447,14 @@ const TUIApp = ({
                     <Text color={sourceColor} bold>
                       [{source}]
                     </Text>
-                    <Text>{sourceSpacing} </Text>
                     {type ? (
                       <>
+                        <Text>{sourceSpacing} </Text>
                         <Text color={typeColors[type] || "#A0A0A0"}>[{type}]</Text>
                         <Text>{typeSpacing} </Text>
                       </>
                     ) : (
-                      <Text>{alignmentSpacing}</Text>
+                      <Text> </Text>
                     )}
                     <Text>{message}</Text>
                   </Text>

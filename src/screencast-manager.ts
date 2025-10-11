@@ -17,6 +17,7 @@ interface BufferedFrame {
 
 interface LayoutShiftSource {
   node?: string
+  position?: string | null
   previousRect?: { x: number; y: number; width: number; height: number }
   currentRect?: { x: number; y: number; width: number; height: number }
   actualRect?: { x: number; y: number; width: number; height: number } | null
@@ -39,6 +40,7 @@ export class ScreencastManager {
   private appPort: string
   private layoutShifts: Array<{ score: number; timestamp: number; sources?: LayoutShiftSource[] }> = []
   private viewportInfo: Record<string, number> = {}
+  private captureTrigger: "navigation" | "load" = "load"
 
   constructor(
     private cdpUrl: string,
@@ -116,7 +118,11 @@ export class ScreencastManager {
 
     // Navigation started - check URL before capturing
     // Note: Page.frameStartedNavigating fires earlier than Page.frameStartedLoading
-    if (message.method === "Page.frameStartedNavigating" || message.method === "Page.frameStartedLoading") {
+    if (message.method === "Page.frameStartedNavigating") {
+      this.captureTrigger = "navigation"
+      this.checkUrlAndStartCapture()
+    } else if (message.method === "Page.frameStartedLoading") {
+      this.captureTrigger = "load"
       this.checkUrlAndStartCapture()
     }
 
@@ -261,6 +267,7 @@ export class ScreencastManager {
         captureEndTime: Date.now(),
         appPort: this.appPort,
         cssViewport: this.viewportInfo, // CSS viewport dimensions from window.innerWidth
+        captureTrigger: this.captureTrigger, // "navigation" or "load"
         layoutShifts: this.layoutShifts,
         totalCLS,
         clsGrade: totalCLS <= 0.1 ? "good" : totalCLS <= 0.25 ? "needs-improvement" : "poor"
@@ -318,8 +325,9 @@ export class ScreencastManager {
         this.logFn(`[CDP] Failed to save metadata - ${error}`)
       }
 
+      const triggerLabel = this.captureTrigger === "navigation" ? "Navigation" : "Load"
       this.logFn(
-        `[CDP] View all frames: http://localhost:${process.env.MCP_PORT || "3684"}/video/${this.currentSessionId}`
+        `[CDP] ${triggerLabel} complete - view all frames: http://localhost:${process.env.MCP_PORT || "3684"}/video/${this.currentSessionId}`
       )
 
       await this.stopScreencast()
@@ -387,9 +395,10 @@ export class ScreencastManager {
           const observer = new PerformanceObserver((list) => {
             for (const entry of list.getEntries()) {
               if (entry.entryType === 'layout-shift' && !entry.hadRecentInput) {
-                // For each shift, try to get the actual current bounding box
+                // For each shift, try to get the actual current bounding box and position style
                 const sources = entry.sources ? entry.sources.map(s => {
                   let actualRect = null;
+                  let positionStyle = null;
                   if (s.node && s.node.nodeName) {
                     try {
                       // Query the first matching element (nav, header, etc.)
@@ -402,6 +411,10 @@ export class ScreencastManager {
                           width: rect.width,
                           height: rect.height
                         };
+
+                        // Get computed position style to detect fixed/absolute elements
+                        const computed = window.getComputedStyle(element);
+                        positionStyle = computed.position;
                       }
                     } catch (e) {
                       // Ignore errors
@@ -410,6 +423,7 @@ export class ScreencastManager {
 
                   return {
                     node: s.node ? s.node.nodeName : undefined,
+                    position: positionStyle,
                     previousRect: s.previousRect ? {
                       x: s.previousRect.x,
                       y: s.previousRect.y,
@@ -496,9 +510,23 @@ export class ScreencastManager {
           const newShifts = shifts.slice(this.layoutShifts.length)
           this.layoutShifts.push(...newShifts)
           newShifts.forEach((shift) => {
-            this.logFn(
-              `[CDP] Layout shift detected (score: ${shift.score.toFixed(4)}, time: ${shift.timestamp.toFixed(0)}ms)`
-            )
+            const element = shift.sources?.[0]?.node || "unidentified"
+            const position = shift.sources?.[0]?.position
+
+            // Log with context about whether we can verify this shift
+            if (!shift.sources?.[0] || element === "unidentified" || position === null || position === undefined) {
+              this.logFn(
+                `[CDP] Unverified shift detected (score: ${shift.score.toFixed(4)}, time: ${shift.timestamp.toFixed(0)}ms) - element could not be identified, likely fixed overlay noise`
+              )
+            } else if (position === "fixed" || position === "absolute") {
+              this.logFn(
+                `[CDP] Fixed/absolute element shift detected (${element}, position: ${position}, score: ${shift.score.toFixed(4)}) - will be filtered as overlay noise`
+              )
+            } else {
+              this.logFn(
+                `[CDP] Layout shift detected (element: ${element}, position: ${position}, score: ${shift.score.toFixed(4)}, time: ${shift.timestamp.toFixed(0)}ms)`
+              )
+            }
           })
         }
       }

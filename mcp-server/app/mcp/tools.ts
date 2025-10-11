@@ -669,7 +669,13 @@ export async function fixMyApp({
           )
         }
 
-        results.push(`📹 **View all frames**: ${videoUrl}`)
+        const triggerLabel =
+          jankResult.captureTrigger === "navigation"
+            ? "Navigation complete"
+            : jankResult.captureTrigger === "load"
+              ? "Load complete"
+              : "View all frames"
+        results.push(`📹 **${triggerLabel}**: ${videoUrl}`)
         results.push(`🎞️ **Session ID**: ${jankResult.sessionId} (${jankResult.totalFrames} frames)`)
         results.push("")
 
@@ -2122,48 +2128,128 @@ export async function getMcpCapabilities({
  * - Layout shifts: Elements move to new positions (top region changes while bottom stays same)
  * - Content changes: Same regions change in-place (image loads with pixels appearing)
  */
-function detectLayoutShiftVsContentChange(prevPng: PNG, currPng: PNG): { isLayoutShift: boolean; shiftScore: number } {
+function detectLayoutShiftVsContentChange(
+  prevPng: PNG,
+  currPng: PNG
+): { isLayoutShift: boolean; shiftScore: number; isOverlayNoise: boolean } {
   const width = prevPng.width
   const height = prevPng.height
 
-  // Divide screen into horizontal bands (top, middle, bottom)
-  const bandHeight = Math.floor(height / 8)
-  const bands = Array(8).fill(0)
+  // Track changes at row-level for detecting correlated shifts
+  const rowChangeCounts = new Array(height).fill(0)
 
-  // Count changed pixels in each band
+  // Count changed pixels per row (for correlation analysis)
   for (let y = 0; y < height; y++) {
-    const bandIndex = Math.min(Math.floor(y / bandHeight), 7)
     for (let x = 0; x < width; x++) {
       const idx = (width * y + x) << 2
       const rDiff = Math.abs(prevPng.data[idx] - currPng.data[idx])
       const gDiff = Math.abs(prevPng.data[idx + 1] - currPng.data[idx + 1])
       const bDiff = Math.abs(prevPng.data[idx + 2] - currPng.data[idx + 2])
 
-      // If any channel differs significantly, count as changed pixel
       if (rDiff > 30 || gDiff > 30 || bDiff > 30) {
-        bands[bandIndex]++
+        rowChangeCounts[y]++
       }
     }
   }
 
-  // Calculate percentage of pixels changed in each band
+  // Calculate percentage of pixels changed per row
+  const rowChangePercents = rowChangeCounts.map((count) => (count / width) * 100)
+
+  // Detect consecutive rows with high change (indicates shift boundary)
+  // True CLS: Many consecutive rows change together (content moved as a block)
+  let maxConsecutiveHighChangeRows = 0
+  let currentConsecutive = 0
+
+  for (let i = 0; i < height; i++) {
+    if (rowChangePercents[i] > 50) {
+      // >50% of row changed
+      currentConsecutive++
+      maxConsecutiveHighChangeRows = Math.max(maxConsecutiveHighChangeRows, currentConsecutive)
+    } else {
+      currentConsecutive = 0
+    }
+  }
+
+  // Detect isolated hotspots (fixed/absolute overlay noise)
+  // Pattern: low change → spike → low change (element appearing in place)
+  let isolatedHotspots = 0
+  const windowSize = 5
+
+  for (let i = windowSize; i < height - windowSize; i++) {
+    // Calculate average change in windows before, during, and after
+    const before = rowChangePercents.slice(i - windowSize, i).reduce((a, b) => a + b, 0) / windowSize
+    const during = rowChangePercents[i]
+    const after = rowChangePercents.slice(i + 1, i + windowSize + 1).reduce((a, b) => a + b, 0) / windowSize
+
+    // Isolated spike: calm before/after, high during
+    if (before < 10 && during > 60 && after < 10) {
+      isolatedHotspots++
+    }
+  }
+
+  // Detect narrow fixed elements (toolbars, indicators)
+  // Pattern: Many rows with LOW percentage change (5-25%) = narrow element across many rows
+  // This catches toolbars/indicators that are thin but tall
+  let narrowChangeRows = 0
+  for (let i = 0; i < height; i++) {
+    // Low but consistent change (narrow element)
+    if (rowChangePercents[i] > 5 && rowChangePercents[i] < 25) {
+      narrowChangeRows++
+    }
+  }
+
+  // If many rows have narrow changes, this is likely a fixed toolbar/sidebar
+  const hasNarrowFixedElement = narrowChangeRows > height * 0.3 // >30% of rows have narrow changes
+
+  // Calculate band-based metrics for backward compatibility
+  const bandHeight = Math.floor(height / 8)
+  const bands = Array(8).fill(0)
+
+  for (let y = 0; y < height; y++) {
+    const bandIndex = Math.min(Math.floor(y / bandHeight), 7)
+    bands[bandIndex] += rowChangeCounts[y]
+  }
+
   const pixelsPerBand = width * bandHeight
   const bandPercentages = bands.map((count) => (count / pixelsPerBand) * 100)
-
-  // Layout shift pattern: High change in top bands (nav/header area), low change in bottom
-  // Content change pattern: Evenly distributed or contained to specific regions
   const topBandChange = (bandPercentages[0] + bandPercentages[1]) / 2
   const bottomBandChange = (bandPercentages[6] + bandPercentages[7]) / 2
 
-  // If top 25% of screen has >5% pixel change but bottom has <2% change = layout shift
-  const isLayoutShift = topBandChange > 5 && bottomBandChange < 2 && topBandChange > bottomBandChange * 2
+  // Calculate variance to detect if changes are uniform (shift) or scattered (overlay)
+  const meanChange = bandPercentages.reduce((a, b) => a + b, 0) / bandPercentages.length
+  const variance = bandPercentages.reduce((sum, val) => sum + (val - meanChange) ** 2, 0) / bandPercentages.length
 
-  // Calculate shift score (similar to CLS score)
+  // Determine if this is a layout shift or overlay noise
+  // True layout shift indicators:
+  // 1. Many consecutive rows changed (>20 rows = significant shift)
+  // 2. Top heavy change pattern (topBandChange > bottomBandChange)
+  // 3. Low variance (uniform change across bands)
+  // 4. Few isolated hotspots
+
+  const hasConsecutiveShift = maxConsecutiveHighChangeRows > 20
+  const hasTopHeavyPattern = topBandChange > 5 && bottomBandChange < 2 && topBandChange > bottomBandChange * 2
+  const hasUniformChange = variance < 200 && meanChange > 10
+  const hasIsolatedHotspots = isolatedHotspots >= 3
+
+  // Overlay noise indicators:
+  // 1. High variance (scattered changes)
+  // 2. Multiple isolated hotspots
+  // 3. Few consecutive rows changed
+  // 4. Narrow fixed element (toolbar/indicator pattern)
+  const isOverlayNoise =
+    hasNarrowFixedElement || // Narrow element like toolbar
+    (hasIsolatedHotspots && !hasConsecutiveShift && (variance > 500 || meanChange < 10))
+
+  // Layout shift: Either consecutive shift pattern OR traditional top-heavy pattern
+  // But NOT if it looks like overlay noise
+  const isLayoutShift = !isOverlayNoise && (hasConsecutiveShift || hasTopHeavyPattern || hasUniformChange)
+
+  // Calculate shift score
   const totalChanged = bands.reduce((sum, count) => sum + count, 0)
   const totalPixels = width * height
-  const shiftScore = (totalChanged / totalPixels) * 0.1 // Rough CLS equivalent
+  const shiftScore = (totalChanged / totalPixels) * 0.1
 
-  return { isLayoutShift, shiftScore }
+  return { isLayoutShift, shiftScore, isOverlayNoise }
 }
 
 /**
@@ -2186,6 +2272,7 @@ async function detectJankFromScreenshots(_projectName?: string): Promise<{
   totalFrames: number
   screenshotDir: string
   realCLS?: { score: number; grade: string }
+  captureTrigger?: "navigation" | "load"
 }> {
   const screenshotDir = process.env.SCREENSHOT_DIR || join(tmpdir(), "dev3000-mcp-deps", "public", "screenshots")
 
@@ -2224,13 +2311,20 @@ async function detectJankFromScreenshots(_projectName?: string): Promise<{
     | {
         score: number
         grade: string
-        shifts: Array<{ score: number; timestamp: number; sources?: Array<{ node?: string }> }>
+        shifts: Array<{
+          score: number
+          timestamp: number
+          sources?: Array<{ node?: string; position?: string | null }>
+        }>
       }
     | undefined
+  let captureTrigger: "navigation" | "load" | undefined
 
   if (existsSync(metadataPath)) {
     try {
       const metadata = JSON.parse(readFileSync(metadataPath, "utf-8"))
+      // Capture the trigger type for use in output messages
+      captureTrigger = metadata.captureTrigger
       // Set realCLSData even if there are zero shifts - this tells us Chrome ran and found nothing
       if (metadata.layoutShifts !== undefined) {
         realCLSData = {
@@ -2329,14 +2423,26 @@ async function detectJankFromScreenshots(_projectName?: string): Promise<{
             continue
           }
 
-          // Detect if this is a layout shift vs content change
+          // Detect if this is a layout shift vs content change vs overlay noise
           const shiftAnalysis = detectLayoutShiftVsContentChange(prevPng, currPng)
 
-          // If we detect a layout shift (not just content loading), flag it
+          // Skip if this looks like overlay noise (fixed/absolute elements like Next.js dev indicator or Vercel toolbar)
+          if (shiftAnalysis.isOverlayNoise) {
+            logToDevFile(
+              `Pixel Diff Hydration: Skipping frame ${i} - detected overlay noise (fixed/absolute elements), not true CLS`
+            )
+            continue
+          }
+
+          // If we detect a true layout shift (not just content loading or overlay noise), flag it
           if (shiftAnalysis.isLayoutShift) {
             foundHydrationShift = true
             const timeMatch = earlyFrames[i].match(/-(\d+)ms\.png$/)
             const timeSinceStart = timeMatch ? parseInt(timeMatch[1], 10) : 0
+
+            logToDevFile(
+              `Pixel Diff Hydration: Detected true layout shift at ${timeSinceStart}ms (score: ${shiftAnalysis.shiftScore.toFixed(4)})`
+            )
 
             const mcpPort = process.env.MCP_PORT || "3684"
             jankDetections.push({
@@ -2378,9 +2484,29 @@ async function detectJankFromScreenshots(_projectName?: string): Promise<{
     }
 
     // Process actual layout shifts detected by Chrome
-    // Trust Chrome's Layout Instability API completely - if Chrome reports it, it's real
+    // Trust Chrome's Layout Instability API - BUT ONLY if we can identify the culprit element
+    // and verify it's not a fixed/absolute positioned overlay
     realCLSData.shifts.forEach((shift) => {
       const element = shift.sources?.[0]?.node || "unknown"
+      const position = shift.sources?.[0]?.position
+
+      // FILTER: Skip shifts where we couldn't identify the element
+      // Chrome sometimes reports CLS for fixed overlays but fails to identify the element
+      if (!shift.sources?.[0] || element === "unknown" || position === null || position === undefined) {
+        logToDevFile(
+          `Chrome CLS: Skipping unidentified shift (score: ${shift.score.toFixed(4)}) - cannot verify if it's a true CLS or fixed overlay noise`
+        )
+        return // Skip this shift - can't verify it's real
+      }
+
+      // FILTER: Skip fixed/absolute positioned elements - these are overlays, not true CLS
+      if (position === "fixed" || position === "absolute") {
+        logToDevFile(
+          `Chrome CLS: Filtering out ${element} shift (position: ${position}) - fixed/absolute elements don't cause true layout shifts`
+        )
+        return // Skip this shift
+      }
+
       const isCriticalElement = ["NAV", "HEADER", "BUTTON", "A"].includes(element.toUpperCase())
       const isDuringLoad = shift.timestamp < 1000 // First second
 
@@ -2479,7 +2605,8 @@ async function detectJankFromScreenshots(_projectName?: string): Promise<{
     detections: jankDetections,
     sessionId: latestSessionId,
     totalFrames: sessionFiles.length,
-    screenshotDir
+    screenshotDir,
+    captureTrigger
   }
 }
 
