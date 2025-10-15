@@ -19,7 +19,7 @@ git push -u origin docker-wsl-support
 
 ### 方法B: Personal Access Token
 1. GitHub設定から Personal Access Token を作成
-   - https://github.com/settings/tokens
+   - <https://github.com/settings/tokens>
    - `repo` スコープを選択
 2. プッシュ時にトークンを入力
 
@@ -44,7 +44,7 @@ gh pr create \
 ```
 
 ### GitHub Web UI使用
-1. ブラウザで https://github.com/automationjp/dev3000 を開く
+1. ブラウザで <https://github.com/automationjp/dev3000> を開く
 2. "Compare & pull request" ボタンをクリック
 3. 以下の情報を入力：
    - **Title**: `Add Docker and WSL support for Dev3000 + Next.js 15`
@@ -68,7 +68,7 @@ gh pr create \
 ```
 
 または、GitHub Web UIで：
-1. https://github.com/vercel-labs/dev3000 を開く
+1. <https://github.com/vercel-labs/dev3000> を開く
 2. "New pull request" をクリック
 3. "compare across forks" をクリック
 4. 以下を選択：

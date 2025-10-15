@@ -22,8 +22,6 @@ example/**/dist/
 example/**/*.log
 
 # Build artifacts (canary.sh creates these)
-*.tgz
-dist/
 mcp-server/.next/
 mcp-server/.turbo/
 
