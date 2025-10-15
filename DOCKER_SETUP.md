@@ -32,7 +32,7 @@
 
 ```bash
 # リポジトリルートで実行
-npm run dev3000:up
+pnpm dev3000:up
 ```
 
 このコマンドは以下を自動実行します：
@@ -49,7 +49,7 @@ npm run dev3000:up
 ### 停止
 
 ```bash
-npm run dev3000:down
+pnpm dev3000:down
 ```
 
 ## 🔧 主な改善点
@@ -285,6 +285,17 @@ docker compose logs dev3000 --tail=50 -f
 │  - http://localhost:3684 → Dev3000 UI              │
 └──────────────────────────────────────────────────────┘
 ```
+
+## 🖥️ TUI の扱い（明確化）
+
+- 本 Compose はデフォルトで `--no-tui` を付与し、標準ログ出力に統一しています。
+- TUI を有効にする場合は、`docker/docker-compose.yml` のコマンドから `--no-tui` を外してください。
+- すでに `tty: true` と `stdin_open: true` を有効にしているため、TUI でも操作できます。
+
+## 🧪 CDP(9222) の自動検出
+
+- `tools/dev3000-up.mjs` は、`http://localhost:9222/json/version` に接続できる場合、Chrome の再起動をスキップします。
+- コンテナからの接続には `--remote-debugging-address=0.0.0.0` が必要です（`host.docker.internal:9222` 経由）。既存の Chrome が 127.0.0.1 のみで待受している場合は再起動してください。
 
 ## 🔄 開発ワークフロー
 

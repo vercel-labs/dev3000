@@ -8,7 +8,7 @@ Dev3000とNext.js 15を同一Dockerコンテナで動作させ、ホストのChr
 
 - Dockerを使った統一的な開発環境の提供
 - WSL環境での動作サポート
-- 1コマンドでの簡単なセットアップ（`npm run dev3000:up`）
+- 1コマンドでの簡単なセットアップ（`pnpm dev3000:up`）
 - セキュアなDocker設定（非root、権限制限、ヘルスチェック）
 
 ## 変更内容
@@ -80,7 +80,7 @@ Dev3000が単一プロセスとしてNext.jsを子プロセス起動し、ログ
 ### クイックスタート
 ```bash
 # リポジトリルートで実行
-npm run dev3000:up
+pnpm dev3000:up
 ```
 
 このコマンドで以下が自動実行されます：
@@ -94,7 +94,7 @@ npm run dev3000:up
 
 ### 停止
 ```bash
-npm run dev3000:down
+pnpm dev3000:down
 ```
 
 ## テスト方法
@@ -107,7 +107,7 @@ docker compose build
 
 ### 2. 起動テスト
 ```bash
-npm run dev3000:up
+pnpm dev3000:up
 ```
 
 ### 3. 動作確認

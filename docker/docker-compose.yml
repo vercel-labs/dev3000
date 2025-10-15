@@ -7,6 +7,8 @@ services:
     init: true                  # PID1=tini (zombie process prevention)
     user: node
     working_dir: /workspace/example/nextjs15
+    tty: true                   # Enable TTY for optional TUI mode
+    stdin_open: true            # Keep STDIN open for TUI interactions
 
     environment:
       # --- CDP（ホストChrome制御） ---
@@ -37,11 +39,12 @@ services:
     command: >
       bash -lc "
         cd /workspace &&
-        [ -d node_modules ] || npm ci &&
-        npm run build &&
+        [ -x \"$(command -v corepack)\" ] && corepack enable && corepack prepare pnpm@10.15.0 --activate || true &&
+        [ -d node_modules ] || pnpm install --frozen-lockfile || pnpm install &&
+        pnpm run build &&
         cd /workspace/example/nextjs15 &&
-        [ -d node_modules ] || npm ci &&
-        node /workspace/dist/cli.js --port ${FRONTEND_PORT} --mcp-port ${DEV3000_PORT}
+        [ -d node_modules ] || pnpm install &&
+        node /workspace/dist/cli.js --port ${FRONTEND_PORT} --port-mcp ${DEV3000_PORT} --no-tui
       "
 
     # どちらか応答すれば良し（UI or Next.js）

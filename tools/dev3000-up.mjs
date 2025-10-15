@@ -37,7 +37,30 @@ function findChrome() {
   return null;
 }
 
-function launchChrome() {
+async function isCdpAvailable() {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 800);
+  try {
+    const res = await fetch('http://localhost:9222/json/version', { signal: controller.signal });
+    clearTimeout(timeout);
+    return res.ok;
+  } catch (_e) {
+    clearTimeout(timeout);
+    return false;
+  }
+}
+
+async function launchChrome() {
+  // If CDP is already available on 9222, skip launching a new Chrome
+  // Note: Ensure the existing Chrome was started with --remote-debugging-address=0.0.0.0
+  // so the Docker container can reach it via host.docker.internal.
+  // This check runs best-effort and won't verify binding address.
+  if (await isCdpAvailable()) {
+    console.log('[dev3000-up] Detected existing Chrome CDP at http://localhost:9222 — skipping Chrome launch.');
+    console.log('[dev3000-up] If the container cannot connect, re-launch Chrome with --remote-debugging-address=0.0.0.0');
+    return null;
+  }
+
   const exe = findChrome();
   if (!exe) {
     console.error('[dev3000-up] Chrome が見つかりません。手動で --remote-debugging-port=9222 で起動してください。');
@@ -68,5 +91,5 @@ function runCompose() {
   proc.on('exit', (code) => process.exit(code ?? 0));
 }
 
-const chrome = launchChrome();
+await launchChrome();
 runCompose();

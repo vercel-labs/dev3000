@@ -9,6 +9,7 @@
 - ✅ WSL/Linux/macOS/Windows対応
 - ✅ セキュア（非root、権限制限、ヘルスチェック）
 - ✅ ホットリロード対応（ポーリングによるFS変更検知）
+- ✅ TUIはデフォルト無効（`--no-tui`）。有効化も可能（`tty`/`stdin_open`設定済み）
 
 ## 前提条件
 
@@ -21,16 +22,16 @@
 
 ## クイックスタート
 
-### 方法1: npm スクリプト（推奨）
+### 方法1: pnpm スクリプト（推奨）
 
 リポジトリルートで：
 
 ```bash
 # 起動（Chrome自動起動 + Docker Compose起動）
-npm run dev3000:up
+pnpm dev3000:up
 
 # 停止
-npm run dev3000:down
+pnpm dev3000:down
 ```
 
 ### 方法2: 手動起動
@@ -163,6 +164,7 @@ Windows版Chromeを使用することを推奨（`/mnt/c/Program Files/Google/Ch
 - **ログ統合**: Next.jsの起動ログ・ランタイムログをDev3000が取り込み
 - **ボリューム**: 名前付きボリュームで`node_modules`をキャッシュ
 - **ヘルスチェック**: Dev3000 UIまたはNext.jsの応答で確認
+- **TUI**: Composeでは `--no-tui` を使用。TUIを使う場合は `--no-tui` を外す（`tty: true`, `stdin_open: true` は既に有効）
 
 ## カスタマイズ
 
@@ -182,15 +184,20 @@ Windows版Chromeを使用することを推奨（`/mnt/c/Program Files/Google/Ch
 command: >
   bash -lc "
     cd /workspace &&
-    npm run build &&
+    pnpm run build &&
     cd /workspace/example/nextjs15 &&
-    npm ci &&
+    pnpm install &&
     node /workspace/dist/cli.js \
       --port ${FRONTEND_PORT} \
-      --mcp-port ${DEV3000_PORT} \
-      --debug  # デバッグモード追加
+      --port-mcp ${DEV3000_PORT} \
+      --debug  # デバッグモード追加（TUIを使う場合は --no-tui を外す）
   "
 ```
+
+## CDP(9222) の自動検出
+
+- `tools/dev3000-up.mjs` は `http://localhost:9222/json/version` に応答がある場合、Chrome の起動をスキップします。
+- コンテナからの到達には `--remote-debugging-address=0.0.0.0` による 0.0.0.0 bind が必要です。
 
 ## ライセンス
 
