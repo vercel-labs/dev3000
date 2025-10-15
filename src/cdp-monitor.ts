@@ -247,6 +247,13 @@ export class CDPMonitor {
   }
 
   private async launchChrome(): Promise<void> {
+    // CDP切り替え: 環境変数DEV3000_CDPが"1"の場合、Chrome起動をスキップ
+    if (process.env.DEV3000_CDP === "1") {
+      this.debugLog("DEV3000_CDP=1 detected - skipping Chrome launch, will connect to external CDP")
+      // CDP接続は connectToCDP() で行うため、ここでは何もせず resolve
+      return Promise.resolve()
+    }
+
     return new Promise((resolve, reject) => {
       // Use custom browser path if provided, otherwise try different Chrome executables based on platform
       const chromeCommands = this.browserPath
@@ -381,7 +388,17 @@ export class CDPMonitor {
   }
 
   private async connectToCDP(): Promise<void> {
-    this.debugLog(`Attempting to connect to CDP on port ${this.debugPort}`)
+    // CDP切り替え: 環境変数DEV3000_CDP_URLが設定されている場合は外部CDPへ接続
+    const cdpUrl = process.env.DEV3000_CDP_URL
+    if (process.env.DEV3000_CDP === "1" && cdpUrl) {
+      this.debugLog(`DEV3000_CDP=1 detected - connecting to external CDP: ${cdpUrl}`)
+      const cdpHost = cdpUrl.replace(/^https?:\/\//, "").replace(/:\d+$/, "").split(":")[0]
+      const cdpPort = cdpUrl.match(/:(\d+)$/)?.[1] || "9222"
+      this.debugPort = parseInt(cdpPort, 10)
+      this.debugLog(`Using external CDP host: ${cdpHost}:${cdpPort}`)
+    } else {
+      this.debugLog(`Attempting to connect to CDP on port ${this.debugPort}`)
+    }
 
     // Retry connection with exponential backoff
     let retryCount = 0
@@ -390,7 +407,11 @@ export class CDPMonitor {
     while (retryCount < maxRetries) {
       try {
         // Get the WebSocket URL from Chrome's debug endpoint
-        const targetsResponse = await fetch(`http://localhost:${this.debugPort}/json`)
+        const cdpEndpoint = cdpUrl
+          ? `${cdpUrl}/json`
+          : `http://localhost:${this.debugPort}/json`
+        this.debugLog(`Fetching CDP targets from: ${cdpEndpoint}`)
+        const targetsResponse = await fetch(cdpEndpoint)
         const targets = await targetsResponse.json()
 
         // Find the first page target (tab)
