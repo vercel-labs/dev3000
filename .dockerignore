@@ -1,0 +1,49 @@
+# Git
+.git
+.gitignore
+
+# Dependencies (will be installed in container)
+node_modules
+**/node_modules
+
+# Build outputs
+dist
+*.tgz
+
+# Logs
+*.log
+logs
+
+# OS files
+.DS_Store
+
+# Development artifacts
+.next
+**/.next
+.turbo
+.cache
+*.cache
+coverage
+.nyc_output
+
+# Test/Development only
+test
+integration/test
+docker/*.log
+
+# IDE/Editor
+.specstory/
+.cursorindexingignore
+.cursor/
+.claude/
+.gemini/
+
+# Environment
+.env*
+!.env.example
+
+# Screenshots
+mcp-server/public/screenshots/*
+
+# Build caches
+.pnpm-store
