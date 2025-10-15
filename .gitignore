@@ -10,3 +10,19 @@ mcp-server/.next/*
 .cursor/
 .claude/
 .mcp.json
+
+# Example app build artifacts
+example/**/node_modules/
+example/**/.next/
+example/**/dist/
+example/**/*.log
+
+# Build artifacts (canary.sh creates these)
+*.tgz
+dist/
+mcp-server/.next/
+mcp-server/.turbo/
+
+# Editor/IDE
+.specstory/
+.cursorindexingignore

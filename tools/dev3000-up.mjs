@@ -43,9 +43,11 @@ function launchChrome() {
     console.error('[dev3000-up] Chrome が見つかりません。手動で --remote-debugging-port=9222 で起動してください。');
     return null;
   }
+  // WARNING: CDP (Chrome DevTools Protocol) is unauthenticated and exposes debugging capabilities.
+  // Only use this in trusted development environments. Do NOT expose port 9222 to untrusted networks.
   const args = [
     '--remote-debugging-port=9222',
-    '--remote-debugging-address=0.0.0.0',
+    '--remote-debugging-address=0.0.0.0',  // Binds to all interfaces for Docker host.docker.internal access
     `--user-data-dir=${path.join(os.tmpdir(), 'dev3000-chrome')}`
   ];
   const opt = { stdio: 'ignore', detached: true };

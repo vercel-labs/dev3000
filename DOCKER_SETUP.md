@@ -42,9 +42,9 @@ npm run dev3000:up
 ### アクセスURL
 
 起動後、以下にアクセス可能：
-- **Next.js アプリ**: http://localhost:3000
-- **Dev3000 UI**: http://localhost:3684
-- **Dev3000 ログ**: http://localhost:3684/logs
+- **Next.js アプリ**: <http://localhost:3000>
+- **Dev3000 UI**: <http://localhost:3684>
+- **Dev3000 ログ**: <http://localhost:3684/logs>
 
 ### 停止
 
@@ -246,7 +246,7 @@ docker compose logs dev3000 --tail=50 -f
 
 ## 📊 アーキテクチャ図
 
-```
+```text
 ┌──────────────────────────────────────────────────────┐
 │ ホスト（WSL / Linux / macOS / Windows）               │
 │                                                      │

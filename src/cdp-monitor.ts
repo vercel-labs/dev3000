@@ -247,10 +247,10 @@ export class CDPMonitor {
   }
 
   private async launchChrome(): Promise<void> {
-    // CDP切り替え: 環境変数DEV3000_CDPが"1"の場合、Chrome起動をスキップ
+    // CDP switching: Skip Chrome launch if DEV3000_CDP="1" (external CDP mode)
     if (process.env.DEV3000_CDP === "1") {
       this.debugLog("DEV3000_CDP=1 detected - skipping Chrome launch, will connect to external CDP")
-      // CDP接続は connectToCDP() で行うため、ここでは何もせず resolve
+      // CDP connection will be handled by connectToCDP()
       return Promise.resolve()
     }
 
@@ -388,14 +388,21 @@ export class CDPMonitor {
   }
 
   private async connectToCDP(): Promise<void> {
-    // CDP切り替え: 環境変数DEV3000_CDP_URLが設定されている場合は外部CDPへ接続
+    // CDP switching: Connect to external CDP if DEV3000_CDP_URL is set
     const cdpUrl = process.env.DEV3000_CDP_URL
     if (process.env.DEV3000_CDP === "1" && cdpUrl) {
       this.debugLog(`DEV3000_CDP=1 detected - connecting to external CDP: ${cdpUrl}`)
-      const cdpHost = cdpUrl.replace(/^https?:\/\//, "").replace(/:\d+$/, "").split(":")[0]
-      const cdpPort = cdpUrl.match(/:(\d+)$/)?.[1] || "9222"
-      this.debugPort = parseInt(cdpPort, 10)
-      this.debugLog(`Using external CDP host: ${cdpHost}:${cdpPort}`)
+      try {
+        const parsedUrl = new URL(cdpUrl)
+        const cdpHost = parsedUrl.hostname
+        const cdpPort = parsedUrl.port || "9222"
+        this.debugPort = parseInt(cdpPort, 10)
+        this.debugLog(`Using external CDP host: ${cdpHost}:${cdpPort}`)
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        this.debugLog(`Invalid CDP URL format: ${cdpUrl} - ${errorMessage}`)
+        throw new Error(`Invalid DEV3000_CDP_URL format: ${cdpUrl}`)
+      }
     } else {
       this.debugLog(`Attempting to connect to CDP on port ${this.debugPort}`)
     }

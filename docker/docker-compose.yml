@@ -4,7 +4,7 @@ services:
       context: ..
       dockerfile: docker/Dockerfile
     container_name: dev3000
-    init: true                  # PID1=tini（ゾンビ対策）
+    init: true                  # PID1=tini (zombie process prevention)
     user: node
     working_dir: /workspace/example/nextjs15
 
