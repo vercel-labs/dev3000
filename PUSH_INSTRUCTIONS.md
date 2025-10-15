@@ -82,7 +82,7 @@ gh pr create \
 ## 変更内容サマリー
 
 ### 追加ファイル（10件）
-```
+```text
 .dockerignore
 DOCKER_SETUP.md
 docker/Dockerfile
@@ -96,7 +96,7 @@ tools/dev3000-up.mjs
 ```
 
 ### 変更ファイル（2件）
-```
+```text
 package.json         (+3行: npm scripts追加)
 src/cdp-monitor.ts   (+25行: 外部CDP接続サポート)
 ```

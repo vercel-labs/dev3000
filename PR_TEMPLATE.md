@@ -57,7 +57,7 @@ Dev3000が単一プロセスとしてNext.jsを子プロセス起動し、ログ
 │  │    └─→ Next.js :3000     │     │
 │  └──────────────────────────┘     │
 └────────────────────────────────────┘
-```
+```text
 
 ### 2. WSL互換性
 - `extra_hosts: host-gateway`でLinux/WSL環境でも`host.docker.internal`が使用可能
@@ -88,9 +88,9 @@ npm run dev3000:up
 2. Docker Composeでコンテナビルド・起動
 
 ### アクセスURL
-- **Next.js**: http://localhost:3000
-- **Dev3000 UI**: http://localhost:3684
-- **ログ**: http://localhost:3684/logs
+- **Next.js**: <http://localhost:3000>
+- **Dev3000 UI**: <http://localhost:3684>
+- **ログ**: <http://localhost:3684/logs>
 
 ### 停止
 ```bash
