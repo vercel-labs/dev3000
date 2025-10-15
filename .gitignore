@@ -11,6 +11,10 @@ mcp-server/.next/*
 .claude/
 .mcp.json
 
+# pnpm
+.pnpm-store/
+.pnpm-debug.log
+
 # Example app build artifacts
 example/**/node_modules/
 example/**/.next/
@@ -23,6 +27,34 @@ dist/
 mcp-server/.next/
 mcp-server/.turbo/
 
+# Docker
+docker/*.log
+.docker/
+*.pid
+**/d3k.log
+
+# Chrome user data (temporary)
+**/dev3000-chrome/
+
+# Test artifacts
+coverage/
+.nyc_output/
+*.coverage
+
+# OS specific
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
 # Editor/IDE
 .specstory/
 .cursorindexingignore
+.vscode/
+.idea/
+*.sublime-*
