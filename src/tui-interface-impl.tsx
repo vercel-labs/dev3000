@@ -20,6 +20,8 @@ interface LogEntry {
   content: string
 }
 
+const NEXTJS_MCP_404_REGEX = /(?:\[POST\]|POST)\s+\/_next\/mcp\b[^\n]*\b404\b/i
+
 // Compact ASCII logo for very small terminals
 const COMPACT_LOGO = "d3k"
 
@@ -148,6 +150,10 @@ const TUIApp = ({
     let buffer = ""
 
     const appendLog = (line: string) => {
+      if (NEXTJS_MCP_404_REGEX.test(line)) {
+        return
+      }
+
       const newLog: LogEntry = {
         id: logIdCounter.current++,
         content: line

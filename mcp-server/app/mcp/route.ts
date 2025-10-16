@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
+import type { Tool } from "@modelcontextprotocol/sdk/types.js"
 import { createMcpHandler } from "mcp-handler"
 import { z } from "zod"
 import { getMCPClientManager } from "./client-manager"
@@ -95,14 +96,39 @@ const initializeOrchestration = async () => {
     return config
   }
 
+  const waitForInitialConfig = async (
+    timeoutMs: number = 10000,
+    pollIntervalMs: number = 250
+  ): Promise<{ config: Parameters<typeof clientManager.initialize>[0]; waited: boolean }> => {
+    const startTime = Date.now()
+    let waited = false
+    let config = getConfigFromSessions()
+
+    while (Object.keys(config).length === 0 && Date.now() - startTime < timeoutMs) {
+      if (!waited) {
+        console.log("[MCP Orchestrator] Waiting for session info before connecting downstream MCPs...")
+        waited = true
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs))
+      config = getConfigFromSessions()
+    }
+
+    return { config, waited }
+  }
+
   try {
     // Initial attempt to connect
-    const config = getConfigFromSessions()
+    const { config, waited } = await waitForInitialConfig()
     if (Object.keys(config).length > 0) {
       await clientManager.initialize(config)
       console.log(`[MCP Orchestrator] Initialized with ${Object.keys(config).join(", ")}`)
     } else {
-      console.log("[MCP Orchestrator] No downstream MCPs found yet (will retry)")
+      if (waited) {
+        console.log("[MCP Orchestrator] No downstream MCPs detected after waiting for session info (will retry)")
+      } else {
+        console.log("[MCP Orchestrator] No downstream MCPs found yet (will retry)")
+      }
     }
 
     // Since MCP server starts before Chrome, periodically retry connection
@@ -146,28 +172,127 @@ const initializeOrchestration = async () => {
 }
 
 // Initialize on module load
-initializeOrchestration().catch(console.error)
+const orchestrationReady = initializeOrchestration().catch((error) => {
+  console.error("[MCP Orchestrator] Failed to initialize downstream MCPs:", error)
+})
 
 const handler = createMcpHandler(
-  (server) => {
-    // Dynamically register proxied tools from downstream MCPs
+  async (server) => {
     const clientManager = getMCPClientManager()
+
+    await orchestrationReady
+    await clientManager.waitForInitialTools()
+
+    const registeredProxiedTools = new Map<
+      string,
+      {
+        mcpName: string
+        toolName: string
+        registered: ReturnType<typeof server.tool>
+      }
+    >()
+
+    const registerOrUpdateProxiedTool = (mcpName: string, tool: Tool): boolean => {
+      const proxiedToolName = `${mcpName}_${tool.name}`
+      const existing = registeredProxiedTools.get(proxiedToolName)
+      const description = `[${mcpName}] ${tool.description || ""}`
+      const annotations = {
+        ...(tool.annotations ?? {}),
+        proxiedFrom: mcpName,
+        originalInputSchema: tool.inputSchema
+      }
+
+      if (existing) {
+        existing.registered.update({
+          description,
+          annotations
+        })
+        return false
+      }
+
+      try {
+        const proxiedTool = server.tool(proxiedToolName, description, {}, async (params: Record<string, unknown>) => {
+          return clientManager.callTool(mcpName, tool.name, params)
+        })
+
+        // Allow arbitrary argument objects to pass through to downstream MCPs
+        proxiedTool.inputSchema = z.object({}).passthrough()
+
+        proxiedTool.update({
+          annotations
+        })
+
+        registeredProxiedTools.set(proxiedToolName, {
+          mcpName,
+          toolName: tool.name,
+          registered: proxiedTool
+        })
+
+        console.log(`[MCP Orchestrator] Registered proxied tool ${proxiedToolName}`)
+        return true
+      } catch (error) {
+        console.warn(`[MCP Orchestrator] Failed to register proxied tool ${proxiedToolName}:`, error)
+        return false
+      }
+    }
+
+    const removeToolsForMcp = (mcpName: string): number => {
+      let removed = 0
+      for (const [proxiedToolName, entry] of registeredProxiedTools.entries()) {
+        if (entry.mcpName === mcpName) {
+          try {
+            entry.registered.remove()
+            registeredProxiedTools.delete(proxiedToolName)
+            removed++
+            console.log(`[MCP Orchestrator] Removed proxied tool ${proxiedToolName}`)
+          } catch (error) {
+            console.warn(`[MCP Orchestrator] Failed to remove proxied tool ${proxiedToolName}:`, error)
+          }
+        }
+      }
+      return removed
+    }
+
+    // Dynamically register proxied tools from downstream MCPs
     const downstreamTools = clientManager.getAllTools()
 
-    for (const { mcpName, tool } of downstreamTools) {
-      // Add prefix to avoid conflicts with dev3000's own tools
-      const proxiedToolName = `${mcpName}_${tool.name}`
-
-      server.tool(
-        proxiedToolName,
-        `[${mcpName}] ${tool.description || ""}`,
-        tool.inputSchema as any,
-        async (params: Record<string, unknown>) => {
-          // Proxy the call to the downstream MCP
-          return clientManager.callTool(mcpName, tool.name, params)
-        }
-      )
+    if (downstreamTools.length === 0) {
+      console.log("[MCP Orchestrator] No downstream MCP tools available during initial registration")
+    } else {
+      console.log(`[MCP Orchestrator] Registering ${downstreamTools.length} downstream MCP tools`)
     }
+
+    let initialNewTools = 0
+    for (const { mcpName, tool } of downstreamTools) {
+      if (registerOrUpdateProxiedTool(mcpName, tool)) {
+        initialNewTools++
+      }
+    }
+
+    if (initialNewTools > 0) {
+      server.sendToolListChanged()
+    }
+
+    clientManager.onToolsUpdated(({ mcpName, tools }) => {
+      if (tools.length === 0) {
+        const removed = removeToolsForMcp(mcpName)
+        if (removed > 0) {
+          server.sendToolListChanged()
+        }
+        return
+      }
+
+      let addedOrUpdated = 0
+      for (const tool of tools) {
+        if (registerOrUpdateProxiedTool(mcpName, tool)) {
+          addedOrUpdated++
+        }
+      }
+
+      if (addedOrUpdated > 0) {
+        server.sendToolListChanged()
+      }
+    })
 
     // Dev3000's own tools below:
     // Enhanced fix_my_app - the ultimate error fixing tool

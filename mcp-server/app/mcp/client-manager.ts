@@ -32,6 +32,8 @@ export class MCPClientManager {
   private tools: Map<string, Tool[]> = new Map()
   private reconnectTimers: Map<string, NodeJS.Timeout> = new Map()
   private lastConfigs: Map<string, MCPClientConfig> = new Map()
+  private toolDiscoveryListeners: Array<() => void> = []
+  private toolUpdateSubscribers: Array<(info: { mcpName: string; tools: Tool[] }) => void> = []
 
   /**
    * Initialize MCP clients for available downstream servers
@@ -118,26 +120,23 @@ export class MCPClientManager {
 
     // Discover available tools (non-fatal - connection already succeeded)
     try {
-      const toolsResult = await client.request(
-        {
-          method: "tools/list",
-          params: {}
-        },
-        undefined as any // Type inference will work at runtime
-      )
+      const toolsResult = await client.listTools()
+      const discoveredTools = Array.isArray(toolsResult?.tools) ? (toolsResult.tools as Tool[]) : []
 
-      if (toolsResult && "tools" in toolsResult) {
-        this.tools.set(config.name, toolsResult.tools as Tool[])
-        console.log(`[MCP Orchestrator] Discovered ${toolsResult.tools.length} tools from ${config.name}`)
+      this.tools.set(config.name, discoveredTools)
+
+      if (discoveredTools.length > 0) {
+        console.log(`[MCP Orchestrator] Discovered ${discoveredTools.length} tools from ${config.name}`)
+        this.notifyToolDiscovery()
       } else {
-        // Set empty array if no tools found
-        this.tools.set(config.name, [])
         console.log(`[MCP Orchestrator] No tools discovered from ${config.name} (will retry on first use)`)
       }
+      this.notifyToolsUpdated(config.name)
     } catch (_error) {
       // Tool discovery failed but connection succeeded - tools will be discovered on first use
       this.tools.set(config.name, [])
       console.log(`[MCP Orchestrator] Tool discovery deferred for ${config.name} (will discover on first tool call)`)
+      this.notifyToolsUpdated(config.name)
     }
   }
 
@@ -167,16 +166,10 @@ export class MCPClientManager {
     }
 
     try {
-      const result = await client.request(
-        {
-          method: "tools/call",
-          params: {
-            name: toolName,
-            arguments: args
-          }
-        },
-        undefined as any // Type inference will work at runtime
-      )
+      const result = await client.callTool({
+        name: toolName,
+        arguments: args
+      })
 
       return result as CallToolResult
     } catch (error) {
@@ -197,6 +190,66 @@ export class MCPClientManager {
    */
   getConnectedMCPs(): string[] {
     return Array.from(this.clients.keys())
+  }
+
+  /**
+   * Subscribe to tool updates for a specific MCP. Returns an unsubscribe function.
+   */
+  onToolsUpdated(subscriber: (info: { mcpName: string; tools: Tool[] }) => void): () => void {
+    this.toolUpdateSubscribers.push(subscriber)
+    return () => {
+      this.toolUpdateSubscribers = this.toolUpdateSubscribers.filter((fn) => fn !== subscriber)
+    }
+  }
+
+  /**
+   * Wait for at least one downstream MCP to finish tool discovery, or resolve after a timeout.
+   * Prevents registering an empty toolset before downstream servers are ready.
+   */
+  async waitForInitialTools(timeoutMs: number = 8000): Promise<void> {
+    if (this.getAllTools().length > 0) {
+      return
+    }
+
+    await new Promise<void>((resolve) => {
+      let timeoutId: NodeJS.Timeout
+
+      const onDiscovery = () => {
+        clearTimeout(timeoutId)
+        this.toolDiscoveryListeners = this.toolDiscoveryListeners.filter((listener) => listener !== onDiscovery)
+        resolve()
+      }
+
+      timeoutId = setTimeout(() => {
+        this.toolDiscoveryListeners = this.toolDiscoveryListeners.filter((listener) => listener !== onDiscovery)
+        resolve()
+      }, timeoutMs)
+
+      this.toolDiscoveryListeners.push(onDiscovery)
+    })
+  }
+
+  private notifyToolDiscovery(): void {
+    if (this.toolDiscoveryListeners.length === 0 || this.getAllTools().length === 0) {
+      return
+    }
+
+    const listeners = [...this.toolDiscoveryListeners]
+    this.toolDiscoveryListeners = []
+    for (const listener of listeners) {
+      listener()
+    }
+  }
+
+  private notifyToolsUpdated(mcpName: string): void {
+    const tools = this.tools.get(mcpName) ?? []
+    for (const subscriber of this.toolUpdateSubscribers) {
+      try {
+        subscriber({ mcpName, tools })
+      } catch (error) {
+        console.warn(`[MCP Orchestrator] Tool update subscriber error for ${mcpName}:`, error)
+      }
+    }
   }
 
   /**
