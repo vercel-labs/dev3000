@@ -860,9 +860,11 @@ export class DevEnvironment {
       await this.tui.updateStatus(`Waiting for ${this.options.commandName} MCP server...`)
       await this.waitForMcpServer()
 
-      // Progressive MCP discovery - after dev server is ready
-      await this.tui.updateStatus("Discovering available MCPs...")
-      await this.discoverMcpsAfterServerStart()
+      // Progressive MCP discovery - after dev server is ready (non-blocking)
+      // Run in background to avoid delaying browser startup
+      this.discoverMcpsAfterServerStart().catch((error) => {
+        this.debugLog(`MCP discovery after server start failed: ${error.message}`)
+      })
 
       // Configure AI CLI integrations (both dev3000 and chrome-devtools MCPs)
       if (!this.options.serversOnly) {
@@ -906,9 +908,11 @@ export class DevEnvironment {
         await this.tui.updateStatus(`Starting ${this.options.commandName} browser...`)
         await this.startCDPMonitoringSync()
 
-        // Progressive MCP discovery - after browser is ready
-        await this.tui.updateStatus("Final MCP discovery scan...")
-        await this.discoverMcpsAfterBrowserStart()
+        // Progressive MCP discovery - after browser is ready (non-blocking)
+        // Run in background to avoid delaying startup completion
+        this.discoverMcpsAfterBrowserStart().catch((error) => {
+          this.debugLog(`MCP discovery after browser start failed: ${error.message}`)
+        })
       } else if (!this.options.serversOnly) {
         this.debugLog("Browser monitoring skipped - server failed to start")
       } else {
@@ -970,9 +974,11 @@ export class DevEnvironment {
       this.spinner.text = `Waiting for ${this.options.commandName} MCP server...`
       await this.waitForMcpServer()
 
-      // Progressive MCP discovery - after dev server is ready
-      this.spinner.text = "Discovering available MCPs..."
-      await this.discoverMcpsAfterServerStart()
+      // Progressive MCP discovery - after dev server is ready (non-blocking)
+      // Run in background to avoid delaying browser startup
+      this.discoverMcpsAfterServerStart().catch((error) => {
+        this.debugLog(`MCP discovery after server start failed: ${error.message}`)
+      })
 
       // Configure AI CLI integrations (both dev3000 and chrome-devtools MCPs)
       if (!this.options.serversOnly) {
@@ -1016,9 +1022,11 @@ export class DevEnvironment {
         this.spinner.text = `Starting ${this.options.commandName} browser...`
         await this.startCDPMonitoringSync()
 
-        // Progressive MCP discovery - after browser is ready
-        this.spinner.text = "Final MCP discovery scan..."
-        await this.discoverMcpsAfterBrowserStart()
+        // Progressive MCP discovery - after browser is ready (non-blocking)
+        // Run in background to avoid delaying startup completion
+        this.discoverMcpsAfterBrowserStart().catch((error) => {
+          this.debugLog(`MCP discovery after browser start failed: ${error.message}`)
+        })
       } else if (!this.options.serversOnly) {
         this.debugLog("Browser monitoring skipped - server failed to start")
       } else {
