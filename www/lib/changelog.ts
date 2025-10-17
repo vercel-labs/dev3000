@@ -14,6 +14,15 @@ export const changelog: Release[] = [
     date: "2025-10-17",
     type: "patch",
     highlights: [
+      "🔧 **Auto-Configuration for AI CLIs**: Automatically writes `.mcp.json` (Claude Code) and `.cursor/mcp.json` (Cursor) so MCP servers are instantly available"
+    ]
+  },
+
+  {
+    version: "0.0.95",
+    date: "2025-10-17",
+    type: "patch",
+    highlights: [
       "🔧 **Bun Package Manager Support**: Added full support for Bun package manager (bun.lockb detection, bunx for MCP spawning)",
       "🔌 **Next.js DevTools MCP Integration**: Updated to use standalone next-devtools-mcp as stdio process with automatic spawning and lifecycle management",
       "Resolves [#8](https://github.com/vercel-labs/dev3000/issues/8)"

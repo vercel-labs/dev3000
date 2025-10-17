@@ -4,6 +4,20 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.95] - 2025-10-17
+
+**Patch Release**
+
+- 🔧 **Auto-Configuration for AI CLIs**: Automatically writes `.mcp.json` (Claude Code) and `.cursor/mcp.json` (Cursor) so MCP servers are instantly available
+
+## [0.0.95] - 2025-10-17
+
+**Patch Release**
+
+- 🔧 **Bun Package Manager Support**: Added full support for Bun package manager (bun.lockb detection, bunx for MCP spawning)
+- 🔌 **Next.js DevTools MCP Integration**: Updated to use standalone next-devtools-mcp as stdio process with automatic spawning and lifecycle management
+- Resolves [#8](https://github.com/vercel-labs/dev3000/issues/8)
+
 ## [0.0.94] - 2025-10-16
 
 **Patch Release**
