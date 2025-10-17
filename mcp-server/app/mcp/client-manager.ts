@@ -40,7 +40,7 @@ export class MCPClientManager {
    */
   async initialize(config: {
     chromeDevtools?: { command: string; args: string[]; enabled: boolean }
-    nextjsDev?: { url: string; enabled: boolean }
+    nextjsDev?: { command: string; args: string[]; enabled: boolean }
   }): Promise<void> {
     const configs: MCPClientConfig[] = []
 
@@ -57,8 +57,9 @@ export class MCPClientManager {
     if (config.nextjsDev?.enabled) {
       configs.push({
         name: "nextjs-dev",
-        type: "http",
-        url: config.nextjsDev.url,
+        type: "stdio",
+        command: config.nextjsDev.command,
+        args: config.nextjsDev.args,
         enabled: true
       })
     }

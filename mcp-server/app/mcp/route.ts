@@ -7,12 +7,20 @@ import { z } from "zod"
 import { getMCPClientManager } from "./client-manager"
 import { executeBrowserAction, findComponentSource, fixMyApp, restartDevServer, TOOL_DESCRIPTIONS } from "./tools"
 
-// Detect available package runner (npx, pnpm dlx, or fail)
+// Detect available package runner (bunx, npx, pnpm dlx, or fail)
 const getPackageRunner = (): { command: string; args: string[] } | null => {
   try {
     const { execSync } = require("node:child_process")
 
-    // Try npx first (most common)
+    // Try bunx first (fastest)
+    try {
+      execSync("bunx --version", { stdio: "ignore" })
+      return { command: "bunx", args: [] }
+    } catch {
+      // bunx not available
+    }
+
+    // Try npx (most common)
     try {
       execSync("npx --version", { stdio: "ignore" })
       return { command: "npx", args: ["-y"] }
@@ -28,7 +36,7 @@ const getPackageRunner = (): { command: string; args: string[] } | null => {
       // pnpm not available
     }
 
-    console.error("[MCP Orchestrator] Neither npx nor pnpm found - cannot spawn chrome-devtools MCP")
+    console.error("[MCP Orchestrator] No package runner found (bunx, npx, or pnpm) - cannot spawn MCP servers")
     return null
   } catch (error) {
     console.error("[MCP Orchestrator] Failed to detect package runner:", error)
@@ -37,7 +45,7 @@ const getPackageRunner = (): { command: string; args: string[] } | null => {
 }
 
 // Initialize MCP client manager for orchestration
-// This will connect to chrome-devtools and nextjs-dev MCPs when available
+// This will spawn and connect to chrome-devtools and next-devtools-mcp as stdio processes
 const initializeOrchestration = async () => {
   const clientManager = getMCPClientManager()
 
@@ -75,22 +83,29 @@ const initializeOrchestration = async () => {
             }
           }
 
-          // Configure nextjs-dev MCP if app port is available
-          if (sessionData.appPort && !config.nextjsDev) {
-            config.nextjsDev = {
-              url: `http://localhost:${sessionData.appPort}/_next/mcp`,
-              enabled: true
-            }
-          }
-
-          // Break if we have both MCPs
-          if (config.chromeDevtools && config.nextjsDev) break
+          // Break early if we have chrome-devtools - only need one session for CDP URL
+          if (config.chromeDevtools) break
         } catch {
           // Skip invalid session files
         }
       }
     } catch (error) {
       console.warn("[MCP Orchestrator] Failed to read session files:", error)
+    }
+
+    // Configure next-devtools-mcp - always spawn as standalone stdio process
+    if (!config.nextjsDev) {
+      const runner = getPackageRunner()
+
+      if (runner) {
+        config.nextjsDev = {
+          command: runner.command,
+          args: [...runner.args, "next-devtools-mcp@latest"],
+          enabled: true
+        }
+      } else {
+        console.warn("[MCP Orchestrator] Cannot configure next-devtools-mcp: no package runner available")
+      }
     }
 
     return config
@@ -174,6 +189,29 @@ const initializeOrchestration = async () => {
 // Initialize on module load
 const orchestrationReady = initializeOrchestration().catch((error) => {
   console.error("[MCP Orchestrator] Failed to initialize downstream MCPs:", error)
+})
+
+// Cleanup on shutdown
+process.on("SIGTERM", async () => {
+  console.log("[MCP Orchestrator] Received SIGTERM, cleaning up...")
+  try {
+    await getMCPClientManager().disconnect()
+    console.log("[MCP Orchestrator] Cleanup complete")
+  } catch (error) {
+    console.error("[MCP Orchestrator] Error during cleanup:", error)
+  }
+  process.exit(0)
+})
+
+process.on("SIGINT", async () => {
+  console.log("[MCP Orchestrator] Received SIGINT, cleaning up...")
+  try {
+    await getMCPClientManager().disconnect()
+    console.log("[MCP Orchestrator] Cleanup complete")
+  } catch (error) {
+    console.error("[MCP Orchestrator] Error during cleanup:", error)
+  }
+  process.exit(0)
 })
 
 const handler = createMcpHandler(

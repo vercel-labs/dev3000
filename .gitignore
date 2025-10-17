@@ -10,3 +10,4 @@ mcp-server/.next/*
 .cursor/
 .claude/
 .mcp.json
+next-devtools-mcp/

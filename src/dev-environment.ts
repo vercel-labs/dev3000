@@ -84,6 +84,7 @@ class Logger {
 }
 
 function detectPackageManagerForRun(): string {
+  if (existsSync("bun.lockb")) return "bun"
   if (existsSync("pnpm-lock.yaml")) return "pnpm"
   if (existsSync("yarn.lock")) return "yarn"
   if (existsSync("package-lock.json")) return "npm"
@@ -252,8 +253,8 @@ async function ensureMcpServers(
 
     // Add dev3000 MCP server (HTTP type)
     // NOTE: dev3000 now acts as an MCP orchestrator/gateway that internally
-    // connects to chrome-devtools and nextjs-dev MCPs, so users only need to
-    // configure dev3000 once!
+    // spawns and connects to chrome-devtools-mcp and next-devtools-mcp as stdio processes,
+    // so users only need to configure dev3000 once!
     if (!settings.mcpServers[MCP_NAMES.DEV3000]) {
       settings.mcpServers[MCP_NAMES.DEV3000] = {
         type: "http",
@@ -313,7 +314,7 @@ async function ensureCursorMcpServers(
 
     // Add dev3000 MCP server
     // NOTE: dev3000 now acts as an MCP orchestrator/gateway that internally
-    // connects to chrome-devtools and nextjs-dev MCPs
+    // spawns and connects to chrome-devtools-mcp and next-devtools-mcp as stdio processes
     if (!settings.mcpServers[MCP_NAMES.DEV3000]) {
       settings.mcpServers[MCP_NAMES.DEV3000] = {
         type: "http",
@@ -376,7 +377,7 @@ async function ensureOpenCodeMcpServers(
 
     // Add dev3000 MCP server - use npx with mcp-client to connect to HTTP server
     // NOTE: dev3000 now acts as an MCP orchestrator/gateway that internally
-    // connects to chrome-devtools and nextjs-dev MCPs
+    // spawns and connects to chrome-devtools-mcp and next-devtools-mcp as stdio processes
     if (!settings.mcp[MCP_NAMES.DEV3000]) {
       settings.mcp[MCP_NAMES.DEV3000] = {
         type: "local",
@@ -1460,9 +1461,8 @@ export class DevEnvironment {
     this.debugLog(`MCP server command: ${mcpCommand.join(" ")}`)
     this.debugLog(`MCP server cwd: ${mcpCwd}`)
 
-    // Get CDP URL and app port for MCP orchestration
+    // Get CDP URL for MCP orchestration
     const cdpUrl = this.cdpMonitor?.getCdpUrl() || null
-    const appPort = this.options.port
 
     // Start MCP server as a true background singleton process
     this.mcpServerProcess = spawn(mcpCommand[0], mcpCommand.slice(1), {
@@ -1475,8 +1475,7 @@ export class DevEnvironment {
         LOG_FILE_PATH: this.options.logFile, // Pass log file path to MCP server
         DEV3000_VERSION: this.version, // Pass version to MCP server
         SCREENSHOT_DIR: this.screenshotDir, // Pass screenshot directory for global installs
-        CDP_URL: cdpUrl || "", // Pass CDP URL for chrome-devtools MCP orchestration
-        APP_PORT: appPort // Pass app port for nextjs-dev MCP orchestration
+        CDP_URL: cdpUrl || "" // Pass CDP URL for chrome-devtools MCP orchestration
       }
     })
 
@@ -1583,6 +1582,7 @@ export class DevEnvironment {
   }
 
   private detectPackageManagerInDir(dir: string): string {
+    if (existsSync(join(dir, "bun.lockb"))) return "bun"
     if (existsSync(join(dir, "pnpm-lock.yaml"))) return "pnpm"
     if (existsSync(join(dir, "yarn.lock"))) return "yarn"
     if (existsSync(join(dir, "package-lock.json"))) return "npm"
@@ -1654,11 +1654,13 @@ export class DevEnvironment {
       // Detect package manager from MCP server directory, not current directory
       const packageManager = this.detectPackageManagerInDir(mcpServerPath)
 
-      // For pnpm, use --dev flag to include devDependencies
+      // Package manager specific install args to include devDependencies
       const installArgs =
         packageManager === "pnpm"
           ? ["install", "--prod=false"] // Install both prod and dev dependencies
-          : ["install", "--include=dev"] // npm/yarn syntax
+          : packageManager === "bun"
+            ? ["install", "--dev"] // bun syntax
+            : ["install", "--include=dev"] // npm/yarn syntax
 
       const fullCommand = `${packageManager} ${installArgs.join(" ")}`
 
