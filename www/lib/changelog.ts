@@ -10,6 +10,17 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.95",
+    date: "2025-10-17",
+    type: "patch",
+    highlights: [
+      "🔧 **Bun Package Manager Support**: Added full support for Bun package manager (bun.lockb detection, bunx for MCP spawning)",
+      "🔌 **Next.js DevTools MCP Integration**: Updated to use standalone next-devtools-mcp as stdio process with automatic spawning and lifecycle management",
+      "Resolves [#8](https://github.com/vercel-labs/dev3000/issues/8)"
+    ]
+  },
+
+  {
     version: "0.0.94",
     date: "2025-10-16",
     type: "patch",
