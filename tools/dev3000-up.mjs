@@ -13,8 +13,8 @@
  * 4. Start Docker Compose with CDP URL
  */
 
-import { spawn, exec } from 'child_process'
-import { writeFileSync, existsSync } from 'fs'
+import { spawn, exec, execSync } from 'child_process'
+import { writeFileSync, existsSync, readFileSync, unlinkSync } from 'fs'
 import { homedir, tmpdir } from 'os'
 import { join } from 'path'
 import { promisify } from 'util'
@@ -65,7 +65,6 @@ function detectPlatform() {
   } else if (platform === 'linux') {
     // Check if WSL
     try {
-      const { execSync } = require('child_process')
       const releaseInfo = execSync('cat /proc/version 2>/dev/null || echo ""', { encoding: 'utf-8' })
       if (releaseInfo.toLowerCase().includes('microsoft') || releaseInfo.toLowerCase().includes('wsl')) {
         return 'wsl'
@@ -362,7 +361,6 @@ async function startDocker(cdpUrl) {
 
   // Check if Docker is available
   try {
-    const { execSync } = require('child_process')
     execSync('docker --version', { stdio: 'ignore' })
   } catch (err) {
     error('\n❌ DOCKER NOT FOUND')
@@ -454,7 +452,7 @@ function setupCleanup() {
     // Kill Chrome
     try {
       if (existsSync(pidFile)) {
-        const pid = require('fs').readFileSync(pidFile, 'utf-8').trim()
+        const pid = readFileSync(pidFile, 'utf-8').trim()
         info(`Killing Chrome (PID ${pid})...`)
 
         if (process.platform === 'win32') {
@@ -463,7 +461,7 @@ function setupCleanup() {
           await execAsync(`kill -9 ${pid}`)
         }
 
-        require('fs').unlinkSync(pidFile)
+        unlinkSync(pidFile)
         success('Chrome stopped')
       }
     } catch (err) {

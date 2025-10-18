@@ -516,24 +516,25 @@ export class CDPMonitor {
 
             let targetsResponse: { ok: boolean; status: number; statusText: string; json: () => Promise<unknown> }
             try {
-              // Use http.get instead of fetch to properly control Host header
-              const http = await import("http")
+              // Support both http and https endpoints
               const url = new URL(httpEndpoint)
+              const httpMod = url.protocol === "https:" ? await import("https") : await import("http")
 
               targetsResponse = await new Promise((resolve, reject) => {
                 const options = {
                   hostname: url.hostname,
-                  port: url.port || "9222",
-                  path: url.pathname,
+                  port: url.port || (url.protocol === "https:" ? 443 : 80),
+                  path: url.pathname + (url.search || ""),
                   method: "GET",
-                  headers: {
-                    Host: "localhost:9222" // Override Host header for Chrome CDP security
-                  }
+                  // Avoid forcing Host header; let Node set it based on target
+                  headers: {}
                 }
 
-                const req = http.get(options, (res) => {
+                const req = httpMod.get(options, (res) => {
                   let data = ""
-                  res.on("data", (chunk) => (data += chunk))
+                  res.on("data", (chunk) => {
+                    data += chunk
+                  })
                   res.on("end", () => {
                     resolve({
                       ok: res.statusCode === 200,
