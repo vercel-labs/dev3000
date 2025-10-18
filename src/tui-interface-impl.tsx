@@ -166,7 +166,6 @@ const TUIApp = ({
         // Keep only last N logs to prevent memory issues
         if (updated.length > maxLogs) {
           const trimmed = updated.slice(-maxLogs)
-          const removedCount = updated.length - trimmed.length
 
           setScrollOffset((currentOffset) => {
             if (currentOffset === 0) {
@@ -174,7 +173,7 @@ const TUIApp = ({
             }
 
             // Maintain relative scroll offset after trimming
-            return Math.max(0, Math.min(maxScrollOffset, currentOffset + removedCount - 1))
+            return Math.max(0, Math.min(maxScrollOffset, currentOffset))
           })
 
           return trimmed
