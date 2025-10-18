@@ -772,10 +772,12 @@ export class DevEnvironment {
         // Try HTTP health check first
         try {
           const http = await import("http")
+          const path = name === "mcp" ? "/health" : "/"
           let httpError: Error | null = null
           const isResponding = await new Promise<boolean>((resolve) => {
-            const req = http.get(`http://localhost:${port}/`, (res) => {
-              resolve(true)
+            const req = http.get({ host: "localhost", port, path }, (res) => {
+              const ok = (res.statusCode ?? 0) >= 200 && (res.statusCode ?? 0) < 400
+              resolve(ok)
             })
             req.on("error", (err) => {
               httpError = err instanceof Error ? err : new Error(String(err))
@@ -823,6 +825,11 @@ export class DevEnvironment {
               output += data.toString()
             })
             proc.on("exit", () => resolve(output.trim()))
+            proc.on("error", (err) => {
+              // lsof not available (e.g., in containers/WSL)
+              this.debugLog(`lsof not available: ${err.message}`)
+              resolve("") // Return empty to trigger failure
+            })
           })
 
           if (!result) {
