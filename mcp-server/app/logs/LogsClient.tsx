@@ -872,11 +872,21 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
   const [logBuffer, setLogBuffer] = useState<LogEntry[]>([]) // Buffer logs when not in live mode
   const bottomRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
-  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const eventSourceRef = useRef<EventSource | null>(null) // SSE connection
+  const isAtBottomRef = useRef(isAtBottom)
+  const logBufferRef = useRef<LogEntry[]>([])
   const dropdownRef = useRef<HTMLDivElement>(null)
   const filterDropdownRef = useRef<HTMLDivElement>(null)
   const userScrolledManually = useRef<boolean>(false) // Track if user manually scrolled away from live mode
+
+  // Keep refs in sync with state
+  useEffect(() => {
+    isAtBottomRef.current = isAtBottom
+  }, [isAtBottom])
+  useEffect(() => {
+    logBufferRef.current = logBuffer
+  }, [logBuffer])
 
   const loadAvailableLogs = useCallback(async () => {
     try {
@@ -1064,7 +1074,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
 
     let reconnectAttempts = 0
     const maxReconnectAttempts = 5
-    let reconnectTimeout: NodeJS.Timeout | null = null
+    let reconnectTimeout: ReturnType<typeof setTimeout> | null = null
 
     const connect = () => {
       const eventSource = new EventSource(sseUrl)
@@ -1119,12 +1129,12 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
           if (data.newLines && data.newLines.length > 0) {
             const newEntries = parseLogEntries(data.newLines)
 
-            if (isAtBottom) {
+            if (isAtBottomRef.current) {
               // In live mode - apply logs immediately and flush buffer
               setLastFetched(new Date())
 
-              if (logBuffer.length > 0) {
-                setLogs((prev) => [...prev, ...logBuffer, ...newEntries])
+              if (logBufferRef.current.length > 0) {
+                setLogs((prev) => [...prev, ...logBufferRef.current, ...newEntries])
                 setLogBuffer([])
               } else {
                 setLogs((prev) => [...prev, ...newEntries])
@@ -1156,10 +1166,8 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
         // Attempt reconnection with exponential backoff
         if (reconnectAttempts < maxReconnectAttempts) {
           reconnectAttempts++
-          const backoffDelay = Math.min(1000 * Math.pow(2, reconnectAttempts - 1), 30000)
-          console.log(
-            `SSE reconnecting in ${backoffDelay}ms (attempt ${reconnectAttempts}/${maxReconnectAttempts})`
-          )
+          const backoffDelay = Math.min(1000 * 2 ** (reconnectAttempts - 1), 30000)
+          console.log(`SSE reconnecting in ${backoffDelay}ms (attempt ${reconnectAttempts}/${maxReconnectAttempts})`)
 
           reconnectTimeout = setTimeout(() => {
             if (mode === "tail") {
@@ -1190,15 +1198,7 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
         eventSourceRef.current = null
       }
     }
-  }, [
-    mode,
-    searchParams,
-    availableLogs,
-    currentLogFile,
-    isAtBottom,
-    logBuffer,
-    pollForNewLogs
-  ])
+  }, [mode, searchParams, availableLogs, currentLogFile, pollForNewLogs])
 
   // Start/stop SSE or polling based on mode
   // Prefer SSE for real-time updates, fallback to polling on error

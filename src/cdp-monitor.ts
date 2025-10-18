@@ -4,7 +4,7 @@ import { tmpdir } from "os"
 import { dirname, join } from "path"
 import { fileURLToPath } from "url"
 import { WebSocket } from "ws"
-import { Logger as StructuredLogger, LogLevel } from "./utils/logger.js"
+import { LogLevel, type Logger as StructuredLogger } from "./utils/logger.js"
 
 export interface CDPEvent {
   method: string
@@ -56,7 +56,7 @@ export class CDPMonitor {
     this.appServerPort = appServerPort
     this.mcpServerPort = mcpServerPort
     this.fileLogger = fileLogger
-    this.logger = structuredLogger.child('cdp')
+    this.logger = structuredLogger.child("cdp")
     this.browserPath = browserPath
     this.pluginReactScan = pluginReactScan
   }
@@ -98,20 +98,20 @@ export class CDPMonitor {
   }
 
   async start(): Promise<void> {
-    this.logger.info('━━━ CDP Monitor Starting ━━━')
+    this.logger.info("━━━ CDP Monitor Starting ━━━")
 
     // Check for external CDP configuration (Docker/WSL mode)
     const externalCdpUrl = process.env.DEV3000_CDP_URL
     const skipLaunch = process.env.DEV3000_CDP_SKIP_LAUNCH === "1"
 
-    this.logger.logFields(LogLevel.DEBUG, 'CDP Configuration', {
-      'External CDP URL': externalCdpUrl || '(not set)',
-      'Skip Chrome Launch': skipLaunch ? 'yes' : 'no',
-      'Mode': externalCdpUrl ? 'External (Docker/WSL)' : 'Local',
-      'Profile Directory': this.profileDir,
-      'Screenshot Directory': this.screenshotDir,
-      'Browser Path': this.browserPath || '(auto-detect)',
-      'Debug Port': this.debugPort.toString()
+    this.logger.logFields(LogLevel.DEBUG, "CDP Configuration", {
+      "External CDP URL": externalCdpUrl || "(not set)",
+      "Skip Chrome Launch": skipLaunch ? "yes" : "no",
+      Mode: externalCdpUrl ? "External (Docker/WSL)" : "Local",
+      "Profile Directory": this.profileDir,
+      "Screenshot Directory": this.screenshotDir,
+      "Browser Path": this.browserPath || "(auto-detect)",
+      "Debug Port": this.debugPort.toString()
     })
 
     if (externalCdpUrl) {
@@ -119,19 +119,19 @@ export class CDPMonitor {
       this.debugLog(`External CDP URL provided: ${externalCdpUrl}`)
     }
     if (skipLaunch) {
-      this.logger.info('Skipping Chrome launch (using external instance)')
+      this.logger.info("Skipping Chrome launch (using external instance)")
       this.debugLog("Skipping Chrome launch (DEV3000_CDP_SKIP_LAUNCH=1)")
     }
 
     // Launch Chrome with CDP enabled (unless using external CDP)
     if (!skipLaunch && !externalCdpUrl) {
-      this.logger.info('Launching Chrome with CDP enabled')
+      this.logger.info("Launching Chrome with CDP enabled")
       this.debugLog("Starting Chrome launch process")
       await this.launchChrome()
-      this.logger.info('✓ Chrome launched successfully')
+      this.logger.info("✓ Chrome launched successfully")
       this.debugLog("Chrome launch completed")
     } else {
-      this.logger.info('Using external Chrome instance')
+      this.logger.info("Using external Chrome instance")
       this.debugLog("Using external Chrome instance via CDP")
     }
 
@@ -293,15 +293,15 @@ export class CDPMonitor {
 
       const browserType = this.browserPath ? "custom browser" : "Chrome"
 
-      this.logger.debug('━━━ Chrome Launch Process ━━━')
-      this.logger.logFields(LogLevel.DEBUG, 'Launch configuration', {
-        'Browser type': browserType,
-        'CDP port': this.debugPort.toString(),
-        'Profile directory': this.profileDir,
-        'Custom path': this.browserPath || '(none)',
-        'Candidates': chromeCommands.length.toString(),
-        'Platform': process.platform,
-        'Architecture': process.arch
+      this.logger.debug("━━━ Chrome Launch Process ━━━")
+      this.logger.logFields(LogLevel.DEBUG, "Launch configuration", {
+        "Browser type": browserType,
+        "CDP port": this.debugPort.toString(),
+        "Profile directory": this.profileDir,
+        "Custom path": this.browserPath || "(none)",
+        Candidates: chromeCommands.length.toString(),
+        Platform: process.platform,
+        Architecture: process.arch
       })
 
       if (chromeCommands.length > 1) {
@@ -363,16 +363,12 @@ export class CDPMonitor {
           this.createLoadingPage()
         ]
 
-        this.logger.trace(`Launch arguments: ${launchArgs.slice(0, 3).join(' ')} ... (${launchArgs.length} total)`)
+        this.logger.trace(`Launch arguments: ${launchArgs.slice(0, 3).join(" ")} ... (${launchArgs.length} total)`)
 
-        this.browser = spawn(
-          chromePath,
-          launchArgs,
-          {
-            stdio: "pipe",
-            detached: false // Keep it attached so it dies with parent
-          }
-        )
+        this.browser = spawn(chromePath, launchArgs, {
+          stdio: "pipe",
+          detached: false // Keep it attached so it dies with parent
+        })
 
         if (!this.browser) {
           this.logger.warn(`✗ Failed to spawn process: ${chromePath}`)
@@ -381,7 +377,7 @@ export class CDPMonitor {
           return
         }
 
-        this.logger.debug(`Process spawned (PID: ${this.browser.pid || 'unknown'})`)
+        this.logger.debug(`Process spawned (PID: ${this.browser.pid || "unknown"})`)
 
         let processExited = false
 
@@ -420,7 +416,7 @@ export class CDPMonitor {
           }
 
           if (attempts === 0) {
-            this.logger.debug('Checking Chrome readiness...')
+            this.logger.debug("Checking Chrome readiness...")
           }
 
           if (attempts >= maxAttempts) {
@@ -449,12 +445,12 @@ export class CDPMonitor {
               this.debugLog(`Chrome successfully started with path: ${chromePath} (after ${readyTime}ms)`)
 
               // Discover all Chrome PIDs for this instance
-              this.logger.debug('Discovering Chrome process PIDs...')
+              this.logger.debug("Discovering Chrome process PIDs...")
               await this.discoverChromePids()
               this.logger.debug(`Found ${this.chromePids.size} Chrome processes`)
 
               // Set up runtime crash monitoring after successful launch
-              this.logger.debug('Setting up runtime crash monitoring')
+              this.logger.debug("Setting up runtime crash monitoring")
               this.setupRuntimeCrashMonitoring()
 
               resolve()
@@ -479,8 +475,8 @@ export class CDPMonitor {
   }
 
   private async connectToCDP(externalCdpUrl?: string): Promise<void> {
-    this.logger.info('━━━ CDP Connection Process ━━━')
-    this.logger.debug(`Mode: ${externalCdpUrl ? 'External (Docker/WSL)' : 'Local'}`)
+    this.logger.info("━━━ CDP Connection Process ━━━")
+    this.logger.debug(`Mode: ${externalCdpUrl ? "External (Docker/WSL)" : "Local"}`)
     this.debugLog(`Attempting to connect to CDP${externalCdpUrl ? " (external)" : ` on port ${this.debugPort}`}`)
 
     // Retry connection with exponential backoff
@@ -488,10 +484,10 @@ export class CDPMonitor {
     const maxRetries = 5
     let lastError: Error | null = null
 
-    this.logger.logFields(LogLevel.DEBUG, 'Connection parameters', {
-      'Max retries': maxRetries.toString(),
-      'External URL': externalCdpUrl || '(none)',
-      'Debug port': this.debugPort.toString()
+    this.logger.logFields(LogLevel.DEBUG, "Connection parameters", {
+      "Max retries": maxRetries.toString(),
+      "External URL": externalCdpUrl || "(none)",
+      "Debug port": this.debugPort.toString()
     })
 
     while (retryCount < maxRetries) {
@@ -504,54 +500,54 @@ export class CDPMonitor {
 
         if (externalCdpUrl) {
           // External CDP mode (Docker/WSL) - fetch WebSocket URL from HTTP endpoint
-          this.logger.debug('Fetching WebSocket URL from external CDP endpoint...')
+          this.logger.debug("Fetching WebSocket URL from external CDP endpoint...")
           this.debugLog(`Fetching CDP targets from external endpoint: ${externalCdpUrl}`)
 
           // Check if externalCdpUrl is already a WebSocket URL or HTTP endpoint
-          if (externalCdpUrl.startsWith('ws://') || externalCdpUrl.startsWith('wss://')) {
+          if (externalCdpUrl.startsWith("ws://") || externalCdpUrl.startsWith("wss://")) {
             // Already a WebSocket URL - use directly
             wsUrl = externalCdpUrl
             this.cdpUrl = wsUrl
             this.debugLog(`Using external WebSocket URL directly: ${wsUrl}`)
           } else {
             // HTTP endpoint - fetch targets and extract WebSocket URL (same as local mode)
-            const httpEndpoint = externalCdpUrl.endsWith('/json') ? externalCdpUrl : `${externalCdpUrl}/json`
+            const httpEndpoint = externalCdpUrl.endsWith("/json") ? externalCdpUrl : `${externalCdpUrl}/json`
             this.debugLog(`Fetching targets from: ${httpEndpoint}`)
 
             let targetsResponse: { ok: boolean; status: number; statusText: string; json: () => Promise<unknown> }
             try {
               // Use http.get instead of fetch to properly control Host header
-              const http = await import('http')
+              const http = await import("http")
               const url = new URL(httpEndpoint)
 
               targetsResponse = await new Promise((resolve, reject) => {
                 const options = {
                   hostname: url.hostname,
-                  port: url.port || '9222',
+                  port: url.port || "9222",
                   path: url.pathname,
-                  method: 'GET',
+                  method: "GET",
                   headers: {
-                    'Host': 'localhost:9222'  // Override Host header for Chrome CDP security
+                    Host: "localhost:9222" // Override Host header for Chrome CDP security
                   }
                 }
 
                 const req = http.get(options, (res) => {
-                  let data = ''
-                  res.on('data', chunk => data += chunk)
-                  res.on('end', () => {
+                  let data = ""
+                  res.on("data", (chunk) => (data += chunk))
+                  res.on("end", () => {
                     resolve({
                       ok: res.statusCode === 200,
                       status: res.statusCode || 0,
-                      statusText: res.statusMessage || '',
+                      statusText: res.statusMessage || "",
                       json: async () => JSON.parse(data)
                     })
                   })
                 })
 
-                req.on('error', reject)
+                req.on("error", reject)
                 req.setTimeout(5000, () => {
                   req.destroy()
-                  reject(new Error('Request timeout'))
+                  reject(new Error("Request timeout"))
                 })
               })
             } catch (fetchError) {
@@ -615,8 +611,8 @@ export class CDPMonitor {
 
             wsUrl = pageTarget.webSocketDebuggerUrl
             // Replace localhost with host.docker.internal for Docker environments
-            if (externalCdpUrl.includes('host.docker.internal')) {
-              wsUrl = wsUrl.replace('localhost', 'host.docker.internal')
+            if (externalCdpUrl.includes("host.docker.internal")) {
+              wsUrl = wsUrl.replace("localhost", "host.docker.internal")
             }
             this.cdpUrl = wsUrl
             this.debugLog(`Found page target in external Chrome: ${pageTarget.title || "Unknown"}`)
@@ -680,9 +676,12 @@ export class CDPMonitor {
               `\nCAUSE: Chrome is running but has no page/tab available`,
               `\nEXPECTED: At least one target with type='page'`,
               `ACTUAL: ${targets.length} targets found:`,
-              ...targets.slice(0, 5).map((t: { type: string; title?: string; url?: string }, i: number) =>
-                `  [${i + 1}] Type: ${t.type}, Title: ${t.title || "N/A"}, URL: ${t.url?.substring(0, 50) || "N/A"}`
-              ),
+              ...targets
+                .slice(0, 5)
+                .map(
+                  (t: { type: string; title?: string; url?: string }, i: number) =>
+                    `  [${i + 1}] Type: ${t.type}, Title: ${t.title || "N/A"}, URL: ${t.url?.substring(0, 50) || "N/A"}`
+                ),
               ...(targets.length > 5 ? [`  ... and ${targets.length - 5} more targets`] : []),
               `\nDEBUG STEPS:`,
               `  1. Chrome may still be initializing (wait 2-3 seconds)`,
@@ -701,7 +700,7 @@ export class CDPMonitor {
         }
 
         return new Promise((resolve, reject) => {
-          this.logger.debug('Establishing WebSocket connection...')
+          this.logger.debug("Establishing WebSocket connection...")
           this.logger.trace(`WebSocket URL: ${wsUrl}`)
           this.debugLog(`Creating WebSocket connection to: ${wsUrl}`)
           const ws = new WebSocket(wsUrl)
@@ -710,7 +709,7 @@ export class CDPMonitor {
           ws.setMaxListeners(20)
 
           ws.on("open", () => {
-            this.logger.info('✓ WebSocket connection established')
+            this.logger.info("✓ WebSocket connection established")
             this.debugLog("WebSocket connection opened successfully")
             this.connection = {
               ws,

@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
       try {
         const content = readFileSync(logPath, "utf-8")
         const stats = statSync(logPath)
-        const lines = content.split("\n").filter((line) => line.trim())
+        const lines = content.split("\n")
         lastSize = content.length
         lastInode = stats.ino
 
@@ -35,22 +35,19 @@ export async function GET(request: NextRequest) {
 
       try {
         watcher = watch(logPath, (eventType) => {
-          if (eventType !== "change") return
-
+          // Handle both 'change' and 'rename' (rotation/truncation)
           try {
-            // Check if file was rotated (inode changed)
             const stats = statSync(logPath)
-            if (stats.ino !== lastInode) {
+            const rotatedOrRecreated = stats.ino !== lastInode || eventType === "rename"
+            if (rotatedOrRecreated) {
               // Log rotation detected - send full content of new file
               console.log("Log rotation detected, reloading full file")
               const content = readFileSync(logPath, "utf-8")
-              const lines = content.split("\n").filter((line) => line.trim())
+              const lines = content.split("\n")
               lastSize = content.length
               lastInode = stats.ino
 
-              controller.enqueue(
-                encoder.encode(`data: ${JSON.stringify({ rotated: true, lines })}\n\n`)
-              )
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ rotated: true, lines })}\n\n`))
               return
             }
 
@@ -58,7 +55,7 @@ export async function GET(request: NextRequest) {
             const content = readFileSync(logPath, "utf-8")
             if (content.length > lastSize) {
               const newContent = content.slice(lastSize)
-              const newLines = newContent.split("\n").filter((line) => line.trim())
+              const newLines = newContent.split("\n")
               if (newLines.length > 0) {
                 controller.enqueue(encoder.encode(`data: ${JSON.stringify({ newLines })}\n\n`))
               }
@@ -66,17 +63,13 @@ export async function GET(request: NextRequest) {
             } else if (content.length < lastSize) {
               // File was truncated - reload full content
               console.log("Log file truncated, reloading")
-              const lines = content.split("\n").filter((line) => line.trim())
+              const lines = content.split("\n")
               lastSize = content.length
-              controller.enqueue(
-                encoder.encode(`data: ${JSON.stringify({ truncated: true, lines })}\n\n`)
-              )
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ truncated: true, lines })}\n\n`))
             }
           } catch (error) {
             console.error("Error reading log updates:", error)
-            controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify({ error: "Failed to read log updates" })}\n\n`)
-            )
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: "Failed to read log updates" })}\n\n`))
           }
         })
 
@@ -84,7 +77,7 @@ export async function GET(request: NextRequest) {
         const heartbeatInterval = setInterval(() => {
           try {
             controller.enqueue(encoder.encode(": heartbeat\n\n"))
-          } catch (error) {
+          } catch (_error) {
             // Connection closed, cleanup
             clearInterval(heartbeatInterval)
           }
@@ -101,9 +94,7 @@ export async function GET(request: NextRequest) {
         })
       } catch (error) {
         console.error("Failed to setup file watcher:", error)
-        controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify({ error: "Failed to setup file watcher" })}\n\n`)
-        )
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: "Failed to setup file watcher" })}\n\n`))
         controller.close()
       }
     }

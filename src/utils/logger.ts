@@ -23,11 +23,11 @@ export interface LoggerOptions {
 }
 
 const LOG_LEVEL_NAMES: Record<LogLevel, string> = {
-  [LogLevel.ERROR]: 'ERROR',
-  [LogLevel.WARN]: 'WARN',
-  [LogLevel.INFO]: 'INFO',
-  [LogLevel.DEBUG]: 'DEBUG',
-  [LogLevel.TRACE]: 'TRACE'
+  [LogLevel.ERROR]: "ERROR",
+  [LogLevel.WARN]: "WARN",
+  [LogLevel.INFO]: "INFO",
+  [LogLevel.DEBUG]: "DEBUG",
+  [LogLevel.TRACE]: "TRACE"
 }
 
 const LOG_LEVEL_COLORS: Record<LogLevel, (text: string) => string> = {
@@ -46,7 +46,7 @@ export class Logger {
 
   constructor(options: LoggerOptions = {}) {
     this.level = options.level ?? this.getLogLevelFromEnv()
-    this.prefix = options.prefix ?? ''
+    this.prefix = options.prefix ?? ""
     this.enableColors = options.enableColors ?? true
     this.enableTimestamp = options.enableTimestamp ?? false
   }
@@ -57,12 +57,18 @@ export class Logger {
   private getLogLevelFromEnv(): LogLevel {
     const envLevel = process.env.DEV3000_LOG_LEVEL?.toUpperCase()
     switch (envLevel) {
-      case 'ERROR': return LogLevel.ERROR
-      case 'WARN': return LogLevel.WARN
-      case 'INFO': return LogLevel.INFO
-      case 'DEBUG': return LogLevel.DEBUG
-      case 'TRACE': return LogLevel.TRACE
-      default: return LogLevel.INFO // Default to INFO
+      case "ERROR":
+        return LogLevel.ERROR
+      case "WARN":
+        return LogLevel.WARN
+      case "INFO":
+        return LogLevel.INFO
+      case "DEBUG":
+        return LogLevel.DEBUG
+      case "TRACE":
+        return LogLevel.TRACE
+      default:
+        return LogLevel.INFO // Default to INFO
     }
   }
 
@@ -114,7 +120,7 @@ export class Logger {
     // Message
     parts.push(message)
 
-    return parts.join(' ')
+    return parts.join(" ")
   }
 
   /**
@@ -185,7 +191,7 @@ export class Logger {
     const formatted = this.format(level, message)
     console.log(formatted)
 
-    if (typeof obj === 'object' && obj !== null) {
+    if (typeof obj === "object" && obj !== null) {
       console.log(JSON.stringify(obj, null, 2))
     } else {
       console.log(obj)
@@ -214,12 +220,18 @@ export class Logger {
 export function parseLogLevel(level: string): LogLevel {
   const upperLevel = level.toUpperCase()
   switch (upperLevel) {
-    case 'ERROR': return LogLevel.ERROR
-    case 'WARN': return LogLevel.WARN
-    case 'INFO': return LogLevel.INFO
-    case 'DEBUG': return LogLevel.DEBUG
-    case 'TRACE': return LogLevel.TRACE
-    default: throw new Error(`Invalid log level: ${level}. Valid levels: ERROR, WARN, INFO, DEBUG, TRACE`)
+    case "ERROR":
+      return LogLevel.ERROR
+    case "WARN":
+      return LogLevel.WARN
+    case "INFO":
+      return LogLevel.INFO
+    case "DEBUG":
+      return LogLevel.DEBUG
+    case "TRACE":
+      return LogLevel.TRACE
+    default:
+      throw new Error(`Invalid log level: ${level}. Valid levels: ERROR, WARN, INFO, DEBUG, TRACE`)
   }
 }
 

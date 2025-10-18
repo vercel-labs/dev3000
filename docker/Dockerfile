@@ -26,10 +26,10 @@ USER node
 # 3684: Dev3000 MCP server port
 EXPOSE 3000 3684
 
-# Health check for MCP server
-# Checks if dev3000's MCP server is responding
+# Health check for both app and MCP server
+# Checks if both Next.js app (3000) and dev3000 MCP server (3684) are responding
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-  CMD node -e "fetch('http://localhost:3684/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))" || exit 1
+  CMD node -e "const to=ms=>new Promise(r=>setTimeout(r,ms));(async()=>{try{const a=await fetch('http://localhost:3000/',{cache:'no-store'});const m=await fetch('http://localhost:3684/health',{cache:'no-store'});process.exit(a.ok&&m.ok?0:1)}catch{process.exit(1)}})()" || exit 1
 
 # Environment variables for Docker container
 ENV NODE_ENV=development \

@@ -5,11 +5,11 @@ import { Command } from "commander"
 import { existsSync, readFileSync } from "fs"
 import { homedir, tmpdir } from "os"
 import { detect } from "package-manager-detector"
-import { dirname, join } from "path"
+import { dirname, join, delimiter as pathDelimiter } from "path"
 import { fileURLToPath } from "url"
 import { createPersistentLogFile, startDevEnvironment } from "./dev-environment.js"
-import { getProjectName } from "./utils/project-name.js"
 import { Logger, LogLevel, parseLogLevel } from "./utils/logger.js"
+import { getProjectName } from "./utils/project-name.js"
 
 // Global logger instance
 let logger: Logger
@@ -24,10 +24,12 @@ interface ProjectConfig {
 
 function detectPythonCommand(log?: Logger): string {
   if (log) {
-    log.debug('━━━ Python Command Detection ━━━')
-    log.logFields(LogLevel.DEBUG, 'Environment check', {
-      'VIRTUAL_ENV': process.env.VIRTUAL_ENV || '(not set)',
-      'PATH (first 3)': process.env.PATH?.split(':').slice(0, 3).join(', ') + '...'
+    log.debug("━━━ Python Command Detection ━━━")
+    log.logFields(LogLevel.DEBUG, "Environment check", {
+      VIRTUAL_ENV: process.env.VIRTUAL_ENV || "(not set)",
+      "PATH (first 3)": process.env.PATH
+        ? `${process.env.PATH.split(pathDelimiter).slice(0, 3).join(", ")}...`
+        : "(not set)"
     })
   }
 
@@ -35,23 +37,29 @@ function detectPythonCommand(log?: Logger): string {
   if (process.env.VIRTUAL_ENV) {
     if (log) {
       log.debug(`✓ Virtual environment detected: ${process.env.VIRTUAL_ENV}`)
-      log.debug('→ Using activated python command')
+      log.debug("→ Using activated python command")
     }
     return "python"
   }
 
   // Check if python3 is available and prefer it
   try {
-    const version = require("child_process").execSync("python3 --version", { encoding: 'utf-8', stdio: "pipe" }).trim()
+    const version = require("child_process")
+      .execSync("python3 --version", {
+        encoding: "utf-8",
+        stdio: "pipe",
+        timeout: 1500
+      })
+      .trim()
     if (log) {
       log.debug(`✓ python3 is available: ${version}`)
-      log.debug('→ Using python3')
+      log.debug("→ Using python3")
     }
     return "python3"
   } catch (error) {
     if (log) {
-      log.debug(`✗ python3 not available: ${error instanceof Error ? error.message : 'unknown error'}`)
-      log.debug('→ Falling back to python')
+      log.debug(`✗ python3 not available: ${error instanceof Error ? error.message : "unknown error"}`)
+      log.debug("→ Falling back to python")
     }
     return "python"
   }
@@ -59,14 +67,14 @@ function detectPythonCommand(log?: Logger): string {
 
 async function detectProjectType(log?: Logger): Promise<ProjectConfig> {
   if (log) {
-    log.debug('━━━ Project Type Detection ━━━')
-    log.logFields(LogLevel.DEBUG, 'Project indicators', {
-      'Current directory': process.cwd(),
-      'requirements.txt': existsSync("requirements.txt") ? '✓ found' : '✗ not found',
-      'pyproject.toml': existsSync("pyproject.toml") ? '✓ found' : '✗ not found',
-      'Gemfile': existsSync("Gemfile") ? '✓ found' : '✗ not found',
-      'config/application.rb': existsSync("config/application.rb") ? '✓ found' : '✗ not found',
-      'package.json': existsSync("package.json") ? '✓ found' : '✗ not found'
+    log.debug("━━━ Project Type Detection ━━━")
+    log.logFields(LogLevel.DEBUG, "Project indicators", {
+      "Current directory": process.cwd(),
+      "requirements.txt": existsSync("requirements.txt") ? "✓ found" : "✗ not found",
+      "pyproject.toml": existsSync("pyproject.toml") ? "✓ found" : "✗ not found",
+      Gemfile: existsSync("Gemfile") ? "✓ found" : "✗ not found",
+      "config/application.rb": existsSync("config/application.rb") ? "✓ found" : "✗ not found",
+      "package.json": existsSync("package.json") ? "✓ found" : "✗ not found"
     })
   }
 
@@ -78,12 +86,14 @@ async function detectProjectType(log?: Logger): Promise<ProjectConfig> {
       const files = [
         existsSync("requirements.txt") && "requirements.txt",
         existsSync("pyproject.toml") && "pyproject.toml"
-      ].filter(Boolean).join(", ")
-      log.debug('✓ Python project detected')
-      log.logFields(LogLevel.DEBUG, 'Python project config', {
-        'Detected files': files,
-        'Python command': pythonCommand,
-        'Default port': '8000'
+      ]
+        .filter(Boolean)
+        .join(", ")
+      log.debug("✓ Python project detected")
+      log.logFields(LogLevel.DEBUG, "Python project config", {
+        "Detected files": files,
+        "Python command": pythonCommand,
+        "Default port": "8000"
       })
     }
     return {
@@ -98,11 +108,11 @@ async function detectProjectType(log?: Logger): Promise<ProjectConfig> {
   const hasRailsFiles = existsSync("Gemfile") && existsSync("config/application.rb")
   if (hasRailsFiles) {
     if (log) {
-      log.debug('✓ Rails project detected')
-      log.logFields(LogLevel.DEBUG, 'Rails project config', {
-        'Detected files': 'Gemfile, config/application.rb',
-        'Default command': 'bundle exec rails server',
-        'Default port': '3000'
+      log.debug("✓ Rails project detected")
+      log.logFields(LogLevel.DEBUG, "Rails project config", {
+        "Detected files": "Gemfile, config/application.rb",
+        "Default command": "bundle exec rails server",
+        "Default port": "3000"
       })
     }
     return {
@@ -114,18 +124,18 @@ async function detectProjectType(log?: Logger): Promise<ProjectConfig> {
 
   // Check for Node.js project using package-manager-detector
   if (log) {
-    log.debug('Detecting Node.js package manager...')
+    log.debug("Detecting Node.js package manager...")
   }
   const detected = await detect()
 
   if (detected) {
     if (log) {
-      log.debug('✓ Node.js project detected')
-      log.logFields(LogLevel.DEBUG, 'Node.js project config', {
-        'Package manager': detected.agent,
-        'Lock file': detected.name,
-        'Default script': 'dev',
-        'Default port': '3000'
+      log.debug("✓ Node.js project detected")
+      log.logFields(LogLevel.DEBUG, "Node.js project config", {
+        "Package manager": detected.agent,
+        "Lock file": detected.name,
+        "Default script": "dev",
+        "Default port": "3000"
       })
     }
     return {
@@ -138,12 +148,12 @@ async function detectProjectType(log?: Logger): Promise<ProjectConfig> {
 
   // Fallback to npm for Node.js
   if (log) {
-    log.warn('⚠ No project indicators detected, using fallback')
-    log.logFields(LogLevel.DEBUG, 'Fallback config', {
-      'Type': 'node',
-      'Package manager': 'npm (fallback)',
-      'Default script': 'dev',
-      'Default port': '3000'
+    log.warn("⚠ No project indicators detected, using fallback")
+    log.logFields(LogLevel.DEBUG, "Fallback config", {
+      Type: "node",
+      "Package manager": "npm (fallback)",
+      "Default script": "dev",
+      "Default port": "3000"
     })
   }
   return {
@@ -190,10 +200,10 @@ function checkGlobalInstall(log?: Logger): boolean {
   const packageRoot = dirname(dirname(currentFile))
 
   if (log) {
-    log.debug('━━━ Global Install Check ━━━')
-    log.logFields(LogLevel.DEBUG, 'Installation paths', {
-      'Current file': currentFile,
-      'Package root': packageRoot
+    log.debug("━━━ Global Install Check ━━━")
+    log.logFields(LogLevel.DEBUG, "Installation paths", {
+      "Current file": currentFile,
+      "Package root": packageRoot
     })
   }
 
@@ -213,7 +223,7 @@ function checkGlobalInstall(log?: Logger): boolean {
     log.debug(`Checking ${globalPaths.length} global install paths`)
     globalPaths.forEach((path, i) => {
       const isMatch = packageRoot.includes(path)
-      log.trace(`  [${i + 1}] ${isMatch ? '✓' : '✗'} ${path}`)
+      log.trace(`  [${i + 1}] ${isMatch ? "✓" : "✗"} ${path}`)
     })
   }
 
@@ -307,14 +317,14 @@ program
 
     logger = new Logger({
       level: logLevel,
-      prefix: 'cli',
+      prefix: "cli",
       enableColors: true,
       enableTimestamp: false
     })
 
-    logger.debug('━━━ CLI Initialization ━━━')
+    logger.debug("━━━ CLI Initialization ━━━")
     logger.debug(`Log level: ${LogLevel[logLevel]}`)
-    logger.debug(`Command line args: ${process.argv.slice(2).join(' ')}`)
+    logger.debug(`Command line args: ${process.argv.slice(2).join(" ")}`)
     logger.debug(`Working directory: ${process.cwd()}`)
 
     // Handle --kill-mcp option
@@ -353,14 +363,14 @@ program
       serverCommand = `${projectConfig.packageManager} run ${script}`
     }
 
-    logger.debug('━━━ Configuration ━━━')
-    logger.logFields(LogLevel.DEBUG, 'Server configuration', {
-      'Project type': projectConfig.type,
-      'Port': `${port} (${userSetPort ? 'explicit' : 'auto-detected'})`,
-      'Script': `${script} (${options.script ? 'explicit' : 'auto-detected'})`,
-      'Server command': serverCommand,
-      'User set port': userSetPort,
-      'User set MCP port': userSetMcpPort
+    logger.debug("━━━ Configuration ━━━")
+    logger.logFields(LogLevel.DEBUG, "Server configuration", {
+      "Project type": projectConfig.type,
+      Port: `${port} (${userSetPort ? "explicit" : "auto-detected"})`,
+      Script: `${script} (${options.script ? "explicit" : "auto-detected"})`,
+      "Server command": serverCommand,
+      "User set port": userSetPort,
+      "User set MCP port": userSetMcpPort
     })
 
     // Check for circular dependency - detect if the script would invoke dev3000 itself
@@ -410,15 +420,15 @@ program
       const projectName = getProjectName()
       const profileDir = join(homedir(), ".d3k", "chrome-profiles", projectName)
 
-      logger.debug('━━━ Starting Development Environment ━━━')
-      logger.logFields(LogLevel.DEBUG, 'Environment paths', {
-        'Log file': logFile,
-        'Project name': projectName,
-        'Profile directory': profileDir
+      logger.debug("━━━ Starting Development Environment ━━━")
+      logger.logFields(LogLevel.DEBUG, "Environment paths", {
+        "Log file": logFile,
+        "Project name": projectName,
+        "Profile directory": profileDir
       })
 
       // Create a child logger for dev-environment
-      const devEnvLogger = logger.child('dev-env')
+      const devEnvLogger = logger.child("dev-env")
 
       await startDevEnvironment({
         ...options,

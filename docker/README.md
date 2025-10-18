@@ -185,8 +185,15 @@ docker compose up --build
 # Check what's using the port
 lsof -ti:3000 | xargs kill -9
 
-# Or use different ports
-docker compose up -p 5173:3000
+# Or use different ports (edit docker-compose.yml or create an override file)
+# Create docker-compose.override.yml:
+# services:
+#   dev3000:
+#     ports:
+#       - "5173:3000"
+#       - "3684:3684"
+# Then run:
+docker compose -f docker/docker-compose.yml -f docker/docker-compose.override.yml up --build
 ```
 
 ### Hot Reload Not Working
