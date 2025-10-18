@@ -51,6 +51,7 @@ const TUIApp = ({
   const { stdout } = useStdout()
   const ctrlCMessageDefault = "^L clear ^C quit"
   const [ctrlCMessage, setCtrlCMessage] = useState(ctrlCMessageDefault)
+  const maxScrollOffsetRef = useRef(0)
 
   const [terminalSize, setTerminalSize] = useState(() => ({
     width: stdout?.columns || 80,
@@ -143,7 +144,10 @@ const TUIApp = ({
     }
   }
 
+  const maxLogs = 1000
   const maxVisibleLogs = calculateMaxVisibleLogs()
+  const maxScrollOffset = Math.max(0, maxLogs - maxVisibleLogs)
+  maxScrollOffsetRef.current = maxScrollOffset
 
   useEffect(() => {
     let logStream: Readable | undefined
@@ -161,15 +165,18 @@ const TUIApp = ({
 
       setLogs((prevLogs) => {
         const updated = [...prevLogs, newLog]
-        // Keep only last 1000 logs to prevent memory issues
-        if (updated.length > 1000) {
-          return updated.slice(-1000)
+        // Keep only last N logs to prevent memory issues
+        if (updated.length > maxLogs) {
+          return updated.slice(-maxLogs)
         }
         return updated
       })
 
-      // Auto-scroll to bottom
-      setScrollOffset(0)
+      // Auto-scroll to bottom only if user is already at the bottom
+      // Otherwise, increment scroll offset by 1, accounting for the appended log and max scroll offset
+      setScrollOffset((currentOffset) => {
+        return currentOffset === 0 ? 0 : Math.min(maxScrollOffsetRef.current, currentOffset + 1)
+      })
     }
 
     // Create a read stream for the log file
