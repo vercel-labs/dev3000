@@ -45,7 +45,9 @@
     "_postinstall": "node scripts/check-install.js || exit 0",
     "_prepare": "husky",
     "release": "./scripts/release.sh",
-    "canary": "./scripts/canary.sh"
+    "canary": "./scripts/canary.sh",
+    "dev3000:up": "node tools/dev3000-up.mjs",
+    "dev3000:down": "node tools/dev3000-down.mjs"
   },
   "keywords": [
     "nextjs",

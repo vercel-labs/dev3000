@@ -1,0 +1,74 @@
+# Dependencies
+node_modules
+npm-debug.log
+yarn-error.log
+pnpm-debug.log
+
+# Build outputs
+dist
+.next
+out
+build
+
+# Logs
+*.log
+logs
+
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# IDE
+.vscode
+.idea
+.cursor
+.claude
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Testing
+coverage
+.nyc_output
+**/*.test.ts
+**/*.test.js
+
+# Documentation (not needed in image)
+*.md
+docs/
+.specstory/
+
+# Temporary files
+*.tgz
+tmp/
+temp/
+
+# Example app dependencies and build
+example/nextjs15/node_modules
+example/nextjs15/.next
+example/nextjs15/out
+
+# Docker itself
+docker/volumes/
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# CI/CD
+.github/
+.husky/
+
+# Other
+mcp-server/public/screenshots/
+mcp-server/.next/
+next-devtools-mcp/
