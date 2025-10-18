@@ -143,7 +143,9 @@ const TUIApp = ({
     }
   }
 
+  const maxLogs = 1000
   const maxVisibleLogs = calculateMaxVisibleLogs()
+  const maxScrollOffset = Math.max(0, maxLogs - maxVisibleLogs)
 
   useEffect(() => {
     let logStream: Readable | undefined
@@ -161,15 +163,28 @@ const TUIApp = ({
 
       setLogs((prevLogs) => {
         const updated = [...prevLogs, newLog]
-        // Keep only last 1000 logs to prevent memory issues
-        if (updated.length > 1000) {
-          return updated.slice(-1000)
+        // Keep only last N logs to prevent memory issues
+        if (updated.length > maxLogs) {
+          const trimmed = updated.slice(-maxLogs)
+          const removedCount = updated.length - trimmed.length
+
+          setScrollOffset((currentOffset) => {
+            if (currentOffset === 0) {
+              return 0
+            }
+
+            // Maintain relative scroll offset after trimming
+            return Math.max(0, Math.min(maxScrollOffset, currentOffset + removedCount - 1))
+          })
+
+          return trimmed
         }
         return updated
       })
 
-      // Auto-scroll to bottom
-      setScrollOffset(0)
+      // Auto-scroll to bottom only if user is already at the bottom
+      // Otherwise, increment scroll offset by 1, accounting for the appended log
+      setScrollOffset((currentOffset) => (currentOffset === 0 ? 0 : currentOffset + 1))
     }
 
     // Create a read stream for the log file
@@ -228,7 +243,7 @@ const TUIApp = ({
       }
       unwatchFile(logFile)
     }
-  }, [logFile])
+  }, [logFile, maxScrollOffset])
 
   // Handle keyboard input
   useInput((input, key) => {
