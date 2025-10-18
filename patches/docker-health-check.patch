@@ -1,0 +1,69 @@
+--- a/src/dev-environment.ts
++++ b/src/dev-environment.ts
+@@ -724,20 +724,36 @@ export class DevEnvironment {
+   private async checkProcessHealth(): Promise<boolean> {
+     if (this.isShuttingDown) return true // Skip health check if already shutting down
+
+     try {
+-      const ports = [this.options.port, this.options.mcpPort]
++      // In Docker environments, use HTTP health checks instead of lsof
++      // lsof may not detect listening ports correctly due to network namespaces
++      const ports = [
++        { port: this.options.port, name: 'app' },
++        { port: this.options.mcpPort, name: 'mcp' }
++      ]
+
+-      for (const port of ports) {
+-        const result = await new Promise<string>((resolve) => {
+-          const proc = spawn("lsof", ["-ti", `:${port}`], { stdio: "pipe" })
+-          let output = ""
+-          proc.stdout?.on("data", (data) => {
+-            output += data.toString()
+-          })
+-          proc.on("exit", () => resolve(output.trim()))
+-        })
++      for (const { port, name } of ports) {
++        // Try HTTP health check first
++        try {
++          const http = await import('http')
++          const isResponding = await new Promise<boolean>((resolve) => {
++            const req = http.get(`http://localhost:${port}/`, (res) => {
++              resolve(true)
++            })
++            req.on('error', () => resolve(false))
++            req.setTimeout(2000, () => {
++              req.destroy()
++              resolve(false)
++            })
++          })
++
++          if (!isResponding) {
++            this.debugLog(`Health check failed: ${name} server on port ${port} is not responding`)
++            this.logger.log("server", `Health check failed: Critical process on port ${port} is no longer running`)
++            return false
++          }
++        } catch (error) {
++          this.debugLog(`Health check error for port ${port}: ${error}`)
++          // Fall back to lsof check
++          const result = await new Promise<string>((resolve) => {
++            const proc = spawn("lsof", ["-ti", `:${port}`], { stdio: "pipe" })
++            let output = ""
++            proc.stdout?.on("data", (data) => {
++              output += data.toString()
++            })
++            proc.on("exit", () => resolve(output.trim()))
++          })
+
+-        if (!result) {
+-          this.debugLog(`Health check failed: Port ${port} is no longer in use`)
+-          this.logger.log("server", `Health check failed: Critical process on port ${port} is no longer running`)
+-          return false
++          if (!result) {
++            this.debugLog(`Health check failed: Port ${port} is no longer in use`)
++            this.logger.log("server", `Health check failed: Critical process on port ${port} is no longer running`)
++            return false
++          }
++        }
+       }
+
+       this.debugLog("Health check passed: All critical processes are running")
