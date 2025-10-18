@@ -872,10 +872,21 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
   const [logBuffer, setLogBuffer] = useState<LogEntry[]>([]) // Buffer logs when not in live mode
   const bottomRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
-  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const eventSourceRef = useRef<EventSource | null>(null) // SSE connection
+  const isAtBottomRef = useRef(isAtBottom)
+  const logBufferRef = useRef<LogEntry[]>([])
   const dropdownRef = useRef<HTMLDivElement>(null)
   const filterDropdownRef = useRef<HTMLDivElement>(null)
   const userScrolledManually = useRef<boolean>(false) // Track if user manually scrolled away from live mode
+
+  // Keep refs in sync with state
+  useEffect(() => {
+    isAtBottomRef.current = isAtBottom
+  }, [isAtBottom])
+  useEffect(() => {
+    logBufferRef.current = logBuffer
+  }, [logBuffer])
 
   const loadAvailableLogs = useCallback(async () => {
     try {
@@ -1031,21 +1042,196 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
     maxRetries
   ])
 
-  // Start/stop polling based on mode (always poll in tail mode, but buffer when not at bottom)
-  useEffect(() => {
-    if (mode === "tail" && retryCount < maxRetries) {
-      pollIntervalRef.current = setInterval(pollForNewLogs, 3000) // Poll every 3 seconds
-      return () => {
-        if (pollIntervalRef.current) {
-          clearInterval(pollIntervalRef.current)
+  // SSE connection for real-time log streaming with auto-reconnection
+  const connectSSE = useCallback(() => {
+    if (mode !== "tail") return
+
+    // Close existing connection
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close()
+      eventSourceRef.current = null
+    }
+
+    // Determine which log file to stream
+    const requestedFile = searchParams.get("file")
+    let logPath = ""
+    let isCurrentFile = true
+
+    if (requestedFile && availableLogs.length > 0) {
+      const foundFile = availableLogs.find((f) => f.name === requestedFile)
+      logPath = foundFile?.path || currentLogFile
+      isCurrentFile = foundFile?.isCurrent !== false
+    } else {
+      logPath = currentLogFile
+      isCurrentFile = true
+    }
+
+    // Only stream current (active) log file
+    if (!isCurrentFile || !logPath) return
+
+    const sseUrl = `/api/logs/stream?logPath=${encodeURIComponent(logPath)}`
+    console.log("Connecting to SSE:", sseUrl)
+
+    let reconnectAttempts = 0
+    const maxReconnectAttempts = 5
+    let reconnectTimeout: ReturnType<typeof setTimeout> | null = null
+
+    const connect = () => {
+      const eventSource = new EventSource(sseUrl)
+      eventSourceRef.current = eventSource
+
+      eventSource.onopen = () => {
+        console.log("SSE connection established")
+        reconnectAttempts = 0 // Reset on successful connection
+      }
+
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data)
+
+          if (data.error) {
+            console.error("SSE error:", data.error)
+            return
+          }
+
+          // Handle log rotation
+          if (data.rotated && data.lines) {
+            console.log("Log rotation detected, reloading logs")
+            const entries = parseLogEntries(data.lines)
+            setLogs(entries)
+            setLastLogCount(entries.length)
+            setLastFetched(new Date())
+            setLogBuffer([]) // Clear buffer on rotation
+            return
+          }
+
+          // Handle file truncation
+          if (data.truncated && data.lines) {
+            console.log("Log file truncated, reloading logs")
+            const entries = parseLogEntries(data.lines)
+            setLogs(entries)
+            setLastLogCount(entries.length)
+            setLastFetched(new Date())
+            setLogBuffer([]) // Clear buffer on truncation
+            return
+          }
+
+          // Handle initial lines
+          if (data.lines && !data.rotated && !data.truncated) {
+            const entries = parseLogEntries(data.lines)
+            setLogs(entries)
+            setLastLogCount(entries.length)
+            setLastFetched(new Date())
+            return
+          }
+
+          // Handle new lines
+          if (data.newLines && data.newLines.length > 0) {
+            const newEntries = parseLogEntries(data.newLines)
+
+            if (isAtBottomRef.current) {
+              // In live mode - apply logs immediately and flush buffer
+              setLastFetched(new Date())
+
+              if (logBufferRef.current.length > 0) {
+                setLogs((prev) => [...prev, ...logBufferRef.current, ...newEntries])
+                setLogBuffer([])
+              } else {
+                setLogs((prev) => [...prev, ...newEntries])
+              }
+              setLastLogCount((prev) => prev + newEntries.length)
+
+              // Auto-scroll to bottom
+              if (!userScrolledManually.current) {
+                setTimeout(() => {
+                  bottomRef.current?.scrollIntoView({ behavior: "smooth" })
+                }, 50)
+              }
+            } else {
+              // Not in live mode - buffer the new entries
+              setLogBuffer((prev) => [...prev, ...newEntries])
+              setLastLogCount((prev) => prev + newEntries.length)
+            }
+          }
+        } catch (error) {
+          console.error("Error parsing SSE data:", error)
         }
       }
-    } else {
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current)
+
+      eventSource.onerror = (error) => {
+        console.error("SSE connection error:", error)
+        eventSource.close()
+        eventSourceRef.current = null
+
+        // Attempt reconnection with exponential backoff
+        if (reconnectAttempts < maxReconnectAttempts) {
+          reconnectAttempts++
+          const backoffDelay = Math.min(1000 * 2 ** (reconnectAttempts - 1), 30000)
+          console.log(`SSE reconnecting in ${backoffDelay}ms (attempt ${reconnectAttempts}/${maxReconnectAttempts})`)
+
+          reconnectTimeout = setTimeout(() => {
+            if (mode === "tail") {
+              // Only reconnect if still in tail mode
+              connect()
+            }
+          }, backoffDelay)
+        } else {
+          // Max reconnection attempts reached, fallback to polling
+          console.log("Max SSE reconnection attempts reached, falling back to polling")
+          if (pollIntervalRef.current) {
+            clearInterval(pollIntervalRef.current)
+          }
+          pollIntervalRef.current = setInterval(pollForNewLogs, 3000)
+        }
       }
     }
-  }, [mode, pollForNewLogs, retryCount, maxRetries]) // Removed isAtBottom - now always poll in tail mode
+
+    // Initial connection
+    connect()
+
+    return () => {
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout)
+      }
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close()
+        eventSourceRef.current = null
+      }
+    }
+  }, [mode, searchParams, availableLogs, currentLogFile, pollForNewLogs])
+
+  // Start/stop SSE or polling based on mode
+  // Prefer SSE for real-time updates, fallback to polling on error
+  useEffect(() => {
+    if (mode === "tail" && retryCount < maxRetries) {
+      // Try SSE first
+      const cleanup = connectSSE()
+
+      return () => {
+        // Cleanup SSE connection
+        if (eventSourceRef.current) {
+          eventSourceRef.current.close()
+          eventSourceRef.current = null
+        }
+        // Cleanup polling if it was started as fallback
+        if (pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current)
+          pollIntervalRef.current = null
+        }
+        if (cleanup) cleanup()
+      }
+    } else {
+      // Cleanup both SSE and polling
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close()
+        eventSourceRef.current = null
+      }
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current)
+        pollIntervalRef.current = null
+      }
+    }
+  }, [mode, connectSSE, retryCount, maxRetries])
 
   // Handle returning to live mode - ONLY flush buffer when user explicitly clicks "Live" button
   // This effect is removed to prevent race conditions - buffer flushing now happens only on explicit user action

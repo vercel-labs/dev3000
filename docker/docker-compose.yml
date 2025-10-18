@@ -1,0 +1,184 @@
+version: '3.8'
+
+services:
+  dev3000:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: dev3000
+
+    # Security hardening
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: false  # We need write access for node_modules and .next
+
+    # Port mappings
+    ports:
+      - "3000:3000"   # Next.js / App server
+      - "3684:3684"   # Dev3000 MCP server
+
+    # Volume mounts
+    # Mount the example Next.js 15 app (or replace with your own project)
+    volumes:
+      - ../example/nextjs15:/app
+      - /app/node_modules  # Anonymous volume for node_modules (prevents overwriting)
+      - /app/.next         # Anonymous volume for .next build directory
+
+    # Environment variables
+    environment:
+      # CDP configuration for external Chrome
+      - DEV3000_CDP_SKIP_LAUNCH=1
+      - DEV3000_CDP_URL=${DEV3000_CDP_URL:-}
+
+      # Node.js environment
+      - NODE_ENV=development
+
+      # File watching for hot reload (required for Docker/WSL)
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+
+      # Next.js configuration
+      - NEXT_TELEMETRY_DISABLED=1
+
+    # WSL compatibility: allow host.docker.internal to work on Linux/WSL
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+    # Command to run
+    # Install dev3000 globally first, then run it with detailed error logging
+    command: >
+      sh -c "
+        set -e
+
+        echo '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
+        echo '🚀 Dev3000 Docker Container Starting...'
+        echo '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
+        echo ''
+        echo '📋 Environment Information:'
+        echo '  Node version: '$(node --version)
+        echo '  NPM version: '$(npm --version)
+        echo '  Working directory: '$(pwd)
+        echo '  User: '$(whoami)
+        echo ''
+        echo '🔍 Environment Variables:'
+        echo '  DEV3000_CDP_URL: '${DEV3000_CDP_URL:-'(not set)'}
+        echo '  DEV3000_CDP_SKIP_LAUNCH: '${DEV3000_CDP_SKIP_LAUNCH:-'(not set)'}
+        echo '  NODE_ENV: '${NODE_ENV:-'(not set)'}
+        echo '  CHOKIDAR_USEPOLLING: '${CHOKIDAR_USEPOLLING:-'(not set)'}
+        echo ''
+
+        echo '📦 Installing dev3000 globally...'
+        if ! pnpm add -g dev3000@latest 2>&1; then
+          echo ''
+          echo '❌ DEV3000 INSTALLATION FAILED'
+          echo 'CAUSE: pnpm failed to install dev3000'
+          echo 'DEBUG STEPS:'
+          echo '  1. Check pnpm version: pnpm --version'
+          echo '  2. Check network: ping registry.npmjs.org'
+          echo '  3. Try manual install: pnpm add -g dev3000@latest'
+          exit 1
+        fi
+        echo '✅ dev3000 installed successfully'
+        echo ''
+
+        echo '📁 Checking application directory...'
+        if [ ! -f package.json ]; then
+          echo ''
+          echo '❌ PACKAGE.JSON NOT FOUND'
+          echo 'EXPECTED: /app/package.json'
+          echo 'ACTUAL: Directory contents:'
+          ls -la /app
+          echo ''
+          echo 'CAUSE: Next.js application not mounted correctly'
+          echo 'DEBUG STEPS:'
+          echo '  1. Check volume mount in docker-compose.yml'
+          echo '  2. Verify example/nextjs15/ exists on host'
+          echo '  3. Check docker compose config: docker compose config'
+          exit 1
+        fi
+        echo '✅ package.json found'
+        echo ''
+
+        echo '📦 Installing application dependencies...'
+        if ! pnpm install 2>&1; then
+          echo ''
+          echo '❌ APPLICATION DEPENDENCY INSTALLATION FAILED'
+          echo 'CAUSE: pnpm install failed in /app'
+          echo 'DEBUG STEPS:'
+          echo '  1. Check package.json syntax: cat package.json'
+          echo '  2. Clear cache: pnpm store prune'
+          echo '  3. Try manual: pnpm install --force'
+          exit 1
+        fi
+        echo '✅ Dependencies installed'
+        echo ''
+
+        echo '🔍 Checking CDP connection...'
+        if [ -z \"${DEV3000_CDP_URL}\" ]; then
+          echo ''
+          echo '⚠️  CDP URL NOT SET'
+          echo 'EXPECTED: DEV3000_CDP_URL=ws://host.docker.internal:9222/...'
+          echo 'ACTUAL: (empty)'
+          echo ''
+          echo 'CAUSE: Chrome may not be running on host or URL not passed'
+          echo 'DEBUG STEPS:'
+          echo '  1. Check if Chrome is running: curl http://localhost:9222/json'
+          echo '  2. Verify tools/dev3000-up.mjs set the environment variable'
+          echo '  3. Check docker compose config: docker compose config'
+          echo ''
+          echo 'Proceeding anyway (dev3000 will try to launch Chrome)...'
+        else
+          echo '✅ CDP URL configured: '${DEV3000_CDP_URL}
+          echo 'Testing connection to host.docker.internal...'
+          if ping -c 1 host.docker.internal >/dev/null 2>&1; then
+            echo '✅ Can reach host.docker.internal'
+          else
+            echo '⚠️  Cannot ping host.docker.internal'
+            echo 'This may cause CDP connection issues'
+          fi
+        fi
+        echo ''
+
+        echo '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
+        echo '🚀 Starting dev3000...'
+        echo '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
+        echo ''
+
+        if ! dev3000 --port 3000 --debug 2>&1; then
+          echo ''
+          echo '❌ DEV3000 STARTUP FAILED'
+          echo 'Check logs above for specific error'
+          echo ''
+          echo 'COMMON CAUSES:'
+          echo '  - CDP connection failure (check host Chrome)'
+          echo '  - Port 3000 or 3684 already in use'
+          echo '  - Next.js build errors'
+          echo '  - Missing environment variables'
+          echo ''
+          echo 'DEBUG STEPS:'
+          echo '  1. Check full logs: docker compose logs -f dev3000'
+          echo '  2. Try manual start: docker exec -it dev3000 sh'
+          echo '  3. Verify CDP: curl http://host.docker.internal:9222/json'
+          exit 1
+        fi
+      "
+
+    # Restart policy
+    restart: unless-stopped
+
+    # Resource limits (optional but recommended)
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+# Networks (using default bridge network)
+networks:
+  default:
+    driver: bridge
