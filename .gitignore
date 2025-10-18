@@ -11,3 +11,18 @@ mcp-server/.next/*
 .claude/
 .mcp.json
 next-devtools-mcp/
+
+# Docker volumes and generated files
+docker/volumes/
+docker/*.env
+
+# Example app build outputs
+example/nextjs15/node_modules/
+example/nextjs15/.next/
+example/nextjs15/out/
+
+# Temporary files from automation scripts
+.dev3000-chrome.pid
+
+# Website directory (not tracked in this fork)
+www/
