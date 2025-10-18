@@ -9,6 +9,10 @@ import { dirname, join } from "path"
 import { fileURLToPath } from "url"
 import { createPersistentLogFile, startDevEnvironment } from "./dev-environment.js"
 import { getProjectName } from "./utils/project-name.js"
+import { Logger, LogLevel, parseLogLevel } from "./utils/logger.js"
+
+// Global logger instance
+let logger: Logger
 
 interface ProjectConfig {
   type: "node" | "python" | "rails"
@@ -18,63 +22,111 @@ interface ProjectConfig {
   defaultPort: string
 }
 
-function detectPythonCommand(debug = false): string {
+function detectPythonCommand(log?: Logger): string {
+  if (log) {
+    log.debug('━━━ Python Command Detection ━━━')
+    log.logFields(LogLevel.DEBUG, 'Environment check', {
+      'VIRTUAL_ENV': process.env.VIRTUAL_ENV || '(not set)',
+      'PATH (first 3)': process.env.PATH?.split(':').slice(0, 3).join(', ') + '...'
+    })
+  }
+
   // Check if we're in a virtual environment
   if (process.env.VIRTUAL_ENV) {
-    if (debug) {
-      console.log(`[DEBUG] Virtual environment detected: ${process.env.VIRTUAL_ENV}`)
-      console.log(`[DEBUG] Using activated python command`)
+    if (log) {
+      log.debug(`✓ Virtual environment detected: ${process.env.VIRTUAL_ENV}`)
+      log.debug('→ Using activated python command')
     }
     return "python"
   }
 
   // Check if python3 is available and prefer it
   try {
-    require("child_process").execSync("python3 --version", { stdio: "ignore" })
-    if (debug) {
-      console.log(`[DEBUG] python3 is available, using python3`)
+    const version = require("child_process").execSync("python3 --version", { encoding: 'utf-8', stdio: "pipe" }).trim()
+    if (log) {
+      log.debug(`✓ python3 is available: ${version}`)
+      log.debug('→ Using python3')
     }
     return "python3"
-  } catch {
-    if (debug) {
-      console.log(`[DEBUG] python3 not available, falling back to python`)
+  } catch (error) {
+    if (log) {
+      log.debug(`✗ python3 not available: ${error instanceof Error ? error.message : 'unknown error'}`)
+      log.debug('→ Falling back to python')
     }
     return "python"
   }
 }
 
-async function detectProjectType(debug = false): Promise<ProjectConfig> {
+async function detectProjectType(log?: Logger): Promise<ProjectConfig> {
+  if (log) {
+    log.debug('━━━ Project Type Detection ━━━')
+    log.logFields(LogLevel.DEBUG, 'Project indicators', {
+      'Current directory': process.cwd(),
+      'requirements.txt': existsSync("requirements.txt") ? '✓ found' : '✗ not found',
+      'pyproject.toml': existsSync("pyproject.toml") ? '✓ found' : '✗ not found',
+      'Gemfile': existsSync("Gemfile") ? '✓ found' : '✗ not found',
+      'config/application.rb': existsSync("config/application.rb") ? '✓ found' : '✗ not found',
+      'package.json': existsSync("package.json") ? '✓ found' : '✗ not found'
+    })
+  }
+
   // Check for Python project
-  if (existsSync("requirements.txt") || existsSync("pyproject.toml")) {
-    if (debug) {
-      console.log(`[DEBUG] Python project detected (found requirements.txt or pyproject.toml)`)
+  const hasPythonFiles = existsSync("requirements.txt") || existsSync("pyproject.toml")
+  if (hasPythonFiles) {
+    const pythonCommand = detectPythonCommand(log)
+    if (log) {
+      const files = [
+        existsSync("requirements.txt") && "requirements.txt",
+        existsSync("pyproject.toml") && "pyproject.toml"
+      ].filter(Boolean).join(", ")
+      log.debug('✓ Python project detected')
+      log.logFields(LogLevel.DEBUG, 'Python project config', {
+        'Detected files': files,
+        'Python command': pythonCommand,
+        'Default port': '8000'
+      })
     }
     return {
       type: "python",
       defaultScript: "main.py",
-      defaultPort: "8000", // Common Python web server port
-      pythonCommand: detectPythonCommand(debug)
+      defaultPort: "8000",
+      pythonCommand
     }
   }
 
   // Check for Rails project
-  if (existsSync("Gemfile") && existsSync("config/application.rb")) {
-    if (debug) {
-      console.log(`[DEBUG] Rails project detected (found Gemfile and config/application.rb)`)
+  const hasRailsFiles = existsSync("Gemfile") && existsSync("config/application.rb")
+  if (hasRailsFiles) {
+    if (log) {
+      log.debug('✓ Rails project detected')
+      log.logFields(LogLevel.DEBUG, 'Rails project config', {
+        'Detected files': 'Gemfile, config/application.rb',
+        'Default command': 'bundle exec rails server',
+        'Default port': '3000'
+      })
     }
     return {
       type: "rails",
       defaultScript: "server",
-      defaultPort: "3000" // Rails default port
+      defaultPort: "3000"
     }
   }
 
   // Check for Node.js project using package-manager-detector
+  if (log) {
+    log.debug('Detecting Node.js package manager...')
+  }
   const detected = await detect()
 
   if (detected) {
-    if (debug) {
-      console.log(`[DEBUG] Node.js project detected with ${detected.agent} package manager`)
+    if (log) {
+      log.debug('✓ Node.js project detected')
+      log.logFields(LogLevel.DEBUG, 'Node.js project config', {
+        'Package manager': detected.agent,
+        'Lock file': detected.name,
+        'Default script': 'dev',
+        'Default port': '3000'
+      })
     }
     return {
       type: "node",
@@ -85,8 +137,14 @@ async function detectProjectType(debug = false): Promise<ProjectConfig> {
   }
 
   // Fallback to npm for Node.js
-  if (debug) {
-    console.log(`[DEBUG] No project files detected, defaulting to Node.js with npm`)
+  if (log) {
+    log.warn('⚠ No project indicators detected, using fallback')
+    log.logFields(LogLevel.DEBUG, 'Fallback config', {
+      'Type': 'node',
+      'Package manager': 'npm (fallback)',
+      'Default script': 'dev',
+      'Default port': '3000'
+    })
   }
   return {
     type: "node",
@@ -127,9 +185,17 @@ function getVersion(): string {
 }
 
 // Check if installed globally before proceeding
-function checkGlobalInstall() {
+function checkGlobalInstall(log?: Logger): boolean {
   const currentFile = fileURLToPath(import.meta.url)
   const packageRoot = dirname(dirname(currentFile))
+
+  if (log) {
+    log.debug('━━━ Global Install Check ━━━')
+    log.logFields(LogLevel.DEBUG, 'Installation paths', {
+      'Current file': currentFile,
+      'Package root': packageRoot
+    })
+  }
 
   // Check common global install paths
   const globalPaths = [
@@ -143,9 +209,20 @@ function checkGlobalInstall() {
     process.env.HOME && join(process.env.HOME, ".yarn/global/node_modules")
   ].filter(Boolean) as string[]
 
+  if (log) {
+    log.debug(`Checking ${globalPaths.length} global install paths`)
+    globalPaths.forEach((path, i) => {
+      const isMatch = packageRoot.includes(path)
+      log.trace(`  [${i + 1}] ${isMatch ? '✓' : '✗'} ${path}`)
+    })
+  }
+
   // Check if our package path contains any of these global paths
   for (const globalPath of globalPaths) {
     if (packageRoot.includes(globalPath)) {
+      if (log) {
+        log.debug(`✓ Global installation detected: ${globalPath}`)
+      }
       return true
     }
   }
@@ -193,7 +270,8 @@ program
     "Full path to browser executable (e.g. for Arc: '/Applications/Arc.app/Contents/MacOS/Arc')"
   )
   .option("--servers-only", "Run servers only, skip browser launch (use with Chrome extension)")
-  .option("--debug", "Enable debug logging to console (automatically disables TUI)")
+  .option("--debug", "Enable debug logging to console (automatically disables TUI) - Alias for --log-level=DEBUG")
+  .option("--log-level <level>", "Log level: ERROR, WARN, INFO, DEBUG, TRACE (default: INFO, env: DEV3000_LOG_LEVEL)")
   .option("-t, --tail", "Output consolidated logfile to terminal (like tail -f)")
   .option("--no-tui", "Disable TUI mode and use standard terminal output")
   .option(
@@ -205,6 +283,40 @@ program
   .option("--no-chrome-devtools-mcp", "Disable chrome-devtools MCP integration (enabled by default)")
   .option("--kill-mcp", "Kill the MCP server on port 3684 and exit")
   .action(async (options) => {
+    // Initialize logger with appropriate log level
+    let logLevel = LogLevel.INFO // Default
+
+    // Check for log level from options (priority: --log-level > --debug > env)
+    if (options.logLevel) {
+      try {
+        logLevel = parseLogLevel(options.logLevel)
+      } catch (error) {
+        console.error(chalk.red(`❌ Invalid log level: ${options.logLevel}`))
+        console.error(chalk.yellow(`   Valid levels: ERROR, WARN, INFO, DEBUG, TRACE`))
+        process.exit(1)
+      }
+    } else if (options.debug) {
+      logLevel = LogLevel.DEBUG
+    } else if (process.env.DEV3000_LOG_LEVEL) {
+      try {
+        logLevel = parseLogLevel(process.env.DEV3000_LOG_LEVEL)
+      } catch (error) {
+        console.error(chalk.yellow(`⚠ Invalid DEV3000_LOG_LEVEL: ${process.env.DEV3000_LOG_LEVEL}, using INFO`))
+      }
+    }
+
+    logger = new Logger({
+      level: logLevel,
+      prefix: 'cli',
+      enableColors: true,
+      enableTimestamp: false
+    })
+
+    logger.debug('━━━ CLI Initialization ━━━')
+    logger.debug(`Log level: ${LogLevel[logLevel]}`)
+    logger.debug(`Command line args: ${process.argv.slice(2).join(' ')}`)
+    logger.debug(`Working directory: ${process.cwd()}`)
+
     // Handle --kill-mcp option
     if (options.killMcp) {
       console.log(chalk.yellow("🛑 Killing MCP server on port 3684..."))
@@ -222,7 +334,7 @@ program
     }
 
     // Detect project type and configuration
-    const projectConfig = await detectProjectType(options.debug)
+    const projectConfig = await detectProjectType(logger)
 
     // Use defaults from project detection if not explicitly provided
     const port = options.port || projectConfig.defaultPort
@@ -240,6 +352,16 @@ program
       // Node.js project
       serverCommand = `${projectConfig.packageManager} run ${script}`
     }
+
+    logger.debug('━━━ Configuration ━━━')
+    logger.logFields(LogLevel.DEBUG, 'Server configuration', {
+      'Project type': projectConfig.type,
+      'Port': `${port} (${userSetPort ? 'explicit' : 'auto-detected'})`,
+      'Script': `${script} (${options.script ? 'explicit' : 'auto-detected'})`,
+      'Server command': serverCommand,
+      'User set port': userSetPort,
+      'User set MCP port': userSetMcpPort
+    })
 
     // Check for circular dependency - detect if the script would invoke dev3000 itself
     if (projectConfig.type === "node") {
@@ -268,29 +390,35 @@ program
           )
           process.exit(1)
         }
-      } catch (_error) {
-        // Ignore errors reading package.json
+      } catch (error) {
+        logger.trace(`Error reading package.json for circular dependency check: ${error}`)
       }
-    }
-
-    if (options.debug) {
-      console.log(`[DEBUG] Project type: ${projectConfig.type}`)
-      console.log(`[DEBUG] Port: ${port} (${options.port ? "explicit" : "auto-detected"})`)
-      console.log(`[DEBUG] Script: ${script} (${options.script ? "explicit" : "auto-detected"})`)
-      console.log(`[DEBUG] Server command: ${serverCommand}`)
     }
 
     // Detect which command name was used (dev3000 or d3k)
     const executablePath = process.argv[1]
     const commandName = executablePath.endsWith("/d3k") || executablePath.includes("/d3k") ? "d3k" : "dev3000"
 
+    logger.debug(`Command name detected: ${commandName}`)
+
     try {
       // Create persistent log file
       const logFile = createPersistentLogFile()
+      logger.debug(`Log file created: ${logFile}`)
 
       // Get unique project name to create profile dir
       const projectName = getProjectName()
       const profileDir = join(homedir(), ".d3k", "chrome-profiles", projectName)
+
+      logger.debug('━━━ Starting Development Environment ━━━')
+      logger.logFields(LogLevel.DEBUG, 'Environment paths', {
+        'Log file': logFile,
+        'Project name': projectName,
+        'Profile directory': profileDir
+      })
+
+      // Create a child logger for dev-environment
+      const devEnvLogger = logger.child('dev-env')
 
       await startDevEnvironment({
         ...options,
@@ -309,7 +437,8 @@ program
         tui: options.noTui !== true && !options.debug, // TUI is default unless --no-tui or --debug is specified
         dateTimeFormat: options.dateTime || "local",
         pluginReactScan: options.pluginReactScan || false,
-        chromeDevtoolsMcp: options.chromeDevtoolsMcp !== false // Default to true unless explicitly disabled
+        chromeDevtoolsMcp: options.chromeDevtoolsMcp !== false, // Default to true unless explicitly disabled
+        logger: devEnvLogger // Pass structured logger to dev-environment
       })
     } catch (error) {
       console.error(chalk.red("❌ Failed to start development environment:"), error)

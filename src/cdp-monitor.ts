@@ -4,6 +4,7 @@ import { tmpdir } from "os"
 import { dirname, join } from "path"
 import { fileURLToPath } from "url"
 import { WebSocket } from "ws"
+import { Logger as StructuredLogger, LogLevel } from "./utils/logger.js"
 
 export interface CDPEvent {
   method: string
@@ -25,8 +26,8 @@ export class CDPMonitor {
   private eventHandlers = new Map<string, (event: CDPEvent) => void>()
   private profileDir: string
   private screenshotDir: string
-  private logger: (source: string, message: string) => void
-  private debug: boolean = false
+  private fileLogger: (source: string, message: string) => void // File logging callback
+  private logger: StructuredLogger // Structured console logger
   private browserPath?: string
   private isShuttingDown = false
   private pendingRequests = 0
@@ -43,8 +44,8 @@ export class CDPMonitor {
   constructor(
     profileDir: string,
     screenshotDir: string,
-    logger: (source: string, message: string) => void,
-    debug: boolean = false,
+    fileLogger: (source: string, message: string) => void,
+    structuredLogger: StructuredLogger,
     browserPath?: string,
     pluginReactScan: boolean = false,
     appServerPort?: string,
@@ -54,16 +55,14 @@ export class CDPMonitor {
     this.screenshotDir = screenshotDir
     this.appServerPort = appServerPort
     this.mcpServerPort = mcpServerPort
-    this.logger = logger
-    this.debug = debug
+    this.fileLogger = fileLogger
+    this.logger = structuredLogger.child('cdp')
     this.browserPath = browserPath
     this.pluginReactScan = pluginReactScan
   }
 
   private debugLog(message: string) {
-    if (this.debug) {
-      console.log(`[CDP DEBUG] ${message}`)
-    }
+    this.logger.debug(message)
   }
 
   /**
@@ -99,14 +98,46 @@ export class CDPMonitor {
   }
 
   async start(): Promise<void> {
-    // Launch Chrome with CDP enabled
-    this.debugLog("Starting Chrome launch process")
-    await this.launchChrome()
-    this.debugLog("Chrome launch completed")
+    this.logger.info('━━━ CDP Monitor Starting ━━━')
+
+    // Check for external CDP configuration (Docker/WSL mode)
+    const externalCdpUrl = process.env.DEV3000_CDP_URL
+    const skipLaunch = process.env.DEV3000_CDP_SKIP_LAUNCH === "1"
+
+    this.logger.logFields(LogLevel.DEBUG, 'CDP Configuration', {
+      'External CDP URL': externalCdpUrl || '(not set)',
+      'Skip Chrome Launch': skipLaunch ? 'yes' : 'no',
+      'Mode': externalCdpUrl ? 'External (Docker/WSL)' : 'Local',
+      'Profile Directory': this.profileDir,
+      'Screenshot Directory': this.screenshotDir,
+      'Browser Path': this.browserPath || '(auto-detect)',
+      'Debug Port': this.debugPort.toString()
+    })
+
+    if (externalCdpUrl) {
+      this.logger.info(`External CDP mode: ${externalCdpUrl}`)
+      this.debugLog(`External CDP URL provided: ${externalCdpUrl}`)
+    }
+    if (skipLaunch) {
+      this.logger.info('Skipping Chrome launch (using external instance)')
+      this.debugLog("Skipping Chrome launch (DEV3000_CDP_SKIP_LAUNCH=1)")
+    }
+
+    // Launch Chrome with CDP enabled (unless using external CDP)
+    if (!skipLaunch && !externalCdpUrl) {
+      this.logger.info('Launching Chrome with CDP enabled')
+      this.debugLog("Starting Chrome launch process")
+      await this.launchChrome()
+      this.logger.info('✓ Chrome launched successfully')
+      this.debugLog("Chrome launch completed")
+    } else {
+      this.logger.info('Using external Chrome instance')
+      this.debugLog("Using external Chrome instance via CDP")
+    }
 
     // Connect to Chrome DevTools Protocol
     this.debugLog("Starting CDP connection")
-    await this.connectToCDP()
+    await this.connectToCDP(externalCdpUrl || undefined)
     this.debugLog("CDP connection completed")
 
     // Enable all the CDP domains we need for comprehensive monitoring
@@ -223,11 +254,11 @@ export class CDPMonitor {
       if (!this.isShuttingDown) {
         const crashMsg = `[CRASH] Chrome process exited unexpectedly - Code: ${code}, Signal: ${signal}`
         // this.logger("browser", `${crashMsg} `)  // [PLAYWRIGHT] tag removed
-        this.logger("browser", `${crashMsg}`)
+        this.fileLogger("browser", `${crashMsg}`)
         this.debugLog(`Chrome crashed: code=${code}, signal=${signal}`)
 
         // Log context for crash correlation
-        this.logger("browser", "[CRASH] Chrome crashed - check recent server/browser logs for correlation")
+        this.fileLogger("browser", "[CRASH] Chrome crashed - check recent server/browser logs for correlation")
 
         // Take screenshot if still connected (for crash context)
         if (this.connection && this.connection.ws.readyState === 1) {
@@ -238,7 +269,7 @@ export class CDPMonitor {
 
     this.browser.on("error", (error) => {
       if (!this.isShuttingDown) {
-        this.logger("browser", `[CHROME] Chrome process error: ${error.message}`)
+        this.fileLogger("browser", `[CHROME] Chrome process error: ${error.message}`)
         this.debugLog(`Chrome process error during runtime: ${error}`)
       }
     })
@@ -261,6 +292,25 @@ export class CDPMonitor {
           ]
 
       const browserType = this.browserPath ? "custom browser" : "Chrome"
+
+      this.logger.debug('━━━ Chrome Launch Process ━━━')
+      this.logger.logFields(LogLevel.DEBUG, 'Launch configuration', {
+        'Browser type': browserType,
+        'CDP port': this.debugPort.toString(),
+        'Profile directory': this.profileDir,
+        'Custom path': this.browserPath || '(none)',
+        'Candidates': chromeCommands.length.toString(),
+        'Platform': process.platform,
+        'Architecture': process.arch
+      })
+
+      if (chromeCommands.length > 1) {
+        this.logger.debug(`Will try ${chromeCommands.length} Chrome paths in order:`)
+        chromeCommands.forEach((path, i) => {
+          this.logger.trace(`  [${i + 1}] ${path}`)
+        })
+      }
+
       this.debugLog(`Attempting to launch ${browserType} for CDP monitoring on port ${this.debugPort}`)
       this.debugLog(`Profile directory: ${this.profileDir}`)
       if (this.browserPath) {
@@ -271,30 +321,53 @@ export class CDPMonitor {
 
       const tryNextChrome = () => {
         if (attemptIndex >= chromeCommands.length) {
+          const errorMsg = [
+            "\n❌ CHROME LAUNCH FAILED",
+            `CAUSE: No Chrome executable found on this system`,
+            `\nSEARCHED PATHS (${chromeCommands.length}):`,
+            ...chromeCommands.map((path, i) => `  [${i + 1}] ${path}`),
+            `\nEXPECTED: At least one Chrome/Chromium executable to be installed`,
+            `ACTUAL: None of the searched paths contain a valid executable`,
+            `\nDEBUG STEPS:`,
+            `  1. Install Chrome: https://www.google.com/chrome/`,
+            `  2. Check if Chrome is in PATH: which chrome || which google-chrome`,
+            `  3. Use --browser flag to specify custom path: dev3000 --browser /path/to/chrome`,
+            `  4. For Docker/WSL: Set DEV3000_CDP_URL to connect to external Chrome`,
+            `\nPLATFORM: ${process.platform}`,
+            `ARCH: ${process.arch}`
+          ].join("\n")
+
+          this.debugLog(errorMsg)
+          this.fileLogger("browser", errorMsg)
           reject(new Error("Failed to launch Chrome: all browser paths exhausted"))
           return
         }
 
         const chromePath = chromeCommands[attemptIndex]
+        this.logger.debug(`Attempting launch [${attemptIndex + 1}/${chromeCommands.length}]: ${chromePath}`)
         this.debugLog(`Trying Chrome path [${attemptIndex}]: ${chromePath}`)
         attemptIndex++
 
+        const launchArgs = [
+          `--remote-debugging-port=${this.debugPort}`,
+          `--user-data-dir=${this.profileDir}`,
+          "--no-first-run",
+          "--no-default-browser-check",
+          "--disable-component-extensions-with-background-pages",
+          "--disable-background-networking",
+          "--disable-sync",
+          "--metrics-recording-only",
+          "--disable-default-apps",
+          "--disable-session-crashed-bubble",
+          "--disable-restore-session-state",
+          this.createLoadingPage()
+        ]
+
+        this.logger.trace(`Launch arguments: ${launchArgs.slice(0, 3).join(' ')} ... (${launchArgs.length} total)`)
+
         this.browser = spawn(
           chromePath,
-          [
-            `--remote-debugging-port=${this.debugPort}`,
-            `--user-data-dir=${this.profileDir}`,
-            "--no-first-run",
-            "--no-default-browser-check",
-            "--disable-component-extensions-with-background-pages",
-            "--disable-background-networking",
-            "--disable-sync",
-            "--metrics-recording-only",
-            "--disable-default-apps",
-            "--disable-session-crashed-bubble",
-            "--disable-restore-session-state",
-            this.createLoadingPage()
-          ],
+          launchArgs,
           {
             stdio: "pipe",
             detached: false // Keep it attached so it dies with parent
@@ -302,14 +375,18 @@ export class CDPMonitor {
         )
 
         if (!this.browser) {
+          this.logger.warn(`✗ Failed to spawn process: ${chromePath}`)
           this.debugLog(`Failed to spawn Chrome process for path: ${chromePath}`)
           setTimeout(tryNextChrome, 100)
           return
         }
 
+        this.logger.debug(`Process spawned (PID: ${this.browser.pid || 'unknown'})`)
+
         let processExited = false
 
         this.browser.on("error", (error) => {
+          this.logger.warn(`✗ Launch error for ${chromePath}: ${error.message}`)
           this.debugLog(`Chrome launch error for ${chromePath}: ${error.message}`)
           if (!this.isShuttingDown && !processExited) {
             processExited = true
@@ -319,6 +396,7 @@ export class CDPMonitor {
 
         this.browser.on("exit", (code, signal) => {
           if (!this.isShuttingDown && !processExited && code !== 0) {
+            this.logger.warn(`✗ Process exited early (code: ${code}, signal: ${signal})`)
             this.debugLog(`Chrome exited early for ${chromePath} with code ${code}, signal ${signal}`)
             processExited = true
             setTimeout(tryNextChrome, 100)
@@ -341,11 +419,22 @@ export class CDPMonitor {
             return
           }
 
+          if (attempts === 0) {
+            this.logger.debug('Checking Chrome readiness...')
+          }
+
           if (attempts >= maxAttempts) {
-            this.debugLog(`Chrome readiness check timed out after ${maxAttempts * 500}ms`)
+            const timeoutMs = maxAttempts * 500
+            this.logger.warn(`✗ Readiness check timed out after ${timeoutMs}ms`)
+            this.debugLog(`Chrome readiness check timed out after ${timeoutMs}ms`)
             processExited = true
             setTimeout(tryNextChrome, 100)
             return
+          }
+
+          // Log progress every 5 attempts (2.5 seconds)
+          if (attempts > 0 && attempts % 5 === 0) {
+            this.logger.trace(`Still waiting... (${attempts * 500}ms elapsed)`)
           }
 
           try {
@@ -354,19 +443,28 @@ export class CDPMonitor {
               signal: AbortSignal.timeout(500)
             })
             if (response.ok) {
-              this.debugLog(`Chrome successfully started with path: ${chromePath} (after ${attempts * 500}ms)`)
+              const readyTime = attempts * 500
+              this.logger.info(`✓ Chrome ready (${readyTime}ms startup time)`)
+              this.logger.debug(`Successful launch path: ${chromePath}`)
+              this.debugLog(`Chrome successfully started with path: ${chromePath} (after ${readyTime}ms)`)
 
               // Discover all Chrome PIDs for this instance
+              this.logger.debug('Discovering Chrome process PIDs...')
               await this.discoverChromePids()
+              this.logger.debug(`Found ${this.chromePids.size} Chrome processes`)
 
               // Set up runtime crash monitoring after successful launch
+              this.logger.debug('Setting up runtime crash monitoring')
               this.setupRuntimeCrashMonitoring()
 
               resolve()
               return
             }
-          } catch (_error) {
+          } catch (error) {
             // Chrome not ready yet, retry
+            if (attempts === 0) {
+              this.logger.trace(`Initial check failed, will retry...`)
+            }
           }
 
           setTimeout(() => checkChromeReady(attempts + 1), 500)
@@ -380,33 +478,231 @@ export class CDPMonitor {
     })
   }
 
-  private async connectToCDP(): Promise<void> {
-    this.debugLog(`Attempting to connect to CDP on port ${this.debugPort}`)
+  private async connectToCDP(externalCdpUrl?: string): Promise<void> {
+    this.logger.info('━━━ CDP Connection Process ━━━')
+    this.logger.debug(`Mode: ${externalCdpUrl ? 'External (Docker/WSL)' : 'Local'}`)
+    this.debugLog(`Attempting to connect to CDP${externalCdpUrl ? " (external)" : ` on port ${this.debugPort}`}`)
 
     // Retry connection with exponential backoff
     let retryCount = 0
     const maxRetries = 5
+    let lastError: Error | null = null
+
+    this.logger.logFields(LogLevel.DEBUG, 'Connection parameters', {
+      'Max retries': maxRetries.toString(),
+      'External URL': externalCdpUrl || '(none)',
+      'Debug port': this.debugPort.toString()
+    })
 
     while (retryCount < maxRetries) {
       try {
-        // Get the WebSocket URL from Chrome's debug endpoint
-        const targetsResponse = await fetch(`http://localhost:${this.debugPort}/json`)
-        const targets = await targetsResponse.json()
-
-        // Find the first page target (tab)
-        const pageTarget = targets.find(
-          (target: { type: string; webSocketDebuggerUrl: string }) => target.type === "page"
-        )
-        if (!pageTarget) {
-          throw new Error("No page target found in Chrome")
+        if (retryCount > 0) {
+          this.logger.debug(`Retry attempt ${retryCount}/${maxRetries}`)
         }
 
-        const wsUrl = pageTarget.webSocketDebuggerUrl
-        this.cdpUrl = wsUrl // Store the CDP URL
-        this.debugLog(`Found page target: ${pageTarget.title || "Unknown"} - ${pageTarget.url}`)
-        this.debugLog(`Got CDP WebSocket URL: ${wsUrl}`)
+        let wsUrl: string
+
+        if (externalCdpUrl) {
+          // External CDP mode (Docker/WSL) - fetch WebSocket URL from HTTP endpoint
+          this.logger.debug('Fetching WebSocket URL from external CDP endpoint...')
+          this.debugLog(`Fetching CDP targets from external endpoint: ${externalCdpUrl}`)
+
+          // Check if externalCdpUrl is already a WebSocket URL or HTTP endpoint
+          if (externalCdpUrl.startsWith('ws://') || externalCdpUrl.startsWith('wss://')) {
+            // Already a WebSocket URL - use directly
+            wsUrl = externalCdpUrl
+            this.cdpUrl = wsUrl
+            this.debugLog(`Using external WebSocket URL directly: ${wsUrl}`)
+          } else {
+            // HTTP endpoint - fetch targets and extract WebSocket URL (same as local mode)
+            const httpEndpoint = externalCdpUrl.endsWith('/json') ? externalCdpUrl : `${externalCdpUrl}/json`
+            this.debugLog(`Fetching targets from: ${httpEndpoint}`)
+
+            let targetsResponse: { ok: boolean; status: number; statusText: string; json: () => Promise<unknown> }
+            try {
+              // Use http.get instead of fetch to properly control Host header
+              const http = await import('http')
+              const url = new URL(httpEndpoint)
+
+              targetsResponse = await new Promise((resolve, reject) => {
+                const options = {
+                  hostname: url.hostname,
+                  port: url.port || '9222',
+                  path: url.pathname,
+                  method: 'GET',
+                  headers: {
+                    'Host': 'localhost:9222'  // Override Host header for Chrome CDP security
+                  }
+                }
+
+                const req = http.get(options, (res) => {
+                  let data = ''
+                  res.on('data', chunk => data += chunk)
+                  res.on('end', () => {
+                    resolve({
+                      ok: res.statusCode === 200,
+                      status: res.statusCode || 0,
+                      statusText: res.statusMessage || '',
+                      json: async () => JSON.parse(data)
+                    })
+                  })
+                })
+
+                req.on('error', reject)
+                req.setTimeout(5000, () => {
+                  req.destroy()
+                  reject(new Error('Request timeout'))
+                })
+              })
+            } catch (fetchError) {
+              const errorMsg = [
+                "\n❌ EXTERNAL CDP ENDPOINT UNREACHABLE",
+                `URL: ${httpEndpoint}`,
+                `Error: ${fetchError instanceof Error ? fetchError.message : String(fetchError)}`,
+                `\nCAUSE: Cannot connect to external Chrome's DevTools Protocol endpoint`,
+                `\nPOSSIBLE REASONS:`,
+                `  - Chrome is not running on host`,
+                `  - CDP not enabled (missing --remote-debugging-port=9222)`,
+                `  - Network routing issue (Docker: host.docker.internal)`,
+                `  - Firewall blocking port 9222`,
+                `\nDEBUG STEPS:`,
+                `  1. Verify Chrome is running with CDP: curl http://localhost:9222/json`,
+                `  2. From container: docker exec <container> curl http://host.docker.internal:9222/json`,
+                `  3. Check DEV3000_CDP_URL environment variable`,
+                `  4. Ensure Chrome started with --remote-debugging-address=0.0.0.0`,
+                `\nAttempt ${retryCount + 1}/${maxRetries}`
+              ].join("\n")
+              this.debugLog(errorMsg)
+              throw new Error(errorMsg)
+            }
+
+            if (!targetsResponse.ok) {
+              const errorMsg = [
+                "\n❌ EXTERNAL CDP ENDPOINT RETURNED ERROR",
+                `URL: ${httpEndpoint}`,
+                `Status: ${targetsResponse.status} ${targetsResponse.statusText}`,
+                `\nCAUSE: External Chrome's CDP endpoint is responding but returned an error`,
+                `\nDEBUG STEPS:`,
+                `  1. Check Chrome logs for errors`,
+                `  2. Verify Chrome is fully started`,
+                `  3. Try manual request with Host header: curl -H "Host: localhost:9222" ${httpEndpoint}`,
+                `\nAttempt ${retryCount + 1}/${maxRetries}`
+              ].join("\n")
+              this.debugLog(errorMsg)
+              throw new Error(errorMsg)
+            }
+
+            const targets = (await targetsResponse.json()) as Array<{
+              type: string
+              webSocketDebuggerUrl: string
+              title?: string
+            }>
+            const pageTarget = targets.find((target) => target.type === "page")
+
+            if (!pageTarget) {
+              const errorMsg = [
+                "\n❌ NO PAGE TARGET FOUND IN EXTERNAL CHROME",
+                `CDP Endpoint: ${httpEndpoint}`,
+                `\nCAUSE: External Chrome is running but has no page/tab available`,
+                `\nDEBUG STEPS:`,
+                `  1. Check if Chrome window is open with at least one tab`,
+                `  2. Manually inspect targets: curl -H "Host: localhost:9222" ${httpEndpoint}`,
+                `\nAttempt ${retryCount + 1}/${maxRetries}`
+              ].join("\n")
+              this.debugLog(errorMsg)
+              throw new Error(errorMsg)
+            }
+
+            wsUrl = pageTarget.webSocketDebuggerUrl
+            // Replace localhost with host.docker.internal for Docker environments
+            if (externalCdpUrl.includes('host.docker.internal')) {
+              wsUrl = wsUrl.replace('localhost', 'host.docker.internal')
+            }
+            this.cdpUrl = wsUrl
+            this.debugLog(`Found page target in external Chrome: ${pageTarget.title || "Unknown"}`)
+            this.debugLog(`External CDP WebSocket URL: ${wsUrl}`)
+          }
+        } else {
+          // Get the WebSocket URL from Chrome's debug endpoint (normal mode)
+          let targetsResponse: Response
+          try {
+            targetsResponse = await fetch(`http://localhost:${this.debugPort}/json`)
+          } catch (fetchError) {
+            const errorMsg = [
+              "\n❌ CDP ENDPOINT UNREACHABLE",
+              `URL: http://localhost:${this.debugPort}/json`,
+              `Error: ${fetchError instanceof Error ? fetchError.message : String(fetchError)}`,
+              `\nCAUSE: Cannot connect to Chrome's DevTools Protocol endpoint`,
+              `\nPOSSIBLE REASONS:`,
+              `  - Chrome failed to start or crashed during startup`,
+              `  - CDP port ${this.debugPort} is blocked by firewall`,
+              `  - Another Chrome instance is using port ${this.debugPort}`,
+              `  - Chrome started without --remote-debugging-port flag`,
+              `\nDEBUG STEPS:`,
+              `  1. Check if Chrome is running: ps aux | grep chrome`,
+              `  2. Check CDP port: lsof -i :${this.debugPort}`,
+              `  3. Try manual connection: curl http://localhost:${this.debugPort}/json`,
+              `  4. Check Chrome stderr logs above for startup errors`,
+              `\nAttempt ${retryCount + 1}/${maxRetries}`
+            ].join("\n")
+            this.debugLog(errorMsg)
+            throw new Error(errorMsg)
+          }
+
+          if (!targetsResponse.ok) {
+            const errorMsg = [
+              "\n❌ CDP ENDPOINT RETURNED ERROR",
+              `URL: http://localhost:${this.debugPort}/json`,
+              `Status: ${targetsResponse.status} ${targetsResponse.statusText}`,
+              `\nCAUSE: Chrome's CDP endpoint is responding but returned an error`,
+              `\nEXPECTED: HTTP 200 OK with JSON array of targets`,
+              `ACTUAL: HTTP ${targetsResponse.status} ${targetsResponse.statusText}`,
+              `\nDEBUG STEPS:`,
+              `  1. Verify Chrome is fully started (wait a few seconds)`,
+              `  2. Check if Chrome crashed during startup`,
+              `  3. Try manual request: curl -v http://localhost:${this.debugPort}/json`,
+              `\nAttempt ${retryCount + 1}/${maxRetries}`
+            ].join("\n")
+            this.debugLog(errorMsg)
+            throw new Error(errorMsg)
+          }
+
+          const targets = await targetsResponse.json()
+
+          // Find the first page target (tab)
+          const pageTarget = targets.find(
+            (target: { type: string; webSocketDebuggerUrl: string }) => target.type === "page"
+          )
+          if (!pageTarget) {
+            const errorMsg = [
+              "\n❌ NO PAGE TARGET FOUND",
+              `CDP Endpoint: http://localhost:${this.debugPort}/json`,
+              `\nCAUSE: Chrome is running but has no page/tab available`,
+              `\nEXPECTED: At least one target with type='page'`,
+              `ACTUAL: ${targets.length} targets found:`,
+              ...targets.slice(0, 5).map((t: { type: string; title?: string; url?: string }, i: number) =>
+                `  [${i + 1}] Type: ${t.type}, Title: ${t.title || "N/A"}, URL: ${t.url?.substring(0, 50) || "N/A"}`
+              ),
+              ...(targets.length > 5 ? [`  ... and ${targets.length - 5} more targets`] : []),
+              `\nDEBUG STEPS:`,
+              `  1. Chrome may still be initializing (wait 2-3 seconds)`,
+              `  2. Check if Chrome was launched with --headless (may not create page targets)`,
+              `  3. Manually inspect targets: curl http://localhost:${this.debugPort}/json | jq`,
+              `\nAttempt ${retryCount + 1}/${maxRetries}`
+            ].join("\n")
+            this.debugLog(errorMsg)
+            throw new Error(errorMsg)
+          }
+
+          wsUrl = pageTarget.webSocketDebuggerUrl
+          this.cdpUrl = wsUrl // Store the CDP URL
+          this.debugLog(`Found page target: ${pageTarget.title || "Unknown"} - ${pageTarget.url}`)
+          this.debugLog(`Got CDP WebSocket URL: ${wsUrl}`)
+        }
 
         return new Promise((resolve, reject) => {
+          this.logger.debug('Establishing WebSocket connection...')
+          this.logger.trace(`WebSocket URL: ${wsUrl}`)
           this.debugLog(`Creating WebSocket connection to: ${wsUrl}`)
           const ws = new WebSocket(wsUrl)
 
@@ -414,6 +710,7 @@ export class CDPMonitor {
           ws.setMaxListeners(20)
 
           ws.on("open", () => {
+            this.logger.info('✓ WebSocket connection established')
             this.debugLog("WebSocket connection opened successfully")
             this.connection = {
               ws,
@@ -424,8 +721,25 @@ export class CDPMonitor {
           })
 
           ws.on("error", (error) => {
-            this.debugLog(`WebSocket connection error: ${error}`)
-            reject(error)
+            const errorMsg = [
+              "\n❌ CDP WEBSOCKET CONNECTION FAILED",
+              `WebSocket URL: ${wsUrl}`,
+              `Error: ${error instanceof Error ? error.message : String(error)}`,
+              `\nCAUSE: Failed to establish WebSocket connection to Chrome`,
+              `\nPOSSIBLE REASONS:`,
+              `  - Chrome tab/page was closed before connection established`,
+              `  - CDP WebSocket URL is invalid or expired`,
+              `  - Network issues preventing WebSocket upgrade`,
+              `  - Chrome is rejecting the connection (security/CORS)`,
+              `\nDEBUG STEPS:`,
+              `  1. Verify Chrome is still running: ps aux | grep chrome`,
+              `  2. Get fresh CDP URL: curl http://localhost:${this.debugPort}/json`,
+              `  3. Check if URL format is correct: ws://localhost:${this.debugPort}/devtools/...`,
+              `  4. For Docker: Verify host.docker.internal is resolvable`,
+              `\nAttempt ${retryCount + 1}/${maxRetries}`
+            ].join("\n")
+            this.debugLog(errorMsg)
+            reject(new Error(errorMsg))
           })
 
           ws.on("message", (data) => {
@@ -433,21 +747,21 @@ export class CDPMonitor {
               const message = JSON.parse(data.toString())
               this.handleCDPMessage(message)
             } catch (error) {
-              this.logger("browser", `[CDP] Failed to parse message: ${error}`)
+              this.fileLogger("browser", `[CDP] Failed to parse message: ${error}`)
             }
           })
 
           ws.on("close", (code, reason) => {
             this.debugLog(`WebSocket closed with code ${code}, reason: ${reason}`)
             if (!this.isShuttingDown) {
-              this.logger("browser", `[CDP] Connection lost unexpectedly (code: ${code}, reason: ${reason})`)
-              this.logger("browser", "[CDP] CDP connection lost - check for Chrome crash or server issues")
+              this.fileLogger("browser", `[CDP] Connection lost unexpectedly (code: ${code}, reason: ${reason})`)
+              this.fileLogger("browser", "[CDP] CDP connection lost - check for Chrome crash or server issues")
 
               // Log current Chrome process status
               if (this.browser && !this.browser.killed) {
-                this.logger("browser", "[CDP] Chrome process still running after CDP disconnect")
+                this.fileLogger("browser", "[CDP] Chrome process still running after CDP disconnect")
               } else {
-                this.logger("browser", "[CDP] Chrome process not available after CDP disconnect")
+                this.fileLogger("browser", "[CDP] Chrome process not available after CDP disconnect")
               }
 
               // If Chrome process is gone or connection loss seems permanent, trigger shutdown
@@ -457,12 +771,12 @@ export class CDPMonitor {
                   // Check if Chrome process is still alive
                   if (!this.browser || this.browser.killed || !this.browser.pid) {
                     this.debugLog("Chrome process is dead and CDP connection lost, triggering d3k shutdown")
-                    this.logger("browser", "[CDP] Chrome process terminated, shutting down d3k")
+                    this.fileLogger("browser", "[CDP] Chrome process terminated, shutting down d3k")
                     this.onWindowClosedCallback()
                   } else {
                     // Chrome is alive but CDP connection is lost - this could be recoverable
                     this.debugLog("Chrome process alive but CDP connection lost - attempting recovery")
-                    this.logger("browser", "[CDP] Attempting to recover from connection loss")
+                    this.fileLogger("browser", "[CDP] Attempting to recover from connection loss")
                     // Could add reconnection logic here in the future
                   }
                 }
@@ -476,16 +790,57 @@ export class CDPMonitor {
             if (ws.readyState === WebSocket.CONNECTING) {
               this.debugLog("WebSocket connection timed out, closing")
               ws.close()
-              reject(new Error("CDP connection timeout"))
+              const errorMsg = [
+                "\n❌ CDP WEBSOCKET CONNECTION TIMEOUT",
+                `WebSocket URL: ${wsUrl}`,
+                `State: CONNECTING (hung for 5 seconds)`,
+                `\nCAUSE: WebSocket connection didn't complete within 5 seconds`,
+                `\nPOSSIBLE REASONS:`,
+                `  - Network latency too high`,
+                `  - Chrome is frozen or unresponsive`,
+                `  - Firewall blocking WebSocket connections`,
+                `  - For Docker: host.docker.internal routing issues`,
+                `\nDEBUG STEPS:`,
+                `  1. Check Chrome responsiveness (can you interact with it?)`,
+                `  2. Test WebSocket manually: wscat -c ${wsUrl}`,
+                `  3. Check firewall rules for WebSocket traffic`,
+                `  4. For Docker: Ping host.docker.internal from container`,
+                `\nAttempt ${retryCount + 1}/${maxRetries}`
+              ].join("\n")
+              this.debugLog(errorMsg)
+              reject(new Error(errorMsg))
             }
           }, 5000)
         })
       } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error))
         retryCount++
         this.debugLog(`CDP connection attempt ${retryCount} failed: ${error}`)
 
         if (retryCount >= maxRetries) {
-          throw new Error(`Failed to connect to CDP after ${maxRetries} attempts: ${error}`)
+          const errorMsg = [
+            "\n❌ CDP CONNECTION FAILED AFTER ALL RETRIES",
+            `Attempts: ${maxRetries}`,
+            `Mode: ${externalCdpUrl ? "External (Docker/WSL)" : `Local port ${this.debugPort}`}`,
+            externalCdpUrl ? `External CDP URL: ${externalCdpUrl}` : `CDP Port: ${this.debugPort}`,
+            `\nLAST ERROR:`,
+            `${lastError.message}`,
+            `\nCAUSE: Unable to establish CDP connection after ${maxRetries} retry attempts`,
+            `\nFINAL DEBUG STEPS:`,
+            `  1. Review all error messages above for specific failure reasons`,
+            `  2. Verify Chrome is installed and executable`,
+            `  3. For Docker mode:`,
+            `     - Check DEV3000_CDP_URL is set correctly`,
+            `     - Verify Chrome is running on host with --remote-debugging-port=${this.debugPort}`,
+            `     - Test connection: docker exec -it dev3000 curl http://host.docker.internal:${this.debugPort}/json`,
+            `  4. For local mode:`,
+            `     - Kill all Chrome processes: pkill -9 chrome`,
+            `     - Restart dev3000`,
+            `  5. Check system logs for Chrome crashes: dmesg | grep chrome`
+          ].join("\n")
+          this.debugLog(errorMsg)
+          this.fileLogger("browser", errorMsg)
+          throw new Error(`Failed to connect to CDP after ${maxRetries} attempts`)
         }
 
         // Exponential backoff
@@ -498,6 +853,21 @@ export class CDPMonitor {
 
   private async sendCDPCommand(method: string, params: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
     if (!this.connection) {
+      const errorMsg = [
+        "\n❌ CDP COMMAND FAILED - NO CONNECTION",
+        `Command: ${method}`,
+        `Params: ${JSON.stringify(params).substring(0, 100)}`,
+        `\nCAUSE: Attempted to send CDP command without active connection`,
+        `\nPOSSIBLE REASONS:`,
+        `  - CDP connection was never established`,
+        `  - CDP connection was closed/lost`,
+        `  - Chrome crashed or was closed`,
+        `\nDEBUG STEPS:`,
+        `  1. Check if CDP connection was successful during startup`,
+        `  2. Check for "WebSocket closed" messages in logs`,
+        `  3. Verify Chrome is still running: ps aux | grep chrome`
+      ].join("\n")
+      this.debugLog(errorMsg)
       throw new Error("No CDP connection available")
     }
 
@@ -531,6 +901,24 @@ export class CDPMonitor {
       // Command timeout
       const timeout = setTimeout(() => {
         this.connection?.ws.removeListener("message", messageHandler)
+        const errorMsg = [
+          "\n❌ CDP COMMAND TIMEOUT",
+          `Command: ${method}`,
+          `Params: ${JSON.stringify(params).substring(0, 200)}`,
+          `Timeout: 10000ms`,
+          `\nCAUSE: Chrome didn't respond to CDP command within timeout`,
+          `\nPOSSIBLE REASONS:`,
+          `  - Chrome is frozen or unresponsive`,
+          `  - Command triggered a long-running operation`,
+          `  - WebSocket connection is degraded but not closed`,
+          `  - Chrome is under heavy load`,
+          `\nDEBUG STEPS:`,
+          `  1. Check Chrome responsiveness (can you interact with it?)`,
+          `  2. Check Chrome CPU/memory usage: ps aux | grep chrome`,
+          `  3. Check WebSocket state (should see heartbeat in --debug mode)`,
+          `  4. Try closing and restarting Chrome`
+        ].join("\n")
+        this.debugLog(errorMsg)
         reject(new Error(`CDP command timeout: ${method}`))
       }, 10000)
 
@@ -568,15 +956,10 @@ export class CDPMonitor {
         this.debugLog(`Enabling CDP domain: ${domain}`)
         await this.sendCDPCommand(`${domain}.enable`)
         this.debugLog(`Successfully enabled CDP domain: ${domain}`)
-        if (this.debug) {
-          this.logger("browser", `[CDP] Enabled ${domain} domain`)
-        }
+        this.fileLogger("browser", `[CDP] Enabled ${domain} domain`)
       } catch (error) {
         this.debugLog(`Failed to enable CDP domain ${domain}: ${error}`)
-        // Only log CDP errors when debug mode is enabled
-        if (this.debug) {
-          this.logger("browser", `[CDP] Failed to enable ${domain}: ${error}`)
-        }
+        this.fileLogger("browser", `[CDP] Failed to enable ${domain}: ${error}`)
         // Continue with other domains instead of throwing
       }
     }
@@ -614,9 +997,7 @@ export class CDPMonitor {
 
       // Debug: Log all console messages to see if tracking script is even running
       if (args && args.length > 0 && args[0].value?.includes("CDP tracking initialized")) {
-        if (this.debug) {
-          this.logger("browser", `[DEBUG] Interaction tracking script loaded successfully`)
-        }
+        this.fileLogger("browser", `[DEBUG] Interaction tracking script loaded successfully`)
       }
 
       // Log regular console messages with enhanced context
@@ -671,7 +1052,7 @@ export class CDPMonitor {
           .join(" -> ")}`
       }
 
-      this.logger("browser", logMsg)
+      this.fileLogger("browser", logMsg)
     })
 
     // Runtime exceptions with full stack traces
@@ -707,7 +1088,7 @@ export class CDPMonitor {
           .join(" -> ")}`
       }
 
-      this.logger("browser", errorMsg)
+      this.fileLogger("browser", errorMsg)
 
       // Take screenshot immediately on errors (no delay needed)
       this.takeScreenshot("error")
@@ -732,7 +1113,7 @@ export class CDPMonitor {
 
       // Only log if it's an error/warning or if we're not already capturing it via Runtime
       if (level === "error" || level === "warning") {
-        this.logger("browser", logMsg)
+        this.fileLogger("browser", logMsg)
       }
     })
 
@@ -775,7 +1156,7 @@ export class CDPMonitor {
       if (headerInfo) logMsg += ` [${headerInfo}]`
       if (postData) logMsg += ` body: ${postData.slice(0, 100)}${postData.length > 100 ? "..." : ""}`
 
-      this.logger("browser", logMsg)
+      this.fileLogger("browser", logMsg)
     })
 
     // Network responses with full details
@@ -809,7 +1190,7 @@ export class CDPMonitor {
         if (totalTime > 0) logMsg += ` (${totalTime}ms)`
       }
 
-      this.logger("browser", logMsg)
+      this.fileLogger("browser", logMsg)
     })
 
     // Page navigation with full context
@@ -827,21 +1208,21 @@ export class CDPMonitor {
         return
       }
 
-      this.logger("browser", `[NAVIGATION] ${url}`)
+      this.fileLogger("browser", `[NAVIGATION] ${url}`)
 
       // Don't take a screenshot here - wait for page load
     })
 
     // Page load events for better screenshot timing
     this.onCDPEvent("Page.loadEventFired", async (_event) => {
-      this.logger("browser", "[DOM] Load event fired")
+      this.fileLogger("browser", "[DOM] Load event fired")
       this.takeScreenshot("page-loaded")
       // Reinject interaction tracking on page load
       await this.setupInteractionTracking()
     })
 
     this.onCDPEvent("Page.domContentEventFired", async (_event) => {
-      this.logger("browser", "[DOM] DOM content loaded")
+      this.fileLogger("browser", "[DOM] DOM content loaded")
       // Skip screenshot on DOM content loaded - we'll get one on page-loaded
       // Reinject interaction tracking on DOM content loaded
       await this.setupInteractionTracking()
@@ -869,7 +1250,7 @@ export class CDPMonitor {
     // DOM mutations for interaction context
     this.onCDPEvent("DOM.documentUpdated", () => {
       // Document structure changed - useful for SPA routing
-      this.logger("browser", "[DOM] Document updated")
+      this.fileLogger("browser", "[DOM] Document updated")
     })
 
     // Note: Input.dispatchMouseEvent and Input.dispatchKeyEvent are for SENDING events, not capturing them
@@ -895,12 +1276,12 @@ export class CDPMonitor {
     this.onCDPEvent("Target.targetDestroyed", (event) => {
       const params = event.params as { targetId: string }
       this.debugLog(`Target destroyed: ${params.targetId}`)
-      this.logger("browser", `[TARGET] Window/tab closed: ${params.targetId}`)
+      this.fileLogger("browser", `[TARGET] Window/tab closed: ${params.targetId}`)
 
       // If this is our main tab/window being closed, trigger shutdown callback
       if (this.onWindowClosedCallback && !this.isShuttingDown) {
         this.debugLog("Chrome window was manually closed, triggering d3k shutdown")
-        this.logger("browser", "[TARGET] Chrome window manually closed, shutting down d3k")
+        this.fileLogger("browser", "[TARGET] Chrome window manually closed, shutting down d3k")
         this.onWindowClosedCallback()
       }
     })
@@ -946,7 +1327,7 @@ export class CDPMonitor {
       // Check if navigation was successful
       if (result.errorText) {
         this.debugLog(`Navigation error: ${result.errorText}`)
-        this.logger("browser", `[CDP] Navigation failed: ${result.errorText}`)
+        this.fileLogger("browser", `[CDP] Navigation failed: ${result.errorText}`)
       }
 
       // Wait for navigation to complete
@@ -981,7 +1362,7 @@ export class CDPMonitor {
       }
     } catch (error) {
       this.debugLog(`Navigation failed: ${error}`)
-      this.logger("browser", `[CDP] Navigation failed: ${error}`)
+      this.fileLogger("browser", `[CDP] Navigation failed: ${error}`)
       throw error
     }
 
@@ -1230,7 +1611,7 @@ export class CDPMonitor {
       } catch (syntaxError) {
         const errorMessage = syntaxError instanceof Error ? syntaxError.message : String(syntaxError)
         this.debugLog(`JavaScript syntax error detected: ${errorMessage}`)
-        this.logger("browser", `[CDP] Tracking script syntax error: ${errorMessage}`)
+        this.fileLogger("browser", `[CDP] Tracking script syntax error: ${errorMessage}`)
         throw new Error(`Invalid tracking script syntax: ${errorMessage}`)
       }
 
@@ -1247,7 +1628,7 @@ export class CDPMonitor {
       }
       if (resultWithDetails.exceptionDetails) {
         this.debugLog(`Script injection exception: ${JSON.stringify(resultWithDetails.exceptionDetails)}`)
-        this.logger(
+        this.fileLogger(
           "browser",
           `[DEBUG] Script injection exception: ${
             resultWithDetails.exceptionDetails.exception?.description || "Unknown error"
@@ -1256,7 +1637,7 @@ export class CDPMonitor {
       }
     } catch (error) {
       this.debugLog(`Failed to inject interaction tracking: ${error}`)
-      this.logger("browser", `[CDP] Interaction tracking failed: ${error}`)
+      this.fileLogger("browser", `[CDP] Interaction tracking failed: ${error}`)
     }
   }
 
@@ -1285,7 +1666,7 @@ export class CDPMonitor {
         const interactions = result.result?.value || []
 
         for (const interaction of interactions) {
-          this.logger("browser", `[INTERACTION] ${interaction.message}`)
+          this.fileLogger("browser", `[INTERACTION] ${interaction.message}`)
 
           // Take screenshot when scroll settles
           if (interaction.message.startsWith("SCROLL_SETTLED")) {
@@ -1356,13 +1737,12 @@ export class CDPMonitor {
       const buffer = Buffer.from(resultWithData.data, "base64")
       writeFileSync(screenshotPath, buffer)
 
-      // Log screenshot with URL path for easy viewing
-      const mcpPort = process.env.MCP_PORT || "3684"
-      this.logger("browser", `[SCREENSHOT] http://localhost:${mcpPort}/api/screenshots/${filename}`)
+      // Log screenshot filename (UI will construct the full URL)
+      this.fileLogger("browser", `[SCREENSHOT] ${filename}`)
 
       return filename
     } catch (error) {
-      this.logger("browser", `[CDP] Screenshot failed: ${error}`)
+      this.fileLogger("browser", `[CDP] Screenshot failed: ${error}`)
       return null
     }
   }
@@ -1423,10 +1803,10 @@ export class CDPMonitor {
           break
 
         default:
-          this.logger("browser", `[REPLAY] Unknown interaction type: ${interaction.type}`)
+          this.fileLogger("browser", `[REPLAY] Unknown interaction type: ${interaction.type}`)
       }
     } catch (error) {
-      this.logger("browser", `[REPLAY] Failed to execute ${interaction.type}: ${error}`)
+      this.fileLogger("browser", `[REPLAY] Failed to execute ${interaction.type}: ${error}`)
     }
   }
 
