@@ -15,11 +15,11 @@ Captures your web app's complete development timeline - server logs, browser eve
 **Never used dev3000?** Start here:
 
 ```bash
-# 1. Install dev3000 globally
+# 1. Install dev3000 globally (one-time setup)
 pnpm install -g dev3000
 
-# 2. Go to your project
-cd my-nextjs-app
+# 2. Go to ANY Next.js/React/Vite project (existing or new)
+cd /path/to/your/project
 
 # 3. Start dev3000 (replaces "npm run dev")
 dev3000
@@ -28,6 +28,8 @@ dev3000
 That's it! Your app is now fully monitored. Visit:
 - **Your App**: http://localhost:3000
 - **Logs Viewer**: http://localhost:3684/logs (see everything happening in real-time)
+
+**Works with ANY project**: No configuration files needed. dev3000 automatically detects your package manager and framework.
 
 **What happens next?** When you encounter a bug, just ask your AI assistant:
 ```
@@ -45,27 +47,44 @@ pnpm install -g dev3000
 dev3000
 ```
 
-### Docker / WSL2 Development
+### 🪟 For Windows Users (Docker Required)
 
-For Docker or WSL2 environments, use the included Docker setup:
+**Windows**: dev3000's Chrome automation requires Docker/WSL2. Direct Windows installation doesn't work due to CDP limitations.
 
-```bash
-make dev-up    # Start development environment with Chrome CDP
-make dev-logs  # View container logs
-make dev-down  # Stop environment
-```
+**Quick setup for YOUR project**:
 
-This will:
-1. Automatically launch Chrome with CDP on your host
-2. Start dev3000 in Docker with proper network configuration
-3. Enable real-time log streaming via Server-Sent Events (SSE)
+1. Clone dev3000 (for Docker config):
+   ```bash
+   git clone https://github.com/automationjp/dev3000.git
+   cd dev3000
+   ```
 
-Access points:
-- **Next.js App**: http://localhost:3000
+2. Edit `docker/docker-compose.yml` to point to YOUR project:
+   ```yaml
+   volumes:
+     - /mnt/c/Users/YourName/Projects/your-app:/app  # Change this line
+     - /app/node_modules
+     - /app/.next
+   ```
+
+3. Start dev3000:
+   ```bash
+   make dev-up    # Starts Chrome on Windows + dev3000 in Docker
+   make dev-logs  # View logs
+   make dev-down  # Stop
+   ```
+
+**Access points**:
+- **Your App**: http://localhost:3000
 - **Dev3000 UI**: http://localhost:3684
-- **Logs Viewer**: http://localhost:3684/logs (with real-time updates)
+- **Logs Viewer**: http://localhost:3684/logs
 
-See [Docker Setup Guide](docker/README.md) for detailed configuration.
+**How it works**:
+- Chrome runs on your Windows host (full GPU acceleration)
+- dev3000 runs in Linux container (proper Unix tools)
+- They communicate via CDP over `host.docker.internal`
+
+See [Docker Setup Guide](docker/README.md) and [Getting Started](GETTING_STARTED.md#docker-installation-required-for-windows) for detailed instructions.
 
 ## AI Integration with Dynamic Enhancement
 

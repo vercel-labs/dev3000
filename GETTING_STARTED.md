@@ -87,49 +87,132 @@ dev3000 --version
 
 You should see the version number displayed.
 
-### Docker Installation
+### Docker Installation (Required for Windows)
 
-For Docker or WSL2 environments, clone the repository and use the provided Docker setup:
+**Windows users**: dev3000's Chrome automation doesn't work directly on Windows due to CDP limitations. Use Docker/WSL2 instead.
 
-```bash
-# Clone the repository
-git clone https://github.com/automationjp/dev3000.git
-cd dev3000
+#### For Your Own Next.js Project with Docker
 
-# Build and start via Makefile
-make dev-up
-```
+1. **Clone dev3000 repository** (for Docker configuration):
+   ```bash
+   git clone https://github.com/automationjp/dev3000.git
+   cd dev3000
+   ```
+
+2. **Modify docker-compose.yml to use YOUR project**:
+
+   Edit `docker/docker-compose.yml`:
+   ```yaml
+   services:
+     dev3000:
+       volumes:
+         # Change this line to point to YOUR project:
+         - /path/to/your/nextjs-project:/app
+         # Keep these lines:
+         - /app/node_modules
+         - /app/.next
+   ```
+
+   Example for Windows WSL2:
+   ```yaml
+   volumes:
+     # Windows path example:
+     - /mnt/c/Users/YourName/Projects/my-app:/app
+     - /app/node_modules
+     - /app/.next
+   ```
+
+3. **Start dev3000 with Docker**:
+   ```bash
+   make dev-up
+   ```
 
 This automatically:
-1. Launches Chrome with CDP (Chrome DevTools Protocol) on your host
-2. Starts dev3000 in Docker with proper network configuration
+1. Launches Chrome with CDP (Chrome DevTools Protocol) on your Windows host
+2. Starts dev3000 in Docker container monitoring YOUR project
 3. Enables real-time log streaming via SSE (Server-Sent Events)
+
+**Access points**:
+- **Your App**: http://localhost:3000
+- **Dev3000 UI**: http://localhost:3684
+- **Logs Viewer**: http://localhost:3684/logs
+
+#### Understanding the Docker Setup
+
+The Docker setup solves Windows compatibility issues:
+
+1. **Chrome runs on Windows host** - Full GPU acceleration, proper window management
+2. **dev3000 runs in Linux container** - Proper file system permissions, Unix tools
+3. **Communication via CDP** - Chrome on Windows connects to dev3000 in container via `host.docker.internal`
+
+**Files you need to modify**:
+- `docker/docker-compose.yml` - Change the volume mount to point to YOUR project
+- That's it! No other configuration needed.
 
 ## Quick Start
 
-### For Next.js Projects
+### For Your Own Next.js Project
 
-1. **Navigate to your Next.js project**:
+dev3000 works with **any** Next.js project (or React/Vite/Vue project). No special configuration needed!
+
+1. **Install dev3000 globally** (one-time setup):
    ```bash
-   cd my-nextjs-app
+   pnpm install -g dev3000
+   # or: npm install -g dev3000
+   # or: yarn global add dev3000
    ```
 
-2. **Start dev3000**:
+2. **Navigate to YOUR project**:
+   ```bash
+   cd /path/to/your/nextjs-project
+   # This can be ANY Next.js project - existing or new!
+   ```
+
+3. **Start dev3000**:
    ```bash
    dev3000
    ```
 
-   This will automatically:
-   - Detect that you're using Next.js
-   - Run `npm run dev` (or your package manager's equivalent)
+   That's it! dev3000 will automatically:
+   - Detect your package manager (pnpm/npm/yarn/bun)
+   - Run the correct dev command (`pnpm run dev`, `npm run dev`, etc.)
    - Launch Chrome with monitoring enabled
    - Start the MCP server for AI integration
    - Open your app in the browser
 
-3. **Access the interfaces**:
+4. **Access the interfaces**:
    - **Your App**: http://localhost:3000
    - **Dev3000 UI**: http://localhost:3684
    - **Logs Viewer**: http://localhost:3684/logs (real-time log updates)
+
+**Important**: dev3000 does NOT require any configuration files in your project. It works out-of-the-box with any standard Next.js, React, Vite, or Vue project.
+
+#### Example: Using dev3000 with a brand new Next.js project
+
+```bash
+# 1. Create a new Next.js project
+npx create-next-app@latest my-app
+
+# 2. Go into your new project
+cd my-app
+
+# 3. Start dev3000 (instead of "npm run dev")
+dev3000
+```
+
+That's all! No `.dev3000.json`, no configuration files needed.
+
+#### Example: Using dev3000 with your existing Next.js project
+
+```bash
+# Go to your existing project
+cd /path/to/your/existing/nextjs/app
+
+# Just run dev3000
+dev3000
+```
+
+dev3000 will use your existing `package.json` and run the appropriate dev command.
 
 ### For Other Frameworks (Vite, React, Vue, etc.)
 
