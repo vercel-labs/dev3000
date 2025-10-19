@@ -374,6 +374,8 @@ This repository is a fork of the original [vercel-labs/dev3000](https://github.c
 
 **Original project**: https://github.com/vercel-labs/dev3000
 
+**Maintained by**: automation co., ltd
+
 We maintain this fork to:
 - Provide enhanced Windows/Docker support and documentation
 - Test and integrate new features specific to our use cases
