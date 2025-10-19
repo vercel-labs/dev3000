@@ -4,10 +4,34 @@ Captures your web app's complete development timeline - server logs, browser eve
 
 ## Quick Start
 
+### Local Development
+
 ```bash
 pnpm install -g dev3000
 dev3000
 ```
+
+### Docker / WSL2 Development
+
+For Docker or WSL2 environments, use the included Docker setup:
+
+```bash
+make dev-up    # Start development environment with Chrome CDP
+make dev-logs  # View container logs
+make dev-down  # Stop environment
+```
+
+This will:
+1. Automatically launch Chrome with CDP on your host
+2. Start dev3000 in Docker with proper network configuration
+3. Enable real-time log streaming via Server-Sent Events (SSE)
+
+Access points:
+- **Next.js App**: http://localhost:3000
+- **Dev3000 UI**: http://localhost:3684
+- **Logs Viewer**: http://localhost:3684/logs (with real-time updates)
+
+See [Docker Setup Guide](docker/README.md) for detailed configuration.
 
 ## AI Integration with Dynamic Enhancement
 

@@ -1069,8 +1069,30 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
     // Only stream current (active) log file
     if (!isCurrentFile || !logPath) return
 
-    const sseUrl = `/api/logs/stream?logPath=${encodeURIComponent(logPath)}`
-    console.log("Connecting to SSE:", sseUrl)
+    // Construct SSE URL with proper host/port
+    // Use MCP_BASE_URL environment variable if available, otherwise detect from window.location
+    const getBaseUrl = () => {
+      // Check if we have a configured MCP base URL (e.g., from environment variable)
+      if (typeof window !== 'undefined' && (window as any).__MCP_BASE_URL__) {
+        return (window as any).__MCP_BASE_URL__
+      }
+
+      // Auto-detect: if current port is 3000 (Next.js app), use port 3684 (Dev3000 MCP)
+      if (typeof window !== 'undefined') {
+        const currentPort = window.location.port
+        if (currentPort === '3000') {
+          // Running in Next.js app context - point to Dev3000 MCP server
+          return `http://${window.location.hostname}:3684`
+        }
+      }
+
+      // Default: use relative URL (same host/port)
+      return ''
+    }
+
+    const baseUrl = getBaseUrl()
+    const sseUrl = `${baseUrl}/api/logs/stream?logPath=${encodeURIComponent(logPath)}`
+    console.log("Connecting to SSE:", sseUrl, baseUrl ? `(base: ${baseUrl})` : '(relative URL)')
 
     let reconnectAttempts = 0
     const maxReconnectAttempts = 5

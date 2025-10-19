@@ -42,6 +42,9 @@ services:
       # Next.js configuration
       - NEXT_TELEMETRY_DISABLED=1
 
+      # Dev3000 logging configuration
+      - LOG_FILE_PATH=/tmp/d3k.log
+
     # WSL compatibility: allow host.docker.internal to work on Linux/WSL
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -69,18 +72,14 @@ services:
         echo '  CHOKIDAR_USEPOLLING: '${CHOKIDAR_USEPOLLING:-'(not set)'}
         echo ''
 
-        echo '📦 Installing dev3000 globally...'
-        if ! pnpm add -g dev3000@latest 2>&1; then
-          echo ''
-          echo '❌ DEV3000 INSTALLATION FAILED'
-          echo 'CAUSE: pnpm failed to install dev3000'
-          echo 'DEBUG STEPS:'
-          echo '  1. Check pnpm version: pnpm --version'
-          echo '  2. Check network: ping registry.npmjs.org'
-          echo '  3. Try manual install: pnpm add -g dev3000@latest'
+        echo '📦 Checking dev3000 installation...'
+        if command -v dev3000 > /dev/null 2>&1; then
+          echo '✅ dev3000 is installed: '$(dev3000 --version)
+        else
+          echo '❌ dev3000 not found in PATH'
+          echo 'This should not happen - dev3000 is installed in Dockerfile'
           exit 1
         fi
-        echo '✅ dev3000 installed successfully'
         echo ''
 
         echo '📁 Checking application directory...'

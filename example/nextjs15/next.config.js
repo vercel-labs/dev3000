@@ -6,9 +6,7 @@ const nextConfig = {
   // Disable static optimization for development
   // This ensures all pages are server-rendered for better dev3000 monitoring
   devIndicators: {
-    appIsrStatus: true,
-    buildActivity: true,
-    buildActivityPosition: 'bottom-right'
+    position: 'bottom-right'
   },
 
   // Logging configuration

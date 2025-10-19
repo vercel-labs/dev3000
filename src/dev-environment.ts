@@ -106,6 +106,10 @@ async function isPortAvailable(port: string): Promise<boolean> {
         output += data.toString()
       })
       proc.on("exit", () => resolve(output.trim()))
+      proc.on("error", () => {
+        // lsof not available (e.g., Windows, containers)
+        resolve("") // Return empty string to indicate port check failed
+      })
     })
     return !result // If no output, port is available
   } catch {
@@ -731,6 +735,11 @@ export class DevEnvironment {
           output += data.toString()
         })
         getPidsProcess.on("exit", () => resolve(output.trim()))
+        getPidsProcess.on("error", (err) => {
+          // lsof not available (e.g., Windows, containers)
+          this.debugLog(`lsof not available for killMcpServer: ${err.message}`)
+          resolve("") // Return empty to skip killing
+        })
       })
 
       if (pids) {
@@ -772,10 +781,12 @@ export class DevEnvironment {
         // Try HTTP health check first
         try {
           const http = await import("http")
+          const path = name === "mcp" ? "/health" : "/"
           let httpError: Error | null = null
           const isResponding = await new Promise<boolean>((resolve) => {
-            const req = http.get(`http://localhost:${port}/`, (res) => {
-              resolve(true)
+            const req = http.get({ host: "localhost", port, path }, (res) => {
+              const ok = (res.statusCode ?? 0) >= 200 && (res.statusCode ?? 0) < 400
+              resolve(ok)
             })
             req.on("error", (err) => {
               httpError = err instanceof Error ? err : new Error(String(err))
@@ -823,6 +834,11 @@ export class DevEnvironment {
               output += data.toString()
             })
             proc.on("exit", () => resolve(output.trim()))
+            proc.on("error", (err) => {
+              // lsof not available (e.g., in containers/WSL/Windows)
+              this.debugLog(`lsof not available: ${err.message}`)
+              resolve("") // Return empty to trigger failure
+            })
           })
 
           if (!result) {
@@ -2661,6 +2677,11 @@ export class DevEnvironment {
 
         findPids.stdout?.on("data", (data) => {
           pidsOutput += data.toString()
+        })
+
+        findPids.on("error", (err) => {
+          // lsof not available (e.g., Windows, containers)
+          this.debugLog(`lsof not available for shutdown: ${err.message}`)
         })
 
         return new Promise<void>((resolve) => {

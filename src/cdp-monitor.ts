@@ -382,7 +382,13 @@ export class CDPMonitor {
         let processExited = false
 
         this.browser.on("error", (error) => {
-          this.logger.warn(`✗ Launch error for ${chromePath}: ${error.message}`)
+          // ENOENT is expected when Chrome is not at this path (WSL2, etc.)
+          const logLevel = error.message.includes("ENOENT") ? "debug" : "warn"
+          if (logLevel === "warn") {
+            this.logger.warn(`✗ Launch error for ${chromePath}: ${error.message}`)
+          } else {
+            this.logger.debug(`Skipping ${chromePath} (not found - expected in WSL2/Docker)`)
+          }
           this.debugLog(`Chrome launch error for ${chromePath}: ${error.message}`)
           if (!this.isShuttingDown && !processExited) {
             processExited = true
@@ -696,6 +702,16 @@ export class CDPMonitor {
 
           wsUrl = pageTarget.webSocketDebuggerUrl
           this.cdpUrl = wsUrl // Store the CDP URL
+
+          // Extract Chrome version info from targets
+          const versionTarget = targets.find((t: { type: string }) => t.type === "browser")
+          if (versionTarget && versionTarget.title) {
+            this.logger.info(`✓ Connected to ${versionTarget.title}`)
+            this.debugLog(`Chrome version: ${versionTarget.title}`)
+          } else {
+            this.logger.info("✓ Connected to Chrome/Chromium browser")
+          }
+
           this.debugLog(`Found page target: ${pageTarget.title || "Unknown"} - ${pageTarget.url}`)
           this.debugLog(`Got CDP WebSocket URL: ${wsUrl}`)
         }
