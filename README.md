@@ -366,6 +366,8 @@ This warning is harmless and can be safely ignored. Sharp is an optional image o
 
 ---
 
+_Made by [elsigh](https://github.com/elsigh)_
+
 ## About This Fork
 
 This repository is a fork of the original [vercel-labs/dev3000](https://github.com/vercel-labs/dev3000) created by [elsigh](https://github.com/elsigh).
