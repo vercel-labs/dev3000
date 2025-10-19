@@ -20,6 +20,7 @@ docker/*.env
 example/nextjs15/node_modules/
 example/nextjs15/.next/
 example/nextjs15/out/
+example/nextjs15/.pnpm-store/
 
 # Temporary files from automation scripts
 .dev3000-chrome.pid
