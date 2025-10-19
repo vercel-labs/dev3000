@@ -2,9 +2,43 @@
 
 Captures your web app's complete development timeline - server logs, browser events, console messages, network requests, and automatic screenshots - in a unified, timestamped feed for AI debugging. **Gracefully enhances with chrome-devtools and nextjs-dev MCPs when available.**
 
+## 📚 Documentation
+
+- **[Getting Started Guide](GETTING_STARTED.md)** - Complete zero-to-production guide for beginners
+- **[Docker Setup](docker/README.md)** - Docker and WSL2 configuration
+- **[SSE & Logging](CHANGELOG-SSE-FIX.md)** - Real-time streaming and logging improvements
+
 ## Quick Start
 
-### Local Development
+### 🚀 For Beginners
+
+**Never used dev3000?** Start here:
+
+```bash
+# 1. Install dev3000 globally
+pnpm install -g dev3000
+
+# 2. Go to your project
+cd my-nextjs-app
+
+# 3. Start dev3000 (replaces "npm run dev")
+dev3000
+```
+
+That's it! Your app is now fully monitored. Visit:
+- **Your App**: http://localhost:3000
+- **Logs Viewer**: http://localhost:3684/logs (see everything happening in real-time)
+
+**What happens next?** When you encounter a bug, just ask your AI assistant:
+```
+"fix my app"
+```
+
+dev3000 gives AI complete context: server logs, browser errors, network calls, screenshots - everything it needs to help you debug.
+
+**Need detailed instructions?** Read the [Getting Started Guide](GETTING_STARTED.md).
+
+### 🐳 For Local Development
 
 ```bash
 pnpm install -g dev3000
