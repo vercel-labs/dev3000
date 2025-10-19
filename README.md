@@ -1,5 +1,7 @@
 # dev3000
 
+> **Note**: This is a fork of [vercel-labs/dev3000](https://github.com/vercel-labs/dev3000) with enhanced Windows/Docker support. See [About This Fork](#about-this-fork) for details.
+
 Captures your web app's complete development timeline - server logs, browser events, console messages, network requests, and automatic screenshots - in a unified, timestamped feed for AI debugging. **Gracefully enhances with chrome-devtools and nextjs-dev MCPs when available.**
 
 ## 📚 Documentation
@@ -364,7 +366,20 @@ This warning is harmless and can be safely ignored. Sharp is an optional image o
 
 ---
 
-_Made by [elsigh](https://github.com/elsigh)_
+## About This Fork
+
+This repository is a fork of the original [vercel-labs/dev3000](https://github.com/vercel-labs/dev3000) created by [elsigh](https://github.com/elsigh).
+
+**Original project**: https://github.com/vercel-labs/dev3000
+
+We maintain this fork to:
+- Provide enhanced Windows/Docker support and documentation
+- Test and integrate new features specific to our use cases
+- Contribute improvements back to the upstream project
+
+**Huge thanks to the original dev3000 team for creating this amazing tool!** 🙏
+
+If you're looking for the official version, please visit the [upstream repository](https://github.com/vercel-labs/dev3000).
 
 ## Contributing
 
