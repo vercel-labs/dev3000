@@ -19,12 +19,11 @@ export async function GET(request: NextRequest) {
       try {
         const content = readFileSync(logPath, "utf-8")
         const stats = statSync(logPath)
-        const lines = content.split("\n")
         lastSize = content.length
         lastInode = stats.ino
 
-        // Send initial lines
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ lines })}\n\n`))
+        // Send initial content as string (parseLogEntries expects string, not array)
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ lines: content })}\n\n`))
       } catch (error) {
         console.error("Failed to read initial log:", error)
         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: "Failed to read log" })}\n\n`))
@@ -43,11 +42,10 @@ export async function GET(request: NextRequest) {
               // Log rotation detected - send full content of new file
               console.log("Log rotation detected, reloading full file")
               const content = readFileSync(logPath, "utf-8")
-              const lines = content.split("\n")
               lastSize = content.length
               lastInode = stats.ino
 
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ rotated: true, lines })}\n\n`))
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ rotated: true, lines: content })}\n\n`))
               return
             }
 
@@ -55,17 +53,15 @@ export async function GET(request: NextRequest) {
             const content = readFileSync(logPath, "utf-8")
             if (content.length > lastSize) {
               const newContent = content.slice(lastSize)
-              const newLines = newContent.split("\n")
-              if (newLines.length > 0) {
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ newLines })}\n\n`))
+              if (newContent.length > 0) {
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ newLines: newContent })}\n\n`))
               }
               lastSize = content.length
             } else if (content.length < lastSize) {
               // File was truncated - reload full content
               console.log("Log file truncated, reloading")
-              const lines = content.split("\n")
               lastSize = content.length
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ truncated: true, lines })}\n\n`))
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ truncated: true, lines: content })}\n\n`))
             }
           } catch (error) {
             console.error("Error reading log updates:", error)

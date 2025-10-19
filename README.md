@@ -1,13 +1,102 @@
 # dev3000
 
+> **Note**: This is a fork of [vercel-labs/dev3000](https://github.com/vercel-labs/dev3000) with enhanced Windows/Docker support. See [About This Fork](#about-this-fork) for details.
+
 Captures your web app's complete development timeline - server logs, browser events, console messages, network requests, and automatic screenshots - in a unified, timestamped feed for AI debugging. **Gracefully enhances with chrome-devtools and nextjs-dev MCPs when available.**
 
+## 📚 Documentation
+
+- **[Getting Started Guide](GETTING_STARTED.md)** - Complete zero-to-production guide for beginners
+- **[Docker Setup](docker/README.md)** - Docker and WSL2 configuration
+- **[SSE & Logging](CHANGELOG-SSE-FIX.md)** - Real-time streaming and logging improvements
+
 ## Quick Start
+
+### 🚀 For Beginners
+
+**Never used dev3000?** Start here:
+
+```bash
+# 1. Install dev3000 globally (one-time setup)
+pnpm install -g dev3000
+
+# 2. Go to ANY Next.js/React/Vite project (existing or new)
+cd /path/to/your/project
+
+# 3. Start dev3000 (replaces "npm run dev")
+dev3000
+```
+
+That's it! Your app is now fully monitored. Visit:
+- **Your App**: http://localhost:3000
+- **Logs Viewer**: http://localhost:3684/logs (see everything happening in real-time)
+
+**Works with ANY project**: No configuration files needed. dev3000 automatically detects your package manager and framework.
+
+**What happens next?** When you encounter a bug, just ask your AI assistant:
+```
+"fix my app"
+```
+
+dev3000 gives AI complete context: server logs, browser errors, network calls, screenshots - everything it needs to help you debug.
+
+**Need detailed instructions?** Read the [Getting Started Guide](GETTING_STARTED.md).
+
+### 🐳 For Local Development
 
 ```bash
 pnpm install -g dev3000
 dev3000
 ```
+
+### 🪟 For Windows Users (Docker Required)
+
+**Windows**: dev3000's Chrome automation requires Docker/WSL2. Direct Windows installation doesn't work due to CDP limitations.
+
+**Setup for YOUR Next.js project**:
+
+1. **Clone this repository** (for Docker configuration):
+   ```bash
+   git clone https://github.com/automationjp/dev3000.git
+   cd dev3000
+   ```
+
+2. **Point Docker to YOUR project**:
+
+   Edit `docker/docker-compose.yml` and change the volume mount:
+   ```yaml
+   volumes:
+     # Change this line to YOUR project path (WSL2 format):
+     - /mnt/c/Users/YourName/Projects/my-nextjs-app:/app
+     # Keep these lines as-is:
+     - /app/node_modules
+     - /app/.next
+   ```
+
+   **Path Examples**:
+   - Windows `C:\Users\John\Projects\my-app` → WSL2 `/mnt/c/Users/John/Projects/my-app`
+   - Windows `D:\github\my-app` → WSL2 `/mnt/d/github/my-app`
+
+3. **Start dev3000**:
+   ```bash
+   make dev-up    # Starts Chrome on Windows + dev3000 in Docker
+   make dev-logs  # View logs
+   make dev-down  # Stop everything
+   ```
+
+**Access Points**:
+- **Your App**: http://localhost:3000
+- **Dev3000 UI**: http://localhost:3684
+- **Logs Viewer**: http://localhost:3684/logs
+
+**How it Works**:
+- ✅ Chrome runs on Windows host (full GPU acceleration)
+- ✅ dev3000 runs in Linux container (proper Unix tools)
+- ✅ Communication via CDP over `host.docker.internal`
+
+**No configuration files needed in YOUR project** - just point the volume mount to your Next.js app directory!
+
+See [Docker Setup Guide](docker/README.md) and [Getting Started](GETTING_STARTED.md#docker-installation-required-for-windows) for detailed instructions.
 
 ## AI Integration with Dynamic Enhancement
 
@@ -278,6 +367,23 @@ This warning is harmless and can be safely ignored. Sharp is an optional image o
 ---
 
 _Made by [elsigh](https://github.com/elsigh)_
+
+## About This Fork
+
+This repository is a fork of the original [vercel-labs/dev3000](https://github.com/vercel-labs/dev3000) created by [elsigh](https://github.com/elsigh).
+
+**Original project**: https://github.com/vercel-labs/dev3000
+
+**Maintained by**: automation co., ltd
+
+We maintain this fork to:
+- Provide enhanced Windows/Docker support and documentation
+- Test and integrate new features specific to our use cases
+- Contribute improvements back to the upstream project
+
+**Huge thanks to the original dev3000 team for creating this amazing tool!** 🙏
+
+If you're looking for the official version, please visit the [upstream repository](https://github.com/vercel-labs/dev3000).
 
 ## Contributing
 

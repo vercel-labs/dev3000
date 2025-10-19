@@ -4,8 +4,11 @@
 
 FROM node:20-bookworm-slim AS base
 
-# Install pnpm globally
+# Install pnpm globally (as root)
 RUN corepack enable && corepack prepare pnpm@latest --activate
+
+# Install dev3000 globally (as root to ensure proper PATH setup)
+RUN npm install -g dev3000@latest
 
 # Set working directory
 WORKDIR /app
@@ -16,6 +19,9 @@ RUN chown -R node:node /app
 
 # Switch to non-root user
 USER node
+
+# Set PATH to include global npm packages for node user
+ENV PATH="/usr/local/lib/node_modules/.bin:${PATH}"
 
 # Copy package files for dependency installation
 # Note: This assumes dev3000 is globally installed or mounted
