@@ -424,11 +424,13 @@ This will:
 
 ## Releasing (Maintainers Only)
 
+**Note**: This fork does not publish to npm. For the official npm package, see the [upstream repository](https://github.com/vercel-labs/dev3000).
+
 We use a semi-automated release process that handles testing while accommodating npm's 2FA requirement:
 
 ### Option 1: GitHub Actions + Manual Publish (Recommended)
 
-1. Go to [Actions](https://github.com/vercel-labs/dev3000/actions) → "Prepare Release"
+1. Go to [Actions](https://github.com/automationjp/dev3000/actions) → "Prepare Release"
 2. Select release type (patch/minor/major) and run
 3. Wait for tests to pass on all platforms
 4. Download the release artifact (tarball)

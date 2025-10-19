@@ -919,6 +919,7 @@ console.log('DEBUG:', { platform, chromePath, cdpPort })
 ## Support
 
 For issues and questions:
-- GitHub Issues: https://github.com/vercel-labs/dev3000/issues
+- GitHub Issues: https://github.com/automationjp/dev3000/issues
+- Upstream (original): https://github.com/vercel-labs/dev3000
 - Check [Troubleshooting](#troubleshooting) section above
 - Review Docker logs: `docker compose logs -f dev3000`
