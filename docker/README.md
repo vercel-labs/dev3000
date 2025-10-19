@@ -1,6 +1,8 @@
 # Dev3000 Docker Setup
 
-This directory contains Docker configuration for running Dev3000 with Next.js 15 in a containerized environment, with browser automation via Chrome DevTools Protocol (CDP) from the host machine.
+This directory contains Docker configuration for running Dev3000 with **YOUR Next.js project** in a containerized environment, with browser automation via Chrome DevTools Protocol (CDP) from the host machine.
+
+**Perfect for Windows users** - Windows requires Docker/WSL2 because CDP doesn't work directly on Windows.
 
 ## Architecture
 
@@ -26,17 +28,38 @@ This directory contains Docker configuration for running Dev3000 with Next.js 15
 
 ## Quick Start
 
-From the repository root:
+**For YOUR Next.js Project**:
+
+1. **Clone this repository** (for Docker configuration):
+   ```bash
+   git clone https://github.com/automationjp/dev3000.git
+   cd dev3000
+   ```
+
+2. **Configure docker-compose.yml** to point to YOUR project:
+
+   Edit `docker/docker-compose.yml`:
+   ```yaml
+   volumes:
+     # CHANGE this line to YOUR project path:
+     - /mnt/c/Users/YourName/Projects/my-nextjs-app:/app
+     # KEEP these lines:
+     - /app/node_modules
+     - /app/.next
+   ```
+
+3. **Start dev3000**:
+   ```bash
+   make dev-up    # Starts Chrome + dev3000 in Docker
+   make dev-logs  # View logs
+   make dev-down  # Stop everything
+   ```
+
+**For the included Next.js 15 example** (testing/development):
 
 ```bash
-# One-command startup (recommended)
-npm run dev3000:up
-
-# Or manually:
-# 1. Start Chrome with CDP on host
-# 2. Build and run Docker container
-cd docker
-docker compose up --build
+# Example is already configured in docker-compose.yml
+make dev-up
 ```
 
 ## Files
@@ -238,24 +261,31 @@ sudo dpkg -i google-chrome-stable_current_amd64.deb
 
 1. **Start Dev Environment**:
    ```bash
-   npm run dev3000:up
+   make dev-up
    ```
 
-2. **Make Code Changes** in `example/nextjs15/`
+2. **Make Code Changes** in YOUR Next.js project:
    - Changes auto-detected via polling
    - Next.js hot-reloads automatically
+   - No need to restart Docker container
 
 3. **View Logs & Screenshots**:
    - Browser: http://localhost:3684/logs
    - Screenshots: Auto-captured on errors/navigation
 
-4. **Use Claude for Debugging**:
+4. **Use Claude Code for Debugging**:
    - Claude has access to dev3000 MCP tools
-   - Run `fix my app` for AI-powered debugging
+   - Ask: `"fix my app"` for AI-powered debugging
+   - Ask: `"analyze the error"` for detailed analysis
 
 5. **Stop Environment**:
    ```bash
-   npm run dev3000:down
+   make dev-down
+   ```
+
+6. **View Logs in Real-time**:
+   ```bash
+   make dev-logs
    ```
 
 ## Security Considerations
@@ -300,9 +330,9 @@ deploy:
 
 ## Next Steps
 
-- See [DOCKER_SETUP.md](../DOCKER_SETUP.md) for comprehensive setup guide
-- See [README.md](../README.md) for dev3000 general usage
-- See [example/nextjs15/README.md](../example/nextjs15/README.md) for Next.js example
+- See [Getting Started Guide](../GETTING_STARTED.md) for detailed setup instructions
+- See [README.md](../README.md) for dev3000 general usage and features
+- See [example/nextjs15/README.md](../example/nextjs15/README.md) for the included example
 
 ## Support
 
@@ -310,3 +340,12 @@ For issues specific to Docker setup, check:
 1. Docker version (`docker --version`) - requires 20.10+
 2. Docker Compose version (`docker compose version`) - requires 1.29+
 3. Platform detection in `tools/dev3000-up.mjs`
+4. GitHub Issues: https://github.com/automationjp/dev3000/issues
+
+## Key Takeaways
+
+✅ **No configuration files needed in YOUR project**
+✅ **Just change ONE line in docker-compose.yml** (volume mount)
+✅ **Works with ANY Next.js project**
+✅ **Dependencies installed in container** (doesn't touch your host)
+✅ **Perfect for Windows** (CDP limitation workaround)

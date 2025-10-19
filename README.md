@@ -51,38 +51,48 @@ dev3000
 
 **Windows**: dev3000's Chrome automation requires Docker/WSL2. Direct Windows installation doesn't work due to CDP limitations.
 
-**Quick setup for YOUR project**:
+**Setup for YOUR Next.js project**:
 
-1. Clone dev3000 (for Docker config):
+1. **Clone this repository** (for Docker configuration):
    ```bash
    git clone https://github.com/automationjp/dev3000.git
    cd dev3000
    ```
 
-2. Edit `docker/docker-compose.yml` to point to YOUR project:
+2. **Point Docker to YOUR project**:
+
+   Edit `docker/docker-compose.yml` and change the volume mount:
    ```yaml
    volumes:
-     - /mnt/c/Users/YourName/Projects/your-app:/app  # Change this line
+     # Change this line to YOUR project path (WSL2 format):
+     - /mnt/c/Users/YourName/Projects/my-nextjs-app:/app
+     # Keep these lines as-is:
      - /app/node_modules
      - /app/.next
    ```
 
-3. Start dev3000:
+   **Path Examples**:
+   - Windows `C:\Users\John\Projects\my-app` → WSL2 `/mnt/c/Users/John/Projects/my-app`
+   - Windows `D:\github\my-app` → WSL2 `/mnt/d/github/my-app`
+
+3. **Start dev3000**:
    ```bash
    make dev-up    # Starts Chrome on Windows + dev3000 in Docker
    make dev-logs  # View logs
-   make dev-down  # Stop
+   make dev-down  # Stop everything
    ```
 
-**Access points**:
+**Access Points**:
 - **Your App**: http://localhost:3000
 - **Dev3000 UI**: http://localhost:3684
 - **Logs Viewer**: http://localhost:3684/logs
 
-**How it works**:
-- Chrome runs on your Windows host (full GPU acceleration)
-- dev3000 runs in Linux container (proper Unix tools)
-- They communicate via CDP over `host.docker.internal`
+**How it Works**:
+- ✅ Chrome runs on Windows host (full GPU acceleration)
+- ✅ dev3000 runs in Linux container (proper Unix tools)
+- ✅ Communication via CDP over `host.docker.internal`
+
+**No configuration files needed in YOUR project** - just point the volume mount to your Next.js app directory!
 
 See [Docker Setup Guide](docker/README.md) and [Getting Started](GETTING_STARTED.md#docker-installation-required-for-windows) for detailed instructions.
 

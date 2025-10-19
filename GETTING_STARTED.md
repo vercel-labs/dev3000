@@ -91,63 +91,119 @@ You should see the version number displayed.
 
 **Windows users**: dev3000's Chrome automation doesn't work directly on Windows due to CDP limitations. Use Docker/WSL2 instead.
 
-#### For Your Own Next.js Project with Docker
+#### Setup for YOUR Next.js Project with Docker
 
-1. **Clone dev3000 repository** (for Docker configuration):
+**Prerequisites**:
+- Docker Desktop installed on Windows
+- WSL2 enabled
+- Your Next.js project exists somewhere on your Windows filesystem
+
+**Steps**:
+
+1. **Clone this repository** (for Docker configuration):
    ```bash
    git clone https://github.com/automationjp/dev3000.git
    cd dev3000
    ```
 
-2. **Modify docker-compose.yml to use YOUR project**:
+2. **Configure Docker to use YOUR project**:
 
-   Edit `docker/docker-compose.yml`:
+   Edit `docker/docker-compose.yml` and change the volume mount to point to YOUR Next.js project:
+
    ```yaml
    services:
      dev3000:
        volumes:
-         # Change this line to point to YOUR project:
-         - /path/to/your/nextjs-project:/app
-         # Keep these lines:
+         # CHANGE THIS LINE to YOUR project path (WSL2 format):
+         - /mnt/c/Users/YourName/Projects/my-nextjs-app:/app
+
+         # KEEP these lines as-is (they optimize Docker performance):
          - /app/node_modules
          - /app/.next
    ```
 
-   Example for Windows WSL2:
-   ```yaml
-   volumes:
-     # Windows path example:
-     - /mnt/c/Users/YourName/Projects/my-app:/app
-     - /app/node_modules
-     - /app/.next
-   ```
+   **Windows Path → WSL2 Path Conversion**:
+   | Windows Path | WSL2 Path |
+   |--------------|-----------|
+   | `C:\Users\John\Projects\my-app` | `/mnt/c/Users/John/Projects/my-app` |
+   | `D:\github\ecommerce` | `/mnt/d/github/ecommerce` |
+   | `C:\dev\nextjs-blog` | `/mnt/c/dev/nextjs-blog` |
 
-3. **Start dev3000 with Docker**:
+3. **Start dev3000**:
    ```bash
    make dev-up
    ```
 
-This automatically:
-1. Launches Chrome with CDP (Chrome DevTools Protocol) on your Windows host
-2. Starts dev3000 in Docker container monitoring YOUR project
-3. Enables real-time log streaming via SSE (Server-Sent Events)
+   This automatically:
+   - ✅ Launches Chrome with CDP on your Windows host
+   - ✅ Starts dev3000 in Docker container monitoring YOUR project
+   - ✅ Enables real-time log streaming via SSE
+   - ✅ Installs dependencies inside container (doesn't touch your host)
 
-**Access points**:
-- **Your App**: http://localhost:3000
-- **Dev3000 UI**: http://localhost:3684
-- **Logs Viewer**: http://localhost:3684/logs
+4. **Access the interfaces**:
+   - **Your App**: http://localhost:3000
+   - **Dev3000 UI**: http://localhost:3684
+   - **Logs Viewer**: http://localhost:3684/logs
+
+5. **Stop dev3000**:
+   ```bash
+   make dev-down
+   ```
+
+6. **View logs**:
+   ```bash
+   make dev-logs
+   ```
 
 #### Understanding the Docker Setup
 
-The Docker setup solves Windows compatibility issues:
+The Docker architecture solves Windows compatibility issues:
 
-1. **Chrome runs on Windows host** - Full GPU acceleration, proper window management
-2. **dev3000 runs in Linux container** - Proper file system permissions, Unix tools
-3. **Communication via CDP** - Chrome on Windows connects to dev3000 in container via `host.docker.internal`
+```
+┌─────────────────────────────────────────┐
+│        Windows Host                     │
+│                                         │
+│  ┌─────────────────┐                   │
+│  │ Your Next.js    │◄──── Volume mount │
+│  │ Project         │                   │
+│  └─────────────────┘                   │
+│                                         │
+│  ┌─────────────────┐                   │
+│  │ Chrome Browser  │                   │
+│  │ (CDP enabled)   │◄──┐               │
+│  └─────────────────┘   │               │
+│                        │ CDP over      │
+│                        │ host.docker   │
+└────────────────────────┼───────────────┘
+                         │ .internal
+┌────────────────────────┼───────────────┐
+│  Docker Container      │               │
+│                        │               │
+│  ┌─────────────────┐   │               │
+│  │ dev3000         │───┘               │
+│  │ + Node.js       │                   │
+│  │ + MCP Server    │                   │
+│  └─────────────────┘                   │
+│                                         │
+│  /app ───► Your project (mounted)      │
+│  /app/node_modules ───► Container only │
+│  /app/.next ───► Container only        │
+└─────────────────────────────────────────┘
+```
 
-**Files you need to modify**:
-- `docker/docker-compose.yml` - Change the volume mount to point to YOUR project
-- That's it! No other configuration needed.
+**Key Benefits**:
+1. **Chrome on Windows** - Full GPU acceleration, proper window management
+2. **dev3000 in Linux** - Proper file system permissions, Unix tools work correctly
+3. **Volume Optimization** - `node_modules` and `.next` stay in container for speed
+4. **No Host Pollution** - Dependencies installed in container don't touch your host machine
+
+**What You Need to Configure**:
+- ✅ `docker/docker-compose.yml` - Change ONE line (volume mount to YOUR project)
+- ❌ **No configuration files needed in YOUR project**
+- ❌ **No changes to YOUR project's package.json**
+- ❌ **No dev3000 installation needed on Windows**
+
+Everything is self-contained in the Docker setup!
 
 ## Quick Start
 
@@ -680,4 +736,4 @@ Now that you understand dev3000:
 **Need Help?**
 - 📚 Documentation: [README.md](README.md)
 - 🐛 Issues: https://github.com/automationjp/dev3000/issues
-- 💬 Discussions: https://github.com/automationjp/dev3000/discussions
+- 💬 GitHub: https://github.com/automationjp/dev3000
