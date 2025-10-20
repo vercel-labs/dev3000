@@ -1092,6 +1092,9 @@ export class DevEnvironment {
 
       entries.forEach((entry: LogEntry) => {
         this.logger.log("server", entry.formatted)
+
+        // Detect when server switches to a different port
+        this.detectPortChange(text)
       })
     })
 
@@ -1101,6 +1104,9 @@ export class DevEnvironment {
 
       entries.forEach((entry: LogEntry) => {
         this.logger.log("server", entry.formatted)
+
+        // Detect when server switches to a different port
+        this.detectPortChange(text)
 
         // Show critical errors to console (parser determines what's critical)
         if (entry.isCritical && entry.rawMessage) {
@@ -1215,6 +1221,39 @@ export class DevEnvironment {
       }
     } catch (error) {
       this.debugLog(`Failed to release lock: ${error}`)
+    }
+  }
+
+  private detectPortChange(text: string) {
+    // Detect Next.js port switch: "⚠ Port 3000 is in use by process 39543, using available port 3001 instead."
+    // Also detect: "Local: http://localhost:3001"
+    const nextJsPortSwitchMatch = text.match(/using available port (\d+) instead/i)
+    const localUrlMatch = text.match(/Local:.*localhost:(\d+)/i)
+
+    const detectedPort = nextJsPortSwitchMatch?.[1] || localUrlMatch?.[1]
+
+    if (detectedPort && detectedPort !== this.options.port) {
+      this.debugLog(`Detected server port change from ${this.options.port} to ${detectedPort}`)
+      this.logger.log("server", `[PORT] Server switched from port ${this.options.port} to ${detectedPort}`)
+      this.options.port = detectedPort
+
+      // Update session info with new port
+      const projectName = getProjectName()
+      const cdpUrl = this.cdpMonitor?.getCdpUrl()
+      const chromePids = this.cdpMonitor?.getChromePids() || []
+
+      if (cdpUrl || chromePids.length > 0) {
+        writeSessionInfo(
+          projectName,
+          this.options.logFile,
+          this.options.port,
+          this.options.mcpPort,
+          cdpUrl || undefined,
+          chromePids,
+          this.options.serverCommand
+        )
+        this.debugLog(`Updated session info with new port: ${this.options.port}`)
+      }
     }
   }
 

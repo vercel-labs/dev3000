@@ -9,18 +9,13 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   reactCompiler: true,
   experimental: {
-    turbopackPersistentCachingForDev: true,
-    mcpServer: true
+    turbopackFileSystemCacheForDev: true,
+    typedRoutes: true,
+    cacheComponents: true
   },
   outputFileTracingRoot: path.join(currentDir, ".."),
   turbopack: {
     root: path.join(currentDir, "..")
-  },
-  eslint: {
-    ignoreDuringBuilds: true
-  },
-  typescript: {
-    ignoreBuildErrors: true
   }
 }
 

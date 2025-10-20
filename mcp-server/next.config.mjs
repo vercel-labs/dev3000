@@ -11,10 +11,6 @@ const nextConfig = {
   turbopack: {
     root: path.join(__dirname, "..")
   },
-  // Optimize for minimal MCP server
-  eslint: {
-    ignoreDuringBuilds: true
-  },
   // Disable image optimization to avoid sharp dependency issues
   images: {
     unoptimized: true

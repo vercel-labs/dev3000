@@ -1,5 +1,6 @@
 import { Calendar, Github, Sparkles } from "lucide-react"
 import type { Metadata } from "next"
+import { cacheLife, cacheTag } from "next/cache"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
@@ -81,6 +82,10 @@ const getVersionTypeBadge = (type: string) => {
 }
 
 export default async function VersionPage({ params }: { params: Promise<{ version: string }> }) {
+  "use cache"
+  cacheLife("hours")
+  cacheTag("changelog")
+
   const { version } = await params
   const release = changelog.find((r) => `v${r.version}` === version || r.version === version)
 

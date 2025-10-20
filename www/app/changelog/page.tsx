@@ -1,5 +1,6 @@
 import { Bug, Calendar, Github, Package, Sparkles, Zap } from "lucide-react"
 import type { Metadata } from "next"
+import { cacheLife, cacheTag } from "next/cache"
 import Link from "next/link"
 import { GitHubLink } from "@/components/github-link"
 import { Badge } from "@/components/ui/badge"
@@ -72,7 +73,11 @@ const getVersionTypeBadge = (type: string) => {
   }
 }
 
-export default function ChangelogPage() {
+export default async function ChangelogPage() {
+  "use cache"
+  cacheLife("hours")
+  cacheTag("changelog")
+
   return (
     <div className="min-h-screen bg-background">
       {/* Grid Pattern Background */}

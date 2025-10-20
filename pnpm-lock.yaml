@@ -253,13 +253,13 @@ importers:
         version: 1.2.8(@types/react-dom@19.1.11(@types/react@19.1.17))(@types/react@19.1.17)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
       '@vercel/analytics':
         specifier: latest
-        version: 1.5.0(@remix-run/react@2.17.1(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(typescript@5.9.3))(@sveltejs/kit@2.46.2(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.10)(vite@5.4.20(@types/node@24.7.2)(lightningcss@1.30.1)))(svelte@5.39.10)(vite@5.4.20(@types/node@24.7.2)(lightningcss@1.30.1)))(next@15.6.0-canary.52(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react@19.1.1)(svelte@5.39.10)(vue-router@4.5.1(vue@3.5.22(typescript@5.9.3)))(vue@3.5.22(typescript@5.9.3))
+        version: 1.5.0(@remix-run/react@2.17.1(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(typescript@5.9.3))(@sveltejs/kit@2.46.2(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.10)(vite@5.4.20(@types/node@24.7.2)(lightningcss@1.30.1)))(svelte@5.39.10)(vite@5.4.20(@types/node@24.7.2)(lightningcss@1.30.1)))(next@16.0.0-canary.15(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react@19.1.1)(svelte@5.39.10)(vue-router@4.5.1(vue@3.5.22(typescript@5.9.3)))(vue@3.5.22(typescript@5.9.3))
       '@vercel/speed-insights':
         specifier: ^1.2.0
-        version: 1.2.0(@sveltejs/kit@2.46.2(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.10)(vite@5.4.20(@types/node@24.7.2)(lightningcss@1.30.1)))(svelte@5.39.10)(vite@5.4.20(@types/node@24.7.2)(lightningcss@1.30.1)))(next@15.6.0-canary.52(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react@19.1.1)(svelte@5.39.10)(vue-router@4.5.1(vue@3.5.22(typescript@5.9.3)))(vue@3.5.22(typescript@5.9.3))
+        version: 1.2.0(@sveltejs/kit@2.46.2(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.10)(vite@5.4.20(@types/node@24.7.2)(lightningcss@1.30.1)))(svelte@5.39.10)(vite@5.4.20(@types/node@24.7.2)(lightningcss@1.30.1)))(next@16.0.0-canary.15(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react@19.1.1)(svelte@5.39.10)(vue-router@4.5.1(vue@3.5.22(typescript@5.9.3)))(vue@3.5.22(typescript@5.9.3))
       '@vercel/toolbar':
         specifier: ^0.1.41
-        version: 0.1.41(04540560cc2fcba4dbab44b1677080fa)
+        version: 0.1.41(80d8de30adf6c8b70906b4d17754350c)
       asciinema-player:
         specifier: ^3.11.1
         version: 3.11.1
@@ -283,10 +283,10 @@ importers:
         version: 8.5.1(react@19.1.1)
       flags:
         specifier: ^4.0.1
-        version: 4.0.1(@sveltejs/kit@2.46.2(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.10)(vite@5.4.20(@types/node@24.7.2)(lightningcss@1.30.1)))(svelte@5.39.10)(vite@5.4.20(@types/node@24.7.2)(lightningcss@1.30.1)))(next@15.6.0-canary.52(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
+        version: 4.0.1(@sveltejs/kit@2.46.2(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.10)(vite@5.4.20(@types/node@24.7.2)(lightningcss@1.30.1)))(svelte@5.39.10)(vite@5.4.20(@types/node@24.7.2)(lightningcss@1.30.1)))(next@16.0.0-canary.15(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
       geist:
         specifier: latest
-        version: 1.5.1(next@15.6.0-canary.52(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))
+        version: 1.5.1(next@16.0.0-canary.15(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))
       input-otp:
         specifier: 1.4.1
         version: 1.4.1(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
@@ -294,8 +294,8 @@ importers:
         specifier: ^0.544.0
         version: 0.544.0(react@19.1.1)
       next:
-        specifier: 15.6.0-canary.52
-        version: 15.6.0-canary.52(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
+        specifier: 16.0.0-canary.15
+        version: 16.0.0-canary.15(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
       next-themes:
         specifier: ^0.4.6
         version: 0.4.6(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
@@ -1003,8 +1003,8 @@ packages:
   '@next/env@15.6.0-canary.31':
     resolution: {integrity: sha512-CyvY3WzOsAhrzsbNnl/60oGymULUTxv/3uUjiF4XiYBd0apvqIwbsU0x0fzV9prnxZOgTL5fKdYAo0vUQF/4+A==}
 
-  '@next/env@15.6.0-canary.52':
-    resolution: {integrity: sha512-AN9TmNjmRURTEDZttkMBps/hKyJJCLra/NO7BLR+WKTLUYy/A4TWK84/MK90hXMOPWzkxBmUaQbZvGLgoLVJNw==}
+  '@next/env@16.0.0-canary.15':
+    resolution: {integrity: sha512-8jqx2sdos/GZfn438PBro+5gnAqOUeZ3r7jU7954n9DsvmrDYDIhzVL5UogvHLUEdgYADn+Luo0CLyfPIrybKg==}
 
   '@next/eslint-plugin-next@15.6.0-canary.38':
     resolution: {integrity: sha512-LQFtlKuDpO49nGooz18Th+30VOLFb2k9kfFhDPOSnhQz+fM+zgaMyA2WNBiQv4mDEgbxCJUFh8PkUfMcolWwAg==}
@@ -1021,8 +1021,8 @@ packages:
     cpu: [arm64]
     os: [darwin]
 
-  '@next/swc-darwin-arm64@15.6.0-canary.52':
-    resolution: {integrity: sha512-h77DekKN0/DvJQ/0LxbFHnV0V90q3ETasXQBl7dOPmf8fWkIiNbJu7fyM6siipD0OmZNVcPTk8kL67L3KJOkjw==}
+  '@next/swc-darwin-arm64@16.0.0-canary.15':
+    resolution: {integrity: sha512-z9F34hGTGq51C2UGhHT6ci4OflC3eneE4J9S/bCXnWND8PpH6mDaxbq+NG7O2vzAjtqFaYEhYjT7QQNs9gkAyA==}
     engines: {node: '>= 10'}
     cpu: [arm64]
     os: [darwin]
@@ -1039,8 +1039,8 @@ packages:
     cpu: [x64]
     os: [darwin]
 
-  '@next/swc-darwin-x64@15.6.0-canary.52':
-    resolution: {integrity: sha512-aHcLzD3gCZZDk7+N4SRym3V8O5BNCjvAyBaQw+iCZWkM6PdCLm6ipwqs7RBCYGNM2U73jZWYhPZb3rij7d8pZg==}
+  '@next/swc-darwin-x64@16.0.0-canary.15':
+    resolution: {integrity: sha512-CgarpUHQMNHf+3CEbwWKRKZQDsRiohQN0gMs67oRMU7hnLLVg2Vsg34wXtnkeGZugN1RwuADQ3mxh+eglMBUuw==}
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [darwin]
@@ -1057,8 +1057,8 @@ packages:
     cpu: [arm64]
     os: [linux]
 
-  '@next/swc-linux-arm64-gnu@15.6.0-canary.52':
-    resolution: {integrity: sha512-UGr/BUOBEplTqAsG7x4R/T7lwJkRKBxBKEBZaMtBZjGDK6mGkjsA3GiKetv9iOtwnB+ezy/XvM8SkTwTD0PkDw==}
+  '@next/swc-linux-arm64-gnu@16.0.0-canary.15':
+    resolution: {integrity: sha512-viAbf6wHgOp+btxHZJqxI9eOJkzi1o4FS+Be3O8qhoENVgGmUUehRMSG4AiGUmama+dqAqWqAhlKNeE07Ucz4w==}
     engines: {node: '>= 10'}
     cpu: [arm64]
     os: [linux]
@@ -1075,8 +1075,8 @@ packages:
     cpu: [arm64]
     os: [linux]
 
-  '@next/swc-linux-arm64-musl@15.6.0-canary.52':
-    resolution: {integrity: sha512-M6knjMZkpbWUwwSlKLXt/Axi83lu+xOof7uvMTNKR4Zc5N37gbCj1ABs32U6ul5pR56SXBJZSbRupJoH0/WBog==}
+  '@next/swc-linux-arm64-musl@16.0.0-canary.15':
+    resolution: {integrity: sha512-fST2TNOzDuM2ucZFqdmcQzi2rBEmSm2hOTi7DN2wRoxNqbo2aJTIjGm65ZIamc0h0xeE/F69cuNyJS+b1ryZEg==}
     engines: {node: '>= 10'}
     cpu: [arm64]
     os: [linux]
@@ -1093,8 +1093,8 @@ packages:
     cpu: [x64]
     os: [linux]
 
-  '@next/swc-linux-x64-gnu@15.6.0-canary.52':
-    resolution: {integrity: sha512-580h/SsZusVvx6ptirLZTZ8ODekJKEYgfzI9FWMzc/1x3QUUVAIw1HGNlt2zC3ipPnbIEWUrTWljMCFMuROG+A==}
+  '@next/swc-linux-x64-gnu@16.0.0-canary.15':
+    resolution: {integrity: sha512-jdElLDM+T+y0BxG/V/P7NiZoZXVfZenANAHtWFtjNz0avRmC53L/lC4kCvNXWP4OCxBI8rgFDDAByDw+oIx4lQ==}
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [linux]
@@ -1111,8 +1111,8 @@ packages:
     cpu: [x64]
     os: [linux]
 
-  '@next/swc-linux-x64-musl@15.6.0-canary.52':
-    resolution: {integrity: sha512-ECT93SQ1N9jaA7AbvPtZ01vssIBGZ7t05jDrr+8wDUlmTrW8vQfA5S07UITDEHS0MZADeAIvUhh5Bazw7ji2nw==}
+  '@next/swc-linux-x64-musl@16.0.0-canary.15':
+    resolution: {integrity: sha512-UQYBPjwWZjhX0+a2OxXMfXK5X+zK+wU7m9yc8lXygNiBJHNnae7evZs1Kl0QKrPu23UsAPUk+nEvEHT8TskoqA==}
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [linux]
@@ -1129,8 +1129,8 @@ packages:
     cpu: [arm64]
     os: [win32]
 
-  '@next/swc-win32-arm64-msvc@15.6.0-canary.52':
-    resolution: {integrity: sha512-Li+FxE5t7RYG0EW1Xbvbv094dCslvEWLz5VP7D1dVfbOmYBv/nJHGaR8LQ8/OntbEalmLVsHnHGFXTFQ4qtmbQ==}
+  '@next/swc-win32-arm64-msvc@16.0.0-canary.15':
+    resolution: {integrity: sha512-kmT0okdaFImEV8jfBQXokmf20AUGqEBoPStxheTRuIrcVZLAUZTK/H6ZfivZSlkQdN4M2sE7U1RYuuyFUZ67Cw==}
     engines: {node: '>= 10'}
     cpu: [arm64]
     os: [win32]
@@ -1147,8 +1147,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@next/swc-win32-x64-msvc@15.6.0-canary.52':
-    resolution: {integrity: sha512-8KQj5h3qDUyIgWJrpg5QADpFaVirhb/blxNjXGKpp43ehpLALo3bWwwZk3x21L8S+YSjMTvqLKkjfocALwIuSw==}
+  '@next/swc-win32-x64-msvc@16.0.0-canary.15':
+    resolution: {integrity: sha512-BrSrVPtVeFPNfR0iNeV51bQIXiIYFmMAGQWnMoahBVUkNH9UGVzw3rO61CIdUYfXtTdsMvBGkREAfZ7+X2gOeA==}
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [win32]
@@ -4125,8 +4125,8 @@ packages:
       sass:
         optional: true
 
-  next@15.6.0-canary.52:
-    resolution: {integrity: sha512-ZxI7fZwRyDv9O/078Gfz+8KevTuFild6TIjmrViMfdKKsZC4xviQGFzh0Ts3OLGaTvuUsVupc1SoEuhUHyd8gg==}
+  next@16.0.0-canary.15:
+    resolution: {integrity: sha512-dKt33hWYxWsaka6FKOV2BmRRMSXi6DLGUOsIIkBU7UmAcjoZwx2TNjsuO30Hus5w+1987e75LghENEuS5N2sDg==}
     engines: {node: '>=20.9.0'}
     hasBin: true
     peerDependencies:
@@ -5563,7 +5563,7 @@ snapshots:
 
   '@next/env@15.6.0-canary.31': {}
 
-  '@next/env@15.6.0-canary.52': {}
+  '@next/env@16.0.0-canary.15': {}
 
   '@next/eslint-plugin-next@15.6.0-canary.38':
     dependencies:
@@ -5575,7 +5575,7 @@ snapshots:
   '@next/swc-darwin-arm64@15.6.0-canary.31':
     optional: true
 
-  '@next/swc-darwin-arm64@15.6.0-canary.52':
+  '@next/swc-darwin-arm64@16.0.0-canary.15':
     optional: true
 
   '@next/swc-darwin-x64@15.5.1-canary.30':
@@ -5584,7 +5584,7 @@ snapshots:
   '@next/swc-darwin-x64@15.6.0-canary.31':
     optional: true
 
-  '@next/swc-darwin-x64@15.6.0-canary.52':
+  '@next/swc-darwin-x64@16.0.0-canary.15':
     optional: true
 
   '@next/swc-linux-arm64-gnu@15.5.1-canary.30':
@@ -5593,7 +5593,7 @@ snapshots:
   '@next/swc-linux-arm64-gnu@15.6.0-canary.31':
     optional: true
 
-  '@next/swc-linux-arm64-gnu@15.6.0-canary.52':
+  '@next/swc-linux-arm64-gnu@16.0.0-canary.15':
     optional: true
 
   '@next/swc-linux-arm64-musl@15.5.1-canary.30':
@@ -5602,7 +5602,7 @@ snapshots:
   '@next/swc-linux-arm64-musl@15.6.0-canary.31':
     optional: true
 
-  '@next/swc-linux-arm64-musl@15.6.0-canary.52':
+  '@next/swc-linux-arm64-musl@16.0.0-canary.15':
     optional: true
 
   '@next/swc-linux-x64-gnu@15.5.1-canary.30':
@@ -5611,7 +5611,7 @@ snapshots:
   '@next/swc-linux-x64-gnu@15.6.0-canary.31':
     optional: true
 
-  '@next/swc-linux-x64-gnu@15.6.0-canary.52':
+  '@next/swc-linux-x64-gnu@16.0.0-canary.15':
     optional: true
 
   '@next/swc-linux-x64-musl@15.5.1-canary.30':
@@ -5620,7 +5620,7 @@ snapshots:
   '@next/swc-linux-x64-musl@15.6.0-canary.31':
     optional: true
 
-  '@next/swc-linux-x64-musl@15.6.0-canary.52':
+  '@next/swc-linux-x64-musl@16.0.0-canary.15':
     optional: true
 
   '@next/swc-win32-arm64-msvc@15.5.1-canary.30':
@@ -5629,7 +5629,7 @@ snapshots:
   '@next/swc-win32-arm64-msvc@15.6.0-canary.31':
     optional: true
 
-  '@next/swc-win32-arm64-msvc@15.6.0-canary.52':
+  '@next/swc-win32-arm64-msvc@16.0.0-canary.15':
     optional: true
 
   '@next/swc-win32-x64-msvc@15.5.1-canary.30':
@@ -5638,7 +5638,7 @@ snapshots:
   '@next/swc-win32-x64-msvc@15.6.0-canary.31':
     optional: true
 
-  '@next/swc-win32-x64-msvc@15.6.0-canary.52':
+  '@next/swc-win32-x64-msvc@16.0.0-canary.15':
     optional: true
 
   '@nodelib/fs.scandir@2.1.5':
@@ -6958,17 +6958,17 @@ snapshots:
   '@unrs/resolver-binding-win32-x64-msvc@1.11.1':
     optional: true
 
-  '@vercel/analytics@1.5.0(@remix-run/react@2.17.1(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(typescript@5.9.3))(@sveltejs/kit@2.46.2(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.10)(vite@5.4.20(@types/node@24.7.2)(lightningcss@1.30.1)))(svelte@5.39.10)(vite@5.4.20(@types/node@24.7.2)(lightningcss@1.30.1)))(next@15.6.0-canary.52(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react@19.1.1)(svelte@5.39.10)(vue-router@4.5.1(vue@3.5.22(typescript@5.9.3)))(vue@3.5.22(typescript@5.9.3))':
+  '@vercel/analytics@1.5.0(@remix-run/react@2.17.1(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(typescript@5.9.3))(@sveltejs/kit@2.46.2(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.10)(vite@5.4.20(@types/node@24.7.2)(lightningcss@1.30.1)))(svelte@5.39.10)(vite@5.4.20(@types/node@24.7.2)(lightningcss@1.30.1)))(next@16.0.0-canary.15(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react@19.1.1)(svelte@5.39.10)(vue-router@4.5.1(vue@3.5.22(typescript@5.9.3)))(vue@3.5.22(typescript@5.9.3))':
     optionalDependencies:
       '@remix-run/react': 2.17.1(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(typescript@5.9.3)
       '@sveltejs/kit': 2.46.2(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.10)(vite@5.4.20(@types/node@24.7.2)(lightningcss@1.30.1)))(svelte@5.39.10)(vite@5.4.20(@types/node@24.7.2)(lightningcss@1.30.1))
-      next: 15.6.0-canary.52(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
+      next: 16.0.0-canary.15(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
       react: 19.1.1
       svelte: 5.39.10
       vue: 3.5.22(typescript@5.9.3)
       vue-router: 4.5.1(vue@3.5.22(typescript@5.9.3))
 
-  '@vercel/microfrontends@1.3.0(04540560cc2fcba4dbab44b1677080fa)':
+  '@vercel/microfrontends@1.3.0(80d8de30adf6c8b70906b4d17754350c)':
     dependencies:
       '@next/env': 15.1.6
       ajv: 8.17.1
@@ -6981,28 +6981,28 @@ snapshots:
       path-to-regexp: 6.2.1
     optionalDependencies:
       '@sveltejs/kit': 2.46.2(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.10)(vite@5.4.20(@types/node@24.7.2)(lightningcss@1.30.1)))(svelte@5.39.10)(vite@5.4.20(@types/node@24.7.2)(lightningcss@1.30.1))
-      '@vercel/analytics': 1.5.0(@remix-run/react@2.17.1(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(typescript@5.9.3))(@sveltejs/kit@2.46.2(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.10)(vite@5.4.20(@types/node@24.7.2)(lightningcss@1.30.1)))(svelte@5.39.10)(vite@5.4.20(@types/node@24.7.2)(lightningcss@1.30.1)))(next@15.6.0-canary.52(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react@19.1.1)(svelte@5.39.10)(vue-router@4.5.1(vue@3.5.22(typescript@5.9.3)))(vue@3.5.22(typescript@5.9.3))
-      '@vercel/speed-insights': 1.2.0(@sveltejs/kit@2.46.2(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.10)(vite@5.4.20(@types/node@24.7.2)(lightningcss@1.30.1)))(svelte@5.39.10)(vite@5.4.20(@types/node@24.7.2)(lightningcss@1.30.1)))(next@15.6.0-canary.52(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react@19.1.1)(svelte@5.39.10)(vue-router@4.5.1(vue@3.5.22(typescript@5.9.3)))(vue@3.5.22(typescript@5.9.3))
-      next: 15.6.0-canary.52(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
+      '@vercel/analytics': 1.5.0(@remix-run/react@2.17.1(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(typescript@5.9.3))(@sveltejs/kit@2.46.2(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.10)(vite@5.4.20(@types/node@24.7.2)(lightningcss@1.30.1)))(svelte@5.39.10)(vite@5.4.20(@types/node@24.7.2)(lightningcss@1.30.1)))(next@16.0.0-canary.15(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react@19.1.1)(svelte@5.39.10)(vue-router@4.5.1(vue@3.5.22(typescript@5.9.3)))(vue@3.5.22(typescript@5.9.3))
+      '@vercel/speed-insights': 1.2.0(@sveltejs/kit@2.46.2(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.10)(vite@5.4.20(@types/node@24.7.2)(lightningcss@1.30.1)))(svelte@5.39.10)(vite@5.4.20(@types/node@24.7.2)(lightningcss@1.30.1)))(next@16.0.0-canary.15(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react@19.1.1)(svelte@5.39.10)(vue-router@4.5.1(vue@3.5.22(typescript@5.9.3)))(vue@3.5.22(typescript@5.9.3))
+      next: 16.0.0-canary.15(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
       react: 19.1.1
       react-dom: 19.1.1(react@19.1.1)
       vite: 5.4.20(@types/node@24.7.2)(lightningcss@1.30.1)
     transitivePeerDependencies:
       - debug
 
-  '@vercel/speed-insights@1.2.0(@sveltejs/kit@2.46.2(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.10)(vite@5.4.20(@types/node@24.7.2)(lightningcss@1.30.1)))(svelte@5.39.10)(vite@5.4.20(@types/node@24.7.2)(lightningcss@1.30.1)))(next@15.6.0-canary.52(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react@19.1.1)(svelte@5.39.10)(vue-router@4.5.1(vue@3.5.22(typescript@5.9.3)))(vue@3.5.22(typescript@5.9.3))':
+  '@vercel/speed-insights@1.2.0(@sveltejs/kit@2.46.2(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.10)(vite@5.4.20(@types/node@24.7.2)(lightningcss@1.30.1)))(svelte@5.39.10)(vite@5.4.20(@types/node@24.7.2)(lightningcss@1.30.1)))(next@16.0.0-canary.15(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react@19.1.1)(svelte@5.39.10)(vue-router@4.5.1(vue@3.5.22(typescript@5.9.3)))(vue@3.5.22(typescript@5.9.3))':
     optionalDependencies:
       '@sveltejs/kit': 2.46.2(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.10)(vite@5.4.20(@types/node@24.7.2)(lightningcss@1.30.1)))(svelte@5.39.10)(vite@5.4.20(@types/node@24.7.2)(lightningcss@1.30.1))
-      next: 15.6.0-canary.52(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
+      next: 16.0.0-canary.15(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
       react: 19.1.1
       svelte: 5.39.10
       vue: 3.5.22(typescript@5.9.3)
       vue-router: 4.5.1(vue@3.5.22(typescript@5.9.3))
 
-  '@vercel/toolbar@0.1.41(04540560cc2fcba4dbab44b1677080fa)':
+  '@vercel/toolbar@0.1.41(80d8de30adf6c8b70906b4d17754350c)':
     dependencies:
       '@tinyhttp/app': 1.3.0
-      '@vercel/microfrontends': 1.3.0(04540560cc2fcba4dbab44b1677080fa)
+      '@vercel/microfrontends': 1.3.0(80d8de30adf6c8b70906b4d17754350c)
       chokidar: 3.6.0
       execa: 5.1.1
       fast-glob: 3.3.3
@@ -7011,7 +7011,7 @@ snapshots:
       jsonc-parser: 3.3.1
       strip-ansi: 6.0.1
     optionalDependencies:
-      next: 15.6.0-canary.52(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
+      next: 16.0.0-canary.15(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
       react: 19.1.1
       vite: 5.4.20(@types/node@24.7.2)(lightningcss@1.30.1)
     transitivePeerDependencies:
@@ -8134,13 +8134,13 @@ snapshots:
       locate-path: 6.0.0
       path-exists: 4.0.0
 
-  flags@4.0.1(@sveltejs/kit@2.46.2(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.10)(vite@5.4.20(@types/node@24.7.2)(lightningcss@1.30.1)))(svelte@5.39.10)(vite@5.4.20(@types/node@24.7.2)(lightningcss@1.30.1)))(next@15.6.0-canary.52(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react-dom@19.1.1(react@19.1.1))(react@19.1.1):
+  flags@4.0.1(@sveltejs/kit@2.46.2(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.10)(vite@5.4.20(@types/node@24.7.2)(lightningcss@1.30.1)))(svelte@5.39.10)(vite@5.4.20(@types/node@24.7.2)(lightningcss@1.30.1)))(next@16.0.0-canary.15(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react-dom@19.1.1(react@19.1.1))(react@19.1.1):
     dependencies:
       '@edge-runtime/cookies': 5.0.2
       jose: 5.10.0
     optionalDependencies:
       '@sveltejs/kit': 2.46.2(@sveltejs/vite-plugin-svelte@6.2.0(svelte@5.39.10)(vite@5.4.20(@types/node@24.7.2)(lightningcss@1.30.1)))(svelte@5.39.10)(vite@5.4.20(@types/node@24.7.2)(lightningcss@1.30.1))
-      next: 15.6.0-canary.52(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
+      next: 16.0.0-canary.15(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
       react: 19.1.1
       react-dom: 19.1.1(react@19.1.1)
 
@@ -8179,9 +8179,9 @@ snapshots:
 
   functions-have-names@1.2.3: {}
 
-  geist@1.5.1(next@15.6.0-canary.52(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)):
+  geist@1.5.1(next@16.0.0-canary.15(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)):
     dependencies:
-      next: 15.6.0-canary.52(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
+      next: 16.0.0-canary.15(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
 
   generator-function@2.0.1: {}
 
@@ -8761,9 +8761,9 @@ snapshots:
       - '@babel/core'
       - babel-plugin-macros
 
-  next@15.6.0-canary.52(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1):
+  next@16.0.0-canary.15(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1):
     dependencies:
-      '@next/env': 15.6.0-canary.52
+      '@next/env': 16.0.0-canary.15
       '@swc/helpers': 0.5.15
       caniuse-lite: 1.0.30001749
       postcss: 8.4.31
@@ -8771,14 +8771,14 @@ snapshots:
       react-dom: 19.1.1(react@19.1.1)
       styled-jsx: 5.1.6(react@19.1.1)
     optionalDependencies:
-      '@next/swc-darwin-arm64': 15.6.0-canary.52
-      '@next/swc-darwin-x64': 15.6.0-canary.52
-      '@next/swc-linux-arm64-gnu': 15.6.0-canary.52
-      '@next/swc-linux-arm64-musl': 15.6.0-canary.52
-      '@next/swc-linux-x64-gnu': 15.6.0-canary.52
-      '@next/swc-linux-x64-musl': 15.6.0-canary.52
-      '@next/swc-win32-arm64-msvc': 15.6.0-canary.52
-      '@next/swc-win32-x64-msvc': 15.6.0-canary.52
+      '@next/swc-darwin-arm64': 16.0.0-canary.15
+      '@next/swc-darwin-x64': 16.0.0-canary.15
+      '@next/swc-linux-arm64-gnu': 16.0.0-canary.15
+      '@next/swc-linux-arm64-musl': 16.0.0-canary.15
+      '@next/swc-linux-x64-gnu': 16.0.0-canary.15
+      '@next/swc-linux-x64-musl': 16.0.0-canary.15
+      '@next/swc-win32-arm64-msvc': 16.0.0-canary.15
+      '@next/swc-win32-x64-msvc': 16.0.0-canary.15
       babel-plugin-react-compiler: 1.0.0
       sharp: 0.34.4
     transitivePeerDependencies:
