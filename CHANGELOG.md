@@ -4,6 +4,14 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.97] - 2025-10-20
+
+**Patch Release**
+
+- 🚨 **Critical Fix**: Detect when server switches ports and update navigation - Chrome no longer gets stuck on loading page
+- 🎨 **Markdown Rendering**: Changelog pages now properly render markdown formatting (**bold**, [links](url)) in highlights
+- 🔧 **Shared Utilities**: Extracted markdown parsing into reusable functions for consistency
+
 ## [0.0.96] - 2025-10-18
 
 **Patch Release**

@@ -10,6 +10,17 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.97",
+    date: "2025-10-20",
+    type: "patch",
+    highlights: [
+      "🚨 **Critical Fix**: Detect when server switches ports and update navigation - Chrome no longer gets stuck on loading page",
+      "🎨 **Markdown Rendering**: Changelog pages now properly render markdown formatting (**bold**, [links](url)) in highlights",
+      "🔧 **Shared Utilities**: Extracted markdown parsing into reusable functions for consistency"
+    ]
+  },
+
+  {
     version: "0.0.96",
     date: "2025-10-18",
     type: "patch",
