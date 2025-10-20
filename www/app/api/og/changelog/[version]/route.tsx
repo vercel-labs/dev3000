@@ -4,6 +4,13 @@ import { changelog } from "@/lib/changelog"
 export const runtime = "nodejs"
 export const revalidate = 3600 // Revalidate every hour
 
+// Strip markdown syntax for plain text display
+const stripMarkdown = (text: string): string => {
+  return text
+    .replace(/\*\*(.*?)\*\*/g, "$1") // Remove bold **text**
+    .replace(/\[(.*?)\]\(.*?\)/g, "$1") // Remove links [text](url) -> text
+}
+
 export async function GET(_request: Request, { params }: { params: Promise<{ version: string }> }) {
   try {
     const { version } = await params
@@ -112,7 +119,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ ver
                 color: "#d1d5db"
               }}
             >
-              {`• ${highlight}`}
+              {`• ${stripMarkdown(highlight)}`}
             </div>
           ))}
         </div>
