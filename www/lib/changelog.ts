@@ -10,11 +10,12 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
-    version: "0.0.95",
-    date: "2025-10-17",
+    version: "0.0.96",
+    date: "2025-10-18",
     type: "patch",
     highlights: [
-      "🔧 **Auto-Configuration for AI CLIs**: Automatically writes `.mcp.json` (Claude Code) and `.cursor/mcp.json` (Cursor) so MCP servers are instantly available"
+      "🏥 **Non-Intrusive Health Checks**: Replaced HTTP HEAD requests with simple TCP port checks - no more interfering with auth middleware or polluting server logs",
+      "✨ **Better Compatibility**: Works seamlessly with apps using redirect-based auth without causing infinite loops"
     ]
   },
 
