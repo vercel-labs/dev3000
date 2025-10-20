@@ -2,9 +2,6 @@ import { ImageResponse } from "next/og"
 import { changelog } from "@/lib/changelog"
 import { stripMarkdown } from "@/lib/utils"
 
-export const runtime = "nodejs"
-export const revalidate = 3600 // Revalidate every hour
-
 export async function GET(_request: Request, { params }: { params: Promise<{ version: string }> }) {
   try {
     const { version } = await params
