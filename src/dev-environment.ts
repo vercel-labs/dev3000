@@ -1546,22 +1546,12 @@ export class DevEnvironment {
         const attemptTime = Date.now() - attemptStartTime
         this.debugLog(`Server responded with status ${response.status} in ${attemptTime}ms`)
 
-        if (
-          response.ok ||
-          response.status === 404 ||
-          response.status === 405 ||
-          response.status === 500 ||
-          response.status === 503
-        ) {
-          const totalTime = Date.now() - startTime
-          this.debugLog(`Server is ready! Total wait time: ${totalTime}ms (${attempts + 1} attempts)`)
-          this.debugLog(
-            `Status ${response.status} indicates server is running (200=OK, 404=Not Found, 405=Method Not Allowed, 500=App Error, 503=Service Unavailable)`
-          )
-          return true
-        } else {
-          this.debugLog(`Server responded with non-OK status: ${response.status}, continuing to wait`)
-        }
+        // Any HTTP response (including redirects, errors, etc.) means the server is alive and responding
+        // We don't care if the app works correctly - just that it's running
+        const totalTime = Date.now() - startTime
+        this.debugLog(`Server is ready! Total wait time: ${totalTime}ms (${attempts + 1} attempts)`)
+        this.debugLog(`Status ${response.status} indicates server is responding`)
+        return true
       } catch (error) {
         const attemptTime = Date.now() - attemptStartTime
         this.debugLog(
