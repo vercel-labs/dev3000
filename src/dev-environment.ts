@@ -1528,30 +1528,30 @@ export class DevEnvironment {
   private async waitForServer(): Promise<boolean> {
     const maxAttempts = 30
     let attempts = 0
-    const serverUrl = `http://localhost:${this.options.port}`
+    const port = this.options.port
     const startTime = Date.now()
 
-    this.debugLog(`Starting server readiness check for ${serverUrl}`)
+    this.debugLog(`Starting server readiness check for port ${port}`)
 
     while (attempts < maxAttempts) {
       const attemptStartTime = Date.now()
       try {
-        this.debugLog(`Server check attempt ${attempts + 1}/${maxAttempts}: ${serverUrl}`)
+        this.debugLog(`Server check attempt ${attempts + 1}/${maxAttempts}: checking port ${port}`)
 
-        const response = await fetch(serverUrl, {
-          method: "HEAD",
-          signal: AbortSignal.timeout(2000)
-        })
+        // Check if port is in use (server is listening) without making HTTP requests
+        const portInUse = !(await isPortAvailable(port))
 
         const attemptTime = Date.now() - attemptStartTime
-        this.debugLog(`Server responded with status ${response.status} in ${attemptTime}ms`)
 
-        // Any HTTP response (including redirects, errors, etc.) means the server is alive and responding
-        // We don't care if the app works correctly - just that it's running
-        const totalTime = Date.now() - startTime
-        this.debugLog(`Server is ready! Total wait time: ${totalTime}ms (${attempts + 1} attempts)`)
-        this.debugLog(`Status ${response.status} indicates server is responding`)
-        return true
+        if (portInUse) {
+          const totalTime = Date.now() - startTime
+          this.debugLog(
+            `Server is ready! Port ${port} is listening. Total wait time: ${totalTime}ms (${attempts + 1} attempts)`
+          )
+          return true
+        } else {
+          this.debugLog(`Port ${port} not yet in use after ${attemptTime}ms`)
+        }
       } catch (error) {
         const attemptTime = Date.now() - attemptStartTime
         this.debugLog(
