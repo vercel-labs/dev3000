@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { changelog } from "@/lib/changelog"
+import { parseMarkdown } from "@/lib/utils"
 
 const slugify = (value: string) =>
   value
@@ -173,7 +174,7 @@ export default async function ChangelogPage() {
                               className="flex items-start gap-3 text-sm"
                             >
                               <div className="w-1.5 h-1.5 bg-blue-400 rounded-full mt-2 flex-shrink-0" />
-                              <span className="text-foreground leading-relaxed">{highlight}</span>
+                              <span className="text-foreground leading-relaxed">{parseMarkdown(highlight)}</span>
                             </li>
                           ))}
                         </ul>
