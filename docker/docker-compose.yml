@@ -46,13 +46,35 @@ services:
     # Command to run - simplified since dependencies are pre-installed in image
     command: >
       sh -c "
+        set -x
         echo '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
         echo '🚀 Starting dev3000...'
         echo '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
-        echo 'Node: '$(node --version)
-        echo 'User: '$(whoami)
-        echo 'Working directory: '$(pwd)
+        echo '[$(date +%Y-%m-%d\ %H:%M:%S)] System Information:'
+        echo '  Node version: '$(node --version)
+        echo '  npm version: '$(npm --version)
+        echo '  User: '$(whoami)
+        echo '  User ID: '$(id)
+        echo '  Working directory: '$(pwd)
+        echo '  Directory permissions:'
+        ls -la
         echo ''
+        echo '[$(date +%Y-%m-%d\ %H:%M:%S)] Environment Variables:'
+        env | grep -E 'DEV3000|NODE|LOG|CDP' | sort
+        echo ''
+        echo '[$(date +%Y-%m-%d\ %H:%M:%S)] Checking dev3000 installation:'
+        which dev3000
+        dev3000 --version || echo 'Failed to get dev3000 version'
+        echo ''
+        echo '[$(date +%Y-%m-%d\ %H:%M:%S)] Checking lsof availability:'
+        which lsof
+        lsof -v 2>&1 | head -3
+        echo ''
+        echo '[$(date +%Y-%m-%d\ %H:%M:%S)] Checking port availability:'
+        lsof -i :3000 || echo 'Port 3000 is free'
+        lsof -i :3684 || echo 'Port 3684 is free'
+        echo ''
+        echo '[$(date +%Y-%m-%d\ %H:%M:%S)] Starting dev3000 with debug enabled...'
         dev3000 --port 3000 --debug
       "
 

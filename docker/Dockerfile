@@ -6,15 +6,23 @@ FROM node:20-bookworm-slim AS base
 
 # Install system dependencies required by dev3000
 # lsof: Port checking utility
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    lsof \
-    && rm -rf /var/lib/apt/lists/*
+RUN echo "[$(date +%Y-%m-%d\ %H:%M:%S)] Installing system dependencies..." \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends lsof \
+    && rm -rf /var/lib/apt/lists/* \
+    && echo "[$(date +%Y-%m-%d\ %H:%M:%S)] System dependencies installed successfully"
 
 # Install pnpm globally (as root)
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN echo "[$(date +%Y-%m-%d\ %H:%M:%S)] Enabling pnpm via corepack..." \
+    && corepack enable \
+    && corepack prepare pnpm@latest --activate \
+    && echo "[$(date +%Y-%m-%d\ %H:%M:%S)] pnpm enabled successfully"
 
 # Install dev3000 globally (as root to ensure proper PATH setup)
-RUN npm install -g dev3000@latest
+RUN echo "[$(date +%Y-%m-%d\ %H:%M:%S)] Installing dev3000 globally..." \
+    && npm install -g dev3000@latest \
+    && echo "[$(date +%Y-%m-%d\ %H:%M:%S)] dev3000 installed successfully" \
+    && dev3000 --version
 
 # Set working directory
 WORKDIR /app
@@ -30,7 +38,10 @@ RUN chown -R node:node /app
 USER node
 
 # Install application dependencies as node user
-RUN npm install
+RUN echo "[$(date +%Y-%m-%d\ %H:%M:%S)] Installing application dependencies as node user..." \
+    && npm install \
+    && echo "[$(date +%Y-%m-%d\ %H:%M:%S)] Application dependencies installed successfully" \
+    && echo "Total packages: $(ls node_modules | wc -l)"
 
 # Set PATH to include global npm packages for node user
 ENV PATH="/usr/local/lib/node_modules/.bin:${PATH}"
