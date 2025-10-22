@@ -12,6 +12,7 @@ import { getProjectName } from "./utils/project-name.js"
 
 interface ProjectConfig {
   type: "node" | "python" | "rails"
+  framework?: "nextjs" | "svelte" | "other" // For node projects
   packageManager?: string // Only for node projects
   pythonCommand?: string // Only for python projects
   defaultScript: string
@@ -72,12 +73,52 @@ async function detectProjectType(debug = false): Promise<ProjectConfig> {
   // Check for Node.js project using package-manager-detector
   const detected = await detect()
 
+  // Helper to detect framework for Node.js projects
+  const detectFramework = (): "nextjs" | "svelte" | "other" => {
+    // Check for Next.js
+    const nextConfigFiles = ["next.config.js", "next.config.ts", "next.config.mjs", "next.config.cjs"]
+    if (nextConfigFiles.some((file) => existsSync(file))) {
+      if (debug) {
+        console.log(`[DEBUG] Next.js framework detected`)
+      }
+      return "nextjs"
+    }
+
+    // Check for Svelte - look for svelte.config.js or svelte dependency
+    if (existsSync("svelte.config.js")) {
+      if (debug) {
+        console.log(`[DEBUG] Svelte framework detected (svelte.config.js)`)
+      }
+      return "svelte"
+    }
+
+    // Check package.json for svelte dependency
+    try {
+      if (existsSync("package.json")) {
+        const packageJson = JSON.parse(readFileSync("package.json", "utf-8"))
+        const deps = { ...packageJson.dependencies, ...packageJson.devDependencies }
+        if (deps.svelte || deps["@sveltejs/kit"]) {
+          if (debug) {
+            console.log(`[DEBUG] Svelte framework detected (package.json dependency)`)
+          }
+          return "svelte"
+        }
+      }
+    } catch {
+      // Ignore parse errors
+    }
+
+    return "other"
+  }
+
   if (detected) {
+    const framework = detectFramework()
     if (debug) {
-      console.log(`[DEBUG] Node.js project detected with ${detected.agent} package manager`)
+      console.log(`[DEBUG] Node.js project detected with ${detected.agent} package manager and ${framework} framework`)
     }
     return {
       type: "node",
+      framework,
       packageManager: detected.agent,
       defaultScript: "dev",
       defaultPort: "3000"
@@ -85,11 +126,13 @@ async function detectProjectType(debug = false): Promise<ProjectConfig> {
   }
 
   // Fallback to npm for Node.js
+  const framework = detectFramework()
   if (debug) {
-    console.log(`[DEBUG] No project files detected, defaulting to Node.js with npm`)
+    console.log(`[DEBUG] No project files detected, defaulting to Node.js with npm and ${framework} framework`)
   }
   return {
     type: "node",
+    framework,
     packageManager: "npm",
     defaultScript: "dev",
     defaultPort: "3000"
@@ -297,6 +340,7 @@ program
         port,
         portMcp: options.portMcp,
         defaultPort: projectConfig.defaultPort,
+        framework: projectConfig.framework,
         userSetPort,
         userSetMcpPort,
         logFile,

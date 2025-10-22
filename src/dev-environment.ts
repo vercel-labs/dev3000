@@ -44,6 +44,7 @@ interface DevEnvironmentOptions {
   commandName: string
   browser?: string
   defaultPort?: string // Default port from project type detection
+  framework?: "nextjs" | "svelte" | "other" // Framework type from project detection
   userSetPort?: boolean // Whether user explicitly set the port
   userSetMcpPort?: boolean // Whether user explicitly set the MCP port
   tail?: boolean // Whether to tail the log file to terminal
@@ -118,38 +119,8 @@ async function findAvailablePort(startPort: number): Promise<string> {
   throw new Error(`No available ports found starting from ${startPort}`)
 }
 
-/**
- * Check if Next.js MCP server is enabled in the project configuration
- */
-async function isNextjsMcpEnabled(): Promise<boolean> {
-  try {
-    const configFiles = ["next.config.js", "next.config.ts", "next.config.mjs", "next.config.cjs"]
-
-    for (const configFile of configFiles) {
-      if (existsSync(configFile)) {
-        try {
-          // Read the config file content
-          const configContent = readFileSync(configFile, "utf8")
-
-          // Look for experimental.mcpServer: true or experimental.mcpServer = true
-          // This is a simple string-based check that should work for most cases
-          const hasMcpServerConfig =
-            /experimental\s*:\s*{[^}]*mcpServer\s*:\s*true|experimental\.mcpServer\s*[=:]\s*true/s.test(configContent)
-
-          if (hasMcpServerConfig) {
-            return true
-          }
-        } catch {
-          // If we can't read the file, continue checking other config files
-        }
-      }
-    }
-
-    return false
-  } catch {
-    return false
-  }
-}
+// REMOVED: isNextjsMcpEnabled check - now using framework detection from cli.ts
+// Framework detection happens in cli.ts and is stored in session files for MCP orchestrator
 
 /**
  * Check if Chrome version supports chrome-devtools MCP (>= 140.0.7339.214)
@@ -223,12 +194,7 @@ async function isChromeDevtoolsMcpSupported(): Promise<boolean> {
 /**
  * Ensure MCP server configurations are added to project's .mcp.json (Claude Code)
  */
-async function ensureMcpServers(
-  mcpPort: string,
-  _appPort: string,
-  _enableChromeDevtools: boolean,
-  _enableNextjsMcp: boolean
-): Promise<void> {
+async function ensureMcpServers(mcpPort: string, _appPort: string, _enableChromeDevtools: boolean): Promise<void> {
   try {
     const settingsPath = join(process.cwd(), ".mcp.json")
 
@@ -281,8 +247,7 @@ async function ensureMcpServers(
 async function ensureCursorMcpServers(
   mcpPort: string,
   _appPort: string,
-  _enableChromeDevtools: boolean,
-  _enableNextjsMcp: boolean
+  _enableChromeDevtools: boolean
 ): Promise<void> {
   try {
     const cursorDir = join(process.cwd(), ".cursor")
@@ -342,8 +307,7 @@ async function ensureCursorMcpServers(
 async function ensureOpenCodeMcpServers(
   mcpPort: string,
   _appPort: string,
-  _enableChromeDevtools: boolean,
-  _enableNextjsMcp: boolean
+  _enableChromeDevtools: boolean
 ): Promise<void> {
   try {
     const settingsPath = join(process.cwd(), "opencode.json")
@@ -430,7 +394,8 @@ function writeSessionInfo(
   mcpPort?: string,
   cdpUrl?: string | null,
   chromePids?: number[],
-  serverCommand?: string
+  serverCommand?: string,
+  framework?: "nextjs" | "svelte" | "other"
 ): void {
   const sessionDir = join(homedir(), ".d3k")
 
@@ -451,7 +416,8 @@ function writeSessionInfo(
       pid: process.pid,
       cwd: process.cwd(),
       chromePids: chromePids || [],
-      serverCommand: serverCommand || null
+      serverCommand: serverCommand || null,
+      framework: framework || null
     }
 
     // Write session file - use project name as filename for easy lookup
@@ -544,7 +510,6 @@ export class DevEnvironment {
   private tui: DevTUI | null = null
   private portChangeMessage: string | null = null
   private firstSigintTime: number | null = null
-  private enableNextjsMcp: boolean = false
   private chromeDevtoolsSupported: boolean = false
 
   constructor(options: DevEnvironmentOptions) {
@@ -869,8 +834,6 @@ export class DevEnvironment {
       // Configure AI CLI integrations (both dev3000 and chrome-devtools MCPs)
       if (!this.options.serversOnly) {
         await this.tui.updateStatus("Configuring AI CLI integrations...")
-        // Check if NextJS MCP is enabled and store the result
-        this.enableNextjsMcp = await isNextjsMcpEnabled()
 
         // Check if Chrome version supports chrome-devtools MCP
         if (this.options.chromeDevtoolsMcp !== false) {
@@ -881,24 +844,10 @@ export class DevEnvironment {
         }
 
         // Ensure MCP server configurations in project settings files (instant, local)
-        await ensureMcpServers(
-          this.options.mcpPort || "3684",
-          this.options.port,
-          this.chromeDevtoolsSupported,
-          this.enableNextjsMcp
-        )
-        await ensureCursorMcpServers(
-          this.options.mcpPort || "3684",
-          this.options.port,
-          this.chromeDevtoolsSupported,
-          this.enableNextjsMcp
-        )
-        await ensureOpenCodeMcpServers(
-          this.options.mcpPort || "3684",
-          this.options.port,
-          this.chromeDevtoolsSupported,
-          this.enableNextjsMcp
-        )
+        // Framework-specific MCPs (Next.js, Svelte) are now configured dynamically by the MCP orchestrator
+        await ensureMcpServers(this.options.mcpPort || "3684", this.options.port, this.chromeDevtoolsSupported)
+        await ensureCursorMcpServers(this.options.mcpPort || "3684", this.options.port, this.chromeDevtoolsSupported)
+        await ensureOpenCodeMcpServers(this.options.mcpPort || "3684", this.options.port, this.chromeDevtoolsSupported)
 
         this.logD3K(`AI CLI Integration: Configured MCP servers in .mcp.json, .cursor/mcp.json, and opencode.json`)
       }
@@ -929,7 +878,8 @@ export class DevEnvironment {
         this.options.mcpPort,
         cdpUrl,
         chromePids,
-        this.options.serverCommand
+        this.options.serverCommand,
+        this.options.framework
       )
 
       // Clear status - ready!
@@ -983,8 +933,6 @@ export class DevEnvironment {
       // Configure AI CLI integrations (both dev3000 and chrome-devtools MCPs)
       if (!this.options.serversOnly) {
         this.spinner.text = "Configuring AI CLI integrations..."
-        // Check if NextJS MCP is enabled and store the result
-        this.enableNextjsMcp = await isNextjsMcpEnabled()
 
         // Check if Chrome version supports chrome-devtools MCP
         if (this.options.chromeDevtoolsMcp !== false) {
@@ -995,24 +943,10 @@ export class DevEnvironment {
         }
 
         // Ensure MCP server configurations in project settings files (instant, local)
-        await ensureMcpServers(
-          this.options.mcpPort || "3684",
-          this.options.port,
-          this.chromeDevtoolsSupported,
-          this.enableNextjsMcp
-        )
-        await ensureCursorMcpServers(
-          this.options.mcpPort || "3684",
-          this.options.port,
-          this.chromeDevtoolsSupported,
-          this.enableNextjsMcp
-        )
-        await ensureOpenCodeMcpServers(
-          this.options.mcpPort || "3684",
-          this.options.port,
-          this.chromeDevtoolsSupported,
-          this.enableNextjsMcp
-        )
+        // Framework-specific MCPs (Next.js, Svelte) are now configured dynamically by the MCP orchestrator
+        await ensureMcpServers(this.options.mcpPort || "3684", this.options.port, this.chromeDevtoolsSupported)
+        await ensureCursorMcpServers(this.options.mcpPort || "3684", this.options.port, this.chromeDevtoolsSupported)
+        await ensureOpenCodeMcpServers(this.options.mcpPort || "3684", this.options.port, this.chromeDevtoolsSupported)
 
         this.logD3K(`AI CLI Integration: Configured MCP servers in .mcp.json, .cursor/mcp.json, and opencode.json`)
       }
@@ -1045,7 +979,8 @@ export class DevEnvironment {
         this.options.mcpPort,
         cdpUrl,
         chromePids,
-        this.options.serverCommand
+        this.options.serverCommand,
+        this.options.framework
       )
 
       // Complete startup with success message only in non-TUI mode

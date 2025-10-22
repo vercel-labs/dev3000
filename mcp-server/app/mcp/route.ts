@@ -93,18 +93,51 @@ const initializeOrchestration = async () => {
       console.warn("[MCP Orchestrator] Failed to read session files:", error)
     }
 
-    // Configure next-devtools-mcp - always spawn as standalone stdio process
-    if (!config.nextjsDev) {
+    // Configure framework-specific MCPs based on detected framework
+    // Read framework from session data
+    if (!config.nextjsDev && !config.svelteDev) {
       const runner = getPackageRunner()
 
-      if (runner) {
-        config.nextjsDev = {
-          command: runner.command,
-          args: [...runner.args, "next-devtools-mcp@latest"],
-          enabled: true
+      // Try to find framework from any session file
+      let framework: string | null = null
+      try {
+        const sessionFiles = readdirSync(sessionDir).filter((f: string) => f.endsWith(".json"))
+        for (const file of sessionFiles) {
+          try {
+            const sessionPath = join(sessionDir, file)
+            const sessionData = JSON.parse(readFileSync(sessionPath, "utf-8"))
+            if (sessionData.framework) {
+              framework = sessionData.framework
+              break
+            }
+          } catch {
+            // Skip invalid session files
+          }
         }
+      } catch {
+        // Ignore errors reading framework
+      }
+
+      if (runner) {
+        // Configure framework-specific MCP based on detected framework
+        if (framework === "nextjs") {
+          config.nextjsDev = {
+            command: runner.command,
+            args: [...runner.args, "next-devtools-mcp@latest"],
+            enabled: true
+          }
+          console.log("[MCP Orchestrator] Detected Next.js framework, configuring next-devtools-mcp")
+        } else if (framework === "svelte") {
+          config.svelteDev = {
+            command: runner.command,
+            args: [...runner.args, "@sveltejs/mcp-server-svelte"],
+            enabled: true
+          }
+          console.log("[MCP Orchestrator] Detected Svelte framework, configuring @sveltejs/mcp-server-svelte")
+        }
+        // For "other" or null framework, don't configure any framework-specific MCP
       } else {
-        console.warn("[MCP Orchestrator] Cannot configure next-devtools-mcp: no package runner available")
+        console.warn("[MCP Orchestrator] Cannot configure framework MCP: no package runner available")
       }
     }
 
@@ -156,15 +189,22 @@ const initializeOrchestration = async () => {
       const newConfig = getConfigFromSessions()
       const hasChromeDevtools = !!newConfig.chromeDevtools
       const hasNextjs = !!newConfig.nextjsDev
+      const hasSvelte = !!newConfig.svelteDev
       const alreadyConnectedChrome = clientManager.isConnected("chrome-devtools")
       const alreadyConnectedNextjs = clientManager.isConnected("nextjs-dev")
+      const alreadyConnectedSvelte = clientManager.isConnected("svelte-dev")
 
       // Check if we have new MCPs to connect to
       const needsChrome = hasChromeDevtools && !alreadyConnectedChrome
       const needsNextjs = hasNextjs && !alreadyConnectedNextjs
+      const needsSvelte = hasSvelte && !alreadyConnectedSvelte
 
-      if (needsChrome || needsNextjs) {
-        const toConnect = [needsChrome && "chrome-devtools", needsNextjs && "nextjs-dev"].filter(Boolean)
+      if (needsChrome || needsNextjs || needsSvelte) {
+        const toConnect = [
+          needsChrome && "chrome-devtools",
+          needsNextjs && "nextjs-dev",
+          needsSvelte && "svelte-dev"
+        ].filter(Boolean)
         console.log(`[MCP Orchestrator] Retry ${retryCount}: Attempting to connect to ${toConnect.join(", ")}`)
         try {
           await clientManager.initialize(newConfig)
@@ -174,8 +214,10 @@ const initializeOrchestration = async () => {
         }
       }
 
-      // Stop retrying after max attempts or when both are connected
-      if (retryCount >= maxRetries || (alreadyConnectedChrome && alreadyConnectedNextjs)) {
+      // Stop retrying after max attempts or when all potential MCPs are connected
+      const allFrameworkMcpsConnected =
+        (hasNextjs ? alreadyConnectedNextjs : true) && (hasSvelte ? alreadyConnectedSvelte : true)
+      if (retryCount >= maxRetries || (alreadyConnectedChrome && allFrameworkMcpsConnected)) {
         clearInterval(retryInterval)
         const connected = clientManager.getConnectedMCPs()
         console.log(`[MCP Orchestrator] Stopped retry loop (connected: ${connected.join(", ") || "none"})`)
