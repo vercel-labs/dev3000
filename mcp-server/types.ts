@@ -34,7 +34,7 @@ export interface LogFile {
   path: string
   timestamp: string
   size: number
-  mtime: Date
+  mtime: string // ISO string (was Date, changed for Next.js 16 serialization compatibility)
   isCurrent: boolean
 }
 
