@@ -4,6 +4,17 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.99] - 2025-10-22
+
+**Feature Release**
+
+- 🎯 **Framework-Specific MCP Support**: Automatically detects project framework and spawns the appropriate MCP server
+  - Next.js projects → `next-devtools-mcp`
+  - Svelte projects → `@sveltejs/mcp-server-svelte`
+  - Other projects → No framework-specific MCP (only dev3000 + chrome-devtools)
+- 🔍 **Smart Framework Detection**: Detects frameworks via config files (next.config.\*, svelte.config.js) and package.json dependencies
+- 🚀 **Next.js 16 Compatibility**: Updated to Next.js 16.0.0-canary with proper serialization for Server/Client Component boundaries
+
 ## [0.0.98] - 2025-10-22
 
 **Feature Release**
