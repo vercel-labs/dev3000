@@ -10,6 +10,16 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.100",
+    date: "2025-10-22",
+    type: "patch",
+    highlights: [
+      "🐛 **Critical Fix**: Added missing 'use client' directive to Button component for Next.js 16 compatibility",
+      "🔧 **Logs Viewer**: Fixed 'Element type is invalid' error that broke the logs viewer in v0.0.99"
+    ]
+  },
+
+  {
     version: "0.0.99",
     date: "2025-10-22",
     type: "minor",

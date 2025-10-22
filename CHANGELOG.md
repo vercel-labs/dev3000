@@ -4,27 +4,25 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.100] - 2025-10-22
+
+**Patch Release**
+
+- 🐛 **Critical Fix**: Added missing 'use client' directive to Button component for Next.js 16 compatibility
+- 🔧 **Logs Viewer**: Fixed 'Element type is invalid' error that broke the logs viewer in v0.0.99
+
 ## [0.0.99] - 2025-10-22
 
 **Feature Release**
 
-- 🎯 **Framework-Specific MCP Support**: Automatically detects project framework and spawns the appropriate MCP server
-  - Next.js projects → `next-devtools-mcp`
-  - Svelte projects → `@sveltejs/mcp-server-svelte`
-  - Other projects → No framework-specific MCP (only dev3000 + chrome-devtools)
-- 🔍 **Smart Framework Detection**: Detects frameworks via config files (next.config.\*, svelte.config.js) and package.json dependencies
-- 🚀 **Next.js 16 Compatibility**: Updated to Next.js 16.0.0-canary with proper serialization for Server/Client Component boundaries
+- 🎯 **Framework-Specific MCP Support**: Automatically detects project framework and spawns the appropriate MCP server (Next.js → `next-devtools-mcp`, Svelte → `@sveltejs/mcp-server-svelte`)
+- 🔍 **Smart Framework Detection**: Detects frameworks via config files and package.json dependencies
+- 🚀 **Next.js 16 Compatibility**: Updated to Next.js 16.0.0-canary with proper serialization fixes
 
 ## [0.0.98] - 2025-10-22
 
-**Feature Release**
+**Patch Release**
 
-- 🎯 **Framework-Specific MCP Support**: Automatically detects project framework and spawns the appropriate MCP server
-  - Next.js projects → `next-devtools-mcp`
-  - Svelte projects → `@sveltejs/mcp-server-svelte`
-  - Other projects → No framework-specific MCP (only dev3000 + chrome-devtools)
-- 🔍 **Smart Framework Detection**: Detects frameworks via config files (next.config.\*, svelte.config.js) and package.json dependencies
-- 🚀 **Next.js 16 Compatibility**: Updated to Next.js 16.0.0-canary with proper serialization for Server/Client Component boundaries
 - 🐛 **Fixed 3 bugs for improved stability**
 
 ## [0.0.97] - 2025-10-20
