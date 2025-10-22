@@ -4,6 +4,12 @@
 
 FROM node:20-bookworm-slim AS base
 
+# Install system dependencies required by dev3000
+# lsof: Port checking utility
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    lsof \
+    && rm -rf /var/lib/apt/lists/*
+
 # Install pnpm globally (as root)
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
@@ -13,19 +19,24 @@ RUN npm install -g dev3000@latest
 # Set working directory
 WORKDIR /app
 
+# Copy example app files
+COPY example/nextjs15/package*.json ./
+
 # Create non-root user (node user already exists in official node image)
 # Set ownership of /app to node user
 RUN chown -R node:node /app
 
-# Switch to non-root user
+# Switch to node user
 USER node
+
+# Install application dependencies as node user
+RUN npm install
 
 # Set PATH to include global npm packages for node user
 ENV PATH="/usr/local/lib/node_modules/.bin:${PATH}"
 
-# Copy package files for dependency installation
-# Note: This assumes dev3000 is globally installed or mounted
-# For development, mount your project directory to /app
+# Copy rest of application files (will be overridden by volume mount in dev mode)
+COPY --chown=node:node example/nextjs15/ ./
 
 # Expose ports
 # 3000: Default Next.js/app server port
