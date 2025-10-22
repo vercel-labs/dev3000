@@ -29,5 +29,5 @@ next-env.d.ts
 # AI CLI configs
 .mcp.json
 .cursor/
-.opencode.json*.env.local
+opencode.json
 .env*.local

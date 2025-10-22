@@ -336,7 +336,7 @@ async function ensureCursorMcpServers(
 }
 
 /**
- * Ensure MCP server configurations are added to project's .opencode.json
+ * Ensure MCP server configurations are added to project's opencode.json
  * OpenCode uses a different structure: "mcp" instead of "mcpServers" and "type": "local" for stdio servers
  */
 async function ensureOpenCodeMcpServers(
@@ -900,7 +900,7 @@ export class DevEnvironment {
           this.enableNextjsMcp
         )
 
-        this.logD3K(`AI CLI Integration: Configured MCP servers in .mcp.json, .cursor/mcp.json, and .opencode.json`)
+        this.logD3K(`AI CLI Integration: Configured MCP servers in .mcp.json, .cursor/mcp.json, and opencode.json`)
       }
 
       // Start CDP monitoring only if server started successfully and not in servers-only mode
@@ -1014,7 +1014,7 @@ export class DevEnvironment {
           this.enableNextjsMcp
         )
 
-        this.logD3K(`AI CLI Integration: Configured MCP servers in .mcp.json, .cursor/mcp.json, and .opencode.json`)
+        this.logD3K(`AI CLI Integration: Configured MCP servers in .mcp.json, .cursor/mcp.json, and opencode.json`)
       }
 
       // Start CDP monitoring only if server started successfully and not in servers-only mode
@@ -2419,7 +2419,7 @@ export class DevEnvironment {
 
     // REMOVED: No longer clean up MCP config files on shutdown
     // This was causing Claude Code instances to crash when dev3000 was killed
-    // Now we keep .mcp.json, .cursor/mcp.json, and .opencode.json configured
+    // Now we keep .mcp.json, .cursor/mcp.json, and opencode.json configured
     // for the next dev3000 run, providing a better developer experience
 
     // Kill processes on both ports
