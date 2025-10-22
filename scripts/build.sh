@@ -13,8 +13,11 @@ pnpm run build
 echo "🏗️ Building MCP server..."
 cd mcp-server
 
-# Clean previous build (this also removes the turbopack cache)
-rm -rf .next
+# Clean previous build and node_modules to avoid caching old dependencies
+rm -rf .next node_modules
+
+# Reinstall dependencies fresh
+pnpm install
 
 # Build with turbopack
 echo "📦 Creating build with turbopack..."
