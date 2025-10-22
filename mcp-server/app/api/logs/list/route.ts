@@ -46,6 +46,10 @@ export async function GET(_request: NextRequest): Promise<Response> {
           }
         })
         .sort((a, b) => b.mtime.getTime() - a.mtime.getTime()) // Most recent first
+        .map((file) => ({
+          ...file,
+          mtime: file.mtime.toISOString() // Convert to string after sorting
+        }))
 
       files.push(...logFiles)
     } catch (error) {
