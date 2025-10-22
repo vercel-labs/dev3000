@@ -41,6 +41,7 @@ export class MCPClientManager {
   async initialize(config: {
     chromeDevtools?: { command: string; args: string[]; enabled: boolean }
     nextjsDev?: { command: string; args: string[]; enabled: boolean }
+    svelteDev?: { command: string; args: string[]; enabled: boolean }
   }): Promise<void> {
     const configs: MCPClientConfig[] = []
 
@@ -60,6 +61,16 @@ export class MCPClientManager {
         type: "stdio",
         command: config.nextjsDev.command,
         args: config.nextjsDev.args,
+        enabled: true
+      })
+    }
+
+    if (config.svelteDev?.enabled) {
+      configs.push({
+        name: "svelte-dev",
+        type: "stdio",
+        command: config.svelteDev.command,
+        args: config.svelteDev.args,
         enabled: true
       })
     }

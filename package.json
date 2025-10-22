@@ -1,6 +1,6 @@
 {
   "name": "dev3000",
-  "version": "0.0.96-canary",
+  "version": "0.0.100-canary",
   "description": "AI-powered development tools with browser monitoring and MCP server integration",
   "type": "module",
   "main": "dist/index.js",
@@ -70,8 +70,8 @@
     "package-manager-detector": "^1.3.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
-    "ws": "^8.18.3",
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "ws": "^8.18.3"
   },
   "devDependencies": {
     "@types/node": "^24.5.2",
@@ -96,5 +96,5 @@
   },
   "author": "Lindsey Simon <lindsey@vercel.com>",
   "license": "MIT",
-  "packageManager": "pnpm@10.19.0+sha512.c9fc7236e92adf5c8af42fd5bf1612df99c2ceb62f27047032f4720b33f8eacdde311865e91c411f2774f618d82f320808ecb51718bfa82c060c4ba7c76a32b8"
+  "packageManager": "pnpm@10.18.3"
 }

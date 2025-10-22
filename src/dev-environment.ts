@@ -22,7 +22,6 @@ import { CDPMonitor } from "./cdp-monitor.js"
 import { ScreencastManager } from "./screencast-manager.js"
 import { type LogEntry, NextJsErrorDetector, OutputProcessor, StandardLogParser } from "./services/parsers/index.js"
 import { DevTUI } from "./tui-interface.js"
-import { LogLevel, Logger as StructuredLogger } from "./utils/logger.js"
 import { getProjectDisplayName, getProjectName } from "./utils/project-name.js"
 import { formatTimestamp } from "./utils/timestamp.js"
 
@@ -45,6 +44,7 @@ interface DevEnvironmentOptions {
   commandName: string
   browser?: string
   defaultPort?: string // Default port from project type detection
+  framework?: "nextjs" | "svelte" | "other" // Framework type from project detection
   userSetPort?: boolean // Whether user explicitly set the port
   userSetMcpPort?: boolean // Whether user explicitly set the MCP port
   tail?: boolean // Whether to tail the log file to terminal
@@ -52,14 +52,9 @@ interface DevEnvironmentOptions {
   dateTimeFormat?: "local" | "utc" // Timestamp format option
   pluginReactScan?: boolean // Whether to enable react-scan performance monitoring
   chromeDevtoolsMcp?: boolean // Whether to enable chrome-devtools MCP integration
-  logger?: StructuredLogger // Structured logger from CLI
 }
 
-/**
- * FileLogger - Handles writing logs to file
- * (Renamed from Logger to avoid confusion with StructuredLogger)
- */
-class FileLogger {
+class Logger {
   private logFile: string
   private tail: boolean
   private dateTimeFormat: "local" | "utc"
@@ -106,10 +101,6 @@ async function isPortAvailable(port: string): Promise<boolean> {
         output += data.toString()
       })
       proc.on("exit", () => resolve(output.trim()))
-      proc.on("error", () => {
-        // lsof not available (e.g., Windows, containers)
-        resolve("") // Return empty string to indicate port check failed
-      })
     })
     return !result // If no output, port is available
   } catch {
@@ -125,59 +116,11 @@ async function findAvailablePort(startPort: number): Promise<string> {
     }
     port++
   }
-  const errorMsg = [
-    "\n❌ NO AVAILABLE PORTS FOUND",
-    `Starting port: ${startPort}`,
-    `Searched range: ${startPort} - 65534`,
-    `\nCAUSE: All ports in the range are already in use`,
-    `\nEXPECTED: At least one free port in the range`,
-    `ACTUAL: All ${65535 - startPort} ports are occupied`,
-    `\nPOSSIBLE REASONS:`,
-    `  - System has an excessive number of listening services`,
-    `  - Port exhaustion due to TIME_WAIT connections`,
-    `  - Firewall or security software blocking port checks`,
-    `  - lsof command is malfunctioning`,
-    `\nDEBUG STEPS:`,
-    `  1. Check listening ports: lsof -i -P | grep LISTEN`,
-    `  2. Check TIME_WAIT: netstat -an | grep TIME_WAIT | wc -l`,
-    `  3. Specify a custom port: dev3000 --port <port>`,
-    `  4. Restart system to clear stale connections`
-  ].join("\n")
-  throw new Error(errorMsg)
+  throw new Error(`No available ports found starting from ${startPort}`)
 }
 
-/**
- * Check if Next.js MCP server is enabled in the project configuration
- */
-async function isNextjsMcpEnabled(): Promise<boolean> {
-  try {
-    const configFiles = ["next.config.js", "next.config.ts", "next.config.mjs", "next.config.cjs"]
-
-    for (const configFile of configFiles) {
-      if (existsSync(configFile)) {
-        try {
-          // Read the config file content
-          const configContent = readFileSync(configFile, "utf8")
-
-          // Look for experimental.mcpServer: true or experimental.mcpServer = true
-          // This is a simple string-based check that should work for most cases
-          const hasMcpServerConfig =
-            /experimental\s*:\s*{[^}]*mcpServer\s*:\s*true|experimental\.mcpServer\s*[=:]\s*true/s.test(configContent)
-
-          if (hasMcpServerConfig) {
-            return true
-          }
-        } catch {
-          // If we can't read the file, continue checking other config files
-        }
-      }
-    }
-
-    return false
-  } catch {
-    return false
-  }
-}
+// REMOVED: isNextjsMcpEnabled check - now using framework detection from cli.ts
+// Framework detection happens in cli.ts and is stored in session files for MCP orchestrator
 
 /**
  * Check if Chrome version supports chrome-devtools MCP (>= 140.0.7339.214)
@@ -251,12 +194,7 @@ async function isChromeDevtoolsMcpSupported(): Promise<boolean> {
 /**
  * Ensure MCP server configurations are added to project's .mcp.json (Claude Code)
  */
-async function ensureMcpServers(
-  mcpPort: string,
-  _appPort: string,
-  _enableChromeDevtools: boolean,
-  _enableNextjsMcp: boolean
-): Promise<void> {
+async function ensureMcpServers(mcpPort: string, _appPort: string, _enableChromeDevtools: boolean): Promise<void> {
   try {
     const settingsPath = join(process.cwd(), ".mcp.json")
 
@@ -309,8 +247,7 @@ async function ensureMcpServers(
 async function ensureCursorMcpServers(
   mcpPort: string,
   _appPort: string,
-  _enableChromeDevtools: boolean,
-  _enableNextjsMcp: boolean
+  _enableChromeDevtools: boolean
 ): Promise<void> {
   try {
     const cursorDir = join(process.cwd(), ".cursor")
@@ -364,27 +301,25 @@ async function ensureCursorMcpServers(
 }
 
 /**
- * Ensure MCP server configurations are added to project's .opencode.json
+ * Ensure MCP server configurations are added to project's opencode.json
  * OpenCode uses a different structure: "mcp" instead of "mcpServers" and "type": "local" for stdio servers
  */
 async function ensureOpenCodeMcpServers(
   mcpPort: string,
   _appPort: string,
-  _enableChromeDevtools: boolean,
-  _enableNextjsMcp: boolean
+  _enableChromeDevtools: boolean
 ): Promise<void> {
   try {
-    const settingsPath = join(process.cwd(), ".opencode.json")
+    const settingsPath = join(process.cwd(), "opencode.json")
 
     // Read or create settings - OpenCode uses "mcp" not "mcpServers"
     let settings: {
       mcp?: Record<
         string,
         {
-          type: "local"
-          command: string[]
+          type?: "remote"
+          url?: string
           enabled?: boolean
-          environment?: Record<string, string>
         }
       >
       [key: string]: unknown
@@ -408,8 +343,8 @@ async function ensureOpenCodeMcpServers(
     // spawns and connects to chrome-devtools-mcp and next-devtools-mcp as stdio processes
     if (!settings.mcp[MCP_NAMES.DEV3000]) {
       settings.mcp[MCP_NAMES.DEV3000] = {
-        type: "local",
-        command: ["npx", "@modelcontextprotocol/inspector", `http://localhost:${mcpPort}/mcp`],
+        type: "remote",
+        url: `http://localhost:${mcpPort}/mcp`,
         enabled: true
       }
       added = true
@@ -459,7 +394,8 @@ function writeSessionInfo(
   mcpPort?: string,
   cdpUrl?: string | null,
   chromePids?: number[],
-  serverCommand?: string
+  serverCommand?: string,
+  framework?: "nextjs" | "svelte" | "other"
 ): void {
   const sessionDir = join(homedir(), ".d3k")
 
@@ -480,7 +416,8 @@ function writeSessionInfo(
       pid: process.pid,
       cwd: process.cwd(),
       chromePids: chromePids || [],
-      serverCommand: serverCommand || null
+      serverCommand: serverCommand || null,
+      framework: framework || null
     }
 
     // Write session file - use project name as filename for easy lookup
@@ -512,8 +449,8 @@ function createLogFileInDir(baseDir: string, projectName: string): string {
   // Create timestamp
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-")
 
-  // Create log file path with dev3000- prefix for MCP server UI discovery
-  const logFileName = `dev3000-${projectName}-${timestamp}.log`
+  // Create log file path
+  const logFileName = `${projectName}-${timestamp}.log`
   const logFilePath = join(baseDir, logFileName)
 
   // Prune old logs for this project (keep only 10 most recent)
@@ -527,9 +464,9 @@ function createLogFileInDir(baseDir: string, projectName: string): string {
 
 function pruneOldLogs(baseDir: string, projectName: string): void {
   try {
-    // Find all log files for this project (with dev3000- prefix)
+    // Find all log files for this project
     const files = readdirSync(baseDir)
-      .filter((file) => file.startsWith(`dev3000-${projectName}-`) && file.endsWith(".log"))
+      .filter((file) => file.startsWith(`${projectName}-`) && file.endsWith(".log"))
       .map((file) => ({
         name: file,
         path: join(baseDir, file),
@@ -558,8 +495,7 @@ export class DevEnvironment {
   private mcpServerProcess: ChildProcess | null = null
   private cdpMonitor: CDPMonitor | null = null
   private screencastManager: ScreencastManager | null = null
-  private fileLogger: FileLogger // File-based logging
-  private logger: StructuredLogger // Structured console logging
+  private logger: Logger
   private outputProcessor: OutputProcessor
   private options: DevEnvironmentOptions
   private screenshotDir: string
@@ -574,7 +510,6 @@ export class DevEnvironment {
   private tui: DevTUI | null = null
   private portChangeMessage: string | null = null
   private firstSigintTime: number | null = null
-  private enableNextjsMcp: boolean = false
   private chromeDevtoolsSupported: boolean = false
 
   constructor(options: DevEnvironmentOptions) {
@@ -583,18 +518,7 @@ export class DevEnvironment {
       ...options,
       mcpPort: options.portMcp || options.mcpPort || "3684"
     }
-    this.fileLogger = new FileLogger(options.logFile, options.tail || false, options.dateTimeFormat || "local")
-
-    // Use provided logger or create a default one
-    this.logger =
-      options.logger ||
-      new StructuredLogger({
-        level: options.debug ? LogLevel.DEBUG : LogLevel.INFO,
-        prefix: "dev-env",
-        enableColors: true,
-        enableTimestamp: false
-      })
-
+    this.logger = new Logger(options.logFile, options.tail || false, options.dateTimeFormat || "local")
     this.outputProcessor = new OutputProcessor(new StandardLogParser(), new NextJsErrorDetector())
 
     // Set up MCP server public directory for web-accessible screenshots
@@ -735,11 +659,6 @@ export class DevEnvironment {
           output += data.toString()
         })
         getPidsProcess.on("exit", () => resolve(output.trim()))
-        getPidsProcess.on("error", (err) => {
-          // lsof not available (e.g., Windows, containers)
-          this.debugLog(`lsof not available for killMcpServer: ${err.message}`)
-          resolve("") // Return empty to skip killing
-        })
       })
 
       if (pids) {
@@ -770,102 +689,22 @@ export class DevEnvironment {
     if (this.isShuttingDown) return true // Skip health check if already shutting down
 
     try {
-      // In Docker environments, use HTTP health checks instead of lsof
-      // lsof may not detect listening ports correctly due to network namespaces
-      const ports = [
-        { port: this.options.port, name: "app" },
-        { port: this.options.mcpPort, name: "mcp" }
-      ]
+      const ports = [this.options.port, this.options.mcpPort]
 
-      for (const { port, name } of ports) {
-        // Try HTTP health check first
-        try {
-          const http = await import("http")
-          const path = name === "mcp" ? "/health" : "/"
-          let httpError: Error | null = null
-          const isResponding = await new Promise<boolean>((resolve) => {
-            const req = http.get({ host: "localhost", port, path }, (res) => {
-              const ok = (res.statusCode ?? 0) >= 200 && (res.statusCode ?? 0) < 400
-              resolve(ok)
-            })
-            req.on("error", (err) => {
-              httpError = err instanceof Error ? err : new Error(String(err))
-              resolve(false)
-            })
-            req.setTimeout(2000, () => {
-              req.destroy()
-              httpError = new Error("Connection timeout after 2000ms")
-              resolve(false)
-            })
+      for (const port of ports) {
+        const result = await new Promise<string>((resolve) => {
+          const proc = spawn("lsof", ["-ti", `:${port}`], { stdio: "pipe" })
+          let output = ""
+          proc.stdout?.on("data", (data) => {
+            output += data.toString()
           })
+          proc.on("exit", () => resolve(output.trim()))
+        })
 
-          if (!isResponding) {
-            const errorMsg = [
-              `\n❌ HEALTH CHECK FAILED - ${name.toUpperCase()} SERVER NOT RESPONDING`,
-              `Server: ${name}`,
-              `Port: ${port}`,
-              `URL: http://localhost:${port}/`,
-              httpError ? `HTTP Error: ${(httpError as Error).message}` : "No response",
-              `\nCAUSE: ${name} server is not responding to HTTP requests`,
-              `\nPOSSIBLE REASONS:`,
-              `  - ${name} server crashed or exited unexpectedly`,
-              `  - ${name} server is frozen or deadlocked`,
-              `  - Port ${port} is bound but process is not accepting connections`,
-              `  - Network namespace issues (Docker/containers)`,
-              `\nDEBUG STEPS:`,
-              `  1. Check if process is running: lsof -i :${port}`,
-              `  2. Review ${name} server logs above for crash/error messages`,
-              `  3. Check system resources: top or htop`,
-              `  4. For Docker: Check container health: docker ps`,
-              `  5. Manual test: curl -v http://localhost:${port}/`,
-              `\nACTION: Initiating graceful shutdown...`
-            ].join("\n")
-            this.debugLog(errorMsg)
-            this.fileLogger.log("server", errorMsg)
-            return false
-          }
-        } catch (error) {
-          this.debugLog(`Health check error for port ${port}: ${error}`)
-          // Fall back to lsof check
-          const result = await new Promise<string>((resolve) => {
-            const proc = spawn("lsof", ["-ti", `:${port}`], { stdio: "pipe" })
-            let output = ""
-            proc.stdout?.on("data", (data) => {
-              output += data.toString()
-            })
-            proc.on("exit", () => resolve(output.trim()))
-            proc.on("error", (err) => {
-              // lsof not available (e.g., in containers/WSL/Windows)
-              this.debugLog(`lsof not available: ${err.message}`)
-              resolve("") // Return empty to trigger failure
-            })
-          })
-
-          if (!result) {
-            const errorMsg = [
-              `\n❌ HEALTH CHECK FAILED - PORT NOT IN USE`,
-              `Server: ${name}`,
-              `Port: ${port}`,
-              `\nCAUSE: No process is listening on port ${port}`,
-              `\nEXPECTED: ${name} server process listening on port ${port}`,
-              `ACTUAL: Port ${port} is free (no process bound)`,
-              `\nPOSSIBLE REASONS:`,
-              `  - ${name} server exited/crashed`,
-              `  - Process was killed externally (kill, pkill, OOM killer)`,
-              `  - Server failed to bind to port on startup`,
-              `  - Port was released due to error condition`,
-              `\nDEBUG STEPS:`,
-              `  1. Check exit code in logs (if process terminated)`,
-              `  2. Check system logs: dmesg | grep -i killed`,
-              `  3. Check memory: free -h (OOM killer may have terminated it)`,
-              `  4. Review ${name} server startup logs for bind errors`,
-              `  5. Verify no port conflicts occurred`,
-              `\nACTION: Initiating graceful shutdown...`
-            ].join("\n")
-            this.debugLog(errorMsg)
-            this.fileLogger.log("server", errorMsg)
-            return false
-          }
+        if (!result) {
+          this.debugLog(`Health check failed: Port ${port} is no longer in use`)
+          this.logger.log("server", `Health check failed: Critical process on port ${port} is no longer running`)
+          return false
         }
       }
 
@@ -900,48 +739,27 @@ export class DevEnvironment {
   }
 
   async start() {
-    this.logger.info("━━━ Development Environment Starting ━━━")
-    this.logger.logFields(LogLevel.INFO, "Configuration", {
-      Command: this.options.commandName,
-      Port: this.options.port,
-      "MCP Port": this.options.mcpPort || "3684",
-      "Server Command": this.options.serverCommand,
-      "TUI Mode": this.options.tui ? "enabled" : "disabled",
-      "Debug Mode": this.options.debug ? "enabled" : "disabled",
-      "Servers Only": this.options.serversOnly ? "yes" : "no"
-    })
-
     // Check if another instance is already running for this project
-    this.logger.debug("Checking for existing instance lock...")
     if (!this.acquireLock()) {
-      this.logger.error(`Another dev3000 instance is already running`)
-      this.logger.error(`Lock file: ${this.lockFile}`)
       console.error(chalk.red(`\n❌ Another dev3000 instance is already running for this project.`))
       console.error(chalk.yellow(`   If you're sure no other instance is running, remove: ${this.lockFile}`))
       process.exit(1)
     }
-    this.logger.debug("✓ Lock acquired successfully")
 
     // Check if TUI mode is enabled (default) and stdin supports it
     const canUseTUI = this.options.tui && process.stdin.isTTY
 
-    this.logger.debug(`TUI check: requested=${this.options.tui}, isTTY=${process.stdin.isTTY}, result=${canUseTUI}`)
-
     if (!canUseTUI && this.options.tui) {
-      this.logger.warn("TTY not available, falling back to non-TUI mode")
       this.debugLog("TTY not available, falling back to non-TUI mode")
     }
 
     if (canUseTUI) {
-      this.logger.debug("Starting TUI mode")
       // Clear console and start TUI immediately for fast render
       console.clear()
 
       // Get unique project name
       const projectName = getProjectName()
       const projectDisplayName = getProjectDisplayName()
-
-      this.logger.debug(`Project names: internal=${projectName}, display=${projectDisplayName}`)
 
       // Start TUI interface with initial status and updated port
       this.tui = new DevTUI({
@@ -1016,8 +834,6 @@ export class DevEnvironment {
       // Configure AI CLI integrations (both dev3000 and chrome-devtools MCPs)
       if (!this.options.serversOnly) {
         await this.tui.updateStatus("Configuring AI CLI integrations...")
-        // Check if NextJS MCP is enabled and store the result
-        this.enableNextjsMcp = await isNextjsMcpEnabled()
 
         // Check if Chrome version supports chrome-devtools MCP
         if (this.options.chromeDevtoolsMcp !== false) {
@@ -1028,26 +844,12 @@ export class DevEnvironment {
         }
 
         // Ensure MCP server configurations in project settings files (instant, local)
-        await ensureMcpServers(
-          this.options.mcpPort || "3684",
-          this.options.port,
-          this.chromeDevtoolsSupported,
-          this.enableNextjsMcp
-        )
-        await ensureCursorMcpServers(
-          this.options.mcpPort || "3684",
-          this.options.port,
-          this.chromeDevtoolsSupported,
-          this.enableNextjsMcp
-        )
-        await ensureOpenCodeMcpServers(
-          this.options.mcpPort || "3684",
-          this.options.port,
-          this.chromeDevtoolsSupported,
-          this.enableNextjsMcp
-        )
+        // Framework-specific MCPs (Next.js, Svelte) are now configured dynamically by the MCP orchestrator
+        await ensureMcpServers(this.options.mcpPort || "3684", this.options.port, this.chromeDevtoolsSupported)
+        await ensureCursorMcpServers(this.options.mcpPort || "3684", this.options.port, this.chromeDevtoolsSupported)
+        await ensureOpenCodeMcpServers(this.options.mcpPort || "3684", this.options.port, this.chromeDevtoolsSupported)
 
-        this.logD3K(`AI CLI Integration: Configured MCP servers in .mcp.json, .cursor/mcp.json, and .opencode.json`)
+        this.logD3K(`AI CLI Integration: Configured MCP servers in .mcp.json, .cursor/mcp.json, and opencode.json`)
       }
 
       // Start CDP monitoring only if server started successfully and not in servers-only mode
@@ -1076,7 +878,8 @@ export class DevEnvironment {
         this.options.mcpPort,
         cdpUrl,
         chromePids,
-        this.options.serverCommand
+        this.options.serverCommand,
+        this.options.framework
       )
 
       // Clear status - ready!
@@ -1130,8 +933,6 @@ export class DevEnvironment {
       // Configure AI CLI integrations (both dev3000 and chrome-devtools MCPs)
       if (!this.options.serversOnly) {
         this.spinner.text = "Configuring AI CLI integrations..."
-        // Check if NextJS MCP is enabled and store the result
-        this.enableNextjsMcp = await isNextjsMcpEnabled()
 
         // Check if Chrome version supports chrome-devtools MCP
         if (this.options.chromeDevtoolsMcp !== false) {
@@ -1142,26 +943,12 @@ export class DevEnvironment {
         }
 
         // Ensure MCP server configurations in project settings files (instant, local)
-        await ensureMcpServers(
-          this.options.mcpPort || "3684",
-          this.options.port,
-          this.chromeDevtoolsSupported,
-          this.enableNextjsMcp
-        )
-        await ensureCursorMcpServers(
-          this.options.mcpPort || "3684",
-          this.options.port,
-          this.chromeDevtoolsSupported,
-          this.enableNextjsMcp
-        )
-        await ensureOpenCodeMcpServers(
-          this.options.mcpPort || "3684",
-          this.options.port,
-          this.chromeDevtoolsSupported,
-          this.enableNextjsMcp
-        )
+        // Framework-specific MCPs (Next.js, Svelte) are now configured dynamically by the MCP orchestrator
+        await ensureMcpServers(this.options.mcpPort || "3684", this.options.port, this.chromeDevtoolsSupported)
+        await ensureCursorMcpServers(this.options.mcpPort || "3684", this.options.port, this.chromeDevtoolsSupported)
+        await ensureOpenCodeMcpServers(this.options.mcpPort || "3684", this.options.port, this.chromeDevtoolsSupported)
 
-        this.logD3K(`AI CLI Integration: Configured MCP servers in .mcp.json, .cursor/mcp.json, and .opencode.json`)
+        this.logD3K(`AI CLI Integration: Configured MCP servers in .mcp.json, .cursor/mcp.json, and opencode.json`)
       }
 
       // Start CDP monitoring only if server started successfully and not in servers-only mode
@@ -1192,7 +979,8 @@ export class DevEnvironment {
         this.options.mcpPort,
         cdpUrl,
         chromePids,
-        this.options.serverCommand
+        this.options.serverCommand,
+        this.options.framework
       )
 
       // Complete startup with success message only in non-TUI mode
@@ -1219,8 +1007,6 @@ export class DevEnvironment {
   }
 
   private async startServer() {
-    this.logger.info("Starting development server")
-    this.logger.debug(`Command: ${this.options.serverCommand}`)
     this.debugLog(`Starting server process: ${this.options.serverCommand}`)
 
     this.serverStartTime = Date.now()
@@ -1231,9 +1017,6 @@ export class DevEnvironment {
       detached: true // Run independently
     })
 
-    if (this.serverProcess.pid) {
-      this.logger.info(`✓ Server process started (PID: ${this.serverProcess.pid})`)
-    }
     this.debugLog(`Server process spawned with PID: ${this.serverProcess.pid}`)
 
     // Log server output (to file only, reduce stdout noise)
@@ -1242,7 +1025,10 @@ export class DevEnvironment {
       const entries = this.outputProcessor.process(text, false)
 
       entries.forEach((entry: LogEntry) => {
-        this.fileLogger.log("server", entry.formatted)
+        this.logger.log("server", entry.formatted)
+
+        // Detect when server switches to a different port
+        this.detectPortChange(text)
       })
     })
 
@@ -1251,7 +1037,10 @@ export class DevEnvironment {
       const entries = this.outputProcessor.process(text, true)
 
       entries.forEach((entry: LogEntry) => {
-        this.fileLogger.log("server", entry.formatted)
+        this.logger.log("server", entry.formatted)
+
+        // Detect when server switches to a different port
+        this.detectPortChange(text)
 
         // Show critical errors to console (parser determines what's critical)
         if (entry.isCritical && entry.rawMessage) {
@@ -1265,7 +1054,7 @@ export class DevEnvironment {
 
       if (code !== 0 && code !== null) {
         this.debugLog(`Server process exited with code ${code}`)
-        this.fileLogger.log("server", `Server process exited with code ${code}`)
+        this.logger.log("server", `Server process exited with code ${code}`)
 
         const timeSinceStart = this.serverStartTime ? Date.now() - this.serverStartTime : 0
         const isEarlyExit = timeSinceStart < 5000 // Less than 5 seconds
@@ -1369,24 +1158,48 @@ export class DevEnvironment {
     }
   }
 
-  private debugLog(message: string) {
-    // Use structured logger for debug messages
-    this.logger.debug(message)
+  private detectPortChange(text: string) {
+    // Detect Next.js port switch: "⚠ Port 3000 is in use by process 39543, using available port 3001 instead."
+    // Also detect: "Local: http://localhost:3001"
+    const nextJsPortSwitchMatch = text.match(/using available port (\d+) instead/i)
+    const localUrlMatch = text.match(/Local:.*localhost:(\d+)/i)
 
-    // Also log to file with timestamp
-    const timestamp = formatTimestamp(new Date(), this.options.dateTimeFormat || "local")
-    if (this.options.debug && this.fileLogger) {
-      // Optionally write debug messages to file when in debug mode
-      // (Only if debug is enabled, to avoid cluttering file logs)
+    const detectedPort = nextJsPortSwitchMatch?.[1] || localUrlMatch?.[1]
+
+    if (detectedPort && detectedPort !== this.options.port) {
+      this.debugLog(`Detected server port change from ${this.options.port} to ${detectedPort}`)
+      this.logger.log("server", `[PORT] Server switched from port ${this.options.port} to ${detectedPort}`)
+      this.options.port = detectedPort
+
+      // Update session info with new port
+      const projectName = getProjectName()
+      const cdpUrl = this.cdpMonitor?.getCdpUrl()
+      const chromePids = this.cdpMonitor?.getChromePids() || []
+
+      if (cdpUrl || chromePids.length > 0) {
+        writeSessionInfo(
+          projectName,
+          this.options.logFile,
+          this.options.port,
+          this.options.mcpPort,
+          cdpUrl || undefined,
+          chromePids,
+          this.options.serverCommand
+        )
+        this.debugLog(`Updated session info with new port: ${this.options.port}`)
+      }
     }
+  }
 
-    // Handle spinner interaction for non-TUI mode
-    if (this.options.debug && !this.options.tui) {
+  private debugLog(message: string) {
+    const timestamp = formatTimestamp(new Date(), this.options.dateTimeFormat || "local")
+
+    if (this.options.debug) {
       if (this.spinner?.isSpinning) {
         // Temporarily stop the spinner, show debug message, then restart
         const currentText = this.spinner.text
         this.spinner.stop()
-        // Message already logged by logger.debug() above
+        console.log(chalk.gray(`[DEBUG] ${message}`))
         this.spinner.start(currentText)
       } else {
         console.log(chalk.gray(`[DEBUG] ${message}`))
@@ -1436,7 +1249,6 @@ export class DevEnvironment {
   }
 
   private async startMcpServer() {
-    this.logger.info("━━━ MCP Server Setup ━━━")
     this.debugLog("Starting MCP server setup")
 
     // Note: MCP server cleanup now happens earlier in checkPortsAvailable()
@@ -1446,8 +1258,6 @@ export class DevEnvironment {
     const currentFile = fileURLToPath(import.meta.url)
     const packageRoot = dirname(dirname(currentFile)) // Go up from dist/ to package root
     let mcpServerPath = join(packageRoot, "mcp-server")
-    this.logger.debug(`Resolving MCP server path...`)
-    this.logger.trace(`Initial path: ${mcpServerPath}`)
     this.debugLog(`Initial MCP server path: ${mcpServerPath}`)
 
     // For pnpm global installs, resolve symlinks to get the real path
@@ -1455,26 +1265,20 @@ export class DevEnvironment {
       try {
         const realPath = realpathSync(mcpServerPath)
         if (realPath !== mcpServerPath) {
-          this.logger.debug(`Symlink resolved: ${mcpServerPath} -> ${realPath}`)
           this.debugLog(`MCP server path resolved from symlink: ${mcpServerPath} -> ${realPath}`)
           mcpServerPath = realPath
         }
       } catch (e) {
         // Error resolving path, continue with original
-        this.logger.warn(`Error resolving symlink: ${e}`)
         this.debugLog(`Error resolving real path: ${e}`)
       }
     }
 
-    this.logger.debug(`Final MCP server path: ${mcpServerPath}`)
     this.debugLog(`Final MCP server path: ${mcpServerPath}`)
 
     if (!existsSync(mcpServerPath)) {
-      const errorMsg = `MCP server directory not found at ${mcpServerPath}`
-      this.logger.error(errorMsg)
-      throw new Error(errorMsg)
+      throw new Error(`MCP server directory not found at ${mcpServerPath}`)
     }
-    this.logger.debug("✓ MCP server directory found")
     this.debugLog("MCP server directory found")
 
     // Check if MCP server dependencies are installed, install if missing
@@ -1571,15 +1375,6 @@ export class DevEnvironment {
     }
 
     // Start the MCP server
-    this.logger.info("Configuring MCP server launch")
-    this.logger.logFields(LogLevel.DEBUG, "MCP server configuration", {
-      "Working directory": actualWorkingDir,
-      Port: this.options.mcpPort || "3684",
-      "Screenshot dir": this.screenshotDir,
-      "Pre-built": isPreBuilt ? "yes" : "no",
-      "Global install": isGlobalInstall ? "yes" : "no"
-    })
-
     this.debugLog(`MCP server working directory: ${actualWorkingDir}`)
     this.debugLog(`MCP server port: ${this.options.mcpPort}`)
     this.debugLog(`Screenshot directory: ${this.screenshotDir}`)
@@ -1590,14 +1385,12 @@ export class DevEnvironment {
     let mcpCwd = actualWorkingDir
 
     if (isGlobalInstall && isPreBuilt) {
-      this.logger.debug("Using global install pre-built mode")
       // For global installs with pre-built servers, use the standalone server directly
       // This avoids the turbopack runtime issues with npx
       const serverJsPath = join(mcpServerPath, ".next", "standalone", "mcp-server", "server.js")
 
       if (existsSync(serverJsPath)) {
         // Use the standalone server directly
-        this.logger.debug(`✓ Found standalone server: ${serverJsPath}`)
         this.debugLog(`Global install with standalone server at ${serverJsPath}`)
         mcpCommand = ["node", serverJsPath]
         mcpCwd = dirname(serverJsPath)
@@ -1607,7 +1400,6 @@ export class DevEnvironment {
 
         if (existsSync(startProdScript)) {
           // Use the production script
-          this.logger.debug(`✓ Found start-production.mjs`)
           this.debugLog(`Global install with start-production.mjs script`)
           mcpCommand = ["node", startProdScript]
           mcpCwd = mcpServerPath
@@ -1616,18 +1408,15 @@ export class DevEnvironment {
           const dev3000NodeModules = join(mcpServerPath, "..", "..", "node_modules")
           const nextBinPath = join(dev3000NodeModules, ".bin", "next")
 
-          this.logger.debug(`Searching for Next.js binary: ${nextBinPath}`)
           this.debugLog(`Looking for Next.js at: ${nextBinPath}`)
 
           if (existsSync(nextBinPath)) {
             // Found Next.js in the dev3000 package
-            this.logger.debug(`✓ Found Next.js binary`)
             this.debugLog(`Global install with Next.js found at ${nextBinPath}`)
             mcpCommand = [nextBinPath, "start"]
             mcpCwd = mcpServerPath
           } else {
             // Fallback to npx with the exact version we built with
-            this.logger.debug(`Using npx fallback`)
             this.debugLog(`Global install with pre-built server - using npx next start`)
             mcpCommand = ["npx", "--yes", "next@15.5.1-canary.30", "start"]
             mcpCwd = mcpServerPath
@@ -1637,26 +1426,18 @@ export class DevEnvironment {
     } else {
       // Non-global or non-pre-built: use package manager
       const packageManagerForRun = detectPackageManagerForRun()
-      this.logger.debug(`Using package manager: ${packageManagerForRun}`)
       this.debugLog(`Using package manager: ${packageManagerForRun}`)
       mcpCommand = [packageManagerForRun, "run", "start"]
       mcpCwd = actualWorkingDir
     }
 
-    this.logger.info(`Starting MCP server: ${mcpCommand.join(" ")}`)
-    this.logger.debug(`Working directory: ${mcpCwd}`)
     this.debugLog(`MCP server command: ${mcpCommand.join(" ")}`)
     this.debugLog(`MCP server cwd: ${mcpCwd}`)
 
     // Get CDP URL for MCP orchestration
     const cdpUrl = this.cdpMonitor?.getCdpUrl() || null
 
-    if (cdpUrl) {
-      this.logger.debug(`CDP URL for MCP orchestration: ${cdpUrl}`)
-    }
-
     // Start MCP server as a true background singleton process
-    this.logger.debug("Spawning MCP server process...")
     this.mcpServerProcess = spawn(mcpCommand[0], mcpCommand.slice(1), {
       stdio: ["ignore", "pipe", "pipe"],
       detached: true, // Run independently of parent process
@@ -1671,16 +1452,9 @@ export class DevEnvironment {
       }
     })
 
-    if (this.mcpServerProcess.pid) {
-      this.logger.info(`✓ MCP server process started (PID: ${this.mcpServerProcess.pid})`)
-    } else {
-      this.logger.warn("MCP server process spawned but PID unknown")
-    }
-
     // Unref the process so it continues running after parent exits
     this.mcpServerProcess.unref()
 
-    this.logger.debug("MCP server running as detached background service")
     this.debugLog("MCP server process spawned as singleton background service")
 
     // Log MCP server output to separate file for debugging
@@ -1717,7 +1491,7 @@ export class DevEnvironment {
       this.debugLog(`MCP server process exited with code ${code}`)
       // Only show exit messages for unexpected failures, not restarts
       if (code !== 0 && code !== null) {
-        this.fileLogger.log("server", `MCP server process exited with code ${code}`)
+        this.logger.log("server", `MCP server process exited with code ${code}`)
       }
     })
 
@@ -1727,39 +1501,29 @@ export class DevEnvironment {
   private async waitForServer(): Promise<boolean> {
     const maxAttempts = 30
     let attempts = 0
-    const serverUrl = `http://localhost:${this.options.port}`
+    const port = this.options.port
     const startTime = Date.now()
 
-    this.debugLog(`Starting server readiness check for ${serverUrl}`)
+    this.debugLog(`Starting server readiness check for port ${port}`)
 
     while (attempts < maxAttempts) {
       const attemptStartTime = Date.now()
       try {
-        this.debugLog(`Server check attempt ${attempts + 1}/${maxAttempts}: ${serverUrl}`)
+        this.debugLog(`Server check attempt ${attempts + 1}/${maxAttempts}: checking port ${port}`)
 
-        const response = await fetch(serverUrl, {
-          method: "HEAD",
-          signal: AbortSignal.timeout(2000)
-        })
+        // Check if port is in use (server is listening) without making HTTP requests
+        const portInUse = !(await isPortAvailable(port))
 
         const attemptTime = Date.now() - attemptStartTime
-        this.debugLog(`Server responded with status ${response.status} in ${attemptTime}ms`)
 
-        if (
-          response.ok ||
-          response.status === 404 ||
-          response.status === 405 ||
-          response.status === 500 ||
-          response.status === 503
-        ) {
+        if (portInUse) {
           const totalTime = Date.now() - startTime
-          this.debugLog(`Server is ready! Total wait time: ${totalTime}ms (${attempts + 1} attempts)`)
           this.debugLog(
-            `Status ${response.status} indicates server is running (200=OK, 404=Not Found, 405=Method Not Allowed, 500=App Error, 503=Service Unavailable)`
+            `Server is ready! Port ${port} is listening. Total wait time: ${totalTime}ms (${attempts + 1} attempts)`
           )
           return true
         } else {
-          this.debugLog(`Server responded with non-OK status: ${response.status}, continuing to wait`)
+          this.debugLog(`Port ${port} not yet in use after ${attemptTime}ms`)
         }
       } catch (error) {
         const attemptTime = Date.now() - attemptStartTime
@@ -2266,82 +2030,10 @@ export class DevEnvironment {
     try {
       await this.startCDPMonitoring()
     } catch (error) {
-      // Detailed error reporting for CDP connection failures
-      const cdpUrl = process.env.DEV3000_CDP_URL
-      const skipLaunch = process.env.DEV3000_CDP_SKIP_LAUNCH === "1"
-      const externalCdpConfigured = cdpUrl && skipLaunch
-
-      console.log(chalk.red("\n════════════════════════════════════════════════════════════════"))
-      console.log(chalk.red("⚠️  CDP MONITORING SETUP FAILED"))
-      console.log(chalk.red("════════════════════════════════════════════════════════════════\n"))
-
-      console.log(chalk.yellow("📋 CDP Configuration:"))
-      console.log(chalk.cyan(`   DEV3000_CDP_URL: ${cdpUrl || "(not set)"}`))
-      console.log(chalk.cyan(`   DEV3000_CDP_SKIP_LAUNCH: ${skipLaunch ? "1 (enabled)" : "(not set)"}`))
-      console.log(chalk.cyan(`   External CDP Mode: ${externalCdpConfigured ? "Yes" : "No"}`))
-      console.log("")
-
-      console.log(chalk.yellow("❌ Error Details:"))
-      if (error instanceof Error) {
-        console.log(chalk.red(`   ${error.message}`))
-        if (error.stack) {
-          console.log(chalk.gray(`   Stack: ${error.stack.split("\n").slice(0, 3).join("\n   ")}`))
-        }
-      } else {
-        console.log(chalk.red(`   ${error}`))
-      }
-      console.log("")
-
-      if (externalCdpConfigured) {
-        // External CDP configured (Docker/WSL2 mode)
-        console.log(chalk.yellow("🔍 Troubleshooting External CDP (Docker/WSL2):"))
-        console.log(chalk.cyan("   1. Verify Chrome is running on host with CDP enabled:"))
-        console.log(
-          chalk.white(`      Windows: chrome.exe --remote-debugging-port=9222 --remote-debugging-address=0.0.0.0`)
-        )
-        console.log(
-          chalk.white(`      Linux/Mac: google-chrome --remote-debugging-port=9222 --remote-debugging-address=0.0.0.0`)
-        )
-        console.log("")
-        console.log(chalk.cyan("   2. Test CDP connectivity from container:"))
-        console.log(
-          chalk.white(`      docker exec -it <container> curl -v http://host.docker.internal:9222/json/version`)
-        )
-        console.log("")
-        console.log(chalk.cyan("   3. Check network configuration:"))
-        console.log(chalk.white(`      - Ensure host.docker.internal resolves correctly`))
-        console.log(chalk.white(`      - Verify firewall allows port 9222`))
-        console.log(chalk.white(`      - Check Docker network mode (bridge/host)`))
-        console.log("")
-        console.log(chalk.cyan("   4. Verify Chrome CDP endpoint accessibility:"))
-        console.log(chalk.white(`      curl http://localhost:9222/json/version  # from host`))
-        console.log("")
-        console.log(chalk.yellow("ℹ️  Continuing in servers-only mode (no browser monitoring)"))
-        console.log(
-          chalk.cyan("📝 Server logs will still be captured, but browser console/network logs will not be available")
-        )
-        console.log(chalk.cyan("🖥️  Use Chrome DevTools or browser extensions for client-side debugging"))
-        console.log(chalk.red("\n════════════════════════════════════════════════════════════════\n"))
-        return
-      } else {
-        // Local mode (Chrome should be launched automatically)
-        console.log(chalk.yellow("🔍 Troubleshooting Local Chrome Launch:"))
-        console.log(chalk.cyan("   1. Chrome installation paths checked:"))
-        console.log(chalk.white(`      - Chrome not found in standard locations`))
-        console.log("")
-        console.log(chalk.cyan("   2. For Docker/WSL2 environments, configure external CDP:"))
-        console.log(chalk.white(`      export DEV3000_CDP_URL="http://host.docker.internal:9222"`))
-        console.log(chalk.white(`      export DEV3000_CDP_SKIP_LAUNCH="1"`))
-        console.log("")
-        console.log(chalk.cyan("   3. Or use servers-only mode:"))
-        console.log(chalk.white(`      dev3000 --servers-only`))
-        console.log("")
-        console.log(chalk.red("❌ CDP monitoring is critical in local mode - shutting down"))
-        console.log(chalk.red("════════════════════════════════════════════════════════════════\n"))
-        // CDP monitoring is critical - shutdown if it fails (only if not using external CDP)
-        this.gracefulShutdown()
-        throw error
-      }
+      console.error(chalk.red("⚠️ CDP monitoring setup failed:"), error)
+      // CDP monitoring is critical - shutdown if it fails
+      this.gracefulShutdown()
+      throw error
     }
   }
 
@@ -2358,14 +2050,13 @@ export class DevEnvironment {
     }
 
     // Initialize CDP monitor with enhanced logging - use MCP public directory for screenshots
-    this.logger.debug("Initializing CDP monitor")
     this.cdpMonitor = new CDPMonitor(
       this.options.profileDir,
       this.mcpPublicDir,
       (_source: string, message: string) => {
-        this.fileLogger.log("browser", message)
+        this.logger.log("browser", message)
       },
-      this.logger, // Pass structured logger
+      this.options.debug,
       this.options.browser,
       this.options.pluginReactScan,
       this.options.port, // App server port to monitor
@@ -2376,14 +2067,14 @@ export class DevEnvironment {
       // Set up callback for when Chrome window is manually closed
       this.cdpMonitor.setOnWindowClosedCallback(() => {
         this.debugLog("Chrome window closed callback triggered, initiating graceful shutdown")
-        this.fileLogger.log("browser", "[CDP] Chrome window was manually closed, shutting down d3k")
+        this.logger.log("browser", "[CDP] Chrome window was manually closed, shutting down d3k")
         // Trigger graceful shutdown
         this.gracefulShutdown()
       })
 
       // Start CDP monitoring
       await this.cdpMonitor.start()
-      this.fileLogger.log("browser", "[CDP] Chrome launched with DevTools Protocol monitoring")
+      this.logger.log("browser", "[CDP] Chrome launched with DevTools Protocol monitoring")
 
       // Update session info with CDP URL and Chrome PIDs now that we have them
       const projectName = getProjectName()
@@ -2396,12 +2087,12 @@ export class DevEnvironment {
           cdpUrl,
           (msg: string) => {
             // Pass through CDP messages directly - they already have their own category tags
-            this.fileLogger.log("browser", msg)
+            this.logger.log("browser", msg)
           },
           this.options.port.toString()
         )
         await this.screencastManager.start()
-        // this.fileLogger.log("browser", "[Screencast] Auto-capture enabled for navigation events")
+        // this.logger.log("browser", "[Screencast] Auto-capture enabled for navigation events")
       }
 
       if (cdpUrl || chromePids.length > 0) {
@@ -2419,10 +2110,10 @@ export class DevEnvironment {
 
       // Navigate to the app
       await this.cdpMonitor.navigateToApp(this.options.port)
-      this.fileLogger.log("browser", `[CDP] Navigated to http://localhost:${this.options.port}`)
+      this.logger.log("browser", `[CDP] Navigated to http://localhost:${this.options.port}`)
     } catch (error) {
       // Log error and throw to trigger graceful shutdown
-      this.fileLogger.log("browser", `[CDP] Failed to start CDP monitoring: ${error}`)
+      this.logger.log("browser", `[CDP] Failed to start CDP monitoring: ${error}`)
       throw error
     }
   }
@@ -2663,7 +2354,7 @@ export class DevEnvironment {
 
     // REMOVED: No longer clean up MCP config files on shutdown
     // This was causing Claude Code instances to crash when dev3000 was killed
-    // Now we keep .mcp.json, .cursor/mcp.json, and .opencode.json configured
+    // Now we keep .mcp.json, .cursor/mcp.json, and opencode.json configured
     // for the next dev3000 run, providing a better developer experience
 
     // Kill processes on both ports
@@ -2677,11 +2368,6 @@ export class DevEnvironment {
 
         findPids.stdout?.on("data", (data) => {
           pidsOutput += data.toString()
-        })
-
-        findPids.on("error", (err) => {
-          // lsof not available (e.g., Windows, containers)
-          this.debugLog(`lsof not available for shutdown: ${err.message}`)
         })
 
         return new Promise<void>((resolve) => {

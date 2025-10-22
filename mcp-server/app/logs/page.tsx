@@ -44,6 +44,10 @@ async function getLogFiles() {
         }
       })
       .sort((a, b) => b.mtime.getTime() - a.mtime.getTime())
+      .map((file) => ({
+        ...file,
+        mtime: file.mtime.toISOString() // Convert to string after sorting
+      }))
 
     return {
       files: logFiles,

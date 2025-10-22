@@ -4,11 +4,43 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [0.0.95] - 2025-10-17
+## [0.0.99] - 2025-10-22
+
+**Feature Release**
+
+- 🎯 **Framework-Specific MCP Support**: Automatically detects project framework and spawns the appropriate MCP server
+  - Next.js projects → `next-devtools-mcp`
+  - Svelte projects → `@sveltejs/mcp-server-svelte`
+  - Other projects → No framework-specific MCP (only dev3000 + chrome-devtools)
+- 🔍 **Smart Framework Detection**: Detects frameworks via config files (next.config.\*, svelte.config.js) and package.json dependencies
+- 🚀 **Next.js 16 Compatibility**: Updated to Next.js 16.0.0-canary with proper serialization for Server/Client Component boundaries
+
+## [0.0.98] - 2025-10-22
+
+**Feature Release**
+
+- 🎯 **Framework-Specific MCP Support**: Automatically detects project framework and spawns the appropriate MCP server
+  - Next.js projects → `next-devtools-mcp`
+  - Svelte projects → `@sveltejs/mcp-server-svelte`
+  - Other projects → No framework-specific MCP (only dev3000 + chrome-devtools)
+- 🔍 **Smart Framework Detection**: Detects frameworks via config files (next.config.\*, svelte.config.js) and package.json dependencies
+- 🚀 **Next.js 16 Compatibility**: Updated to Next.js 16.0.0-canary with proper serialization for Server/Client Component boundaries
+- 🐛 **Fixed 3 bugs for improved stability**
+
+## [0.0.97] - 2025-10-20
 
 **Patch Release**
 
-- 🔧 **Auto-Configuration for AI CLIs**: Automatically writes `.mcp.json` (Claude Code) and `.cursor/mcp.json` (Cursor) so MCP servers are instantly available
+- 🚨 **Critical Fix**: Detect when server switches ports and update navigation - Chrome no longer gets stuck on loading page
+- 🎨 **Markdown Rendering**: Changelog pages now properly render markdown formatting (**bold**, [links](url)) in highlights
+- 🔧 **Shared Utilities**: Extracted markdown parsing into reusable functions for consistency
+
+## [0.0.96] - 2025-10-18
+
+**Patch Release**
+
+- 🏥 **Non-Intrusive Health Checks**: Replaced HTTP HEAD requests with simple TCP port checks - no more interfering with auth middleware or polluting server logs
+- ✨ **Better Compatibility**: Works seamlessly with apps using redirect-based auth without causing infinite loops
 
 ## [0.0.95] - 2025-10-17
 

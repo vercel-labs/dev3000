@@ -20,7 +20,7 @@
     "commander": "^14.0.1",
     "lucide-react": "^0.544.0",
     "mcp-handler": "^1.0.2",
-    "next": "15.6.0-canary.31",
+    "next": "16.0.0-canary.18",
     "pixelmatch": "^7.1.0",
     "pngjs": "^7.0.0",
     "react": "19.1.1",
