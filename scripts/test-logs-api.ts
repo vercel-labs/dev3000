@@ -104,6 +104,52 @@ async function runTests() {
     }
     console.log("✅ Logs page working")
 
+    // Test 5: Verify screenshot URLs in log data via API
+    console.log("\n🖼️ Testing screenshot URLs in log entries...")
+    // Fetch actual log content to check for screenshot entries
+    if (currentLogFile) {
+      const logContentResponse = await fetch(
+        `${mcpUrl}/api/logs/tail?file=${encodeURIComponent(currentLogFile)}&lines=1000`
+      )
+      if (logContentResponse.ok) {
+        const logContent = await logContentResponse.text()
+        const screenshotLines = logContent.split("\n").filter((line) => line.includes("[SCREENSHOT]"))
+
+        if (screenshotLines.length > 0) {
+          console.log(`Found ${screenshotLines.length} screenshot entries in logs`)
+          for (const line of screenshotLines.slice(0, 3)) {
+            // Extract screenshot URL from log line (non-greedy match up to newline or end)
+            const urlMatch = line.match(/\[SCREENSHOT\] (https?:\/\/[^\s\n]+)/)
+            if (urlMatch) {
+              const screenshotUrl = urlMatch[1].trim()
+              console.log(`  Checking screenshot URL: ${screenshotUrl}`)
+
+              // Check for doubled protocol or path issues
+              if (screenshotUrl.includes("http://") && screenshotUrl.match(/http:\/\//g)?.length > 1) {
+                throw new Error(`Screenshot URL has doubled protocol: ${screenshotUrl}`)
+              }
+              if (
+                screenshotUrl.includes("/api/screenshots/") &&
+                screenshotUrl.match(/\/api\/screenshots\//g)?.length > 1
+              ) {
+                throw new Error(`Screenshot URL has doubled path: ${screenshotUrl}`)
+              }
+
+              // Try to fetch the screenshot
+              const screenshotCheck = await fetch(screenshotUrl)
+              if (screenshotCheck.status !== 200 && screenshotCheck.status !== 404) {
+                throw new Error(`Screenshot URL ${screenshotUrl} returned unexpected status: ${screenshotCheck.status}`)
+              }
+              console.log(`  ✓ Screenshot URL valid (${screenshotCheck.status})`)
+            }
+          }
+          console.log("✅ Screenshot URLs are correctly formatted")
+        } else {
+          console.log("ℹ️ No screenshot entries found in current log file")
+        }
+      }
+    }
+
     console.log("\n🎉 All tests passed!")
   } catch (error) {
     console.error("\n❌ Test failed:", error)
