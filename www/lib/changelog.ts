@@ -12,8 +12,13 @@ export const changelog: Release[] = [
   {
     version: "0.0.98",
     date: "2025-10-22",
-    type: "patch",
-    highlights: ["🐛 **Fixed 3 bugs for improved stability**"]
+    type: "minor",
+    highlights: [
+      "🎯 **Framework-Specific MCP Support**: Automatically detects project framework and spawns the appropriate MCP server (Next.js → `next-devtools-mcp`, Svelte → `@sveltejs/mcp-server-svelte`)",
+      "🔍 **Smart Framework Detection**: Detects frameworks via config files and package.json dependencies",
+      "🚀 **Next.js 16 Compatibility**: Updated to Next.js 16.0.0-canary with proper serialization fixes",
+      "🐛 **Fixed 3 bugs for improved stability**"
+    ]
   },
 
   {
