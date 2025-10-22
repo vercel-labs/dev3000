@@ -346,17 +346,16 @@ async function ensureOpenCodeMcpServers(
   _enableNextjsMcp: boolean
 ): Promise<void> {
   try {
-    const settingsPath = join(process.cwd(), ".opencode.json")
+    const settingsPath = join(process.cwd(), "opencode.json")
 
     // Read or create settings - OpenCode uses "mcp" not "mcpServers"
     let settings: {
       mcp?: Record<
         string,
         {
-          type: "local"
-          command: string[]
+          type?: "remote"
+          url?: string
           enabled?: boolean
-          environment?: Record<string, string>
         }
       >
       [key: string]: unknown
@@ -380,8 +379,8 @@ async function ensureOpenCodeMcpServers(
     // spawns and connects to chrome-devtools-mcp and next-devtools-mcp as stdio processes
     if (!settings.mcp[MCP_NAMES.DEV3000]) {
       settings.mcp[MCP_NAMES.DEV3000] = {
-        type: "local",
-        command: ["npx", "@modelcontextprotocol/inspector", `http://localhost:${mcpPort}/mcp`],
+        type: "remote",
+        url: `http://localhost:${mcpPort}/mcp`,
         enabled: true
       }
       added = true
