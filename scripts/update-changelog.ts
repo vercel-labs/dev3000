@@ -175,37 +175,37 @@ function extractHighlights(commits: Commit[]): string[] {
   // Generate concrete highlights based on detected features
   if (detectedFeatures.cls) {
     highlights.push(
-      "🎬 **Passive Screencast Capture**: Automatically records page loads and navigations for performance analysis"
+      "**Passive Screencast Capture**: Automatically records page loads and navigations for performance analysis"
     )
-    highlights.push("🎯 **CLS Detection**: Watch frame-by-frame video of layout shifts with precise element tracking")
+    highlights.push("**CLS Detection**: Watch frame-by-frame video of layout shifts with precise element tracking")
   }
 
   if (detectedFeatures.mcp) {
     highlights.push(
-      "🔧 **Auto-Configuration for AI CLIs**: Automatically writes `.mcp.json` (Claude Code) and `.cursor/mcp.json` (Cursor) so MCP servers are instantly available"
+      "**Auto-Configuration for AI CLIs**: Automatically writes `.mcp.json` (Claude Code) and `.cursor/mcp.json` (Cursor) so MCP servers are instantly available"
     )
   }
 
   if (detectedFeatures.chrome) {
     highlights.push(
-      "⚡ **Intelligent Chrome Launch**: Replaced fixed timeout with smart polling - dev3000 starts as soon as Chrome is ready instead of waiting arbitrarily"
+      "**Intelligent Chrome Launch**: Replaced fixed timeout with smart polling - dev3000 starts as soon as Chrome is ready instead of waiting arbitrarily"
     )
   }
 
   if (detectedFeatures.delegation) {
     highlights.push(
-      "🤖 **Augmented Delegation**: dev3000 now intelligently delegates to chrome-devtools MCP when detected, creating a powerful debugging orchestration layer"
+      "**Augmented Delegation**: dev3000 now intelligently delegates to chrome-devtools MCP when detected, creating a powerful debugging orchestration layer"
     )
   }
 
   if (detectedFeatures.cdp) {
     highlights.push(
-      "📡 **CDP URL Sharing**: Shares Chrome DevTools Protocol URL with other MCPs to prevent duplicate browser instances"
+      "**CDP URL Sharing**: Shares Chrome DevTools Protocol URL with other MCPs to prevent duplicate browser instances"
     )
   }
 
   if (detectedFeatures.tui) {
-    highlights.push("🎨 **Improved TUI**: Better header and status line rendering for narrow terminal windows")
+    highlights.push("**Improved TUI**: Better header and status line rendering for narrow terminal windows")
   }
 
   if (detectedFeatures.browserSupport) {
@@ -217,27 +217,27 @@ function extractHighlights(commits: Commit[]): string[] {
       .map((name) => name.charAt(0).toUpperCase() + name.slice(1).toLowerCase())
     const uniqueBrowsers = [...new Set(browserNames)]
     if (uniqueBrowsers.length > 0) {
-      highlights.push(`🌐 **Browser Support**: Added support for ${uniqueBrowsers.join(", ")} browsers`)
+      highlights.push(`**Browser Support**: Added support for ${uniqueBrowsers.join(", ")} browsers`)
     } else {
-      highlights.push("🌐 **Expanded Browser Support**: Added support for additional Chromium-based browsers")
+      highlights.push("**Expanded Browser Support**: Added support for additional Chromium-based browsers")
     }
   }
 
   if (detectedFeatures.errorPrioritization) {
     highlights.push(
-      "🎯 **Smart Error Prioritization**: Automatically scores and ranks errors by severity - build errors (1000+), server errors (500+), browser errors (300+), with modifiers for recency and reproducibility"
+      "**Smart Error Prioritization**: Automatically scores and ranks errors by severity - build errors (1000+), server errors (500+), browser errors (300+), with modifiers for recency and reproducibility"
     )
   }
 
   if (detectedFeatures.prCreation) {
     highlights.push(
-      "🚀 **One-PR-Per-Run**: Creates focused single-issue PRs for the highest priority error - no more overwhelming multi-fix PRs"
+      "**One-PR-Per-Run**: Creates focused single-issue PRs for the highest priority error - no more overwhelming multi-fix PRs"
     )
   }
 
   if (detectedFeatures.portDetection) {
     highlights.push(
-      "⚡ **Improved Port Detection**: Works with non-standard ports (like Svelte's 5173) and shows loading spinner until port is confirmed"
+      "**Improved Port Detection**: Works with non-standard ports (like Svelte's 5173) and shows loading spinner until port is confirmed"
     )
   }
 
@@ -260,7 +260,7 @@ function extractHighlights(commits: Commit[]): string[] {
         .join(", ")
       highlights.push(`Resolved GitHub issues ${issueLinks}`)
     } else if (analysis.fixes.length >= 3) {
-      highlights.push(`🐛 **Fixed ${analysis.fixes.length} bugs for improved stability**`)
+      highlights.push(`**Fixed ${analysis.fixes.length} bugs for improved stability**`)
     } else {
       highlights.push("Bug fixes improve overall reliability")
     }

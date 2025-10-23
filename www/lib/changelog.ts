@@ -14,9 +14,9 @@ export const changelog: Release[] = [
     date: "2025-10-23",
     type: "patch",
     highlights: [
-      "🎯 **Smart Error Prioritization**: Automatically scores and ranks errors by severity - build errors (1000+), server errors (500+), browser errors (300+), with modifiers for recency and reproducibility",
-      "🚀 **One-PR-Per-Run**: Creates focused single-issue PRs for the highest priority error - no more overwhelming multi-fix PRs",
-      "⚡ **Improved Port Detection**: Works with non-standard ports (like Svelte's 5173) and shows loading spinner until port is confirmed"
+      "**Smart Error Prioritization**: Automatically scores and ranks errors by severity - build errors (1000+), server errors (500+), browser errors (300+), with modifiers for recency and reproducibility",
+      "**One-PR-Per-Run**: Creates focused single-issue PRs for the highest priority error - no more overwhelming multi-fix PRs",
+      "**Improved Port Detection**: Works with non-standard ports (like Svelte's 5173) and shows loading spinner until port is confirmed"
     ]
   },
 
@@ -25,10 +25,10 @@ export const changelog: Release[] = [
     date: "2025-10-23",
     type: "patch",
     highlights: [
-      "🎬 **Passive Screencast Capture**: Automatically records page loads and navigations for performance analysis",
-      "🎯 **CLS Detection**: Watch frame-by-frame video of layout shifts with precise element tracking",
-      "🎨 **Improved TUI**: Better header and status line rendering for narrow terminal windows",
-      "🐛 **Fixed 7 bugs for improved stability**"
+      "**Passive Screencast Capture**: Automatically records page loads and navigations for performance analysis",
+      "**CLS Detection**: Watch frame-by-frame video of layout shifts with precise element tracking",
+      "**Improved TUI**: Better header and status line rendering for narrow terminal windows",
+      "**Fixed 7 bugs for improved stability**"
     ]
   },
 
@@ -36,7 +36,7 @@ export const changelog: Release[] = [
     version: "0.0.101",
     date: "2025-10-22",
     type: "patch",
-    highlights: ["🐛 **Fixed 3 bugs for improved stability**"]
+    highlights: ["**Fixed 3 bugs for improved stability**"]
   },
 
   {
@@ -44,8 +44,8 @@ export const changelog: Release[] = [
     date: "2025-10-22",
     type: "patch",
     highlights: [
-      "🐛 **Critical Fix**: Added missing 'use client' directive to Button component for Next.js 16 compatibility",
-      "🔧 **Logs Viewer**: Fixed 'Element type is invalid' error that broke the logs viewer in v0.0.99"
+      "**Critical Fix**: Added missing 'use client' directive to Button component for Next.js 16 compatibility",
+      "**Logs Viewer**: Fixed 'Element type is invalid' error that broke the logs viewer in v0.0.99"
     ]
   },
 
@@ -54,9 +54,9 @@ export const changelog: Release[] = [
     date: "2025-10-22",
     type: "minor",
     highlights: [
-      "🎯 **Framework-Specific MCP Support**: Automatically detects project framework and spawns the appropriate MCP server (Next.js → `next-devtools-mcp`, Svelte → `@sveltejs/mcp-server-svelte`)",
-      "🔍 **Smart Framework Detection**: Detects frameworks via config files and package.json dependencies",
-      "🚀 **Next.js 16 Compatibility**: Updated to Next.js 16.0.0-canary with proper serialization fixes"
+      "**Framework-Specific MCP Support**: Automatically detects project framework and spawns the appropriate MCP server (Next.js → `next-devtools-mcp`, Svelte → `@sveltejs/mcp-server-svelte`)",
+      "**Smart Framework Detection**: Detects frameworks via config files and package.json dependencies",
+      "**Next.js 16 Compatibility**: Updated to Next.js 16.0.0-canary with proper serialization fixes"
     ]
   },
 
@@ -64,7 +64,7 @@ export const changelog: Release[] = [
     version: "0.0.98",
     date: "2025-10-22",
     type: "patch",
-    highlights: ["🐛 **Fixed 3 bugs for improved stability**"]
+    highlights: ["**Fixed 3 bugs for improved stability**"]
   },
 
   {
@@ -72,9 +72,9 @@ export const changelog: Release[] = [
     date: "2025-10-20",
     type: "patch",
     highlights: [
-      "🚨 **Critical Fix**: Detect when server switches ports and update navigation - Chrome no longer gets stuck on loading page",
-      "🎨 **Markdown Rendering**: Changelog pages now properly render markdown formatting (**bold**, [links](url)) in highlights",
-      "🔧 **Shared Utilities**: Extracted markdown parsing into reusable functions for consistency"
+      "**Critical Fix**: Detect when server switches ports and update navigation - Chrome no longer gets stuck on loading page",
+      "**Markdown Rendering**: Changelog pages now properly render markdown formatting (**bold**, [links](url)) in highlights",
+      "**Shared Utilities**: Extracted markdown parsing into reusable functions for consistency"
     ]
   },
 
@@ -83,8 +83,8 @@ export const changelog: Release[] = [
     date: "2025-10-18",
     type: "patch",
     highlights: [
-      "🏥 **Non-Intrusive Health Checks**: Replaced HTTP HEAD requests with simple TCP port checks - no more interfering with auth middleware or polluting server logs",
-      "✨ **Better Compatibility**: Works seamlessly with apps using redirect-based auth without causing infinite loops"
+      "**Non-Intrusive Health Checks**: Replaced HTTP HEAD requests with simple TCP port checks - no more interfering with auth middleware or polluting server logs",
+      "**Better Compatibility**: Works seamlessly with apps using redirect-based auth without causing infinite loops"
     ]
   },
 
@@ -93,8 +93,8 @@ export const changelog: Release[] = [
     date: "2025-10-17",
     type: "patch",
     highlights: [
-      "🔧 **Bun Package Manager Support**: Added full support for Bun package manager (bun.lockb detection, bunx for MCP spawning)",
-      "🔌 **Next.js DevTools MCP Integration**: Updated to use standalone next-devtools-mcp as stdio process with automatic spawning and lifecycle management",
+      "**Bun Package Manager Support**: Added full support for Bun package manager (bun.lockb detection, bunx for MCP spawning)",
+      "**Next.js DevTools MCP Integration**: Updated to use standalone next-devtools-mcp as stdio process with automatic spawning and lifecycle management",
       "Resolves [#8](https://github.com/vercel-labs/dev3000/issues/8)"
     ]
   },
@@ -104,7 +104,7 @@ export const changelog: Release[] = [
     date: "2025-10-16",
     type: "patch",
     highlights: [
-      "🔧 **Auto-Configuration for AI CLIs**: Automatically writes `.mcp.json` (Claude Code) and `.cursor/mcp.json` (Cursor) so MCP servers are instantly available"
+      "**Auto-Configuration for AI CLIs**: Automatically writes `.mcp.json` (Claude Code) and `.cursor/mcp.json` (Cursor) so MCP servers are instantly available"
     ]
   },
 
@@ -113,8 +113,8 @@ export const changelog: Release[] = [
     date: "2025-10-16",
     type: "patch",
     highlights: [
-      "🔧 **Auto-Configuration for AI CLIs**: Automatically writes `.mcp.json` (Claude Code) and `.cursor/mcp.json` (Cursor) so MCP servers are instantly available",
-      "🤖 **Augmented Delegation**: dev3000 now intelligently delegates to chrome-devtools MCP when detected, creating a powerful debugging orchestration layer",
+      "**Auto-Configuration for AI CLIs**: Automatically writes `.mcp.json` (Claude Code) and `.cursor/mcp.json` (Cursor) so MCP servers are instantly available",
+      "**Augmented Delegation**: dev3000 now intelligently delegates to chrome-devtools MCP when detected, creating a powerful debugging orchestration layer",
       "Bug fixes improve overall reliability"
     ]
   },
@@ -124,9 +124,9 @@ export const changelog: Release[] = [
     date: "2025-10-11",
     type: "patch",
     highlights: [
-      "🎬 **Passive Screencast Capture**: Automatically records page loads and navigations for performance analysis",
-      "🎯 **CLS Detection**: Watch frame-by-frame video of layout shifts with precise element tracking",
-      "🎨 **Improved TUI**: Better header and status line rendering for narrow terminal windows"
+      "**Passive Screencast Capture**: Automatically records page loads and navigations for performance analysis",
+      "**CLS Detection**: Watch frame-by-frame video of layout shifts with precise element tracking",
+      "**Improved TUI**: Better header and status line rendering for narrow terminal windows"
     ]
   },
 
@@ -135,7 +135,7 @@ export const changelog: Release[] = [
     date: "2025-10-10",
     type: "patch",
     highlights: [
-      "🔧 **Auto-Configuration for AI CLIs**: Automatically writes `.mcp.json` (Claude Code) and `.cursor/mcp.json` (Cursor) so MCP servers are instantly available",
+      "**Auto-Configuration for AI CLIs**: Automatically writes `.mcp.json` (Claude Code) and `.cursor/mcp.json` (Cursor) so MCP servers are instantly available",
       "Resolved GitHub issues [#12](https://github.com/anthropics/claude-code/issues/12)"
     ]
   },
@@ -145,8 +145,8 @@ export const changelog: Release[] = [
     date: "2025-10-10",
     type: "patch",
     highlights: [
-      "🎬 **Passive Screencast Capture**: Automatically records page loads and navigations for performance analysis",
-      "🎯 **CLS Detection**: Watch frame-by-frame video of layout shifts with precise element tracking",
+      "**Passive Screencast Capture**: Automatically records page loads and navigations for performance analysis",
+      "**CLS Detection**: Watch frame-by-frame video of layout shifts with precise element tracking",
       "Bug fixes improve overall reliability"
     ]
   },
@@ -156,7 +156,7 @@ export const changelog: Release[] = [
     date: "2025-10-10",
     type: "patch",
     highlights: [
-      "🔧 **Auto-Configuration for AI CLIs**: Automatically writes `.mcp.json` (Claude Code) and `.cursor/mcp.json` (Cursor) so MCP servers are instantly available"
+      "**Auto-Configuration for AI CLIs**: Automatically writes `.mcp.json` (Claude Code) and `.cursor/mcp.json` (Cursor) so MCP servers are instantly available"
     ]
   },
 
@@ -186,11 +186,11 @@ export const changelog: Release[] = [
     date: "2025-10-09",
     type: "patch",
     highlights: [
-      "🎬 **Passive Screencast Capture**: Automatically records page loads and navigations for performance analysis",
-      "🎯 **CLS Detection**: Watch frame-by-frame video of layout shifts with precise element tracking",
-      "🔧 **Auto-Configuration for AI CLIs**: Automatically writes `.mcp.json` (Claude Code) and `.cursor/mcp.json` (Cursor) so MCP servers are instantly available",
-      "🤖 **Augmented Delegation**: dev3000 now intelligently delegates to chrome-devtools MCP when detected, creating a powerful debugging orchestration layer",
-      "🐛 **Fixed 3 bugs for improved stability**"
+      "**Passive Screencast Capture**: Automatically records page loads and navigations for performance analysis",
+      "**CLS Detection**: Watch frame-by-frame video of layout shifts with precise element tracking",
+      "**Auto-Configuration for AI CLIs**: Automatically writes `.mcp.json` (Claude Code) and `.cursor/mcp.json` (Cursor) so MCP servers are instantly available",
+      "**Augmented Delegation**: dev3000 now intelligently delegates to chrome-devtools MCP when detected, creating a powerful debugging orchestration layer",
+      "**Fixed 3 bugs for improved stability**"
     ]
   },
 
