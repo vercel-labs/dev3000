@@ -28,7 +28,6 @@ export async function GET(_request: Request, { params }: { params: Promise<{ ver
           justifyContent: "center",
           fontFamily: "Inter, system-ui, sans-serif",
           color: "#ffffff",
-          textAlign: "center",
           padding: "60px"
         }}
       >
@@ -98,7 +97,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ ver
             flexDirection: "column",
             gap: "12px",
             maxWidth: "800px",
-            marginBottom: "32px"
+            marginBottom: "32px",
+            textAlign: "left"
           }}
         >
           {release.highlights.slice(0, 3).map((highlight) => (
@@ -107,7 +107,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ ver
               style={{
                 display: "block",
                 fontSize: "16px",
-                color: "#d1d5db"
+                color: "#d1d5db",
+                textAlign: "left"
               }}
             >
               {`• ${stripMarkdown(highlight)}`}
