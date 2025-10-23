@@ -4,6 +4,13 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.105] - 2025-10-23
+
+**Feature Release**
+
+- Simplify changelog generation - remove pattern matching, just use git commit messages directly
+- Update v0.0.104 changelog with proper custom command flag highlight and add pattern for future releases
+
 ## [0.0.104] - 2025-10-23
 
 **Patch Release**
