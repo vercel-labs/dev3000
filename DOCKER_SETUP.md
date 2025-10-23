@@ -835,7 +835,7 @@ Update command for your framework:
 ```yaml
 command: >
   sh -c "
-    pnpm add -g github:automationjp/dev3000#feature/docker-cdp-monitoring &&
+    pnpm add -g github:automationjp/dev3000 &&
     dev3000 --port 3000 --script dev
   "
 ```

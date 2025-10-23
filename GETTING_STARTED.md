@@ -76,7 +76,7 @@ npm install -g github:automationjp/dev3000
 yarn global add github:automationjp/dev3000
 
 # Using bun
-bun install -g dev3000
+bun install -g github:automationjp/dev3000
 ```
 
 Verify installation:
