@@ -67,13 +67,13 @@ Install dev3000 globally to use it across all your projects:
 
 ```bash
 # Using pnpm (recommended)
-pnpm install -g dev3000
+pnpm install -g github:automationjp/dev3000
 
 # Using npm
-npm install -g dev3000
+npm install -g github:automationjp/dev3000
 
 # Using yarn
-yarn global add dev3000
+yarn global add github:automationjp/dev3000
 
 # Using bun
 bun install -g dev3000
@@ -213,9 +213,9 @@ dev3000 works with **any** Next.js project (or React/Vite/Vue project). No speci
 
 1. **Install dev3000 globally** (one-time setup):
    ```bash
-   pnpm install -g dev3000
-   # or: npm install -g dev3000
-   # or: yarn global add dev3000
+   pnpm install -g github:automationjp/dev3000
+   # or: npm install -g github:automationjp/dev3000
+   # or: yarn global add github:automationjp/dev3000
    ```
 
 2. **Navigate to YOUR project**:

@@ -17,8 +17,8 @@ Captures your web app's complete development timeline - server logs, browser eve
 **Never used dev3000?** Start here:
 
 ```bash
-# 1. Install dev3000 globally (one-time setup)
-pnpm install -g dev3000
+# 1. Install dev3000 globally from automationjp/dev3000 (one-time setup)
+pnpm install -g github:automationjp/dev3000
 
 # 2. Go to ANY Next.js/React/Vite project (existing or new)
 cd /path/to/your/project
@@ -45,7 +45,7 @@ dev3000 gives AI complete context: server logs, browser errors, network calls, s
 ### 🐳 For Local Development
 
 ```bash
-pnpm install -g dev3000
+pnpm install -g github:automationjp/dev3000
 dev3000
 ```
 
