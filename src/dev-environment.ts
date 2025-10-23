@@ -1208,6 +1208,26 @@ export class DevEnvironment {
           this.debugLog(`Failed to navigate browser to new port: ${error}`)
         })
       }
+    } else if (!this.portDetected) {
+      // Fallback: detect generic server startup messages when no explicit port is found
+      // This handles test apps and servers that don't output port information
+      const serverStartPatterns = [
+        /server\s+(is\s+)?running/i,
+        /ready\s+(in|on)/i,
+        /listening\s+on/i,
+        /started\s+server/i,
+        /http:\/\/localhost/i
+      ]
+
+      if (serverStartPatterns.some((pattern) => pattern.test(text))) {
+        this.debugLog(`Detected server startup via generic message, using configured port ${this.options.port}`)
+        this.portDetected = true
+
+        // Update TUI header with configured port
+        if (this.tui) {
+          this.tui.updateAppPort(this.options.port)
+        }
+      }
     }
   }
 
