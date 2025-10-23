@@ -3628,7 +3628,7 @@ export async function crawlApp(params: CrawlAppParams) {
       return {
         content: [
           {
-            type: "text",
+            type: "text" as const,
             text: projectName
               ? `❌ No active session found for project "${projectName}". Available projects: ${sessions.map((s) => s.projectName).join(", ") || "none"}`
               : "❌ No active dev3000 sessions found. Start dev3000 first with `d3k` in your project directory."
@@ -3647,7 +3647,7 @@ export async function crawlApp(params: CrawlAppParams) {
       return {
         content: [
           {
-            type: "text",
+            type: "text" as const,
             text: "❌ No Chrome DevTools connection found. Browser monitoring must be active to crawl."
           }
         ]
@@ -3776,7 +3776,7 @@ export async function crawlApp(params: CrawlAppParams) {
     return {
       content: [
         {
-          type: "text",
+          type: "text" as const,
           text: `🕷️ **APP CRAWL COMPLETE**\n\n📊 **SUMMARY:**\n• Base URL: ${baseUrl}\n• Depth: ${depthReached}${depth === "all" ? " (exhaustive)" : ""}\n• Total URLs: ${urls.length}\n\n📍 **DISCOVERED URLs:**\n${urls.map((url) => `• ${url}`).join("\n")}\n\n💡 **NEXT STEPS:**\n• Use fix_my_app to check for errors across all pages\n• Use execute_browser_action to test specific pages\n• Verify all routes are working correctly`
         }
       ]
@@ -3786,7 +3786,7 @@ export async function crawlApp(params: CrawlAppParams) {
     return {
       content: [
         {
-          type: "text",
+          type: "text" as const,
           text: `❌ **CRAWL FAILED**\n\n${error instanceof Error ? error.message : String(error)}`
         }
       ]
