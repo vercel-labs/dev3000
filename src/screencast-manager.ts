@@ -325,9 +325,8 @@ export class ScreencastManager {
         this.logFn(`[CDP] Failed to save metadata - ${error}`)
       }
 
-      const triggerLabel = this.captureTrigger === "navigation" ? "Navigation" : "Load"
       this.logFn(
-        `[CDP] ${triggerLabel} complete - view all frames: http://localhost:${process.env.MCP_PORT || "3684"}/video/${this.currentSessionId}`
+        `[SCREENCAST] View frame analysis: http://localhost:${process.env.MCP_PORT || "3684"}/video/${this.currentSessionId}`
       )
 
       await this.stopScreencast()
@@ -450,9 +449,9 @@ export class ScreencastManager {
           });
 
           observer.observe({ type: 'layout-shift', buffered: true });
-          console.log('[dev3000] CLS observer installed');
+          console.log('CLS observer installed');
         } catch (e) {
-          console.error('[dev3000] Failed to install CLS observer:', e);
+          console.error('Failed to install CLS observer:', e);
         }
       })();
     `

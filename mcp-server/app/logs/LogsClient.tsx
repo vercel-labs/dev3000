@@ -773,11 +773,10 @@ function LogEntryComponent({ entry, darkMode }: { entry: LogEntry; darkMode: boo
       {entry.screenshot && (
         <div className="mt-2">
           <Image
-            src={`/api/screenshots/${entry.screenshot}`}
+            src={entry.screenshot.startsWith("http") ? entry.screenshot : `/api/screenshots/${entry.screenshot}`}
             alt="Screenshot"
-            width={0}
-            height={0}
-            sizes="100vw"
+            width={800}
+            height={600}
             className="w-full h-auto max-w-2xl border rounded shadow-sm"
             style={{ maxHeight: "600px", objectFit: "contain" }}
             unoptimized

@@ -5,7 +5,14 @@ import type { Tool } from "@modelcontextprotocol/sdk/types.js"
 import { createMcpHandler } from "mcp-handler"
 import { z } from "zod"
 import { getMCPClientManager } from "./client-manager"
-import { executeBrowserAction, findComponentSource, fixMyApp, restartDevServer, TOOL_DESCRIPTIONS } from "./tools"
+import {
+  crawlApp,
+  executeBrowserAction,
+  findComponentSource,
+  fixMyApp,
+  restartDevServer,
+  TOOL_DESCRIPTIONS
+} from "./tools"
 
 // Detect available package runner (bunx, npx, pnpm dlx, or fail)
 const getPackageRunner = (): { command: string; args: string[] } | null => {
@@ -499,6 +506,24 @@ const handler = createMcpHandler(
       },
       async (params) => {
         return restartDevServer(params)
+      }
+    )
+
+    // App crawler tool
+    server.tool(
+      "crawl_app",
+      TOOL_DESCRIPTIONS.crawl_app,
+      {
+        depth: z
+          .union([z.number().int().min(1), z.literal("all")])
+          .optional()
+          .describe(
+            "Crawl depth: number (1=homepage only, 2=homepage+next level, etc.) or 'all' for exhaustive (default: 1)"
+          ),
+        projectName: z.string().optional().describe("Project name (if multiple dev3000 instances are running)")
+      },
+      async (params) => {
+        return crawlApp(params)
       }
     )
 

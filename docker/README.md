@@ -1,351 +1,249 @@
 # Dev3000 Docker Setup
 
-This directory contains Docker configuration for running Dev3000 with **YOUR Next.js project** in a containerized environment, with browser automation via Chrome DevTools Protocol (CDP) from the host machine.
-
-**Perfect for Windows users** - Windows requires Docker/WSL2 because CDP doesn't work directly on Windows.
-
-## Architecture
-
-```
-┌────────────────────────────────────┐
-│ Host (WSL/Linux/macOS/Windows)    │
-│  Chrome :9222 (CDP)               │
-│       ↑                            │
-│       │ CDP WebSocket              │
-│  ┌────┴─────────────────────┐     │
-│  │ Docker Container         │     │
-│  │  Dev3000 :3684           │     │
-│  │    └─→ Next.js :3000     │     │
-│  └──────────────────────────┘     │
-└────────────────────────────────────┘
-```
-
-**Key Points:**
-- Chrome runs on the **host** with `--remote-debugging-port=9222`
-- Dev3000 runs **inside Docker** and connects to host Chrome via CDP
-- Next.js app runs as a child process of Dev3000
-- All logs, screenshots, and monitoring accessible at `http://localhost:3684`
+This directory contains Docker configuration for running dev3000 in a containerized environment.
 
 ## Quick Start
 
-**For YOUR Next.js Project**:
-
-1. **Clone this repository** (for Docker configuration):
-   ```bash
-   git clone https://github.com/automationjp/dev3000.git
-   cd dev3000
-   ```
-
-2. **Configure docker-compose.yml** to point to YOUR project:
-
-   Edit `docker/docker-compose.yml`:
-   ```yaml
-   volumes:
-     # CHANGE this line to YOUR project path:
-     - /mnt/c/Users/YourName/Projects/my-nextjs-app:/app
-     # KEEP these lines:
-     - /app/node_modules
-     - /app/.next
-   ```
-
-3. **Start dev3000**:
-   ```bash
-   make dev-up    # Starts Chrome + dev3000 in Docker
-   make dev-logs  # View logs
-   make dev-down  # Stop everything
-   ```
-
-**For the included Next.js 15 example** (testing/development):
-
 ```bash
-# Example is already configured in docker-compose.yml
-make dev-up
+# From the docker directory
+docker compose up --build
 ```
 
-## Files
+This will:
+- Build the dev3000 Docker image with all dependencies
+- Start the dev3000 container
+- Expose ports 3000 (Next.js app) and 3684 (MCP server/logs viewer)
 
-- **Dockerfile**: Multi-stage build with node:20-bookworm-slim
-  - Non-root user (`USER node`)
-  - Security hardening (`cap_drop: ALL`, `no-new-privileges`)
-  - Health checks for MCP server
+## Connecting to Host Chrome
 
-- **docker-compose.yml**: Service orchestration
-  - Port mappings: 3000 (Next.js), 3684 (MCP)
-  - WSL support via `extra_hosts: host-gateway`
-  - File watching enabled (`CHOKIDAR_USEPOLLING`)
-  - Environment variables for external CDP
+By default, dev3000 is configured to connect to Chrome running on your host machine via Chrome DevTools Protocol (CDP). This allows dev3000 to monitor browser events without running Chrome inside the Docker container.
 
-- **.dockerignore**: Build context optimization
+### Step 1: Start Chrome with Remote Debugging
 
-## Platform-Specific Setup
-
-### WSL (Windows Subsystem for Linux)
-
-```bash
-# Chrome will be launched on Windows, accessible from WSL via host.docker.internal
-npm run dev3000:up
+**Windows (PowerShell):**
+```powershell
+Start-Process "C:\Program Files\Google\Chrome\Application\chrome.exe" -ArgumentList "--remote-debugging-port=9222","--user-data-dir=$env:TEMP\chrome-dev-profile","--no-first-run","--no-default-browser-check"
 ```
 
-**WSL Notes:**
-- The automation script `tools/dev3000-up.mjs` automatically detects WSL
-- Windows Chrome is preferred (Snap/Flatpak restrictions)
-- CDP URL uses `host.docker.internal` for cross-boundary communication
-
-### macOS
-
-```bash
-npm run dev3000:up
-```
-
-**macOS Notes:**
-- Uses `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`
-- `host.docker.internal` works natively on Docker Desktop for Mac
-
-### Linux
-
-```bash
-npm run dev3000:up
-```
-
-**Linux Notes:**
-- Requires Docker 20.10+ for `host-gateway` support
-- Avoids Snap/Flatpak Chrome (CDP restrictions)
-- Falls back to system Chrome if available
-
-## Manual Setup (Without Automation Script)
-
-### 1. Start Chrome with CDP
-
-**macOS/Linux:**
+**macOS:**
 ```bash
 /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
   --remote-debugging-port=9222 \
   --user-data-dir=/tmp/chrome-dev-profile \
   --no-first-run \
-  about:blank &
+  --no-default-browser-check &
 ```
 
-**Windows (PowerShell):**
-```powershell
-& "C:\Program Files\Google\Chrome\Application\chrome.exe" `
-  --remote-debugging-port=9222 `
-  --user-data-dir=$env:TEMP\chrome-dev-profile `
-  --no-first-run `
-  about:blank
+**Linux/WSL2:**
+```bash
+google-chrome \
+  --remote-debugging-port=9222 \
+  --user-data-dir=/tmp/chrome-dev-profile \
+  --no-first-run \
+  --no-default-browser-check &
 ```
 
-### 2. Get CDP WebSocket URL
+### Step 2: Verify CDP Connection
+
+Check that Chrome's debugging interface is accessible:
 
 ```bash
-curl http://localhost:9222/json | jq -r '.[0].webSocketDebuggerUrl'
+curl http://localhost:9222/json/version
 ```
 
-Example output:
-```
-ws://localhost:9222/devtools/browser/a1b2c3d4-e5f6-7890-abcd-ef1234567890
-```
+You should see JSON output with Chrome version information.
 
-### 3. Set Environment Variable and Start Docker
+### Step 3: Start Dev3000 Container
 
 ```bash
-export DEV3000_CDP_URL="ws://host.docker.internal:9222/devtools/browser/..."
-cd docker
-docker compose up --build
+docker compose up
 ```
 
-### 4. Access Services
+Dev3000 will automatically connect to Chrome at `http://host.docker.internal:9222`.
 
+### Custom CDP URL
+
+If Chrome is running on a different port or machine, set the `DEV3000_CDP_URL` environment variable:
+
+```bash
+# .env file
+DEV3000_CDP_URL=http://192.168.1.100:9222
+
+# Or via command line
+DEV3000_CDP_URL=http://192.168.1.100:9222 docker compose up
+```
+
+## Accessing the Application
+
+Once running:
 - **Next.js App**: http://localhost:3000
-- **Dev3000 UI**: http://localhost:3684
-- **Logs Viewer**: http://localhost:3684/logs
-- **Screenshots**: http://localhost:3684/screenshots
-
-## Environment Variables
-
-### Required for External CDP
-
-- `DEV3000_CDP_SKIP_LAUNCH=1` - Skip launching Chrome inside container
-- `DEV3000_CDP_URL` - WebSocket URL from host Chrome
-
-### File Watching (Auto-configured)
-
-- `CHOKIDAR_USEPOLLING=true` - Enable polling for file changes
-- `WATCHPACK_POLLING=true` - Enable polling for webpack/turbopack
-
-### Optional
-
-- `NEXT_TELEMETRY_DISABLED=1` - Disable Next.js telemetry
-- `NODE_ENV=development` - Node environment
+- **Dev3000 Logs Viewer**: http://localhost:3684/logs
 
 ## Troubleshooting
 
-### CDP Connection Failed
+### CDP Connection Issues
 
-**Symptom**: `Failed to connect to CDP` in logs
+**Problem**: Dev3000 shows "CDP connection failed" errors
 
 **Solutions**:
-1. Verify Chrome is running with CDP:
+1. Verify Chrome is running with remote debugging:
    ```bash
    curl http://localhost:9222/json
    ```
 
-2. Check `DEV3000_CDP_URL` is set correctly:
+2. Check that port 9222 is accessible from Docker:
    ```bash
-   echo $DEV3000_CDP_URL
+   docker exec dev3000 curl http://host.docker.internal:9222/json
    ```
 
-3. For WSL, ensure `host.docker.internal` resolves:
+3. On WSL2, ensure `host.docker.internal` resolves correctly (already configured in docker-compose.yml)
+
+4. Check Docker logs for CDP connection status:
    ```bash
-   docker exec dev3000 ping host.docker.internal
+   docker compose logs -f dev3000
    ```
 
 ### Port Already in Use
 
-**Symptom**: `Port 3000 already allocated`
+**Problem**: Port 3000 or 3684 already in use
 
-**Solutions**:
-```bash
-# Check what's using the port
-lsof -ti:3000 | xargs kill -9
-
-# Or use different ports (edit docker-compose.yml or create an override file)
-# Create docker-compose.override.yml:
-# services:
-#   dev3000:
-#     ports:
-#       - "5173:3000"
-#       - "3684:3684"
-# Then run:
-docker compose -f docker/docker-compose.yml -f docker/docker-compose.override.yml up --build
+**Solution**: Stop other services using these ports, or modify port mappings in docker-compose.yml:
+```yaml
+ports:
+  - "3001:3000"  # Map host port 3001 to container port 3000
+  - "3685:3684"  # Map host port 3685 to container port 3684
 ```
 
-### Hot Reload Not Working
+### Container Health Check Failures
 
-**Symptom**: Changes don't trigger rebuild
+**Problem**: Container keeps restarting with health check failures
 
-**Solutions**:
-1. Verify polling is enabled:
-   ```bash
-   docker exec dev3000 env | grep POLLING
-   ```
+**Solution**: 
+1. Check logs: `docker compose logs dev3000`
+2. Verify app is starting: `docker exec dev3000 curl http://localhost:3000`
+3. Verify MCP server: `docker exec dev3000 curl http://localhost:3684/health`
 
-2. Increase polling interval in `next.config.js`:
-   ```javascript
-   module.exports = {
-     webpack: (config) => {
-       config.watchOptions = {
-         poll: 1000,
-         aggregateTimeout: 300,
-       }
-       return config
-     }
-   }
-   ```
+### Permission Errors
 
-### Snap/Flatpak Chrome Issues
+**Problem**: Permission denied errors for screenshots or logs
 
-**Symptom**: CDP not accessible from Docker
-
-**Solution**: Use non-Snap Chrome or Windows Chrome (WSL)
-
+This should be automatically resolved by the Dockerfile, but if issues persist:
 ```bash
-# Remove Snap Chrome (Ubuntu)
-sudo snap remove chromium
-
-# Install .deb Chrome
-wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-sudo dpkg -i google-chrome-stable_current_amd64.deb
+docker exec dev3000 chmod -R 777 /build/dev3000/mcp-server/public
 ```
 
-## Development Workflow
+## Architecture
 
-1. **Start Dev Environment**:
-   ```bash
-   make dev-up
-   ```
-
-2. **Make Code Changes** in YOUR Next.js project:
-   - Changes auto-detected via polling
-   - Next.js hot-reloads automatically
-   - No need to restart Docker container
-
-3. **View Logs & Screenshots**:
-   - Browser: http://localhost:3684/logs
-   - Screenshots: Auto-captured on errors/navigation
-
-4. **Use Claude Code for Debugging**:
-   - Claude has access to dev3000 MCP tools
-   - Ask: `"fix my app"` for AI-powered debugging
-   - Ask: `"analyze the error"` for detailed analysis
-
-5. **Stop Environment**:
-   ```bash
-   make dev-down
-   ```
-
-6. **View Logs in Real-time**:
-   ```bash
-   make dev-logs
-   ```
-
-## Security Considerations
-
-### Included Protections
-
-- ✅ Non-root user (`USER node`)
-- ✅ Dropped all capabilities (`cap_drop: ALL`)
-- ✅ No privilege escalation (`no-new-privileges:true`)
-- ✅ Health checks for monitoring
-- ✅ Resource limits (CPU/memory)
-
-### CDP Security Warning
-
-⚠️ **CDP Port (9222) has no authentication** - only use for development:
-- Do NOT expose port 9222 to external networks
-- Do NOT use in production environments
-- CDP provides full browser control to anyone with access
-
-### Recommended for Production
-
-For production, use standard Next.js deployment without dev3000:
-```bash
-npm run build
-npm run start
 ```
+┌─────────────────────────────────────────────────────────────┐
+│ Host Machine                                                │
+│                                                             │
+│  ┌──────────────────────────┐                              │
+│  │ Chrome Browser           │                              │
+│  │ --remote-debugging-port= │                              │
+│  │ 9222                     │                              │
+│  └───────────┬──────────────┘                              │
+│              │ CDP (Chrome DevTools Protocol)              │
+│              │                                             │
+│  ┌───────────▼──────────────────────────────────────────┐  │
+│  │ Docker Container: dev3000                           │  │
+│  │                                                     │  │
+│  │  ┌─────────────────────────────────────────────┐   │  │
+│  │  │ dev3000 Process                            │   │  │
+│  │  │ - Monitors Chrome via CDP                  │   │  │
+│  │  │ - Captures browser events                  │   │  │
+│  │  │ - Provides AI-powered dev tools            │   │  │
+│  │  └─────────────────────────────────────────────┘   │  │
+│  │                                                     │  │
+│  │  ┌─────────────────────────────────────────────┐   │  │
+│  │  │ Next.js App (Port 3000)                    │   │  │
+│  │  │ - Your application being monitored         │   │  │
+│  │  └─────────────────────────────────────────────┘   │  │
+│  │                                                     │  │
+│  │  ┌─────────────────────────────────────────────┐   │  │
+│  │  │ MCP Server (Port 3684)                     │   │  │
+│  │  │ - Logs viewer UI                           │   │  │
+│  │  │ - Screenshot serving                       │   │  │
+│  │  └─────────────────────────────────────────────┘   │  │
+│  └─────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+         │ Port 3000        │ Port 3684
+         ▼                  ▼
+    http://localhost:3000   http://localhost:3684/logs
+```
+
+## Development
+
+### Rebuilding the Image
+
+```bash
+docker compose up --build
+```
+
+### Viewing Logs
+
+```bash
+# Follow all logs
+docker compose logs -f
+
+# Follow dev3000 logs only
+docker compose logs -f dev3000
+
+# View last 100 lines
+docker compose logs --tail=100 dev3000
+```
+
+### Accessing Container Shell
+
+```bash
+docker exec -it dev3000 sh
+```
+
+### Stopping the Container
+
+```bash
+# Stop without removing
+docker compose stop
+
+# Stop and remove
+docker compose down
+
+# Stop, remove, and remove volumes
+docker compose down -v
+```
+
+## Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DEV3000_CDP_URL` | `http://host.docker.internal:9222` | Chrome DevTools Protocol endpoint URL |
+| `NODE_ENV` | `development` | Node.js environment mode |
+| `CHOKIDAR_USEPOLLING` | `true` | Enable file watching polling (required for Docker) |
+| `WATCHPACK_POLLING` | `true` | Enable webpack polling (required for Docker) |
+| `NEXT_TELEMETRY_DISABLED` | `1` | Disable Next.js telemetry |
+| `LOG_FILE_PATH` | `/tmp/d3k.log` | Path for dev3000 log file |
 
 ## Resource Limits
 
-Default limits (configurable in docker-compose.yml):
-- **CPU**: 2 cores max, 0.5 cores reserved
-- **Memory**: 4GB max, 512MB reserved
+The container is configured with:
+- **CPU Limit**: 2.0 cores
+- **Memory Limit**: 4GB
+- **CPU Reservation**: 0.5 cores
+- **Memory Reservation**: 512MB
 
-Adjust based on your project size:
-```yaml
-deploy:
-  resources:
-    limits:
-      cpus: '4.0'
-      memory: 8G
-```
+Adjust in docker-compose.yml if needed for your machine.
 
-## Next Steps
+## Security
 
-- See [Getting Started Guide](../GETTING_STARTED.md) for detailed setup instructions
-- See [README.md](../README.md) for dev3000 general usage and features
-- See [example/nextjs15/README.md](../example/nextjs15/README.md) for the included example
+The container includes several security hardening measures:
+- Runs as non-root user (`node`)
+- `no-new-privileges` security option enabled
+- All capabilities dropped with `cap_drop: ALL`
+- Minimal base image (node:20-bookworm-slim)
+- Only necessary dependencies installed
 
-## Support
+## Related Files
 
-For issues specific to Docker setup, check:
-1. Docker version (`docker --version`) - requires 20.10+
-2. Docker Compose version (`docker compose version`) - requires 1.29+
-3. Platform detection in `tools/dev3000-up.mjs`
-4. GitHub Issues: https://github.com/automationjp/dev3000/issues
-
-## Key Takeaways
-
-✅ **No configuration files needed in YOUR project**
-✅ **Just change ONE line in docker-compose.yml** (volume mount)
-✅ **Works with ANY Next.js project**
-✅ **Dependencies installed in container** (doesn't touch your host)
-✅ **Perfect for Windows** (CDP limitation workaround)
+- `Dockerfile` - Multi-stage build configuration
+- `docker-compose.yml` - Service orchestration and environment setup
+- `../example/nextjs15/` - Example Next.js application

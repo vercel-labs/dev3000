@@ -1191,8 +1191,9 @@ export class DevEnvironment {
     const detectedPort = nextJsPortSwitchMatch?.[1] || localUrlMatch?.[1]
 
     if (detectedPort && detectedPort !== this.options.port) {
-      this.debugLog(`Detected server port change from ${this.options.port} to ${detectedPort}`)
-      this.logger.log("server", `[PORT] Server switched from port ${this.options.port} to ${detectedPort}`)
+      const oldPort = this.options.port
+      this.debugLog(`Detected server port change from ${oldPort} to ${detectedPort}`)
+      this.logger.log("server", `[PORT] Server switched from port ${oldPort} to ${detectedPort}`)
       this.options.port = detectedPort
 
       // Update session info with new port
@@ -1211,6 +1212,15 @@ export class DevEnvironment {
           this.options.serverCommand
         )
         this.debugLog(`Updated session info with new port: ${this.options.port}`)
+      }
+
+      // Navigate browser to new port if CDP monitor is active
+      if (this.cdpMonitor) {
+        this.debugLog(`Re-navigating browser from port ${oldPort} to ${detectedPort}`)
+        this.logger.log("browser", `[CDP] Port changed - navigating to http://localhost:${detectedPort}`)
+        this.cdpMonitor.navigateToApp(detectedPort).catch((error: Error) => {
+          this.debugLog(`Failed to navigate browser to new port: ${error}`)
+        })
       }
     }
   }

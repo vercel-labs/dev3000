@@ -45,15 +45,14 @@ dev-up: ## Start dev3000 in Docker (launches Chrome automatically)
 	@echo "Step 3: Launching Chrome with CDP..."
 	@$(MAKE) start-chrome-cdp
 	@echo ""
-	@echo "Step 4: Configuring CDP connection..."
-	@CDP_WS_URL=$$(curl -s http://localhost:9222/json/version 2>/dev/null | grep -o '"webSocketDebuggerUrl":"[^"]*"' | cut -d'"' -f4 | sed 's/127.0.0.1/host.docker.internal/g' || echo ""); \
-	if [ -n "$$CDP_WS_URL" ]; then \
-		echo "✅ CDP WebSocket URL: $$CDP_WS_URL"; \
-		echo "Restarting containers with CDP integration..."; \
-		cd docker && DEV3000_CDP_URL="$$CDP_WS_URL" docker compose up -d --force-recreate; \
+	@echo "Step 4: Verifying CDP connection from container..."
+	@if curl -s http://localhost:9222/json/version > /dev/null 2>&1; then \
+		echo "✅ CDP connection verified"; \
+		BROWSER_VER=$$(curl -s http://localhost:9222/json/version | grep -o '"Browser":"[^"]*"' | cut -d'"' -f4); \
+		echo "   Browser: $$BROWSER_VER"; \
 	else \
-		echo "⚠️  Could not fetch CDP URL."; \
-		echo "Dev3000 will try to auto-detect or launch its own Chrome instance."; \
+		echo "⚠️  Could not verify CDP connection"; \
+		echo "Dev3000 may not be able to monitor browser events."; \
 	fi
 	@echo ""
 	@echo "✅ Development environment started"
@@ -110,19 +109,19 @@ start-chrome-cdp: ## Start Chrome with CDP (auto-detects WSL/Linux/macOS)
 		echo "   Detected WSL2 host IP: $$HOST_IP"; \
 		APP_URL="http://$$HOST_IP:3000/"; \
 		echo "   Application URL: $$APP_URL"; \
-		powershell.exe -Command "Start-Process chrome.exe -ArgumentList '--remote-debugging-port=9222','--remote-debugging-address=0.0.0.0','--user-data-dir=C:\\temp\\chrome-dev-profile','--no-first-run','--no-default-browser-check','$$APP_URL'" 2>/dev/null || \
-		cmd.exe /c "start chrome.exe --remote-debugging-port=9222 --remote-debugging-address=0.0.0.0 --user-data-dir=C:\\temp\\chrome-dev-profile --no-first-run --no-default-browser-check $$APP_URL" 2>/dev/null || \
+		powershell.exe -Command "Start-Process chrome.exe -ArgumentList '--remote-debugging-port=9222','--user-data-dir=C:\\temp\\chrome-dev-profile','--no-first-run','--no-default-browser-check','$$APP_URL'" 2>/dev/null || \
+		cmd.exe /c "start chrome.exe --remote-debugging-port=9222 --user-data-dir=C:\\temp\\chrome-dev-profile --no-first-run --no-default-browser-check $$APP_URL" 2>/dev/null || \
 		echo "⚠️  Failed to start Chrome automatically. Please start Chrome manually:"; \
-		echo "   chrome.exe --remote-debugging-port=9222 --remote-debugging-address=0.0.0.0 --user-data-dir=C:\\temp\\chrome-dev-profile $$APP_URL"; \
+		echo "   chrome.exe --remote-debugging-port=9222 --user-data-dir=C:\\temp\\chrome-dev-profile $$APP_URL"; \
 		sleep 3; \
 	elif [ "$$(uname)" = "Darwin" ]; then \
 		echo "Detected macOS environment"; \
-		open -a "Google Chrome" --args --remote-debugging-port=9222 --remote-debugging-address=0.0.0.0 --user-data-dir=/tmp/chrome-dev-profile --no-first-run --no-default-browser-check http://localhost:3000 & \
+		open -a "Google Chrome" --args --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-dev-profile --no-first-run --no-default-browser-check http://localhost:3000 & \
 		echo "✅ Chrome started with CDP"; \
 		sleep 3; \
 	else \
 		echo "Detected Linux environment"; \
-		google-chrome --remote-debugging-port=9222 --remote-debugging-address=0.0.0.0 --user-data-dir=/tmp/chrome-dev-profile --no-first-run --no-default-browser-check http://localhost:3000 > /dev/null 2>&1 & \
+		google-chrome --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-dev-profile --no-first-run --no-default-browser-check http://localhost:3000 > /dev/null 2>&1 & \
 		echo "✅ Chrome started with CDP"; \
 		sleep 3; \
 	fi; \
