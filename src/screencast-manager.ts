@@ -450,9 +450,9 @@ export class ScreencastManager {
           });
 
           observer.observe({ type: 'layout-shift', buffered: true });
-          console.log('[dev3000] CLS observer installed');
+          console.log('CLS observer installed');
         } catch (e) {
-          console.error('[dev3000] Failed to install CLS observer:', e);
+          console.error('Failed to install CLS observer:', e);
         }
       })();
     `
