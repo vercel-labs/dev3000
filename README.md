@@ -1,5 +1,7 @@
 # dev3000
 
+![dev3000 terminal interface](./www/public/hero-terminal.png)
+
 Captures your web app's complete development timeline - server logs, browser events, console messages, network requests, and automatic screenshots - in a unified, timestamped feed for AI debugging. **Gracefully enhances with chrome-devtools and nextjs-dev MCPs when available.**
 
 ## Quick Start
