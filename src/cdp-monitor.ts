@@ -462,7 +462,7 @@ export class CDPMonitor {
               resolve()
               return
             }
-          } catch (error) {
+          } catch (_error) {
             // Chrome not ready yet, retry
             if (attempts === 0) {
               this.logger.trace(`Initial check failed, will retry...`)
@@ -708,7 +708,7 @@ export class CDPMonitor {
 
           // Extract Chrome version info from targets
           const versionTarget = targets.find((t: { type: string }) => t.type === "browser")
-          if (versionTarget && versionTarget.title) {
+          if (versionTarget?.title) {
             this.logger.info(`✓ Connected to ${versionTarget.title}`)
             this.debugLog(`Chrome version: ${versionTarget.title}`)
           } else {

@@ -5,8 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { DarkModeToggle } from "@/components/dark-mode-toggle"
 import { useDarkMode } from "@/hooks/use-dark-mode"
-import type { LogEntry, LogFile, LogListResponse, LogsApiResponse } from "@/types"
 import { getTextColor, LOG_COLORS } from "@/lib/constants/log-colors"
+import type { LogEntry, LogFile, LogListResponse, LogsApiResponse } from "@/types"
 
 // Define interfaces for object property rendering
 interface PropertyData {
@@ -1072,26 +1072,26 @@ export default function LogsClient({ version, initialData }: LogsClientProps) {
     // Use MCP_BASE_URL environment variable if available, otherwise detect from window.location
     const getBaseUrl = () => {
       // Check if we have a configured MCP base URL (e.g., from environment variable)
-      if (typeof window !== 'undefined' && (window as any).__MCP_BASE_URL__) {
+      if (typeof window !== "undefined" && (window as any).__MCP_BASE_URL__) {
         return (window as any).__MCP_BASE_URL__
       }
 
       // Auto-detect: if current port is 3000 (Next.js app), use port 3684 (Dev3000 MCP)
-      if (typeof window !== 'undefined') {
+      if (typeof window !== "undefined") {
         const currentPort = window.location.port
-        if (currentPort === '3000') {
+        if (currentPort === "3000") {
           // Running in Next.js app context - point to Dev3000 MCP server
           return `http://${window.location.hostname}:3684`
         }
       }
 
       // Default: use relative URL (same host/port)
-      return ''
+      return ""
     }
 
     const baseUrl = getBaseUrl()
     const sseUrl = `${baseUrl}/api/logs/stream?logPath=${encodeURIComponent(logPath)}`
-    console.log("Connecting to SSE:", sseUrl, baseUrl ? `(base: ${baseUrl})` : '(relative URL)')
+    console.log("Connecting to SSE:", sseUrl, baseUrl ? `(base: ${baseUrl})` : "(relative URL)")
 
     let reconnectAttempts = 0
     const maxReconnectAttempts = 5
