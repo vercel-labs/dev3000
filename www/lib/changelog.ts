@@ -14,7 +14,7 @@ export const changelog: Release[] = [
     date: "2025-10-23",
     type: "patch",
     highlights: [
-      "**Custom Command Flag**: New `--command` flag lets you override auto-detection and run any arbitrary command (e.g., `dev3000 --command \"bun run dev\"` or `dev3000 --command \"uvicorn main:app --reload\"`)"
+      '**Custom Command Flag**: New `--command` flag lets you override auto-detection and run any arbitrary command (e.g., `dev3000 --command "bun run dev"` or `dev3000 --command "uvicorn main:app --reload"`)'
     ]
   },
 
