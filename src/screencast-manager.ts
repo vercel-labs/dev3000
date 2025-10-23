@@ -325,9 +325,8 @@ export class ScreencastManager {
         this.logFn(`[CDP] Failed to save metadata - ${error}`)
       }
 
-      const triggerLabel = this.captureTrigger === "navigation" ? "Navigation" : "Load"
       this.logFn(
-        `[CDP] ${triggerLabel} complete - view all frames: http://localhost:${process.env.MCP_PORT || "3684"}/video/${this.currentSessionId}`
+        `[SCREENCAST] View jank analysis: http://localhost:${process.env.MCP_PORT || "3684"}/video/${this.currentSessionId}`
       )
 
       await this.stopScreencast()
