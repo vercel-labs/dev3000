@@ -113,7 +113,8 @@ const FEATURE_PATTERNS = {
   browserSupport: [/arc|comet|edge|brave|browser.*support|browser.*path/i],
   errorPrioritization: [/priorit|priority.*score|worst.*issue|highest.*priority/i],
   prCreation: [/PR.*creation|create.*PR|pull.*request|one-PR-per-run/i],
-  portDetection: [/port.*detection|port.*3000|port.*5173|svelte.*port|detect.*port/i]
+  portDetection: [/port.*detection|port.*3000|port.*5173|svelte.*port|detect.*port/i],
+  customCommand: [/--command|custom.*command|override.*auto.*detect|arbitrary.*command/i]
 }
 
 // Function to extract highlights using Vercel-style changelog writing
@@ -169,6 +170,9 @@ function extractHighlights(commits: Commit[]): string[] {
     prCreation: meaningfulCommits.some((c) => FEATURE_PATTERNS.prCreation.some((pattern) => pattern.test(c.subject))),
     portDetection: meaningfulCommits.some((c) =>
       FEATURE_PATTERNS.portDetection.some((pattern) => pattern.test(c.subject))
+    ),
+    customCommand: meaningfulCommits.some((c) =>
+      FEATURE_PATTERNS.customCommand.some((pattern) => pattern.test(c.subject))
     )
   }
 
@@ -238,6 +242,12 @@ function extractHighlights(commits: Commit[]): string[] {
   if (detectedFeatures.portDetection) {
     highlights.push(
       "**Improved Port Detection**: Works with non-standard ports (like Svelte's 5173) and shows loading spinner until port is confirmed"
+    )
+  }
+
+  if (detectedFeatures.customCommand) {
+    highlights.push(
+      "**Custom Command Flag**: New `--command` flag lets you override auto-detection and run any arbitrary command (e.g., `dev3000 --command \"bun run dev\"` or `dev3000 --command \"uvicorn main:app --reload\"`)"
     )
   }
 

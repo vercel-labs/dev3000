@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 **Patch Release**
 
-- Bug fixes improve overall reliability
+- **Custom Command Flag**: New `--command` flag lets you override auto-detection and run any arbitrary command (e.g., `dev3000 --command "bun run dev"` or `dev3000 --command "uvicorn main:app --reload"`)
 
 ## [0.0.103] - 2025-10-23
 
