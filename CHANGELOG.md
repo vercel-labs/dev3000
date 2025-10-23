@@ -8,7 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 **Patch Release**
 
-- 🐛 **Fixed 3 bugs for improved stability**
+- 🐳 **Docker Support**: Added production-ready Dockerfile and docker-compose configuration with security hardening
+- 🔌 **CDP Host Header Fix**: Resolved HTTP 500 errors by setting Host: localhost:9222 for Chrome DevTools Protocol connections
+- 🐛 **Health Check**: Corrected Docker health check to query the MCP server instead of HTTP endpoints
+- 🪟 **WSL2 Support**: Added automatic Chrome launch and CDP connection for Windows Subsystem for Linux 2
+- 🔧 **Logs Viewer**: Fixed rendering and error handling issues
 
 ## [0.0.100] - 2025-10-22
 
@@ -29,7 +33,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 **Patch Release**
 
-- 🐛 **Fixed 3 bugs for improved stability**
+- 🐛 **Bug Fixes**: Various stability improvements and minor fixes
 
 ## [0.0.97] - 2025-10-20
 

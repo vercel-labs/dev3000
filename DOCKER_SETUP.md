@@ -835,7 +835,7 @@ Update command for your framework:
 ```yaml
 command: >
   sh -c "
-    pnpm add -g dev3000@latest &&
+    pnpm add -g dev3000@0.0.101 &&
     dev3000 --port 3000 --script dev
   "
 ```
