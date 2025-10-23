@@ -4,6 +4,12 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.104] - 2025-10-23
+
+**Patch Release**
+
+- Bug fixes improve overall reliability
+
 ## [0.0.103] - 2025-10-23
 
 **Patch Release**
