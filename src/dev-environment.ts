@@ -689,20 +689,44 @@ export class DevEnvironment {
     if (this.isShuttingDown) return true // Skip health check if already shutting down
 
     try {
+      const http = await import("node:http")
+
+      // Check both app server and MCP server by making HTTP requests
+      // This is more reliable than lsof in Docker containers
       const ports = [this.options.port, this.options.mcpPort]
 
       for (const port of ports) {
-        const result = await new Promise<string>((resolve) => {
-          const proc = spawn("lsof", ["-ti", `:${port}`], { stdio: "pipe" })
-          let output = ""
-          proc.stdout?.on("data", (data) => {
-            output += data.toString()
+        const isHealthy = await new Promise<boolean>((resolve) => {
+          const req = http.request(
+            {
+              hostname: "localhost",
+              port,
+              path: "/",
+              method: "GET",
+              timeout: 2000
+            },
+            (res) => {
+              // Any response (including errors like 404) means the server is running
+              resolve(true)
+            }
+          )
+
+          req.on("error", () => {
+            // Connection refused means the server is not running
+            resolve(false)
           })
-          proc.on("exit", () => resolve(output.trim()))
+
+          req.on("timeout", () => {
+            // Timeout means server might be slow, but it's still running
+            req.destroy()
+            resolve(true)
+          })
+
+          req.end()
         })
 
-        if (!result) {
-          this.debugLog(`Health check failed: Port ${port} is no longer in use`)
+        if (!isHealthy) {
+          this.debugLog(`Health check failed: Port ${port} is no longer responding`)
           this.logger.log("server", `Health check failed: Critical process on port ${port} is no longer running`)
           return false
         }
@@ -2050,13 +2074,22 @@ export class DevEnvironment {
     }
 
     // Initialize CDP monitor with enhanced logging - use MCP public directory for screenshots
+    // Create a structured logger for CDP using the utils/logger Logger
+    const { Logger: StructuredLogger, LogLevel } = await import("./utils/logger.js")
+    const cdpLogger = new StructuredLogger({
+      prefix: "cdp",
+      level: this.options.debug ? LogLevel.DEBUG : LogLevel.INFO,
+      enableColors: true,
+      enableTimestamp: true
+    })
+
     this.cdpMonitor = new CDPMonitor(
       this.options.profileDir,
       this.mcpPublicDir,
       (_source: string, message: string) => {
         this.logger.log("browser", message)
       },
-      this.options.debug,
+      cdpLogger,
       this.options.browser,
       this.options.pluginReactScan,
       this.options.port, // App server port to monitor

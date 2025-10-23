@@ -18,13 +18,32 @@ RUN echo "[$(date +%Y-%m-%d\ %H:%M:%S)] Enabling pnpm via corepack..." \
     && corepack prepare pnpm@latest --activate \
     && echo "[$(date +%Y-%m-%d\ %H:%M:%S)] pnpm enabled successfully"
 
-# Install dev3000 globally (as root to ensure proper PATH setup)
-RUN echo "[$(date +%Y-%m-%d\ %H:%M:%S)] Installing dev3000 globally..." \
-    && npm install -g dev3000@latest \
+# Build dev3000 and MCP server from local source
+WORKDIR /build/dev3000
+
+# Copy workspace configuration and package files
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json ./
+
+# Copy source code
+COPY src ./src
+COPY mcp-server ./mcp-server
+
+# Install dependencies and build
+RUN echo "[$(date +%Y-%m-%d\ %H:%M:%S)] Installing dev3000 dependencies..." \
+    && pnpm install --frozen-lockfile \
+    && echo "[$(date +%Y-%m-%d\ %H:%M:%S)] Building dev3000 CLI..." \
+    && pnpm run build \
+    && echo "[$(date +%Y-%m-%d\ %H:%M:%S)] Building MCP server..." \
+    && cd mcp-server && pnpm run build && cd .. \
+    && echo "[$(date +%Y-%m-%d\ %H:%M:%S)] Creating MCP server public directories..." \
+    && mkdir -p /build/dev3000/mcp-server/public/screenshots \
+    && chmod -R 777 /build/dev3000/mcp-server/public \
+    && echo "[$(date +%Y-%m-%d\ %H:%M:%S)] Installing dev3000 globally..." \
+    && npm install -g . \
     && echo "[$(date +%Y-%m-%d\ %H:%M:%S)] dev3000 installed successfully" \
     && dev3000 --version
 
-# Set working directory
+# Set working directory for app
 WORKDIR /app
 
 # Copy example app files

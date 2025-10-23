@@ -25,6 +25,7 @@ services:
       # CDP configuration for external Chrome
       - DEV3000_CDP_SKIP_LAUNCH=1
       - DEV3000_CDP_URL=${DEV3000_CDP_URL:-}
+      - DEV3000_DISABLE_CDP=1
 
       # Node.js environment
       - NODE_ENV=development
@@ -76,7 +77,7 @@ services:
         lsof -i :3684 || echo 'Port 3684 is free'
         echo ''
         echo '[$(date +%Y-%m-%d\ %H:%M:%S)] Starting dev3000 with debug enabled...'
-        dev3000 --port 3000 --debug
+        dev3000 --port 3000 --debug --servers-only
       "
 
     # Restart policy
