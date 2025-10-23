@@ -532,8 +532,11 @@ export class CDPMonitor {
                   port: url.port || (url.protocol === "https:" ? 443 : 80),
                   path: url.pathname + (url.search || ""),
                   method: "GET",
-                  // Avoid forcing Host header; let Node set it based on target
-                  headers: {}
+                  // Set Host header to localhost:9222 for Chrome compatibility when using host.docker.internal
+                  // Chrome's CDP endpoint validates the Host header and rejects non-localhost hosts
+                  headers: {
+                    Host: `localhost:${url.port || (url.protocol === "https:" ? 443 : 80)}`
+                  }
                 }
 
                 const req = httpMod.get(options, (res) => {
