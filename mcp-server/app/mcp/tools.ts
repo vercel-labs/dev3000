@@ -24,7 +24,10 @@ export const TOOL_DESCRIPTIONS = {
     "🔍 **COMPONENT SOURCE FINDER** - Maps DOM elements to their source code by extracting the React component function and finding unique patterns to search for.\n\n🎯 **HOW IT WORKS:**\n• Inspects the element via Chrome DevTools Protocol\n• Extracts the React component function source using .toString()\n• Identifies unique code patterns (specific JSX, classNames, imports)\n• Returns targeted grep patterns to find the exact source file\n\n💡 **PERFECT FOR:** Finding which file contains the code for a specific element, especially useful for CLS debugging when you need to fix layout shifts in specific components.",
 
   restart_dev_server:
-    "🔄 **DEV SERVER RESTART** - Safely restarts the development server while preserving dev3000's monitoring, logs, and browser connection.\n\n🎯 **SMART RESTART LOGIC:**\n• First tries nextjs-dev MCP restart (if available and user has Next.js canary)\n• Falls back to dev3000's own restart mechanism:\n  - Kills the old server process on the app port\n  - Waits for clean shutdown\n  - Spawns a new server with the same command that was originally used\n  - Keeps dev3000's MCP server, browser monitoring, and screenshot capture running\n• All logging continues seamlessly - no data loss\n• Browser monitoring stays connected - no need to relaunch Chrome\n\n⚡ **WHEN TO USE:**\n• After modifying next.config.js, middleware, or environment variables\n• When you need a clean restart to clear server state\n• After significant code changes that Next.js HMR can't handle\n• When debugging persistent state or memory issues\n\n⚠️ **CRITICAL - DO NOT:**\n• ❌ NEVER manually run kill commands on the dev server like `pkill -f \"next dev\"` or `lsof -ti :3000 | xargs kill`\n• ❌ NEVER manually start the dev server with `npm run dev`, `pnpm dev`, `next dev`, etc.\n• ✅ ALWAYS use this tool for dev server restarts - it preserves all dev3000 infrastructure\n\n⚠️ **IMPORTANT:**\n• AVOID using this unnecessarily - Next.js HMR handles most changes automatically\n• Only restart when truly needed for config changes or state issues\n• The server will be offline for a few seconds during restart\n• Browser may show connection error briefly while server restarts\n\n💡 **PERFECT FOR:** 'restart the dev server', 'clean restart', 'reload the server' - but only when actually needed, not for regular code changes."
+    "🔄 **DEV SERVER RESTART** - Safely restarts the development server while preserving dev3000's monitoring, logs, and browser connection.\n\n🎯 **SMART RESTART LOGIC:**\n• First tries nextjs-dev MCP restart (if available and user has Next.js canary)\n• Falls back to dev3000's own restart mechanism:\n  - Kills the old server process on the app port\n  - Waits for clean shutdown\n  - Spawns a new server with the same command that was originally used\n  - Keeps dev3000's MCP server, browser monitoring, and screenshot capture running\n• All logging continues seamlessly - no data loss\n• Browser monitoring stays connected - no need to relaunch Chrome\n\n⚡ **WHEN TO USE:**\n• After modifying next.config.js, middleware, or environment variables\n• When you need a clean restart to clear server state\n• After significant code changes that Next.js HMR can't handle\n• When debugging persistent state or memory issues\n\n⚠️ **CRITICAL - DO NOT:**\n• ❌ NEVER manually run kill commands on the dev server like `pkill -f \"next dev\"` or `lsof -ti :3000 | xargs kill`\n• ❌ NEVER manually start the dev server with `npm run dev`, `pnpm dev`, `next dev`, etc.\n• ✅ ALWAYS use this tool for dev server restarts - it preserves all dev3000 infrastructure\n\n⚠️ **IMPORTANT:**\n• AVOID using this unnecessarily - Next.js HMR handles most changes automatically\n• Only restart when truly needed for config changes or state issues\n• The server will be offline for a few seconds during restart\n• Browser may show connection error briefly while server restarts\n\n💡 **PERFECT FOR:** 'restart the dev server', 'clean restart', 'reload the server' - but only when actually needed, not for regular code changes.",
+
+  crawl_app:
+    "🕷️ **APP CRAWLER** - Discovers all URLs in your app by crawling links starting from the homepage. Perfect for finding every page before running fixes or tests across your entire site.\n\n🎯 **SMART CRAWLING:**\n• Starts at your app's homepage (localhost)\n• Discovers all unique URLs at specified depth\n• Depth 1 = homepage links only\n• Depth 2 = homepage + links from those pages\n• Depth 'all' = exhaustive crawl until no new links found\n• Only follows same-origin links (stays within your app)\n• Deduplicates URLs automatically\n\n📊 **OUTPUT:**\n• List of all discovered URLs\n• Total count of unique pages\n• Depth reached\n• Ready to use with fix_my_app or other tools\n\n💡 **PERFECT FOR:**\n• 'crawl my app' or 'crawl my shit' - discover all pages\n• 'crawl my app and fix my shit' - find all pages then run fixes\n• Site-wide testing and debugging\n• Verifying all routes work before deployment\n\n⚡ **USAGE:**\n• Default: depth 1 (just homepage links)\n• Specify depth: 'crawl at depth 2' or depth=2\n• Full crawl: 'crawl all pages' or depth='all'"
 }
 
 // Types
@@ -3601,6 +3604,190 @@ export async function restartDevServer(params: {
         {
           type: "text",
           text: `❌ **ERROR**\n\n${error instanceof Error ? error.message : String(error)}`
+        }
+      ]
+    }
+  }
+}
+
+// Crawl app - discover all URLs
+export interface CrawlAppParams {
+  depth?: number | "all"
+  projectName?: string
+}
+
+export async function crawlApp(params: CrawlAppParams) {
+  const { depth = 1, projectName } = params
+
+  try {
+    // Find active session
+    const sessions = findActiveSessions()
+    const session = projectName ? sessions.find((s) => s.projectName === projectName) : sessions[0]
+
+    if (!session) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: projectName
+              ? `❌ No active session found for project "${projectName}". Available projects: ${sessions.map((s) => s.projectName).join(", ") || "none"}`
+              : "❌ No active dev3000 sessions found. Start dev3000 first with `d3k` in your project directory."
+          }
+        ]
+      }
+    }
+
+    // Get CDP URL and app port from session
+    const sessionData = JSON.parse(readFileSync(session.sessionFile, "utf-8"))
+    const cdpUrl = sessionData.cdpUrl?.replace("http://", "ws://")
+    const appPort = sessionData.port || "3000"
+    const baseUrl = `http://localhost:${appPort}`
+
+    if (!cdpUrl) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "❌ No Chrome DevTools connection found. Browser monitoring must be active to crawl."
+          }
+        ]
+      }
+    }
+
+    logToDevFile(`Crawl App: Starting crawl at depth ${depth} for ${baseUrl}`)
+
+    // Connect to CDP
+    const ws = new WebSocket(cdpUrl)
+    await new Promise((resolve, reject) => {
+      ws.on("open", resolve)
+      ws.on("error", reject)
+      setTimeout(() => reject(new Error("CDP connection timeout")), 5000)
+    })
+
+    let messageId = 2000
+    // biome-ignore lint/suspicious/noExplicitAny: CDP protocol responses are dynamic
+    const sendCommand = (method: string, params: Record<string, unknown> = {}): Promise<any> => {
+      return new Promise((resolve, reject) => {
+        const id = messageId++
+        const message = JSON.stringify({ id, method, params })
+
+        const handler = (data: Buffer) => {
+          const response = JSON.parse(data.toString())
+          if (response.id === id) {
+            ws.off("message", handler)
+            if (response.error) {
+              reject(new Error(response.error.message))
+            } else {
+              resolve(response.result)
+            }
+          }
+        }
+
+        ws.on("message", handler)
+        ws.send(message)
+
+        setTimeout(() => {
+          ws.off("message", handler)
+          reject(new Error("Command timeout"))
+        }, 10000)
+      })
+    }
+
+    // Enable necessary domains
+    await sendCommand("Runtime.enable")
+    await sendCommand("Page.enable")
+
+    // Discovered URLs
+    const discovered = new Set<string>([baseUrl])
+    const visited = new Set<string>()
+    const toVisit: string[] = [baseUrl]
+
+    let currentDepth = 0
+    const maxDepth = depth === "all" ? Number.POSITIVE_INFINITY : depth
+
+    while (toVisit.length > 0 && currentDepth <= maxDepth) {
+      const currentLevelUrls = [...toVisit]
+      toVisit.length = 0
+
+      logToDevFile(`Crawl App: Processing depth ${currentDepth} with ${currentLevelUrls.length} URLs`)
+
+      for (const url of currentLevelUrls) {
+        if (visited.has(url)) continue
+        visited.add(url)
+
+        try {
+          // Navigate to URL
+          logToDevFile(`Crawl App: Visiting ${url}`)
+          await sendCommand("Page.navigate", { url })
+
+          // Wait for page load
+          await new Promise((resolve) => setTimeout(resolve, 2000))
+
+          // Extract all links
+          const result = await sendCommand("Runtime.evaluate", {
+            expression: `
+              Array.from(document.querySelectorAll('a[href]')).map(a => {
+                try {
+                  const url = new URL(a.href, window.location.href);
+                  // Only return same-origin links
+                  if (url.origin === window.location.origin) {
+                    // Remove hash and query params for deduplication
+                    return url.origin + url.pathname;
+                  }
+                } catch {}
+                return null;
+              }).filter(Boolean)
+            `,
+            returnByValue: true
+          })
+
+          const links = result.result?.value || []
+
+          for (const link of links) {
+            if (!discovered.has(link)) {
+              discovered.add(link)
+              if (currentDepth < maxDepth) {
+                toVisit.push(link)
+              }
+            }
+          }
+
+          logToDevFile(`Crawl App: Found ${links.length} links on ${url}`)
+        } catch (error) {
+          logToDevFile(`Crawl App: Error visiting ${url} - ${error}`)
+        }
+      }
+
+      currentDepth++
+
+      // For "all" mode, stop when no new URLs are found
+      if (depth === "all" && toVisit.length === 0) {
+        break
+      }
+    }
+
+    ws.close()
+
+    const urls = Array.from(discovered).sort()
+    const depthReached = depth === "all" ? currentDepth - 1 : Math.min(currentDepth - 1, maxDepth)
+
+    logToDevFile(`Crawl App: Complete - discovered ${urls.length} URLs at depth ${depthReached}`)
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: `🕷️ **APP CRAWL COMPLETE**\n\n📊 **SUMMARY:**\n• Base URL: ${baseUrl}\n• Depth: ${depthReached}${depth === "all" ? " (exhaustive)" : ""}\n• Total URLs: ${urls.length}\n\n📍 **DISCOVERED URLs:**\n${urls.map((url) => `• ${url}`).join("\n")}\n\n💡 **NEXT STEPS:**\n• Use fix_my_app to check for errors across all pages\n• Use execute_browser_action to test specific pages\n• Verify all routes are working correctly`
+        }
+      ]
+    }
+  } catch (error) {
+    logToDevFile(`Crawl App: Error - ${error}`)
+    return {
+      content: [
+        {
+          type: "text",
+          text: `❌ **CRAWL FAILED**\n\n${error instanceof Error ? error.message : String(error)}`
         }
       ]
     }
