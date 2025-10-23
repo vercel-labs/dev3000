@@ -3640,7 +3640,7 @@ export async function crawlApp(params: CrawlAppParams) {
     // Get CDP URL and app port from session
     const sessionData = JSON.parse(readFileSync(session.sessionFile, "utf-8"))
     const cdpUrl = sessionData.cdpUrl?.replace("http://", "ws://")
-    const appPort = sessionData.port || "3000"
+    const appPort = sessionData.appPort || "3000"
     const baseUrl = `http://localhost:${appPort}`
 
     if (!cdpUrl) {

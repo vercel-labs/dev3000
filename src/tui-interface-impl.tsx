@@ -1,6 +1,7 @@
 import chalk from "chalk"
 import { createReadStream, unwatchFile, watchFile } from "fs"
 import { Box, render, Text, useInput, useStdout } from "ink"
+import Spinner from "ink-spinner"
 import { useEffect, useRef, useState } from "react"
 import type { Readable } from "stream"
 import { LOG_COLORS } from "./constants/log-colors.js"
@@ -46,6 +47,7 @@ const TUIApp = ({
   const [scrollOffset, setScrollOffset] = useState(0)
   const [initStatus, setInitStatus] = useState<string | null>("Initializing...")
   const [appPort, setAppPort] = useState<string>(initialAppPort)
+  const [portConfirmed, setPortConfirmed] = useState<boolean>(false)
   const logIdCounter = useRef(0)
   const [clearFromLogId, setClearFromLogId] = useState<number>(0) // Track log ID to clear from
   const { stdout } = useStdout()
@@ -112,6 +114,7 @@ const TUIApp = ({
   useEffect(() => {
     onAppPortUpdate((port: string) => {
       setAppPort(port)
+      setPortConfirmed(true)
     })
   }, [onAppPortUpdate])
 
@@ -332,7 +335,10 @@ const TUIApp = ({
 
             {/* Info on the right */}
             <Box flexDirection="column" flexGrow={1}>
-              <Text color="cyan">🌐 App: http://localhost:{appPort}</Text>
+              <Box>
+                <Text color="cyan">🌐 App: http://localhost:{appPort} </Text>
+                {!portConfirmed && <Spinner type="dots" />}
+              </Box>
               <Text color="cyan">🤖 MCP: http://localhost:{mcpPort}</Text>
               <Text color="cyan">
                 📸 Logs: http://localhost:{mcpPort}/logs

@@ -511,6 +511,7 @@ export class DevEnvironment {
   private portChangeMessage: string | null = null
   private firstSigintTime: number | null = null
   private chromeDevtoolsSupported: boolean = false
+  private portDetected: boolean = false
 
   constructor(options: DevEnvironmentOptions) {
     // Handle portMcp vs mcpPort naming
@@ -689,44 +690,20 @@ export class DevEnvironment {
     if (this.isShuttingDown) return true // Skip health check if already shutting down
 
     try {
-      const http = await import("node:http")
-
-      // Check both app server and MCP server by making HTTP requests
-      // This is more reliable than lsof in Docker containers
       const ports = [this.options.port, this.options.mcpPort]
 
       for (const port of ports) {
-        const isHealthy = await new Promise<boolean>((resolve) => {
-          const req = http.request(
-            {
-              hostname: "localhost",
-              port,
-              path: "/",
-              method: "GET",
-              timeout: 2000
-            },
-            (res) => {
-              // Any response (including errors like 404) means the server is running
-              resolve(true)
-            }
-          )
-
-          req.on("error", () => {
-            // Connection refused means the server is not running
-            resolve(false)
+        const result = await new Promise<string>((resolve) => {
+          const proc = spawn("lsof", ["-ti", `:${port}`], { stdio: "pipe" })
+          let output = ""
+          proc.stdout?.on("data", (data) => {
+            output += data.toString()
           })
-
-          req.on("timeout", () => {
-            // Timeout means server might be slow, but it's still running
-            req.destroy()
-            resolve(true)
-          })
-
-          req.end()
+          proc.on("exit", () => resolve(output.trim()))
         })
 
-        if (!isHealthy) {
-          this.debugLog(`Health check failed: Port ${port} is no longer responding`)
+        if (!result) {
+          this.debugLog(`Health check failed: Port ${port} is no longer in use`)
           this.logger.log("server", `Health check failed: Critical process on port ${port} is no longer running`)
           return false
         }
@@ -845,6 +822,9 @@ export class DevEnvironment {
         console.error(chalk.yellow("Exiting without launching browser."))
         process.exit(1)
       }
+
+      // Update TUI with confirmed port (may have changed during server startup)
+      this.tui.updateAppPort(this.options.port)
 
       await this.tui.updateStatus(`Waiting for ${this.options.commandName} MCP server...`)
       await this.waitForMcpServer()
@@ -1195,6 +1175,7 @@ export class DevEnvironment {
       this.debugLog(`Detected server port change from ${oldPort} to ${detectedPort}`)
       this.logger.log("server", `[PORT] Server switched from port ${oldPort} to ${detectedPort}`)
       this.options.port = detectedPort
+      this.portDetected = true
 
       // Update session info with new port
       const projectName = getProjectName()
@@ -1214,6 +1195,11 @@ export class DevEnvironment {
         this.debugLog(`Updated session info with new port: ${this.options.port}`)
       }
 
+      // Update TUI header with new port
+      if (this.tui) {
+        this.tui.updateAppPort(detectedPort)
+      }
+
       // Navigate browser to new port if CDP monitor is active
       if (this.cdpMonitor) {
         this.debugLog(`Re-navigating browser from port ${oldPort} to ${detectedPort}`)
@@ -1221,6 +1207,26 @@ export class DevEnvironment {
         this.cdpMonitor.navigateToApp(detectedPort).catch((error: Error) => {
           this.debugLog(`Failed to navigate browser to new port: ${error}`)
         })
+      }
+    } else if (!this.portDetected) {
+      // Fallback: detect generic server startup messages when no explicit port is found
+      // This handles test apps and servers that don't output port information
+      const serverStartPatterns = [
+        /server\s+(is\s+)?running/i,
+        /ready\s+(in|on)/i,
+        /listening\s+on/i,
+        /started\s+server/i,
+        /http:\/\/localhost/i
+      ]
+
+      if (serverStartPatterns.some((pattern) => pattern.test(text))) {
+        this.debugLog(`Detected server startup via generic message, using configured port ${this.options.port}`)
+        this.portDetected = true
+
+        // Update TUI header with configured port
+        if (this.tui) {
+          this.tui.updateAppPort(this.options.port)
+        }
       }
     }
   }
@@ -1535,29 +1541,40 @@ export class DevEnvironment {
   private async waitForServer(): Promise<boolean> {
     const maxAttempts = 30
     let attempts = 0
-    const port = this.options.port
     const startTime = Date.now()
 
-    this.debugLog(`Starting server readiness check for port ${port}`)
+    this.debugLog(`Waiting for server to report its port...`)
 
     while (attempts < maxAttempts) {
       const attemptStartTime = Date.now()
+
+      // Wait for port to be detected from server logs before checking
+      if (!this.portDetected) {
+        this.debugLog(`Port not yet detected from server logs, waiting... (attempt ${attempts + 1}/${maxAttempts})`)
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+        attempts++
+        continue
+      }
+
+      // Now check if the detected port is actually listening
+      const currentPort = this.options.port
+
       try {
-        this.debugLog(`Server check attempt ${attempts + 1}/${maxAttempts}: checking port ${port}`)
+        this.debugLog(`Server check attempt ${attempts + 1}/${maxAttempts}: checking port ${currentPort}`)
 
         // Check if port is in use (server is listening) without making HTTP requests
-        const portInUse = !(await isPortAvailable(port))
+        const portInUse = !(await isPortAvailable(currentPort))
 
         const attemptTime = Date.now() - attemptStartTime
 
         if (portInUse) {
           const totalTime = Date.now() - startTime
           this.debugLog(
-            `Server is ready! Port ${port} is listening. Total wait time: ${totalTime}ms (${attempts + 1} attempts)`
+            `Server is ready! Port ${currentPort} is listening. Total wait time: ${totalTime}ms (${attempts + 1} attempts)`
           )
           return true
         } else {
-          this.debugLog(`Port ${port} not yet in use after ${attemptTime}ms`)
+          this.debugLog(`Port ${currentPort} not yet in use after ${attemptTime}ms`)
         }
       } catch (error) {
         const attemptTime = Date.now() - attemptStartTime
@@ -2084,22 +2101,13 @@ export class DevEnvironment {
     }
 
     // Initialize CDP monitor with enhanced logging - use MCP public directory for screenshots
-    // Create a structured logger for CDP using the utils/logger Logger
-    const { Logger: StructuredLogger, LogLevel } = await import("./utils/logger.js")
-    const cdpLogger = new StructuredLogger({
-      prefix: "cdp",
-      level: this.options.debug ? LogLevel.DEBUG : LogLevel.INFO,
-      enableColors: true,
-      enableTimestamp: true
-    })
-
     this.cdpMonitor = new CDPMonitor(
       this.options.profileDir,
       this.mcpPublicDir,
       (_source: string, message: string) => {
         this.logger.log("browser", message)
       },
-      cdpLogger,
+      this.options.debug,
       this.options.browser,
       this.options.pluginReactScan,
       this.options.port, // App server port to monitor
