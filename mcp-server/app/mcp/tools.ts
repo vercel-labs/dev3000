@@ -12,7 +12,7 @@ const execAsync = promisify(exec)
 // Tool descriptions
 export const TOOL_DESCRIPTIONS = {
   fix_my_app:
-    "🔧 **THE ULTIMATE FIND→FIX→VERIFY MACHINE!** This tool doesn't just find bugs - it FIXES them! Pure dev3000 magic that identifies issues, provides exact fixes, and verifies everything works! 🪄\n\n🔥 **INSTANT FIXING SUPERPOWERS:**\n• Detects ALL error types: server crashes, browser errors, build failures, API issues, performance problems\n• Shows EXACT user interactions that triggered each error (clicks, navigation, etc.)\n• Provides EXACT fix code with file locations and line numbers\n• Guides you through implementing fixes step-by-step\n• Verifies fixes by replaying the same interactions that caused the error!\n\n📍 **INTERACTION-BASED VERIFICATION:**\n• Every error includes the user interactions that led to it\n• Use execute_browser_action to replay these exact interactions\n• Verify your fix works by confirming the error doesn't reoccur\n• Example: Error shows '[INTERACTION] Click at (450,300)' → After fix, use execute_browser_action(action='click', params={x:450, y:300}) to verify\n\n⚡ **3 ACTION MODES:**\n• FIX NOW: 'What's broken RIGHT NOW?' → Find and fix immediately\n• FIX REGRESSION: 'What broke during testing?' → Compare before/after and fix\n• FIX CONTINUOUSLY: 'Fix issues as they appear' → Monitor and fix proactively\n\n🎪 **THE FIX-IT WORKFLOW:**\n1️⃣ I FIND all issues with their triggering interactions\n2️⃣ I provide EXACT FIXES with code snippets\n3️⃣ You implement the fixes\n4️⃣ We REPLAY the interactions to VERIFY everything works\n\n💡 **PERFECT FOR:** 'fix my app' or 'debug my app' requests, error resolution, code repairs, making broken apps work again. This tool doesn't just identify problems - it SOLVES them with precise reproduction steps!",
+    "🔧 **THE ULTIMATE FIND→FIX→VERIFY MACHINE!** This tool doesn't just find bugs - it FIXES them! Pure dev3000 magic that identifies issues, prioritizes them, and creates focused PRs for the worst issue! 🪄\n\n🔥 **INSTANT FIXING SUPERPOWERS:**\n• Detects ALL error types: server crashes, browser errors, build failures, API issues, performance problems\n• **PRIORITIZES errors** using smart scoring (build > server > browser > network > warnings)\n• **Identifies the SINGLE WORST issue** that needs fixing right now\n• **Creates ONE focused PR** per run - no overwhelming multi-issue PRs!\n• Shows EXACT user interactions that triggered each error (clicks, navigation, etc.)\n• Provides EXACT fix code with file locations and line numbers\n• Verifies fixes by replaying the same interactions that caused the error!\n\n🎯 **SMART PRIORITIZATION:**\n• Build errors: 1000+ priority (blocks development)\n• Server errors: 500+ priority (affects functionality)\n• Browser errors: 300+ priority (user-facing issues)\n• Network errors: 200+ priority (intermittent issues)\n• Warnings: 100+ priority (nice to fix)\n• +Modifiers: Multiple occurrences, recency, reproducibility\n\n🚀 **ONE-PR-PER-RUN WORKFLOW:**\n1️⃣ I FIND all issues and their interactions\n2️⃣ I PRIORITIZE using smart scoring algorithm\n3️⃣ I IDENTIFY the single worst issue\n4️⃣ Set createPR=true to CREATE A FOCUSED PR for just that issue\n5️⃣ Fix that ONE issue, then run again for the next worst issue\n\n📍 **INTERACTION-BASED VERIFICATION:**\n• Every error includes the user interactions that led to it\n• Use execute_browser_action to replay these exact interactions\n• Verify your fix works by confirming the error doesn't reoccur\n• Example: Error shows '[INTERACTION] Click at (450,300)' → After fix, use execute_browser_action(action='click', params={x:450, y:300}) to verify\n\n⚡ **3 ACTION MODES:**\n• FIX NOW: 'What's broken RIGHT NOW?' → Find worst issue and optionally create PR\n• FIX REGRESSION: 'What broke during testing?' → Compare before/after and fix worst issue\n• FIX CONTINUOUSLY: 'Fix issues as they appear' → Monitor and fix proactively\n\n💡 **PERFECT FOR:** 'fix my app' or 'debug my app' or 'create pr for worst issue' requests. This tool identifies problems, ranks them by severity, and creates focused single-issue PRs - not giant multi-fix PRs!",
 
   execute_browser_action:
     "🌐 **INTELLIGENT BROWSER AUTOMATION** - Smart browser action routing that automatically delegates to chrome-devtools MCP when available for superior automation capabilities.\n\n🎯 **INTELLIGENT DELEGATION:**\n• Screenshots → chrome-devtools MCP (better quality, no conflicts)\n• Navigation → chrome-devtools MCP (more reliable page handling)\n• Clicks → chrome-devtools MCP (precise coordinate-based interaction)\n• JavaScript evaluation → chrome-devtools MCP (enhanced debugging)\n• Scrolling & typing → dev3000 fallback (specialized actions)\n\n⚡ **PROGRESSIVE ENHANCEMENT:**\n• Uses chrome-devtools MCP when available for best results\n• Falls back to dev3000's native implementation when chrome-devtools unavailable\n• Shares the same Chrome instance via CDP URL coordination\n• Eliminates browser conflicts between tools\n\n💡 **PERFECT FOR:** Browser automation that automatically chooses the best tool for each action, ensuring optimal results whether chrome-devtools MCP is available or not.",
@@ -49,6 +49,7 @@ export interface FixMyAppParams {
   integrateNextjs?: boolean
   integrateChromeDevtools?: boolean
   returnRawData?: boolean
+  createPR?: boolean // Create a PR for the highest priority issue
 }
 
 export interface CreateIntegratedWorkflowParams {
@@ -122,6 +123,259 @@ export interface StructuredAnalysisResult {
   }
 }
 
+export interface PrioritizedError {
+  error: string
+  category: "build" | "server" | "browser" | "network" | "warning"
+  severity: "critical" | "error" | "warning"
+  priorityScore: number
+  interactions: string[]
+  timestamp?: string
+  suggestedFix?: string
+}
+
+// Helper functions
+
+/**
+ * Calculate priority score for an error
+ * Higher score = higher priority to fix
+ *
+ * Scoring system:
+ * - Build errors: 1000+ (blocks development)
+ * - Server errors: 500+ (affects functionality)
+ * - Browser errors: 300+ (user-facing issues)
+ * - Network errors: 200+ (intermittent issues)
+ * - Warnings: 100+ (nice to fix)
+ *
+ * Additional modifiers:
+ * - Multiple occurrences: +50 per occurrence
+ * - Recent (last minute): +100
+ * - Has user interactions: +50 (reproducible)
+ */
+function calculateErrorPriority(
+  errorLine: string,
+  category: PrioritizedError["category"],
+  interactions: string[],
+  allErrors: string[]
+): number {
+  let score = 0
+
+  // Base score by category
+  if (category === "build") {
+    score = 1000
+  } else if (category === "server") {
+    score = 500
+  } else if (category === "browser") {
+    score = 300
+  } else if (category === "network") {
+    score = 200
+  } else if (category === "warning") {
+    score = 100
+  }
+
+  // Severity multipliers
+  if (/CRITICAL|FATAL|crashed/i.test(errorLine)) {
+    score *= 2
+  } else if (/ERROR|Exception|FAIL/i.test(errorLine)) {
+    score *= 1.5
+  }
+
+  // Count occurrences of similar errors
+  const errorPattern = errorLine.replace(/\d+/g, "\\d+").substring(0, 100)
+  const occurrences = allErrors.filter((e) => new RegExp(errorPattern).test(e)).length
+  if (occurrences > 1) {
+    score += (occurrences - 1) * 50
+  }
+
+  // Boost if has interactions (reproducible)
+  if (interactions.length > 0) {
+    score += 50
+  }
+
+  // Boost if recent (within last minute)
+  const timestampMatch = errorLine.match(/\[(\d{2}):(\d{2}):(\d{2})\.\d{3}\]/)
+  if (timestampMatch) {
+    const now = new Date()
+    const errorTime = new Date()
+    errorTime.setHours(parseInt(timestampMatch[1], 10))
+    errorTime.setMinutes(parseInt(timestampMatch[2], 10))
+    errorTime.setSeconds(parseInt(timestampMatch[3], 10))
+
+    const ageMinutes = (now.getTime() - errorTime.getTime()) / 1000 / 60
+    if (ageMinutes < 1) {
+      score += 100
+    }
+  }
+
+  return score
+}
+
+/**
+ * Find the single highest priority error from categorized errors
+ */
+function findHighestPriorityError(
+  categorizedErrors: {
+    serverErrors: string[]
+    browserErrors: string[]
+    buildErrors: string[]
+    networkErrors: string[]
+    warnings: string[]
+  },
+  allErrors: string[],
+  logLines: string[]
+): PrioritizedError | null {
+  const prioritizedErrors: PrioritizedError[] = []
+
+  // Helper to find interactions before an error
+  const findInteractions = (errorLine: string): string[] => {
+    const errorIndex = logLines.indexOf(errorLine)
+    if (errorIndex === -1) return []
+
+    const interactions: string[] = []
+    for (let i = errorIndex - 1; i >= Math.max(0, errorIndex - 20) && interactions.length < 5; i--) {
+      if (
+        logLines[i].includes("[INTERACTION]") ||
+        logLines[i].includes("[NAVIGATION]") ||
+        logLines[i].includes("[PAGE]")
+      ) {
+        interactions.unshift(logLines[i])
+      }
+    }
+    return interactions
+  }
+
+  // Process build errors
+  for (const error of categorizedErrors.buildErrors) {
+    const interactions = findInteractions(error)
+    prioritizedErrors.push({
+      error,
+      category: "build",
+      severity: "critical",
+      priorityScore: calculateErrorPriority(error, "build", interactions, allErrors),
+      interactions
+    })
+  }
+
+  // Process server errors
+  for (const error of categorizedErrors.serverErrors) {
+    const interactions = findInteractions(error)
+    const severity: PrioritizedError["severity"] = /CRITICAL|FATAL/i.test(error) ? "critical" : "error"
+    prioritizedErrors.push({
+      error,
+      category: "server",
+      severity,
+      priorityScore: calculateErrorPriority(error, "server", interactions, allErrors),
+      interactions
+    })
+  }
+
+  // Process browser errors
+  for (const error of categorizedErrors.browserErrors) {
+    const interactions = findInteractions(error)
+    const severity: PrioritizedError["severity"] = /CRITICAL|FATAL/i.test(error) ? "critical" : "error"
+    prioritizedErrors.push({
+      error,
+      category: "browser",
+      severity,
+      priorityScore: calculateErrorPriority(error, "browser", interactions, allErrors),
+      interactions
+    })
+  }
+
+  // Process network errors
+  for (const error of categorizedErrors.networkErrors) {
+    const interactions = findInteractions(error)
+    prioritizedErrors.push({
+      error,
+      category: "network",
+      severity: "error",
+      priorityScore: calculateErrorPriority(error, "network", interactions, allErrors),
+      interactions
+    })
+  }
+
+  // Process warnings (only if no errors found)
+  if (prioritizedErrors.length === 0) {
+    for (const error of categorizedErrors.warnings) {
+      const interactions = findInteractions(error)
+      prioritizedErrors.push({
+        error,
+        category: "warning",
+        severity: "warning",
+        priorityScore: calculateErrorPriority(error, "warning", interactions, allErrors),
+        interactions
+      })
+    }
+  }
+
+  // Sort by priority score (highest first)
+  prioritizedErrors.sort((a, b) => b.priorityScore - a.priorityScore)
+
+  return prioritizedErrors[0] || null
+}
+
+/**
+ * Create a PR for the highest priority issue
+ */
+async function createPRForIssue(prioritizedError: PrioritizedError, _projectName: string): Promise<string> {
+  try {
+    // Extract error details for PR title and body
+    const errorType = prioritizedError.category.toUpperCase()
+    const errorMessage = prioritizedError.error
+      .replace(/\[[^\]]+\]/g, "") // Remove timestamps and tags
+      .trim()
+      .substring(0, 100)
+
+    const prTitle = `Fix: ${errorType} - ${errorMessage}`
+
+    // Build PR body
+    const prBody = `## 🐛 Bug Fix - ${prioritizedError.category} Error
+
+**Priority Score:** ${prioritizedError.priorityScore} (${prioritizedError.severity})
+
+### Error Details
+\`\`\`
+${prioritizedError.error}
+\`\`\`
+
+${
+  prioritizedError.interactions.length > 0
+    ? `### Reproduction Steps
+The error occurred after these user interactions:
+${prioritizedError.interactions.map((i, idx) => `${idx + 1}. ${i}`).join("\n")}
+
+### Verification
+After implementing the fix, verify by:
+1. Replaying the same interactions using \`execute_browser_action\`
+2. Confirming the error no longer appears in logs
+3. Checking that functionality works as expected
+`
+    : ""
+}
+
+### Suggested Fix
+This PR addresses the ${prioritizedError.severity}-level ${prioritizedError.category} error detected by dev3000.
+
+${prioritizedError.suggestedFix || "Please analyze the error and implement the appropriate fix."}
+
+---
+🤖 Generated with [dev3000](https://github.com/vercel-labs/dev3000) - AI-powered debugging
+`
+
+    // Create a new branch
+    const branchName = `fix/${prioritizedError.category}-${Date.now()}`
+
+    // Use execAsync to run git and gh commands
+    await execAsync(`git checkout -b ${branchName}`)
+
+    // Create the PR using gh
+    await execAsync(`gh pr create --title "${prTitle}" --body "${prBody}" --head ${branchName}`)
+
+    return `✅ Created PR: ${prTitle}\n\nBranch: ${branchName}\n\nNext steps:\n1. Implement the fix in your code\n2. Commit and push changes\n3. PR is ready for review!`
+  } catch (error) {
+    return `❌ Failed to create PR: ${error instanceof Error ? error.message : String(error)}\n\nYou can manually create a PR with the error details above.`
+  }
+}
+
 // Helper functions
 export function findActiveSessions(): Session[] {
   const sessionDir = join(homedir(), ".d3k")
@@ -185,7 +439,8 @@ export async function fixMyApp({
   includeTimestampInstructions = true,
   integrateNextjs = false,
   integrateChromeDevtools = false,
-  returnRawData = false
+  returnRawData = false,
+  createPR = false
 }: FixMyAppParams): Promise<{ content: Array<{ type: "text"; text: string }> }> {
   // 🎯 MCP ORCHESTRATION: Check which downstream MCPs are available
   const { getMCPClientManager } = await import("./client-manager")
@@ -629,6 +884,47 @@ export async function fixMyApp({
           results.push("• nextjs-dev provides server-side framework context")
           results.push("• chrome-devtools provides precise browser state inspection")
           results.push("• Combined = 90%+ issue resolution rate!")
+        }
+      }
+
+      // 🎯 PRIORITIZATION & PR CREATION
+      // Find the single highest priority error and optionally create a PR
+      const highestPriorityError = findHighestPriorityError(categorizedErrors, actionableErrors, logLines)
+
+      if (highestPriorityError) {
+        results.push("")
+        results.push("🎯 **HIGHEST PRIORITY ISSUE:**")
+        results.push(`📊 Priority Score: ${highestPriorityError.priorityScore}`)
+        results.push(`🏷️ Category: ${highestPriorityError.category.toUpperCase()}`)
+        results.push(`⚠️ Severity: ${highestPriorityError.severity.toUpperCase()}`)
+        results.push("")
+        results.push("❌ **Error:**")
+        results.push(`   ${highestPriorityError.error}`)
+
+        if (highestPriorityError.interactions.length > 0) {
+          results.push("")
+          results.push("📍 **Reproduction Steps:**")
+          highestPriorityError.interactions.forEach((interaction, idx) => {
+            results.push(`   ${idx + 1}. ${interaction}`)
+          })
+        }
+
+        // Create PR if requested
+        if (createPR) {
+          results.push("")
+          results.push("🚀 **CREATING PR FOR THIS ISSUE...**")
+          const prResult = await createPRForIssue(highestPriorityError, projectName || "")
+          results.push(prResult)
+        } else {
+          results.push("")
+          results.push("💡 **To create a PR for this issue:**")
+          results.push("   Run: fix_my_app(createPR=true)")
+          results.push("")
+          results.push("   This will:")
+          results.push("   • Create a new branch for the fix")
+          results.push("   • Generate a PR with full error context")
+          results.push("   • Include reproduction steps")
+          results.push("   • Focus on fixing just this ONE issue")
         }
       }
     }
