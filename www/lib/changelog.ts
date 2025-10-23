@@ -13,7 +13,11 @@ export const changelog: Release[] = [
     version: "0.0.103",
     date: "2025-10-23",
     type: "patch",
-    highlights: ["Quality improvements and bug fixes"]
+    highlights: [
+      "🎯 **Smart Error Prioritization**: Automatically scores and ranks errors by severity - build errors (1000+), server errors (500+), browser errors (300+), with modifiers for recency and reproducibility",
+      "🚀 **One-PR-Per-Run**: Creates focused single-issue PRs for the highest priority error - no more overwhelming multi-fix PRs",
+      "⚡ **Improved Port Detection**: Works with non-standard ports (like Svelte's 5173) and shows loading spinner until port is confirmed"
+    ]
   },
 
   {

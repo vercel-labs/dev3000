@@ -110,7 +110,10 @@ const FEATURE_PATTERNS = {
   delegation: [/delegat|orchestrat|coordinate/i],
   cdp: [/CDP.*URL|chrome.*devtools.*protocol/i],
   tui: [/TUI|terminal.*UI|header.*status/i],
-  browserSupport: [/arc|comet|edge|brave|browser.*support|browser.*path/i]
+  browserSupport: [/arc|comet|edge|brave|browser.*support|browser.*path/i],
+  errorPrioritization: [/priorit|priority.*score|worst.*issue|highest.*priority/i],
+  prCreation: [/PR.*creation|create.*PR|pull.*request|one-PR-per-run/i],
+  portDetection: [/port.*detection|port.*3000|port.*5173|svelte.*port|detect.*port/i]
 }
 
 // Function to extract highlights using Vercel-style changelog writing
@@ -159,6 +162,13 @@ function extractHighlights(commits: Commit[]): string[] {
     tui: meaningfulCommits.some((c) => FEATURE_PATTERNS.tui.some((pattern) => pattern.test(c.subject))),
     browserSupport: meaningfulCommits.some((c) =>
       FEATURE_PATTERNS.browserSupport.some((pattern) => pattern.test(c.subject))
+    ),
+    errorPrioritization: meaningfulCommits.some((c) =>
+      FEATURE_PATTERNS.errorPrioritization.some((pattern) => pattern.test(c.subject))
+    ),
+    prCreation: meaningfulCommits.some((c) => FEATURE_PATTERNS.prCreation.some((pattern) => pattern.test(c.subject))),
+    portDetection: meaningfulCommits.some((c) =>
+      FEATURE_PATTERNS.portDetection.some((pattern) => pattern.test(c.subject))
     )
   }
 
@@ -211,6 +221,24 @@ function extractHighlights(commits: Commit[]): string[] {
     } else {
       highlights.push("🌐 **Expanded Browser Support**: Added support for additional Chromium-based browsers")
     }
+  }
+
+  if (detectedFeatures.errorPrioritization) {
+    highlights.push(
+      "🎯 **Smart Error Prioritization**: Automatically scores and ranks errors by severity - build errors (1000+), server errors (500+), browser errors (300+), with modifiers for recency and reproducibility"
+    )
+  }
+
+  if (detectedFeatures.prCreation) {
+    highlights.push(
+      "🚀 **One-PR-Per-Run**: Creates focused single-issue PRs for the highest priority error - no more overwhelming multi-fix PRs"
+    )
+  }
+
+  if (detectedFeatures.portDetection) {
+    highlights.push(
+      "⚡ **Improved Port Detection**: Works with non-standard ports (like Svelte's 5173) and shows loading spinner until port is confirmed"
+    )
   }
 
   // Add fix highlights
