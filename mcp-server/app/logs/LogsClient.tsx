@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { DarkModeToggle } from "@/components/dark-mode-toggle"
 import { useDarkMode } from "@/hooks/use-dark-mode"
 import type { LogEntry, LogFile, LogListResponse, LogsApiResponse } from "@/types"
-import { getTextColor, LOG_COLORS } from "../../../src/constants/log-colors"
+import { getTextColor, LOG_COLORS } from "@/lib/constants/log-colors"
 
 // Define interfaces for object property rendering
 interface PropertyData {
