@@ -238,6 +238,7 @@ dev3000 [options]
   -p, --port <port>         Your app's port (default: 3000)
   --mcp-port <port>         MCP server port (default: 3684)
   -s, --script <script>     Package.json script to run (default: dev)
+  -c, --command <command>   Custom command to run (overrides auto-detection and --script)
   --browser <path>          Full path to browser executable (e.g. Arc, custom Chrome)
   --servers-only            Run servers only, skip browser launch (use with Chrome extension)
   --profile-dir <dir>       Chrome profile directory (default: /tmp/dev3000-chrome-profile)
@@ -248,6 +249,12 @@ Examples:
 ```bash
 # Custom port
 dev3000 --port 5173
+
+# Custom command (skip auto-detection)
+dev3000 --command "bun run dev"
+
+# Custom Python server
+dev3000 --command "uvicorn main:app --reload" --port 8000
 
 # Use Arc browser
 dev3000 --browser '/Applications/Arc.app/Contents/MacOS/Arc'

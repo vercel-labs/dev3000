@@ -230,6 +230,7 @@ program
   .option("-p, --port <port>", "Development server port (auto-detected by project type)")
   .option("-m, --port-mcp <port>", "MCP server port", "3684")
   .option("-s, --script <script>", "Script to run (e.g. dev, main.py) - auto-detected by project type")
+  .option("-c, --command <command>", "Custom command to run (overrides auto-detection and --script)")
   .option("--profile-dir <dir>", "Chrome profile directory", join(tmpdir(), "dev3000-chrome-profile"))
   .option(
     "--browser <path>",
@@ -273,9 +274,15 @@ program
     const userSetPort = options.port !== undefined
     const userSetMcpPort = process.argv.includes("--port-mcp") || process.argv.includes("-p-mcp")
 
-    // Generate server command based on project type
+    // Generate server command based on custom command or project type
     let serverCommand: string
-    if (projectConfig.type === "python") {
+    if (options.command) {
+      // Use custom command if provided - this overrides everything
+      serverCommand = options.command
+      if (options.debug) {
+        console.log(`[DEBUG] Using custom command: ${serverCommand}`)
+      }
+    } else if (projectConfig.type === "python") {
       serverCommand = `${projectConfig.pythonCommand} ${script}`
     } else if (projectConfig.type === "rails") {
       serverCommand = `bundle exec rails ${script}`
@@ -285,7 +292,8 @@ program
     }
 
     // Check for circular dependency - detect if the script would invoke dev3000 itself
-    if (projectConfig.type === "node") {
+    // Skip this check if using a custom command
+    if (projectConfig.type === "node" && !options.command) {
       try {
         const packageJson = JSON.parse(readFileSync(join(process.cwd(), "package.json"), "utf-8"))
         const scriptContent = packageJson.scripts?.[script]
