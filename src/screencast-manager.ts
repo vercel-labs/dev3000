@@ -326,7 +326,7 @@ export class ScreencastManager {
       }
 
       this.logFn(
-        `[SCREENCAST] View jank analysis: http://localhost:${process.env.MCP_PORT || "3684"}/video/${this.currentSessionId}`
+        `[SCREENCAST] View frame analysis: http://localhost:${process.env.MCP_PORT || "3684"}/video/${this.currentSessionId}`
       )
 
       await this.stopScreencast()
