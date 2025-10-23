@@ -109,10 +109,10 @@ start-chrome-cdp: ## Start Chrome with CDP (auto-detects WSL/Linux/macOS)
 		echo "   Detected WSL2 host IP: $$HOST_IP"; \
 		APP_URL="http://$$HOST_IP:3000/"; \
 		echo "   Application URL: $$APP_URL"; \
-		powershell.exe -Command "Start-Process chrome.exe -ArgumentList '--remote-debugging-port=9222','--user-data-dir=C:\\temp\\chrome-dev-profile','--no-first-run','--no-default-browser-check','$$APP_URL'" 2>/dev/null || \
-		cmd.exe /c "start chrome.exe --remote-debugging-port=9222 --user-data-dir=C:\\temp\\chrome-dev-profile --no-first-run --no-default-browser-check $$APP_URL" 2>/dev/null || \
+		powershell.exe -Command "Start-Process chrome.exe -ArgumentList '--remote-debugging-port=9222','--remote-debugging-address=0.0.0.0','--user-data-dir=C:\\temp\\chrome-dev-profile','--no-first-run','--no-default-browser-check','$$APP_URL'" 2>/dev/null || \
+		cmd.exe /c "start chrome.exe --remote-debugging-port=9222 --remote-debugging-address=0.0.0.0 --user-data-dir=C:\\temp\\chrome-dev-profile --no-first-run --no-default-browser-check $$APP_URL" 2>/dev/null || \
 		echo "⚠️  Failed to start Chrome automatically. Please start Chrome manually:"; \
-		echo "   chrome.exe --remote-debugging-port=9222 --user-data-dir=C:\\temp\\chrome-dev-profile $$APP_URL"; \
+		echo "   chrome.exe --remote-debugging-port=9222 --remote-debugging-address=0.0.0.0 --user-data-dir=C:\\temp\\chrome-dev-profile $$APP_URL"; \
 		sleep 3; \
 	elif [ "$$(uname)" = "Darwin" ]; then \
 		echo "Detected macOS environment"; \
