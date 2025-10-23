@@ -511,6 +511,7 @@ export class DevEnvironment {
   private portChangeMessage: string | null = null
   private firstSigintTime: number | null = null
   private chromeDevtoolsSupported: boolean = false
+  private portDetected: boolean = false
 
   constructor(options: DevEnvironmentOptions) {
     // Handle portMcp vs mcpPort naming
@@ -821,6 +822,9 @@ export class DevEnvironment {
         console.error(chalk.yellow("Exiting without launching browser."))
         process.exit(1)
       }
+
+      // Update TUI with confirmed port (may have changed during server startup)
+      this.tui.updateAppPort(this.options.port)
 
       await this.tui.updateStatus(`Waiting for ${this.options.commandName} MCP server...`)
       await this.waitForMcpServer()
@@ -1171,6 +1175,7 @@ export class DevEnvironment {
       this.debugLog(`Detected server port change from ${oldPort} to ${detectedPort}`)
       this.logger.log("server", `[PORT] Server switched from port ${oldPort} to ${detectedPort}`)
       this.options.port = detectedPort
+      this.portDetected = true
 
       // Update session info with new port
       const projectName = getProjectName()
@@ -1188,6 +1193,11 @@ export class DevEnvironment {
           this.options.serverCommand
         )
         this.debugLog(`Updated session info with new port: ${this.options.port}`)
+      }
+
+      // Update TUI header with new port
+      if (this.tui) {
+        this.tui.updateAppPort(detectedPort)
       }
 
       // Navigate browser to new port if CDP monitor is active
@@ -1511,29 +1521,40 @@ export class DevEnvironment {
   private async waitForServer(): Promise<boolean> {
     const maxAttempts = 30
     let attempts = 0
-    const port = this.options.port
     const startTime = Date.now()
 
-    this.debugLog(`Starting server readiness check for port ${port}`)
+    this.debugLog(`Waiting for server to report its port...`)
 
     while (attempts < maxAttempts) {
       const attemptStartTime = Date.now()
+
+      // Wait for port to be detected from server logs before checking
+      if (!this.portDetected) {
+        this.debugLog(`Port not yet detected from server logs, waiting... (attempt ${attempts + 1}/${maxAttempts})`)
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+        attempts++
+        continue
+      }
+
+      // Now check if the detected port is actually listening
+      const currentPort = this.options.port
+
       try {
-        this.debugLog(`Server check attempt ${attempts + 1}/${maxAttempts}: checking port ${port}`)
+        this.debugLog(`Server check attempt ${attempts + 1}/${maxAttempts}: checking port ${currentPort}`)
 
         // Check if port is in use (server is listening) without making HTTP requests
-        const portInUse = !(await isPortAvailable(port))
+        const portInUse = !(await isPortAvailable(currentPort))
 
         const attemptTime = Date.now() - attemptStartTime
 
         if (portInUse) {
           const totalTime = Date.now() - startTime
           this.debugLog(
-            `Server is ready! Port ${port} is listening. Total wait time: ${totalTime}ms (${attempts + 1} attempts)`
+            `Server is ready! Port ${currentPort} is listening. Total wait time: ${totalTime}ms (${attempts + 1} attempts)`
           )
           return true
         } else {
-          this.debugLog(`Port ${port} not yet in use after ${attemptTime}ms`)
+          this.debugLog(`Port ${currentPort} not yet in use after ${attemptTime}ms`)
         }
       } catch (error) {
         const attemptTime = Date.now() - attemptStartTime
