@@ -25,7 +25,7 @@ services:
       # CDP configuration for host Chrome connection
       # Set DEV3000_CDP_URL to connect to Chrome running on host
       # Default: http://host.docker.internal:9222 (works on Docker Desktop)
-      # For WSL2: Use the actual host IP or host.docker.internal
+      # For WSL2: Use host.docker.internal to access Windows host
       - DEV3000_CDP_URL=${DEV3000_CDP_URL:-http://host.docker.internal:9222}
 
       # Node.js environment
@@ -41,7 +41,7 @@ services:
       # Dev3000 logging configuration
       - LOG_FILE_PATH=/tmp/d3k.log
 
-    # WSL compatibility: allow host.docker.internal to work on Linux/WSL
+    # WSL2 compatibility: Map host.docker.internal to Windows host IP
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
