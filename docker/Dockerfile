@@ -67,7 +67,8 @@ RUN chown -R node:node /app
 USER node
 
 # Install application dependencies with npm ci for faster, cleaner installs
-RUN npm ci --prefer-offline --no-audit
+# Use --legacy-peer-deps for Next.js 16 with ESLint 9 compatibility
+RUN npm ci --prefer-offline --no-audit --legacy-peer-deps
 
 # Set PATH to include global npm packages
 ENV PATH="/usr/local/lib/node_modules/.bin:${PATH}"
