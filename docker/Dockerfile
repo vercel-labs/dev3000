@@ -5,10 +5,15 @@
 FROM node:20-alpine AS base
 
 # Install system dependencies required by dev3000
-# lsof: Port checking utility (note: Alpine uses different package)
+# lsof: Port checking utility
+# coreutils: GNU coreutils for env -S support (required by dev3000 shebang)
 RUN echo "[$(date +%Y-%m-%d\ %H:%M:%S)] Installing system dependencies..." \
-    && apk add --no-cache lsof curl \
+    && apk add --no-cache lsof curl coreutils \
     && echo "[$(date +%Y-%m-%d\ %H:%M:%S)] System dependencies installed successfully"
+
+# Ensure GNU coreutils binaries are prioritized over BusyBox
+# This is critical for dev3000's shebang (#!/usr/bin/env -S node)
+ENV PATH="/usr/bin:$PATH"
 
 # Install pnpm globally (as root)
 RUN echo "[$(date +%Y-%m-%d\ %H:%M:%S)] Enabling pnpm via corepack..." \
