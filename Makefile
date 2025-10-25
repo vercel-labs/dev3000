@@ -94,6 +94,62 @@ clean: ## Clean up Docker resources and build artifacts
 	@rm -rf example/nextjs15/node_modules example/nextjs15/.next
 	@echo "✅ Cleanup complete"
 
+## ========== Frontend Deployment ==========
+
+deploy-frontend: ## Deploy example app to frontend directory (e.g., make deploy-frontend APP=nextjs15)
+	@if [ -z "$(APP)" ]; then \
+		echo "❌ Error: APP parameter is required"; \
+		echo ""; \
+		echo "Usage: make deploy-frontend APP=<app-name>"; \
+		echo ""; \
+		echo "Available apps in example/:"; \
+		ls -1 example/ | sed 's/^/  - /'; \
+		exit 1; \
+	fi; \
+	if [ ! -d "example/$(APP)" ]; then \
+		echo "❌ Error: example/$(APP) does not exist"; \
+		echo ""; \
+		echo "Available apps:"; \
+		ls -1 example/ | sed 's/^/  - /'; \
+		exit 1; \
+	fi; \
+	echo "📦 Deploying example/$(APP) to frontend/..."; \
+	rm -rf frontend; \
+	mkdir -p frontend; \
+	rsync -av --exclude='node_modules' --exclude='.next' --exclude='out' --exclude='.pnpm-store' example/$(APP)/ frontend/; \
+	echo "✅ Deployed example/$(APP) to frontend/"; \
+	echo ""; \
+	echo "Frontend directory contents:"; \
+	du -sh frontend/; \
+	echo ""; \
+	echo "Next steps:"; \
+	echo "  make dev-rebuild  - Rebuild Docker image with new frontend"; \
+	echo "  make dev-up       - Start development environment"
+
+deploy-and-start: ## Deploy example and start dev environment (e.g., make deploy-and-start APP=nextjs15)
+	@if [ -z "$(APP)" ]; then \
+		echo "❌ Error: APP parameter is required"; \
+		echo ""; \
+		echo "Usage: make deploy-and-start APP=<app-name>"; \
+		echo ""; \
+		echo "Available apps in example/:"; \
+		ls -1 example/ | sed 's/^/  - /'; \
+		exit 1; \
+	fi
+	@echo "🚀 Deploying and starting $(APP)..."
+	@echo ""
+	@$(MAKE) deploy-frontend APP=$(APP)
+	@echo ""
+	@echo "🔨 Rebuilding Docker image..."
+	@$(MAKE) dev-rebuild
+
+list-examples: ## List available example apps
+	@echo "Available example apps:"
+	@ls -1 example/ | sed 's/^/  - /'
+	@echo ""
+	@echo "Deploy with: make deploy-frontend APP=<app-name>"
+	@echo "Deploy and start with: make deploy-and-start APP=<app-name>"
+
 ## ========== Chrome CDP Management ==========
 
 start-chrome-cdp: ## Start Chrome with CDP (auto-detects WSL/Linux/macOS)
