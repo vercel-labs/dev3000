@@ -727,6 +727,7 @@ export class DevEnvironment {
       const ports = [this.options.port, this.options.mcpPort]
 
       for (const port of ports) {
+        // Try lsof first (traditional method)
         const result = await new Promise<string>((resolve) => {
           const proc = spawn("lsof", ["-ti", `:${port}`], { stdio: "pipe" })
           let output = ""
@@ -734,12 +735,35 @@ export class DevEnvironment {
             output += data.toString()
           })
           proc.on("exit", () => resolve(output.trim()))
+          proc.on("error", () => resolve(""))
         })
 
+        // If lsof found no processes, try HTTP health check as fallback
         if (!result) {
-          this.debugLog(`Health check failed: Port ${port} is no longer in use`)
-          this.fileLogger.log("server", `Health check failed: Critical process on port ${port} is no longer running`)
-          return false
+          try {
+            const http = await import("node:http")
+            const isListening = await new Promise<boolean>((resolve) => {
+              const req = http.get(`http://localhost:${port}/`, { timeout: 2000 }, (res) => {
+                res.resume() // Consume response data to free up memory
+                resolve(true)
+              })
+              req.on("error", () => resolve(false))
+              req.on("timeout", () => {
+                req.destroy()
+                resolve(false)
+              })
+            })
+
+            if (!isListening) {
+              this.debugLog(`Health check failed: Port ${port} is no longer in use (HTTP check)`)
+              this.fileLogger.log("server", `Health check failed: Critical process on port ${port} is no longer running`)
+              return false
+            }
+          } catch (httpError) {
+            this.debugLog(`Health check HTTP fallback failed for port ${port}: ${httpError}`)
+            this.fileLogger.log("server", `Health check failed: Critical process on port ${port} is no longer running`)
+            return false
+          }
         }
       }
 
