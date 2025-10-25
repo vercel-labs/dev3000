@@ -29,8 +29,9 @@ WORKDIR /build/dev3000
 # Copy workspace configuration and lock files first for better caching
 COPY pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY package.json ./
+COPY mcp-server/package.json ./mcp-server/
 
-# Install dependencies first (cached layer)
+# Install all workspace dependencies (cached layer)
 RUN pnpm install --frozen-lockfile --prefer-offline
 
 # Copy source code (changes more frequently)
@@ -38,7 +39,7 @@ COPY tsconfig.json ./
 COPY src ./src
 COPY mcp-server ./mcp-server
 
-# Build dev3000 and MCP server
+# Build dev3000 CLI and MCP server
 RUN pnpm run build && \
     cd mcp-server && pnpm run build && cd .. && \
     mkdir -p /build/dev3000/mcp-server/public/screenshots && \
