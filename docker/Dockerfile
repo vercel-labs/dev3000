@@ -58,7 +58,7 @@ COPY --from=dev3000-builder /usr/local/bin/dev3000 /usr/local/bin/dev3000
 COPY --from=dev3000-builder /build/dev3000/mcp-server /usr/local/lib/node_modules/dev3000/mcp-server
 
 # Copy frontend package files for dependency installation
-COPY frontend/package*.json ./
+COPY frontend/package.json ./
 
 # Create non-root user and set permissions
 RUN chown -R node:node /app
@@ -66,9 +66,9 @@ RUN chown -R node:node /app
 # Switch to node user
 USER node
 
-# Install application dependencies with npm ci for faster, cleaner installs
-# Use --legacy-peer-deps for Next.js 16 with ESLint 9 compatibility
-RUN npm ci --prefer-offline --no-audit --legacy-peer-deps
+# Install application dependencies
+# Use npm install since package-lock.json may not exist in examples
+RUN npm install --prefer-offline --no-audit --legacy-peer-deps
 
 # Set PATH to include global npm packages
 ENV PATH="/usr/local/lib/node_modules/.bin:${PATH}"

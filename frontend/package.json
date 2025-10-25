@@ -1,0 +1,24 @@
+{
+  "name": "dev3000-nextjs16-example",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Example Next.js 16 application for dev3000 Docker setup",
+  "scripts": {
+    "dev": "next dev --turbopack",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "next": "^16.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "eslint": "^9",
+    "eslint-config-next": "^16.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
