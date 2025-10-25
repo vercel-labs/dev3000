@@ -4,11 +4,38 @@
 
 Captures your web app's complete development timeline - server logs, browser events, console messages, network requests, and automatic screenshots - in a unified, timestamped feed for AI debugging. **Gracefully enhances with chrome-devtools and nextjs-dev MCPs when available.**
 
-## Quick Start
+> **Note**: This is a fork of [vercel-labs/dev3000](https://github.com/vercel-labs/dev3000) optimized for Docker-based development with Alpine Linux, enhanced health checks, and simplified deployment workflows. We're grateful to the original developers for creating this amazing debugging tool!
+
+## Quick Start (Docker)
 
 ```bash
-pnpm install -g dev3000
-dev3000
+# Clone this repository
+git clone https://github.com/YOUR-USERNAME/dev3000.git
+cd dev3000
+
+# Deploy example app to frontend
+make deploy-frontend APP=nextjs16
+
+# Start development environment
+make dev-up
+```
+
+The development environment will start:
+- **Next.js App**: http://localhost:3000
+- **Dev3000 UI**: http://localhost:3684
+- **Logs Viewer**: http://localhost:3684/logs
+
+### Available Commands
+
+```bash
+make list-examples          # List available example apps
+make deploy-frontend APP=nextjs16  # Deploy specific example
+make deploy-and-start APP=nextjs16 # Deploy and start (one command)
+make dev-up                 # Start development environment
+make dev-down               # Stop development environment
+make dev-logs               # Follow container logs
+make dev-rebuild            # Rebuild Docker image
+make status                 # Show environment status
 ```
 
 ## AI Integration with Dynamic Enhancement
@@ -16,7 +43,7 @@ dev3000
 **dev3000 features smart MCP integration that gracefully enhances capabilities when specialized MCPs are available!**
 
 ### 🎯 Core Experience (Always Available)
-When you run `dev3000`, you get:
+When you run dev3000, you get:
 - **dev3000 MCP** - Complete debugging and browser automation tools
 - Full log analysis, error detection, interaction replay
 - Comprehensive browser automation and screenshot capture
@@ -28,12 +55,12 @@ dev3000 **automatically discovers** and integrates with:
 
 ### 🚀 Dynamic Capability Discovery
 - **Real-time detection** of available MCP capabilities via log introspection
-- **Context-aware suggestions** that match your current debugging scenario  
+- **Context-aware suggestions** that match your current debugging scenario
 - **Zero manual configuration** - works out of the box
 - **Intelligent caching** (5min TTL) for optimal performance
 - **Self-updating** - automatically adapts when MCPs add new features
 
-For **Claude Code**, no manual setup is required. Just run `dev3000` and start using AI commands:
+For **Claude Code**, no manual setup is required. Just run dev3000 and start using AI commands:
 
 ```
 fix my app
@@ -72,7 +99,7 @@ The tool monitors your app in a real browser and captures:
 
 ![dev3000 Logs Viewer](logs.jpg)
 
-Logs are automatically saved with timestamps in `/var/log/dev3000/` (or temp directory) and rotated to keep the 10 most recent per project. Each instance has its own timestamped log file displayed when starting dev3000.
+Logs are automatically saved with timestamps in `~/.d3k/logs/` and rotated to keep the 10 most recent per project. Each instance has its own timestamped log file displayed when starting dev3000.
 
 ## dev3000: Smart Debugging Orchestrator
 
@@ -87,7 +114,7 @@ Logs are automatically saved with timestamps in `/var/log/dev3000/` (or temp dir
 
 **Enhanced Mode** (with specialized MCPs):
 - **Dynamic Discovery**: Real-time detection of available MCP capabilities via log introspection
-- **Capability-Aware Suggestions**: Context-sensitive recommendations based on discovered MCP functions  
+- **Capability-Aware Suggestions**: Context-sensitive recommendations based on discovered MCP functions
 - **Augmented Delegation**: Provides comprehensive dev3000 analysis PLUS enhanced MCP suggestions
 - **Self-Updating Intelligence**: Automatically adapts when MCPs add new capabilities - no manual updates required
 
@@ -123,7 +150,7 @@ Unlike static integrations that become outdated, dev3000 features **living integ
 ### 📋 Smart Integration Tools
 
 **`fix_my_app`** - Enhanced with dynamic capability discovery
-- Provides comprehensive dev3000 log analysis  
+- Provides comprehensive dev3000 log analysis
 - Automatically suggests relevant enhanced MCP functions based on discovered capabilities
 - Context-aware suggestions that match current error patterns
 - Returns structured data for orchestration when needed
@@ -134,7 +161,7 @@ Unlike static integrations that become outdated, dev3000 features **living integ
 "Show me what MCP capabilities are currently available"
 ```
 - Displays all discovered functions from available MCPs
-- Shows capability categories (advanced vs basic)  
+- Shows capability categories (advanced vs basic)
 - Reveals cache status and discovery timestamps
 - Perfect for debugging MCP integration issues
 
@@ -151,7 +178,7 @@ Unlike static integrations that become outdated, dev3000 features **living integ
 
 **`create_integrated_workflow`** - Generate systematic debugging plans
 ```bash
-# In Claude Code  
+# In Claude Code
 "Create an integrated debugging workflow for my Next.js app"
 ```
 
@@ -165,7 +192,7 @@ dev3000 can automatically discover other MCPs without manual configuration:
 
 ```
 [2025-01-XX] [D3K] MCP Discovery: Found nextjs-dev MCP via process detection
-[2025-01-XX] [D3K] MCP Integration: Activated integrations [Next.js, Chrome DevTools]  
+[2025-01-XX] [D3K] MCP Integration: Activated integrations [Next.js, Chrome DevTools]
 [2025-01-XX] [D3K] Fix Analysis: Using active MCP integrations for enhanced error analysis
 ```
 
@@ -176,18 +203,33 @@ dev3000 can automatically discover other MCPs without manual configuration:
 The MCP server runs at `http://localhost:3684/mcp` and provides these tools:
 
 - `fix_my_app` - **Enhanced!** AI-powered debugging with dynamic MCP capability suggestions
-- `execute_browser_action` - **Enhanced!** Browser automation with context-aware MCP recommendations  
+- `execute_browser_action` - **Enhanced!** Browser automation with context-aware MCP recommendations
 - `get_mcp_capabilities` - **NEW!** Inspect available MCP ecosystem capabilities in real-time
 - `discover_available_mcps` - Find running MCPs via process detection and port pinging
 - `create_integrated_workflow` - Generate systematic multi-MCP debugging plans
 - `get_shared_cdp_url` - Get CDP WebSocket URL for browser coordination
 - `read_consolidated_logs` - Get recent logs with filtering
-- `search_logs` - Regex search with context  
+- `search_logs` - Regex search with context
 - `get_browser_errors` - Extract browser errors by time period
 
-**Automatic Configuration**: Claude Code users get MCP access automatically when running `dev3000`. The dynamic capability discovery works with any MCPs you have configured - no manual setup required!
+**Automatic Configuration**: Claude Code users get MCP access automatically when running dev3000. The dynamic capability discovery works with any MCPs you have configured - no manual setup required!
 
+## Docker Environment
 
+This repository uses Docker for consistent development across platforms (WSL2, Linux, macOS).
+
+### Architecture
+- **Alpine Linux base** - Lightweight and optimized
+- **GNU coreutils** - Full dev3000 compatibility
+- **HTTP health checks** - Robust container monitoring
+- **Volume mounts** - Hot reload for development
+
+### Requirements
+- Docker and Docker Compose
+- Make (for convenience commands)
+- WSL2 (for Windows users)
+
+For detailed Docker setup instructions, see [DOCKER_SETUP.md](DOCKER_SETUP.md).
 
 ## Using the Chrome Extension vs Playwright
 
@@ -230,42 +272,6 @@ dev3000 --servers-only
 | **Screenshots**     | Automatic on events      | Manual via extension    |
 | **Best For**        | Automated testing, CI/CD | Development debugging   |
 
-## Options
-
-```bash
-dev3000 [options]
-
-  -p, --port <port>         Your app's port (default: 3000)
-  --mcp-port <port>         MCP server port (default: 3684)
-  -s, --script <script>     Package.json script to run (default: dev)
-  -c, --command <command>   Custom command to run (overrides auto-detection and --script)
-  --browser <path>          Full path to browser executable (e.g. Arc, custom Chrome)
-  --servers-only            Run servers only, skip browser launch (use with Chrome extension)
-  --profile-dir <dir>       Chrome profile directory (default: /tmp/dev3000-chrome-profile)
-```
-
-Examples:
-
-```bash
-# Custom port
-dev3000 --port 5173
-
-# Custom command (skip auto-detection)
-dev3000 --command "bun run dev"
-
-# Custom Python server
-dev3000 --command "uvicorn main:app --reload" --port 8000
-
-# Use Arc browser
-dev3000 --browser '/Applications/Arc.app/Contents/MacOS/Arc'
-
-# Use with Chrome extension (no Playwright)
-dev3000 --servers-only
-
-# Custom profile directory
-dev3000 --profile-dir ./chrome-profile
-```
-
 ## Frequently Asked Questions
 
 ### Does dev3000 save my login state?
@@ -274,77 +280,66 @@ Yes, login state is saved automatically in a unique browser profile for each pro
 
 ### How do I stop a dev3000 session?
 
-Press `Ctrl+C` to stop everything (server, browser, and MCP server).
+Use `make dev-down` to stop the development environment, or `Ctrl+C` in the terminal running dev3000.
 
 ### Does dev3000 work with other frameworks besides Next.js?
 
-Yes, it works with React, Vue, Vite, etc. Use `--script` to specify your dev command.
+Yes, it works with React, Vue, Vite, etc. Deploy your own app by copying it to the `frontend/` directory and rebuilding.
 
 ### Why do I see a warning about "sharp" during installation?
 
 This warning is harmless and can be safely ignored. Sharp is an optional image optimization library used by Next.js, but dev3000 has image optimization disabled (`images: { unoptimized: true }` in next.config.mjs) since all images are served locally. The warning appears because pnpm wants to run sharp's build script, but the library is never actually used at runtime.
 
----
-
-_Made by [elsigh](https://github.com/elsigh)_
-
 ## Contributing
 
 We welcome contributions! Here's how to get started:
 
-### Testing Your Changes Locally
-
-Use the canary script to build and test your changes on your machine:
+### Development Setup
 
 ```bash
-./scripts/canary.sh
+# Clone the repository
+git clone https://github.com/YOUR-USERNAME/dev3000.git
+cd dev3000
+
+# Install dependencies
+pnpm install
+
+# Build the project
+pnpm run build
+
+# Run tests
+pnpm test
 ```
 
-This will:
-- Build the project (including MCP server)
-- Create a local package
-- Install it globally for testing
-- You can verify with `dev3000 --version` (should show canary version)
+### Testing Your Changes
+
+Test your changes in Docker:
+
+```bash
+# Rebuild Docker image with your changes
+make dev-rebuild
+
+# Check logs
+make dev-logs
+
+# Test in different scenarios
+make deploy-and-start APP=nextjs16
+```
 
 ### Before Submitting a PR
 
 - **Pull the latest changes** from `main`
-- **Run the canary build** to test your changes: `./scripts/canary.sh`
 - **Ensure tests pass**: `pnpm test`
+- **Run linting**: `pnpm run lint`
+- **Check types**: `pnpm run typecheck`
 - **Note**: Pre-commit hooks will automatically format your code with Biome
-
-### Development Tips
-
-- Use `pnpm run lint` to check code style
-- Use `pnpm run typecheck` for TypeScript validation
-- The canary script is the best way to test the full user experience locally
 
 ### Testing
 
 - `pnpm test` - Run unit tests
 - `pnpm run test-clean-install` - Test clean installations in isolated environments
-- `pnpm run test-release` - Run comprehensive release tests (includes all of the above plus build, pack, and MCP server tests)
+- `pnpm run test-release` - Run comprehensive release tests
 
-## Releasing (Maintainers Only)
+## License
 
-We use a semi-automated release process that handles testing while accommodating npm's 2FA requirement:
-
-### Option 1: GitHub Actions + Manual Publish (Recommended)
-
-1. Go to [Actions](https://github.com/vercel-labs/dev3000/actions) → "Prepare Release"
-2. Select release type (patch/minor/major) and run
-3. Wait for tests to pass on all platforms
-4. Download the release artifact (tarball)
-5. Publish locally: `./scripts/publish.sh dev3000-*.tgz`
-
-### Option 2: Local Release
-
-```bash
-./scripts/release.sh  # Creates tag and updates version
-./scripts/publish.sh  # Publishes to npm (requires 2FA)
-git push origin main --tags
-```
-
-The release script automatically handles re-releases by cleaning up existing tags if needed.
-
-For detailed instructions, see [docs/RELEASE_PROCESS.md](docs/RELEASE_PROCESS.md).
+MIT
