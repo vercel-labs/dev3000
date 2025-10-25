@@ -1,15 +1,13 @@
 # Dev3000 Docker Image
-# Multi-stage build for optimal size and security
-# Base: node:20-bookworm-slim for minimal dependencies
+# Optimized Alpine-based image for minimal size and maximum efficiency
+# Base: node:20-alpine for minimal footprint
 
-FROM node:20-bookworm-slim AS base
+FROM node:20-alpine AS base
 
 # Install system dependencies required by dev3000
-# lsof: Port checking utility
+# lsof: Port checking utility (note: Alpine uses different package)
 RUN echo "[$(date +%Y-%m-%d\ %H:%M:%S)] Installing system dependencies..." \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends lsof \
-    && rm -rf /var/lib/apt/lists/* \
+    && apk add --no-cache lsof curl \
     && echo "[$(date +%Y-%m-%d\ %H:%M:%S)] System dependencies installed successfully"
 
 # Install pnpm globally (as root)
@@ -40,16 +38,15 @@ RUN echo "[$(date +%Y-%m-%d\ %H:%M:%S)] Installing dev3000 dependencies..." \
     && chmod -R 777 /build/dev3000/mcp-server/public \
     && echo "[$(date +%Y-%m-%d\ %H:%M:%S)] Installing dev3000 globally..." \
     && npm install -g . \
-    && echo "[$(date +%Y-%m-%d\ %H:%M:%S)] dev3000 installed successfully" \
-    && dev3000 --version
+    && echo "[$(date +%Y-%m-%d\ %H:%M:%S)] dev3000 installed successfully"
 
 # Set working directory for app
 WORKDIR /app
 
-# Copy example app files
-COPY example/nextjs15/package*.json ./
+# Copy frontend app files
+COPY frontend/package*.json ./
 
-# Create non-root user (node user already exists in official node image)
+# Create non-root user (node user already exists in Alpine node image)
 # Set ownership of /app to node user
 RUN chown -R node:node /app
 
@@ -60,13 +57,13 @@ USER node
 RUN echo "[$(date +%Y-%m-%d\ %H:%M:%S)] Installing application dependencies as node user..." \
     && npm install \
     && echo "[$(date +%Y-%m-%d\ %H:%M:%S)] Application dependencies installed successfully" \
-    && echo "Total packages: $(ls node_modules | wc -l)"
+    && echo "Total packages: $(ls node_modules 2>/dev/null | wc -l)"
 
 # Set PATH to include global npm packages for node user
 ENV PATH="/usr/local/lib/node_modules/.bin:${PATH}"
 
 # Copy rest of application files (will be overridden by volume mount in dev mode)
-COPY --chown=node:node example/nextjs15/ ./
+COPY --chown=node:node frontend/ ./
 
 # Expose ports
 # 3000: Default Next.js/app server port
@@ -74,9 +71,10 @@ COPY --chown=node:node example/nextjs15/ ./
 EXPOSE 3000 3684
 
 # Health check for both app and MCP server
-# Checks if both Next.js app (3000) and dev3000 MCP server (3684) are responding
+# Uses HTTP requests with fallback instead of relying on port checking
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-  CMD node -e "const to=ms=>new Promise(r=>setTimeout(r,ms));(async()=>{try{const a=await fetch('http://localhost:3000/',{cache:'no-store'});const m=await fetch('http://localhost:3684/health',{cache:'no-store'});process.exit(a.ok&&m.ok?0:1)}catch{process.exit(1)}})()" || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/ && \
+      wget --no-verbose --tries=1 --spider http://localhost:3684/health || exit 1
 
 # Environment variables for Docker container
 ENV NODE_ENV=development \
@@ -86,4 +84,4 @@ ENV NODE_ENV=development \
 
 # Default command: Install dependencies and run dev3000
 # This will be overridden by docker-compose.yml
-CMD ["sh", "-c", "pnpm install && dev3000"]
+CMD ["sh", "-c", "npm install && dev3000"]

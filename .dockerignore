@@ -1,5 +1,6 @@
 # Dependencies
-node_modules
+**/node_modules
+node_modules/
 npm-debug.log
 yarn-error.log
 pnpm-debug.log
@@ -54,9 +55,10 @@ tmp/
 temp/
 
 # Example app dependencies and build
-example/nextjs15/node_modules
-example/nextjs15/.next
-example/nextjs15/out
+example/
+frontend/node_modules
+frontend/.next
+frontend/out
 
 # Docker itself
 docker/volumes/

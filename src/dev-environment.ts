@@ -22,6 +22,7 @@ import { CDPMonitor } from "./cdp-monitor.js"
 import { ScreencastManager } from "./screencast-manager.js"
 import { type LogEntry, NextJsErrorDetector, OutputProcessor, StandardLogParser } from "./services/parsers/index.js"
 import { DevTUI } from "./tui-interface.js"
+import { LogLevel, Logger as StructuredLogger } from "./utils/logger.js"
 import { getProjectDisplayName, getProjectName } from "./utils/project-name.js"
 import { formatTimestamp } from "./utils/timestamp.js"
 
@@ -54,7 +55,7 @@ interface DevEnvironmentOptions {
   chromeDevtoolsMcp?: boolean // Whether to enable chrome-devtools MCP integration
 }
 
-class Logger {
+class FileLogger {
   private logFile: string
   private tail: boolean
   private dateTimeFormat: "local" | "utc"
@@ -94,6 +95,7 @@ function detectPackageManagerForRun(): string {
 
 async function isPortAvailable(port: string): Promise<boolean> {
   try {
+    // Try lsof first (traditional method)
     const result = await new Promise<string>((resolve) => {
       const proc = spawn("lsof", ["-ti", `:${port}`], { stdio: "pipe" })
       let output = ""
@@ -101,8 +103,35 @@ async function isPortAvailable(port: string): Promise<boolean> {
         output += data.toString()
       })
       proc.on("exit", () => resolve(output.trim()))
+      // If lsof fails to execute, resolve empty string
+      proc.on("error", () => resolve(""))
     })
-    return !result // If no output, port is available
+
+    // If lsof returned PIDs, port is in use
+    if (result) {
+      return false
+    }
+
+    // Fallback: Try HTTP health check
+    // If port is listening, we should be able to connect to it
+    try {
+      const http = await import("node:http")
+      const isListening = await new Promise<boolean>((resolve) => {
+        const req = http.get(`http://localhost:${port}/`, { timeout: 1000 }, (_res) => {
+          resolve(true) // Port is responding
+        })
+        req.on("error", () => resolve(false)) // Port not responding
+        req.on("timeout", () => {
+          req.destroy()
+          resolve(false)
+        })
+      })
+
+      return !isListening // Port available if not listening
+    } catch {
+      // If HTTP check also fails, assume port is available
+      return true
+    }
   } catch {
     return true // Assume port is available if check fails
   }
@@ -495,7 +524,8 @@ export class DevEnvironment {
   private mcpServerProcess: ChildProcess | null = null
   private cdpMonitor: CDPMonitor | null = null
   private screencastManager: ScreencastManager | null = null
-  private logger: Logger
+  private fileLogger: FileLogger
+  private structuredLogger: StructuredLogger
   private outputProcessor: OutputProcessor
   private options: DevEnvironmentOptions
   private screenshotDir: string
@@ -519,7 +549,11 @@ export class DevEnvironment {
       ...options,
       mcpPort: options.portMcp || options.mcpPort || "3684"
     }
-    this.logger = new Logger(options.logFile, options.tail || false, options.dateTimeFormat || "local")
+    this.fileLogger = new FileLogger(options.logFile, options.tail || false, options.dateTimeFormat || "local")
+    this.structuredLogger = new StructuredLogger({
+      level: options.debug ? LogLevel.DEBUG : LogLevel.INFO,
+      prefix: "dev3000"
+    })
     this.outputProcessor = new OutputProcessor(new StandardLogParser(), new NextJsErrorDetector())
 
     // Set up MCP server public directory for web-accessible screenshots
@@ -704,7 +738,7 @@ export class DevEnvironment {
 
         if (!result) {
           this.debugLog(`Health check failed: Port ${port} is no longer in use`)
-          this.logger.log("server", `Health check failed: Critical process on port ${port} is no longer running`)
+          this.fileLogger.log("server", `Health check failed: Critical process on port ${port} is no longer running`)
           return false
         }
       }
@@ -1029,7 +1063,7 @@ export class DevEnvironment {
       const entries = this.outputProcessor.process(text, false)
 
       entries.forEach((entry: LogEntry) => {
-        this.logger.log("server", entry.formatted)
+        this.fileLogger.log("server", entry.formatted)
 
         // Detect when server switches to a different port
         this.detectPortChange(text)
@@ -1041,7 +1075,7 @@ export class DevEnvironment {
       const entries = this.outputProcessor.process(text, true)
 
       entries.forEach((entry: LogEntry) => {
-        this.logger.log("server", entry.formatted)
+        this.fileLogger.log("server", entry.formatted)
 
         // Detect when server switches to a different port
         this.detectPortChange(text)
@@ -1058,7 +1092,7 @@ export class DevEnvironment {
 
       if (code !== 0 && code !== null) {
         this.debugLog(`Server process exited with code ${code}`)
-        this.logger.log("server", `Server process exited with code ${code}`)
+        this.fileLogger.log("server", `Server process exited with code ${code}`)
 
         const timeSinceStart = this.serverStartTime ? Date.now() - this.serverStartTime : 0
         const isEarlyExit = timeSinceStart < 5000 // Less than 5 seconds
@@ -1173,7 +1207,7 @@ export class DevEnvironment {
     if (detectedPort && detectedPort !== this.options.port) {
       const oldPort = this.options.port
       this.debugLog(`Detected server port change from ${oldPort} to ${detectedPort}`)
-      this.logger.log("server", `[PORT] Server switched from port ${oldPort} to ${detectedPort}`)
+      this.fileLogger.log("server", `[PORT] Server switched from port ${oldPort} to ${detectedPort}`)
       this.options.port = detectedPort
       this.portDetected = true
 
@@ -1203,7 +1237,7 @@ export class DevEnvironment {
       // Navigate browser to new port if CDP monitor is active
       if (this.cdpMonitor) {
         this.debugLog(`Re-navigating browser from port ${oldPort} to ${detectedPort}`)
-        this.logger.log("browser", `[CDP] Port changed - navigating to http://localhost:${detectedPort}`)
+        this.fileLogger.log("browser", `[CDP] Port changed - navigating to http://localhost:${detectedPort}`)
         this.cdpMonitor.navigateToApp(detectedPort).catch((error: Error) => {
           this.debugLog(`Failed to navigate browser to new port: ${error}`)
         })
@@ -1531,7 +1565,7 @@ export class DevEnvironment {
       this.debugLog(`MCP server process exited with code ${code}`)
       // Only show exit messages for unexpected failures, not restarts
       if (code !== 0 && code !== null) {
-        this.logger.log("server", `MCP server process exited with code ${code}`)
+        this.fileLogger.log("server", `MCP server process exited with code ${code}`)
       }
     })
 
@@ -2105,9 +2139,9 @@ export class DevEnvironment {
       this.options.profileDir,
       this.mcpPublicDir,
       (_source: string, message: string) => {
-        this.logger.log("browser", message)
+        this.fileLogger.log("browser", message)
       },
-      this.options.debug,
+      this.structuredLogger,
       this.options.browser,
       this.options.pluginReactScan,
       this.options.port, // App server port to monitor
@@ -2118,14 +2152,14 @@ export class DevEnvironment {
       // Set up callback for when Chrome window is manually closed
       this.cdpMonitor.setOnWindowClosedCallback(() => {
         this.debugLog("Chrome window closed callback triggered, initiating graceful shutdown")
-        this.logger.log("browser", "[CDP] Chrome window was manually closed, shutting down d3k")
+        this.fileLogger.log("browser", "[CDP] Chrome window was manually closed, shutting down d3k")
         // Trigger graceful shutdown
         this.gracefulShutdown()
       })
 
       // Start CDP monitoring
       await this.cdpMonitor.start()
-      this.logger.log("browser", "[CDP] Chrome launched with DevTools Protocol monitoring")
+      this.fileLogger.log("browser", "[CDP] Chrome launched with DevTools Protocol monitoring")
 
       // Update session info with CDP URL and Chrome PIDs now that we have them
       const projectName = getProjectName()
@@ -2138,12 +2172,12 @@ export class DevEnvironment {
           cdpUrl,
           (msg: string) => {
             // Pass through CDP messages directly - they already have their own category tags
-            this.logger.log("browser", msg)
+            this.fileLogger.log("browser", msg)
           },
           this.options.port.toString()
         )
         await this.screencastManager.start()
-        // this.logger.log("browser", "[Screencast] Auto-capture enabled for navigation events")
+        // this.fileLogger.log("browser", "[Screencast] Auto-capture enabled for navigation events")
       }
 
       if (cdpUrl || chromePids.length > 0) {
@@ -2161,10 +2195,10 @@ export class DevEnvironment {
 
       // Navigate to the app
       await this.cdpMonitor.navigateToApp(this.options.port)
-      this.logger.log("browser", `[CDP] Navigated to http://localhost:${this.options.port}`)
+      this.fileLogger.log("browser", `[CDP] Navigated to http://localhost:${this.options.port}`)
     } catch (error) {
       // Log error and throw to trigger graceful shutdown
-      this.logger.log("browser", `[CDP] Failed to start CDP monitoring: ${error}`)
+      this.fileLogger.log("browser", `[CDP] Failed to start CDP monitoring: ${error}`)
       throw error
     }
   }
