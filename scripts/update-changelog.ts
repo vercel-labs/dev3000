@@ -1,8 +1,9 @@
 #!/usr/bin/env tsx
 
 /**
- * Enhanced Changelog Generator for dev3000
+ * Changelog Generator for dev3000
  *
+ * Reads git commit messages between releases and creates a concise summary.
  * Uses Vercel-style changelog writing principles:
  *
  * ✍️ STYLE & TONE:
@@ -11,22 +12,7 @@
  * - Be confident. Avoid "I think," "maybe," "sort of."
  * - Use inclusive language. No jargon or idioms.
  * - Write short, declarative sentences. Fewer commas. More periods.
- * - Vary sentence length for impact—mix one-liners and longer lines.
- * - Use Oxford commas.
  * - Active voice, present tense.
- *
- * 🏗️ STRUCTURE:
- * - Promise the core benefit
- * - Be concrete, visual, and falsifiable
- * - Focus on what changed and why it matters—focus on the product or user, not "we"
- * - Single feature: 1–2 short paragraphs explaining use cases and benefits
- * - Multiple updates: bullet format with bold feature names
- *
- * ✅ BEST PRACTICES:
- * - Link to docs, not jargon
- * - No fluff: if a competitor could write it, cut it
- * - Rewrite ruthlessly—remove every unnecessary word
- * - Treat the reader as if they know nothing
  */
 
 import { execSync } from "child_process"
@@ -78,48 +64,9 @@ function getCommitsSinceLastRelease(): Commit[] {
   }
 }
 
-// Enhanced pattern matching for casual commit messages
-const CASUAL_PATTERNS = {
-  fixes: [
-    /fix(es|ed|ing)?\s+#\d+/i, // "fixes #34"
-    /resolve(s|d)?\s+#\d+/i,
-    /close(s|d)?\s+#\d+/i,
-    /fix(es|ed)?\s+.*(bug|issue|problem|error)/i,
-    /^fix/i
-  ],
-  improvements: [
-    /^lil\s+/i, // "lil README fix"
-    /^more\s+lil/i, // "more lil changes"
-    /improv/i,
-    /better/i,
-    /enhance/i,
-    /update/i,
-    /refactor/i,
-    /clean/i
-  ],
-  builds: [/typegen/i, /build/i, /compile/i, /bundl/i],
-  features: [/^add/i, /implement/i, /create/i, /new\s+/i, /introduce/i],
-  dx: [/ctrl[+-]c/i, /canary/i, /script/i, /cli/i, /command/i]
-}
-
-// Specific feature patterns for concrete changelog entries
-const FEATURE_PATTERNS = {
-  cls: [/CLS|cumulative layout shift|screencast|video|jank/i],
-  mcp: [/MCP|auto-config|\.mcp\.json|cursor\.mcp/i],
-  chrome: [/chrome.*launch|intelligent.*polling|chrome.*timeout/i],
-  delegation: [/delegat|orchestrat|coordinate/i],
-  cdp: [/CDP.*URL|chrome.*devtools.*protocol/i],
-  tui: [/TUI|terminal.*UI|header.*status/i],
-  browserSupport: [/arc|comet|edge|brave|browser.*support|browser.*path/i]
-}
-
-// Function to extract highlights using Vercel-style changelog writing
-// Based on: https://vercel.com/blog style guide
-// Style: Get to the point, cut filler, be confident, short declarative sentences
+// Function to extract highlights from commit messages
 function extractHighlights(commits: Commit[]): string[] {
-  const highlights: string[] = []
-
-  // Filter out noise commits first
+  // Filter out noise commits
   const meaningfulCommits = commits.filter((commit) => {
     const skipPatterns = [
       /^merge/i,
@@ -138,144 +85,20 @@ function extractHighlights(commits: Commit[]): string[] {
     return ["Performance and stability improvements"]
   }
 
-  // Analyze commit patterns with flexible matching
-  const analysis = {
-    fixes: meaningfulCommits.filter((c) => CASUAL_PATTERNS.fixes.some((pattern) => pattern.test(c.subject))),
-    improvements: meaningfulCommits.filter((c) =>
-      CASUAL_PATTERNS.improvements.some((pattern) => pattern.test(c.subject))
-    ),
-    builds: meaningfulCommits.filter((c) => CASUAL_PATTERNS.builds.some((pattern) => pattern.test(c.subject))),
-    features: meaningfulCommits.filter((c) => CASUAL_PATTERNS.features.some((pattern) => pattern.test(c.subject))),
-    dx: meaningfulCommits.filter((c) => CASUAL_PATTERNS.dx.some((pattern) => pattern.test(c.subject)))
-  }
+  // Simple summarization: just take the commit messages and clean them up
+  const highlights = meaningfulCommits.slice(0, 5).map((commit) => {
+    let subject = commit.subject
 
-  // Detect specific features across ALL commits (not just features category)
-  const detectedFeatures = {
-    cls: meaningfulCommits.some((c) => FEATURE_PATTERNS.cls.some((pattern) => pattern.test(c.subject))),
-    mcp: meaningfulCommits.some((c) => FEATURE_PATTERNS.mcp.some((pattern) => pattern.test(c.subject))),
-    chrome: meaningfulCommits.some((c) => FEATURE_PATTERNS.chrome.some((pattern) => pattern.test(c.subject))),
-    delegation: meaningfulCommits.some((c) => FEATURE_PATTERNS.delegation.some((pattern) => pattern.test(c.subject))),
-    cdp: meaningfulCommits.some((c) => FEATURE_PATTERNS.cdp.some((pattern) => pattern.test(c.subject))),
-    tui: meaningfulCommits.some((c) => FEATURE_PATTERNS.tui.some((pattern) => pattern.test(c.subject))),
-    browserSupport: meaningfulCommits.some((c) =>
-      FEATURE_PATTERNS.browserSupport.some((pattern) => pattern.test(c.subject))
-    )
-  }
+    // Remove "Feature:" or "Fix:" prefixes
+    subject = subject.replace(/^(Feature|Fix|Feat|Chore|Docs|Style|Refactor|Test|Build|CI):\s*/i, "")
 
-  // Generate concrete highlights based on detected features
-  if (detectedFeatures.cls) {
-    highlights.push(
-      "🎬 **Passive Screencast Capture**: Automatically records page loads and navigations for performance analysis"
-    )
-    highlights.push("🎯 **CLS Detection**: Watch frame-by-frame video of layout shifts with precise element tracking")
-  }
+    // Capitalize first letter
+    subject = subject.charAt(0).toUpperCase() + subject.slice(1)
 
-  if (detectedFeatures.mcp) {
-    highlights.push(
-      "🔧 **Auto-Configuration for AI CLIs**: Automatically writes `.mcp.json` (Claude Code) and `.cursor/mcp.json` (Cursor) so MCP servers are instantly available"
-    )
-  }
+    return subject
+  })
 
-  if (detectedFeatures.chrome) {
-    highlights.push(
-      "⚡ **Intelligent Chrome Launch**: Replaced fixed timeout with smart polling - dev3000 starts as soon as Chrome is ready instead of waiting arbitrarily"
-    )
-  }
-
-  if (detectedFeatures.delegation) {
-    highlights.push(
-      "🤖 **Augmented Delegation**: dev3000 now intelligently delegates to chrome-devtools MCP when detected, creating a powerful debugging orchestration layer"
-    )
-  }
-
-  if (detectedFeatures.cdp) {
-    highlights.push(
-      "📡 **CDP URL Sharing**: Shares Chrome DevTools Protocol URL with other MCPs to prevent duplicate browser instances"
-    )
-  }
-
-  if (detectedFeatures.tui) {
-    highlights.push("🎨 **Improved TUI**: Better header and status line rendering for narrow terminal windows")
-  }
-
-  if (detectedFeatures.browserSupport) {
-    // Extract browser names from commits for concrete description
-    const browserNames = meaningfulCommits
-      .filter((c) => FEATURE_PATTERNS.browserSupport.some((pattern) => pattern.test(c.subject)))
-      .flatMap((c) => c.subject.match(/arc|comet|edge|brave/gi))
-      .filter(Boolean)
-      .map((name) => name.charAt(0).toUpperCase() + name.slice(1).toLowerCase())
-    const uniqueBrowsers = [...new Set(browserNames)]
-    if (uniqueBrowsers.length > 0) {
-      highlights.push(`🌐 **Browser Support**: Added support for ${uniqueBrowsers.join(", ")} browsers`)
-    } else {
-      highlights.push("🌐 **Expanded Browser Support**: Added support for additional Chromium-based browsers")
-    }
-  }
-
-  // Add fix highlights
-  if (analysis.fixes.length > 0) {
-    // Check for GitHub issue fixes first
-    const githubIssues = analysis.fixes
-      .filter((c) => /#\d+/.test(c.subject))
-      .flatMap((c) => {
-        // Extract all issue numbers from the commit subject
-        const matches = c.subject.match(/#(\d+)/g)
-        return matches ? matches.map((match) => match.replace("#", "")) : []
-      })
-      .filter(Boolean)
-
-    if (githubIssues.length > 0) {
-      const uniqueIssues = [...new Set(githubIssues)] // Remove duplicates
-      const issueLinks = uniqueIssues
-        .map((issue) => `[#${issue}](https://github.com/anthropics/claude-code/issues/${issue})`)
-        .join(", ")
-      highlights.push(`Resolved GitHub issues ${issueLinks}`)
-    } else if (analysis.fixes.length >= 3) {
-      highlights.push(`🐛 **Fixed ${analysis.fixes.length} bugs for improved stability**`)
-    } else {
-      highlights.push("Bug fixes improve overall reliability")
-    }
-  }
-
-  // Add build improvements if significant
-  if (analysis.builds.length > 0) {
-    if (analysis.builds.some((c) => c.subject.toLowerCase().includes("typegen"))) {
-      highlights.push("Build process optimized to prevent duplicate type generation")
-    }
-  }
-
-  // Add DX improvements
-  if (analysis.dx.length > 0) {
-    if (analysis.dx.some((c) => c.subject.toLowerCase().includes("ctrl"))) {
-      highlights.push("Keyboard shortcuts now work consistently across all modes")
-    }
-    if (analysis.dx.some((c) => c.subject.toLowerCase().includes("canary"))) {
-      highlights.push("Canary builds streamlined for faster testing and deployment")
-    }
-  }
-
-  // Generic fallback only if no specific features detected
-  if (highlights.length === 0) {
-    if (analysis.features.length > 0) {
-      highlights.push("New development tools make debugging faster and more reliable")
-    }
-    if (analysis.improvements.length > 0) {
-      highlights.push("Developer experience improvements across CLI and interface")
-    }
-  }
-
-  // Final fallback for when we really can't categorize
-  if (highlights.length === 0) {
-    if (meaningfulCommits.length >= 5) {
-      highlights.push("Performance and stability improvements across all systems")
-    } else {
-      highlights.push("Quality improvements and bug fixes")
-    }
-  }
-
-  // Return top 5 highlights (expanded from 3 to capture more detail for feature-rich releases)
-  return highlights.slice(0, 5)
+  return highlights
 }
 
 // Function to determine version type based on changes

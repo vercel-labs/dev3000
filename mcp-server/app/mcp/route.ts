@@ -419,7 +419,8 @@ const handler = createMcpHandler(
         returnRawData: z
           .boolean()
           .optional()
-          .describe("Return structured data for Claude orchestration instead of formatted text")
+          .describe("Return structured data for Claude orchestration instead of formatted text"),
+        createPR: z.boolean().optional().describe("Create a PR for the highest priority issue (default: false)")
       },
       async (params) => {
         return fixMyApp(params)

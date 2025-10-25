@@ -4,107 +4,134 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.106] - 2025-10-23
+
+**Feature Release**
+
+- Add attribution requirement to fix_my_app tool description
+
+## [0.0.105] - 2025-10-23
+
+**Feature Release**
+
+- Simplify changelog generation - remove pattern matching, just use git commit messages directly
+- Update v0.0.104 changelog with proper custom command flag highlight and add pattern for future releases
+
+## [0.0.104] - 2025-10-23
+
+**Patch Release**
+
+- **Custom Command Flag**: New `--command` flag lets you override auto-detection and run any arbitrary command (e.g., `dev3000 --command "bun run dev"` or `dev3000 --command "uvicorn main:app --reload"`)
+
+## [0.0.103] - 2025-10-23
+
+**Patch Release**
+
+- **Smart Error Prioritization**: Automatically scores and ranks errors by severity - build errors (1000+), server errors (500+), browser errors (300+), with modifiers for recency and reproducibility
+- **One-PR-Per-Run**: Creates focused single-issue PRs for the highest priority error - no more overwhelming multi-fix PRs
+- **Improved Port Detection**: Works with non-standard ports (like Svelte's 5173) and shows loading spinner until port is confirmed
+
 ## [0.0.102] - 2025-10-23
 
 **Patch Release**
 
-- 🎬 **Passive Screencast Capture**: Automatically records page loads and navigations for performance analysis
-- 🎯 **CLS Detection**: Watch frame-by-frame video of layout shifts with precise element tracking
-- 🎨 **Improved TUI**: Better header and status line rendering for narrow terminal windows
-- 🐛 **Fixed 7 bugs for improved stability**
+- **Passive Screencast Capture**: Automatically records page loads and navigations for performance analysis
+- **CLS Detection**: Watch frame-by-frame video of layout shifts with precise element tracking
+- **Improved TUI**: Better header and status line rendering for narrow terminal windows
+- **Fixed 7 bugs for improved stability**
 
 ## [0.0.101] - 2025-10-22
 
 **Patch Release**
 
-- 🐛 **Fixed 3 bugs for improved stability**
+- **Fixed 3 bugs for improved stability**
 
 ## [0.0.100] - 2025-10-22
 
 **Patch Release**
 
-- 🐛 **Critical Fix**: Added missing 'use client' directive to Button component for Next.js 16 compatibility
-- 🔧 **Logs Viewer**: Fixed 'Element type is invalid' error that broke the logs viewer in v0.0.99
+- **Critical Fix**: Added missing 'use client' directive to Button component for Next.js 16 compatibility
+- **Logs Viewer**: Fixed 'Element type is invalid' error that broke the logs viewer in v0.0.99
 
 ## [0.0.99] - 2025-10-22
 
 **Feature Release**
 
-- 🎯 **Framework-Specific MCP Support**: Automatically detects project framework and spawns the appropriate MCP server (Next.js → `next-devtools-mcp`, Svelte → `@sveltejs/mcp-server-svelte`)
-- 🔍 **Smart Framework Detection**: Detects frameworks via config files and package.json dependencies
-- 🚀 **Next.js 16 Compatibility**: Updated to Next.js 16.0.0-canary with proper serialization fixes
+- **Framework-Specific MCP Support**: Automatically detects project framework and spawns the appropriate MCP server (Next.js → `next-devtools-mcp`, Svelte → `@sveltejs/mcp-server-svelte`)
+- **Smart Framework Detection**: Detects frameworks via config files and package.json dependencies
+- **Next.js 16 Compatibility**: Updated to Next.js 16.0.0-canary with proper serialization fixes
 
 ## [0.0.98] - 2025-10-22
 
 **Patch Release**
 
-- 🐛 **Fixed 3 bugs for improved stability**
+- **Fixed 3 bugs for improved stability**
 
 ## [0.0.97] - 2025-10-20
 
 **Patch Release**
 
-- 🚨 **Critical Fix**: Detect when server switches ports and update navigation - Chrome no longer gets stuck on loading page
-- 🎨 **Markdown Rendering**: Changelog pages now properly render markdown formatting (**bold**, [links](url)) in highlights
-- 🔧 **Shared Utilities**: Extracted markdown parsing into reusable functions for consistency
+- **Critical Fix**: Detect when server switches ports and update navigation - Chrome no longer gets stuck on loading page
+- **Markdown Rendering**: Changelog pages now properly render markdown formatting (**bold**, [links](url)) in highlights
+- **Shared Utilities**: Extracted markdown parsing into reusable functions for consistency
 
 ## [0.0.96] - 2025-10-18
 
 **Patch Release**
 
-- 🏥 **Non-Intrusive Health Checks**: Replaced HTTP HEAD requests with simple TCP port checks - no more interfering with auth middleware or polluting server logs
-- ✨ **Better Compatibility**: Works seamlessly with apps using redirect-based auth without causing infinite loops
+- **Non-Intrusive Health Checks**: Replaced HTTP HEAD requests with simple TCP port checks - no more interfering with auth middleware or polluting server logs
+- **Better Compatibility**: Works seamlessly with apps using redirect-based auth without causing infinite loops
 
 ## [0.0.95] - 2025-10-17
 
 **Patch Release**
 
-- 🔧 **Bun Package Manager Support**: Added full support for Bun package manager (bun.lockb detection, bunx for MCP spawning)
-- 🔌 **Next.js DevTools MCP Integration**: Updated to use standalone next-devtools-mcp as stdio process with automatic spawning and lifecycle management
+- **Bun Package Manager Support**: Added full support for Bun package manager (bun.lockb detection, bunx for MCP spawning)
+- **Next.js DevTools MCP Integration**: Updated to use standalone next-devtools-mcp as stdio process with automatic spawning and lifecycle management
 - Resolves [#8](https://github.com/vercel-labs/dev3000/issues/8)
 
 ## [0.0.94] - 2025-10-16
 
 **Patch Release**
 
-- 🔧 **Auto-Configuration for AI CLIs**: Automatically writes `.mcp.json` (Claude Code) and `.cursor/mcp.json` (Cursor) so MCP servers are instantly available
+- **Auto-Configuration for AI CLIs**: Automatically writes `.mcp.json` (Claude Code) and `.cursor/mcp.json` (Cursor) so MCP servers are instantly available
 
 ## [0.0.93] - 2025-10-16
 
 **Patch Release**
 
-- 🔧 **Auto-Configuration for AI CLIs**: Automatically writes `.mcp.json` (Claude Code) and `.cursor/mcp.json` (Cursor) so MCP servers are instantly available
-- 🤖 **Augmented Delegation**: dev3000 now intelligently delegates to chrome-devtools MCP when detected, creating a powerful debugging orchestration layer
+- **Auto-Configuration for AI CLIs**: Automatically writes `.mcp.json` (Claude Code) and `.cursor/mcp.json` (Cursor) so MCP servers are instantly available
+- **Augmented Delegation**: dev3000 now intelligently delegates to chrome-devtools MCP when detected, creating a powerful debugging orchestration layer
 - Bug fixes improve overall reliability
 
 ## [0.0.92] - 2025-10-11
 
 **Patch Release**
 
-- 🎬 **Passive Screencast Capture**: Automatically records page loads and navigations for performance analysis
-- 🎯 **CLS Detection**: Watch frame-by-frame video of layout shifts with precise element tracking
-- 🎨 **Improved TUI**: Better header and status line rendering for narrow terminal windows
+- **Passive Screencast Capture**: Automatically records page loads and navigations for performance analysis
+- **CLS Detection**: Watch frame-by-frame video of layout shifts with precise element tracking
+- **Improved TUI**: Better header and status line rendering for narrow terminal windows
 
 ## [0.0.91] - 2025-10-10
 
 **Patch Release**
 
-- 🔧 **Auto-Configuration for AI CLIs**: Automatically writes `.mcp.json` (Claude Code) and `.cursor/mcp.json` (Cursor) so MCP servers are instantly available
+- **Auto-Configuration for AI CLIs**: Automatically writes `.mcp.json` (Claude Code) and `.cursor/mcp.json` (Cursor) so MCP servers are instantly available
 - Resolved GitHub issues [#12](https://github.com/anthropics/claude-code/issues/12)
 
 ## [0.0.90] - 2025-10-10
 
 **Patch Release**
 
-- 🎬 **Passive Screencast Capture**: Automatically records page loads and navigations for performance analysis
-- 🎯 **CLS Detection**: Watch frame-by-frame video of layout shifts with precise element tracking
+- **Passive Screencast Capture**: Automatically records page loads and navigations for performance analysis
+- **CLS Detection**: Watch frame-by-frame video of layout shifts with precise element tracking
 - Bug fixes improve overall reliability
 
 ## [0.0.89] - 2025-10-10
 
 **Patch Release**
 
-- 🔧 **Auto-Configuration for AI CLIs**: Automatically writes `.mcp.json` (Claude Code) and `.cursor/mcp.json` (Cursor) so MCP servers are instantly available
+- **Auto-Configuration for AI CLIs**: Automatically writes `.mcp.json` (Claude Code) and `.cursor/mcp.json` (Cursor) so MCP servers are instantly available
 
 ## [0.0.88] - 2025-10-09
 
@@ -128,11 +155,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 **Patch Release**
 
-- 🎬 **Passive Screencast Capture**: Automatically records page loads and navigations for performance analysis
-- 🎯 **CLS Detection**: Watch frame-by-frame video of layout shifts with precise element tracking
-- 🔧 **Auto-Configuration for AI CLIs**: Automatically writes `.mcp.json` (Claude Code) and `.cursor/mcp.json` (Cursor) so MCP servers are instantly available
-- 🤖 **Augmented Delegation**: dev3000 now intelligently delegates to chrome-devtools MCP when detected, creating a powerful debugging orchestration layer
-- 🐛 **Fixed 3 bugs for improved stability**
+- **Passive Screencast Capture**: Automatically records page loads and navigations for performance analysis
+- **CLS Detection**: Watch frame-by-frame video of layout shifts with precise element tracking
+- **Auto-Configuration for AI CLIs**: Automatically writes `.mcp.json` (Claude Code) and `.cursor/mcp.json` (Cursor) so MCP servers are instantly available
+- **Augmented Delegation**: dev3000 now intelligently delegates to chrome-devtools MCP when detected, creating a powerful debugging orchestration layer
+- **Fixed 3 bugs for improved stability**
 
 ## [0.0.84] - 2025-10-07
 
