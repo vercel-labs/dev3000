@@ -3,6 +3,13 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
+      # Build arguments for optimization
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+      # Use BuildKit for parallel builds and better caching
+      cache_from:
+        - type=registry,ref=dev3000:latest
+      target: production
     container_name: dev3000
 
     # Security hardening
@@ -85,15 +92,15 @@ services:
     # Restart policy
     restart: unless-stopped
 
-    # Resource limits (optional but recommended)
+    # Resource limits - optimized for development performance
     deploy:
       resources:
         limits:
-          cpus: '2.0'
-          memory: 4G
+          cpus: '4.0'      # Increased for faster builds
+          memory: 6G       # Increased for Next.js Turbopack
         reservations:
-          cpus: '0.5'
-          memory: 512M
+          cpus: '1.0'      # Guaranteed CPU
+          memory: 1G       # Guaranteed memory
 
 # Networks (using default bridge network)
 networks:

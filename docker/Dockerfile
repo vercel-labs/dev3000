@@ -7,67 +7,71 @@ FROM node:20-alpine AS base
 # Install system dependencies required by dev3000
 # lsof: Port checking utility
 # coreutils: GNU coreutils for env -S support (required by dev3000 shebang)
-RUN echo "[$(date +%Y-%m-%d\ %H:%M:%S)] Installing system dependencies..." \
-    && apk add --no-cache lsof curl coreutils \
-    && echo "[$(date +%Y-%m-%d\ %H:%M:%S)] System dependencies installed successfully"
+# Build dependencies in single layer for better caching
+RUN apk add --no-cache \
+    lsof \
+    curl \
+    coreutils \
+    && rm -rf /var/cache/apk/*
 
 # Ensure GNU coreutils binaries are prioritized over BusyBox
 # This is critical for dev3000's shebang (#!/usr/bin/env -S node)
 ENV PATH="/usr/bin:$PATH"
 
-# Install pnpm globally (as root)
-RUN echo "[$(date +%Y-%m-%d\ %H:%M:%S)] Enabling pnpm via corepack..." \
-    && corepack enable \
-    && corepack prepare pnpm@latest --activate \
-    && echo "[$(date +%Y-%m-%d\ %H:%M:%S)] pnpm enabled successfully"
+# Install pnpm globally (as root) - use specific version for consistency
+RUN corepack enable \
+    && corepack prepare pnpm@9.15.2 --activate
 
-# Build dev3000 and MCP server from local source
+# Build stage for dev3000
+FROM base AS dev3000-builder
 WORKDIR /build/dev3000
 
-# Copy workspace configuration and package files
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json ./
+# Copy workspace configuration and lock files first for better caching
+COPY pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY package.json ./
 
-# Copy source code
+# Install dependencies first (cached layer)
+RUN pnpm install --frozen-lockfile --prefer-offline
+
+# Copy source code (changes more frequently)
+COPY tsconfig.json ./
 COPY src ./src
 COPY mcp-server ./mcp-server
 
-# Install dependencies and build
-RUN echo "[$(date +%Y-%m-%d\ %H:%M:%S)] Installing dev3000 dependencies..." \
-    && pnpm install --frozen-lockfile \
-    && echo "[$(date +%Y-%m-%d\ %H:%M:%S)] Building dev3000 CLI..." \
-    && pnpm run build \
-    && echo "[$(date +%Y-%m-%d\ %H:%M:%S)] Building MCP server..." \
-    && cd mcp-server && pnpm run build && cd .. \
-    && echo "[$(date +%Y-%m-%d\ %H:%M:%S)] Creating MCP server public directories..." \
-    && mkdir -p /build/dev3000/mcp-server/public/screenshots \
-    && chmod -R 777 /build/dev3000/mcp-server/public \
-    && echo "[$(date +%Y-%m-%d\ %H:%M:%S)] Installing dev3000 globally..." \
-    && npm install -g . \
-    && echo "[$(date +%Y-%m-%d\ %H:%M:%S)] dev3000 installed successfully"
+# Build dev3000 and MCP server
+RUN pnpm run build && \
+    cd mcp-server && pnpm run build && cd .. && \
+    mkdir -p /build/dev3000/mcp-server/public/screenshots && \
+    chmod -R 777 /build/dev3000/mcp-server/public
 
-# Set working directory for app
+# Install dev3000 globally
+RUN npm install -g .
+
+# Final stage - production-ready image
+FROM base AS production
 WORKDIR /app
 
-# Copy frontend app files
+# Copy dev3000 from builder stage
+COPY --from=dev3000-builder /usr/local/lib/node_modules /usr/local/lib/node_modules
+COPY --from=dev3000-builder /usr/local/bin/dev3000 /usr/local/bin/dev3000
+COPY --from=dev3000-builder /build/dev3000/mcp-server /usr/local/lib/node_modules/dev3000/mcp-server
+
+# Copy frontend package files for dependency installation
 COPY frontend/package*.json ./
 
-# Create non-root user (node user already exists in Alpine node image)
-# Set ownership of /app to node user
+# Create non-root user and set permissions
 RUN chown -R node:node /app
 
 # Switch to node user
 USER node
 
-# Install application dependencies as node user
-RUN echo "[$(date +%Y-%m-%d\ %H:%M:%S)] Installing application dependencies as node user..." \
-    && npm install \
-    && echo "[$(date +%Y-%m-%d\ %H:%M:%S)] Application dependencies installed successfully" \
-    && echo "Total packages: $(ls node_modules 2>/dev/null | wc -l)"
+# Install application dependencies with npm ci for faster, cleaner installs
+RUN npm ci --prefer-offline --no-audit
 
-# Set PATH to include global npm packages for node user
+# Set PATH to include global npm packages
 ENV PATH="/usr/local/lib/node_modules/.bin:${PATH}"
 
-# Copy rest of application files (will be overridden by volume mount in dev mode)
+# Copy rest of application files
 COPY --chown=node:node frontend/ ./
 
 # Expose ports

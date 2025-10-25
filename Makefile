@@ -85,7 +85,13 @@ dev-logs: ## Follow Docker container logs
 dev-rebuild: ## Rebuild and restart Docker environment
 	@echo "Rebuilding development environment..."
 	@cd docker && docker compose down
-	@cd docker && docker compose build --no-cache
+	@cd docker && DOCKER_BUILDKIT=1 docker compose build --no-cache
+	@$(MAKE) dev-up
+
+dev-rebuild-fast: ## Fast rebuild using cache (for minor changes)
+	@echo "Fast rebuilding development environment (with cache)..."
+	@cd docker && docker compose down
+	@cd docker && DOCKER_BUILDKIT=1 docker compose build
 	@$(MAKE) dev-up
 
 clean: ## Clean up Docker resources and build artifacts
