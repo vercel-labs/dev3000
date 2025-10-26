@@ -279,7 +279,7 @@ docker compose logs -f dev3000
 
 ### Environment Variables
 
-Set in `docker/docker-compose.yml` or via `export`:
+Set in `docker-compose.yml` or via `export`:
 
 #### Required for External CDP
 - `DEV3000_CDP_SKIP_LAUNCH=1` - Skip launching Chrome inside container
@@ -295,7 +295,7 @@ Set in `docker/docker-compose.yml` or via `export`:
 
 ### Docker Compose Customization
 
-Edit `docker/docker-compose.yml` to customize:
+Edit `docker-compose.yml` to customize:
 
 ```yaml
 services:
@@ -322,7 +322,7 @@ services:
 Replace the example app:
 
 ```yaml
-# docker/docker-compose.yml
+# docker-compose.yml
 volumes:
   - ../my-nextjs-app:/app  # Your project path
   - /app/node_modules
@@ -824,7 +824,7 @@ Dev3000 is a **development tool only**.
 Mount your own Next.js/React/Vite app:
 
 ```yaml
-# docker/docker-compose.yml
+# docker-compose.yml
 volumes:
   - /path/to/your/app:/app
   - /app/node_modules
@@ -845,7 +845,7 @@ command: >
 Run multiple apps simultaneously:
 
 ```yaml
-# docker/docker-compose.yml
+# docker-compose.yml
 services:
   dev3000-app1:
     # ... config for app 1
