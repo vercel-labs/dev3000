@@ -5,6 +5,10 @@
 ## 前提条件
 
 - dev3000 が起動していること (`http://localhost:3684/mcp` でアクセス可能)
+- **Chrome DevTools Protocol (CDP) が有効なブラウザが起動していること** (`http://localhost:9222` でアクセス可能)
+  - dev3000 の MCP ツール（`execute_browser_action`, `fix_my_app` など）は CDP を使用してブラウザを操作します
+  - CDP ブラウザが起動していない場合、MCP ツールは正常に動作しません
+  - `make dev-up` を実行すると自動的に CDP 対応 Chrome が起動します
 - Node.js 18+ がインストールされていること
 - Claude Desktop または Claude Code (CLI) がインストールされていること
 
@@ -274,6 +278,42 @@ dev3000 は以下のツールを提供します：
    - macOS: `~/Library/Logs/Claude/`
    - Windows: `%APPDATA%\Claude\logs\`
    - Linux: `~/.config/Claude/logs/`
+
+### CDP ブラウザが起動していない
+
+**重要**: dev3000 の MCP ツールは Chrome DevTools Protocol (CDP) を使用するため、CDP が有効なブラウザが起動している必要があります。
+
+1. CDP ブラウザが起動しているか確認：
+   ```bash
+   curl http://localhost:9222/json/version
+   ```
+
+2. CDP ブラウザが起動していない場合、以下のコマンドで起動：
+   ```bash
+   make start-chrome-cdp
+   ```
+
+   または手動で起動：
+
+   **WSL2/Windows:**
+   ```powershell
+   chrome.exe --remote-debugging-port=9222 --remote-debugging-address=0.0.0.0 --user-data-dir=C:\temp\chrome-dev-profile http://localhost:3000
+   ```
+
+   **macOS:**
+   ```bash
+   open -a "Google Chrome" --args --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-dev-profile http://localhost:3000
+   ```
+
+   **Linux:**
+   ```bash
+   google-chrome --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-dev-profile http://localhost:3000
+   ```
+
+3. CDP ブラウザが起動していない場合の症状：
+   - `execute_browser_action` ツールがエラーを返す
+   - `fix_my_app` でブラウザ関連のエラーが検出できない
+   - スクリーンショットが取得できない
 
 ### ポート 3684 が使用中
 

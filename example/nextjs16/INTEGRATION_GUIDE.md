@@ -50,6 +50,33 @@ That's it! Your project structure should now look like this:
 └── Makefile                    # Your Makefile (copied from .dev3000)
 ```
 
+## Important Prerequisites
+
+**CDP Browser is Required**: dev3000 MCP tools (like `execute_browser_action`, `fix_my_app`, etc.) use Chrome DevTools Protocol (CDP) to control the browser. Without a CDP-enabled browser running, these tools will not work.
+
+When you run `make dev-up`, it automatically starts Chrome with CDP enabled. You can verify it's running:
+
+```bash
+curl http://localhost:9222/json/version
+```
+
+If you need to manually start the CDP browser:
+
+**WSL2/Windows:**
+```powershell
+chrome.exe --remote-debugging-port=9222 --remote-debugging-address=0.0.0.0 --user-data-dir=C:\temp\chrome-dev-profile http://localhost:3000
+```
+
+**macOS:**
+```bash
+open -a "Google Chrome" --args --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-dev-profile http://localhost:3000
+```
+
+**Linux:**
+```bash
+google-chrome --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-dev-profile http://localhost:3000
+```
+
 ## What dev3000 Provides
 
 When running `make dev-up`:
@@ -134,22 +161,35 @@ If ports 3000, 3684, or 9222 are already in use:
 
 ### Chrome CDP Issues
 
-If Chrome doesn't start automatically:
+**Important**: dev3000 MCP tools require a CDP-enabled browser to be running.
 
-**WSL2/Windows:**
-```powershell
-chrome.exe --remote-debugging-port=9222 --remote-debugging-address=0.0.0.0 --user-data-dir=C:\temp\chrome-dev-profile http://localhost:3000
-```
+1. **Check if CDP browser is running:**
+   ```bash
+   curl http://localhost:9222/json/version
+   ```
 
-**macOS:**
-```bash
-open -a "Google Chrome" --args --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-dev-profile http://localhost:3000
-```
+2. **If Chrome doesn't start automatically, start it manually:**
 
-**Linux:**
-```bash
-google-chrome --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-dev-profile http://localhost:3000
-```
+   **WSL2/Windows:**
+   ```powershell
+   chrome.exe --remote-debugging-port=9222 --remote-debugging-address=0.0.0.0 --user-data-dir=C:\temp\chrome-dev-profile http://localhost:3000
+   ```
+
+   **macOS:**
+   ```bash
+   open -a "Google Chrome" --args --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-dev-profile http://localhost:3000
+   ```
+
+   **Linux:**
+   ```bash
+   google-chrome --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-dev-profile http://localhost:3000
+   ```
+
+3. **Symptoms of missing CDP browser:**
+   - MCP tools (`execute_browser_action`, `fix_my_app`) fail with connection errors
+   - Screenshots cannot be captured
+   - Browser console errors not detected in logs
+   - dev3000 reports "CDP not available" warnings
 
 ### Docker Build Failures
 

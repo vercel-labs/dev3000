@@ -62,10 +62,17 @@ make dev-up
 
 ## Setup Instructions (Use Case 1: This Repository)
 
+**Prerequisites:**
+- `make dev-up` automatically starts Chrome with CDP enabled
+- **CDP browser is required** for dev3000 MCP tools to function
+  - CDP URL: http://localhost:9222/json/version
+  - Without CDP browser, MCP tools (`execute_browser_action`, `fix_my_app`, etc.) will not work
+
 Access your application:
 - **Next.js App**: http://localhost:3000
 - **dev3000 Logs**: http://localhost:3684/logs
 - **MCP Server**: http://localhost:3684
+- **Chrome CDP**: http://localhost:9222/json/version
 
 ## What This Example Demonstrates
 
@@ -190,9 +197,45 @@ Biome is the modern replacement for ESLint and Prettier, written in Rust for max
 - Modify `docker-compose.yml` if needed
 
 ### Chrome CDP Issues
-- Ensure Chrome runs on host
-- Check `DEV3000_CDP_URL` environment variable
-- Verify `host.docker.internal` works
+
+**Important**: dev3000 MCP tools require a CDP-enabled browser to be running.
+
+1. **Check if CDP browser is running:**
+   ```bash
+   curl http://localhost:9222/json/version
+   ```
+
+2. **If not running, start CDP browser:**
+   ```bash
+   make start-chrome-cdp
+   ```
+
+   Or manually:
+
+   **WSL2/Windows:**
+   ```powershell
+   chrome.exe --remote-debugging-port=9222 --remote-debugging-address=0.0.0.0 --user-data-dir=C:\temp\chrome-dev-profile http://localhost:3000
+   ```
+
+   **macOS:**
+   ```bash
+   open -a "Google Chrome" --args --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-dev-profile http://localhost:3000
+   ```
+
+   **Linux:**
+   ```bash
+   google-chrome --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-dev-profile http://localhost:3000
+   ```
+
+3. **Other CDP troubleshooting:**
+   - Ensure Chrome runs on host (not inside Docker)
+   - Check `DEV3000_CDP_URL` environment variable
+   - Verify `host.docker.internal` works (WSL2/Docker Desktop)
+
+4. **Symptoms of missing CDP browser:**
+   - MCP tools (`execute_browser_action`, `fix_my_app`) fail
+   - Screenshots cannot be captured
+   - Browser errors not detected
 
 ### Code Quality
 
