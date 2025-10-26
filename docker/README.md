@@ -246,4 +246,4 @@ The container includes several security hardening measures:
 
 - `Dockerfile` - Multi-stage build configuration
 - `docker-compose.yml` - Service orchestration and environment setup
-- `../example/nextjs15/` - Example Next.js application
+- `../example/nextjs16/` - Example Next.js 16 application

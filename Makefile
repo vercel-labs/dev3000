@@ -97,7 +97,7 @@ dev-rebuild-fast: ## Fast rebuild using cache (for minor changes)
 clean: ## Clean up Docker resources and build artifacts
 	@echo "Cleaning up..."
 	@cd docker && docker compose down -v
-	@rm -rf example/nextjs15/node_modules example/nextjs15/.next
+	@rm -rf example/*/node_modules example/*/.next
 	@echo "✅ Cleanup complete"
 
 clean-frontend: ## Clear frontend directory (keeps only .keep file)
@@ -115,7 +115,7 @@ clean-frontend: ## Clear frontend directory (keeps only .keep file)
 
 ## ========== Frontend Deployment ==========
 
-deploy-frontend: ## Deploy example app to frontend directory (e.g., make deploy-frontend APP=nextjs15)
+deploy-frontend: ## Deploy example app to frontend directory (e.g., make deploy-frontend APP=nextjs16)
 	@if [ -z "$(APP)" ]; then \
 		echo "❌ Error: APP parameter is required"; \
 		echo ""; \
@@ -145,7 +145,7 @@ deploy-frontend: ## Deploy example app to frontend directory (e.g., make deploy-
 	echo "  make dev-rebuild  - Rebuild Docker image with new frontend"; \
 	echo "  make dev-up       - Start development environment"
 
-deploy-and-start: ## Deploy example and start dev environment (e.g., make deploy-and-start APP=nextjs15)
+deploy-and-start: ## Deploy example and start dev environment (e.g., make deploy-and-start APP=nextjs16)
 	@if [ -z "$(APP)" ]; then \
 		echo "❌ Error: APP parameter is required"; \
 		echo ""; \

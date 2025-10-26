@@ -10,7 +10,7 @@ Captures your web app's complete development timeline - server logs, browser eve
 
 ```bash
 # Clone this repository
-git clone https://github.com/YOUR-USERNAME/dev3000.git
+git clone https://github.com/automationjp/dev3000.git
 cd dev3000
 
 # Deploy example app to frontend
@@ -298,7 +298,7 @@ We welcome contributions! Here's how to get started:
 
 ```bash
 # Clone the repository
-git clone https://github.com/YOUR-USERNAME/dev3000.git
+git clone https://github.com/automationjp/dev3000.git
 cd dev3000
 
 # Install dependencies
