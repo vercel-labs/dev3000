@@ -912,7 +912,7 @@ console.log('DEBUG:', { platform, chromePath, cdpPort })
 
 ## Next Steps
 
-- See [docker/README.md](docker/README.md) for Docker-specific details
+
 - See [example/nextjs16/README.md](example/nextjs16/README.md) for Next.js 16 example usage
 - See [README.md](README.md) for general dev3000 documentation
 
