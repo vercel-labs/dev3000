@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "dev3000": {
+      "command": "node",
+      "args": [
+        "/ABSOLUTE/PATH/TO/dev3000/scripts/mcp-stdio-bridge.js"
+      ],
+      "env": {}
+    }
+  }
+}

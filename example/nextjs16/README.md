@@ -1,241 +1,226 @@
-# Dev3000 + Next.js 15 Example
+# Frontend Example - Next.js 16 with dev3000
 
-This is a minimal Next.js 15 application configured to work with dev3000's Docker setup.
+This is a sample Next.js 16 application demonstrating dev3000 integration for AI-powered development monitoring and debugging.
 
-## Features
+## Two Use Cases
 
-- **Next.js 15** with Turbopack for fast builds
-- **React 19** with modern hooks
-- **MCP Server Integration** for dev3000 debugging tools
-- **Docker & WSL Support** via external Chrome CDP
-- **Hot Module Replacement** with polling for Docker compatibility
+dev3000 is designed for two different workflows:
 
-## Quick Start
+### Use Case 1: Try dev3000 (This Repository)
 
-### Option 1: Automated Docker Setup (Recommended)
+Test dev3000 with this example application:
 
-From the repository root:
+```
+/dev3000/                       # This repository
+├── frontend/                   # This example (copied from example/)
+├── docker/
+│   └── docker-compose.yml
+├── Makefile
+└── example/                    # Example applications
+```
 
+**Quick Start:**
 ```bash
-npm run dev3000:up
+# From dev3000 repository root
+make dev-up
 ```
 
-This will:
-1. Launch Chrome with CDP on your host machine
-2. Build and start the Docker container
-3. Run dev3000 with this Next.js app
+### Use Case 2: Integrate into Your Project (Recommended)
 
-Access the app at:
-- **Next.js**: http://localhost:3000
-- **Dev3000 UI**: http://localhost:3684
-- **Logs Viewer**: http://localhost:3684/logs
+Use dev3000 as a submodule in your own project:
 
-### Option 2: Standalone Development
+```
+/my-project/                    # Your project root
+├── frontend/                   # Your Next.js application
+│   ├── .dev3000/              # dev3000 as submodule
+│   ├── app/                    # Your Next.js code
+│   └── package.json
+├── docker/                     # Your docker config (copied from reference)
+│   └── docker-compose.yml
+└── Makefile                    # Your Makefile (copied from reference)
+```
 
-Run this example without Docker:
-
+**Quick Start:**
 ```bash
-cd example/nextjs15
-pnpm install
-pnpm dev
+# 1. Clone dev3000 into your frontend directory
+cd /path/to/your-project/frontend
+git clone https://github.com/automationjp/dev3000 .dev3000
+
+# 2. Copy reference files to your project root
+cd ..
+mkdir -p docker
+cp frontend/.dev3000/frontend/docker-reference/docker-compose.yml docker/
+cp frontend/.dev3000/frontend/docker-reference/Makefile ./
+
+# 3. Start dev3000
+make dev-up
 ```
 
-Then in another terminal, start dev3000:
+📖 **Full integration guide**: See [INTEGRATION_GUIDE.md](./INTEGRATION_GUIDE.md)
 
+---
+
+## Setup Instructions (Use Case 1: This Repository)
+
+Access your application:
+- **Next.js App**: http://localhost:3000
+- **dev3000 Logs**: http://localhost:3684/logs
+- **MCP Server**: http://localhost:3684
+
+## What This Example Demonstrates
+
+This sample application showcases Next.js 16 features that work seamlessly with dev3000 monitoring:
+
+### Core Features
+- **App Router** - Next.js 16's file-based routing with Server and Client Components
+- **TypeScript** - Full type safety across the application
+- **Tailwind CSS** - Utility-first CSS framework for modern styling
+- **React 19** - Latest React with new hooks and features
+
+### Demo Pages
+1. **Counter Demo** (`/demos/counter`) - Client-side state management
+2. **Server Actions** (`/demos/server-actions`) - Form handling and mutations
+3. **Context7** (`/demos/context7`) - Library documentation search example
+4. **Next.js MCP** (`/demos/nextjs-mcp`) - Builtin MCP features in Next.js 16
+5. **Browser Automation** (`/demos/browser-automation`) - CDP integration demo
+6. **fix_my_app** (`/demos/fix-my-app`) - AI-powered debugging demonstration
+7. **Parallel Routes** (`/demos/parallel-routes`) - Advanced routing patterns
+
+## Development Workflow
+
+### 1. Start Monitoring
 ```bash
-dev3000 --port 3000
+# From project root
+make dev-up
 ```
 
-## Project Structure
+### 2. Develop Your App
+- Edit files in `app/`
+- Changes hot-reload via Turbopack
+- All activity logged by dev3000
 
+### 3. Debug with AI
+```bash
+# In Claude Code
+"fix my app"
 ```
-example/nextjs15/
-├── pages/
-│   └── index.js          # Main page with counter example
-├── package.json          # Next.js 15 + React 19 dependencies
-├── next.config.js        # Turbopack + MCP configuration
-├── .gitignore            # Standard Next.js ignores
-└── README.md             # This file
+
+### 4. View Logs
+- Open http://localhost:3684/logs
+- See timeline of all events
+- Screenshots linked to errors
+
+### 5. Stop Monitoring
+```bash
+make dev-down
 ```
+
+## How dev3000 Helps
+
+When running with dev3000:
+
+1. **Automatic Monitoring**
+   - Server logs captured
+   - Browser console recorded
+   - Network requests tracked
+   - Screenshots on errors
+
+2. **AI-Powered Debugging**
+   - "fix my app" for analysis
+   - Prioritized error reports
+   - Exact fix suggestions
+   - Interaction replay
+
+3. **MCP Integration**
+   - Next.js builtin MCP at `/_next/mcp`
+   - dev3000 MCP at http://localhost:3684
+   - Context7 for docs
+   - CDP browser access
 
 ## Configuration
 
 ### next.config.js
 
-Key configurations for dev3000 integration:
-
 ```javascript
 module.exports = {
   experimental: {
-    mcpServer: true  // Enable MCP server integration
+    turbo: { /* Turbopack config */ },
+    serverActions: { bodySizeLimit: '2mb' },
   },
   logging: {
-    fetches: {
-      fullUrl: true  // Log full URLs for better debugging
-    }
-  }
+    fetches: { fullUrl: true }
+  },
 }
 ```
 
-### package.json Scripts
+### package.json
 
-- `pnpm dev` - Start development server with Turbopack
-- `pnpm build` - Build for production
-- `pnpm start` - Start production server
-- `pnpm lint` - Run ESLint
+**Key dependencies:**
+- `next: ^16.0.0` - Next.js 16 with builtin MCP
+- `react: ^19.0.0` - React 19 with new hooks
+- `react-dom: ^19.0.0` - React DOM 19
 
-## Development Workflow
+**Dev dependencies:**
+- `@biomejs/biome: ^1.9.4` - Ultra-fast Rust-based linter and formatter
+- `typescript: ^5` - TypeScript compiler
+- `tailwindcss: ^3` - Utility-first CSS framework
+- `@types/*` - TypeScript type definitions
 
-### 1. Start the Environment
+## Best Practices
 
-```bash
-npm run dev3000:up
-```
+1. **Server Components First** - Add "use client" only when needed
+2. **Server Actions for Mutations** - No API routes required
+3. **Code Quality** - Run `npm run check` before committing (format + lint + typecheck)
+4. **Error Boundaries** - Better debugging context for dev3000
+5. **Logging** - Use console.log/error; dev3000 captures all output
 
-### 2. Make Changes
+### Why Biome?
 
-Edit `pages/index.js` or add new pages. Changes will hot-reload automatically.
-
-### 3. Debug with dev3000
-
-- View all logs at http://localhost:3684/logs
-- Ask Claude to "fix my app" for AI-powered debugging
-- Automatic screenshots on errors and navigation
-
-### 4. Stop the Environment
-
-```bash
-npm run dev3000:down
-```
-
-## Using dev3000 Features
-
-### AI-Powered Debugging
-
-When you encounter errors, tell Claude:
-
-```
-fix my app
-```
-
-dev3000 will:
-1. Analyze recent errors and logs
-2. Show the exact interactions that triggered errors
-3. Provide code fixes with file locations
-4. Help you verify fixes by replaying interactions
-
-### Browser Automation
-
-Ask Claude to:
-- "Take a screenshot of the current page"
-- "Click the increment button"
-- "Navigate to /about"
-
-dev3000 executes these actions via Chrome DevTools Protocol.
-
-### Log Analysis
-
-All server and browser events are captured with timestamps:
-- Server console output
-- Browser console messages
-- Network requests
-- Automatic screenshots
-
-Access logs at http://localhost:3684/logs
-
-## Hot Reload in Docker
-
-This example is configured for Docker/WSL environments:
-
-```javascript
-// Automatically set by docker-compose.yml:
-process.env.CHOKIDAR_USEPOLLING = 'true'
-process.env.WATCHPACK_POLLING = 'true'
-```
-
-These enable file watching via polling, which works across Docker volume mounts.
-
-## Adding Pages
-
-Create new pages in the `pages/` directory:
-
-```javascript
-// pages/about.js
-export default function About() {
-  return <h1>About Page</h1>
-}
-```
-
-Access at http://localhost:3000/about
-
-## API Routes
-
-Create API routes in `pages/api/`:
-
-```javascript
-// pages/api/hello.js
-export default function handler(req, res) {
-  res.status(200).json({ message: 'Hello from dev3000!' })
-}
-```
-
-Access at http://localhost:3000/api/hello
-
-## Environment Variables
-
-Create `.env.local` for local environment variables:
-
-```env
-NEXT_PUBLIC_API_URL=http://localhost:3000/api
-NEXT_TELEMETRY_DISABLED=1
-```
-
-**Note**: In Docker, environment variables are set via `docker-compose.yml`.
+Biome is the modern replacement for ESLint and Prettier, written in Rust for maximum speed:
+- **10-100x faster** than ESLint/Prettier
+- **All-in-one** tool for linting and formatting
+- **Next.js optimized** with React hooks and TypeScript support
+- **Zero config** needed - works out of the box
+- **Fast feedback** during development
 
 ## Troubleshooting
 
-### Changes Not Hot-Reloading
+### Port Conflicts
+- Ports 3000, 3684, 9222 must be available
+- Modify `docker-compose.yml` if needed
 
-Verify polling is enabled:
+### Chrome CDP Issues
+- Ensure Chrome runs on host
+- Check `DEV3000_CDP_URL` environment variable
+- Verify `host.docker.internal` works
+
+### Code Quality
+
+**Formatting** (Biome - Ultra-fast Rust-based formatter):
 ```bash
-docker exec dev3000 env | grep POLLING
+npm run format        # Format all files
+npm run format:check  # Check formatting without changes
 ```
 
-Should show:
-```
-CHOKIDAR_USEPOLLING=true
-WATCHPACK_POLLING=true
-```
-
-### Port Already in Use
-
+**Linting** (Biome - 10-100x faster than ESLint):
 ```bash
-# Kill process on port 3000
-lsof -ti:3000 | xargs kill -9
-
-# Or use a different port
-dev3000 --port 5173
+npm run lint       # Check for linting issues
+npm run lint:fix   # Auto-fix linting issues
 ```
 
-### Build Errors
-
-Clear Next.js cache:
+**Type Checking** (TypeScript):
 ```bash
-rm -rf .next
-pnpm dev
+npm run typecheck  # Check for type errors
 ```
 
-## Next Steps
+**All Checks** (Format + Lint + TypeCheck):
+```bash
+npm run check      # Run all quality checks
+```
 
-- Add more pages in `pages/`
-- Create API routes in `pages/api/`
-- Add styling with CSS modules or Tailwind
-- Configure TypeScript (optional)
-- Integrate with backend APIs
+## Learn More
 
-## Resources
-
-- [dev3000 Documentation](../../README.md)
-- [Docker Setup Guide](../../docker/README.md)
-- [Next.js Documentation](https://nextjs.org/docs)
-- [React 19 Documentation](https://react.dev)
+- [Next.js 16 Documentation](https://nextjs.org/docs)
+- [dev3000 Repository](https://github.com/automationjp/dev3000)
+- [Model Context Protocol](https://modelcontextprotocol.io/)
+- [React 19 Documentation](https://react.dev/)

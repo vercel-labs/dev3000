@@ -100,6 +100,19 @@ clean: ## Clean up Docker resources and build artifacts
 	@rm -rf example/nextjs15/node_modules example/nextjs15/.next
 	@echo "✅ Cleanup complete"
 
+clean-frontend: ## Clear frontend directory (keeps only .keep file)
+	@echo "Clearing frontend directory..."
+	@if [ -d "frontend" ]; then \
+		rm -rf frontend/* frontend/.* 2>/dev/null || true; \
+		echo "# Frontend deployment directory" > frontend/.keep; \
+		echo "✅ Frontend directory cleared"; \
+		echo "   Only .keep file remains"; \
+		echo ""; \
+		echo "Deploy an example with: make deploy-frontend APP=nextjs16"; \
+	else \
+		echo "❌ Error: frontend directory does not exist"; \
+	fi
+
 ## ========== Frontend Deployment ==========
 
 deploy-frontend: ## Deploy example app to frontend directory (e.g., make deploy-frontend APP=nextjs15)

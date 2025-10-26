@@ -1,0 +1,130 @@
+# Docker Compose Configuration for User Projects
+#
+# This file is for users who have cloned dev3000 into frontend/.dev3000
+#
+# Your project structure:
+#   /your-project/                  # Your project root
+#   ├── frontend/                   # Your Next.js application
+#   │   ├── .dev3000/              # git clone https://github.com/automationjp/dev3000
+#   │   ├── app/                    # Your Next.js code
+#   │   └── package.json
+#   ├── docker/                     # This file should be here
+#   │   └── docker-compose.yml
+#   └── Makefile
+#
+# Usage from your project root:
+#   make dev-up
+
+services:
+  dev3000:
+    build:
+      # Build from dev3000 cloned in frontend/.dev3000
+      context: ../frontend/.dev3000
+      dockerfile: docker/Dockerfile
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+      cache_from:
+        - type=registry,ref=dev3000:latest
+      target: production
+
+    container_name: dev3000
+
+    # Security
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: false
+
+    # Ports - CUSTOMIZE if needed
+    ports:
+      - "3000:3000"   # Your Next.js app
+      - "3684:3684"   # Dev3000 MCP server
+
+    # Mount your frontend directory
+    volumes:
+      # Mount your entire frontend directory
+      - ../frontend:/app/user-frontend:cached
+
+      # Exclude .dev3000 to avoid conflicts
+      - /app/user-frontend/.dev3000
+
+      # Keep node_modules in container for performance
+      - /app/user-frontend/node_modules
+      - /app/user-frontend/.next
+
+      # Temporary files
+      - dev3000-tmp:/tmp
+
+    # Set working directory to your frontend
+    working_dir: /app/user-frontend
+
+    # Environment - CUSTOMIZE for your project
+    environment:
+      # CDP for Chrome on host
+      - DEV3000_CDP_URL=${DEV3000_CDP_URL:-http://host.docker.internal:9222}
+
+      # Node.js
+      - NODE_ENV=development
+
+      # File watching for Docker
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+
+      # Next.js
+      - NEXT_TELEMETRY_DISABLED=1
+
+      # Dev3000
+      - LOG_FILE_PATH=/tmp/d3k.log
+
+      # ADD YOUR ENVIRONMENT VARIABLES HERE
+      # - DATABASE_URL=...
+      # - API_KEY=...
+
+    # WSL2/Mac compatibility
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+    # Startup command
+    command: >
+      sh -c "
+        set -x
+        echo '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
+        echo '🚀 Starting dev3000 for your project...'
+        echo '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
+        echo '[INFO] Working directory: '$(pwd)
+        echo '[INFO] Node: '$(node --version)
+        ls -la
+        echo ''
+
+        # Install dependencies if needed
+        if [ ! -d 'node_modules' ]; then
+          echo '[INFO] Installing dependencies...'
+          npm install || pnpm install || yarn install
+        fi
+
+        # Start dev3000
+        echo '[INFO] Starting dev3000...'
+        /usr/local/bin/dev3000 --port 3000 --debug
+      "
+
+    restart: unless-stopped
+
+    # Resource limits - CUSTOMIZE based on your needs
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 6G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
+
+# Named volumes
+volumes:
+  dev3000-tmp:
+    driver: local
+
+networks:
+  default:
+    driver: bridge
