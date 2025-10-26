@@ -91,9 +91,9 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/vercel-labs/dev3000.git"
+    "url": "git+https://github.com/automationjp/dev3000.git"
   },
-  "author": "Lindsey Simon <lindsey@vercel.com>",
+  "author": "automationjp (forked from Lindsey Simon <lindsey@vercel.com>)",
   "license": "MIT",
   "packageManager": "pnpm@10.18.3"
 }

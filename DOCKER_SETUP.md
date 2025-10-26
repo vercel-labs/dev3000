@@ -1,6 +1,6 @@
-# Docker Setup Guide for Dev3000 + Next.js 15
+# Docker Setup Guide for Dev3000 + Next.js 16
 
-Complete guide for running Dev3000 with Next.js 15 in Docker, with browser automation via Chrome DevTools Protocol (CDP) from the host machine.
+Complete guide for running Dev3000 with Next.js 16 in Docker, with browser automation via Chrome DevTools Protocol (CDP) from the host machine.
 
 ## Table of Contents
 
@@ -47,7 +47,7 @@ Complete guide for running Dev3000 with Next.js 15 in Docker, with browser autom
 │  │  └──────────────────────────────────┘       ││
 │  │                                              ││
 │  │  Volumes:                                    ││
-│  │  - example/nextjs15 → /app                  ││
+│  │  - example/nextjs16 → /app                  ││
 │  │  - node_modules (anonymous)                  ││
 │  │  - .next (anonymous)                         ││
 │  └──────────────────────────────────────────────┘│
@@ -347,7 +347,7 @@ Wait for:
 
 ### 2. Make Code Changes
 
-Edit files in `example/nextjs15/pages/index.js`:
+Edit files in `example/nextjs16/app/page.tsx`:
 
 ```javascript
 export default function Home() {
@@ -808,7 +808,7 @@ For production, use standard Next.js deployment **without dev3000**:
 
 ```bash
 # Build for production
-cd example/nextjs15
+cd example/nextjs16
 npm run build
 npm run start
 
@@ -913,7 +913,7 @@ console.log('DEBUG:', { platform, chromePath, cdpPort })
 ## Next Steps
 
 - See [docker/README.md](docker/README.md) for Docker-specific details
-- See [example/nextjs15/README.md](example/nextjs15/README.md) for Next.js example usage
+- See [example/nextjs16/README.md](example/nextjs16/README.md) for Next.js 16 example usage
 - See [README.md](README.md) for general dev3000 documentation
 
 ## Support
