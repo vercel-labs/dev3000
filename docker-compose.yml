@@ -1,15 +1,15 @@
 services:
   dev3000:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: frontend
+      dockerfile: Dockerfile.dev
       # Build arguments for optimization
       args:
         BUILDKIT_INLINE_CACHE: 1
       # Use BuildKit for parallel builds and better caching
       cache_from:
         - type=registry,ref=dev3000:latest
-      target: production
+      target: development
     container_name: dev3000
 
     # Security hardening
