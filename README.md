@@ -101,6 +101,27 @@ The tool monitors your app in a real browser and captures:
 
 Logs are automatically saved with timestamps in `~/.d3k/logs/` and rotated to keep the 10 most recent per project. Each instance has its own timestamped log file displayed when starting dev3000.
 
+## 📚 Documentation
+
+Comprehensive documentation is available in the `/docs` directory:
+
+### User Guides
+- **[Getting Started](docs/user-guide/getting-started.md)** - Complete guide from installation to debugging
+- **[Docker Setup](docs/user-guide/docker-setup.md)** - Running dev3000 in Docker (Windows/WSL2/Linux/macOS)
+- **[MCP Setup](docs/user-guide/mcp-setup.md)** - AI integration with Claude Code
+- **[Performance Guide](docs/user-guide/performance.md)** - Optimization tips
+
+### Developer Documentation
+- **[Documentation Index](docs/README.md)** - Complete documentation navigation
+- **[Claude Code Guide](CLAUDE.md)** - Development guidelines for Claude Code (root level)
+- **[Release Process](docs/developer/release-process.md)** - How to release new versions
+- **[Changelog Management](docs/developer/changelog-management.md)** - How the changelog system works
+
+### Component Documentation
+- [Chrome Extension](chrome-extension/README.md) - Browser extension setup
+- [Docker Configuration](docker/README.md) - Docker architecture
+- [Example Apps](example/nextjs16/README.md) - Sample applications
+
 ## dev3000: Smart Debugging Orchestrator
 
 **dev3000 doesn't just work alone - it's designed to intelligently enhance its capabilities by orchestrating your entire MCP debugging ecosystem!** 🎼
@@ -229,7 +250,7 @@ This repository uses Docker for consistent development across platforms (WSL2, L
 - Make (for convenience commands)
 - WSL2 (for Windows users)
 
-For detailed Docker setup instructions, see [DOCKER_SETUP.md](DOCKER_SETUP.md).
+For detailed Docker setup instructions, see [Docker Setup Guide](docs/user-guide/docker-setup.md).
 
 ## Using the Chrome Extension vs Playwright
 
