@@ -79,7 +79,7 @@ Complete guide for running Dev3000 with Next.js 16 in Docker, with browser autom
 From the dev3000 repository root:
 
 ```bash
-npm run dev3000:up
+make dev-up
 ```
 
 This automated script will:
@@ -100,7 +100,7 @@ Once running, access:
 ### Shutdown
 
 ```bash
-npm run dev3000:down
+make dev-down
 ```
 
 This will gracefully:
@@ -119,7 +119,7 @@ WSL provides the best of both worlds - Linux dev environment with Windows Chrome
 ```bash
 # From WSL terminal
 cd /mnt/d/github/dev3000  # Your repository path
-npm run dev3000:up
+make dev-up
 ```
 
 **How it works:**
@@ -155,7 +155,7 @@ npm run dev3000:up
 
 ```bash
 cd ~/dev3000  # Your repository path
-npm run dev3000:up
+make dev-up
 ```
 
 **How it works:**
@@ -174,7 +174,7 @@ npm run dev3000:up
 
 ```bash
 cd ~/dev3000  # Your repository path
-npm run dev3000:up
+make dev-up
 ```
 
 **How it works:**
@@ -198,7 +198,7 @@ npm run dev3000:up
 ```powershell
 # From PowerShell or CMD
 cd C:\dev3000  # Your repository path
-npm run dev3000:up
+make dev-up
 ```
 
 **How it works:**
@@ -334,7 +334,7 @@ volumes:
 ### 1. Start Development
 
 ```bash
-npm run dev3000:up
+make dev-up
 ```
 
 Wait for:
@@ -385,7 +385,7 @@ Dev3000's MCP tools provide:
 ### 5. Stop Development
 
 ```bash
-npm run dev3000:down
+make dev-down
 ```
 
 Or press `Ctrl+C` in the terminal running `dev3000:up`.
@@ -481,7 +481,7 @@ docker system df
 
 ### Chrome Not Found (Automation Script)
 
-**Symptom:** `Chrome not found!` when running `npm run dev3000:up`
+**Symptom:** `Chrome not found!` when running `make dev-up`
 
 **Solutions:**
 
@@ -660,7 +660,7 @@ docker exec dev3000 dmesg | grep -i killed
 docker stats dev3000
 
 # Restart the container
-npm run dev3000:down && npm run dev3000:up
+make dev-down && make dev-up
 ```
 
 **4. Port Errors**
@@ -744,7 +744,7 @@ docker compose logs dev3000 | grep "CHROME LAUNCH"
 2. **Check POSSIBLE REASONS** - Identify which scenario matches
 3. **Follow DEBUG STEPS** - Run the suggested commands
 4. **Review logs** - Look at the full context with `docker compose logs`
-5. **Test the fix** - Restart with `npm run dev3000:down && npm run dev3000:up`
+5. **Test the fix** - Restart with `make dev-down && make dev-up`
 
 #### Getting Help
 
@@ -800,7 +800,7 @@ Attach `error.log` and command outputs when creating GitHub issues.
 **Safe Usage:**
 - ✅ Development environments only
 - ✅ Localhost/local network only
-- ✅ Stop Chrome when done: `npm run dev3000:down`
+- ✅ Stop Chrome when done: `make dev-down`
 
 ### Production Deployment
 
@@ -901,7 +901,7 @@ Enable verbose output:
 
 ```bash
 # Add debug logging
-NODE_DEBUG=dev3000 npm run dev3000:up
+NODE_DEBUG=dev3000 make dev-up
 ```
 
 Or edit `tools/dev3000-up.mjs`:

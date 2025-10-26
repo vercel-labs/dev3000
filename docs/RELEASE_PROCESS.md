@@ -12,7 +12,7 @@ This document describes how to release new versions of dev3000.
 
 ### Method 1: GitHub Actions + Manual Publish (Recommended)
 
-1. Go to the [Actions tab](https://github.com/vercel-labs/dev3000/actions) on GitHub
+1. Go to the [Actions tab](https://github.com/automationjp/dev3000/actions) on GitHub
 2. Click on "Prepare Release" workflow
 3. Click "Run workflow"
 4. Select release type (patch/minor/major) and click "Run workflow"
