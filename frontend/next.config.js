@@ -1,9 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Performance optimizations
-
-  // SWC compiler optimizations
-  swcMinify: true,
+  // Compiler optimizations
   compiler: {
     removeConsole: process.env.NODE_ENV === 'production',
   },
@@ -13,7 +10,7 @@ const nextConfig = {
     unoptimized: true,
   },
 
-  // Disable x-powered-by header
+  // Disable x-powered-by header for security
   poweredByHeader: false,
 
   // Development indicators
@@ -22,15 +19,24 @@ const nextConfig = {
     buildActivityPosition: 'bottom-right'
   },
 
-  // Experimental features for performance
+  // Experimental features
   experimental: {
-    // Enable optimized package imports
+    // Enable optimized package imports for better tree-shaking
     optimizePackageImports: ['react', 'react-dom'],
 
-    // Turbopack configuration (when using --turbopack flag)
+    // Enable Turbopack for faster development builds
     turbo: {
-      // Use memory cache for faster rebuilds
-      memoryLimit: 1024 * 1024 * 1024, // 1GB
+      rules: {
+        '*.svg': {
+          loaders: ['@svgr/webpack'],
+          as: '*.js',
+        },
+      },
+    },
+
+    // Optimize server component data streaming
+    serverActions: {
+      bodySizeLimit: '2mb',
     },
   },
 
@@ -41,8 +47,14 @@ const nextConfig = {
     }
   },
 
-  // Output configuration for faster builds
+  // Output configuration
   output: 'standalone',
+
+  // TypeScript configuration
+  typescript: {
+    // Enable type checking during build
+    ignoreBuildErrors: false,
+  },
 }
 
 module.exports = nextConfig

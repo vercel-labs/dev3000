@@ -45,17 +45,22 @@ RUN pnpm run build && \
     mkdir -p /build/dev3000/mcp-server/public/screenshots && \
     chmod -R 777 /build/dev3000/mcp-server/public
 
-# Install dev3000 globally
-RUN npm install -g .
+# Install dev3000 globally (with dependencies)
+RUN pnpm pack && \
+    npm install -g ./dev3000-*.tgz && \
+    rm ./dev3000-*.tgz
 
 # Final stage - production-ready image
 FROM base AS production
 WORKDIR /app
 
-# Copy dev3000 from builder stage
+# Copy dev3000 from builder stage (including all dependencies and binaries)
 COPY --from=dev3000-builder /usr/local/lib/node_modules /usr/local/lib/node_modules
-COPY --from=dev3000-builder /usr/local/bin/dev3000 /usr/local/bin/dev3000
-COPY --from=dev3000-builder /build/dev3000/mcp-server /usr/local/lib/node_modules/dev3000/mcp-server
+COPY --from=dev3000-builder /usr/local/bin /usr/local/bin
+
+# Fix permissions for screenshots directory so node user can write
+RUN mkdir -p /usr/local/lib/node_modules/dev3000/mcp-server/public/screenshots && \
+    chmod -R 777 /usr/local/lib/node_modules/dev3000/mcp-server/public
 
 # Copy frontend package files for dependency installation
 COPY frontend/package.json ./
