@@ -12,6 +12,18 @@ mcp-server/.next/*
 .mcp.json
 next-devtools-mcp/
 
+# Lock files from other package managers (project uses pnpm)
+package-lock.json
+yarn.lock
+
+# pnpm debug logs
+pnpm-debug.log
+.pnpm-debug.log
+
+# Next.js / Turbopack cache
+.turbo/
+.vercel/
+
 # Docker volumes and generated files
 docker/volumes/
 docker/*.env
