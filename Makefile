@@ -168,7 +168,7 @@ deploy-frontend: ## Deploy example app to frontend directory (e.g., make deploy-
 	mkdir -p frontend/.dev3000/scripts; \
 	cp scripts/docker-entrypoint.sh frontend/.dev3000/scripts/; \
 	chmod +x frontend/.dev3000/scripts/docker-entrypoint.sh; \
-	cp package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json biome.json Makefile frontend/.dev3000/; \
+	cp package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json biome.json Makefile docker-compose.yml frontend/.dev3000/; \
 	echo ""; \
 	echo "✅ Deployed example/$(APP) to frontend/"; \
 	echo "✅ Created frontend/.dev3000 reference (simulating user setup)"; \
