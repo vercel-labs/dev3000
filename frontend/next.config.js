@@ -19,25 +19,13 @@ const nextConfig = {
     buildActivityPosition: 'bottom-right'
   },
 
-  // Experimental features
+  // Experimental features for performance optimization
   experimental: {
-    // Enable optimized package imports for better tree-shaking
     optimizePackageImports: ['react', 'react-dom'],
-
-    // Enable Turbopack for faster development builds
-    turbo: {
-      rules: {
-        '*.svg': {
-          loaders: ['@svgr/webpack'],
-          as: '*.js',
-        },
-      },
-    },
-
-    // Optimize server component data streaming
-    serverActions: {
-      bodySizeLimit: '2mb',
-    },
+    // Enable optimistic client cache for faster navigation
+    optimisticClientCache: true,
+    // Enable CSS chunking for better performance
+    optimizeCss: true,
   },
 
   // Logging configuration
@@ -47,8 +35,8 @@ const nextConfig = {
     }
   },
 
-  // Output configuration
-  output: 'standalone',
+  // Build output directory
+  distDir: '.next',
 
   // TypeScript configuration
   typescript: {

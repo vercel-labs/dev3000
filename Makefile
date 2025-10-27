@@ -45,13 +45,19 @@ dev-up: ## Start dev3000 in Docker (launches Chrome automatically)
 	@echo "Step 3: Launching Chrome with CDP..."
 	@$(MAKE) start-chrome-cdp
 	@echo ""
-	@echo "Step 4: Verifying CDP connection from container..."
-	@if curl -s http://localhost:9222/json/version > /dev/null 2>&1; then \
-		echo "✅ CDP connection verified"; \
-		BROWSER_VER=$$(curl -s http://localhost:9222/json/version | grep -o '"Browser":"[^"]*"' | cut -d'"' -f4); \
+	@echo "Step 4: Verifying CDP connection from host..."
+	@if grep -qi microsoft /proc/version 2>/dev/null; then \
+		HOST_IP=$$(ip route | grep default | awk '{print $$3}' || echo "127.0.0.1"); \
+		CDP_CHECK_URL="http://$$HOST_IP:9222"; \
+	else \
+		CDP_CHECK_URL="http://localhost:9222"; \
+	fi; \
+	if curl -s $$CDP_CHECK_URL/json/version > /dev/null 2>&1; then \
+		echo "✅ CDP connection verified ($$CDP_CHECK_URL)"; \
+		BROWSER_VER=$$(curl -s $$CDP_CHECK_URL/json/version | grep -o '"Browser":"[^"]*"' | cut -d'"' -f4); \
 		echo "   Browser: $$BROWSER_VER"; \
 	else \
-		echo "⚠️  Could not verify CDP connection"; \
+		echo "⚠️  Could not verify CDP connection ($$CDP_CHECK_URL)"; \
 		echo "Dev3000 may not be able to monitor browser events."; \
 	fi
 	@echo ""
@@ -98,6 +104,7 @@ clean: ## Clean up Docker resources and build artifacts
 	@echo "Cleaning up..."
 	@docker compose down -v
 	@rm -rf example/*/node_modules example/*/.next
+	@rm -rf frontend/node_modules frontend/.next
 	@echo "✅ Cleanup complete"
 
 clean-frontend: ## Clear frontend directory (keeps only .keep file)
@@ -136,10 +143,25 @@ deploy-frontend: ## Deploy example app to frontend directory (e.g., make deploy-
 	rm -rf frontend; \
 	mkdir -p frontend; \
 	rsync -av --exclude='node_modules' --exclude='.next' --exclude='out' --exclude='.pnpm-store' example/$(APP)/ frontend/; \
+	echo ""; \
+	echo "🔗 Setting up frontend/.dev3000 (dev3000 reference)..."; \
+	mkdir -p frontend/.dev3000/frontend; \
+	rm -rf frontend/.dev3000/src frontend/.dev3000/mcp-server frontend/.dev3000/www; \
+	rsync -av --exclude='node_modules' --exclude='.next' --exclude='dist' --exclude='.pnpm-store' src mcp-server frontend/.dev3000/; \
+	cp package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json biome.json Makefile docker-compose.yml frontend/.dev3000/; \
+	cp Dockerfile.dev frontend/.dev3000/frontend/Dockerfile.dev; \
+	cp Dockerfile.dev frontend/Dockerfile.dev; \
+	echo "   Note: In production, users would run:"; \
+	echo "   git submodule add https://github.com/automationjp/dev3000 frontend/.dev3000"; \
+	echo ""; \
 	echo "✅ Deployed example/$(APP) to frontend/"; \
+	echo "✅ Created frontend/.dev3000 reference (simulating user setup)"; \
 	echo ""; \
 	echo "Frontend directory contents:"; \
 	du -sh frontend/; \
+	du -sh frontend/.dev3000/ 2>/dev/null || true; \
+	echo ""; \
+	echo "📝 Note: Dependencies will be installed automatically by Docker on first run"; \
 	echo ""; \
 	echo "Next steps:"; \
 	echo "  make dev-rebuild  - Rebuild Docker image with new frontend"; \
@@ -173,22 +195,24 @@ list-examples: ## List available example apps
 
 start-chrome-cdp: ## Start Chrome with CDP (auto-detects WSL/Linux/macOS)
 	@echo "🌐 Starting Chrome with CDP..."
-	@if curl -s http://localhost:9222/json/version > /dev/null 2>&1; then \
-		echo "✅ Chrome already running with CDP on port 9222"; \
-		BROWSER_VER=$$(curl -s http://localhost:9222/json/version | grep -o '"Browser":"[^"]*"' | cut -d'"' -f4); \
-		echo "   Version: $$BROWSER_VER"; \
-	elif grep -qi microsoft /proc/version 2>/dev/null; then \
-		echo "Detected WSL2 environment"; \
-		echo "Starting Windows Chrome from WSL..."; \
+	@if grep -qi microsoft /proc/version 2>/dev/null; then \
 		HOST_IP=$$(ip route | grep default | awk '{print $$3}' || echo "127.0.0.1"); \
-		echo "   Detected WSL2 host IP: $$HOST_IP"; \
-		APP_URL="http://$$HOST_IP:3000/"; \
-		echo "   Application URL: $$APP_URL"; \
-		powershell.exe -Command "Start-Process chrome.exe -ArgumentList '--remote-debugging-port=9222','--remote-debugging-address=0.0.0.0','--user-data-dir=C:\\temp\\chrome-dev-profile','--no-first-run','--no-default-browser-check','$$APP_URL'" 2>/dev/null || \
-		cmd.exe /c "start chrome.exe --remote-debugging-port=9222 --remote-debugging-address=0.0.0.0 --user-data-dir=C:\\temp\\chrome-dev-profile --no-first-run --no-default-browser-check $$APP_URL" 2>/dev/null || \
-		echo "⚠️  Failed to start Chrome automatically. Please start Chrome manually:"; \
-		echo "   chrome.exe --remote-debugging-port=9222 --remote-debugging-address=0.0.0.0 --user-data-dir=C:\\temp\\chrome-dev-profile $$APP_URL"; \
-		sleep 3; \
+		if curl -s http://$$HOST_IP:9222/json/version > /dev/null 2>&1; then \
+			echo "✅ Chrome already running with CDP on port 9222"; \
+			BROWSER_VER=$$(curl -s http://$$HOST_IP:9222/json/version | grep -o '"Browser":"[^"]*"' | cut -d'"' -f4); \
+			echo "   Version: $$BROWSER_VER"; \
+		else \
+			echo "Detected WSL2 environment"; \
+			echo "Starting Windows Chrome from WSL..."; \
+			echo "   Detected WSL2 host IP: $$HOST_IP"; \
+			APP_URL="http://$$HOST_IP:3000/"; \
+			echo "   Application URL: $$APP_URL"; \
+			powershell.exe -Command "Start-Process chrome.exe -ArgumentList '--remote-debugging-port=9222','--remote-debugging-address=0.0.0.0','--user-data-dir=C:\\temp\\chrome-dev-profile','--no-first-run','--no-default-browser-check','$$APP_URL'" 2>/dev/null || \
+			cmd.exe /c "start chrome.exe --remote-debugging-port=9222 --remote-debugging-address=0.0.0.0 --user-data-dir=C:\\temp\\chrome-dev-profile --no-first-run --no-default-browser-check $$APP_URL" 2>/dev/null || \
+			echo "⚠️  Failed to start Chrome automatically. Please start Chrome manually:"; \
+			echo "   chrome.exe --remote-debugging-port=9222 --remote-debugging-address=0.0.0.0 --user-data-dir=C:\\temp\\chrome-dev-profile $$APP_URL"; \
+			sleep 3; \
+		fi; \
 	elif [ "$$(uname)" = "Darwin" ]; then \
 		echo "Detected macOS environment"; \
 		open -a "Google Chrome" --args --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-dev-profile --no-first-run --no-default-browser-check http://localhost:3000 & \
@@ -202,14 +226,20 @@ start-chrome-cdp: ## Start Chrome with CDP (auto-detects WSL/Linux/macOS)
 	fi; \
 	echo ""; \
 	echo "Waiting for CDP endpoint to be ready..."; \
+	if grep -qi microsoft /proc/version 2>/dev/null; then \
+		HOST_IP=$$(ip route | grep default | awk '{print $$3}' || echo "127.0.0.1"); \
+		CDP_CHECK_URL="http://$$HOST_IP:9222/json/version"; \
+	else \
+		CDP_CHECK_URL="http://localhost:9222/json/version"; \
+	fi; \
 	i=1; while [ $$i -le 5 ]; do \
-		if curl -s http://localhost:9222/json/version > /dev/null 2>&1; then \
+		if curl -s $$CDP_CHECK_URL > /dev/null 2>&1; then \
 			echo "✅ CDP endpoint ready!"; \
 			break; \
 		fi; \
 		if [ $$i -eq 5 ]; then \
 			echo "⚠️  CDP endpoint not ready after 5 seconds"; \
-			echo "   Chrome may still be starting. Check manually: http://localhost:9222/json/version"; \
+			echo "   Chrome may still be starting. Check manually: $$CDP_CHECK_URL"; \
 		fi; \
 		echo -n "."; \
 		sleep 1; \
@@ -234,14 +264,20 @@ status: ## Show development environment status
 	@docker compose ps
 	@echo ""
 	@echo "Chrome CDP:"
-	@if curl -s http://localhost:9222/json/version > /dev/null 2>&1; then \
-		echo "  ✅ Chrome running with CDP on port 9222"; \
-		BROWSER_VER=$$(curl -s http://localhost:9222/json/version | grep -o '"Browser":"[^"]*"' | cut -d'"' -f4); \
-		CDP_WS_URL=$$(curl -s http://localhost:9222/json/version | grep -o '"webSocketDebuggerUrl":"[^"]*"' | cut -d'"' -f4); \
+	@if grep -qi microsoft /proc/version 2>/dev/null; then \
+		HOST_IP=$$(ip route | grep default | awk '{print $$3}' || echo "127.0.0.1"); \
+		CDP_CHECK_URL="http://$$HOST_IP:9222"; \
+	else \
+		CDP_CHECK_URL="http://localhost:9222"; \
+	fi; \
+	if curl -s $$CDP_CHECK_URL/json/version > /dev/null 2>&1; then \
+		echo "  ✅ Chrome running with CDP on port 9222 ($$CDP_CHECK_URL)"; \
+		BROWSER_VER=$$(curl -s $$CDP_CHECK_URL/json/version | grep -o '"Browser":"[^"]*"' | cut -d'"' -f4); \
+		CDP_WS_URL=$$(curl -s $$CDP_CHECK_URL/json/version | grep -o '"webSocketDebuggerUrl":"[^"]*"' | cut -d'"' -f4); \
 		echo "  Version: $$BROWSER_VER"; \
 		echo "  WebSocket URL: $$CDP_WS_URL"; \
 	else \
-		echo "  ❌ Chrome CDP not accessible on port 9222"; \
+		echo "  ❌ Chrome CDP not accessible ($$CDP_CHECK_URL)"; \
 	fi
 	@echo ""
 	@echo "CDP Integration:"

@@ -1,108 +1,70 @@
+# Dev3000 Docker Compose Reference Implementation
+#
+# This file demonstrates how to run dev3000 with Docker.
+#
+# For users: When using dev3000 as a git submodule at frontend/.dev3000/,
+# copy this file to your project root and update the build context:
+#   build.context: ./frontend/.dev3000
+
 services:
+  # Dev3000 container (runs both frontend app and MCP server)
   dev3000:
     build:
-      context: frontend
+      context: ./frontend
       dockerfile: Dockerfile.dev
-      # Build arguments for optimization
       args:
         BUILDKIT_INLINE_CACHE: 1
-      # Use BuildKit for parallel builds and better caching
-      cache_from:
-        - type=registry,ref=dev3000:latest
       target: development
     container_name: dev3000
 
-    # Security hardening
+    # Security hardening (relaxed for development)
     security_opt:
       - no-new-privileges:true
-    cap_drop:
-      - ALL
-    read_only: false  # We need write access for node_modules and .next
 
     # Port mappings
     ports:
-      - "3000:3000"   # Next.js / App server
-      - "3684:3684"   # Dev3000 MCP server
+      - "3000:3000"   # Next.js development server
+      - "3684:3684"   # Dev3000 MCP Server UI
 
-    # Volume mounts - removed to avoid WSL2 permission issues
-    # Application files are copied into image during build
+    # Volume mounts
+    volumes:
+      # Mount frontend directory (includes .dev3000 subdirectory)
+      # Use delegated consistency for better WSL2 performance
+      - ./frontend:/app/frontend:delegated
+      # Use named volume for node_modules (avoids WSL2 permission issues)
+      - node_modules:/app/frontend/node_modules
+      - next_cache:/app/frontend/.next
 
     # Environment variables
     environment:
-      # CDP configuration for host Chrome connection
-      # Set DEV3000_CDP_URL to connect to Chrome running on host
-      # Default: http://host.docker.internal:9222 (works on Docker Desktop)
-      # For WSL2: Use host.docker.internal to access Windows host
-      - DEV3000_CDP_URL=${DEV3000_CDP_URL:-http://host.docker.internal:9222}
-
-      # Node.js environment
       - NODE_ENV=development
-
-      # File watching for hot reload (required for Docker/WSL)
       - CHOKIDAR_USEPOLLING=true
       - WATCHPACK_POLLING=true
-
-      # Next.js configuration
       - NEXT_TELEMETRY_DISABLED=1
+      # CDP connection (connect to host machine's Chrome)
+      # To enable screenshots: Run Chrome with --remote-debugging-port=9222
+      # Example: chrome.exe --remote-debugging-port=9222 --remote-debugging-address=0.0.0.0 --user-data-dir=C:\temp\chrome-dev-profile
+      # Or use: make start-chrome-cdp
+      - DEV3000_CDP_URL=http://host.docker.internal:9222
 
-      # Dev3000 logging configuration
-      - LOG_FILE_PATH=/tmp/d3k.log
-
-    # WSL2 compatibility: Map host.docker.internal to Windows host IP
+    # Allow access to host (for Chrome CDP on Windows/WSL2)
     extra_hosts:
       - "host.docker.internal:host-gateway"
-
-    # Command to run - simplified since dependencies are pre-installed in image
-    command: >
-      sh -c "
-        set -x
-        rm -f /tmp/dev3000-*.lock
-        echo '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
-        echo '🚀 Starting dev3000...'
-        echo '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
-        echo '[$(date +%Y-%m-%d\ %H:%M:%S)] System Information:'
-        echo '  Node version: '$(node --version)
-        echo '  npm version: '$(npm --version)
-        echo '  User: '$(whoami)
-        echo '  User ID: '$(id)
-        echo '  Working directory: '$(pwd)
-        echo '  Directory permissions:'
-        ls -la
-        echo ''
-        echo '[$(date +%Y-%m-%d\ %H:%M:%S)] Environment Variables:'
-        env | grep -E 'DEV3000|NODE|LOG|CDP' | sort
-        echo ''
-        echo '[$(date +%Y-%m-%d\ %H:%M:%S)] Checking dev3000 installation:'
-        which dev3000
-        dev3000 --version || echo 'Failed to get dev3000 version'
-        echo ''
-        echo '[$(date +%Y-%m-%d\ %H:%M:%S)] Checking lsof availability:'
-        which lsof
-        lsof -v 2>&1 | head -3
-        echo ''
-        echo '[$(date +%Y-%m-%d\ %H:%M:%S)] Checking port availability:'
-        lsof -i :3000 || echo 'Port 3000 is free'
-        lsof -i :3684 || echo 'Port 3684 is free'
-        echo ''
-        echo '[$(date +%Y-%m-%d\ %H:%M:%S)] Starting dev3000 with debug enabled...'
-        echo 'CDP URL: '${DEV3000_CDP_URL:-http://host.docker.internal:9222}
-        dev3000 --port 3000 --debug
-      "
 
     # Restart policy
     restart: unless-stopped
 
-    # Resource limits - optimized for development performance
+    # Resource limits
     deploy:
       resources:
         limits:
-          cpus: '4.0'      # Increased for faster builds
-          memory: 6G       # Increased for Next.js Turbopack
+          cpus: '4.0'
+          memory: 6G
         reservations:
-          cpus: '1.0'      # Guaranteed CPU
-          memory: 1G       # Guaranteed memory
+          cpus: '1.0'
+          memory: 1G
 
-# Networks (using default bridge network)
-networks:
-  default:
-    driver: bridge
+# Named volumes for better performance and WSL2 compatibility
+volumes:
+  node_modules:
+  next_cache:
