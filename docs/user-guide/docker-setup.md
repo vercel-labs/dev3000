@@ -712,6 +712,36 @@ ip addr show docker0 | grep inet | awk '{print $2}' | cut -d/ -f1
 docker exec -it dev3000 sh -c 'echo "172.17.0.1 host.docker.internal" >> /etc/hosts'
 ```
 
+### WSL Permission Issues (pnpm install)
+
+**Symptom:** `pnpm install` fails with permission errors or hangs on WSL2 mounted directories
+
+**Root Cause:** WSL2 mounted directories (`/mnt/c/`, `/mnt/d/`, etc.) have cross-filesystem performance issues and permission restrictions
+
+**Solution:** Use temporary directories to bypass WSL mount restrictions:
+
+```bash
+# Navigate to dev3000 directory and install dependencies using /tmp paths
+cd ../dev3000 && PNPM_HOME=/tmp/.pnpm-home pnpm install --store-dir /tmp/.pnpm-store --no-frozen-lockfile
+```
+
+**Explanation:**
+- `PNPM_HOME=/tmp/.pnpm-home` - Uses native Linux filesystem for pnpm home
+- `--store-dir /tmp/.pnpm-store` - Stores packages in native Linux filesystem (faster, no permission issues)
+- `--no-frozen-lockfile` - Allows lockfile updates (use with caution in production)
+
+**Alternative (Permanent Fix):**
+Add to your shell profile (`~/.bashrc` or `~/.zshrc`):
+```bash
+export PNPM_HOME="/tmp/.pnpm-home"
+export PATH="$PNPM_HOME:$PATH"
+```
+
+Then configure pnpm globally:
+```bash
+pnpm config set store-dir /tmp/.pnpm-store
+```
+
 ### Understanding Detailed Error Messages
 
 Dev3000's Docker implementation includes comprehensive error diagnostics. Each error message follows a structured format:
