@@ -11,6 +11,30 @@ Docker Compose configuration for dev3000 + Next.js development environment.
 
 **Purpose:** Defines the dev3000 container with proper ports, environment variables, and build configuration.
 
+### 📄 .env.example
+Environment variables template for docker-compose.yml configuration.
+
+**Copy to:** `your-project-root/.env`
+
+**Purpose:**
+- CDP (Chrome DevTools Protocol) configuration
+- Enables socat proxy for localhost CDP forwarding
+- Provides sensible defaults for all environments
+
+**Key settings:**
+- `DEV3000_CDP=1` - Enable CDP monitoring
+- `DEV3000_CDP_URL=http://host.docker.internal:9222` - Chrome CDP URL
+- `DEV3000_CDP_PROXY=socat` - Enable socat proxy (recommended)
+
+**How socat proxy works:**
+```
+1. Chrome on host: localhost:9222
+2. Docker maps: host.docker.internal:9222 → host's localhost:9222
+3. socat in container: localhost:9222 → host.docker.internal:9222
+4. dev3000 connects to: http://localhost:9222 (via socat)
+5. Chrome sees "localhost" → Host header check passes ✅
+```
+
 ### 📄 Makefile
 Convenient make commands for Docker development workflow.
 

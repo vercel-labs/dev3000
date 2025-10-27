@@ -12,6 +12,7 @@ RUN apk add --no-cache \
     curl \
     git \
     lsof \
+    socat \
     && rm -rf /var/cache/apk/*
 
 # Install pnpm

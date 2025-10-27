@@ -3,6 +3,7 @@ dist/
 *.log
 .DS_Store
 .env*
+!.env.example
 *.tgz
 mcp-server/public/screenshots/*
 mcp-server/.next/*
