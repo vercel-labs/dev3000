@@ -59,6 +59,7 @@ COPY --from=dev3000-builder /build/mcp-server/public /usr/local/lib/dev3000/mcp-
 COPY --from=dev3000-builder /build/mcp-server/start-production.mjs /usr/local/lib/dev3000/mcp-server/
 COPY --from=dev3000-builder /build/package.json /usr/local/lib/dev3000/
 COPY --from=dev3000-builder /build/node_modules /usr/local/lib/dev3000/node_modules
+COPY --from=dev3000-builder /build/mcp-server/node_modules /usr/local/lib/dev3000/mcp-server/node_modules
 
 # Create symlink for dev3000 command
 RUN ln -s /usr/local/lib/dev3000/dist/cli.js /usr/local/bin/dev3000 && \
@@ -75,6 +76,14 @@ ENV NODE_ENV=development \
     NEXT_TELEMETRY_DISABLED=1 \
     PNPM_HOME=/tmp/pnpm \
     TMPDIR=/tmp
+
+# Copy user application files
+# These files are required by the entrypoint script and dev3000 runtime
+COPY package.json .npmrc* pnpm-lock.yaml* ./
+COPY next.config.js tsconfig.json ./
+COPY postcss.config.mjs* tailwind.config.ts* biome.json* ./
+COPY app ./app
+COPY public* ./public
 
 # Copy and setup entrypoint script
 COPY scripts/docker-entrypoint.sh /entrypoint.sh
