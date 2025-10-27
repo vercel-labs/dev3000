@@ -189,6 +189,8 @@ deploy-frontend: ## Deploy example app to frontend directory (e.g., make deploy-
 	echo "   Development setup: Copy dev3000 source to frontend/.dev3000/"; \
 	rm -rf frontend/.dev3000/src frontend/.dev3000/mcp-server frontend/.dev3000/www; \
 	rsync -av --exclude='node_modules' --exclude='.next' --exclude='dist' --exclude='.pnpm-store' src mcp-server frontend/.dev3000/; \
+	rm -rf frontend/.dev3000/node_modules frontend/.dev3000/mcp-server/node_modules; \
+	echo "   Removed node_modules directories (will be installed by Docker)"; \
 	mkdir -p frontend/.dev3000/scripts; \
 	cp scripts/docker-entrypoint.sh frontend/.dev3000/scripts/; \
 	chmod +x frontend/.dev3000/scripts/docker-entrypoint.sh; \
