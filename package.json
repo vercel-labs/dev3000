@@ -31,6 +31,7 @@
     "README.md"
   ],
   "scripts": {
+    "preinstall": "npx only-allow pnpm",
     "build": "tsc && mkdir -p dist/src && cp src/loading.html dist/src/ && cp src/tui-interface-impl.tsx dist/src/",
     "typegen": "./scripts/typegen.sh",
     "typecheck": "tsc --noEmit",

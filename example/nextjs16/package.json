@@ -4,6 +4,7 @@
   "private": true,
   "description": "Example Next.js 16 application for dev3000 Docker setup",
   "scripts": {
+    "preinstall": "npx only-allow pnpm",
     "dev": "next dev --turbopack",
     "build": "next build",
     "build:static": "node scripts/build-static.js",
@@ -35,5 +36,6 @@
   },
   "engines": {
     "node": ">=18.0.0"
-  }
+  },
+  "packageManager": "pnpm@10.18.3"
 }
