@@ -232,13 +232,43 @@ If you get permission errors:
 
 ## Updating dev3000
 
-To update to the latest version:
+To update dev3000 and your application to the latest version:
+
+### Quick Update Workflow
+
+```bash
+# 1. Update dev3000 submodule to latest version
+make dev3000-sync
+
+# 2. Copy updated example app files (if using nextjs16 example)
+rsync -av --exclude='node_modules' --exclude='.next' \
+  frontend/.dev3000/example/nextjs16/ frontend/
+
+# 3. Rebuild Docker image with updated code
+make dev-rebuild-frontend
+
+# 4. Start the development environment
+make dev-up
+```
+
+### What each step does:
+
+1. **`make dev3000-sync`** - Updates the dev3000 submodule in `frontend/.dev3000` to the latest version from GitHub
+2. **`rsync`** - Copies updated example app files (only needed if you're using the reference example, skip if using your own app)
+3. **`make dev-rebuild-frontend`** - Rebuilds the Docker image with updated dependencies and code
+4. **`make dev-up`** - Starts the containers and launches Chrome with CDP
+
+### Manual Update (Alternative)
+
+If you prefer to update manually without make commands:
 
 ```bash
 cd frontend/.dev3000
 git pull origin main
 cd ../..
-make dev-rebuild
+docker compose down
+docker compose build
+docker compose up -d
 ```
 
 ## Learn More

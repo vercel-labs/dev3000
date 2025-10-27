@@ -130,6 +130,31 @@ Access your application:
 - **MCP Server**: http://localhost:3684
 - **Chrome CDP**: http://localhost:9222/json/version
 
+## Quick Update Workflow
+
+To update the example with the latest dev3000 and sample app changes:
+
+```bash
+# 1. Update dev3000 submodule to latest version
+make dev3000-sync
+
+# 2. Copy Next.js 16 sample app (excluding build outputs)
+rsync -av --exclude='node_modules' --exclude='.next' \
+  frontend/.dev3000/example/nextjs16/ frontend/
+
+# 3. Rebuild Docker image with updated code
+make dev-rebuild-frontend
+
+# 4. Start the development environment
+make dev-up
+```
+
+**What each step does:**
+1. `dev3000-sync` - Pulls latest dev3000 changes from GitHub
+2. `rsync` - Copies example app files while preserving .dev3000 directory
+3. `dev-rebuild-frontend` - Rebuilds Docker image with updated dependencies
+4. `dev-up` - Starts containers and launches Chrome with CDP
+
 ## What This Example Demonstrates
 
 This sample application showcases Next.js 16 features that work seamlessly with dev3000 monitoring:

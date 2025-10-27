@@ -1,7 +1,7 @@
 # Dev3000 Development Makefile
 # Simplified development workflow for Docker-based dev3000
 
-.PHONY: help dev-up dev-down dev-logs dev-rebuild clean
+.PHONY: help dev-up dev-down dev-logs dev-rebuild dev-rebuild-fast dev3000-sync dev-rebuild-frontend clean clean-frontend deploy-frontend deploy-and-start list-examples start-chrome-cdp stop-chrome-cdp status
 
 # Default target
 .DEFAULT_GOAL := help
@@ -27,7 +27,7 @@ help: ## Show this help message
 	@echo "  make dev-down      - Stop development environment"
 	@echo "  make dev-logs      - Follow container logs"
 	@echo ""
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
+	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
 
 ## ========== Docker Development ==========
@@ -104,6 +104,30 @@ dev-rebuild-fast: ## Fast rebuild using cache (for minor changes)
 	@docker compose down
 	@DOCKER_BUILDKIT=1 docker compose build
 	@$(MAKE) dev-up
+
+dev3000-sync: ## Update dev3000 submodule to latest version
+	@echo "🔄 Updating dev3000 submodule..."
+	@if [ -d "frontend/.dev3000/.git" ]; then \
+		cd frontend/.dev3000 && git pull origin main; \
+		echo "✅ dev3000 submodule updated to latest"; \
+		echo ""; \
+		echo "Next step: make dev-rebuild-frontend"; \
+	else \
+		echo "❌ Error: frontend/.dev3000 is not a git repository"; \
+		echo ""; \
+		echo "To set up frontend/.dev3000:"; \
+		echo "  1. Run: make deploy-frontend APP=nextjs16"; \
+		echo "  2. Or manually: cd frontend && git submodule add https://github.com/automationjp/dev3000 .dev3000"; \
+		exit 1; \
+	fi
+
+dev-rebuild-frontend: ## Rebuild frontend Docker image only (without full restart)
+	@echo "🔨 Rebuilding frontend Docker image..."
+	@docker compose down
+	@DOCKER_BUILDKIT=1 docker compose build
+	@echo "✅ Frontend Docker image rebuilt"
+	@echo ""
+	@echo "Next step: make dev-up"
 
 clean: ## Clean up Docker resources and build artifacts
 	@echo "Cleaning up..."
