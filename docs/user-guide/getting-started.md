@@ -169,14 +169,14 @@ For production use with your own application.
    ```bash
    # Copy entrypoint script
    mkdir -p scripts
-   cp .dev3000/scripts/docker-entrypoint.sh scripts/
+   cp .dev3000/example/nextjs16/reference/scripts/docker-entrypoint.sh scripts/
 
    # Copy Docker configuration
-   cp .dev3000/Dockerfile.dev ./
+   cp .dev3000/example/nextjs16/reference/Dockerfile.dev ./
 
    # Copy docker-compose and Makefile to project root
-   cp .dev3000/docker-compose.yml ../
-   cp .dev3000/Makefile ../
+   cp .dev3000/example/nextjs16/reference/docker-compose.yml ../
+   cp .dev3000/example/nextjs16/reference/Makefile ../
    ```
 
 5. **Build and start from project root**:

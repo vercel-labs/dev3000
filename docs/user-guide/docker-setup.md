@@ -146,10 +146,10 @@ cd ..
 
 # Step 3: Copy required files
 mkdir -p scripts
-cp .dev3000/scripts/docker-entrypoint.sh scripts/
-cp .dev3000/Dockerfile.dev ./
-cp .dev3000/docker-compose.yml ../
-cp .dev3000/Makefile ../
+cp .dev3000/example/nextjs16/reference/scripts/docker-entrypoint.sh scripts/
+cp .dev3000/example/nextjs16/reference/Dockerfile.dev ./
+cp .dev3000/example/nextjs16/reference/docker-compose.yml ../
+cp .dev3000/example/nextjs16/reference/Makefile ../
 
 # Step 4: Build and start
 cd ..
@@ -467,10 +467,10 @@ git submodule add https://github.com/automationjp/dev3000 .dev3000
 cd .dev3000 && git config core.symlinks false && git checkout -f && cd ..
 
 # Copy required files
-cp .dev3000/Dockerfile.dev ./
-cp .dev3000/docker-compose.yml ../
-cp .dev3000/Makefile ../
-mkdir -p scripts && cp .dev3000/scripts/docker-entrypoint.sh scripts/
+cp .dev3000/example/nextjs16/reference/Dockerfile.dev ./
+cp .dev3000/example/nextjs16/reference/docker-compose.yml ../
+cp .dev3000/example/nextjs16/reference/Makefile ../
+mkdir -p scripts && cp .dev3000/example/nextjs16/reference/scripts/docker-entrypoint.sh scripts/
 
 # Build and run
 cd .. && make dev-rebuild && make dev-up

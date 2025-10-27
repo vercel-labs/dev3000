@@ -22,19 +22,21 @@ git checkout -f
 cd ..
 ```
 
-### 3. Copy required files
+### 3. Copy required files from reference directory
+
+All reference files are located in `.dev3000/example/nextjs16/reference/`:
 
 ```bash
 # Copy entrypoint script
 mkdir -p scripts
-cp .dev3000/scripts/docker-entrypoint.sh scripts/
+cp .dev3000/example/nextjs16/reference/scripts/docker-entrypoint.sh scripts/
 
 # Copy Docker configuration
-cp .dev3000/Dockerfile.dev ./
+cp .dev3000/example/nextjs16/reference/Dockerfile.dev ./
 
 # Copy docker-compose and Makefile to project root
-cp .dev3000/docker-compose.yml ../
-cp .dev3000/Makefile ../
+cp .dev3000/example/nextjs16/reference/docker-compose.yml ../
+cp .dev3000/example/nextjs16/reference/Makefile ../
 ```
 
 ### 4. Build and start from project root
@@ -51,20 +53,24 @@ That's it! Your project structure should now look like this:
 /your-project/                  # Your project root
 ├── frontend/                   # Your Next.js application
 │   ├── .dev3000/              # dev3000 repository (git submodule)
-│   │   ├── src/
-│   │   ├── mcp-server/
-│   │   ├── scripts/
-│   │   ├── Dockerfile.dev
-│   │   ├── docker-compose.yml
-│   │   └── Makefile
+│   │   ├── src/               # dev3000 source code
+│   │   ├── mcp-server/        # MCP server source
+│   │   └── example/
+│   │       └── nextjs16/
+│   │           └── reference/ # 🔍 Reference files for integration
+│   │               ├── docker-compose.yml
+│   │               ├── Makefile
+│   │               ├── Dockerfile.dev
+│   │               └── scripts/
+│   │                   └── docker-entrypoint.sh
 │   ├── app/                    # Your Next.js App Router code
 │   ├── scripts/
-│   │   └── docker-entrypoint.sh  # Copied from .dev3000
-│   ├── Dockerfile.dev          # Copied from .dev3000
+│   │   └── docker-entrypoint.sh  # Copied from reference/
+│   ├── Dockerfile.dev          # Copied from reference/
 │   ├── package.json
 │   └── next.config.js
-├── docker-compose.yml          # Copied from .dev3000
-└── Makefile                    # Copied from .dev3000
+├── docker-compose.yml          # Copied from reference/
+└── Makefile                    # Copied from reference/
 ```
 
 ## Important Prerequisites

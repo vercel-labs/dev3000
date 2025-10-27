@@ -1,0 +1,93 @@
+# Dev3000 Development Dockerfile
+# This Dockerfile builds dev3000 and runs it with the user's frontend application
+#
+# Directory structure (user's project):
+#   /app/frontend/          ← User's Next.js app
+#   /app/frontend/.dev3000/ ← dev3000 repository (git submodule)
+
+FROM node:20-alpine AS base
+
+# Install system dependencies
+RUN apk add --no-cache \
+    curl \
+    git \
+    lsof \
+    && rm -rf /var/cache/apk/*
+
+# Install pnpm
+RUN corepack enable && corepack prepare pnpm@9.15.2 --activate
+
+# Build dev3000 stage
+FROM base AS dev3000-builder
+WORKDIR /build
+
+# Copy dev3000 source (.dev3000 directory will be mounted or copied)
+COPY .dev3000/package.json .dev3000/pnpm-lock.yaml .dev3000/pnpm-workspace.yaml ./
+COPY .dev3000/mcp-server/package.json ./mcp-server/
+
+# Install dev3000 dependencies
+# Note: Using frozen-lockfile for reproducibility with fallback for development flexibility
+# For production builds, remove the fallback to enforce deterministic installs
+RUN pnpm install --frozen-lockfile || { \
+    echo "⚠️  Warning: Frozen lockfile install failed, falling back to non-deterministic install"; \
+    echo "   This is acceptable for development but should be avoided in production"; \
+    pnpm install; \
+}
+
+# Copy dev3000 source code
+COPY .dev3000/src ./src
+COPY .dev3000/mcp-server ./mcp-server
+COPY .dev3000/tsconfig.json .dev3000/biome.json ./
+
+# Build dev3000 CLI
+RUN pnpm run build
+
+# Build mcp-server (Next.js app)
+WORKDIR /build/mcp-server
+RUN pnpm run build
+
+# Development stage
+FROM base AS development
+WORKDIR /app/frontend
+
+# Copy built dev3000 from builder
+COPY --from=dev3000-builder /build/dist /usr/local/lib/dev3000/dist
+COPY --from=dev3000-builder /build/mcp-server/.next /usr/local/lib/dev3000/mcp-server/.next
+COPY --from=dev3000-builder /build/mcp-server/package.json /usr/local/lib/dev3000/mcp-server/
+COPY --from=dev3000-builder /build/mcp-server/next.config.mjs /usr/local/lib/dev3000/mcp-server/
+COPY --from=dev3000-builder /build/mcp-server/public /usr/local/lib/dev3000/mcp-server/public
+COPY --from=dev3000-builder /build/mcp-server/start-production.mjs /usr/local/lib/dev3000/mcp-server/
+COPY --from=dev3000-builder /build/package.json /usr/local/lib/dev3000/
+COPY --from=dev3000-builder /build/node_modules /usr/local/lib/dev3000/node_modules
+COPY --from=dev3000-builder /build/mcp-server/node_modules /usr/local/lib/dev3000/mcp-server/node_modules
+
+# Create symlink for dev3000 command
+RUN ln -s /usr/local/lib/dev3000/dist/cli.js /usr/local/bin/dev3000 && \
+    ln -s /usr/local/lib/dev3000/dist/cli.js /usr/local/bin/d3k && \
+    chmod +x /usr/local/bin/dev3000 /usr/local/bin/d3k
+
+# Expose ports
+EXPOSE 3000 3684
+
+# Environment variables
+ENV NODE_ENV=development \
+    CHOKIDAR_USEPOLLING=true \
+    WATCHPACK_POLLING=true \
+    NEXT_TELEMETRY_DISABLED=1 \
+    PNPM_HOME=/tmp/pnpm \
+    TMPDIR=/tmp
+
+# Copy user application files
+# These files are required by the entrypoint script and dev3000 runtime
+COPY package.json .npmrc* pnpm-lock.yaml* ./
+COPY next.config.js tsconfig.json ./
+COPY postcss.config.mjs* tailwind.config.ts* biome.json* ./
+COPY app ./app
+COPY public* ./public
+
+# Copy and setup entrypoint script
+COPY scripts/docker-entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
+CMD []

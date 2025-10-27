@@ -66,12 +66,12 @@ git config core.symlinks false
 git checkout -f
 cd ..
 
-# 3. Copy required files to your project
+# 3. Copy reference files to your project
 mkdir -p scripts
-cp .dev3000/scripts/docker-entrypoint.sh scripts/
-cp .dev3000/Dockerfile.dev ./
-cp .dev3000/docker-compose.yml ../
-cp .dev3000/Makefile ../
+cp .dev3000/example/nextjs16/reference/scripts/docker-entrypoint.sh scripts/
+cp .dev3000/example/nextjs16/reference/Dockerfile.dev ./
+cp .dev3000/example/nextjs16/reference/docker-compose.yml ../
+cp .dev3000/example/nextjs16/reference/Makefile ../
 
 # 4. Build and start from project root
 cd ..
