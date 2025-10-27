@@ -12,48 +12,104 @@ Test dev3000 with this example application:
 
 ```
 /dev3000/                       # This repository
-├── frontend/                   # This example (copied from example/)
-├── docker/
-│   └── docker-compose.yml
-├── Makefile
+├── frontend/                   # Deployed example app
+│   ├── .dev3000/              # Git submodule (dev3000 source)
+│   ├── app/                    # Next.js application
+│   ├── Dockerfile.dev          # Docker build configuration
+│   └── package.json
+├── docker-compose.yml          # Docker Compose configuration
+├── Makefile                    # Build and deployment commands
 └── example/                    # Example applications
+    └── nextjs16/               # This example (source)
 ```
 
 **Quick Start:**
 ```bash
 # From dev3000 repository root
-make dev-up
+make deploy-frontend APP=nextjs16   # Deploy example to frontend/
+make dev-rebuild                     # Build Docker image
+make dev-up                          # Start environment
 ```
 
-### Use Case 2: Integrate into Your Project (Recommended)
+**How it works:**
+1. `make deploy-frontend` copies example app to `frontend/` directory
+2. Creates `frontend/.dev3000/` as a git submodule pointing to dev3000 source
+3. Dockerfile.dev builds dev3000 from the submodule and copies user app files
+4. Container runs dev3000 with your application
+
+### Use Case 2: Integrate into Your Project (Production Use)
 
 Use dev3000 as a submodule in your own project:
 
 ```
 /my-project/                    # Your project root
 ├── frontend/                   # Your Next.js application
-│   ├── .dev3000/              # dev3000 as submodule
+│   ├── .dev3000/              # dev3000 as git submodule
 │   ├── app/                    # Your Next.js code
+│   ├── Dockerfile.dev          # Copied from dev3000
+│   ├── scripts/
+│   │   └── docker-entrypoint.sh
 │   └── package.json
-├── docker/                     # Your docker config (copied from reference)
-│   └── docker-compose.yml
-└── Makefile                    # Your Makefile (copied from reference)
+├── docker-compose.yml          # Copied from dev3000
+└── Makefile                    # Copied from dev3000
 ```
 
-**Quick Start:**
+**Setup Steps:**
 ```bash
-# 1. Clone dev3000 into your frontend directory
+# 1. Add dev3000 as a git submodule in your frontend directory
 cd /path/to/your-project/frontend
-git clone https://github.com/automationjp/dev3000 .dev3000
+git submodule add https://github.com/automationjp/dev3000 .dev3000
 
-# 2. Copy reference files to your project root
+# 2. For WSL2: Disable symlinks to work around path length limits
+cd .dev3000
+git config core.symlinks false
+git checkout -f
 cd ..
-mkdir -p docker
-cp frontend/.dev3000/frontend/docker-reference/docker-compose.yml docker/
-cp frontend/.dev3000/frontend/docker-reference/Makefile ./
 
-# 3. Start dev3000
+# 3. Copy required files to your project
+mkdir -p scripts
+cp .dev3000/scripts/docker-entrypoint.sh scripts/
+cp .dev3000/Dockerfile.dev ./
+cp .dev3000/docker-compose.yml ../
+cp .dev3000/Makefile ../
+
+# 4. Build and start from project root
+cd ..
+make dev-rebuild
 make dev-up
+```
+
+**Key Benefits:**
+- **Automatic Updates**: Pull latest dev3000 features with `git submodule update`
+- **Consistent Environment**: Same Docker setup as development
+- **No Manual Installation**: dev3000 built automatically from submodule
+- **Version Control**: Pin specific dev3000 versions via submodule commit
+
+**Production Dockerfile Structure:**
+```dockerfile
+# Your frontend/Dockerfile.dev
+FROM node:20-alpine AS base
+
+# Build dev3000 from submodule
+FROM base AS dev3000-builder
+WORKDIR /build
+COPY .dev3000/package.json .dev3000/pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
+COPY .dev3000/src ./src
+COPY .dev3000/mcp-server ./mcp-server
+RUN pnpm run build
+
+# Development stage with your app + dev3000
+FROM base AS development
+WORKDIR /app/frontend
+# Copy built dev3000
+COPY --from=dev3000-builder /build/dist /usr/local/lib/dev3000/dist
+COPY --from=dev3000-builder /build/mcp-server/.next /usr/local/lib/dev3000/mcp-server/.next
+COPY --from=dev3000-builder /build/mcp-server/node_modules /usr/local/lib/dev3000/mcp-server/node_modules
+# Copy your application files
+COPY package.json ./
+COPY app ./app
+# ... (rest of your app files)
 ```
 
 📖 **Full integration guide**: See [INTEGRATION_GUIDE.md](./INTEGRATION_GUIDE.md)

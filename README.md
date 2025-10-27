@@ -8,15 +8,48 @@ Captures your web app's complete development timeline - server logs, browser eve
 
 ## Quick Start (Docker)
 
+### Option 1: Try with Example App (Development)
+
 ```bash
 # Clone this repository
 git clone https://github.com/automationjp/dev3000.git
 cd dev3000
 
-# Deploy example app to frontend
+# Deploy example app to frontend directory
 make deploy-frontend APP=nextjs16
 
-# Start development environment
+# Rebuild and start development environment
+make dev-rebuild
+
+# Or deploy and start in one command
+make deploy-and-start APP=nextjs16
+```
+
+### Option 2: Use with Your Own Project (Production Use)
+
+```bash
+# Navigate to your project's frontend directory
+cd /path/to/your-project/frontend
+
+# Add dev3000 as a git submodule
+git submodule add https://github.com/automationjp/dev3000 .dev3000
+
+# For WSL2: Disable symlinks due to path length limitations
+cd .dev3000
+git config core.symlinks false
+git checkout -f
+cd ..
+
+# Copy necessary files to project root
+mkdir -p ../scripts
+cp .dev3000/scripts/docker-entrypoint.sh ../scripts/
+cp .dev3000/Dockerfile.dev ./
+cp .dev3000/docker-compose.yml ../
+cp .dev3000/Makefile ../
+
+# Build and start from project root
+cd ..
+make dev-rebuild
 make dev-up
 ```
 
@@ -28,14 +61,23 @@ The development environment will start:
 ### Available Commands
 
 ```bash
+# Deployment
 make list-examples          # List available example apps
 make deploy-frontend APP=nextjs16  # Deploy specific example
-make deploy-and-start APP=nextjs16 # Deploy and start (one command)
+make deploy-and-start APP=nextjs16 # Deploy and start in one command
+make clean-frontend         # Clean frontend directory (keeps only .keep)
+
+# Development
 make dev-up                 # Start development environment
 make dev-down               # Stop development environment
 make dev-logs               # Follow container logs
-make dev-rebuild            # Rebuild Docker image
+make dev-rebuild            # Rebuild Docker image (use after code changes)
+make dev-rebuild-fast       # Fast rebuild with cache
+
+# Monitoring
 make status                 # Show environment status
+make start-chrome-cdp       # Manually start Chrome with CDP
+make stop-chrome-cdp        # Stop Chrome CDP process
 ```
 
 ## AI Integration with Dynamic Enhancement
@@ -119,8 +161,8 @@ Comprehensive documentation is available in the `/docs` directory:
 
 ### Component Documentation
 - [Chrome Extension](chrome-extension/README.md) - Browser extension setup
-- [Docker Configuration](docker/README.md) - Docker architecture
-- [Example Apps](example/nextjs16/README.md) - Sample applications
+- [Docker Setup Guide](docs/user-guide/docker-setup.md) - Docker configuration and architecture
+- [Example Apps](example/nextjs16/README.md) - Sample applications and integration guide
 
 ## dev3000: Smart Debugging Orchestrator
 

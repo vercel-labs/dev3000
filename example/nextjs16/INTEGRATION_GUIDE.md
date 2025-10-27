@@ -1,34 +1,47 @@
 # dev3000 Integration Guide
 
-This guide shows you how to integrate dev3000 into your own Next.js project.
+This guide shows you how to integrate dev3000 into your own Next.js project using git submodules.
 
 ## Quick Start
 
-### 1. Clone dev3000 into your frontend directory
+### 1. Add dev3000 as a git submodule
+
+Navigate to your project's frontend directory and add dev3000 as a submodule:
 
 ```bash
 cd /path/to/your-project/frontend
-git clone https://github.com/automationjp/dev3000 .dev3000
+git submodule add https://github.com/automationjp/dev3000 .dev3000
 ```
 
-### 2. Copy reference files to your project root
+### 2. For WSL2: Disable symlinks (workaround for Windows path length limits)
 
 ```bash
-# From your frontend directory
+cd .dev3000
+git config core.symlinks false
+git checkout -f
+cd ..
+```
+
+### 3. Copy required files
+
+```bash
+# Copy entrypoint script
+mkdir -p scripts
+cp .dev3000/scripts/docker-entrypoint.sh scripts/
+
+# Copy Docker configuration
+cp .dev3000/Dockerfile.dev ./
+
+# Copy docker-compose and Makefile to project root
+cp .dev3000/docker-compose.yml ../
+cp .dev3000/Makefile ../
+```
+
+### 4. Build and start from project root
+
+```bash
 cd ..  # Go to project root
-
-# Create docker directory
-mkdir -p docker
-
-# Copy reference files
-cp frontend/.dev3000/frontend/docker-reference/docker-compose.yml docker/
-cp frontend/.dev3000/frontend/docker-reference/Makefile ./
-```
-
-### 3. Start dev3000
-
-```bash
-# From your project root
+make dev-rebuild
 make dev-up
 ```
 
@@ -37,17 +50,21 @@ That's it! Your project structure should now look like this:
 ```
 /your-project/                  # Your project root
 ├── frontend/                   # Your Next.js application
-│   ├── .dev3000/              # dev3000 repository (cloned)
-│   │   ├── docker/
-│   │   ├── Makefile
+│   ├── .dev3000/              # dev3000 repository (git submodule)
 │   │   ├── src/
-│   │   └── mcp-server/
+│   │   ├── mcp-server/
+│   │   ├── scripts/
+│   │   ├── Dockerfile.dev
+│   │   ├── docker-compose.yml
+│   │   └── Makefile
 │   ├── app/                    # Your Next.js App Router code
+│   ├── scripts/
+│   │   └── docker-entrypoint.sh  # Copied from .dev3000
+│   ├── Dockerfile.dev          # Copied from .dev3000
 │   ├── package.json
 │   └── next.config.js
-├── docker/                     # Your docker config (copied from .dev3000)
-│   └── docker-compose.yml
-└── Makefile                    # Your Makefile (copied from .dev3000)
+├── docker-compose.yml          # Copied from .dev3000
+└── Makefile                    # Copied from .dev3000
 ```
 
 ## Important Prerequisites

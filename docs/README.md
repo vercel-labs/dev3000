@@ -33,9 +33,8 @@ Practical examples and use cases:
 Documentation for specific parts of the project:
 
 - **[Chrome Extension](../chrome-extension/README.md)** - Browser extension for lightweight monitoring
-- **[Docker Configuration](../docker/README.md)** - Docker-specific setup and architecture
-- **[Frontend Example](../frontend/README.md)** - Next.js 16 example application
-- **[Example Apps](../example/nextjs16/README.md)** - Sample applications for testing
+- **[Frontend Example](../frontend/README.md)** - Next.js 16 deployed example application
+- **[Example Apps](../example/nextjs16/README.md)** - Sample applications and integration guide
 
 ### 📜 Archive
 
@@ -81,4 +80,4 @@ When updating documentation:
 4. **Test all links** - ensure internal links work after changes
 5. **Follow structure** - place new docs in the appropriate directory
 
-See the [Claude Code Guide](developer/claude-code.md) for code contribution guidelines.
+See the [Claude Code Guide](../CLAUDE.md) for code contribution guidelines.

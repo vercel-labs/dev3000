@@ -1,130 +1,111 @@
-# Docker Compose Configuration for User Projects
-#
-# This file is for users who have cloned dev3000 into frontend/.dev3000
-#
-# Your project structure:
-#   /your-project/                  # Your project root
-#   ├── frontend/                   # Your Next.js application
-#   │   ├── .dev3000/              # git clone https://github.com/automationjp/dev3000
-#   │   ├── app/                    # Your Next.js code
-#   │   └── package.json
-#   ├── docker/                     # This file should be here
-#   │   └── docker-compose.yml
-#   └── Makefile
-#
-# Usage from your project root:
-#   make dev-up
-
 services:
   dev3000:
     build:
-      # Build from dev3000 cloned in frontend/.dev3000
-      context: ../frontend/.dev3000
-      dockerfile: docker/Dockerfile
+      context: frontend
+      dockerfile: Dockerfile.dev
+      # Build arguments for optimization
       args:
         BUILDKIT_INLINE_CACHE: 1
+      # Use BuildKit for parallel builds and better caching
       cache_from:
         - type=registry,ref=dev3000:latest
-      target: production
-
+      target: development
     container_name: dev3000
 
-    # Security
+    # Security hardening
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
-    read_only: false
+    read_only: false  # We need write access for node_modules and .next
 
-    # Ports - CUSTOMIZE if needed
+    # Port mappings
     ports:
-      - "3000:3000"   # Your Next.js app
+      - "3000:3000"   # Next.js / App server
       - "3684:3684"   # Dev3000 MCP server
 
-    # Mount your frontend directory
-    volumes:
-      # Mount your entire frontend directory
-      - ../frontend:/app/user-frontend:cached
+    # Volume mounts - removed to avoid WSL2 permission issues
+    # Application files are copied into image during build
 
-      # Exclude .dev3000 to avoid conflicts
-      - /app/user-frontend/.dev3000
-
-      # Keep node_modules in container for performance
-      - /app/user-frontend/node_modules
-      - /app/user-frontend/.next
-
-      # Temporary files
-      - dev3000-tmp:/tmp
-
-    # Set working directory to your frontend
-    working_dir: /app/user-frontend
-
-    # Environment - CUSTOMIZE for your project
+    # Environment variables
     environment:
-      # CDP for Chrome on host
+      # CDP configuration for host Chrome connection
+      # Set DEV3000_CDP_URL to connect to Chrome running on host
+      # Default: http://host.docker.internal:9222 (works on Docker Desktop)
+      # For WSL2: Use host.docker.internal to access Windows host
       - DEV3000_CDP_URL=${DEV3000_CDP_URL:-http://host.docker.internal:9222}
 
-      # Node.js
+      # Node.js environment
       - NODE_ENV=development
 
-      # File watching for Docker
+      # File watching for hot reload (required for Docker/WSL)
       - CHOKIDAR_USEPOLLING=true
       - WATCHPACK_POLLING=true
 
-      # Next.js
+      # Next.js configuration
       - NEXT_TELEMETRY_DISABLED=1
 
-      # Dev3000
+      # Dev3000 logging configuration
       - LOG_FILE_PATH=/tmp/d3k.log
 
-      # ADD YOUR ENVIRONMENT VARIABLES HERE
-      # - DATABASE_URL=...
-      # - API_KEY=...
-
-    # WSL2/Mac compatibility
+    # WSL2 compatibility: Map host.docker.internal to Windows host IP
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
-    # Startup command
+    # Override entrypoint to run custom debug script
+    entrypoint: []
+
+    # Command to run - simplified since dependencies are pre-installed in image
     command: >
       sh -c "
         set -x
+        rm -f /tmp/dev3000-*.lock
         echo '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
-        echo '🚀 Starting dev3000 for your project...'
+        echo '🚀 Starting dev3000...'
         echo '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
-        echo '[INFO] Working directory: '$(pwd)
-        echo '[INFO] Node: '$(node --version)
+        echo '[$(date +%Y-%m-%d\ %H:%M:%S)] System Information:'
+        echo '  Node version: '$(node --version)
+        echo '  npm version: '$(npm --version)
+        echo '  User: '$(whoami)
+        echo '  User ID: '$(id)
+        echo '  Working directory: '$(pwd)
+        echo '  Directory permissions:'
         ls -la
         echo ''
-
-        # Install dependencies if needed
-        if [ ! -d 'node_modules' ]; then
-          echo '[INFO] Installing dependencies...'
-          npm install || pnpm install || yarn install
-        fi
-
-        # Start dev3000
-        echo '[INFO] Starting dev3000...'
-        /usr/local/bin/dev3000 --port 3000 --debug
+        echo '[$(date +%Y-%m-%d\ %H:%M:%S)] Environment Variables:'
+        env | grep -E 'DEV3000|NODE|LOG|CDP' | sort
+        echo ''
+        echo '[$(date +%Y-%m-%d\ %H:%M:%S)] Checking dev3000 installation:'
+        which dev3000
+        dev3000 --version || echo 'Failed to get dev3000 version'
+        echo ''
+        echo '[$(date +%Y-%m-%d\ %H:%M:%S)] Checking lsof availability:'
+        which lsof
+        lsof -v 2>&1 | head -3
+        echo ''
+        echo '[$(date +%Y-%m-%d\ %H:%M:%S)] Checking port availability:'
+        lsof -i :3000 || echo 'Port 3000 is free'
+        lsof -i :3684 || echo 'Port 3684 is free'
+        echo ''
+        echo '[$(date +%Y-%m-%d\ %H:%M:%S)] Starting dev3000 with debug enabled...'
+        echo 'CDP URL: '${DEV3000_CDP_URL:-http://host.docker.internal:9222}
+        /entrypoint.sh --port 3000 --debug
       "
 
+    # Restart policy
     restart: unless-stopped
 
-    # Resource limits - CUSTOMIZE based on your needs
+    # Resource limits - optimized for development performance
     deploy:
       resources:
         limits:
-          cpus: '4.0'
-          memory: 6G
+          cpus: '4.0'      # Increased for faster builds
+          memory: 6G       # Increased for Next.js Turbopack
         reservations:
-          cpus: '1.0'
-          memory: 1G
+          cpus: '1.0'      # Guaranteed CPU
+          memory: 1G       # Guaranteed memory
 
-# Named volumes
-volumes:
-  dev3000-tmp:
-    driver: local
-
+# Networks (using default bridge network)
 networks:
   default:
     driver: bridge
