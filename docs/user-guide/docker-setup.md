@@ -62,8 +62,36 @@ Complete guide for running Dev3000 with Next.js 16 in Docker, with browser autom
 
 1. **Chrome on Host**: Browser runs on host for stability and native performance
 2. **Single Container**: Dev3000 and Next.js in one container for simplicity
-3. **Volume Mounts**: Source code mounted for hot reload
-4. **WSL Compatible**: Uses `host.docker.internal` for cross-boundary communication
+3. **Multi-stage Build**: Separate builder stage for dev3000 compilation
+4. **Git Submodule**: dev3000 source included as `.dev3000/` submodule
+5. **Entrypoint Script**: Handles dependency installation at runtime
+6. **No Volume Mounts**: Files copied into image for consistency (no permission issues)
+7. **WSL Compatible**: Uses `host.docker.internal` for cross-boundary communication
+
+### Docker Build Architecture
+
+```dockerfile
+# Stage 1: Build dev3000 from submodule
+FROM node:20-alpine AS dev3000-builder
+WORKDIR /build
+COPY .dev3000/package.json .dev3000/pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
+COPY .dev3000/src ./src
+COPY .dev3000/mcp-server ./mcp-server
+RUN pnpm run build
+
+# Stage 2: Development environment
+FROM node:20-alpine AS development
+# Copy built dev3000
+COPY --from=dev3000-builder /build/dist /usr/local/lib/dev3000/dist
+COPY --from=dev3000-builder /build/mcp-server/.next /usr/local/lib/dev3000/mcp-server/.next
+COPY --from=dev3000-builder /build/mcp-server/node_modules /usr/local/lib/dev3000/mcp-server/node_modules
+# Copy user application
+COPY package.json ./
+COPY app ./app
+# Entrypoint handles dependency installation
+ENTRYPOINT ["/entrypoint.sh"]
+```
 
 ## Quick Start
 
@@ -73,21 +101,61 @@ Complete guide for running Dev3000 with Next.js 16 in Docker, with browser autom
 - Node.js 18+ (on host, for running automation scripts)
 - Google Chrome installed on host
 - Git (to clone the repository)
+- Make (command automation)
 
-### One-Command Startup
+### Development Workflow (Option 1: Try Example App)
 
 From the dev3000 repository root:
 
 ```bash
+# Step 1: Deploy example app to frontend/
+make deploy-frontend APP=nextjs16
+
+# Step 2: Rebuild Docker image
+make dev-rebuild
+
+# Step 3: Start development environment
 make dev-up
+
+# Or combine steps 1-3 in one command:
+make deploy-and-start APP=nextjs16
 ```
 
-This automated script will:
-1. ✅ Detect your platform (WSL, Linux, macOS, Windows)
-2. ✅ Find and launch Chrome with CDP enabled on port 9222
-3. ✅ Extract the CDP WebSocket URL
-4. ✅ Start Docker Compose with the correct CDP configuration
-5. ✅ Build and run the dev3000 container
+This automated workflow will:
+1. ✅ Copy example app to `frontend/` directory
+2. ✅ Create `frontend/.dev3000/` as a git submodule
+3. ✅ Build Docker image with dev3000 + your app
+4. ✅ Launch Chrome with CDP enabled on port 9222
+5. ✅ Start Docker container with Next.js dev server
+6. ✅ Start dev3000 MCP server on port 3684
+
+### Production Workflow (Option 2: Use with Your Project)
+
+For integrating dev3000 into your own project:
+
+```bash
+# Step 1: Add dev3000 as git submodule
+cd /path/to/your-project/frontend
+git submodule add https://github.com/automationjp/dev3000 .dev3000
+
+# Step 2: Configure git for WSL2 (if needed)
+cd .dev3000
+git config core.symlinks false
+git checkout -f
+cd ..
+
+# Step 3: Copy required files
+mkdir -p scripts
+cp .dev3000/scripts/docker-entrypoint.sh scripts/
+cp .dev3000/Dockerfile.dev ./
+cp .dev3000/docker-compose.yml ../
+cp .dev3000/Makefile ../
+
+# Step 4: Build and start
+cd ..
+make dev-rebuild
+make dev-up
+```
 
 ### Access Your App
 
@@ -105,8 +173,8 @@ make dev-down
 
 This will gracefully:
 1. Stop Docker containers
-2. Kill the Chrome process
-3. Clean up temporary files
+2. Clean up temporary files
+3. **Note**: Chrome CDP browser remains running (close manually if needed)
 
 ## Platform-Specific Setup
 
@@ -281,17 +349,19 @@ docker compose logs -f dev3000
 
 Set in `docker-compose.yml` or via `export`:
 
-#### Required for External CDP
-- `DEV3000_CDP_SKIP_LAUNCH=1` - Skip launching Chrome inside container
-- `DEV3000_CDP_URL` - WebSocket URL from host Chrome
+#### CDP Configuration
+- `DEV3000_CDP_URL` - CDP WebSocket URL (default: `http://host.docker.internal:9222`)
+- Chrome runs on host machine for better performance
 
 #### File Watching (Pre-configured)
 - `CHOKIDAR_USEPOLLING=true` - Enable polling for file changes
 - `WATCHPACK_POLLING=true` - Enable webpack/turbopack polling
+- Required for Docker environments to detect file changes
 
 #### Optional
 - `NEXT_TELEMETRY_DISABLED=1` - Disable Next.js telemetry
 - `NODE_ENV=development` - Node environment mode
+- `LOG_FILE_PATH=/tmp/d3k.log` - dev3000 log file location
 
 ### Docker Compose Customization
 
@@ -300,33 +370,120 @@ Edit `docker-compose.yml` to customize:
 ```yaml
 services:
   dev3000:
+    build:
+      context: frontend          # Your frontend directory
+      dockerfile: Dockerfile.dev
+      target: development
+
     ports:
-      - "5173:3000"  # Use different host port
-      - "3684:3684"
+      - "5173:3000"  # Use different host port for Next.js
+      - "3684:3684"  # dev3000 MCP server
 
     environment:
+      - DEV3000_CDP_URL=${DEV3000_CDP_URL:-http://host.docker.internal:9222}
       - CUSTOM_VAR=value  # Add your env vars
 
-    volumes:
-      - ./my-app:/app  # Mount your own app instead of example
+    # Override entrypoint for custom startup
+    entrypoint: []
+    command: >
+      sh -c "
+        /entrypoint.sh --port 3000 --debug
+      "
 
     deploy:
       resources:
         limits:
           cpus: '4.0'    # Adjust CPU limit
-          memory: 8G     # Adjust memory limit
+          memory: 6G     # Adjust memory limit (increased for Turbopack)
+```
+
+### Dockerfile Structure
+
+Your `frontend/Dockerfile.dev` should follow this structure:
+
+```dockerfile
+FROM node:20-alpine AS base
+# Install system dependencies
+RUN apk add --no-cache curl git lsof
+RUN corepack enable && corepack prepare pnpm@9.15.2 --activate
+
+# Build dev3000 from submodule
+FROM base AS dev3000-builder
+WORKDIR /build
+COPY .dev3000/package.json .dev3000/pnpm-lock.yaml .dev3000/pnpm-workspace.yaml ./
+COPY .dev3000/mcp-server/package.json ./mcp-server/
+RUN pnpm install --frozen-lockfile
+COPY .dev3000/src ./src
+COPY .dev3000/mcp-server ./mcp-server
+COPY .dev3000/tsconfig.json .dev3000/biome.json ./
+RUN pnpm run build
+
+# Development stage
+FROM base AS development
+WORKDIR /app/frontend
+
+# Copy built dev3000
+COPY --from=dev3000-builder /build/dist /usr/local/lib/dev3000/dist
+COPY --from=dev3000-builder /build/mcp-server/.next /usr/local/lib/dev3000/mcp-server/.next
+COPY --from=dev3000-builder /build/mcp-server/node_modules /usr/local/lib/dev3000/mcp-server/node_modules
+COPY --from=dev3000-builder /build/mcp-server/package.json /usr/local/lib/dev3000/mcp-server/
+COPY --from=dev3000-builder /build/package.json /usr/local/lib/dev3000/
+COPY --from=dev3000-builder /build/node_modules /usr/local/lib/dev3000/node_modules
+
+# Create dev3000 command symlinks
+RUN ln -s /usr/local/lib/dev3000/dist/cli.js /usr/local/bin/dev3000 && \
+    ln -s /usr/local/lib/dev3000/dist/cli.js /usr/local/bin/d3k && \
+    chmod +x /usr/local/bin/dev3000 /usr/local/bin/d3k
+
+# Copy user application files
+COPY package.json .npmrc* pnpm-lock.yaml* ./
+COPY next.config.js tsconfig.json ./
+COPY postcss.config.mjs tailwind.config.ts biome.json* ./
+COPY app ./app
+
+EXPOSE 3000 3684
+
+ENV NODE_ENV=development \
+    CHOKIDAR_USEPOLLING=true \
+    WATCHPACK_POLLING=true \
+    NEXT_TELEMETRY_DISABLED=1
+
+# Entrypoint handles dependency installation
+COPY scripts/docker-entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+ENTRYPOINT ["/entrypoint.sh"]
+CMD []
 ```
 
 ### Using Your Own Project
 
-Replace the example app:
+#### Method 1: Git Submodule (Recommended)
 
-```yaml
-# docker-compose.yml
-volumes:
-  - ../my-nextjs-app:/app  # Your project path
-  - /app/node_modules
-  - /app/.next
+```bash
+cd /path/to/your-project/frontend
+git submodule add https://github.com/automationjp/dev3000 .dev3000
+
+# For WSL2
+cd .dev3000 && git config core.symlinks false && git checkout -f && cd ..
+
+# Copy required files
+cp .dev3000/Dockerfile.dev ./
+cp .dev3000/docker-compose.yml ../
+cp .dev3000/Makefile ../
+mkdir -p scripts && cp .dev3000/scripts/docker-entrypoint.sh scripts/
+
+# Build and run
+cd .. && make dev-rebuild && make dev-up
+```
+
+#### Method 2: Makefile Deployment (Development)
+
+```bash
+cd /path/to/dev3000
+make clean-frontend
+# Copy your app to example/my-app/
+make deploy-frontend APP=my-app
+make dev-rebuild
 ```
 
 ## Development Workflow

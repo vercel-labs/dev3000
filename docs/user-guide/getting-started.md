@@ -87,86 +87,131 @@ dev3000 --version
 
 You should see the version number displayed.
 
-### Docker Installation (Required for Windows)
+### Docker Installation (Recommended for Windows/WSL2)
 
 **Windows users**: dev3000's Chrome automation doesn't work directly on Windows due to CDP limitations. Use Docker/WSL2 instead.
 
-#### Setup for YOUR Next.js Project with Docker
+Docker provides a consistent development environment across all platforms (Windows, macOS, Linux).
+
+#### Option 1: Try dev3000 with Example App
+
+Perfect for exploring dev3000 features before integrating into your project.
 
 **Prerequisites**:
-- Docker Desktop installed on Windows
-- WSL2 enabled
-- Your Next.js project exists somewhere on your Windows filesystem
+- Docker Desktop installed
+- WSL2 enabled (Windows only)
+- Git installed
 
 **Steps**:
 
-1. **Clone this repository** (for Docker configuration):
+1. **Clone dev3000 repository**:
    ```bash
    git clone https://github.com/automationjp/dev3000.git
    cd dev3000
    ```
 
-2. **Configure Docker to use YOUR project**:
-
-   Edit `docker/docker-compose.yml` and change the volume mount to point to YOUR Next.js project:
-
-   ```yaml
-   services:
-     dev3000:
-       volumes:
-         # CHANGE THIS LINE to YOUR project path (WSL2 format):
-         - /mnt/c/Users/YourName/Projects/my-nextjs-app:/app
-
-         # KEEP these lines as-is (they optimize Docker performance):
-         - /app/node_modules
-         - /app/.next
-   ```
-
-   **Windows Path → WSL2 Path Conversion**:
-   | Windows Path | WSL2 Path |
-   |--------------|-----------|
-   | `C:\Users\John\Projects\my-app` | `/mnt/c/Users/John/Projects/my-app` |
-   | `D:\github\ecommerce` | `/mnt/d/github/ecommerce` |
-   | `C:\dev\nextjs-blog` | `/mnt/c/dev/nextjs-blog` |
-
-3. **Start dev3000**:
+2. **Deploy example app and start**:
    ```bash
+   # Deploy the Next.js 16 example app
+   make deploy-frontend APP=nextjs16
+
+   # Rebuild Docker image
+   make dev-rebuild
+
+   # Start development environment
    make dev-up
+
+   # Or combine all steps:
+   make deploy-and-start APP=nextjs16
    ```
 
-   This automatically:
-   - ✅ Launches Chrome with CDP on your Windows host
-   - ✅ Starts dev3000 in Docker container monitoring YOUR project
-   - ✅ Enables real-time log streaming via SSE
-   - ✅ Installs dependencies inside container (doesn't touch your host)
-
-4. **Access the interfaces**:
-   - **Your App**: http://localhost:3000
+3. **Access the interfaces**:
+   - **Next.js App**: http://localhost:3000
    - **Dev3000 UI**: http://localhost:3684
    - **Logs Viewer**: http://localhost:3684/logs
+   - **Chrome CDP**: http://localhost:9222/json/version
 
-5. **Stop dev3000**:
+4. **Stop dev3000**:
    ```bash
    make dev-down
    ```
 
-6. **View logs**:
+#### Option 2: Integrate into YOUR Next.js Project
+
+For production use with your own application.
+
+**Prerequisites**:
+- Docker Desktop installed
+- WSL2 enabled (Windows only)
+- Your Next.js project exists
+
+**Steps**:
+
+1. **Navigate to your project's frontend directory**:
    ```bash
-   make dev-logs
+   cd /path/to/your-project/frontend
    ```
+
+2. **Add dev3000 as git submodule**:
+   ```bash
+   git submodule add https://github.com/automationjp/dev3000 .dev3000
+   ```
+
+3. **For WSL2: Disable symlinks** (workaround for Windows path length limits):
+   ```bash
+   cd .dev3000
+   git config core.symlinks false
+   git checkout -f
+   cd ..
+   ```
+
+4. **Copy required files**:
+   ```bash
+   # Copy entrypoint script
+   mkdir -p scripts
+   cp .dev3000/scripts/docker-entrypoint.sh scripts/
+
+   # Copy Docker configuration
+   cp .dev3000/Dockerfile.dev ./
+
+   # Copy docker-compose and Makefile to project root
+   cp .dev3000/docker-compose.yml ../
+   cp .dev3000/Makefile ../
+   ```
+
+5. **Build and start from project root**:
+   ```bash
+   cd ..
+   make dev-rebuild
+   make dev-up
+   ```
+
+6. **Access the interfaces**:
+   - **Your App**: http://localhost:3000
+   - **Dev3000 UI**: http://localhost:3684
+   - **Logs Viewer**: http://localhost:3684/logs
+
+**Your project structure will be**:
+```
+/your-project/
+├── frontend/
+│   ├── .dev3000/              # Git submodule (dev3000 source)
+│   ├── app/                    # Your Next.js code
+│   ├── Dockerfile.dev          # Copied from .dev3000
+│   ├── scripts/
+│   │   └── docker-entrypoint.sh
+│   └── package.json
+├── docker-compose.yml          # Copied from .dev3000
+└── Makefile                    # Copied from .dev3000
+```
 
 #### Understanding the Docker Setup
 
-The Docker architecture solves Windows compatibility issues:
+The Docker architecture uses multi-stage builds:
 
 ```
 ┌─────────────────────────────────────────┐
-│        Windows Host                     │
-│                                         │
-│  ┌─────────────────┐                   │
-│  │ Your Next.js    │◄──── Volume mount │
-│  │ Project         │                   │
-│  └─────────────────┘                   │
+│        Host (Windows/macOS/Linux)       │
 │                                         │
 │  ┌─────────────────┐                   │
 │  │ Chrome Browser  │                   │
@@ -179,31 +224,36 @@ The Docker architecture solves Windows compatibility issues:
 ┌────────────────────────┼───────────────┐
 │  Docker Container      │               │
 │                        │               │
-│  ┌─────────────────┐   │               │
-│  │ dev3000         │───┘               │
-│  │ + Node.js       │                   │
-│  │ + MCP Server    │                   │
-│  └─────────────────┘                   │
-│                                         │
-│  /app ───► Your project (mounted)      │
-│  /app/node_modules ───► Container only │
-│  /app/.next ───► Container only        │
+│  ┌─────────────────────────────────┐   │
+│  │ Stage 1: dev3000-builder        │   │
+│  │ - Builds dev3000 from submodule │   │
+│  │ - Compiles TypeScript           │   │
+│  │ - Builds MCP server             │   │
+│  └─────────────────────────────────┘   │
+│                        ↓                │
+│  ┌─────────────────────────────────┐   │
+│  │ Stage 2: development            │   │
+│  │ - Your Next.js app              │───┘
+│  │ - Built dev3000                 │
+│  │ - MCP server                    │
+│  └─────────────────────────────────┘
+│
+│  Files copied into image (no volume mounts)
 └─────────────────────────────────────────┘
 ```
 
 **Key Benefits**:
-1. **Chrome on Windows** - Full GPU acceleration, proper window management
-2. **dev3000 in Linux** - Proper file system permissions, Unix tools work correctly
-3. **Volume Optimization** - `node_modules` and `.next` stay in container for speed
-4. **No Host Pollution** - Dependencies installed in container don't touch your host machine
+1. **Chrome on Host** - Full GPU acceleration, proper window management
+2. **dev3000 in Container** - Consistent Linux environment with proper tools
+3. **Multi-stage Build** - Efficient image size, separate build/runtime stages
+4. **Git Submodule** - Easy updates with `git submodule update`
+5. **No Volume Mounts** - Avoids WSL2 permission issues
 
-**What You Need to Configure**:
-- ✅ `docker/docker-compose.yml` - Change ONE line (volume mount to YOUR project)
-- ❌ **No configuration files needed in YOUR project**
-- ❌ **No changes to YOUR project's package.json**
-- ❌ **No dev3000 installation needed on Windows**
-
-Everything is self-contained in the Docker setup!
+**Key Differences from Traditional Docker Setup**:
+- ✅ **No volume mounts** - Files copied into image during build
+- ✅ **Git submodule** - dev3000 source included in your project
+- ✅ **Multi-stage build** - dev3000 built from source automatically
+- ✅ **Entrypoint script** - Handles runtime dependency installation
 
 ## Quick Start
 

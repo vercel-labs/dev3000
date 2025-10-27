@@ -191,13 +191,15 @@ pnpm run canary  # Build, package, and install globally for testing
 **Makefile Workflow** (for Windows/WSL2):
 1. `make dev-up` - Starts Chrome on host, launches dev3000 container
 2. Automatically configures CDP URL via `host.docker.internal`
-3. Mounts project from `/mnt/c/...` into `/app` inside container
-4. `node_modules` and `.next` stay in container (performance optimization)
+3. Files copied into image during build (no volume mounts)
+4. Multi-stage build: dev3000-builder → development stage
+5. Entrypoint script handles runtime dependency installation
 
 **Key Files**:
-- `docker/docker-compose.yml` - Container definition, volume mounts
-- `docker/Dockerfile` - Node.js environment with Chrome dependencies
+- `docker-compose.yml` - Container definition (root level, no volume mounts)
+- `frontend/Dockerfile.dev` - Multi-stage build with dev3000 from submodule
 - `Makefile` - Cross-platform Chrome CDP management (WSL/Linux/macOS)
+- `scripts/docker-entrypoint.sh` - Runtime initialization script
 
 ## Memories
 

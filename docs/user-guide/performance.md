@@ -189,22 +189,35 @@ RUN pnpm install --frozen-lockfile --prefer-offline
 - Disk space savings via content-addressable storage
 - Strict dependency resolution
 
-### 3. Volume Mount for node_modules (Development Only)
+### 3. No Volume Mounts (Current Implementation)
 
-For active development, use named volumes:
+**Current design uses files copied into image instead of volume mounts.**
+
+This approach avoids WSL2 permission issues and provides:
+- Consistent file permissions
+- Better isolation between host and container
+- No cross-filesystem performance penalties
+
+**For development workflow:**
+```bash
+# Make changes to code
+# Rebuild image (with cache)
+make dev-rebuild-fast
+
+# Or full rebuild if dependencies changed
+make dev-rebuild
+```
+
+**Alternative (not recommended):** If you need volume mounts for faster iteration, you can modify `docker-compose.yml`:
 
 ```yaml
 volumes:
-  - node_modules:/app/node_modules
-  - next_cache:/app/.next
+  - ./frontend:/app/frontend  # Mount source code
+  - /app/frontend/node_modules  # Keep node_modules in container
+  - /app/frontend/.next  # Keep .next in container
 ```
 
-**Benefits:**
-- Persist dependencies across restarts
-- Faster container startup
-- Better hot-reload performance
-
-⚠️ **Warning:** Only for development. Don't use in production.
+⚠️ **Warning:** Volume mounts can cause permission issues on WSL2 and slower performance due to cross-filesystem access. Only use if absolutely necessary.
 
 ### 4. Use Remote Caching (CI/CD)
 
@@ -307,7 +320,20 @@ NEXT_PROFILE=true npm run build
    docker exec dev3000 env | grep POLLING
    ```
 
-2. **Check WSL file system**
+   Should show:
+   ```
+   CHOKIDAR_USEPOLLING=true
+   WATCHPACK_POLLING=true
+   ```
+
+2. **Current implementation uses file copying, not volume mounts**
+   - Hot reload works for changes made inside the container
+   - For host changes to reflect, rebuild the image:
+     ```bash
+     make dev-rebuild-fast  # Fast rebuild with cache
+     ```
+
+3. **If using volume mounts (not recommended)**
    - Ensure project is on WSL2 filesystem, not /mnt/c/
    - WSL2 filesystem has better inotify support
 

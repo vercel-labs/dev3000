@@ -114,8 +114,9 @@ clean: ## Clean up Docker resources and build artifacts
 
 clean-frontend: ## Clear frontend directory (keeps only .keep file)
 	@echo "Clearing frontend directory..."
+	@docker compose down 2>/dev/null || true
 	@if [ -d "frontend" ]; then \
-		rm -rf frontend/* frontend/.* 2>/dev/null || true; \
+		find frontend -mindepth 1 -maxdepth 1 ! -name '.keep' -print0 | xargs -0 rm -rf 2>/dev/null || true; \
 		echo "# Frontend deployment directory" > frontend/.keep; \
 		echo "✅ Frontend directory cleared"; \
 		echo "   Only .keep file remains"; \
@@ -172,6 +173,9 @@ deploy-frontend: ## Deploy example app to frontend directory (e.g., make deploy-
 	echo "   Development setup: Copy dev3000 source to frontend/.dev3000/"; \
 	rm -rf frontend/.dev3000/src frontend/.dev3000/mcp-server frontend/.dev3000/www; \
 	rsync -av --exclude='node_modules' --exclude='.next' --exclude='dist' --exclude='.pnpm-store' src mcp-server frontend/.dev3000/; \
+	mkdir -p frontend/.dev3000/scripts; \
+	cp scripts/docker-entrypoint.sh frontend/.dev3000/scripts/; \
+	chmod +x frontend/.dev3000/scripts/docker-entrypoint.sh; \
 	cp package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json biome.json Makefile frontend/.dev3000/; \
 	echo ""; \
 	echo "✅ Deployed example/$(APP) to frontend/"; \
