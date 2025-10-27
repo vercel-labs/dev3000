@@ -40,6 +40,22 @@ Container entrypoint script that handles dependency installation and starts dev3
 
 **Purpose:** Automatically installs dependencies on first run and starts dev3000 with your application.
 
+### 📄 .npmrc
+pnpm configuration file that enforces package manager usage.
+
+**Copy to:** `your-project/frontend/.npmrc`
+
+**Purpose:**
+- Enforces pnpm as the only allowed package manager
+- Prevents accidental generation of package-lock.json or yarn.lock
+- Maintains workspace isolation for example projects
+- Optimizes dependency installation in Docker
+
+**What it does:**
+- Blocks `npm install` and `yarn install` commands
+- Only allows `pnpm install`
+- Prevents wrong lock files from being committed
+
 ## How to use these files
 
 See the [INTEGRATION_GUIDE.md](../INTEGRATION_GUIDE.md) for step-by-step instructions.
