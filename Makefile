@@ -25,7 +25,7 @@ dev-up: ## Start dev3000 in Docker (launches Chrome automatically)
 	@echo "Starting dev3000 development environment..."
 	@echo ""
 	@echo "Step 1: Starting Docker containers..."
-	@cd docker && docker compose up -d
+	@docker compose up -d
 	@echo ""
 	@echo "Step 2: Waiting for Next.js to be ready..."
 	@i=1; while [ $$i -le 60 ]; do \
@@ -67,7 +67,7 @@ dev-up: ## Start dev3000 in Docker (launches Chrome automatically)
 
 dev-down: ## Stop dev3000 Docker environment
 	@echo "Stopping development environment..."
-	@cd docker && docker compose down
+	@docker compose down
 	@echo ""
 	@echo "✅ Development environment stopped"
 	@echo ""
@@ -80,23 +80,23 @@ dev-down: ## Stop dev3000 Docker environment
 	fi
 
 dev-logs: ## Follow Docker container logs
-	@cd docker && docker compose logs -f
+	@docker compose logs -f
 
 dev-rebuild: ## Rebuild and restart Docker environment
 	@echo "Rebuilding development environment..."
-	@cd docker && docker compose down
-	@cd docker && DOCKER_BUILDKIT=1 docker compose build --no-cache
+	@docker compose down
+	@DOCKER_BUILDKIT=1 docker compose build --no-cache
 	@$(MAKE) dev-up
 
 dev-rebuild-fast: ## Fast rebuild using cache (for minor changes)
 	@echo "Fast rebuilding development environment (with cache)..."
-	@cd docker && docker compose down
-	@cd docker && DOCKER_BUILDKIT=1 docker compose build
+	@docker compose down
+	@DOCKER_BUILDKIT=1 docker compose build
 	@$(MAKE) dev-up
 
 clean: ## Clean up Docker resources and build artifacts
 	@echo "Cleaning up..."
-	@cd docker && docker compose down -v
+	@docker compose down -v
 	@rm -rf example/*/node_modules example/*/.next
 	@echo "✅ Cleanup complete"
 
@@ -231,7 +231,7 @@ status: ## Show development environment status
 	@echo "=== Dev3000 Status ==="
 	@echo ""
 	@echo "Docker Containers:"
-	@cd docker && docker compose ps
+	@docker compose ps
 	@echo ""
 	@echo "Chrome CDP:"
 	@if curl -s http://localhost:9222/json/version > /dev/null 2>&1; then \
