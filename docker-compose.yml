@@ -1,108 +1,130 @@
+# Docker Compose Configuration for User Projects
+#
+# This file is for users who have cloned dev3000 into frontend/.dev3000
+#
+# Your project structure:
+#   /your-project/                  # Your project root
+#   ├── frontend/                   # Your Next.js application
+#   │   ├── .dev3000/              # git clone https://github.com/automationjp/dev3000
+#   │   ├── app/                    # Your Next.js code
+#   │   └── package.json
+#   ├── docker/                     # This file should be here
+#   │   └── docker-compose.yml
+#   └── Makefile
+#
+# Usage from your project root:
+#   make dev-up
+
 services:
   dev3000:
     build:
-      context: frontend
-      dockerfile: Dockerfile.dev
-      # Build arguments for optimization
+      # Build from dev3000 cloned in frontend/.dev3000
+      context: ../frontend/.dev3000
+      dockerfile: docker/Dockerfile
       args:
         BUILDKIT_INLINE_CACHE: 1
-      # Use BuildKit for parallel builds and better caching
       cache_from:
         - type=registry,ref=dev3000:latest
-      target: development
+      target: production
+
     container_name: dev3000
 
-    # Security hardening
+    # Security
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
-    read_only: false  # We need write access for node_modules and .next
+    read_only: false
 
-    # Port mappings
+    # Ports - CUSTOMIZE if needed
     ports:
-      - "3000:3000"   # Next.js / App server
+      - "3000:3000"   # Your Next.js app
       - "3684:3684"   # Dev3000 MCP server
 
-    # Volume mounts - removed to avoid WSL2 permission issues
-    # Application files are copied into image during build
+    # Mount your frontend directory
+    volumes:
+      # Mount your entire frontend directory
+      - ../frontend:/app/user-frontend:cached
 
-    # Environment variables
+      # Exclude .dev3000 to avoid conflicts
+      - /app/user-frontend/.dev3000
+
+      # Keep node_modules in container for performance
+      - /app/user-frontend/node_modules
+      - /app/user-frontend/.next
+
+      # Temporary files
+      - dev3000-tmp:/tmp
+
+    # Set working directory to your frontend
+    working_dir: /app/user-frontend
+
+    # Environment - CUSTOMIZE for your project
     environment:
-      # CDP configuration for host Chrome connection
-      # Set DEV3000_CDP_URL to connect to Chrome running on host
-      # Default: http://host.docker.internal:9222 (works on Docker Desktop)
-      # For WSL2: Use host.docker.internal to access Windows host
+      # CDP for Chrome on host
       - DEV3000_CDP_URL=${DEV3000_CDP_URL:-http://host.docker.internal:9222}
 
-      # Node.js environment
+      # Node.js
       - NODE_ENV=development
 
-      # File watching for hot reload (required for Docker/WSL)
+      # File watching for Docker
       - CHOKIDAR_USEPOLLING=true
       - WATCHPACK_POLLING=true
 
-      # Next.js configuration
+      # Next.js
       - NEXT_TELEMETRY_DISABLED=1
 
-      # Dev3000 logging configuration
+      # Dev3000
       - LOG_FILE_PATH=/tmp/d3k.log
 
-    # WSL2 compatibility: Map host.docker.internal to Windows host IP
+      # ADD YOUR ENVIRONMENT VARIABLES HERE
+      # - DATABASE_URL=...
+      # - API_KEY=...
+
+    # WSL2/Mac compatibility
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
-    # Command to run - simplified since dependencies are pre-installed in image
+    # Startup command
     command: >
       sh -c "
         set -x
-        rm -f /tmp/dev3000-*.lock
         echo '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
-        echo '🚀 Starting dev3000...'
+        echo '🚀 Starting dev3000 for your project...'
         echo '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
-        echo '[$(date +%Y-%m-%d\ %H:%M:%S)] System Information:'
-        echo '  Node version: '$(node --version)
-        echo '  npm version: '$(npm --version)
-        echo '  User: '$(whoami)
-        echo '  User ID: '$(id)
-        echo '  Working directory: '$(pwd)
-        echo '  Directory permissions:'
+        echo '[INFO] Working directory: '$(pwd)
+        echo '[INFO] Node: '$(node --version)
         ls -la
         echo ''
-        echo '[$(date +%Y-%m-%d\ %H:%M:%S)] Environment Variables:'
-        env | grep -E 'DEV3000|NODE|LOG|CDP' | sort
-        echo ''
-        echo '[$(date +%Y-%m-%d\ %H:%M:%S)] Checking dev3000 installation:'
-        which dev3000
-        dev3000 --version || echo 'Failed to get dev3000 version'
-        echo ''
-        echo '[$(date +%Y-%m-%d\ %H:%M:%S)] Checking lsof availability:'
-        which lsof
-        lsof -v 2>&1 | head -3
-        echo ''
-        echo '[$(date +%Y-%m-%d\ %H:%M:%S)] Checking port availability:'
-        lsof -i :3000 || echo 'Port 3000 is free'
-        lsof -i :3684 || echo 'Port 3684 is free'
-        echo ''
-        echo '[$(date +%Y-%m-%d\ %H:%M:%S)] Starting dev3000 with debug enabled...'
-        echo 'CDP URL: '${DEV3000_CDP_URL:-http://host.docker.internal:9222}
-        dev3000 --port 3000 --debug
+
+        # Install dependencies if needed
+        if [ ! -d 'node_modules' ]; then
+          echo '[INFO] Installing dependencies...'
+          npm install || pnpm install || yarn install
+        fi
+
+        # Start dev3000
+        echo '[INFO] Starting dev3000...'
+        /usr/local/bin/dev3000 --port 3000 --debug
       "
 
-    # Restart policy
     restart: unless-stopped
 
-    # Resource limits - optimized for development performance
+    # Resource limits - CUSTOMIZE based on your needs
     deploy:
       resources:
         limits:
-          cpus: '4.0'      # Increased for faster builds
-          memory: 6G       # Increased for Next.js Turbopack
+          cpus: '4.0'
+          memory: 6G
         reservations:
-          cpus: '1.0'      # Guaranteed CPU
-          memory: 1G       # Guaranteed memory
+          cpus: '1.0'
+          memory: 1G
 
-# Networks (using default bridge network)
+# Named volumes
+volumes:
+  dev3000-tmp:
+    driver: local
+
 networks:
   default:
     driver: bridge

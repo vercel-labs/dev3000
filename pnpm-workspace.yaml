@@ -1,6 +1,10 @@
 packages:
   - www
   - mcp-server
+  # Exclude user-facing directories (completely separate from dev3000 core)
+  - '!frontend'
+  - '!example'
+  - '!example/**'
 
 catalog:
   '@modelcontextprotocol/sdk': ^1.18.1

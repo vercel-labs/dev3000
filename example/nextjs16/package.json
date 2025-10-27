@@ -6,18 +6,22 @@
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",
+    "build:static": "node scripts/build-static.js",
+    "build:production": "next build && next export",
     "start": "next start",
+    "serve:static": "npx serve out",
     "format": "biome format --write .",
     "format:check": "biome format .",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "typecheck": "tsc --noEmit",
-    "check": "npm run format && npm run lint:fix && npm run typecheck"
+    "check": "npm run format && npm run lint:fix && npm run typecheck",
+    "clean": "rm -rf .next out .build-manifest.json"
   },
   "dependencies": {
     "next": "^16.0.0",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react": "19.1.0",
+    "react-dom": "19.1.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
