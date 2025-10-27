@@ -133,8 +133,7 @@ clean-frontend: ## Clear frontend directory (keeps only .keep file)
 # This allows Dockerfile.dev to build dev3000 from the submodule during container builds
 # Process:
 #   1. Copies example app to frontend/ directory (rsync, excluding build outputs)
-#   2. Copies framework-specific docker-compose.yml from docker-reference/ to root (if exists)
-#   3. Creates frontend/.dev3000/ with dev3000 source code (simulates: git submodule add)
+#   2. Creates frontend/.dev3000/ with dev3000 source code (simulates: git submodule add)
 # Production setup: git submodule add https://github.com/automationjp/dev3000 frontend/.dev3000
 deploy-frontend: ## Deploy example app to frontend directory (e.g., make deploy-frontend APP=nextjs16)
 	@if [ -z "$(APP)" ]; then \
@@ -156,15 +155,8 @@ deploy-frontend: ## Deploy example app to frontend directory (e.g., make deploy-
 	echo "📦 Deploying example/$(APP) to frontend/..."; \
 	rm -rf frontend; \
 	mkdir -p frontend; \
-	rsync -av --exclude='node_modules' --exclude='.next' --exclude='out' --exclude='.pnpm-store' --exclude='docker-reference' example/$(APP)/ frontend/; \
-	echo ""; \
-	echo "🔧 Copying framework-specific docker-compose.yml..."; \
-	if [ -f "example/$(APP)/docker-reference/docker-compose.yml" ]; then \
-		cp example/$(APP)/docker-reference/docker-compose.yml docker-compose.yml; \
-		echo "✅ Copied example/$(APP)/docker-reference/docker-compose.yml to root"; \
-	else \
-		echo "⚠️  No docker-reference/docker-compose.yml found for $(APP), using existing root docker-compose.yml"; \
-	fi; \
+	rsync -av --exclude='node_modules' --exclude='.next' --exclude='out' --exclude='.pnpm-store' example/$(APP)/ frontend/; \
+	echo "✅ Copied example/$(APP) to frontend/"; \
 	echo ""; \
 	echo "🔗 Setting up frontend/.dev3000 (dev3000 reference)..."; \
 	echo "   This simulates a user's dev3000 git submodule setup"; \
