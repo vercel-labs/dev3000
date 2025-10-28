@@ -1,6 +1,7 @@
 import { existsSync, renameSync, writeFileSync } from "fs"
 import { type NextRequest, NextResponse } from "next/server"
 import { dirname, join } from "path"
+import { extractProjectNameFromLogFilename } from "../../../../src/utils/log-filename"
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,13 +20,12 @@ export async function POST(request: NextRequest) {
     const logDir = dirname(currentLogPath)
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-")
 
-    // Extract project name from current log path if it follows dev3000 pattern
+    // Extract project name from current log filename using shared utility
     const currentFileName = currentLogPath.split("/").pop() || ""
-    const projectMatch = currentFileName.match(/^dev3000-([^-]+)-/)
-    const projectName = projectMatch ? projectMatch[1] : "unknown"
+    const projectName = extractProjectNameFromLogFilename(currentFileName) || "unknown"
 
-    // Create new timestamped filename matching dev3000 pattern
-    const archivedLogPath = join(logDir, `dev3000-${projectName}-${timestamp}.log`)
+    // Create new timestamped filename
+    const archivedLogPath = join(logDir, `${projectName}-${timestamp}.log`)
 
     // Rename current log to archived name
     renameSync(currentLogPath, archivedLogPath)
