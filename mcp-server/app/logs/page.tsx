@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "fs"
 import { redirect } from "next/navigation"
 import { basename, dirname, join } from "path"
-import { extractProjectNameFromLogFilename, logFilenameMatchesProject } from "../../../src/utils/log-filename"
+import { extractProjectNameFromLogFilename, logFilenameMatchesProject } from "@dev3000/src/utils/log-filename"
 import LogsClient from "./LogsClient"
 import { parseLogEntries } from "./utils"
 

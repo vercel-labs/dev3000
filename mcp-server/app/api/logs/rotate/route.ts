@@ -1,7 +1,7 @@
 import { existsSync, renameSync, writeFileSync } from "fs"
 import { type NextRequest, NextResponse } from "next/server"
 import { dirname, join } from "path"
-import { extractProjectNameFromLogFilename } from "../../../../src/utils/log-filename"
+import { extractProjectNameFromLogFilename } from "@dev3000/src/utils/log-filename"
 
 export async function POST(request: NextRequest) {
   try {
