@@ -26,20 +26,17 @@ Before starting, ensure you have:
 git clone https://github.com/automationjp/dev3000.git
 cd dev3000
 
-# 2. Initialize git submodules (if any)
-git submodule update --init --recursive
-
-# 3. Deploy Next.js 16 example to frontend/
+# 2. Deploy Next.js 16 example to frontend/
 make deploy-frontend APP=nextjs16
 
-# 4. Configure environment (optional - has sensible defaults)
+# 3. Configure environment (optional - has sensible defaults)
 # Copy .env.example to .env and customize if needed
 cp .env.example .env
 # Default settings work for most environments:
 #   DEV3000_CDP_PROXY=socat (enables localhost CDP forwarding)
 #   DEV3000_CDP_URL=http://host.docker.internal:9222
 
-# 5. Start Chrome with CDP enabled on host machine
+# 4. Start Chrome with CDP enabled on host machine
 # This is REQUIRED for dev3000 to monitor browser events
 
 # On Windows (PowerShell):
@@ -54,10 +51,10 @@ google-chrome --remote-debugging-port=9222 --remote-debugging-address=0.0.0.0 --
 # Or use the Makefile command (auto-detects platform):
 make start-chrome-cdp
 
-# 6. Build Docker image with dev3000 + Next.js
+# 5. Build Docker image with dev3000 + Next.js
 make dev-rebuild
 
-# 7. Start the development environment
+# 6. Start the development environment
 make dev-up
 
 # ✅ That's it! Your app is now running with dev3000 monitoring
@@ -95,16 +92,20 @@ make dev-logs
 # 1. Navigate to your project's frontend directory
 cd /path/to/your-project/frontend
 
-# 2. Add dev3000 as a git submodule
+# 2. Add dev3000 as a git submodule in .dev3000/ directory
 git submodule add https://github.com/automationjp/dev3000 .dev3000
 
-# 3. For WSL2: Disable symlinks due to Windows path length limitations
+# 3. Initialize the submodule (downloads dev3000 repository)
+git submodule update --init --recursive
+
+# 4. For WSL2: Disable symlinks due to Windows path length limitations
+#    This step is REQUIRED on WSL2 to avoid path length errors
 cd .dev3000
 git config core.symlinks false
-git checkout -f
+git checkout -f  # Re-checkout files with symlinks disabled
 cd ..
 
-# 4. Copy reference files from dev3000 to your project
+# 5. Copy reference files from dev3000 to your project
 mkdir -p scripts
 cp .dev3000/example/nextjs16/reference/scripts/docker-entrypoint.sh scripts/
 cp .dev3000/example/nextjs16/reference/Dockerfile.dev ./
@@ -113,17 +114,34 @@ cp .dev3000/example/nextjs16/reference/docker-compose.yml ../
 cp .dev3000/example/nextjs16/reference/Makefile ../
 cp .dev3000/example/nextjs16/reference/.env.example ../.env
 
-# 5. Customize .env for your environment (if needed)
+# 6. Customize .env for your environment (if needed)
 cd ..
 nano .env  # Edit CDP URL if not using host.docker.internal
 
-# 6. Start Chrome with CDP (same as Option 1, step 5)
+# 7. Start Chrome with CDP (same as Option 1, step 4)
 make start-chrome-cdp
 
-# 7. Build and start from project root
-cd ..
+# 8. Build and start from project root
 make dev-rebuild
 make dev-up
+```
+
+**Understanding git submodule commands:**
+
+- `git submodule add <repo> <path>` - Adds the submodule reference to .gitmodules
+- `git submodule update --init --recursive` - Downloads the actual submodule content
+  - `--init` - Initialize submodule if not already done
+  - `--recursive` - Process nested submodules (if any)
+
+**For future updates:**
+```bash
+# Update dev3000 to latest version
+cd /path/to/your-project/frontend/.dev3000
+git pull origin main
+cd ..
+
+# Or from project root:
+git submodule update --remote .dev3000
 ```
 
 The development environment will start:

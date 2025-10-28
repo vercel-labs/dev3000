@@ -133,11 +133,19 @@ Before starting, ensure you have:
 ```bash
 git clone https://github.com/automationjp/dev3000.git
 cd dev3000
+
+# Note: This repository does not have submodules in its root.
+# Submodules are only relevant when integrating dev3000 into your own project.
 ```
 
 **2. Deploy Next.js 16 example to frontend/:**
 ```bash
 make deploy-frontend APP=nextjs16
+
+# This command:
+# - Copies example/nextjs16/ files to frontend/
+# - Creates frontend/.dev3000/ with dev3000 source (simulates submodule setup)
+# - Removes node_modules to ensure clean dependencies
 ```
 
 **3. Configure environment (optional):**
@@ -151,7 +159,10 @@ cp .env.example .env
 # DEV3000_CDP_PROXY=socat
 ```
 
-**4. Start Chrome with CDP enabled (REQUIRED):**
+**4. Start Chrome with CDP enabled (REQUIRED for MCP tools):**
+
+Chrome with CDP (Chrome DevTools Protocol) is essential for dev3000 to monitor browser events,
+capture console messages, and take automatic screenshots.
 
 **Windows (PowerShell):**
 ```powershell
@@ -176,11 +187,22 @@ make start-chrome-cdp
 **5. Build Docker image:**
 ```bash
 make dev-rebuild
+
+# This builds:
+# - dev3000 from frontend/.dev3000/ source
+# - Next.js application dependencies
+# - Installs socat for CDP proxy
 ```
 
 **6. Start the development environment:**
 ```bash
 make dev-up
+
+# This starts:
+# - Docker container with dev3000 + Next.js
+# - socat proxy (localhost:9222 → host.docker.internal:9222)
+# - dev3000 MCP server on port 3684
+# - Next.js dev server on port 3000
 ```
 
 **7. Verify everything is working:**
