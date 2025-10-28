@@ -118,17 +118,92 @@ COPY app ./app
 
 ## Setup Instructions (Use Case 1: This Repository)
 
-**Prerequisites:**
-- `make dev-up` automatically starts Chrome with CDP enabled
-- **CDP browser is required** for dev3000 MCP tools to function
-  - CDP URL: http://localhost:9222/json/version
-  - Without CDP browser, MCP tools (`execute_browser_action`, `fix_my_app`, etc.) will not work
+### Prerequisites
 
-Access your application:
+Before starting, ensure you have:
+- **Docker Desktop** installed and running
+- **Git** installed
+- **Chrome browser** installed (for CDP monitoring)
+- **WSL2** enabled (Windows users)
+- **Make** utility (usually pre-installed on Linux/Mac)
+
+### Step-by-Step Setup
+
+**1. Clone the repository:**
+```bash
+git clone https://github.com/automationjp/dev3000.git
+cd dev3000
+```
+
+**2. Deploy Next.js 16 example to frontend/:**
+```bash
+make deploy-frontend APP=nextjs16
+```
+
+**3. Configure environment (optional):**
+```bash
+# Copy .env.example to .env
+cp .env.example .env
+
+# Default settings (usually work out of the box):
+# DEV3000_CDP=1
+# DEV3000_CDP_URL=http://host.docker.internal:9222
+# DEV3000_CDP_PROXY=socat
+```
+
+**4. Start Chrome with CDP enabled (REQUIRED):**
+
+**Windows (PowerShell):**
+```powershell
+Start-Process chrome.exe -ArgumentList '--remote-debugging-port=9222','--remote-debugging-address=0.0.0.0','--user-data-dir=C:\temp\chrome-dev-profile','http://localhost:3000'
+```
+
+**macOS:**
+```bash
+open -a "Google Chrome" --args --remote-debugging-port=9222 --remote-debugging-address=0.0.0.0 --user-data-dir=/tmp/chrome-dev-profile http://localhost:3000
+```
+
+**Linux:**
+```bash
+google-chrome --remote-debugging-port=9222 --remote-debugging-address=0.0.0.0 --user-data-dir=/tmp/chrome-dev-profile http://localhost:3000 &
+```
+
+**Or use Makefile (auto-detects platform):**
+```bash
+make start-chrome-cdp
+```
+
+**5. Build Docker image:**
+```bash
+make dev-rebuild
+```
+
+**6. Start the development environment:**
+```bash
+make dev-up
+```
+
+**7. Verify everything is working:**
+```bash
+# Check CDP connection
+curl http://localhost:9222/json/version
+
+# Check container status
+make status
+
+# View logs
+make dev-logs
+```
+
+### Access Points
+
+Once running, access your application at:
 - **Next.js App**: http://localhost:3000
 - **dev3000 Logs**: http://localhost:3684/logs
 - **MCP Server**: http://localhost:3684
 - **Chrome CDP**: http://localhost:9222/json/version
+
+**Important:** CDP browser is REQUIRED for dev3000 MCP tools to function. Without it, tools like `execute_browser_action` and `fix_my_app` will not work.
 
 ## Quick Update Workflow
 

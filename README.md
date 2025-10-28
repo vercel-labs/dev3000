@@ -8,46 +8,119 @@ Captures your web app's complete development timeline - server logs, browser eve
 
 ## Quick Start (Docker)
 
-### Option 1: Try with Example App (Development)
+### Prerequisites
+
+Before starting, ensure you have:
+- **Docker Desktop** installed and running
+- **Git** installed
+- **Chrome browser** installed (for CDP monitoring)
+- **WSL2** enabled (Windows users)
+- **Make** utility (usually pre-installed on Linux/Mac)
+
+### Option 1: Try with Example App (Recommended for First-Time Users)
+
+**Complete step-by-step guide to run dev3000 + Next.js 16:**
 
 ```bash
-# Clone this repository
+# 1. Clone this repository
 git clone https://github.com/automationjp/dev3000.git
 cd dev3000
 
-# Deploy example app to frontend directory
+# 2. Initialize git submodules (if any)
+git submodule update --init --recursive
+
+# 3. Deploy Next.js 16 example to frontend/
 make deploy-frontend APP=nextjs16
 
-# Rebuild and start development environment
+# 4. Configure environment (optional - has sensible defaults)
+# Copy .env.example to .env and customize if needed
+cp .env.example .env
+# Default settings work for most environments:
+#   DEV3000_CDP_PROXY=socat (enables localhost CDP forwarding)
+#   DEV3000_CDP_URL=http://host.docker.internal:9222
+
+# 5. Start Chrome with CDP enabled on host machine
+# This is REQUIRED for dev3000 to monitor browser events
+
+# On Windows (PowerShell):
+Start-Process chrome.exe -ArgumentList '--remote-debugging-port=9222','--remote-debugging-address=0.0.0.0','--user-data-dir=C:\temp\chrome-dev-profile','http://localhost:3000'
+
+# On macOS:
+open -a "Google Chrome" --args --remote-debugging-port=9222 --remote-debugging-address=0.0.0.0 --user-data-dir=/tmp/chrome-dev-profile http://localhost:3000
+
+# On Linux:
+google-chrome --remote-debugging-port=9222 --remote-debugging-address=0.0.0.0 --user-data-dir=/tmp/chrome-dev-profile http://localhost:3000 &
+
+# Or use the Makefile command (auto-detects platform):
+make start-chrome-cdp
+
+# 6. Build Docker image with dev3000 + Next.js
 make dev-rebuild
 
-# Or deploy and start in one command
+# 7. Start the development environment
+make dev-up
+
+# ✅ That's it! Your app is now running with dev3000 monitoring
+
+# Access points:
+#   - Next.js App:    http://localhost:3000
+#   - dev3000 Logs:   http://localhost:3684/logs
+#   - MCP Server:     http://localhost:3684
+#   - Chrome CDP:     http://localhost:9222/json/version
+```
+
+**Or deploy and start in one command:**
+```bash
 make deploy-and-start APP=nextjs16
+# Then start Chrome CDP manually (see step 5 above)
+```
+
+**Verify everything is working:**
+```bash
+# Check CDP connection
+curl http://localhost:9222/json/version
+
+# Check container status
+make status
+
+# View logs
+make dev-logs
 ```
 
 ### Option 2: Use with Your Own Project (Production Use)
 
+**Integrate dev3000 into your existing Next.js project:**
+
 ```bash
-# Navigate to your project's frontend directory
+# 1. Navigate to your project's frontend directory
 cd /path/to/your-project/frontend
 
-# Add dev3000 as a git submodule
+# 2. Add dev3000 as a git submodule
 git submodule add https://github.com/automationjp/dev3000 .dev3000
 
-# For WSL2: Disable symlinks due to path length limitations
+# 3. For WSL2: Disable symlinks due to Windows path length limitations
 cd .dev3000
 git config core.symlinks false
 git checkout -f
 cd ..
 
-# Copy necessary files to project root
-mkdir -p ../scripts
-cp .dev3000/scripts/docker-entrypoint.sh ../scripts/
-cp .dev3000/Dockerfile.dev ./
-cp .dev3000/docker-compose.yml ../
-cp .dev3000/Makefile ../
+# 4. Copy reference files from dev3000 to your project
+mkdir -p scripts
+cp .dev3000/example/nextjs16/reference/scripts/docker-entrypoint.sh scripts/
+cp .dev3000/example/nextjs16/reference/Dockerfile.dev ./
+cp .dev3000/example/nextjs16/reference/.npmrc ./
+cp .dev3000/example/nextjs16/reference/docker-compose.yml ../
+cp .dev3000/example/nextjs16/reference/Makefile ../
+cp .dev3000/example/nextjs16/reference/.env.example ../.env
 
-# Build and start from project root
+# 5. Customize .env for your environment (if needed)
+cd ..
+nano .env  # Edit CDP URL if not using host.docker.internal
+
+# 6. Start Chrome with CDP (same as Option 1, step 5)
+make start-chrome-cdp
+
+# 7. Build and start from project root
 cd ..
 make dev-rebuild
 make dev-up
@@ -78,7 +151,157 @@ make dev-rebuild-fast       # Fast rebuild with cache
 make status                 # Show environment status
 make start-chrome-cdp       # Manually start Chrome with CDP
 make stop-chrome-cdp        # Stop Chrome CDP process
+
+# Update workflow
+make dev3000-sync           # Update dev3000 submodule to latest
+make dev-rebuild-frontend   # Rebuild frontend image only (fast)
 ```
+
+## Troubleshooting
+
+### Chrome CDP Connection Issues
+
+**Symptom:** dev3000 cannot connect to Chrome, WebSocket errors in logs
+
+**Solutions:**
+
+1. **Verify Chrome is running with CDP:**
+   ```bash
+   curl http://localhost:9222/json/version
+   ```
+   Should return JSON with Chrome version info.
+
+2. **Check if Chrome CDP is accessible from Docker:**
+   ```bash
+   docker exec dev3000 curl http://host.docker.internal:9222/json/version
+   ```
+
+3. **Restart Chrome with correct flags:**
+   ```bash
+   # Close all Chrome instances first
+   make stop-chrome-cdp
+
+   # Start Chrome with CDP enabled
+   make start-chrome-cdp
+   ```
+
+4. **Verify socat proxy is running inside container:**
+   ```bash
+   docker exec dev3000 ps aux | grep socat
+   # Should show: socat TCP-LISTEN:9222,reuseaddr,fork TCP:host.docker.internal:9222
+   ```
+
+5. **Check environment variables:**
+   ```bash
+   docker exec dev3000 env | grep CDP
+   # Should show:
+   #   DEV3000_CDP=1
+   #   DEV3000_CDP_URL=http://localhost:9222
+   #   DEV3000_CDP_PROXY=socat
+   ```
+
+### Port Conflicts
+
+**Symptom:** "Port already in use" errors
+
+**Solution:**
+```bash
+# Check which process is using the port
+lsof -i :3000  # Next.js port
+lsof -i :3684  # dev3000 MCP port
+lsof -i :9222  # Chrome CDP port
+
+# Stop conflicting services
+make dev-down
+```
+
+### Docker Build Failures
+
+**Symptom:** "Cannot find module" or symlink errors during build
+
+**Solution:**
+```bash
+# Clean rebuild without cache
+make dev-rebuild
+
+# If node_modules symlink issues persist:
+make clean-frontend
+make deploy-frontend APP=nextjs16
+make dev-rebuild
+```
+
+### WSL2 Specific Issues
+
+**Problem 1: Permission errors with pnpm install**
+
+**Solution:** Use temporary directories to bypass WSL mount restrictions:
+```bash
+cd frontend/.dev3000
+PNPM_HOME=/tmp/.pnpm-home pnpm install --store-dir /tmp/.pnpm-store --no-frozen-lockfile
+```
+
+**Problem 2: File watching not working (hot reload broken)**
+
+**Solution:** Already configured in docker-compose.yml:
+```yaml
+environment:
+  - CHOKIDAR_USEPOLLING=true
+  - WATCHPACK_POLLING=true
+```
+
+**Problem 3: host.docker.internal not resolving**
+
+**Solution:** Manually set host IP in .env:
+```bash
+# Get WSL2 host IP
+ip route | grep default | awk '{print $3}'
+
+# Update .env
+DEV3000_CDP_URL=http://172.17.0.1:9222  # Use your actual host IP
+```
+
+### Container Won't Start
+
+**Symptom:** Container exits immediately or fails health check
+
+**Solutions:**
+
+1. **Check logs:**
+   ```bash
+   make dev-logs
+   ```
+
+2. **Verify frontend/ directory exists:**
+   ```bash
+   ls -la frontend/
+   # Should contain: package.json, app/, .dev3000/, etc.
+   ```
+
+3. **Check Docker resources:**
+   - Ensure Docker has at least 4GB RAM allocated
+   - Ensure enough disk space (5GB+ recommended)
+
+4. **Verify entrypoint.sh is executable:**
+   ```bash
+   ls -l frontend/scripts/docker-entrypoint.sh
+   # Should show: -rwxr-xr-x (executable)
+   ```
+
+### Still Having Issues?
+
+1. **Check full system status:**
+   ```bash
+   make status
+   ```
+
+2. **View detailed logs:**
+   ```bash
+   make dev-logs
+   ```
+
+3. **Report an issue:**
+   - GitHub Issues: https://github.com/automationjp/dev3000/issues
+   - Include: OS, Docker version, error logs, output of `make status`
 
 ## AI Integration with Dynamic Enhancement
 
