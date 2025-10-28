@@ -4,6 +4,13 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.107] - 2025-10-28
+
+**Patch Release**
+
+- Fix module resolution for log-filename utility
+- Fix log filename project matching with centralized utility
+
 ## [0.0.106] - 2025-10-23
 
 **Feature Release**
