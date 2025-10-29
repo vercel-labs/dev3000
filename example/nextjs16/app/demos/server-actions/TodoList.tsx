@@ -96,3 +96,4 @@ export default function TodoList({ initialTodos }: { initialTodos: Todo[] }) {
     </div>
   );
 }
+

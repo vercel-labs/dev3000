@@ -53,6 +53,23 @@ dev-up: ## Start dev3000 in Docker (launches Chrome automatically)
 		i=$$((i + 1)); \
 	done
 	@echo ""
+	@if [ "$$NEXT_READY" = "1" ]; then \
+		echo "Step 2.5: Warming common routes (compile ahead of time)..."; \
+		for route in "/" "/demos/counter" "/demos/server-actions" "/demos/parallel-routes"; do \
+			START_RT=$$(date +%s); \
+			echo "  → warming http://localhost:3000$$route"; \
+			code=$$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:3000$$route" || echo 000); \
+			END_RT=$$(date +%s); EL=$$((END_RT-START_RT)); \
+			if [ "$$code" -ge 200 ] && [ "$$code" -lt 300 ]; then \
+				echo "    warmed ($$code) in $${EL}s ✅"; \
+			else \
+				echo "    warmed ($$code) in $${EL}s ⚠️"; \
+			fi; \
+		done; \
+	else \
+		echo "Step 2.5: Skipping route warming (Next not ready)"; \
+	fi
+	@echo ""
 	@echo "Step 3: Launching Chrome with CDP..."
 	@$(MAKE) start-chrome-cdp
 	@echo ""

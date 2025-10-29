@@ -10,13 +10,22 @@ FROM node:20-alpine AS base
 # Install system dependencies
 RUN apk add --no-cache \
     curl \
+    bash \
     git \
     lsof \
     socat \
+    xz \
     && rm -rf /var/cache/apk/*
 
 # Install pnpm
 RUN corepack enable && corepack prepare pnpm@9.15.2 --activate
+
+# Install Bun (bunx) for faster package execution (used by MCP orchestrator)
+ENV BUN_INSTALL=/root/.bun
+RUN curl -fsSL https://bun.sh/install | bash
+ENV PATH="${BUN_INSTALL}/bin:${PATH}"
+RUN ln -sf /root/.bun/bin/bunx /usr/local/bin/bunx && \
+    ln -sf /root/.bun/bin/bun /usr/local/bin/bun
 
 # Build dev3000 stage
 FROM base AS dev3000-builder

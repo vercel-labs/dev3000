@@ -66,3 +66,4 @@ export default async function ServerActionsDemo() {
     </div>
   );
 }
+

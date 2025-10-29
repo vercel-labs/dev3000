@@ -16,7 +16,7 @@
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "typecheck": "tsc --noEmit",
-    "check": "npm run format && npm run lint:fix && npm run typecheck",
+    "check": "pnpm run format && pnpm run lint:fix && pnpm run typecheck",
     "clean": "rm -rf .next out .build-manifest.json"
   },
   "dependencies": {

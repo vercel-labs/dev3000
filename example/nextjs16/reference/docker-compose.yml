@@ -24,8 +24,13 @@ services:
       - "3000:3000"   # Next.js / App server
       - "3684:3684"   # Dev3000 MCP server
 
-    # Volume mounts - removed to avoid WSL2 permission issues
-    # Application files are copied into image during build
+    # Volume mounts
+    # Bind-mount only source dirs needed for HMR to avoid WSL2 permission issues on root
+    volumes:
+      - ./app:/app/frontend/app:delegated
+      - ./public:/app/frontend/public:delegated
+      - /app/frontend/node_modules
+      - /app/frontend/.next
 
     # Environment variables
     environment:

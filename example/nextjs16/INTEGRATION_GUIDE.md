@@ -119,13 +119,33 @@ When running `make dev-up`:
 3. **MCP Integration**
    - Next.js builtin MCP at `/_next/mcp`
    - dev3000 MCP at http://localhost:3684
-   - Context7 for docs
-   - CDP browser access
+   - CDP browser integration (required)
 
 ## Access Points
 
 - **Your App**: http://localhost:3000
 - **dev3000 UI**: http://localhost:3684
+
+---
+
+## Dev-up Flow (What Happens)
+
+When you run `make dev-up`, the following occurs with log-driven diagnostics:
+
+1. Docker containers start (Next.js app + dev3000 MCP server)
+2. Next.js readiness check (up to 60s)
+3. Route warming (only if Next.js is ready)
+   - Warms common routes to precompile in dev: `/`, `/demos/counter`, `/demos/server-actions`, `/demos/parallel-routes`
+   - Each warming logs HTTP status and elapsed time (e.g., `warmed (200) in 1s ✅`)
+4. Chrome with CDP launch (cross-platform launcher)
+5. CDP verification
+   - Host/WSL checks are shown as reference
+   - Authoritative signal is the container’s ability to reach CDP (localhost:9222 via socat)
+
+Notes:
+- On WSL2, the container starts a socat proxy so dev3000 inside the container can connect to your host Chrome via `localhost:9222`.
+- Experimental turbopack filesystem cache flags are disabled on stable Next.js (only supported on latest canary).
+
 - **Logs Viewer**: http://localhost:3684/logs
 - **Chrome CDP**: http://localhost:9222/json/version
 

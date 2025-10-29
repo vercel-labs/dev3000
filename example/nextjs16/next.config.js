@@ -1,5 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Reduce dev double-render overhead while keeping prod strict checks
+  reactStrictMode: process.env.NODE_ENV !== 'development',
   // Compiler optimizations
   compiler: {
     removeConsole: process.env.NODE_ENV === 'production',
@@ -25,6 +27,8 @@ const nextConfig = {
     optimizePackageImports: ['react', 'react-dom'],
     // Enable CSS chunking for better performance (Next.js 16+)
     cssChunking: 'strict',
+    // Note: Turbopack filesystem cache flags require latest canary of Next.js.
+    // Keep disabled on stable to avoid startup failures.
   },
 
   // Logging configuration

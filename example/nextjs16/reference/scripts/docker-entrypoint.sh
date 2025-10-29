@@ -9,6 +9,21 @@ cd /app/frontend || exit 1
 
 echo "Dev3000 Container Starting..."
 echo "Working directory: $(pwd)"
+echo "PWD check (inside entrypoint): $(pwd)"
+
+# Quiet npm if it gets invoked indirectly by any tool
+export NPM_CONFIG_LOGLEVEL=silent
+export NPM_CONFIG_FUND=false
+export NPM_CONFIG_AUDIT=false
+export NPM_CONFIG_PROGRESS=false
+export NPM_CONFIG_UPDATE_NOTIFIER=false
+
+# Clean leftover NPX cache to avoid ENOTEMPTY cleanup warnings
+if [ -d "/root/.npm/_npx" ]; then
+  echo "[NPM] Cleaning leftover NPX cache at /root/.npm/_npx ..."
+  rm -rf /root/.npm/_npx/* 2>/dev/null || true
+  echo "[NPM] NPX cache cleaned"
+fi
 
 # Check if package.json exists
 if [ ! -f package.json ]; then
