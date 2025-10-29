@@ -75,11 +75,11 @@ node -e "
 
 # Update changelog
 echo "📝 Updating changelog..."
-npx tsx scripts/update-changelog.ts "v$NEXT_VERSION"
+bunx tsx scripts/update-changelog.ts "v$NEXT_VERSION"
 
 # Generate CHANGELOG.md from changelog.ts
 echo "📝 Generating CHANGELOG.md..."
-npx tsx scripts/generate-changelog-md.ts
+bunx tsx scripts/generate-changelog-md.ts
 
 # Commit version change and changelog
 echo "📝 Committing version change and changelog..."

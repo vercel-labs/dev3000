@@ -352,8 +352,8 @@ dev3000 と他の MCP サーバーを同時に使用できます：
       "args": ["/mnt/d/github/dev3000/scripts/mcp-stdio-bridge.js"]
     },
     "filesystem": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/allowed/files"]
+      "command": "bunx",
+      "args": ["@modelcontextprotocol/server-filesystem", "/path/to/allowed/files"]
     }
   }
 }

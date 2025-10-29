@@ -4,7 +4,9 @@ import { join } from "node:path"
 import { NextResponse } from "next/server"
 import { getMCPClientManager } from "@/app/mcp/client-manager"
 
-export const dynamic = "force-dynamic"
+// MIGRATED: Removed export const dynamic = "force-dynamic" (incompatible with Cache Components)
+// This route reads from filesystem which is dynamic by nature
+// No "use cache" needed - dynamic by default with Cache Components
 
 export async function GET(_request: Request) {
   const clientManager = getMCPClientManager()

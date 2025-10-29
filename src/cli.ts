@@ -1,5 +1,6 @@
 #!/usr/bin/env -S node --no-warnings
 
+import { execSync, spawn } from "node:child_process"
 import chalk from "chalk"
 import { Command } from "commander"
 import { existsSync, readFileSync } from "fs"
@@ -31,7 +32,7 @@ function detectPythonCommand(debug = false): string {
 
   // Check if python3 is available and prefer it
   try {
-    require("child_process").execSync("python3 --version", { stdio: "ignore" })
+    execSync("python3 --version", { stdio: "ignore" })
     if (debug) {
       console.log(`[DEBUG] python3 is available, using python3`)
     }
@@ -150,7 +151,6 @@ function getVersion(): string {
 
     // Use git to detect if we're in the dev3000 source repository
     try {
-      const { execSync } = require("child_process")
       const gitRemote = execSync("git remote get-url origin 2>/dev/null", {
         cwd: packageRoot,
         encoding: "utf8"
@@ -253,7 +253,6 @@ program
     if (options.killMcp) {
       console.log(chalk.yellow("🛑 Killing MCP server on port 3684..."))
       try {
-        const { spawn } = require("child_process")
         await new Promise<void>((resolve) => {
           const killProcess = spawn("sh", ["-c", "lsof -ti:3684 | xargs kill -9"], { stdio: "inherit" })
           killProcess.on("exit", () => resolve())

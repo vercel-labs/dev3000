@@ -448,7 +448,7 @@ This gracefully shuts down:
 **Solution**:
 1. Start dev3000 in your project
 2. Reproduce the issue
-3. Share your log file (found at `~/.d3k/logs/dev3000-[project]-[timestamp].log`)
+3. Share your log file (found at `~/.d3k/logs/[project]-[timestamp].log`)
 4. Teammate can review the exact sequence of events
 5. Both can ask AI the same questions using shared log context
 
@@ -567,10 +567,10 @@ dev3000
 **Solutions**:
 ```bash
 # Check current log file
-cat ~/.d3k/logs/dev3000-*  # Should show recent logs
+cat ~/.d3k/logs/*-*.log  # Should show recent logs
 
 # Verify MCP server can access logs
-curl http://localhost:3684/api/logs/stream?logPath=$(ls -t ~/.d3k/logs/dev3000-* | head -1)
+curl "http://localhost:3684/api/logs/stream?logPath=$(ls -t ~/.d3k/logs/*-*.log | head -1)"
 
 # Set explicit log path
 export LOG_FILE_PATH="/tmp/d3k.log"
@@ -619,7 +619,7 @@ ls -la node_modules/dev3000/mcp-server/public/screenshots/
 mkdir -p node_modules/dev3000/mcp-server/public/screenshots
 
 # Verify screenshots are being taken
-tail -f ~/.d3k/logs/dev3000-* | grep SCREENSHOT
+tail -f ~/.d3k/logs/*-*.log | grep SCREENSHOT
 ```
 
 ## Advanced Features
@@ -687,15 +687,15 @@ Each profile maintains:
 dev3000 automatically manages logs:
 
 - **Retention**: Keeps 10 most recent log files per project
-- **Location**: `~/.d3k/logs/dev3000-[project]-[timestamp].log`
+- **Location**: `~/.d3k/logs/[project]-[timestamp].log`
 - **Format**: Timestamped entries with source tags `[SERVER]` or `[BROWSER]`
 - **Search**: Use grep or the MCP search tools
   ```bash
   # Find all errors
-  grep "ERROR" ~/.d3k/logs/dev3000-*
+  grep "ERROR" ~/.d3k/logs/*-*.log
 
   # Find network failures
-  grep "NETWORK.*[45][0-9][0-9]" ~/.d3k/logs/dev3000-*
+  grep "NETWORK.*[45][0-9][0-9]" ~/.d3k/logs/*-*.log
   ```
 
 ### Browser Automation and Replay

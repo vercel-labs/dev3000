@@ -21,7 +21,7 @@ echo '{"name":"test-d3k","private":true}' > package.json
 npm install "../$TARBALL"
 
 # Test that d3k works
-if npx d3k --version; then
+if bunx d3k --version; then
     echo "✅ d3k works!"
 else
     echo "❌ d3k failed"

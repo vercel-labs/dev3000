@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-const { existsSync } = require("fs")
-const { dirname, join } = require("path")
+import { existsSync } from "node:fs"
+import { dirname, join } from "node:path"
+import { pathToFileURL } from "node:url"
 
 function isGlobalInstall() {
   const packageRoot = dirname(__dirname)
@@ -51,7 +52,7 @@ function checkInstallation() {
   }
 }
 
-// Only run if this is the main module
-if (require.main === module) {
+// Only run if executed directly (not imported)
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   checkInstallation()
 }

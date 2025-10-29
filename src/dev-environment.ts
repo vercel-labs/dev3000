@@ -1,5 +1,5 @@
+import { type ChildProcess, execSync, spawn } from "node:child_process"
 import chalk from "chalk"
-import { type ChildProcess, spawn } from "child_process"
 import {
   appendFileSync,
   copyFileSync,
@@ -367,9 +367,9 @@ async function ensureOpenCodeMcpServers(
 
     let added = false
 
-    // Add dev3000 MCP server - use npx with mcp-client to connect to HTTP server
-    // NOTE: dev3000 now acts as an MCP orchestrator/gateway that internally
-    // spawns and connects to chrome-devtools-mcp and next-devtools-mcp as stdio processes
+    // Add dev3000 MCP server (remote HTTP endpoint)
+    // NOTE: dev3000 acts as an MCP orchestrator/gateway that internally
+    // spawns chrome-devtools-mcp / next-devtools-mcp as stdio processes via bunx
     if (!settings.mcp[MCP_NAMES.DEV3000]) {
       settings.mcp[MCP_NAMES.DEV3000] = {
         type: "remote",
@@ -542,6 +542,7 @@ export class DevEnvironment {
   private firstSigintTime: number | null = null
   private chromeDevtoolsSupported: boolean = false
   private portDetected: boolean = false
+  private preflightIssues: string[] = []
 
   constructor(options: DevEnvironmentOptions) {
     // Handle portMcp vs mcpPort naming
@@ -578,7 +579,6 @@ export class DevEnvironment {
 
       // Use git to detect if we're in the dev3000 source repository
       try {
-        const { execSync } = require("child_process")
         const gitRemote = execSync("git remote get-url origin 2>/dev/null", {
           cwd: packageRoot,
           encoding: "utf8"
@@ -756,7 +756,10 @@ export class DevEnvironment {
 
             if (!isListening) {
               this.debugLog(`Health check failed: Port ${port} is no longer in use (HTTP check)`)
-              this.fileLogger.log("server", `Health check failed: Critical process on port ${port} is no longer running`)
+              this.fileLogger.log(
+                "server",
+                `Health check failed: Critical process on port ${port} is no longer running`
+              )
               return false
             }
           } catch (httpError) {
@@ -839,6 +842,10 @@ export class DevEnvironment {
       // Check ports in background after TUI is visible
       await this.tui.updateStatus("Checking ports...")
       await this.checkPortsAvailable(true) // silent mode for TUI
+
+      // Preflight checks (surface permissions/missing files before server start)
+      await this.tui.updateStatus("Running preflight checks...")
+      this.runPreflightChecks()
 
       // Update the app port in TUI (may have changed during port check)
       this.tui.updateAppPort(this.options.port)
@@ -959,6 +966,10 @@ export class DevEnvironment {
       this.spinner.text = "Setting up environment..."
       // Write our process group ID to PID file for cleanup
       writeFileSync(this.pidFile, process.pid.toString())
+
+      // Preflight checks (surface permissions/missing files before server start)
+      this.spinner.text = "Running preflight checks..."
+      this.runPreflightChecks()
 
       // Setup cleanup handlers
       this.setupCleanupHandlers()
@@ -1107,6 +1118,8 @@ export class DevEnvironment {
         // Show critical errors to console (parser determines what's critical)
         if (entry.isCritical && entry.rawMessage) {
           console.error(chalk.red("[ERROR]"), entry.rawMessage)
+          // Add actionable suggestions into D3K log and main log
+          this.handleErrorSuggestion(entry.rawMessage)
         }
       })
     })
@@ -1286,6 +1299,141 @@ export class DevEnvironment {
           this.tui.updateAppPort(this.options.port)
         }
       }
+    }
+  }
+
+  /**
+   * Map known error patterns to actionable suggestions and log them.
+   * Suggestions are written to both the project log and the D3K log.
+   */
+  private handleErrorSuggestion(message: string) {
+    type Advice = { pattern: RegExp; title: string; details: string[] }
+
+    const advices: Advice[] = [
+      {
+        pattern: /No package\.json found\s+in\s+\S*\/app\/frontend/i,
+        title: "package.json が見つかりません",
+        details: [
+          "原因候補: Docker イメージに package.json が COPY されていない、または bind mount により隠れている",
+          "対処: リポジトリのルートで `docker compose build --no-cache dev3000` を実行して再ビルド",
+          "対処: `docker compose up` はリポジトリのルートで実行 (build.context: frontend を前提)",
+          "対処: `frontend/package.json` が存在することを確認。存在するのに見えない場合は Volume 設定を確認",
+          "WSL2 の場合: Windows ドライブ直下ではなく Linux FS 上に配置することを推奨"
+        ]
+      },
+      {
+        pattern: /EACCES: permission denied, open\s+'([^']+)'/i,
+        title: "ファイル権限エラー (EACCES)",
+        details: [
+          "対象ファイルが読み取り/書き込み不可です。ホスト側の所有者やマウントの権限を確認してください",
+          "対処 (ホスト): `sudo chown -R $(id -u):$(id -g) frontend` で所有者を修正",
+          "対処 (ホスト): `rm -rf frontend/node_modules frontend/.next` を削除してから再ビルド",
+          "対処 (Docker): bind mount 先が read-only でないこと、Compose の `read_only: false` を確認",
+          "対処 (WSL2): Linux FS 上のパスへ移動、または権限の通るディレクトリに置き直し"
+        ]
+      },
+      {
+        pattern: /EACCES: permission denied, mkdir|EACCES: permission denied, copy|EACCES: permission denied/i,
+        title: "書き込み権限エラー (EACCES)",
+        details: [
+          "作業ディレクトリに書き込めません。コンテナ内の /app/frontend が書き込み可か確認",
+          "対処: entrypoint が実行する `chmod -R u+w /app/frontend` の効果を確認",
+          "対処: Docker で root 所有の生成物がある場合は削除して再生成 (node_modules, .next 等)"
+        ]
+      },
+      {
+        pattern: /(Cannot find module|Module not found).*next|^.*next dev.*not found/i,
+        title: "Next.js が見つかりません",
+        details: [
+          "依存関係が未インストールの可能性があります",
+          "対処 (ローカル): `pnpm install` を実行",
+          "対処 (Docker): エントリポイントが自動で `pnpm install` します。ログに EACCES が出る場合は上の権限対処を実施"
+        ]
+      }
+    ]
+
+    for (const advice of advices) {
+      const m = advice.pattern.exec(message)
+      if (m) {
+        const header = `🪪 トラブルシュート: ${advice.title}`
+        this.fileLogger.log("server", header)
+        for (const line of advice.details) {
+          this.fileLogger.log("server", `ADVICE: ${line}`)
+        }
+        this.logD3K(`${header}`)
+        for (const line of advice.details) {
+          this.logD3K(`ADVICE: ${line}`)
+        }
+        break
+      }
+    }
+  }
+
+  /**
+   * Run preflight checks to proactively surface common misconfigurations and EACCES issues.
+   * Writes a concise, actionable summary to the D3K log and to the main project log.
+   */
+  private runPreflightChecks(): void {
+    this.preflightIssues = []
+
+    const cwd = process.cwd()
+    const reqFiles = ["package.json", "tsconfig.json"]
+    for (const f of reqFiles) {
+      if (!existsSync(f)) {
+        this.preflightIssues.push(`${f} が見つかりません (${join(cwd, f)})`)
+      } else {
+        try {
+          // Ensure we can read the file
+          readFileSync(f, "utf8")
+        } catch (e) {
+          this.preflightIssues.push(`${f} を読み取れません (権限/EACCES): ${(e as Error).message}`)
+        }
+      }
+    }
+
+    // Write test: can we write inside the project directory? Use a temp file and clean it up
+    const writeProbe = `.d3k-write-probe-${Date.now()}`
+    try {
+      writeFileSync(writeProbe, "ok")
+      unlinkSync(writeProbe)
+    } catch (e) {
+      this.preflightIssues.push(`作業ディレクトリへ書き込みできません (EACCES): ${(e as Error).message}`)
+    }
+
+    // Check for Bun (bunx) availability for MCP orchestration and scripts
+    try {
+      execSync("bunx --version", { stdio: "ignore" })
+    } catch (_e) {
+      this.preflightIssues.push(
+        "Bun (bunx) が見つかりません。MCP オーケストレーションやスクリプト実行に使用します。https://bun.sh/ の手順でインストールしてください"
+      )
+    }
+
+    if (this.preflightIssues.length > 0) {
+      const header = `🧪 Preflight チェックで ${this.preflightIssues.length} 件の問題を検出しました`
+      this.fileLogger.log("server", header)
+      this.logD3K(header)
+
+      for (const issue of this.preflightIssues) {
+        this.fileLogger.log("server", `PRECHECK: ${issue}`)
+        this.logD3K(`PRECHECK: ${issue}`)
+      }
+
+      // Provide consolidated advice
+      const genericAdvice = [
+        "Docker 利用時はルートで `docker compose build --no-cache dev3000 && docker compose up` を実行",
+        "WSL2 の場合は Linux FS へ配置し、Windows ドライブ直下を避ける",
+        "ホストで `sudo chown -R $(id -u):$(id -g) frontend` により所有権を修正",
+        "root 所有の生成物 (frontend/node_modules, frontend/.next) を削除して再生成"
+      ]
+      this.fileLogger.log("server", "NEXT ACTIONS:")
+      this.logD3K("NEXT ACTIONS:")
+      for (const a of genericAdvice) {
+        this.fileLogger.log("server", ` - ${a}`)
+        this.logD3K(` - ${a}`)
+      }
+    } else {
+      this.logD3K("Preflight チェック: 問題は見つかりませんでした")
     }
   }
 
@@ -1514,9 +1662,9 @@ export class DevEnvironment {
             mcpCommand = [nextBinPath, "start"]
             mcpCwd = mcpServerPath
           } else {
-            // Fallback to npx with the exact version we built with
-            this.debugLog(`Global install with pre-built server - using npx next start`)
-            mcpCommand = ["npx", "--yes", "next@15.5.1-canary.30", "start"]
+            // Fallback to bunx with the exact version we built with (avoid npx ephemeral cache issues)
+            this.debugLog(`Global install with pre-built server - using bunx next start`)
+            mcpCommand = ["bunx", "next@15.5.1-canary.30", "start"]
             mcpCwd = mcpServerPath
           }
         }

@@ -10,6 +10,49 @@ cd /app/frontend || exit 1
 echo "Dev3000 Container Starting..."
 echo "Working directory: $(pwd)"
 
+# Quiet npm if it gets invoked indirectly by any tool (suppress noisy cleanup warns)
+export NPM_CONFIG_LOGLEVEL=silent
+export NPM_CONFIG_FUND=false
+export NPM_CONFIG_AUDIT=false
+export NPM_CONFIG_PROGRESS=false
+export NPM_CONFIG_UPDATE_NOTIFIER=false
+
+# Clean up any leftover npx cache to avoid ENOTEMPTY cleanup warnings
+if [ -d "/root/.npm/_npx" ]; then
+  echo "[NPM] Cleaning leftover NPX cache at /root/.npm/_npx ..."
+  rm -rf /root/.npm/_npx/* 2>/dev/null || true
+  echo "[NPM] NPX cache cleaned"
+fi
+
+# Show hot-reload mount status
+echo ""
+echo "🧩 Hot Reload mounts"
+
+is_mounted() {
+  awk -v p="$1" '$5==p {found=1} END {exit !found}' /proc/self/mountinfo 2>/dev/null && echo "mounted" || echo "not-mounted"
+}
+
+fs_type() {
+  awk -v p="$1" '$5==p { split($0,a," - "); split(a[2],b," "); print b[1]; exit }' /proc/self/mountinfo 2>/dev/null || true
+}
+
+log_mount() {
+  path="$1"; label="$2"
+  status=$(is_mounted "$path")
+  fstype=$(fs_type "$path")
+  writable="no"; [ -w "$path" ] && writable="yes"
+  if [ -n "$fstype" ]; then
+    echo " - $label: $path [$status, $fstype, writable:$writable]"
+  else
+    echo " - $label: $path [$status, writable:$writable]"
+  fi
+}
+
+log_mount "/app/frontend/app" "bind"
+log_mount "/app/frontend/public" "bind"
+log_mount "/app/frontend/node_modules" "volume"
+log_mount "/app/frontend/.next" "volume"
+
 # Check if package.json exists
 if [ ! -f package.json ]; then
   echo "Error: No package.json found in /app/frontend"
@@ -25,8 +68,8 @@ if [ ! -f node_modules/.bin/next ]; then
   pnpm config set store-dir /tmp/.pnpm-store
   pnpm config set cache-dir /tmp/.pnpm-cache
   # Install with config to avoid WSL2 permission issues
-  # Using lockfile for reproducible builds
-  pnpm install --config.package-import-method=hardlink || exit 1
+  # Using frozen lockfile to avoid modifying host bind mounts (.yaml temp files)
+  pnpm install --frozen-lockfile --config.package-import-method=hardlink || exit 1
   echo "✅ Dependencies installed"
 else
   echo "✅ Dependencies already installed"

@@ -69,7 +69,7 @@ This is a pnpm workspace with three main packages:
 1. User's dev server → stdout/stderr → captured by `dev-environment.ts`
 2. Browser console/errors → CDP → captured by `cdp-monitor.ts`
 3. Both streams → consolidated into single timestamped log file
-4. Log file → stored in `~/.d3k/logs/dev3000-[project]-[timestamp].log`
+4. Log file → stored in `~/.d3k/logs/[project]-[timestamp].log`
 5. MCP server → reads log file via SSE streaming → serves to UI and AI tools
 
 **Log Rotation**: Keeps 10 most recent log files per project (managed in `dev-environment.ts`)

@@ -26,6 +26,15 @@ services:
 
     # Volume mounts - removed to avoid WSL2 permission issues
     # Application files are copied into image during build
+    #
+    # Hot reload: enable bind mount for source, but keep node_modules/.next as container volumes
+    volumes:
+      # Bind-mount only source dirs needed for HMR to avoid WSL2 permission issues on root
+      - ./frontend/app:/app/frontend/app:delegated
+      - ./frontend/public:/app/frontend/public:delegated
+      # Keep build artifacts and deps inside container
+      - /app/frontend/node_modules
+      - /app/frontend/.next
 
     # Environment variables
     environment:
@@ -54,6 +63,9 @@ services:
       # File watching for hot reload (required for Docker/WSL)
       - CHOKIDAR_USEPOLLING=true
       - WATCHPACK_POLLING=true
+      # Reduce polling frequency to lower overhead in dev and speed up HMR/first render
+      - WATCHPACK_POLLING_INTERVAL=1000
+      - CHOKIDAR_INTERVAL=500
 
       # Next.js configuration
       - NEXT_TELEMETRY_DISABLED=1

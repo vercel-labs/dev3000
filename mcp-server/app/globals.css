@@ -73,11 +73,9 @@
 
 @layer base {
   * {
-    /* biome-ignore lint/suspicious/noUnknownAtRules: Tailwind CSS @apply directive */
     @apply border-border outline-ring/50;
   }
   body {
-    /* biome-ignore lint/suspicious/noUnknownAtRules: Tailwind CSS @apply directive */
     @apply bg-background text-foreground;
   }
 }

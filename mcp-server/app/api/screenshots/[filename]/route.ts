@@ -1,6 +1,7 @@
 import { existsSync } from "fs"
 import { readFile } from "fs/promises"
 import { type NextRequest, NextResponse } from "next/server"
+import { tmpdir } from "os"
 import { join } from "path"
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ filename: string }> }) {
@@ -24,7 +25,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
       if (isGlobalInstall) {
         // Global install - check temp directory
-        const tmpDir = join(require("os").tmpdir(), "dev3000-mcp-deps", "public", "screenshots", filename)
+        const tmpDir = join(tmpdir(), "dev3000-mcp-deps", "public", "screenshots", filename)
         screenshotPath = tmpDir
       } else {
         // Local install - use current working directory

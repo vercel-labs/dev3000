@@ -40,7 +40,7 @@ The monitoring script watches for:
 
 ```
 🔍 Starting dev3000 error monitoring...
-📁 Watching: /Users/name/.d3k/logs/dev3000-myapp-2025-01-22.log
+📁 Watching: /Users/name/.d3k/logs/myapp-2025-01-22.log
 ⏱️  Check interval: 5 seconds
 🛑 Press Ctrl+C to stop monitoring
 ------------------------------------------------------------

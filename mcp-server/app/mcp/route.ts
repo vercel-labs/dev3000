@@ -1,4 +1,5 @@
-import { readdirSync, readFileSync } from "node:fs"
+import { execSync } from "node:child_process"
+import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
 import type { Tool } from "@modelcontextprotocol/sdk/types.js"
@@ -14,39 +15,15 @@ import {
   TOOL_DESCRIPTIONS
 } from "./tools"
 
-// Detect available package runner (bunx, npx, pnpm dlx, or fail)
+// Detect available package runner (bunx only, per request)
 const getPackageRunner = (): { command: string; args: string[] } | null => {
   try {
-    const { execSync } = require("node:child_process")
-
-    // Try bunx first (fastest)
-    try {
-      execSync("bunx --version", { stdio: "ignore" })
-      return { command: "bunx", args: [] }
-    } catch {
-      // bunx not available
-    }
-
-    // Try npx (most common)
-    try {
-      execSync("npx --version", { stdio: "ignore" })
-      return { command: "npx", args: ["-y"] }
-    } catch {
-      // npx not available or is aliased to pnpm dlx
-    }
-
-    // Try pnpm dlx as fallback
-    try {
-      execSync("pnpm --version", { stdio: "ignore" })
-      return { command: "pnpm", args: ["dlx"] }
-    } catch {
-      // pnpm not available
-    }
-
-    console.error("[MCP Orchestrator] No package runner found (bunx, npx, or pnpm) - cannot spawn MCP servers")
-    return null
-  } catch (error) {
-    console.error("[MCP Orchestrator] Failed to detect package runner:", error)
+    execSync("bunx --version", { stdio: "ignore" })
+    return { command: "bunx", args: [] }
+  } catch {
+    console.error(
+      "[MCP Orchestrator] bunx not found. Please install Bun (https://bun.sh/) so we can spawn downstream MCP servers."
+    )
     return null
   }
 }
@@ -63,7 +40,6 @@ const initializeOrchestration = async () => {
 
     try {
       // Read all *.json session files
-      const { readdirSync, existsSync } = require("node:fs")
       if (!existsSync(sessionDir)) return config
 
       const sessionFiles = readdirSync(sessionDir).filter((f: string) => f.endsWith(".json"))

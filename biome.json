@@ -30,9 +30,21 @@
       "quoteStyle": "double"
     }
   },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  },
   "overrides": [
     {
       "includes": ["**/next-env.d.ts"],
+      "formatter": {
+        "enabled": false
+      }
+    }
+    ,
+    {
+      "includes": ["scripts/check-cdp.mjs"],
       "formatter": {
         "enabled": false
       }

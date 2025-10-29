@@ -1,21 +1,25 @@
 # Dev3000 Development Makefile
 # Simplified development workflow for Docker-based dev3000
 
-.PHONY: help dev-up dev-down dev-logs dev-rebuild dev-rebuild-fast dev3000-sync dev-rebuild-frontend clean clean-frontend deploy-frontend deploy-and-start list-examples start-chrome-cdp stop-chrome-cdp status
+.PHONY: help dev-up dev-down dev-logs dev-rebuild dev-rebuild-fast dev3000-sync dev-rebuild-frontend clean clean-frontend deploy-frontend deploy-and-start list-examples start-chrome-cdp start-chrome-cdp-xplat stop-chrome-cdp status cdp-check dev-build dev-build-fast
 
 # Default target
 .DEFAULT_GOAL := help
 
-# Detect environment and set CDP URL
+# Use a single bash shell per recipe to preserve variables like START_TS/END_TS
+SHELL := /bin/bash
+.ONESHELL:
+.SHELLFLAGS := -lc
+
+# Resolve absolute directory of this Makefile for robust cd in recipes (deferred evaluation)
+MAKEFILE_DIR = $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
+
+# Detect environment
 IS_WSL2 := $(shell grep -qi microsoft /proc/version 2>/dev/null && echo 1 || echo 0)
-ifeq ($(IS_WSL2),1)
-    HOST_IP := $(shell ip route | grep default | awk '{print $$3}' || echo "127.0.0.1")
-    CDP_URL := http://$(HOST_IP):9222
-    CDP_CHECK_URL := http://$(HOST_IP):9222/json/version
-else
-    CDP_URL := http://localhost:9222
-    CDP_CHECK_URL := http://localhost:9222/json/version
-endif
+
+# CDP URLs always use localhost (WSL2 uses socat proxy in container)
+CDP_URL := http://localhost:9222
+CDP_CHECK_URL := http://localhost:9222/json/version
 
 ## ========== Quick Start ==========
 
@@ -33,14 +37,16 @@ help: ## Show this help message
 ## ========== Docker Development ==========
 
 dev-up: ## Start dev3000 in Docker (launches Chrome automatically)
+	@START_TS=$$(date +%s); echo "[RUN] Start: $$(date '+%Y-%m-%d %H:%M:%S')"
 	@echo "Starting dev3000 development environment..."
 	@echo ""
 	@echo "Step 1: Starting Docker containers..."
 	@docker compose up -d
 	@echo ""
 	@echo "Step 2: Waiting for Next.js to be ready..."
-	@i=1; while [ $$i -le 60 ]; do \
+	@NEXT_READY=0; i=1; while [ $$i -le 60 ]; do \
 		if curl -s http://localhost:3000 > /dev/null 2>&1; then \
+			NEXT_READY=1; \
 			echo "✅ Next.js is ready!"; \
 			break; \
 		fi; \
@@ -53,18 +59,96 @@ dev-up: ## Start dev3000 in Docker (launches Chrome automatically)
 		i=$$((i + 1)); \
 	done
 	@echo ""
-	@echo "Step 3: Launching Chrome with CDP..."
-	@$(MAKE) start-chrome-cdp
-	@echo ""
-	@echo "Step 4: Verifying CDP connection from host..."
-	@if curl -s $(CDP_CHECK_URL) > /dev/null 2>&1; then \
-		echo "✅ CDP connection verified ($(CDP_CHECK_URL))"; \
-		BROWSER_VER=$$(curl -s $(CDP_CHECK_URL) | grep -o '"Browser":"[^"]*"' | cut -d'"' -f4); \
-		echo "   Browser: $$BROWSER_VER"; \
+	@if [ "$$NEXT_READY" = "1" ]; then \
+		echo "Step 2.5: Warming common routes (compile ahead of time)..."; \
+			for route in "/" "/demos/counter" "/demos/server-actions" "/demos/parallel-routes"; do \
+				START_RT=$$(date +%s); \
+				echo "  → warming http://localhost:3000$$route"; \
+				code=$$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:3000$$route" || echo 000); \
+				END_RT=$$(date +%s); EL=$$((END_RT-START_RT)); \
+				if [ "$$code" -ge 200 ] && [ "$$code" -lt 300 ]; then \
+					echo "    warmed ($$code) in $${EL}s ✅"; \
+				else \
+					echo "    warmed ($$code) in $${EL}s ⚠️"; \
+				fi; \
+			done; \
 	else \
-		echo "⚠️  Could not verify CDP connection ($(CDP_CHECK_URL))"; \
-		echo "Dev3000 may not be able to monitor browser events."; \
+		echo "Step 2.5: Skipping route warming (Next not ready)"; \
 	fi
+	@echo ""
+		@echo "[CDP] Step 3: Launching Chrome with CDP..."
+			@APP_URL="http://localhost:3000/"; \
+			if ! /usr/bin/env bash -lc 'cd "$(pwd -P 2>/dev/null || pwd)" && node scripts/launch-chrome-cdp.js --app-url '"$$APP_URL"' --check-url "$(CDP_CHECK_URL)" --cdp-port 9222'; then \
+				echo "[CDP] ⚠️  Chrome launcher exited with error (check logs)"; \
+			fi
+	@echo ""
+	@echo "[CDP] Step 4: Verifying CDP connection (host + container)"
+		@if echo "[CDP][ref] Host curl: curl -sSf $(CDP_CHECK_URL)"; curl -sSf $(CDP_CHECK_URL) > /dev/null 2>&1; then \
+		echo "[CDP][ref] Host curl: OK"; \
+		BROWSER_VER=$$(curl -s $(CDP_CHECK_URL) | grep -o '"Browser":"[^"]*"' | cut -d'"' -f4); \
+		echo "[CDP][ref] Browser: $$BROWSER_VER"; \
+	else \
+				if [ "$(IS_WSL2)" = "1" ]; then \
+					echo "[CDP][ref] Windows curl.exe check: $(CDP_CHECK_URL)"; \
+					WIN_CURL=$$(command -v curl.exe 2>/dev/null || echo "$${WINDIR}\\System32\\curl.exe"); \
+					if [ -n "$$WIN_CURL" ]; then \
+								echo "[CDP][ref] Windows curl.exe: $$WIN_CURL -sSf $(CDP_CHECK_URL)"; "$$WIN_CURL" -sSf $(CDP_CHECK_URL) > /dev/null 2>&1; RC=$$?; \
+							if [ $$RC -eq 0 ]; then \
+							BROWSER_VER=$$("$$WIN_CURL" -s $(CDP_CHECK_URL) | sed -n 's/.*\"Browser\":\"\([^\"]*\)\".*/\1/p'); \
+							echo "[CDP][ref] Windows curl.exe: OK"; \
+							if [ -n "$$BROWSER_VER" ]; then echo "[CDP][ref] Browser: $$BROWSER_VER"; fi; \
+						else \
+							echo "[CDP][ref] Windows curl.exe: NG (exit=$$RC)"; \
+						fi; \
+					else \
+						echo "[CDP][ref] Windows curl.exe: not found; skip fallback"; \
+					fi; \
+		else \
+				echo "[CDP][ref] Host curl: NG"; \
+		fi; \
+		fi
+		@# Container-side verification (ensure container running, then curl inside)
+		@if ! docker ps --format '{{.Names}}' | grep -q '^dev3000$$'; then \
+			echo "[CDP] Container not running. Starting dev3000..."; \
+			docker compose up -d >/dev/null 2>&1 || true; \
+			sleep 1; \
+		fi; \
+		if docker ps --format '{{.Names}}' | grep -q '^dev3000$$'; then \
+			DX_LOCAL_OUT=$$(docker exec dev3000 sh -lc 'curl -sSf http://localhost:9222/json/version 2>/dev/null || true'); \
+			DX_PROXY_INFO=$$(docker exec dev3000 sh -lc 'if command -v lsof >/dev/null 2>&1; then lsof -nP -iTCP:9222 -sTCP:LISTEN 2>/dev/null | awk '\''NR>1{print $$1,$$9}'\''; elif command -v ss >/dev/null 2>&1; then ss -ltnp 2>/dev/null | awk '\''/(:|\.)9222(\s|$)/ {print $$0; exit}'\''; fi' || true); \
+			if [ -n "$$DX_LOCAL_OUT" ]; then \
+				DX_BROWSER=$$(printf "%s" "$$DX_LOCAL_OUT" | sed -n 's/.*\"Browser\":\"\([^\"]*\)\".*/\1/p'); \
+				echo "[CDP] ✅ Container: localhost:9222 OK"; \
+				if [ -n "$$DX_BROWSER" ]; then echo "[CDP]    Browser(local): $$DX_BROWSER"; fi; \
+			else \
+				echo "[CDP] ⚠️  Container: localhost:9222 NG"; \
+			fi; \
+			DX_HOST_RC=$$(docker exec dev3000 sh -lc 'curl -sSf http://host.docker.internal:9222/json/version >/dev/null 2>&1; echo $$?'); \
+			if [ "$$DX_HOST_RC" = "0" ]; then \
+				echo "[CDP] ✅ Container: host.docker.internal:9222 OK"; \
+			else \
+				echo "[CDP] ⚠️  Container: host.docker.internal:9222 NG"; \
+			fi; \
+		else \
+			echo "[CDP] ⚠️  Container dev3000 not running; skip container checks"; \
+		fi; \
+			if [ -n "$$DX_LOCAL_OUT" ] || [ "$$DX_HOST_RC" = "0" ]; then \
+				echo "[CDP] ✅ Dev3000 CDP Ready (container reachable)"; \
+				if [ -n "$$DX_LOCAL_OUT" ]; then \
+					DX_PROXY_PROC=$$(printf "%s" "$$DX_PROXY_INFO" | awk 'NR==1{ if ($$1=="LISTEN") { match($$0,/users:\(\(([^,]+)/,m); if (m[1] != "") print m[1]; else print "" } else { print $$1 } }'); \
+					if [ -n "$$DX_PROXY_PROC" ]; then \
+						echo "[CDP]    Route: container localhost:9222 → proxy (listener: $$DX_PROXY_PROC) → Windows 127.0.0.1:9222"; \
+					else \
+						echo "[CDP]    Route: container localhost:9222 → proxy → Windows 127.0.0.1:9222"; \
+					fi; \
+					echo "[CDP]    Why: Dev3000 connects to CDP from inside the container via localhost:9222 listener"; \
+				else \
+					echo "[CDP]    Route: container → host.docker.internal:9222 (direct host)"; \
+					echo "[CDP]    Why: Dev3000 connects to CDP from inside the container directly to host"; \
+				fi; \
+			else \
+				echo "[CDP] ❌ Dev3000 CDP Not Ready (container cannot reach CDP)"; \
+			fi
 	@echo ""
 	@echo "✅ Development environment started"
 	@echo ""
@@ -75,8 +159,29 @@ dev-up: ## Start dev3000 in Docker (launches Chrome automatically)
 	@echo ""
 	@echo "View logs: make dev-logs"
 	@echo "Stop:      make dev-down"
+	@# Open logs UI automatically (best-effort)
+	@if [ "$(IS_WSL2)" = "1" ]; then \
+		echo "[LOGS] Opening http://localhost:3684/logs in Windows..."; \
+		cmd.exe /C start http://localhost:3684/logs >/dev/null 2>&1 || true; \
+	else \
+		if command -v xdg-open >/dev/null 2>&1; then \
+			echo "[LOGS] Opening http://localhost:3684/logs..."; \
+			if ! xdg-open http://localhost:3684/logs >/dev/null 2>&1; then \
+				echo "[LOGS] ⚠️  Failed to auto-open; visit: http://localhost:3684/logs"; \
+			fi; \
+		elif command -v open >/dev/null 2>&1; then \
+			echo "[LOGS] Opening http://localhost:3684/logs..."; \
+			if ! open http://localhost:3684/logs >/dev/null 2>&1; then \
+				echo "[LOGS] ⚠️  Failed to auto-open; visit: http://localhost:3684/logs"; \
+			fi; \
+		else \
+			echo "[LOGS] Visit: http://localhost:3684/logs"; \
+		fi; \
+	fi
+	@END_TS=$$(date +%s); ELAPSED=$$((END_TS-START_TS)); echo "[RUN] End:   $$(date '+%Y-%m-%d %H:%M:%S') (elapsed: $${ELAPSED}s)"
 
 dev-down: ## Stop dev3000 Docker environment
+	@START_TS=$$(date +%s); echo "[RUN] Start: $$(date '+%Y-%m-%d %H:%M:%S')"
 	@echo "Stopping development environment..."
 	@docker compose down
 	@echo ""
@@ -89,21 +194,41 @@ dev-down: ## Stop dev3000 Docker environment
 	else \
 		echo "  pkill -f 'chrome.*remote-debugging-port'"; \
 	fi
+	@END_TS=$$(date +%s); ELAPSED=$$((END_TS-START_TS)); echo "[RUN] End:   $$(date '+%Y-%m-%d %H:%M:%S') (elapsed: $${ELAPSED}s)"
 
 dev-logs: ## Follow Docker container logs
+	@START_TS=$$(date +%s); echo "[RUN] Start: $$(date '+%Y-%m-%d %H:%M:%S')"
 	@docker compose logs -f
+	@END_TS=$$(date +%s); ELAPSED=$$((END_TS-START_TS)); echo "[RUN] End:   $$(date '+%Y-%m-%d %H:%M:%S') (elapsed: $${ELAPSED}s)"
 
 dev-rebuild: ## Rebuild and restart Docker environment
+	@START_TS=$$(date +%s); echo "[RUN] Start: $$(date '+%Y-%m-%d %H:%M:%S')"
 	@echo "Rebuilding development environment..."
 	@docker compose down
 	@DOCKER_BUILDKIT=1 docker compose build --no-cache
 	@$(MAKE) dev-up
+	@END_TS=$$(date +%s); ELAPSED=$$((END_TS-START_TS)); echo "[RUN] End:   $$(date '+%Y-%m-%d %H:%M:%S') (elapsed: $${ELAPSED}s)"
 
 dev-rebuild-fast: ## Fast rebuild using cache (for minor changes)
+	@START_TS=$$(date +%s); echo "[RUN] Start: $$(date '+%Y-%m-%d %H:%M:%S')"
 	@echo "Fast rebuilding development environment (with cache)..."
 	@docker compose down
 	@DOCKER_BUILDKIT=1 docker compose build
 	@$(MAKE) dev-up
+	@END_TS=$$(date +%s); ELAPSED=$$((END_TS-START_TS)); echo "[RUN] End:   $$(date '+%Y-%m-%d %H:%M:%S') (elapsed: $${ELAPSED}s)"
+
+# Build-only targets (do not start or stop containers)
+dev-build: ## Build Docker images without cache (no start)
+	@START_TS=$$(date +%s); echo "[RUN] Start: $$(date '+%Y-%m-%d %H:%M:%S')"
+	@echo "Building images (no-cache)..."
+	@DOCKER_BUILDKIT=1 docker compose build --no-cache
+	@END_TS=$$(date +%s); ELAPSED=$$((END_TS-START_TS)); echo "[RUN] End:   $$(date '+%Y-%m-%d %H:%M:%S') (elapsed: $${ELAPSED}s)"
+
+dev-build-fast: ## Build Docker images with cache (no start)
+	@START_TS=$$(date +%s); echo "[RUN] Start: $$(date '+%Y-%m-%d %H:%M:%S')"
+	@echo "Building images (with cache)..."
+	@DOCKER_BUILDKIT=1 docker compose build
+	@END_TS=$$(date +%s); ELAPSED=$$((END_TS-START_TS)); echo "[RUN] End:   $$(date '+%Y-%m-%d %H:%M:%S') (elapsed: $${ELAPSED}s)"
 
 dev3000-sync: ## Update dev3000 submodule to latest version
 	@echo "🔄 Updating dev3000 submodule..."
@@ -237,53 +362,27 @@ list-examples: ## List available example apps
 	@echo "Deploy with: make deploy-frontend APP=<app-name>"
 	@echo "Deploy and start with: make deploy-and-start APP=<app-name>"
 
+cdp-check: ## Verify CDP reachability from Windows/WSL/Docker
+	@START_TS=$$(date +%s); echo "[RUN] Start: $$(date '+%Y-%m-%d %H:%M:%S')"
+	@echo "=== CDP Reachability Check ==="
+	@/usr/bin/env bash -lc 'cd "$(pwd -P 2>/dev/null || pwd)" && node scripts/check-cdp.mjs'
+	@END_TS=$$(date +%s); ELAPSED=$$((END_TS-START_TS)); echo "[RUN] End:   $$(date '+%Y-%m-%d %H:%M:%S') (elapsed: $${ELAPSED}s)"
+
 ## ========== Chrome CDP Management ==========
 
-start-chrome-cdp: ## Start Chrome with CDP (auto-detects WSL/Linux/macOS)
-	@echo "🌐 Starting Chrome with CDP..."
-	@if [ "$(IS_WSL2)" = "1" ]; then \
-		if curl -s $(CDP_CHECK_URL) > /dev/null 2>&1; then \
-			echo "✅ Chrome already running with CDP on port 9222"; \
-			BROWSER_VER=$$(curl -s $(CDP_CHECK_URL) | grep -o '"Browser":"[^"]*"' | cut -d'"' -f4); \
-			echo "   Version: $$BROWSER_VER"; \
-		else \
-			echo "Detected WSL2 environment"; \
-			echo "Starting Windows Chrome from WSL..."; \
-			echo "   Detected WSL2 host IP: $(HOST_IP)"; \
-			APP_URL="http://$(HOST_IP):3000/"; \
-			echo "   Application URL: $$APP_URL"; \
-			powershell.exe -Command "Start-Process chrome.exe -ArgumentList '--remote-debugging-port=9222','--remote-debugging-address=0.0.0.0','--user-data-dir=C:\\temp\\chrome-dev-profile','--no-first-run','--no-default-browser-check','$$APP_URL'" 2>/dev/null || \
-			cmd.exe /c "start chrome.exe --remote-debugging-port=9222 --remote-debugging-address=0.0.0.0 --user-data-dir=C:\\temp\\chrome-dev-profile --no-first-run --no-default-browser-check $$APP_URL" 2>/dev/null || \
-			echo "⚠️  Failed to start Chrome automatically. Please start Chrome manually:"; \
-			echo "   chrome.exe --remote-debugging-port=9222 --remote-debugging-address=0.0.0.0 --user-data-dir=C:\\temp\\chrome-dev-profile $$APP_URL"; \
-			sleep 3; \
-		fi; \
-	elif [ "$$(uname)" = "Darwin" ]; then \
-		echo "Detected macOS environment"; \
-		open -a "Google Chrome" --args --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-dev-profile --no-first-run --no-default-browser-check http://localhost:3000 & \
-		echo "✅ Chrome started with CDP"; \
-		sleep 3; \
-	else \
-		echo "Detected Linux environment"; \
-		google-chrome --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-dev-profile --no-first-run --no-default-browser-check http://localhost:3000 > /dev/null 2>&1 & \
-		echo "✅ Chrome started with CDP"; \
-		sleep 3; \
-	fi; \
-	echo ""; \
-	echo "Waiting for CDP endpoint to be ready..."; \
-	i=1; while [ $$i -le 5 ]; do \
-		if curl -s $(CDP_CHECK_URL) > /dev/null 2>&1; then \
-			echo "✅ CDP endpoint ready!"; \
-			break; \
-		fi; \
-		if [ $$i -eq 5 ]; then \
-			echo "⚠️  CDP endpoint not ready after 5 seconds"; \
-			echo "   Chrome may still be starting. Check manually: $(CDP_CHECK_URL)"; \
-		fi; \
-		echo -n "."; \
-		sleep 1; \
-		i=$$((i + 1)); \
-	done
+start-chrome-cdp: ## Start Chrome with CDP (now unified to cross-platform launcher)
+	@$(MAKE) start-chrome-cdp-xplat
+
+
+start-chrome-cdp-xplat: ## Start Chrome with CDP via cross-platform Node launcher
+	@echo "🌐 Starting Chrome with CDP (cross-platform launcher)..."
+	@echo "PWD: $$(pwd)"
+	@echo "CDP check URL: $(CDP_CHECK_URL)"
+	@APP_URL="http://localhost:3000/"; \
+	echo "App URL: $$APP_URL"; \
+	if ! /usr/bin/env bash -lc 'cd "$(pwd -P 2>/dev/null || pwd)" && node scripts/launch-chrome-cdp.js --app-url '"$$APP_URL"' --check-url "$(CDP_CHECK_URL)" --cdp-port 9222'; then \
+		echo "[CDP] ⚠️  Chrome launcher exited with error (check logs)"; \
+	fi
 
 stop-chrome-cdp: ## Stop Chrome CDP process
 	@echo "Stopping Chrome CDP..."

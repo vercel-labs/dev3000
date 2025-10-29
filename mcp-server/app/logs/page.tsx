@@ -1,6 +1,8 @@
+import { extractProjectNameFromLogFilename, logFilenameMatchesProject } from "@dev3000/src/utils/log-filename"
 import { existsSync, readdirSync, readFileSync, statSync } from "fs"
 import { redirect } from "next/navigation"
 import { basename, dirname, join } from "path"
+import { Suspense } from "react"
 import LogsClient from "./LogsClient"
 import { parseLogEntries } from "./utils"
 
@@ -19,14 +21,13 @@ async function getLogFiles() {
     const logDir = dirname(currentLogPath)
     const currentLogName = basename(currentLogPath)
 
-    // Extract project name from current log filename
-    const projectMatch = currentLogName.match(/^dev3000-(.+?)-\d{4}-\d{2}-\d{2}T/)
-    const projectName = projectMatch ? projectMatch[1] : "unknown"
+    // Extract project name from current log filename using shared utility
+    const projectName = extractProjectNameFromLogFilename(currentLogName) || "unknown"
 
     const dirContents = readdirSync(logDir)
     const logFiles = dirContents
-      // Get all dev3000 log files
-      .filter((file) => file.startsWith("dev3000-") && file.endsWith(".log"))
+      // Get all log files for this project
+      .filter((file) => logFilenameMatchesProject(file, projectName))
       .map((file) => {
         const filePath = join(logDir, file)
         const stats = statSync(filePath)
@@ -79,7 +80,9 @@ async function getLogData(logPath: string, mode: "head" | "tail" = "tail", lines
   }
 }
 
-export default async function LogsPage({ searchParams }: PageProps) {
+// MIGRATED for Cache Components: Wrapped dynamic filesystem operations in Suspense
+// This page reads from filesystem which is inherently dynamic
+async function LogsContent({ searchParams }: PageProps) {
   const version = process.env.DEV3000_VERSION || "0.0.0"
 
   // Await searchParams (Next.js 15 requirement)
@@ -90,17 +93,8 @@ export default async function LogsPage({ searchParams }: PageProps) {
 
   // If project parameter is provided, find latest file for that project
   if (params.project && !params.file) {
-    // Look for files that contain the project name (could be partial match)
-    const projectFiles = files.filter((f) => {
-      // Extract the project part from filename: dev3000-<project>-timestamp.log
-      const match = f.name.match(/^dev3000-(.+?)-\d{4}-\d{2}-\d{2}T/)
-      if (match) {
-        const fileProject = match[1]
-        // Check if the file project contains the requested project as substring
-        return fileProject.includes(params.project ?? "")
-      }
-      return false
-    })
+    // Look for files that match the project name (supports partial matching)
+    const projectFiles = files.filter((f) => logFilenameMatchesProject(f.name, params.project ?? ""))
     if (projectFiles.length > 0) {
       redirect(`/logs?file=${encodeURIComponent(projectFiles[0].name)}&mode=tail`)
     }
@@ -155,5 +149,13 @@ export default async function LogsPage({ searchParams }: PageProps) {
         mode
       }}
     />
+  )
+}
+
+export default function LogsPage({ searchParams }: PageProps) {
+  return (
+    <Suspense fallback={<div className="p-8 text-center">Loading logs...</div>}>
+      <LogsContent searchParams={searchParams} />
+    </Suspense>
   )
 }

@@ -1,3 +1,4 @@
+import { extractProjectNameFromLogFilename, logFilenameMatchesProject } from "@dev3000/src/utils/log-filename"
 import { existsSync, readdirSync, statSync } from "fs"
 import type { NextRequest } from "next/server"
 import { basename, dirname, join } from "path"
@@ -16,10 +17,8 @@ export async function GET(_request: NextRequest): Promise<Response> {
     const logDir = dirname(currentLogPath)
     const currentLogName = basename(currentLogPath)
 
-    // Extract project name from current log filename
-    // Format: dev3000-{projectName}-{timestamp}.log
-    const projectMatch = currentLogName.match(/^dev3000-(.+?)-\d{4}-\d{2}-\d{2}T/)
-    const projectName = projectMatch ? projectMatch[1] : "unknown"
+    // Extract project name from current log filename using shared utility
+    const projectName = extractProjectNameFromLogFilename(currentLogName) || "unknown"
 
     // Find all log files for this project
     const files: LogFile[] = []
@@ -27,7 +26,7 @@ export async function GET(_request: NextRequest): Promise<Response> {
     try {
       const dirContents = readdirSync(logDir)
       const logFiles = dirContents
-        .filter((file) => file.startsWith(`dev3000-${projectName}-`) && file.endsWith(".log"))
+        .filter((file) => logFilenameMatchesProject(file, projectName))
         .map((file) => {
           const filePath = join(logDir, file)
           const stats = statSync(filePath)

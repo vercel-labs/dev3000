@@ -1,9 +1,10 @@
 "use client"
 
 import NextImage from "next/image"
-import { use, useEffect, useState } from "react"
+import { Suspense, use, useEffect, useState } from "react"
 
-export default function VideoPlayer({ params }: { params: Promise<{ session: string }> }) {
+// MIGRATED for Cache Components: Wrapped dynamic params access in Suspense
+function _VideoPlayerContent({ params }: { params: Promise<{ session: string }> }) {
   const { session } = use(params)
   const [frames, setFrames] = useState<string[]>([])
   const [currentFrame, setCurrentFrame] = useState(0)
@@ -235,5 +236,13 @@ export default function VideoPlayer({ params }: { params: Promise<{ session: str
         </div>
       </div>
     </div>
+  )
+}
+
+export default function VideoPlayer({ params }: { params: Promise<{ session: string }> }) {
+  return (
+    <Suspense fallback={<div className="p-8 text-center">Loading video player...</div>}>
+      <_VideoPlayerContent params={params} />
+    </Suspense>
   )
 }
