@@ -38,26 +38,31 @@ help: ## Show this help message
 
 dev-up: ## Start dev3000 in Docker (launches Chrome automatically)
 	@START_TS=$$(date +%s); echo "[RUN] Start: $$(date '+%Y-%m-%d %H:%M:%S')"
+	@. scripts/make-helpers.sh
 	@echo "Starting dev3000 development environment..."
 	@echo ""
 	@echo "Step 1: Starting Docker containers..."
-	@docker compose up -d
+	@run_cmd "docker compose up" docker compose up -d
 	@echo ""
 	@echo "Step 2: Waiting for Next.js to be ready..."
-	@NEXT_READY=0; i=1; while [ $$i -le 60 ]; do \
-		if curl -s http://localhost:3000 > /dev/null 2>&1; then \
-			NEXT_READY=1; \
-			echo "✅ Next.js is ready!"; \
-			break; \
-		fi; \
-		if [ $$i -eq 60 ]; then \
-			echo "⚠️  Timeout waiting for Next.js (60s)"; \
-			echo "Services may still be starting. Check logs with: make dev-logs"; \
-		fi; \
-		echo -n "."; \
-		sleep 1; \
-		i=$$((i + 1)); \
-	done
+	@if [ "$$D3K_LOG_DRY_RUN" = "1" ]; then \
+		echo "[DRY-RUN] Skipping readiness wait"; \
+	else \
+		NEXT_READY=0; i=1; while [ $$i -le 60 ]; do \
+			if curl -s http://localhost:3000 > /dev/null 2>&1; then \
+				NEXT_READY=1; \
+				echo "✅ Next.js is ready!"; \
+				break; \
+			fi; \
+			if [ $$i -eq 60 ]; then \
+				echo "⚠️  Timeout waiting for Next.js (60s)"; \
+				echo "Services may still be starting. Check logs with: make dev-logs"; \
+			fi; \
+			echo -n "."; \
+			sleep 1; \
+			i=$$((i + 1)); \
+		done; \
+	fi
 	@echo ""
 	@if [ "$$NEXT_READY" = "1" ]; then \
 		echo "Step 2.5: Warming common routes (compile ahead of time)..."; \
@@ -78,7 +83,7 @@ dev-up: ## Start dev3000 in Docker (launches Chrome automatically)
 	@echo ""
 		@echo "[CDP] Step 3: Launching Chrome with CDP..."
 			@APP_URL="http://localhost:3000/"; \
-			if ! /usr/bin/env bash -lc 'cd "$(pwd -P 2>/dev/null || pwd)" && node scripts/launch-chrome-cdp.js --app-url '"$$APP_URL"' --check-url "$(CDP_CHECK_URL)" --cdp-port 9222'; then \
+			if ! /usr/bin/env bash -lc 'cd "$(pwd -P 2>/dev/null || pwd)" && . scripts/make-helpers.sh && run_cmd "launch chrome cdp" node scripts/launch-chrome-cdp.js --app-url '"$$APP_URL"' --check-url "$(CDP_CHECK_URL)" --cdp-port 9222'; then \
 				echo "[CDP] ⚠️  Chrome launcher exited with error (check logs)"; \
 			fi
 	@echo ""
@@ -107,8 +112,9 @@ dev-up: ## Start dev3000 in Docker (launches Chrome automatically)
 				echo "[CDP][ref] Host curl: NG"; \
 		fi; \
 		fi
-		@# Container-side verification (ensure container running, then curl inside)
-		@if ! docker ps --format '{{.Names}}' | grep -q '^dev3000$$'; then \
+		@if false; then \
+		# Container-side verification (ensure container running, then curl inside)
+		if ! docker ps --format '{{.Names}}' | grep -q '^dev3000$$'; then \
 			echo "[CDP] Container not running. Starting dev3000..."; \
 			docker compose up -d >/dev/null 2>&1 || true; \
 			sleep 1; \
@@ -148,7 +154,8 @@ dev-up: ## Start dev3000 in Docker (launches Chrome automatically)
 				fi; \
 			else \
 				echo "[CDP] ❌ Dev3000 CDP Not Ready (container cannot reach CDP)"; \
-			fi
+			fi; \
+		fi
 	@echo ""
 	@echo "✅ Development environment started"
 	@echo ""
@@ -364,14 +371,15 @@ list-examples: ## List available example apps
 
 cdp-check: ## Verify CDP reachability from Windows/WSL/Docker
 	@START_TS=$$(date +%s); echo "[RUN] Start: $$(date '+%Y-%m-%d %H:%M:%S')"
+	@. scripts/make-helpers.sh
 	@echo "=== CDP Reachability Check ==="
 	@# Ensure dev3000 container is running for container-side diagnostics
 	@if ! docker ps --format '{{.Names}}' | grep -q '^dev3000$$'; then \
 		echo "[CDP] dev3000 container not running. Starting via docker compose..."; \
-		docker compose up -d >/dev/null 2>&1 || true; \
+		. scripts/make-helpers.sh; run_cmd "docker compose up" docker compose up -d; \
 		sleep 1; \
 	fi
-	@/usr/bin/env bash -lc 'cd "$(pwd -P 2>/dev/null || pwd)" && node scripts/check-cdp.mjs'
+	@/usr/bin/env bash -lc 'cd "$(pwd -P 2>/dev/null || pwd)" && . scripts/make-helpers.sh && run_cmd "node scripts/check-cdp.mjs" node scripts/check-cdp.mjs'
 	@END_TS=$$(date +%s); ELAPSED=$$((END_TS-START_TS)); echo "[RUN] End:   $$(date '+%Y-%m-%d %H:%M:%S') (elapsed: $${ELAPSED}s)"
 
 ## ========== Chrome CDP Management ==========
