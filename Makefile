@@ -82,8 +82,8 @@ dev-up: ## Start dev3000 in Docker (launches Chrome automatically)
 				echo "[CDP] ⚠️  Chrome launcher exited with error (check logs)"; \
 			fi
 	@echo ""
-	@echo "[CDP] Step 4: Verifying CDP connection (host + container)"
-		@if echo "[CDP][ref] Host curl: curl -sSf $(CDP_CHECK_URL)"; curl -sSf $(CDP_CHECK_URL) > /dev/null 2>&1; then \
+	@echo "[CDP] Step 4: Running cdp-check diagnostics (host + container)"; $(MAKE) cdp-check
+		@if false; then \
 		echo "[CDP][ref] Host curl: OK"; \
 		BROWSER_VER=$$(curl -s $(CDP_CHECK_URL) | grep -o '"Browser":"[^"]*"' | cut -d'"' -f4); \
 		echo "[CDP][ref] Browser: $$BROWSER_VER"; \
@@ -365,6 +365,12 @@ list-examples: ## List available example apps
 cdp-check: ## Verify CDP reachability from Windows/WSL/Docker
 	@START_TS=$$(date +%s); echo "[RUN] Start: $$(date '+%Y-%m-%d %H:%M:%S')"
 	@echo "=== CDP Reachability Check ==="
+	@# Ensure dev3000 container is running for container-side diagnostics
+	@if ! docker ps --format '{{.Names}}' | grep -q '^dev3000$$'; then \
+		echo "[CDP] dev3000 container not running. Starting via docker compose..."; \
+		docker compose up -d >/dev/null 2>&1 || true; \
+		sleep 1; \
+	fi
 	@/usr/bin/env bash -lc 'cd "$(pwd -P 2>/dev/null || pwd)" && node scripts/check-cdp.mjs'
 	@END_TS=$$(date +%s); ELAPSED=$$((END_TS-START_TS)); echo "[RUN] End:   $$(date '+%Y-%m-%d %H:%M:%S') (elapsed: $${ELAPSED}s)"
 
