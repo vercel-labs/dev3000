@@ -1,4 +1,19 @@
 # Dev3000 Development Dockerfile
+# -----------------------------------------------------------------------------
+# monorepo example 版（実運用）
+# - example アプリのビルド検証に実際に使用されます。
+#
+# 参照（テンプレート版）:
+# - example/nextjs16/reference/Dockerfile.dev
+#   → 外部プロジェクトへコピーする想定の読みやすいテンプレートです。
+#
+# 同期ポリシー:
+# - 片方を更新したらもう片方にも反映してください（差分がある場合は理由をコメント化）。
+#
+# 同梱ポリシー (Bundling Policy):
+# - 本ファイルは npm 配布物には同梱しません（package.json の files を参照）。
+# - このリポの example 用であり、ユーザーは reference 版をコピーして利用します。
+# -----------------------------------------------------------------------------
 # This Dockerfile builds dev3000 and runs it with the user's frontend application
 #
 # Directory structure (user's project):
