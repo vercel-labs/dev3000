@@ -1,4 +1,29 @@
 #!/bin/sh
+# -----------------------------------------------------------------------------
+# Dev3000 monorepo entrypoint (実運用版)
+#
+# 用途:
+#   - 本リポジトリの Docker 開発環境で使用されるエントリポイントです。
+#   - `make deploy-frontend` 時に `frontend/.dev3000/scripts/docker-entrypoint.sh` へ
+#     コピーされ、コンテナ内で dev3000 を起動します。
+#
+# 参照（テンプレート版）:
+#   - example/nextjs16/reference/scripts/docker-entrypoint.sh
+#     → 外部プロジェクトへ導入する際にコピーしやすい最小構成のリファレンスです。
+#
+# 同期ポリシー:
+#   - ここを変更した場合、可能な限り reference 側にも反映してください。
+#   - 逆に、reference 側を保守した場合も本ファイルに差分を取り込むことを推奨します。
+#   - monorepo 固有の事情（ログや検証用出力など）は reference では簡略化して構いません。
+#
+# 関連ドキュメント:
+#   - example/nextjs16/INTEGRATION_GUIDE.md
+#   - example/nextjs16/reference/README.md
+#
+# 同梱ポリシー (Bundling Policy):
+#   - 本スクリプトは npm 配布物には同梱しません（package.json の files を参照）。
+#   - Docker イメージのビルド時に COPY され、コンテナ内でのみ利用されます。
+# -----------------------------------------------------------------------------
 set -e
 
 # Fix permissions for WSL2 mounted volumes

@@ -1,4 +1,20 @@
 # Dev3000 Development Dockerfile
+# -----------------------------------------------------------------------------
+# reference/ 版（テンプレート）
+# - 外部プロジェクトに導入する際のコピー元です。
+# - 内容は example/nextjs16/Dockerfile.dev と概ね同一ですが、
+#   テンプレートとして読みやすさを優先します。
+#
+# 対になる実運用ファイル（このリポ内）:
+# - example/nextjs16/Dockerfile.dev
+#
+# 同期ポリシー:
+# - 片方を更新したらもう片方にも反映してください（差分がある場合は理由をコメント化）。
+#
+# 同梱ポリシー (Bundling Policy):
+# - 本テンプレートは npm 配布物には同梱しません（package.json の files を参照）。
+# - `.dev3000` をサブモジュールとして導入後、`reference/` からコピーして利用します。
+# -----------------------------------------------------------------------------
 # This Dockerfile builds dev3000 and runs it with the user's frontend application
 #
 # Directory structure (user's project):
