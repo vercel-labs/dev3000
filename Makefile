@@ -1,7 +1,7 @@
 # Dev3000 Development Makefile
 # Simplified development workflow for Docker-based dev3000
 
-.PHONY: help dev-up dev-down dev-logs dev-rebuild dev-rebuild-fast dev3000-sync dev-rebuild-frontend clean clean-frontend deploy-frontend deploy-and-start list-examples start-chrome-cdp start-chrome-cdp-xplat stop-chrome-cdp status cdp-check dev-build dev-build-fast diagnose log-clean log-ls log-tail-last test-echo test-fail test test-node test-shellspec test-all
+.PHONY: help setup init dev-up dev-down dev-logs dev-rebuild dev-rebuild-fast dev3000-sync dev-rebuild-frontend clean clean-frontend deploy-frontend deploy-and-start list-examples start-chrome-cdp start-chrome-cdp-xplat stop-chrome-cdp status cdp-check dev-build dev-build-fast diagnose log-clean log-ls log-tail-last test-echo test-fail test test-node test-shellspec test-all
 
 # Default target
 .DEFAULT_GOAL := help
@@ -26,6 +26,8 @@ CDP_CHECK_URL := http://localhost:9222/json/version
 help: ## Show this help message
 	@echo "Dev3000 Development Commands"
 	@echo ""
+	@echo "Setup:"
+	@echo "  make setup        - Initial setup (deploy example + build + start)"
 	@echo "Quick Start:"
 	@echo "  make dev-up        - Start development environment"
 	@echo "  make dev-down      - Stop development environment"
@@ -343,8 +345,34 @@ list-examples: ## List available example apps
 	@echo "Available example apps:"
 	@ls -1 example/ | sed 's/^/  - /'
 	@echo ""
-	@echo "Deploy with: make deploy-frontend APP=<app-name>"
-	@echo "Deploy and start with: make deploy-and-start APP=<app-name>"
+		@echo "Deploy with: make deploy-frontend APP=<app-name>"
+		@echo "Deploy and start with: make deploy-and-start APP=<app-name>"
+
+## ========== Initial Setup ==========
+
+setup: ## Initial setup: deploy example (APP? default: nextjs16), build images, and start
+	@START_TS=$$(date +%s); echo "[RUN] Start: $$(date '+%Y-%m-%d %H:%M:%S')"
+	@. scripts/make-helpers.sh
+	@# Determine app to deploy
+	@if [ -z "$(APP)" ]; then \
+		APP_NAME=nextjs16; \
+		echo "[SETUP] APP not specified; defaulting to '$$APP_NAME'"; \
+	else \
+		APP_NAME="$(APP)"; \
+	fi; \
+	$(MAKE) deploy-frontend APP=$$APP_NAME
+	@echo ""
+	@echo "[SETUP] Building images and starting environment..."
+	@$(MAKE) dev-rebuild
+	@echo ""
+	@echo "✅ Setup complete. Next steps:"
+	@echo "  - Open: http://localhost:3000 (App)"
+	@echo "  - Open: http://localhost:3684 (Dev3000 UI)"
+	@echo "  - Logs: make dev-logs or http://localhost:3684/logs"
+	@END_TS=$$(date +%s); ELAPSED=$$((END_TS-START_TS)); echo "[RUN] End:   $$(date '+%Y-%m-%d %H:%M:%S') (elapsed: $${ELAPSED}s)"
+
+init: ## Alias for setup
+	@$(MAKE) setup APP=$(APP)
 
 cdp-check: ## Verify CDP reachability from Windows/WSL/Docker
 	@START_TS=$$(date +%s); echo "[RUN] Start: $$(date '+%Y-%m-%d %H:%M:%S')"
