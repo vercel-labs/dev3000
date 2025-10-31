@@ -60,11 +60,16 @@ _combined_log_path() {
 run_cmd() {
   local name="$1"; shift
   local cmd=("$@")
-  local t0=$(date +%s)
-  local ts_iso=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-  local dir=$(_d3k_log_dir)
-  local combined=$(_combined_log_path)
-  local id="$(date +%Y%m%dT%H%M%S)-$$-$RANDOM"
+  local t0
+  t0=$(date +%s)
+  local ts_iso
+  ts_iso=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+  local dir
+  dir=$(_d3k_log_dir)
+  local combined
+  combined=$(_combined_log_path)
+  local id
+  id="$(date +%Y%m%dT%H%M%S)-$$-$RANDOM"
   local out_file="$dir/${id}.out"
   local err_file="$dir/${id}.err"
 
