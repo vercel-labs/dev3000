@@ -116,8 +116,9 @@ run_cmd() {
   [[ -f "$out_file" ]] && stdout_len=$(wc -c <"$out_file" 2>/dev/null || echo 0)
   [[ -f "$err_file" ]] && stderr_len=$(wc -c <"$err_file" 2>/dev/null || echo 0)
   local stdout_trunc=false stderr_trunc=false
-  if (( stdout_len > max_bytes )); then stdout_trunc=true; fi
-  if (( stderr_len > max_bytes )); then stderr_trunc=true; fi
+  local stdout_len=0 stderr_len=0
+  [[ -f "$out_file" ]] && stdout_len=$(wc -c <"$out_file" 2>/dev/null || echo 0)
+  [[ -f "$err_file" ]] && stderr_len=$(wc -c <"$err_file" 2>/dev/null || echo 0)
 
   {
     printf "===== ENTRY %s START =====\n" "$id"
