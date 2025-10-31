@@ -39,6 +39,7 @@
     "lint": "biome check src mcp-server www scripts --vcs-use-ignore-file=true && node scripts/verify-esm.mjs && node scripts/verify-no-npx.mjs",
     "lint:fix": "biome check --write src mcp-server www scripts",
     "test": "vitest run",
+    "shellspec": "bash scripts/run-shellspec.sh",
     "test-postinstall": "tsx scripts/test-postinstall.ts",
     "test-global-install": "tsx scripts/test-global-install.ts",
     "test-clean-install": "tsx scripts/test-clean-install.ts",

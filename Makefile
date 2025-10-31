@@ -1,7 +1,7 @@
 # Dev3000 Development Makefile
 # Simplified development workflow for Docker-based dev3000
 
-.PHONY: help dev-up dev-down dev-logs dev-rebuild dev-rebuild-fast dev3000-sync dev-rebuild-frontend clean clean-frontend deploy-frontend deploy-and-start list-examples start-chrome-cdp start-chrome-cdp-xplat stop-chrome-cdp status cdp-check dev-build dev-build-fast
+.PHONY: help dev-up dev-down dev-logs dev-rebuild dev-rebuild-fast dev3000-sync dev-rebuild-frontend clean clean-frontend deploy-frontend deploy-and-start list-examples start-chrome-cdp start-chrome-cdp-xplat stop-chrome-cdp status cdp-check dev-build dev-build-fast diagnose log-clean log-ls log-tail-last test-echo test-fail test test-node test-shellspec test-all
 
 # Default target
 .DEFAULT_GOAL := help
@@ -30,6 +30,17 @@ help: ## Show this help message
 	@echo "  make dev-up        - Start development environment"
 	@echo "  make dev-down      - Stop development environment"
 	@echo "  make dev-logs      - Follow container logs"
+	@echo ""
+	@echo "Testing:"
+	@echo "  make test          - Run Node/TS tests (Vitest)"
+	@echo "  make test-shellspec - Run ShellSpec tests for Make targets"
+	@echo "  make test-all      - Run both Node tests and ShellSpec"
+	@echo "    pass args to ShellSpec: make test-shellspec ARGS=\"--format progress --jobs 2\""
+	@echo ""
+	@echo "Logs Utilities:"
+	@echo "  make log-ls        - List recent entries in combined.log"
+	@echo "  make log-tail-last - Show last entry from combined.log"
+	@echo "  make log-clean     - Remove .make-logs (or D3K_LOG_DIR)"
 	@echo ""
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
@@ -82,80 +93,9 @@ dev-up: ## Start dev3000 in Docker (launches Chrome automatically)
 	fi
 	@echo ""
 		@echo "[CDP] Step 3: Launching Chrome with CDP..."
-			@APP_URL="http://localhost:3000/"; \
-			if ! /usr/bin/env bash -lc 'cd "$(pwd -P 2>/dev/null || pwd)" && . scripts/make-helpers.sh && run_cmd "launch chrome cdp" node scripts/launch-chrome-cdp.js --app-url '"$$APP_URL"' --check-url "$(CDP_CHECK_URL)" --cdp-port 9222'; then \
-				echo "[CDP] ⚠️  Chrome launcher exited with error (check logs)"; \
-			fi
+			@$(MAKE) start-chrome-cdp-xplat
 	@echo ""
 	@echo "[CDP] Step 4: Running cdp-check diagnostics (host + container)"; $(MAKE) cdp-check
-		@if false; then \
-		echo "[CDP][ref] Host curl: OK"; \
-		BROWSER_VER=$$(curl -s $(CDP_CHECK_URL) | grep -o '"Browser":"[^"]*"' | cut -d'"' -f4); \
-		echo "[CDP][ref] Browser: $$BROWSER_VER"; \
-	else \
-				if [ "$(IS_WSL2)" = "1" ]; then \
-					echo "[CDP][ref] Windows curl.exe check: $(CDP_CHECK_URL)"; \
-					WIN_CURL=$$(command -v curl.exe 2>/dev/null || echo "$${WINDIR}\\System32\\curl.exe"); \
-					if [ -n "$$WIN_CURL" ]; then \
-								echo "[CDP][ref] Windows curl.exe: $$WIN_CURL -sSf $(CDP_CHECK_URL)"; "$$WIN_CURL" -sSf $(CDP_CHECK_URL) > /dev/null 2>&1; RC=$$?; \
-							if [ $$RC -eq 0 ]; then \
-							BROWSER_VER=$$("$$WIN_CURL" -s $(CDP_CHECK_URL) | sed -n 's/.*\"Browser\":\"\([^\"]*\)\".*/\1/p'); \
-							echo "[CDP][ref] Windows curl.exe: OK"; \
-							if [ -n "$$BROWSER_VER" ]; then echo "[CDP][ref] Browser: $$BROWSER_VER"; fi; \
-						else \
-							echo "[CDP][ref] Windows curl.exe: NG (exit=$$RC)"; \
-						fi; \
-					else \
-						echo "[CDP][ref] Windows curl.exe: not found; skip fallback"; \
-					fi; \
-		else \
-				echo "[CDP][ref] Host curl: NG"; \
-		fi; \
-		fi
-		@if false; then \
-		# Container-side verification (ensure container running, then curl inside)
-		if ! docker ps --format '{{.Names}}' | grep -q '^dev3000$$'; then \
-			echo "[CDP] Container not running. Starting dev3000..."; \
-			docker compose up -d >/dev/null 2>&1 || true; \
-			sleep 1; \
-		fi; \
-		if docker ps --format '{{.Names}}' | grep -q '^dev3000$$'; then \
-			DX_LOCAL_OUT=$$(docker exec dev3000 sh -lc 'curl -sSf http://localhost:9222/json/version 2>/dev/null || true'); \
-			DX_PROXY_INFO=$$(docker exec dev3000 sh -lc 'if command -v lsof >/dev/null 2>&1; then lsof -nP -iTCP:9222 -sTCP:LISTEN 2>/dev/null | awk '\''NR>1{print $$1,$$9}'\''; elif command -v ss >/dev/null 2>&1; then ss -ltnp 2>/dev/null | awk '\''/(:|\.)9222(\s|$)/ {print $$0; exit}'\''; fi' || true); \
-			if [ -n "$$DX_LOCAL_OUT" ]; then \
-				DX_BROWSER=$$(printf "%s" "$$DX_LOCAL_OUT" | sed -n 's/.*\"Browser\":\"\([^\"]*\)\".*/\1/p'); \
-				echo "[CDP] ✅ Container: localhost:9222 OK"; \
-				if [ -n "$$DX_BROWSER" ]; then echo "[CDP]    Browser(local): $$DX_BROWSER"; fi; \
-			else \
-				echo "[CDP] ⚠️  Container: localhost:9222 NG"; \
-			fi; \
-			DX_HOST_RC=$$(docker exec dev3000 sh -lc 'curl -sSf http://host.docker.internal:9222/json/version >/dev/null 2>&1; echo $$?'); \
-			if [ "$$DX_HOST_RC" = "0" ]; then \
-				echo "[CDP] ✅ Container: host.docker.internal:9222 OK"; \
-			else \
-				echo "[CDP] ⚠️  Container: host.docker.internal:9222 NG"; \
-			fi; \
-		else \
-			echo "[CDP] ⚠️  Container dev3000 not running; skip container checks"; \
-		fi; \
-			if [ -n "$$DX_LOCAL_OUT" ] || [ "$$DX_HOST_RC" = "0" ]; then \
-				echo "[CDP] ✅ Dev3000 CDP Ready (container reachable)"; \
-				if [ -n "$$DX_LOCAL_OUT" ]; then \
-					DX_PROXY_PROC=$$(printf "%s" "$$DX_PROXY_INFO" | awk 'NR==1{ if ($$1=="LISTEN") { match($$0,/users:\(\(([^,]+)/,m); if (m[1] != "") print m[1]; else print "" } else { print $$1 } }'); \
-					if [ -n "$$DX_PROXY_PROC" ]; then \
-						echo "[CDP]    Route: container localhost:9222 → proxy (listener: $$DX_PROXY_PROC) → Windows 127.0.0.1:9222"; \
-					else \
-						echo "[CDP]    Route: container localhost:9222 → proxy → Windows 127.0.0.1:9222"; \
-					fi; \
-					echo "[CDP]    Why: Dev3000 connects to CDP from inside the container via localhost:9222 listener"; \
-				else \
-					echo "[CDP]    Route: container → host.docker.internal:9222 (direct host)"; \
-					echo "[CDP]    Why: Dev3000 connects to CDP from inside the container directly to host"; \
-				fi; \
-			else \
-				echo "[CDP] ❌ Dev3000 CDP Not Ready (container cannot reach CDP)"; \
-			fi; \
-		fi
 	@echo ""
 	@echo "✅ Development environment started"
 	@echo ""
@@ -189,8 +129,9 @@ dev-up: ## Start dev3000 in Docker (launches Chrome automatically)
 
 dev-down: ## Stop dev3000 Docker environment
 	@START_TS=$$(date +%s); echo "[RUN] Start: $$(date '+%Y-%m-%d %H:%M:%S')"
+	@. scripts/make-helpers.sh
 	@echo "Stopping development environment..."
-	@docker compose down
+	@run_cmd "docker compose down" docker compose down
 	@echo ""
 	@echo "✅ Development environment stopped"
 	@echo ""
@@ -205,36 +146,55 @@ dev-down: ## Stop dev3000 Docker environment
 
 dev-logs: ## Follow Docker container logs
 	@START_TS=$$(date +%s); echo "[RUN] Start: $$(date '+%Y-%m-%d %H:%M:%S')"
-	@docker compose logs -f
+	@. scripts/make-helpers.sh
+	@if [ "$$D3K_LOG_ONE_SHOT" = "1" ]; then \
+		run_cmd "docker compose logs --tail 100" docker compose logs --tail 100; \
+	else \
+		run_cmd "docker compose logs -f" docker compose logs -f; \
+	fi
 	@END_TS=$$(date +%s); ELAPSED=$$((END_TS-START_TS)); echo "[RUN] End:   $$(date '+%Y-%m-%d %H:%M:%S') (elapsed: $${ELAPSED}s)"
 
 dev-rebuild: ## Rebuild and restart Docker environment
 	@START_TS=$$(date +%s); echo "[RUN] Start: $$(date '+%Y-%m-%d %H:%M:%S')"
+	@. scripts/make-helpers.sh
 	@echo "Rebuilding development environment..."
-	@docker compose down
-	@DOCKER_BUILDKIT=1 docker compose build --no-cache
+	@# Ensure frontend/Dockerfile.dev exists; auto-provision default example if missing
+	@if [ ! -f "frontend/Dockerfile.dev" ]; then \
+		echo "[SETUP] Missing frontend/Dockerfile.dev. Auto-deploying example: nextjs16"; \
+		$(MAKE) deploy-frontend APP=nextjs16; \
+	fi
+	@run_cmd "docker compose down" docker compose down
+	@/usr/bin/env bash -lc '. scripts/make-helpers.sh; run_cmd "docker compose build --no-cache" bash -lc "DOCKER_BUILDKIT=1 docker compose build --no-cache"'
 	@$(MAKE) dev-up
 	@END_TS=$$(date +%s); ELAPSED=$$((END_TS-START_TS)); echo "[RUN] End:   $$(date '+%Y-%m-%d %H:%M:%S') (elapsed: $${ELAPSED}s)"
 
 dev-rebuild-fast: ## Fast rebuild using cache (for minor changes)
 	@START_TS=$$(date +%s); echo "[RUN] Start: $$(date '+%Y-%m-%d %H:%M:%S')"
+	@. scripts/make-helpers.sh
 	@echo "Fast rebuilding development environment (with cache)..."
-	@docker compose down
-	@DOCKER_BUILDKIT=1 docker compose build
+	@# Ensure frontend/Dockerfile.dev exists; auto-provision default example if missing
+	@if [ ! -f "frontend/Dockerfile.dev" ]; then \
+		echo "[SETUP] Missing frontend/Dockerfile.dev. Auto-deploying example: nextjs16"; \
+		$(MAKE) deploy-frontend APP=nextjs16; \
+	fi
+	@run_cmd "docker compose down" docker compose down
+	@/usr/bin/env bash -lc '. scripts/make-helpers.sh; run_cmd "docker compose build (cache)" bash -lc "DOCKER_BUILDKIT=1 docker compose build"'
 	@$(MAKE) dev-up
 	@END_TS=$$(date +%s); ELAPSED=$$((END_TS-START_TS)); echo "[RUN] End:   $$(date '+%Y-%m-%d %H:%M:%S') (elapsed: $${ELAPSED}s)"
 
 # Build-only targets (do not start or stop containers)
 dev-build: ## Build Docker images without cache (no start)
 	@START_TS=$$(date +%s); echo "[RUN] Start: $$(date '+%Y-%m-%d %H:%M:%S')"
+	@. scripts/make-helpers.sh
 	@echo "Building images (no-cache)..."
-	@DOCKER_BUILDKIT=1 docker compose build --no-cache
+	@/usr/bin/env bash -lc '. scripts/make-helpers.sh; run_cmd "docker compose build --no-cache" bash -lc "DOCKER_BUILDKIT=1 docker compose build --no-cache"'
 	@END_TS=$$(date +%s); ELAPSED=$$((END_TS-START_TS)); echo "[RUN] End:   $$(date '+%Y-%m-%d %H:%M:%S') (elapsed: $${ELAPSED}s)"
 
 dev-build-fast: ## Build Docker images with cache (no start)
 	@START_TS=$$(date +%s); echo "[RUN] Start: $$(date '+%Y-%m-%d %H:%M:%S')"
+	@. scripts/make-helpers.sh
 	@echo "Building images (with cache)..."
-	@DOCKER_BUILDKIT=1 docker compose build
+	@/usr/bin/env bash -lc '. scripts/make-helpers.sh; run_cmd "docker compose build (cache)" bash -lc "DOCKER_BUILDKIT=1 docker compose build"'
 	@END_TS=$$(date +%s); ELAPSED=$$((END_TS-START_TS)); echo "[RUN] End:   $$(date '+%Y-%m-%d %H:%M:%S') (elapsed: $${ELAPSED}s)"
 
 dev3000-sync: ## Update dev3000 submodule to latest version
@@ -254,25 +214,33 @@ dev3000-sync: ## Update dev3000 submodule to latest version
 	fi
 
 dev-rebuild-frontend: ## Rebuild frontend Docker image only (without full restart)
+	@. scripts/make-helpers.sh
 	@echo "🔨 Rebuilding frontend Docker image..."
-	@docker compose down
-	@DOCKER_BUILDKIT=1 docker compose build
+	@# Ensure frontend/Dockerfile.dev exists; auto-provision default example if missing
+	@if [ ! -f "frontend/Dockerfile.dev" ]; then \
+		echo "[SETUP] Missing frontend/Dockerfile.dev. Auto-deploying example: nextjs16"; \
+		$(MAKE) deploy-frontend APP=nextjs16; \
+	fi
+	@run_cmd "docker compose down" docker compose down
+	@/usr/bin/env bash -lc '. scripts/make-helpers.sh; run_cmd "docker compose build (cache)" bash -lc "DOCKER_BUILDKIT=1 docker compose build"'
 	@echo "✅ Frontend Docker image rebuilt"
 	@echo ""
 	@echo "Next step: make dev-up"
 
 clean: ## Clean up Docker resources and build artifacts
+	@. scripts/make-helpers.sh
 	@echo "Cleaning up..."
-	@docker compose down -v
-	@rm -rf example/*/node_modules example/*/.next
-	@rm -rf frontend/node_modules frontend/.next
+	@run_cmd "docker compose down -v" docker compose down -v || true
+	@/usr/bin/env bash -lc '. scripts/make-helpers.sh; run_cmd "rm example builds" bash -lc "rm -rf example/*/node_modules example/*/.next"' || true
+	@/usr/bin/env bash -lc '. scripts/make-helpers.sh; run_cmd "rm frontend builds" bash -lc "rm -rf frontend/node_modules frontend/.next"' || true
 	@echo "✅ Cleanup complete"
 
 clean-frontend: ## Clear frontend directory (keeps only .keep file)
 	@echo "Clearing frontend directory..."
-	@docker compose down 2>/dev/null || true
+	@. scripts/make-helpers.sh
+	@run_cmd "docker compose down" docker compose down || true
 	@if [ -d "frontend" ]; then \
-		find frontend -mindepth 1 -maxdepth 1 ! -name '.keep' -print0 | xargs -0 rm -rf 2>/dev/null || true; \
+		. scripts/make-helpers.sh; run_cmd "rm frontend/* (keep .keep)" find frontend -mindepth 1 -maxdepth 1 -not -name .keep -exec rm -rf {} +; \
 		echo "# Frontend deployment directory" > frontend/.keep; \
 		echo "✅ Frontend directory cleared"; \
 		echo "   Only .keep file remains"; \
@@ -291,11 +259,12 @@ clean-frontend: ## Clear frontend directory (keeps only .keep file)
 #   1. Copies example app to frontend/ directory (rsync, excluding build outputs)
 #   2. Creates frontend/.dev3000/ with dev3000 source code (simulates: git submodule add)
 # Production setup: git submodule add https://github.com/automationjp/dev3000 frontend/.dev3000
+
 deploy-frontend: ## Deploy example app to frontend directory (e.g., make deploy-frontend APP=nextjs16)
 	@if [ -z "$(APP)" ]; then \
-		echo "❌ Error: APP parameter is required"; \
-		echo ""; \
-		echo "Usage: make deploy-frontend APP=<app-name>"; \
+        echo "❌ Error: APP parameter is required"; \
+        echo ""; \
+        echo "Usage: make deploy-frontend APP=<app-name>"; \
 		echo ""; \
 		echo "Available apps in example/:"; \
 		ls -1 example/ | sed 's/^/  - /'; \
@@ -308,10 +277,18 @@ deploy-frontend: ## Deploy example app to frontend directory (e.g., make deploy-
 		ls -1 example/ | sed 's/^/  - /'; \
 		exit 1; \
 	fi; \
+	. scripts/make-helpers.sh; \
 	echo "📦 Deploying example/$(APP) to frontend/..."; \
-	rm -rf frontend; \
-	mkdir -p frontend; \
-	rsync -av --exclude='node_modules' --exclude='.next' --exclude='out' --exclude='.pnpm-store' example/$(APP)/ frontend/; \
+	. scripts/make-helpers.sh; run_cmd "rm -rf frontend" rm -rf frontend; \
+	. scripts/make-helpers.sh; run_cmd "mkdir -p frontend" mkdir -p frontend; \
+	. scripts/make-helpers.sh; run_cmd "rsync example -> frontend" rsync -av --exclude=node_modules --exclude=.next --exclude=out --exclude=.pnpm-store example/$(APP)/ frontend/; \
+	# Ensure frontend/Dockerfile.dev exists for docker compose builds
+	if [ -f "example/$(APP)/Dockerfile.dev" ]; then \
+		. scripts/make-helpers.sh; run_cmd "copy Dockerfile.dev" cp "example/$(APP)/Dockerfile.dev" frontend/Dockerfile.dev; \
+	else \
+		echo "❌ Missing example/$(APP)/Dockerfile.dev. Cannot set up frontend Dockerfile."; \
+		exit 1; \
+	fi; \
 	echo "✅ Copied example/$(APP) to frontend/"; \
 	echo ""; \
 	echo "🔗 Setting up frontend/.dev3000 (dev3000 reference)..."; \
@@ -320,13 +297,13 @@ deploy-frontend: ## Deploy example app to frontend directory (e.g., make deploy-
 	echo "   Production users: git submodule add https://github.com/automationjp/dev3000 frontend/.dev3000"; \
 	echo "   Development setup: Copy dev3000 source to frontend/.dev3000/"; \
 	rm -rf frontend/.dev3000/src frontend/.dev3000/mcp-server frontend/.dev3000/www; \
-	rsync -av --exclude='node_modules' --exclude='.next' --exclude='dist' --exclude='.pnpm-store' src mcp-server frontend/.dev3000/; \
-	rm -rf frontend/.dev3000/node_modules frontend/.dev3000/mcp-server/node_modules; \
+	. scripts/make-helpers.sh; run_cmd "rsync dev3000 -> .dev3000" rsync -av --exclude=node_modules --exclude=.next --exclude=dist --exclude=.pnpm-store src mcp-server frontend/.dev3000/; \
+	. scripts/make-helpers.sh; run_cmd "rm node_modules in .dev3000" rm -rf frontend/.dev3000/node_modules frontend/.dev3000/mcp-server/node_modules; \
 	echo "   Removed node_modules directories (will be installed by Docker)"; \
 	mkdir -p frontend/.dev3000/scripts; \
-	cp scripts/docker-entrypoint.sh frontend/.dev3000/scripts/; \
-	chmod +x frontend/.dev3000/scripts/docker-entrypoint.sh; \
-	cp package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json biome.json Makefile docker-compose.yml frontend/.dev3000/; \
+		. scripts/make-helpers.sh; run_cmd "copy entrypoint" cp scripts/docker-entrypoint.sh frontend/.dev3000/scripts/; \
+		. scripts/make-helpers.sh; run_cmd "chmod entrypoint" chmod +x frontend/.dev3000/scripts/docker-entrypoint.sh; \
+		. scripts/make-helpers.sh; run_cmd "copy meta files" cp package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json biome.json Makefile docker-compose.yml frontend/.dev3000/; \
 	echo ""; \
 	echo "✅ Deployed example/$(APP) to frontend/"; \
 	echo "✅ Created frontend/.dev3000 reference (simulating user setup)"; \
@@ -382,6 +359,51 @@ cdp-check: ## Verify CDP reachability from Windows/WSL/Docker
 	@/usr/bin/env bash -lc 'cd "$(pwd -P 2>/dev/null || pwd)" && . scripts/make-helpers.sh && run_cmd "node scripts/check-cdp.mjs" node scripts/check-cdp.mjs'
 	@END_TS=$$(date +%s); ELAPSED=$$((END_TS-START_TS)); echo "[RUN] End:   $$(date '+%Y-%m-%d %H:%M:%S') (elapsed: $${ELAPSED}s)"
 
+diagnose: ## Comprehensive diagnostics: env, ports, docker, browser, status
+	@START_TS=$$(date +%s); echo "[RUN] Start: $$(date '+%Y-%m-%d %H:%M:%S')"
+	@. scripts/make-helpers.sh
+	@section "Environment"
+	@run_cmd "node --version" node --version || true
+	@run_cmd "pnpm --version" pnpm --version || true
+	@run_cmd "docker --version" docker --version || true
+	@run_cmd "docker compose version" docker compose version || true
+	@section "Docker Containers"
+	@run_cmd "docker compose ps" docker compose ps || true
+	@section "Ports"
+	@/usr/bin/env bash -lc '. scripts/make-helpers.sh; run_cmd "ss -ltnp ports 3000/3684/9222" bash -lc "ss -ltnp 2>/dev/null | rg -n -e \":(3000|3684|9222)\" || true"'
+	@section "HTTP Probes"
+	@/usr/bin/env bash -lc '. scripts/make-helpers.sh; run_cmd "curl app /" bash -lc "curl -s -o /dev/null -w '%{http_code}' http://localhost:3000 || true"'
+	@/usr/bin/env bash -lc '. scripts/make-helpers.sh; run_cmd "curl cdp /json/version" bash -lc "curl -s -o /dev/null -w '%{http_code}' http://localhost:9222/json/version || true"'
+	@section "CDP Diagnostics"
+	@$(MAKE) cdp-check
+	@section "Status"
+	@$(MAKE) status
+	@END_TS=$$(date +%s); ELAPSED=$$((END_TS-START_TS)); echo "[RUN] End:   $$(date '+%Y-%m-%d %H:%M:%S') (elapsed: $${ELAPSED}s)"
+
+## ========== Log Utilities ==========
+
+log-clean: ## Clean the local make command logs directory
+	@. scripts/make-helpers.sh
+	@dir=$$(D3K_LOG_DIR="$$D3K_LOG_DIR" bash -lc 'echo $${D3K_LOG_DIR:-.make-logs}'); \
+		echo "Cleaning logs in: $$dir"; \
+		rm -rf "$$dir"; \
+		echo "✅ Cleaned logs"
+
+log-ls: ## List recent entries in combined.log
+	@. scripts/make-helpers.sh
+	@dir=$$(D3K_LOG_DIR="$$D3K_LOG_DIR" D3K_LOG_FILE="$$D3K_LOG_FILE" bash -lc 'd=$${D3K_LOG_DIR:-.make-logs}; echo $${D3K_LOG_FILE:-$$d/combined.log}'); \
+		file="$$dir"; \
+		N=$${LOGS_N:-10}; \
+		if [ ! -f "$$file" ]; then echo "No logs yet in $$file"; exit 0; fi; \
+		echo "=== Last $$N entries ($$file) ==="; \
+		awk '/^===== ENTRY .* START =====/{printf("%s\n",$$0)} END{}' "$$file" | tail -n $$N
+
+log-tail-last: ## Show last command details from combined.log
+	@. scripts/make-helpers.sh
+	@combined=$$(D3K_LOG_DIR="$$D3K_LOG_DIR" D3K_LOG_FILE="$$D3K_LOG_FILE" bash -lc 'dir=$${D3K_LOG_DIR:-.make-logs}; echo $${D3K_LOG_FILE:-$$dir/combined.log}'); \
+		if [ ! -f "$$combined" ]; then echo "Combined log not found: $$combined"; exit 1; fi; \
+		awk 'BEGIN{start=0} /^===== ENTRY .* START =====/{start=NR} {lines[NR]="" $$0} /^===== ENTRY .* END =====/{block_start=start; block_end=NR} END{ if (block_start) { for(i=block_start;i<=block_end;i++) print lines[i] } }' "$$combined"
+
 ## ========== Chrome CDP Management ==========
 
 start-chrome-cdp: ## Start Chrome with CDP (now unified to cross-platform launcher)
@@ -389,21 +411,21 @@ start-chrome-cdp: ## Start Chrome with CDP (now unified to cross-platform launch
 
 
 start-chrome-cdp-xplat: ## Start Chrome with CDP via cross-platform Node launcher
+	@. scripts/make-helpers.sh
 	@echo "🌐 Starting Chrome with CDP (cross-platform launcher)..."
 	@echo "PWD: $$(pwd)"
 	@echo "CDP check URL: $(CDP_CHECK_URL)"
 	@APP_URL="http://localhost:3000/"; \
 	echo "App URL: $$APP_URL"; \
-	if ! /usr/bin/env bash -lc 'cd "$(pwd -P 2>/dev/null || pwd)" && node scripts/launch-chrome-cdp.js --app-url '"$$APP_URL"' --check-url "$(CDP_CHECK_URL)" --cdp-port 9222'; then \
-		echo "[CDP] ⚠️  Chrome launcher exited with error (check logs)"; \
-	fi
+	/usr/bin/env bash -lc 'cd "$(pwd -P 2>/dev/null || pwd)" && . scripts/make-helpers.sh && run_cmd "launch chrome cdp" node scripts/launch-chrome-cdp.js --app-url '"$$APP_URL"' --check-url "$(CDP_CHECK_URL)" --cdp-port 9222' || echo "[CDP] ⚠️  Chrome launcher exited with error (check logs)"
 
 stop-chrome-cdp: ## Stop Chrome CDP process
+	@. scripts/make-helpers.sh
 	@echo "Stopping Chrome CDP..."
 	@if [ "$(IS_WSL2)" = "1" ]; then \
-		powershell.exe -Command "Get-Process chrome | Where-Object {\$$_.CommandLine -like '*remote-debugging-port*'} | Stop-Process" 2>/dev/null; \
+		/usr/bin/env bash -lc '. scripts/make-helpers.sh; run_cmd "stop chrome (powershell)" bash -lc "powershell.exe -Command \"Get-Process chrome | Where-Object {\$$_.CommandLine -like '*remote-debugging-port*'} | Stop-Process\""'; \
 	else \
-		pkill -f 'chrome.*remote-debugging-port' 2>/dev/null; \
+		/usr/bin/env bash -lc '. scripts/make-helpers.sh; run_cmd "pkill chrome" bash -lc "pkill -f '"'"'chrome.*remote-debugging-port'"'"' 2>/dev/null || true"'; \
 	fi
 	@echo "✅ Chrome stopped"
 
@@ -424,17 +446,45 @@ status: ## Show development environment status
 		echo "  WebSocket URL: $$CDP_WS_URL"; \
 	else \
 		echo "  ❌ Chrome CDP not accessible ($(CDP_URL))"; \
-	fi
-	@echo ""
-	@echo "CDP Integration:"
-	@if docker ps --format '{{.Names}}' | grep -q 'dev3000'; then \
-		CDP_ENV=$$(docker inspect dev3000 2>/dev/null | grep -o '"DEV3000_CDP_URL=[^"]*"' | head -1 | cut -d'=' -f2 | tr -d '"' || echo ""); \
-		if [ -n "$$CDP_ENV" ]; then \
-			echo "  ✅ Container configured with CDP URL"; \
-			echo "  URL: $$CDP_ENV"; \
+		fi
+		@echo ""
+		@echo "CDP Integration:"
+		@if docker ps --format '{{.Names}}' | grep -q 'dev3000'; then \
+			CDP_ENV=$$(docker inspect dev3000 2>/dev/null | grep -o '"DEV3000_CDP_URL=[^"]*"' | head -1 | cut -d'=' -f2 | tr -d '"' || echo ""); \
+			if [ -n "$$CDP_ENV" ]; then \
+				echo "  ✅ Container configured with CDP URL"; \
+				echo "  URL: $$CDP_ENV"; \
+			else \
+				echo "  ⚠️  Container running without explicit CDP URL (auto-detect mode)"; \
+			fi; \
 		else \
-			echo "  ⚠️  Container running without explicit CDP URL (auto-detect mode)"; \
-		fi; \
-	else \
-		echo "  ❌ Dev3000 container not running"; \
-	fi
+			echo "  ❌ Dev3000 container not running"; \
+		fi
+
+## ========== Testing ==========
+
+test: ## Run Node/TS tests (Vitest)
+	@. scripts/make-helpers.sh
+	@run_cmd "pnpm test" pnpm -s test
+
+test-node: ## Alias for make test
+	@$(MAKE) test
+
+test-shellspec: ## Run ShellSpec suite for Make targets (e.g., make test-shellspec ARGS="--format progress")
+	@. scripts/make-helpers.sh
+	@run_cmd "shellspec" bash scripts/run-shellspec.sh $(if $(ARGS),$(ARGS),--format documentation)
+	@$(MAKE) log-ls
+
+test-all: ## Run both Node tests and ShellSpec
+	@$(MAKE) test
+	@$(MAKE) test-shellspec $(if $(ARGS),ARGS="$(ARGS)")
+
+## ========== Testing (lightweight) ==========
+
+test-echo: ## Test-only: exercise logger with simple success command
+	@. scripts/make-helpers.sh
+	@run_cmd "test echo" bash -lc "echo 'Hello from STDOUT'; echo 'Hello from STDERR' 1>&2"
+
+test-fail: ## Test-only: exercise logger on failure (exit 2)
+	@. scripts/make-helpers.sh
+	@run_cmd "test fail" bash -lc "echo 'About to fail'; echo 'Error happened' 1>&2; exit 2"

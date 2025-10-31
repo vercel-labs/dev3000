@@ -60,3 +60,10 @@ example/nextjs16/tsconfig.tsbuildinfo
 
 # Website directory (not tracked in this fork)
 www/
+
+# Local logs from make run_cmd
+.make-logs/
+
+# Ignore local ShellSpec clone and tsbuildinfo
+.shellspec/
+*.tsbuildinfo

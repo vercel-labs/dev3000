@@ -53,10 +53,10 @@ COPY .dev3000/mcp-server/package.json ./mcp-server/
 # Install dev3000 dependencies
 # Note: Using frozen-lockfile for reproducibility with fallback for development flexibility
 # For production builds, remove the fallback to enforce deterministic installs
-RUN pnpm install --frozen-lockfile || { \
+RUN pnpm install --frozen-lockfile --ignore-scripts || { \
     echo "⚠️  Warning: Frozen lockfile install failed, falling back to non-deterministic install"; \
     echo "   This is acceptable for development but should be avoided in production"; \
-    pnpm install; \
+    pnpm install --ignore-scripts; \
 }
 
 # Copy dev3000 source code
