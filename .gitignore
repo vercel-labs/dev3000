@@ -60,3 +60,7 @@ example/nextjs16/tsconfig.tsbuildinfo
 
 # Website directory (not tracked in this fork)
 www/
+
+# Ignore local ShellSpec clone and tsbuildinfo
+.shellspec/
+*.tsbuildinfo
