@@ -110,7 +110,8 @@ run_cmd() {
   rc=$?
   set -e
 
-  local t1=$(date +%s)
+  local t1
+  t1=$(date +%s)
   local elapsed=$(($t1-$t0))
   kv Exit "$rc"
   kv Time "${elapsed}s"
