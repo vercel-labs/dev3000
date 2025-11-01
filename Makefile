@@ -27,36 +27,36 @@ help: ## Show this help message
 	@echo "Dev3000 Development Commands"
 	@echo ""
 	@echo "Setup:"
-	@echo "  make setup        - Initial setup (deploy example + build + start)"
+	@echo "  make setup           - Initial setup (deploy example + build + start)"
 	@echo "Quick Start:"
-	@echo "  make dev-up        - Start development environment"
-	@echo "  make dev-down      - Stop development environment"
-	@echo "  make dev-logs      - Follow container logs"
+	@echo "  make dev-up          - Start development environment"
+	@echo "  make dev-down        - Stop development environment"
+	@echo "  make dev-logs        - Follow Docker container logs"
 	@echo ""
 	@echo "Diagnostics:"
-	@echo "  make diagnose     - Comprehensive diagnostics (env/ports/docker/browser/status)"
-	@echo "  make cdp-check    - Verify CDP reachability (host/WSL/container)"
-	@echo "  make status       - Show Docker/Chrome CDP status snapshot"
+	@echo "  make diagnose        - Comprehensive diagnostics (env/ports/docker/browser/status)"
+	@echo "  make cdp-check       - Verify CDP reachability (host/WSL/container)"
+	@echo "  make status          - Show Docker/Chrome CDP status snapshot"
 	@echo ""
 	@echo "Testing:"
-	@echo "  make test          - Run Node/TS tests (Vitest)"
-	@echo "  make test-shellspec - Run ShellSpec tests for Make targets"
-	@echo "  make test-all      - Run both Node tests and ShellSpec"
+	@echo "  make test            - Run Node/TS tests (Vitest)"
+	@echo "  make test-shellspec  - Run ShellSpec tests for Make targets"
+	@echo "  make test-all        - Run both Node tests and ShellSpec"
 	@echo "    pass args to ShellSpec: make test-shellspec ARGS=\"--format progress --jobs 2\""
 	@echo ""
 	@echo "Logs Utilities:"
-	@echo "  make log-ls        - List recent entries in combined.log"
-	@echo "  make log-tail-last - Show last entry from combined.log"
-	@echo "  make log-clean     - Remove .make-logs (or D3K_LOG_DIR)"
+	@echo "  make log-ls          - List recent entries in combined.log"
+	@echo "  make log-tail-last   - Show last entry from combined.log"
+	@echo "  make log-clean       - Remove .make-logs (or D3K_LOG_DIR)"
 	@echo ""
 	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
-		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
+		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
 ## ========== Docker Development ==========
 
 dev-up: ## Start dev3000 in Docker (launches Chrome automatically)
 	@START_TS=$$(date +%s); echo "[RUN] Start: $$(date '+%Y-%m-%d %H:%M:%S')"
-	@. scripts/make-helpers.sh
+    @. scripts/make-helpers.sh
 	@echo "Starting dev3000 development environment..."
 	@echo ""
 	@echo "Step 1: Starting Docker containers..."
