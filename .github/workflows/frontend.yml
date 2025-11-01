@@ -27,14 +27,12 @@ jobs:
             echo "No frontend/package.json; skipping install"
           fi
       - name: Run frontend tests
-        - name: Run frontend tests
-          run: |
-            if [ -f frontend/package.json ]; then
-              cd frontend
-              if node -e 'const pkg=require("./package.json"); process.exit(pkg.scripts && pkg.scripts.test ? 0 : 1)' ; then
-                pnpm test
-              else
-                echo "No frontend tests defined; skipping"
-              fi
+        run: |
+          if [ -f frontend/package.json ]; then
+            cd frontend
+            if node -e 'const pkg=require("./package.json"); process.exit(pkg.scripts && pkg.scripts.test ? 0 : 1)' ; then
+              pnpm test
+            else
+              echo "No frontend tests defined; skipping"
             fi
-
+          fi
