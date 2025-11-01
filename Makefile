@@ -521,7 +521,7 @@ start-chrome-cdp-xplat: ## Start Chrome with CDP via cross-platform Node launche
 	@echo "CDP check URL: $(CDP_CHECK_URL)"
 	@APP_URL="http://localhost:3000/"; \
 	echo "App URL: $$APP_URL"; \
-	/usr/bin/env bash -lc 'cd "$(pwd -P 2>/dev/null || pwd)" && . scripts/make-helpers.sh && run_cmd "launch chrome cdp" node scripts/launch-chrome-cdp.js --app-url '"$$APP_URL"' --check-url "$(CDP_CHECK_URL)" --cdp-port 9222' || echo "[CDP] ⚠️  Chrome launcher exited with error (check logs)"
+	/usr/bin/env bash -lc 'cd "$(MAKEFILE_DIR)" && . scripts/make-helpers.sh && run_cmd "launch chrome cdp" node scripts/launch-chrome-cdp.js --app-url '"$$APP_URL"' --check-url "$(CDP_CHECK_URL)" --cdp-port 9222' || echo "[CDP] ⚠️  Chrome launcher exited with error (check logs)"
 
 stop-chrome-cdp: ## Stop Chrome CDP process
 	@. scripts/make-helpers.sh
