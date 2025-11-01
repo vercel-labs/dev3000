@@ -56,7 +56,7 @@ help: ## Show this help message
 
 dev-up: ## Start dev3000 in Docker (launches Chrome automatically)
 	@START_TS=$$(date +%s); echo "[RUN] Start: $$(date '+%Y-%m-%d %H:%M:%S')"
-    @. scripts/make-helpers.sh
+	@. scripts/make-helpers.sh
 	@echo "Starting dev3000 development environment..."
 	@echo ""
 	@echo "Step 1: Starting Docker containers..."
