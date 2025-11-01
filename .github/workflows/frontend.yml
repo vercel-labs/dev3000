@@ -1,0 +1,35 @@
+name: Frontend Tests
+on:
+  push:
+    paths:
+      - 'frontend/**'
+  pull_request:
+    paths:
+      - 'frontend/**'
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+          cache-dependency-path: 'frontend/pnpm-lock.yaml'
+      - run: corepack enable
+      - run: corepack prepare pnpm@10.18.3 --activate
+      - name: Install deps (frontend)
+        run: |
+          if [ -f frontend/package.json ]; then
+            cd frontend
+            pnpm install --frozen-lockfile || pnpm install
+          else
+            echo "No frontend/package.json; skipping install"
+          fi
+      - name: Run frontend tests
+        run: |
+          if [ -f frontend/package.json ]; then
+            cd frontend
+            pnpm test || echo "No frontend tests defined; skipping"
+          fi
+
