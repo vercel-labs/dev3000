@@ -1,7 +1,7 @@
 # Dev3000 Development Makefile
 # Simplified development workflow for Docker-based dev3000
 
-.PHONY: help dev-up dev-down dev-logs dev-rebuild dev-rebuild-fast dev3000-sync dev-rebuild-frontend clean clean-frontend deploy-frontend deploy-and-start list-examples start-chrome-cdp start-chrome-cdp-xplat stop-chrome-cdp status cdp-check dev-build dev-build-fast diagnose log-clean log-ls log-tail-last test-echo test-fail test test-node test-shellspec test-all
+.PHONY: help setup init dev-up dev-down dev-logs dev-rebuild dev-rebuild-fast dev3000-sync dev-rebuild-frontend clean clean-frontend deploy-frontend deploy-and-start list-examples start-chrome-cdp start-chrome-cdp-xplat stop-chrome-cdp status cdp-check dev-build dev-build-fast diagnose log-clean log-ls log-tail-last test-echo test-fail test test-node test-shellspec test-all
 
 # Default target
 .DEFAULT_GOAL := help
@@ -26,10 +26,17 @@ CDP_CHECK_URL := http://localhost:9222/json/version
 help: ## Show this help message
 	@echo "Dev3000 Development Commands"
 	@echo ""
+	@echo "Setup:"
+	@echo "  make setup        - Initial setup (deploy example + build + start)"
 	@echo "Quick Start:"
 	@echo "  make dev-up        - Start development environment"
 	@echo "  make dev-down      - Stop development environment"
 	@echo "  make dev-logs      - Follow container logs"
+	@echo ""
+	@echo "Diagnostics:"
+	@echo "  make diagnose     - Comprehensive diagnostics (env/ports/docker/browser/status)"
+	@echo "  make cdp-check    - Verify CDP reachability (host/WSL/container)"
+	@echo "  make status       - Show Docker/Chrome CDP status snapshot"
 	@echo ""
 	@echo "Testing:"
 	@echo "  make test          - Run Node/TS tests (Vitest)"
@@ -343,8 +350,71 @@ list-examples: ## List available example apps
 	@echo "Available example apps:"
 	@ls -1 example/ | sed 's/^/  - /'
 	@echo ""
-	@echo "Deploy with: make deploy-frontend APP=<app-name>"
-	@echo "Deploy and start with: make deploy-and-start APP=<app-name>"
+		@echo "Deploy with: make deploy-frontend APP=<app-name>"
+		@echo "Deploy and start with: make deploy-and-start APP=<app-name>"
+
+## ========== Initial Setup ==========
+
+setup: ## Initial setup: deploy example (APP? default: nextjs16), build images, and start
+	@START_TS=$$(date +%s); echo "[RUN] Start: $$(date '+%Y-%m-%d %H:%M:%S')"
+	@. scripts/make-helpers.sh
+	@# Determine app to deploy
+	@if [ -z "$(APP)" ]; then \
+		APP_NAME=nextjs16; \
+		echo "[SETUP] APP not specified; defaulting to '$$APP_NAME'"; \
+	else \
+		APP_NAME="$(APP)"; \
+	fi; \
+	$(MAKE) deploy-frontend APP=$$APP_NAME
+	@# Ensure pnpm exists
+	@if ! command -v pnpm >/dev/null 2>&1; then \
+		section "PNPM Setup"; \
+		if confirm "pnpm not found. Install via corepack now?"; then \
+			run_cmd "corepack enable" corepack enable || true; \
+			run_cmd "corepack prepare pnpm@10.18.3 --activate" corepack prepare pnpm@10.18.3 --activate || true; \
+		else \
+			hint "Skipping pnpm setup."; \
+		fi; \
+	fi
+	@# Install root dependencies when missing
+	@if [ ! -d node_modules ]; then \
+		section "Dependencies (root)"; \
+		if confirm "Install root dependencies with pnpm install now?"; then \
+			run_cmd "pnpm install (root)" pnpm install || true; \
+		else \
+			hint "Skipping pnpm install (root)."; \
+		fi; \
+	fi
+	@# Install frontend dependencies when missing
+	@if [ -f frontend/package.json ] && [ ! -d frontend/node_modules ]; then \
+		section "Dependencies (frontend)"; \
+		if confirm "Install frontend dependencies with pnpm install now?"; then \
+			/usr/bin/env bash -lc '. scripts/make-helpers.sh; run_cmd "pnpm install (frontend)" bash -lc "cd frontend && pnpm install"' || true; \
+		else \
+			hint "Skipping pnpm install (frontend)."; \
+		fi; \
+	fi
+	@# Optionally install .dev3000 deps (rarely needed on host; mostly installed in Docker build)
+	@if [ -f frontend/.dev3000/package.json ] && [ ! -d frontend/.dev3000/node_modules ]; then \
+		section "Dependencies (frontend/.dev3000)"; \
+		if confirm "Install frontend/.dev3000 deps on host? (Usually not required)"; then \
+			/usr/bin/env bash -lc '. scripts/make-helpers.sh; run_cmd "pnpm install (frontend/.dev3000)" bash -lc "cd frontend/.dev3000 && pnpm install"' || true; \
+		else \
+			hint "Skipping pnpm install (frontend/.dev3000)."; \
+		fi; \
+	fi
+	@echo ""
+	@echo "[SETUP] Building images and starting environment..."
+	@$(MAKE) dev-rebuild
+	@echo ""
+	@echo "✅ Setup complete. Next steps:"
+	@echo "  - Open: http://localhost:3000 (App)"
+	@echo "  - Open: http://localhost:3684 (Dev3000 UI)"
+	@echo "  - Logs: make dev-logs or http://localhost:3684/logs"
+	@END_TS=$$(date +%s); ELAPSED=$$((END_TS-START_TS)); echo "[RUN] End:   $$(date '+%Y-%m-%d %H:%M:%S') (elapsed: $${ELAPSED}s)"
+
+init: ## Alias for setup
+	@$(MAKE) setup APP=$(APP)
 
 cdp-check: ## Verify CDP reachability from Windows/WSL/Docker
 	@START_TS=$$(date +%s); echo "[RUN] Start: $$(date '+%Y-%m-%d %H:%M:%S')"
@@ -365,6 +435,33 @@ diagnose: ## Comprehensive diagnostics: env, ports, docker, browser, status
 	@section "Environment"
 	@run_cmd "node --version" node --version || true
 	@run_cmd "pnpm --version" pnpm --version || true
+	@# Offer to install pnpm via corepack if missing
+	@if ! command -v pnpm >/dev/null 2>&1; then \
+		section "PNPM Setup"; \
+		if confirm "pnpm not found. Install via corepack now?"; then \
+			run_cmd "corepack enable" corepack enable || true; \
+			run_cmd "corepack prepare pnpm@10.18.3 --activate" corepack prepare pnpm@10.18.3 --activate || true; \
+		else \
+			hint "Skipping pnpm setup. Set NON_INTERACTIVE=1 to auto-skip prompts."; \
+		fi; \
+	fi
+	@# Offer to install dependencies if node_modules missing
+	@if [ ! -d node_modules ]; then \
+		section "Dependencies"; \
+		if confirm "Install root dependencies with pnpm install now?"; then \
+			run_cmd "pnpm install (root)" pnpm install || true; \
+		else \
+			hint "Skipping pnpm install (root)."; \
+		fi; \
+	fi
+	@if [ -f frontend/package.json ] && [ ! -d frontend/node_modules ]; then \
+		section "Dependencies (frontend)"; \
+		if confirm "Install frontend dependencies with pnpm install now?"; then \
+			/usr/bin/env bash -lc '. scripts/make-helpers.sh; run_cmd "pnpm install (frontend)" bash -lc "cd frontend && pnpm install"' || true; \
+		else \
+			hint "Skipping pnpm install (frontend)."; \
+		fi; \
+	fi
 	@run_cmd "docker --version" docker --version || true
 	@run_cmd "docker compose version" docker compose version || true
 	@section "Docker Containers"
@@ -387,6 +484,8 @@ log-clean: ## Clean the local make command logs directory
 	@dir=$$(D3K_LOG_DIR="$$D3K_LOG_DIR" bash -lc 'echo $${D3K_LOG_DIR:-.make-logs}'); \
 		echo "Cleaning logs in: $$dir"; \
 		rm -rf "$$dir"; \
+		mkdir -p "$$dir"; \
+		echo "# keep" > "$$dir/.keep"; \
 		echo "✅ Cleaned logs"
 
 log-ls: ## List recent entries in combined.log

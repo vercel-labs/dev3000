@@ -52,7 +52,7 @@ Describe 'Make targets (ShellSpec)'
   End
 
   It 'diagnose covers sections (real)'
-    When run run_make diagnose
+    When run run_make diagnose NON_INTERACTIVE=1
     The status should be success
     The output should include 'Environment'
     The output should include 'Docker Containers'
