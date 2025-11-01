@@ -33,6 +33,11 @@ help: ## Show this help message
 	@echo "  make dev-down      - Stop development environment"
 	@echo "  make dev-logs      - Follow container logs"
 	@echo ""
+	@echo "Diagnostics:"
+	@echo "  make diagnose     - Comprehensive diagnostics (env/ports/docker/browser/status)"
+	@echo "  make cdp-check    - Verify CDP reachability (host/WSL/container)"
+	@echo "  make status       - Show Docker/Chrome CDP status snapshot"
+	@echo ""
 	@echo "Testing:"
 	@echo "  make test          - Run Node/TS tests (Vitest)"
 	@echo "  make test-shellspec - Run ShellSpec tests for Make targets"
@@ -393,6 +398,25 @@ diagnose: ## Comprehensive diagnostics: env, ports, docker, browser, status
 	@section "Environment"
 	@run_cmd "node --version" node --version || true
 	@run_cmd "pnpm --version" pnpm --version || true
+	@# Offer to install pnpm via corepack if missing
+	@if ! command -v pnpm >/dev/null 2>&1; then \
+		section "PNPM Setup"; \
+		if confirm "pnpm not found. Install via corepack now?"; then \
+			run_cmd "corepack enable" corepack enable || true; \
+			run_cmd "corepack prepare pnpm@10.18.3 --activate" corepack prepare pnpm@10.18.3 --activate || true; \
+		else \
+			hint "Skipping pnpm setup. Set NON_INTERACTIVE=1 to auto-skip prompts."; \
+		fi; \
+	fi
+	@# Offer to install dependencies if node_modules missing
+	@if [ ! -d node_modules ]; then \
+		section "Dependencies"; \
+		if confirm "Install root dependencies with pnpm install now?"; then \
+			run_cmd "pnpm install" pnpm install || true; \
+		else \
+			hint "Skipping pnpm install (root)."; \
+		fi; \
+	fi
 	@run_cmd "docker --version" docker --version || true
 	@run_cmd "docker compose version" docker compose version || true
 	@section "Docker Containers"

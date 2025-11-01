@@ -19,6 +19,21 @@ hint() {
   printf -- "👉 %s\n" "$*"
 }
 
+# confirm "message" -> returns 0 if user answered yes
+confirm() {
+  local msg="$1"
+  if [[ -n "${NON_INTERACTIVE:-}" ]]; then
+    hint "NON_INTERACTIVE=1: skipping prompt: $msg"
+    return 1
+  fi
+  printf "[?] %s [y/N]: " "$msg"
+  read -r ans || true
+  case "$ans" in
+    y|Y|yes|YES) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 # ========= Logging (combined only) =========
 
 # Ensure log directory; can be overridden via D3K_LOG_DIR
