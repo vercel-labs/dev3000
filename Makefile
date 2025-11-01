@@ -366,6 +366,43 @@ setup: ## Initial setup: deploy example (APP? default: nextjs16), build images, 
 		APP_NAME="$(APP)"; \
 	fi; \
 	$(MAKE) deploy-frontend APP=$$APP_NAME
+	@# Ensure pnpm exists
+	@if ! command -v pnpm >/dev/null 2>&1; then \
+		section "PNPM Setup"; \
+		if confirm "pnpm not found. Install via corepack now?"; then \
+			run_cmd "corepack enable" corepack enable || true; \
+			run_cmd "corepack prepare pnpm@10.18.3 --activate" corepack prepare pnpm@10.18.3 --activate || true; \
+		else \
+			hint "Skipping pnpm setup."; \
+		fi; \
+	fi
+	@# Install root dependencies when missing
+	@if [ ! -d node_modules ]; then \
+		section "Dependencies (root)"; \
+		if confirm "Install root dependencies with pnpm install now?"; then \
+			run_cmd "pnpm install (root)" pnpm install || true; \
+		else \
+			hint "Skipping pnpm install (root)."; \
+		fi; \
+	fi
+	@# Install frontend dependencies when missing
+	@if [ -f frontend/package.json ] && [ ! -d frontend/node_modules ]; then \
+		section "Dependencies (frontend)"; \
+		if confirm "Install frontend dependencies with pnpm install now?"; then \
+			/usr/bin/env bash -lc '. scripts/make-helpers.sh; run_cmd "pnpm install (frontend)" bash -lc "cd frontend && pnpm install"' || true; \
+		else \
+			hint "Skipping pnpm install (frontend)."; \
+		fi; \
+	fi
+	@# Optionally install .dev3000 deps (rarely needed on host; mostly installed in Docker build)
+	@if [ -f frontend/.dev3000/package.json ] && [ ! -d frontend/.dev3000/node_modules ]; then \
+		section "Dependencies (frontend/.dev3000)"; \
+		if confirm "Install frontend/.dev3000 deps on host? (Usually not required)"; then \
+			/usr/bin/env bash -lc '. scripts/make-helpers.sh; run_cmd "pnpm install (frontend/.dev3000)" bash -lc "cd frontend/.dev3000 && pnpm install"' || true; \
+		else \
+			hint "Skipping pnpm install (frontend/.dev3000)."; \
+		fi; \
+	fi
 	@echo ""
 	@echo "[SETUP] Building images and starting environment..."
 	@$(MAKE) dev-rebuild
@@ -412,9 +449,17 @@ diagnose: ## Comprehensive diagnostics: env, ports, docker, browser, status
 	@if [ ! -d node_modules ]; then \
 		section "Dependencies"; \
 		if confirm "Install root dependencies with pnpm install now?"; then \
-			run_cmd "pnpm install" pnpm install || true; \
+			run_cmd "pnpm install (root)" pnpm install || true; \
 		else \
 			hint "Skipping pnpm install (root)."; \
+		fi; \
+	fi
+	@if [ -f frontend/package.json ] && [ ! -d frontend/node_modules ]; then \
+		section "Dependencies (frontend)"; \
+		if confirm "Install frontend dependencies with pnpm install now?"; then \
+			/usr/bin/env bash -lc '. scripts/make-helpers.sh; run_cmd "pnpm install (frontend)" bash -lc "cd frontend && pnpm install"' || true; \
+		else \
+			hint "Skipping pnpm install (frontend)."; \
 		fi; \
 	fi
 	@run_cmd "docker --version" docker --version || true
