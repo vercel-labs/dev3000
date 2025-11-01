@@ -15,12 +15,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 10.18.3
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: 'pnpm'
-      - run: corepack enable
-      - run: corepack prepare pnpm@10.18.3 --activate
       - name: Run ShellSpec
         run: bash scripts/run-shellspec.sh -- --format junit --output reports/shellspec/junit.xml
         env:
@@ -30,4 +31,3 @@ jobs:
           name: shellspec-junit
           path: reports/shellspec/junit.xml
           if-no-files-found: warn
-
