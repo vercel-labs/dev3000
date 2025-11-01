@@ -23,6 +23,15 @@ fi
 if printf "%s" "$CHANGED" | grep -Eq '^frontend/'; then
   if [ -f frontend/package.json ]; then
     echo "🧪 Running frontend tests..."
-    (cd frontend && pnpm install --frozen-lockfile || pnpm install; pnpm test || echo "No frontend tests defined; skipping")
+    (
+      cd frontend
+      pnpm install --frozen-lockfile || pnpm install
+      if node -e 'const pkg=require("./package.json"); process.exit(pkg.scripts && pkg.scripts.test ? 0 : 1)' ; then
+        pnpm test
+      else
+        echo "No frontend tests defined; skipping"
+      fi
+    )
   fi
+fi
 fi
