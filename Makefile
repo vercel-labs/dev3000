@@ -484,6 +484,8 @@ log-clean: ## Clean the local make command logs directory
 	@dir=$$(D3K_LOG_DIR="$$D3K_LOG_DIR" bash -lc 'echo $${D3K_LOG_DIR:-.make-logs}'); \
 		echo "Cleaning logs in: $$dir"; \
 		rm -rf "$$dir"; \
+		mkdir -p "$$dir"; \
+		echo "# keep" > "$$dir/.keep"; \
 		echo "✅ Cleaned logs"
 
 log-ls: ## List recent entries in combined.log
