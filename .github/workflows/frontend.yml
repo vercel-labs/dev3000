@@ -11,6 +11,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
       - uses: pnpm/action-setup@v3
         with:
           version: 10.18.3
@@ -18,7 +21,6 @@ jobs:
         with:
           node-version: '22'
           cache: 'pnpm'
-          cache-dependency-path: 'frontend/pnpm-lock.yaml'
       - name: Install deps (frontend)
         run: |
           if [ -f frontend/package.json ]; then
