@@ -75,6 +75,8 @@ _combined_log_path() {
 run_cmd() {
   local name="$1"; shift
   local cmd=("$@")
+  local cwd
+  cwd=$(pwd -P 2>/dev/null || pwd)
   local t0=$(date +%s)
   local ts_iso=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
   local dir=$(_d3k_log_dir)
@@ -87,6 +89,7 @@ run_cmd() {
   kv Command "${cmd[*]}"
   kv LogDir "$dir"
   kv LogID "$id"
+  kv CWD "$cwd"
 
   if [[ "${D3K_LOG_DRY_RUN:-}" == "1" ]]; then
     kv Mode "DRY-RUN"
@@ -140,6 +143,7 @@ run_cmd() {
     printf "Mode: EXEC\n"
     printf "Name: %s\n" "$name"
     printf "Cmd: %s\n" "${cmd[*]}"
+    printf "Cwd: %s\n" "$cwd"
     printf "Exit: %s\n" "$rc"
     printf "Time: %ss\n" "$elapsed"
     printf "Stdout-Bytes: %s\n" "$stdout_len"

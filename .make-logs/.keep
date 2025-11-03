@@ -1,2 +1,1 @@
-# Log aggregation directory for make run_cmd
-# This file ensures the directory exists in the repo while other log files remain ignored.
+# keep
