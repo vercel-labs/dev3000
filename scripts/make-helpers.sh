@@ -77,11 +77,16 @@ run_cmd() {
   local cmd=("$@")
   local cwd
   cwd=$(pwd -P 2>/dev/null || pwd)
-  local t0=$(date +%s)
-  local ts_iso=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-  local dir=$(_d3k_log_dir)
-  local combined=$(_combined_log_path)
-  local id="$(date +%Y%m%dT%H%M%S)-$$-$RANDOM"
+  local t0
+  t0=$(date +%s)
+  local ts_iso
+  ts_iso=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+  local dir
+  dir=$(_d3k_log_dir)
+  local combined
+  combined=$(_combined_log_path)
+  local id
+  id="$(date +%Y%m%dT%H%M%S)-$$-$RANDOM"
   local out_file="$dir/${id}.out"
   local err_file="$dir/${id}.err"
 
@@ -123,7 +128,8 @@ run_cmd() {
   rc=$?
   set -e
 
-  local t1=$(date +%s)
+  local t1
+  t1=$(date +%s)
   local elapsed=$(($t1-$t0))
   kv Exit "$rc"
   kv Time "${elapsed}s"
@@ -134,8 +140,6 @@ run_cmd() {
   [[ -f "$out_file" ]] && stdout_len=$(wc -c <"$out_file" 2>/dev/null || echo 0)
   [[ -f "$err_file" ]] && stderr_len=$(wc -c <"$err_file" 2>/dev/null || echo 0)
   local stdout_trunc=false stderr_trunc=false
-  if (( stdout_len > max_bytes )); then stdout_trunc=true; fi
-  if (( stderr_len > max_bytes )); then stderr_trunc=true; fi
 
   {
     printf "===== ENTRY %s START =====\n" "$id"
