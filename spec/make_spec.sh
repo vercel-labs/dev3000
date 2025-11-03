@@ -34,7 +34,7 @@ Describe 'Make targets (ShellSpec)'
   End
 
   It 'dev-up shows all steps (real)'
-    Skip if "[ -n \"$CI\" ]"
+    Skip if "[ -n \"${CI:-}\" ]"
     When run run_make dev-up
     The status should be success
     The output should include 'Step 1: Starting Docker containers'
@@ -45,7 +45,7 @@ Describe 'Make targets (ShellSpec)'
   End
 
   It 'cdp-check logs intent (real)'
-    Skip if "[ -n \"$CI\" ]"
+    Skip if "[ -n \"${CI:-}\" ]"
     When run run_make cdp-check
     The status should be success
     The output should include 'CDP Reachability Check'
@@ -54,7 +54,7 @@ Describe 'Make targets (ShellSpec)'
   End
 
   It 'diagnose covers sections (real)'
-    Skip if "[ -n \"$CI\" ]"
+    Skip if "[ -n \"${CI:-}\" ]"
     When run run_make diagnose NON_INTERACTIVE=1
     The status should be success
     The output should include 'Environment'
@@ -66,7 +66,7 @@ Describe 'Make targets (ShellSpec)'
   End
 
   It 'dev-logs one-shot (real)'
-    Skip if "[ -n \"$CI\" ]"
+    Skip if "[ -n \"${CI:-}\" ]"
     When run run_make dev-logs D3K_LOG_ONE_SHOT=1
     The status should be success
     The output should include 'RUN: docker compose logs --tail 100'
@@ -74,7 +74,7 @@ Describe 'Make targets (ShellSpec)'
   End
 
   It 'dev-build no-cache (real)'
-    Skip if "[ -n \"$CI\" ]"
+    Skip if "[ -n \"${CI:-}\" ]"
         When run run_make dev-build
     The status should be success
     The output should include 'RUN: docker compose build --no-cache'
@@ -82,7 +82,7 @@ Describe 'Make targets (ShellSpec)'
   End
 
   It 'dev-build-fast with cache (real)'
-    Skip if "[ -n \"$CI\" ]"
+    Skip if "[ -n \"${CI:-}\" ]"
         When run run_make dev-build-fast
     The status should be success
     The output should include 'RUN: docker compose build (cache)'
@@ -90,7 +90,7 @@ Describe 'Make targets (ShellSpec)'
   End
 
   It 'dev-rebuild down + build (real)'
-    Skip if "[ -n \"$CI\" ]"
+    Skip if "[ -n \"${CI:-}\" ]"
         When run run_seq "make -s deploy-frontend APP=nextjs16 && make -s dev-rebuild"
     The status should be success
     The output should include 'RUN: docker compose down'
@@ -99,7 +99,7 @@ Describe 'Make targets (ShellSpec)'
   End
 
   It 'dev-rebuild-fast down + build cache (real)'
-    Skip if "[ -n \"$CI\" ]"
+    Skip if "[ -n \"${CI:-}\" ]"
         When run run_seq "make -s deploy-frontend APP=nextjs16 && make -s dev-rebuild-fast"
     The status should be success
     The output should include 'RUN: docker compose down'
@@ -108,7 +108,7 @@ Describe 'Make targets (ShellSpec)'
   End
 
   It 'dev-down wraps docker compose down (real)'
-    Skip if "[ -n \"$CI\" ]"
+    Skip if "[ -n \"${CI:-}\" ]"
     When run run_make dev-down
     The status should be success
     The output should include 'RUN: docker compose down'
@@ -116,7 +116,7 @@ Describe 'Make targets (ShellSpec)'
   End
 
   It 'status prints summary (real)'
-    Skip if "[ -n \"$CI\" ]"
+    Skip if "[ -n \"${CI:-}\" ]"
     When run run_make status
     The status should be success
     The output should include 'Dev3000 Status'
@@ -124,7 +124,7 @@ Describe 'Make targets (ShellSpec)'
   End
 
   It 'start-chrome-cdp delegates to xplat (real)'
-    Skip if "[ -n \"$CI\" ]"
+    Skip if "[ -n \"${CI:-}\" ]"
     When run run_make start-chrome-cdp
     The status should be success
     The output should include 'Starting Chrome with CDP (cross-platform launcher)'
@@ -132,7 +132,7 @@ Describe 'Make targets (ShellSpec)'
   End
 
   It 'stop-chrome-cdp executes stop logic (real)'
-    Skip if "[ -n \"$CI\" ]"
+    Skip if "[ -n \"${CI:-}\" ]"
     When run run_make stop-chrome-cdp
     The status should be success
     The output should include 'Stopping Chrome CDP'
@@ -175,7 +175,7 @@ Describe 'Make targets (ShellSpec)'
   End
 
   It 'setup deploys example and starts (real)'
-    Skip if "[ -n \"$CI\" ]"
+    Skip if "[ -n \"${CI:-}\" ]"
     When run run_seq "make -s setup APP=nextjs16 NON_INTERACTIVE=1"
     The status should be success
     The output should include 'Setup complete'
@@ -183,7 +183,7 @@ Describe 'Make targets (ShellSpec)'
   End
 
   It 'init is an alias of setup (real)'
-    Skip if "[ -n \"$CI\" ]"
+    Skip if "[ -n \"${CI:-}\" ]"
     When run run_seq "make -s init APP=nextjs16 NON_INTERACTIVE=1"
     The status should be success
     The output should include 'Setup complete'
@@ -205,7 +205,7 @@ Describe 'Make targets (ShellSpec)'
   End
 
   It 'dev-rebuild-frontend down + build cache (real)'
-    Skip if "[ -n \"$CI\" ]"
+    Skip if "[ -n \"${CI:-}\" ]"
         When run run_seq "make -s deploy-frontend APP=nextjs16 && make -s dev-rebuild-frontend"
     The status should be success
     The output should include 'RUN: docker compose down'
@@ -214,7 +214,7 @@ Describe 'Make targets (ShellSpec)'
   End
 
   It 'clean down -v and rm (real)'
-    Skip if "[ -n \"$CI\" ]"
+    Skip if "[ -n \"${CI:-}\" ]"
     When run run_make clean
     The status should be success
     The output should include 'RUN: docker compose down -v'
@@ -222,7 +222,7 @@ Describe 'Make targets (ShellSpec)'
   End
 
   It 'start-chrome-cdp-xplat logs intent (real)'
-    Skip if "[ -n \"$CI\" ]"
+    Skip if "[ -n \"${CI:-}\" ]"
     When run run_make start-chrome-cdp-xplat
     The status should be success
     The output should include 'RUN: launch chrome cdp'
