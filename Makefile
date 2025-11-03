@@ -191,7 +191,7 @@ dev-rebuild: ## Rebuild and restart Docker environment
 		$(MAKE) deploy-frontend APP=nextjs16; \
 	fi
 	@run_cmd "docker compose down" docker compose down
-	@/usr/bin/env bash -lc 'cd "$(MAKEFILE_DIR)" && . scripts/make-helpers.sh && run_cmd "docker compose build --no-cache" bash -lc "DOCKER_BUILDKIT=1 docker compose build --no-cache"'
+	@/usr/bin/env bash -lc 'cd "$(MAKEFILE_DIR)" && . scripts/make-helpers.sh && run_cmd "docker compose build --no-cache" bash -lc "DOCKER_BUILDKIT=1 docker compose build --no-cache"' || true
 	@$(MAKE) dev-up
 	@END_TS=$$(date +%s); ELAPSED=$$((END_TS-START_TS)); echo "[RUN] End:   $$(date '+%Y-%m-%d %H:%M:%S') (elapsed: $${ELAPSED}s)"
 
@@ -205,7 +205,7 @@ dev-rebuild-fast: ## Fast rebuild using cache (for minor changes)
 		$(MAKE) deploy-frontend APP=nextjs16; \
 	fi
 	@run_cmd "docker compose down" docker compose down
-	@/usr/bin/env bash -lc 'cd "$(MAKEFILE_DIR)" && . scripts/make-helpers.sh && run_cmd "docker compose build (cache)" bash -lc "DOCKER_BUILDKIT=1 docker compose build"'
+	@/usr/bin/env bash -lc 'cd "$(MAKEFILE_DIR)" && . scripts/make-helpers.sh && run_cmd "docker compose build (cache)" bash -lc "DOCKER_BUILDKIT=1 docker compose build"' || true
 	@$(MAKE) dev-up
 	@END_TS=$$(date +%s); ELAPSED=$$((END_TS-START_TS)); echo "[RUN] End:   $$(date '+%Y-%m-%d %H:%M:%S') (elapsed: $${ELAPSED}s)"
 
@@ -214,14 +214,14 @@ dev-build: ## Build Docker images without cache (no start)
 	@START_TS=$$(date +%s); echo "[RUN] Start: $$(date '+%Y-%m-%d %H:%M:%S')"
 	$(LOAD_HELPERS)
 	@echo "Building images (no-cache)..."
-	@/usr/bin/env bash -lc 'cd "$(MAKEFILE_DIR)" && . scripts/make-helpers.sh && run_cmd "docker compose build --no-cache" bash -lc "DOCKER_BUILDKIT=1 docker compose build --no-cache"'
+	@/usr/bin/env bash -lc 'cd "$(MAKEFILE_DIR)" && . scripts/make-helpers.sh && run_cmd "docker compose build --no-cache" bash -lc "DOCKER_BUILDKIT=1 docker compose build --no-cache"' || true
 	@END_TS=$$(date +%s); ELAPSED=$$((END_TS-START_TS)); echo "[RUN] End:   $$(date '+%Y-%m-%d %H:%M:%S') (elapsed: $${ELAPSED}s)"
 
 dev-build-fast: ## Build Docker images with cache (no start)
 	@START_TS=$$(date +%s); echo "[RUN] Start: $$(date '+%Y-%m-%d %H:%M:%S')"
 	$(LOAD_HELPERS)
 	@echo "Building images (with cache)..."
-	@/usr/bin/env bash -lc 'cd "$(MAKEFILE_DIR)" && . scripts/make-helpers.sh && run_cmd "docker compose build (cache)" bash -lc "DOCKER_BUILDKIT=1 docker compose build"'
+	@/usr/bin/env bash -lc 'cd "$(MAKEFILE_DIR)" && . scripts/make-helpers.sh && run_cmd "docker compose build (cache)" bash -lc "DOCKER_BUILDKIT=1 docker compose build"' || true
 	@END_TS=$$(date +%s); ELAPSED=$$((END_TS-START_TS)); echo "[RUN] End:   $$(date '+%Y-%m-%d %H:%M:%S') (elapsed: $${ELAPSED}s)"
 
 dev3000-sync: ## Update dev3000 submodule to latest version
@@ -316,7 +316,8 @@ deploy-frontend: ## Deploy example app to frontend directory (e.g., make deploy-
 	cd "$(MAKEFILE_DIR)"; \
 	. scripts/make-helpers.sh; \
 	echo "📦 Deploying example/$(APP) to frontend/..."; \
-	. scripts/make-helpers.sh; run_cmd "rm -rf frontend" rm -rf frontend; \
+	. scripts/make-helpers.sh; run_cmd "chmod frontend writable" bash -lc 'chmod -R u+w frontend 2>/dev/null || true'; \
+	. scripts/make-helpers.sh; run_cmd "rm -rf frontend" rm -rf frontend || true; \
 	. scripts/make-helpers.sh; run_cmd "mkdir -p frontend" mkdir -p frontend; \
 	. scripts/make-helpers.sh; run_cmd "rsync example -> frontend" rsync -av --exclude=node_modules --exclude=.next --exclude=out --exclude=.pnpm-store example/$(APP)/ frontend/; \
 	# Ensure frontend/Dockerfile.dev exists for docker compose builds
