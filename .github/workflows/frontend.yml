@@ -17,10 +17,18 @@ jobs:
       - uses: pnpm/action-setup@v3
         with:
           version: 10.18.3
-      - uses: actions/setup-node@v4
+      - name: Setup Node (no cache)
+        if: ${{ hashFiles('frontend/pnpm-lock.yaml') == '' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Setup Node (with pnpm cache)
+        if: ${{ hashFiles('frontend/pnpm-lock.yaml') != '' }}
+        uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: 'pnpm'
+          cache-dependency-path: 'frontend/pnpm-lock.yaml'
       - name: Install deps (frontend)
         run: |
           if [ -f frontend/package.json ]; then
