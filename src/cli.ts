@@ -8,6 +8,7 @@ import { detect } from "package-manager-detector"
 import { dirname, join } from "path"
 import { fileURLToPath } from "url"
 import { createPersistentLogFile, startDevEnvironment } from "./dev-environment.js"
+import { detectAIAgent } from "./utils/agent-detection.js"
 import { getProjectName } from "./utils/project-name.js"
 
 interface ProjectConfig {
@@ -267,6 +268,18 @@ program
 
     // Detect project type and configuration
     const projectConfig = await detectProjectType(options.debug)
+
+    // Detect if running under an AI agent and auto-disable TUI
+    const agentDetection = detectAIAgent()
+    if (agentDetection.isAgent && options.tui !== false) {
+      if (options.debug) {
+        console.log(
+          `[DEBUG] AI agent detected: ${agentDetection.agentName} (${agentDetection.reason}), auto-disabling TUI`
+        )
+      }
+      // Override TUI setting to false when agent is detected
+      options.tui = false
+    }
 
     // Use defaults from project detection if not explicitly provided
     const port = options.port || projectConfig.defaultPort
