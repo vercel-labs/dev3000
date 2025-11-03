@@ -9,6 +9,7 @@ on:
 
 jobs:
   test-release:
+    if: ${{ github.event_name != 'pull_request' }}
     runs-on: macos-latest
     
     steps:
@@ -32,5 +33,6 @@ jobs:
       - run: pnpm install
       
       # Run the full release test suite
-      - name: Run Release Tests
+      - name: Run Release Tests (skipped for PR)
+        if: ${{ github.event_name != 'pull_request' }}
         run: ./scripts/test-release.sh
