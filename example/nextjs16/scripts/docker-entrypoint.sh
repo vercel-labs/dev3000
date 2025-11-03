@@ -1,4 +1,22 @@
 #!/bin/sh
+# -----------------------------------------------------------------------------
+# Dev3000 monorepo entrypoint（実運用版）
+#
+# 用途:
+#   - このリポの example/nextjs16 を起動するための実運用向けエントリポイントです。
+#
+# 対になるテンプレート（外部導入時のコピー元）:
+#   - example/nextjs16/reference/scripts/docker-entrypoint.sh
+#     → 外部プロジェクトへコピーして使う前提で、読みやすさを優先しています。
+#
+# 同期ポリシー:
+#   - 機能変更は原則 monorepo 側（本ファイル）と reference 側の両方に反映してください。
+#   - 差分がある場合は、その理由をコメントで残してください。
+#
+# 同梱ポリシー (Bundling Policy):
+#   - reference/ 版は npm 配布物には同梱しません（package.json の files を参照）。
+#   - ユーザーは `.dev3000/.../reference/` から自身のプロジェクトへコピーして利用します。
+# -----------------------------------------------------------------------------
 set -e
 
 # Fix permissions for WSL2 mounted volumes
@@ -89,4 +107,3 @@ fi
 # Start dev3000
 echo "Starting dev3000..."
 exec node /usr/local/lib/dev3000/dist/cli.js "$@"
-
