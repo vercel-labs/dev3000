@@ -21,7 +21,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'pnpm'
       - name: Run ShellSpec
         run: bash scripts/run-shellspec.sh -- --format junit --output reports/shellspec/junit.xml
         env:
