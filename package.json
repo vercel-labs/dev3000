@@ -31,7 +31,7 @@
     "README.md"
   ],
   "scripts": {
-    "preinstall": "bunx only-allow pnpm",
+    "preinstall": "node -e \"process.exit((process.env.npm_config_global==='true'||process.env.CI==='true')?0:1)\" || bunx only-allow pnpm",
     "build": "tsc && mkdir -p dist/src && cp src/loading.html dist/src/ && cp src/tui-interface-impl.tsx dist/src/",
     "typegen": "./scripts/typegen.sh",
     "typecheck": "tsc --noEmit",

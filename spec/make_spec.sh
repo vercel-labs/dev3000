@@ -162,6 +162,20 @@ Describe 'Make targets (ShellSpec)'
     The stderr should be present
   End
 
+  It 'setup deploys example and starts (real)'
+    When run run_seq "make -s setup APP=nextjs16 NON_INTERACTIVE=1"
+    The status should be success
+    The output should include 'Setup complete'
+    The stderr should be present
+  End
+
+  It 'init is an alias of setup (real)'
+    When run run_seq "make -s init APP=nextjs16 NON_INTERACTIVE=1"
+    The status should be success
+    The output should include 'Setup complete'
+    The stderr should be present
+  End
+
   It 'deploy-and-start requires APP (real)'
     When run run_make deploy-and-start
     The status should be failure

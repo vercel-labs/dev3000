@@ -75,6 +75,8 @@ _combined_log_path() {
 run_cmd() {
   local name="$1"; shift
   local cmd=("$@")
+  local cwd
+  cwd=$(pwd -P 2>/dev/null || pwd)
   local t0
   t0=$(date +%s)
   local ts_iso
@@ -92,6 +94,7 @@ run_cmd() {
   kv Command "${cmd[*]}"
   kv LogDir "$dir"
   kv LogID "$id"
+  kv CWD "$cwd"
 
   if [[ "${D3K_LOG_DRY_RUN:-}" == "1" ]]; then
     kv Mode "DRY-RUN"
@@ -137,9 +140,6 @@ run_cmd() {
   [[ -f "$out_file" ]] && stdout_len=$(wc -c <"$out_file" 2>/dev/null || echo 0)
   [[ -f "$err_file" ]] && stderr_len=$(wc -c <"$err_file" 2>/dev/null || echo 0)
   local stdout_trunc=false stderr_trunc=false
-  local stdout_len=0 stderr_len=0
-  [[ -f "$out_file" ]] && stdout_len=$(wc -c <"$out_file" 2>/dev/null || echo 0)
-  [[ -f "$err_file" ]] && stderr_len=$(wc -c <"$err_file" 2>/dev/null || echo 0)
 
   {
     printf "===== ENTRY %s START =====\n" "$id"
@@ -147,6 +147,7 @@ run_cmd() {
     printf "Mode: EXEC\n"
     printf "Name: %s\n" "$name"
     printf "Cmd: %s\n" "${cmd[*]}"
+    printf "Cwd: %s\n" "$cwd"
     printf "Exit: %s\n" "$rc"
     printf "Time: %ss\n" "$elapsed"
     printf "Stdout-Bytes: %s\n" "$stdout_len"

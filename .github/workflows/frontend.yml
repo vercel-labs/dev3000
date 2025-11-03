@@ -1,0 +1,40 @@
+name: Frontend Tests
+on:
+  push:
+    paths:
+      - 'frontend/**'
+  pull_request:
+    paths:
+      - 'frontend/**'
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 10.18.3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install deps (frontend)
+        run: |
+          if [ -f frontend/package.json ]; then
+            cd frontend
+            pnpm install --frozen-lockfile || pnpm install
+          else
+            echo "No frontend/package.json; skipping install"
+          fi
+      - name: Run frontend tests
+        run: |
+          if [ -f frontend/package.json ]; then
+            cd frontend
+            if node -e 'const pkg=require("./package.json"); process.exit(pkg.scripts && pkg.scripts.test ? 0 : 1)' ; then
+              pnpm test
+            else
+              echo "No frontend tests defined; skipping"
+            fi
+          fi

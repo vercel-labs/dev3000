@@ -1,0 +1,32 @@
+name: ShellSpec
+on:
+  push:
+    paths:
+      - 'Makefile'
+      - 'scripts/**'
+      - 'spec/**'
+  pull_request:
+    paths:
+      - 'Makefile'
+      - 'scripts/**'
+      - 'spec/**'
+jobs:
+  shellspec:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 10.18.3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run ShellSpec
+        run: bash scripts/run-shellspec.sh -- --format junit --output reports/shellspec/junit.xml
+        env:
+          NON_INTERACTIVE: '1'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: shellspec-junit
+          path: reports/shellspec/junit.xml
+          if-no-files-found: warn

@@ -18,15 +18,20 @@ jobs:
     
     steps:
       - uses: actions/checkout@v4
-      
+
+      # Install bun for preinstall script (bunx only-allow pnpm)
+      - uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
-      
+
       # Install pnpm
       - uses: pnpm/action-setup@v3
         with:
-          version: 9
+          version: 10.18.3
       
       # Install dependencies and build
       - run: pnpm install
