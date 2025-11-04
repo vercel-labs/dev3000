@@ -77,38 +77,46 @@ export async function cloudFix(options: CloudFixOptions = {}): Promise<void> {
     console.log(`  ✅ Dev server ready: ${devUrl}`)
     console.log()
 
-    // Start MCP server in sandbox
-    console.log("🔧 Starting MCP server in sandbox...")
-    await sandbox.runCommand({
-      cmd: "npx",
-      args: ["tsx", "mcp-server/index.ts"],
-      detached: true,
+    // Run d3k with crawl command in sandbox
+    console.log("🔧 Running d3k crawl in sandbox...")
+    console.log(`  Target: ${devUrl}`)
+    console.log()
+
+    // Run d3k in the sandbox to crawl the dev server
+    const crawlResult = await sandbox.runCommand({
+      cmd: installCmd,
+      args: [
+        "exec",
+        "d3k",
+        "start",
+        "--url",
+        devUrl,
+        "--servers-only",
+        "--disable-tui"
+      ],
       stdout: debug ? process.stdout : undefined,
       stderr: debug ? process.stderr : undefined
     })
 
-    // Wait for MCP server to be ready
-    await waitForServer(sandbox, 3684, 30000)
-    const mcpUrl = sandbox.domain(3684)
-    console.log(`  ✅ MCP server ready: ${mcpUrl}`)
+    console.log(`\n  ✅ d3k crawl completed (exit code: ${crawlResult.exitCode})`)
     console.log()
 
-    // TODO: Connect to MCP server and run tools
-    console.log("🔧 Analyzing with MCP tools...")
-    console.log("  Running crawl_my_site...")
-    console.log("  (TODO: Implement MCP client connection)")
+    // TODO: Run fix_my_app tool
+    console.log("🔧 Running fix_my_app tool...")
+    console.log("  (TODO: Implement fix_my_app integration)")
     console.log()
 
-    console.log("⚠️  Full implementation coming soon!")
-    console.log(`\nFor now, you can manually test your app at: ${devUrl}`)
-    console.log(`MCP server is running at: ${mcpUrl}`)
-    console.log(`\nPress Ctrl+C when done to clean up the sandbox.`)
+    // TODO: Extract changes and create PR
+    console.log("📤 Creating pull request...")
+    console.log("  (TODO: Implement PR creation)")
+    console.log()
 
-    // Keep sandbox running until user stops
-    await new Promise((resolve) => {
-      process.on("SIGINT", resolve)
-      process.on("SIGTERM", resolve)
-    })
+    console.log("✅ Analysis complete!")
+    console.log(`\nYou can view the app at: ${devUrl}`)
+    console.log("\nNext steps:")
+    console.log("  1. Integrate fix_my_app tool to generate fixes")
+    console.log("  2. Extract changed files from sandbox")
+    console.log("  3. Create PR with fixes")
   } finally {
     console.log("\n🧹 Cleaning up sandbox...")
     await sandbox.stop()
