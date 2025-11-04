@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import type { CloudStatus } from "../../../../lib/cloud/types"
+import type { CloudStatus, ProductionError, ReproductionResult } from "../../../../lib/cloud/types"
 
 /**
  * Cloud Status API
@@ -11,8 +11,8 @@ import type { CloudStatus } from "../../../../lib/cloud/types"
 
 // Import the errors map from detect endpoint
 // Note: This is a simplified approach for POC. Phase 2 will use proper shared storage
-let errors: Map<string, any> | undefined
-let reproductions: Map<string, any> | undefined
+let errors: Map<string, ProductionError> | undefined
+let reproductions: Map<string, ReproductionResult> | undefined
 
 try {
   // Dynamic import to avoid circular dependencies

@@ -20,12 +20,13 @@ vercel --prod
 
 ### 2. Configure Environment Variables
 
-Required variables (set in Vercel dashboard):
+Required variables (set in Vercel dashboard or via CLI):
 
 ```bash
-VERCEL_SANDBOX_TOKEN=<your-token>  # Get from vercel.com/account/tokens
 REPO_URL=https://github.com/vercel-labs/dev3000.git
 ```
+
+Note: Vercel Sandbox uses OIDC tokens automatically - no separate sandbox token needed!
 
 ### 3. Test Your Deployment
 

@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto"
 import { type NextRequest, NextResponse } from "next/server"
-import type { ReproductionRequest, ReproductionResult } from "../../../../lib/cloud/types"
+import { createSandboxManager } from "../../../../lib/cloud/sandbox-manager"
+import type { ProductionError, ReproductionRequest, ReproductionResult } from "../../../../lib/cloud/types"
 
 /**
  * Cloud Error Reproduction API
@@ -15,7 +16,7 @@ import type { ReproductionRequest, ReproductionResult } from "../../../../lib/cl
 export const reproductions: Map<string, ReproductionResult> = new Map()
 
 // Import errors from detect endpoint
-let errors: Map<string, any> | undefined
+let errors: Map<string, ProductionError> | undefined
 try {
   const detectModule = await import("../detect/route")
   errors = detectModule.errors
@@ -49,32 +50,36 @@ export async function POST(request: NextRequest) {
 
     console.log(`[Cloud] Reproduction queued: ${reproduction.id} for error ${body.errorId}`)
 
-    // In Phase 1, we'll just mark as pending
-    // Phase 2 will actually spin up Vercel Sandbox
-    // For now, simulate async processing
-    setTimeout(async () => {
+    // Start async reproduction in Vercel Sandbox
+    // Note: In production, this should use Vercel Queues or Workflow for better durability
+    setImmediate(async () => {
       try {
         reproduction.status = "running"
         reproductions.set(reproduction.id, reproduction)
+        console.log(`[Cloud] Starting sandbox reproduction: ${reproduction.id}`)
 
-        // TODO: Actually run in Vercel Sandbox
-        // const result = await runInSandbox(error, body)
+        // Create sandbox manager and run reproduction
+        const sandboxManager = createSandboxManager()
+        const result = await sandboxManager.reproduceError(error)
 
-        // Simulate completion
-        reproduction.status = "completed"
+        // Update reproduction with results
+        reproduction.status = result.success ? "completed" : "failed"
         reproduction.completedAt = new Date().toISOString()
-        reproduction.analysis = `Error reproduced: ${error.message}`
-        reproduction.logs = "Simulated log output from sandbox"
+        reproduction.analysis = result.analysis
+        reproduction.logs = result.logs
+        reproduction.error = result.error
         reproductions.set(reproduction.id, reproduction)
 
-        // Mark error as reproduced
-        if (errors) {
+        // Mark error as reproduced if successful
+        if (result.success && errors) {
           error.reproduced = true
           error.reproductionId = reproduction.id
           errors.set(body.errorId, error)
         }
 
-        console.log(`[Cloud] Reproduction completed: ${reproduction.id}`)
+        console.log(
+          `[Cloud] Reproduction ${result.success ? "completed" : "failed"}: ${reproduction.id} (${result.duration}ms)`
+        )
       } catch (err) {
         reproduction.status = "failed"
         reproduction.error = err instanceof Error ? err.message : "Unknown error"
@@ -82,7 +87,7 @@ export async function POST(request: NextRequest) {
         reproductions.set(reproduction.id, reproduction)
         console.error(`[Cloud] Reproduction failed: ${reproduction.id}`, err)
       }
-    }, 2000) // Simulate 2s processing
+    })
 
     return NextResponse.json({
       success: true,

@@ -45,9 +45,6 @@ vercel link
 Add the following environment variables in your Vercel project settings:
 
 ```bash
-# Required for Vercel Sandbox integration
-VERCEL_SANDBOX_TOKEN=<get-from-vercel-dashboard>
-
 # Repository URL for cloning in sandbox
 REPO_URL=https://github.com/vercel-labs/dev3000.git
 
@@ -59,11 +56,9 @@ LOG_FILE_PATH=/tmp/d3k/logs
 SCREENSHOT_DIR=/tmp/d3k/screenshots
 ```
 
-### Getting Your Sandbox Token
+### Authentication
 
-1. Go to https://vercel.com/account/tokens
-2. Create a new token with "Sandbox" scope
-3. Copy the token and add as `VERCEL_SANDBOX_TOKEN` environment variable
+Vercel Sandbox uses OIDC tokens automatically - no separate sandbox token needed! The SDK will automatically use the `VERCEL_OIDC_TOKEN` that Vercel provides to all deployed functions. For local development, run `vercel env pull` to get a development OIDC token in `.env.local`.
 
 ## Step 3: Configure Ignored Build Step (Monorepo)
 
