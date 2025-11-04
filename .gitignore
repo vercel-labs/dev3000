@@ -11,3 +11,5 @@ mcp-server/.next/*
 .claude/
 .mcp.json
 next-devtools-mcp/
+.vercel
+.env*.local

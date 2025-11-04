@@ -1,6 +1,6 @@
 import { execSync } from "node:child_process"
 import { existsSync, readFileSync } from "node:fs"
-import { join } from "node:path"
+import { dirname, join } from "node:path"
 
 export interface ProjectInfo {
   /** Project directory path */
@@ -32,9 +32,9 @@ export async function detectProject(cwd: string = process.cwd()): Promise<Projec
   // Read package.json
   const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf-8"))
 
-  // Detect git repository
-  const gitDir = join(cwd, ".git")
-  if (!existsSync(gitDir)) {
+  // Detect git repository (walk up to find .git directory)
+  const gitDir = findGitRoot(cwd)
+  if (!gitDir) {
     throw new Error("Not a git repository. Please initialize git first.")
   }
 
@@ -42,7 +42,7 @@ export async function detectProject(cwd: string = process.cwd()): Promise<Projec
   let repoUrl: string
   try {
     const remoteUrl = execSync("git config --get remote.origin.url", {
-      cwd,
+      cwd: gitDir,
       encoding: "utf-8"
     }).trim()
 
@@ -56,7 +56,7 @@ export async function detectProject(cwd: string = process.cwd()): Promise<Projec
   let branch: string
   try {
     branch = execSync("git rev-parse --abbrev-ref HEAD", {
-      cwd,
+      cwd: gitDir,
       encoding: "utf-8"
     }).trim()
   } catch {
@@ -81,6 +81,24 @@ export async function detectProject(cwd: string = process.cwd()): Promise<Projec
     framework,
     packageManager
   }
+}
+
+/**
+ * Find git root directory by walking up from cwd
+ */
+function findGitRoot(startDir: string): string | null {
+  let currentDir = startDir
+
+  // Walk up to root looking for .git
+  while (currentDir !== "/") {
+    const gitDir = join(currentDir, ".git")
+    if (existsSync(gitDir)) {
+      return currentDir
+    }
+    currentDir = dirname(currentDir)
+  }
+
+  return null
 }
 
 /**
