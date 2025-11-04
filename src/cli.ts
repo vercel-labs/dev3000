@@ -7,6 +7,7 @@ import { homedir, tmpdir } from "os"
 import { detect } from "package-manager-detector"
 import { dirname, join } from "path"
 import { fileURLToPath } from "url"
+import { cloudFix } from "./commands/cloud-fix.js"
 import { createPersistentLogFile, startDevEnvironment } from "./dev-environment.js"
 import { detectAIAgent } from "./utils/agent-detection.js"
 import { getProjectName } from "./utils/project-name.js"
@@ -378,6 +379,23 @@ program
       })
     } catch (error) {
       console.error(chalk.red("❌ Failed to start development environment:"), error)
+      process.exit(1)
+    }
+  })
+
+// Cloud fix command
+program
+  .command("cloud")
+  .description("Cloud-based tools using Vercel Sandbox")
+  .command("fix")
+  .description("Analyze and fix issues in current project using Vercel Sandbox + MCP tools")
+  .option("--debug", "Enable debug logging")
+  .option("--timeout <duration>", "Sandbox timeout (e.g. '30m', '1h')", "30m")
+  .action(async (options) => {
+    try {
+      await cloudFix(options)
+    } catch (error) {
+      console.error(chalk.red("❌ Cloud fix failed:"), error)
       process.exit(1)
     }
   })
