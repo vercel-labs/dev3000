@@ -39,7 +39,13 @@ confirm() {
 # Ensure log directory; can be overridden via D3K_LOG_DIR
 _d3k_log_dir() {
   local dir="${D3K_LOG_DIR:-.make-logs}"
-  mkdir -p "$dir" 2>/dev/null || true
+  if ! mkdir -p "$dir" 2>/dev/null; then
+    local fallback="${D3K_FALLBACK_LOG_DIR:-/tmp/dev3000-make-logs}"
+    if mkdir -p "$fallback" 2>/dev/null; then
+      dir="$fallback"
+      printf "LogDirFallback: %s\n" "$dir" >&2
+    fi
+  fi
   printf "%s" "$dir"
 }
 

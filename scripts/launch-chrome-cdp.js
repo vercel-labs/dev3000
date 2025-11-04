@@ -233,34 +233,43 @@ function waitForAnyCdp(urls, retries = 5, delayMs = 1000) {
   })
 }
 
-function quickCheckCdp(checkUrl) {
-  return new Promise((resolve) => {
-    try {
-      // In WSL, if checking Windows localhost, prefer calling curl.exe (Windows) for accuracy
-      if (isWSL() && checkUrl.startsWith("http://localhost:")) {
-        const curlCmd = resolveWindowsCurl()
-        if (curlCmd) {
-          const r = spawnSync(curlCmd, ["-sSf", checkUrl], { stdio: ["ignore", "ignore", "ignore"] })
-          resolve(r.status === 0)
-        } else {
+async function quickCheckCdp(checkUrl) {
+  const probeFromWSL = () =>
+    new Promise((resolve) => {
+      try {
+        const req = http.get(checkUrl, (res) => {
+          res.resume()
+          resolve(true)
+        })
+        req.on("error", () => resolve(false))
+        req.setTimeout(1000, () => {
+          req.destroy()
           resolve(false)
-        }
-        return
-      }
-
-      const req = http.get(checkUrl, (res) => {
-        res.resume()
-        resolve(true)
-      })
-      req.on("error", () => resolve(false))
-      req.setTimeout(1000, () => {
-        req.destroy()
+        })
+      } catch {
         resolve(false)
-      })
-    } catch {
-      resolve(false)
+      }
+    })
+
+  if (isWSL() && checkUrl.startsWith("http://localhost:")) {
+    const wslOk = await probeFromWSL()
+    if (wslOk) {
+      return true
     }
-  })
+
+    const curlCmd = resolveWindowsCurl()
+    if (curlCmd) {
+      const r = spawnSync(curlCmd, ["-sSf", checkUrl], { stdio: ["ignore", "ignore", "ignore"] })
+      if (r.status === 0) {
+        console.log(
+          "Detected Chrome DevTools endpoint from Windows, but WSL could not reach it directly. Will restart Chrome with 0.0.0.0 binding."
+        )
+      }
+    }
+    return false
+  }
+
+  return await probeFromWSL()
 }
 
 function windowsChromeInstalled() {
@@ -326,7 +335,21 @@ async function main() {
     appUrl
   ]
 
+  if (process.platform === "win32" || isWSL()) {
+    _args.unshift("--remote-debugging-address=0.0.0.0")
+  }
+
   if (isWSL()) {
+    // Ensure any existing Chrome started with remote-debugging-port is terminated so we can re-launch with correct flags
+    try {
+      spawnSync("powershell.exe", [
+        "-Command",
+        "try { Get-Process chrome | Where-Object { $_.CommandLine -like '*remote-debugging-port*' } | Stop-Process -ErrorAction SilentlyContinue } catch { }"
+      ])
+    } catch {
+      // Ignore errors; best effort cleanup
+    }
+
     // Launch Windows Chrome from WSL (or install it if missing)
     // Check if Chrome exists (robust checks beyond PATH)
     const chromeExists = windowsChromeInstalled()

@@ -23,6 +23,7 @@ interface MCPClientConfig {
   url?: string // For HTTP transport
   command?: string // For stdio transport
   args?: string[] // For stdio transport
+  env?: Record<string, string> // For stdio transport
   enabled: boolean
 }
 
@@ -39,9 +40,9 @@ export class MCPClientManager {
    * Initialize MCP clients for available downstream servers
    */
   async initialize(config: {
-    chromeDevtools?: { command: string; args: string[]; enabled: boolean }
-    nextjsDev?: { command: string; args: string[]; enabled: boolean }
-    svelteDev?: { command: string; args: string[]; enabled: boolean }
+    chromeDevtools?: { command: string; args: string[]; env?: Record<string, string>; enabled: boolean }
+    nextjsDev?: { command: string; args: string[]; env?: Record<string, string>; enabled: boolean }
+    svelteDev?: { command: string; args: string[]; env?: Record<string, string>; enabled: boolean }
   }): Promise<void> {
     const configs: MCPClientConfig[] = []
 
@@ -51,6 +52,7 @@ export class MCPClientManager {
         type: "stdio",
         command: config.chromeDevtools.command,
         args: config.chromeDevtools.args,
+        env: config.chromeDevtools.env,
         enabled: true
       })
     }
@@ -61,6 +63,7 @@ export class MCPClientManager {
         type: "stdio",
         command: config.nextjsDev.command,
         args: config.nextjsDev.args,
+        env: config.nextjsDev.env,
         enabled: true
       })
     }
@@ -71,6 +74,7 @@ export class MCPClientManager {
         type: "stdio",
         command: config.svelteDev.command,
         args: config.svelteDev.args,
+        env: config.svelteDev.env,
         enabled: true
       })
     }
@@ -119,7 +123,8 @@ export class MCPClientManager {
     } else if (config.type === "stdio" && config.command) {
       transport = new StdioClientTransport({
         command: config.command,
-        args: config.args || []
+        args: config.args || [],
+        env: config.env
       })
     } else {
       throw new Error(`Invalid MCP config for ${config.name}`)
@@ -336,11 +341,15 @@ export class MCPClientManager {
 }
 
 // Singleton instance
-let clientManager: MCPClientManager | null = null
-
+// Use a global singleton so that separate Next.js route bundles
+// (e.g., /mcp and /api/orchestrator) share the same client manager instance.
+// Without this, each route can end up with its own module graph and its own
+// in-memory singleton, leading to connected MCPs not being visible from
+// other routes.
 export function getMCPClientManager(): MCPClientManager {
-  if (!clientManager) {
-    clientManager = new MCPClientManager()
+  const g = globalThis as unknown as { __d3kMcpClientManager?: MCPClientManager }
+  if (!g.__d3kMcpClientManager) {
+    g.__d3kMcpClientManager = new MCPClientManager()
   }
-  return clientManager
+  return g.__d3kMcpClientManager
 }

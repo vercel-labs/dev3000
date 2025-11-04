@@ -1,19 +1,18 @@
 # Dev3000 Development Dockerfile
 # -----------------------------------------------------------------------------
-# reference/ 版（テンプレート）
-# - 外部プロジェクトに導入する際のコピー元です。
-# - 内容は example/nextjs16/Dockerfile.dev と概ね同一ですが、
-#   テンプレートとして読みやすさを優先します。
+# monorepo example 版（実運用）
+# - example アプリのビルド検証に実際に使用されます。
 #
-# 対になる実運用ファイル（このリポ内）:
-# - example/nextjs16/Dockerfile.dev
+# 参照（テンプレート版）:
+# - example/nextjs16/reference/Dockerfile.dev
+#   → 外部プロジェクトへコピーする想定の読みやすいテンプレートです。
 #
 # 同期ポリシー:
 # - 片方を更新したらもう片方にも反映してください（差分がある場合は理由をコメント化）。
 #
 # 同梱ポリシー (Bundling Policy):
-# - 本テンプレートは npm 配布物には同梱しません（package.json の files を参照）。
-# - `.dev3000` をサブモジュールとして導入後、`reference/` からコピーして利用します。
+# - 本ファイルは npm 配布物には同梱しません（package.json の files を参照）。
+# - このリポの example 用であり、ユーザーは reference 版をコピーして利用します。
 # -----------------------------------------------------------------------------
 # This Dockerfile builds dev3000 and runs it with the user's frontend application
 #
@@ -41,7 +40,12 @@ RUN corepack enable && corepack prepare pnpm@10.20.0 --activate
 ENV BUN_INSTALL=/root/.bun
 RUN curl -fsSL https://bun.sh/install | bash
 ENV PATH="${BUN_INSTALL}/bin:${PATH}"
-RUN ln -sf /root/.bun/bin/bunx /usr/local/bin/bunx && \
+# Create a robust bunx shim: if bunx binary is missing, provide a wrapper to use 'bun x'
+RUN if [ -x /root/.bun/bin/bunx ]; then \
+      ln -sf /root/.bun/bin/bunx /usr/local/bin/bunx; \
+    else \
+      printf '#!/bin/sh\nif [ "$1" = "--version" ] || [ "$1" = "-v" ]; then exec bun --version; else exec bun x "$@"; fi\n' > /usr/local/bin/bunx && chmod +x /usr/local/bin/bunx; \
+    fi && \
     ln -sf /root/.bun/bin/bun /usr/local/bin/bun
 
 # Build dev3000 stage
@@ -71,6 +75,8 @@ RUN pnpm run build
 
 # Build mcp-server (Next.js app)
 WORKDIR /build/mcp-server
+# Ensure mcp-server dependencies are installed in package context (workspace root install may not create local bin)
+RUN pnpm install --frozen-lockfile --ignore-scripts || pnpm install --ignore-scripts
 RUN pnpm run build
 
 # Development stage

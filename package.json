@@ -97,5 +97,5 @@
   },
   "author": "automationjp (forked from Lindsey Simon <lindsey@vercel.com>)",
   "license": "MIT",
-  "packageManager": "pnpm@10.18.3"
+  "packageManager": "pnpm@10.20.0"
 }

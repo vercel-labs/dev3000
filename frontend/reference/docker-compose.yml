@@ -1,22 +1,21 @@
 ## -----------------------------------------------------------------------------
-## Dev3000 monorepo docker-compose (実運用版)
+## Dev3000 reference docker-compose (テンプレート)
 ##
 ## 用途:
-##   - このリポの Make ターゲット（例: `make dev-up`）から利用される compose 定義です。
-##   - ソースは `./frontend/...` を前提にしたバインド構成になっています。
+##   - 外部プロジェクトに dev3000 を導入する際のコピー元テンプレートです。
+##   - ルート直下の `app/`, `public/` を前提にしたバインド構成になっています。
 ##
-## 参照（テンプレート版）:
-##   - example/nextjs16/reference/docker-compose.yml
-##     → 外部プロジェクトでの導入時にコピーして調整するためのリファレンス。
-##     → バインドパスは `./app`, `./public` など、より一般的な構成になっています。
+## 対になる実運用ファイル（このリポ内）:
+##   - docker-compose.yml
+##     → monorepo では `./frontend/...` を前提にしています。
 ##
 ## 同期ポリシー:
-##   - 本ファイルを更新した場合、reference 側にも意図の差分をコメントで反映してください。
-##   - 逆も同様に、reference を改善したら本ファイルにも取り込みます。
+##   - 本テンプレートの改善は monorepo 側にも反映し、差分の理由をコメントで残してください。
+##   - 外部ユーザー向けに読みやすさ・最小構成を優先します。
 ##
 ## 同梱ポリシー (Bundling Policy):
-##   - 本 compose は npm 配布物には同梱しません（package.json の files を参照）。
-##   - このリポの開発・デモ用途に限定されます。
+##   - 本テンプレートは npm 配布物には同梱しません（package.json の files を参照）。
+##   - `.dev3000` をサブモジュールとして導入後、`reference/` からコピーして利用します。
 ## -----------------------------------------------------------------------------
 services:
   dev3000:
@@ -44,19 +43,11 @@ services:
       - "3000:3000"   # Next.js / App server
       - "3684:3684"   # Dev3000 MCP server
 
-    # Volume mounts - removed to avoid WSL2 permission issues
-    # Application files are copied into image during build
-    #
-    # Hot reload: enable bind mount for source, but keep node_modules/.next as container volumes
+    # Volume mounts
+    # Bind-mount only source dirs needed for HMR to avoid WSL2 permission issues on root
     volumes:
-      # Bind-mount only source dirs needed for HMR to avoid WSL2 permission issues on root
-      - ./frontend/app:/app/frontend/app:delegated
-      - ./frontend/public:/app/frontend/public:delegated
-      # Share dev3000 runtime sources so host edits take effect immediately
-      - ./frontend/.dev3000:/app/frontend/.dev3000:delegated
-      # Persist dev3000 session/log data across restarts (named volume avoids host permission issues)
-      - dev3000_d3k:/root/.d3k
-      # Keep build artifacts and deps inside container
+      - ./app:/app/frontend/app:delegated
+      - ./public:/app/frontend/public:delegated
       - /app/frontend/node_modules
       - /app/frontend/.next
 
@@ -87,9 +78,6 @@ services:
       # File watching for hot reload (required for Docker/WSL)
       - CHOKIDAR_USEPOLLING=true
       - WATCHPACK_POLLING=true
-      # Reduce polling frequency to lower overhead in dev and speed up HMR/first render
-      - WATCHPACK_POLLING_INTERVAL=1000
-      - CHOKIDAR_INTERVAL=500
 
       # Next.js configuration
       - NEXT_TELEMETRY_DISABLED=1
@@ -125,7 +113,3 @@ services:
 networks:
   default:
     driver: bridge
-
-volumes:
-  dev3000_d3k:
-    driver: local

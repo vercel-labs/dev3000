@@ -1,7 +1,7 @@
 # Dev3000 Development Makefile
 # Simplified development workflow for Docker-based dev3000
 
-.PHONY: help setup init dev-up dev-down dev-logs dev-rebuild dev-rebuild-fast dev3000-sync dev-rebuild-frontend clean clean-frontend deploy-frontend deploy-and-start list-examples start-chrome-cdp start-chrome-cdp-xplat stop-chrome-cdp status cdp-check dev-build dev-build-fast diagnose log-clean log-ls log-tail-last test-echo test-fail test test-node test-shellspec test-all
+.PHONY: help setup init dev-up dev-down dev-logs dev-rebuild dev-rebuild-fast dev3000-sync dev-rebuild-frontend clean clean-frontend deploy-frontend deploy-and-start list-examples start-chrome-cdp start-chrome-cdp-xplat stop-chrome-cdp status cdp-check dev-build dev-build-fast diagnose log-clean log-ls log-tail-last test-echo test-fail test test-node test-shellspec test-all sync-dev3000-local
 
 # Default target
 .DEFAULT_GOAL := help
@@ -72,6 +72,9 @@ dev-up: ## Start dev3000 in Docker (launches Chrome automatically)
 	@START_TS=$$(date +%s); echo "[RUN] Start: $$(date '+%Y-%m-%d %H:%M:%S')"
 	$(LOAD_HELPERS)
 	@echo "Starting dev3000 development environment..."
+	@echo ""
+	@echo "[SETUP] Syncing local dev3000 sources into frontend/.dev3000 ..."; \
+		$(MAKE) sync-dev3000-local || true
 	@echo ""
 	@echo "Step 1: Starting Docker containers..."
 	@cd "$(MAKEFILE_DIR)"; \
@@ -190,10 +193,20 @@ dev-rebuild: ## Rebuild and restart Docker environment
 		echo "[SETUP] Missing frontend/Dockerfile.dev. Auto-deploying example: nextjs16"; \
 		$(MAKE) deploy-frontend APP=nextjs16; \
 	fi
+	@echo "[SETUP] Syncing local dev3000 sources into frontend/.dev3000 ..."; \
+		$(MAKE) sync-dev3000-local || true
 	@run_cmd "docker compose down" docker compose down
 	@/usr/bin/env bash -lc 'cd "$(MAKEFILE_DIR)" && . scripts/make-helpers.sh && run_cmd "docker compose build --no-cache" bash -lc "DOCKER_BUILDKIT=1 docker compose build --no-cache"' || true
 	@$(MAKE) dev-up
 	@END_TS=$$(date +%s); ELAPSED=$$((END_TS-START_TS)); echo "[RUN] End:   $$(date '+%Y-%m-%d %H:%M:%S') (elapsed: $${ELAPSED}s)"
+
+sync-dev3000-local: ## Copy local dev3000 source (mcp-server) into frontend/.dev3000 for container build
+	@echo "[sync] Copying mcp-server sources ..."
+	@mkdir -p frontend/.dev3000/mcp-server/app/mcp frontend/.dev3000/mcp-server/app/api/orchestrator
+	@cp -f mcp-server/app/mcp/route.ts frontend/.dev3000/mcp-server/app/mcp/route.ts || true
+	@cp -f mcp-server/app/mcp/client-manager.ts frontend/.dev3000/mcp-server/app/mcp/client-manager.ts || true
+	@cp -f mcp-server/app/api/orchestrator/route.ts frontend/.dev3000/mcp-server/app/api/orchestrator/route.ts || true
+	@echo "[sync] Done"
 
 dev-rebuild-fast: ## Fast rebuild using cache (for minor changes)
 	@START_TS=$$(date +%s); echo "[RUN] Start: $$(date '+%Y-%m-%d %H:%M:%S')"
@@ -402,7 +415,7 @@ setup: ## Initial setup: deploy example (APP? default: nextjs16), build images, 
 		section "PNPM Setup"; \
 		if confirm "pnpm not found. Install via corepack now?"; then \
 			run_cmd "corepack enable" corepack enable || true; \
-			run_cmd "corepack prepare pnpm@10.18.3 --activate" corepack prepare pnpm@10.18.3 --activate || true; \
+			run_cmd "corepack prepare pnpm@10.20.0 --activate" corepack prepare pnpm@10.20.0 --activate || true; \
 		else \
 			hint "Skipping pnpm setup."; \
 		fi; \

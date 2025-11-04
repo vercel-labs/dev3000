@@ -1,0 +1,35 @@
+# Keep the Docker build context small and fast
+
+# Node / Next.js build outputs
+node_modules
+.next
+.turbo
+.cache
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# VCS / OS junk
+.git
+.gitignore
+.DS_Store
+Thumbs.db
+
+# Dev3000 submodule: exclude heavy/unneeded parts from context
+.dev3000/node_modules
+.dev3000/.next
+.dev3000/dist
+.dev3000/example
+.dev3000/docs
+.dev3000/.git
+.dev3000/.specstory
+.dev3000/.shellspec
+.dev3000/.husky
+.dev3000/.cursor
+.dev3000/.make-logs
+.dev3000/logs.jpg
+.dev3000/cli.jpg
+
+# Frontend runtime artifacts
+public/screenshots
+**/.d3k-*.log

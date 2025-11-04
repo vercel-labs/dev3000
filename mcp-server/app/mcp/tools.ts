@@ -1819,7 +1819,9 @@ export async function executeBrowserAction({
     if (!cdpUrl) {
       // Try to get CDP URL from Chrome debugging port as fallback
       try {
-        const response = await fetch("http://localhost:9222/json")
+        const base = process.env.DEV3000_CDP_URL || "http://localhost:9222"
+        const jsonUrl = base.endsWith("/json") ? base : `${base}/json`
+        const response = await fetch(jsonUrl)
         const pages = await response.json()
         const activePage = pages.find(
           (page: { type: string; url: string }) => page.type === "page" && !page.url.startsWith("chrome://")

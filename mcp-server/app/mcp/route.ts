@@ -15,16 +15,22 @@ import {
   TOOL_DESCRIPTIONS
 } from "./tools"
 
-// Detect available package runner (bunx only, per request)
+// Detect available package runner (prefer bunx, fallback to pnpm dlx)
 const getPackageRunner = (): { command: string; args: string[] } | null => {
   try {
     execSync("bunx --version", { stdio: "ignore" })
     return { command: "bunx", args: [] }
   } catch {
-    console.error(
-      "[MCP Orchestrator] bunx not found. Please install Bun (https://bun.sh/) so we can spawn downstream MCP servers."
-    )
-    return null
+    try {
+      execSync("pnpm --version", { stdio: "ignore" })
+      // Use pnpm dlx as a safe fallback when bunx is unavailable
+      return { command: "pnpm", args: ["dlx"] }
+    } catch {
+      console.error(
+        "[MCP Orchestrator] No package runner found (bunx/pnpm dlx). Please install Bun (https://bun.sh/) or pnpm."
+      )
+      return null
+    }
   }
 }
 
@@ -33,48 +39,114 @@ const getPackageRunner = (): { command: string; args: string[] } | null => {
 const initializeOrchestration = async () => {
   const clientManager = getMCPClientManager()
 
+  // Normalize a CDP URL to base host:port (http[s]://host:port)
+  const extractBaseCdpUrl = (raw: string): string => {
+    try {
+      // Force http(s) scheme for CDP HTTP endpoint
+      const normalized = raw.replace(/^ws(s)?:\/\//, (_m, s1) => (s1 ? "https://" : "http://"))
+      const u = new URL(normalized)
+      return `${u.protocol}//${u.host}`
+    } catch {
+      // Best-effort fallback – strip path after host
+      const tmp = raw.replace(/^ws(s)?:\/\//, (_m, s1) => (s1 ? "https://" : "http://"))
+      const idx = tmp.indexOf("/", tmp.indexOf("://") + 3)
+      return idx > 0 ? tmp.slice(0, idx) : tmp
+    }
+  }
+
   // Helper to get config from session files in ~/.d3k/
   const getConfigFromSessions = () => {
     const config: Parameters<typeof clientManager.initialize>[0] = {}
-    const sessionDir = join(homedir(), ".d3k")
+    const candidateDirs = new Set<string>()
+    candidateDirs.add(join(homedir(), ".d3k"))
+    candidateDirs.add(join("/root", ".d3k"))
+    if (process.env.D3K_SESSION_DIR) {
+      candidateDirs.add(process.env.D3K_SESSION_DIR)
+    }
+
+    let inspectedSessions = 0
+    let detectedAppPort: string | null = null
+
+    // Prefer explicit DEV3000_CDP_URL when present (Docker/WSL friendly)
+    try {
+      if (!config.chromeDevtools && process.env.DEV3000_CDP_URL) {
+        const runner = getPackageRunner()
+        if (runner) {
+          const browserUrl = extractBaseCdpUrl(process.env.DEV3000_CDP_URL)
+          config.chromeDevtools = {
+            command: runner.command,
+            args: [...runner.args, "chrome-devtools-mcp@latest", "--browserUrl", browserUrl],
+            enabled: true
+          }
+          console.log(`[MCP Orchestrator] Using DEV3000_CDP_URL for chrome-devtools MCP: ${browserUrl}`)
+        } else {
+          console.warn(
+            "[MCP Orchestrator] Cannot configure chrome-devtools MCP from DEV3000_CDP_URL: no package runner available"
+          )
+        }
+      }
+    } catch (error) {
+      console.warn("[MCP Orchestrator] Failed to apply DEV3000_CDP_URL preference:", error)
+    }
 
     try {
-      // Read all *.json session files
-      if (!existsSync(sessionDir)) return config
-
-      const sessionFiles = readdirSync(sessionDir).filter((f: string) => f.endsWith(".json"))
-
-      // Use the most recent session with CDP URL
-      for (const file of sessionFiles) {
-        try {
-          const sessionPath = join(sessionDir, file)
-          const sessionData = JSON.parse(readFileSync(sessionPath, "utf-8"))
-
-          // Configure chrome-devtools MCP if CDP URL is available
-          if (sessionData.cdpUrl && !config.chromeDevtools) {
-            const cdpUrl = sessionData.cdpUrl.replace("ws://", "http://") // Convert ws:// to http:// for browser URL
-            const runner = getPackageRunner()
-
-            if (runner) {
-              config.chromeDevtools = {
-                command: runner.command,
-                args: [...runner.args, "chrome-devtools-mcp@latest", "--browserUrl", cdpUrl],
-                enabled: true
-              }
-            } else {
-              console.warn("[MCP Orchestrator] Cannot configure chrome-devtools MCP: no package runner available")
-            }
-          }
-
-          // Break early if we have chrome-devtools - only need one session for CDP URL
-          if (config.chromeDevtools) break
-        } catch {
-          // Skip invalid session files
+      for (const sessionDir of candidateDirs) {
+        if (!existsSync(sessionDir)) {
+          continue
         }
+
+        const sessionFiles = readdirSync(sessionDir).filter((f: string) => f.endsWith(".json"))
+        inspectedSessions += sessionFiles.length
+        console.log(`[MCP Orchestrator] Inspecting ${sessionFiles.length} session file(s) in ${sessionDir}`)
+
+        for (const file of sessionFiles) {
+          try {
+            const sessionPath = join(sessionDir, file)
+            const sessionData = JSON.parse(readFileSync(sessionPath, "utf-8"))
+            console.log(
+              `[MCP Orchestrator] Session ${file}: appPort=${sessionData.appPort ?? "unknown"}, mcpPort=${sessionData.mcpPort ?? "unknown"}, cdpUrl=${sessionData.cdpUrl ?? "null"}, framework=${sessionData.framework ?? "unknown"}`
+            )
+            if (sessionData.appPort) {
+              detectedAppPort = String(sessionData.appPort)
+            }
+
+            if (sessionData.cdpUrl && !config.chromeDevtools) {
+              const cdpUrl = extractBaseCdpUrl(sessionData.cdpUrl)
+              const runner = getPackageRunner()
+
+              if (runner) {
+                config.chromeDevtools = {
+                  command: runner.command,
+                  args: [...runner.args, "chrome-devtools-mcp@latest", "--browserUrl", cdpUrl],
+                  enabled: true
+                }
+                console.log(
+                  `[MCP Orchestrator] Prepared chrome-devtools config from session ${file} (browserUrl=${cdpUrl})`
+                )
+              } else {
+                console.warn("[MCP Orchestrator] Cannot configure chrome-devtools MCP: no package runner available")
+              }
+            } else if (!sessionData.cdpUrl) {
+              console.log(`[MCP Orchestrator] Session ${file} has no cdpUrl; skipping chrome-devtools configuration`)
+            }
+
+            if (config.chromeDevtools) break
+          } catch (error) {
+            console.warn(`[MCP Orchestrator] Failed to parse session ${file}:`, error)
+          }
+        }
+
+        if (config.chromeDevtools) break
+      }
+
+      if (inspectedSessions === 0) {
+        console.log("[MCP Orchestrator] No session files found in any candidate directories")
       }
     } catch (error) {
       console.warn("[MCP Orchestrator] Failed to read session files:", error)
     }
+
+    // Note: DEV3000_CDP_URL preference already applied above; no fallback needed here
 
     // Configure framework-specific MCPs based on detected framework
     // Read framework from session data
@@ -84,18 +156,22 @@ const initializeOrchestration = async () => {
       // Try to find framework from any session file
       let framework: string | null = null
       try {
-        const sessionFiles = readdirSync(sessionDir).filter((f: string) => f.endsWith(".json"))
-        for (const file of sessionFiles) {
-          try {
-            const sessionPath = join(sessionDir, file)
-            const sessionData = JSON.parse(readFileSync(sessionPath, "utf-8"))
-            if (sessionData.framework) {
-              framework = sessionData.framework
-              break
+        for (const sessionDir of candidateDirs) {
+          if (!existsSync(sessionDir)) continue
+          const sessionFiles = readdirSync(sessionDir).filter((f: string) => f.endsWith(".json"))
+          for (const file of sessionFiles) {
+            try {
+              const sessionPath = join(sessionDir, file)
+              const sessionData = JSON.parse(readFileSync(sessionPath, "utf-8"))
+              if (sessionData.framework) {
+                framework = sessionData.framework
+                break
+              }
+            } catch {
+              // Skip invalid session files
             }
-          } catch {
-            // Skip invalid session files
           }
+          if (framework) break
         }
       } catch {
         // Ignore errors reading framework
@@ -104,12 +180,23 @@ const initializeOrchestration = async () => {
       if (runner) {
         // Configure framework-specific MCP based on detected framework
         if (framework === "nextjs") {
+          const env: Record<string, string> = {}
+          if (detectedAppPort) {
+            env.NEXTJS_PORT = detectedAppPort
+            env.PORT = detectedAppPort
+          }
           config.nextjsDev = {
             command: runner.command,
             args: [...runner.args, "next-devtools-mcp@latest"],
+            env,
             enabled: true
           }
           console.log("[MCP Orchestrator] Detected Next.js framework, configuring next-devtools-mcp")
+          if (detectedAppPort) {
+            console.log(
+              `[MCP Orchestrator] next-devtools-mcp env: NEXTJS_PORT=${detectedAppPort}, PORT=${detectedAppPort}`
+            )
+          }
         } else if (framework === "svelte") {
           config.svelteDev = {
             command: runner.command,
@@ -122,6 +209,10 @@ const initializeOrchestration = async () => {
       } else {
         console.warn("[MCP Orchestrator] Cannot configure framework MCP: no package runner available")
       }
+    }
+
+    if (Object.keys(config).length === 0) {
+      console.log("[MCP Orchestrator] No downstream MCP configuration derived from sessions or environment")
     }
 
     return config
@@ -151,9 +242,11 @@ const initializeOrchestration = async () => {
   try {
     // Initial attempt to connect
     const { config, waited } = await waitForInitialConfig()
-    if (Object.keys(config).length > 0) {
+    const configKeys = Object.keys(config)
+    if (configKeys.length > 0) {
+      console.log(`[MCP Orchestrator] Initializing downstream MCPs with config keys: ${configKeys.join(", ")}`)
       await clientManager.initialize(config)
-      console.log(`[MCP Orchestrator] Initialized with ${Object.keys(config).join(", ")}`)
+      console.log(`[MCP Orchestrator] Initialized with ${clientManager.getConnectedMCPs().join(", ") || "none"}`)
     } else {
       if (waited) {
         console.log("[MCP Orchestrator] No downstream MCPs detected after waiting for session info (will retry)")
@@ -182,6 +275,11 @@ const initializeOrchestration = async () => {
       const needsNextjs = hasNextjs && !alreadyConnectedNextjs
       const needsSvelte = hasSvelte && !alreadyConnectedSvelte
 
+      // Debug logging for retry loop
+      console.log(
+        `[MCP Orchestrator] Retry ${retryCount}: hasNextjs=${hasNextjs}, alreadyConnectedNextjs=${alreadyConnectedNextjs}, needsNextjs=${needsNextjs}`
+      )
+
       if (needsChrome || needsNextjs || needsSvelte) {
         const toConnect = [
           needsChrome && "chrome-devtools",
@@ -191,19 +289,29 @@ const initializeOrchestration = async () => {
         console.log(`[MCP Orchestrator] Retry ${retryCount}: Attempting to connect to ${toConnect.join(", ")}`)
         try {
           await clientManager.initialize(newConfig)
-          console.log("[MCP Orchestrator] Successfully connected to downstream MCPs")
+          const connectedList = clientManager.getConnectedMCPs()
+          console.log(
+            `[MCP Orchestrator] Successfully connected to downstream MCPs: ${connectedList.join(", ") || "none"}`
+          )
         } catch (error) {
           console.warn(`[MCP Orchestrator] Retry ${retryCount} failed:`, error)
         }
       }
 
       // Stop retrying after max attempts or when all potential MCPs are connected
+      // IMPORTANT: Only stop early if we've found at least one session file with framework info
+      // Otherwise, keep retrying to give session files time to be created
       const allFrameworkMcpsConnected =
         (hasNextjs ? alreadyConnectedNextjs : true) && (hasSvelte ? alreadyConnectedSvelte : true)
-      if (retryCount >= maxRetries || (alreadyConnectedChrome && allFrameworkMcpsConnected)) {
+      const hasSessionWithFramework = hasNextjs || hasSvelte
+      const shouldStopEarly = alreadyConnectedChrome && allFrameworkMcpsConnected && hasSessionWithFramework
+
+      if (retryCount >= maxRetries || shouldStopEarly) {
         clearInterval(retryInterval)
         const connected = clientManager.getConnectedMCPs()
-        console.log(`[MCP Orchestrator] Stopped retry loop (connected: ${connected.join(", ") || "none"})`)
+        console.log(
+          `[MCP Orchestrator] Stopped retry loop after ${retryCount} attempts (connected: ${connected.join(", ") || "none"})`
+        )
       }
     }, 2000) // Retry every 2 seconds
   } catch (error) {
@@ -245,6 +353,9 @@ const handler = createMcpHandler(
 
     await orchestrationReady
     await clientManager.waitForInitialTools()
+    console.log(
+      `[MCP Orchestrator] Handler ready. Connected MCPs: ${clientManager.getConnectedMCPs().join(", ") || "none"}`
+    )
 
     const registeredProxiedTools = new Map<
       string,
@@ -291,7 +402,9 @@ const handler = createMcpHandler(
           registered: proxiedTool
         })
 
-        console.log(`[MCP Orchestrator] Registered proxied tool ${proxiedToolName}`)
+        console.log(
+          `[MCP Orchestrator] Registered proxied tool ${proxiedToolName} from ${mcpName}. Total proxied: ${registeredProxiedTools.size + 1}`
+        )
         return true
       } catch (error) {
         console.warn(`[MCP Orchestrator] Failed to register proxied tool ${proxiedToolName}:`, error)

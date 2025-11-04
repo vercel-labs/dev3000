@@ -28,12 +28,13 @@ RUN apk add --no-cache \
     bash \
     git \
     lsof \
+    psmisc \
     socat \
     xz \
     && rm -rf /var/cache/apk/*
 
 # Install pnpm
-RUN corepack enable && corepack prepare pnpm@9.15.2 --activate
+RUN corepack enable && corepack prepare pnpm@10.20.0 --activate
 
 # Install Bun (bunx) for faster package execution (used by MCP orchestrator)
 ENV BUN_INSTALL=/root/.bun
