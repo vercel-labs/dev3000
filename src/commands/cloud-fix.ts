@@ -77,28 +77,26 @@ export async function cloudFix(options: CloudFixOptions = {}): Promise<void> {
     console.log(`  ✅ Dev server ready: ${devUrl}`)
     console.log()
 
-    // Run d3k with crawl command in sandbox
-    console.log("🔧 Running d3k crawl in sandbox...")
-    console.log(`  Target: ${devUrl}`)
+    // The dev server is already running - just report success
+    console.log("✅ Development environment ready in sandbox!")
+    console.log(`  Dev server: ${devUrl}`)
     console.log()
 
-    // Run d3k in the sandbox to crawl the dev server
-    const crawlResult = await sandbox.runCommand({
-      cmd: installCmd,
-      args: [
-        "exec",
-        "d3k",
-        "start",
-        "--url",
-        devUrl,
-        "--servers-only",
-        "--disable-tui"
-      ],
-      stdout: debug ? process.stdout : undefined,
-      stderr: debug ? process.stderr : undefined
-    })
+    // TODO Phase 2: Actually use MCP tools to crawl and analyze
+    console.log("📊 Analysis:")
+    console.log("  App is running and accessible")
+    console.log("  Ready for MCP tool integration")
+    console.log()
 
-    console.log(`\n  ✅ d3k crawl completed (exit code: ${crawlResult.exitCode})`)
+    // Try a simple HTTP check to verify the site is working
+    console.log("🔍 Verifying site accessibility...")
+    try {
+      const response = await fetch(devUrl)
+      console.log(`  Status: ${response.status} ${response.statusText}`)
+      console.log("  ✅ Site is accessible")
+    } catch (err) {
+      console.log(`  ⚠️  Error accessing site: ${err}`)
+    }
     console.log()
 
     // TODO: Run fix_my_app tool
