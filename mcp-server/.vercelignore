@@ -1,0 +1,7 @@
+# Ignore everything at the root level except mcp-server
+../*
+!../package.json
+!../pnpm-lock.yaml
+!../pnpm-workspace.yaml
+!../tsconfig.json
+!../src
