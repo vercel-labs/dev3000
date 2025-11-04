@@ -43,7 +43,9 @@ export async function GET() {
         completed: allReproductions.filter((r) => r.status === "completed").length,
         failed: allReproductions.filter((r) => r.status === "failed").length
       },
-      recentErrors: allErrors.slice(0, 10).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      recentErrors: allErrors
+        .slice(0, 10)
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
     }
 
     return NextResponse.json(status)
