@@ -727,19 +727,47 @@ export class DevEnvironment {
       const ports = [this.options.port, this.options.mcpPort]
 
       for (const port of ports) {
-        // Try lsof first (traditional method)
-        const result = await new Promise<string>((resolve) => {
-          const proc = spawn("lsof", ["-ti", `:${port}`], { stdio: "pipe" })
+        let processFound = false
+
+        // Try fuser first (most reliable on Alpine Linux, especially for IPv6 sockets)
+        const fuserResult = await new Promise<string>((resolve) => {
+          const proc = spawn("fuser", [`${port}/tcp`], { stdio: "pipe" })
           let output = ""
           proc.stdout?.on("data", (data) => {
+            output += data.toString()
+          })
+          proc.stderr?.on("data", (data) => {
             output += data.toString()
           })
           proc.on("exit", () => resolve(output.trim()))
           proc.on("error", () => resolve(""))
         })
 
-        // If lsof found no processes, try HTTP health check as fallback
-        if (!result) {
+        if (fuserResult?.match(/\d+/)) {
+          // fuser found a process (output contains PID)
+          this.debugLog(`Health check: fuser found process on port ${port}`)
+          processFound = true
+        } else {
+          // Try lsof as fallback (traditional method)
+          const lsofResult = await new Promise<string>((resolve) => {
+            const proc = spawn("lsof", ["-ti", `:${port}`], { stdio: "pipe" })
+            let output = ""
+            proc.stdout?.on("data", (data) => {
+              output += data.toString()
+            })
+            proc.on("exit", () => resolve(output.trim()))
+            proc.on("error", () => resolve(""))
+          })
+
+          if (lsofResult) {
+            this.debugLog(`Health check: lsof found process on port ${port}`)
+            processFound = true
+          }
+        }
+
+        // If both fuser and lsof found no processes, try HTTP health check as final fallback
+        if (!processFound) {
+          this.debugLog(`Health check: Both fuser and lsof failed for port ${port}, trying HTTP fallback`)
           try {
             const http = await import("node:http")
             const isListening = await new Promise<boolean>((resolve) => {
@@ -762,6 +790,7 @@ export class DevEnvironment {
               )
               return false
             }
+            this.debugLog(`Health check: HTTP fallback succeeded for port ${port}`)
           } catch (httpError) {
             this.debugLog(`Health check HTTP fallback failed for port ${port}: ${httpError}`)
             this.fileLogger.log("server", `Health check failed: Critical process on port ${port} is no longer running`)
