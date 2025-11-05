@@ -27,7 +27,7 @@ export const TOOL_DESCRIPTIONS = {
     "🔄 **DEV SERVER RESTART** - Safely restarts the development server while preserving dev3000's monitoring, logs, and browser connection.\n\n🎯 **SMART RESTART LOGIC:**\n• First tries nextjs-dev MCP restart (if available and user has Next.js canary)\n• Falls back to dev3000's own restart mechanism:\n  - Kills the old server process on the app port\n  - Waits for clean shutdown\n  - Spawns a new server with the same command that was originally used\n  - Keeps dev3000's MCP server, browser monitoring, and screenshot capture running\n• All logging continues seamlessly - no data loss\n• Browser monitoring stays connected - no need to relaunch Chrome\n\n⚡ **WHEN TO USE:**\n• After modifying next.config.js, middleware, or environment variables\n• When you need a clean restart to clear server state\n• After significant code changes that Next.js HMR can't handle\n• When debugging persistent state or memory issues\n\n⚠️ **CRITICAL - DO NOT:**\n• ❌ NEVER manually run kill commands on the dev server like `pkill -f \"next dev\"` or `lsof -ti :3000 | xargs kill`\n• ❌ NEVER manually start the dev server with `npm run dev`, `pnpm dev`, `next dev`, etc.\n• ✅ ALWAYS use this tool for dev server restarts - it preserves all dev3000 infrastructure\n\n⚠️ **IMPORTANT:**\n• AVOID using this unnecessarily - Next.js HMR handles most changes automatically\n• Only restart when truly needed for config changes or state issues\n• The server will be offline for a few seconds during restart\n• Browser may show connection error briefly while server restarts\n\n💡 **PERFECT FOR:** 'restart the dev server', 'clean restart', 'reload the server' - but only when actually needed, not for regular code changes.",
 
   crawl_app:
-    "🕷️ **APP CRAWLER** - Discovers all URLs in your app by crawling links starting from the homepage. Perfect for finding every page before running fixes or tests across your entire site.\n\n🎯 **SMART CRAWLING:**\n• Starts at your app's homepage (localhost)\n• Discovers all unique URLs at specified depth\n• Depth 1 = homepage links only\n• Depth 2 = homepage + links from those pages\n• Depth 'all' = exhaustive crawl until no new links found\n• Only follows same-origin links (stays within your app)\n• Deduplicates URLs automatically\n\n📊 **OUTPUT:**\n• List of all discovered URLs\n• Total count of unique pages\n• Depth reached\n• Ready to use with fix_my_app or other tools\n\n💡 **PERFECT FOR:**\n• 'crawl my app' or 'crawl my shit' - discover all pages\n• 'crawl my app and fix my shit' - find all pages then run fixes\n• Site-wide testing and debugging\n• Verifying all routes work before deployment\n\n⚡ **USAGE:**\n• Default: depth 1 (just homepage links)\n• Specify depth: 'crawl at depth 2' or depth=2\n• Full crawl: 'crawl all pages' or depth='all'"
+    "🕷️ **APP CRAWLER** - Discovers all URLs in your app by crawling links starting from the homepage. Perfect for finding every page before running fixes or tests across your entire site.\n\n🎯 **SMART CRAWLING:**\n• Starts at your app's homepage (localhost)\n• Discovers all unique URLs at specified depth\n• Depth 1 = homepage links only\n• Depth 2 = homepage + links from those pages\n• Depth 'all' = exhaustive crawl until no new links found\n• Limit controls max links followed per page (default 3)\n• Only follows same-origin links (stays within your app)\n• Deduplicates URLs automatically\n\n⚙️ **PARAMETERS:**\n• depth: How many levels to crawl (1, 2, 3... or 'all')\n• limit: Max links to follow per page (default 3, prevents following 100+ links from homepage)\n• Higher limit = more thorough but slower crawl\n\n📊 **OUTPUT:**\n• List of all discovered URLs\n• Total count of unique pages\n• Depth reached\n• Ready to use with fix_my_app or other tools\n\n💡 **PERFECT FOR:**\n• 'crawl my app' or 'crawl my shit' - discover all pages\n• 'crawl my app and fix my shit' - find all pages then run fixes\n• Site-wide testing and debugging\n• Verifying all routes work before deployment\n\n⚡ **USAGE:**\n• Default: depth 1, limit 3 (just first 3 homepage links)\n• Specify depth: 'crawl at depth 2' or depth=2\n• Specify limit: 'crawl with limit 10' or limit=10\n• Full crawl: 'crawl all pages' or depth='all'"
 }
 
 // Types
@@ -3909,11 +3909,12 @@ export async function restartDevServer(params: {
 // Crawl app - discover all URLs
 export interface CrawlAppParams {
   depth?: number | "all"
+  limit?: number
   projectName?: string
 }
 
 export async function crawlApp(params: CrawlAppParams) {
-  const { depth = 1, projectName } = params
+  const { depth = 1, limit = 3, projectName } = params
 
   try {
     // Find active session
@@ -3950,7 +3951,7 @@ export async function crawlApp(params: CrawlAppParams) {
       }
     }
 
-    logToDevFile(`Crawl App: Starting crawl at depth ${depth} for ${baseUrl}`)
+    logToDevFile(`Crawl App: Starting crawl at depth ${depth} with limit ${limit} for ${baseUrl}`)
 
     // Connect to CDP
     const ws = new WebSocket(cdpUrl)
@@ -4039,16 +4040,21 @@ export async function crawlApp(params: CrawlAppParams) {
 
           const links = result.result?.value || []
 
+          // Apply limit to prevent following too many links per page
+          let linksAdded = 0
           for (const link of links) {
             if (!discovered.has(link)) {
               discovered.add(link)
-              if (currentDepth < maxDepth) {
+              if (currentDepth < maxDepth && linksAdded < limit) {
                 toVisit.push(link)
+                linksAdded++
               }
             }
           }
 
-          logToDevFile(`Crawl App: Found ${links.length} links on ${url}`)
+          logToDevFile(
+            `Crawl App: Found ${links.length} links on ${url}, added ${linksAdded} to queue (limit: ${limit})`
+          )
         } catch (error) {
           logToDevFile(`Crawl App: Error visiting ${url} - ${error}`)
         }

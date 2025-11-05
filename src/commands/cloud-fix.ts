@@ -438,6 +438,8 @@ import os from 'os';
     console.log("🔍 Running crawl_app tool...")
     try {
       // Call MCP tool endpoint to crawl the site
+      // limit: max links per page to follow (default 3 to avoid 100+ links on homepage)
+      // depth: how many levels deep to crawl
       const crawlResponse = await fetch(`${mcpUrl}/mcp`, {
         method: "POST",
         headers: {
@@ -451,7 +453,8 @@ import os from 'os';
           params: {
             name: "crawl_app",
             arguments: {
-              depth: 2
+              depth: 2,
+              limit: 3
             }
           }
         })
