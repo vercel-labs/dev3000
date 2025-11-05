@@ -76,13 +76,14 @@ const initializeOrchestration = async () => {
 
           // Configure chrome-devtools MCP if CDP URL is available
           if (sessionData.cdpUrl && !config.chromeDevtools) {
-            const cdpUrl = sessionData.cdpUrl.replace("ws://", "http://") // Convert ws:// to http:// for browser URL
+            // Use --wsEndpoint for direct WebSocket CDP connection
+            const cdpUrl = sessionData.cdpUrl // Keep ws:// URL as-is
             const runner = getPackageRunner()
 
             if (runner) {
               config.chromeDevtools = {
                 command: runner.command,
-                args: [...runner.args, "chrome-devtools-mcp@latest", "--browserUrl", cdpUrl],
+                args: [...runner.args, "chrome-devtools-mcp@latest", "--wsEndpoint", cdpUrl],
                 enabled: true
               }
             } else {
