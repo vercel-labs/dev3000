@@ -240,6 +240,21 @@ import path from 'path';
 import os from 'os';
 
 (async () => {
+  // Check Node.js version - CDP requires Node >=v22.12.0
+  const nodeVersion = process.version;
+  console.log('Node.js version:', nodeVersion);
+  const versionMatch = nodeVersion.match(/^v(\\d+)\\.(\\d+)\\.(\\d+)/);
+  if (versionMatch) {
+    const [, major, minor] = versionMatch.map(Number);
+    if (major < 22 || (major === 22 && minor < 12)) {
+      console.error('❌ ERROR: Node.js version >= v22.12.0 is required for CDP support');
+      console.error('   Current version:', nodeVersion);
+      console.error('   CDP tools will not work correctly with older versions');
+      process.exit(1);
+    }
+    console.log('✅ Node.js version meets CDP requirements (>= v22.12.0)');
+  }
+
   console.log('Ensuring Chromium is installed...');
   // The chromium package may need to download the binary first
   await chromiumPkg.install();

@@ -11,6 +11,10 @@ pnpm install -g dev3000
 dev3000
 ```
 
+## Requirements
+
+- **Node.js >= v22.12.0** - Required for Chrome DevTools Protocol (CDP) support. The CDP `Runtime.enable` command and other browser automation features require this version or higher.
+
 ## AI Integration with Dynamic Enhancement
 
 **dev3000 features smart MCP integration that gracefully enhances capabilities when specialized MCPs are available!**
