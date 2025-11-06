@@ -49,7 +49,7 @@ async function parseSSEResponse(response: Response): Promise<string> {
 /**
  * Create a PR from changes made in the sandbox
  */
-// @ts-ignore - Temporarily unused for focused testing
+// @ts-expect-error - Temporarily unused for focused testing
 // biome-ignore lint/correctness/noUnusedVariables: Temporarily disabled for focused testing
 async function createPRFromSandbox(
   sandbox: Sandbox,
