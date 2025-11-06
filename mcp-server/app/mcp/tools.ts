@@ -486,7 +486,18 @@ export async function fixMyApp({
       projectName = sessions[0].projectName
       logPath = getLogPath(projectName)
       logToDevFile(`fix_my_app: Auto-selected single session: ${projectName}`)
-      // Continue with the auto-selected project
+
+      // If still no log path after auto-select, return error
+      if (!logPath) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `❌ Could not find log file for project "${projectName}". The session may not be properly initialized yet.`
+            }
+          ]
+        }
+      }
     } else {
       const sessionList = sessions
         .map((s) => `• ${s.projectName} (started ${new Date(s.startTime).toLocaleString()})`)
