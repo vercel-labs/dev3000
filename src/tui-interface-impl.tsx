@@ -260,7 +260,7 @@ const TUIApp = ({
       setScrollOffset((prev) => Math.min(prev + maxVisibleLogs, Math.max(0, filteredCount - maxVisibleLogs)))
     } else if (key.pageDown) {
       setScrollOffset((prev) => Math.max(0, prev - maxVisibleLogs))
-    } else if (input === "g" && key.shift) {
+    } else if (input === "G" && key.shift) {
       // Shift+G to go to end
       setScrollOffset(0)
     } else if (input === "g" && !key.shift) {
