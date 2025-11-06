@@ -414,14 +414,17 @@ export function getLogPath(projectName?: string): string | null {
   if (projectName) {
     const sessions = findActiveSessions()
     const session = sessions.find((s) => s.projectName === projectName)
-    if (session && existsSync(session.logFilePath)) {
+    if (session) {
+      // Return the log path even if file doesn't exist yet
+      // (it will be created when logs start, especially in sandbox environments)
       return session.logFilePath
     }
   }
 
   // Fall back to environment variable
   const envPath = process.env.LOG_FILE_PATH
-  if (envPath && existsSync(envPath)) {
+  if (envPath) {
+    // Return the path even if file doesn't exist yet
     return envPath
   }
 
@@ -535,6 +538,15 @@ export async function fixMyApp({
   }
 
   try {
+    // Check if log file exists before reading
+    if (!existsSync(logPath)) {
+      results.push("📋 Log file doesn't exist yet. The dev server may still be starting up.")
+      results.push("💡 Wait a few seconds for the server to generate logs, then try again.")
+      return {
+        content: [{ type: "text", text: results.join("\n") }]
+      }
+    }
+
     const content = readFileSync(logPath, "utf-8")
     const logLines = content.trim().split("\n").filter(Boolean)
 
