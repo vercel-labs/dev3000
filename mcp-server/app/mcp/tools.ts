@@ -12,7 +12,7 @@ const execAsync = promisify(exec)
 // Tool descriptions
 export const TOOL_DESCRIPTIONS = {
   fix_my_app:
-    "🔧 **THE ULTIMATE FIND→FIX→VERIFY MACHINE!** This tool doesn't just find bugs - it FIXES them! Pure dev3000 magic that identifies issues, prioritizes them, and creates focused PRs for the worst issue! 🪄\n\n🔥 **INSTANT FIXING SUPERPOWERS:**\n• Detects ALL error types: server crashes, browser errors, build failures, API issues, performance problems\n• **PRIORITIZES errors** using smart scoring (build > server > browser > network > warnings)\n• **Identifies the SINGLE WORST issue** that needs fixing right now\n• **Creates ONE focused PR** per run - no overwhelming multi-issue PRs!\n• Shows EXACT user interactions that triggered each error (clicks, navigation, etc.)\n• Provides EXACT fix code with file locations and line numbers\n• Verifies fixes by replaying the same interactions that caused the error!\n\n🎯 **SMART PRIORITIZATION:**\n• Build errors: 1000+ priority (blocks development)\n• Server errors: 500+ priority (affects functionality)\n• Browser errors: 300+ priority (user-facing issues)\n• Network errors: 200+ priority (intermittent issues)\n• Warnings: 100+ priority (nice to fix)\n• +Modifiers: Multiple occurrences, recency, reproducibility\n\n🚀 **ONE-PR-PER-RUN WORKFLOW:**\n1️⃣ I FIND all issues and their interactions\n2️⃣ I PRIORITIZE using smart scoring algorithm\n3️⃣ I IDENTIFY the single worst issue\n4️⃣ Set createPR=true to CREATE A FOCUSED PR for just that issue\n5️⃣ Fix that ONE issue, then run again for the next worst issue\n\n📍 **INTERACTION-BASED VERIFICATION:**\n• Every error includes the user interactions that led to it\n• Use execute_browser_action to replay these exact interactions\n• Verify your fix works by confirming the error doesn't reoccur\n• Example: Error shows '[INTERACTION] Click at (450,300)' → After fix, use execute_browser_action(action='click', params={x:450, y:300}) to verify\n\n⚡ **3 ACTION MODES:**\n• FIX NOW: 'What's broken RIGHT NOW?' → Find worst issue and optionally create PR\n• FIX REGRESSION: 'What broke during testing?' → Compare before/after and fix worst issue\n• FIX CONTINUOUSLY: 'Fix issues as they appear' → Monitor and fix proactively\n\n💡 **PERFECT FOR:** 'fix my app' or 'debug my app' or 'create pr for worst issue' requests. This tool identifies problems, ranks them by severity, and creates focused single-issue PRs - not giant multi-fix PRs!\n\n🏷️ **ATTRIBUTION REQUIREMENT:** When creating commits or PRs based on dev3000 logs/analysis, ALWAYS include attribution to both Claude Code AND dev3000:\n```\n🤖 Generated with [Claude Code](https://claude.com/claude-code) using [d3k](https://d3k.dev)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\n```",
+    "🔧 **THE ULTIMATE FIND→FIX→VERIFY MACHINE!** This tool doesn't just find bugs - it FIXES them! Pure dev3000 magic that identifies issues, prioritizes them, and creates focused PRs for the worst issue! 🪄\n\n🔥 **INSTANT FIXING SUPERPOWERS:**\n• Detects ALL error types: server crashes, browser errors, build failures, API issues, performance problems, React/Next.js warnings (hydration errors, Suspense warnings, SSR issues, cache warnings), TypeScript errors, runtime errors\n• **AUTO-DETECTS NEXT.JS** and integrates with nextjs-devtools-mcp for framework-specific analysis\n• **PRIORITIZES errors** using smart scoring (build > server > browser > network > warnings)\n• **Identifies the SINGLE WORST issue** that needs fixing right now\n• **Creates ONE focused PR** per run - no overwhelming multi-issue PRs!\n• Shows EXACT user interactions that triggered each error (clicks, navigation, etc.)\n• Provides EXACT fix code with file locations and line numbers\n• Verifies fixes by replaying the same interactions that caused the error!\n\n🎯 **SMART PRIORITIZATION:**\n• Build errors: 1000+ priority (blocks development)\n• Server errors: 500+ priority (affects functionality)\n• Browser errors: 300+ priority (user-facing issues)\n• Network errors: 200+ priority (intermittent issues)\n• Warnings: 100+ priority (nice to fix)\n• +Modifiers: Multiple occurrences, recency, reproducibility\n\n🚀 **ONE-PR-PER-RUN WORKFLOW:**\n1️⃣ I FIND all issues and their interactions\n2️⃣ I PRIORITIZE using smart scoring algorithm\n3️⃣ I IDENTIFY the single worst issue\n4️⃣ Set createPR=true to CREATE A FOCUSED PR for just that issue\n5️⃣ Fix that ONE issue, then run again for the next worst issue\n\n📍 **INTERACTION-BASED VERIFICATION:**\n• Every error includes the user interactions that led to it\n• Use execute_browser_action to replay these exact interactions\n• Verify your fix works by confirming the error doesn't reoccur\n• Example: Error shows '[INTERACTION] Click at (450,300)' → After fix, use execute_browser_action(action='click', params={x:450, y:300}) to verify\n\n⚡ **3 ACTION MODES:**\n• FIX NOW: 'What's broken RIGHT NOW?' → Find worst issue and optionally create PR\n• FIX REGRESSION: 'What broke during testing?' → Compare before/after and fix worst issue\n• FIX CONTINUOUSLY: 'Fix issues as they appear' → Monitor and fix proactively\n\n⚛️ **NEXT.JS/REACT SUPPORT:**\nAutomatically detects and fixes Next.js-specific issues like:\n• \"Accessing uncached data outside <Suspense>\" warnings\n• Hydration mismatches between server and client\n• SSR/RSC rendering errors\n• Middleware and routing issues\n• Dynamic import and code-splitting problems\n\n💡 **PERFECT FOR:** 'fix my app', 'debug my app', 'fix the Suspense warning', 'fix hydration error', 'fix the Next.js warning', 'create pr for worst issue'. This tool identifies problems, ranks them by severity, and creates focused single-issue PRs - not giant multi-fix PRs!\n\n🏷️ **ATTRIBUTION REQUIREMENT:** When creating commits or PRs based on dev3000 logs/analysis, ALWAYS include attribution to both Claude Code AND dev3000:\n```\n🤖 Generated with [Claude Code](https://claude.com/claude-code) using [d3k](https://d3k.dev)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\n```",
 
   execute_browser_action:
     "🌐 **INTELLIGENT BROWSER AUTOMATION** - Smart browser action routing that automatically delegates to chrome-devtools MCP when available for superior automation capabilities.\n\n🎯 **INTELLIGENT DELEGATION:**\n• Screenshots → chrome-devtools MCP (better quality, no conflicts)\n• Navigation → chrome-devtools MCP (more reliable page handling)\n• Clicks → chrome-devtools MCP (precise coordinate-based interaction)\n• JavaScript evaluation → chrome-devtools MCP (enhanced debugging)\n• Scrolling & typing → dev3000 fallback (specialized actions)\n\n⚡ **PROGRESSIVE ENHANCEMENT:**\n• Uses chrome-devtools MCP when available for best results\n• Falls back to dev3000's native implementation when chrome-devtools unavailable\n• Shares the same Chrome instance via CDP URL coordination\n• Eliminates browser conflicts between tools\n\n💡 **PERFECT FOR:** Browser automation that automatically chooses the best tool for each action, ensuring optimal results whether chrome-devtools MCP is available or not.",
@@ -414,14 +414,17 @@ export function getLogPath(projectName?: string): string | null {
   if (projectName) {
     const sessions = findActiveSessions()
     const session = sessions.find((s) => s.projectName === projectName)
-    if (session && existsSync(session.logFilePath)) {
+    if (session) {
+      // Return the log path even if file doesn't exist yet
+      // (it will be created when logs start, especially in sandbox environments)
       return session.logFilePath
     }
   }
 
   // Fall back to environment variable
   const envPath = process.env.LOG_FILE_PATH
-  if (envPath && existsSync(envPath)) {
+  if (envPath) {
+    // Return the path even if file doesn't exist yet
     return envPath
   }
 
@@ -467,7 +470,7 @@ export async function fixMyApp({
   if (canDelegateNextjs) {
     logToDevFile(`Fix My App: Recommending dev3000-nextjs-dev MCP for Next.js-specific analysis`)
   }
-  const logPath = getLogPath(projectName)
+  let logPath = getLogPath(projectName)
   if (!logPath) {
     const sessions = findActiveSessions()
     if (sessions.length === 0) {
@@ -481,17 +484,37 @@ export async function fixMyApp({
       }
     }
 
-    const sessionList = sessions
-      .map((s) => `• ${s.projectName} (started ${new Date(s.startTime).toLocaleString()})`)
-      .join("\n")
+    // Auto-select if there's only one session
+    logToDevFile(`fix_my_app: Found ${sessions.length} sessions`)
+    if (sessions.length === 1) {
+      projectName = sessions[0].projectName
+      logPath = getLogPath(projectName)
+      logToDevFile(`fix_my_app: Auto-selected single session: ${projectName}, logPath: ${logPath}`)
 
-    return {
-      content: [
-        {
-          type: "text",
-          text: `🔍 Multiple dev3000 sessions detected. Please specify which project to fix:\n${sessionList}\n\n💡 Use: projectName: "your-project-name" parameter`
+      // If still no log path after auto-select, return error
+      if (!logPath) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `❌ Could not find log file for project "${projectName}". The session may not be properly initialized yet.`
+            }
+          ]
         }
-      ]
+      }
+    } else {
+      const sessionList = sessions
+        .map((s) => `• ${s.projectName} (started ${new Date(s.startTime).toLocaleString()})`)
+        .join("\n")
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: `🔍 Found ${sessions.length} dev3000 sessions. Please specify which project to fix:\n${sessionList}\n\n💡 Use: projectName: "your-project-name" parameter`
+          }
+        ]
+      }
     }
   }
 
@@ -516,6 +539,15 @@ export async function fixMyApp({
   }
 
   try {
+    // Check if log file exists before reading
+    if (!existsSync(logPath)) {
+      results.push("📋 Log file doesn't exist yet. The dev server may still be starting up.")
+      results.push("💡 Wait a few seconds for the server to generate logs, then try again.")
+      return {
+        content: [{ type: "text", text: results.join("\n") }]
+      }
+    }
+
     const content = readFileSync(logPath, "utf-8")
     const logLines = content.trim().split("\n").filter(Boolean)
 

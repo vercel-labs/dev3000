@@ -49,6 +49,8 @@ async function parseSSEResponse(response: Response): Promise<string> {
 /**
  * Create a PR from changes made in the sandbox
  */
+// @ts-expect-error - Temporarily unused for focused testing
+// biome-ignore lint/correctness/noUnusedVariables: Temporarily disabled for focused testing
 async function createPRFromSandbox(
   sandbox: Sandbox,
   _project: Awaited<ReturnType<typeof detectProject>>,
@@ -435,8 +437,12 @@ import os from 'os';
   console.log('Browser launched successfully');
   const page = await browser.newPage();
 
-  // Get CDP endpoint - Puppeteer uses wsEndpoint()
-  const cdpUrl = browser.wsEndpoint();
+  // Get CDP endpoint for the page target (not browser)
+  // Page-level commands like Runtime.enable and Page.enable need page target URL
+  const browserWsUrl = browser.wsEndpoint();
+  const target = page.target();
+  const targetId = target._targetId;
+  const cdpUrl = browserWsUrl.replace('/devtools/browser/', \`/devtools/page/\${targetId}\`);
   console.log('CDP URL:', cdpUrl);
 
   // Write session info for MCP server
@@ -591,52 +597,8 @@ import os from 'os';
     }
     console.log()
 
-    // Run crawl_app tool via MCP
-    console.log("🔍 Running crawl_app tool...")
-    try {
-      // Call MCP tool endpoint to crawl the site
-      // limit: max links per page to follow (default 3 to avoid 100+ links on homepage)
-      // depth: how many levels deep to crawl
-      const crawlResponse = await fetch(`${mcpUrl}/mcp`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json, text/event-stream"
-        },
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          id: 1,
-          method: "tools/call",
-          params: {
-            name: "crawl_app",
-            arguments: {
-              depth: 2,
-              limit: 3
-            }
-          }
-        })
-      })
-
-      if (debug) {
-        console.log(`  Response status: ${crawlResponse.status}`)
-        console.log(`  Response headers:`, Object.fromEntries(crawlResponse.headers.entries()))
-      }
-
-      if (crawlResponse.ok) {
-        const responseText = await parseSSEResponse(crawlResponse)
-        if (debug) {
-          console.log(`  Response body:`, responseText.substring(0, 500))
-        }
-
-        console.log("  ✅ Crawl completed")
-        console.log(`\n${responseText}\n`)
-      } else {
-        const errorText = await crawlResponse.text()
-        console.log(`  ⚠️  Crawl failed: ${crawlResponse.status} - ${errorText}`)
-      }
-    } catch (err) {
-      console.log(`  ⚠️  Error calling crawl tool: ${err}`)
-    }
+    // Skip crawl_app - just let homepage trigger the undefinedVariable error
+    console.log("⏭️  Skipping crawl_app - homepage should trigger undefinedVariable error")
     console.log()
 
     // Run fix_my_app tool
@@ -680,16 +642,8 @@ import os from 'os';
     }
     console.log()
 
-    // Extract changes and create PR
-    console.log("📤 Creating pull request from sandbox fixes...")
-    try {
-      await createPRFromSandbox(sandbox, project, debug)
-    } catch (err) {
-      console.log(`  ⚠️  Error creating PR: ${err}`)
-      if (debug) {
-        console.error(err)
-      }
-    }
+    // Skip PR creation for focused testing
+    console.log("⏭️  Skipping PR creation - just validating error detection")
     console.log()
 
     console.log("✅ Analysis complete!")
