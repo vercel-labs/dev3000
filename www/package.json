@@ -31,21 +31,11 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc && mkdir -p dist/src && cp src/loading.html dist/src/ && cp src/tui-interface-impl.tsx dist/src/",
-    "typegen": "./scripts/typegen.sh",
-    "typecheck": "tsc --noEmit",
-    "format": "biome format --write .",
-    "lint": "biome check src mcp-server www scripts --vcs-use-ignore-file=true",
-    "lint:fix": "biome check --write src mcp-server www scripts",
-    "test": "vitest run",
-    "test-postinstall": "tsx scripts/test-postinstall.ts",
-    "test-global-install": "tsx scripts/test-global-install.ts",
-    "test-clean-install": "tsx scripts/test-clean-install.ts",
-    "test-release": "./scripts/test-release.sh",
-    "_postinstall": "node scripts/check-install.js || exit 0",
-    "_prepare": "husky",
-    "release": "./scripts/release.sh",
-    "canary": "./scripts/canary.sh"
+    "dev": "next dev --turbopack",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit"
   },
   "keywords": [
     "nextjs",

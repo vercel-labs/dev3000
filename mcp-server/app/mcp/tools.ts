@@ -467,7 +467,7 @@ export async function fixMyApp({
   if (canDelegateNextjs) {
     logToDevFile(`Fix My App: Recommending dev3000-nextjs-dev MCP for Next.js-specific analysis`)
   }
-  const logPath = getLogPath(projectName)
+  let logPath = getLogPath(projectName)
   if (!logPath) {
     const sessions = findActiveSessions()
     if (sessions.length === 0) {
@@ -481,17 +481,25 @@ export async function fixMyApp({
       }
     }
 
-    const sessionList = sessions
-      .map((s) => `• ${s.projectName} (started ${new Date(s.startTime).toLocaleString()})`)
-      .join("\n")
+    // Auto-select if there's only one session
+    if (sessions.length === 1) {
+      projectName = sessions[0].projectName
+      logPath = getLogPath(projectName)
+      logToDevFile(`fix_my_app: Auto-selected single session: ${projectName}`)
+      // Continue with the auto-selected project
+    } else {
+      const sessionList = sessions
+        .map((s) => `• ${s.projectName} (started ${new Date(s.startTime).toLocaleString()})`)
+        .join("\n")
 
-    return {
-      content: [
-        {
-          type: "text",
-          text: `🔍 Multiple dev3000 sessions detected. Please specify which project to fix:\n${sessionList}\n\n💡 Use: projectName: "your-project-name" parameter`
-        }
-      ]
+      return {
+        content: [
+          {
+            type: "text",
+            text: `🔍 Multiple dev3000 sessions detected. Please specify which project to fix:\n${sessionList}\n\n💡 Use: projectName: "your-project-name" parameter`
+          }
+        ]
+      }
     }
   }
 
