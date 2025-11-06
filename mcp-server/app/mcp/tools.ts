@@ -485,10 +485,11 @@ export async function fixMyApp({
     }
 
     // Auto-select if there's only one session
+    logToDevFile(`fix_my_app: Found ${sessions.length} sessions`)
     if (sessions.length === 1) {
       projectName = sessions[0].projectName
       logPath = getLogPath(projectName)
-      logToDevFile(`fix_my_app: Auto-selected single session: ${projectName}`)
+      logToDevFile(`fix_my_app: Auto-selected single session: ${projectName}, logPath: ${logPath}`)
 
       // If still no log path after auto-select, return error
       if (!logPath) {
@@ -510,7 +511,7 @@ export async function fixMyApp({
         content: [
           {
             type: "text",
-            text: `🔍 Multiple dev3000 sessions detected. Please specify which project to fix:\n${sessionList}\n\n💡 Use: projectName: "your-project-name" parameter`
+            text: `🔍 Found ${sessions.length} dev3000 sessions. Please specify which project to fix:\n${sessionList}\n\n💡 Use: projectName: "your-project-name" parameter`
           }
         ]
       }
