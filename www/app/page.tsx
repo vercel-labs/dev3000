@@ -37,9 +37,6 @@ export default async function HomePage() {
 
               {/* Changelog link - controlled by demo-cls-bugs flag */}
               <ChangelogLink enableCLSBug={showDemoCLSBugs} />
-
-              {/* BUG: undefined variable */}
-              <a href={undefinedVariable}>Broken Link</a>
             </nav>
           </div>
         </div>
