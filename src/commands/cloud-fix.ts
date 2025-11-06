@@ -1,3 +1,6 @@
+import { execSync } from "node:child_process"
+import { mkdirSync, writeFileSync } from "node:fs"
+import { dirname, join } from "node:path"
 import { Sandbox } from "@vercel/sandbox"
 import ms from "ms"
 import { detectProject } from "../utils/project-detector.js"
@@ -41,6 +44,160 @@ async function parseSSEResponse(response: Response): Promise<string> {
   }
 
   return result || text
+}
+
+/**
+ * Create a PR from changes made in the sandbox
+ */
+async function createPRFromSandbox(
+  sandbox: Sandbox,
+  _project: Awaited<ReturnType<typeof detectProject>>,
+  debug?: boolean
+): Promise<void> {
+  // Check if there are any changes in the sandbox
+  console.log("  🔍 Checking for changes in sandbox...")
+  const statusResult = await sandbox.runCommand({
+    cmd: "git",
+    args: ["status", "--porcelain"],
+    cwd: "/vercel/sandbox"
+  })
+
+  const statusOutput = await statusResult.stdout()
+
+  if (!statusOutput.trim()) {
+    console.log("  ℹ️  No changes detected in sandbox")
+    return
+  }
+
+  if (debug) {
+    console.log(`  Git status output:\n${statusOutput}`)
+  }
+
+  // Get the list of changed files
+  console.log("  📋 Getting list of changed files...")
+  const diffResult = await sandbox.runCommand({
+    cmd: "git",
+    args: ["diff", "--name-only", "HEAD"],
+    cwd: "/vercel/sandbox"
+  })
+
+  const changedFiles = (await diffResult.stdout()).trim().split("\n").filter(Boolean)
+  console.log(`  Found ${changedFiles.length} changed files`)
+
+  if (changedFiles.length === 0) {
+    console.log("  ℹ️  No modified files to create PR from")
+    return
+  }
+
+  // Create a new branch locally
+  const branchName = `d3k-cloud-fix-${Date.now()}`
+  console.log(`  🌿 Creating branch: ${branchName}`)
+
+  try {
+    execSync(`git checkout -b ${branchName}`, { cwd: process.cwd(), stdio: "pipe" })
+  } catch (err) {
+    throw new Error(`Failed to create branch: ${err}`)
+  }
+
+  // Download each changed file from sandbox and apply locally
+  console.log("  📥 Downloading changes from sandbox...")
+  for (const file of changedFiles) {
+    try {
+      const fileStream = await sandbox.readFile({
+        path: file,
+        cwd: "/vercel/sandbox"
+      })
+
+      if (!fileStream) {
+        console.log(`  ⚠️  Could not read file: ${file}`)
+        continue
+      }
+
+      // Read the stream into a buffer
+      const chunks: Buffer[] = []
+      for await (const chunk of fileStream) {
+        chunks.push(Buffer.from(chunk))
+      }
+      const content = Buffer.concat(chunks)
+
+      // Write the file locally
+      const localPath = join(process.cwd(), file)
+      mkdirSync(dirname(localPath), { recursive: true })
+      writeFileSync(localPath, content)
+      console.log(`  ✅ Downloaded: ${file}`)
+    } catch (err) {
+      console.log(`  ⚠️  Error downloading ${file}: ${err}`)
+    }
+  }
+
+  // Stage and commit the changes
+  console.log("  💾 Committing changes...")
+  try {
+    execSync("git add .", { cwd: process.cwd(), stdio: "pipe" })
+
+    const commitMessage = `Fix issues detected by dev3000 cloud analysis
+
+Applied fixes from dev3000 cloud sandbox analysis.
+
+Changed files:
+${changedFiles.map((f) => `- ${f}`).join("\n")}
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code) using [d3k](https://d3k.dev)
+
+Co-Authored-By: Claude <noreply@anthropic.com>`
+
+    execSync(`git commit -m "${commitMessage.replace(/"/g, '\\"')}"`, {
+      cwd: process.cwd(),
+      stdio: "pipe"
+    })
+    console.log("  ✅ Changes committed")
+  } catch (err) {
+    throw new Error(`Failed to commit changes: ${err}`)
+  }
+
+  // Push the branch
+  console.log("  📤 Pushing branch to remote...")
+  try {
+    execSync(`git push -u origin ${branchName}`, { cwd: process.cwd(), stdio: "pipe" })
+    console.log("  ✅ Branch pushed")
+  } catch (err) {
+    throw new Error(`Failed to push branch: ${err}`)
+  }
+
+  // Create PR using gh CLI
+  console.log("  🔀 Creating pull request...")
+  try {
+    const prBody = `## Automated fixes from dev3000 cloud analysis
+
+This PR contains fixes detected and applied by dev3000's cloud analysis system.
+
+### Changed files
+${changedFiles.map((f) => `- \`${f}\``).join("\n")}
+
+### How it works
+1. Code was deployed to Vercel Sandbox
+2. dev3000 MCP tools analyzed the running application
+3. Fixes were applied automatically in the sandbox
+4. Changes were extracted and committed to this PR
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code) using [d3k](https://d3k.dev)`
+
+    const result = execSync(
+      `gh pr create --title "Fix issues detected by dev3000 cloud analysis" --body "${prBody.replace(/"/g, '\\"')}"`,
+      { cwd: process.cwd(), encoding: "utf-8" }
+    )
+
+    const prUrl = result
+      .trim()
+      .split("\n")
+      .find((line) => line.includes("https://"))
+    console.log(`  ✅ Pull request created!`)
+    if (prUrl) {
+      console.log(`  🔗 ${prUrl}`)
+    }
+  } catch (err) {
+    throw new Error(`Failed to create PR: ${err}`)
+  }
 }
 
 /**
@@ -523,9 +680,16 @@ import os from 'os';
     }
     console.log()
 
-    // TODO: Extract changes and create PR
-    console.log("📤 Next: Create pull request...")
-    console.log("  (TODO: Extract changed files from sandbox and create PR)")
+    // Extract changes and create PR
+    console.log("📤 Creating pull request from sandbox fixes...")
+    try {
+      await createPRFromSandbox(sandbox, project, debug)
+    } catch (err) {
+      console.log(`  ⚠️  Error creating PR: ${err}`)
+      if (debug) {
+        console.error(err)
+      }
+    }
     console.log()
 
     console.log("✅ Analysis complete!")
