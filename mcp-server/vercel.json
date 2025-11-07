@@ -1,9 +1,9 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "cd .. && cd mcp-server && node ../node_modules/next/dist/bin/next build --turbopack",
+  "buildCommand": "BUILD_DIR=$PWD && cd .. && pnpm install && cd \"$BUILD_DIR\" && NODE_PATH=../node_modules node ../node_modules/next/dist/bin/next build --turbopack",
   "outputDirectory": ".next",
   "devCommand": "pnpm dev",
-  "installCommand": "cd .. && pnpm install",
+  "installCommand": "echo 'Install handled in buildCommand'",
   "framework": null,
   "env": {
     "LOG_FILE_PATH": "/tmp/d3k/logs",
