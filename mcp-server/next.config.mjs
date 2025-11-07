@@ -8,9 +8,6 @@ const nextConfig = {
   reactCompiler: true,
   experimental: { turbopackFileSystemCacheForDev: true },
   devIndicators: false,
-  turbopack: {
-    root: path.join(__dirname, "..")
-  },
   // Disable image optimization to avoid sharp dependency issues
   images: {
     unoptimized: true
