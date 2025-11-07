@@ -4,7 +4,7 @@
   "outputDirectory": ".next",
   "devCommand": "pnpm dev",
   "installCommand": "SUBDIR=$PWD && cd .. && pnpm install && cd \"$SUBDIR\" && ln -sf ../node_modules node_modules",
-  "framework": "nextjs",
+  "framework": null,
   "env": {
     "LOG_FILE_PATH": "/tmp/d3k/logs",
     "SCREENSHOT_DIR": "/tmp/d3k/screenshots"
