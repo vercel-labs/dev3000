@@ -15,6 +15,7 @@ export async function POST(request: Request) {
   console.log(`[Workflow] MCP URL: ${mcpUrl}`)
   console.log(`[Workflow] Dev URL: ${devUrl}`)
   console.log(`[Workflow] Project: ${projectName}`)
+  console.log(`[Workflow] Timestamp: ${new Date().toISOString()}`)
 
   // Step 1: Fetch log analysis from MCP
   const logAnalysis = await fetchLogAnalysis(mcpUrl)
