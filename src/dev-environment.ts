@@ -90,11 +90,7 @@ function detectPackageManagerForRun(): string {
   if (existsSync("bun.lockb")) return "bun"
   if (existsSync("pnpm-lock.yaml")) return "pnpm"
   if (existsSync("yarn.lock")) return "yarn"
-  if (existsSync("package-lock.json")) {
-    console.log(chalk.yellow("⚠️ Detected package-lock.json, using npm as package manager"))
-    return "npm"
-  }
-  console.log(chalk.yellow("⚠️ Could not detect package manager, defaulting to npm"))
+  if (existsSync("package-lock.json")) return "npm"
   return "npm" // fallback
 }
 
