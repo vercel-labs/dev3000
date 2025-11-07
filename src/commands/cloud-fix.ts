@@ -259,14 +259,22 @@ export async function cloudFix(options: CloudFixOptions = {}): Promise<void> {
       throw new Error(`Dependency installation failed with exit code ${installResult.exitCode}`)
     }
 
-    // Start dev server
+    // Start dev server with output redirected to log file
     console.log("  Starting dev server...")
+    const logFilePath = "/tmp/dev3000.log"
+
+    // Create empty log file first
     await sandbox.runCommand({
-      cmd: installCmd,
-      args: ["run", project.devCommand],
-      detached: true,
-      stdout: debug ? process.stdout : undefined,
-      stderr: debug ? process.stderr : undefined
+      cmd: "sh",
+      args: ["-c", `touch ${logFilePath}`]
+    })
+
+    // Start dev server with stdout/stderr redirected to log file
+    // Using 'sh -c' with redirection to properly capture all output
+    await sandbox.runCommand({
+      cmd: "sh",
+      args: ["-c", `${installCmd} run ${project.devCommand} > ${logFilePath} 2>&1`],
+      detached: true
     })
 
     // Wait for server to be ready
