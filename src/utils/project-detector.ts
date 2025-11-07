@@ -9,6 +9,10 @@ export interface ProjectInfo {
   name: string
   /** Git repository URL (without .git suffix) */
   repoUrl: string
+  /** Git root directory path */
+  gitRoot: string
+  /** Relative path from git root to project (empty string if at root) */
+  relativePath: string
   /** Current git branch */
   branch: string
   /** Development server command */
@@ -72,10 +76,15 @@ export async function detectProject(cwd: string = process.cwd()): Promise<Projec
   // Detect package manager
   const packageManager = detectPackageManager(cwd)
 
+  // Calculate relative path from git root to project directory
+  const relativePath = cwd === gitDir ? "" : cwd.slice(gitDir.length + 1)
+
   return {
     path: cwd,
     name: packageJson.name || "unknown",
     repoUrl,
+    gitRoot: gitDir,
+    relativePath,
     branch,
     devCommand,
     framework,

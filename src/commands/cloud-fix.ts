@@ -215,6 +215,9 @@ export async function cloudFix(options: CloudFixOptions = {}): Promise<void> {
 
   console.log(`  Repository: ${project.repoUrl}`)
   console.log(`  Branch: ${project.branch}`)
+  if (project.relativePath) {
+    console.log(`  Project directory: ${project.relativePath}`)
+  }
   console.log(`  Framework: ${project.framework || "Unknown"}`)
   console.log(`  Dev command: ${project.packageManager} run ${project.devCommand}`)
   console.log()
@@ -238,12 +241,16 @@ export async function cloudFix(options: CloudFixOptions = {}): Promise<void> {
   console.log("  Sandbox created successfully")
 
   try {
+    // Calculate working directory in sandbox (use /vercel/sandbox + relativePath)
+    const sandboxCwd = project.relativePath ? `/vercel/sandbox/${project.relativePath}` : "/vercel/sandbox"
+
     // Install dependencies
     console.log("  Installing dependencies...")
     const installCmd = project.packageManager === "pnpm" ? "pnpm" : project.packageManager
     const installResult = await sandbox.runCommand({
       cmd: installCmd,
       args: ["install"],
+      cwd: sandboxCwd,
       stdout: debug ? process.stdout : undefined,
       stderr: debug ? process.stderr : undefined
     })
@@ -258,6 +265,7 @@ export async function cloudFix(options: CloudFixOptions = {}): Promise<void> {
       cmd: installCmd,
       args: ["run", project.devCommand],
       detached: true,
+      cwd: sandboxCwd,
       stdout: debug ? process.stdout : undefined,
       stderr: debug ? process.stderr : undefined
     })
