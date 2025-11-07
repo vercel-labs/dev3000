@@ -3,7 +3,7 @@
   "buildCommand": "pnpm build",
   "outputDirectory": ".next",
   "devCommand": "pnpm dev",
-  "installCommand": "cd .. && pnpm install",
+  "installCommand": "cd .. && pnpm install && cd mcp-server && pnpm install --shamefully-hoist",
   "framework": "nextjs",
   "env": {
     "LOG_FILE_PATH": "/tmp/d3k/logs",
