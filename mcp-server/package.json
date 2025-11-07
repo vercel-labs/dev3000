@@ -11,7 +11,7 @@
     "tools": "tsx tools-cli.ts"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "catalog:",
+    "@modelcontextprotocol/sdk": "^1.18.1",
     "@radix-ui/react-slot": "^1.1.1",
     "@types/pixelmatch": "^5.2.6",
     "@types/pngjs": "^6.0.5",
@@ -34,14 +34,14 @@
     "zod": "^3.22.4"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "catalog:",
+    "@tailwindcss/postcss": "^4.1.13",
     "@types/ms": "^2.1.0",
     "@types/node": "^24.5.2",
     "@types/react": "19.1.13",
-    "autoprefixer": "catalog:",
+    "autoprefixer": "^10.4.21",
     "babel-plugin-react-compiler": "^19.1.0-rc.3",
-    "postcss": "catalog:",
-    "tailwindcss": "catalog:",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.13",
     "typescript": "^5.0.0",
     "vitest": "^3.2.4"
   }
