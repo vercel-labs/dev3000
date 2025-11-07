@@ -1,9 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "cd .. && pnpm build --filter=dev3000-mcp-server",
-  "outputDirectory": ".next",
-  "installCommand": "cd .. && pnpm install",
-  "framework": null,
   "env": {
     "LOG_FILE_PATH": "/tmp/d3k/logs",
     "SCREENSHOT_DIR": "/tmp/d3k/screenshots"
