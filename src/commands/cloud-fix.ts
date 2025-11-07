@@ -628,9 +628,10 @@ import os from 'os';
 
     // Run AI agent workflow (deployed on Vercel) to analyze and fix issues
     console.log("🤖 Invoking AI agent workflow to analyze and fix issues...")
-    console.log(`  Workflow will run at: ${mcpUrl.replace("/mcp", "/api/cloud/fix-workflow")}`)
+    // Use production deployment for workflow, not the sandbox MCP URL
+    const workflowUrl = "https://dev3000-mcp.vercel.sh/api/cloud/fix-workflow"
+    console.log(`  Workflow will run at: ${workflowUrl}`)
     try {
-      const workflowUrl = mcpUrl.replace("/mcp", "/api/cloud/fix-workflow")
       const workflowResponse = await fetch(workflowUrl, {
         method: "POST",
         headers: {
