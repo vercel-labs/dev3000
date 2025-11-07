@@ -79,6 +79,7 @@ dev3000 --help
 Key options:
 - `--port <number>` - Development server port (default: 3000)
 - `--mcp-port <number>` - MCP server port (default: 3684)
+- `--disable-mcp-configs <targets>` - Skip auto-writing specific MCP config files (`.mcp.json`, `.cursor/mcp.json`, `opencode.json`). Use `all` to skip everything or set the `DEV3000_DISABLE_MCP_CONFIGS` env var for a default.
 - `--no-browser` - Skip browser monitoring
 - `--playwright` - Use Playwright instead of Chrome extension
 
@@ -91,6 +92,20 @@ dev3000 automatically integrates with:
 - **nextjs-dev MCP** - Next.js-specific debugging when installed
 
 The MCP server discovers available tools automatically and suggests them when relevant.
+
+### MCP Config Control
+
+dev3000 writes MCP client config files (`.mcp.json`, `.cursor/mcp.json`, `opencode.json`) so Claude Code, Cursor, and OpenCode can connect instantly. If you don't want certain files touched, pass `--disable-mcp-configs "claude cursor"` (aliases: `.mcp.json`, `.cursor/mcp.json`, `opencode.json`, or `all`). You can also set a default via `DEV3000_DISABLE_MCP_CONFIGS`.
+
+Prefer a persistent setting? Create `${XDG_CONFIG_HOME:-~/.config}/dev3000/config.json`:
+
+```json
+{
+  "disableMcpConfigs": "all"
+}
+```
+
+Any value in this file is treated like a default CLI flag (overridden by env vars or explicit flags).
 
 ## Development Commands
 
