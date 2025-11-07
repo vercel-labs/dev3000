@@ -16,6 +16,7 @@
     "@types/pixelmatch": "^5.2.6",
     "@types/pngjs": "^6.0.5",
     "@vercel/sdk": "^1.16.1",
+    "ai": "^5.0.89",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "commander": "^14.0.1",
@@ -28,6 +29,7 @@
     "react": "19.1.1",
     "react-dom": "19.1.1",
     "tailwind-merge": "^2.5.5",
+    "workflow": "4.0.1-beta.11",
     "ws": "^8.18.3",
     "zod": "^3.22.4"
   },

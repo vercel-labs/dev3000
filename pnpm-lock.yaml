@@ -118,6 +118,9 @@ importers:
       '@vercel/sdk':
         specifier: ^1.16.1
         version: 1.16.1(@modelcontextprotocol/sdk@1.20.1)
+      ai:
+        specifier: ^5.0.89
+        version: 5.0.89(zod@3.25.76)
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -154,6 +157,9 @@ importers:
       tailwind-merge:
         specifier: ^2.5.5
         version: 2.6.0
+      workflow:
+        specifier: 4.0.1-beta.11
+        version: 4.0.1-beta.11(@aws-sdk/client-sts@3.926.0)(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@6.2.1(svelte@5.43.4)(vite@7.1.11(@types/node@24.9.1)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)))(babel-plugin-react-compiler@19.1.0-rc.1-rc-af1b7da-20250421)(next@16.0.0-canary.18(@opentelemetry/api@1.9.0)(babel-plugin-react-compiler@19.1.0-rc.1-rc-af1b7da-20250421)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(svelte@5.43.4)(typescript@5.9.3)(vite@7.1.11(@types/node@24.9.1)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6))
       ws:
         specifier: ^8.18.3
         version: 8.18.3
@@ -5692,12 +5698,26 @@ packages:
 
 snapshots:
 
+  '@ai-sdk/gateway@2.0.7(zod@3.25.76)':
+    dependencies:
+      '@ai-sdk/provider': 2.0.0
+      '@ai-sdk/provider-utils': 3.0.16(zod@3.25.76)
+      '@vercel/oidc': 3.0.3
+      zod: 3.25.76
+
   '@ai-sdk/gateway@2.0.7(zod@4.1.11)':
     dependencies:
       '@ai-sdk/provider': 2.0.0
       '@ai-sdk/provider-utils': 3.0.16(zod@4.1.11)
       '@vercel/oidc': 3.0.3
       zod: 4.1.11
+
+  '@ai-sdk/provider-utils@3.0.16(zod@3.25.76)':
+    dependencies:
+      '@ai-sdk/provider': 2.0.0
+      '@standard-schema/spec': 1.0.0
+      eventsource-parser: 3.0.6
+      zod: 3.25.76
 
   '@ai-sdk/provider-utils@3.0.16(zod@4.1.11)':
     dependencies:
@@ -8293,6 +8313,49 @@ snapshots:
       - sass
       - supports-color
 
+  '@workflow/cli@4.0.1-beta.11(@aws-sdk/client-sts@3.926.0)(@opentelemetry/api@1.9.0)(babel-plugin-react-compiler@19.1.0-rc.1-rc-af1b7da-20250421)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)':
+    dependencies:
+      '@oclif/core': 4.8.0
+      '@oclif/plugin-help': 6.2.35
+      '@swc/core': 1.11.24
+      '@workflow/builders': 4.0.1-beta.7(@aws-sdk/client-sts@3.926.0)(@opentelemetry/api@1.9.0)
+      '@workflow/core': 4.0.1-beta.9(@aws-sdk/client-sts@3.926.0)(@opentelemetry/api@1.9.0)
+      '@workflow/errors': 4.0.1-beta.3
+      '@workflow/swc-plugin': 4.0.1-beta.3(@swc/core@1.11.24)
+      '@workflow/web': 4.0.1-beta.8(@opentelemetry/api@1.9.0)(babel-plugin-react-compiler@19.1.0-rc.1-rc-af1b7da-20250421)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
+      '@workflow/world': 4.0.1-beta.4(zod@4.1.11)
+      '@workflow/world-local': 4.0.1-beta.5(@opentelemetry/api@1.9.0)
+      '@workflow/world-vercel': 4.0.1-beta.5
+      boxen: 8.0.1
+      builtin-modules: 5.0.0
+      chalk: 5.6.2
+      chokidar: 4.0.3
+      comment-json: 4.2.5
+      date-fns: 4.1.0
+      easy-table: 1.2.0
+      enhanced-resolve: 5.18.2
+      esbuild: 0.25.11
+      find-up: 7.0.0
+      mixpart: 0.0.4
+      open: 10.2.0
+      ora: 8.2.0
+      terminal-link: 5.0.0
+      tinyglobby: 0.2.15
+      xdg-app-paths: 5.5.1
+      zod: 4.1.11
+    transitivePeerDependencies:
+      - '@aws-sdk/client-sts'
+      - '@babel/core'
+      - '@opentelemetry/api'
+      - '@playwright/test'
+      - '@swc/helpers'
+      - babel-plugin-macros
+      - babel-plugin-react-compiler
+      - react
+      - react-dom
+      - sass
+      - supports-color
+
   '@workflow/core@4.0.1-beta.9(@aws-sdk/client-sts@3.926.0)(@opentelemetry/api@1.9.0)':
     dependencies:
       '@aws-sdk/credential-provider-web-identity': 3.609.0(@aws-sdk/client-sts@3.926.0)
@@ -8330,6 +8393,22 @@ snapshots:
       watchpack: 2.4.4
     optionalDependencies:
       next: 16.0.0-canary.18(@opentelemetry/api@1.9.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
+    transitivePeerDependencies:
+      - '@aws-sdk/client-sts'
+      - '@opentelemetry/api'
+      - '@swc/helpers'
+      - supports-color
+
+  '@workflow/next@4.0.1-beta.11(@aws-sdk/client-sts@3.926.0)(@opentelemetry/api@1.9.0)(next@16.0.0-canary.18(@opentelemetry/api@1.9.0)(babel-plugin-react-compiler@19.1.0-rc.1-rc-af1b7da-20250421)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))':
+    dependencies:
+      '@swc/core': 1.11.24
+      '@workflow/builders': 4.0.1-beta.7(@aws-sdk/client-sts@3.926.0)(@opentelemetry/api@1.9.0)
+      '@workflow/core': 4.0.1-beta.9(@aws-sdk/client-sts@3.926.0)(@opentelemetry/api@1.9.0)
+      '@workflow/swc-plugin': 4.0.1-beta.3(@swc/core@1.11.24)
+      semver: 7.7.3
+      watchpack: 2.4.4
+    optionalDependencies:
+      next: 16.0.0-canary.18(@opentelemetry/api@1.9.0)(babel-plugin-react-compiler@19.1.0-rc.1-rc-af1b7da-20250421)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
     transitivePeerDependencies:
       - '@aws-sdk/client-sts'
       - '@opentelemetry/api'
@@ -8389,6 +8468,19 @@ snapshots:
       - react-dom
       - sass
 
+  '@workflow/web@4.0.1-beta.8(@opentelemetry/api@1.9.0)(babel-plugin-react-compiler@19.1.0-rc.1-rc-af1b7da-20250421)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)':
+    dependencies:
+      next: 15.5.4(@opentelemetry/api@1.9.0)(babel-plugin-react-compiler@19.1.0-rc.1-rc-af1b7da-20250421)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
+    transitivePeerDependencies:
+      - '@babel/core'
+      - '@opentelemetry/api'
+      - '@playwright/test'
+      - babel-plugin-macros
+      - babel-plugin-react-compiler
+      - react
+      - react-dom
+      - sass
+
   '@workflow/world-local@4.0.1-beta.5(@opentelemetry/api@1.9.0)':
     dependencies:
       '@vercel/queue': 0.0.0-alpha.23
@@ -8421,6 +8513,14 @@ snapshots:
       acorn: 8.15.0
 
   acorn@8.15.0: {}
+
+  ai@5.0.89(zod@3.25.76):
+    dependencies:
+      '@ai-sdk/gateway': 2.0.7(zod@3.25.76)
+      '@ai-sdk/provider': 2.0.0
+      '@ai-sdk/provider-utils': 3.0.16(zod@3.25.76)
+      '@opentelemetry/api': 1.9.0
+      zod: 3.25.76
 
   ai@5.0.89(zod@4.1.11):
     dependencies:
@@ -10206,6 +10306,31 @@ snapshots:
       - '@babel/core'
       - babel-plugin-macros
 
+  next@15.5.4(@opentelemetry/api@1.9.0)(babel-plugin-react-compiler@19.1.0-rc.1-rc-af1b7da-20250421)(react-dom@19.1.1(react@19.1.1))(react@19.1.1):
+    dependencies:
+      '@next/env': 15.5.4
+      '@swc/helpers': 0.5.15
+      caniuse-lite: 1.0.30001751
+      postcss: 8.4.31
+      react: 19.1.1
+      react-dom: 19.1.1(react@19.1.1)
+      styled-jsx: 5.1.6(react@19.1.1)
+    optionalDependencies:
+      '@next/swc-darwin-arm64': 15.5.4
+      '@next/swc-darwin-x64': 15.5.4
+      '@next/swc-linux-arm64-gnu': 15.5.4
+      '@next/swc-linux-arm64-musl': 15.5.4
+      '@next/swc-linux-x64-gnu': 15.5.4
+      '@next/swc-linux-x64-musl': 15.5.4
+      '@next/swc-win32-arm64-msvc': 15.5.4
+      '@next/swc-win32-x64-msvc': 15.5.4
+      '@opentelemetry/api': 1.9.0
+      babel-plugin-react-compiler: 19.1.0-rc.1-rc-af1b7da-20250421
+      sharp: 0.34.4
+    transitivePeerDependencies:
+      - '@babel/core'
+      - babel-plugin-macros
+
   next@16.0.0-canary.18(@opentelemetry/api@1.9.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1):
     dependencies:
       '@next/env': 16.0.0-canary.18
@@ -11449,6 +11574,35 @@ snapshots:
       '@workflow/core': 4.0.1-beta.9(@aws-sdk/client-sts@3.926.0)(@opentelemetry/api@1.9.0)
       '@workflow/errors': 4.0.1-beta.3
       '@workflow/next': 4.0.1-beta.11(@aws-sdk/client-sts@3.926.0)(@opentelemetry/api@1.9.0)(next@16.0.0-canary.18(@opentelemetry/api@1.9.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))
+      '@workflow/nitro': 4.0.1-beta.11(@aws-sdk/client-sts@3.926.0)(@opentelemetry/api@1.9.0)
+      '@workflow/sveltekit': 4.0.0-beta.5(@aws-sdk/client-sts@3.926.0)(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@6.2.1(svelte@5.43.4)(vite@7.1.11(@types/node@24.9.1)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)))(svelte@5.43.4)(vite@7.1.11(@types/node@24.9.1)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6))
+      '@workflow/typescript-plugin': 4.0.1-beta.4(typescript@5.9.3)
+      ms: 2.1.3
+    optionalDependencies:
+      '@opentelemetry/api': 1.9.0
+    transitivePeerDependencies:
+      - '@aws-sdk/client-sts'
+      - '@babel/core'
+      - '@playwright/test'
+      - '@sveltejs/vite-plugin-svelte'
+      - '@swc/helpers'
+      - babel-plugin-macros
+      - babel-plugin-react-compiler
+      - next
+      - react
+      - react-dom
+      - sass
+      - supports-color
+      - svelte
+      - typescript
+      - vite
+
+  workflow@4.0.1-beta.11(@aws-sdk/client-sts@3.926.0)(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@6.2.1(svelte@5.43.4)(vite@7.1.11(@types/node@24.9.1)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)))(babel-plugin-react-compiler@19.1.0-rc.1-rc-af1b7da-20250421)(next@16.0.0-canary.18(@opentelemetry/api@1.9.0)(babel-plugin-react-compiler@19.1.0-rc.1-rc-af1b7da-20250421)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react-dom@19.1.1(react@19.1.1))(react@19.1.1)(svelte@5.43.4)(typescript@5.9.3)(vite@7.1.11(@types/node@24.9.1)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)):
+    dependencies:
+      '@workflow/cli': 4.0.1-beta.11(@aws-sdk/client-sts@3.926.0)(@opentelemetry/api@1.9.0)(babel-plugin-react-compiler@19.1.0-rc.1-rc-af1b7da-20250421)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
+      '@workflow/core': 4.0.1-beta.9(@aws-sdk/client-sts@3.926.0)(@opentelemetry/api@1.9.0)
+      '@workflow/errors': 4.0.1-beta.3
+      '@workflow/next': 4.0.1-beta.11(@aws-sdk/client-sts@3.926.0)(@opentelemetry/api@1.9.0)(next@16.0.0-canary.18(@opentelemetry/api@1.9.0)(babel-plugin-react-compiler@19.1.0-rc.1-rc-af1b7da-20250421)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))
       '@workflow/nitro': 4.0.1-beta.11(@aws-sdk/client-sts@3.926.0)(@opentelemetry/api@1.9.0)
       '@workflow/sveltekit': 4.0.0-beta.5(@aws-sdk/client-sts@3.926.0)(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@6.2.1(svelte@5.43.4)(vite@7.1.11(@types/node@24.9.1)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6)))(svelte@5.43.4)(vite@7.1.11(@types/node@24.9.1)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.20.6))
       '@workflow/typescript-plugin': 4.0.1-beta.4(typescript@5.9.3)

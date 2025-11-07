@@ -4,7 +4,6 @@ import { dirname, join } from "node:path"
 import { Sandbox } from "@vercel/sandbox"
 import ms from "ms"
 import { detectProject } from "../utils/project-detector.js"
-import { cloudFixWorkflow } from "./cloud-fix-workflow.js"
 
 export interface CloudFixOptions {
   debug?: boolean
@@ -627,15 +626,29 @@ import os from 'os';
     await new Promise((resolve) => setTimeout(resolve, 2000))
     console.log()
 
-    // Run AI agent workflow to analyze and fix issues
+    // Run AI agent workflow (deployed on Vercel) to analyze and fix issues
     console.log("🤖 Invoking AI agent workflow to analyze and fix issues...")
+    console.log(`  Workflow will run at: ${mcpUrl.replace("/mcp", "/api/cloud/fix-workflow")}`)
     try {
-      const workflowResult = await cloudFixWorkflow({
-        mcpUrl,
-        devUrl,
-        projectName: project.name,
-        debug
+      const workflowUrl = mcpUrl.replace("/mcp", "/api/cloud/fix-workflow")
+      const workflowResponse = await fetch(workflowUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          mcpUrl,
+          devUrl,
+          projectName: project.name
+        })
       })
+
+      if (!workflowResponse.ok) {
+        const errorText = await workflowResponse.text()
+        throw new Error(`Workflow request failed: ${workflowResponse.status} - ${errorText}`)
+      }
+
+      const workflowResult = await workflowResponse.json()
 
       console.log("  ✅ Workflow completed successfully")
       if (debug) {
