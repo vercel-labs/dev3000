@@ -230,8 +230,7 @@ export async function cloudFix(options: CloudFixOptions = {}): Promise<void> {
   const sandbox = await Sandbox.create({
     // Always use dev3000-mcp project on vercel team for sandbox creation
     teamId: process.env.VERCEL_TEAM_ID || "team_nLlpyC6REAqxydlFKbrMDlud",
-    projectId:
-      process.env.VERCEL_PROJECT_ID || "prj_21F00Vr3bXzc1VSC8D9j2YJUzd0Q",
+    projectId: process.env.VERCEL_PROJECT_ID || "prj_21F00Vr3bXzc1VSC8D9j2YJUzd0Q",
     token: process.env.VERCEL_TOKEN || process.env.VERCEL_OIDC_TOKEN,
     source: {
       url: `${project.repoUrl}.git`,

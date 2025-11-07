@@ -28,12 +28,7 @@ export async function cloudFixWorkflow(options: {
   const fixProposal = await analyzeLogsWithAgent(logAnalysis, devUrl, debug)
 
   // Step 3: Apply fix and create PR (if applicable)
-  const result = await applyFixAndCreatePR(
-    mcpUrl,
-    fixProposal,
-    projectName,
-    debug
-  )
+  const result = await applyFixAndCreatePR(mcpUrl, fixProposal, projectName, debug)
 
   return result
 }
@@ -67,9 +62,7 @@ async function fetchLogAnalysis(mcpUrl: string, debug?: boolean) {
 
   if (!response.ok) {
     const errorText = await response.text()
-    throw new Error(
-      `Failed to fetch log analysis: ${response.status} - ${errorText}`
-    )
+    throw new Error(`Failed to fetch log analysis: ${response.status} - ${errorText}`)
   }
 
   // Parse SSE response
@@ -105,11 +98,7 @@ async function fetchLogAnalysis(mcpUrl: string, debug?: boolean) {
  * Step 2: Invoke AI agent to analyze logs and propose fixes
  * Uses AI SDK with AI Gateway for multi-model support
  */
-async function analyzeLogsWithAgent(
-  logAnalysis: string,
-  devUrl: string,
-  debug?: boolean
-) {
+async function analyzeLogsWithAgent(logAnalysis: string, devUrl: string, debug?: boolean) {
   "use step"
 
   if (debug) {
@@ -172,12 +161,7 @@ If no errors are found, respond with "No critical issues detected."`
  * Step 3: Apply fix and create PR
  * This would call MCP tools to create the actual PR
  */
-async function applyFixAndCreatePR(
-  mcpUrl: string,
-  fixProposal: string,
-  projectName: string,
-  debug?: boolean
-) {
+async function applyFixAndCreatePR(_mcpUrl: string, fixProposal: string, projectName: string, debug?: boolean) {
   "use step"
 
   if (debug) {
