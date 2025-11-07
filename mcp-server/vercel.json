@@ -9,12 +9,6 @@
     "LOG_FILE_PATH": "/tmp/d3k/logs",
     "SCREENSHOT_DIR": "/tmp/d3k/screenshots"
   },
-  "functions": {
-    "app/api/**/*.ts": {
-      "memory": 3008,
-      "maxDuration": 300
-    }
-  },
   "rewrites": [
     {
       "source": "/mcp/:path*",
