@@ -61,6 +61,7 @@
   "dependencies": {
     "@biomejs/biome": "^2.2.4",
     "@vercel/sandbox": "^1.0.2",
+    "ai": "^5.0.87",
     "chalk": "^5.3.0",
     "commander": "^14.0.1",
     "ink": "^6.3.1",
@@ -72,6 +73,7 @@
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "typescript": "^5.0.0",
+    "workflow": "latest",
     "ws": "^8.18.3"
   },
   "devDependencies": {

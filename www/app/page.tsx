@@ -1,6 +1,7 @@
 import { clsx } from "clsx"
 import Image from "next/image"
 import Link from "next/link"
+import { connection } from "next/server"
 import { GitHubLink } from "@/components/github-link"
 import { Button } from "@/components/ui/button"
 import { demoCLSBugsFlag } from "@/lib/flags"
@@ -9,6 +10,7 @@ import HeroTerminalImage from "@/public/hero-terminal.png"
 import { ChangelogLink, TerminalRecording } from "./components.client"
 
 export default async function HomePage() {
+  await connection()
   const showDemoCLSBugs = await demoCLSBugsFlag()
   return (
     <div className="min-h-screen bg-background">

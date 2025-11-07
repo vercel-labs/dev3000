@@ -4,6 +4,7 @@ import { dirname, join } from "node:path"
 import { Sandbox } from "@vercel/sandbox"
 import ms from "ms"
 import { detectProject } from "../utils/project-detector.js"
+import { cloudFixWorkflow } from "./cloud-fix-workflow.js"
 
 export interface CloudFixOptions {
   debug?: boolean
@@ -227,6 +228,11 @@ export async function cloudFix(options: CloudFixOptions = {}): Promise<void> {
   // biome-ignore lint/suspicious/noExplicitAny: ms type inference issue
   const timeoutMs = ms(timeout as any) as unknown as number
   const sandbox = await Sandbox.create({
+    // Always use dev3000-mcp project on vercel team for sandbox creation
+    teamId: process.env.VERCEL_TEAM_ID || "team_nLlpyC6REAqxydlFKbrMDlud",
+    projectId:
+      process.env.VERCEL_PROJECT_ID || "prj_21F00Vr3bXzc1VSC8D9j2YJUzd0Q",
+    token: process.env.VERCEL_TOKEN || process.env.VERCEL_OIDC_TOKEN,
     source: {
       url: `${project.repoUrl}.git`,
       type: "git"
@@ -597,53 +603,47 @@ import os from 'os';
     }
     console.log()
 
-    // Skip crawl_app - just let homepage trigger the undefinedVariable error
-    console.log("⏭️  Skipping crawl_app - homepage should trigger undefinedVariable error")
+    // Wait a bit for logs to be generated, then visit homepage to trigger any errors
+    console.log("⏳ Waiting for dev server to generate logs...")
+    await new Promise((resolve) => setTimeout(resolve, 5000))
+
+    // Visit the homepage to trigger any errors and generate logs
+    console.log("🌐 Visiting homepage to trigger errors...")
+    try {
+      await fetch(devUrl)
+      console.log("  ✅ Homepage visited")
+    } catch (err) {
+      console.log(`  ⚠️  Error visiting homepage: ${err}`)
+    }
+
+    // Wait a bit more for logs to be written
+    await new Promise((resolve) => setTimeout(resolve, 2000))
     console.log()
 
-    // Run fix_my_app tool
-    console.log("🔧 Running fix_my_app tool...")
+    // Run AI agent workflow to analyze and fix issues
+    console.log("🤖 Invoking AI agent workflow to analyze and fix issues...")
     try {
-      const fixResponse = await fetch(`${mcpUrl}/mcp`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json, text/event-stream"
-        },
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          id: 2,
-          method: "tools/call",
-          params: {
-            name: "fix_my_app",
-            arguments: {}
-          }
-        })
+      const workflowResult = await cloudFixWorkflow({
+        mcpUrl,
+        devUrl,
+        projectName: project.name,
+        debug
       })
 
+      console.log("  ✅ Workflow completed successfully")
       if (debug) {
-        console.log(`  Response status: ${fixResponse.status}`)
+        console.log(`  Result:`, JSON.stringify(workflowResult, null, 2))
       }
 
-      if (fixResponse.ok) {
-        const responseText = await parseSSEResponse(fixResponse)
-        if (debug) {
-          console.log(`  Response body:`, responseText.substring(0, 500))
-        }
-
-        console.log("  ✅ Fix analysis completed")
-        console.log(`\n${responseText}\n`)
-      } else {
-        const errorText = await fixResponse.text()
-        console.log(`  ⚠️  Fix analysis failed: ${fixResponse.status} - ${errorText}`)
-      }
+      console.log("\n📋 Fix Proposal:")
+      console.log(workflowResult.fixProposal)
+      console.log()
     } catch (err) {
-      console.log(`  ⚠️  Error calling fix tool: ${err}`)
+      console.log(`  ⚠️  Workflow failed: ${err}`)
+      if (debug && err instanceof Error) {
+        console.log(`  Stack trace: ${err.stack}`)
+      }
     }
-    console.log()
-
-    // Skip PR creation for focused testing
-    console.log("⏭️  Skipping PR creation - just validating error detection")
     console.log()
 
     console.log("✅ Analysis complete!")
