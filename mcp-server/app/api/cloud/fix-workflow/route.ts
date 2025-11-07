@@ -4,7 +4,7 @@ import { createGateway, generateText } from "ai"
  * Cloud Fix Workflow - Deployed on Vercel
  *
  * This workflow analyzes logs from a sandbox environment and generates fix proposals.
- * Uses Vercel Workflow SDK for durability and the AI Gateway for multi-model support.
+ * Uses Vercel Workflow SDK for durability and AI Gateway for multi-model support.
  */
 export async function POST(request: Request) {
   "use workflow"
