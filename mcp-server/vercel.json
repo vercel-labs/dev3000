@@ -3,7 +3,7 @@
   "buildCommand": "pnpm build",
   "outputDirectory": ".next",
   "devCommand": "pnpm dev",
-  "installCommand": "SUBDIR=$PWD && cd .. && pnpm install && cd \"$SUBDIR\" && pnpm install --shamefully-hoist",
+  "installCommand": "SUBDIR=$PWD && cd .. && pnpm install && cd \"$SUBDIR\" && ln -sf ../node_modules node_modules",
   "framework": "nextjs",
   "env": {
     "LOG_FILE_PATH": "/tmp/d3k/logs",
