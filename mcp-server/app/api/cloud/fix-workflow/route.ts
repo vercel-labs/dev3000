@@ -5,6 +5,8 @@ import { createGateway, generateText } from "ai"
  *
  * This workflow analyzes logs from a sandbox environment and generates fix proposals.
  * Uses Vercel Workflow SDK for durability and the AI Gateway for multi-model support.
+ *
+ * Deployed via GitHub integration.
  */
 export async function POST(request: Request) {
   "use workflow"
