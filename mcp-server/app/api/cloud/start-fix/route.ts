@@ -9,12 +9,12 @@ import { POST as cloudFixWorkflow } from "../fix-workflow/route"
  */
 export async function POST(request: Request) {
   try {
-    const { mcpUrl, devUrl, projectName } = await request.json()
+    const { logAnalysis, devUrl, projectName } = await request.json()
 
     console.log("[Start Fix] Starting cloud fix workflow...")
-    console.log(`[Start Fix] MCP URL: ${mcpUrl}`)
     console.log(`[Start Fix] Dev URL: ${devUrl}`)
     console.log(`[Start Fix] Project: ${projectName}`)
+    console.log(`[Start Fix] Log analysis length: ${logAnalysis?.length || 0} chars`)
 
     // Use the Workflow SDK's start() function to invoke the workflow
     // The workflow will run asynchronously and durably
@@ -22,7 +22,7 @@ export async function POST(request: Request) {
       new Request(request.url, {
         method: "POST",
         headers: request.headers,
-        body: JSON.stringify({ mcpUrl, devUrl, projectName })
+        body: JSON.stringify({ logAnalysis, devUrl, projectName })
       })
     ])
 

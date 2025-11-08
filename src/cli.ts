@@ -389,6 +389,9 @@ program
   .description("Cloud-based tools using Vercel Sandbox")
   .command("fix")
   .description("Analyze and fix issues in current project using Vercel Sandbox + MCP tools")
+  .option("--repo <url>", "Repository URL (e.g. https://github.com/user/repo)")
+  .option("--branch <name>", "Git branch to test")
+  .option("--project-dir <dir>", "Project directory within repo (e.g. 'www')")
   .option("--debug", "Enable debug logging")
   .option("--timeout <duration>", "Sandbox timeout (e.g. '30m', '1h')", "30m")
   .action(async (options) => {

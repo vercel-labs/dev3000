@@ -214,22 +214,23 @@ export async function cloudFix(options: CloudFixOptions = {}): Promise<void> {
   const { debug = false, timeout = "30m", repo, branch, projectDir } = options
 
   // Use provided params or detect from filesystem
-  const project = repo && branch
-    ? {
-        repoUrl: repo,
-        branch,
-        relativePath: projectDir || "",
-        name: projectDir || "app",
-        packageManager: "pnpm" as const,
-        devCommand: "dev",
-        framework: "Next.js",
-        path: process.cwd(),
-        gitRoot: process.cwd()
-      }
-    : await (async () => {
-        console.log("🔍 Detecting project...")
-        return await detectProject()
-      })()
+  const project =
+    repo && branch
+      ? {
+          repoUrl: repo,
+          branch,
+          relativePath: projectDir || "",
+          name: projectDir || "app",
+          packageManager: "pnpm" as const,
+          devCommand: "dev",
+          framework: "Next.js",
+          path: process.cwd(),
+          gitRoot: process.cwd()
+        }
+      : await (async () => {
+          console.log("🔍 Detecting project...")
+          return await detectProject()
+        })()
 
   console.log(`  Repository: ${project.repoUrl}`)
   console.log(`  Branch: ${project.branch}`)
@@ -650,6 +651,65 @@ import os from 'os';
     await new Promise((resolve) => setTimeout(resolve, 2000))
     console.log()
 
+    // Fetch log analysis from MCP before starting workflow
+    console.log("📊 Fetching log analysis from MCP...")
+    let logAnalysis = ""
+    try {
+      const mcpResponse = await fetch(`${mcpUrl}/mcp`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json, text/event-stream"
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "tools/call",
+          params: {
+            name: "fix_my_app",
+            arguments: {}
+          }
+        })
+      })
+
+      if (!mcpResponse.ok) {
+        const errorText = await mcpResponse.text()
+        throw new Error(`Failed to fetch log analysis: ${mcpResponse.status} - ${errorText}`)
+      }
+
+      // Parse SSE response
+      const text = await mcpResponse.text()
+      const lines = text.split("\n")
+
+      for (const line of lines) {
+        if (line.startsWith("data: ")) {
+          try {
+            const json = JSON.parse(line.substring(6))
+            if (json.result?.content) {
+              for (const content of json.result.content) {
+                if (content.type === "text") {
+                  logAnalysis += content.text
+                }
+              }
+            }
+          } catch (_err) {
+            // Skip invalid JSON
+          }
+        }
+      }
+
+      console.log(`  ✅ Log analysis fetched (${logAnalysis.length} chars)`)
+      if (debug && logAnalysis) {
+        console.log(`  First 500 chars: ${logAnalysis.substring(0, 500)}...`)
+      }
+    } catch (err) {
+      console.log(`  ⚠️  Failed to fetch log analysis: ${err}`)
+      if (debug && err instanceof Error) {
+        console.log(`  Stack trace: ${err.stack}`)
+      }
+    }
+    console.log()
+
     // Run AI agent workflow (deployed on Vercel) to analyze and fix issues
     console.log("🤖 Invoking AI agent workflow to analyze and fix issues...")
     // Use the workflow starter endpoint which uses the Workflow SDK's start() function
@@ -662,7 +722,7 @@ import os from 'os';
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          mcpUrl,
+          logAnalysis,
           devUrl,
           projectName: project.name
         })
@@ -681,9 +741,7 @@ import os from 'os';
       }
 
       console.log("\n📋 Workflow Status:")
-      console.log(
-        `  The workflow is running asynchronously and will analyze logs, generate fixes, and create PRs.`
-      )
+      console.log(`  The workflow is running asynchronously and will analyze logs, generate fixes, and create PRs.`)
       console.log(`  You can monitor the workflow in the Vercel dashboard.`)
       console.log()
     } catch (err) {

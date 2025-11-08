@@ -9,91 +9,31 @@ import { createGateway, generateText } from "ai"
 export async function POST(request: Request) {
   "use workflow"
 
-  const { mcpUrl, devUrl, projectName } = await request.json()
+  const { logAnalysis, devUrl, projectName } = await request.json()
 
   console.log("[Workflow] Starting cloud fix workflow...")
-  console.log(`[Workflow] MCP URL: ${mcpUrl}`)
   console.log(`[Workflow] Dev URL: ${devUrl}`)
   console.log(`[Workflow] Project: ${projectName}`)
+  console.log(`[Workflow] Log analysis length: ${logAnalysis?.length || 0} chars`)
   console.log(`[Workflow] Timestamp: ${new Date().toISOString()}`)
 
-  // Step 1: Fetch log analysis from MCP
-  const logAnalysis = await fetchLogAnalysis(mcpUrl)
-
-  // Step 2: Invoke AI agent to analyze logs and create fix
+  // Step 1: Invoke AI agent to analyze logs and create fix
   const fixProposal = await analyzeLogsWithAgent(logAnalysis, devUrl)
 
-  // Step 3: Apply fix and create PR (if applicable)
-  const result = await applyFixAndCreatePR(mcpUrl, fixProposal, projectName)
+  // Step 2: Apply fix and create PR (if applicable)
+  const result = await applyFixAndCreatePR(fixProposal, projectName)
 
   return Response.json(result)
 }
 
 /**
- * Step 1: Fetch log analysis from fix_my_app MCP tool
- */
-async function fetchLogAnalysis(mcpUrl: string) {
-  "use step"
-
-  console.log("[Step 1] Fetching log analysis from MCP...")
-
-  const response = await fetch(`${mcpUrl}/mcp`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json, text/event-stream"
-    },
-    body: JSON.stringify({
-      jsonrpc: "2.0",
-      id: 1,
-      method: "tools/call",
-      params: {
-        name: "fix_my_app",
-        arguments: {}
-      }
-    })
-  })
-
-  if (!response.ok) {
-    const errorText = await response.text()
-    throw new Error(`Failed to fetch log analysis: ${response.status} - ${errorText}`)
-  }
-
-  // Parse SSE response
-  const text = await response.text()
-  const lines = text.split("\n")
-  let result = ""
-
-  for (const line of lines) {
-    if (line.startsWith("data: ")) {
-      try {
-        const json = JSON.parse(line.substring(6))
-        if (json.result?.content) {
-          for (const content of json.result.content) {
-            if (content.type === "text") {
-              result += content.text
-            }
-          }
-        }
-      } catch (_err) {
-        // Skip invalid JSON
-      }
-    }
-  }
-
-  console.log(`[Step 1] Log analysis result (first 500 chars): ${result.substring(0, 500)}...`)
-
-  return result
-}
-
-/**
- * Step 2: Invoke AI agent to analyze logs and propose fixes
+ * Step 1: Invoke AI agent to analyze logs and propose fixes
  * Uses AI SDK with AI Gateway for multi-model support
  */
 async function analyzeLogsWithAgent(logAnalysis: string, devUrl: string) {
   "use step"
 
-  console.log("[Step 2] Invoking AI agent to analyze logs...")
+  console.log("[Step 1] Invoking AI agent to analyze logs...")
 
   // Create AI Gateway instance
   const gateway = createGateway({
@@ -137,19 +77,19 @@ If no errors are found, respond with "No critical issues detected."`
     prompt
   })
 
-  console.log(`[Step 2] AI agent response (first 500 chars): ${text.substring(0, 500)}...`)
+  console.log(`[Step 1] AI agent response (first 500 chars): ${text.substring(0, 500)}...`)
 
   return text
 }
 
 /**
- * Step 3: Apply fix and create PR
+ * Step 2: Apply fix and create PR
  * This would call MCP tools to create the actual PR
  */
-async function applyFixAndCreatePR(_mcpUrl: string, fixProposal: string, projectName: string) {
+async function applyFixAndCreatePR(fixProposal: string, projectName: string) {
   "use step"
 
-  console.log("[Step 3] Preparing fix results...")
+  console.log("[Step 2] Preparing fix results...")
 
   // For now, just return the fix proposal
   // In the future, this would:
