@@ -122,14 +122,18 @@ export async function POST(request: Request) {
  */
 async function findPRNumber(owner: string, repo: string, branch: string): Promise<string | null> {
   try {
+    const headers: Record<string, string> = {
+      Accept: "application/vnd.github.v3+json"
+    }
+
+    // Only add Authorization header if token is available
+    if (process.env.GITHUB_TOKEN) {
+      headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`
+    }
+
     const response = await fetch(
       `https://api.github.com/repos/${owner}/${repo}/pulls?head=${owner}:${branch}&state=open`,
-      {
-        headers: {
-          Accept: "application/vnd.github.v3+json",
-          Authorization: `Bearer ${process.env.GITHUB_TOKEN}`
-        }
-      }
+      { headers }
     )
 
     if (!response.ok) {
@@ -150,11 +154,17 @@ async function findPRNumber(owner: string, repo: string, branch: string): Promis
  */
 async function fetchPRDetails(owner: string, repo: string, prNumber: string) {
   try {
+    const headers: Record<string, string> = {
+      Accept: "application/vnd.github.v3+json"
+    }
+
+    // Only add Authorization header if token is available
+    if (process.env.GITHUB_TOKEN) {
+      headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`
+    }
+
     const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls/${prNumber}`, {
-      headers: {
-        Accept: "application/vnd.github.v3+json",
-        Authorization: `Bearer ${process.env.GITHUB_TOKEN}`
-      }
+      headers
     })
 
     if (!response.ok) {
@@ -178,11 +188,17 @@ async function fetchPRDetails(owner: string, repo: string, prNumber: string) {
  */
 async function getChangedFiles(owner: string, repo: string, prNumber: string): Promise<string[]> {
   try {
+    const headers: Record<string, string> = {
+      Accept: "application/vnd.github.v3+json"
+    }
+
+    // Only add Authorization header if token is available
+    if (process.env.GITHUB_TOKEN) {
+      headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`
+    }
+
     const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls/${prNumber}/files`, {
-      headers: {
-        Accept: "application/vnd.github.v3+json",
-        Authorization: `Bearer ${process.env.GITHUB_TOKEN}`
-      }
+      headers
     })
 
     if (!response.ok) {
