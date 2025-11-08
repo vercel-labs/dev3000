@@ -1,5 +1,3 @@
-import { put } from "@vercel/blob"
-import { createGateway, generateText } from "ai"
 import { start } from "workflow/api"
 
 /**
@@ -78,6 +76,9 @@ export async function cloudCheckPRWorkflow(params: {
  */
 async function identifyAffectedPages(changedFiles: string[], prBody: string) {
   "use step"
+
+  // Import AI functions inside step function to avoid Node.js module errors in workflow bundle
+  const { createGateway, generateText } = await import("ai")
 
   console.log(`[Step 1] Identifying affected pages from ${changedFiles.length} changed files...`)
 
@@ -246,6 +247,9 @@ async function crawlPreviewPages(previewUrl: string, pagesToCheck: string[]) {
 // biome-ignore lint/suspicious/noExplicitAny: AI-generated crawl data has dynamic structure
 async function verifyPRClaims(prTitle: string, prBody: string, crawlResults: any[], changedFiles: string[]) {
   "use step"
+
+  // Import AI functions inside step function to avoid Node.js module errors in workflow bundle
+  const { createGateway, generateText } = await import("ai")
 
   console.log("[Step 3] Verifying PR claims against actual behavior...")
 
@@ -566,6 +570,9 @@ Learn more at https://github.com/vercel-labs/dev3000
  */
 async function uploadReport(report: string, repoOwner: string, repoName: string, prNumber: string) {
   "use step"
+
+  // Import blob function inside step function to avoid Node.js module errors in workflow bundle
+  const { put } = await import("@vercel/blob")
 
   console.log("[Step 6] Uploading report to blob storage...")
 
