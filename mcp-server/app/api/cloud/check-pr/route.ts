@@ -1,5 +1,6 @@
 import { put } from "@vercel/blob"
 import { createGateway, generateText } from "ai"
+import { start } from "workflow/api"
 
 /**
  * Cloud Check PR Workflow Function - Verifies PR changes work as expected
@@ -598,18 +599,31 @@ export async function POST(request: Request) {
     console.log(`[POST /api/cloud/check-pr] PR #${prNumber}: ${prTitle}`)
     console.log(`[POST /api/cloud/check-pr] Preview URL: ${previewUrl}`)
 
-    const result = await cloudCheckPRWorkflow({
-      previewUrl,
-      prTitle,
-      prBody,
-      changedFiles,
-      repoOwner,
-      repoName,
-      prNumber
-    })
+    // Start the workflow using the Workflow SDK's start() API
+    const run = await start(cloudCheckPRWorkflow, [
+      {
+        previewUrl,
+        prTitle,
+        prBody,
+        changedFiles,
+        repoOwner,
+        repoName,
+        prNumber
+      }
+    ])
+
+    console.log(`[POST /api/cloud/check-pr] Workflow started, waiting for completion...`)
+
+    // Wait for workflow to complete and get the Response
+    const workflowResponse = await run.returnValue
+
+    // Parse the JSON result from the Response
+    const result = await workflowResponse.json()
 
     console.log("[POST /api/cloud/check-pr] Workflow completed successfully")
-    return result
+
+    // Return the result
+    return Response.json(result)
   } catch (error) {
     console.error("[POST /api/cloud/check-pr] Error:", error)
     return Response.json(
