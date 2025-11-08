@@ -7,34 +7,92 @@ import { createGateway, generateText } from "ai"
  * This is the actual workflow that can be invoked via start() from the Workflow SDK.
  * Accepts serializable parameters and returns a Response.
  */
-export async function cloudFixWorkflow(params: { logAnalysis: string; devUrl: string; projectName: string }) {
+export async function cloudFixWorkflow(params: { devUrl: string; projectName: string }) {
   "use workflow"
 
-  const { logAnalysis, devUrl, projectName } = params
+  const { devUrl, projectName } = params
 
   console.log("[Workflow] Starting cloud fix workflow...")
   console.log(`[Workflow] Dev URL: ${devUrl}`)
   console.log(`[Workflow] Project: ${projectName}`)
-  console.log(`[Workflow] Log analysis length: ${logAnalysis?.length || 0} chars`)
   console.log(`[Workflow] Timestamp: ${new Date().toISOString()}`)
 
-  // Step 1: Invoke AI agent to analyze logs and create fix
+  // Step 1: Fetch real logs from the dev URL
+  const logAnalysis = await fetchRealLogs(devUrl)
+
+  // Step 2: Invoke AI agent to analyze logs and create fix
   const fixProposal = await analyzeLogsWithAgent(logAnalysis, devUrl)
 
-  // Step 2: Upload to blob storage with full context
+  // Step 3: Upload to blob storage with full context
   const result = await applyFixAndCreatePR(fixProposal, projectName, logAnalysis, devUrl)
 
   return Response.json(result)
 }
 
 /**
- * Step 1: Invoke AI agent to analyze logs and propose fixes
+ * Step 1: Fetch real logs from the dev URL
+ * Makes HTTP requests to capture actual errors and issues
+ */
+async function fetchRealLogs(devUrl: string) {
+  "use step"
+
+  console.log(`[Step 1] Fetching real logs from: ${devUrl}`)
+
+  try {
+    // Make HTTP request to the dev URL to capture any errors
+    const response = await fetch(devUrl, {
+      method: "GET",
+      headers: {
+        "User-Agent": "dev3000-cloud-fix/1.0",
+        Accept: "text/html,application/json,*/*"
+      }
+    })
+
+    console.log(`[Step 1] Response status: ${response.status}`)
+    console.log(`[Step 1] Response headers:`, Object.fromEntries(response.headers.entries()))
+
+    // Get response body
+    const body = await response.text()
+    console.log(`[Step 1] Response body length: ${body.length} chars`)
+
+    // Construct log analysis from the response
+    let logAnalysis = `Dev Server URL: ${devUrl}\n`
+    logAnalysis += `HTTP Status: ${response.status} ${response.statusText}\n\n`
+
+    // If there was an error status, capture it
+    if (!response.ok) {
+      logAnalysis += `ERROR: HTTP ${response.status} ${response.statusText}\n\n`
+    }
+
+    // Try to extract error information from the body
+    if (body.includes("ReferenceError") || body.includes("Error") || body.includes("error")) {
+      logAnalysis += `Response body contains error information:\n${body.substring(0, 5000)}\n\n`
+    } else if (!response.ok) {
+      logAnalysis += `Response body:\n${body.substring(0, 2000)}\n\n`
+    } else {
+      logAnalysis += "No errors detected in response.\n"
+    }
+
+    console.log(`[Step 1] Constructed log analysis (${logAnalysis.length} chars)`)
+
+    return logAnalysis
+  } catch (error) {
+    console.error("[Step 1] Error fetching logs:", error)
+
+    // If fetch fails, return error information
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    return `Failed to fetch logs from ${devUrl}\n\nError: ${errorMessage}\n\nThis may indicate the dev server is not accessible or has crashed.`
+  }
+}
+
+/**
+ * Step 2: Invoke AI agent to analyze logs and propose fixes
  * Uses AI SDK with AI Gateway for multi-model support
  */
 async function analyzeLogsWithAgent(logAnalysis: string, devUrl: string) {
   "use step"
 
-  console.log("[Step 1] Invoking AI agent to analyze logs...")
+  console.log("[Step 2] Invoking AI agent to analyze logs...")
 
   // Create AI Gateway instance
   const gateway = createGateway({
@@ -103,18 +161,18 @@ If no errors are found, respond with "No critical issues detected."`
     prompt
   })
 
-  console.log(`[Step 1] AI agent response (first 500 chars): ${text.substring(0, 500)}...`)
+  console.log(`[Step 2] AI agent response (first 500 chars): ${text.substring(0, 500)}...`)
 
   return text
 }
 
 /**
- * Step 2: Upload fix proposal to blob storage and return URL
+ * Step 3: Upload fix proposal to blob storage and return URL
  */
 async function applyFixAndCreatePR(fixProposal: string, projectName: string, logAnalysis: string, devUrl: string) {
   "use step"
 
-  console.log("[Step 2] Uploading fix proposal to blob storage...")
+  console.log("[Step 3] Uploading fix proposal to blob storage...")
 
   // Create enhanced markdown with full context and attribution
   const timestamp = new Date().toISOString()
@@ -165,7 +223,7 @@ Learn more at https://github.com/vercel-labs/dev3000
     contentType: "text/markdown"
   })
 
-  console.log(`[Step 2] Fix proposal uploaded to: ${blob.url}`)
+  console.log(`[Step 3] Fix proposal uploaded to: ${blob.url}`)
 
   return {
     success: true,
@@ -183,7 +241,7 @@ Learn more at https://github.com/vercel-labs/dev3000
  * It extracts parameters from the Request and calls the workflow function.
  */
 export async function POST(request: Request) {
-  const { logAnalysis, devUrl, projectName } = await request.json()
-  const result = await cloudFixWorkflow({ logAnalysis, devUrl, projectName })
+  const { devUrl, projectName } = await request.json()
+  const result = await cloudFixWorkflow({ devUrl, projectName })
   return result
 }
