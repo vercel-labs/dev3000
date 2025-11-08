@@ -1,10 +1,12 @@
+import { start } from "workflow/api"
 import { POST as cloudFixWorkflow } from "../fix-workflow/route"
 
 /**
  * API Route to Start Cloud Fix Workflow
  *
- * This endpoint calls the durable workflow directly and waits for the result,
- * which includes the blob URL where the fix proposal was uploaded.
+ * This endpoint uses the Workflow SDK's start() API to invoke the workflow
+ * and waits for the result using run.returnValue, which includes the blob URL
+ * where the fix proposal was uploaded.
  */
 export async function POST(request: Request) {
   try {
@@ -15,14 +17,15 @@ export async function POST(request: Request) {
     console.log(`[Start Fix] Project: ${projectName}`)
     console.log(`[Start Fix] Log analysis length: ${logAnalysis?.length || 0} chars`)
 
-    // Call the workflow directly to get the result including blob URL
-    const workflowRequest = new Request(request.url, {
-      method: "POST",
-      headers: request.headers,
-      body: JSON.stringify({ logAnalysis, devUrl, projectName })
-    })
+    // Start the workflow and get a Run object
+    const run = await start(cloudFixWorkflow, [request])
 
-    const workflowResponse = await cloudFixWorkflow(workflowRequest)
+    console.log(`[Start Fix] Workflow started, waiting for completion...`)
+
+    // Wait for workflow to complete and get the Response
+    const workflowResponse = await run.returnValue
+
+    // Parse the JSON result from the Response
     const result = await workflowResponse.json()
 
     console.log(`[Start Fix] Workflow completed successfully`)
