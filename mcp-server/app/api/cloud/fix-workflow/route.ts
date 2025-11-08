@@ -7,15 +7,25 @@ import { createGateway, generateText } from "ai"
  * This is the actual workflow that can be invoked via start() from the Workflow SDK.
  * Accepts serializable parameters and returns a Response.
  */
-export async function cloudFixWorkflow(params: { devUrl: string; projectName: string }) {
+export async function cloudFixWorkflow(params: {
+  devUrl: string
+  projectName: string
+  repoOwner?: string
+  repoName?: string
+  baseBranch?: string
+}) {
   "use workflow"
 
-  const { devUrl, projectName } = params
+  const { devUrl, projectName, repoOwner, repoName, baseBranch = "main" } = params
 
   console.log("[Workflow] Starting cloud fix workflow...")
   console.log(`[Workflow] Dev URL: ${devUrl}`)
   console.log(`[Workflow] Project: ${projectName}`)
   console.log(`[Workflow] Timestamp: ${new Date().toISOString()}`)
+  if (repoOwner && repoName) {
+    console.log(`[Workflow] GitHub Repo: ${repoOwner}/${repoName}`)
+    console.log(`[Workflow] Base Branch: ${baseBranch}`)
+  }
 
   // Step 1: Fetch real logs from the dev URL
   const logAnalysis = await fetchRealLogs(devUrl)
@@ -24,9 +34,18 @@ export async function cloudFixWorkflow(params: { devUrl: string; projectName: st
   const fixProposal = await analyzeLogsWithAgent(logAnalysis, devUrl)
 
   // Step 3: Upload to blob storage with full context
-  const result = await applyFixAndCreatePR(fixProposal, projectName, logAnalysis, devUrl)
+  const blobResult = await uploadToBlob(fixProposal, projectName, logAnalysis, devUrl)
 
-  return Response.json(result)
+  // Step 4: Create GitHub PR if repo info provided
+  let prResult = null
+  if (repoOwner && repoName) {
+    prResult = await createGitHubPR(fixProposal, blobResult.blobUrl, repoOwner, repoName, baseBranch, projectName)
+  }
+
+  return Response.json({
+    ...blobResult,
+    pr: prResult
+  })
 }
 
 /**
@@ -169,7 +188,7 @@ If no errors are found, respond with "No critical issues detected."`
 /**
  * Step 3: Upload fix proposal to blob storage and return URL
  */
-async function applyFixAndCreatePR(fixProposal: string, projectName: string, logAnalysis: string, devUrl: string) {
+async function uploadToBlob(fixProposal: string, projectName: string, logAnalysis: string, devUrl: string) {
   "use step"
 
   console.log("[Step 3] Uploading fix proposal to blob storage...")
@@ -235,13 +254,288 @@ Learn more at https://github.com/vercel-labs/dev3000
 }
 
 /**
+ * Step 4: Create GitHub PR with the fix
+ * Uses GitHub API to create a branch, commit the patch, and open a PR
+ */
+async function createGitHubPR(
+  fixProposal: string,
+  blobUrl: string,
+  repoOwner: string,
+  repoName: string,
+  baseBranch: string,
+  projectName: string
+) {
+  "use step"
+
+  console.log(`[Step 4] Creating GitHub PR for ${repoOwner}/${repoName}...`)
+
+  const githubToken = process.env.GITHUB_TOKEN
+  if (!githubToken) {
+    console.error("[Step 4] GITHUB_TOKEN not found in environment")
+    return {
+      success: false,
+      error: "GitHub token not configured"
+    }
+  }
+
+  try {
+    // Extract the git patch from the fix proposal
+    const patchMatch = fixProposal.match(/```diff\n([\s\S]*?)\n```/)
+    if (!patchMatch) {
+      console.error("[Step 4] No git patch found in fix proposal")
+      return {
+        success: false,
+        error: "No git patch found in fix proposal"
+      }
+    }
+
+    const patch = patchMatch[1]
+    console.log(`[Step 4] Extracted patch (${patch.length} chars)`)
+
+    // Parse the patch to extract file changes
+    const fileChanges = parsePatchToFileChanges(patch)
+    if (fileChanges.length === 0) {
+      console.error("[Step 4] Failed to parse any file changes from patch")
+      return {
+        success: false,
+        error: "Failed to parse file changes from patch"
+      }
+    }
+
+    console.log(`[Step 4] Parsed ${fileChanges.length} file change(s)`)
+
+    // Create a unique branch name
+    const branchName = `dev3000-fix-${projectName}-${Date.now()}`
+    console.log(`[Step 4] Branch name: ${branchName}`)
+
+    // Get the base branch SHA
+    const baseRef = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/git/ref/heads/${baseBranch}`, {
+      headers: {
+        Authorization: `Bearer ${githubToken}`,
+        Accept: "application/vnd.github.v3+json"
+      }
+    })
+
+    if (!baseRef.ok) {
+      const error = await baseRef.text()
+      console.error(`[Step 4] Failed to get base branch: ${error}`)
+      return {
+        success: false,
+        error: `Failed to get base branch: ${baseRef.status}`
+      }
+    }
+
+    const baseData = await baseRef.json()
+    const baseSha = baseData.object.sha
+    console.log(`[Step 4] Base SHA: ${baseSha}`)
+
+    // Create new branch
+    const createBranch = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/git/refs`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${githubToken}`,
+        Accept: "application/vnd.github.v3+json",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        ref: `refs/heads/${branchName}`,
+        sha: baseSha
+      })
+    })
+
+    if (!createBranch.ok) {
+      const error = await createBranch.text()
+      console.error(`[Step 4] Failed to create branch: ${error}`)
+      return {
+        success: false,
+        error: `Failed to create branch: ${createBranch.status}`
+      }
+    }
+
+    console.log(`[Step 4] Created branch: ${branchName}`)
+
+    // For each file, fetch current content, apply changes, and commit
+    for (const fileChange of fileChanges) {
+      console.log(`[Step 4] Processing file: ${fileChange.path}`)
+
+      // Get current file content
+      const fileResp = await fetch(
+        `https://api.github.com/repos/${repoOwner}/${repoName}/contents/${fileChange.path}?ref=${branchName}`,
+        {
+          headers: {
+            Authorization: `Bearer ${githubToken}`,
+            Accept: "application/vnd.github.v3+json"
+          }
+        }
+      )
+
+      let currentContent = ""
+      let currentSha = ""
+
+      if (fileResp.ok) {
+        const fileData = await fileResp.json()
+        currentSha = fileData.sha
+        currentContent = Buffer.from(fileData.content, "base64").toString("utf-8")
+      } else {
+        console.log(`[Step 4] File doesn't exist, will create new file`)
+      }
+
+      // Apply the patch changes to the content
+      const newContent = applyPatchChanges(currentContent, fileChange.changes)
+
+      // Update file
+      const updateFile = await fetch(
+        `https://api.github.com/repos/${repoOwner}/${repoName}/contents/${fileChange.path}`,
+        {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${githubToken}`,
+            Accept: "application/vnd.github.v3+json",
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            message: `Fix: Apply dev3000 fix for ${projectName}`,
+            content: Buffer.from(newContent).toString("base64"),
+            branch: branchName,
+            ...(currentSha && { sha: currentSha })
+          })
+        }
+      )
+
+      if (!updateFile.ok) {
+        const error = await updateFile.text()
+        console.error(`[Step 4] Failed to update file ${fileChange.path}: ${error}`)
+        return {
+          success: false,
+          error: `Failed to update file ${fileChange.path}: ${updateFile.status}`
+        }
+      }
+
+      console.log(`[Step 4] Updated file: ${fileChange.path}`)
+    }
+
+    // Create PR
+    const prBody = `## Automated Fix Proposal
+
+This PR was automatically generated by [dev3000](https://github.com/vercel-labs/dev3000) after analyzing your application.
+
+### Fix Details
+View the full analysis: [${blobUrl}](${blobUrl})
+
+${fixProposal}
+
+---
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+Co-Authored-By: Claude (dev3000) <noreply@anthropic.com>`
+
+    const createPR = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/pulls`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${githubToken}`,
+        Accept: "application/vnd.github.v3+json",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        title: `Fix: ${projectName} - Automated fix from dev3000`,
+        head: branchName,
+        base: baseBranch,
+        body: prBody
+      })
+    })
+
+    if (!createPR.ok) {
+      const error = await createPR.text()
+      console.error(`[Step 4] Failed to create PR: ${error}`)
+      return {
+        success: false,
+        error: `Failed to create PR: ${createPR.status}`
+      }
+    }
+
+    const prData = await createPR.json()
+    console.log(`[Step 4] Created PR: ${prData.html_url}`)
+
+    return {
+      success: true,
+      prUrl: prData.html_url,
+      prNumber: prData.number,
+      branch: branchName
+    }
+  } catch (error) {
+    console.error("[Step 4] Error creating PR:", error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error)
+    }
+  }
+}
+
+/**
+ * Parse a git patch into file changes
+ */
+function parsePatchToFileChanges(patch: string) {
+  const fileChanges: Array<{ path: string; changes: string }> = []
+  const files = patch.split(/diff --git /).filter(Boolean)
+
+  for (const file of files) {
+    const lines = file.split("\n")
+    const pathMatch = lines[0].match(/a\/(.*?) b\//)
+    if (!pathMatch) continue
+
+    const path = pathMatch[1]
+    const changes = lines.slice(1).join("\n")
+    fileChanges.push({ path, changes })
+  }
+
+  return fileChanges
+}
+
+/**
+ * Apply patch changes to file content
+ * This is a simplified implementation - may need enhancement for complex patches
+ */
+function applyPatchChanges(content: string, changes: string): string {
+  const lines = content.split("\n")
+  const changeLines = changes.split("\n")
+
+  let currentLine = 0
+  const result: string[] = []
+
+  for (const change of changeLines) {
+    if (change.startsWith("@@")) {
+      // Parse hunk header to get line number
+      const match = change.match(/@@ -(\d+)/)
+      if (match) {
+        currentLine = Number.parseInt(match[1], 10) - 1
+      }
+    } else if (change.startsWith("-")) {
+      // Remove line
+      currentLine++
+    } else if (change.startsWith("+")) {
+      // Add line
+      result.push(change.substring(1))
+    } else if (change.startsWith(" ")) {
+      // Context line
+      if (currentLine < lines.length) {
+        result.push(lines[currentLine])
+        currentLine++
+      }
+    }
+  }
+
+  return result.join("\n")
+}
+
+/**
  * Next.js API Route Handler
  *
  * This is the HTTP POST endpoint that Next.js exposes as /api/cloud/fix-workflow.
  * It extracts parameters from the Request and calls the workflow function.
  */
 export async function POST(request: Request) {
-  const { devUrl, projectName } = await request.json()
-  const result = await cloudFixWorkflow({ devUrl, projectName })
+  const { devUrl, projectName, repoOwner, repoName, baseBranch } = await request.json()
+  const result = await cloudFixWorkflow({ devUrl, projectName, repoOwner, repoName, baseBranch })
   return result
 }

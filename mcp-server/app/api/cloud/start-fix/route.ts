@@ -10,16 +10,19 @@ import { cloudFixWorkflow } from "../fix-workflow/route"
  */
 export async function POST(request: Request) {
   try {
-    const { devUrl, projectName } = await request.json()
+    const { devUrl, projectName, repoOwner, repoName, baseBranch } = await request.json()
 
     console.log("[Start Fix] Starting cloud fix workflow...")
     console.log(`[Start Fix] Dev URL: ${devUrl}`)
     console.log(`[Start Fix] Project: ${projectName}`)
+    if (repoOwner && repoName) {
+      console.log(`[Start Fix] GitHub: ${repoOwner}/${repoName} (base: ${baseBranch || "main"})`)
+    }
 
     // Start the workflow and get a Run object
     // Pass serializable data instead of Request object
-    // The workflow will fetch real logs from the devUrl
-    const run = await start(cloudFixWorkflow, [{ devUrl, projectName }])
+    // The workflow will fetch real logs from the devUrl and optionally create a PR
+    const run = await start(cloudFixWorkflow, [{ devUrl, projectName, repoOwner, repoName, baseBranch }])
 
     console.log(`[Start Fix] Workflow started, waiting for completion...`)
 
@@ -33,13 +36,17 @@ export async function POST(request: Request) {
     if (result.blobUrl) {
       console.log(`[Start Fix] Fix proposal uploaded to: ${result.blobUrl}`)
     }
+    if (result.pr?.prUrl) {
+      console.log(`[Start Fix] GitHub PR created: ${result.pr.prUrl}`)
+    }
 
     return Response.json({
       success: true,
       message: "Cloud fix workflow completed successfully",
       projectName,
       blobUrl: result.blobUrl,
-      fixProposal: result.fixProposal
+      fixProposal: result.fixProposal,
+      pr: result.pr
     })
   } catch (error) {
     console.error("[Start Fix] Error running workflow:", error)
