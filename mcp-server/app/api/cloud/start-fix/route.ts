@@ -1,5 +1,5 @@
 import { start } from "workflow/api"
-import { POST as cloudFixWorkflow } from "../fix-workflow/route"
+import { cloudFixWorkflow } from "../fix-workflow/route"
 
 /**
  * API Route to Start Cloud Fix Workflow
@@ -18,7 +18,8 @@ export async function POST(request: Request) {
     console.log(`[Start Fix] Log analysis length: ${logAnalysis?.length || 0} chars`)
 
     // Start the workflow and get a Run object
-    const run = await start(cloudFixWorkflow, [request])
+    // Pass serializable data instead of Request object
+    const run = await start(cloudFixWorkflow, [{ logAnalysis, devUrl, projectName }])
 
     console.log(`[Start Fix] Workflow started, waiting for completion...`)
 

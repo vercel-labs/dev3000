@@ -2,15 +2,15 @@ import { put } from "@vercel/blob"
 import { createGateway, generateText } from "ai"
 
 /**
- * Cloud Fix Workflow - Deployed on Vercel
+ * Cloud Fix Workflow Function - Core workflow logic
  *
- * This workflow analyzes logs from a sandbox environment and generates fix proposals.
- * Uses Vercel Workflow SDK for durability and AI Gateway for multi-model support.
+ * This is the actual workflow that can be invoked via start() from the Workflow SDK.
+ * Accepts serializable parameters and returns a Response.
  */
-export async function POST(request: Request) {
+export async function cloudFixWorkflow(params: { logAnalysis: string; devUrl: string; projectName: string }) {
   "use workflow"
 
-  const { logAnalysis, devUrl, projectName } = await request.json()
+  const { logAnalysis, devUrl, projectName } = params
 
   console.log("[Workflow] Starting cloud fix workflow...")
   console.log(`[Workflow] Dev URL: ${devUrl}`)
@@ -174,4 +174,16 @@ Learn more at https://github.com/vercel-labs/dev3000
     blobUrl: blob.url,
     message: "Fix analysis completed and uploaded to blob storage"
   }
+}
+
+/**
+ * Next.js API Route Handler
+ *
+ * This is the HTTP POST endpoint that Next.js exposes as /api/cloud/fix-workflow.
+ * It extracts parameters from the Request and calls the workflow function.
+ */
+export async function POST(request: Request) {
+  const { logAnalysis, devUrl, projectName } = await request.json()
+  const result = await cloudFixWorkflow({ logAnalysis, devUrl, projectName })
+  return result
 }
