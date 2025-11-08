@@ -41,9 +41,18 @@ fi
 
 # Extract owner and repo name from various GitHub URL formats
 # Supports: git@github.com:owner/repo.git, https://github.com/owner/repo.git, https://github.com/owner/repo
-if [[ "$REMOTE_URL" =~ github\.com[:/]([^/]+)/([^/.]+)(\.git)?$ ]]; then
+if [[ "$REMOTE_URL" =~ ^git@github\.com:([^/]+)/(.+)$ ]]; then
+  # SSH format: git@github.com:owner/repo.git
   REPO_OWNER="${BASH_REMATCH[1]}"
   REPO_NAME="${BASH_REMATCH[2]}"
+  # Remove .git suffix if present
+  REPO_NAME="${REPO_NAME%.git}"
+elif [[ "$REMOTE_URL" =~ github\.com/([^/]+)/(.+)$ ]]; then
+  # HTTPS format: https://github.com/owner/repo.git
+  REPO_OWNER="${BASH_REMATCH[1]}"
+  REPO_NAME="${BASH_REMATCH[2]}"
+  # Remove .git suffix if present
+  REPO_NAME="${REPO_NAME%.git}"
 else
   echo "Error: Could not parse GitHub repository from remote URL: $REMOTE_URL" >&2
   exit 1

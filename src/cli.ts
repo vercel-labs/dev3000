@@ -7,6 +7,7 @@ import { homedir, tmpdir } from "os"
 import { detect } from "package-manager-detector"
 import { dirname, join } from "path"
 import { fileURLToPath } from "url"
+import { cloudCheckPR } from "./commands/cloud-check-pr.js"
 import { cloudFix } from "./commands/cloud-fix.js"
 import { createPersistentLogFile, startDevEnvironment } from "./dev-environment.js"
 import { detectAIAgent } from "./utils/agent-detection.js"
@@ -383,10 +384,11 @@ program
     }
   })
 
+// Cloud commands
+const cloud = program.command("cloud").description("Cloud-based tools using Vercel Sandbox")
+
 // Cloud fix command
-program
-  .command("cloud")
-  .description("Cloud-based tools using Vercel Sandbox")
+cloud
   .command("fix")
   .description("Analyze and fix issues in current project using Vercel Sandbox + MCP tools")
   .option("--repo <url>", "Repository URL (e.g. https://github.com/user/repo)")
@@ -399,6 +401,21 @@ program
       await cloudFix(options)
     } catch (error) {
       console.error(chalk.red("❌ Cloud fix failed:"), error)
+      process.exit(1)
+    }
+  })
+
+// Cloud check-pr command
+cloud
+  .command("check-pr [pr-number]")
+  .description("Verify a PR's changes work as expected using Vercel preview deployment")
+  .option("--repo <url>", "Repository URL (optional, auto-detected from git)")
+  .option("--debug", "Enable debug logging")
+  .action(async (prNumber, options) => {
+    try {
+      await cloudCheckPR({ ...options, prNumber })
+    } catch (error) {
+      console.error(chalk.red("❌ Cloud check-pr failed:"), error)
       process.exit(1)
     }
   })
