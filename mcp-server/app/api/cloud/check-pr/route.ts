@@ -591,15 +591,34 @@ async function uploadReport(report: string, repoOwner: string, repoName: string,
  * It extracts parameters from the Request and calls the workflow function.
  */
 export async function POST(request: Request) {
-  const { previewUrl, prTitle, prBody, changedFiles, repoOwner, repoName, prNumber } = await request.json()
-  const result = await cloudCheckPRWorkflow({
-    previewUrl,
-    prTitle,
-    prBody,
-    changedFiles,
-    repoOwner,
-    repoName,
-    prNumber
-  })
-  return result
+  try {
+    const { previewUrl, prTitle, prBody, changedFiles, repoOwner, repoName, prNumber } = await request.json()
+
+    console.log("[POST /api/cloud/check-pr] Starting PR check...")
+    console.log(`[POST /api/cloud/check-pr] PR #${prNumber}: ${prTitle}`)
+    console.log(`[POST /api/cloud/check-pr] Preview URL: ${previewUrl}`)
+
+    const result = await cloudCheckPRWorkflow({
+      previewUrl,
+      prTitle,
+      prBody,
+      changedFiles,
+      repoOwner,
+      repoName,
+      prNumber
+    })
+
+    console.log("[POST /api/cloud/check-pr] Workflow completed successfully")
+    return result
+  } catch (error) {
+    console.error("[POST /api/cloud/check-pr] Error:", error)
+    return Response.json(
+      {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+        message: "PR check workflow failed - this feature is still in development"
+      },
+      { status: 500 }
+    )
+  }
 }
