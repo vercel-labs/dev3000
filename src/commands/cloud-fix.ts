@@ -735,14 +735,20 @@ import os from 'os';
 
       const workflowResult = await workflowResponse.json()
 
-      console.log("  ✅ Workflow started successfully")
+      console.log("  ✅ Workflow completed successfully")
       if (debug) {
         console.log(`  Result:`, JSON.stringify(workflowResult, null, 2))
       }
 
-      console.log("\n📋 Workflow Status:")
-      console.log(`  The workflow is running asynchronously and will analyze logs, generate fixes, and create PRs.`)
-      console.log(`  You can monitor the workflow in the Vercel dashboard.`)
+      console.log("\n📋 Fix Analysis:")
+      if (workflowResult.blobUrl) {
+        console.log(`  📄 Fix proposal uploaded to blob storage`)
+        console.log(`  🔗 View the fix: ${workflowResult.blobUrl}`)
+      }
+      if (debug && workflowResult.fixProposal) {
+        console.log(`\n  First 500 chars of fix:`)
+        console.log(`  ${workflowResult.fixProposal.substring(0, 500)}...`)
+      }
       console.log()
     } catch (err) {
       console.log(`  ⚠️  Workflow failed: ${err}`)

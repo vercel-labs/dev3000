@@ -1,11 +1,10 @@
-import { start } from "workflow/api"
 import { POST as cloudFixWorkflow } from "../fix-workflow/route"
 
 /**
  * API Route to Start Cloud Fix Workflow
  *
- * This endpoint can be called via standard HTTP POST and uses the Workflow SDK's
- * start() function to invoke the durable workflow asynchronously.
+ * This endpoint calls the durable workflow directly and waits for the result,
+ * which includes the blob URL where the fix proposal was uploaded.
  */
 export async function POST(request: Request) {
   try {
@@ -16,23 +15,30 @@ export async function POST(request: Request) {
     console.log(`[Start Fix] Project: ${projectName}`)
     console.log(`[Start Fix] Log analysis length: ${logAnalysis?.length || 0} chars`)
 
-    // Use the Workflow SDK's start() function to invoke the workflow
-    // The workflow will run asynchronously and durably
-    await start(cloudFixWorkflow, [
-      new Request(request.url, {
-        method: "POST",
-        headers: request.headers,
-        body: JSON.stringify({ logAnalysis, devUrl, projectName })
-      })
-    ])
+    // Call the workflow directly to get the result including blob URL
+    const workflowRequest = new Request(request.url, {
+      method: "POST",
+      headers: request.headers,
+      body: JSON.stringify({ logAnalysis, devUrl, projectName })
+    })
+
+    const workflowResponse = await cloudFixWorkflow(workflowRequest)
+    const result = await workflowResponse.json()
+
+    console.log(`[Start Fix] Workflow completed successfully`)
+    if (result.blobUrl) {
+      console.log(`[Start Fix] Fix proposal uploaded to: ${result.blobUrl}`)
+    }
 
     return Response.json({
       success: true,
-      message: "Cloud fix workflow started successfully",
-      projectName
+      message: "Cloud fix workflow completed successfully",
+      projectName,
+      blobUrl: result.blobUrl,
+      fixProposal: result.fixProposal
     })
   } catch (error) {
-    console.error("[Start Fix] Error starting workflow:", error)
+    console.error("[Start Fix] Error running workflow:", error)
     return Response.json(
       {
         success: false,

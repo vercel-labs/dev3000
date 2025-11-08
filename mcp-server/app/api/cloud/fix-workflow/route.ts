@@ -1,3 +1,4 @@
+import { put } from "@vercel/blob"
 import { createGateway, generateText } from "ai"
 
 /**
@@ -83,24 +84,29 @@ If no errors are found, respond with "No critical issues detected."`
 }
 
 /**
- * Step 2: Apply fix and create PR
- * This would call MCP tools to create the actual PR
+ * Step 2: Upload fix proposal to blob storage and return URL
  */
 async function applyFixAndCreatePR(fixProposal: string, projectName: string) {
   "use step"
 
-  console.log("[Step 2] Preparing fix results...")
+  console.log("[Step 2] Uploading fix proposal to blob storage...")
 
-  // For now, just return the fix proposal
-  // In the future, this would:
-  // 1. Parse the fix proposal
-  // 2. Call MCP tools to apply code changes
-  // 3. Create a PR via GitHub API
+  // Upload the fix proposal to Vercel Blob Storage
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-")
+  const filename = `fix-${projectName}-${timestamp}.md`
+
+  const blob = await put(filename, fixProposal, {
+    access: "public",
+    contentType: "text/markdown"
+  })
+
+  console.log(`[Step 2] Fix proposal uploaded to: ${blob.url}`)
 
   return {
     success: true,
     projectName,
     fixProposal,
-    message: "Fix analysis completed successfully"
+    blobUrl: blob.url,
+    message: "Fix analysis completed and uploaded to blob storage"
   }
 }
