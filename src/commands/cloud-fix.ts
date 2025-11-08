@@ -8,6 +8,9 @@ import { detectProject } from "../utils/project-detector.js"
 export interface CloudFixOptions {
   debug?: boolean
   timeout?: string
+  repo?: string
+  branch?: string
+  projectDir?: string
 }
 
 /**
@@ -208,12 +211,25 @@ ${changedFiles.map((f) => `- \`${f}\``).join("\n")}
  * Analyzes and fixes issues in a project using Vercel Sandbox + MCP tools
  */
 export async function cloudFix(options: CloudFixOptions = {}): Promise<void> {
-  const { debug = false, timeout = "30m" } = options
+  const { debug = false, timeout = "30m", repo, branch, projectDir } = options
 
-  console.log("🔍 Detecting project...")
-
-  // Detect project information
-  const project = await detectProject()
+  // Use provided params or detect from filesystem
+  const project = repo && branch
+    ? {
+        repoUrl: repo,
+        branch,
+        relativePath: projectDir || "",
+        name: projectDir || "app",
+        packageManager: "pnpm" as const,
+        devCommand: "dev",
+        framework: "Next.js",
+        path: process.cwd(),
+        gitRoot: process.cwd()
+      }
+    : await (async () => {
+        console.log("🔍 Detecting project...")
+        return await detectProject()
+      })()
 
   console.log(`  Repository: ${project.repoUrl}`)
   console.log(`  Branch: ${project.branch}`)
@@ -236,7 +252,8 @@ export async function cloudFix(options: CloudFixOptions = {}): Promise<void> {
     token: process.env.VERCEL_TOKEN || process.env.VERCEL_OIDC_TOKEN,
     source: {
       url: `${project.repoUrl}.git`,
-      type: "git"
+      type: "git",
+      ...(project.branch ? { revision: project.branch } : {})
     },
     resources: { vcpus: 4 },
     timeout: timeoutMs,
@@ -635,8 +652,8 @@ import os from 'os';
 
     // Run AI agent workflow (deployed on Vercel) to analyze and fix issues
     console.log("🤖 Invoking AI agent workflow to analyze and fix issues...")
-    // Use production deployment for workflow, not the sandbox MCP URL
-    const workflowUrl = "https://dev3000-mcp.vercel.sh/api/cloud/fix-workflow"
+    // Use the workflow starter endpoint which uses the Workflow SDK's start() function
+    const workflowUrl = "https://dev3000-mcp.vercel.sh/api/cloud/start-fix"
     console.log(`  Workflow will run at: ${workflowUrl}`)
     try {
       const workflowResponse = await fetch(workflowUrl, {
@@ -658,13 +675,16 @@ import os from 'os';
 
       const workflowResult = await workflowResponse.json()
 
-      console.log("  ✅ Workflow completed successfully")
+      console.log("  ✅ Workflow started successfully")
       if (debug) {
         console.log(`  Result:`, JSON.stringify(workflowResult, null, 2))
       }
 
-      console.log("\n📋 Fix Proposal:")
-      console.log(workflowResult.fixProposal)
+      console.log("\n📋 Workflow Status:")
+      console.log(
+        `  The workflow is running asynchronously and will analyze logs, generate fixes, and create PRs.`
+      )
+      console.log(`  You can monitor the workflow in the Vercel dashboard.`)
       console.log()
     } catch (err) {
       console.log(`  ⚠️  Workflow failed: ${err}`)
