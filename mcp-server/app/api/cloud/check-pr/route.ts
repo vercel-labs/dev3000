@@ -1,5 +1,4 @@
 import { start } from "workflow/api"
-import * as steps from "./steps"
 
 /**
  * Cloud Check PR Workflow Function - Verifies PR changes work as expected
@@ -30,19 +29,19 @@ export async function cloudCheckPRWorkflow(params: {
   console.log(`[Workflow] Timestamp: ${new Date().toISOString()}`)
 
   // Step 1: Determine which pages to check based on changed files
-  const pagesToCheck = await steps.identifyAffectedPages(changedFiles, prBody)
+  const pagesToCheck = await identifyAffectedPagesStep(changedFiles, prBody)
 
   // Step 2: Crawl the preview deployment
-  const crawlResults = await steps.crawlPreviewPages(previewUrl, pagesToCheck)
+  const crawlResults = await crawlPreviewPagesStep(previewUrl, pagesToCheck)
 
   // Step 3: Verify PR claims against actual behavior
-  const verification = await steps.verifyPRClaims(prTitle, prBody, crawlResults, changedFiles)
+  const verification = await verifyPRClaimsStep(prTitle, prBody, crawlResults, changedFiles)
 
   // Step 4: Check performance metrics
-  const performanceResults = await steps.checkPerformance(previewUrl, pagesToCheck)
+  const performanceResults = await checkPerformanceStep(previewUrl, pagesToCheck)
 
   // Step 5: Generate comprehensive report
-  const report = await steps.generateReport({
+  const report = await generateReportStep({
     prTitle,
     prBody,
     prNumber,
@@ -57,7 +56,7 @@ export async function cloudCheckPRWorkflow(params: {
   })
 
   // Step 6: Upload report to blob storage
-  const blobResult = await steps.uploadReport(report, repoOwner, repoName, prNumber)
+  const blobResult = await uploadReportStep(report, repoOwner, repoName, prNumber)
 
   return Response.json({
     success: verification.allChecksPassed,
@@ -69,6 +68,45 @@ export async function cloudCheckPRWorkflow(params: {
       ? "All PR checks passed! ✅"
       : "Some PR checks failed - see report for details"
   })
+}
+
+// Step function wrappers that dynamically import the actual implementations
+async function identifyAffectedPagesStep(changedFiles: string[], prBody: string) {
+  "use step"
+  const { identifyAffectedPages } = await import("./steps")
+  return identifyAffectedPages(changedFiles, prBody)
+}
+
+async function crawlPreviewPagesStep(previewUrl: string, pagesToCheck: string[]) {
+  "use step"
+  const { crawlPreviewPages } = await import("./steps")
+  return crawlPreviewPages(previewUrl, pagesToCheck)
+}
+
+// biome-ignore lint/suspicious/noExplicitAny: AI-generated crawl data has dynamic structure
+async function verifyPRClaimsStep(prTitle: string, prBody: string, crawlResults: any[], changedFiles: string[]) {
+  "use step"
+  const { verifyPRClaims } = await import("./steps")
+  return verifyPRClaims(prTitle, prBody, crawlResults, changedFiles)
+}
+
+async function checkPerformanceStep(previewUrl: string, pagesToCheck: string[]) {
+  "use step"
+  const { checkPerformance } = await import("./steps")
+  return checkPerformance(previewUrl, pagesToCheck)
+}
+
+// biome-ignore lint/suspicious/noExplicitAny: Report data has dynamic structure from previous steps
+async function generateReportStep(data: any) {
+  "use step"
+  const { generateReport } = await import("./steps")
+  return generateReport(data)
+}
+
+async function uploadReportStep(report: string, repoOwner: string, repoName: string, prNumber: string) {
+  "use step"
+  const { uploadReport } = await import("./steps")
+  return uploadReport(report, repoOwner, repoName, prNumber)
 }
 
 /**
