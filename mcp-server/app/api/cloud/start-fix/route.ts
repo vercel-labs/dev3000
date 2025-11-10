@@ -1,5 +1,5 @@
 import { start } from "workflow/api"
-import { cloudFixWorkflow } from "../fix-workflow/route"
+import { cloudFixWorkflow } from "../fix-workflow/workflow"
 
 /**
  * API Route to Start Cloud Fix Workflow
