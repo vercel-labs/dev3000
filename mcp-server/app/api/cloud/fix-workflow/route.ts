@@ -1,3 +1,5 @@
+import { start } from "workflow/api"
+
 /**
  * Cloud Fix Workflow Function - Core workflow logic
  *
@@ -78,13 +80,49 @@ async function createGitHubPR(
 }
 
 /**
- * Next.js API Route Handler
- *
- * This is the HTTP POST endpoint that Next.js exposes as /api/cloud/fix-workflow.
- * It extracts parameters from the Request and calls the workflow function.
+ * POST /api/cloud/fix-workflow
+ * HTTP endpoint that starts the workflow using the Workflow SDK
  */
 export async function POST(request: Request) {
-  const { devUrl, projectName, repoOwner, repoName, baseBranch } = await request.json()
-  const result = await cloudFixWorkflow({ devUrl, projectName, repoOwner, repoName, baseBranch })
-  return result
+  try {
+    const body = await request.json()
+    const { devUrl, projectName, repoOwner, repoName, baseBranch } = body
+
+    // Validate required fields
+    if (!devUrl || !projectName) {
+      return Response.json({ error: "Missing required fields: devUrl, projectName" }, { status: 400 })
+    }
+
+    console.log(`[API] Starting fix workflow for ${projectName}`)
+
+    // Start the workflow using the Workflow SDK
+    // @ts-expect-error - Workflow SDK types are incomplete
+    const workflowRun = await start(cloudFixWorkflow, {
+      devUrl,
+      projectName,
+      repoOwner,
+      repoName,
+      baseBranch: baseBranch || "main"
+    })
+
+    // @ts-expect-error - Workflow SDK types are incomplete
+    console.log(`[API] Workflow started: ${workflowRun.id}`)
+
+    // Wait for workflow to complete (workflows are durable and will continue even if this times out)
+    // @ts-expect-error - Workflow SDK types are incomplete
+    const result = await workflowRun.result()
+
+    console.log(`[API] Workflow completed: ${result.status}`)
+
+    return result
+  } catch (error) {
+    console.error("[API] Error starting workflow:", error)
+    return Response.json(
+      {
+        error: error instanceof Error ? error.message : "Unknown error",
+        details: error instanceof Error ? error.stack : undefined
+      },
+      { status: 500 }
+    )
+  }
 }

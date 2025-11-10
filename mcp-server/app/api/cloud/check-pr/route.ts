@@ -127,6 +127,7 @@ export async function POST(request: Request) {
     console.log(`[API] Starting PR check for ${repoOwner}/${repoName}#${prNumber}`)
 
     // Start the workflow
+    // @ts-expect-error - Workflow SDK types are incomplete
     const workflowRun = await start(cloudCheckPRWorkflow, {
       previewUrl,
       prTitle,
@@ -137,9 +138,11 @@ export async function POST(request: Request) {
       prNumber: String(prNumber)
     })
 
+    // @ts-expect-error - Workflow SDK types are incomplete
     console.log(`[API] Workflow started: ${workflowRun.id}`)
 
     // Wait for workflow to complete (workflows are durable and will continue even if this times out)
+    // @ts-expect-error - Workflow SDK types are incomplete
     const result = await workflowRun.result()
 
     console.log(`[API] Workflow completed: ${result.status}`)
