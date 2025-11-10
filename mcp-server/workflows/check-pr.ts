@@ -1,23 +1,86 @@
 /**
- * Step functions for check-pr workflow
- * Separated into their own module to avoid workflow bundler issues
+ * Check PR Workflow - Verifies PR changes work as expected
+ *
+ * This workflow is in a separate file from the route to avoid bundler issues.
+ * The workflow function analyzes PR changes by:
+ * 1. Intelligently determining which pages to check based on changed files
+ * 2. Crawling the preview deployment to verify functionality
+ * 3. Checking performance metrics
+ * 4. Verifying PR description claims match actual behavior
  */
 
 import { put } from "@vercel/blob"
 import { createGateway, generateText } from "ai"
 
-/**
- * Step 1: Identify affected pages based on changed files
- */
-export async function identifyAffectedPages(changedFiles: string[], prBody: string) {
+export async function cloudCheckPRWorkflow(
+  previewUrl: string,
+  prTitle: string,
+  prBody: string,
+  changedFiles: string[],
+  repoOwner: string,
+  repoName: string,
+  prNumber: string
+) {
+  "use workflow"
+
+  console.log("[Workflow] Starting cloud check-pr workflow...")
+  console.log(`[Workflow] Preview URL: ${previewUrl}`)
+  console.log(`[Workflow] PR #${prNumber}: ${prTitle}`)
+  console.log(`[Workflow] Changed files: ${changedFiles.length}`)
+  console.log(`[Workflow] Timestamp: ${new Date().toISOString()}`)
+
+  // Step 1: Determine which pages to check based on changed files
+  const pagesToCheck = await identifyAffectedPagesStep(changedFiles, prBody)
+
+  // Step 2: Crawl the preview deployment
+  const crawlResults = await crawlPreviewPagesStep(previewUrl, pagesToCheck)
+
+  // Step 3: Verify PR claims against actual behavior
+  const verification = await verifyPRClaimsStep(prTitle, prBody, crawlResults, changedFiles)
+
+  // Step 4: Check performance metrics
+  const performanceResults = await checkPerformanceStep(previewUrl, pagesToCheck)
+
+  // Step 5: Generate comprehensive report
+  const report = await generateReportStep({
+    prTitle,
+    prBody,
+    prNumber,
+    previewUrl,
+    changedFiles,
+    pagesToCheck,
+    crawlResults,
+    verification,
+    performanceResults,
+    repoOwner,
+    repoName
+  })
+
+  // Step 6: Upload report to blob storage
+  const blobResult = await uploadReportStep(report, repoOwner, repoName, prNumber)
+
+  return {
+    success: verification.allChecksPassed,
+    reportUrl: blobResult.blobUrl,
+    prComment: true,
+    verification: verification.summary,
+    performance: performanceResults.summary,
+    message: verification.allChecksPassed
+      ? "All PR checks passed! ✅"
+      : "Some PR checks failed - see report for details"
+  }
+}
+
+// Step 1: Identify affected pages based on changed files
+async function identifyAffectedPagesStep(changedFiles: string[], prBody: string) {
   "use step"
 
   console.log(`[Step 1] Identifying affected pages from ${changedFiles.length} changed files...`)
 
   // Common patterns to identify page files
   const pagePatterns = [
-    /\/pages\/(.*)\.(tsx?|jsx?)$/, // Next.js pages dir
-    /\/app\/(.*)\/(page|route)\.(tsx?|jsx?)$/, // Next.js app dir
+    /\/pages\/(.*)\.( tsx?|jsx?)$/, // Next.js pages dir
+    /\/app\/(.*)\/( page|route)\.(tsx?|jsx?)$/, // Next.js app dir
     /\/routes\/(.*)\.(tsx?|jsx?)$/, // SvelteKit routes
     /\/src\/routes\/(.*)\.(svelte|tsx?|jsx?)$/, // SvelteKit src/routes
     /\.page\.(tsx?|jsx?)$/, // Generic page pattern
@@ -101,10 +164,8 @@ Do not include explanations, just the JSON array.`
   return detectedPages
 }
 
-/**
- * Step 2: Crawl preview deployment pages
- */
-export async function crawlPreviewPages(previewUrl: string, pagesToCheck: string[]) {
+// Step 2: Crawl preview deployment pages
+async function crawlPreviewPagesStep(previewUrl: string, pagesToCheck: string[]) {
   "use step"
 
   console.log(`[Step 2] Crawling ${pagesToCheck.length} pages on ${previewUrl}`)
@@ -164,11 +225,9 @@ export async function crawlPreviewPages(previewUrl: string, pagesToCheck: string
   return results
 }
 
-/**
- * Step 3: Verify PR claims against actual behavior
- */
+// Step 3: Verify PR claims against actual behavior
 // biome-ignore lint/suspicious/noExplicitAny: AI-generated crawl data has dynamic structure
-export async function verifyPRClaims(prTitle: string, prBody: string, crawlResults: any[], changedFiles: string[]) {
+async function verifyPRClaimsStep(prTitle: string, prBody: string, crawlResults: any[], changedFiles: string[]) {
   "use step"
 
   console.log("[Step 3] Verifying PR claims against actual behavior...")
@@ -250,10 +309,8 @@ Only return valid JSON, no additional text.`
   }
 }
 
-/**
- * Step 4: Check performance metrics
- */
-export async function checkPerformance(previewUrl: string, pagesToCheck: string[]) {
+// Step 4: Check performance metrics
+async function checkPerformanceStep(previewUrl: string, pagesToCheck: string[]) {
   "use step"
 
   console.log(`[Step 4] Checking performance for ${pagesToCheck.length} pages`)
@@ -316,11 +373,9 @@ export async function checkPerformance(previewUrl: string, pagesToCheck: string[
   }
 }
 
-/**
- * Step 5: Generate comprehensive report
- */
+// Step 5: Generate comprehensive report
 // biome-ignore lint/suspicious/noExplicitAny: Report data has dynamic structure from previous steps
-export async function generateReport(data: any) {
+async function generateReportStep(data: any) {
   "use step"
 
   console.log("[Step 5] Generating comprehensive report...")
@@ -429,10 +484,8 @@ export async function generateReport(data: any) {
   return report
 }
 
-/**
- * Step 6: Upload report to blob storage
- */
-export async function uploadReport(report: string, repoOwner: string, repoName: string, prNumber: string) {
+// Step 6: Upload report to blob storage
+async function uploadReportStep(report: string, repoOwner: string, repoName: string, prNumber: string) {
   "use step"
 
   console.log("[Step 6] Uploading report to blob storage...")
