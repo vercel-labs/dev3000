@@ -11,7 +11,9 @@ import { cloudCheckPR } from "./commands/cloud-check-pr.js"
 import { cloudFix } from "./commands/cloud-fix.js"
 import { createPersistentLogFile, startDevEnvironment } from "./dev-environment.js"
 import { detectAIAgent } from "./utils/agent-detection.js"
+import { formatMcpConfigTargets, parseDisabledMcpConfigs } from "./utils/mcp-configs.js"
 import { getProjectName } from "./utils/project-name.js"
+import { loadUserConfig } from "./utils/user-config.js"
 
 interface ProjectConfig {
   type: "node" | "python" | "rails"
@@ -249,6 +251,10 @@ program
     "local"
   )
   .option("--plugin-react-scan", "Enable react-scan performance monitoring for React applications")
+  .option(
+    "--disable-mcp-configs <targets>",
+    "Comma or space separated list of MCP config files to skip (.mcp.json, .cursor/mcp.json, opencode.json). Use 'all' to disable all."
+  )
   .option("--no-chrome-devtools-mcp", "Disable chrome-devtools MCP integration (enabled by default)")
   .option("--kill-mcp", "Kill the MCP server on port 3684 and exit")
   .action(async (options) => {
@@ -270,6 +276,7 @@ program
 
     // Detect project type and configuration
     const projectConfig = await detectProjectType(options.debug)
+    const userConfig = loadUserConfig()
 
     // Detect if running under an AI agent and auto-disable TUI
     const agentDetection = detectAIAgent()
@@ -288,6 +295,9 @@ program
     const script = options.script || projectConfig.defaultScript
     const userSetPort = options.port !== undefined
     const userSetMcpPort = process.argv.includes("--port-mcp") || process.argv.includes("-p-mcp")
+    const disableMcpConfigsInput =
+      options.disableMcpConfigs ?? process.env.DEV3000_DISABLE_MCP_CONFIGS ?? userConfig.disableMcpConfigs
+    const disabledMcpConfigs = parseDisabledMcpConfigs(disableMcpConfigsInput)
 
     // Generate server command based on custom command or project type
     let serverCommand: string
@@ -344,6 +354,11 @@ program
       console.log(`[DEBUG] Port: ${port} (${options.port ? "explicit" : "auto-detected"})`)
       console.log(`[DEBUG] Script: ${script} (${options.script ? "explicit" : "auto-detected"})`)
       console.log(`[DEBUG] Server command: ${serverCommand}`)
+      console.log(
+        `[DEBUG] Disabled MCP configs: ${
+          disabledMcpConfigs.length ? formatMcpConfigTargets(disabledMcpConfigs) : "none"
+        }`
+      )
     }
 
     // Detect which command name was used (dev3000 or d3k)
@@ -376,7 +391,8 @@ program
         tui: options.noTui !== true && !options.debug, // TUI is default unless --no-tui or --debug is specified
         dateTimeFormat: options.dateTime || "local",
         pluginReactScan: options.pluginReactScan || false,
-        chromeDevtoolsMcp: options.chromeDevtoolsMcp !== false // Default to true unless explicitly disabled
+        chromeDevtoolsMcp: options.chromeDevtoolsMcp !== false, // Default to true unless explicitly disabled
+        disabledMcpConfigs
       })
     } catch (error) {
       console.error(chalk.red("❌ Failed to start development environment:"), error)

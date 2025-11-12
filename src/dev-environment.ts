@@ -22,6 +22,7 @@ import { CDPMonitor } from "./cdp-monitor.js"
 import { ScreencastManager } from "./screencast-manager.js"
 import { type LogEntry, NextJsErrorDetector, OutputProcessor, StandardLogParser } from "./services/parsers/index.js"
 import { DevTUI } from "./tui-interface.js"
+import { formatMcpConfigTargets, MCP_CONFIG_TARGETS, type McpConfigTarget } from "./utils/mcp-configs.js"
 import { getProjectDisplayName, getProjectName } from "./utils/project-name.js"
 import { formatTimestamp } from "./utils/timestamp.js"
 
@@ -52,6 +53,7 @@ interface DevEnvironmentOptions {
   dateTimeFormat?: "local" | "utc" // Timestamp format option
   pluginReactScan?: boolean // Whether to enable react-scan performance monitoring
   chromeDevtoolsMcp?: boolean // Whether to enable chrome-devtools MCP integration
+  disabledMcpConfigs?: McpConfigTarget[] // Which MCP config files should be skipped
 }
 
 class Logger {
@@ -512,13 +514,16 @@ export class DevEnvironment {
   private firstSigintTime: number | null = null
   private chromeDevtoolsSupported: boolean = false
   private portDetected: boolean = false
+  private disabledMcpConfigSet: Set<McpConfigTarget>
 
   constructor(options: DevEnvironmentOptions) {
     // Handle portMcp vs mcpPort naming
     this.options = {
       ...options,
-      mcpPort: options.portMcp || options.mcpPort || "3684"
+      mcpPort: options.portMcp || options.mcpPort || "3684",
+      disabledMcpConfigs: options.disabledMcpConfigs || []
     }
+    this.disabledMcpConfigSet = new Set(this.options.disabledMcpConfigs)
     this.logger = new Logger(options.logFile, options.tail || false, options.dateTimeFormat || "local")
     this.outputProcessor = new OutputProcessor(new StandardLogParser(), new NextJsErrorDetector())
 
@@ -739,6 +744,40 @@ export class DevEnvironment {
     }
   }
 
+  private async configureMcpConfigs(): Promise<void> {
+    const enabledTargets = MCP_CONFIG_TARGETS.filter((target) => !this.disabledMcpConfigSet.has(target))
+
+    if (enabledTargets.length === 0) {
+      this.logD3K(
+        "AI CLI Integration: MCP config generation disabled via --disable-mcp-configs/DEV3000_DISABLE_MCP_CONFIGS"
+      )
+      return
+    }
+
+    const configuredTargets: McpConfigTarget[] = []
+
+    if (enabledTargets.includes("claude")) {
+      await ensureMcpServers(this.options.mcpPort || "3684", this.options.port, this.chromeDevtoolsSupported)
+      configuredTargets.push("claude")
+    }
+
+    if (enabledTargets.includes("cursor")) {
+      await ensureCursorMcpServers(this.options.mcpPort || "3684", this.options.port, this.chromeDevtoolsSupported)
+      configuredTargets.push("cursor")
+    }
+
+    if (enabledTargets.includes("opencode")) {
+      await ensureOpenCodeMcpServers(this.options.mcpPort || "3684", this.options.port, this.chromeDevtoolsSupported)
+      configuredTargets.push("opencode")
+    }
+
+    if (configuredTargets.length > 0) {
+      this.logD3K(`AI CLI Integration: Configured MCP servers in ${formatMcpConfigTargets(configuredTargets)}`)
+    } else {
+      this.logD3K("AI CLI Integration: MCP configs already up to date")
+    }
+  }
+
   async start() {
     // Check if another instance is already running for this project
     if (!this.acquireLock()) {
@@ -848,12 +887,7 @@ export class DevEnvironment {
         }
 
         // Ensure MCP server configurations in project settings files (instant, local)
-        // Framework-specific MCPs (Next.js, Svelte) are now configured dynamically by the MCP orchestrator
-        await ensureMcpServers(this.options.mcpPort || "3684", this.options.port, this.chromeDevtoolsSupported)
-        await ensureCursorMcpServers(this.options.mcpPort || "3684", this.options.port, this.chromeDevtoolsSupported)
-        await ensureOpenCodeMcpServers(this.options.mcpPort || "3684", this.options.port, this.chromeDevtoolsSupported)
-
-        this.logD3K(`AI CLI Integration: Configured MCP servers in .mcp.json, .cursor/mcp.json, and opencode.json`)
+        await this.configureMcpConfigs()
       }
 
       // Start CDP monitoring only if server started successfully and not in servers-only mode
@@ -947,12 +981,7 @@ export class DevEnvironment {
         }
 
         // Ensure MCP server configurations in project settings files (instant, local)
-        // Framework-specific MCPs (Next.js, Svelte) are now configured dynamically by the MCP orchestrator
-        await ensureMcpServers(this.options.mcpPort || "3684", this.options.port, this.chromeDevtoolsSupported)
-        await ensureCursorMcpServers(this.options.mcpPort || "3684", this.options.port, this.chromeDevtoolsSupported)
-        await ensureOpenCodeMcpServers(this.options.mcpPort || "3684", this.options.port, this.chromeDevtoolsSupported)
-
-        this.logD3K(`AI CLI Integration: Configured MCP servers in .mcp.json, .cursor/mcp.json, and opencode.json`)
+        await this.configureMcpConfigs()
       }
 
       // Start CDP monitoring only if server started successfully and not in servers-only mode

@@ -10,6 +10,16 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.108",
+    date: "2025-11-07",
+    type: "minor",
+    highlights: [
+      "**MCP Config Control**: Use `--disable-mcp-configs`, `DEV3000_DISABLE_MCP_CONFIGS`, or `$XDG_CONFIG_HOME/dev3000/config.json` (falls back to `~/.config/dev3000/config.json`) to skip writing specific MCP config files (resolves [#58](https://github.com/vercel-labs/dev3000/issues/58))",
+      "**User Config Defaults**: `$XDG_CONFIG_HOME/dev3000/config.json` (or `~/.config/dev3000/config.json`) now stores persistent CLI defaults like MCP config suppression"
+    ]
+  },
+
+  {
     version: "0.0.107",
     date: "2025-10-28",
     type: "patch",
