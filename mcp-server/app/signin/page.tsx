@@ -21,6 +21,7 @@ export default async function SignInPage() {
         <div className="mt-8">
           <Link
             href="/api/auth/authorize"
+            prefetch={false}
             className="flex w-full justify-center rounded-md bg-black px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-gray-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black"
           >
             Sign in with Vercel
