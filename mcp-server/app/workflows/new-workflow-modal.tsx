@@ -79,6 +79,12 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
         // Just type selected, show team selection
         setStep("team")
       }
+    } else {
+      // No params, reset to type selection step
+      setStep("type")
+      setSelectedType("")
+      setSelectedTeam(null)
+      setSelectedProject(null)
     }
   }, [isOpen, searchParams])
 
