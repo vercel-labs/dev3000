@@ -65,7 +65,48 @@ export async function fetchRealLogs(mcpUrlOrDevUrl: string, bypassToken?: string
       // Use d3k MCP server in sandbox - capture CLS metrics and errors
       console.log("[Step 1] Using d3k MCP server to capture CLS metrics and errors...")
 
-      // First, navigate to the app to generate screenshots and logs
+      // First, validate MCP server access and list available tools
+      console.log("[Step 1] Validating d3k MCP server access...")
+      try {
+        const toolsResponse = await fetch(`${mcpUrl}/mcp`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            jsonrpc: "2.0",
+            id: 0,
+            method: "tools/list"
+          })
+        })
+
+        if (toolsResponse.ok) {
+          const toolsText = await toolsResponse.text()
+          try {
+            const toolsData = JSON.parse(toolsText)
+            const toolNames = toolsData.result?.tools?.map((t: { name: string }) => t.name) || []
+            console.log(`[Step 1] ✅ d3k MCP server accessible`)
+            console.log(`[Step 1] Available tools (${toolNames.length}): ${toolNames.join(", ")}`)
+
+            // Check for expected chrome-devtools and nextjs-dev tools
+            const hasChrome = toolNames.some((name: string) => name.includes("chrome-devtools"))
+            const hasNextjs = toolNames.some((name: string) => name.includes("nextjs"))
+            const hasFixMyApp = toolNames.includes("fix_my_app")
+
+            console.log(`[Step 1] Chrome DevTools MCP: ${hasChrome ? "✅" : "❌"}`)
+            console.log(`[Step 1] Next.js DevTools MCP: ${hasNextjs ? "✅" : "❌"}`)
+            console.log(`[Step 1] fix_my_app tool: ${hasFixMyApp ? "✅" : "❌"}`)
+          } catch {
+            console.log(`[Step 1] MCP server responded but couldn't parse tools list: ${toolsText.substring(0, 200)}`)
+          }
+        } else {
+          console.log(`[Step 1] ⚠️  MCP server not accessible: ${toolsResponse.status}`)
+        }
+      } catch (error) {
+        console.log(
+          `[Step 1] ⚠️  Failed to validate MCP server: ${error instanceof Error ? error.message : String(error)}`
+        )
+      }
+
+      // Navigate to the app to generate logs
       console.log("[Step 1] Navigating browser to app URL...")
       const navResponse = await fetch(`${mcpUrl}/mcp`, {
         method: "POST",
