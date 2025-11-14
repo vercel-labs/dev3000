@@ -17,11 +17,15 @@ export async function createD3kSandbox(repoUrl: string, branch: string, projectN
   console.log(`[Step 0] Repository: ${repoUrl}`)
   console.log(`[Step 0] Branch: ${branch}`)
 
-  // Set token as environment variable for d3k-sandbox utility
-  if (vercelToken) {
-    process.env.VERCEL_TOKEN = vercelToken
-    console.log("[Step 0] Using provided Vercel access token")
-  }
+  // Log available token types (workflow should provide VERCEL_OIDC_TOKEN automatically)
+  console.log(`[Step 0] VERCEL_OIDC_TOKEN available: ${!!process.env.VERCEL_OIDC_TOKEN}`)
+  console.log(`[Step 0] VERCEL_TOKEN available: ${!!process.env.VERCEL_TOKEN}`)
+  console.log(`[Step 0] User access token provided: ${!!vercelToken}`)
+
+  // Note: We do NOT set VERCEL_TOKEN here because:
+  // 1. The user's access token is for web API access, not Sandbox creation
+  // 2. Vercel Workflows automatically provide VERCEL_OIDC_TOKEN which has sandbox permissions
+  // 3. The createD3kSandboxUtil will use VERCEL_OIDC_TOKEN or VERCEL_TOKEN automatically
 
   const sandboxResult = await createD3kSandboxUtil({
     repoUrl,
