@@ -60,6 +60,10 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   const [bypassToken, setBypassToken] = useState("")
   const [isCheckingProtection, setIsCheckingProtection] = useState(false)
   const [needsBypassToken, setNeedsBypassToken] = useState(false)
+  const [availableBranches, setAvailableBranches] = useState<
+    Array<{ name: string; lastDeployment: { url: string; createdAt: number } }>
+  >([])
+  const [loadingBranches, setLoadingBranches] = useState(false)
   const loadedTeamIdRef = useRef<string | null>(null)
 
   // Restore state from URL whenever searchParams change
@@ -108,6 +112,8 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       setBypassToken("")
       setNeedsBypassToken(false)
       setProjectsError(null)
+      setAvailableBranches([])
+      setLoadingBranches(false)
       loadedTeamIdRef.current = null
       router.replace("/workflows", { scroll: false })
     }
@@ -143,6 +149,14 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       loadProjects(selectedTeam)
     }
   }, [selectedTeam, loadingProjects])
+
+  // Load branches when project and team are selected and on options step
+  // biome-ignore lint/correctness/useExhaustiveDependencies: loadBranches is stable and doesn't need to be a dependency
+  useEffect(() => {
+    if (selectedProject && selectedTeam && step === "options" && availableBranches.length === 0 && !loadingBranches) {
+      loadBranches(selectedProject, selectedTeam)
+    }
+  }, [selectedProject, selectedTeam, step, availableBranches.length, loadingBranches])
 
   // Check if deployment is protected when project is selected and on options step
   useEffect(() => {
@@ -220,6 +234,33 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       console.error("Failed to load teams:", error)
     } finally {
       setLoadingTeams(false)
+    }
+  }
+
+  async function loadBranches(project: Project, team: Team) {
+    setLoadingBranches(true)
+    try {
+      const url = team.isPersonal
+        ? `/api/projects/branches?projectId=${project.id}`
+        : `/api/projects/branches?projectId=${project.id}&teamId=${team.id}`
+      console.log("Fetching branches from:", url)
+      const response = await fetch(url)
+      const data = await response.json()
+      console.log("Branches response:", data)
+
+      if (data.success && data.branches) {
+        setAvailableBranches(data.branches)
+        // If current baseBranch is not in the list, reset to first available or "main"
+        if (data.branches.length > 0 && !data.branches.some((b: { name: string }) => b.name === baseBranch)) {
+          const mainBranch = data.branches.find((b: { name: string }) => b.name === "main")
+          setBaseBranch(mainBranch?.name || data.branches[0].name)
+        }
+      }
+    } catch (error) {
+      console.error("Failed to load branches:", error)
+      // Keep default "main" if fetch fails
+    } finally {
+      setLoadingBranches(false)
     }
   }
 
@@ -504,14 +545,37 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                     <label htmlFor={baseBranchId} className="block text-sm font-medium text-gray-700 mb-1">
                       Base Branch
                     </label>
-                    <input
-                      type="text"
-                      id={baseBranchId}
-                      value={baseBranch}
-                      onChange={(e) => setBaseBranch(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                      placeholder="main"
-                    />
+                    {loadingBranches ? (
+                      <div className="text-sm text-gray-500 py-2">Loading branches...</div>
+                    ) : availableBranches.length > 0 ? (
+                      <select
+                        id={baseBranchId}
+                        value={baseBranch}
+                        onChange={(e) => setBaseBranch(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                      >
+                        {availableBranches.map((branch) => (
+                          <option key={branch.name} value={branch.name}>
+                            {branch.name} (deployed {new Date(branch.lastDeployment.createdAt).toLocaleDateString()})
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        id={baseBranchId}
+                        value={baseBranch}
+                        onChange={(e) => setBaseBranch(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                        placeholder="main"
+                      />
+                    )}
+                    {availableBranches.length > 0 && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        Showing branches with recent deployments (last {availableBranches.length} branch
+                        {availableBranches.length !== 1 ? "es" : ""})
+                      </p>
+                    )}
                   </div>
                 )}
                 {autoCreatePR && !selectedProject?.link?.repo && (
