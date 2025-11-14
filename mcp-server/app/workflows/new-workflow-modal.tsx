@@ -237,7 +237,15 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       const response = await fetch("/api/teams")
       const data = await response.json()
       if (data.success) {
-        setTeams(data.teams)
+        // Sort teams alphabetically by name (personal account first if present, then alphabetically)
+        const sortedTeams = [...data.teams].sort((a, b) => {
+          // Personal accounts first
+          if (a.isPersonal && !b.isPersonal) return -1
+          if (!a.isPersonal && b.isPersonal) return 1
+          // Then alphabetically by name
+          return a.name.localeCompare(b.name)
+        })
+        setTeams(sortedTeams)
       }
     } catch (error) {
       console.error("Failed to load teams:", error)
@@ -473,7 +481,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                     >
                       <div className="font-semibold">{team.name}</div>
                       <div className="text-sm text-gray-600">
-                        {team.isPersonal ? "Personal Account" : "Team"} • @{team.slug}
+                        {team.isPersonal ? "Personal Account" : "Team"} • {team.id}
                       </div>
                     </Link>
                   ))}
