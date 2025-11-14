@@ -5,15 +5,54 @@
 
 import { put } from "@vercel/blob"
 import { createGateway, generateText } from "ai"
+import { createD3kSandbox as createD3kSandboxUtil } from "@/lib/cloud/d3k-sandbox"
+
+/**
+ * Step 0: Create d3k sandbox with MCP tools pre-configured
+ */
+export async function createD3kSandbox(repoUrl: string, branch: string, projectName: string) {
+  "use step"
+
+  console.log(`[Step 0] Creating d3k sandbox for ${projectName}...`)
+  console.log(`[Step 0] Repository: ${repoUrl}`)
+  console.log(`[Step 0] Branch: ${branch}`)
+
+  const sandboxResult = await createD3kSandboxUtil({
+    repoUrl,
+    branch,
+    projectDir: "",
+    packageManager: "pnpm",
+    debug: true
+  })
+
+  console.log(`[Step 0] Sandbox created successfully`)
+  console.log(`[Step 0] Dev URL: ${sandboxResult.devUrl}`)
+  console.log(`[Step 0] MCP URL: ${sandboxResult.mcpUrl}`)
+
+  return {
+    mcpUrl: sandboxResult.mcpUrl,
+    devUrl: sandboxResult.devUrl,
+    cleanup: sandboxResult.cleanup
+  }
+}
 
 /**
  * Step 1: Use browser automation to capture real errors
- * Uses Playwright MCP via AI Gateway to navigate and capture console errors
+ * Uses d3k MCP server in sandbox (if available) or AI Gateway for browser automation
  */
-export async function fetchRealLogs(devUrl: string, bypassToken?: string) {
+export async function fetchRealLogs(mcpUrlOrDevUrl: string, bypassToken?: string, sandboxDevUrl?: string) {
   "use step"
 
-  console.log(`[Step 1] Using browser automation to fetch logs from: ${devUrl}`)
+  // Determine if we're using sandbox MCP or direct dev URL
+  const isSandbox = !!sandboxDevUrl
+  const devUrl = sandboxDevUrl || mcpUrlOrDevUrl
+  const mcpUrl = isSandbox ? mcpUrlOrDevUrl : null
+
+  console.log(`[Step 1] Fetching logs from: ${devUrl}`)
+  console.log(`[Step 1] Using sandbox: ${isSandbox ? "yes" : "no"}`)
+  if (mcpUrl) {
+    console.log(`[Step 1] MCP URL: ${mcpUrl}`)
+  }
   console.log(`[Step 1] Bypass token: ${bypassToken ? "provided" : "not provided"}`)
 
   try {
@@ -22,13 +61,64 @@ export async function fetchRealLogs(devUrl: string, bypassToken?: string) {
 
     console.log(`[Step 1] Final URL: ${urlWithBypass.replace(bypassToken || "", "***")}`)
 
-    // Create AI Gateway instance
+    if (isSandbox && mcpUrl) {
+      // Use d3k MCP server in sandbox - it has fix_my_app tool with browser automation
+      console.log("[Step 1] Using d3k MCP server fix_my_app tool...")
+
+      const mcpResponse = await fetch(`${mcpUrl}/mcp`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json, text/event-stream"
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "tools/call",
+          params: {
+            name: "fix_my_app",
+            arguments: {}
+          }
+        })
+      })
+
+      if (!mcpResponse.ok) {
+        throw new Error(`MCP request failed: ${mcpResponse.status}`)
+      }
+
+      // Parse SSE response
+      const text = await mcpResponse.text()
+      const lines = text.split("\n")
+      let logAnalysis = ""
+
+      for (const line of lines) {
+        if (line.startsWith("data: ")) {
+          try {
+            const json = JSON.parse(line.substring(6))
+            if (json.result?.content) {
+              for (const content of json.result.content) {
+                if (content.type === "text") {
+                  logAnalysis += content.text
+                }
+              }
+            }
+          } catch {
+            // Skip invalid JSON
+          }
+        }
+      }
+
+      console.log(`[Step 1] Got ${logAnalysis.length} chars from fix_my_app`)
+      return `d3k Analysis for ${devUrl}\n\n${logAnalysis}`
+    }
+
+    // Fallback: Use AI Gateway with browser automation prompting
+    console.log("[Step 1] Using AI Gateway with browser automation...")
     const gateway = createGateway({
       apiKey: process.env.AI_GATEWAY_API_KEY,
       baseURL: "https://ai-gateway.vercel.sh/v1/ai"
     })
 
-    // Use Claude Sonnet 4 via AI Gateway with MCP tools
     const model = gateway("anthropic/claude-sonnet-4-20250514")
 
     const prompt = `You are a web application debugger with access to browser automation tools via Playwright MCP.
@@ -53,7 +143,6 @@ Analyze the console messages and provide a detailed report including:
 
 Format your response as a clear, structured report that helps identify what's broken in the application.`
 
-    console.log("[Step 1] Invoking AI with browser automation...")
     const { text } = await generateText({
       model,
       prompt,
@@ -63,7 +152,6 @@ Format your response as a clear, structured report that helps identify what's br
     })
 
     console.log(`[Step 1] Browser automation response (first 500 chars): ${text.substring(0, 500)}...`)
-
     return `Browser Automation Analysis for ${devUrl}\n\n${text}`
   } catch (error) {
     console.error("[Step 1] Error with browser automation:", error)
@@ -529,4 +617,20 @@ function applyPatchChanges(content: string, changes: string): string {
   }
 
   return result.join("\n")
+}
+
+/**
+ * Cleanup step: Stop the sandbox
+ */
+export async function cleanupSandbox(cleanup: () => Promise<void>) {
+  "use step"
+
+  console.log("[Cleanup] Stopping sandbox...")
+  try {
+    await cleanup()
+    console.log("[Cleanup] Sandbox stopped successfully")
+  } catch (error) {
+    console.error("[Cleanup] Error stopping sandbox:", error)
+    // Don't throw - cleanup errors shouldn't fail the workflow
+  }
 }
