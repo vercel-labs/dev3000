@@ -57,10 +57,10 @@ export async function getCurrentUser(): Promise<UserInfo | null> {
     const data = await response.json()
 
     return {
-      id: data.user.uid,
-      email: data.user.email,
-      name: data.user.name,
-      username: data.user.username
+      id: data.user?.uid || data.user?.id || "",
+      email: data.user?.email || "",
+      name: data.user?.name || "",
+      username: data.user?.username || ""
     }
   } catch (error) {
     console.error("Failed to get current user:", error)

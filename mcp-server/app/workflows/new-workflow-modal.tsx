@@ -42,6 +42,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   const router = useRouter()
   const searchParams = useSearchParams()
   const baseBranchId = useId()
+  const bypassTokenId = useId()
   const [step, setStep] = useState<WorkflowStep>("type")
   const [_selectedType, setSelectedType] = useState<string>("")
   const [teams, setTeams] = useState<Team[]>([])
@@ -140,23 +141,46 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
     }
   }, [selectedTeam, loadingProjects])
 
-  // Check if deployment is protected when project is selected
+  // Check if deployment is protected when project is selected and on options step
   useEffect(() => {
     async function checkDeploymentProtection() {
-      if (!selectedProject || step !== "options") return
+      console.log("[Bypass Token] useEffect triggered - step:", step, "selectedProject:", selectedProject?.name)
+
+      if (!selectedProject) {
+        console.log("[Bypass Token] No selected project, skipping check")
+        return
+      }
+
+      if (step !== "options") {
+        console.log("[Bypass Token] Not on options step, skipping check")
+        return
+      }
 
       const latestDeployment = selectedProject.latestDeployments[0]
-      if (!latestDeployment) return
+      if (!latestDeployment) {
+        console.log("[Bypass Token] No latest deployment, skipping check")
+        return
+      }
 
       setIsCheckingProtection(true)
+      console.log("[Bypass Token] Checking deployment protection...")
       try {
         const devUrl = `https://${latestDeployment.url}`
-        const response = await fetch(devUrl, { method: "HEAD" })
+        console.log("[Bypass Token] Checking URL:", devUrl)
 
-        // If we get 401, deployment is protected
-        setNeedsBypassToken(response.status === 401)
+        // Use server-side API route to avoid CORS issues
+        const response = await fetch("/api/projects/check-protection", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: devUrl })
+        })
+
+        const data = await response.json()
+        console.log("[Bypass Token] Protection check result:", data)
+
+        setNeedsBypassToken(data.isProtected)
       } catch (error) {
-        console.error("Failed to check deployment protection:", error)
+        console.error("[Bypass Token] Failed to check deployment protection:", error)
         // Assume not protected on error
         setNeedsBypassToken(false)
       } finally {
@@ -482,18 +506,16 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                     This project is not connected to a GitHub repository. PRs cannot be created automatically.
                   </div>
                 )}
-                {isCheckingProtection && (
-                  <div className="text-sm text-gray-500">Checking deployment protection...</div>
-                )}
+                {isCheckingProtection && <div className="text-sm text-gray-500">Checking deployment protection...</div>}
                 {needsBypassToken && (
                   <div>
-                    <label htmlFor="bypassToken" className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor={bypassTokenId} className="block text-sm font-medium text-gray-700 mb-1">
                       Deployment Protection Bypass Token
                       <span className="text-red-500 ml-1">*</span>
                     </label>
                     <input
                       type="text"
-                      id="bypassToken"
+                      id={bypassTokenId}
                       value={bypassToken}
                       onChange={(e) => setBypassToken(e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md font-mono text-sm"
@@ -502,14 +524,25 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                     />
                     <p className="mt-1 text-xs text-gray-500">
                       This deployment is protected. Get your bypass token from{" "}
-                      <a
-                        href="https://vercel.com/docs/deployment-protection/methods-to-bypass-deployment-protection/protection-bypass-automation"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 hover:underline"
-                      >
-                        Vercel Dashboard → Project Settings → Deployment Protection
-                      </a>
+                      {selectedTeam && selectedProject ? (
+                        <a
+                          href={`https://vercel.com/${selectedTeam.slug}/${selectedProject.name}/settings/deployment-protection#protection-bypass-for-automation`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline"
+                        >
+                          Project Settings → Deployment Protection
+                        </a>
+                      ) : (
+                        <a
+                          href="https://vercel.com/docs/deployment-protection/methods-to-bypass-deployment-protection/protection-bypass-automation"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline"
+                        >
+                          Vercel Dashboard → Project Settings → Deployment Protection
+                        </a>
+                      )}
                     </p>
                   </div>
                 )}
@@ -576,7 +609,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                     type="button"
                     onClick={() => {
                       onClose()
-                      window.location.reload()
+                      router.push("/workflows")
                     }}
                     className="w-full px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
                   >

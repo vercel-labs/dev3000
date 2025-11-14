@@ -18,9 +18,7 @@ export async function fetchRealLogs(devUrl: string, bypassToken?: string) {
 
   try {
     // Construct URL with bypass token if provided
-    const urlWithBypass = bypassToken
-      ? `${devUrl}?x-vercel-protection-bypass=${bypassToken}`
-      : devUrl
+    const urlWithBypass = bypassToken ? `${devUrl}?x-vercel-protection-bypass=${bypassToken}` : devUrl
 
     console.log(`[Step 1] Final URL: ${urlWithBypass.replace(bypassToken || "", "***")}`)
 
