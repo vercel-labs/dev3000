@@ -194,12 +194,25 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   }
 
   async function startWorkflow() {
-    if (!selectedProject) return
+    if (!selectedProject || !selectedTeam) return
 
     setStep("running")
     setWorkflowStatus("Starting workflow...")
 
     try {
+      // Generate deployment protection bypass token for this project
+      setWorkflowStatus("Generating deployment protection bypass token...")
+      const bypassResponse = await fetch(`/api/projects/${selectedProject.id}/bypass-token?teamId=${selectedTeam.id}`, {
+        method: "POST"
+      })
+
+      if (!bypassResponse.ok) {
+        throw new Error("Failed to generate deployment protection bypass token")
+      }
+
+      const bypassData = await bypassResponse.json()
+      const bypassToken = bypassData.token
+
       // Get the latest deployment URL
       const latestDeployment = selectedProject.latestDeployments[0]
       if (!latestDeployment) {
@@ -221,7 +234,8 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       const body: any = {
         devUrl,
         projectName: selectedProject.name,
-        userId
+        userId,
+        bypassToken
       }
 
       if (autoCreatePR && repoOwner && repoName) {

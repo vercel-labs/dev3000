@@ -14,22 +14,24 @@ export async function cloudFixWorkflow(params: {
   repoOwner?: string
   repoName?: string
   baseBranch?: string
+  bypassToken?: string
 }) {
   "use workflow"
 
-  const { devUrl, projectName, repoOwner, repoName, baseBranch = "main" } = params
+  const { devUrl, projectName, repoOwner, repoName, baseBranch = "main", bypassToken } = params
 
   console.log("[Workflow] Starting cloud fix workflow...")
   console.log(`[Workflow] Dev URL: ${devUrl}`)
   console.log(`[Workflow] Project: ${projectName}`)
   console.log(`[Workflow] Timestamp: ${new Date().toISOString()}`)
+  console.log(`[Workflow] Bypass Token: ${bypassToken ? "provided" : "not provided"}`)
   if (repoOwner && repoName) {
     console.log(`[Workflow] GitHub Repo: ${repoOwner}/${repoName}`)
     console.log(`[Workflow] Base Branch: ${baseBranch}`)
   }
 
   // Step 1: Fetch real logs from the dev URL
-  const logAnalysis = await fetchRealLogs(devUrl)
+  const logAnalysis = await fetchRealLogs(devUrl, bypassToken)
 
   // Step 2: Invoke AI agent to analyze logs and create fix
   const fixProposal = await analyzeLogsWithAgent(logAnalysis, devUrl)
@@ -50,10 +52,10 @@ export async function cloudFixWorkflow(params: {
 }
 
 // Step function wrappers that dynamically import the actual implementations
-async function fetchRealLogs(devUrl: string) {
+async function fetchRealLogs(devUrl: string, bypassToken?: string) {
   "use step"
   const { fetchRealLogs } = await import("./steps")
-  return fetchRealLogs(devUrl)
+  return fetchRealLogs(devUrl, bypassToken)
 }
 
 async function analyzeLogsWithAgent(logAnalysis: string, devUrl: string) {

@@ -10,7 +10,7 @@ export default async function WorkflowsPage() {
     redirect("/signin")
   }
 
-  const runs = await listWorkflowRuns(user.username)
+  const runs = await listWorkflowRuns(user.id)
 
   return <WorkflowsClient user={user} initialRuns={runs} />
 }

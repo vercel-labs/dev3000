@@ -10,19 +10,34 @@ import { createGateway, generateText } from "ai"
  * Step 1: Fetch real logs from the dev URL
  * Makes HTTP requests to capture actual errors and issues
  */
-export async function fetchRealLogs(devUrl: string) {
+export async function fetchRealLogs(devUrl: string, bypassToken?: string) {
   "use step"
 
   console.log(`[Step 1] Fetching real logs from: ${devUrl}`)
+  console.log(`[Step 1] Bypass token: ${bypassToken ? "provided" : "not provided"}`)
 
   try {
+    // Construct URL with bypass token if provided
+    const urlWithBypass = bypassToken
+      ? `${devUrl}?x-vercel-protection-bypass=${bypassToken}`
+      : devUrl
+
+    console.log(`[Step 1] Final URL: ${urlWithBypass.replace(bypassToken || "", "***")}`)
+
     // Make HTTP request to the dev URL to capture any errors
-    const response = await fetch(devUrl, {
+    const headers: HeadersInit = {
+      "User-Agent": "dev3000-cloud-fix/1.0",
+      Accept: "text/html,application/json,*/*"
+    }
+
+    // Add bypass token to headers as well (Vercel accepts both methods)
+    if (bypassToken) {
+      headers["x-vercel-protection-bypass"] = bypassToken
+    }
+
+    const response = await fetch(urlWithBypass, {
       method: "GET",
-      headers: {
-        "User-Agent": "dev3000-cloud-fix/1.0",
-        Accept: "text/html,application/json,*/*"
-      }
+      headers
     })
 
     console.log(`[Step 1] Response status: ${response.status}`)
