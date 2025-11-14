@@ -124,10 +124,13 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   // Restore team from URL once teams are loaded
   useEffect(() => {
     const teamParam = searchParams.get("team")
-    if (teamParam && teams.length > 0 && !selectedTeam) {
-      const team = teams.find((t) => t.id === teamParam)
-      if (team) {
-        setSelectedTeam(team)
+    if (teamParam && teams.length > 0) {
+      // Update team if URL param differs from currently selected team
+      if (!selectedTeam || selectedTeam.id !== teamParam) {
+        const team = teams.find((t) => t.id === teamParam)
+        if (team) {
+          setSelectedTeam(team)
+        }
       }
     }
   }, [teams, searchParams, selectedTeam])
