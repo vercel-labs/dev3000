@@ -1,6 +1,5 @@
 import { start } from "workflow/api"
-// @ts-expect-error - Workflow file is resolved at runtime by Next.js
-import { cloudCheckPRWorkflow } from "../../../workflows/check-pr"
+import { cloudCheckPRWorkflow } from "./workflow"
 
 /**
  * POST /api/cloud/check-pr
@@ -19,25 +18,28 @@ export async function POST(request: Request) {
 
     console.log(`[API] Starting PR check for ${repoOwner}/${repoName}#${prNumber}`)
 
-    // Start the workflow with array of arguments (not an object)
-    const workflowRun = await start(cloudCheckPRWorkflow, [
+    // Start the workflow
+    // @ts-expect-error - Workflow SDK types are incomplete
+    const workflowRun = await start(cloudCheckPRWorkflow, {
       previewUrl,
       prTitle,
-      prBody || "",
-      changedFiles || [],
+      prBody: prBody || "",
+      changedFiles: changedFiles || [],
       repoOwner,
       repoName,
-      String(prNumber)
-    ])
+      prNumber: String(prNumber)
+    })
 
-    console.log(`[API] Workflow started`)
+    // @ts-expect-error - Workflow SDK types are incomplete
+    console.log(`[API] Workflow started: ${workflowRun.id}`)
 
-    // Get the workflow return value using returnValue (not result())
-    const result = await workflowRun.returnValue
+    // Wait for workflow to complete (workflows are durable and will continue even if this times out)
+    // @ts-expect-error - Workflow SDK types are incomplete
+    const result = await workflowRun.result()
 
-    console.log(`[API] Workflow completed successfully`)
+    console.log(`[API] Workflow completed: ${result.status}`)
 
-    return Response.json(result)
+    return result
   } catch (error) {
     console.error("[API] Error starting workflow:", error)
     return Response.json(

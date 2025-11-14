@@ -1,5 +1,7 @@
+import { randomUUID } from "crypto"
 import { start } from "workflow/api"
-import { cloudFixWorkflow } from "../fix-workflow/route"
+import { saveWorkflowRun } from "@/lib/workflow-storage"
+import { cloudFixWorkflow } from "../fix-workflow/workflow"
 
 /**
  * API Route to Start Cloud Fix Workflow
@@ -9,12 +11,20 @@ import { cloudFixWorkflow } from "../fix-workflow/route"
  * where the fix proposal was uploaded.
  */
 export async function POST(request: Request) {
+  let userId: string | undefined
+  let projectName: string | undefined
+
   try {
-    const { devUrl, projectName, repoOwner, repoName, baseBranch } = await request.json()
+    const body = await request.json()
+    const { devUrl, repoOwner, repoName, baseBranch, bypassToken } = body
+    userId = body.userId
+    projectName = body.projectName
 
     console.log("[Start Fix] Starting cloud fix workflow...")
     console.log(`[Start Fix] Dev URL: ${devUrl}`)
     console.log(`[Start Fix] Project: ${projectName}`)
+    console.log(`[Start Fix] User ID: ${userId}`)
+    console.log(`[Start Fix] Bypass Token: ${bypassToken ? "provided" : "not provided"}`)
     if (repoOwner && repoName) {
       console.log(`[Start Fix] GitHub: ${repoOwner}/${repoName} (base: ${baseBranch || "main"})`)
     }
@@ -22,7 +32,16 @@ export async function POST(request: Request) {
     // Start the workflow and get a Run object
     // Pass serializable data instead of Request object
     // The workflow will fetch real logs from the devUrl and optionally create a PR
-    const run = await start(cloudFixWorkflow, [{ devUrl, projectName, repoOwner, repoName, baseBranch }])
+    const workflowParams: Parameters<typeof cloudFixWorkflow>[0] = {
+      devUrl,
+      projectName,
+      ...(repoOwner && { repoOwner }),
+      ...(repoName && { repoName }),
+      ...(baseBranch && { baseBranch }),
+      ...(bypassToken && { bypassToken })
+    }
+
+    const run = await start(cloudFixWorkflow, [workflowParams])
 
     console.log(`[Start Fix] Workflow started, waiting for completion...`)
 
@@ -40,6 +59,21 @@ export async function POST(request: Request) {
       console.log(`[Start Fix] GitHub PR created: ${result.pr.prUrl}`)
     }
 
+    // Save workflow run metadata if userId and projectName provided
+    if (userId && projectName) {
+      const runId = randomUUID()
+      await saveWorkflowRun({
+        id: runId,
+        userId,
+        projectName,
+        timestamp: new Date().toISOString(),
+        status: "success",
+        reportBlobUrl: result.blobUrl,
+        prUrl: result.pr?.prUrl
+      })
+      console.log(`[Start Fix] Saved workflow run metadata: ${runId}`)
+    }
+
     return Response.json({
       success: true,
       message: "Cloud fix workflow completed successfully",
@@ -50,6 +84,21 @@ export async function POST(request: Request) {
     })
   } catch (error) {
     console.error("[Start Fix] Error running workflow:", error)
+
+    // Save failure metadata if userId provided
+    if (userId && projectName) {
+      const runId = randomUUID()
+      await saveWorkflowRun({
+        id: runId,
+        userId,
+        projectName,
+        timestamp: new Date().toISOString(),
+        status: "failure",
+        error: error instanceof Error ? error.message : String(error)
+      }).catch((err) => console.error("[Start Fix] Failed to save error metadata:", err))
+      console.log(`[Start Fix] Saved workflow run failure metadata: ${runId}`)
+    }
+
     return Response.json(
       {
         success: false,

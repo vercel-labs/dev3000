@@ -1,0 +1,626 @@
+"use client"
+
+import Link from "next/link"
+import { useRouter, useSearchParams } from "next/navigation"
+import { useEffect, useId, useRef, useState } from "react"
+
+interface Team {
+  id: string
+  slug: string
+  name: string
+  isPersonal: boolean
+}
+
+interface Project {
+  id: string
+  name: string
+  framework: string | null
+  link: {
+    type: string
+    repo: string
+    repoId: number
+    org: string
+  } | null
+  latestDeployments: Array<{
+    id: string
+    url: string
+    state: string
+    readyState: string
+    createdAt: number
+  }>
+}
+
+interface NewWorkflowModalProps {
+  isOpen: boolean
+  onClose: () => void
+  userId: string
+}
+
+type WorkflowStep = "type" | "team" | "project" | "options" | "running"
+
+export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflowModalProps) {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const baseBranchId = useId()
+  const bypassTokenId = useId()
+  const [step, setStep] = useState<WorkflowStep>("type")
+  const [_selectedType, setSelectedType] = useState<string>("")
+  const [teams, setTeams] = useState<Team[]>([])
+  const [selectedTeam, setSelectedTeam] = useState<Team | null>(null)
+  const [projects, setProjects] = useState<Project[]>([])
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null)
+  const [loadingTeams, setLoadingTeams] = useState(false)
+  const [loadingProjects, setLoadingProjects] = useState(false)
+  const [projectsError, setProjectsError] = useState<string | null>(null)
+  const [workflowStatus, setWorkflowStatus] = useState<string>("")
+  // biome-ignore lint/suspicious/noExplicitAny: API response type is dynamic
+  const [workflowResult, setWorkflowResult] = useState<any>(null)
+  const [baseBranch, setBaseBranch] = useState("main")
+  const [autoCreatePR, setAutoCreatePR] = useState(true)
+  const [bypassToken, setBypassToken] = useState("")
+  const [isCheckingProtection, setIsCheckingProtection] = useState(false)
+  const [needsBypassToken, setNeedsBypassToken] = useState(false)
+  const loadedTeamIdRef = useRef<string | null>(null)
+
+  // Restore state from URL whenever searchParams change
+  useEffect(() => {
+    if (!isOpen) return
+
+    const typeParam = searchParams.get("type")
+    const teamParam = searchParams.get("team")
+    const projectParam = searchParams.get("project")
+
+    if (typeParam) {
+      setSelectedType(typeParam)
+
+      if (projectParam) {
+        // If we have project param, we need to show options step
+        setStep("options")
+      } else if (teamParam) {
+        // If we have team param, we need to show project selection
+        setStep("project")
+      } else {
+        // Just type selected, show team selection
+        setStep("team")
+      }
+    } else {
+      // No params, reset to type selection step
+      setStep("type")
+      setSelectedType("")
+      setSelectedTeam(null)
+      setSelectedProject(null)
+    }
+  }, [isOpen, searchParams])
+
+  // Reset modal state when closed
+  useEffect(() => {
+    if (!isOpen) {
+      setStep("type")
+      setSelectedType("")
+      setSelectedTeam(null)
+      setSelectedProject(null)
+      setProjects([])
+      setTeams([])
+      setWorkflowStatus("")
+      setWorkflowResult(null)
+      setBaseBranch("main")
+      setAutoCreatePR(true)
+      setBypassToken("")
+      setNeedsBypassToken(false)
+      setProjectsError(null)
+      loadedTeamIdRef.current = null
+      router.replace("/workflows", { scroll: false })
+    }
+  }, [isOpen, router])
+
+  // Load teams when needed
+  // biome-ignore lint/correctness/useExhaustiveDependencies: loadTeams is stable and doesn't need to be a dependency
+  useEffect(() => {
+    if (["team", "project", "options"].includes(step) && teams.length === 0 && !loadingTeams) {
+      loadTeams()
+    }
+  }, [step, teams.length, loadingTeams])
+
+  // Restore team from URL once teams are loaded
+  useEffect(() => {
+    const teamParam = searchParams.get("team")
+    if (teamParam && teams.length > 0 && !selectedTeam) {
+      const team = teams.find((t) => t.id === teamParam)
+      if (team) {
+        setSelectedTeam(team)
+      }
+    }
+  }, [teams, searchParams, selectedTeam])
+
+  // Load projects when team selected
+  // biome-ignore lint/correctness/useExhaustiveDependencies: loadProjects is stable and doesn't need to be a dependency
+  useEffect(() => {
+    if (selectedTeam && !loadingProjects && loadedTeamIdRef.current !== selectedTeam.id) {
+      loadedTeamIdRef.current = selectedTeam.id
+      loadProjects(selectedTeam)
+    }
+  }, [selectedTeam, loadingProjects])
+
+  // Check if deployment is protected when project is selected and on options step
+  useEffect(() => {
+    async function checkDeploymentProtection() {
+      console.log("[Bypass Token] useEffect triggered - step:", step, "selectedProject:", selectedProject?.name)
+
+      if (!selectedProject) {
+        console.log("[Bypass Token] No selected project, skipping check")
+        return
+      }
+
+      if (step !== "options") {
+        console.log("[Bypass Token] Not on options step, skipping check")
+        return
+      }
+
+      const latestDeployment = selectedProject.latestDeployments[0]
+      if (!latestDeployment) {
+        console.log("[Bypass Token] No latest deployment, skipping check")
+        return
+      }
+
+      setIsCheckingProtection(true)
+      console.log("[Bypass Token] Checking deployment protection...")
+      try {
+        const devUrl = `https://${latestDeployment.url}`
+        console.log("[Bypass Token] Checking URL:", devUrl)
+
+        // Use server-side API route to avoid CORS issues
+        const response = await fetch("/api/projects/check-protection", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: devUrl })
+        })
+
+        const data = await response.json()
+        console.log("[Bypass Token] Protection check result:", data)
+
+        setNeedsBypassToken(data.isProtected)
+      } catch (error) {
+        console.error("[Bypass Token] Failed to check deployment protection:", error)
+        // Assume not protected on error
+        setNeedsBypassToken(false)
+      } finally {
+        setIsCheckingProtection(false)
+      }
+    }
+
+    checkDeploymentProtection()
+  }, [selectedProject, step])
+
+  // Restore project from URL once projects are loaded
+  useEffect(() => {
+    const projectParam = searchParams.get("project")
+    if (projectParam && projects.length > 0) {
+      // Update if no project selected OR if the URL project differs from selected
+      if (!selectedProject || selectedProject.id !== projectParam) {
+        const project = projects.find((p) => p.id === projectParam)
+        if (project) {
+          setSelectedProject(project)
+        }
+      }
+    }
+  }, [projects, searchParams, selectedProject])
+
+  async function loadTeams() {
+    setLoadingTeams(true)
+    try {
+      const response = await fetch("/api/teams")
+      const data = await response.json()
+      if (data.success) {
+        setTeams(data.teams)
+      }
+    } catch (error) {
+      console.error("Failed to load teams:", error)
+    } finally {
+      setLoadingTeams(false)
+    }
+  }
+
+  async function loadProjects(team: Team) {
+    setLoadingProjects(true)
+    setProjectsError(null)
+    try {
+      const url = team.isPersonal ? "/api/projects" : `/api/projects?teamId=${team.id}`
+      console.log("Fetching projects from:", url)
+      const response = await fetch(url)
+      const data = await response.json()
+      console.log("Projects response:", data)
+
+      if (data.success) {
+        setProjects(data.projects)
+        if (data.projects.length === 0) {
+          setProjectsError("No projects found for this account")
+        }
+      } else {
+        const errorMsg = `Failed to fetch projects: ${data.error || "Unknown error"}`
+        console.error(errorMsg)
+        setProjectsError(errorMsg)
+      }
+    } catch (error) {
+      const errorMsg = `Failed to load projects: ${error instanceof Error ? error.message : String(error)}`
+      console.error(errorMsg, error)
+      setProjectsError(errorMsg)
+    } finally {
+      setLoadingProjects(false)
+    }
+  }
+
+  async function startWorkflow() {
+    if (!selectedProject || !selectedTeam) return
+
+    setStep("running")
+    setWorkflowStatus("Starting workflow...")
+
+    try {
+      // Get the latest deployment URL
+      const latestDeployment = selectedProject.latestDeployments[0]
+      if (!latestDeployment) {
+        throw new Error("No deployments found for this project")
+      }
+
+      const devUrl = `https://${latestDeployment.url}`
+
+      // Extract repo info from project link
+      let repoOwner: string | undefined
+      let repoName: string | undefined
+
+      if (selectedProject.link?.org && selectedProject.link?.repo) {
+        repoOwner = selectedProject.link.org
+        repoName = selectedProject.link.repo
+      }
+
+      // biome-ignore lint/suspicious/noExplicitAny: Request body type depends on conditional fields
+      const body: any = {
+        devUrl,
+        projectName: selectedProject.name,
+        userId,
+        bypassToken
+      }
+
+      if (autoCreatePR && repoOwner && repoName) {
+        body.repoOwner = repoOwner
+        body.repoName = repoName
+        body.baseBranch = baseBranch
+      }
+
+      setWorkflowStatus("Analyzing deployment logs...")
+
+      const response = await fetch("/api/cloud/start-fix", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        setWorkflowResult(result)
+        setWorkflowStatus("Workflow completed successfully!")
+      } else {
+        setWorkflowStatus(`Workflow failed: ${result.error}`)
+      }
+    } catch (error) {
+      console.error("Workflow error:", error)
+      setWorkflowStatus(`Error: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
+  if (!isOpen) return null
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <div className="p-6">
+          <div className="flex justify-between items-start mb-6">
+            <h2 className="text-2xl font-bold text-gray-900">New d3k Workflow</h2>
+            <button
+              type="button"
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600"
+              aria-label="Close modal"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          {/* Progress indicator */}
+          <div className="mb-8">
+            <div className="flex items-center">
+              {["type", "team", "project", "options", "running"].map((s, index) => (
+                <div key={s} className="flex items-center flex-1">
+                  <div
+                    className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                      step === s
+                        ? "bg-blue-600 text-white"
+                        : ["type", "team", "project", "options", "running"].indexOf(step) >
+                            ["type", "team", "project", "options", "running"].indexOf(s)
+                          ? "bg-green-600 text-white"
+                          : "bg-gray-200 text-gray-600"
+                    }`}
+                  >
+                    {index + 1}
+                  </div>
+                  {index < 4 && <div className="flex-1 h-1 bg-gray-200 mx-2" />}
+                </div>
+              ))}
+            </div>
+            <div className="flex items-center mt-2">
+              {["Type", "Team", "Project", "Options", "Run"].map((label, index) => (
+                <div key={label} className="flex items-center flex-1">
+                  <span className="text-xs text-gray-600 w-8 text-center">{label}</span>
+                  {index < 4 && <div className="flex-1 mx-2" />}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Step 1: Select Workflow Type */}
+          {step === "type" && (
+            <div>
+              <h3 className="text-lg font-semibold mb-4">Select Workflow Type</h3>
+              <div className="space-y-3">
+                <Link
+                  href="/workflows/new?type=cloud-fix"
+                  className="block w-full p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 text-left transition-colors"
+                >
+                  <div className="font-semibold">CLS Detection & Fix</div>
+                  <div className="text-sm text-gray-600 mt-1">
+                    Analyze deployment logs for errors and generate fix proposals
+                  </div>
+                </Link>
+                <Link
+                  href="/workflows/new?type=next-16-migration"
+                  className="block w-full p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 text-left transition-colors"
+                >
+                  <div className="font-semibold">Next.js 16 Migration</div>
+                  <div className="text-sm text-gray-600 mt-1">
+                    Upgrade your project to Next.js 16 with automated codemods and fixes
+                  </div>
+                </Link>
+              </div>
+              {/* Reserve space for Back link to prevent CLS */}
+              <div className="mt-4 h-10" aria-hidden="true" />
+            </div>
+          )}
+
+          {/* Step 2: Select Team */}
+          {step === "team" && (
+            <div>
+              <h3 className="text-lg font-semibold mb-4">Select Team or Personal Account</h3>
+              {loadingTeams ? (
+                <div className="text-center py-8 text-gray-500">Loading teams...</div>
+              ) : (
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {teams.map((team) => (
+                    <Link
+                      key={team.id}
+                      href={`/workflows/new?type=${_selectedType}&team=${team.id}`}
+                      className="block w-full p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 text-left transition-colors"
+                    >
+                      <div className="font-semibold">{team.name}</div>
+                      <div className="text-sm text-gray-600">
+                        {team.isPersonal ? "Personal Account" : "Team"} • @{team.slug}
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+              <Link href="/workflows/new" className="mt-4 inline-block px-4 py-2 text-gray-600 hover:text-gray-800">
+                ← Back
+              </Link>
+            </div>
+          )}
+
+          {/* Step 3: Select Project */}
+          {step === "project" && (
+            <div>
+              <h3 className="text-lg font-semibold mb-4">Select Project</h3>
+              {selectedTeam && (
+                <div className="mb-4 text-sm text-gray-600">
+                  Team: <span className="font-semibold">{selectedTeam.name}</span>
+                </div>
+              )}
+              {projectsError && (
+                <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                  <div className="text-sm font-medium text-red-900">Error</div>
+                  <div className="text-sm text-red-700 mt-1">{projectsError}</div>
+                </div>
+              )}
+              {loadingProjects ? (
+                <div className="text-center py-8 text-gray-500">Loading projects...</div>
+              ) : projects.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  {projectsError ? "Unable to load projects" : "No projects found"}
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {projects.map((project) => (
+                    <Link
+                      key={project.id}
+                      href={`/workflows/new?type=${_selectedType}&team=${selectedTeam?.id}&project=${project.id}`}
+                      className="block w-full p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 text-left transition-colors"
+                    >
+                      <div className="font-semibold">{project.name}</div>
+                      <div className="text-sm text-gray-600 mt-1">
+                        {project.framework && <span className="mr-2">Framework: {project.framework}</span>}
+                        {project.latestDeployments[0] && <span>Latest: {project.latestDeployments[0].url}</span>}
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+              <Link
+                href={`/workflows/new?type=${_selectedType}`}
+                className="mt-4 inline-block px-4 py-2 text-gray-600 hover:text-gray-800"
+              >
+                ← Back
+              </Link>
+            </div>
+          )}
+
+          {/* Step 4: Configure Options */}
+          {step === "options" && (
+            <div>
+              <h3 className="text-lg font-semibold mb-4">Configure Options</h3>
+              {selectedProject && (
+                <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+                  <div className="text-sm text-gray-600 mb-2">Selected Project:</div>
+                  <div className="font-semibold">{selectedProject.name}</div>
+                </div>
+              )}
+              <div className="space-y-4">
+                <div>
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={autoCreatePR}
+                      onChange={(e) => setAutoCreatePR(e.target.checked)}
+                      className="mr-2 w-4 h-4"
+                    />
+                    <span className="text-sm">Automatically create GitHub PR with fixes</span>
+                  </label>
+                </div>
+                {autoCreatePR && selectedProject?.link?.repo && (
+                  <div>
+                    <label htmlFor={baseBranchId} className="block text-sm font-medium text-gray-700 mb-1">
+                      Base Branch
+                    </label>
+                    <input
+                      type="text"
+                      id={baseBranchId}
+                      value={baseBranch}
+                      onChange={(e) => setBaseBranch(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                      placeholder="main"
+                    />
+                  </div>
+                )}
+                {autoCreatePR && !selectedProject?.link?.repo && (
+                  <div className="text-sm text-amber-600">
+                    This project is not connected to a GitHub repository. PRs cannot be created automatically.
+                  </div>
+                )}
+                {isCheckingProtection && <div className="text-sm text-gray-500">Checking deployment protection...</div>}
+                {needsBypassToken && (
+                  <div>
+                    <label htmlFor={bypassTokenId} className="block text-sm font-medium text-gray-700 mb-1">
+                      Deployment Protection Bypass Token
+                      <span className="text-red-500 ml-1">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      id={bypassTokenId}
+                      value={bypassToken}
+                      onChange={(e) => setBypassToken(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md font-mono text-sm"
+                      placeholder="Enter your 32-character bypass token"
+                      required
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      This deployment is protected. Get your bypass token from{" "}
+                      {selectedTeam && selectedProject ? (
+                        <a
+                          href={`https://vercel.com/${selectedTeam.slug}/${selectedProject.name}/settings/deployment-protection#protection-bypass-for-automation`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline"
+                        >
+                          Project Settings → Deployment Protection
+                        </a>
+                      ) : (
+                        <a
+                          href="https://vercel.com/docs/deployment-protection/methods-to-bypass-deployment-protection/protection-bypass-automation"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:underline"
+                        >
+                          Vercel Dashboard → Project Settings → Deployment Protection
+                        </a>
+                      )}
+                    </p>
+                  </div>
+                )}
+              </div>
+              <div className="flex gap-3 mt-6">
+                <Link
+                  href={`/workflows/new?type=${_selectedType}&team=${selectedTeam?.id}`}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                >
+                  ← Back
+                </Link>
+                <button
+                  type="button"
+                  onClick={startWorkflow}
+                  disabled={needsBypassToken && !bypassToken}
+                  className="flex-1 px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Start Workflow
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 5: Running / Results */}
+          {step === "running" && (
+            <div>
+              <h3 className="text-lg font-semibold mb-4">Workflow Status</h3>
+              <div className="space-y-4">
+                <div className="p-4 bg-blue-50 rounded-lg">
+                  <div className="text-sm font-medium text-blue-900">{workflowStatus}</div>
+                </div>
+                {workflowResult && (
+                  <div className="space-y-3">
+                    {workflowResult.blobUrl && (
+                      <div className="p-4 bg-green-50 rounded-lg">
+                        <div className="text-sm font-medium text-green-900 mb-2">Fix Proposal Generated</div>
+                        <a
+                          href={workflowResult.blobUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-800 underline text-sm"
+                        >
+                          View Report
+                        </a>
+                      </div>
+                    )}
+                    {workflowResult.pr?.prUrl && (
+                      <div className="p-4 bg-green-50 rounded-lg">
+                        <div className="text-sm font-medium text-green-900 mb-2">GitHub PR Created</div>
+                        <a
+                          href={workflowResult.pr.prUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-800 underline text-sm"
+                        >
+                          View Pull Request
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {workflowResult && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose()
+                      router.push("/workflows")
+                    }}
+                    className="w-full px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                  >
+                    Done
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}

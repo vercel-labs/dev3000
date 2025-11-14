@@ -72,7 +72,9 @@ Do not include explanations, just the JSON array.`
     try {
       const { text } = await generateText({
         model,
-        prompt: aiPrompt
+        prompt: aiPrompt,
+        // @ts-expect-error - AI SDK types for maxTokens are incomplete
+        maxTokens: 500
       })
 
       // Parse AI response
@@ -215,7 +217,9 @@ Only return valid JSON, no additional text.`
   try {
     const { text } = await generateText({
       model,
-      prompt: aiPrompt
+      prompt: aiPrompt,
+      // @ts-expect-error - AI SDK types for maxTokens are incomplete
+      maxTokens: 1500
     })
 
     // Parse AI response

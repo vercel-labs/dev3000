@@ -201,13 +201,20 @@ export default function HomePage() {
       {/* Main Content - no sidebar needed with only 2 tools */}
       <main className="max-w-7xl mx-auto px-6 py-8">
         {/* MCP Connections Status */}
-        {!loading && orchestrator && (
-          <section className="mb-16">
-            <div className="bg-accent/10 border border-accent/20 rounded p-8">
-              <h2 className="text-xl font-semibold mb-4">🔌 MCP Connections</h2>
-              <p className="text-sm text-muted-foreground mb-4">{orchestrator.message}</p>
+        <section className="mb-16">
+          <div className="bg-accent/10 border border-accent/20 rounded p-8">
+            <h2 className="text-xl font-semibold mb-4">🔌 MCP Connections</h2>
 
-              {orchestrator.totalConnections > 0 ? (
+            {loading ? (
+              <div className="h-[120px] space-y-4">
+                <div className="h-4 bg-muted rounded w-3/4 animate-pulse"></div>
+                <div className="h-12 bg-muted rounded w-1/2 animate-pulse"></div>
+              </div>
+            ) : orchestrator ? (
+              <>
+                <p className="text-sm text-muted-foreground mb-4">{orchestrator.message}</p>
+
+                {orchestrator.totalConnections > 0 ? (
                 <>
                   <div className="flex flex-wrap gap-3 mb-4">
                     {orchestrator.mcpDetails.map((mcp) => {
@@ -246,18 +253,31 @@ export default function HomePage() {
                   </p>
                 </div>
               )}
-            </div>
-          </section>
-        )}
+              </>
+            ) : null}
+          </div>
+        </section>
 
         {/* Tools Documentation */}
         <section className="bg-accent/10 border border-accent/20 rounded p-8">
           <h2 className="text-xl font-semibold mb-4">🛠️ dev3000 Tools</h2>
 
           {loading ? (
-            <div className="text-center py-16">
-              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-              <p className="mt-6 text-muted-foreground">Loading tool documentation...</p>
+            <div className="grid gap-6 lg:grid-cols-2">
+              {/* Skeleton loading states */}
+              {[1, 2].map((i) => (
+                <div
+                  key={i}
+                  className="bg-background/50 border border-border rounded-lg p-6 h-[600px] animate-pulse"
+                >
+                  <div className="h-6 bg-muted rounded w-3/4 mb-4"></div>
+                  <div className="space-y-2">
+                    <div className="h-4 bg-muted rounded"></div>
+                    <div className="h-4 bg-muted rounded w-5/6"></div>
+                    <div className="h-4 bg-muted rounded w-4/6"></div>
+                  </div>
+                </div>
+              ))}
             </div>
           ) : tools ? (
             <div className="grid gap-6 lg:grid-cols-2">
