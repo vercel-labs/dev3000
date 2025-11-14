@@ -90,9 +90,9 @@ export async function fetchRealLogs(mcpUrlOrDevUrl: string, bypassToken?: string
         console.log(`[Step 1] Browser navigation failed: ${navResponse.status}`)
       }
 
-      // Wait a bit for the page to fully load and for d3k to capture screenshots
-      console.log("[Step 1] Waiting 10s for page load and screenshot capture...")
-      await new Promise((resolve) => setTimeout(resolve, 10000))
+      // Wait for page to fully load
+      console.log("[Step 1] Waiting 5s for page load...")
+      await new Promise((resolve) => setTimeout(resolve, 5000))
 
       // Call fix_my_app with focusArea='performance' to capture CLS and jank
       console.log("[Step 1] Calling fix_my_app with focusArea='performance'...")
