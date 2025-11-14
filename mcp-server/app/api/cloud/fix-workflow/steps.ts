@@ -62,9 +62,40 @@ export async function fetchRealLogs(mcpUrlOrDevUrl: string, bypassToken?: string
     console.log(`[Step 1] Final URL: ${urlWithBypass.replace(bypassToken || "", "***")}`)
 
     if (isSandbox && mcpUrl) {
-      // Use d3k MCP server in sandbox - it has fix_my_app tool with browser automation
-      console.log("[Step 1] Using d3k MCP server fix_my_app tool...")
+      // Use d3k MCP server in sandbox - capture CLS metrics and errors
+      console.log("[Step 1] Using d3k MCP server to capture CLS metrics and errors...")
 
+      // First, navigate to the app to generate screenshots and logs
+      console.log("[Step 1] Navigating browser to app URL...")
+      const navResponse = await fetch(`${mcpUrl}/mcp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 0,
+          method: "tools/call",
+          params: {
+            name: "execute_browser_action",
+            arguments: {
+              action: "navigate",
+              params: { url: urlWithBypass }
+            }
+          }
+        })
+      })
+
+      if (navResponse.ok) {
+        console.log("[Step 1] Browser navigation completed")
+      } else {
+        console.log(`[Step 1] Browser navigation failed: ${navResponse.status}`)
+      }
+
+      // Wait a bit for the page to fully load and for d3k to capture screenshots
+      console.log("[Step 1] Waiting 10s for page load and screenshot capture...")
+      await new Promise((resolve) => setTimeout(resolve, 10000))
+
+      // Call fix_my_app with focusArea='performance' to capture CLS and jank
+      console.log("[Step 1] Calling fix_my_app with focusArea='performance'...")
       const mcpResponse = await fetch(`${mcpUrl}/mcp`, {
         method: "POST",
         headers: {
@@ -77,7 +108,12 @@ export async function fetchRealLogs(mcpUrlOrDevUrl: string, bypassToken?: string
           method: "tools/call",
           params: {
             name: "fix_my_app",
-            arguments: {}
+            arguments: {
+              mode: "snapshot",
+              focusArea: "performance",
+              timeRangeMinutes: 5,
+              returnRawData: false
+            }
           }
         })
       })
@@ -108,8 +144,8 @@ export async function fetchRealLogs(mcpUrlOrDevUrl: string, bypassToken?: string
         }
       }
 
-      console.log(`[Step 1] Got ${logAnalysis.length} chars from fix_my_app`)
-      return `d3k Analysis for ${devUrl}\n\n${logAnalysis}`
+      console.log(`[Step 1] Got ${logAnalysis.length} chars from fix_my_app (performance analysis)`)
+      return `d3k Performance Analysis for ${devUrl}\n\n${logAnalysis}`
     }
 
     // Fallback: Use AI Gateway with browser automation prompting
