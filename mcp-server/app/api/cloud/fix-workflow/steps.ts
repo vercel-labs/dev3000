@@ -7,13 +7,13 @@ import { put } from "@vercel/blob"
 import { createGateway, generateText } from "ai"
 
 /**
- * Step 1: Fetch real logs from the dev URL
- * Makes HTTP requests to capture actual errors and issues
+ * Step 1: Use browser automation to capture real errors
+ * Uses Playwright MCP via AI Gateway to navigate and capture console errors
  */
 export async function fetchRealLogs(devUrl: string, bypassToken?: string) {
   "use step"
 
-  console.log(`[Step 1] Fetching real logs from: ${devUrl}`)
+  console.log(`[Step 1] Using browser automation to fetch logs from: ${devUrl}`)
   console.log(`[Step 1] Bypass token: ${bypassToken ? "provided" : "not provided"}`)
 
   try {
@@ -22,56 +22,88 @@ export async function fetchRealLogs(devUrl: string, bypassToken?: string) {
 
     console.log(`[Step 1] Final URL: ${urlWithBypass.replace(bypassToken || "", "***")}`)
 
-    // Make HTTP request to the dev URL to capture any errors
-    const headers: HeadersInit = {
-      "User-Agent": "dev3000-cloud-fix/1.0",
-      Accept: "text/html,application/json,*/*"
-    }
-
-    // Add bypass token to headers as well (Vercel accepts both methods)
-    if (bypassToken) {
-      headers["x-vercel-protection-bypass"] = bypassToken
-    }
-
-    const response = await fetch(urlWithBypass, {
-      method: "GET",
-      headers
+    // Create AI Gateway instance
+    const gateway = createGateway({
+      apiKey: process.env.AI_GATEWAY_API_KEY,
+      baseURL: "https://ai-gateway.vercel.sh/v1/ai"
     })
 
-    console.log(`[Step 1] Response status: ${response.status}`)
-    console.log(`[Step 1] Response headers:`, Object.fromEntries(response.headers.entries()))
+    // Use Claude Sonnet 4 via AI Gateway with MCP tools
+    const model = gateway("anthropic/claude-sonnet-4-20250514")
 
-    // Get response body
-    const body = await response.text()
-    console.log(`[Step 1] Response body length: ${body.length} chars`)
+    const prompt = `You are a web application debugger with access to browser automation tools via Playwright MCP.
 
-    // Construct log analysis from the response
-    let logAnalysis = `Dev Server URL: ${devUrl}\n`
-    logAnalysis += `HTTP Status: ${response.status} ${response.statusText}\n\n`
+Your task is to visit this URL and capture any errors, warnings, or issues:
+${urlWithBypass}
 
-    // If there was an error status, capture it
-    if (!response.ok) {
-      logAnalysis += `ERROR: HTTP ${response.status} ${response.statusText}\n\n`
-    }
+Steps to follow:
+1. Use browser_eval with action="start" to start the browser
+2. Use browser_eval with action="navigate" and params={url: "${urlWithBypass}"} to navigate to the page
+3. Wait a few seconds for the page to fully load and JavaScript to execute
+4. Use browser_eval with action="console_messages" to get all browser console output (errors, warnings, logs)
+5. Use browser_eval with action="screenshot" to capture a screenshot
+6. Use browser_eval with action="close" to close the browser
 
-    // Try to extract error information from the body
-    if (body.includes("ReferenceError") || body.includes("Error") || body.includes("error")) {
-      logAnalysis += `Response body contains error information:\n${body.substring(0, 5000)}\n\n`
-    } else if (!response.ok) {
-      logAnalysis += `Response body:\n${body.substring(0, 2000)}\n\n`
-    } else {
-      logAnalysis += "No errors detected in response.\n"
-    }
+Analyze the console messages and provide a detailed report including:
+- All console errors (with full stack traces if available)
+- All console warnings
+- HTTP status codes or network errors
+- Any visual issues you can identify from the screenshot
+- Screenshot URL if captured
 
-    console.log(`[Step 1] Constructed log analysis (${logAnalysis.length} chars)`)
+Format your response as a clear, structured report that helps identify what's broken in the application.`
 
-    return logAnalysis
+    console.log("[Step 1] Invoking AI with browser automation...")
+    const { text } = await generateText({
+      model,
+      prompt,
+      toolChoice: "auto",
+      // @ts-expect-error - AI SDK types for maxTokens are incomplete
+      maxTokens: 4000
+    })
+
+    console.log(`[Step 1] Browser automation response (first 500 chars): ${text.substring(0, 500)}...`)
+
+    return `Browser Automation Analysis for ${devUrl}\n\n${text}`
   } catch (error) {
-    console.error("[Step 1] Error fetching logs:", error)
+    console.error("[Step 1] Error with browser automation:", error)
 
-    // If fetch fails, return error information
-    const errorMessage = error instanceof Error ? error.message : String(error)
-    return `Failed to fetch logs from ${devUrl}\n\nError: ${errorMessage}\n\nThis may indicate the dev server is not accessible or has crashed.`
+    // Fallback to simple fetch if browser automation fails
+    console.log("[Step 1] Falling back to simple HTTP fetch...")
+    try {
+      const urlWithBypass = bypassToken ? `${devUrl}?x-vercel-protection-bypass=${bypassToken}` : devUrl
+      const headers: HeadersInit = {
+        "User-Agent": "dev3000-cloud-fix/1.0",
+        Accept: "text/html,application/json,*/*"
+      }
+      if (bypassToken) {
+        headers["x-vercel-protection-bypass"] = bypassToken
+      }
+
+      const response = await fetch(urlWithBypass, { method: "GET", headers })
+      const body = await response.text()
+
+      let logAnalysis = `Dev Server URL: ${devUrl}\n`
+      logAnalysis += `HTTP Status: ${response.status} ${response.statusText}\n\n`
+      logAnalysis += `Note: Browser automation failed, using fallback HTTP fetch.\n\n`
+
+      if (!response.ok) {
+        logAnalysis += `ERROR: HTTP ${response.status} ${response.statusText}\n\n`
+      }
+
+      if (body.includes("ReferenceError") || body.includes("Error") || body.includes("error")) {
+        logAnalysis += `Response body contains error information:\n${body.substring(0, 5000)}\n\n`
+      } else if (!response.ok) {
+        logAnalysis += `Response body:\n${body.substring(0, 2000)}\n\n`
+      } else {
+        logAnalysis += "No errors detected in response.\n"
+      }
+
+      return logAnalysis
+    } catch (fallbackError) {
+      const errorMessage = fallbackError instanceof Error ? fallbackError.message : String(fallbackError)
+      return `Failed to fetch logs from ${devUrl}\n\nError: ${errorMessage}\n\nThis may indicate the dev server is not accessible or has crashed.`
+    }
   }
 }
 
