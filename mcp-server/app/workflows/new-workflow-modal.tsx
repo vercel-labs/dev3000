@@ -56,6 +56,9 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   const [workflowResult, setWorkflowResult] = useState<any>(null)
   const [baseBranch, setBaseBranch] = useState("main")
   const [autoCreatePR, setAutoCreatePR] = useState(true)
+  const [bypassToken, setBypassToken] = useState("")
+  const [isCheckingProtection, setIsCheckingProtection] = useState(false)
+  const [needsBypassToken, setNeedsBypassToken] = useState(false)
   const loadedTeamIdRef = useRef<string | null>(null)
 
   // Restore state from URL whenever searchParams change
@@ -101,6 +104,8 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       setWorkflowResult(null)
       setBaseBranch("main")
       setAutoCreatePR(true)
+      setBypassToken("")
+      setNeedsBypassToken(false)
       setProjectsError(null)
       loadedTeamIdRef.current = null
       router.replace("/workflows", { scroll: false })
@@ -134,6 +139,33 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       loadProjects(selectedTeam)
     }
   }, [selectedTeam, loadingProjects])
+
+  // Check if deployment is protected when project is selected
+  useEffect(() => {
+    async function checkDeploymentProtection() {
+      if (!selectedProject || step !== "options") return
+
+      const latestDeployment = selectedProject.latestDeployments[0]
+      if (!latestDeployment) return
+
+      setIsCheckingProtection(true)
+      try {
+        const devUrl = `https://${latestDeployment.url}`
+        const response = await fetch(devUrl, { method: "HEAD" })
+
+        // If we get 401, deployment is protected
+        setNeedsBypassToken(response.status === 401)
+      } catch (error) {
+        console.error("Failed to check deployment protection:", error)
+        // Assume not protected on error
+        setNeedsBypassToken(false)
+      } finally {
+        setIsCheckingProtection(false)
+      }
+    }
+
+    checkDeploymentProtection()
+  }, [selectedProject, step])
 
   // Restore project from URL once projects are loaded
   useEffect(() => {
@@ -200,19 +232,6 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
     setWorkflowStatus("Starting workflow...")
 
     try {
-      // Generate deployment protection bypass token for this project
-      setWorkflowStatus("Generating deployment protection bypass token...")
-      const bypassResponse = await fetch(`/api/projects/${selectedProject.id}/bypass-token?teamId=${selectedTeam.id}`, {
-        method: "POST"
-      })
-
-      if (!bypassResponse.ok) {
-        throw new Error("Failed to generate deployment protection bypass token")
-      }
-
-      const bypassData = await bypassResponse.json()
-      const bypassToken = bypassData.token
-
       // Get the latest deployment URL
       const latestDeployment = selectedProject.latestDeployments[0]
       if (!latestDeployment) {
@@ -463,6 +482,37 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                     This project is not connected to a GitHub repository. PRs cannot be created automatically.
                   </div>
                 )}
+                {isCheckingProtection && (
+                  <div className="text-sm text-gray-500">Checking deployment protection...</div>
+                )}
+                {needsBypassToken && (
+                  <div>
+                    <label htmlFor="bypassToken" className="block text-sm font-medium text-gray-700 mb-1">
+                      Deployment Protection Bypass Token
+                      <span className="text-red-500 ml-1">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      id="bypassToken"
+                      value={bypassToken}
+                      onChange={(e) => setBypassToken(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md font-mono text-sm"
+                      placeholder="Enter your 32-character bypass token"
+                      required
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      This deployment is protected. Get your bypass token from{" "}
+                      <a
+                        href="https://vercel.com/docs/deployment-protection/methods-to-bypass-deployment-protection/protection-bypass-automation"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:underline"
+                      >
+                        Vercel Dashboard → Project Settings → Deployment Protection
+                      </a>
+                    </p>
+                  </div>
+                )}
               </div>
               <div className="flex gap-3 mt-6">
                 <Link
@@ -474,7 +524,8 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                 <button
                   type="button"
                   onClick={startWorkflow}
-                  className="flex-1 px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                  disabled={needsBypassToken && !bypassToken}
+                  className="flex-1 px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Start Workflow
                 </button>
