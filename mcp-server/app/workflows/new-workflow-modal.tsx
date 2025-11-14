@@ -64,6 +64,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
     Array<{ name: string; lastDeployment: { url: string; createdAt: number } }>
   >([])
   const [loadingBranches, setLoadingBranches] = useState(false)
+  const [branchesError, setBranchesError] = useState(false)
   const loadedTeamIdRef = useRef<string | null>(null)
 
   // Restore state from URL whenever searchParams change
@@ -114,6 +115,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       setProjectsError(null)
       setAvailableBranches([])
       setLoadingBranches(false)
+      setBranchesError(false)
       loadedTeamIdRef.current = null
       router.replace("/workflows", { scroll: false })
     }
@@ -153,10 +155,17 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   // Load branches when project and team are selected and on options step
   // biome-ignore lint/correctness/useExhaustiveDependencies: loadBranches is stable and doesn't need to be a dependency
   useEffect(() => {
-    if (selectedProject && selectedTeam && step === "options" && availableBranches.length === 0 && !loadingBranches) {
+    if (
+      selectedProject &&
+      selectedTeam &&
+      step === "options" &&
+      availableBranches.length === 0 &&
+      !loadingBranches &&
+      !branchesError
+    ) {
       loadBranches(selectedProject, selectedTeam)
     }
-  }, [selectedProject, selectedTeam, step, availableBranches.length, loadingBranches])
+  }, [selectedProject, selectedTeam, step, availableBranches.length, loadingBranches, branchesError])
 
   // Check if deployment is protected when project is selected and on options step
   useEffect(() => {
@@ -239,6 +248,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
 
   async function loadBranches(project: Project, team: Team) {
     setLoadingBranches(true)
+    setBranchesError(false)
     try {
       const url = team.isPersonal
         ? `/api/projects/branches?projectId=${project.id}`
@@ -255,10 +265,14 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
           const mainBranch = data.branches.find((b: { name: string }) => b.name === "main")
           setBaseBranch(mainBranch?.name || data.branches[0].name)
         }
+      } else {
+        // API call succeeded but returned error (like 403)
+        setBranchesError(true)
+        console.warn("Failed to fetch branches:", data.error)
       }
     } catch (error) {
       console.error("Failed to load branches:", error)
-      // Keep default "main" if fetch fails
+      setBranchesError(true)
     } finally {
       setLoadingBranches(false)
     }
@@ -548,33 +562,40 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                     {loadingBranches ? (
                       <div className="text-sm text-gray-500 py-2">Loading branches...</div>
                     ) : availableBranches.length > 0 ? (
-                      <select
-                        id={baseBranchId}
-                        value={baseBranch}
-                        onChange={(e) => setBaseBranch(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                      >
-                        {availableBranches.map((branch) => (
-                          <option key={branch.name} value={branch.name}>
-                            {branch.name} (deployed {new Date(branch.lastDeployment.createdAt).toLocaleDateString()})
-                          </option>
-                        ))}
-                      </select>
+                      <>
+                        <select
+                          id={baseBranchId}
+                          value={baseBranch}
+                          onChange={(e) => setBaseBranch(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                        >
+                          {availableBranches.map((branch) => (
+                            <option key={branch.name} value={branch.name}>
+                              {branch.name} (deployed {new Date(branch.lastDeployment.createdAt).toLocaleDateString()})
+                            </option>
+                          ))}
+                        </select>
+                        <p className="text-xs text-gray-500 mt-1">
+                          Showing branches with recent deployments (last {availableBranches.length} branch
+                          {availableBranches.length !== 1 ? "es" : ""})
+                        </p>
+                      </>
                     ) : (
-                      <input
-                        type="text"
-                        id={baseBranchId}
-                        value={baseBranch}
-                        onChange={(e) => setBaseBranch(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                        placeholder="main"
-                      />
-                    )}
-                    {availableBranches.length > 0 && (
-                      <p className="text-xs text-gray-500 mt-1">
-                        Showing branches with recent deployments (last {availableBranches.length} branch
-                        {availableBranches.length !== 1 ? "es" : ""})
-                      </p>
+                      <>
+                        <input
+                          type="text"
+                          id={baseBranchId}
+                          value={baseBranch}
+                          onChange={(e) => setBaseBranch(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                          placeholder="main"
+                        />
+                        {branchesError && (
+                          <p className="text-xs text-amber-600 mt-1">
+                            Unable to load branches automatically. Please enter the branch name manually.
+                          </p>
+                        )}
+                      </>
                     )}
                   </div>
                 )}
