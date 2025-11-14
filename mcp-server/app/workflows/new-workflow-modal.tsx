@@ -284,7 +284,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       // If we have repo info, pass it for sandbox creation
       if (repoOwner && repoName) {
         body.repoUrl = `https://github.com/${repoOwner}/${repoName}`
-        body.repoBranch = selectedProject.link?.gitBranch || baseBranch || "main"
+        body.repoBranch = baseBranch || "main"
       }
 
       if (autoCreatePR && repoOwner && repoName) {
