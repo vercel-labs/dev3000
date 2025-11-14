@@ -115,7 +115,10 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     if (debug) console.log("  🚀 Starting d3k...")
     await sandbox.runCommand({
       cmd: "sh",
-      args: ["-c", `cd ${sandboxCwd} && d3k start --disable-tui --debug > /tmp/d3k.log 2>&1`],
+      args: [
+        "-c",
+        `cd ${sandboxCwd} && MCP_SKIP_PERMISSIONS=true d3k start --disable-tui --debug > /tmp/d3k.log 2>&1`
+      ],
       detached: true
     })
 
