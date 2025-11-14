@@ -16,7 +16,7 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json()
-    const { devUrl, repoOwner, repoName, baseBranch, bypassToken } = body
+    const { devUrl, repoOwner, repoName, baseBranch, bypassToken, repoUrl, repoBranch } = body
     userId = body.userId
     projectName = body.projectName
 
@@ -25,6 +25,10 @@ export async function POST(request: Request) {
     console.log(`[Start Fix] Project: ${projectName}`)
     console.log(`[Start Fix] User ID: ${userId}`)
     console.log(`[Start Fix] Bypass Token: ${bypassToken ? "provided" : "not provided"}`)
+    if (repoUrl) {
+      console.log(`[Start Fix] Will create sandbox from: ${repoUrl}`)
+      console.log(`[Start Fix] Branch: ${repoBranch || "main"}`)
+    }
     if (repoOwner && repoName) {
       console.log(`[Start Fix] GitHub: ${repoOwner}/${repoName} (base: ${baseBranch || "main"})`)
     }
@@ -38,7 +42,9 @@ export async function POST(request: Request) {
       ...(repoOwner && { repoOwner }),
       ...(repoName && { repoName }),
       ...(baseBranch && { baseBranch }),
-      ...(bypassToken && { bypassToken })
+      ...(bypassToken && { bypassToken }),
+      ...(repoUrl && { repoUrl }),
+      ...(repoBranch && { repoBranch })
     }
 
     const run = await start(cloudFixWorkflow, [workflowParams])
