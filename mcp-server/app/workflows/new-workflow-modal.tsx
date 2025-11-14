@@ -289,7 +289,11 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
 
       setWorkflowStatus("Analyzing deployment logs...")
 
-      const response = await fetch("/api/cloud/start-fix", {
+      // Use production API if configured, otherwise use relative path (local)
+      const apiBaseUrl = process.env.NEXT_PUBLIC_WORKFLOW_API_URL || ""
+      const apiUrl = `${apiBaseUrl}/api/cloud/start-fix`
+
+      const response = await fetch(apiUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body)
