@@ -215,44 +215,44 @@ export default function HomePage() {
                 <p className="text-sm text-muted-foreground mb-4">{orchestrator.message}</p>
 
                 {orchestrator.totalConnections > 0 ? (
-                <>
-                  <div className="flex flex-wrap gap-3 mb-4">
-                    {orchestrator.mcpDetails.map((mcp) => {
-                      const Icon =
-                        mcp.name === "chrome-devtools" ? ChromeIcon : mcp.name === "nextjs-dev" ? NextJsIcon : null
-                      return (
-                        <div
-                          key={mcp.name}
-                          className="inline-flex items-center gap-2 bg-background/50 border border-border rounded px-3 py-2"
-                        >
-                          {Icon && <Icon className="shrink-0" />}
-                          <span className="font-semibold font-mono text-sm">{mcp.name}</span>
-                          <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-                        </div>
-                      )
-                    })}
-                  </div>
-                  {orchestrator.totalProjects > 0 && (
-                    <div className="text-sm text-muted-foreground">
-                      <span className="font-medium">Active projects:</span>{" "}
-                      {orchestrator.projects.map((project, idx) => (
-                        <span key={project}>
-                          <code className="text-foreground bg-background/50 px-1.5 py-0.5 rounded">{project}</code>
-                          {idx < orchestrator.projects.length - 1 && ", "}
-                        </span>
-                      ))}
+                  <>
+                    <div className="flex flex-wrap gap-3 mb-4">
+                      {orchestrator.mcpDetails.map((mcp) => {
+                        const Icon =
+                          mcp.name === "chrome-devtools" ? ChromeIcon : mcp.name === "nextjs-dev" ? NextJsIcon : null
+                        return (
+                          <div
+                            key={mcp.name}
+                            className="inline-flex items-center gap-2 bg-background/50 border border-border rounded px-3 py-2"
+                          >
+                            {Icon && <Icon className="shrink-0" />}
+                            <span className="font-semibold font-mono text-sm">{mcp.name}</span>
+                            <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                          </div>
+                        )
+                      })}
                     </div>
-                  )}
-                </>
-              ) : (
-                <div className="text-sm text-muted-foreground bg-background/50 border border-border rounded p-4">
-                  <p className="mb-2">⏳ Waiting for downstream MCPs to become available...</p>
-                  <p className="text-xs">
-                    dev3000 will automatically connect to <code className="text-foreground">chrome-devtools</code> and{" "}
-                    <code className="text-foreground">nextjs-dev</code> MCPs when Chrome and your dev server start.
-                  </p>
-                </div>
-              )}
+                    {orchestrator.totalProjects > 0 && (
+                      <div className="text-sm text-muted-foreground">
+                        <span className="font-medium">Active projects:</span>{" "}
+                        {orchestrator.projects.map((project, idx) => (
+                          <span key={project}>
+                            <code className="text-foreground bg-background/50 px-1.5 py-0.5 rounded">{project}</code>
+                            {idx < orchestrator.projects.length - 1 && ", "}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="text-sm text-muted-foreground bg-background/50 border border-border rounded p-4">
+                    <p className="mb-2">⏳ Waiting for downstream MCPs to become available...</p>
+                    <p className="text-xs">
+                      dev3000 will automatically connect to <code className="text-foreground">chrome-devtools</code> and{" "}
+                      <code className="text-foreground">nextjs-dev</code> MCPs when Chrome and your dev server start.
+                    </p>
+                  </div>
+                )}
               </>
             ) : null}
           </div>
@@ -266,10 +266,7 @@ export default function HomePage() {
             <div className="grid gap-6 lg:grid-cols-2">
               {/* Skeleton loading states */}
               {[1, 2].map((i) => (
-                <div
-                  key={i}
-                  className="bg-background/50 border border-border rounded-lg p-6 h-[600px] animate-pulse"
-                >
+                <div key={i} className="bg-background/50 border border-border rounded-lg p-6 h-[600px] animate-pulse">
                   <div className="h-6 bg-muted rounded w-3/4 mb-4"></div>
                   <div className="space-y-2">
                     <div className="h-4 bg-muted rounded"></div>

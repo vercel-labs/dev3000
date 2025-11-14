@@ -1,9 +1,6 @@
 import { cookies } from "next/headers"
 
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ projectId: string }> }
-) {
+export async function POST(request: Request, { params }: { params: Promise<{ projectId: string }> }) {
   try {
     const { projectId } = await params
     const url = new URL(request.url)
@@ -35,10 +32,7 @@ export async function POST(
     if (!response.ok) {
       const error = await response.text()
       console.error("Failed to generate bypass token:", response.status, error)
-      return Response.json(
-        { error: "Failed to generate bypass token", details: error },
-        { status: response.status }
-      )
+      return Response.json({ error: "Failed to generate bypass token", details: error }, { status: response.status })
     }
 
     const data = await response.json()
@@ -49,9 +43,6 @@ export async function POST(
     })
   } catch (error) {
     console.error("Error generating bypass token:", error)
-    return Response.json(
-      { error: error instanceof Error ? error.message : String(error) },
-      { status: 500 }
-    )
+    return Response.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 })
   }
 }
