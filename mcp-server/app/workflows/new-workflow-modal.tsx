@@ -245,6 +245,10 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
           // Then alphabetically by name (case-insensitive)
           return a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
         })
+        console.log(
+          "Teams sorted:",
+          sortedTeams.map((t) => t.name)
+        )
         setTeams(sortedTeams)
       }
     } catch (error) {
