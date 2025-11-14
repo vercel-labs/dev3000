@@ -10,12 +10,18 @@ import { createD3kSandbox as createD3kSandboxUtil } from "@/lib/cloud/d3k-sandbo
 /**
  * Step 0: Create d3k sandbox with MCP tools pre-configured
  */
-export async function createD3kSandbox(repoUrl: string, branch: string, projectName: string) {
+export async function createD3kSandbox(repoUrl: string, branch: string, projectName: string, vercelToken?: string) {
   "use step"
 
   console.log(`[Step 0] Creating d3k sandbox for ${projectName}...`)
   console.log(`[Step 0] Repository: ${repoUrl}`)
   console.log(`[Step 0] Branch: ${branch}`)
+
+  // Set token as environment variable for d3k-sandbox utility
+  if (vercelToken) {
+    process.env.VERCEL_TOKEN = vercelToken
+    console.log("[Step 0] Using provided Vercel access token")
+  }
 
   const sandboxResult = await createD3kSandboxUtil({
     repoUrl,

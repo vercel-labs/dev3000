@@ -11,6 +11,7 @@
 export async function cloudFixWorkflow(params: {
   devUrl: string
   projectName: string
+  vercelToken?: string
   repoOwner?: string
   repoName?: string
   baseBranch?: string
@@ -20,7 +21,17 @@ export async function cloudFixWorkflow(params: {
 }) {
   "use workflow"
 
-  const { devUrl, projectName, repoOwner, repoName, baseBranch = "main", bypassToken, repoUrl, repoBranch } = params
+  const {
+    devUrl,
+    projectName,
+    vercelToken,
+    repoOwner,
+    repoName,
+    baseBranch = "main",
+    bypassToken,
+    repoUrl,
+    repoBranch
+  } = params
 
   console.log("[Workflow] Starting cloud fix workflow...")
   console.log(`[Workflow] Dev URL: ${devUrl}`)
@@ -39,7 +50,7 @@ export async function cloudFixWorkflow(params: {
   // Step 0: Create d3k sandbox if repoUrl provided
   let sandboxInfo: { mcpUrl: string; devUrl: string; cleanup: () => Promise<void> } | null = null
   if (repoUrl) {
-    sandboxInfo = await createD3kSandbox(repoUrl, repoBranch || "main", projectName)
+    sandboxInfo = await createD3kSandbox(repoUrl, repoBranch || "main", projectName, vercelToken)
   }
 
   try {
@@ -71,10 +82,10 @@ export async function cloudFixWorkflow(params: {
 }
 
 // Step function wrappers that dynamically import the actual implementations
-async function createD3kSandbox(repoUrl: string, branch: string, projectName: string) {
+async function createD3kSandbox(repoUrl: string, branch: string, projectName: string, vercelToken?: string) {
   "use step"
   const { createD3kSandbox } = await import("./steps")
-  return createD3kSandbox(repoUrl, branch, projectName)
+  return createD3kSandbox(repoUrl, branch, projectName, vercelToken)
 }
 
 async function fetchRealLogs(mcpUrlOrDevUrl: string, bypassToken?: string, sandboxDevUrl?: string) {

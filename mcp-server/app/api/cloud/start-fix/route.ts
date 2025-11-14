@@ -15,6 +15,18 @@ export async function POST(request: Request) {
   let projectName: string | undefined
 
   try {
+    // Get user's access token from cookies for Vercel API access
+    const { cookies: getCookies } = await import("next/headers")
+    const cookieStore = await getCookies()
+    const accessToken = cookieStore.get("access_token")?.value
+
+    if (!accessToken) {
+      return Response.json(
+        { success: false, error: "Not authenticated. Please sign in to use workflows." },
+        { status: 401 }
+      )
+    }
+
     const body = await request.json()
     const { devUrl, repoOwner, repoName, baseBranch, bypassToken, repoUrl, repoBranch } = body
     userId = body.userId
@@ -39,6 +51,7 @@ export async function POST(request: Request) {
     const workflowParams: Parameters<typeof cloudFixWorkflow>[0] = {
       devUrl,
       projectName,
+      vercelToken: accessToken, // Pass user's access token for sandbox creation
       ...(repoOwner && { repoOwner }),
       ...(repoName && { repoName }),
       ...(baseBranch && { baseBranch }),
