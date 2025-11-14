@@ -138,10 +138,13 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   // Restore project from URL once projects are loaded
   useEffect(() => {
     const projectParam = searchParams.get("project")
-    if (projectParam && projects.length > 0 && !selectedProject) {
-      const project = projects.find((p) => p.id === projectParam)
-      if (project) {
-        setSelectedProject(project)
+    if (projectParam && projects.length > 0) {
+      // Update if no project selected OR if the URL project differs from selected
+      if (!selectedProject || selectedProject.id !== projectParam) {
+        const project = projects.find((p) => p.id === projectParam)
+        if (project) {
+          setSelectedProject(project)
+        }
       }
     }
   }, [projects, searchParams, selectedProject])
@@ -256,7 +259,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
         <div className="p-6">
           <div className="flex justify-between items-start mb-6">
-            <h2 className="text-2xl font-bold text-gray-900">New Workflow</h2>
+            <h2 className="text-2xl font-bold text-gray-900">New d3k Workflow</h2>
             <button
               type="button"
               onClick={onClose}
@@ -278,8 +281,8 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                     className={`w-8 h-8 rounded-full flex items-center justify-center ${
                       step === s
                         ? "bg-blue-600 text-white"
-                        : ["type", "team", "project", "options"].indexOf(step) >
-                            ["type", "team", "project", "options"].indexOf(s)
+                        : ["type", "team", "project", "options", "running"].indexOf(step) >
+                            ["type", "team", "project", "options", "running"].indexOf(s)
                           ? "bg-green-600 text-white"
                           : "bg-gray-200 text-gray-600"
                     }`}
@@ -314,7 +317,18 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                     Analyze deployment logs for errors and generate fix proposals
                   </div>
                 </Link>
+                <Link
+                  href="/workflows/new?type=next-16-migration"
+                  className="block w-full p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 text-left transition-colors"
+                >
+                  <div className="font-semibold">Next.js 16 Migration</div>
+                  <div className="text-sm text-gray-600 mt-1">
+                    Upgrade your project to Next.js 16 with automated codemods and fixes
+                  </div>
+                </Link>
               </div>
+              {/* Reserve space for Back link to prevent CLS */}
+              <div className="mt-4 h-10" aria-hidden="true" />
             </div>
           )}
 
