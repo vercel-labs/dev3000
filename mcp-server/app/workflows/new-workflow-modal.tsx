@@ -242,8 +242,8 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
           // Personal accounts first
           if (a.isPersonal && !b.isPersonal) return -1
           if (!a.isPersonal && b.isPersonal) return 1
-          // Then alphabetically by name
-          return a.name.localeCompare(b.name)
+          // Then alphabetically by name (case-insensitive)
+          return a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
         })
         setTeams(sortedTeams)
       }
