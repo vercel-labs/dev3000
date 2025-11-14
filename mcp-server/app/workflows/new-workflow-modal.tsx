@@ -468,7 +468,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
           {/* Step 2: Select Team */}
           {step === "team" && (
             <div>
-              <h3 className="text-lg font-semibold mb-4">Select Team or Personal Account</h3>
+              <h3 className="text-lg font-semibold mb-4">Select Team</h3>
               {loadingTeams ? (
                 <div className="text-center py-8 text-gray-500">Loading teams...</div>
               ) : (
