@@ -57,13 +57,27 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     console.log(`  Framework: ${framework}`)
   }
 
+  // Check for required credentials
+  const token = process.env.VERCEL_TOKEN || process.env.VERCEL_OIDC_TOKEN
+  if (!token) {
+    throw new Error(
+      "Missing VERCEL_TOKEN or VERCEL_OIDC_TOKEN environment variable. " +
+        "Vercel AI Workflows should automatically provide VERCEL_OIDC_TOKEN. " +
+        "Check your workflow configuration and ensure it has access to Vercel API credentials."
+    )
+  }
+
+  if (debug) {
+    console.log(`  Token type: ${process.env.VERCEL_OIDC_TOKEN ? "OIDC" : "static"}`)
+  }
+
   // Create sandbox
   // biome-ignore lint/suspicious/noExplicitAny: ms type inference issue
   const timeoutMs = ms(timeout as any) as unknown as number
   const sandbox = await Sandbox.create({
     teamId: process.env.VERCEL_TEAM_ID || "team_nLlpyC6REAqxydlFKbrMDlud",
     projectId: process.env.VERCEL_PROJECT_ID || "prj_21F00Vr3bXzc1VSC8D9j2YJUzd0Q",
-    token: process.env.VERCEL_TOKEN || process.env.VERCEL_OIDC_TOKEN,
+    token,
     source: {
       url: `${repoUrl}.git`,
       type: "git",
