@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useId, useRef, useState } from "react"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { AlertCircle } from "lucide-react"
 
 interface Team {
   id: string
@@ -525,10 +527,11 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                 </div>
               )}
               {projectsError && (
-                <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-                  <div className="text-sm font-medium text-red-900">Error</div>
-                  <div className="text-sm text-red-700 mt-1">{projectsError}</div>
-                </div>
+                <Alert variant="destructive" className="mb-4">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Error</AlertTitle>
+                  <AlertDescription>{projectsError}</AlertDescription>
+                </Alert>
               )}
               {loadingProjects ? (
                 <div className="text-center py-8 text-gray-500">Loading projects...</div>
@@ -700,36 +703,48 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
             <div>
               <h3 className="text-lg font-semibold mb-4">Workflow Status</h3>
               <div className="space-y-4">
-                <div className="p-4 bg-blue-50 rounded-lg">
-                  <div className="text-sm font-medium text-blue-900">{workflowStatus}</div>
-                </div>
+                <Alert
+                  variant={workflowStatus.includes("Error") || workflowStatus.includes("failed") ? "destructive" : "default"}
+                  className={workflowStatus.includes("Error") || workflowStatus.includes("failed") ? "" : "bg-blue-50 border-blue-200"}
+                >
+                  {(workflowStatus.includes("Error") || workflowStatus.includes("failed")) && (
+                    <AlertCircle className="h-4 w-4" />
+                  )}
+                  <AlertDescription className={workflowStatus.includes("Error") || workflowStatus.includes("failed") ? "" : "text-blue-900"}>
+                    {workflowStatus}
+                  </AlertDescription>
+                </Alert>
                 {workflowResult && (
                   <div className="space-y-3">
                     {workflowResult.blobUrl && (
-                      <div className="p-4 bg-green-50 rounded-lg">
-                        <div className="text-sm font-medium text-green-900 mb-2">Fix Proposal Generated</div>
-                        <a
-                          href={workflowResult.blobUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 hover:text-blue-800 underline text-sm"
-                        >
-                          View Report
-                        </a>
-                      </div>
+                      <Alert className="bg-green-50 border-green-200">
+                        <AlertTitle className="text-green-900">Fix Proposal Generated</AlertTitle>
+                        <AlertDescription>
+                          <a
+                            href={workflowResult.blobUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-primary hover:underline"
+                          >
+                            View Report
+                          </a>
+                        </AlertDescription>
+                      </Alert>
                     )}
                     {workflowResult.pr?.prUrl && (
-                      <div className="p-4 bg-green-50 rounded-lg">
-                        <div className="text-sm font-medium text-green-900 mb-2">GitHub PR Created</div>
-                        <a
-                          href={workflowResult.pr.prUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 hover:text-blue-800 underline text-sm"
-                        >
-                          View Pull Request
-                        </a>
-                      </div>
+                      <Alert className="bg-green-50 border-green-200">
+                        <AlertTitle className="text-green-900">GitHub PR Created</AlertTitle>
+                        <AlertDescription>
+                          <a
+                            href={workflowResult.pr.prUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-primary hover:underline"
+                          >
+                            View Pull Request
+                          </a>
+                        </AlertDescription>
+                      </Alert>
                     )}
                   </div>
                 )}

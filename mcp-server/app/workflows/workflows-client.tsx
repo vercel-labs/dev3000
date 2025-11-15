@@ -2,10 +2,11 @@
 
 import Link from "next/link"
 import { useState } from "react"
-import type { WorkflowRun } from "@/lib/workflow-storage"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Badge } from "@/components/ui/badge"
+import type { WorkflowRun } from "@/lib/workflow-storage"
 
 interface UserInfo {
   id: string
@@ -79,17 +80,11 @@ export default function WorkflowsClient({ user, initialRuns }: WorkflowsClientPr
                       <div className="text-xs text-muted-foreground">{run.id}</div>
                     </TableCell>
                     <TableCell>
-                      <span
-                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          run.status === "success" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
-                        }`}
-                      >
+                      <Badge variant={run.status === "success" ? "secondary" : "destructive"} className={run.status === "success" ? "bg-green-100 text-green-800 hover:bg-green-100" : ""}>
                         {run.status}
-                      </span>
+                      </Badge>
                     </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {new Date(run.timestamp).toLocaleString()}
-                    </TableCell>
+                    <TableCell className="text-muted-foreground">{new Date(run.timestamp).toLocaleString()}</TableCell>
                     <TableCell>
                       {run.reportBlobUrl ? (
                         <a

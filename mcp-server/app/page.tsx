@@ -3,9 +3,9 @@
 import { useEffect, useState } from "react"
 import { DarkModeToggle } from "@/components/dark-mode-toggle"
 import { ChromeIcon, NextJsIcon } from "@/components/mcp-icons"
-import { useDarkMode } from "@/hooks/use-dark-mode"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { useDarkMode } from "@/hooks/use-dark-mode"
 
 interface MCPTool {
   name: string
@@ -206,57 +206,57 @@ export default function HomePage() {
               <CardTitle>🔌 MCP Connections</CardTitle>
             </CardHeader>
             <CardContent>
+              {loading ? (
+                <div className="h-[120px] space-y-4">
+                  <div className="h-4 bg-muted rounded w-3/4 animate-pulse"></div>
+                  <div className="h-12 bg-muted rounded w-1/2 animate-pulse"></div>
+                </div>
+              ) : orchestrator ? (
+                <>
+                  <p className="text-sm text-muted-foreground mb-4">{orchestrator.message}</p>
 
-            {loading ? (
-              <div className="h-[120px] space-y-4">
-                <div className="h-4 bg-muted rounded w-3/4 animate-pulse"></div>
-                <div className="h-12 bg-muted rounded w-1/2 animate-pulse"></div>
-              </div>
-            ) : orchestrator ? (
-              <>
-                <p className="text-sm text-muted-foreground mb-4">{orchestrator.message}</p>
-
-                {orchestrator.totalConnections > 0 ? (
-                  <>
-                    <div className="flex flex-wrap gap-3 mb-4">
-                      {orchestrator.mcpDetails.map((mcp) => {
-                        const Icon =
-                          mcp.name === "chrome-devtools" ? ChromeIcon : mcp.name === "nextjs-dev" ? NextJsIcon : null
-                        return (
-                          <div
-                            key={mcp.name}
-                            className="inline-flex items-center gap-2 bg-background/50 border border-border rounded px-3 py-2"
-                          >
-                            {Icon && <Icon className="shrink-0" />}
-                            <span className="font-semibold font-mono text-sm">{mcp.name}</span>
-                            <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-                          </div>
-                        )
-                      })}
-                    </div>
-                    {orchestrator.totalProjects > 0 && (
-                      <div className="text-sm text-muted-foreground">
-                        <span className="font-medium">Active projects:</span>{" "}
-                        {orchestrator.projects.map((project, idx) => (
-                          <span key={project}>
-                            <code className="text-foreground bg-background/50 px-1.5 py-0.5 rounded">{project}</code>
-                            {idx < orchestrator.projects.length - 1 && ", "}
-                          </span>
-                        ))}
+                  {orchestrator.totalConnections > 0 ? (
+                    <>
+                      <div className="flex flex-wrap gap-3 mb-4">
+                        {orchestrator.mcpDetails.map((mcp) => {
+                          const Icon =
+                            mcp.name === "chrome-devtools" ? ChromeIcon : mcp.name === "nextjs-dev" ? NextJsIcon : null
+                          return (
+                            <div
+                              key={mcp.name}
+                              className="inline-flex items-center gap-2 bg-background/50 border border-border rounded px-3 py-2"
+                            >
+                              {Icon && <Icon className="shrink-0" />}
+                              <span className="font-semibold font-mono text-sm">{mcp.name}</span>
+                              <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                            </div>
+                          )
+                        })}
                       </div>
-                    )}
-                  </>
-                ) : (
-                  <div className="text-sm text-muted-foreground bg-background/50 border border-border rounded p-4">
-                    <p className="mb-2">⏳ Waiting for downstream MCPs to become available...</p>
-                    <p className="text-xs">
-                      dev3000 will automatically connect to <code className="text-foreground">chrome-devtools</code> and{" "}
-                      <code className="text-foreground">nextjs-dev</code> MCPs when Chrome and your dev server start.
-                    </p>
-                  </div>
-                )}
-              </>
-            ) : null}
+                      {orchestrator.totalProjects > 0 && (
+                        <div className="text-sm text-muted-foreground">
+                          <span className="font-medium">Active projects:</span>{" "}
+                          {orchestrator.projects.map((project, idx) => (
+                            <span key={project}>
+                              <code className="text-foreground bg-background/50 px-1.5 py-0.5 rounded">{project}</code>
+                              {idx < orchestrator.projects.length - 1 && ", "}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="text-sm text-muted-foreground bg-background/50 border border-border rounded p-4">
+                      <p className="mb-2">⏳ Waiting for downstream MCPs to become available...</p>
+                      <p className="text-xs">
+                        dev3000 will automatically connect to <code className="text-foreground">chrome-devtools</code>{" "}
+                        and <code className="text-foreground">nextjs-dev</code> MCPs when Chrome and your dev server
+                        start.
+                      </p>
+                    </div>
+                  )}
+                </>
+              ) : null}
             </CardContent>
           </Card>
         </section>
@@ -267,63 +267,62 @@ export default function HomePage() {
             <CardTitle>🛠️ dev3000 Tools</CardTitle>
           </CardHeader>
           <CardContent>
-
-          {loading ? (
-            <div className="grid gap-6 lg:grid-cols-2">
-              {/* Skeleton loading states */}
-              {[1, 2].map((i) => (
-                <div key={i} className="bg-background/50 border border-border rounded-lg p-6 h-[600px] animate-pulse">
-                  <div className="h-6 bg-muted rounded w-3/4 mb-4"></div>
-                  <div className="space-y-2">
-                    <div className="h-4 bg-muted rounded"></div>
-                    <div className="h-4 bg-muted rounded w-5/6"></div>
-                    <div className="h-4 bg-muted rounded w-4/6"></div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : tools ? (
-            <div className="grid gap-6 lg:grid-cols-2">
-              {tools.tools.map((tool) => (
-                <div
-                  key={tool.name}
-                  id={tool.name}
-                  className="bg-background/50 border border-border rounded-lg p-6 hover:border-muted-foreground/50 transition-colors"
-                >
-                  <div className="mb-4">
-                    <h4 className="text-xl font-semibold font-mono mb-3">{tool.name}</h4>
-                    <div className="text-muted-foreground space-y-3">{formatToolDescription(tool.description)}</div>
-                  </div>
-                  {tool.parameters.length > 0 && (
-                    <div>
-                      <h5 className="text-sm font-semibold mb-3">Parameters:</h5>
-                      <div className="space-y-2">
-                        {tool.parameters.map((param) => (
-                          <div key={param.name} className="text-sm">
-                            <div className="flex items-start gap-2">
-                              <span className="font-mono text-primary font-medium">{param.name}</span>
-                              <span className="text-muted-foreground text-xs">
-                                {param.optional ? "(optional)" : "(required)"}
-                              </span>
-                              <span className="text-muted-foreground/70 text-xs">- {param.type}</span>
-                            </div>
-                            {param.description && (
-                              <div className="text-muted-foreground ml-1 mt-1 text-sm">{param.description}</div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
+            {loading ? (
+              <div className="grid gap-6 lg:grid-cols-2">
+                {/* Skeleton loading states */}
+                {[1, 2].map((i) => (
+                  <div key={i} className="bg-background/50 border border-border rounded-lg p-6 h-[600px] animate-pulse">
+                    <div className="h-6 bg-muted rounded w-3/4 mb-4"></div>
+                    <div className="space-y-2">
+                      <div className="h-4 bg-muted rounded"></div>
+                      <div className="h-4 bg-muted rounded w-5/6"></div>
+                      <div className="h-4 bg-muted rounded w-4/6"></div>
                     </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-16">
-              <p className="text-destructive mb-6">Failed to load tool documentation</p>
-              <Button onClick={() => window.location.reload()}>Retry</Button>
-            </div>
-          )}
+                  </div>
+                ))}
+              </div>
+            ) : tools ? (
+              <div className="grid gap-6 lg:grid-cols-2">
+                {tools.tools.map((tool) => (
+                  <div
+                    key={tool.name}
+                    id={tool.name}
+                    className="bg-background/50 border border-border rounded-lg p-6 hover:border-muted-foreground/50 transition-colors"
+                  >
+                    <div className="mb-4">
+                      <h4 className="text-xl font-semibold font-mono mb-3">{tool.name}</h4>
+                      <div className="text-muted-foreground space-y-3">{formatToolDescription(tool.description)}</div>
+                    </div>
+                    {tool.parameters.length > 0 && (
+                      <div>
+                        <h5 className="text-sm font-semibold mb-3">Parameters:</h5>
+                        <div className="space-y-2">
+                          {tool.parameters.map((param) => (
+                            <div key={param.name} className="text-sm">
+                              <div className="flex items-start gap-2">
+                                <span className="font-mono text-primary font-medium">{param.name}</span>
+                                <span className="text-muted-foreground text-xs">
+                                  {param.optional ? "(optional)" : "(required)"}
+                                </span>
+                                <span className="text-muted-foreground/70 text-xs">- {param.type}</span>
+                              </div>
+                              {param.description && (
+                                <div className="text-muted-foreground ml-1 mt-1 text-sm">{param.description}</div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-16">
+                <p className="text-destructive mb-6">Failed to load tool documentation</p>
+                <Button onClick={() => window.location.reload()}>Retry</Button>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -333,35 +332,35 @@ export default function HomePage() {
             <CardTitle className="text-2xl">🪄 The Magic Workflow</CardTitle>
           </CardHeader>
           <CardContent>
-          <div className="grid md:grid-cols-3 gap-8">
-            <div className="text-center">
-              <div className="w-16 h-16 bg-primary/20 rounded-full flex items-center justify-center mx-auto mb-4 shadow-md">
-                <span className="text-primary font-bold text-2xl">1</span>
+            <div className="grid md:grid-cols-3 gap-8">
+              <div className="text-center">
+                <div className="w-16 h-16 bg-primary/20 rounded-full flex items-center justify-center mx-auto mb-4 shadow-md">
+                  <span className="text-primary font-bold text-2xl">1</span>
+                </div>
+                <h3 className="font-semibold mb-3 text-lg">AI Finds Issues</h3>
+                <p className="text-muted-foreground leading-relaxed">
+                  fix_my_app automatically detects all types of errors and problems in your app
+                </p>
               </div>
-              <h3 className="font-semibold mb-3 text-lg">AI Finds Issues</h3>
-              <p className="text-muted-foreground leading-relaxed">
-                fix_my_app automatically detects all types of errors and problems in your app
-              </p>
-            </div>
-            <div className="text-center">
-              <div className="w-16 h-16 bg-accent/20 rounded-full flex items-center justify-center mx-auto mb-4 shadow-md">
-                <span className="text-accent-foreground font-bold text-2xl">2</span>
+              <div className="text-center">
+                <div className="w-16 h-16 bg-accent/20 rounded-full flex items-center justify-center mx-auto mb-4 shadow-md">
+                  <span className="text-accent-foreground font-bold text-2xl">2</span>
+                </div>
+                <h3 className="font-semibold mb-3 text-lg">AI Fixes Code</h3>
+                <p className="text-muted-foreground leading-relaxed">
+                  AI analyzes errors and edits your code files to resolve issues
+                </p>
               </div>
-              <h3 className="font-semibold mb-3 text-lg">AI Fixes Code</h3>
-              <p className="text-muted-foreground leading-relaxed">
-                AI analyzes errors and edits your code files to resolve issues
-              </p>
-            </div>
-            <div className="text-center">
-              <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4 shadow-md">
-                <span className="text-green-600 dark:text-green-400 font-bold text-2xl">3</span>
+              <div className="text-center">
+                <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4 shadow-md">
+                  <span className="text-green-600 dark:text-green-400 font-bold text-2xl">3</span>
+                </div>
+                <h3 className="font-semibold mb-3 text-lg">AI Verifies Fixes</h3>
+                <p className="text-muted-foreground leading-relaxed">
+                  execute_browser_action tests the fixes in real-time with screenshots
+                </p>
               </div>
-              <h3 className="font-semibold mb-3 text-lg">AI Verifies Fixes</h3>
-              <p className="text-muted-foreground leading-relaxed">
-                execute_browser_action tests the fixes in real-time with screenshots
-              </p>
             </div>
-          </div>
           </CardContent>
         </Card>
       </main>
