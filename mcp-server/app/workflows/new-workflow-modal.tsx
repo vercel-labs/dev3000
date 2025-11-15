@@ -1,12 +1,14 @@
 "use client"
 
+import { AlertCircle } from "lucide-react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useId, useRef, useState } from "react"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { AlertCircle } from "lucide-react"
+import { Progress } from "@/components/ui/progress"
+import { Checkbox } from "@/components/ui/checkbox"
 
 interface Team {
   id: string
@@ -446,7 +448,16 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                   >
                     {index + 1}
                   </div>
-                  {index < 4 && <div className="flex-1 h-1 bg-gray-200 mx-2" />}
+                  {index < 4 && (
+                    <div className="flex-1 mx-2">
+                      <Progress
+                        value={
+                          ["type", "team", "project", "options", "running"].indexOf(step) > index ? 100 : 0
+                        }
+                        className="h-1"
+                      />
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -576,16 +587,18 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                 </div>
               )}
               <div className="space-y-4">
-                <div>
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={autoCreatePR}
-                      onChange={(e) => setAutoCreatePR(e.target.checked)}
-                      className="mr-2 w-4 h-4"
-                    />
-                    <span className="text-sm">Automatically create GitHub PR with fixes</span>
-                  </label>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="auto-create-pr"
+                    checked={autoCreatePR}
+                    onCheckedChange={(checked) => setAutoCreatePR(checked === true)}
+                  />
+                  <Label
+                    htmlFor="auto-create-pr"
+                    className="text-sm font-normal cursor-pointer"
+                  >
+                    Automatically create GitHub PR with fixes
+                  </Label>
                 </div>
                 {autoCreatePR && selectedProject?.link?.repo && (
                   <div>
@@ -704,13 +717,23 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
               <h3 className="text-lg font-semibold mb-4">Workflow Status</h3>
               <div className="space-y-4">
                 <Alert
-                  variant={workflowStatus.includes("Error") || workflowStatus.includes("failed") ? "destructive" : "default"}
-                  className={workflowStatus.includes("Error") || workflowStatus.includes("failed") ? "" : "bg-blue-50 border-blue-200"}
+                  variant={
+                    workflowStatus.includes("Error") || workflowStatus.includes("failed") ? "destructive" : "default"
+                  }
+                  className={
+                    workflowStatus.includes("Error") || workflowStatus.includes("failed")
+                      ? ""
+                      : "bg-blue-50 border-blue-200"
+                  }
                 >
                   {(workflowStatus.includes("Error") || workflowStatus.includes("failed")) && (
                     <AlertCircle className="h-4 w-4" />
                   )}
-                  <AlertDescription className={workflowStatus.includes("Error") || workflowStatus.includes("failed") ? "" : "text-blue-900"}>
+                  <AlertDescription
+                    className={
+                      workflowStatus.includes("Error") || workflowStatus.includes("failed") ? "" : "text-blue-900"
+                    }
+                  >
                     {workflowStatus}
                   </AlertDescription>
                 </Alert>

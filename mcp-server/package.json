@@ -12,8 +12,10 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.18.1",
+    "@radix-ui/react-checkbox": "catalog:",
     "@radix-ui/react-dialog": "catalog:",
     "@radix-ui/react-label": "catalog:",
+    "@radix-ui/react-progress": "catalog:",
     "@radix-ui/react-select": "catalog:",
     "@radix-ui/react-slot": "catalog:",
     "@types/pixelmatch": "^5.2.6",

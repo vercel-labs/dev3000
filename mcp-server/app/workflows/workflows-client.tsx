@@ -2,10 +2,10 @@
 
 import Link from "next/link"
 import { useState } from "react"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
 import type { WorkflowRun } from "@/lib/workflow-storage"
 
 interface UserInfo {
@@ -80,7 +80,10 @@ export default function WorkflowsClient({ user, initialRuns }: WorkflowsClientPr
                       <div className="text-xs text-muted-foreground">{run.id}</div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={run.status === "success" ? "secondary" : "destructive"} className={run.status === "success" ? "bg-green-100 text-green-800 hover:bg-green-100" : ""}>
+                      <Badge
+                        variant={run.status === "success" ? "secondary" : "destructive"}
+                        className={run.status === "success" ? "bg-green-100 text-green-800 hover:bg-green-100" : ""}
+                      >
                         {run.status}
                       </Badge>
                     </TableCell>
