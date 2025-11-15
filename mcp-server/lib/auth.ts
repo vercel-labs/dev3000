@@ -50,42 +50,13 @@ export async function getCurrentUser(): Promise<UserInfo | null> {
   }
 
   // For Vercel OAuth, we need to fetch user info from the API
+  // Note: Token refresh is handled by middleware before this function is called
   try {
     const response = await fetch("https://api.vercel.com/v2/user", {
       headers: {
         Authorization: `Bearer ${accessToken}`
       }
     })
-
-    // If token expired, try to refresh and retry once
-    if (response.status === 401) {
-      console.log("Access token expired, attempting refresh...")
-      accessToken = await refreshAccessToken()
-
-      if (!accessToken) {
-        return null
-      }
-
-      // Retry with new token
-      const retryResponse = await fetch("https://api.vercel.com/v2/user", {
-        headers: {
-          Authorization: `Bearer ${accessToken}`
-        }
-      })
-
-      if (!retryResponse.ok) {
-        console.error("Failed to fetch user info after refresh:", retryResponse.status)
-        return null
-      }
-
-      const data = await retryResponse.json()
-      return {
-        id: data.user?.uid || data.user?.id || "",
-        email: data.user?.email || "",
-        name: data.user?.name || "",
-        username: data.user?.username || ""
-      }
-    }
 
     if (!response.ok) {
       console.error("Failed to fetch user info:", response.status)
