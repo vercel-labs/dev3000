@@ -575,7 +575,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                           id={baseBranchId}
                           value={baseBranch}
                           onChange={(e) => setBaseBranch(e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                          className="w-full pl-3 pr-10 py-2 border border-gray-300 rounded-md"
                         >
                           {availableBranches.map((branch) => (
                             <option key={branch.name} value={branch.name}>
