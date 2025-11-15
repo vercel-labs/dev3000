@@ -117,6 +117,9 @@ export async function isAuthenticated(): Promise<boolean> {
 /**
  * Refresh the access token using the refresh token
  * Returns the new access token or null if refresh failed
+ *
+ * IMPORTANT: This function can only be called from Server Actions or Route Handlers
+ * where cookie modification is allowed. Do not call from Server Components.
  */
 async function refreshAccessToken(): Promise<string | null> {
   const cookieStore = await cookies()
@@ -150,6 +153,7 @@ async function refreshAccessToken(): Promise<string | null> {
     const tokenData: RefreshTokenResponse = await response.json()
 
     // Update cookies with new tokens
+    // Note: This will throw an error if called outside Server Action/Route Handler context
     cookieStore.set("access_token", tokenData.access_token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
@@ -179,12 +183,9 @@ export async function getValidAccessToken(): Promise<string | null> {
   const cookieStore = await cookies()
   const accessToken = cookieStore.get("access_token")?.value
 
-  if (accessToken) {
-    // Try to use the existing token
-    // If it's expired, the API will return 401 and we'll refresh
-    return accessToken
-  }
-
-  // No access token, try to refresh
-  return await refreshAccessToken()
+  // Return the access token if it exists
+  // Don't attempt to refresh here because this function may be called from Server Components
+  // where cookie modification is not allowed. Refresh should only happen in API routes
+  // when a 401 is detected.
+  return accessToken || null
 }
