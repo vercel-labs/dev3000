@@ -5,10 +5,10 @@ import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useId, useRef, useState } from "react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Progress } from "@/components/ui/progress"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
+import { Progress } from "@/components/ui/progress"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 interface Team {
   id: string
@@ -48,6 +48,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   const router = useRouter()
   const searchParams = useSearchParams()
   const baseBranchId = useId()
+  const autoCreatePRId = useId()
   const bypassTokenId = useId()
   const [step, setStep] = useState<WorkflowStep>("type")
   const [_selectedType, setSelectedType] = useState<string>("")
@@ -451,9 +452,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                   {index < 4 && (
                     <div className="flex-1 mx-2">
                       <Progress
-                        value={
-                          ["type", "team", "project", "options", "running"].indexOf(step) > index ? 100 : 0
-                        }
+                        value={["type", "team", "project", "options", "running"].indexOf(step) > index ? 100 : 0}
                         className="h-1"
                       />
                     </div>
@@ -589,14 +588,11 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
               <div className="space-y-4">
                 <div className="flex items-center space-x-2">
                   <Checkbox
-                    id="auto-create-pr"
+                    id={autoCreatePRId}
                     checked={autoCreatePR}
                     onCheckedChange={(checked) => setAutoCreatePR(checked === true)}
                   />
-                  <Label
-                    htmlFor="auto-create-pr"
-                    className="text-sm font-normal cursor-pointer"
-                  >
+                  <Label htmlFor={autoCreatePRId} className="text-sm font-normal cursor-pointer">
                     Automatically create GitHub PR with fixes
                   </Label>
                 </div>
