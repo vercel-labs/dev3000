@@ -47,10 +47,14 @@ export async function cloudFixWorkflow(params: {
     console.log(`[Workflow] Branch: ${repoBranch || "main"}`)
   }
 
+  // Capture VERCEL_OIDC_TOKEN from workflow context to pass to steps
+  const vercelOidcToken = process.env.VERCEL_OIDC_TOKEN
+  console.log(`[Workflow] VERCEL_OIDC_TOKEN available: ${!!vercelOidcToken}`)
+
   // Step 0: Create d3k sandbox if repoUrl provided
   let sandboxInfo: { mcpUrl: string; devUrl: string; cleanup: () => Promise<void> } | null = null
   if (repoUrl) {
-    sandboxInfo = await createD3kSandbox(repoUrl, repoBranch || "main", projectName, vercelToken)
+    sandboxInfo = await createD3kSandbox(repoUrl, repoBranch || "main", projectName, vercelToken, vercelOidcToken)
   }
 
   try {
@@ -82,10 +86,16 @@ export async function cloudFixWorkflow(params: {
 }
 
 // Step function wrappers that dynamically import the actual implementations
-async function createD3kSandbox(repoUrl: string, branch: string, projectName: string, vercelToken?: string) {
+async function createD3kSandbox(
+  repoUrl: string,
+  branch: string,
+  projectName: string,
+  vercelToken?: string,
+  vercelOidcToken?: string
+) {
   "use step"
   const { createD3kSandbox } = await import("./steps")
-  return createD3kSandbox(repoUrl, branch, projectName, vercelToken)
+  return createD3kSandbox(repoUrl, branch, projectName, vercelToken, vercelOidcToken)
 }
 
 async function fetchRealLogs(mcpUrlOrDevUrl: string, bypassToken?: string, sandboxDevUrl?: string) {

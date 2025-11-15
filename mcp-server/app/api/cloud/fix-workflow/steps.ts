@@ -10,22 +10,31 @@ import { createD3kSandbox as createD3kSandboxUtil } from "@/lib/cloud/d3k-sandbo
 /**
  * Step 0: Create d3k sandbox with MCP tools pre-configured
  */
-export async function createD3kSandbox(repoUrl: string, branch: string, projectName: string, vercelToken?: string) {
+export async function createD3kSandbox(
+  repoUrl: string,
+  branch: string,
+  projectName: string,
+  vercelToken?: string,
+  vercelOidcToken?: string
+) {
   "use step"
 
   console.log(`[Step 0] Creating d3k sandbox for ${projectName}...`)
   console.log(`[Step 0] Repository: ${repoUrl}`)
   console.log(`[Step 0] Branch: ${branch}`)
 
-  // Log available token types (workflow should provide VERCEL_OIDC_TOKEN automatically)
-  console.log(`[Step 0] VERCEL_OIDC_TOKEN available: ${!!process.env.VERCEL_OIDC_TOKEN}`)
+  // Log available token types
+  console.log(`[Step 0] VERCEL_OIDC_TOKEN from env: ${!!process.env.VERCEL_OIDC_TOKEN}`)
+  console.log(`[Step 0] VERCEL_OIDC_TOKEN passed as param: ${!!vercelOidcToken}`)
   console.log(`[Step 0] VERCEL_TOKEN available: ${!!process.env.VERCEL_TOKEN}`)
   console.log(`[Step 0] User access token provided: ${!!vercelToken}`)
 
-  // Note: We do NOT set VERCEL_TOKEN here because:
-  // 1. The user's access token is for web API access, not Sandbox creation
-  // 2. Vercel Workflows automatically provide VERCEL_OIDC_TOKEN which has sandbox permissions
-  // 3. The createD3kSandboxUtil will use VERCEL_OIDC_TOKEN or VERCEL_TOKEN automatically
+  // Set VERCEL_OIDC_TOKEN if passed from workflow context
+  // This is necessary because workflow steps don't automatically inherit environment variables
+  if (vercelOidcToken && !process.env.VERCEL_OIDC_TOKEN) {
+    process.env.VERCEL_OIDC_TOKEN = vercelOidcToken
+    console.log(`[Step 0] Set VERCEL_OIDC_TOKEN from workflow context`)
+  }
 
   const sandboxResult = await createD3kSandboxUtil({
     repoUrl,
