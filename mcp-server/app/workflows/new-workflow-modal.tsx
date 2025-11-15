@@ -3,6 +3,8 @@
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useId, useRef, useState } from "react"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 interface Team {
   id: string
@@ -584,38 +586,27 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                 </div>
                 {autoCreatePR && selectedProject?.link?.repo && (
                   <div>
-                    <label htmlFor={baseBranchId} className="block text-sm font-medium text-gray-700 mb-1">
+                    <Label htmlFor={baseBranchId} className="mb-2">
                       Base Branch
-                    </label>
+                    </Label>
                     {loadingBranches ? (
                       <div className="text-sm text-gray-500 py-2">Loading branches...</div>
                     ) : availableBranches.length > 0 ? (
                       <>
-                        <div className="relative">
-                          <select
-                            id={baseBranchId}
-                            value={baseBranch}
-                            onChange={(e) => setBaseBranch(e.target.value)}
-                            className="w-full pl-3 pr-10 py-2 border border-gray-300 rounded-md appearance-none"
-                          >
+                        <Select value={baseBranch} onValueChange={setBaseBranch}>
+                          <SelectTrigger id={baseBranchId} className="w-full">
+                            <SelectValue placeholder="Select a branch" />
+                          </SelectTrigger>
+                          <SelectContent>
                             {availableBranches.map((branch) => (
-                              <option key={branch.name} value={branch.name}>
+                              <SelectItem key={branch.name} value={branch.name}>
                                 {branch.name} (deployed {new Date(branch.lastDeployment.createdAt).toLocaleDateString()}
                                 )
-                              </option>
+                              </SelectItem>
                             ))}
-                          </select>
-                          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400">
-                            <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                              <path
-                                fillRule="evenodd"
-                                d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
-                                clipRule="evenodd"
-                              />
-                            </svg>
-                          </div>
-                        </div>
-                        <p className="text-xs text-gray-500 mt-1">
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground mt-1">
                           Showing branches with recent deployments (last {availableBranches.length} branch
                           {availableBranches.length !== 1 ? "es" : ""})
                         </p>
