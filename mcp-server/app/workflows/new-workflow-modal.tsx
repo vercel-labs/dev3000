@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Progress } from "@/components/ui/progress"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Spinner } from "@/components/ui/spinner"
 
 interface Team {
   id: string
@@ -382,7 +383,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
         "Fetching deployment logs...",
         "Analyzing errors with AI...",
         "Generating fix proposal...",
-        autoCreatePR ? "Creating GitHub PR..." : null
+        autoCreatePR ? "Writing code..." : null
       ].filter(Boolean) as string[]
 
       let currentStep = 0
@@ -785,8 +786,10 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                       : "bg-blue-50 border-blue-200"
                   }
                 >
-                  {(workflowStatus.includes("Error") || workflowStatus.includes("failed")) && (
+                  {workflowStatus.includes("Error") || workflowStatus.includes("failed") ? (
                     <AlertCircle className="h-4 w-4" />
+                  ) : (
+                    !workflowStatus.includes("completed successfully") && <Spinner className="h-4 w-4" />
                   )}
                   <AlertDescription
                     className={
