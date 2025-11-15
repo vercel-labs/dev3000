@@ -1,5 +1,5 @@
-import { ViewTransition } from "next/view-transitions"
 import type React from "react"
+import { ViewTransition } from "react"
 import "./globals.css"
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
