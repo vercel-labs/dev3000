@@ -76,7 +76,7 @@ async function getRecentProjects(teamSlug?: string, limit = 5): Promise<Project[
         const url = parts[1].trim()
 
         // Only include projects with valid URLs (not "--")
-        if (url && url.includes(".") && url.startsWith("http")) {
+        if (url?.includes(".") && url.startsWith("http")) {
           projects.push({
             id: name,
             name,
@@ -136,7 +136,7 @@ async function runCLSDetection(
 
     // Parse CLS issues from the fix proposal if present
     const clsIssues: Array<{ element: string; score: number; description: string }> = []
-    if (result.fixProposal && result.fixProposal.includes("CLS")) {
+    if (result.fixProposal?.includes("CLS")) {
       // Basic parsing - could be enhanced
       clsIssues.push({
         element: "detected",
@@ -276,7 +276,7 @@ async function promptProjectSelection(projects: Project[]): Promise<Project[]> {
         if (part.includes("-")) {
           // Range like "1-5"
           const [start, end] = part.split("-").map((n) => parseInt(n.trim(), 10))
-          if (!isNaN(start) && !isNaN(end)) {
+          if (!Number.isNaN(start) && !Number.isNaN(end)) {
             for (let i = start; i <= end && i <= projects.length; i++) {
               if (i > 0 && !selected.includes(projects[i - 1])) {
                 selected.push(projects[i - 1])
@@ -286,7 +286,7 @@ async function promptProjectSelection(projects: Project[]): Promise<Project[]> {
         } else {
           // Single number
           const num = parseInt(part, 10)
-          if (!isNaN(num) && num > 0 && num <= projects.length) {
+          if (!Number.isNaN(num) && num > 0 && num <= projects.length) {
             if (!selected.includes(projects[num - 1])) {
               selected.push(projects[num - 1])
             }
@@ -316,7 +316,7 @@ async function getCurrentUser(): Promise<string> {
     // Extract username from whoami output
     // Format is typically: "You are logged in as <username>"
     const match = output.match(/logged in as (\S+)/)
-    if (match && match[1]) {
+    if (match?.[1]) {
       return match[1]
     }
 
@@ -426,7 +426,7 @@ async function main() {
   }
 
   // Print summary
-  console.log("\n" + "=".repeat(50))
+  console.log(`\n${"=".repeat(50)}`)
   console.log("📊 Summary")
   console.log("=".repeat(50))
 

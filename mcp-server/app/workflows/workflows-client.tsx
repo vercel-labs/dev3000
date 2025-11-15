@@ -35,8 +35,8 @@ export default function WorkflowsClient({ user, initialRuns }: WorkflowsClientPr
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="mb-8 flex justify-between items-start">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Workflow Runs</h1>
-            <p className="mt-2 text-gray-600">View all your workflow fix proposals and PRs</p>
+            <h1 className="text-3xl font-bold text-gray-900">d3k Workflow Runs</h1>
+            <p className="mt-2 text-gray-600">View all your d3k workflow fix proposals and PRs</p>
             <p className="mt-1 text-sm text-gray-500">Signed in as {user.email}</p>
           </div>
           <div className="flex gap-3">

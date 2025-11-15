@@ -1,4 +1,4 @@
-import { cookies } from "next/headers"
+import { getValidAccessToken } from "@/lib/auth"
 
 /**
  * API Route to fetch branches with recent deployments for a project
@@ -10,8 +10,7 @@ import { cookies } from "next/headers"
  */
 export async function GET(request: Request) {
   try {
-    const cookieStore = await cookies()
-    const accessToken = cookieStore.get("access_token")?.value
+    const accessToken = await getValidAccessToken()
 
     if (!accessToken) {
       return Response.json({ error: "Not authenticated" }, { status: 401 })
