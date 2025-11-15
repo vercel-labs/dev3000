@@ -5,7 +5,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className="h-full">
       <head>
-        <title>🎯 dev3000</title>
+        <title>dev3000</title>
         <link rel="icon" href="/favicon.ico" type="image/x-icon" />
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" sizes="32x32" />
         <link rel="icon" href="/favicon-16.svg" type="image/svg+xml" sizes="16x16" />
