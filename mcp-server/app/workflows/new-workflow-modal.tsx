@@ -571,18 +571,30 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                       <div className="text-sm text-gray-500 py-2">Loading branches...</div>
                     ) : availableBranches.length > 0 ? (
                       <>
-                        <select
-                          id={baseBranchId}
-                          value={baseBranch}
-                          onChange={(e) => setBaseBranch(e.target.value)}
-                          className="w-full pl-3 pr-12 py-2 border border-gray-300 rounded-md appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 20 20%22 fill=%22none%22%3E%3Cpath d=%22M7 7l3 3 3-3%22 stroke=%22%239CA3AF%22 stroke-width=%221.5%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22/%3E%3C/svg%3E')] bg-[length:1.5rem] bg-[right_0.5rem_center] bg-no-repeat"
-                        >
-                          {availableBranches.map((branch) => (
-                            <option key={branch.name} value={branch.name}>
-                              {branch.name} (deployed {new Date(branch.lastDeployment.createdAt).toLocaleDateString()})
-                            </option>
-                          ))}
-                        </select>
+                        <div className="relative">
+                          <select
+                            id={baseBranchId}
+                            value={baseBranch}
+                            onChange={(e) => setBaseBranch(e.target.value)}
+                            className="w-full pl-3 pr-10 py-2 border border-gray-300 rounded-md appearance-none"
+                          >
+                            {availableBranches.map((branch) => (
+                              <option key={branch.name} value={branch.name}>
+                                {branch.name} (deployed {new Date(branch.lastDeployment.createdAt).toLocaleDateString()}
+                                )
+                              </option>
+                            ))}
+                          </select>
+                          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400">
+                            <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                              <path
+                                fillRule="evenodd"
+                                d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
+                                clipRule="evenodd"
+                              />
+                            </svg>
+                          </div>
+                        </div>
                         <p className="text-xs text-gray-500 mt-1">
                           Showing branches with recent deployments (last {availableBranches.length} branch
                           {availableBranches.length !== 1 ? "es" : ""})
