@@ -365,19 +365,39 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       const apiBaseUrl = process.env.NEXT_PUBLIC_WORKFLOW_API_URL || ""
       const apiUrl = `${apiBaseUrl}/api/cloud/start-fix`
 
-      const response = await fetch(apiUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body)
-      })
+      // Create an AbortController for timeout handling
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 5 * 60 * 1000) // 5 minute timeout
 
-      const result = await response.json()
+      try {
+        const response = await fetch(apiUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+          signal: controller.signal
+        })
 
-      if (result.success) {
-        setWorkflowResult(result)
-        setWorkflowStatus("Workflow completed successfully!")
-      } else {
-        setWorkflowStatus(`Workflow failed: ${result.error}`)
+        clearTimeout(timeoutId)
+
+        if (!response.ok) {
+          const errorText = await response.text()
+          throw new Error(`API returned ${response.status}: ${errorText}`)
+        }
+
+        const result = await response.json()
+
+        if (result.success) {
+          setWorkflowResult(result)
+          setWorkflowStatus("Workflow completed successfully!")
+        } else {
+          setWorkflowStatus(`Workflow failed: ${result.error}`)
+        }
+      } catch (fetchError) {
+        clearTimeout(timeoutId)
+        if (fetchError instanceof Error && fetchError.name === "AbortError") {
+          throw new Error("Workflow timed out after 5 minutes")
+        }
+        throw fetchError
       }
     } catch (error) {
       console.error("Workflow error:", error)
