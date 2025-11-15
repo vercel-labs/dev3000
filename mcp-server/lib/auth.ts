@@ -7,15 +7,6 @@ interface UserInfo {
   username: string
 }
 
-interface RefreshTokenResponse {
-  access_token: string
-  token_type: string
-  id_token: string
-  expires_in: number
-  scope: string
-  refresh_token: string
-}
-
 /**
  * Decode the JWT ID token to extract user information
  * This is a simple decoder - for production you should verify the signature
@@ -43,7 +34,7 @@ function _decodeIdToken(idToken: string): UserInfo | null {
  * Returns null if not authenticated
  */
 export async function getCurrentUser(): Promise<UserInfo | null> {
-  let accessToken = await getValidAccessToken()
+  const accessToken = await getValidAccessToken()
 
   if (!accessToken) {
     return null
@@ -86,77 +77,16 @@ export async function isAuthenticated(): Promise<boolean> {
 }
 
 /**
- * Refresh the access token using the refresh token
- * Returns the new access token or null if refresh failed
+ * Get a valid access token
+ * Returns null if no token available
  *
- * IMPORTANT: This function can only be called from Server Actions or Route Handlers
- * where cookie modification is allowed. Do not call from Server Components.
- */
-async function refreshAccessToken(): Promise<string | null> {
-  const cookieStore = await cookies()
-  const refreshToken = cookieStore.get("refresh_token")?.value
-
-  if (!refreshToken) {
-    return null
-  }
-
-  try {
-    const params = new URLSearchParams({
-      grant_type: "refresh_token",
-      client_id: process.env.NEXT_PUBLIC_CLIENT_ID as string,
-      client_secret: process.env.CLIENT_SECRET as string,
-      refresh_token: refreshToken
-    })
-
-    const response = await fetch("https://vercel.com/api/login/oauth/token", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded"
-      },
-      body: params.toString()
-    })
-
-    if (!response.ok) {
-      console.error("Failed to refresh token:", response.status)
-      return null
-    }
-
-    const tokenData: RefreshTokenResponse = await response.json()
-
-    // Update cookies with new tokens
-    // Note: This will throw an error if called outside Server Action/Route Handler context
-    cookieStore.set("access_token", tokenData.access_token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: tokenData.expires_in
-    })
-
-    cookieStore.set("refresh_token", tokenData.refresh_token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 60 * 60 * 24 * 30 // 30 days
-    })
-
-    return tokenData.access_token
-  } catch (error) {
-    console.error("Error refreshing token:", error)
-    return null
-  }
-}
-
-/**
- * Get a valid access token, refreshing if necessary
- * Returns null if no token available and refresh fails
+ * Note: Token refresh is handled by middleware before requests reach Server Components
  */
 export async function getValidAccessToken(): Promise<string | null> {
   const cookieStore = await cookies()
   const accessToken = cookieStore.get("access_token")?.value
 
   // Return the access token if it exists
-  // Don't attempt to refresh here because this function may be called from Server Components
-  // where cookie modification is not allowed. Refresh should only happen in API routes
-  // when a 401 is detected.
+  // Token refresh is handled by middleware, not here
   return accessToken || null
 }

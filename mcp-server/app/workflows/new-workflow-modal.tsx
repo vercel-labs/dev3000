@@ -399,6 +399,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: bodyString,
+          credentials: "include",
           signal: controller.signal
         })
 

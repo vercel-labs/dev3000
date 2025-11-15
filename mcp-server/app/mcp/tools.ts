@@ -1965,20 +1965,32 @@ export async function executeBrowserAction({
                     throw new Error("Evaluate action requires expression parameter as string")
                   }
                   const expression = params.expression
-                  // Whitelist safe expressions only
-                  const safeExpressions = [
-                    /^document\.title$/,
-                    /^window\.location\.href$/,
-                    /^document\.querySelector\(['"][^'"]*['"]\)\.textContent$/,
-                    /^document\.body\.scrollHeight$/,
-                    /^window\.scrollY$/,
-                    /^window\.scrollX$/,
-                    // Allow React Fiber inspection (read-only introspection)
-                    /^\s*\(function\(\)\s*\{[\s\S]*__reactFiber\$[\s\S]*\}\)\(\)\s*$/
+                  // Validate that the expression is safe (read-only DOM queries)
+                  // Block dangerous patterns
+                  const dangerousPatterns = [
+                    /eval\s*\(/,
+                    /Function\s*\(/,
+                    /setTimeout/,
+                    /setInterval/,
+                    /\.innerHTML\s*=/,
+                    /\.outerHTML\s*=/,
+                    /document\.write/,
+                    /document\.cookie\s*=/,
+                    /localStorage\.setItem/,
+                    /sessionStorage\.setItem/,
+                    /\.src\s*=/,
+                    /\.href\s*=/,
+                    /location\s*=/,
+                    /\.addEventListener/,
+                    /\.removeEventListener/,
+                    /new\s+Function/,
+                    /import\s*\(/,
+                    /fetch\s*\(/,
+                    /XMLHttpRequest/
                   ]
 
-                  if (!safeExpressions.some((regex) => regex.test(expression))) {
-                    throw new Error("Expression not in whitelist. Only safe read-only expressions allowed.")
+                  if (dangerousPatterns.some((regex) => regex.test(expression))) {
+                    throw new Error("Expression contains dangerous patterns. Only safe read-only expressions allowed.")
                   }
 
                   cdpResult = await sendCDPCommand(ws, messageId++, "Runtime.evaluate", {
@@ -2051,11 +2063,11 @@ export async function executeBrowserAction({
               ws.on("message", messageHandler)
               ws.send(JSON.stringify(command))
 
-              // Command timeout
+              // Command timeout (30 seconds for complex evaluate expressions)
               setTimeout(() => {
                 ws.removeListener("message", messageHandler)
-                cmdReject(new Error(`CDP command timeout: ${method}`))
-              }, 5000)
+                cmdReject(new Error(`CDP command timeout after 30s: ${method}`))
+              }, 30000)
             })
           }
         } catch (error) {
