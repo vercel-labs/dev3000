@@ -575,7 +575,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                           id={baseBranchId}
                           value={baseBranch}
                           onChange={(e) => setBaseBranch(e.target.value)}
-                          className="w-full pl-3 pr-10 py-2 border border-gray-300 rounded-md"
+                          className="w-full pl-3 pr-12 py-2 border border-gray-300 rounded-md appearance-none bg-[url('data:image/svg+xml;charset=utf-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 20 20%22 fill=%22none%22%3E%3Cpath d=%22M7 7l3 3 3-3%22 stroke=%22%239CA3AF%22 stroke-width=%221.5%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22/%3E%3C/svg%3E')] bg-[length:1.5rem] bg-[right_0.5rem_center] bg-no-repeat"
                         >
                           {availableBranches.map((branch) => (
                             <option key={branch.name} value={branch.name}>
