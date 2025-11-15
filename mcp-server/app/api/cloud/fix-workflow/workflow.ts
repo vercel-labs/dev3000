@@ -57,37 +57,33 @@ export async function cloudFixWorkflow(params: {
   console.log(`[Workflow] VERCEL_OIDC_TOKEN available: ${!!vercelOidcToken}`)
 
   // Step 0: Create d3k sandbox if repoUrl provided
-  let sandboxInfo: { mcpUrl: string; devUrl: string; cleanup: () => Promise<void> } | null = null
+  let sandboxInfo: { mcpUrl: string; devUrl: string } | null = null
   if (repoUrl) {
     sandboxInfo = await createD3kSandbox(repoUrl, repoBranch || "main", projectName, vercelToken, vercelOidcToken)
   }
 
-  try {
-    // Step 1: Fetch real logs (using sandbox MCP if available, otherwise devUrl directly)
-    const logAnalysis = await fetchRealLogs(sandboxInfo?.mcpUrl || devUrl, bypassToken, sandboxInfo?.devUrl)
+  // Step 1: Fetch real logs (using sandbox MCP if available, otherwise devUrl directly)
+  const logAnalysis = await fetchRealLogs(sandboxInfo?.mcpUrl || devUrl, bypassToken, sandboxInfo?.devUrl)
 
-    // Step 2: Invoke AI agent to analyze logs and create fix
-    const fixProposal = await analyzeLogsWithAgent(logAnalysis, sandboxInfo?.devUrl || devUrl)
+  // Step 2: Invoke AI agent to analyze logs and create fix
+  const fixProposal = await analyzeLogsWithAgent(logAnalysis, sandboxInfo?.devUrl || devUrl)
 
-    // Step 3: Upload to blob storage with full context
-    const blobResult = await uploadToBlob(fixProposal, projectName, logAnalysis, sandboxInfo?.devUrl || devUrl)
+  // Step 3: Upload to blob storage with full context
+  const blobResult = await uploadToBlob(fixProposal, projectName, logAnalysis, sandboxInfo?.devUrl || devUrl)
 
-    // Step 4: Create GitHub PR if repo info provided
-    let prResult = null
-    if (repoOwner && repoName) {
-      prResult = await createGitHubPR(fixProposal, blobResult.blobUrl, repoOwner, repoName, baseBranch, projectName)
-    }
-
-    return Response.json({
-      ...blobResult,
-      pr: prResult
-    })
-  } finally {
-    // Cleanup sandbox if it was created
-    if (sandboxInfo) {
-      await cleanupSandbox(sandboxInfo.cleanup)
-    }
+  // Step 4: Create GitHub PR if repo info provided
+  let prResult = null
+  if (repoOwner && repoName) {
+    prResult = await createGitHubPR(fixProposal, blobResult.blobUrl, repoOwner, repoName, baseBranch, projectName)
   }
+
+  // Note: Sandbox cleanup is handled automatically by the sandbox timeout
+  // We cannot store cleanup functions as they're not serializable
+
+  return Response.json({
+    ...blobResult,
+    pr: prResult
+  })
 }
 
 // Step function wrappers that dynamically import the actual implementations
@@ -132,10 +128,4 @@ async function createGitHubPR(
   "use step"
   const { createGitHubPR } = await import("./steps")
   return createGitHubPR(fixProposal, blobUrl, repoOwner, repoName, baseBranch, projectName)
-}
-
-async function cleanupSandbox(cleanup: () => Promise<void>) {
-  "use step"
-  const { cleanupSandbox } = await import("./steps")
-  return cleanupSandbox(cleanup)
 }

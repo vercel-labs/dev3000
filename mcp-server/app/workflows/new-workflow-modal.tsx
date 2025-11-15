@@ -375,7 +375,26 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
         body.baseBranch = baseBranch
       }
 
-      setWorkflowStatus("Analyzing deployment logs...")
+      // Show step-by-step progress
+      const steps = [
+        "Starting workflow...",
+        repoUrl ? "Creating development sandbox..." : null,
+        "Fetching deployment logs...",
+        "Analyzing errors with AI...",
+        "Generating fix proposal...",
+        autoCreatePR ? "Creating GitHub PR..." : null
+      ].filter(Boolean) as string[]
+
+      let currentStep = 0
+      setWorkflowStatus(steps[currentStep])
+
+      // Update status every 3 seconds to show progress
+      const progressInterval = setInterval(() => {
+        currentStep++
+        if (currentStep < steps.length) {
+          setWorkflowStatus(steps[currentStep])
+        }
+      }, 3000)
 
       // Use production API if configured, otherwise use relative path (local)
       const apiBaseUrl = process.env.NEXT_PUBLIC_WORKFLOW_API_URL || ""
@@ -417,6 +436,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
         console.log("[Start Workflow] Fetch completed, status:", response.status)
 
         clearTimeout(timeoutId)
+        clearInterval(progressInterval)
 
         if (!response.ok) {
           const errorText = await response.text()
@@ -433,6 +453,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
         }
       } catch (fetchError) {
         clearTimeout(timeoutId)
+        clearInterval(progressInterval)
         if (fetchError instanceof Error && fetchError.name === "AbortError") {
           throw new Error("Workflow timed out after 5 minutes")
         }

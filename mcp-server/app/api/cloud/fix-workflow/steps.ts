@@ -48,10 +48,11 @@ export async function createD3kSandbox(
   console.log(`[Step 0] Dev URL: ${sandboxResult.devUrl}`)
   console.log(`[Step 0] MCP URL: ${sandboxResult.mcpUrl}`)
 
+  // Note: We cannot return the cleanup function as it's not serializable
+  // Sandbox cleanup will happen automatically when the sandbox times out
   return {
     mcpUrl: sandboxResult.mcpUrl,
-    devUrl: sandboxResult.devUrl,
-    cleanup: sandboxResult.cleanup
+    devUrl: sandboxResult.devUrl
   }
 }
 
