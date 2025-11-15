@@ -34,6 +34,13 @@ interface Project {
     state: string
     readyState: string
     createdAt: number
+    gitSource: {
+      type: string
+      repoId: number
+      ref: string
+      sha: string
+      message: string
+    } | null
   }>
 }
 
@@ -365,9 +372,13 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       }
 
       // If we have repo info, pass it for sandbox creation
+      // Use the deployment's git SHA if available, otherwise fall back to baseBranch
       if (repoOwner && repoName) {
         body.repoUrl = `https://github.com/${repoOwner}/${repoName}`
-        body.repoBranch = baseBranch || "main"
+        body.repoBranch = latestDeployment.gitSource?.sha || baseBranch || "main"
+        console.log(
+          `[Start Workflow] Using git reference: ${body.repoBranch} (${latestDeployment.gitSource?.sha ? "SHA from deployment" : "branch name"})`
+        )
       }
 
       if (autoCreatePR && repoOwner && repoName) {

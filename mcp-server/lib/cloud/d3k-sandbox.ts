@@ -52,7 +52,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
   if (debug) {
     console.log("🚀 Creating d3k sandbox...")
     console.log(`  Repository: ${repoUrl}`)
-    console.log(`  Branch: ${branch}`)
+    console.log(`  Branch/SHA: ${branch}${branch.length === 40 ? " (git commit SHA)" : " (branch name)"}`)
     console.log(`  Project: ${projectName}`)
     console.log(`  Framework: ${framework}`)
   }

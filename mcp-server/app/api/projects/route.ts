@@ -67,7 +67,16 @@ export async function GET(request: Request) {
           url: deployment.url,
           state: deployment.state,
           readyState: deployment.readyState,
-          createdAt: deployment.createdAt
+          createdAt: deployment.createdAt,
+          gitSource: deployment.gitSource
+            ? {
+                type: deployment.gitSource.type,
+                repoId: deployment.gitSource.repoId,
+                ref: deployment.gitSource.ref,
+                sha: deployment.gitSource.sha,
+                message: deployment.gitSource.message
+              }
+            : null
         })) || []
     }))
 
