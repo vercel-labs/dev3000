@@ -15,7 +15,7 @@
     "@radix-ui/react-dialog": "catalog:",
     "@radix-ui/react-label": "catalog:",
     "@radix-ui/react-select": "catalog:",
-    "@radix-ui/react-slot": "^1.1.1",
+    "@radix-ui/react-slot": "catalog:",
     "@types/pixelmatch": "^5.2.6",
     "@types/pngjs": "^6.0.5",
     "@vercel/blob": "^2.0.0",

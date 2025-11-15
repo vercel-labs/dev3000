@@ -15,6 +15,9 @@ catalogs:
     '@radix-ui/react-select':
       specifier: ^2.2.6
       version: 2.2.6
+    '@radix-ui/react-slot':
+      specifier: ^1.2.4
+      version: 1.2.4
     class-variance-authority:
       specifier: ^0.7.1
       version: 0.7.1
@@ -128,8 +131,8 @@ importers:
         specifier: 'catalog:'
         version: 2.2.6(@types/react-dom@19.1.11(@types/react@19.1.17))(@types/react@19.1.17)(react-dom@19.3.0-canary-257b033f-20251113(react@19.3.0-canary-257b033f-20251113))(react@19.3.0-canary-257b033f-20251113)
       '@radix-ui/react-slot':
-        specifier: ^1.1.1
-        version: 1.2.3(@types/react@19.1.17)(react@19.3.0-canary-257b033f-20251113)
+        specifier: 'catalog:'
+        version: 1.2.4(@types/react@19.1.17)(react@19.3.0-canary-257b033f-20251113)
       '@types/pixelmatch':
         specifier: ^5.2.6
         version: 5.2.6

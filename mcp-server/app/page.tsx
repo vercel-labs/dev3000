@@ -4,6 +4,8 @@ import { useEffect, useState } from "react"
 import { DarkModeToggle } from "@/components/dark-mode-toggle"
 import { ChromeIcon, NextJsIcon } from "@/components/mcp-icons"
 import { useDarkMode } from "@/hooks/use-dark-mode"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
 interface MCPTool {
   name: string
@@ -184,14 +186,11 @@ export default function HomePage() {
               </div>
             </div>
             <div className="flex items-center gap-4">
-              <a
-                href="https://github.com/vercel-labs/dev3000#setup"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 px-5 py-3 border border-border text-foreground text-sm font-medium rounded hover:bg-accent hover:text-accent-foreground transition-colors"
-              >
-                📖 Setup Guide
-              </a>
+              <Button variant="outline" asChild>
+                <a href="https://github.com/vercel-labs/dev3000#setup" target="_blank" rel="noopener noreferrer">
+                  📖 Setup Guide
+                </a>
+              </Button>
               <DarkModeToggle darkMode={darkMode} setDarkMode={setDarkMode} />
             </div>
           </div>
@@ -202,8 +201,11 @@ export default function HomePage() {
       <main className="max-w-7xl mx-auto px-6 py-8">
         {/* MCP Connections Status */}
         <section className="mb-16">
-          <div className="bg-accent/10 border border-accent/20 rounded p-8">
-            <h2 className="text-xl font-semibold mb-4">🔌 MCP Connections</h2>
+          <Card className="bg-accent/10 border-accent/20">
+            <CardHeader>
+              <CardTitle>🔌 MCP Connections</CardTitle>
+            </CardHeader>
+            <CardContent>
 
             {loading ? (
               <div className="h-[120px] space-y-4">
@@ -255,12 +257,16 @@ export default function HomePage() {
                 )}
               </>
             ) : null}
-          </div>
+            </CardContent>
+          </Card>
         </section>
 
         {/* Tools Documentation */}
-        <section className="bg-accent/10 border border-accent/20 rounded p-8">
-          <h2 className="text-xl font-semibold mb-4">🛠️ dev3000 Tools</h2>
+        <Card className="bg-accent/10 border-accent/20">
+          <CardHeader>
+            <CardTitle>🛠️ dev3000 Tools</CardTitle>
+          </CardHeader>
+          <CardContent>
 
           {loading ? (
             <div className="grid gap-6 lg:grid-cols-2">
@@ -315,20 +321,18 @@ export default function HomePage() {
           ) : (
             <div className="text-center py-16">
               <p className="text-destructive mb-6">Failed to load tool documentation</p>
-              <button
-                onClick={() => window.location.reload()}
-                className="px-6 py-3 bg-primary text-primary-foreground text-sm rounded hover:bg-primary/90 transition-colors"
-                type="button"
-              >
-                Retry
-              </button>
+              <Button onClick={() => window.location.reload()}>Retry</Button>
             </div>
           )}
-        </section>
+          </CardContent>
+        </Card>
 
         {/* Magic Workflow */}
-        <section className="mt-20 bg-gradient-to-r from-primary/10 to-secondary/10 border border-border rounded-lg p-10">
-          <h2 className="text-2xl font-semibold mb-6 flex items-center gap-3">🪄 The Magic Workflow</h2>
+        <Card className="mt-20 bg-gradient-to-r from-primary/10 to-secondary/10">
+          <CardHeader>
+            <CardTitle className="text-2xl">🪄 The Magic Workflow</CardTitle>
+          </CardHeader>
+          <CardContent>
           <div className="grid md:grid-cols-3 gap-8">
             <div className="text-center">
               <div className="w-16 h-16 bg-primary/20 rounded-full flex items-center justify-center mx-auto mb-4 shadow-md">
@@ -358,7 +362,8 @@ export default function HomePage() {
               </p>
             </div>
           </div>
-        </section>
+          </CardContent>
+        </Card>
       </main>
 
       {/* Footer */}
