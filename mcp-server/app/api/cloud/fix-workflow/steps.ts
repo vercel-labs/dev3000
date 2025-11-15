@@ -48,6 +48,31 @@ export async function createD3kSandbox(
   console.log(`[Step 0] Dev URL: ${sandboxResult.devUrl}`)
   console.log(`[Step 0] MCP URL: ${sandboxResult.mcpUrl}`)
 
+  // Verify sandbox is actually working by checking both URLs
+  console.log(`[Step 0] Verifying sandbox URLs are accessible...`)
+  try {
+    const devCheck = await fetch(sandboxResult.devUrl, { method: "HEAD" })
+    console.log(`[Step 0] Dev server check: ${devCheck.status} ${devCheck.statusText}`)
+  } catch (error) {
+    console.log(`[Step 0] Dev server check FAILED: ${error instanceof Error ? error.message : String(error)}`)
+  }
+
+  try {
+    const mcpCheck = await fetch(`${sandboxResult.mcpUrl}/mcp`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 0, method: "tools/list" })
+    })
+    console.log(`[Step 0] MCP server check: ${mcpCheck.status} ${mcpCheck.statusText}`)
+    if (mcpCheck.ok) {
+      const mcpData = await mcpCheck.json()
+      const toolCount = mcpData.result?.tools?.length || 0
+      console.log(`[Step 0] MCP server has ${toolCount} tools available`)
+    }
+  } catch (error) {
+    console.log(`[Step 0] MCP server check FAILED: ${error instanceof Error ? error.message : String(error)}`)
+  }
+
   // Note: We cannot return the cleanup function as it's not serializable
   // Sandbox cleanup will happen automatically when the sandbox times out
   return {
@@ -155,6 +180,20 @@ export async function fetchRealLogs(mcpUrlOrDevUrl: string, bypassToken?: string
       console.log("[Step 1] Waiting 5s for page load...")
       await new Promise((resolve) => setTimeout(resolve, 5000))
 
+      // Check d3k logs to see if it's capturing data
+      console.log("[Step 1] Fetching d3k logs from sandbox to verify it's working...")
+      try {
+        const logsResponse = await fetch(`${mcpUrl}/api/logs`)
+        if (logsResponse.ok) {
+          const logsText = await logsResponse.text()
+          console.log(`[Step 1] d3k logs (last 1000 chars):\n${logsText.slice(-1000)}`)
+        } else {
+          console.log(`[Step 1] Could not fetch d3k logs: ${logsResponse.status}`)
+        }
+      } catch (error) {
+        console.log(`[Step 1] Failed to fetch d3k logs: ${error instanceof Error ? error.message : String(error)}`)
+      }
+
       // Call fix_my_app with focusArea='performance' to capture CLS and jank
       console.log("[Step 1] Calling fix_my_app with focusArea='performance'...")
       const mcpResponse = await fetch(`${mcpUrl}/mcp`, {
@@ -185,27 +224,50 @@ export async function fetchRealLogs(mcpUrlOrDevUrl: string, bypassToken?: string
 
       // Parse SSE response
       const text = await mcpResponse.text()
+      console.log(`[Step 1] fix_my_app response length: ${text.length} bytes`)
+      console.log(`[Step 1] fix_my_app response preview (first 500 chars):\n${text.substring(0, 500)}`)
+
       const lines = text.split("\n")
+      console.log(`[Step 1] Response split into ${lines.length} lines`)
+
       let logAnalysis = ""
+      let linesProcessed = 0
+      let contentBlocks = 0
 
       for (const line of lines) {
         if (line.startsWith("data: ")) {
+          linesProcessed++
           try {
             const json = JSON.parse(line.substring(6))
+            console.log(`[Step 1] Parsed JSON line ${linesProcessed}:`, JSON.stringify(json).substring(0, 200))
+
             if (json.result?.content) {
               for (const content of json.result.content) {
                 if (content.type === "text") {
+                  contentBlocks++
                   logAnalysis += content.text
+                  console.log(`[Step 1] Added text content block ${contentBlocks}, length: ${content.text.length}`)
                 }
               }
+            } else if (json.error) {
+              console.log(`[Step 1] ERROR in response: ${JSON.stringify(json.error)}`)
             }
-          } catch {
-            // Skip invalid JSON
+          } catch (error) {
+            console.log(
+              `[Step 1] Failed to parse JSON line ${linesProcessed}: ${error instanceof Error ? error.message : String(error)}`
+            )
+            console.log(`[Step 1] Problem line: ${line.substring(0, 200)}`)
           }
         }
       }
 
+      console.log(`[Step 1] Processed ${linesProcessed} data lines, ${contentBlocks} content blocks`)
       console.log(`[Step 1] Got ${logAnalysis.length} chars from fix_my_app (performance analysis)`)
+
+      if (logAnalysis.length === 0) {
+        console.log(`[Step 1] WARNING: fix_my_app returned NO data. Full response:\n${text}`)
+      }
+
       return `d3k Performance Analysis for ${devUrl}\n\n${logAnalysis}`
     }
 
