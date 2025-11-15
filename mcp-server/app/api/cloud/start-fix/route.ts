@@ -15,7 +15,7 @@ import { cloudFixWorkflow } from "../fix-workflow/workflow"
 const corsHeaders = {
   "Access-Control-Allow-Origin": "http://localhost:3000",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
   "Access-Control-Allow-Credentials": "true"
 }
 
@@ -32,10 +32,18 @@ export async function POST(request: Request) {
   let projectName: string | undefined
 
   try {
-    // Get user's access token from cookies for Vercel API access
+    // Get user's access token from cookies or Authorization header
     const { cookies: getCookies } = await import("next/headers")
     const cookieStore = await getCookies()
-    const accessToken = cookieStore.get("access_token")?.value
+    let accessToken = cookieStore.get("access_token")?.value
+
+    // Fallback to Authorization header for cross-origin requests
+    if (!accessToken) {
+      const authHeader = request.headers.get("Authorization")
+      if (authHeader?.startsWith("Bearer ")) {
+        accessToken = authHeader.substring(7)
+      }
+    }
 
     if (!accessToken) {
       return Response.json(

@@ -395,9 +395,20 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
         console.log("[Start Workflow] Body stringified successfully, length:", bodyString.length)
         console.log("[Start Workflow] Calling fetch with URL:", apiUrl)
 
+        // Get access token for Authorization header (needed for cross-origin requests)
+        const tokenResponse = await fetch("/api/auth/token")
+        const tokenData = await tokenResponse.json()
+        const accessToken = tokenData.accessToken
+
+        const headers: HeadersInit = { "Content-Type": "application/json" }
+        if (accessToken && apiBaseUrl) {
+          // If calling production API, include Authorization header
+          headers.Authorization = `Bearer ${accessToken}`
+        }
+
         const response = await fetch(apiUrl, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers,
           body: bodyString,
           credentials: "include",
           signal: controller.signal
