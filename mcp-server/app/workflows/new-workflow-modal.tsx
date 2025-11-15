@@ -378,7 +378,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       // Show step-by-step progress
       const steps = [
         "Starting workflow...",
-        repoUrl ? "Creating development sandbox..." : null,
+        repoOwner && repoName ? "Creating development sandbox..." : null,
         "Fetching deployment logs...",
         "Analyzing errors with AI...",
         "Generating fix proposal...",
