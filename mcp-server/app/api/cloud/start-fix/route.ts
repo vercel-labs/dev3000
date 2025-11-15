@@ -52,6 +52,10 @@ export async function POST(request: Request) {
       )
     }
 
+    // Get VERCEL_OIDC_TOKEN from request header (runtime token)
+    const vercelOidcToken = request.headers.get("x-vercel-oidc-token") || process.env.VERCEL_OIDC_TOKEN
+    console.log(`[Start Fix] VERCEL_OIDC_TOKEN available: ${!!vercelOidcToken}`)
+
     const body = await request.json()
     const { devUrl, repoOwner, repoName, baseBranch, bypassToken, repoUrl, repoBranch } = body
     userId = body.userId
@@ -77,6 +81,7 @@ export async function POST(request: Request) {
       devUrl,
       projectName,
       vercelToken: accessToken, // Pass user's access token for sandbox creation
+      vercelOidcToken, // Pass OIDC token from request header for sandbox creation
       ...(repoOwner && { repoOwner }),
       ...(repoName && { repoName }),
       ...(baseBranch && { baseBranch }),

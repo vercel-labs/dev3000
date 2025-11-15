@@ -12,6 +12,7 @@ export async function cloudFixWorkflow(params: {
   devUrl: string
   projectName: string
   vercelToken?: string
+  vercelOidcToken?: string
   repoOwner?: string
   repoName?: string
   baseBranch?: string
@@ -25,6 +26,7 @@ export async function cloudFixWorkflow(params: {
     devUrl,
     projectName,
     vercelToken,
+    vercelOidcToken: vercelOidcTokenParam,
     repoOwner,
     repoName,
     baseBranch = "main",
@@ -47,8 +49,11 @@ export async function cloudFixWorkflow(params: {
     console.log(`[Workflow] Branch: ${repoBranch || "main"}`)
   }
 
-  // Capture VERCEL_OIDC_TOKEN from workflow context to pass to steps
-  const vercelOidcToken = process.env.VERCEL_OIDC_TOKEN
+  // Use VERCEL_OIDC_TOKEN from params (passed from request header) or fall back to env
+  // At runtime, OIDC token is in x-vercel-oidc-token header, not process.env
+  const vercelOidcToken = vercelOidcTokenParam || process.env.VERCEL_OIDC_TOKEN
+  console.log(`[Workflow] VERCEL_OIDC_TOKEN from param: ${!!vercelOidcTokenParam}`)
+  console.log(`[Workflow] VERCEL_OIDC_TOKEN from env: ${!!process.env.VERCEL_OIDC_TOKEN}`)
   console.log(`[Workflow] VERCEL_OIDC_TOKEN available: ${!!vercelOidcToken}`)
 
   // Step 0: Create d3k sandbox if repoUrl provided
