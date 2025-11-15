@@ -463,7 +463,10 @@ export class CDPMonitor {
                     // Chrome is alive but CDP connection is lost - this could be recoverable
                     this.debugLog("Chrome process alive but CDP connection lost - attempting recovery")
                     this.logger("browser", "[CDP] Attempting to recover from connection loss")
-                    // Could add reconnection logic here in the future
+                    // Attempt to reconnect
+                    this.attemptReconnect().catch((err) => {
+                      this.logger("browser", `[CDP] Reconnection failed: ${err.message}`)
+                    })
                   }
                 }
               }, 2000) // Wait 2 seconds to see if it's a temporary disconnect
@@ -493,6 +496,31 @@ export class CDPMonitor {
         this.debugLog(`Retrying CDP connection in ${delay}ms`)
         await new Promise((resolve) => setTimeout(resolve, delay))
       }
+    }
+  }
+
+  private async attemptReconnect(): Promise<void> {
+    this.debugLog("Starting CDP reconnection attempt")
+    this.logger("browser", "[CDP] Starting reconnection process...")
+
+    // Close existing connection if any
+    if (this.connection) {
+      try {
+        this.connection.ws.close()
+      } catch (err) {
+        this.debugLog(`Error closing old connection: ${err}`)
+      }
+      this.connection = null
+    }
+
+    // Attempt to reconnect
+    try {
+      await this.connectToCDP()
+      this.logger("browser", "[CDP] Reconnection successful!")
+      this.debugLog("CDP reconnection completed successfully")
+    } catch (err) {
+      this.logger("browser", `[CDP] Reconnection failed: ${err}`)
+      throw err
     }
   }
 

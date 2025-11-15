@@ -1,6 +1,5 @@
 import path from "path"
 import { fileURLToPath } from "url"
-import { withWorkflow } from "workflow/next"
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -18,4 +17,4 @@ const nextConfig = {
   }
 }
 
-export default withWorkflow(nextConfig)
+export default nextConfig

@@ -323,19 +323,28 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   }
 
   async function startWorkflow() {
-    if (!selectedProject || !selectedTeam) return
+    console.log("[Start Workflow] Function called")
+    console.log("[Start Workflow] selectedProject:", selectedProject)
+    console.log("[Start Workflow] selectedTeam:", selectedTeam)
+
+    if (!selectedProject || !selectedTeam) {
+      console.log("[Start Workflow] Missing project or team, returning")
+      return
+    }
 
     setStep("running")
     setWorkflowStatus("Starting workflow...")
 
     try {
       // Get the latest deployment URL
+      console.log("[Start Workflow] latestDeployments:", selectedProject.latestDeployments)
       const latestDeployment = selectedProject.latestDeployments[0]
       if (!latestDeployment) {
         throw new Error("No deployments found for this project")
       }
 
       const devUrl = `https://${latestDeployment.url}`
+      console.log("[Start Workflow] devUrl:", devUrl)
 
       // Extract repo info from project link
       let repoOwner: string | undefined
@@ -372,17 +381,28 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       const apiBaseUrl = process.env.NEXT_PUBLIC_WORKFLOW_API_URL || ""
       const apiUrl = `${apiBaseUrl}/api/cloud/start-fix`
 
+      console.log("[Start Workflow] API URL:", apiUrl)
+      console.log("[Start Workflow] Request body:", body)
+
       // Create an AbortController for timeout handling
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 5 * 60 * 1000) // 5 minute timeout
 
       try {
+        console.log("[Start Workflow] Making fetch request...")
+        console.log("[Start Workflow] About to stringify body...")
+        const bodyString = JSON.stringify(body)
+        console.log("[Start Workflow] Body stringified successfully, length:", bodyString.length)
+        console.log("[Start Workflow] Calling fetch with URL:", apiUrl)
+
         const response = await fetch(apiUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
+          body: bodyString,
           signal: controller.signal
         })
+
+        console.log("[Start Workflow] Fetch completed, status:", response.status)
 
         clearTimeout(timeoutId)
 
@@ -407,8 +427,18 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
         throw fetchError
       }
     } catch (error) {
-      console.error("Workflow error:", error)
-      setWorkflowStatus(`Error: ${error instanceof Error ? error.message : String(error)}`)
+      console.error("[Start Workflow] OUTER ERROR caught:", error)
+      console.error("[Start Workflow] Error type:", error?.constructor?.name)
+      console.error("[Start Workflow] Error stack:", error instanceof Error ? error.stack : "no stack")
+
+      let errorMessage = error instanceof Error ? error.message : String(error)
+
+      if (error instanceof TypeError && errorMessage === "Failed to fetch") {
+        errorMessage =
+          "Network error: Unable to connect to API. This might be a CORS issue, network problem, or Content Security Policy blocking the request."
+      }
+
+      setWorkflowStatus(`Error: ${errorMessage}`)
     }
   }
 

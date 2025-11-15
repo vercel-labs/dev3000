@@ -10,6 +10,22 @@ import { cloudFixWorkflow } from "../fix-workflow/workflow"
  * and waits for the result using run.returnValue, which includes the blob URL
  * where the fix proposal was uploaded.
  */
+
+// CORS headers
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type"
+}
+
+// Handle OPTIONS preflight request
+export async function OPTIONS() {
+  return new Response(null, {
+    status: 204,
+    headers: corsHeaders
+  })
+}
+
 export async function POST(request: Request) {
   let userId: string | undefined
   let projectName: string | undefined
@@ -23,7 +39,7 @@ export async function POST(request: Request) {
     if (!accessToken) {
       return Response.json(
         { success: false, error: "Not authenticated. Please sign in to use workflows." },
-        { status: 401 }
+        { status: 401, headers: corsHeaders }
       )
     }
 
@@ -93,14 +109,19 @@ export async function POST(request: Request) {
       console.log(`[Start Fix] Saved workflow run metadata: ${runId}`)
     }
 
-    return Response.json({
-      success: true,
-      message: "Cloud fix workflow completed successfully",
-      projectName,
-      blobUrl: result.blobUrl,
-      fixProposal: result.fixProposal,
-      pr: result.pr
-    })
+    return Response.json(
+      {
+        success: true,
+        message: "Cloud fix workflow completed successfully",
+        projectName,
+        blobUrl: result.blobUrl,
+        fixProposal: result.fixProposal,
+        pr: result.pr
+      },
+      {
+        headers: corsHeaders
+      }
+    )
   } catch (error) {
     console.error("[Start Fix] Error running workflow:", error)
 
@@ -123,7 +144,7 @@ export async function POST(request: Request) {
         success: false,
         error: error instanceof Error ? error.message : String(error)
       },
-      { status: 500 }
+      { status: 500, headers: corsHeaders }
     )
   }
 }

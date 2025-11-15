@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
+import { NextResponse } from "next/server"
 
 interface RefreshTokenResponse {
   access_token: string
@@ -10,21 +10,55 @@ interface RefreshTokenResponse {
   refresh_token: string
 }
 
-export async function middleware(request: NextRequest) {
+export default async function proxy(request: NextRequest) {
   const accessToken = request.cookies.get("access_token")?.value
   const refreshToken = request.cookies.get("refresh_token")?.value
+
+  console.log("[Middleware] Path:", request.nextUrl.pathname)
+  console.log("[Middleware] Has access token:", !!accessToken)
+  console.log("[Middleware] Has refresh token:", !!refreshToken)
 
   // Only check auth on protected routes
   const protectedPaths = ["/workflows"]
   const isProtectedPath = protectedPaths.some((path) => request.nextUrl.pathname.startsWith(path))
 
   if (!isProtectedPath) {
+    console.log("[Middleware] Not a protected path, continuing")
     return NextResponse.next()
   }
 
   // If no tokens at all, let the page handle redirect
   if (!accessToken && !refreshToken) {
+    console.log("[Middleware] No tokens found, letting page handle redirect")
     return NextResponse.next()
+  }
+
+  // If we have a refresh token but no access token, try to refresh immediately
+  if (!accessToken && refreshToken) {
+    console.log("[Middleware] No access token but have refresh token, attempting refresh...")
+    const newAccessToken = await attemptRefresh(refreshToken)
+
+    if (newAccessToken) {
+      // Create response and set new cookies
+      const response = NextResponse.next()
+      response.cookies.set("access_token", newAccessToken.access_token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: newAccessToken.expires_in
+      })
+      response.cookies.set("refresh_token", newAccessToken.refresh_token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 60 * 60 * 24 * 30 // 30 days
+      })
+      console.log("[Middleware] Token refreshed successfully")
+      return response
+    } else {
+      console.log("[Middleware] Token refresh failed")
+      return NextResponse.next()
+    }
   }
 
   // If we have an access token, verify it's still valid
@@ -38,6 +72,7 @@ export async function middleware(request: NextRequest) {
 
       // Token is valid, continue
       if (response.ok) {
+        console.log("[Middleware] Access token is valid")
         return NextResponse.next()
       }
 
@@ -63,6 +98,8 @@ export async function middleware(request: NextRequest) {
           })
           console.log("[Middleware] Token refreshed successfully")
           return response
+        } else {
+          console.log("[Middleware] Token refresh failed")
         }
       }
     } catch (error) {
