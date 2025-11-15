@@ -77,7 +77,7 @@ export async function POST(request: Request) {
       ...(repoBranch && { repoBranch })
     }
 
-    const run = await start(cloudFixWorkflow, [workflowParams])
+    const run = await start(cloudFixWorkflow, workflowParams)
 
     console.log(`[Start Fix] Workflow started, waiting for completion...`)
 

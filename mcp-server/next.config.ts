@@ -1,9 +1,7 @@
-import path from "path"
-import { fileURLToPath } from "url"
+import type { NextConfig } from "next"
+import { withWorkflow } from "workflow/next"
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-
-const nextConfig = {
+const nextConfig: NextConfig = {
   reactStrictMode: true,
   reactCompiler: true,
   experimental: {
@@ -17,4 +15,4 @@ const nextConfig = {
   }
 }
 
-export default nextConfig
+export default withWorkflow(nextConfig)
