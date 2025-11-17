@@ -38,7 +38,7 @@ catalog:
   '@types/ws': ^8.5.12
   autoprefixer: ^10.4.21
   babel-plugin-react-compiler: 19.1.0-rc.3
-  class-variance-authority: ^0.7.1
+  class-variance-authority: 0.7.1
   clsx: ^2.1.1
   commander: ^14.0.1
   lucide-react: ^0.544.0
