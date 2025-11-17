@@ -64,10 +64,26 @@ export async function createD3kSandbox(
       body: JSON.stringify({ jsonrpc: "2.0", id: 0, method: "tools/list" })
     })
     console.log(`[Step 0] MCP server check: ${mcpCheck.status} ${mcpCheck.statusText}`)
+
     if (mcpCheck.ok) {
-      const mcpData = await mcpCheck.json()
-      const toolCount = mcpData.result?.tools?.length || 0
-      console.log(`[Step 0] MCP server has ${toolCount} tools available`)
+      // Get raw response text first to debug JSON parsing issues
+      const responseText = await mcpCheck.text()
+      console.log(`[Step 0] MCP server response length: ${responseText.length} bytes`)
+      console.log(`[Step 0] MCP server response preview: ${responseText.substring(0, 200)}`)
+
+      try {
+        const mcpData = JSON.parse(responseText)
+        const toolCount = mcpData.result?.tools?.length || 0
+        console.log(`[Step 0] MCP server has ${toolCount} tools available`)
+      } catch (parseError) {
+        console.log(
+          `[Step 0] Failed to parse MCP response as JSON: ${parseError instanceof Error ? parseError.message : String(parseError)}`
+        )
+        console.log(`[Step 0] Full response text: ${responseText}`)
+      }
+    } else {
+      const errorText = await mcpCheck.text()
+      console.log(`[Step 0] MCP server returned error response: ${errorText}`)
     }
   } catch (error) {
     console.log(`[Step 0] MCP server check FAILED: ${error instanceof Error ? error.message : String(error)}`)

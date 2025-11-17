@@ -151,6 +151,21 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     if (debug) console.log("  ⏳ Waiting for d3k to initialize MCPs and browser...")
     await new Promise((resolve) => setTimeout(resolve, 10000))
 
+    // Check d3k logs for any errors
+    if (debug) {
+      console.log("  📋 Checking d3k logs...")
+      const logsResult = await sandbox.runCommand({
+        cmd: "tail",
+        args: ["-n", "50", "/tmp/d3k.log"]
+      })
+      if (logsResult.exitCode === 0 && logsResult.stdout) {
+        console.log("  📋 d3k log (last 50 lines):")
+        console.log(logsResult.stdout)
+      } else {
+        console.log("  ⚠️ Could not read d3k logs")
+      }
+    }
+
     if (debug) console.log("  ✅ d3k sandbox ready!")
 
     return {
