@@ -97,17 +97,21 @@ function detectPackageManagerForRun(): string {
 
 async function isPortAvailable(port: string): Promise<boolean> {
   try {
-    const result = await new Promise<string>((resolve) => {
+    const result = await new Promise<string>((resolve, reject) => {
       const proc = spawn("lsof", ["-ti", `:${port}`], { stdio: "pipe" })
       let output = ""
       proc.stdout?.on("data", (data) => {
         output += data.toString()
       })
+      proc.on("error", (err) => {
+        // Handle case where lsof command doesn't exist (e.g., in sandboxes)
+        reject(err)
+      })
       proc.on("exit", () => resolve(output.trim()))
     })
     return !result // If no output, port is available
   } catch {
-    return true // Assume port is available if check fails
+    return true // Assume port is available if check fails (including when lsof is not installed)
   }
 }
 
