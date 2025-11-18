@@ -77,7 +77,7 @@ export async function POST(request: Request) {
     // Start the workflow and get a Run object
     // Pass serializable data instead of Request object
     // The workflow will fetch real logs from the devUrl and optionally create a PR
-    const workflowParams = {
+    const workflowParams: Parameters<typeof cloudFixWorkflow>[0] = {
       devUrl,
       projectName,
       vercelToken: accessToken, // Pass user's access token for sandbox creation
@@ -90,7 +90,7 @@ export async function POST(request: Request) {
       ...(repoBranch && { repoBranch })
     }
 
-    const run = await start(cloudFixWorkflow, [workflowParams] as any)
+    const run = await start(cloudFixWorkflow, [workflowParams])
 
     console.log(`[Start Fix] Workflow started, waiting for completion...`)
 
