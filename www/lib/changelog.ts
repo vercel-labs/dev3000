@@ -10,6 +10,19 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.109",
+    date: "2025-11-18",
+    type: "patch",
+    highlights: [
+      "Fix lsof port checking to only skip in sandbox environments",
+      "Disable lsof port checking entirely to fix sandbox crashes",
+      "Fix lsof ENOENT crash by checking command existence first",
+      "Fix TypeScript type safety in cloud workflow start",
+      ".gitignore updates"
+    ]
+  },
+
+  {
     version: "0.0.108",
     date: "2025-11-18",
     type: "patch",

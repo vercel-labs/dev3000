@@ -8,8 +8,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 **Patch Release**
 
-- **Sandbox Environment Detection**: Smart port checking that detects Vercel Sandbox, Docker, and container environments to skip lsof checks only where needed while maintaining proper port conflict detection locally
-- Improved stability in sandboxed environments (Vercel, Docker, Podman)
+- Fix lsof port checking to only skip in sandbox environments
+- Disable lsof port checking entirely to fix sandbox crashes
+- Fix lsof ENOENT crash by checking command existence first
+- Fix TypeScript type safety in cloud workflow start
+- .gitignore updates
+
+## [0.0.108] - 2025-11-18
+
+**Patch Release**
+
+- Ignore TypeScript build info file
+- Update Next.js build artifact (next-env.d.ts)
+- Fix browser automation and multi-instance support
+- Fix d3k command in cloud workflow Step 0 - remove invalid 'start' subcommand
+- Fix d3k startup - use correct --no-tui flag
 
 ## [0.0.108] - 2025-11-07
 
