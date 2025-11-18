@@ -459,7 +459,14 @@ const handler = createMcpHandler(
         params: z
           .record(z.unknown())
           .optional()
-          .describe("Parameters for the action (e.g., {x: 100, y: 200} for click, {url: 'https://...'} for navigate)")
+          .describe(
+            "Parameters for the action:\n" +
+              "- click: {x: number, y: number} OR {selector: string} (CSS selector)\n" +
+              "- navigate: {url: string}\n" +
+              "- evaluate: {expression: string}\n" +
+              "- scroll: {deltaX?: number, deltaY?: number, x?: number, y?: number}\n" +
+              "- type: {text: string}"
+          )
       },
       async (params) => {
         return executeBrowserAction(params)

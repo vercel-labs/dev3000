@@ -48,7 +48,8 @@ export class CDPMonitor {
     browserPath?: string,
     pluginReactScan: boolean = false,
     appServerPort?: string,
-    mcpServerPort?: string
+    mcpServerPort?: string,
+    debugPort?: number
   ) {
     this.profileDir = profileDir
     this.screenshotDir = screenshotDir
@@ -58,6 +59,10 @@ export class CDPMonitor {
     this.debug = debug
     this.browserPath = browserPath
     this.pluginReactScan = pluginReactScan
+    // Use custom debug port if provided, otherwise use default 9222
+    if (debugPort) {
+      this.debugPort = debugPort
+    }
   }
 
   private debugLog(message: string) {
@@ -284,6 +289,7 @@ export class CDPMonitor {
           [
             `--remote-debugging-port=${this.debugPort}`,
             `--user-data-dir=${this.profileDir}`,
+            "--new-window", // Force new window instead of reusing existing instance
             "--no-first-run",
             "--no-default-browser-check",
             "--disable-component-extensions-with-background-pages",
@@ -393,12 +399,25 @@ export class CDPMonitor {
         const targetsResponse = await fetch(`http://localhost:${this.debugPort}/json`)
         const targets = await targetsResponse.json()
 
-        // Find the first page target (tab)
-        const pageTarget = targets.find(
+        this.debugLog(
+          `Found ${targets.length} targets: ${JSON.stringify(targets.map((t: { type: string; url: string }) => ({ type: t.type, url: t.url })))}`
+        )
+
+        // Find the first page target (tab) - prefer 'page' type but accept any target with a webSocketDebuggerUrl
+        let pageTarget = targets.find(
           (target: { type: string; webSocketDebuggerUrl: string }) => target.type === "page"
         )
+
+        // Fallback: if no 'page' type found, try to use any target with a debugger URL
+        if (!pageTarget && targets.length > 0) {
+          pageTarget = targets.find((target: { webSocketDebuggerUrl?: string }) => target.webSocketDebuggerUrl)
+          if (pageTarget) {
+            this.debugLog(`No 'page' type target found, using target of type '${pageTarget.type}' instead`)
+          }
+        }
+
         if (!pageTarget) {
-          throw new Error("No page target found in Chrome")
+          throw new Error(`No debuggable target found in Chrome (found ${targets.length} targets)`)
         }
 
         const wsUrl = pageTarget.webSocketDebuggerUrl

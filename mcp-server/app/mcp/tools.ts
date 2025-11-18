@@ -1876,9 +1876,19 @@ export async function executeBrowserAction({
       }
     }
 
-    // Connect to Chrome DevTools Protocol
+    // Connect to Chrome DevTools Protocol with timeout
     const result = await new Promise<Record<string, unknown>>((resolve, reject) => {
       const ws = new WebSocket(cdpUrl)
+
+      // Overall timeout for the entire browser action (60 seconds)
+      const overallTimeout = setTimeout(() => {
+        ws.close()
+        reject(
+          new Error(
+            `Browser action '${action}' timed out after 60 seconds. This may indicate an issue with the browser or invalid parameters.`
+          )
+        )
+      }, 60000)
 
       ws.on("open", async () => {
         try {
@@ -1890,153 +1900,204 @@ export async function executeBrowserAction({
           let messageId = 2
 
           ws.on("message", async (data) => {
-            const message = JSON.parse(data.toString())
+            try {
+              const message = JSON.parse(data.toString())
 
-            // Handle getting targets
-            if (message.id === 1) {
-              const pageTarget = message.result.targetInfos.find((t: Record<string, unknown>) => t.type === "page")
-              if (!pageTarget) {
-                ws.close()
-                reject(new Error("No page targets found"))
+              // Handle getting targets
+              if (message.id === 1) {
+                const pageTarget = message.result.targetInfos.find((t: Record<string, unknown>) => t.type === "page")
+                if (!pageTarget) {
+                  ws.close()
+                  reject(new Error("No page targets found"))
+                  return
+                }
+
+                targetId = pageTarget.targetId
+
+                // Attach to the target
+                ws.send(
+                  JSON.stringify({
+                    id: messageId++,
+                    method: "Target.attachToTarget",
+                    params: { targetId, flatten: true }
+                  })
+                )
                 return
               }
 
-              targetId = pageTarget.targetId
+              // Handle session creation
+              if (message.method === "Target.attachedToTarget") {
+                _sessionId = message.params.sessionId
 
-              // Attach to the target
-              ws.send(
-                JSON.stringify({
-                  id: messageId++,
-                  method: "Target.attachToTarget",
-                  params: { targetId, flatten: true }
-                })
-              )
-              return
-            }
+                // Now execute the requested action
+                let cdpResult: Record<string, unknown>
 
-            // Handle session creation
-            if (message.method === "Target.attachedToTarget") {
-              _sessionId = message.params.sessionId
+                switch (action) {
+                  case "click": {
+                    let clickX: number
+                    let clickY: number
 
-              // Now execute the requested action
-              let cdpResult: Record<string, unknown>
+                    // Support both coordinate-based and selector-based clicks
+                    if (typeof params.selector === "string") {
+                      // Get element coordinates from selector
+                      const selectorResult = (await sendCDPCommand(ws, messageId++, "Runtime.evaluate", {
+                        expression: `(() => {
+                        const el = document.querySelector(${JSON.stringify(params.selector)});
+                        if (!el) return { found: false };
+                        const rect = el.getBoundingClientRect();
+                        return {
+                          found: true,
+                          x: rect.left + rect.width / 2,
+                          y: rect.top + rect.height / 2
+                        };
+                      })()`,
+                        returnByValue: true
+                      })) as { result?: { value?: { found: boolean; x?: number; y?: number } } }
 
-              switch (action) {
-                case "click": {
-                  if (typeof params.x !== "number" || typeof params.y !== "number") {
-                    throw new Error("Click action requires x and y coordinates as numbers")
-                  }
-                  cdpResult = await sendCDPCommand(ws, messageId++, "Input.dispatchMouseEvent", {
-                    type: "mousePressed",
-                    x: params.x,
-                    y: params.y,
-                    button: "left",
-                    clickCount: 1
-                  })
-                  await sendCDPCommand(ws, messageId++, "Input.dispatchMouseEvent", {
-                    type: "mouseReleased",
-                    x: params.x,
-                    y: params.y,
-                    button: "left",
-                    clickCount: 1
-                  })
-                  break
-                }
+                      if (
+                        selectorResult.result?.value?.found === true &&
+                        typeof selectorResult.result.value.x === "number" &&
+                        typeof selectorResult.result.value.y === "number"
+                      ) {
+                        clickX = selectorResult.result.value.x
+                        clickY = selectorResult.result.value.y
+                      } else {
+                        throw new Error(`Element not found for selector: ${params.selector}`)
+                      }
+                    } else if (typeof params.x === "number" && typeof params.y === "number") {
+                      clickX = params.x
+                      clickY = params.y
+                    } else {
+                      throw new Error("Click action requires either {x, y} coordinates or a {selector} CSS selector")
+                    }
 
-                case "navigate":
-                  if (typeof params.url !== "string") {
-                    throw new Error("Navigate action requires url parameter as string")
-                  }
-                  cdpResult = await sendCDPCommand(ws, messageId++, "Page.navigate", { url: params.url })
-                  break
-
-                case "screenshot":
-                  ws.close()
-                  resolve({
-                    warning: "Screenshot action is not recommended!",
-                    advice:
-                      "Dev3000 automatically captures screenshots during interactions. Instead of manual screenshots, use click/navigate/scroll/type actions to reproduce user workflows, and dev3000 will capture screenshots at optimal times.",
-                    suggestion: "Run fix_my_app to see all auto-captured screenshots from your session."
-                  })
-                  return
-
-                case "evaluate": {
-                  if (typeof params.expression !== "string") {
-                    throw new Error("Evaluate action requires expression parameter as string")
-                  }
-                  const expression = params.expression
-                  // Validate that the expression is safe (read-only DOM queries)
-                  // Block dangerous patterns
-                  const dangerousPatterns = [
-                    /eval\s*\(/,
-                    /Function\s*\(/,
-                    /setTimeout/,
-                    /setInterval/,
-                    /\.innerHTML\s*=/,
-                    /\.outerHTML\s*=/,
-                    /document\.write/,
-                    /document\.cookie\s*=/,
-                    /localStorage\.setItem/,
-                    /sessionStorage\.setItem/,
-                    /\.src\s*=/,
-                    /\.href\s*=/,
-                    /location\s*=/,
-                    /\.addEventListener/,
-                    /\.removeEventListener/,
-                    /new\s+Function/,
-                    /import\s*\(/,
-                    /fetch\s*\(/,
-                    /XMLHttpRequest/
-                  ]
-
-                  if (dangerousPatterns.some((regex) => regex.test(expression))) {
-                    throw new Error("Expression contains dangerous patterns. Only safe read-only expressions allowed.")
-                  }
-
-                  cdpResult = await sendCDPCommand(ws, messageId++, "Runtime.evaluate", {
-                    expression: expression,
-                    returnByValue: true
-                  })
-                  break
-                }
-
-                case "scroll": {
-                  const scrollX = typeof params.deltaX === "number" ? params.deltaX : 0
-                  const scrollY = typeof params.deltaY === "number" ? params.deltaY : 0
-                  cdpResult = await sendCDPCommand(ws, messageId++, "Input.dispatchMouseEvent", {
-                    type: "mouseWheel",
-                    x: typeof params.x === "number" ? params.x : 500,
-                    y: typeof params.y === "number" ? params.y : 500,
-                    deltaX: scrollX,
-                    deltaY: scrollY
-                  })
-                  break
-                }
-
-                case "type":
-                  if (typeof params.text !== "string") {
-                    throw new Error("Type action requires text parameter as string")
-                  }
-                  // Type each character
-                  for (const char of params.text) {
-                    await sendCDPCommand(ws, messageId++, "Input.dispatchKeyEvent", {
-                      type: "char",
-                      text: char
+                    cdpResult = await sendCDPCommand(ws, messageId++, "Input.dispatchMouseEvent", {
+                      type: "mousePressed",
+                      x: clickX,
+                      y: clickY,
+                      button: "left",
+                      clickCount: 1
                     })
+                    await sendCDPCommand(ws, messageId++, "Input.dispatchMouseEvent", {
+                      type: "mouseReleased",
+                      x: clickX,
+                      y: clickY,
+                      button: "left",
+                      clickCount: 1
+                    })
+                    break
                   }
-                  cdpResult = { action: "type", text: params.text }
-                  break
 
-                default:
-                  throw new Error(`Unsupported action: ${action}`)
+                  case "navigate":
+                    if (typeof params.url !== "string") {
+                      throw new Error("Navigate action requires url parameter as string")
+                    }
+                    cdpResult = await sendCDPCommand(ws, messageId++, "Page.navigate", { url: params.url })
+                    break
+
+                  case "screenshot":
+                    ws.close()
+                    resolve({
+                      warning: "Screenshot action is not recommended!",
+                      advice:
+                        "Dev3000 automatically captures screenshots during interactions. Instead of manual screenshots, use click/navigate/scroll/type actions to reproduce user workflows, and dev3000 will capture screenshots at optimal times.",
+                      suggestion: "Run fix_my_app to see all auto-captured screenshots from your session."
+                    })
+                    return
+
+                  case "evaluate": {
+                    if (typeof params.expression !== "string") {
+                      throw new Error("Evaluate action requires expression parameter as string")
+                    }
+                    const expression = params.expression
+                    // Validate that the expression is safe (read-only DOM queries)
+                    // Block dangerous patterns
+                    const dangerousPatterns = [
+                      /eval\s*\(/,
+                      /Function\s*\(/,
+                      /setTimeout/,
+                      /setInterval/,
+                      /\.innerHTML\s*=/,
+                      /\.outerHTML\s*=/,
+                      /document\.write/,
+                      /document\.cookie\s*=/,
+                      /localStorage\.setItem/,
+                      /sessionStorage\.setItem/,
+                      /\.src\s*=/,
+                      /\.href\s*=/,
+                      /location\s*=/,
+                      /\.addEventListener/,
+                      /\.removeEventListener/,
+                      /new\s+Function/,
+                      /import\s*\(/,
+                      /fetch\s*\(/,
+                      /XMLHttpRequest/
+                    ]
+
+                    if (dangerousPatterns.some((regex) => regex.test(expression))) {
+                      throw new Error(
+                        "Expression contains dangerous patterns. Only safe read-only expressions allowed."
+                      )
+                    }
+
+                    cdpResult = await sendCDPCommand(ws, messageId++, "Runtime.evaluate", {
+                      expression: expression,
+                      returnByValue: true
+                    })
+                    break
+                  }
+
+                  case "scroll": {
+                    const scrollX = typeof params.deltaX === "number" ? params.deltaX : 0
+                    const scrollY = typeof params.deltaY === "number" ? params.deltaY : 0
+                    cdpResult = await sendCDPCommand(ws, messageId++, "Input.dispatchMouseEvent", {
+                      type: "mouseWheel",
+                      x: typeof params.x === "number" ? params.x : 500,
+                      y: typeof params.y === "number" ? params.y : 500,
+                      deltaX: scrollX,
+                      deltaY: scrollY
+                    })
+                    break
+                  }
+
+                  case "type":
+                    if (typeof params.text !== "string") {
+                      throw new Error("Type action requires text parameter as string")
+                    }
+                    // Type each character
+                    for (const char of params.text) {
+                      await sendCDPCommand(ws, messageId++, "Input.dispatchKeyEvent", {
+                        type: "char",
+                        text: char
+                      })
+                    }
+                    cdpResult = { action: "type", text: params.text }
+                    break
+
+                  default:
+                    throw new Error(`Unsupported action: ${action}`)
+                }
+
+                ws.close()
+                clearTimeout(overallTimeout)
+                resolve(cdpResult)
               }
-
+            } catch (error) {
+              // Catch any errors that occur during message handling
               ws.close()
-              resolve(cdpResult)
+              clearTimeout(overallTimeout)
+              reject(
+                error instanceof Error
+                  ? error
+                  : new Error(`Browser action failed: ${error instanceof Error ? error.message : String(error)}`)
+              )
             }
           })
 
-          ws.on("error", reject)
+          ws.on("error", (error) => {
+            clearTimeout(overallTimeout)
+            reject(error)
+          })
 
           // Helper function to send CDP commands
           async function sendCDPCommand(
@@ -2072,11 +2133,15 @@ export async function executeBrowserAction({
           }
         } catch (error) {
           ws.close()
+          clearTimeout(overallTimeout)
           reject(error)
         }
       })
 
-      ws.on("error", reject)
+      ws.on("error", (error) => {
+        clearTimeout(overallTimeout)
+        reject(error)
+      })
     })
 
     // Build success message with augmented suggestions

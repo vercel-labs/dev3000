@@ -54,6 +54,7 @@ interface DevEnvironmentOptions {
   pluginReactScan?: boolean // Whether to enable react-scan performance monitoring
   chromeDevtoolsMcp?: boolean // Whether to enable chrome-devtools MCP integration
   disabledMcpConfigs?: McpConfigTarget[] // Which MCP config files should be skipped
+  debugPort?: number // Chrome debugging port (default 9222, auto-incremented for multiple instances)
 }
 
 class Logger {
@@ -110,7 +111,7 @@ async function isPortAvailable(port: string): Promise<boolean> {
   }
 }
 
-async function findAvailablePort(startPort: number): Promise<string> {
+export async function findAvailablePort(startPort: number): Promise<string> {
   let port = startPort
   while (port < 65535) {
     if (await isPortAvailable(port.toString())) {
@@ -2140,7 +2141,8 @@ export class DevEnvironment {
       this.options.browser,
       this.options.pluginReactScan,
       this.options.port, // App server port to monitor
-      this.options.mcpPort // MCP server port to ignore
+      this.options.mcpPort, // MCP server port to ignore
+      this.options.debugPort // Chrome debug port
     )
 
     try {

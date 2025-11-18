@@ -9,7 +9,7 @@ import { dirname, join } from "path"
 import { fileURLToPath } from "url"
 import { cloudCheckPR } from "./commands/cloud-check-pr.js"
 import { cloudFix } from "./commands/cloud-fix.js"
-import { createPersistentLogFile, startDevEnvironment } from "./dev-environment.js"
+import { createPersistentLogFile, findAvailablePort, startDevEnvironment } from "./dev-environment.js"
 import { detectAIAgent } from "./utils/agent-detection.js"
 import { formatMcpConfigTargets, parseDisabledMcpConfigs } from "./utils/mcp-configs.js"
 import { getProjectName } from "./utils/project-name.js"
@@ -373,10 +373,15 @@ program
       const projectName = getProjectName()
       const profileDir = join(homedir(), ".d3k", "chrome-profiles", projectName)
 
+      // Find available Chrome debug port (starting from 9222)
+      // Each d3k instance needs its own debug port to avoid conflicts
+      const debugPort = await findAvailablePort(9222)
+
       await startDevEnvironment({
         ...options,
         port,
         portMcp: options.portMcp,
+        debugPort: Number.parseInt(debugPort, 10),
         defaultPort: projectConfig.defaultPort,
         framework: projectConfig.framework,
         userSetPort,
