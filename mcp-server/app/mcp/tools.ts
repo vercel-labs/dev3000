@@ -1939,20 +1939,42 @@ export async function executeBrowserAction({
 
                     // Support both coordinate-based and selector-based clicks
                     if (typeof params.selector === "string") {
-                      // Get element coordinates from selector
+                      // Get element coordinates from selector and ensure we click in the center
                       const selectorResult = (await sendCDPCommand(ws, messageId++, "Runtime.evaluate", {
                         expression: `(() => {
                         const el = document.querySelector(${JSON.stringify(params.selector)});
                         if (!el) return { found: false };
                         const rect = el.getBoundingClientRect();
+                        // Calculate center point, rounding to avoid fractional pixels
+                        const centerX = Math.round(rect.left + rect.width / 2);
+                        const centerY = Math.round(rect.top + rect.height / 2);
+                        // Verify what element is at this point
+                        const elementAtPoint = document.elementFromPoint(centerX, centerY);
+                        const isCorrectElement = elementAtPoint === el || el.contains(elementAtPoint);
                         return {
                           found: true,
-                          x: rect.left + rect.width / 2,
-                          y: rect.top + rect.height / 2
+                          x: centerX,
+                          y: centerY,
+                          width: rect.width,
+                          height: rect.height,
+                          elementAtPoint: elementAtPoint?.tagName + (elementAtPoint?.className ? '.' + elementAtPoint.className : ''),
+                          isCorrectElement: isCorrectElement
                         };
                       })()`,
                         returnByValue: true
-                      })) as { result?: { value?: { found: boolean; x?: number; y?: number } } }
+                      })) as {
+                        result?: {
+                          value?: {
+                            found: boolean
+                            x?: number
+                            y?: number
+                            width?: number
+                            height?: number
+                            elementAtPoint?: string
+                            isCorrectElement?: boolean
+                          }
+                        }
+                      }
 
                       if (
                         selectorResult.result?.value?.found === true &&
@@ -1961,6 +1983,14 @@ export async function executeBrowserAction({
                       ) {
                         clickX = selectorResult.result.value.x
                         clickY = selectorResult.result.value.y
+
+                        // Log diagnostic info if element at point doesn't match
+                        if (selectorResult.result.value.isCorrectElement === false) {
+                          console.warn(
+                            `[execute_browser_action] Warning: Center point (${clickX}, ${clickY}) is over ${selectorResult.result.value.elementAtPoint}, not the target element. ` +
+                              `This may cause unexpected click behavior. Element size: ${selectorResult.result.value.width}x${selectorResult.result.value.height}`
+                          )
+                        }
                       } else {
                         throw new Error(`Element not found for selector: ${params.selector}`)
                       }
