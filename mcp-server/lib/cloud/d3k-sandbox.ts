@@ -110,11 +110,11 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
 
     if (debug) console.log("  ✅ Project dependencies installed")
 
-    // Install d3k globally
-    if (debug) console.log("  📦 Installing d3k globally (pnpm i -g dev3000)...")
+    // Install d3k globally from git to get latest fixes
+    if (debug) console.log("  📦 Installing d3k globally from git...")
     const d3kInstallResult = await sandbox.runCommand({
       cmd: "pnpm",
-      args: ["i", "-g", "dev3000"],
+      args: ["i", "-g", "github:vercel-labs/dev3000#main"],
       stdout: debug ? process.stdout : undefined,
       stderr: debug ? process.stderr : undefined
     })

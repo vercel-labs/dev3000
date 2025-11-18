@@ -95,11 +95,57 @@ function detectPackageManagerForRun(): string {
   return "npm" // fallback
 }
 
-async function isPortAvailable(_port: string): Promise<boolean> {
-  // Skip port checking entirely - just return true
-  // In sandboxed/containerized environments, lsof often doesn't exist
+async function isPortAvailable(port: string): Promise<boolean> {
+  // Detect if we're in a sandbox environment (Vercel Sandbox, Docker, etc.)
+  const isSandbox =
+    process.env.VERCEL_SANDBOX === "1" ||
+    process.env.VERCEL === "1" ||
+    existsSync("/.dockerenv") ||
+    existsSync("/run/.containerenv")
+
+  // In sandboxed environments, skip port checking - lsof often doesn't exist
   // and port conflicts are rare due to process isolation
-  return true
+  if (isSandbox) {
+    return true
+  }
+
+  // Regular environment - do proper port checking with lsof
+  try {
+    // Check if lsof command exists first
+    const checkCmd = process.platform === "win32" ? "where" : "which"
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const check = spawn(checkCmd, ["lsof"], { stdio: "pipe" })
+        check.on("error", reject)
+        check.on("exit", (code) => {
+          if (code === 0) resolve()
+          else reject(new Error("lsof not found"))
+        })
+      })
+    } catch {
+      // lsof doesn't exist, assume port is available
+      return true
+    }
+
+    // lsof exists, use it to check the port
+    const result = await new Promise<string>((resolve, reject) => {
+      const proc = spawn("lsof", ["-ti", `:${port}`], { stdio: "pipe" })
+      let output = ""
+
+      proc.on("error", (err) => {
+        reject(err)
+      })
+
+      proc.stdout?.on("data", (data) => {
+        output += data.toString()
+      })
+
+      proc.on("exit", () => resolve(output.trim()))
+    })
+    return !result // If no output, port is available
+  } catch {
+    return true // Assume port is available if check fails
+  }
 }
 
 export async function findAvailablePort(startPort: number): Promise<string> {
