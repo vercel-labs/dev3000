@@ -157,13 +157,28 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
       cmd: "tail",
       args: ["-n", "100", "/tmp/d3k.log"]
     })
-    if (logsResult.exitCode === 0 && logsResult.stdout) {
+    if (logsResult.exitCode === 0) {
+      // stdout might be a string or need to be read
+      const stdout =
+        typeof logsResult.stdout === "string"
+          ? logsResult.stdout
+          : typeof logsResult.stdout === "function"
+            ? await logsResult.stdout()
+            : String(logsResult.stdout || "")
+
       console.log("  📋 d3k log (last 100 lines):")
-      console.log(logsResult.stdout)
+      console.log(stdout)
     } else {
       console.log(`  ⚠️ Could not read d3k logs (exit code: ${logsResult.exitCode})`)
-      if (logsResult.stderr) {
-        console.log(`  ⚠️ stderr: ${logsResult.stderr}`)
+      const stderr =
+        typeof logsResult.stderr === "string"
+          ? logsResult.stderr
+          : typeof logsResult.stderr === "function"
+            ? await logsResult.stderr()
+            : String(logsResult.stderr || "")
+
+      if (stderr) {
+        console.log(`  ⚠️ stderr: ${stderr}`)
       }
     }
 
