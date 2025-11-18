@@ -14,3 +14,5 @@ next-devtools-mcp/
 .vercel
 .env*.local
 mcp-server/tsconfig.tsbuildinfo
+mcp-server/next-env.d.ts
+mcp-server/tsconfig.tsbuildinfo
