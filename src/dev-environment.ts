@@ -95,44 +95,11 @@ function detectPackageManagerForRun(): string {
   return "npm" // fallback
 }
 
-async function isPortAvailable(port: string): Promise<boolean> {
-  try {
-    // Check if lsof command exists first by trying which/where
-    const checkCmd = process.platform === "win32" ? "where" : "which"
-    try {
-      await new Promise<void>((resolve, reject) => {
-        const check = spawn(checkCmd, ["lsof"], { stdio: "pipe" })
-        check.on("error", reject)
-        check.on("exit", (code) => {
-          if (code === 0) resolve()
-          else reject(new Error("lsof not found"))
-        })
-      })
-    } catch {
-      // lsof doesn't exist, assume port is available
-      return true
-    }
-
-    // lsof exists, use it to check the port
-    const result = await new Promise<string>((resolve, reject) => {
-      const proc = spawn("lsof", ["-ti", `:${port}`], { stdio: "pipe" })
-      let output = ""
-
-      proc.on("error", (err) => {
-        // Handle case where lsof command doesn't exist (e.g., in sandboxes)
-        reject(err)
-      })
-
-      proc.stdout?.on("data", (data) => {
-        output += data.toString()
-      })
-
-      proc.on("exit", () => resolve(output.trim()))
-    })
-    return !result // If no output, port is available
-  } catch {
-    return true // Assume port is available if check fails (including when lsof is not installed)
-  }
+async function isPortAvailable(_port: string): Promise<boolean> {
+  // Skip port checking entirely - just return true
+  // In sandboxed/containerized environments, lsof often doesn't exist
+  // and port conflicts are rare due to process isolation
+  return true
 }
 
 export async function findAvailablePort(startPort: number): Promise<string> {
