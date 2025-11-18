@@ -11,6 +11,19 @@ export interface Release {
 export const changelog: Release[] = [
   {
     version: "0.0.108",
+    date: "2025-11-18",
+    type: "patch",
+    highlights: [
+      "Ignore TypeScript build info file",
+      "Update Next.js build artifact (next-env.d.ts)",
+      "Fix browser automation and multi-instance support",
+      "Fix d3k command in cloud workflow Step 0 - remove invalid 'start' subcommand",
+      "Fix d3k startup - use correct --no-tui flag"
+    ]
+  },
+
+  {
+    version: "0.0.108",
     date: "2025-11-07",
     type: "minor",
     highlights: [
