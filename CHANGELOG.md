@@ -4,15 +4,12 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [0.0.108] - 2025-11-18
+## [0.0.109] - 2025-11-18
 
 **Patch Release**
 
-- Ignore TypeScript build info file
-- Update Next.js build artifact (next-env.d.ts)
-- Fix browser automation and multi-instance support
-- Fix d3k command in cloud workflow Step 0 - remove invalid 'start' subcommand
-- Fix d3k startup - use correct --no-tui flag
+- **Sandbox Environment Detection**: Smart port checking that detects Vercel Sandbox, Docker, and container environments to skip lsof checks only where needed while maintaining proper port conflict detection locally
+- Improved stability in sandboxed environments (Vercel, Docker, Podman)
 
 ## [0.0.108] - 2025-11-07
 
