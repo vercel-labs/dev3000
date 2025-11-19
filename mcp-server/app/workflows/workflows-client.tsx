@@ -90,14 +90,9 @@ export default function WorkflowsClient({ user, initialRuns }: WorkflowsClientPr
                     <TableCell className="text-muted-foreground">{new Date(run.timestamp).toLocaleString()}</TableCell>
                     <TableCell>
                       {run.reportBlobUrl ? (
-                        <a
-                          href={run.reportBlobUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-primary hover:underline"
-                        >
+                        <Link href={`/workflows/${run.id}/report`} className="text-primary hover:underline">
                           View Report
-                        </a>
+                        </Link>
                       ) : (
                         <span className="text-muted-foreground">No report</span>
                       )}
