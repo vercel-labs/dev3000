@@ -60,7 +60,10 @@ export async function createD3kSandbox(
   try {
     const mcpCheck = await fetch(`${sandboxResult.mcpUrl}/mcp`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json, text/event-stream"
+      },
       body: JSON.stringify({ jsonrpc: "2.0", id: 0, method: "tools/list" })
     })
     console.log(`[Step 0] MCP server check: ${mcpCheck.status} ${mcpCheck.statusText}`)
@@ -131,7 +134,10 @@ export async function fetchRealLogs(mcpUrlOrDevUrl: string, bypassToken?: string
       try {
         const toolsResponse = await fetch(`${mcpUrl}/mcp`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json, text/event-stream"
+          },
           body: JSON.stringify({
             jsonrpc: "2.0",
             id: 0,
@@ -171,7 +177,10 @@ export async function fetchRealLogs(mcpUrlOrDevUrl: string, bypassToken?: string
       console.log("[Step 1] Navigating browser to app URL...")
       const navResponse = await fetch(`${mcpUrl}/mcp`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json, text/event-stream"
+        },
         body: JSON.stringify({
           jsonrpc: "2.0",
           id: 0,
