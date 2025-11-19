@@ -71,18 +71,14 @@ export async function cloudFixWorkflow(params: {
   // Step 3: Upload to blob storage with full context
   const blobResult = await uploadToBlob(fixProposal, projectName, logAnalysis, sandboxInfo?.devUrl || devUrl)
 
-  // Step 4: Create GitHub PR if repo info provided
-  let prResult = null
-  if (repoOwner && repoName) {
-    prResult = await createGitHubPR(fixProposal, blobResult.blobUrl, repoOwner, repoName, baseBranch, projectName)
-  }
-
+  // Note: PR creation is now a separate workflow that can be triggered after reviewing the report
   // Note: Sandbox cleanup is handled automatically by the sandbox timeout
   // We cannot store cleanup functions as they're not serializable
 
   return Response.json({
     ...blobResult,
-    pr: prResult
+    // Include repo info in response so PR can be created later if desired
+    repoInfo: repoOwner && repoName ? { repoOwner, repoName, baseBranch } : null
   })
 }
 
@@ -115,17 +111,4 @@ async function uploadToBlob(fixProposal: string, projectName: string, logAnalysi
   "use step"
   const { uploadToBlob } = await import("./steps")
   return uploadToBlob(fixProposal, projectName, logAnalysis, devUrl)
-}
-
-async function createGitHubPR(
-  fixProposal: string,
-  blobUrl: string,
-  repoOwner: string,
-  repoName: string,
-  baseBranch: string,
-  projectName: string
-) {
-  "use step"
-  const { createGitHubPR } = await import("./steps")
-  return createGitHubPR(fixProposal, blobUrl, repoOwner, repoName, baseBranch, projectName)
 }
