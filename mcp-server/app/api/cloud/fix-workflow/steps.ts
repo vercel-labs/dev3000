@@ -221,79 +221,99 @@ export async function fetchRealLogs(mcpUrlOrDevUrl: string, bypassToken?: string
 
       // Call fix_my_app with focusArea='performance' to capture CLS and jank
       console.log("[Step 1] Calling fix_my_app with focusArea='performance'...")
-      const mcpResponse = await fetch(`${mcpUrl}/mcp`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json, text/event-stream"
-        },
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          id: 1,
-          method: "tools/call",
-          params: {
-            name: "fix_my_app",
-            arguments: {
-              mode: "snapshot",
-              focusArea: "performance",
-              timeRangeMinutes: 5,
-              returnRawData: false
-            }
-          }
-        })
-      })
 
-      if (!mcpResponse.ok) {
-        throw new Error(`MCP request failed: ${mcpResponse.status}`)
-      }
+      // Set a 3-minute timeout for the MCP call
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 3 * 60 * 1000)
 
-      // Parse SSE response
-      const text = await mcpResponse.text()
-      console.log(`[Step 1] fix_my_app response length: ${text.length} bytes`)
-      console.log(`[Step 1] fix_my_app response preview (first 500 chars):\n${text.substring(0, 500)}`)
-
-      const lines = text.split("\n")
-      console.log(`[Step 1] Response split into ${lines.length} lines`)
-
-      let logAnalysis = ""
-      let linesProcessed = 0
-      let contentBlocks = 0
-
-      for (const line of lines) {
-        if (line.startsWith("data: ")) {
-          linesProcessed++
-          try {
-            const json = JSON.parse(line.substring(6))
-            console.log(`[Step 1] Parsed JSON line ${linesProcessed}:`, JSON.stringify(json).substring(0, 200))
-
-            if (json.result?.content) {
-              for (const content of json.result.content) {
-                if (content.type === "text") {
-                  contentBlocks++
-                  logAnalysis += content.text
-                  console.log(`[Step 1] Added text content block ${contentBlocks}, length: ${content.text.length}`)
-                }
+      try {
+        const mcpResponse = await fetch(`${mcpUrl}/mcp`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json, text/event-stream"
+          },
+          body: JSON.stringify({
+            jsonrpc: "2.0",
+            id: 1,
+            method: "tools/call",
+            params: {
+              name: "fix_my_app",
+              arguments: {
+                mode: "snapshot",
+                focusArea: "performance",
+                timeRangeMinutes: 5,
+                returnRawData: false
               }
-            } else if (json.error) {
-              console.log(`[Step 1] ERROR in response: ${JSON.stringify(json.error)}`)
             }
-          } catch (error) {
-            console.log(
-              `[Step 1] Failed to parse JSON line ${linesProcessed}: ${error instanceof Error ? error.message : String(error)}`
-            )
-            console.log(`[Step 1] Problem line: ${line.substring(0, 200)}`)
+          }),
+          signal: controller.signal
+        })
+
+        clearTimeout(timeoutId)
+
+        if (!mcpResponse.ok) {
+          throw new Error(`MCP request failed: ${mcpResponse.status}`)
+        }
+
+        // Parse SSE response
+        const text = await mcpResponse.text()
+        console.log(`[Step 1] fix_my_app response length: ${text.length} bytes`)
+        console.log(`[Step 1] fix_my_app response preview (first 500 chars):\n${text.substring(0, 500)}`)
+
+        const lines = text.split("\n")
+        console.log(`[Step 1] Response split into ${lines.length} lines`)
+
+        let logAnalysis = ""
+        let linesProcessed = 0
+        let contentBlocks = 0
+
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            linesProcessed++
+            try {
+              const json = JSON.parse(line.substring(6))
+              console.log(`[Step 1] Parsed JSON line ${linesProcessed}:`, JSON.stringify(json).substring(0, 200))
+
+              if (json.result?.content) {
+                for (const content of json.result.content) {
+                  if (content.type === "text") {
+                    contentBlocks++
+                    logAnalysis += content.text
+                    console.log(`[Step 1] Added text content block ${contentBlocks}, length: ${content.text.length}`)
+                  }
+                }
+              } else if (json.error) {
+                console.log(`[Step 1] ERROR in response: ${JSON.stringify(json.error)}`)
+              }
+            } catch (error) {
+              console.log(
+                `[Step 1] Failed to parse JSON line ${linesProcessed}: ${error instanceof Error ? error.message : String(error)}`
+              )
+              console.log(`[Step 1] Problem line: ${line.substring(0, 200)}`)
+            }
           }
         }
+
+        console.log(`[Step 1] Processed ${linesProcessed} data lines, ${contentBlocks} content blocks`)
+        console.log(`[Step 1] Got ${logAnalysis.length} chars from fix_my_app (performance analysis)`)
+
+        if (logAnalysis.length === 0) {
+          console.log(`[Step 1] WARNING: fix_my_app returned NO data. Full response:\n${text}`)
+        }
+
+        return `d3k Performance Analysis for ${devUrl}\n\n${logAnalysis}`
+      } catch (error) {
+        clearTimeout(timeoutId)
+
+        if (error instanceof Error && error.name === "AbortError") {
+          console.log("[Step 1] fix_my_app timed out after 3 minutes, using fallback method")
+          // Fall through to fallback method below
+        } else {
+          console.log(`[Step 1] fix_my_app error: ${error instanceof Error ? error.message : String(error)}`)
+          // Fall through to fallback method below
+        }
       }
-
-      console.log(`[Step 1] Processed ${linesProcessed} data lines, ${contentBlocks} content blocks`)
-      console.log(`[Step 1] Got ${logAnalysis.length} chars from fix_my_app (performance analysis)`)
-
-      if (logAnalysis.length === 0) {
-        console.log(`[Step 1] WARNING: fix_my_app returned NO data. Full response:\n${text}`)
-      }
-
-      return `d3k Performance Analysis for ${devUrl}\n\n${logAnalysis}`
     }
 
     // Fallback: Use AI Gateway with browser automation prompting

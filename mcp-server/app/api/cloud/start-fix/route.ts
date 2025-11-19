@@ -11,6 +11,9 @@ import { cloudFixWorkflow } from "../fix-workflow/workflow"
  * where the fix proposal was uploaded.
  */
 
+// Configure longer timeout for workflow execution (10 minutes)
+export const maxDuration = 600
+
 // CORS headers - allowing credentials from localhost
 const corsHeaders = {
   "Access-Control-Allow-Origin": "http://localhost:3000",
@@ -30,6 +33,7 @@ export async function OPTIONS() {
 export async function POST(request: Request) {
   let userId: string | undefined
   let projectName: string | undefined
+  let runId: string | undefined
 
   try {
     // Get user's access token from cookies or Authorization header
@@ -90,6 +94,19 @@ export async function POST(request: Request) {
       ...(repoBranch && { repoBranch })
     }
 
+    // Save workflow run metadata at start if userId and projectName provided
+    if (userId && projectName) {
+      runId = randomUUID()
+      await saveWorkflowRun({
+        id: runId,
+        userId,
+        projectName,
+        timestamp: new Date().toISOString(),
+        status: "running"
+      })
+      console.log(`[Start Fix] Saved workflow run metadata (running): ${runId}`)
+    }
+
     const run = await start(cloudFixWorkflow, [workflowParams])
 
     console.log(`[Start Fix] Workflow started, waiting for completion...`)
@@ -108,10 +125,8 @@ export async function POST(request: Request) {
       console.log(`[Start Fix] GitHub PR created: ${result.pr.prUrl}`)
     }
 
-    // Save workflow run metadata if userId and projectName provided
-    let runId: string | undefined
-    if (userId && projectName) {
-      runId = randomUUID()
+    // Update workflow run metadata with success status
+    if (userId && projectName && runId) {
       await saveWorkflowRun({
         id: runId,
         userId,
@@ -121,7 +136,7 @@ export async function POST(request: Request) {
         reportBlobUrl: result.blobUrl,
         prUrl: result.pr?.prUrl
       })
-      console.log(`[Start Fix] Saved workflow run metadata: ${runId}`)
+      console.log(`[Start Fix] Updated workflow run metadata to success: ${runId}`)
     }
 
     return Response.json(
@@ -141,9 +156,8 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("[Start Fix] Error running workflow:", error)
 
-    // Save failure metadata if userId provided
-    if (userId && projectName) {
-      const runId = randomUUID()
+    // Update workflow run metadata with failure status
+    if (userId && projectName && runId) {
       await saveWorkflowRun({
         id: runId,
         userId,
@@ -152,7 +166,7 @@ export async function POST(request: Request) {
         status: "failure",
         error: error instanceof Error ? error.message : String(error)
       }).catch((err) => console.error("[Start Fix] Failed to save error metadata:", err))
-      console.log(`[Start Fix] Saved workflow run failure metadata: ${runId}`)
+      console.log(`[Start Fix] Updated workflow run metadata to failure: ${runId}`)
     }
 
     return Response.json(
