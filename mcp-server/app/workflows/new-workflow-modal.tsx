@@ -197,6 +197,14 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
         return
       }
 
+      // Load stored token for this project from localStorage
+      const storageKey = `d3k_bypass_token_${selectedProject.id}`
+      const storedToken = localStorage.getItem(storageKey)
+      if (storedToken) {
+        console.log("[Bypass Token] Found stored token for project", selectedProject.id)
+        setBypassToken(storedToken)
+      }
+
       const latestDeployment = selectedProject.latestDeployments[0]
       if (!latestDeployment) {
         console.log("[Bypass Token] No latest deployment, skipping check")
@@ -733,7 +741,16 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                       type="text"
                       id={bypassTokenId}
                       value={bypassToken}
-                      onChange={(e) => setBypassToken(e.target.value)}
+                      onChange={(e) => {
+                        const newToken = e.target.value
+                        setBypassToken(newToken)
+                        // Save to localStorage for this project
+                        if (selectedProject && newToken) {
+                          const storageKey = `d3k_bypass_token_${selectedProject.id}`
+                          localStorage.setItem(storageKey, newToken)
+                          console.log("[Bypass Token] Saved token to localStorage for project", selectedProject.id)
+                        }
+                      }}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md font-mono text-sm"
                       placeholder="Enter your 32-character bypass token"
                       required
