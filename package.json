@@ -1,6 +1,6 @@
 {
   "name": "dev3000",
-  "version": "0.0.109",
+  "version": "0.0.110-canary",
   "description": "AI-powered development tools with browser monitoring and MCP server integration",
   "type": "module",
   "main": "dist/index.js",
