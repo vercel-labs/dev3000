@@ -109,8 +109,9 @@ export async function POST(request: Request) {
     }
 
     // Save workflow run metadata if userId and projectName provided
+    let runId: string | undefined
     if (userId && projectName) {
-      const runId = randomUUID()
+      runId = randomUUID()
       await saveWorkflowRun({
         id: runId,
         userId,
@@ -128,6 +129,7 @@ export async function POST(request: Request) {
         success: true,
         message: "Cloud fix workflow completed successfully",
         projectName,
+        runId,
         blobUrl: result.blobUrl,
         fixProposal: result.fixProposal,
         pr: result.pr

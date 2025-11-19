@@ -829,18 +829,16 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                 </Alert>
                 {workflowResult && (
                   <div className="space-y-3">
-                    {workflowResult.blobUrl && (
+                    {workflowResult.blobUrl && workflowResult.runId && (
                       <Alert className="bg-green-50 border-green-200">
                         <AlertTitle className="text-green-900">Fix Proposal Generated</AlertTitle>
                         <AlertDescription>
-                          <a
-                            href={workflowResult.blobUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                          <Link
+                            href={`/workflows/${workflowResult.runId}/report`}
                             className="text-primary hover:underline"
                           >
                             View Report
-                          </a>
+                          </Link>
                         </AlertDescription>
                       </Alert>
                     )}
