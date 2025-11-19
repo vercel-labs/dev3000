@@ -71,14 +71,21 @@ export async function cloudFixWorkflow(params: {
   // Step 3: Upload to blob storage with full context
   const blobResult = await uploadToBlob(fixProposal, projectName, logAnalysis, sandboxInfo?.devUrl || devUrl)
 
-  // Note: PR creation is now a separate workflow that can be triggered after reviewing the report
+  // Step 4: Create GitHub PR if repo info provided AND there are actual fixes to apply
+  let prResult = null
+  const hasGitPatch = fixProposal.includes("```diff")
+  if (repoOwner && repoName && hasGitPatch) {
+    prResult = await createGitHubPR(fixProposal, blobResult.blobUrl, repoOwner, repoName, baseBranch, projectName)
+  } else if (repoOwner && repoName && !hasGitPatch) {
+    console.log("[Workflow] No git patch found - skipping PR creation (system is healthy)")
+  }
+
   // Note: Sandbox cleanup is handled automatically by the sandbox timeout
   // We cannot store cleanup functions as they're not serializable
 
   return Response.json({
     ...blobResult,
-    // Include repo info in response so PR can be created later if desired
-    repoInfo: repoOwner && repoName ? { repoOwner, repoName, baseBranch } : null
+    pr: prResult
   })
 }
 
@@ -111,4 +118,17 @@ async function uploadToBlob(fixProposal: string, projectName: string, logAnalysi
   "use step"
   const { uploadToBlob } = await import("./steps")
   return uploadToBlob(fixProposal, projectName, logAnalysis, devUrl)
+}
+
+async function createGitHubPR(
+  fixProposal: string,
+  blobUrl: string,
+  repoOwner: string,
+  repoName: string,
+  baseBranch: string,
+  projectName: string
+) {
+  "use step"
+  const { createGitHubPR } = await import("./steps")
+  return createGitHubPR(fixProposal, blobUrl, repoOwner, repoName, baseBranch, projectName)
 }

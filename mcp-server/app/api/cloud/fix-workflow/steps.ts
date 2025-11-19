@@ -398,8 +398,9 @@ ${logAnalysis}
 Your task:
 1. Identify the most critical error or issue from the logs
 2. Determine the root cause
-3. Propose a high-level fix strategy with affected files and approach
-4. Explain why this fix will resolve the issue
+3. Propose a specific code fix with file paths and changes
+4. Create a git-style unified diff that can be applied with 'git apply'
+5. Explain why this fix will resolve the issue
 
 Format your response EXACTLY as follows:
 
@@ -410,18 +411,31 @@ Format your response EXACTLY as follows:
 [Explanation of what's causing the issue]
 
 ## Proposed Fix
-[High-level explanation of the fix approach, including:
-- Which files need to be modified
-- What changes are needed (conceptually)
-- Any architectural considerations]
+[High-level explanation of the fix]
 
-## Affected Files
-[List of file paths that would need changes]
+## Git Patch
+\`\`\`diff
+[Full unified diff format that can be applied with 'git apply' or 'patch']
+[Include file paths, line numbers, and exact changes]
+[Example format:]
+[diff --git a/path/to/file.ts b/path/to/file.ts]
+[index abc123..def456 100644]
+[--- a/path/to/file.ts]
+[+++ b/path/to/file.ts]
+[@@ -10,7 +10,7 @@ function example() {]
+[ unchanged line]
+[-  old line to remove]
+[+  new line to add]
+[ unchanged line]
+\`\`\`
 
 ## Reasoning
-[Why this fix will work and how it addresses the root cause]
+[Why this fix will work]
 
-If no errors are found, respond with "✅ **SYSTEM HEALTHY** - No errors found in last ${logAnalysis.includes("5 minutes") ? "5 minutes" : "analysis period"}" and provide monitoring suggestions.`
+IMPORTANT:
+- The Git Patch section must be a valid unified diff that can be applied directly with 'git apply'.
+- If no errors are found, respond with "✅ **SYSTEM HEALTHY** - No errors found" and do NOT include a Git Patch section.
+- Only include a Git Patch if there are actual issues that need fixing.`
 
   const { text } = await generateText({
     model,
