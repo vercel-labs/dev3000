@@ -58,8 +58,21 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   const baseBranchId = useId()
   const autoCreatePRId = useId()
   const bypassTokenId = useId()
-  const [step, setStep] = useState<WorkflowStep>("type")
-  const [_selectedType, setSelectedType] = useState<string>("")
+
+  // Initialize step from URL params to avoid CLS from cascading useEffects
+  const initialStep = (() => {
+    const typeParam = searchParams.get("type")
+    const teamParam = searchParams.get("team")
+    const projectParam = searchParams.get("project")
+
+    if (!typeParam) return "type"
+    if (projectParam) return "options"
+    if (teamParam) return "project"
+    return "team"
+  })()
+
+  const [step, setStep] = useState<WorkflowStep>(initialStep)
+  const [_selectedType, setSelectedType] = useState<string>(searchParams.get("type") || "")
   const [teams, setTeams] = useState<Team[]>([])
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null)
   const [projects, setProjects] = useState<Project[]>([])
@@ -82,7 +95,8 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   const [branchesError, setBranchesError] = useState(false)
   const loadedTeamIdRef = useRef<string | null>(null)
 
-  // Restore state from URL whenever searchParams change
+  // Restore state from URL whenever searchParams change (after initial load)
+  // This handles the case where user navigates via browser back/forward
   useEffect(() => {
     if (!isOpen) return
 
@@ -90,27 +104,25 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
     const teamParam = searchParams.get("team")
     const projectParam = searchParams.get("project")
 
-    if (typeParam) {
+    // Only update if there's a meaningful change from current state
+    if (typeParam && typeParam !== _selectedType) {
       setSelectedType(typeParam)
+    }
 
-      if (projectParam) {
-        // If we have project param, we need to show options step
-        setStep("options")
-      } else if (teamParam) {
-        // If we have team param, we need to show project selection
-        setStep("project")
-      } else {
-        // Just type selected, show team selection
-        setStep("team")
-      }
-    } else {
-      // No params, reset to type selection step
-      setStep("type")
+    // Determine the correct step based on URL params
+    const targetStep: WorkflowStep = !typeParam ? "type" : projectParam ? "options" : teamParam ? "project" : "team"
+
+    if (targetStep !== step) {
+      setStep(targetStep)
+    }
+
+    // Reset selections if params are removed
+    if (!typeParam) {
       setSelectedType("")
       setSelectedTeam(null)
       setSelectedProject(null)
     }
-  }, [isOpen, searchParams])
+  }, [isOpen, searchParams, step, _selectedType])
 
   // Reset modal state when closed
   useEffect(() => {
