@@ -238,47 +238,47 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
         console.log(`  📋 Log files:\n${stdout}`)
       }
 
-      // Check if server.log has any content
-      const serverLogCheck = await sandbox.runCommand({
+      // Check ALL d3k log files for initial content
+      const allLogsCheck = await sandbox.runCommand({
         cmd: "sh",
         args: [
           "-c",
-          "if [ -f /home/vercel-sandbox/.d3k/logs/server.log ]; then wc -l /home/vercel-sandbox/.d3k/logs/server.log && head -20 /home/vercel-sandbox/.d3k/logs/server.log; else echo 'server.log does not exist'; fi"
+          'for log in /home/vercel-sandbox/.d3k/logs/*.log 2>/dev/null; do echo "=== $log ==="  && head -50 "$log" || true; done'
         ]
       })
-      if (serverLogCheck.stdout) {
+      if (allLogsCheck.stdout) {
         const stdout =
-          typeof serverLogCheck.stdout === "string"
-            ? serverLogCheck.stdout
-            : typeof serverLogCheck.stdout === "function"
-              ? await serverLogCheck.stdout()
-              : String(serverLogCheck.stdout || "")
-        console.log(`  📋 server.log content:\n${stdout}`)
+          typeof allLogsCheck.stdout === "string"
+            ? allLogsCheck.stdout
+            : typeof allLogsCheck.stdout === "function"
+              ? await allLogsCheck.stdout()
+              : String(allLogsCheck.stdout || "")
+        console.log(`  📋 Initial log content:\n${stdout}`)
       }
     }
 
-    // Also stream the dev server logs from d3k's log file
-    // d3k writes child process output to ~/.d3k/logs/server.log
+    // Stream ALL d3k log files in the background
+    // This ensures we capture d3k's main logs + server logs + any other logs
     if (debug) {
-      console.log("  📋 Starting dev server log stream...")
+      console.log("  📋 Starting comprehensive log stream...")
       const tailCmd = await sandbox.runCommand({
         cmd: "sh",
-        args: ["-c", "tail -f /home/vercel-sandbox/.d3k/logs/server.log 2>/dev/null || true"],
+        args: ["-c", "tail -f /home/vercel-sandbox/.d3k/logs/*.log 2>/dev/null || true"],
         detached: true
       })
 
-      // Stream server logs in the background
+      // Stream all logs in the background
       ;(async () => {
         try {
           for await (const log of tailCmd.logs()) {
             if (log.stream === "stdout") {
-              console.log(`[SERVER] ${log.data}`)
+              console.log(`[D3K-LOGS] ${log.data}`)
             } else if (log.stream === "stderr") {
-              console.error(`[SERVER] ${log.data}`)
+              console.error(`[D3K-LOGS] ${log.data}`)
             }
           }
         } catch (e) {
-          console.error(`Error reading server logs: ${e instanceof Error ? e.message : String(e)}`)
+          console.error(`Error reading d3k logs: ${e instanceof Error ? e.message : String(e)}`)
         }
       })()
     }
@@ -286,7 +286,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     // Wait for dev server to be ready
     if (debug) console.log("  ⏳ Waiting for dev server on port 3000...")
     try {
-      await waitForServer(sandbox, 3000, 120000) // 2 minutes for d3k to start everything
+      await waitForServer(sandbox, 3000, 120000, debug) // 2 minutes for d3k to start everything
     } catch (error) {
       // If dev server didn't start, try to get diagnostic info
       console.log(`  ⚠️ Dev server failed to start: ${error instanceof Error ? error.message : String(error)}`)
@@ -321,7 +321,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
 
     // Wait for MCP server to be ready (d3k starts it automatically)
     if (debug) console.log("  ⏳ Waiting for MCP server...")
-    await waitForServer(sandbox, 3684, 60000)
+    await waitForServer(sandbox, 3684, 60000, debug)
 
     const mcpUrl = sandbox.domain(3684)
     if (debug) console.log(`  ✅ MCP server ready: ${mcpUrl}`)
@@ -376,22 +376,44 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
 /**
  * Wait for a port to become available on the sandbox
  */
-async function waitForServer(sandbox: Sandbox, port: number, timeoutMs: number): Promise<void> {
+async function waitForServer(sandbox: Sandbox, port: number, timeoutMs: number, debug = false): Promise<void> {
   const startTime = Date.now()
   const url = sandbox.domain(port)
+  let lastError: string | undefined
+  let lastStatus: number | undefined
 
   while (Date.now() - startTime < timeoutMs) {
     try {
-      const response = await fetch(url, { method: "HEAD" })
+      const response = await fetch(url, { method: "HEAD", redirect: "manual" })
+      lastStatus = response.status
+
+      if (debug && response.status !== lastStatus) {
+        console.log(`  🔍 Port ${port} check: status ${response.status} ${response.statusText}`)
+      }
+
       if (response.ok || response.status === 404) {
+        if (debug) console.log(`  ✅ Port ${port} is ready (status ${response.status})`)
         return
       }
-    } catch {
-      // Not ready yet
+
+      // Log unexpected status codes
+      if (response.status >= 400 && response.status !== 404) {
+        lastError = `HTTP ${response.status} ${response.statusText}`
+        if (debug) console.log(`  ⚠️ Port ${port} returned ${lastError}`)
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      if (lastError !== errorMsg) {
+        lastError = errorMsg
+        if (debug) console.log(`  ⚠️ Port ${port} check failed: ${errorMsg}`)
+      }
     }
 
     await new Promise((resolve) => setTimeout(resolve, 1000))
   }
 
-  throw new Error(`Server on port ${port} did not become ready within ${timeoutMs}ms`)
+  throw new Error(
+    `Server on port ${port} did not become ready within ${timeoutMs}ms. ` +
+      `Last status: ${lastStatus ?? "no response"}, Last error: ${lastError ?? "none"}`
+  )
 }
