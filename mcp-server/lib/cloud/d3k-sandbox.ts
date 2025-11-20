@@ -101,7 +101,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
         cmd: "ls",
         args: ["-la", sandboxCwd]
       })
-      if (lsResult.exitCode === 0) {
+      if (lsResult.exitCode === 0 && lsResult.stdout) {
         const stdout =
           typeof lsResult.stdout === "string"
             ? lsResult.stdout
@@ -111,6 +111,8 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
 
         console.log(`  📂 Contents of ${sandboxCwd}:`)
         console.log(stdout)
+      } else {
+        console.log("  ⚠️ Could not read directory listing (stdout is undefined)")
       }
     } catch (error) {
       console.log(`  ⚠️ Could not list directory: ${error instanceof Error ? error.message : String(error)}`)
@@ -185,7 +187,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
         cmd: "tail",
         args: ["-n", "50", "/tmp/d3k.log"]
       })
-      if (initialLogsResult.exitCode === 0) {
+      if (initialLogsResult.exitCode === 0 && initialLogsResult.stdout) {
         const stdout =
           typeof initialLogsResult.stdout === "string"
             ? initialLogsResult.stdout
@@ -195,6 +197,8 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
 
         console.log("  📋 d3k initial output (first 50 lines):")
         console.log(stdout)
+      } else if (initialLogsResult.exitCode === 0) {
+        console.log("  ⚠️ Could not read initial d3k logs (stdout is undefined)")
       }
     } catch (error) {
       console.log(`  ⚠️ Could not read initial d3k logs: ${error instanceof Error ? error.message : String(error)}`)
