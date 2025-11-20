@@ -57,13 +57,15 @@ export async function cloudFixWorkflow(params: {
   console.log(`[Workflow] VERCEL_OIDC_TOKEN available: ${!!vercelOidcToken}`)
 
   // Step 0: Create d3k sandbox if repoUrl provided
-  let sandboxInfo: { mcpUrl: string; devUrl: string } | null = null
+  let sandboxInfo: { mcpUrl: string; devUrl: string; bypassToken?: string } | null = null
   if (repoUrl) {
     sandboxInfo = await createD3kSandbox(repoUrl, repoBranch || "main", projectName, vercelToken, vercelOidcToken)
   }
 
   // Step 1: Fetch real logs (using sandbox MCP if available, otherwise devUrl directly)
-  const logAnalysis = await fetchRealLogs(sandboxInfo?.mcpUrl || devUrl, bypassToken, sandboxInfo?.devUrl)
+  // Use bypass token from sandbox if available, otherwise use provided one
+  const effectiveBypassToken = sandboxInfo?.bypassToken || bypassToken
+  const logAnalysis = await fetchRealLogs(sandboxInfo?.mcpUrl || devUrl, effectiveBypassToken, sandboxInfo?.devUrl)
 
   // Step 2: Invoke AI agent to analyze logs and create fix
   const fixProposal = await analyzeLogsWithAgent(logAnalysis, sandboxInfo?.devUrl || devUrl)

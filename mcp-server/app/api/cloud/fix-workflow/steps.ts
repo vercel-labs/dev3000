@@ -96,7 +96,8 @@ export async function createD3kSandbox(
   // Sandbox cleanup will happen automatically when the sandbox times out
   return {
     mcpUrl: sandboxResult.mcpUrl,
-    devUrl: sandboxResult.devUrl
+    devUrl: sandboxResult.devUrl,
+    bypassToken: sandboxResult.bypassToken
   }
 }
 

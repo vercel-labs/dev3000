@@ -18,6 +18,15 @@ export interface D3kSandboxResult {
   mcpUrl: string
   projectName: string
   cleanup: () => Promise<void>
+  // TODO: Add bypassToken support
+  // The @vercel/sandbox SDK does not currently expose protection bypass tokens.
+  // These tokens are needed for headless browser automation to access protected sandboxes.
+  // Potential solutions:
+  // 1. Extract from response headers (x-vercel-protection-bypass)
+  // 2. Use Vercel API to get deployment protection bypass tokens
+  // 3. Pass as environment variable if available
+  // For now, workflows without bypass tokens will fail when accessing protected sandboxes.
+  bypassToken?: string
 }
 
 /**
@@ -356,6 +365,10 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
       devUrl,
       mcpUrl,
       projectName,
+      // TODO: Implement bypass token extraction
+      // The @vercel/sandbox SDK doesn't expose bypass tokens.
+      // Until this is implemented, protected sandboxes will fail in headless browser automation.
+      bypassToken: undefined,
       cleanup: async () => {
         if (debug) console.log("  🧹 Cleaning up sandbox...")
         await sandbox.stop()
