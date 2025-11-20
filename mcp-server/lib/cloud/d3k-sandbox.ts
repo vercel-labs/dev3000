@@ -185,31 +185,18 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     if (debug) console.log(`  📂 Working directory: ${sandboxCwd}`)
     if (debug) console.log(`  🔧 Command: cd ${sandboxCwd} && MCP_SKIP_PERMISSIONS=true d3k --no-tui --debug`)
 
-    // Start d3k in detached mode and capture the Command object
-    // Even though it's detached, we can still read logs from it
-    const d3kCmd = await sandbox.runCommand({
+    // Start d3k in detached mode
+    // We run it detached so it continues running independently in the sandbox.
+    // Logs are written to /home/vercel-sandbox/.d3k/logs/ and can be read later.
+    // IMPORTANT: Do NOT start infinite log streaming loops here - they prevent
+    // the workflow step function from completing properly.
+    await sandbox.runCommand({
       cmd: "sh",
       args: ["-c", `cd ${sandboxCwd} && MCP_SKIP_PERMISSIONS=true d3k --no-tui --debug`],
       detached: true
     })
 
-    // Stream d3k logs in the background
-    if (debug) {
-      // Don't await this - let it run in background
-      ;(async () => {
-        try {
-          for await (const log of d3kCmd.logs()) {
-            if (log.stream === "stdout") {
-              console.log(log.data)
-            } else if (log.stream === "stderr") {
-              console.error(log.data)
-            }
-          }
-        } catch (e) {
-          console.error(`Error reading d3k logs: ${e instanceof Error ? e.message : String(e)}`)
-        }
-      })()
-    }
+    if (debug) console.log("  ✅ d3k started in detached mode")
 
     // Give d3k a moment to start and create log files
     if (debug) console.log("  ⏳ Waiting for d3k to start...")
@@ -266,31 +253,9 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
       }
     }
 
-    // Stream ALL d3k log files in the background
-    // This ensures we capture d3k's main logs + server logs + any other logs
-    if (debug) {
-      console.log("  📋 Starting comprehensive log stream...")
-      const tailCmd = await sandbox.runCommand({
-        cmd: "sh",
-        args: ["-c", "tail -f /home/vercel-sandbox/.d3k/logs/*.log 2>/dev/null || true"],
-        detached: true
-      })
-
-      // Stream all logs in the background
-      ;(async () => {
-        try {
-          for await (const log of tailCmd.logs()) {
-            if (log.stream === "stdout") {
-              console.log(`[D3K-LOGS] ${log.data}`)
-            } else if (log.stream === "stderr") {
-              console.error(`[D3K-LOGS] ${log.data}`)
-            }
-          }
-        } catch (e) {
-          console.error(`Error reading d3k logs: ${e instanceof Error ? e.message : String(e)}`)
-        }
-      })()
-    }
+    // Note: We do NOT start infinite log streaming loops here because they prevent
+    // the workflow step function from completing. Logs are written to files and can
+    // be read synchronously when needed (see checks above).
 
     // Wait for dev server to be ready
     if (debug) console.log("  ⏳ Waiting for dev server on port 3000...")
