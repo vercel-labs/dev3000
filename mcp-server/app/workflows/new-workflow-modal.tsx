@@ -674,140 +674,149 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
           {step === "options" && (
             <div>
               <h3 className="text-lg font-semibold mb-4">Configure Options</h3>
-              {selectedProject && (
-                <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-                  <div className="text-sm text-gray-600 mb-2">Selected Project:</div>
-                  <div className="font-semibold">{selectedProject.name}</div>
+              {!selectedProject ? (
+                <div className="text-center py-8 text-gray-500">
+                  <Spinner className="mx-auto mb-2" />
+                  Loading project details...
                 </div>
-              )}
-              <div className="space-y-4">
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id={autoCreatePRId}
-                    checked={autoCreatePR}
-                    onCheckedChange={(checked) => setAutoCreatePR(checked === true)}
-                  />
-                  <Label htmlFor={autoCreatePRId} className="text-sm font-normal cursor-pointer">
-                    Automatically create GitHub PR with fixes
-                  </Label>
-                </div>
-                {autoCreatePR && selectedProject?.link?.repo && (
-                  <div>
-                    <Label htmlFor={baseBranchId} className="mb-2">
-                      Base Branch
-                    </Label>
-                    {loadingBranches ? (
-                      <div className="text-sm text-gray-500 py-2">Loading branches...</div>
-                    ) : availableBranches.length > 0 ? (
-                      <>
-                        <Select value={baseBranch} onValueChange={setBaseBranch}>
-                          <SelectTrigger id={baseBranchId} className="w-full">
-                            <SelectValue placeholder="Select a branch" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {availableBranches.map((branch) => (
-                              <SelectItem key={branch.name} value={branch.name}>
-                                {branch.name} (deployed {new Date(branch.lastDeployment.createdAt).toLocaleDateString()}
-                                )
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Showing branches with recent deployments (last {availableBranches.length} branch
-                          {availableBranches.length !== 1 ? "es" : ""})
-                        </p>
-                      </>
-                    ) : (
-                      <>
+              ) : (
+                <>
+                  <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+                    <div className="text-sm text-gray-600 mb-2">Selected Project:</div>
+                    <div className="font-semibold">{selectedProject.name}</div>
+                  </div>
+                  <div className="space-y-4">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id={autoCreatePRId}
+                        checked={autoCreatePR}
+                        onCheckedChange={(checked) => setAutoCreatePR(checked === true)}
+                      />
+                      <Label htmlFor={autoCreatePRId} className="text-sm font-normal cursor-pointer">
+                        Automatically create GitHub PR with fixes
+                      </Label>
+                    </div>
+                    {autoCreatePR && selectedProject?.link?.repo && (
+                      <div>
+                        <Label htmlFor={baseBranchId} className="mb-2">
+                          Base Branch
+                        </Label>
+                        {loadingBranches ? (
+                          <div className="text-sm text-gray-500 py-2">Loading branches...</div>
+                        ) : availableBranches.length > 0 ? (
+                          <>
+                            <Select value={baseBranch} onValueChange={setBaseBranch}>
+                              <SelectTrigger id={baseBranchId} className="w-full">
+                                <SelectValue placeholder="Select a branch" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {availableBranches.map((branch) => (
+                                  <SelectItem key={branch.name} value={branch.name}>
+                                    {branch.name} (deployed{" "}
+                                    {new Date(branch.lastDeployment.createdAt).toLocaleDateString()})
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Showing branches with recent deployments (last {availableBranches.length} branch
+                              {availableBranches.length !== 1 ? "es" : ""})
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            <input
+                              type="text"
+                              id={baseBranchId}
+                              value={baseBranch}
+                              onChange={(e) => setBaseBranch(e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                              placeholder="main"
+                            />
+                            {branchesError && (
+                              <p className="text-xs text-amber-600 mt-1">
+                                Unable to load branches automatically. Please enter the branch name manually.
+                              </p>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    )}
+                    {autoCreatePR && !selectedProject?.link?.repo && (
+                      <div className="text-sm text-amber-600">
+                        This project is not connected to a GitHub repository. PRs cannot be created automatically.
+                      </div>
+                    )}
+                    {isCheckingProtection && (
+                      <div className="text-sm text-gray-500">Checking deployment protection...</div>
+                    )}
+                    {needsBypassToken && (
+                      <div>
+                        <label htmlFor={bypassTokenId} className="block text-sm font-medium text-gray-700 mb-1">
+                          Deployment Protection Bypass Token
+                          <span className="text-red-500 ml-1">*</span>
+                        </label>
                         <input
                           type="text"
-                          id={baseBranchId}
-                          value={baseBranch}
-                          onChange={(e) => setBaseBranch(e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                          placeholder="main"
+                          id={bypassTokenId}
+                          value={bypassToken}
+                          onChange={(e) => {
+                            const newToken = e.target.value
+                            setBypassToken(newToken)
+                            // Save to localStorage for this project
+                            if (selectedProject && newToken) {
+                              const storageKey = `d3k_bypass_token_${selectedProject.id}`
+                              localStorage.setItem(storageKey, newToken)
+                              console.log("[Bypass Token] Saved token to localStorage for project", selectedProject.id)
+                            }
+                          }}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md font-mono text-sm"
+                          placeholder="Enter your 32-character bypass token"
+                          required
                         />
-                        {branchesError && (
-                          <p className="text-xs text-amber-600 mt-1">
-                            Unable to load branches automatically. Please enter the branch name manually.
-                          </p>
-                        )}
-                      </>
+                        <p className="mt-1 text-xs text-gray-500">
+                          This deployment is protected. Get your bypass token from{" "}
+                          {selectedTeam && selectedProject ? (
+                            <a
+                              href={`https://vercel.com/${selectedTeam.slug}/${selectedProject.name}/settings/deployment-protection#protection-bypass-for-automation`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:underline"
+                            >
+                              Project Settings → Deployment Protection
+                            </a>
+                          ) : (
+                            <a
+                              href="https://vercel.com/docs/deployment-protection/methods-to-bypass-deployment-protection/protection-bypass-automation"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:underline"
+                            >
+                              Vercel Dashboard → Project Settings → Deployment Protection
+                            </a>
+                          )}
+                        </p>
+                      </div>
                     )}
                   </div>
-                )}
-                {autoCreatePR && !selectedProject?.link?.repo && (
-                  <div className="text-sm text-amber-600">
-                    This project is not connected to a GitHub repository. PRs cannot be created automatically.
+                  <div className="flex gap-3 mt-6">
+                    <Link
+                      href={`/workflows/new?type=${_selectedType}&team=${selectedTeam?.id}`}
+                      className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                    >
+                      ← Back
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={startWorkflow}
+                      disabled={needsBypassToken && !bypassToken}
+                      className="flex-1 px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Start Workflow
+                    </button>
                   </div>
-                )}
-                {isCheckingProtection && <div className="text-sm text-gray-500">Checking deployment protection...</div>}
-                {needsBypassToken && (
-                  <div>
-                    <label htmlFor={bypassTokenId} className="block text-sm font-medium text-gray-700 mb-1">
-                      Deployment Protection Bypass Token
-                      <span className="text-red-500 ml-1">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      id={bypassTokenId}
-                      value={bypassToken}
-                      onChange={(e) => {
-                        const newToken = e.target.value
-                        setBypassToken(newToken)
-                        // Save to localStorage for this project
-                        if (selectedProject && newToken) {
-                          const storageKey = `d3k_bypass_token_${selectedProject.id}`
-                          localStorage.setItem(storageKey, newToken)
-                          console.log("[Bypass Token] Saved token to localStorage for project", selectedProject.id)
-                        }
-                      }}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md font-mono text-sm"
-                      placeholder="Enter your 32-character bypass token"
-                      required
-                    />
-                    <p className="mt-1 text-xs text-gray-500">
-                      This deployment is protected. Get your bypass token from{" "}
-                      {selectedTeam && selectedProject ? (
-                        <a
-                          href={`https://vercel.com/${selectedTeam.slug}/${selectedProject.name}/settings/deployment-protection#protection-bypass-for-automation`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 hover:underline"
-                        >
-                          Project Settings → Deployment Protection
-                        </a>
-                      ) : (
-                        <a
-                          href="https://vercel.com/docs/deployment-protection/methods-to-bypass-deployment-protection/protection-bypass-automation"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-600 hover:underline"
-                        >
-                          Vercel Dashboard → Project Settings → Deployment Protection
-                        </a>
-                      )}
-                    </p>
-                  </div>
-                )}
-              </div>
-              <div className="flex gap-3 mt-6">
-                <Link
-                  href={`/workflows/new?type=${_selectedType}&team=${selectedTeam?.id}`}
-                  className="px-4 py-2 text-gray-600 hover:text-gray-800"
-                >
-                  ← Back
-                </Link>
-                <button
-                  type="button"
-                  onClick={startWorkflow}
-                  disabled={needsBypassToken && !bypassToken}
-                  className="flex-1 px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Start Workflow
-                </button>
-              </div>
+                </>
+              )}
             </div>
           )}
 
