@@ -206,6 +206,57 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     if (debug) console.log("  ⏳ Waiting for d3k to start...")
     await new Promise((resolve) => setTimeout(resolve, 5000))
 
+    // Debug: Check d3k process and log files
+    if (debug) {
+      console.log("  🔍 Checking d3k process status...")
+      const psCheck = await sandbox.runCommand({
+        cmd: "sh",
+        args: ["-c", "ps aux | grep -E '(d3k|pnpm|next)' | grep -v grep || echo 'No d3k/pnpm/next processes found'"]
+      })
+      if (psCheck.stdout) {
+        const stdout =
+          typeof psCheck.stdout === "string"
+            ? psCheck.stdout
+            : typeof psCheck.stdout === "function"
+              ? await psCheck.stdout()
+              : String(psCheck.stdout || "")
+        console.log(`  📋 Process list:\n${stdout}`)
+      }
+
+      console.log("  🔍 Checking for d3k log files...")
+      const logsCheck = await sandbox.runCommand({
+        cmd: "sh",
+        args: ["-c", "ls -lah /home/vercel-sandbox/.d3k/logs/ 2>/dev/null || echo 'No .d3k/logs directory found'"]
+      })
+      if (logsCheck.stdout) {
+        const stdout =
+          typeof logsCheck.stdout === "string"
+            ? logsCheck.stdout
+            : typeof logsCheck.stdout === "function"
+              ? await logsCheck.stdout()
+              : String(logsCheck.stdout || "")
+        console.log(`  📋 Log files:\n${stdout}`)
+      }
+
+      // Check if server.log has any content
+      const serverLogCheck = await sandbox.runCommand({
+        cmd: "sh",
+        args: [
+          "-c",
+          "if [ -f /home/vercel-sandbox/.d3k/logs/server.log ]; then wc -l /home/vercel-sandbox/.d3k/logs/server.log && head -20 /home/vercel-sandbox/.d3k/logs/server.log; else echo 'server.log does not exist'; fi"
+        ]
+      })
+      if (serverLogCheck.stdout) {
+        const stdout =
+          typeof serverLogCheck.stdout === "string"
+            ? serverLogCheck.stdout
+            : typeof serverLogCheck.stdout === "function"
+              ? await serverLogCheck.stdout()
+              : String(serverLogCheck.stdout || "")
+        console.log(`  📋 server.log content:\n${stdout}`)
+      }
+    }
+
     // Also stream the dev server logs from d3k's log file
     // d3k writes child process output to ~/.d3k/logs/server.log
     if (debug) {
