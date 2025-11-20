@@ -174,17 +174,13 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     // Start d3k (which will auto-configure MCPs and start browser)
     if (debug) console.log("  🚀 Starting d3k...")
     if (debug) console.log(`  📂 Working directory: ${sandboxCwd}`)
-    if (debug)
-      console.log(
-        `  🔧 Command: cd ${sandboxCwd} && PORT=3684 MCP_SKIP_PERMISSIONS=true d3k --no-tui --debug --port-mcp 3684`
-      )
+    if (debug) console.log(`  🔧 Command: cd ${sandboxCwd} && MCP_SKIP_PERMISSIONS=true d3k --no-tui --debug`)
 
     // Start d3k in detached mode and capture the Command object
     // Even though it's detached, we can still read logs from it
-    // IMPORTANT: We set PORT=3684 to ensure the MCP server UI doesn't conflict with the target app on port 3000
     const d3kCmd = await sandbox.runCommand({
       cmd: "sh",
-      args: ["-c", `cd ${sandboxCwd} && PORT=3684 MCP_SKIP_PERMISSIONS=true d3k --no-tui --debug --port-mcp 3684`],
+      args: ["-c", `cd ${sandboxCwd} && MCP_SKIP_PERMISSIONS=true d3k --no-tui --debug`],
       detached: true
     })
 

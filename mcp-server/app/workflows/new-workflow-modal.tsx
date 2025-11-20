@@ -100,6 +100,9 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   useEffect(() => {
     if (!isOpen) return
 
+    // Don't interfere with the "running" state - it's controlled by workflow execution, not URL
+    if (step === "running") return
+
     const typeParam = searchParams.get("type")
     const teamParam = searchParams.get("team")
     const projectParam = searchParams.get("project")
