@@ -12,6 +12,11 @@ const IGNORED_ERROR_CODES = new Set([
 
 // Setup global error handlers
 export function register() {
+  // Only register handlers in Node.js runtime (not Edge Runtime)
+  if (typeof process === "undefined" || !process.on) {
+    return
+  }
+
   // Suppress unhandled rejections for network errors
   process.on("unhandledRejection", (reason: unknown) => {
     // Ignore network-related errors
