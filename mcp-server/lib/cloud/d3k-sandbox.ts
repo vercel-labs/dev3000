@@ -193,7 +193,33 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
 
     // Wait for dev server to be ready
     if (debug) console.log("  ⏳ Waiting for dev server on port 3000...")
-    await waitForServer(sandbox, 3000, 120000) // 2 minutes for d3k to start everything
+    try {
+      await waitForServer(sandbox, 3000, 120000) // 2 minutes for d3k to start everything
+    } catch (error) {
+      // If dev server didn't start, try to get diagnostic info
+      console.log(`  ⚠️ Dev server failed to start: ${error instanceof Error ? error.message : String(error)}`)
+      console.log("  🔍 Checking d3k logs for errors...")
+
+      try {
+        const logsCheck = await sandbox.runCommand({
+          cmd: "cat",
+          args: ["/home/vercel-sandbox/.d3k/logs/server.log"]
+        })
+        if (logsCheck.exitCode === 0 && logsCheck.stdout) {
+          const stdout = typeof logsCheck.stdout === "string"
+            ? logsCheck.stdout
+            : typeof logsCheck.stdout === "function"
+              ? await logsCheck.stdout()
+              : String(logsCheck.stdout || "")
+          console.log("  📋 Dev server logs:")
+          console.log(stdout)
+        }
+      } catch (logError) {
+        console.log(`  ⚠️ Could not read server logs: ${logError instanceof Error ? logError.message : String(logError)}`)
+      }
+
+      throw error
+    }
 
     const devUrl = sandbox.domain(3000)
     if (debug) console.log(`  ✅ Dev server ready: ${devUrl}`)
