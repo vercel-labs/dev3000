@@ -176,45 +176,20 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     if (debug) console.log(`  📂 Working directory: ${sandboxCwd}`)
     if (debug) console.log(`  🔧 Command: cd ${sandboxCwd} && MCP_SKIP_PERMISSIONS=true d3k --no-tui --debug`)
 
-    // Start d3k in detached mode
-    await sandbox.runCommand({
+    // Start d3k in detached mode without redirecting output to a file
+    // This allows the output to flow through the sandbox's stdout/stderr
+    sandbox.runCommand({
       cmd: "sh",
-      args: ["-c", `cd ${sandboxCwd} && MCP_SKIP_PERMISSIONS=true d3k --no-tui --debug > /tmp/d3k.log 2>&1`],
-      detached: true
+      args: ["-c", `cd ${sandboxCwd} && MCP_SKIP_PERMISSIONS=true d3k --no-tui --debug`],
+      detached: true,
+      stdout: debug ? process.stdout : undefined,
+      stderr: debug ? process.stderr : undefined
     })
 
-    // Give d3k a moment to start writing logs
-    await new Promise((resolve) => setTimeout(resolve, 3000))
-
-    // Read initial d3k logs to verify it started
-    if (debug) console.log("  📋 Reading initial d3k logs...")
-    try {
-      const initialLogsResult = await sandbox.runCommand({
-        cmd: "tail",
-        args: ["-n", "50", "/tmp/d3k.log"]
-      })
-      if (initialLogsResult.exitCode === 0 && initialLogsResult.stdout) {
-        try {
-          const stdout =
-            typeof initialLogsResult.stdout === "string"
-              ? initialLogsResult.stdout
-              : typeof initialLogsResult.stdout === "function"
-                ? await initialLogsResult.stdout()
-                : String(initialLogsResult.stdout || "")
-
-          console.log("  📋 d3k initial output (first 50 lines):")
-          console.log(stdout)
-        } catch (stdoutError) {
-          console.log(
-            `  ⚠️ Error reading initial d3k logs stdout: ${stdoutError instanceof Error ? stdoutError.message : String(stdoutError)}`
-          )
-        }
-      } else if (initialLogsResult.exitCode === 0) {
-        console.log("  ⚠️ Could not read initial d3k logs (stdout is undefined)")
-      }
-    } catch (error) {
-      console.log(`  ⚠️ Could not read initial d3k logs: ${error instanceof Error ? error.message : String(error)}`)
-    }
+    // Give d3k a moment to start
+    // Output is now streaming to process.stdout/stderr instead of a log file
+    if (debug) console.log("  ⏳ Waiting for d3k to start...")
+    await new Promise((resolve) => setTimeout(resolve, 5000))
 
     // Wait for dev server to be ready
     if (debug) console.log("  ⏳ Waiting for dev server on port 3000...")
@@ -231,61 +206,9 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     if (debug) console.log(`  ✅ MCP server ready: ${mcpUrl}`)
 
     // Give d3k a bit more time to fully initialize MCPs and browser
+    // Logs are now streaming to the workflow output instead of being written to a file
     if (debug) console.log("  ⏳ Waiting for d3k to initialize MCPs and browser...")
     await new Promise((resolve) => setTimeout(resolve, 10000))
-
-    // Check d3k logs for any errors
-    console.log("  📋 Checking d3k logs for errors and startup status...")
-    const logsResult = await sandbox.runCommand({
-      cmd: "tail",
-      args: ["-n", "200", "/tmp/d3k.log"]
-    })
-    if (logsResult.exitCode === 0 && logsResult.stdout) {
-      try {
-        // stdout might be a string or need to be read
-        const stdoutRaw = logsResult.stdout
-        const stdout =
-          typeof stdoutRaw === "string"
-            ? stdoutRaw
-            : typeof stdoutRaw === "function"
-              ? await stdoutRaw()
-              : String(stdoutRaw || "")
-
-        console.log("  📋 d3k log (last 200 lines):")
-        console.log(stdout)
-
-        // Check for common error patterns
-        const hasErrors = stdout.toLowerCase().includes("error") || stdout.toLowerCase().includes("failed")
-        const hasDevServer = stdout.includes("ready") || stdout.includes("listening") || stdout.includes("started")
-
-        if (hasErrors) {
-          console.log("  ⚠️ WARNING: d3k logs contain errors")
-        }
-        if (hasDevServer) {
-          console.log("  ✅ Dev server appears to have started successfully")
-        } else {
-          console.log("  ⚠️ WARNING: Could not confirm dev server started from logs")
-        }
-      } catch (stdoutError) {
-        console.log(
-          `  ⚠️ Error reading d3k logs stdout: ${stdoutError instanceof Error ? stdoutError.message : String(stdoutError)}`
-        )
-      }
-    } else if (logsResult.exitCode !== 0) {
-      console.log(`  ⚠️ Could not read d3k logs (exit code: ${logsResult.exitCode})`)
-      const stderr =
-        typeof logsResult.stderr === "string"
-          ? logsResult.stderr
-          : typeof logsResult.stderr === "function"
-            ? await logsResult.stderr()
-            : String(logsResult.stderr || "")
-
-      if (stderr) {
-        console.log(`  ⚠️ stderr: ${stderr}`)
-      }
-    } else {
-      console.log("  ⚠️ WARNING: Could not read d3k logs (stdout is undefined)")
-    }
 
     // Verify we can actually fetch the dev server URL
     console.log(`  🔍 Testing dev server accessibility at ${devUrl}...`)
