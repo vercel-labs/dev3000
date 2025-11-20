@@ -94,6 +94,44 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
   try {
     const sandboxCwd = projectDir ? `/vercel/sandbox/${projectDir}` : "/vercel/sandbox"
 
+    // Verify sandbox directory contents
+    if (debug) console.log("  📂 Checking sandbox directory contents...")
+    try {
+      const lsResult = await sandbox.runCommand({
+        cmd: "ls",
+        args: ["-la", sandboxCwd]
+      })
+      if (lsResult.exitCode === 0) {
+        const stdout =
+          typeof lsResult.stdout === "string"
+            ? lsResult.stdout
+            : typeof lsResult.stdout === "function"
+              ? await lsResult.stdout()
+              : String(lsResult.stdout || "")
+
+        console.log(`  📂 Contents of ${sandboxCwd}:`)
+        console.log(stdout)
+      }
+    } catch (error) {
+      console.log(`  ⚠️ Could not list directory: ${error instanceof Error ? error.message : String(error)}`)
+    }
+
+    // Check for package.json
+    if (debug) console.log("  📄 Verifying package.json exists...")
+    try {
+      const pkgCheck = await sandbox.runCommand({
+        cmd: "test",
+        args: ["-f", `${sandboxCwd}/package.json`]
+      })
+      if (pkgCheck.exitCode === 0) {
+        console.log("  ✅ package.json found")
+      } else {
+        console.log("  ⚠️ WARNING: package.json not found in sandbox directory")
+      }
+    } catch (error) {
+      console.log(`  ⚠️ Could not check for package.json: ${error instanceof Error ? error.message : String(error)}`)
+    }
+
     // Install project dependencies
     if (debug) console.log("  📦 Installing project dependencies...")
     const installResult = await sandbox.runCommand({
@@ -127,14 +165,43 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
 
     // Start d3k (which will auto-configure MCPs and start browser)
     if (debug) console.log("  🚀 Starting d3k...")
+    if (debug) console.log(`  📂 Working directory: ${sandboxCwd}`)
+    if (debug) console.log(`  🔧 Command: cd ${sandboxCwd} && MCP_SKIP_PERMISSIONS=true d3k --no-tui --debug`)
+
+    // Start d3k in detached mode
     await sandbox.runCommand({
       cmd: "sh",
       args: ["-c", `cd ${sandboxCwd} && MCP_SKIP_PERMISSIONS=true d3k --no-tui --debug > /tmp/d3k.log 2>&1`],
       detached: true
     })
 
+    // Give d3k a moment to start writing logs
+    await new Promise((resolve) => setTimeout(resolve, 3000))
+
+    // Read initial d3k logs to verify it started
+    if (debug) console.log("  📋 Reading initial d3k logs...")
+    try {
+      const initialLogsResult = await sandbox.runCommand({
+        cmd: "tail",
+        args: ["-n", "50", "/tmp/d3k.log"]
+      })
+      if (initialLogsResult.exitCode === 0) {
+        const stdout =
+          typeof initialLogsResult.stdout === "string"
+            ? initialLogsResult.stdout
+            : typeof initialLogsResult.stdout === "function"
+              ? await initialLogsResult.stdout()
+              : String(initialLogsResult.stdout || "")
+
+        console.log("  📋 d3k initial output (first 50 lines):")
+        console.log(stdout)
+      }
+    } catch (error) {
+      console.log(`  ⚠️ Could not read initial d3k logs: ${error instanceof Error ? error.message : String(error)}`)
+    }
+
     // Wait for dev server to be ready
-    if (debug) console.log("  ⏳ Waiting for dev server...")
+    if (debug) console.log("  ⏳ Waiting for dev server on port 3000...")
     await waitForServer(sandbox, 3000, 120000) // 2 minutes for d3k to start everything
 
     const devUrl = sandbox.domain(3000)
@@ -152,22 +219,36 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     await new Promise((resolve) => setTimeout(resolve, 10000))
 
     // Check d3k logs for any errors
-    console.log("  📋 Checking d3k logs...")
+    console.log("  📋 Checking d3k logs for errors and startup status...")
     const logsResult = await sandbox.runCommand({
       cmd: "tail",
-      args: ["-n", "100", "/tmp/d3k.log"]
+      args: ["-n", "200", "/tmp/d3k.log"]
     })
     if (logsResult.exitCode === 0) {
       // stdout might be a string or need to be read
+      const stdoutRaw = logsResult.stdout
       const stdout =
-        typeof logsResult.stdout === "string"
-          ? logsResult.stdout
-          : typeof logsResult.stdout === "function"
-            ? await logsResult.stdout()
-            : String(logsResult.stdout || "")
+        typeof stdoutRaw === "string"
+          ? stdoutRaw
+          : typeof stdoutRaw === "function"
+            ? await stdoutRaw()
+            : String(stdoutRaw || "")
 
-      console.log("  📋 d3k log (last 100 lines):")
+      console.log("  📋 d3k log (last 200 lines):")
       console.log(stdout)
+
+      // Check for common error patterns
+      const hasErrors = stdout.toLowerCase().includes("error") || stdout.toLowerCase().includes("failed")
+      const hasDevServer = stdout.includes("ready") || stdout.includes("listening") || stdout.includes("started")
+
+      if (hasErrors) {
+        console.log("  ⚠️ WARNING: d3k logs contain errors")
+      }
+      if (hasDevServer) {
+        console.log("  ✅ Dev server appears to have started successfully")
+      } else {
+        console.log("  ⚠️ WARNING: Could not confirm dev server started from logs")
+      }
     } else {
       console.log(`  ⚠️ Could not read d3k logs (exit code: ${logsResult.exitCode})`)
       const stderr =
@@ -180,6 +261,24 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
       if (stderr) {
         console.log(`  ⚠️ stderr: ${stderr}`)
       }
+    }
+
+    // Verify we can actually fetch the dev server URL
+    console.log(`  🔍 Testing dev server accessibility at ${devUrl}...`)
+    try {
+      const testResponse = await fetch(devUrl, {
+        method: "GET",
+        redirect: "manual" // Don't follow redirects
+      })
+      console.log(`  ✅ Dev server responded with status: ${testResponse.status} ${testResponse.statusText}`)
+
+      if (testResponse.status === 308 || testResponse.status === 401) {
+        console.log(
+          `  ℹ️ Dev server returned ${testResponse.status}, this is expected for protected deployments (use bypass token)`
+        )
+      }
+    } catch (error) {
+      console.log(`  ⚠️ WARNING: Could not fetch dev server: ${error instanceof Error ? error.message : String(error)}`)
     }
 
     if (debug) console.log("  ✅ d3k sandbox ready!")
