@@ -293,9 +293,11 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
       console.log("  🔍 Checking d3k logs for errors...")
 
       try {
+        // d3k creates log files with pattern: {projectName}-{timestamp}.log
+        // Use cat with wildcard to capture all log files
         const logsCheck = await sandbox.runCommand({
-          cmd: "cat",
-          args: ["/home/vercel-sandbox/.d3k/logs/server.log"]
+          cmd: "sh",
+          args: ["-c", "cat /home/vercel-sandbox/.d3k/logs/*.log 2>/dev/null || echo 'No log files found'"]
         })
         if (logsCheck.exitCode === 0 && logsCheck.stdout) {
           const stdout =
@@ -304,13 +306,11 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
               : typeof logsCheck.stdout === "function"
                 ? await logsCheck.stdout()
                 : String(logsCheck.stdout || "")
-          console.log("  📋 Dev server logs:")
+          console.log("  📋 All d3k logs:")
           console.log(stdout)
         }
       } catch (logError) {
-        console.log(
-          `  ⚠️ Could not read server logs: ${logError instanceof Error ? logError.message : String(logError)}`
-        )
+        console.log(`  ⚠️ Could not read d3k logs: ${logError instanceof Error ? logError.message : String(logError)}`)
       }
 
       throw error
