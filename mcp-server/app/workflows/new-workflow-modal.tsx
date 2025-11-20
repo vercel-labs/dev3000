@@ -425,7 +425,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
 
       // Create an AbortController for timeout handling
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 5 * 60 * 1000) // 5 minute timeout
+      const timeoutId = setTimeout(() => controller.abort(), 10 * 60 * 1000) // 10 minute timeout (matches server maxDuration)
 
       try {
         console.log("[Start Workflow] Making fetch request...")
