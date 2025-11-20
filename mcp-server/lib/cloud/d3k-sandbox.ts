@@ -202,9 +202,35 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
       })()
     }
 
-    // Give d3k a moment to start
+    // Give d3k a moment to start and create log files
     if (debug) console.log("  ⏳ Waiting for d3k to start...")
     await new Promise((resolve) => setTimeout(resolve, 5000))
+
+    // Also stream the dev server logs from d3k's log file
+    // d3k writes child process output to ~/.d3k/logs/server.log
+    if (debug) {
+      console.log("  📋 Starting dev server log stream...")
+      const tailCmd = await sandbox.runCommand({
+        cmd: "sh",
+        args: ["-c", "tail -f /home/vercel-sandbox/.d3k/logs/server.log 2>/dev/null || true"],
+        detached: true
+      })
+
+      // Stream server logs in the background
+      ;(async () => {
+        try {
+          for await (const log of tailCmd.logs()) {
+            if (log.stream === "stdout") {
+              console.log(`[SERVER] ${log.data}`)
+            } else if (log.stream === "stderr") {
+              console.error(`[SERVER] ${log.data}`)
+            }
+          }
+        } catch (e) {
+          console.error(`Error reading server logs: ${e instanceof Error ? e.message : String(e)}`)
+        }
+      })()
+    }
 
     // Wait for dev server to be ready
     if (debug) console.log("  ⏳ Waiting for dev server on port 3000...")
