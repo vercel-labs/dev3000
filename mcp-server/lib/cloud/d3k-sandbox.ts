@@ -176,18 +176,33 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     if (debug) console.log(`  📂 Working directory: ${sandboxCwd}`)
     if (debug) console.log(`  🔧 Command: cd ${sandboxCwd} && MCP_SKIP_PERMISSIONS=true d3k --no-tui --debug`)
 
-    // Start d3k in detached mode without redirecting output to a file
-    // This allows the output to flow through the sandbox's stdout/stderr
-    sandbox.runCommand({
+    // Start d3k in detached mode and capture the Command object
+    // Even though it's detached, we can still read logs from it
+    const d3kCmd = await sandbox.runCommand({
       cmd: "sh",
       args: ["-c", `cd ${sandboxCwd} && MCP_SKIP_PERMISSIONS=true d3k --no-tui --debug`],
-      detached: true,
-      stdout: debug ? process.stdout : undefined,
-      stderr: debug ? process.stderr : undefined
+      detached: true
     })
 
+    // Stream d3k logs in the background
+    if (debug) {
+      // Don't await this - let it run in background
+      ;(async () => {
+        try {
+          for await (const log of d3kCmd.logs()) {
+            if (log.stream === "stdout") {
+              console.log(log.data)
+            } else if (log.stream === "stderr") {
+              console.error(log.data)
+            }
+          }
+        } catch (e) {
+          console.error(`Error reading d3k logs: ${e instanceof Error ? e.message : String(e)}`)
+        }
+      })()
+    }
+
     // Give d3k a moment to start
-    // Output is now streaming to process.stdout/stderr instead of a log file
     if (debug) console.log("  ⏳ Waiting for d3k to start...")
     await new Promise((resolve) => setTimeout(resolve, 5000))
 
@@ -206,16 +221,19 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
           args: ["/home/vercel-sandbox/.d3k/logs/server.log"]
         })
         if (logsCheck.exitCode === 0 && logsCheck.stdout) {
-          const stdout = typeof logsCheck.stdout === "string"
-            ? logsCheck.stdout
-            : typeof logsCheck.stdout === "function"
-              ? await logsCheck.stdout()
-              : String(logsCheck.stdout || "")
+          const stdout =
+            typeof logsCheck.stdout === "string"
+              ? logsCheck.stdout
+              : typeof logsCheck.stdout === "function"
+                ? await logsCheck.stdout()
+                : String(logsCheck.stdout || "")
           console.log("  📋 Dev server logs:")
           console.log(stdout)
         }
       } catch (logError) {
-        console.log(`  ⚠️ Could not read server logs: ${logError instanceof Error ? logError.message : String(logError)}`)
+        console.log(
+          `  ⚠️ Could not read server logs: ${logError instanceof Error ? logError.message : String(logError)}`
+        )
       }
 
       throw error
