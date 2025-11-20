@@ -102,15 +102,21 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
         args: ["-la", sandboxCwd]
       })
       if (lsResult.exitCode === 0 && lsResult.stdout) {
-        const stdout =
-          typeof lsResult.stdout === "string"
-            ? lsResult.stdout
-            : typeof lsResult.stdout === "function"
-              ? await lsResult.stdout()
-              : String(lsResult.stdout || "")
+        try {
+          const stdout =
+            typeof lsResult.stdout === "string"
+              ? lsResult.stdout
+              : typeof lsResult.stdout === "function"
+                ? await lsResult.stdout()
+                : String(lsResult.stdout || "")
 
-        console.log(`  📂 Contents of ${sandboxCwd}:`)
-        console.log(stdout)
+          console.log(`  📂 Contents of ${sandboxCwd}:`)
+          console.log(stdout)
+        } catch (stdoutError) {
+          console.log(
+            `  ⚠️ Could not read directory listing stdout: ${stdoutError instanceof Error ? stdoutError.message : String(stdoutError)}`
+          )
+        }
       } else {
         console.log("  ⚠️ Could not read directory listing (stdout is undefined)")
       }
@@ -188,15 +194,21 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
         args: ["-n", "50", "/tmp/d3k.log"]
       })
       if (initialLogsResult.exitCode === 0 && initialLogsResult.stdout) {
-        const stdout =
-          typeof initialLogsResult.stdout === "string"
-            ? initialLogsResult.stdout
-            : typeof initialLogsResult.stdout === "function"
-              ? await initialLogsResult.stdout()
-              : String(initialLogsResult.stdout || "")
+        try {
+          const stdout =
+            typeof initialLogsResult.stdout === "string"
+              ? initialLogsResult.stdout
+              : typeof initialLogsResult.stdout === "function"
+                ? await initialLogsResult.stdout()
+                : String(initialLogsResult.stdout || "")
 
-        console.log("  📋 d3k initial output (first 50 lines):")
-        console.log(stdout)
+          console.log("  📋 d3k initial output (first 50 lines):")
+          console.log(stdout)
+        } catch (stdoutError) {
+          console.log(
+            `  ⚠️ Error reading initial d3k logs stdout: ${stdoutError instanceof Error ? stdoutError.message : String(stdoutError)}`
+          )
+        }
       } else if (initialLogsResult.exitCode === 0) {
         console.log("  ⚠️ Could not read initial d3k logs (stdout is undefined)")
       }
@@ -229,29 +241,35 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
       args: ["-n", "200", "/tmp/d3k.log"]
     })
     if (logsResult.exitCode === 0 && logsResult.stdout) {
-      // stdout might be a string or need to be read
-      const stdoutRaw = logsResult.stdout
-      const stdout =
-        typeof stdoutRaw === "string"
-          ? stdoutRaw
-          : typeof stdoutRaw === "function"
-            ? await stdoutRaw()
-            : String(stdoutRaw || "")
+      try {
+        // stdout might be a string or need to be read
+        const stdoutRaw = logsResult.stdout
+        const stdout =
+          typeof stdoutRaw === "string"
+            ? stdoutRaw
+            : typeof stdoutRaw === "function"
+              ? await stdoutRaw()
+              : String(stdoutRaw || "")
 
-      console.log("  📋 d3k log (last 200 lines):")
-      console.log(stdout)
+        console.log("  📋 d3k log (last 200 lines):")
+        console.log(stdout)
 
-      // Check for common error patterns
-      const hasErrors = stdout.toLowerCase().includes("error") || stdout.toLowerCase().includes("failed")
-      const hasDevServer = stdout.includes("ready") || stdout.includes("listening") || stdout.includes("started")
+        // Check for common error patterns
+        const hasErrors = stdout.toLowerCase().includes("error") || stdout.toLowerCase().includes("failed")
+        const hasDevServer = stdout.includes("ready") || stdout.includes("listening") || stdout.includes("started")
 
-      if (hasErrors) {
-        console.log("  ⚠️ WARNING: d3k logs contain errors")
-      }
-      if (hasDevServer) {
-        console.log("  ✅ Dev server appears to have started successfully")
-      } else {
-        console.log("  ⚠️ WARNING: Could not confirm dev server started from logs")
+        if (hasErrors) {
+          console.log("  ⚠️ WARNING: d3k logs contain errors")
+        }
+        if (hasDevServer) {
+          console.log("  ✅ Dev server appears to have started successfully")
+        } else {
+          console.log("  ⚠️ WARNING: Could not confirm dev server started from logs")
+        }
+      } catch (stdoutError) {
+        console.log(
+          `  ⚠️ Error reading d3k logs stdout: ${stdoutError instanceof Error ? stdoutError.message : String(stdoutError)}`
+        )
       }
     } else if (logsResult.exitCode !== 0) {
       console.log(`  ⚠️ Could not read d3k logs (exit code: ${logsResult.exitCode})`)
