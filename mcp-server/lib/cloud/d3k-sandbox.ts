@@ -391,7 +391,12 @@ async function waitForServer(sandbox: Sandbox, port: number, timeoutMs: number, 
         console.log(`  🔍 Port ${port} check: status ${response.status} ${response.statusText}`)
       }
 
-      if (response.ok || response.status === 404) {
+      // Consider server ready if:
+      // - 2xx (ok)
+      // - 404 (server responding but route not found)
+      // - 308 (redirect - sandbox protection)
+      // - 401 (auth required - sandbox protection)
+      if (response.ok || response.status === 404 || response.status === 308 || response.status === 401) {
         if (debug) console.log(`  ✅ Port ${port} is ready (status ${response.status})`)
         return
       }
