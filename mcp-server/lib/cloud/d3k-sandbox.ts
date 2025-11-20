@@ -224,7 +224,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
       cmd: "tail",
       args: ["-n", "200", "/tmp/d3k.log"]
     })
-    if (logsResult.exitCode === 0) {
+    if (logsResult.exitCode === 0 && logsResult.stdout) {
       // stdout might be a string or need to be read
       const stdoutRaw = logsResult.stdout
       const stdout =
@@ -249,7 +249,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
       } else {
         console.log("  ⚠️ WARNING: Could not confirm dev server started from logs")
       }
-    } else {
+    } else if (logsResult.exitCode !== 0) {
       console.log(`  ⚠️ Could not read d3k logs (exit code: ${logsResult.exitCode})`)
       const stderr =
         typeof logsResult.stderr === "string"
@@ -261,6 +261,8 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
       if (stderr) {
         console.log(`  ⚠️ stderr: ${stderr}`)
       }
+    } else {
+      console.log("  ⚠️ WARNING: Could not read d3k logs (stdout is undefined)")
     }
 
     // Verify we can actually fetch the dev server URL
