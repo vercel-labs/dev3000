@@ -34,7 +34,7 @@
     "pngjs": "^7.0.0",
     "react": "19.3.0-canary-257b033f-20251113",
     "react-dom": "19.3.0-canary-257b033f-20251113",
-    "react-markdown": "^10.1.0",
+    "streamdown": "^1.6.6",
     "tailwind-merge": "catalog:",
     "workflow": "4.0.1-beta.11",
     "ws": "^8.18.3",
