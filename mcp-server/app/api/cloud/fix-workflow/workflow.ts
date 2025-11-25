@@ -57,15 +57,29 @@ export async function cloudFixWorkflow(params: {
   console.log(`[Workflow] VERCEL_OIDC_TOKEN available: ${!!vercelOidcToken}`)
 
   // Step 0: Create d3k sandbox if repoUrl provided
-  let sandboxInfo: { mcpUrl: string; devUrl: string; bypassToken?: string } | null = null
+  // This step also captures CLS data from inside the sandbox
+  let sandboxInfo: {
+    mcpUrl: string
+    devUrl: string
+    bypassToken?: string
+    clsData?: unknown
+    mcpError?: string | null
+  } | null = null
   if (repoUrl) {
     sandboxInfo = await createD3kSandbox(repoUrl, repoBranch || "main", projectName, vercelToken, vercelOidcToken)
   }
 
   // Step 1: Fetch real logs (using sandbox MCP if available, otherwise devUrl directly)
+  // If we got CLS data from Step 0, pass it to Step 1 to avoid re-fetching
   // Use bypass token from sandbox if available, otherwise use provided one
   const effectiveBypassToken = sandboxInfo?.bypassToken || bypassToken
-  const logAnalysis = await fetchRealLogs(sandboxInfo?.mcpUrl || devUrl, effectiveBypassToken, sandboxInfo?.devUrl)
+  const logAnalysis = await fetchRealLogs(
+    sandboxInfo?.mcpUrl || devUrl,
+    effectiveBypassToken,
+    sandboxInfo?.devUrl,
+    sandboxInfo?.clsData,
+    sandboxInfo?.mcpError
+  )
 
   // Step 2: Invoke AI agent to analyze logs and create fix
   const fixProposal = await analyzeLogsWithAgent(logAnalysis, sandboxInfo?.devUrl || devUrl)
@@ -104,10 +118,16 @@ async function createD3kSandbox(
   return createD3kSandbox(repoUrl, branch, projectName, vercelToken, vercelOidcToken)
 }
 
-async function fetchRealLogs(mcpUrlOrDevUrl: string, bypassToken?: string, sandboxDevUrl?: string) {
+async function fetchRealLogs(
+  mcpUrlOrDevUrl: string,
+  bypassToken?: string,
+  sandboxDevUrl?: string,
+  clsData?: unknown,
+  mcpError?: string | null
+) {
   "use step"
   const { fetchRealLogs } = await import("./steps")
-  return fetchRealLogs(mcpUrlOrDevUrl, bypassToken, sandboxDevUrl)
+  return fetchRealLogs(mcpUrlOrDevUrl, bypassToken, sandboxDevUrl, clsData, mcpError)
 }
 
 async function analyzeLogsWithAgent(logAnalysis: string, devUrl: string) {

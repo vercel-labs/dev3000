@@ -101,5 +101,5 @@
   },
   "author": "Lindsey Simon <lindsey@vercel.com>",
   "license": "MIT",
-  "packageManager": "pnpm@10.18.3"
+  "packageManager": "pnpm@10.23.0"
 }

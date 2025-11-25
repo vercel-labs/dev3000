@@ -48,56 +48,89 @@ export async function createD3kSandbox(
   console.log(`[Step 0] Dev URL: ${sandboxResult.devUrl}`)
   console.log(`[Step 0] MCP URL: ${sandboxResult.mcpUrl}`)
 
-  // Verify sandbox is actually working by checking both URLs
-  console.log(`[Step 0] Verifying sandbox URLs are accessible...`)
-  try {
-    const devCheck = await fetch(sandboxResult.devUrl, { method: "HEAD" })
-    console.log(`[Step 0] Dev server check: ${devCheck.status} ${devCheck.statusText}`)
-  } catch (error) {
-    console.log(`[Step 0] Dev server check FAILED: ${error instanceof Error ? error.message : String(error)}`)
-  }
+  // Now capture CLS and errors using MCP from INSIDE the sandbox
+  // We must do this in Step 0 while we have the sandbox object
+  console.log(`[Step 0] Capturing CLS metrics from inside sandbox...`)
+
+  let clsData: unknown = null
+  let mcpError: string | null = null
 
   try {
-    const mcpCheck = await fetch(`${sandboxResult.mcpUrl}/mcp`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json, text/event-stream"
-      },
-      body: JSON.stringify({ jsonrpc: "2.0", id: 0, method: "tools/list" })
+    // Call fix_my_app MCP tool via curl from inside the sandbox
+    // This avoids network isolation issues - we're calling localhost:3684 from within the sandbox
+    const mcpCommand = `curl -s -X POST http://localhost:3684/mcp \\
+      -H "Content-Type: application/json" \\
+      -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"fix_my_app","arguments":{"mode":"snapshot","focusArea":"performance","returnRawData":true}}}'`
+
+    console.log(`[Step 0] Executing MCP command inside sandbox...`)
+    const mcpResult = await sandboxResult.sandbox.runCommand({
+      cmd: "bash",
+      args: ["-c", mcpCommand]
     })
-    console.log(`[Step 0] MCP server check: ${mcpCheck.status} ${mcpCheck.statusText}`)
 
-    if (mcpCheck.ok) {
-      // Get raw response text first to debug JSON parsing issues
-      const responseText = await mcpCheck.text()
-      console.log(`[Step 0] MCP server response length: ${responseText.length} bytes`)
-      console.log(`[Step 0] MCP server response preview: ${responseText.substring(0, 200)}`)
+    console.log(`[Step 0] MCP command exit code: ${mcpResult.exitCode}`)
 
+    // Handle stdout which can be a string or a function
+    // The Vercel Sandbox SDK types stdout as a union of string | function
+    let stdout: string
+    const rawStdout = mcpResult.stdout
+    if (typeof rawStdout === "string") {
+      stdout = rawStdout as string
+    } else if (typeof rawStdout === "function") {
+      stdout = await (rawStdout as () => Promise<string>)()
+    } else {
+      stdout = String(rawStdout || "")
+    }
+
+    console.log(`[Step 0] MCP stdout length: ${stdout.length} bytes`)
+
+    if (mcpResult.exitCode === 0 && stdout) {
       try {
-        const mcpData = JSON.parse(responseText)
-        const toolCount = mcpData.result?.tools?.length || 0
-        console.log(`[Step 0] MCP server has ${toolCount} tools available`)
+        const mcpResponse = JSON.parse(stdout)
+        if (mcpResponse.result?.content) {
+          // Extract the actual data from MCP response
+          const contentArray = mcpResponse.result.content
+          for (const item of contentArray) {
+            if (item.type === "text" && item.text) {
+              // Try to parse the text as JSON if it contains structured data
+              try {
+                clsData = JSON.parse(item.text)
+                console.log(`[Step 0] Successfully parsed CLS data`)
+                break
+              } catch {
+                // If not JSON, treat as plain text
+                clsData = { rawOutput: item.text }
+              }
+            }
+          }
+        }
+
+        console.log(`[Step 0] CLS data captured:`, JSON.stringify(clsData).substring(0, 500))
       } catch (parseError) {
-        console.log(
-          `[Step 0] Failed to parse MCP response as JSON: ${parseError instanceof Error ? parseError.message : String(parseError)}`
-        )
-        console.log(`[Step 0] Full response text: ${responseText}`)
+        mcpError = `Failed to parse MCP response: ${parseError instanceof Error ? parseError.message : String(parseError)}`
+        console.log(`[Step 0] ${mcpError}`)
+        console.log(`[Step 0] Raw stdout: ${stdout.substring(0, 1000)}`)
       }
     } else {
-      const errorText = await mcpCheck.text()
-      console.log(`[Step 0] MCP server returned error response: ${errorText}`)
+      mcpError = `MCP command failed with exit code ${mcpResult.exitCode}`
+      console.log(`[Step 0] ${mcpError}`)
+      if (mcpResult.stderr) {
+        console.log(`[Step 0] stderr: ${mcpResult.stderr}`)
+      }
     }
   } catch (error) {
-    console.log(`[Step 0] MCP server check FAILED: ${error instanceof Error ? error.message : String(error)}`)
+    mcpError = `MCP execution error: ${error instanceof Error ? error.message : String(error)}`
+    console.log(`[Step 0] ${mcpError}`)
   }
 
-  // Note: We cannot return the cleanup function as it's not serializable
+  // Note: We cannot return the cleanup function or sandbox object as they're not serializable
   // Sandbox cleanup will happen automatically when the sandbox times out
   return {
     mcpUrl: sandboxResult.mcpUrl,
     devUrl: sandboxResult.devUrl,
-    bypassToken: sandboxResult.bypassToken
+    bypassToken: sandboxResult.bypassToken,
+    clsData,
+    mcpError
   }
 }
 
@@ -105,8 +138,25 @@ export async function createD3kSandbox(
  * Step 1: Use browser automation to capture real errors
  * Uses d3k MCP server in sandbox (if available) or AI Gateway for browser automation
  */
-export async function fetchRealLogs(mcpUrlOrDevUrl: string, bypassToken?: string, sandboxDevUrl?: string) {
+export async function fetchRealLogs(
+  mcpUrlOrDevUrl: string,
+  bypassToken?: string,
+  sandboxDevUrl?: string,
+  clsData?: unknown,
+  mcpError?: string | null
+) {
   "use step"
+
+  // If we already have CLS data from Step 0, use it
+  if (clsData) {
+    console.log("[Step 1] Using CLS data captured in Step 0")
+    return JSON.stringify(clsData, null, 2)
+  }
+
+  // If there was an MCP error in Step 0, log it
+  if (mcpError) {
+    console.log(`[Step 1] Note: MCP error from Step 0: ${mcpError}`)
+  }
 
   // Determine if we're using sandbox MCP or direct dev URL
   const isSandbox = !!sandboxDevUrl
