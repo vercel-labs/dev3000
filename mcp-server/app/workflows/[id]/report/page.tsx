@@ -1,6 +1,6 @@
 import { Download } from "lucide-react"
 import { redirect } from "next/navigation"
-import ReactMarkdown from "react-markdown"
+import { Streamdown } from "streamdown"
 import { getCurrentUser } from "@/lib/auth"
 import { getWorkflowRun } from "@/lib/workflow-storage"
 
@@ -43,23 +43,9 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
         </div>
 
         <div className="bg-card border border-border rounded-lg p-8">
-          <article className="prose prose-slate dark:prose-invert max-w-none">
-            <ReactMarkdown
-              components={{
-                // Style code blocks
-                pre: ({ node, ...props }) => <pre className="bg-muted p-4 rounded-md overflow-x-auto" {...props} />,
-                code: ({ node, ...props }) => <code className="bg-muted px-1.5 py-0.5 rounded text-sm" {...props} />,
-                // Style links
-                a: ({ node, ...props }) => <a className="text-primary hover:underline" {...props} />,
-                // Style headings
-                h1: ({ node, ...props }) => <h1 className="text-3xl font-bold mt-8 mb-4" {...props} />,
-                h2: ({ node, ...props }) => <h2 className="text-2xl font-semibold mt-6 mb-3" {...props} />,
-                h3: ({ node, ...props }) => <h3 className="text-xl font-semibold mt-4 mb-2" {...props} />
-              }}
-            >
-              {markdown}
-            </ReactMarkdown>
-          </article>
+          <Streamdown mode="static">
+            {markdown}
+          </Streamdown>
         </div>
 
         <div className="mt-6 flex gap-4">
