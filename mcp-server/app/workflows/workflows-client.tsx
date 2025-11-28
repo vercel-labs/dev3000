@@ -74,7 +74,7 @@ export default function WorkflowsClient({ user, initialRuns }: WorkflowsClientPr
               </TableHeader>
               <TableBody>
                 {initialRuns.map((run) => (
-                  <TableRow key={run.id}>
+                  <TableRow key={`${run.id}-${run.timestamp}`}>
                     <TableCell>
                       <div className="font-medium">{run.projectName}</div>
                       <div className="text-xs text-muted-foreground">{run.id}</div>
