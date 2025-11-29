@@ -397,9 +397,16 @@ export function findActiveSessions(): Session[] {
         }
       })
       .filter((session) => {
-        // Only show sessions from the last 24 hours
-        const age = Date.now() - new Date(session.startTime).getTime()
-        return age < 24 * 60 * 60 * 1000
+        // Check if the process is still running by checking the PID
+        if (!session.pid) {
+          return false
+        }
+        try {
+          process.kill(session.pid, 0) // Signal 0 just checks if process exists
+          return true // Process is still running
+        } catch {
+          return false // Process is not running
+        }
       })
       .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime())
 

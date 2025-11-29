@@ -7,8 +7,7 @@
     "build": "next build --turbopack",
     "start": "next start",
     "typegen": "next typegen",
-    "typecheck": "tsc --noEmit",
-    "tools": "tsx tools-cli.ts"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.18.1",
