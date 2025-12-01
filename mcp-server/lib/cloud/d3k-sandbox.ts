@@ -95,7 +95,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
         if (debug && options.stdout !== process.stdout) console.log(log.data)
       } else {
         stderr += log.data
-        if (debug && options.stderr !== process.stderr) console.error(log.data)
+        if (debug && options.stderr !== process.stderr) console.debug(log.data)
       }
     }
 
@@ -288,7 +288,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
         cmd: "sh",
         args: [
           "-c",
-          'for log in /home/vercel-sandbox/.d3k/logs/*.log 2>/dev/null; do echo "=== $log ==="  && head -50 "$log" || true; done'
+          'for log in /home/vercel-sandbox/.d3k/logs/*.log; do [ -f "$log" ] && echo "=== $log ===" && head -50 "$log" || true; done 2>/dev/null || true'
         ]
       })
       console.log(`  📋 Initial log content:\n${allLogsCheck.stdout}`)
