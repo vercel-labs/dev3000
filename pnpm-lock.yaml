@@ -157,6 +157,9 @@ importers:
       '@vercel/sdk':
         specifier: ^1.16.1
         version: 1.16.1(@modelcontextprotocol/sdk@1.20.1)
+      '@workflow/errors':
+        specifier: 4.0.1-beta.6
+        version: 4.0.1-beta.6
       ai:
         specifier: ^5.0.89
         version: 5.0.89(zod@3.25.76)
