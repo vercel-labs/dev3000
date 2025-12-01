@@ -10,6 +10,19 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.110",
+    date: "2025-12-01",
+    type: "patch",
+    highlights: [
+      "Update Next.js type references after route cleanup",
+      "Remove Phase 1 POC artifacts",
+      "Clean up unused artifacts and improve workflow testing",
+      "Fix React duplicate key warnings on workflows page",
+      "Trigger deployment"
+    ]
+  },
+
+  {
     version: "0.0.109",
     date: "2025-11-18",
     type: "patch",

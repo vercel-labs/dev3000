@@ -4,6 +4,16 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.110] - 2025-12-01
+
+**Patch Release**
+
+- Update Next.js type references after route cleanup
+- Remove Phase 1 POC artifacts
+- Clean up unused artifacts and improve workflow testing
+- Fix React duplicate key warnings on workflows page
+- Trigger deployment
+
 ## [0.0.109] - 2025-11-18
 
 **Patch Release**
