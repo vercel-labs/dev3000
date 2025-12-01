@@ -218,10 +218,132 @@ echo "4. Monitoring production logs..."
 echo "   vercel logs $DEPLOYMENT --scope team_AOfCfb0WM8wEQYM5swopmVwn"
 ```
 
+## Testing Sandbox Dev URLs
+
+When a workflow creates a sandbox, it logs the Dev URL like:
+```
+[Step 0] Dev URL: https://sb-6xydwiqnuv8o.vercel.run
+```
+
+### Extract Dev URL from Logs
+
+**From Vercel production logs:**
+```bash
+# Get latest deployment
+DEPLOYMENT=$(vercel ls --scope team_AOfCfb0WM8wEQYM5swopmVwn | grep dev3000 | head -1 | awk '{print $2}')
+
+# Extract Dev URL
+vercel logs $DEPLOYMENT --scope team_AOfCfb0WM8wEQYM5swopmVwn 2>&1 | grep "Dev URL:" | tail -1
+```
+
+**From real-time monitoring:**
+```bash
+# Monitor logs and extract Dev URL as it appears
+vercel logs --follow d3k-mcp.vercel.sh --scope team_AOfCfb0WM8wEQYM5swopmVwn 2>&1 | grep -o "https://sb-[a-z0-9]*\.vercel\.run"
+```
+
+### Test Dev URL with Browser Automation
+
+Once you have the Dev URL, test it using dev3000 MCP:
+
+```typescript
+// Navigate to the Dev URL
+await execute_browser_action({
+  action: "navigate",
+  params: {
+    url: "https://sb-6xydwiqnuv8o.vercel.run"  // Replace with actual URL from logs
+  }
+})
+
+// Wait for page to load
+await sleep(3)
+
+// Take a screenshot to verify it loaded
+await execute_browser_action({
+  action: "screenshot"
+})
+
+// Check console for errors
+await execute_browser_action({
+  action: "evaluate",
+  params: {
+    expression: `
+      JSON.stringify({
+        title: document.title,
+        errors: window.__errors || [],
+        url: location.href
+      })
+    `
+  }
+})
+```
+
+### Verify Dev URL is Accessible
+
+The Dev URL should:
+- ✅ Return HTTP 200 (not 502 SANDBOX_NOT_LISTENING)
+- ✅ Actually render the homepage HTML
+- ✅ Load CSS and JavaScript resources successfully
+- ✅ Not hang or timeout
+
+**Common Issues:**
+
+| Issue | Cause | Fix |
+|-------|-------|-----|
+| HTTP 502 "SANDBOX_NOT_LISTENING" | Dev server binding to localhost instead of 0.0.0.0 | Update d3k to pass `--hostname 0.0.0.0` to Next.js |
+| Page loads but very broken | Resources failing to load | Check network tab for failed requests |
+| Hangs indefinitely | Sandbox not ready or crashed | Check sandbox logs for errors |
+
+### Test from Command Line
+
+```bash
+# Quick test with curl
+curl -I https://sb-XXXXX.vercel.run
+
+# Expected: HTTP 200 (or 308 redirect if protected)
+# Bad: HTTP 502 or timeout
+```
+
+### Automated Testing Script
+
+```bash
+#!/bin/bash
+# Extract and test Dev URL from latest workflow
+
+echo "1. Getting latest deployment..."
+DEPLOYMENT=$(vercel ls --scope team_AOfCfb0WM8wEQYM5swopmVwn | grep dev3000 | head -1 | awk '{print $2}')
+echo "   Deployment: $DEPLOYMENT"
+
+echo "2. Extracting Dev URL from logs..."
+DEV_URL=$(vercel logs $DEPLOYMENT --scope team_AOfCfb0WM8wEQYM5swopmVwn 2>&1 | grep -o "https://sb-[a-z0-9]*\.vercel\.run" | tail -1)
+echo "   Dev URL: $DEV_URL"
+
+if [ -z "$DEV_URL" ]; then
+  echo "   ❌ No Dev URL found in logs"
+  exit 1
+fi
+
+echo "3. Testing Dev URL with curl..."
+HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -I $DEV_URL)
+echo "   HTTP Status: $HTTP_CODE"
+
+if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "308" ]; then
+  echo "   ✅ Dev URL is accessible"
+else
+  echo "   ❌ Dev URL returned error: $HTTP_CODE"
+fi
+
+echo "4. Use dev3000 MCP to test in browser:"
+echo "   execute_browser_action({ action: 'navigate', params: { url: '$DEV_URL' } })"
+```
+
 ## Summary
 
 **Always check BOTH:**
 1. ✅ Local logs (`~/.d3k/logs/`) - Shows API was called
 2. ✅ Production logs (Vercel dashboard or CLI) - Shows workflow actually executed
+3. ✅ Test Dev URLs (if sandbox created) - Verify sandbox is accessible
 
 **If production logs are empty**, workflow was never created - check OIDC token!
+
+**If Dev URL returns 502**, the dev server isn't binding to 0.0.0.0 for external access.
