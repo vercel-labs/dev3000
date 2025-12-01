@@ -75,32 +75,29 @@ execute_browser_action({
 })
 ```
 
-### Step 2: Monitor UI Status
+### Step 2: IMMEDIATELY Monitor Production Logs (Source of Truth)
 
-```typescript
-// Check current UI status
-execute_browser_action({
-  action: "evaluate",
-  params: {
-    expression: "document.body.innerText"
-  }
-})
+**CRITICAL**: The UI status is NOT a reliable indicator of workflow execution! Always verify in production logs via CLI.
 
-// Look for status messages:
-// - "Generating fix proposal..."
-// - "Creating sandbox..."
-// - "Writing code..."
-// - "Workflow completed successfully"
+❌ **DO NOT TRUST THE UI**: UI showing "Writing code..." does NOT mean the workflow is running
+✅ **ONLY TRUST PRODUCTION LOGS**: Use `vercel logs` CLI to verify actual execution
+
+Start monitoring production logs IMMEDIATELY after clicking "Start Workflow":
+
+```bash
+# Get the latest deployment URL
+DEPLOYMENT=$(vercel ls --scope team_AOfCfb0WM8wEQYM5swopmVwn | grep dev3000 | head -1 | awk '{print $2}')
+
+# Monitor production logs in real-time (grep for workflow activity)
+vercel logs $DEPLOYMENT --scope team_AOfCfb0WM8wEQYM5swopmVwn 2>&1 | grep -i "workflow\|sandbox\|step"
 ```
-
-**Note**: UI has a 5-minute timeout, but workflow can take up to 10 minutes to complete in production.
 
 ## Monitor Logs Correctly
 
-### CRITICAL: Monitor BOTH Local AND Production Logs
+### CRITICAL: Production Logs Are the ONLY Source of Truth
 
-❌ **Common Mistake**: Only checking local logs
-✅ **Correct**: Check BOTH local AND Vercel production logs
+❌ **DO NOT RELY ON**: UI status, local logs alone, or assumptions
+✅ **ALWAYS VERIFY WITH**: Vercel CLI production logs
 
 ### Monitor Local Logs (shows API calls)
 
@@ -118,52 +115,50 @@ grep -i "workflow\|sandbox\|step" ~/.d3k/logs/dev3000-mcp-server-*.log | tail -5
 
 **Important**: Local logs showing "200 OK" does NOT mean the workflow succeeded in production!
 
-### Monitor Vercel Production Logs (shows actual workflow execution)
+### Production Logs via Vercel CLI (REQUIRED - Source of Truth)
+
+**This is the ONLY way to verify workflow execution.** Always use CLI, never dashboard.
 
 ```bash
-# Get the most recent production deployment URL
-vercel ls --scope team_AOfCfb0WM8wEQYM5swopmVwn | head -2
+# Step 1: Get latest deployment URL
+DEPLOYMENT=$(vercel ls --scope team_AOfCfb0WM8wEQYM5swopmVwn | grep dev3000 | head -1 | awk '{print $2}')
+echo "Checking logs for: $DEPLOYMENT"
 
-# Monitor production logs for that deployment
-vercel logs https://dev3000-XXXXX.vercel.sh --scope team_AOfCfb0WM8wEQYM5swopmVwn 2>&1 | grep -i "workflow\|sandbox\|step"
+# Step 2: Monitor production logs for workflow activity
+vercel logs $DEPLOYMENT --scope team_AOfCfb0WM8wEQYM5swopmVwn 2>&1 | grep -i "workflow\|sandbox\|step"
+
+# Step 3: If no output, check all recent logs (no grep filter)
+vercel logs $DEPLOYMENT --scope team_AOfCfb0WM8wEQYM5swopmVwn 2>&1 | tail -100
 ```
 
-**Or check the Vercel Dashboard:**
-https://dash.vercel.com/vercel/dev3000-mcp/[DEPLOYMENT_ID]/logs
-
-**What to look for in production logs:**
-- `[Workflow] Starting cloud fix workflow...` - Workflow started
-- `[Step 0] Creating d3k sandbox...` - Sandbox creation
-- `[Step 0] Sandbox created successfully` - Sandbox ready
+**What MUST appear in production logs for successful execution:**
+- `[Workflow] Starting cloud fix workflow...` - Workflow initiated in production
+- `[Step 0] Creating d3k sandbox...` - Sandbox creation started
+- `[Step 0] Sandbox created successfully` - Sandbox is ready
 - `[Step 0] Executing MCP command inside sandbox...` - Running fix_my_app
-- `[Step 1] Analyzing logs with AI agent...` - AI analysis
-- `[Step 2] Uploading to blob storage...` - Saving report
-- `[Step 3] Creating GitHub PR...` - Creating PR (if applicable)
+- `[Step 0] Dev URL: https://sb-XXXXX.vercel.run` - Sandbox URL available
+- `[Step 1] Analyzing logs with AI agent...` - AI analysis phase
+- `[Step 2] Uploading to blob storage...` - Report generation
+- `[Step 3] Creating GitHub PR...` - PR creation (if enabled)
 
-**If production logs are empty**: The workflow was NOT created - likely due to expired OIDC token.
+**If production logs show NOTHING**:
+- ❌ Workflow was NOT created despite UI showing progress
+- Most likely cause: Expired OIDC token
+- Solution: Run `vercel env pull .env.local --scope team_AOfCfb0WM8wEQYM5swopmVwn` and restart dev server
 
-### Check Workflow Status in UI
+### Checking Final Workflow Results
 
-Use d3k browser automation to check workflow status:
+After production logs confirm completion, you can check results via CLI:
 
-```typescript
-// Navigate to workflows list page
-execute_browser_action({
-  action: "navigate",
-  params: { url: "http://localhost:3000/workflows" }
-})
+```bash
+# List all workflows to see final status
+vercel ls --scope team_AOfCfb0WM8wEQYM5swopmVwn | head -20
 
-// Wait for page to load, then check workflow status
-execute_browser_action({
-  action: "evaluate",
-  params: { expression: "document.body.innerText" }
-})
+# Or check the workflows page in browser (ONLY after production logs confirm completion)
+# Navigate to: http://localhost:3000/workflows
 ```
 
-Look for the most recent workflow entry with:
-- Status: `running` | `success` | `failure`
-- Report: Link to view report (if completed)
-- PR: Link to GitHub PR (if created)
+**Remember**: Only check UI AFTER production logs confirm the workflow completed. UI status alone is unreliable.
 
 ## Expected Timeline
 
