@@ -431,8 +431,8 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
         }
       }, 3000)
 
-      // Use production API if configured, otherwise use relative path (local)
-      const apiBaseUrl = process.env.NEXT_PUBLIC_WORKFLOW_API_URL || ""
+      // Always use production API endpoint for workflow execution
+      const apiBaseUrl = "https://d3k-mcp.vercel.sh"
       const apiUrl = `${apiBaseUrl}/api/cloud/start-fix`
 
       console.log("[Start Workflow] API URL:", apiUrl)
@@ -455,8 +455,8 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
         const accessToken = tokenData.accessToken
 
         const headers: HeadersInit = { "Content-Type": "application/json" }
-        if (accessToken && apiBaseUrl) {
-          // If calling production API, include Authorization header
+        if (accessToken) {
+          // Always include Authorization header for production API
           headers.Authorization = `Bearer ${accessToken}`
         }
 

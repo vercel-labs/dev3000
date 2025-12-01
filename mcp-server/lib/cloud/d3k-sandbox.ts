@@ -80,18 +80,39 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     console.log(`  Token type: ${process.env.VERCEL_OIDC_TOKEN ? "OIDC" : "static"}`)
   }
 
-  // Create sandbox
+  // Helper function to run commands and collect output properly
+  async function runCommandWithLogs(
+    sandbox: Sandbox,
+    options: Parameters<Sandbox["runCommand"]>[0]
+  ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+    const result = await sandbox.runCommand(options)
+
+    let stdout = ""
+    let stderr = ""
+    for await (const log of result.logs()) {
+      if (log.stream === "stdout") {
+        stdout += log.data
+        if (debug && options.stdout !== process.stdout) console.log(log.data)
+      } else {
+        stderr += log.data
+        if (debug && options.stderr !== process.stderr) console.error(log.data)
+      }
+    }
+
+    await result.wait()
+
+    return {
+      exitCode: result.exitCode,
+      stdout,
+      stderr
+    }
+  }
+
+  // Create sandbox WITHOUT source parameter
+  // We'll manually clone the repo after sandbox creation for better control
   // biome-ignore lint/suspicious/noExplicitAny: ms type inference issue
   const timeoutMs = ms(timeout as any) as unknown as number
   const sandbox = await Sandbox.create({
-    teamId: process.env.VERCEL_TEAM_ID || "team_nLlpyC6REAqxydlFKbrMDlud",
-    projectId: process.env.VERCEL_PROJECT_ID || "prj_21F00Vr3bXzc1VSC8D9j2YJUzd0Q",
-    token,
-    source: {
-      url: `${repoUrl}.git`,
-      type: "git",
-      ...(branch ? { revision: branch } : {})
-    },
     resources: { vcpus: 4 },
     timeout: timeoutMs,
     ports: [3000, 3684], // App port + MCP server port
@@ -103,31 +124,75 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
   try {
     const sandboxCwd = projectDir ? `/vercel/sandbox/${projectDir}` : "/vercel/sandbox"
 
+    // Manually clone the repository
+    if (debug) console.log(`  📦 Cloning repository: ${repoUrl}`)
+
+    // Create the target directory
+    const mkdirResult = await runCommandWithLogs(sandbox, {
+      cmd: "mkdir",
+      args: ["-p", sandboxCwd]
+    })
+
+    if (mkdirResult.exitCode !== 0) {
+      throw new Error(`Failed to create directory ${sandboxCwd}: ${mkdirResult.stderr}`)
+    }
+
+    // Clone the repository
+    const gitArgs = ["clone"]
+
+    // Add depth for faster cloning
+    gitArgs.push("--depth", "1")
+
+    // Add revision if it's a commit SHA (40 characters)
+    if (branch && branch.length === 40) {
+      gitArgs.push("--revision", branch)
+    }
+
+    gitArgs.push(`${repoUrl}.git`, sandboxCwd)
+
+    const gitClone = await runCommandWithLogs(sandbox, {
+      cmd: "git",
+      args: gitArgs,
+      env: {
+        GIT_TERMINAL_PROMPT: "0"
+      }
+    })
+
+    if (gitClone.exitCode !== 0) {
+      throw new Error(`Git clone failed with exit code: ${gitClone.exitCode}. Error: ${gitClone.stderr}`)
+    }
+
+    // If branch is a branch name (not a commit SHA), checkout the branch
+    if (branch && branch.length !== 40) {
+      if (debug) console.log(`  🔀 Checking out branch: ${branch}`)
+      const gitCheckout = await runCommandWithLogs(sandbox, {
+        cmd: "git",
+        args: ["checkout", branch],
+        cwd: sandboxCwd,
+        env: {
+          GIT_TERMINAL_PROMPT: "0"
+        }
+      })
+
+      if (gitCheckout.exitCode !== 0) {
+        throw new Error(`Git checkout failed with exit code: ${gitCheckout.exitCode}. Error: ${gitCheckout.stderr}`)
+      }
+    }
+
+    if (debug) console.log("  ✅ Repository cloned")
+
     // Verify sandbox directory contents
     if (debug) console.log("  📂 Checking sandbox directory contents...")
     try {
-      const lsResult = await sandbox.runCommand({
+      const lsResult = await runCommandWithLogs(sandbox, {
         cmd: "ls",
         args: ["-la", sandboxCwd]
       })
-      if (lsResult.exitCode === 0 && lsResult.stdout) {
-        try {
-          const stdout =
-            typeof lsResult.stdout === "string"
-              ? lsResult.stdout
-              : typeof lsResult.stdout === "function"
-                ? await lsResult.stdout()
-                : String(lsResult.stdout || "")
-
-          console.log(`  📂 Contents of ${sandboxCwd}:`)
-          console.log(stdout)
-        } catch (stdoutError) {
-          console.log(
-            `  ⚠️ Could not read directory listing stdout: ${stdoutError instanceof Error ? stdoutError.message : String(stdoutError)}`
-          )
-        }
+      if (lsResult.exitCode === 0) {
+        console.log(`  📂 Contents of ${sandboxCwd}:`)
+        console.log(lsResult.stdout)
       } else {
-        console.log("  ⚠️ Could not read directory listing (stdout is undefined)")
+        console.log("  ⚠️ Could not read directory listing")
       }
     } catch (error) {
       console.log(`  ⚠️ Could not list directory: ${error instanceof Error ? error.message : String(error)}`)
@@ -136,7 +201,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     // Check for package.json
     if (debug) console.log("  📄 Verifying package.json exists...")
     try {
-      const pkgCheck = await sandbox.runCommand({
+      const pkgCheck = await runCommandWithLogs(sandbox, {
         cmd: "test",
         args: ["-f", `${sandboxCwd}/package.json`]
       })
@@ -151,7 +216,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
 
     // Install project dependencies
     if (debug) console.log("  📦 Installing project dependencies...")
-    const installResult = await sandbox.runCommand({
+    const installResult = await runCommandWithLogs(sandbox, {
       cmd: packageManager,
       args: ["install"],
       cwd: sandboxCwd,
@@ -167,7 +232,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
 
     // Install d3k globally from npm
     if (debug) console.log("  📦 Installing d3k globally from npm...")
-    const d3kInstallResult = await sandbox.runCommand({
+    const d3kInstallResult = await runCommandWithLogs(sandbox, {
       cmd: "pnpm",
       args: ["i", "-g", "dev3000"],
       stdout: debug ? process.stdout : undefined,
@@ -205,52 +270,28 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     // Debug: Check d3k process and log files
     if (debug) {
       console.log("  🔍 Checking d3k process status...")
-      const psCheck = await sandbox.runCommand({
+      const psCheck = await runCommandWithLogs(sandbox, {
         cmd: "sh",
         args: ["-c", "ps aux | grep -E '(d3k|pnpm|next)' | grep -v grep || echo 'No d3k/pnpm/next processes found'"]
       })
-      if (psCheck.stdout) {
-        const stdout =
-          typeof psCheck.stdout === "string"
-            ? psCheck.stdout
-            : typeof psCheck.stdout === "function"
-              ? await psCheck.stdout()
-              : String(psCheck.stdout || "")
-        console.log(`  📋 Process list:\n${stdout}`)
-      }
+      console.log(`  📋 Process list:\n${psCheck.stdout}`)
 
       console.log("  🔍 Checking for d3k log files...")
-      const logsCheck = await sandbox.runCommand({
+      const logsCheck = await runCommandWithLogs(sandbox, {
         cmd: "sh",
         args: ["-c", "ls -lah /home/vercel-sandbox/.d3k/logs/ 2>/dev/null || echo 'No .d3k/logs directory found'"]
       })
-      if (logsCheck.stdout) {
-        const stdout =
-          typeof logsCheck.stdout === "string"
-            ? logsCheck.stdout
-            : typeof logsCheck.stdout === "function"
-              ? await logsCheck.stdout()
-              : String(logsCheck.stdout || "")
-        console.log(`  📋 Log files:\n${stdout}`)
-      }
+      console.log(`  📋 Log files:\n${logsCheck.stdout}`)
 
       // Check ALL d3k log files for initial content
-      const allLogsCheck = await sandbox.runCommand({
+      const allLogsCheck = await runCommandWithLogs(sandbox, {
         cmd: "sh",
         args: [
           "-c",
           'for log in /home/vercel-sandbox/.d3k/logs/*.log 2>/dev/null; do echo "=== $log ==="  && head -50 "$log" || true; done'
         ]
       })
-      if (allLogsCheck.stdout) {
-        const stdout =
-          typeof allLogsCheck.stdout === "string"
-            ? allLogsCheck.stdout
-            : typeof allLogsCheck.stdout === "function"
-              ? await allLogsCheck.stdout()
-              : String(allLogsCheck.stdout || "")
-        console.log(`  📋 Initial log content:\n${stdout}`)
-      }
+      console.log(`  📋 Initial log content:\n${allLogsCheck.stdout}`)
     }
 
     // Note: We do NOT start infinite log streaming loops here because they prevent
@@ -269,19 +310,13 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
       try {
         // d3k creates log files with pattern: {projectName}-{timestamp}.log
         // Use cat with wildcard to capture all log files
-        const logsCheck = await sandbox.runCommand({
+        const logsCheck = await runCommandWithLogs(sandbox, {
           cmd: "sh",
           args: ["-c", "cat /home/vercel-sandbox/.d3k/logs/*.log 2>/dev/null || echo 'No log files found'"]
         })
-        if (logsCheck.exitCode === 0 && logsCheck.stdout) {
-          const stdout =
-            typeof logsCheck.stdout === "string"
-              ? logsCheck.stdout
-              : typeof logsCheck.stdout === "function"
-                ? await logsCheck.stdout()
-                : String(logsCheck.stdout || "")
+        if (logsCheck.exitCode === 0) {
           console.log("  📋 All d3k logs:")
-          console.log(stdout)
+          console.log(logsCheck.stdout)
         }
       } catch (logError) {
         console.log(`  ⚠️ Could not read d3k logs: ${logError instanceof Error ? logError.message : String(logError)}`)
