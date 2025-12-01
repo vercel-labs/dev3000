@@ -50,24 +50,24 @@ pnpm d3k
 
 ## Test Workflow Creation
 
-### Step 1: Navigate to Workflow Form
+**IMPORTANT**: Always use d3k MCP tools for testing workflows. Do NOT use curl or manual API calls - use d3k's browser automation instead.
 
-Use d3k browser automation to navigate and trigger workflow:
+### Step 1: Navigate to Workflow Form and Trigger
+
+Use d3k browser automation (via `execute_browser_action` MCP tool):
 
 ```typescript
 // Navigate to workflow form with all required parameters
-await execute_browser_action({
+execute_browser_action({
   action: "navigate",
   params: {
     url: "http://localhost:3000/workflows/new?type=cloud-fix&team=team_AOfCfb0WM8wEQYM5swopmVwn&project=prj_9kvdjxXYqydZsyifQmpbfjimvjHv"
   }
 })
 
-// Wait for page to load
-await sleep(2)
-
-// Click "Start Workflow" button
-await execute_browser_action({
+// Wait for page to load (2-3 seconds)
+// Then click "Start Workflow" button
+execute_browser_action({
   action: "evaluate",
   params: {
     expression: "Array.from(document.querySelectorAll('button')).find(btn => btn.textContent.includes('Start Workflow'))?.click()"
@@ -75,21 +75,25 @@ await execute_browser_action({
 })
 ```
 
-### Step 2: Check UI Status
+### Step 2: Monitor UI Status
 
 ```typescript
-// Monitor the UI for status changes
-await execute_browser_action({
+// Check current UI status
+execute_browser_action({
   action: "evaluate",
   params: {
     expression: "document.body.innerText"
   }
 })
 
-// Look for status: "Generating fix proposal...", "Writing code...", etc.
+// Look for status messages:
+// - "Generating fix proposal..."
+// - "Creating sandbox..."
+// - "Writing code..."
+// - "Workflow completed successfully"
 ```
 
-**Note**: UI has a 5-minute timeout, but workflow can take up to 10 minutes.
+**Note**: UI has a 5-minute timeout, but workflow can take up to 10 minutes to complete in production.
 
 ## Monitor Logs Correctly
 
@@ -140,21 +144,17 @@ https://dash.vercel.com/vercel/dev3000-mcp/[DEPLOYMENT_ID]/logs
 
 ### Check Workflow Status in UI
 
-```bash
-# Navigate to workflows list
-curl -s http://localhost:3000/workflows | grep -o "tailwind-plus-transmit.*running\|success\|failure" | head -5
-```
+Use d3k browser automation to check workflow status:
 
-Or use d3k browser automation:
 ```typescript
-await execute_browser_action({
+// Navigate to workflows list page
+execute_browser_action({
   action: "navigate",
   params: { url: "http://localhost:3000/workflows" }
 })
 
-await sleep(2)
-
-await execute_browser_action({
+// Wait for page to load, then check workflow status
+execute_browser_action({
   action: "evaluate",
   params: { expression: "document.body.innerText" }
 })
@@ -244,27 +244,24 @@ vercel logs --follow d3k-mcp.vercel.sh --scope team_AOfCfb0WM8wEQYM5swopmVwn 2>&
 
 ### Test Dev URL with Browser Automation
 
-Once you have the Dev URL, test it using dev3000 MCP:
+Once you have the Dev URL, test it using d3k MCP:
 
 ```typescript
-// Navigate to the Dev URL
-await execute_browser_action({
+// Navigate to the Dev URL from logs
+execute_browser_action({
   action: "navigate",
   params: {
     url: "https://sb-6xydwiqnuv8o.vercel.run"  // Replace with actual URL from logs
   }
 })
 
-// Wait for page to load
-await sleep(3)
-
-// Take a screenshot to verify it loaded
-await execute_browser_action({
+// Wait a few seconds for page to load, then take a screenshot
+execute_browser_action({
   action: "screenshot"
 })
 
-// Check console for errors
-await execute_browser_action({
+// Check for any errors in the page
+execute_browser_action({
   action: "evaluate",
   params: {
     expression: `
