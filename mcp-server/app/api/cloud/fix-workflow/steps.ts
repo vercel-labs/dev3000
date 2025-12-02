@@ -63,28 +63,47 @@ export async function createD3kSandbox(
       -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"fix_my_app","arguments":{"mode":"snapshot","focusArea":"performance","returnRawData":true}}}'`
 
     console.log(`[Step 0] Executing MCP command inside sandbox...`)
-    const mcpResult = await sandboxResult.sandbox.runCommand({
-      cmd: "bash",
-      args: ["-c", mcpCommand]
-    })
+    console.log(`[Step 0] MCP command: ${mcpCommand.replace(/\s+/g, " ").substring(0, 200)}...`)
 
-    console.log(`[Step 0] MCP command exit code: ${mcpResult.exitCode}`)
+    let mcpResult: Awaited<ReturnType<typeof sandboxResult.sandbox.runCommand>> | null = null
+    try {
+      mcpResult = await sandboxResult.sandbox.runCommand({
+        cmd: "bash",
+        args: ["-c", mcpCommand]
+      })
+    } catch (runCommandError) {
+      const errorMsg = runCommandError instanceof Error ? runCommandError.message : String(runCommandError)
+      console.log(`[Step 0] sandbox.runCommand threw: ${errorMsg}`)
+      mcpError = `sandbox.runCommand failed: ${errorMsg}`
+    }
+
+    if (!mcpResult) {
+      console.log(`[Step 0] mcpResult is null/undefined after runCommand`)
+      mcpError = mcpError || "sandbox.runCommand returned null/undefined"
+    }
+
+    // Defensive check: log the result structure for debugging
+    if (mcpResult) {
+      console.log(`[Step 0] mcpResult keys: ${Object.keys(mcpResult).join(", ")}`)
+      console.log(`[Step 0] mcpResult.exitCode: ${mcpResult.exitCode}`)
+    }
 
     // Handle stdout which can be a string or a function
     // The Vercel Sandbox SDK types stdout as a union of string | function
-    let stdout: string
-    const rawStdout = mcpResult.stdout
-    if (typeof rawStdout === "string") {
-      stdout = rawStdout as string
-    } else if (typeof rawStdout === "function") {
-      stdout = await (rawStdout as () => Promise<string>)()
-    } else {
-      stdout = String(rawStdout || "")
+    let stdout: string = ""
+    if (mcpResult) {
+      const rawStdout = mcpResult.stdout
+      if (typeof rawStdout === "string") {
+        stdout = rawStdout as string
+      } else if (typeof rawStdout === "function") {
+        stdout = await (rawStdout as () => Promise<string>)()
+      } else {
+        stdout = String(rawStdout || "")
+      }
+      console.log(`[Step 0] MCP stdout length: ${stdout.length} bytes`)
     }
 
-    console.log(`[Step 0] MCP stdout length: ${stdout.length} bytes`)
-
-    if (mcpResult.exitCode === 0 && stdout) {
+    if (mcpResult && mcpResult.exitCode === 0 && stdout) {
       try {
         const mcpResponse = JSON.parse(stdout)
         if (mcpResponse.result?.content) {
@@ -111,13 +130,14 @@ export async function createD3kSandbox(
         console.log(`[Step 0] ${mcpError}`)
         console.log(`[Step 0] Raw stdout: ${stdout.substring(0, 1000)}`)
       }
-    } else {
+    } else if (mcpResult && !mcpError) {
       mcpError = `MCP command failed with exit code ${mcpResult.exitCode}`
       console.log(`[Step 0] ${mcpError}`)
       if (mcpResult.stderr) {
         console.log(`[Step 0] stderr: ${mcpResult.stderr}`)
       }
     }
+    // If mcpError is already set from earlier (runCommand failed), we've already logged it
   } catch (error) {
     mcpError = `MCP execution error: ${error instanceof Error ? error.message : String(error)}`
     console.log(`[Step 0] ${mcpError}`)

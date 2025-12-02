@@ -336,9 +336,23 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     if (debug) console.log(`  ✅ MCP server ready: ${mcpUrl}`)
 
     // Give d3k a bit more time to fully initialize MCPs and browser
-    // Logs are now streaming to the workflow output instead of being written to a file
     if (debug) console.log("  ⏳ Waiting for d3k to initialize MCPs and browser...")
     await new Promise((resolve) => setTimeout(resolve, 10000))
+
+    // Dump ALL d3k logs after initialization for debugging
+    // This is critical for understanding what d3k is doing in the sandbox
+    if (debug) {
+      console.log("  📋 === d3k FULL LOG DUMP (after initialization) ===")
+      const fullLogsCheck = await runCommandWithLogs(sandbox, {
+        cmd: "sh",
+        args: [
+          "-c",
+          'for log in /home/vercel-sandbox/.d3k/logs/*.log; do [ -f "$log" ] && echo "\\n=== $log ===" && cat "$log" || true; done 2>/dev/null || echo "No log files found"'
+        ]
+      })
+      console.log(fullLogsCheck.stdout)
+      console.log("  📋 === END d3k LOG DUMP ===")
+    }
 
     // Verify we can actually fetch the dev server URL
     console.log(`  🔍 Testing dev server accessibility at ${devUrl}...`)

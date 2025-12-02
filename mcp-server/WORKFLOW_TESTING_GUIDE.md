@@ -75,22 +75,26 @@ execute_browser_action({
 })
 ```
 
-### Step 2: IMMEDIATELY Monitor Production Logs (Source of Truth)
+### Step 2: Start Monitoring Production Logs BEFORE Triggering Workflow
 
-**CRITICAL**: The UI status is NOT a reliable indicator of workflow execution! Always verify in production logs via CLI.
+**CRITICAL**: The `vercel logs` command only streams logs that occur AFTER you start monitoring. You must start monitoring BEFORE clicking "Start Workflow" or you will miss the logs!
 
 ❌ **DO NOT TRUST THE UI**: UI showing "Writing code..." does NOT mean the workflow is running
 ✅ **ONLY TRUST PRODUCTION LOGS**: Use `vercel logs` CLI to verify actual execution
 
-Start monitoring production logs IMMEDIATELY after clicking "Start Workflow":
+**⚠️ IMPORTANT: Start monitoring in a separate terminal BEFORE triggering the workflow:**
 
 ```bash
-# Get the latest deployment URL
+# Terminal 1: Start monitoring FIRST (before clicking Start Workflow)
 DEPLOYMENT=$(vercel ls --scope team_AOfCfb0WM8wEQYM5swopmVwn | grep dev3000 | head -1 | awk '{print $2}')
+echo "Monitoring: $DEPLOYMENT"
+vercel logs $DEPLOYMENT --scope team_AOfCfb0WM8wEQYM5swopmVwn
 
-# Monitor production logs in real-time (grep for workflow activity)
-vercel logs $DEPLOYMENT --scope team_AOfCfb0WM8wEQYM5swopmVwn 2>&1 | grep -i "workflow\|sandbox\|step"
+# Terminal 2: THEN trigger the workflow via browser automation
+# (or use the Vercel Dashboard to view logs in real-time)
 ```
+
+**Why this matters:** The `vercel logs` CLI streams logs in real-time but does NOT show historical logs. If you start monitoring after the workflow begins, you'll see "waiting for new logs..." and miss the actual execution logs.
 
 ## Monitor Logs Correctly
 
@@ -192,6 +196,21 @@ Typical workflow execution:
 ### Issue: "Can't see production logs"
 **Cause**: Looking at wrong deployment or wrong time range
 **Fix**: Get latest deployment from `vercel ls` and check dashboard with correct timestamp
+
+### Issue: "MCP error: Cannot read properties of undefined (reading 'output')"
+**Cause**: The MCP tool response format changed or there's a bug in parsing the response in the workflow code
+**Symptoms**:
+- Logs show: `[Step 1] Note: MCP error from Step 0: MCP execution error: Cannot read properties of undefined (reading 'output')`
+- Workflow times out at 300 seconds
+**Fix**: Check `mcp-server/app/api/cloud/fix-workflow/workflow.ts` for how MCP responses are parsed
+
+### Issue: "Sandbox page hangs (HTTP HEAD works but full page doesn't load)"
+**Cause**: SSR/rendering issues in the sandbox, or the sandbox dev server crashed after initial startup
+**Symptoms**:
+- `curl -I https://sb-XXXXX.vercel.run` returns HTTP 200
+- `curl https://sb-XXXXX.vercel.run` hangs indefinitely
+- Browser navigation times out
+**Fix**: Check sandbox logs for errors, may need to investigate the target app's SSR behavior
 
 ## Quick Test Script
 
