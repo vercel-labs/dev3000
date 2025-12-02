@@ -89,7 +89,8 @@
   "pnpm": {
     "overrides": {
       "@types/react": "19.1.17",
-      "@types/react-dom": "19.1.11"
+      "@types/react-dom": "19.1.11",
+      "@workflow/world-local>@workflow/errors": "4.0.1-beta.6"
     }
   },
   "engines": {
