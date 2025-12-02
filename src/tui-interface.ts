@@ -22,6 +22,11 @@ export class DevTUI {
 
   async start(): Promise<void> {
     try {
+      // Enter alternate screen buffer immediately to prevent scroll history pollution
+      // This must happen before any other output
+      // Note: alternate screen buffer starts clean, no need to clear
+      process.stdout.write("\x1b[?1049h")
+
       // Temporarily suppress React hook warnings during TUI startup
       const originalError = console.error
       const suppressReactHookWarnings = (...args: unknown[]) => {
@@ -67,5 +72,7 @@ export class DevTUI {
     if (this.app) {
       this.app.unmount()
     }
+    // Exit alternate screen buffer to restore previous terminal content
+    process.stdout.write("\x1b[?1049l")
   }
 }

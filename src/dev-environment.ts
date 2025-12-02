@@ -832,9 +832,6 @@ export class DevEnvironment {
     }
 
     if (canUseTUI) {
-      // Clear console and start TUI immediately for fast render
-      console.clear()
-
       // Get unique project name
       const projectName = getProjectName()
       const projectDisplayName = getProjectDisplayName()
@@ -851,9 +848,6 @@ export class DevEnvironment {
       })
 
       await this.tui.start()
-
-      // Give TUI a moment to fully initialize
-      await new Promise((resolve) => setTimeout(resolve, 50))
 
       // Check ports in background after TUI is visible
       await this.tui.updateStatus("Checking ports...")

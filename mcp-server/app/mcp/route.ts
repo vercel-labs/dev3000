@@ -286,22 +286,23 @@ const handler = createMcpHandler(
     // so we only proxy advanced analysis tools that dev3000 doesn't provide natively
     const PROXIED_TOOL_WHITELIST: Record<string, string[]> = {
       "chrome-devtools": [
-        // Performance & CLS/Jank Analysis
-        "get_performance_metrics",
-        "get_layout_shift_metrics",
-        "start_performance_trace",
-        "stop_performance_trace",
-        "get_memory_usage",
-        "get_coverage",
-        // Network Analysis
-        "get_network_waterfall",
-        "get_network_timing",
-        // Advanced Debugging (beyond dev3000's CDP)
-        "get_dom_snapshot",
-        "evaluate_on_selector",
-        "get_computed_style"
+        // Performance & CLS/Jank Analysis (actual tool names from chrome-devtools-mcp)
+        "performance_start_trace",
+        "performance_stop_trace",
+        "performance_analyze_insight",
+        // DOM/Page Analysis
+        "take_snapshot"
       ],
-      "nextjs-dev": ["restart", "analyze_build", "inspect_route", "check_hydration"]
+      // nextjs-dev: Include most tools for framework-specific debugging
+      "nextjs-dev": [
+        "browser_eval",
+        "enable_cache_components",
+        "init",
+        "nextjs_docs",
+        "nextjs_index",
+        "nextjs_call",
+        "upgrade_nextjs_16"
+      ]
     }
 
     const shouldProxyTool = (mcpName: string, toolName: string): boolean => {

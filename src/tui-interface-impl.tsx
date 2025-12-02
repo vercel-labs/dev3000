@@ -45,7 +45,7 @@ const TUIApp = ({
 }) => {
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [scrollOffset, setScrollOffset] = useState(0)
-  const [initStatus, setInitStatus] = useState<string | null>("Initializing...")
+  const [initStatus, setInitStatus] = useState<string | null>(null)
   const [appPort, setAppPort] = useState<string>(initialAppPort)
   const [portConfirmed, setPortConfirmed] = useState<boolean>(false)
   const logIdCounter = useRef(0)
@@ -131,10 +131,10 @@ const TUIApp = ({
       const headerBorderLines = 2 // Top border (with title) + bottom border
       const headerContentLines = 5 // Logo is 4 lines tall, +1 for padding
       const logBoxBorderLines = 2 // Top and bottom border of log box
-      const logBoxHeaderLines = 2 // "Logs (X total)" text (no blank line after)
-      const logBoxFooterLines = scrollOffset > 0 ? 2 : 0 // "(X lines below)" when scrolled
+      const logBoxHeaderLines = 1 // "Logs (X total)" text
+      const logBoxFooterLines = 1 // Always reserve space for "(X lines below)" to keep layout stable
       const bottomStatusLine = 1 // Log path and quit message
-      const safetyBuffer = 1 // Small buffer to prevent header from being pushed up
+      const safetyBuffer = 0 // No buffer needed with explicit heights
       const totalReservedLines =
         headerBorderLines +
         headerContentLines +
@@ -354,21 +354,25 @@ const TUIApp = ({
     )
   }
 
+  // Calculate the height for the logs box to ensure stable layout from first render
+  // This prevents the layout from shifting as logs fill in
+  const logsBoxHeight = maxVisibleLogs + 3 // +3 for header line, borders
+
   return (
-    <Box flexDirection="column" height="100%">
+    <Box flexDirection="column" height={termHeight}>
       {/* Header Box - responsive to terminal size */}
       {isCompact ? renderCompactHeader() : renderNormalHeader()}
 
-      {/* Logs Box - flexGrow makes it expand to fill available height */}
-      <Box flexDirection="column" borderStyle="single" borderColor="gray" paddingX={1} flexGrow={1} minHeight={0}>
+      {/* Logs Box - explicit height for stable initial render */}
+      <Box flexDirection="column" borderStyle="single" borderColor="gray" paddingX={1} height={logsBoxHeight}>
         {!isVeryCompact && (
           <Text color="gray" dimColor>
             Logs ({filteredLogs.length} total{scrollOffset > 0 && `, scrolled up ${scrollOffset} lines`})
           </Text>
         )}
 
-        {/* Logs content area - also uses flexGrow to expand */}
-        <Box flexDirection="column" flexGrow={1}>
+        {/* Logs content area */}
+        <Box flexDirection="column">
           {visibleLogs.length === 0 ? (
             <Text dimColor>Waiting for logs...</Text>
           ) : (
@@ -533,8 +537,8 @@ export async function runTUI(options: TUIOptions): Promise<{
         { exitOnCtrlC: false }
       )
 
-      // Give React time to set up the updaters
-      setTimeout(() => {
+      // Give React one tick to set up the updaters
+      setImmediate(() => {
         resolve({
           app,
           updateStatus: (status: string | null) => {
@@ -548,7 +552,7 @@ export async function runTUI(options: TUIOptions): Promise<{
             }
           }
         })
-      }, 100)
+      })
     } catch (error) {
       console.error("Error in runTUI render:", error)
       reject(error)

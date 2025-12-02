@@ -4,6 +4,26 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.112] - 2025-12-02
+
+**Feature Release**
+
+### TUI Improvements
+- Use alternate screen buffer to prevent scroll history pollution (like vim/htop)
+- Fix logs box height to prevent layout shifts during startup
+- Remove unnecessary delays for faster TUI initialization
+- Reserve space for scroll indicator to maintain stable layout
+
+### MCP Tool Whitelist
+- Fix chrome-devtools MCP tool whitelist with correct tool names
+- Add performance/CLS analysis tools: `performance_start_trace`, `performance_stop_trace`, `performance_analyze_insight`, `take_snapshot`
+- Add nextjs-dev tools: `browser_eval`, `enable_cache_components`, `init`, `nextjs_docs`, `nextjs_index`, `nextjs_call`, `upgrade_nextjs_16`
+
+### Dependencies
+- Upgrade workflow to 4.0.1-beta.23
+- Upgrade Next.js to 16.1.0-canary.9
+- Upgrade React to 19.3.0-canary
+
 ## [0.0.111] - 2025-12-02
 
 **Feature Release**

@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NEVER RUN**: 
 - Do not run `pnpm build` or `pnpm dev` during development - the user tests manually.
-- Do not run any of the scripts in the scripts/ directory unless explicitly asked to.
+
 
 **ALWAYS RUN**: When completing any code changes, you MUST run:
 - `pnpm run lint` - Fix all linting errors before committing
