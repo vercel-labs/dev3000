@@ -21,7 +21,6 @@
     "@types/pngjs": "^6.0.5",
     "@vercel/blob": "^2.0.0",
     "@vercel/sdk": "^1.16.1",
-    "@workflow/errors": "4.0.1-beta.6",
     "ai": "^5.0.89",
     "class-variance-authority": "catalog:",
     "clsx": "catalog:",
