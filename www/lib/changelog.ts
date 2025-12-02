@@ -10,6 +10,19 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.112",
+    date: "2025-12-02",
+    type: "minor",
+    highlights: [
+      "TUI improvements and MCP tool whitelist fixes for v0.0.112",
+      "Upgrade workflow to 4.0.1-beta.23 with upstream @workflow/errors fix",
+      "Trigger Vercel rebuild with workflow@4.0.1-beta.22 and @workflow/errors",
+      "Update pnpm-lock.yaml for @workflow/errors dependency",
+      "Add @workflow/errors as direct dependency for Vercel builds"
+    ]
+  },
+
+  {
     version: "0.0.111",
     date: "2025-12-02",
     type: "minor",
