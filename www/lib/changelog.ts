@@ -10,6 +10,19 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.111",
+    date: "2025-12-02",
+    type: "minor",
+    highlights: [
+      "Fix workflow@4.0.1-beta.22 build by adding pnpm override",
+      "Upgrade workflow to 4.0.1-beta.22 with @workflow/errors dependency",
+      "Emphasize CLI-only verification and add MCP tool whitelist",
+      "Update WORKFLOW_TESTING_GUIDE to use d3k MCP tools instead of curl",
+      "Revert workflow upgrade due to peer dependency issue"
+    ]
+  },
+
+  {
     version: "0.0.110",
     date: "2025-12-01",
     type: "patch",

@@ -4,6 +4,16 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.111] - 2025-12-02
+
+**Feature Release**
+
+- Fix workflow@4.0.1-beta.22 build by adding pnpm override
+- Upgrade workflow to 4.0.1-beta.22 with @workflow/errors dependency
+- Emphasize CLI-only verification and add MCP tool whitelist
+- Update WORKFLOW_TESTING_GUIDE to use d3k MCP tools instead of curl
+- Revert workflow upgrade due to peer dependency issue
+
 ## [0.0.110] - 2025-12-01
 
 **Patch Release**
