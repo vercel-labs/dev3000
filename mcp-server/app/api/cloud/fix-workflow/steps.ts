@@ -311,7 +311,7 @@ export async function fetchRealLogs(
             id: 0,
             method: "tools/call",
             params: {
-              name: "chrome-devtools_take_screenshot",
+              name: "chrome-devtools_take_snapshot",
               arguments: {}
             }
           }),
