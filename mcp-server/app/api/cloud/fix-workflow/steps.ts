@@ -201,7 +201,10 @@ export async function fetchRealLogs(
       console.log("[Step 1] Using d3k MCP server to capture CLS metrics and errors...")
 
       // First, validate MCP server access and list available tools
+      // Use a 30-second timeout to avoid hanging the entire workflow
       console.log("[Step 1] Validating d3k MCP server access...")
+      const validationController = new AbortController()
+      const validationTimeout = setTimeout(() => validationController.abort(), 30000)
       try {
         const toolsResponse = await fetch(`${mcpUrl}/mcp`, {
           method: "POST",
@@ -213,8 +216,10 @@ export async function fetchRealLogs(
             jsonrpc: "2.0",
             id: 0,
             method: "tools/list"
-          })
+          }),
+          signal: validationController.signal
         })
+        clearTimeout(validationTimeout)
 
         if (toolsResponse.ok) {
           const toolsText = await toolsResponse.text()
@@ -239,47 +244,63 @@ export async function fetchRealLogs(
           console.log(`[Step 1] ⚠️  MCP server not accessible: ${toolsResponse.status}`)
         }
       } catch (error) {
-        console.log(
-          `[Step 1] ⚠️  Failed to validate MCP server: ${error instanceof Error ? error.message : String(error)}`
-        )
+        clearTimeout(validationTimeout)
+        const errorMsg = error instanceof Error ? error.message : String(error)
+        const isTimeout = error instanceof Error && error.name === "AbortError"
+        console.log(`[Step 1] ⚠️  Failed to validate MCP server: ${isTimeout ? "Timed out after 30s" : errorMsg}`)
       }
 
-      // Navigate to the app to generate logs
+      // Navigate to the app to generate logs (with 30s timeout)
       console.log("[Step 1] Navigating browser to app URL...")
-      const navResponse = await fetch(`${mcpUrl}/mcp`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json, text/event-stream"
-        },
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          id: 0,
-          method: "tools/call",
-          params: {
-            name: "execute_browser_action",
-            arguments: {
-              action: "navigate",
-              params: { url: urlWithBypass }
+      const navController = new AbortController()
+      const navTimeout = setTimeout(() => navController.abort(), 30000)
+      try {
+        const navResponse = await fetch(`${mcpUrl}/mcp`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json, text/event-stream"
+          },
+          body: JSON.stringify({
+            jsonrpc: "2.0",
+            id: 0,
+            method: "tools/call",
+            params: {
+              name: "execute_browser_action",
+              arguments: {
+                action: "navigate",
+                params: { url: urlWithBypass }
+              }
             }
-          }
+          }),
+          signal: navController.signal
         })
-      })
+        clearTimeout(navTimeout)
 
-      if (navResponse.ok) {
-        console.log("[Step 1] Browser navigation completed")
-      } else {
-        console.log(`[Step 1] Browser navigation failed: ${navResponse.status}`)
+        if (navResponse.ok) {
+          console.log("[Step 1] Browser navigation completed")
+        } else {
+          console.log(`[Step 1] Browser navigation failed: ${navResponse.status}`)
+        }
+      } catch (navError) {
+        clearTimeout(navTimeout)
+        const isTimeout = navError instanceof Error && navError.name === "AbortError"
+        console.log(
+          `[Step 1] Browser navigation error: ${isTimeout ? "Timed out after 30s" : navError instanceof Error ? navError.message : String(navError)}`
+        )
       }
 
       // Wait for page to fully load
       console.log("[Step 1] Waiting 5s for page load...")
       await new Promise((resolve) => setTimeout(resolve, 5000))
 
-      // Check d3k logs to see if it's capturing data
+      // Check d3k logs to see if it's capturing data (with 15s timeout)
       console.log("[Step 1] Fetching d3k logs from sandbox to verify it's working...")
+      const logsController = new AbortController()
+      const logsTimeout = setTimeout(() => logsController.abort(), 15000)
       try {
-        const logsResponse = await fetch(`${mcpUrl}/api/logs`)
+        const logsResponse = await fetch(`${mcpUrl}/api/logs`, { signal: logsController.signal })
+        clearTimeout(logsTimeout)
         if (logsResponse.ok) {
           const logsText = await logsResponse.text()
           console.log(`[Step 1] d3k logs (last 1000 chars):\n${logsText.slice(-1000)}`)
@@ -287,7 +308,11 @@ export async function fetchRealLogs(
           console.log(`[Step 1] Could not fetch d3k logs: ${logsResponse.status}`)
         }
       } catch (error) {
-        console.log(`[Step 1] Failed to fetch d3k logs: ${error instanceof Error ? error.message : String(error)}`)
+        clearTimeout(logsTimeout)
+        const isTimeout = error instanceof Error && error.name === "AbortError"
+        console.log(
+          `[Step 1] Failed to fetch d3k logs: ${isTimeout ? "Timed out after 15s" : error instanceof Error ? error.message : String(error)}`
+        )
       }
 
       // Call fix_my_app with focusArea='performance' to capture CLS and jank
