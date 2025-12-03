@@ -73,19 +73,26 @@ export async function cloudFixWorkflow(params: {
   // If we got CLS data from Step 0, pass it to Step 1 to avoid re-fetching
   // Use bypass token from sandbox if available, otherwise use provided one
   const effectiveBypassToken = sandboxInfo?.bypassToken || bypassToken
-  const logAnalysis = await fetchRealLogs(
+  const step1Result = await fetchRealLogs(
     sandboxInfo?.mcpUrl || devUrl,
     effectiveBypassToken,
     sandboxInfo?.devUrl,
     sandboxInfo?.clsData,
     sandboxInfo?.mcpError
   )
+  const { logAnalysis, beforeScreenshotUrl } = step1Result
 
   // Step 2: Invoke AI agent to analyze logs and create fix
   const fixProposal = await analyzeLogsWithAgent(logAnalysis, sandboxInfo?.devUrl || devUrl)
 
-  // Step 3: Upload to blob storage with full context
-  const blobResult = await uploadToBlob(fixProposal, projectName, logAnalysis, sandboxInfo?.devUrl || devUrl)
+  // Step 3: Upload to blob storage with full context and screenshot
+  const blobResult = await uploadToBlob(
+    fixProposal,
+    projectName,
+    logAnalysis,
+    sandboxInfo?.devUrl || devUrl,
+    beforeScreenshotUrl
+  )
 
   // Step 4: Create GitHub PR if repo info provided AND there are actual fixes to apply
   let prResult = null
@@ -124,7 +131,7 @@ async function fetchRealLogs(
   sandboxDevUrl?: string,
   clsData?: unknown,
   mcpError?: string | null
-) {
+): Promise<{ logAnalysis: string; beforeScreenshotUrl: string | null }> {
   "use step"
   const { fetchRealLogs } = await import("./steps")
   return fetchRealLogs(mcpUrlOrDevUrl, bypassToken, sandboxDevUrl, clsData, mcpError)
@@ -136,10 +143,16 @@ async function analyzeLogsWithAgent(logAnalysis: string, devUrl: string) {
   return analyzeLogsWithAgent(logAnalysis, devUrl)
 }
 
-async function uploadToBlob(fixProposal: string, projectName: string, logAnalysis: string, devUrl: string) {
+async function uploadToBlob(
+  fixProposal: string,
+  projectName: string,
+  logAnalysis: string,
+  devUrl: string,
+  beforeScreenshotUrl?: string | null
+) {
   "use step"
   const { uploadToBlob } = await import("./steps")
-  return uploadToBlob(fixProposal, projectName, logAnalysis, devUrl)
+  return uploadToBlob(fixProposal, projectName, logAnalysis, devUrl, beforeScreenshotUrl)
 }
 
 async function createGitHubPR(

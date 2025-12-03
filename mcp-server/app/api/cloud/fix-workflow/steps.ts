@@ -170,7 +170,7 @@ export async function fetchRealLogs(
   // If we already have CLS data from Step 0, use it
   if (clsData) {
     console.log("[Step 1] Using CLS data captured in Step 0")
-    return JSON.stringify(clsData, null, 2)
+    return { logAnalysis: JSON.stringify(clsData, null, 2), beforeScreenshotUrl: null }
   }
 
   // If there was an MCP error in Step 0, log it
@@ -294,6 +294,75 @@ export async function fetchRealLogs(
       console.log("[Step 1] Waiting 5s for page load...")
       await new Promise((resolve) => setTimeout(resolve, 5000))
 
+      // Capture "before" screenshot to prove the page loaded and for later comparison
+      let beforeScreenshotUrl: string | null = null
+      console.log("[Step 1] Capturing 'before' screenshot...")
+      const screenshotController = new AbortController()
+      const screenshotTimeout = setTimeout(() => screenshotController.abort(), 30000)
+      try {
+        const screenshotResponse = await fetch(`${mcpUrl}/mcp`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json, text/event-stream"
+          },
+          body: JSON.stringify({
+            jsonrpc: "2.0",
+            id: 0,
+            method: "tools/call",
+            params: {
+              name: "chrome-devtools_take_screenshot",
+              arguments: {}
+            }
+          }),
+          signal: screenshotController.signal
+        })
+        clearTimeout(screenshotTimeout)
+
+        if (screenshotResponse.ok) {
+          const screenshotText = await screenshotResponse.text()
+          // Parse SSE response to get screenshot data
+          const lines = screenshotText.split("\n")
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              try {
+                const json = JSON.parse(line.substring(6))
+                if (json.result?.content) {
+                  for (const content of json.result.content) {
+                    if (content.type === "image" && content.data) {
+                      // Upload base64 image to Vercel Blob
+                      const imageBuffer = Buffer.from(content.data, "base64")
+                      const timestamp = new Date().toISOString().replace(/[:.]/g, "-")
+                      const filename = `screenshot-before-${timestamp}.png`
+                      const blob = await put(filename, imageBuffer, {
+                        access: "public",
+                        contentType: "image/png"
+                      })
+                      beforeScreenshotUrl = blob.url
+                      console.log(`[Step 1] ✅ Before screenshot uploaded: ${beforeScreenshotUrl}`)
+                    }
+                  }
+                }
+              } catch {
+                // Continue parsing other lines
+              }
+            }
+          }
+          if (!beforeScreenshotUrl) {
+            console.log(`[Step 1] Screenshot response received but no image data found`)
+            console.log(`[Step 1] Response preview: ${screenshotText.substring(0, 500)}`)
+          }
+        } else {
+          console.log(`[Step 1] Screenshot request failed: ${screenshotResponse.status}`)
+        }
+      } catch (error) {
+        clearTimeout(screenshotTimeout)
+        const isTimeout = error instanceof Error && error.name === "AbortError"
+        console.log(
+          `[Step 1] Screenshot capture error: ${isTimeout ? "Timed out after 30s" : error instanceof Error ? error.message : String(error)}`
+        )
+      }
+
       // Check d3k logs to see if it's capturing data (with 15s timeout)
       console.log("[Step 1] Fetching d3k logs from sandbox to verify it's working...")
       const logsController = new AbortController()
@@ -398,7 +467,10 @@ export async function fetchRealLogs(
           console.log(`[Step 1] WARNING: fix_my_app returned NO data. Full response:\n${text}`)
         }
 
-        return `d3k Performance Analysis for ${devUrl}\n\n${logAnalysis}`
+        return {
+          logAnalysis: `d3k Performance Analysis for ${devUrl}\n\n${logAnalysis}`,
+          beforeScreenshotUrl
+        }
       } catch (error) {
         clearTimeout(timeoutId)
 
@@ -452,7 +524,7 @@ Format your response as a clear, structured report that helps identify what's br
     })
 
     console.log(`[Step 1] Browser automation response (first 500 chars): ${text.substring(0, 500)}...`)
-    return `Browser Automation Analysis for ${devUrl}\n\n${text}`
+    return { logAnalysis: `Browser Automation Analysis for ${devUrl}\n\n${text}`, beforeScreenshotUrl: null }
   } catch (error) {
     console.error("[Step 1] Error with browser automation:", error)
 
@@ -487,10 +559,13 @@ Format your response as a clear, structured report that helps identify what's br
         logAnalysis += "No errors detected in response.\n"
       }
 
-      return logAnalysis
+      return { logAnalysis, beforeScreenshotUrl: null }
     } catch (fallbackError) {
       const errorMessage = fallbackError instanceof Error ? fallbackError.message : String(fallbackError)
-      return `Failed to fetch logs from ${devUrl}\n\nError: ${errorMessage}\n\nThis may indicate the dev server is not accessible or has crashed.`
+      return {
+        logAnalysis: `Failed to fetch logs from ${devUrl}\n\nError: ${errorMessage}\n\nThis may indicate the dev server is not accessible or has crashed.`,
+        beforeScreenshotUrl: null
+      }
     }
   }
 }
@@ -575,10 +650,32 @@ IMPORTANT:
 /**
  * Step 3: Upload fix proposal to blob storage and return URL
  */
-export async function uploadToBlob(fixProposal: string, projectName: string, logAnalysis: string, devUrl: string) {
+export async function uploadToBlob(
+  fixProposal: string,
+  projectName: string,
+  logAnalysis: string,
+  devUrl: string,
+  beforeScreenshotUrl?: string | null
+) {
   "use step"
 
   console.log("[Step 3] Uploading fix proposal to blob storage...")
+  if (beforeScreenshotUrl) {
+    console.log(`[Step 3] Including before screenshot: ${beforeScreenshotUrl}`)
+  }
+
+  // Create screenshot section if we have a screenshot
+  const screenshotSection = beforeScreenshotUrl
+    ? `## Before Screenshot
+
+This screenshot was captured when the sandbox dev server first loaded, proving the page rendered successfully.
+
+![Before Screenshot](${beforeScreenshotUrl})
+
+---
+
+`
+    : ""
 
   // Create enhanced markdown with full context and attribution
   const timestamp = new Date().toISOString()
@@ -590,7 +687,7 @@ export async function uploadToBlob(fixProposal: string, projectName: string, log
 
 ---
 
-## Original Log Analysis
+${screenshotSection}## Original Log Analysis
 
 \`\`\`
 ${logAnalysis}
