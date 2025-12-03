@@ -55,55 +55,56 @@ export async function createD3kSandbox(
   let clsData: unknown = null
   let mcpError: string | null = null
 
+  // Helper function to properly consume sandbox command output
+  // The Vercel Sandbox SDK returns a result object with an async logs() iterator
+  async function runSandboxCommand(
+    sandbox: typeof sandboxResult.sandbox,
+    cmd: string,
+    args: string[]
+  ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+    const result = await sandbox.runCommand({ cmd, args })
+    let stdout = ""
+    let stderr = ""
+    for await (const log of result.logs()) {
+      if (log.stream === "stdout") {
+        stdout += log.data
+      } else {
+        stderr += log.data
+      }
+    }
+    await result.wait()
+    return { exitCode: result.exitCode, stdout, stderr }
+  }
+
   try {
     // Call fix_my_app MCP tool via curl from inside the sandbox
     // This avoids network isolation issues - we're calling localhost:3684 from within the sandbox
-    const mcpCommand = `curl -s -X POST http://localhost:3684/mcp \\
-      -H "Content-Type: application/json" \\
-      -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"fix_my_app","arguments":{"mode":"snapshot","focusArea":"performance","returnRawData":true}}}'`
+    const mcpCommand = `curl -s -X POST http://localhost:3684/mcp -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"fix_my_app","arguments":{"mode":"snapshot","focusArea":"performance","returnRawData":true}}}'`
 
     console.log(`[Step 0] Executing MCP command inside sandbox...`)
-    console.log(`[Step 0] MCP command: ${mcpCommand.replace(/\s+/g, " ").substring(0, 200)}...`)
+    console.log(`[Step 0] MCP command: ${mcpCommand.substring(0, 200)}...`)
 
-    let mcpResult: Awaited<ReturnType<typeof sandboxResult.sandbox.runCommand>> | null = null
+    let stdout = ""
+    let stderr = ""
+    let exitCode = -1
+
     try {
-      mcpResult = await sandboxResult.sandbox.runCommand({
-        cmd: "bash",
-        args: ["-c", mcpCommand]
-      })
+      const result = await runSandboxCommand(sandboxResult.sandbox, "bash", ["-c", mcpCommand])
+      stdout = result.stdout
+      stderr = result.stderr
+      exitCode = result.exitCode
+      console.log(`[Step 0] MCP command exit code: ${exitCode}`)
+      console.log(`[Step 0] MCP stdout length: ${stdout.length} bytes`)
+      if (stderr) {
+        console.log(`[Step 0] MCP stderr: ${stderr.substring(0, 500)}`)
+      }
     } catch (runCommandError) {
       const errorMsg = runCommandError instanceof Error ? runCommandError.message : String(runCommandError)
       console.log(`[Step 0] sandbox.runCommand threw: ${errorMsg}`)
       mcpError = `sandbox.runCommand failed: ${errorMsg}`
     }
 
-    if (!mcpResult) {
-      console.log(`[Step 0] mcpResult is null/undefined after runCommand`)
-      mcpError = mcpError || "sandbox.runCommand returned null/undefined"
-    }
-
-    // Defensive check: log the result structure for debugging
-    if (mcpResult) {
-      console.log(`[Step 0] mcpResult keys: ${Object.keys(mcpResult).join(", ")}`)
-      console.log(`[Step 0] mcpResult.exitCode: ${mcpResult.exitCode}`)
-    }
-
-    // Handle stdout which can be a string or a function
-    // The Vercel Sandbox SDK types stdout as a union of string | function
-    let stdout: string = ""
-    if (mcpResult) {
-      const rawStdout = mcpResult.stdout
-      if (typeof rawStdout === "string") {
-        stdout = rawStdout as string
-      } else if (typeof rawStdout === "function") {
-        stdout = await (rawStdout as () => Promise<string>)()
-      } else {
-        stdout = String(rawStdout || "")
-      }
-      console.log(`[Step 0] MCP stdout length: ${stdout.length} bytes`)
-    }
-
-    if (mcpResult && mcpResult.exitCode === 0 && stdout) {
+    if (exitCode === 0 && stdout) {
       try {
         const mcpResponse = JSON.parse(stdout)
         if (mcpResponse.result?.content) {
@@ -130,18 +131,30 @@ export async function createD3kSandbox(
         console.log(`[Step 0] ${mcpError}`)
         console.log(`[Step 0] Raw stdout: ${stdout.substring(0, 1000)}`)
       }
-    } else if (mcpResult && !mcpError) {
-      mcpError = `MCP command failed with exit code ${mcpResult.exitCode}`
+    } else if (exitCode !== 0 && !mcpError) {
+      mcpError = `MCP command failed with exit code ${exitCode}`
       console.log(`[Step 0] ${mcpError}`)
-      if (mcpResult.stderr) {
-        console.log(`[Step 0] stderr: ${mcpResult.stderr}`)
+      if (stderr) {
+        console.log(`[Step 0] stderr: ${stderr}`)
       }
     }
-    // If mcpError is already set from earlier (runCommand failed), we've already logged it
   } catch (error) {
     mcpError = `MCP execution error: ${error instanceof Error ? error.message : String(error)}`
     console.log(`[Step 0] ${mcpError}`)
   }
+
+  // Dump all sandbox logs before returning for debugging
+  console.log(`[Step 0] === Dumping sandbox logs before returning ===`)
+  try {
+    const logsResult = await runSandboxCommand(sandboxResult.sandbox, "sh", [
+      "-c",
+      'for log in /home/vercel-sandbox/.d3k/logs/*.log; do [ -f "$log" ] && echo "=== $log ===" && tail -100 "$log" || true; done 2>/dev/null || echo "No log files found"'
+    ])
+    console.log(logsResult.stdout)
+  } catch (logsError) {
+    console.log(`[Step 0] Failed to dump logs: ${logsError instanceof Error ? logsError.message : String(logsError)}`)
+  }
+  console.log(`[Step 0] === End sandbox log dump ===`)
 
   // Note: We cannot return the cleanup function or sandbox object as they're not serializable
   // Sandbox cleanup will happen automatically when the sandbox times out
