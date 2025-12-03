@@ -32,7 +32,7 @@ if (token) {
 
 **If expired**, refresh the token:
 ```bash
-vercel env pull .env.local --scope team_AOfCfb0WM8wEQYM5swopmVwn
+vercel env pull .env.local --scope team_aMS4jZUlMooxyr9VgMKJf9uT
 ```
 
 Then restart the dev server (kill and restart d3k).
@@ -61,7 +61,7 @@ Use d3k browser automation (via `execute_browser_action` MCP tool):
 execute_browser_action({
   action: "navigate",
   params: {
-    url: "http://localhost:3000/workflows/new?type=cloud-fix&team=team_AOfCfb0WM8wEQYM5swopmVwn&project=prj_9kvdjxXYqydZsyifQmpbfjimvjHv"
+    url: "http://localhost:3000/workflows/new?type=cloud-fix&team=team_aMS4jZUlMooxyr9VgMKJf9uT&project=prj_0ITI5UHrH4Kp92G5OLEMrlgVX08p"
   }
 })
 
@@ -86,9 +86,9 @@ execute_browser_action({
 
 ```bash
 # Terminal 1: Start monitoring FIRST (before clicking Start Workflow)
-DEPLOYMENT=$(vercel ls --scope team_AOfCfb0WM8wEQYM5swopmVwn | grep dev3000 | head -1 | awk '{print $2}')
+DEPLOYMENT=$(vercel ls --scope team_aMS4jZUlMooxyr9VgMKJf9uT | grep dev3000 | head -1 | awk '{print $2}')
 echo "Monitoring: $DEPLOYMENT"
-vercel logs $DEPLOYMENT --scope team_AOfCfb0WM8wEQYM5swopmVwn
+vercel logs $DEPLOYMENT --scope team_aMS4jZUlMooxyr9VgMKJf9uT
 
 # Terminal 2: THEN trigger the workflow via browser automation
 # (or use the Vercel Dashboard to view logs in real-time)
@@ -125,14 +125,14 @@ grep -i "workflow\|sandbox\|step" ~/.d3k/logs/dev3000-mcp-server-*.log | tail -5
 
 ```bash
 # Step 1: Get latest deployment URL
-DEPLOYMENT=$(vercel ls --scope team_AOfCfb0WM8wEQYM5swopmVwn | grep dev3000 | head -1 | awk '{print $2}')
+DEPLOYMENT=$(vercel ls --scope team_aMS4jZUlMooxyr9VgMKJf9uT | grep dev3000 | head -1 | awk '{print $2}')
 echo "Checking logs for: $DEPLOYMENT"
 
 # Step 2: Monitor production logs for workflow activity
-vercel logs $DEPLOYMENT --scope team_AOfCfb0WM8wEQYM5swopmVwn 2>&1 | grep -i "workflow\|sandbox\|step"
+vercel logs $DEPLOYMENT --scope team_aMS4jZUlMooxyr9VgMKJf9uT 2>&1 | grep -i "workflow\|sandbox\|step"
 
 # Step 3: If no output, check all recent logs (no grep filter)
-vercel logs $DEPLOYMENT --scope team_AOfCfb0WM8wEQYM5swopmVwn 2>&1 | tail -100
+vercel logs $DEPLOYMENT --scope team_aMS4jZUlMooxyr9VgMKJf9uT 2>&1 | tail -100
 ```
 
 **What MUST appear in production logs for successful execution:**
@@ -148,7 +148,7 @@ vercel logs $DEPLOYMENT --scope team_AOfCfb0WM8wEQYM5swopmVwn 2>&1 | tail -100
 **If production logs show NOTHING**:
 - ❌ Workflow was NOT created despite UI showing progress
 - Most likely cause: Expired OIDC token
-- Solution: Run `vercel env pull .env.local --scope team_AOfCfb0WM8wEQYM5swopmVwn` and restart dev server
+- Solution: Run `vercel env pull .env.local --scope team_aMS4jZUlMooxyr9VgMKJf9uT` and restart dev server
 
 ### Checking Final Workflow Results
 
@@ -156,7 +156,7 @@ After production logs confirm completion, you can check results via CLI:
 
 ```bash
 # List all workflows to see final status
-vercel ls --scope team_AOfCfb0WM8wEQYM5swopmVwn | head -20
+vercel ls --scope team_aMS4jZUlMooxyr9VgMKJf9uT | head -20
 
 # Or check the workflows page in browser (ONLY after production logs confirm completion)
 # Navigate to: http://localhost:3000/workflows
@@ -183,7 +183,7 @@ Typical workflow execution:
 
 ### Issue: "No logs in production"
 **Cause**: OIDC token expired
-**Fix**: Run `vercel env pull .env.local --scope team_AOfCfb0WM8wEQYM5swopmVwn` and restart dev server
+**Fix**: Run `vercel env pull .env.local --scope team_aMS4jZUlMooxyr9VgMKJf9uT` and restart dev server
 
 ### Issue: "Workflow stuck in 'running' state"
 **Cause**: Workflow exceeded 10-minute Vercel Function timeout
@@ -222,14 +222,14 @@ echo "1. Checking OIDC token..."
 node -e "require('dotenv').config({ path: '.env.local' }); const token = process.env.VERCEL_OIDC_TOKEN || ''; if (token) { const payload = token.split('.')[1]; const decoded = JSON.parse(Buffer.from(payload, 'base64').toString()); const exp = new Date(decoded.exp * 1000); const now = new Date(); console.log(now > exp ? '❌ EXPIRED' : '✅ Valid'); } else { console.log('❌ No token'); }"
 
 echo "2. Getting latest deployment..."
-DEPLOYMENT=$(vercel ls --scope team_AOfCfb0WM8wEQYM5swopmVwn | head -2 | tail -1)
+DEPLOYMENT=$(vercel ls --scope team_aMS4jZUlMooxyr9VgMKJf9uT | head -2 | tail -1)
 echo "Latest: $DEPLOYMENT"
 
 echo "3. Triggering workflow via d3k..."
 echo "   (Use d3k browser automation to click 'Start Workflow')"
 
 echo "4. Monitoring production logs..."
-echo "   vercel logs $DEPLOYMENT --scope team_AOfCfb0WM8wEQYM5swopmVwn"
+echo "   vercel logs $DEPLOYMENT --scope team_aMS4jZUlMooxyr9VgMKJf9uT"
 ```
 
 ## Testing Sandbox Dev URLs
@@ -244,16 +244,16 @@ When a workflow creates a sandbox, it logs the Dev URL like:
 **From Vercel production logs:**
 ```bash
 # Get latest deployment
-DEPLOYMENT=$(vercel ls --scope team_AOfCfb0WM8wEQYM5swopmVwn | grep dev3000 | head -1 | awk '{print $2}')
+DEPLOYMENT=$(vercel ls --scope team_aMS4jZUlMooxyr9VgMKJf9uT | grep dev3000 | head -1 | awk '{print $2}')
 
 # Extract Dev URL
-vercel logs $DEPLOYMENT --scope team_AOfCfb0WM8wEQYM5swopmVwn 2>&1 | grep "Dev URL:" | tail -1
+vercel logs $DEPLOYMENT --scope team_aMS4jZUlMooxyr9VgMKJf9uT 2>&1 | grep "Dev URL:" | tail -1
 ```
 
 **From real-time monitoring:**
 ```bash
 # Monitor logs and extract Dev URL as it appears
-vercel logs --follow d3k-mcp.vercel.sh --scope team_AOfCfb0WM8wEQYM5swopmVwn 2>&1 | grep -o "https://sb-[a-z0-9]*\.vercel\.run"
+vercel logs --follow d3k-mcp.vercel.sh --scope team_aMS4jZUlMooxyr9VgMKJf9uT 2>&1 | grep -o "https://sb-[a-z0-9]*\.vercel\.run"
 ```
 
 ### Test Dev URL with Browser Automation
@@ -322,11 +322,11 @@ curl -I https://sb-XXXXX.vercel.run
 # Extract and test Dev URL from latest workflow
 
 echo "1. Getting latest deployment..."
-DEPLOYMENT=$(vercel ls --scope team_AOfCfb0WM8wEQYM5swopmVwn | grep dev3000 | head -1 | awk '{print $2}')
+DEPLOYMENT=$(vercel ls --scope team_aMS4jZUlMooxyr9VgMKJf9uT | grep dev3000 | head -1 | awk '{print $2}')
 echo "   Deployment: $DEPLOYMENT"
 
 echo "2. Extracting Dev URL from logs..."
-DEV_URL=$(vercel logs $DEPLOYMENT --scope team_AOfCfb0WM8wEQYM5swopmVwn 2>&1 | grep -o "https://sb-[a-z0-9]*\.vercel\.run" | tail -1)
+DEV_URL=$(vercel logs $DEPLOYMENT --scope team_aMS4jZUlMooxyr9VgMKJf9uT 2>&1 | grep -o "https://sb-[a-z0-9]*\.vercel\.run" | tail -1)
 echo "   Dev URL: $DEV_URL"
 
 if [ -z "$DEV_URL" ]; then
