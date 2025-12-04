@@ -230,6 +230,31 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
 
     if (debug) console.log("  ✅ Project dependencies installed")
 
+    // Install Chromium browser for headless browser automation
+    // The Vercel Sandbox doesn't have Chrome/Chromium installed by default
+    if (debug) console.log("  🌐 Installing Chromium browser...")
+    const chromiumInstallResult = await runCommandWithLogs(sandbox, {
+      cmd: "sh",
+      args: ["-c", "apt-get update && apt-get install -y chromium chromium-driver"],
+      stdout: debug ? process.stdout : undefined,
+      stderr: debug ? process.stderr : undefined
+    })
+
+    if (chromiumInstallResult.exitCode !== 0) {
+      console.log(`  ⚠️ Chromium installation failed (exit code ${chromiumInstallResult.exitCode})`)
+      console.log("  ⚠️ Continuing anyway - d3k may work with alternative browser paths")
+    } else {
+      if (debug) console.log("  ✅ Chromium installed")
+    }
+
+    // Verify Chromium installation and find the executable path
+    if (debug) console.log("  🔍 Checking for Chromium executable...")
+    const whichChromium = await runCommandWithLogs(sandbox, {
+      cmd: "sh",
+      args: ["-c", "which chromium chromium-browser google-chrome 2>/dev/null || echo 'not found'"]
+    })
+    if (debug) console.log(`  📋 Chromium paths: ${whichChromium.stdout.trim()}`)
+
     // Install d3k globally from npm
     if (debug) console.log("  📦 Installing d3k globally from npm...")
     const d3kInstallResult = await runCommandWithLogs(sandbox, {
@@ -248,14 +273,17 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     // Start d3k (which will auto-configure MCPs and start browser)
     if (debug) console.log("  🚀 Starting d3k...")
     if (debug) console.log(`  📂 Working directory: ${sandboxCwd}`)
+
+    // Use chromium which we installed via apt-get
+    const chromiumPath = "/usr/bin/chromium"
     if (debug)
       console.log(
-        `  🔧 Command: cd ${sandboxCwd} && MCP_SKIP_PERMISSIONS=true d3k --no-tui --debug --headless --browser /usr/bin/google-chrome`
+        `  🔧 Command: cd ${sandboxCwd} && MCP_SKIP_PERMISSIONS=true d3k --no-tui --debug --headless --browser ${chromiumPath}`
       )
 
     // Start d3k in detached mode with --headless flag
     // This tells d3k to launch Chrome in headless mode, which works in serverless environments
-    // We explicitly pass --browser /usr/bin/google-chrome since that's where Chrome is in Vercel Sandbox
+    // We explicitly pass --browser /usr/bin/chromium since we installed chromium via apt-get
     // Logs are written to /home/vercel-sandbox/.d3k/logs/ and can be read later.
     // IMPORTANT: Do NOT start infinite log streaming loops here - they prevent
     // the workflow step function from completing properly.
@@ -263,7 +291,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
       cmd: "sh",
       args: [
         "-c",
-        `cd ${sandboxCwd} && MCP_SKIP_PERMISSIONS=true d3k --no-tui --debug --headless --browser /usr/bin/google-chrome`
+        `cd ${sandboxCwd} && MCP_SKIP_PERMISSIONS=true d3k --no-tui --debug --headless --browser ${chromiumPath}`
       ],
       detached: true
     })
