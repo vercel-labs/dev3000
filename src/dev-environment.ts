@@ -55,6 +55,7 @@ interface DevEnvironmentOptions {
   chromeDevtoolsMcp?: boolean // Whether to enable chrome-devtools MCP integration
   disabledMcpConfigs?: McpConfigTarget[] // Which MCP config files should be skipped
   debugPort?: number // Chrome debugging port (default 9222, auto-incremented for multiple instances)
+  headless?: boolean // Run Chrome in headless mode (for serverless/CI environments)
 }
 
 class Logger {
@@ -2173,7 +2174,8 @@ export class DevEnvironment {
       this.options.pluginReactScan,
       this.options.port, // App server port to monitor
       this.options.mcpPort, // MCP server port to ignore
-      this.options.debugPort // Chrome debug port
+      this.options.debugPort, // Chrome debug port
+      this.options.headless // Headless mode for serverless/CI environments
     )
 
     try {

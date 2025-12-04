@@ -39,6 +39,7 @@ export class CDPMonitor {
   private onWindowClosedCallback: (() => void) | null = null // Callback for when window is manually closed
   private appServerPort?: string // Port of the user's app server to monitor
   private mcpServerPort?: string // Port of dev3000's MCP server to ignore
+  private headless: boolean = false // Run Chrome in headless mode
 
   constructor(
     profileDir: string,
@@ -49,7 +50,8 @@ export class CDPMonitor {
     pluginReactScan: boolean = false,
     appServerPort?: string,
     mcpServerPort?: string,
-    debugPort?: number
+    debugPort?: number,
+    headless: boolean = false
   ) {
     this.profileDir = profileDir
     this.screenshotDir = screenshotDir
@@ -59,6 +61,7 @@ export class CDPMonitor {
     this.debug = debug
     this.browserPath = browserPath
     this.pluginReactScan = pluginReactScan
+    this.headless = headless
     // Use custom debug port if provided, otherwise use default 9222
     if (debugPort) {
       this.debugPort = debugPort
@@ -284,28 +287,41 @@ export class CDPMonitor {
         this.debugLog(`Trying Chrome path [${attemptIndex}]: ${chromePath}`)
         attemptIndex++
 
-        this.browser = spawn(
-          chromePath,
-          [
-            `--remote-debugging-port=${this.debugPort}`,
-            `--user-data-dir=${this.profileDir}`,
-            "--new-window", // Force new window instead of reusing existing instance
-            "--no-first-run",
-            "--no-default-browser-check",
-            "--disable-component-extensions-with-background-pages",
-            "--disable-background-networking",
-            "--disable-sync",
-            "--metrics-recording-only",
-            "--disable-default-apps",
-            "--disable-session-crashed-bubble",
-            "--disable-restore-session-state",
-            this.createLoadingPage()
-          ],
-          {
-            stdio: "pipe",
-            detached: false // Keep it attached so it dies with parent
-          }
-        )
+        // Build Chrome args - add headless flag if enabled
+        const chromeArgs = [
+          `--remote-debugging-port=${this.debugPort}`,
+          `--user-data-dir=${this.profileDir}`,
+          "--no-first-run",
+          "--no-default-browser-check",
+          "--disable-component-extensions-with-background-pages",
+          "--disable-background-networking",
+          "--disable-sync",
+          "--metrics-recording-only",
+          "--disable-default-apps",
+          "--disable-session-crashed-bubble",
+          "--disable-restore-session-state"
+        ]
+
+        if (this.headless) {
+          // Use new headless mode (Chrome 112+) which has better compatibility
+          chromeArgs.push("--headless=new")
+          // Additional flags needed for headless in serverless environments
+          chromeArgs.push("--no-sandbox")
+          chromeArgs.push("--disable-setuid-sandbox")
+          chromeArgs.push("--disable-gpu")
+          chromeArgs.push("--disable-dev-shm-usage")
+          this.debugLog("Launching Chrome in headless mode")
+        } else {
+          chromeArgs.push("--new-window") // Force new window (only for non-headless)
+        }
+
+        // Add initial page
+        chromeArgs.push(this.createLoadingPage())
+
+        this.browser = spawn(chromePath, chromeArgs, {
+          stdio: "pipe",
+          detached: false // Keep it attached so it dies with parent
+        })
 
         if (!this.browser) {
           this.debugLog(`Failed to spawn Chrome process for path: ${chromePath}`)

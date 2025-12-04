@@ -256,6 +256,7 @@ program
     "Comma or space separated list of MCP config files to skip (.mcp.json, .cursor/mcp.json, opencode.json). Use 'all' to disable all."
   )
   .option("--no-chrome-devtools-mcp", "Disable chrome-devtools MCP integration (enabled by default)")
+  .option("--headless", "Run Chrome in headless mode (for serverless/CI environments)")
   .option("--kill-mcp", "Kill the MCP server on port 3684 and exit")
   .action(async (options) => {
     // Handle --kill-mcp option
