@@ -134,7 +134,8 @@ export async function POST(request: Request) {
         timestamp: new Date().toISOString(),
         status: "success",
         reportBlobUrl: result.blobUrl,
-        prUrl: result.pr?.prUrl
+        prUrl: result.pr?.prUrl,
+        beforeScreenshotUrl: result.beforeScreenshotUrl || undefined
       })
       console.log(`[Start Fix] Updated workflow run metadata to success: ${runId}`)
     }

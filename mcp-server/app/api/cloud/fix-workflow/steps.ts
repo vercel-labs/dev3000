@@ -237,7 +237,24 @@ export async function fetchRealLogs(
         if (toolsResponse.ok) {
           const toolsText = await toolsResponse.text()
           try {
-            const toolsData = JSON.parse(toolsText)
+            // Parse SSE response format: "event: message\ndata: {...}\n\n"
+            let toolsData = null
+            const lines = toolsText.split("\n")
+            for (const line of lines) {
+              if (line.startsWith("data: ")) {
+                try {
+                  toolsData = JSON.parse(line.substring(6))
+                  break
+                } catch {
+                  // Continue to next line
+                }
+              }
+            }
+            // Fallback: try parsing the whole response as JSON (non-SSE format)
+            if (!toolsData) {
+              toolsData = JSON.parse(toolsText)
+            }
+
             const toolNames = toolsData.result?.tools?.map((t: { name: string }) => t.name) || []
             console.log(`[Step 1] ✅ d3k MCP server accessible`)
             console.log(`[Step 1] Available tools (${toolNames.length}): ${toolNames.join(", ")}`)
@@ -746,6 +763,7 @@ Learn more at https://github.com/vercel-labs/dev3000
     projectName,
     fixProposal,
     blobUrl: blob.url,
+    beforeScreenshotUrl: beforeScreenshotUrl || null,
     message: "Fix analysis completed and uploaded to blob storage"
   }
 }

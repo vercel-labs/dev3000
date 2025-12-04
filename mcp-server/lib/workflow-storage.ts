@@ -9,6 +9,8 @@ export interface WorkflowRun {
   reportBlobUrl?: string
   prUrl?: string
   error?: string
+  beforeScreenshotUrl?: string
+  afterScreenshotUrl?: string
 }
 
 /**

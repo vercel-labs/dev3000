@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import Link from "next/link"
 import { useState } from "react"
 import { Badge } from "@/components/ui/badge"
@@ -68,6 +69,8 @@ export default function WorkflowsClient({ user, initialRuns }: WorkflowsClientPr
                   <TableHead>Project</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Timestamp</TableHead>
+                  <TableHead>Before</TableHead>
+                  <TableHead>After</TableHead>
                   <TableHead>Report</TableHead>
                   <TableHead>PR</TableHead>
                 </TableRow>
@@ -96,6 +99,38 @@ export default function WorkflowsClient({ user, initialRuns }: WorkflowsClientPr
                       </Badge>
                     </TableCell>
                     <TableCell className="text-muted-foreground">{new Date(run.timestamp).toLocaleString()}</TableCell>
+                    <TableCell>
+                      {run.beforeScreenshotUrl ? (
+                        <a href={run.beforeScreenshotUrl} target="_blank" rel="noopener noreferrer">
+                          <Image
+                            src={run.beforeScreenshotUrl}
+                            alt="Before"
+                            width={64}
+                            height={40}
+                            className="object-cover rounded border hover:opacity-80 transition-opacity"
+                            unoptimized
+                          />
+                        </a>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {run.afterScreenshotUrl ? (
+                        <a href={run.afterScreenshotUrl} target="_blank" rel="noopener noreferrer">
+                          <Image
+                            src={run.afterScreenshotUrl}
+                            alt="After"
+                            width={64}
+                            height={40}
+                            className="object-cover rounded border hover:opacity-80 transition-opacity"
+                            unoptimized
+                          />
+                        </a>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">-</span>
+                      )}
+                    </TableCell>
                     <TableCell>
                       {run.reportBlobUrl ? (
                         <Link href={`/workflows/${run.id}/report`} className="text-primary hover:underline">
