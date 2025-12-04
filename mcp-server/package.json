@@ -35,7 +35,7 @@
     "react-dom": "19.3.0-canary-09f05694-20251201",
     "react-markdown": "^10.1.0",
     "tailwind-merge": "catalog:",
-    "workflow": "4.0.1-beta.23",
+    "workflow": "4.0.1-beta.26",
     "ws": "^8.18.3",
     "zod": "^3.22.4"
   },
