@@ -2528,6 +2528,27 @@ export class DevEnvironment {
     if (!this.options.tui) {
       console.log(chalk.yellow("🔄 Killing app server..."))
     }
+
+    // First, try to kill the process group if we have the server process reference
+    // This is important because the server is spawned with detached: true, which creates
+    // its own process group. Killing the entire group ensures child processes (like
+    // Next.js's next-server and webpack workers) are also killed.
+    if (this.serverProcess?.pid) {
+      try {
+        // Negative PID kills the entire process group
+        const pgid = -this.serverProcess.pid
+        this.debugLog(`Killing process group ${pgid} (server PID: ${this.serverProcess.pid})`)
+        process.kill(pgid, "SIGKILL")
+        if (!this.options.tui) {
+          console.log(chalk.green(`✅ Killed server process group (PID: ${this.serverProcess.pid})`))
+        }
+      } catch (error) {
+        // Process group may already be dead or may not exist
+        this.debugLog(`Could not kill process group: ${error}`)
+      }
+    }
+
+    // Fallback: kill any remaining processes on the port
     await killPortProcess(this.options.port, "your app server")
 
     // Add a small delay to let the kill process complete
