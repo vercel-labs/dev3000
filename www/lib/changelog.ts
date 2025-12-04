@@ -10,6 +10,19 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.113",
+    date: "2025-12-04",
+    type: "minor",
+    highlights: [
+      "Update Next.js type definitions after build",
+      "Add --headless flag for Chrome in serverless/CI environments",
+      "Add screenshot columns to workflows table and fix SSE parsing",
+      "Fix sandbox MCP response parsing and add log dumping",
+      "Fix WORKFLOW_TESTING_GUIDE.md to use correct mcp-server production team"
+    ]
+  },
+
+  {
     version: "0.0.112",
     date: "2025-12-02",
     type: "minor",

@@ -4,6 +4,16 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.113] - 2025-12-04
+
+**Feature Release**
+
+- Update Next.js type definitions after build
+- Add --headless flag for Chrome in serverless/CI environments
+- Add screenshot columns to workflows table and fix SSE parsing
+- Fix sandbox MCP response parsing and add log dumping
+- Fix WORKFLOW_TESTING_GUIDE.md to use correct mcp-server production team
+
 ## [0.0.112] - 2025-12-02
 
 **Feature Release**
