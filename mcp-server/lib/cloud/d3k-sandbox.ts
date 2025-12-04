@@ -249,16 +249,22 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     if (debug) console.log("  🚀 Starting d3k...")
     if (debug) console.log(`  📂 Working directory: ${sandboxCwd}`)
     if (debug)
-      console.log(`  🔧 Command: cd ${sandboxCwd} && MCP_SKIP_PERMISSIONS=true d3k --no-tui --debug --headless`)
+      console.log(
+        `  🔧 Command: cd ${sandboxCwd} && MCP_SKIP_PERMISSIONS=true d3k --no-tui --debug --headless --browser /usr/bin/google-chrome`
+      )
 
     // Start d3k in detached mode with --headless flag
     // This tells d3k to launch Chrome in headless mode, which works in serverless environments
+    // We explicitly pass --browser /usr/bin/google-chrome since that's where Chrome is in Vercel Sandbox
     // Logs are written to /home/vercel-sandbox/.d3k/logs/ and can be read later.
     // IMPORTANT: Do NOT start infinite log streaming loops here - they prevent
     // the workflow step function from completing properly.
     await sandbox.runCommand({
       cmd: "sh",
-      args: ["-c", `cd ${sandboxCwd} && MCP_SKIP_PERMISSIONS=true d3k --no-tui --debug --headless`],
+      args: [
+        "-c",
+        `cd ${sandboxCwd} && MCP_SKIP_PERMISSIONS=true d3k --no-tui --debug --headless --browser /usr/bin/google-chrome`
+      ],
       detached: true
     })
 
