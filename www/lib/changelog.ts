@@ -10,6 +10,16 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.114",
+    date: "2025-12-04",
+    type: "patch",
+    highlights: [
+      "Remove unused next dependency from root package.json",
+      "Fix process cleanup to kill entire process group on shutdown"
+    ]
+  },
+
+  {
     version: "0.0.113",
     date: "2025-12-04",
     type: "minor",

@@ -4,6 +4,13 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.114] - 2025-12-04
+
+**Patch Release**
+
+- Remove unused next dependency from root package.json
+- Fix process cleanup to kill entire process group on shutdown
+
 ## [0.0.113] - 2025-12-04
 
 **Feature Release**
