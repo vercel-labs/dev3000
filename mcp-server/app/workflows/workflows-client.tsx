@@ -188,7 +188,7 @@ export default function WorkflowsClient({ user, initialRuns }: WorkflowsClientPr
                         aria-label="Select all"
                       />
                     </TableHead>
-                    <TableHead>Project</TableHead>
+                    <TableHead>Project ({runs.length})</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Timestamp</TableHead>
                     <TableHead>Before</TableHead>
