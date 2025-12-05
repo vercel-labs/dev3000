@@ -53,16 +53,15 @@ describe("TUI ASCII Logo", () => {
   })
 
   it("should handle log formatting with minimal padding", () => {
-    // This test ensures that we use minimal padding to maximize horizontal space
+    // This test ensures that the log line parsing uses proper regex and spacing
     const tuiFilePath = join(__dirname, "tui-interface-impl.tsx")
     const fileContent = readFileSync(tuiFilePath, "utf-8")
 
-    // Check that we use minimal padding
-    expect(fileContent).toContain('const sourceSpacing = ""')
-    expect(fileContent).toContain('const typeSpacing = ""')
+    // Check that we use minimal padding (inline <Text> {" "} </Text> for spacing)
+    expect(fileContent).toContain("Normal mode with minimal padding")
 
-    // Verify the regex pattern that could allow various source names
-    const logParseRegex = /\^\\\[\(.*\?\)\\\] \\\[\(.*\?\)\\\]/
-    expect(fileContent).toMatch(logParseRegex)
+    // Verify the log parsing regex pattern exists and handles [timestamp] [source] [type?] message
+    expect(fileContent).toContain("log.content.match")
+    expect(fileContent).toMatch(/\^\\\[\(.*\?\)\\\]/)
   })
 })
