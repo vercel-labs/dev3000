@@ -230,30 +230,44 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
 
     if (debug) console.log("  ✅ Project dependencies installed")
 
-    // Install Chromium browser for headless browser automation
-    // The Vercel Sandbox doesn't have Chrome/Chromium installed by default
-    if (debug) console.log("  🌐 Installing Chromium browser...")
+    // Install Chromium browser for headless browser automation using @sparticuz/chromium
+    // The Vercel Sandbox doesn't have apt-get or Chrome installed by default
+    // @sparticuz/chromium is designed for serverless environments and provides a pre-compiled Chromium
+    if (debug) console.log("  🌐 Installing @sparticuz/chromium for serverless browser automation...")
     const chromiumInstallResult = await runCommandWithLogs(sandbox, {
-      cmd: "sh",
-      args: ["-c", "apt-get update && apt-get install -y chromium chromium-driver"],
+      cmd: packageManager,
+      args: ["add", "@sparticuz/chromium", "puppeteer-core"],
+      cwd: sandboxCwd,
       stdout: debug ? process.stdout : undefined,
       stderr: debug ? process.stderr : undefined
     })
 
     if (chromiumInstallResult.exitCode !== 0) {
-      console.log(`  ⚠️ Chromium installation failed (exit code ${chromiumInstallResult.exitCode})`)
-      console.log("  ⚠️ Continuing anyway - d3k may work with alternative browser paths")
+      console.log(`  ⚠️ @sparticuz/chromium installation failed (exit code ${chromiumInstallResult.exitCode})`)
+      console.log("  ⚠️ Continuing anyway - d3k may work without browser automation")
     } else {
-      if (debug) console.log("  ✅ Chromium installed")
+      if (debug) console.log("  ✅ @sparticuz/chromium installed")
     }
 
-    // Verify Chromium installation and find the executable path
-    if (debug) console.log("  🔍 Checking for Chromium executable...")
-    const whichChromium = await runCommandWithLogs(sandbox, {
-      cmd: "sh",
-      args: ["-c", "which chromium chromium-browser google-chrome 2>/dev/null || echo 'not found'"]
+    // Create a helper script to extract the Chromium executable path from @sparticuz/chromium
+    // This package downloads and extracts Chromium at runtime
+    if (debug) console.log("  🔍 Getting Chromium executable path from @sparticuz/chromium...")
+    const getChromiumPathResult = await runCommandWithLogs(sandbox, {
+      cmd: "node",
+      args: ["-e", "require('@sparticuz/chromium').executablePath().then(p => console.log(p))"],
+      cwd: sandboxCwd
     })
-    if (debug) console.log(`  📋 Chromium paths: ${whichChromium.stdout.trim()}`)
+
+    let chromiumPath = "/usr/bin/chromium" // fallback
+    if (getChromiumPathResult.exitCode === 0 && getChromiumPathResult.stdout.trim()) {
+      chromiumPath = getChromiumPathResult.stdout.trim()
+      if (debug) console.log(`  ✅ Chromium path from @sparticuz/chromium: ${chromiumPath}`)
+    } else {
+      console.log(`  ⚠️ Could not get Chromium path from @sparticuz/chromium, using fallback: ${chromiumPath}`)
+      if (getChromiumPathResult.stderr) {
+        console.log(`  ⚠️ Error: ${getChromiumPathResult.stderr.substring(0, 500)}`)
+      }
+    }
 
     // Install d3k globally from npm
     if (debug) console.log("  📦 Installing d3k globally from npm...")
@@ -274,8 +288,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     if (debug) console.log("  🚀 Starting d3k...")
     if (debug) console.log(`  📂 Working directory: ${sandboxCwd}`)
 
-    // Use chromium which we installed via apt-get
-    const chromiumPath = "/usr/bin/chromium"
+    // Use chromium path from @sparticuz/chromium (or fallback)
     if (debug)
       console.log(
         `  🔧 Command: cd ${sandboxCwd} && MCP_SKIP_PERMISSIONS=true d3k --no-tui --debug --headless --browser ${chromiumPath}`
@@ -283,7 +296,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
 
     // Start d3k in detached mode with --headless flag
     // This tells d3k to launch Chrome in headless mode, which works in serverless environments
-    // We explicitly pass --browser /usr/bin/chromium since we installed chromium via apt-get
+    // We explicitly pass --browser with the path from @sparticuz/chromium
     // Logs are written to /home/vercel-sandbox/.d3k/logs/ and can be read later.
     // IMPORTANT: Do NOT start infinite log streaming loops here - they prevent
     // the workflow step function from completing properly.

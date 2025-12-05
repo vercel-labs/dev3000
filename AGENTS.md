@@ -26,6 +26,12 @@ For local testing, use:
 pnpm run canary
 ```
 
+To test the d3k-in-the-cloud workflow:
+- Use d3k MCP browser automation (NOT curl/API calls)
+- Navigate to `http://localhost:3000/workflows/new?type=cloud-fix&team=team_aMS4jZUlMooxyr9VgMKJf9uT&project=prj_0ITI5UHrH4Kp92G5OLEMrlgVX08p`
+- Start monitoring production logs BEFORE triggering: `vercel logs <deployment> --scope team_nLlpyC6REAqxydlFKbrMDlud`
+- The local dev server must be running for the UI to work
+
 ## Quick Architecture Reference
 
 **Main Files**:
