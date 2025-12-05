@@ -311,6 +311,27 @@ export async function createD3kSandbox(
   }
   console.log(`[Step 0] === End sandbox log dump ===`)
 
+  // Capture git diff from sandbox - this shows any changes made by d3k
+  console.log(`[Step 0] Capturing git diff from sandbox...`)
+  let gitDiff: string | null = null
+  try {
+    const diffResult = await runSandboxCommand(sandboxResult.sandbox, "sh", [
+      "-c",
+      "cd /vercel/sandbox && git diff --no-color 2>/dev/null || echo 'No git diff available'"
+    ])
+    if (diffResult.exitCode === 0 && diffResult.stdout.trim() && diffResult.stdout.trim() !== "No git diff available") {
+      gitDiff = diffResult.stdout.trim()
+      console.log(`[Step 0] Git diff captured (${gitDiff.length} chars)`)
+      console.log(`[Step 0] Git diff preview:\n${gitDiff.substring(0, 500)}...`)
+    } else {
+      console.log(`[Step 0] No git changes detected in sandbox`)
+    }
+  } catch (diffError) {
+    console.log(
+      `[Step 0] Failed to capture git diff: ${diffError instanceof Error ? diffError.message : String(diffError)}`
+    )
+  }
+
   // Note: We cannot return the cleanup function or sandbox object as they're not serializable
   // Sandbox cleanup will happen automatically when the sandbox times out
   return {
@@ -320,7 +341,8 @@ export async function createD3kSandbox(
     clsData,
     mcpError,
     beforeScreenshotUrl,
-    chromiumPath
+    chromiumPath,
+    gitDiff
   }
 }
 
@@ -846,13 +868,17 @@ export async function uploadToBlob(
   projectName: string,
   logAnalysis: string,
   devUrl: string,
-  beforeScreenshotUrl?: string | null
+  beforeScreenshotUrl?: string | null,
+  gitDiff?: string | null
 ) {
   "use step"
 
   console.log("[Step 3] Uploading fix proposal to blob storage...")
   if (beforeScreenshotUrl) {
     console.log(`[Step 3] Including before screenshot: ${beforeScreenshotUrl}`)
+  }
+  if (gitDiff) {
+    console.log(`[Step 3] Including git diff (${gitDiff.length} chars)`)
   }
 
   // Create screenshot section if we have a screenshot
@@ -862,6 +888,21 @@ export async function uploadToBlob(
 This screenshot was captured when the sandbox dev server first loaded, proving the page rendered successfully.
 
 ![Before Screenshot](${beforeScreenshotUrl})
+
+---
+
+`
+    : ""
+
+  // Create git diff section if we have a diff from the sandbox
+  const gitDiffSection = gitDiff
+    ? `## Actual Git Diff from Sandbox
+
+The following diff shows the actual changes made by d3k in the sandbox environment:
+
+\`\`\`diff
+${gitDiff}
+\`\`\`
 
 ---
 
@@ -880,7 +921,7 @@ This screenshot was captured when the sandbox dev server first loaded, proving t
 
 ---
 
-${screenshotSection}## Original Log Analysis
+${screenshotSection}${gitDiffSection}## Original Log Analysis
 
 \`\`\`
 ${logAnalysis}

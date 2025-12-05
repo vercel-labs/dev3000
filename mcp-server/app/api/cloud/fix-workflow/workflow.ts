@@ -57,7 +57,7 @@ export async function cloudFixWorkflow(params: {
   console.log(`[Workflow] VERCEL_OIDC_TOKEN available: ${!!vercelOidcToken}`)
 
   // Step 0: Create d3k sandbox if repoUrl provided
-  // This step also captures CLS data and a "before" screenshot from inside the sandbox
+  // This step also captures CLS data, "before" screenshot, and git diff from inside the sandbox
   let sandboxInfo: {
     mcpUrl: string
     devUrl: string
@@ -66,6 +66,7 @@ export async function cloudFixWorkflow(params: {
     mcpError?: string | null
     beforeScreenshotUrl?: string | null
     chromiumPath?: string
+    gitDiff?: string | null
   } | null = null
   if (repoUrl) {
     sandboxInfo = await createD3kSandbox(repoUrl, repoBranch || "main", projectName, vercelToken, vercelOidcToken)
@@ -89,13 +90,14 @@ export async function cloudFixWorkflow(params: {
   // Step 2: Invoke AI agent to analyze logs and create fix
   const fixProposal = await analyzeLogsWithAgent(logAnalysis, sandboxInfo?.devUrl || devUrl)
 
-  // Step 3: Upload to blob storage with full context and screenshot
+  // Step 3: Upload to blob storage with full context, screenshot, and git diff
   const blobResult = await uploadToBlob(
     fixProposal,
     projectName,
     logAnalysis,
     sandboxInfo?.devUrl || devUrl,
-    beforeScreenshotUrl
+    beforeScreenshotUrl,
+    sandboxInfo?.gitDiff
   )
 
   // Step 4: Create GitHub PR if repo info provided AND there are actual fixes to apply
@@ -153,11 +155,12 @@ async function uploadToBlob(
   projectName: string,
   logAnalysis: string,
   devUrl: string,
-  beforeScreenshotUrl?: string | null
+  beforeScreenshotUrl?: string | null,
+  gitDiff?: string | null
 ) {
   "use step"
   const { uploadToBlob } = await import("./steps")
-  return uploadToBlob(fixProposal, projectName, logAnalysis, devUrl, beforeScreenshotUrl)
+  return uploadToBlob(fixProposal, projectName, logAnalysis, devUrl, beforeScreenshotUrl, gitDiff)
 }
 
 async function createGitHubPR(
