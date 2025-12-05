@@ -107,6 +107,11 @@ function detectPackageManagerForRun(): string {
   return "npm" // fallback
 }
 
+/**
+ * Check if a port is available for binding (no process is listening on it).
+ * Used for finding available ports before starting servers.
+ * In sandbox environments, skips checking since lsof often doesn't exist.
+ */
 async function isPortAvailable(port: string): Promise<boolean> {
   // Detect if we're in a sandbox environment (Vercel Sandbox, Docker, etc.)
   const isSandbox =
@@ -157,6 +162,42 @@ async function isPortAvailable(port: string): Promise<boolean> {
     return !result // If no output, port is available
   } catch {
     return true // Assume port is available if check fails
+  }
+}
+
+/**
+ * Check if a server is actually listening and responding on a port.
+ * Used for waiting for a dev server to start up.
+ * Works in all environments including sandboxes by using HTTP requests.
+ */
+async function isServerListening(port: string | number): Promise<boolean> {
+  try {
+    // Use HTTP HEAD request to check if server is responding
+    // This works in sandboxes where lsof doesn't exist
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 2000) // 2 second timeout
+
+    try {
+      await fetch(`http://localhost:${port}/`, {
+        method: "HEAD",
+        signal: controller.signal
+      })
+      clearTimeout(timeout)
+      // Any response (even 4xx/5xx) means server is listening
+      return true
+    } catch (error: unknown) {
+      clearTimeout(timeout)
+      // ECONNREFUSED means no server is listening
+      // AbortError means timeout (server might be starting)
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      if (errorMsg.includes("ECONNREFUSED") || errorMsg.includes("fetch failed") || errorMsg.includes("aborted")) {
+        return false
+      }
+      // Other errors (like network issues) - assume not listening
+      return false
+    }
+  } catch {
+    return false
   }
 }
 
@@ -1657,19 +1698,19 @@ export class DevEnvironment {
       try {
         this.debugLog(`Server check attempt ${attempts + 1}/${maxAttempts}: checking port ${currentPort}`)
 
-        // Check if port is in use (server is listening) without making HTTP requests
-        const portInUse = !(await isPortAvailable(currentPort))
+        // Use HTTP-based check which works in sandboxes where lsof doesn't exist
+        const serverListening = await isServerListening(currentPort)
 
         const attemptTime = Date.now() - attemptStartTime
 
-        if (portInUse) {
+        if (serverListening) {
           const totalTime = Date.now() - startTime
           this.debugLog(
             `Server is ready! Port ${currentPort} is listening. Total wait time: ${totalTime}ms (${attempts + 1} attempts)`
           )
           return true
         } else {
-          this.debugLog(`Port ${currentPort} not yet in use after ${attemptTime}ms`)
+          this.debugLog(`Port ${currentPort} not yet responding after ${attemptTime}ms`)
         }
       } catch (error) {
         const attemptTime = Date.now() - attemptStartTime
