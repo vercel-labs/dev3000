@@ -10,6 +10,19 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.116",
+    date: "2025-12-05",
+    type: "minor",
+    highlights: [
+      "Add Vercel MCP tools section to WORKFLOW_TESTING_GUIDE",
+      "Rewrite tool descriptions to enforce diagnose-fix-verify loop",
+      "Capture d3k stdout/stderr to d3k-startup.log and dump logs on CDP failure",
+      "Add always-on diagnostic logging to CDPMonitor for sandbox debugging",
+      "Add Node.js spawn() diagnostic test for Chrome in sandbox"
+    ]
+  },
+
+  {
     version: "0.0.115",
     date: "2025-12-05",
     type: "patch",

@@ -4,6 +4,16 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.116] - 2025-12-05
+
+**Feature Release**
+
+- Add Vercel MCP tools section to WORKFLOW_TESTING_GUIDE
+- Rewrite tool descriptions to enforce diagnose-fix-verify loop
+- Capture d3k stdout/stderr to d3k-startup.log and dump logs on CDP failure
+- Add always-on diagnostic logging to CDPMonitor for sandbox debugging
+- Add Node.js spawn() diagnostic test for Chrome in sandbox
+
 ## [0.0.115] - 2025-12-05
 
 **Patch Release**
