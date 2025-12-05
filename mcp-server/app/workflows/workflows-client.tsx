@@ -164,9 +164,9 @@ export default function WorkflowsClient({ user, initialRuns }: WorkflowsClientPr
           </Card>
         ) : (
           <Card className="h-full flex flex-col overflow-hidden">
-            <div className="overflow-auto flex-1">
+            <div className="overflow-auto flex-1 [&_[data-slot=table-container]]:overflow-visible">
               <Table>
-                <TableHeader className="sticky top-0 bg-background z-10">
+                <TableHeader className="sticky top-0 bg-card z-10 shadow-[0_1px_3px_-1px_rgba(0,0,0,0.1)]">
                   <TableRow>
                     <TableHead className="w-8 pr-0">
                       <Checkbox
