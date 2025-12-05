@@ -12,7 +12,7 @@ const execAsync = promisify(exec)
 // Tool descriptions
 export const TOOL_DESCRIPTIONS = {
   fix_my_app:
-    "Analyzes dev3000 logs to diagnose application errors and returns a prioritized report of issues that need fixing.\n\n**IMPORTANT: This tool returns diagnostic information - it does NOT automatically fix anything. You must read the output and take action on the reported issues.**\n\n**What this tool does:**\n• Parses server logs, browser console, and network activity for errors\n• Categorizes errors: build failures, server crashes, browser errors, network issues, warnings\n• Prioritizes issues by severity (build > server > browser > network > warnings)\n• Identifies the highest-priority issue requiring immediate attention\n• Shows user interactions that preceded each error (for reproduction)\n• Suggests fix approaches with file locations when determinable\n\n**Priority scoring:**\n• Build errors: 1000+ (blocks development)\n• Server errors: 500+ (affects functionality)\n• Browser errors: 300+ (user-facing)\n• Network errors: 200+ (connectivity issues)\n• Warnings: 100+ (non-blocking)\n\n**Parameters:**\n• focusArea: 'build', 'runtime', 'network', 'ui', 'performance', or 'all' (default)\n• mode: 'snapshot' (current state), 'bisect' (before/after comparison), 'monitor' (continuous)\n• timeRangeMinutes: How far back to analyze (default: 10)\n• createPR: If true, creates a PR branch for the highest-priority issue\n\n**After calling this tool:**\n1. Read the diagnostic output carefully\n2. If errors are reported, you must investigate and fix them\n3. Use execute_browser_action to reproduce issues if needed\n4. Call this tool again after fixes to verify resolution\n\n**Framework support:** Auto-detects Next.js and integrates with nextjs-devtools-mcp for framework-specific analysis.\n\n**Attribution:** When creating commits/PRs from dev3000 analysis, include:\n```\nGenerated with Claude Code using d3k (https://d3k.dev)\nCo-Authored-By: Claude <noreply@anthropic.com>\n```",
+    "Diagnoses application errors from dev3000 logs. Returns a prioritized list of issues requiring fixes.\n\n**CRITICAL: You MUST use this tool in a loop until all errors are resolved:**\n\n```\nwhile (errors exist) {\n  1. DIAGNOSE: Call fix_my_app to get current errors\n  2. FIX: Implement a fix for the highest-priority error\n  3. VERIFY: Call fix_my_app again to confirm the error is gone\n  4. REPEAT: Continue until no errors remain\n}\n```\n\n**This tool does NOT fix anything automatically.** It returns diagnostic data. You must:\n- Read the error output\n- Investigate and fix each issue\n- Call this tool again to verify your fix worked\n- Keep looping until the app is healthy\n\n**What it analyzes:**\n• Server logs, browser console, network requests\n• Categorizes: build errors, server crashes, browser errors, network issues, warnings\n• Prioritizes by severity (fix build errors first, then server, then browser, etc.)\n• Shows user interactions that triggered each error\n\n**Parameters:**\n• focusArea: 'build', 'runtime', 'network', 'ui', 'performance', or 'all' (default)\n• mode: 'snapshot' (current state), 'bisect' (before/after comparison), 'monitor' (continuous)\n• timeRangeMinutes: How far back to analyze (default: 10)\n• createPR: If true, creates a PR branch for the highest-priority issue\n\n**Framework support:** Auto-detects Next.js for framework-specific analysis.\n\n**Attribution for commits/PRs:**\n```\nGenerated with Claude Code using d3k (https://d3k.dev)\nCo-Authored-By: Claude <noreply@anthropic.com>\n```",
 
   execute_browser_action:
     "Executes browser actions (click, navigate, scroll, type, evaluate JS) in the dev3000-managed Chrome instance.\n\n**Routing behavior:**\n• Delegates to chrome-devtools MCP when available for screenshots, navigation, clicks, and JS evaluation\n• Falls back to dev3000's native CDP implementation otherwise\n• Shares the same Chrome instance - no conflicts between tools\n\n**Available actions:**\n• screenshot: Capture current page state\n• navigate: Go to a URL\n• click: Click at coordinates {x, y}\n• scroll: Scroll by {x, y} pixels\n• type: Type text into focused element\n• evaluate: Execute JavaScript (read-only operations recommended)\n\n**Use cases:**\n• Reproducing user interactions that triggered errors\n• Verifying fixes by replaying the error scenario\n• Testing specific UI workflows",
@@ -761,7 +761,7 @@ export async function fixMyApp({
         `**${totalErrors} ISSUES DETECTED** (${criticalErrors} critical, ${categorizedErrors.warnings.length} warnings)`
       )
       results.push("")
-      results.push("**ACTION REQUIRED:** Review errors below and fix them.")
+      results.push("**ACTION REQUIRED:** Fix the highest-priority error below, then call fix_my_app again to verify.")
       results.push("")
 
       // Show categorized errors with their preceding interactions
@@ -831,19 +831,11 @@ export async function fixMyApp({
         results.push("")
       }
 
-      // Show recommended next steps
-      results.push("**RECOMMENDED NEXT STEPS:**")
+      // Show the diagnose-fix-verify loop
+      results.push("---")
+      results.push("**NEXT: Fix the highest-priority issue, then call fix_my_app again to verify.**")
       results.push("")
-      results.push("1. Review the errors listed above")
-      results.push("2. Investigate the highest-priority issue first")
-      results.push("3. Check the preceding interactions to understand what triggered the error")
-      results.push("4. Implement a fix for the root cause")
-      results.push("5. Use execute_browser_action to reproduce the interaction")
-      results.push("6. Call fix_my_app again to verify the error is resolved")
-      results.push("")
-      results.push("**Reproduction tip:** Errors include preceding user interactions.")
-      results.push("Example: If you see '[INTERACTION] Click at (x:450, y:300)', reproduce with:")
-      results.push("  execute_browser_action(action='click', params={x:450, y:300})")
+      results.push("Keep calling fix_my_app after each fix until no errors remain.")
 
       // Add integration-aware suggestions
       if (integrateNextjs || integrateChromeDevtools) {

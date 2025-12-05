@@ -7,7 +7,7 @@ export async function GET() {
       {
         name: "fix_my_app",
         description:
-          "Analyzes dev3000 logs to diagnose application errors and returns a prioritized report.\n\n**IMPORTANT:** This tool returns diagnostic information - it does NOT automatically fix anything. You must read the output and take action on reported issues.\n\n**What it does:**\n• Parses server logs, browser console, and network activity\n• Categorizes errors by type (build, server, browser, network, warnings)\n• Prioritizes issues by severity\n• Shows user interactions that preceded each error\n• Suggests fix approaches when determinable\n\n**Modes:**\n• snapshot (default): Analyze current state\n• bisect: Compare before/after states\n• monitor: Continuous monitoring\n\n**After calling:**\n1. Read the diagnostic output\n2. Fix reported issues\n3. Use execute_browser_action to verify\n4. Call fix_my_app again to confirm resolution",
+          "Diagnoses application errors from dev3000 logs. Returns prioritized issues requiring fixes.\n\n**CRITICAL: Use in a loop until all errors are resolved:**\n1. DIAGNOSE: Call fix_my_app to get errors\n2. FIX: Fix the highest-priority error\n3. VERIFY: Call fix_my_app again to confirm fix worked\n4. REPEAT: Loop until no errors remain\n\n**This tool does NOT fix anything automatically.** You must read the output, fix issues, and call again to verify.\n\n**What it analyzes:** Server logs, browser console, network requests. Prioritizes by severity (build > server > browser > network > warnings).",
         category: "Diagnostics",
         parameters: [
           {
