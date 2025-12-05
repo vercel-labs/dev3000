@@ -113,7 +113,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
   // biome-ignore lint/suspicious/noExplicitAny: ms type inference issue
   const timeoutMs = ms(timeout as any) as unknown as number
   const sandbox = await Sandbox.create({
-    resources: { vcpus: 4 },
+    resources: { vcpus: 8 },
     timeout: timeoutMs,
     ports: [3000, 3684], // App port + MCP server port
     runtime: "node22"
