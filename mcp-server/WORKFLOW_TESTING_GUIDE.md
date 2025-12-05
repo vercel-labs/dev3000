@@ -137,21 +137,53 @@ grep -i "workflow\|sandbox\|step" ~/.d3k/logs/dev3000-mcp-server-*.log | tail -5
 
 **Important**: Local logs showing "200 OK" does NOT mean the workflow succeeded in production!
 
-### Production Logs via Vercel CLI (REQUIRED - Source of Truth)
+### Production Logs via Vercel MCP Tools (RECOMMENDED)
 
-**This is the ONLY way to verify workflow execution.** Always use CLI, never dashboard.
+When Claude Code has the Vercel MCP configured, use these tools for easier debugging:
+
+```typescript
+// List recent deployments to find the correct one
+mcp__vercel__list_deployments({
+  projectId: "prj_21F00Vr3bXzc1VSC8D9j2YJUzd0Q",  // dev3000-mcp project
+  teamId: "team_nLlpyC6REAqxydlFKbrMDlud"         // vercel team
+})
+
+// Get build logs for a specific deployment
+mcp__vercel__get_deployment_build_logs({
+  idOrUrl: "dpl_XXXXX",  // deployment ID from list_deployments
+  teamId: "team_nLlpyC6REAqxydlFKbrMDlud",
+  limit: 500
+})
+
+// Fetch a protected Vercel URL
+mcp__vercel__web_fetch_vercel_url({
+  url: "https://dev3000-xxxxx.vercel.sh/api/health"
+})
+```
+
+**Key IDs for this project:**
+- Team ID (Vercel): `team_nLlpyC6REAqxydlFKbrMDlud`
+- Project ID (mcp-server): `prj_21F00Vr3bXzc1VSC8D9j2YJUzd0Q`
+- Test Team (elsigh-pro): `team_aMS4jZUlMooxyr9VgMKJf9uT`
+- Test Project: `prj_0ITI5UHrH4Kp92G5OLEMrlgVX08p`
+
+### Production Logs via Vercel CLI (Fallback)
+
+**Use CLI when MCP tools are not available:**
 
 ```bash
 # Step 1: Get latest deployment URL for mcp-server production
 DEPLOYMENT=$(vercel ls --scope team_nLlpyC6REAqxydlFKbrMDlud | grep dev3000 | head -1 | awk '{print $2}')
 echo "Checking logs for: $DEPLOYMENT"
 
-# Step 2: Monitor production logs for workflow activity
+# Step 2: Monitor production logs for workflow activity (streams in real-time)
 vercel logs $DEPLOYMENT --scope team_nLlpyC6REAqxydlFKbrMDlud 2>&1 | grep -i "workflow\|sandbox\|step"
 
 # Step 3: If no output, check all recent logs (no grep filter)
 vercel logs $DEPLOYMENT --scope team_nLlpyC6REAqxydlFKbrMDlud 2>&1 | tail -100
 ```
+
+**Note:** `vercel logs` streams in real-time but auto-disconnects after 5 minutes. For longer monitoring, restart the command.
 
 **What MUST appear in production logs for successful execution:**
 - `[Workflow] Starting cloud fix workflow...` - Workflow initiated in production
