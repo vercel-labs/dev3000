@@ -230,6 +230,37 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
 
     if (debug) console.log("  ✅ Project dependencies installed")
 
+    // Install system dependencies for Chromium
+    // The Vercel Sandbox uses Amazon Linux 2023 which has dnf package manager
+    // These packages provide shared libraries that Chromium needs (nspr, nss, etc.)
+    if (debug) console.log("  🔧 Installing system dependencies for Chromium...")
+    const sysDepsResult = await runCommandWithLogs(sandbox, {
+      cmd: "sh",
+      args: [
+        "-c",
+        "sudo dnf install -y nspr nss atk at-spi2-atk cups-libs libdrm libxkbcommon libXcomposite libXdamage libXfixes libXrandr mesa-libgbm alsa-lib cairo pango glib2 gtk3 libX11 libXext libXcursor libXi libXtst > /tmp/sys-deps-install.log 2>&1"
+      ]
+    })
+
+    if (sysDepsResult.exitCode !== 0) {
+      console.log(`  ⚠️ System dependencies installation failed (exit code ${sysDepsResult.exitCode})`)
+      // Try to read the log for debugging
+      try {
+        const logResult = await runCommandWithLogs(sandbox, {
+          cmd: "sh",
+          args: ["-c", "cat /tmp/sys-deps-install.log 2>&1 | tail -20"]
+        })
+        if (logResult.stdout) {
+          console.log(`  📋 Install log: ${logResult.stdout}`)
+        }
+      } catch {
+        // Ignore log read errors
+      }
+      console.log("  ⚠️ Continuing anyway - browser automation may not work")
+    } else {
+      if (debug) console.log("  ✅ System dependencies installed")
+    }
+
     // Install Chromium browser for headless browser automation using @sparticuz/chromium
     // The Vercel Sandbox doesn't have apt-get or Chrome installed by default
     // @sparticuz/chromium is designed for serverless environments and provides a pre-compiled Chromium
