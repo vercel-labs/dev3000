@@ -237,6 +237,54 @@ export async function createD3kSandbox(
     console.log(`[Step 0] Could not get chromium path, using default: ${chromiumPath}`)
   }
 
+  // CRITICAL DIAGNOSTIC: Test Chrome headless directly before any screenshot attempts
+  console.log(`[Step 0] ===== CHROMIUM CDP DIAGNOSTIC TEST =====`)
+  try {
+    const chromeTestScript = `
+      exec 2>&1
+      echo "=== Chromium CDP Test ==="
+      echo "Chromium path: ${chromiumPath}"
+      echo ""
+      echo "1. Checking if file exists..."
+      ls -la "${chromiumPath}" 2>&1 || echo "   File not found"
+      echo ""
+      echo "2. Testing --version..."
+      timeout 5 "${chromiumPath}" --version 2>&1 || echo "   --version failed or timed out"
+      echo ""
+      echo "3. Starting Chrome headless with CDP port..."
+      timeout 10 "${chromiumPath}" --headless=new --no-sandbox --disable-setuid-sandbox --disable-gpu --disable-dev-shm-usage --remote-debugging-port=9222 --remote-debugging-address=127.0.0.1 about:blank &
+      PID=$!
+      echo "   Chrome PID: $PID"
+      sleep 3
+      echo ""
+      echo "4. Checking if Chrome is still running..."
+      if ps -p $PID > /dev/null 2>&1; then
+        echo "   Chrome is RUNNING after 3s"
+        echo ""
+        echo "5. Trying to connect to CDP endpoint..."
+        curl -s --max-time 5 http://127.0.0.1:9222/json/version 2>&1 || echo "   CDP connection failed"
+        echo ""
+        echo "6. Killing test Chrome process..."
+        kill $PID 2>/dev/null
+      else
+        echo "   Chrome DIED within 3s"
+        wait $PID 2>/dev/null
+        echo "   Exit code: $?"
+      fi
+      echo ""
+      echo "7. Current processes:"
+      ps aux 2>/dev/null | head -20 || echo "   ps failed"
+      echo ""
+      echo "=== End Chromium CDP Test ==="
+    `
+    const chromeTest = await runSandboxCommand(sandboxResult.sandbox, "bash", ["-c", chromeTestScript])
+    console.log(`[Step 0] Chrome CDP test (exit ${chromeTest.exitCode}):\n${chromeTest.stdout || "(no output)"}`)
+    if (chromeTest.stderr) console.log(`[Step 0] Chrome CDP test stderr: ${chromeTest.stderr}`)
+  } catch (error) {
+    console.log(`[Step 0] Chrome CDP test error: ${error instanceof Error ? error.message : String(error)}`)
+  }
+  console.log(`[Step 0] ===== END CHROMIUM CDP DIAGNOSTIC TEST =====`)
+
   // Capture "BEFORE" screenshot - this shows the app before any fixes
   console.log(`[Step 0] Capturing BEFORE screenshot...`)
   let beforeScreenshotUrl: string | null = null

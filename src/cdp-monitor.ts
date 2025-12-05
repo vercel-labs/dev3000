@@ -40,7 +40,6 @@ export class CDPMonitor {
   private appServerPort?: string // Port of the user's app server to monitor
   private mcpServerPort?: string // Port of dev3000's MCP server to ignore
   private headless: boolean = false // Run Chrome in headless mode
-  private cdpTimeout: number = 30 // CDP navigation timeout in seconds
 
   constructor(
     profileDir: string,
@@ -52,8 +51,7 @@ export class CDPMonitor {
     appServerPort?: string,
     mcpServerPort?: string,
     debugPort?: number,
-    headless: boolean = false,
-    cdpTimeout: number = 30
+    headless: boolean = false
   ) {
     this.profileDir = profileDir
     this.screenshotDir = screenshotDir
@@ -64,7 +62,6 @@ export class CDPMonitor {
     this.browserPath = browserPath
     this.pluginReactScan = pluginReactScan
     this.headless = headless
-    this.cdpTimeout = cdpTimeout
     // Use custom debug port if provided, otherwise use default 9222
     if (debugPort) {
       this.debugPort = debugPort
@@ -1015,36 +1012,11 @@ export class CDPMonitor {
         this.logger("browser", `[CDP] Navigation failed: ${result.errorText}`)
       }
 
-      // Wait for navigation to complete
+      // No need to wait for navigation to complete - Chrome will fire events as the page loads
+      // and we'll capture errors/logs via our CDP event handlers. This allows slow-compiling
+      // apps (like Next.js on first load) to take as long as they need.
       if (result.frameId) {
-        this.debugLog(`Waiting for frame ${result.frameId} to finish loading...`)
-        try {
-          // Enable Page events if not already enabled
-          await this.sendCDPCommand("Page.enable")
-
-          // Wait for frameStoppedLoading event
-          const timeoutMs = this.cdpTimeout * 1000
-          await new Promise<void>((resolve) => {
-            const timeout = setTimeout(() => {
-              this.debugLog(`Navigation wait timed out after ${this.cdpTimeout}s`)
-              resolve()
-            }, timeoutMs)
-
-            const handler = (data: Buffer) => {
-              const message = JSON.parse(data.toString())
-              if (message.method === "Page.frameStoppedLoading" && message.params.frameId === result.frameId) {
-                clearTimeout(timeout)
-                this.connection?.ws.removeListener("message", handler)
-                this.debugLog(`Frame ${result.frameId} finished loading`)
-                resolve()
-              }
-            }
-
-            this.connection?.ws.on("message", handler)
-          })
-        } catch (waitError) {
-          this.debugLog(`Error waiting for navigation: ${waitError}`)
-        }
+        this.debugLog(`Navigation initiated for frame ${result.frameId} - not blocking on load completion`)
       }
     } catch (error) {
       this.debugLog(`Navigation failed: ${error}`)
