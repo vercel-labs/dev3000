@@ -25,7 +25,8 @@ export async function saveWorkflowRun(run: WorkflowRun): Promise<string> {
 
   const blob = await put(path, JSON.stringify(run, null, 2), {
     access: "public",
-    addRandomSuffix: false
+    addRandomSuffix: false,
+    allowOverwrite: true
   })
 
   console.log(`[Workflow Storage] Saved run to: ${blob.url}`)
