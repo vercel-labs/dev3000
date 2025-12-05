@@ -4,6 +4,12 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.117] - 2025-12-05
+
+**Patch Release**
+
+- Fix server detection in sandbox environments
+
 ## [0.0.116] - 2025-12-05
 
 **Feature Release**
