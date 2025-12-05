@@ -6,11 +6,14 @@ export interface WorkflowRun {
   projectName: string
   timestamp: string
   status: "running" | "done" | "failure"
+  currentStep?: string // Current step being executed (for live progress)
+  stepNumber?: number // 0-4 to show progress (0=sandbox, 1=logs, 2=ai, 3=upload, 4=pr)
   reportBlobUrl?: string
   prUrl?: string
   error?: string
   beforeScreenshotUrl?: string
   afterScreenshotUrl?: string
+  sandboxUrl?: string // Dev URL from sandbox for live viewing
 }
 
 /**
@@ -64,6 +67,43 @@ export async function listWorkflowRuns(userId: string): Promise<WorkflowRun[]> {
 export async function getWorkflowRun(userId: string, runId: string): Promise<WorkflowRun | null> {
   const runs = await listWorkflowRuns(userId)
   return runs.find((run) => run.id === runId) || null
+}
+
+/**
+ * Update workflow progress (step tracking for live UI updates)
+ * This is a lightweight update that only changes step info, not the full run
+ */
+export async function updateWorkflowProgress(
+  userId: string,
+  runId: string,
+  projectName: string,
+  timestamp: string,
+  stepNumber: number,
+  currentStep: string,
+  sandboxUrl?: string
+): Promise<void> {
+  // We need to re-save the full run with updated step info
+  // First, try to get existing run data
+  const existingRuns = await listWorkflowRuns(userId)
+  const existingRun = existingRuns.find((r) => r.id === runId)
+
+  const runData: WorkflowRun = existingRun || {
+    id: runId,
+    userId,
+    projectName,
+    timestamp,
+    status: "running"
+  }
+
+  // Update with new step info
+  runData.stepNumber = stepNumber
+  runData.currentStep = currentStep
+  if (sandboxUrl) {
+    runData.sandboxUrl = sandboxUrl
+  }
+
+  await saveWorkflowRun(runData)
+  console.log(`[Workflow Storage] Updated progress: Step ${stepNumber} - ${currentStep}`)
 }
 
 /**

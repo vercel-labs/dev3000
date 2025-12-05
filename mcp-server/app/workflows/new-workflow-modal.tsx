@@ -83,6 +83,8 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   const [workflowStatus, setWorkflowStatus] = useState<string>("")
   // biome-ignore lint/suspicious/noExplicitAny: API response type is dynamic
   const [workflowResult, setWorkflowResult] = useState<any>(null)
+  const [activeRunId, setActiveRunId] = useState<string | null>(null)
+  const [sandboxUrl, setSandboxUrl] = useState<string | null>(null)
   const [baseBranch, setBaseBranch] = useState("main")
   const [autoCreatePR, setAutoCreatePR] = useState(true)
   const [bypassToken, setBypassToken] = useState("")
@@ -138,6 +140,8 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       setTeams([])
       setWorkflowStatus("")
       setWorkflowResult(null)
+      setActiveRunId(null)
+      setSandboxUrl(null)
       setBaseBranch("main")
       setAutoCreatePR(true)
       setBypassToken("")
@@ -196,6 +200,69 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       loadBranches(selectedProject, selectedTeam)
     }
   }, [selectedProject, selectedTeam, step, availableBranches.length, loadingBranches, branchesError])
+
+  // Poll workflow status when running
+  // biome-ignore lint/correctness/useExhaustiveDependencies: selectedProject is used for matching but shouldn't re-trigger polling
+  useEffect(() => {
+    if (!userId || step !== "running") return
+
+    const pollStatus = async () => {
+      try {
+        // Use production API for consistent status
+        const response = await fetch(`https://d3k-mcp.vercel.sh/api/workflows?userId=${userId}`)
+        if (!response.ok) return
+
+        const data = await response.json()
+        if (!data.success || !data.runs) return
+
+        // Find the run - either by activeRunId or by matching project + running status
+        // biome-ignore lint/suspicious/noExplicitAny: API response type is dynamic
+        let run: any = null
+        if (activeRunId) {
+          // biome-ignore lint/suspicious/noExplicitAny: API response type is dynamic
+          run = data.runs.find((r: any) => r.id === activeRunId)
+        } else if (selectedProject) {
+          // Find the most recent running workflow for this project
+          // biome-ignore lint/suspicious/noExplicitAny: API response type is dynamic
+          run = data.runs.find((r: any) => r.projectName === selectedProject.name && r.status === "running")
+          if (run) {
+            setActiveRunId(run.id)
+          }
+        }
+        if (!run) return
+
+        // Update status from real backend data
+        if (run.currentStep) {
+          setWorkflowStatus(run.currentStep)
+        }
+        if (run.sandboxUrl) {
+          setSandboxUrl(run.sandboxUrl)
+        }
+
+        // Check for completion
+        if (run.status === "done") {
+          setWorkflowStatus("Workflow completed successfully!")
+          setWorkflowResult({
+            success: true,
+            blobUrl: run.reportBlobUrl,
+            runId: run.id,
+            pr: run.prUrl ? { prUrl: run.prUrl } : null
+          })
+        } else if (run.status === "failure") {
+          setWorkflowStatus(`Workflow failed: ${run.error || "Unknown error"}`)
+        }
+      } catch (error) {
+        console.error("[Poll Status] Error:", error)
+      }
+    }
+
+    // Poll every 3 seconds
+    const interval = setInterval(pollStatus, 3000)
+    // Also poll immediately
+    pollStatus()
+
+    return () => clearInterval(interval)
+  }, [activeRunId, userId, step])
 
   // Check if deployment is protected when project is selected and on options step
   useEffect(() => {
@@ -410,26 +477,8 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
         body.baseBranch = baseBranch
       }
 
-      // Show step-by-step progress
-      const steps = [
-        "Starting workflow...",
-        repoOwner && repoName ? "Creating development sandbox..." : null,
-        "Fetching deployment logs...",
-        "Analyzing errors with AI...",
-        "Generating fix proposal...",
-        autoCreatePR ? "Writing code..." : null
-      ].filter(Boolean) as string[]
-
-      let currentStep = 0
-      setWorkflowStatus(steps[currentStep])
-
-      // Update status every 3 seconds to show progress
-      const progressInterval = setInterval(() => {
-        currentStep++
-        if (currentStep < steps.length) {
-          setWorkflowStatus(steps[currentStep])
-        }
-      }, 3000)
+      // Initial status - will be updated by polling
+      setWorkflowStatus("Starting workflow...")
 
       // Always use production API endpoint for workflow execution
       const apiBaseUrl = "https://d3k-mcp.vercel.sh"
@@ -471,7 +520,6 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
         console.log("[Start Workflow] Fetch completed, status:", response.status)
 
         clearTimeout(timeoutId)
-        clearInterval(progressInterval)
 
         if (!response.ok) {
           const errorText = await response.text()
@@ -479,6 +527,11 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
         }
 
         const result = await response.json()
+
+        // Set activeRunId for polling (even if workflow already completed)
+        if (result.runId) {
+          setActiveRunId(result.runId)
+        }
 
         if (result.success) {
           setWorkflowResult(result)
@@ -488,9 +541,8 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
         }
       } catch (fetchError) {
         clearTimeout(timeoutId)
-        clearInterval(progressInterval)
         if (fetchError instanceof Error && fetchError.name === "AbortError") {
-          throw new Error("Workflow timed out after 5 minutes")
+          throw new Error("Workflow timed out after 10 minutes")
         }
         throw fetchError
       }
@@ -851,6 +903,21 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                     {workflowStatus}
                   </AlertDescription>
                 </Alert>
+                {sandboxUrl && !workflowResult && (
+                  <Alert className="bg-yellow-50 border-yellow-200">
+                    <AlertDescription className="text-yellow-900">
+                      <span className="font-medium">Sandbox:</span>{" "}
+                      <a
+                        href={sandboxUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:underline font-mono text-sm"
+                      >
+                        {sandboxUrl}
+                      </a>
+                    </AlertDescription>
+                  </Alert>
+                )}
                 {workflowResult && (
                   <div className="space-y-3">
                     {workflowResult.blobUrl && workflowResult.runId && (
