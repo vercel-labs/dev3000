@@ -51,33 +51,53 @@ function detectPythonCommand(debug = false): string {
 }
 
 async function detectProjectType(debug = false): Promise<ProjectConfig> {
-  // Check for Python project
-  if (existsSync("requirements.txt") || existsSync("pyproject.toml")) {
-    if (debug) {
-      console.log(`[DEBUG] Python project detected (found requirements.txt or pyproject.toml)`)
+  // Helper to check if package.json has a dev script (indicates Node.js project)
+  const hasNodeDevScript = (): boolean => {
+    try {
+      if (existsSync("package.json")) {
+        const packageJson = JSON.parse(readFileSync("package.json", "utf-8"))
+        return !!packageJson.scripts?.dev
+      }
+    } catch {
+      // Ignore parse errors
     }
-    return {
-      type: "python",
-      defaultScript: "main.py",
-      defaultPort: "8000", // Common Python web server port
-      pythonCommand: detectPythonCommand(debug)
-    }
+    return false
   }
 
-  // Check for Rails project
-  if (existsSync("Gemfile") && existsSync("config/application.rb")) {
-    if (debug) {
-      console.log(`[DEBUG] Rails project detected (found Gemfile and config/application.rb)`)
-    }
-    return {
-      type: "rails",
-      defaultScript: "server",
-      defaultPort: "3000" // Rails default port
-    }
-  }
-
-  // Check for Node.js project using package-manager-detector
+  // Check for Node.js project FIRST if package.json has a dev script
+  // This takes priority over Python/Rails detection for hybrid projects
   const detected = await detect()
+  if (detected && hasNodeDevScript()) {
+    if (debug) {
+      console.log(`[DEBUG] Node.js project detected (package.json with dev script takes priority)`)
+    }
+    // Continue to Node.js detection below
+  } else {
+    // Check for Python project (only if no Node.js dev script)
+    if (existsSync("requirements.txt") || existsSync("pyproject.toml")) {
+      if (debug) {
+        console.log(`[DEBUG] Python project detected (found requirements.txt or pyproject.toml)`)
+      }
+      return {
+        type: "python",
+        defaultScript: "main.py",
+        defaultPort: "8000", // Common Python web server port
+        pythonCommand: detectPythonCommand(debug)
+      }
+    }
+
+    // Check for Rails project
+    if (existsSync("Gemfile") && existsSync("config/application.rb")) {
+      if (debug) {
+        console.log(`[DEBUG] Rails project detected (found Gemfile and config/application.rb)`)
+      }
+      return {
+        type: "rails",
+        defaultScript: "server",
+        defaultPort: "3000" // Rails default port
+      }
+    }
+  }
 
   // Helper to detect framework for Node.js projects
   const detectFramework = (): "nextjs" | "svelte" | "other" => {
