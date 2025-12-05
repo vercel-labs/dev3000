@@ -81,10 +81,10 @@ export async function cloudFixWorkflow(params: {
     gitDiff?: string | null
   } | null = null
   if (repoUrl) {
-    await updateProgress(0, `Cloning ${repoUrl.split("/").slice(-1)[0] || "repository"}...`)
+    await updateProgress(0, "Creating development sandbox...")
     sandboxInfo = await createD3kSandbox(repoUrl, repoBranch || "main", projectName, vercelToken, vercelOidcToken)
     if (sandboxInfo?.devUrl) {
-      await updateProgress(0, `Sandbox live at ${sandboxInfo.devUrl.replace("https://", "")}`, sandboxInfo.devUrl)
+      await updateProgress(0, "Sandbox ready, starting dev server...", sandboxInfo.devUrl)
     }
   }
 
@@ -106,18 +106,18 @@ export async function cloudFixWorkflow(params: {
   await updateProgress(1, `Captured ${logAnalysis.length > 5000 ? "detailed" : "initial"} diagnostics`)
 
   // Step 2: Invoke AI agent to analyze logs and create fix
-  await updateProgress(2, "Claude analyzing logs and generating fixes...")
+  await updateProgress(2, "AI agent analyzing logs and generating fixes...")
   const fixProposal = await analyzeLogsWithAgent(logAnalysis, sandboxInfo?.devUrl || devUrl)
 
   // Provide feedback on what was found
   const hasError = fixProposal.toLowerCase().includes("error") || fixProposal.toLowerCase().includes("issue")
   const hasFix = fixProposal.includes("```diff")
   if (hasFix) {
-    await updateProgress(2, "Claude generated a fix proposal with code changes")
+    await updateProgress(2, "AI generated a fix proposal with code changes")
   } else if (hasError) {
-    await updateProgress(2, "Claude identified issues but no code fix needed")
+    await updateProgress(2, "AI identified issues but no code fix needed")
   } else {
-    await updateProgress(2, "Claude analysis complete - system appears healthy")
+    await updateProgress(2, "AI analysis complete - system appears healthy")
   }
 
   // Step 3: Upload to blob storage with full context, screenshot, and git diff
