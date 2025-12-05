@@ -5,7 +5,7 @@ export interface WorkflowRun {
   userId: string
   projectName: string
   timestamp: string
-  status: "running" | "success" | "failure"
+  status: "running" | "done" | "failure"
   reportBlobUrl?: string
   prUrl?: string
   error?: string
