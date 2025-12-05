@@ -30,8 +30,19 @@ import { formatTimestamp } from "./utils/timestamp.js"
 const MCP_NAMES = {
   DEV3000: "dev3000",
   CHROME_DEVTOOLS: "dev3000-chrome-devtools",
-  NEXTJS_DEV: "dev3000-nextjs-dev"
+  NEXTJS_DEV: "dev3000-nextjs-dev",
+  VERCEL: "vercel"
 } as const
+
+// Vercel MCP URL (public OAuth-based MCP)
+const VERCEL_MCP_URL = "https://mcp.vercel.com"
+
+/**
+ * Check if the current project has a .vercel directory (indicating a Vercel project)
+ */
+function hasVercelProject(): boolean {
+  return existsSync(join(process.cwd(), ".vercel"))
+}
 
 interface DevEnvironmentOptions {
   port: string
@@ -270,8 +281,15 @@ async function ensureMcpServers(mcpPort: string, _appPort: string, _enableChrome
       added = true
     }
 
-    // REMOVED: No longer auto-configure chrome-devtools and nextjs-dev
-    // dev3000 MCP server now orchestrates these internally via the gateway pattern
+    // Add Vercel MCP if this is a Vercel project (.vercel directory exists)
+    // Vercel MCP uses OAuth authentication handled by the client (Claude Code)
+    if (hasVercelProject() && !settings.mcpServers[MCP_NAMES.VERCEL]) {
+      settings.mcpServers[MCP_NAMES.VERCEL] = {
+        type: "http",
+        url: VERCEL_MCP_URL
+      }
+      added = true
+    }
 
     // Write if we added anything
     if (added) {
@@ -329,8 +347,15 @@ async function ensureCursorMcpServers(
       added = true
     }
 
-    // REMOVED: No longer auto-configure chrome-devtools and nextjs-dev
-    // dev3000 MCP server now orchestrates these internally via the gateway pattern
+    // Add Vercel MCP if this is a Vercel project (.vercel directory exists)
+    // Vercel MCP uses OAuth authentication handled by the client (Cursor)
+    if (hasVercelProject() && !settings.mcpServers[MCP_NAMES.VERCEL]) {
+      settings.mcpServers[MCP_NAMES.VERCEL] = {
+        type: "http",
+        url: VERCEL_MCP_URL
+      }
+      added = true
+    }
 
     // Write if we added anything
     if (added) {
@@ -391,8 +416,16 @@ async function ensureOpenCodeMcpServers(
       added = true
     }
 
-    // REMOVED: No longer auto-configure chrome-devtools and nextjs-dev
-    // dev3000 MCP server now orchestrates these internally via the gateway pattern
+    // Add Vercel MCP if this is a Vercel project (.vercel directory exists)
+    // Vercel MCP uses OAuth authentication handled by the client (OpenCode)
+    if (hasVercelProject() && !settings.mcp[MCP_NAMES.VERCEL]) {
+      settings.mcp[MCP_NAMES.VERCEL] = {
+        type: "remote",
+        url: VERCEL_MCP_URL,
+        enabled: true
+      }
+      added = true
+    }
 
     // Write if we added anything
     if (added) {

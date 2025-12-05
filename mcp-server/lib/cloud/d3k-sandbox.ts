@@ -300,140 +300,84 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
       }
     }
 
-    // Validate Chromium binary exists and is executable
-    if (debug) console.log(`  🔍 Validating Chromium binary at: ${chromiumPath}`)
-    const validateChromiumResult = await runCommandWithLogs(sandbox, {
+    // SIMPLIFIED TEST: Run simple, individual tests one at a time to capture output
+    // The complex shell script was swallowing output - let's break it down
+    console.log("  🔍 ===== CHROMIUM DIAGNOSTIC TESTS =====")
+
+    // Test 1: Check if file exists
+    console.log("  📋 Test 1: Checking if Chromium exists...")
+    const test1 = await runCommandWithLogs(sandbox, {
+      cmd: "ls",
+      args: ["-la", chromiumPath]
+    })
+    console.log(`  📋 Test 1 result (exit ${test1.exitCode}):\n${test1.stdout || "(no output)"}`)
+    if (test1.stderr) console.log(`  📋 Test 1 stderr: ${test1.stderr}`)
+
+    // Test 2: Check file type
+    console.log("  📋 Test 2: Checking file type...")
+    const test2 = await runCommandWithLogs(sandbox, {
+      cmd: "file",
+      args: [chromiumPath]
+    })
+    console.log(`  📋 Test 2 result (exit ${test2.exitCode}):\n${test2.stdout || "(no output)"}`)
+    if (test2.stderr) console.log(`  📋 Test 2 stderr: ${test2.stderr}`)
+
+    // Test 3: Try --version (quick test that doesn't start a browser)
+    console.log("  📋 Test 3: Running chromium --version...")
+    const test3 = await runCommandWithLogs(sandbox, {
+      cmd: chromiumPath,
+      args: ["--version"]
+    })
+    console.log(`  📋 Test 3 result (exit ${test3.exitCode}):\n${test3.stdout || "(no output)"}`)
+    if (test3.stderr) console.log(`  📋 Test 3 stderr: ${test3.stderr}`)
+
+    // Test 4: Try to start Chrome with CDP port using timeout (CRITICAL TEST)
+    // This is the key test - can Chrome start and expose CDP?
+    console.log("  📋 Test 4: Starting Chrome headless with CDP port (5 second timeout)...")
+    const test4 = await runCommandWithLogs(sandbox, {
       cmd: "sh",
       args: [
         "-c",
         `
-        echo "=== Chromium Binary Validation ==="
-        echo "1. Checking if file exists..."
-        if [ -f "${chromiumPath}" ]; then
-          echo "   ✅ File exists"
-          ls -la "${chromiumPath}"
+        # Redirect stderr to stdout so we capture everything
+        exec 2>&1
+
+        echo "Starting Chrome with CDP..."
+        echo "Command: ${chromiumPath} --headless=new --no-sandbox --disable-gpu --remote-debugging-port=9222 about:blank"
+
+        # Start Chrome in background, capture its PID
+        ${chromiumPath} --headless=new --no-sandbox --disable-setuid-sandbox --disable-gpu --disable-dev-shm-usage --remote-debugging-port=9222 --remote-debugging-address=127.0.0.1 about:blank &
+        PID=$!
+        echo "Chrome PID: $PID"
+
+        # Wait 2 seconds
+        sleep 2
+
+        # Check if still running
+        if ps -p $PID > /dev/null 2>&1; then
+          echo "✅ Chrome is RUNNING after 2s"
+
+          # Try to connect to CDP
+          echo "Trying CDP connection..."
+          curl -s --max-time 3 http://127.0.0.1:9222/json/version || echo "⚠️ CDP connection failed"
+
+          # Kill Chrome
+          kill $PID 2>/dev/null
         else
-          echo "   ❌ File does NOT exist at ${chromiumPath}"
-          echo "   Checking /tmp directory..."
-          ls -la /tmp/ | head -20
-          exit 1
+          echo "❌ Chrome DIED within 2s"
+          echo "Exit code from wait: $?"
         fi
 
-        echo "2. Checking if file is executable..."
-        if [ -x "${chromiumPath}" ]; then
-          echo "   ✅ File is executable"
-        else
-          echo "   ❌ File is NOT executable"
-          echo "   Attempting to make it executable..."
-          chmod +x "${chromiumPath}" && echo "   ✅ Made executable" || echo "   ❌ Failed to chmod"
-        fi
-
-        echo "3. Checking file type..."
-        file "${chromiumPath}" 2>&1 || echo "   ⚠️ file command failed"
-
-        echo "4. Testing Chromium launch with --version..."
-        "${chromiumPath}" --version 2>&1 || echo "   ⚠️ --version failed (may need deps)"
-
-        echo "5. Testing headless mode briefly..."
-        timeout 5 "${chromiumPath}" --headless=new --no-sandbox --disable-gpu --dump-dom about:blank 2>&1 | head -5 || echo "   ⚠️ Headless test completed or timed out"
-
-        echo "=== End Chromium Validation ==="
+        # Show what processes are running
+        echo "Current processes:"
+        ps aux | grep -E "chrom|PID" | head -10
         `
       ]
     })
-    console.log(`  📋 Chromium validation:\n${validateChromiumResult.stdout}`)
-    if (validateChromiumResult.stderr) {
-      console.log(`  ⚠️ Chromium validation stderr:\n${validateChromiumResult.stderr}`)
-    }
+    console.log(`  📋 Test 4 result (exit ${test4.exitCode}):\n${test4.stdout || "(no output)"}`)
+    if (test4.stderr) console.log(`  📋 Test 4 stderr: ${test4.stderr}`)
 
-    // CRITICAL TEST: Try to start Chrome headless with --remote-debugging-port DIRECTLY
-    // This tests if Chrome can actually start and expose a CDP endpoint in the sandbox
-    // If this fails, d3k won't be able to start Chrome either
-    console.log("  🧪 CRITICAL TEST: Starting Chrome headless with CDP port directly (BEFORE d3k)...")
-    const directChromeTestResult = await runCommandWithLogs(sandbox, {
-      cmd: "sh",
-      args: [
-        "-c",
-        `
-        set -x  # Enable command tracing for debugging
-
-        echo "=== Direct Chrome CDP Launch Test ==="
-        echo "Chromium path: ${chromiumPath}"
-        echo ""
-
-        # Kill any existing Chrome processes first
-        pkill -f chromium 2>/dev/null || true
-        sleep 1
-
-        # Create a temp file for Chrome stderr
-        CHROME_STDERR=/tmp/chrome_stderr.log
-        rm -f $CHROME_STDERR
-
-        echo "1. Starting Chrome headless with CDP port (stderr -> $CHROME_STDERR)..."
-        "${chromiumPath}" \\
-          --headless=new \\
-          --no-sandbox \\
-          --disable-setuid-sandbox \\
-          --disable-gpu \\
-          --disable-dev-shm-usage \\
-          --disable-software-rasterizer \\
-          --remote-debugging-port=9222 \\
-          --remote-debugging-address=127.0.0.1 \\
-          about:blank 2>$CHROME_STDERR &
-        CHROME_PID=$!
-        echo "   Chrome PID: $CHROME_PID"
-
-        # Wait a tiny bit to let Chrome start (or crash)
-        sleep 0.5
-
-        # Check if it's still running immediately after launch
-        echo "2. Checking immediate process status..."
-        if ps -p $CHROME_PID > /dev/null 2>&1; then
-          echo "   ✅ Chrome process is still alive after 0.5s"
-        else
-          echo "   ❌ Chrome process DIED within 0.5s!"
-          echo "   Chrome stderr output:"
-          cat $CHROME_STDERR 2>/dev/null || echo "   (no stderr captured)"
-          echo "   Checking for core dumps..."
-          ls -la /tmp/core* 2>/dev/null || echo "   (no core dumps)"
-        fi
-
-        echo "3. Waiting 3 more seconds for Chrome to fully start..."
-        sleep 3
-
-        echo "4. Final process status check..."
-        if ps -p $CHROME_PID > /dev/null 2>&1; then
-          echo "   ✅ Chrome process is RUNNING (PID $CHROME_PID)"
-        else
-          echo "   ❌ Chrome process DIED"
-          echo "   Chrome stderr output:"
-          cat $CHROME_STDERR 2>/dev/null || echo "   (no stderr captured)"
-        fi
-
-        echo "5. Chrome stderr (first 50 lines):"
-        head -50 $CHROME_STDERR 2>/dev/null || echo "   (no stderr file)"
-
-        echo "6. Checking what's listening on port 9222..."
-        ss -tlnp 2>/dev/null | grep 9222 || netstat -tlnp 2>/dev/null | grep 9222 || echo "   ⚠️ Nothing listening on port 9222"
-
-        echo "7. Trying to connect to CDP endpoint..."
-        curl -s --connect-timeout 5 http://127.0.0.1:9222/json/version 2>&1 || echo "   ⚠️ Could not connect to CDP endpoint"
-
-        echo "8. All processes:"
-        ps aux | head -20
-
-        echo "9. Killing test Chrome process..."
-        kill $CHROME_PID 2>/dev/null || true
-        rm -f $CHROME_STDERR
-
-        echo "=== End Direct Chrome CDP Test ==="
-        `
-      ]
-    })
-    console.log(`  📋 Direct Chrome CDP test:\n${directChromeTestResult.stdout}`)
-    if (directChromeTestResult.stderr) {
-      console.log(`  ⚠️ Direct Chrome CDP test stderr:\n${directChromeTestResult.stderr}`)
-    }
+    console.log("  🔍 ===== END CHROMIUM DIAGNOSTIC TESTS =====")
 
     // Install d3k globally from npm
     if (debug) console.log("  📦 Installing d3k globally from npm...")
