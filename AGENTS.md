@@ -16,9 +16,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Never bypass pre-commit hooks or use --no-verify. Fix all issues until the code passes.
 
 **AFTER COMMITTING**: When you push to main, Vercel auto-deploys. Monitor the deployment:
-1. Start monitoring logs immediately after push: `vercel logs d3k-mcp.vercel.app --scope team_nLlpyC6REAqxydlFKbrMDlud`
-2. Wait for deployment to complete (watch for new log activity or check `vercel ls`)
-3. Once deployed, proceed with testing the changes - don't wait for user confirmation
+1. First, get the latest deployment URL: `vercel ls --scope team_nLlpyC6REAqxydlFKbrMDlud | head -10`
+2. Wait for deployment to complete (status changes from "Building" to "Ready")
+3. Monitor runtime logs with the deployment URL: `vercel logs <deployment-url>.vercel.sh --scope team_nLlpyC6REAqxydlFKbrMDlud`
+   - Example: `vercel logs dev3000-6tynruehj.vercel.sh --scope team_nLlpyC6REAqxydlFKbrMDlud`
+   - NOTE: `d3k-mcp.vercel.app` doesn't work for `vercel logs` - you need the specific deployment URL
+4. Once deployed, proceed with testing the changes - don't wait for user confirmation
 
 **PACKAGE MANAGER**: This project uses pnpm exclusively. Never use npm or yarn.
 
