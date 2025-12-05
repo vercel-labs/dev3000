@@ -269,6 +269,11 @@ export class CDPMonitor {
           ]
 
       const browserType = this.browserPath ? "custom browser" : "Chrome"
+      // Always log critical startup info (not just in debug mode)
+      this.logger("browser", `[CDP] Launching ${browserType} on port ${this.debugPort}, headless=${this.headless}`)
+      if (this.browserPath) {
+        this.logger("browser", `[CDP] Custom browser path: ${this.browserPath}`)
+      }
       this.debugLog(`Attempting to launch ${browserType} for CDP monitoring on port ${this.debugPort}`)
       this.debugLog(`Profile directory: ${this.profileDir}`)
       if (this.browserPath) {
@@ -279,7 +284,9 @@ export class CDPMonitor {
 
       const tryNextChrome = () => {
         if (attemptIndex >= chromeCommands.length) {
-          reject(new Error("Failed to launch Chrome: all browser paths exhausted"))
+          const errorMsg = `Failed to launch Chrome: all ${chromeCommands.length} browser paths exhausted`
+          this.logger("browser", `[CDP] ${errorMsg}`)
+          reject(new Error(errorMsg))
           return
         }
 
@@ -332,6 +339,8 @@ export class CDPMonitor {
         let processExited = false
 
         this.browser.on("error", (error) => {
+          // Always log spawn errors - critical for debugging sandbox issues
+          this.logger("browser", `[CDP] Chrome spawn error: ${error.message}`)
           this.debugLog(`Chrome launch error for ${chromePath}: ${error.message}`)
           if (!this.isShuttingDown && !processExited) {
             processExited = true
@@ -341,6 +350,8 @@ export class CDPMonitor {
 
         this.browser.on("exit", (code, signal) => {
           if (!this.isShuttingDown && !processExited && code !== 0) {
+            // Always log early exit - critical for debugging sandbox issues
+            this.logger("browser", `[CDP] Chrome exited early with code ${code}, signal ${signal}`)
             this.debugLog(`Chrome exited early for ${chromePath} with code ${code}, signal ${signal}`)
             processExited = true
             setTimeout(tryNextChrome, 100)
@@ -364,7 +375,9 @@ export class CDPMonitor {
           }
 
           if (attempts >= maxAttempts) {
-            this.debugLog(`Chrome readiness check timed out after ${maxAttempts * 500}ms`)
+            const timeoutMsg = `Chrome readiness check timed out after ${maxAttempts * 500}ms`
+            this.logger("browser", `[CDP] ${timeoutMsg}`)
+            this.debugLog(timeoutMsg)
             processExited = true
             setTimeout(tryNextChrome, 100)
             return
@@ -376,6 +389,7 @@ export class CDPMonitor {
               signal: AbortSignal.timeout(500)
             })
             if (response.ok) {
+              this.logger("browser", `[CDP] Chrome successfully started (after ${attempts * 500}ms)`)
               this.debugLog(`Chrome successfully started with path: ${chromePath} (after ${attempts * 500}ms)`)
 
               // Discover all Chrome PIDs for this instance
