@@ -237,53 +237,97 @@ export async function createD3kSandbox(
     console.log(`[Step 0] Could not get chromium path, using default: ${chromiumPath}`)
   }
 
-  // CRITICAL DIAGNOSTIC: Test Chrome headless directly before any screenshot attempts
-  console.log(`[Step 0] ===== CHROMIUM CDP DIAGNOSTIC TEST =====`)
+  // CRITICAL DIAGNOSTIC: Test Chrome with EXACT d3k command
+  // d3k uses: --user-data-dir, no --remote-debugging-address, loading page, etc.
+  console.log(`[Step 0] ===== CHROMIUM CDP TEST (d3k exact command) =====`)
   try {
     const chromeTestScript = `
       exec 2>&1
-      echo "=== Chromium CDP Test ==="
+      echo "=== Chromium CDP Test (d3k exact command) ==="
       echo "Chromium path: ${chromiumPath}"
       echo ""
-      echo "1. Checking if file exists..."
-      ls -la "${chromiumPath}" 2>&1 || echo "   File not found"
+
+      # Create user-data-dir like d3k does
+      USER_DATA_DIR="/tmp/d3k-test-profile"
+      mkdir -p "$USER_DATA_DIR"
+      echo "1. Created user-data-dir: $USER_DATA_DIR"
+
+      # Create loading page like d3k does
+      LOADING_DIR="/tmp/dev3000-loading"
+      mkdir -p "$LOADING_DIR"
+      cat > "$LOADING_DIR/loading.html" << 'LOADINGHTML'
+<!DOCTYPE html>
+<html>
+<head><title>Loading...</title></head>
+<body><h1>Loading dev3000...</h1></body>
+</html>
+LOADINGHTML
+      echo "2. Created loading page: $LOADING_DIR/loading.html"
       echo ""
-      echo "2. Testing --version..."
-      timeout 5 "${chromiumPath}" --version 2>&1 || echo "   --version failed or timed out"
-      echo ""
-      echo "3. Starting Chrome headless with CDP port..."
-      timeout 10 "${chromiumPath}" --headless=new --no-sandbox --disable-setuid-sandbox --disable-gpu --disable-dev-shm-usage --remote-debugging-port=9222 --remote-debugging-address=127.0.0.1 about:blank &
+
+      # Use EXACT d3k command (from cdp-monitor.ts)
+      # Note: d3k does NOT use --remote-debugging-address
+      echo "3. Starting Chrome with d3k's exact args..."
+      echo "   Command: ${chromiumPath} --remote-debugging-port=9222 --user-data-dir=$USER_DATA_DIR --no-first-run --no-default-browser-check --disable-component-extensions-with-background-pages --disable-background-networking --disable-sync --metrics-recording-only --disable-default-apps --disable-session-crashed-bubble --disable-restore-session-state --headless=new --no-sandbox --disable-setuid-sandbox --disable-gpu --disable-dev-shm-usage file://$LOADING_DIR/loading.html"
+
+      timeout 15 "${chromiumPath}" \\
+        --remote-debugging-port=9222 \\
+        --user-data-dir="$USER_DATA_DIR" \\
+        --no-first-run \\
+        --no-default-browser-check \\
+        --disable-component-extensions-with-background-pages \\
+        --disable-background-networking \\
+        --disable-sync \\
+        --metrics-recording-only \\
+        --disable-default-apps \\
+        --disable-session-crashed-bubble \\
+        --disable-restore-session-state \\
+        --headless=new \\
+        --no-sandbox \\
+        --disable-setuid-sandbox \\
+        --disable-gpu \\
+        --disable-dev-shm-usage \\
+        "file://$LOADING_DIR/loading.html" &
       PID=$!
       echo "   Chrome PID: $PID"
       sleep 3
       echo ""
+
       echo "4. Checking if Chrome is still running..."
       if ps -p $PID > /dev/null 2>&1; then
         echo "   Chrome is RUNNING after 3s"
         echo ""
-        echo "5. Trying to connect to CDP endpoint..."
-        curl -s --max-time 5 http://127.0.0.1:9222/json/version 2>&1 || echo "   CDP connection failed"
+        echo "5. Trying CDP (note: d3k doesn't use --remote-debugging-address)..."
+        echo "   Trying 127.0.0.1..."
+        curl -s --max-time 5 http://127.0.0.1:9222/json/version 2>&1 || echo "   127.0.0.1 failed"
         echo ""
-        echo "6. Killing test Chrome process..."
+        echo "   Trying localhost..."
+        curl -s --max-time 5 http://localhost:9222/json/version 2>&1 || echo "   localhost failed"
+        echo ""
+        echo "6. Checking what's listening on 9222..."
+        ss -tlnp 2>/dev/null | grep 9222 || netstat -tlnp 2>/dev/null | grep 9222 || echo "   Could not check listening ports"
+        echo ""
+        echo "7. Killing test Chrome..."
         kill $PID 2>/dev/null
       else
         echo "   Chrome DIED within 3s"
         wait $PID 2>/dev/null
-        echo "   Exit code: $?"
+        EXIT_CODE=$?
+        echo "   Exit code: $EXIT_CODE"
+        echo ""
+        echo "   Checking for crash logs..."
+        ls -la "$USER_DATA_DIR" 2>&1 | head -10 || echo "   No user-data-dir"
       fi
       echo ""
-      echo "7. Current processes:"
-      ps aux 2>/dev/null | head -20 || echo "   ps failed"
-      echo ""
-      echo "=== End Chromium CDP Test ==="
+      echo "=== End d3k exact command test ==="
     `
     const chromeTest = await runSandboxCommand(sandboxResult.sandbox, "bash", ["-c", chromeTestScript])
-    console.log(`[Step 0] Chrome CDP test (exit ${chromeTest.exitCode}):\n${chromeTest.stdout || "(no output)"}`)
-    if (chromeTest.stderr) console.log(`[Step 0] Chrome CDP test stderr: ${chromeTest.stderr}`)
+    console.log(`[Step 0] d3k Chrome test (exit ${chromeTest.exitCode}):\n${chromeTest.stdout || "(no output)"}`)
+    if (chromeTest.stderr) console.log(`[Step 0] d3k Chrome test stderr: ${chromeTest.stderr}`)
   } catch (error) {
-    console.log(`[Step 0] Chrome CDP test error: ${error instanceof Error ? error.message : String(error)}`)
+    console.log(`[Step 0] d3k Chrome test error: ${error instanceof Error ? error.message : String(error)}`)
   }
-  console.log(`[Step 0] ===== END CHROMIUM CDP DIAGNOSTIC TEST =====`)
+  console.log(`[Step 0] ===== END d3k EXACT COMMAND TEST =====`)
 
   // Capture "BEFORE" screenshot - this shows the app before any fixes
   console.log(`[Step 0] Capturing BEFORE screenshot...`)
