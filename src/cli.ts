@@ -22,6 +22,7 @@ interface ProjectConfig {
   pythonCommand?: string // Only for python projects
   defaultScript: string
   defaultPort: string
+  noProjectDetected?: boolean // True if no valid project was found
 }
 
 function detectPythonCommand(debug = false): string {
@@ -130,10 +131,29 @@ async function detectProjectType(debug = false): Promise<ProjectConfig> {
     }
   }
 
-  // Fallback to npm for Node.js
+  // Check if this is a valid project directory
+  // If we get here, no lock files or project markers were found
+  // Check if package.json exists - if not, this isn't a valid project directory
+  if (!existsSync("package.json")) {
+    if (debug) {
+      console.log(`[DEBUG] No project files detected - not a valid project directory`)
+    }
+    return {
+      type: "node",
+      framework: "other",
+      packageManager: "npm",
+      defaultScript: "dev",
+      defaultPort: "3000",
+      noProjectDetected: true // Flag to indicate no project was found
+    }
+  }
+
+  // Fallback to npm for Node.js (package.json exists but no lock file)
   const framework = detectFramework()
   if (debug) {
-    console.log(`[DEBUG] No project files detected, defaulting to Node.js with npm and ${framework} framework`)
+    console.log(
+      `[DEBUG] Node.js project detected (package.json exists, no lock file), defaulting to npm and ${framework} framework`
+    )
   }
   return {
     type: "node",
@@ -278,6 +298,21 @@ program
     // Detect project type and configuration
     const projectConfig = await detectProjectType(options.debug)
     const userConfig = loadUserConfig()
+
+    // Check if we're in a valid project directory
+    if (projectConfig.noProjectDetected) {
+      console.error(chalk.red("\n❌ No project detected in current directory.\n"))
+      console.error(chalk.white("dev3000 requires a project with one of these files:"))
+      console.error(chalk.gray("  • package.json (Node.js/JavaScript)"))
+      console.error(chalk.gray("  • requirements.txt or pyproject.toml (Python)"))
+      console.error(chalk.gray("  • Gemfile + config/application.rb (Rails)\n"))
+      console.error(chalk.cyan("💡 To get started:"))
+      console.error(chalk.gray("  • Navigate to an existing project directory, or"))
+      console.error(chalk.gray("  • Create a new project (e.g., 'npx create-next-app@latest'), or"))
+      console.error(chalk.gray("  • Use --command to run a custom command:\n"))
+      console.error(chalk.yellow(`    d3k --command "node server.js" -p 3000\n`))
+      process.exit(1)
+    }
 
     // Detect if running under an AI agent and auto-disable TUI
     const agentDetection = detectAIAgent()
