@@ -346,6 +346,74 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
       console.log(`  ⚠️ Chromium validation stderr:\n${validateChromiumResult.stderr}`)
     }
 
+    // CRITICAL TEST: Try to start Chrome headless with --remote-debugging-port DIRECTLY
+    // This tests if Chrome can actually start and expose a CDP endpoint in the sandbox
+    // If this fails, d3k won't be able to start Chrome either
+    console.log("  🧪 CRITICAL TEST: Starting Chrome headless with CDP port directly (BEFORE d3k)...")
+    const directChromeTestResult = await runCommandWithLogs(sandbox, {
+      cmd: "sh",
+      args: [
+        "-c",
+        `
+        echo "=== Direct Chrome CDP Launch Test ==="
+        echo "This tests if Chrome can start with --remote-debugging-port=9222"
+        echo "If this fails, d3k won't be able to start Chrome either."
+        echo ""
+
+        # Kill any existing Chrome processes first
+        pkill -f chromium 2>/dev/null || true
+        sleep 1
+
+        echo "1. Starting Chrome headless with CDP port..."
+        "${chromiumPath}" \\
+          --headless=new \\
+          --no-sandbox \\
+          --disable-setuid-sandbox \\
+          --disable-gpu \\
+          --disable-dev-shm-usage \\
+          --disable-software-rasterizer \\
+          --remote-debugging-port=9222 \\
+          --remote-debugging-address=127.0.0.1 \\
+          about:blank &
+        CHROME_PID=$!
+        echo "   Chrome PID: $CHROME_PID"
+
+        echo "2. Waiting 3 seconds for Chrome to start..."
+        sleep 3
+
+        echo "3. Checking if Chrome process is running..."
+        if ps -p $CHROME_PID > /dev/null 2>&1; then
+          echo "   ✅ Chrome process is RUNNING (PID $CHROME_PID)"
+        else
+          echo "   ❌ Chrome process DIED immediately"
+          echo "   Checking dmesg for kernel messages..."
+          dmesg 2>/dev/null | tail -10 || echo "   (dmesg not available)"
+        fi
+
+        echo "4. Checking what's listening on port 9222..."
+        netstat -tlnp 2>/dev/null | grep 9222 || ss -tlnp 2>/dev/null | grep 9222 || echo "   ⚠️ Nothing listening on port 9222"
+
+        echo "5. Trying to connect to CDP endpoint..."
+        curl -s http://127.0.0.1:9222/json/version 2>&1 | head -20 || echo "   ⚠️ Could not connect to CDP endpoint"
+
+        echo "6. Trying to get browser websocket URL..."
+        curl -s http://127.0.0.1:9222/json/version 2>&1 | grep -o '"webSocketDebuggerUrl":"[^"]*"' || echo "   ⚠️ No webSocketDebuggerUrl found"
+
+        echo "7. Process list (Chrome-related)..."
+        ps aux | grep -E '(chromium|chrome)' | grep -v grep | head -10 || echo "   No Chrome processes found"
+
+        echo "8. Killing test Chrome process..."
+        kill $CHROME_PID 2>/dev/null || true
+
+        echo "=== End Direct Chrome CDP Test ==="
+        `
+      ]
+    })
+    console.log(`  📋 Direct Chrome CDP test:\n${directChromeTestResult.stdout}`)
+    if (directChromeTestResult.stderr) {
+      console.log(`  ⚠️ Direct Chrome CDP test stderr:\n${directChromeTestResult.stderr}`)
+    }
+
     // Install d3k globally from npm
     if (debug) console.log("  📦 Installing d3k globally from npm...")
     const d3kInstallResult = await runCommandWithLogs(sandbox, {
