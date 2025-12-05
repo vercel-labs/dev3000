@@ -13,9 +13,7 @@ export const changelog: Release[] = [
     version: "0.0.117",
     date: "2025-12-05",
     type: "patch",
-    highlights: [
-      "Fix server detection in sandbox environments"
-    ]
+    highlights: ["Fix server detection in sandbox environments"]
   },
 
   {
