@@ -40,6 +40,7 @@ export class CDPMonitor {
   private appServerPort?: string // Port of the user's app server to monitor
   private mcpServerPort?: string // Port of dev3000's MCP server to ignore
   private headless: boolean = false // Run Chrome in headless mode
+  private cdpTimeout: number = 30 // CDP navigation timeout in seconds
 
   constructor(
     profileDir: string,
@@ -51,7 +52,8 @@ export class CDPMonitor {
     appServerPort?: string,
     mcpServerPort?: string,
     debugPort?: number,
-    headless: boolean = false
+    headless: boolean = false,
+    cdpTimeout: number = 30
   ) {
     this.profileDir = profileDir
     this.screenshotDir = screenshotDir
@@ -62,6 +64,7 @@ export class CDPMonitor {
     this.browserPath = browserPath
     this.pluginReactScan = pluginReactScan
     this.headless = headless
+    this.cdpTimeout = cdpTimeout
     // Use custom debug port if provided, otherwise use default 9222
     if (debugPort) {
       this.debugPort = debugPort
@@ -1020,11 +1023,12 @@ export class CDPMonitor {
           await this.sendCDPCommand("Page.enable")
 
           // Wait for frameStoppedLoading event
+          const timeoutMs = this.cdpTimeout * 1000
           await new Promise<void>((resolve) => {
             const timeout = setTimeout(() => {
-              this.debugLog("Navigation wait timed out after 10s")
+              this.debugLog(`Navigation wait timed out after ${this.cdpTimeout}s`)
               resolve()
-            }, 10000)
+            }, timeoutMs)
 
             const handler = (data: Buffer) => {
               const message = JSON.parse(data.toString())

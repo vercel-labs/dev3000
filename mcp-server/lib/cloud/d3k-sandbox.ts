@@ -300,84 +300,79 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
       }
     }
 
-    // SIMPLIFIED TEST: Run simple, individual tests one at a time to capture output
-    // The complex shell script was swallowing output - let's break it down
-    console.log("  🔍 ===== CHROMIUM DIAGNOSTIC TESTS =====")
+    // CRITICAL TEST: Run Chrome CDP test in a single shell command
+    // Previous tests showed that using separate commands can fail with 400 errors
+    // if a command doesn't exist (like 'file'). So we do everything in one sh -c.
+    console.log("  🔍 ===== CHROMIUM DIAGNOSTIC TEST =====")
+    try {
+      const chromeTest = await runCommandWithLogs(sandbox, {
+        cmd: "sh",
+        args: [
+          "-c",
+          `
+          # Redirect stderr to stdout so we capture everything
+          exec 2>&1
 
-    // Test 1: Check if file exists
-    console.log("  📋 Test 1: Checking if Chromium exists...")
-    const test1 = await runCommandWithLogs(sandbox, {
-      cmd: "ls",
-      args: ["-la", chromiumPath]
-    })
-    console.log(`  📋 Test 1 result (exit ${test1.exitCode}):\n${test1.stdout || "(no output)"}`)
-    if (test1.stderr) console.log(`  📋 Test 1 stderr: ${test1.stderr}`)
+          echo "=== Chromium CDP Test ==="
+          echo "Chromium path: ${chromiumPath}"
+          echo ""
 
-    // Test 2: Check file type
-    console.log("  📋 Test 2: Checking file type...")
-    const test2 = await runCommandWithLogs(sandbox, {
-      cmd: "file",
-      args: [chromiumPath]
-    })
-    console.log(`  📋 Test 2 result (exit ${test2.exitCode}):\n${test2.stdout || "(no output)"}`)
-    if (test2.stderr) console.log(`  📋 Test 2 stderr: ${test2.stderr}`)
+          echo "1. Checking if file exists..."
+          ls -la "${chromiumPath}" 2>&1 || echo "   ❌ File not found"
 
-    // Test 3: Try --version (quick test that doesn't start a browser)
-    console.log("  📋 Test 3: Running chromium --version...")
-    const test3 = await runCommandWithLogs(sandbox, {
-      cmd: chromiumPath,
-      args: ["--version"]
-    })
-    console.log(`  📋 Test 3 result (exit ${test3.exitCode}):\n${test3.stdout || "(no output)"}`)
-    if (test3.stderr) console.log(`  📋 Test 3 stderr: ${test3.stderr}`)
+          echo ""
+          echo "2. Checking file type (if 'file' command exists)..."
+          file "${chromiumPath}" 2>&1 || echo "   (file command not available)"
 
-    // Test 4: Try to start Chrome with CDP port using timeout (CRITICAL TEST)
-    // This is the key test - can Chrome start and expose CDP?
-    console.log("  📋 Test 4: Starting Chrome headless with CDP port (5 second timeout)...")
-    const test4 = await runCommandWithLogs(sandbox, {
-      cmd: "sh",
-      args: [
-        "-c",
-        `
-        # Redirect stderr to stdout so we capture everything
-        exec 2>&1
+          echo ""
+          echo "3. Testing --version..."
+          "${chromiumPath}" --version 2>&1 || echo "   ❌ --version failed"
 
-        echo "Starting Chrome with CDP..."
-        echo "Command: ${chromiumPath} --headless=new --no-sandbox --disable-gpu --remote-debugging-port=9222 about:blank"
+          echo ""
+          echo "4. Starting Chrome headless with CDP port..."
+          echo "   Command: ${chromiumPath} --headless=new --no-sandbox --disable-gpu --remote-debugging-port=9222 about:blank"
 
-        # Start Chrome in background, capture its PID
-        ${chromiumPath} --headless=new --no-sandbox --disable-setuid-sandbox --disable-gpu --disable-dev-shm-usage --remote-debugging-port=9222 --remote-debugging-address=127.0.0.1 about:blank &
-        PID=$!
-        echo "Chrome PID: $PID"
+          # Start Chrome in background
+          "${chromiumPath}" --headless=new --no-sandbox --disable-setuid-sandbox --disable-gpu --disable-dev-shm-usage --remote-debugging-port=9222 --remote-debugging-address=127.0.0.1 about:blank &
+          PID=$!
+          echo "   Chrome PID: $PID"
 
-        # Wait 2 seconds
-        sleep 2
+          # Wait 2 seconds
+          sleep 2
 
-        # Check if still running
-        if ps -p $PID > /dev/null 2>&1; then
-          echo "✅ Chrome is RUNNING after 2s"
+          echo ""
+          echo "5. Checking if Chrome is still running..."
+          if ps -p $PID > /dev/null 2>&1; then
+            echo "   ✅ Chrome is RUNNING after 2s"
 
-          # Try to connect to CDP
-          echo "Trying CDP connection..."
-          curl -s --max-time 3 http://127.0.0.1:9222/json/version || echo "⚠️ CDP connection failed"
+            echo ""
+            echo "6. Trying to connect to CDP endpoint..."
+            curl -s --max-time 3 http://127.0.0.1:9222/json/version 2>&1 || echo "   ⚠️ CDP connection failed"
 
-          # Kill Chrome
-          kill $PID 2>/dev/null
-        else
-          echo "❌ Chrome DIED within 2s"
-          echo "Exit code from wait: $?"
-        fi
+            echo ""
+            echo "7. Killing test Chrome process..."
+            kill $PID 2>/dev/null
+          else
+            echo "   ❌ Chrome DIED within 2s"
+            wait $PID 2>/dev/null
+            echo "   Exit code: $?"
+          fi
 
-        # Show what processes are running
-        echo "Current processes:"
-        ps aux | grep -E "chrom|PID" | head -10
-        `
-      ]
-    })
-    console.log(`  📋 Test 4 result (exit ${test4.exitCode}):\n${test4.stdout || "(no output)"}`)
-    if (test4.stderr) console.log(`  📋 Test 4 stderr: ${test4.stderr}`)
+          echo ""
+          echo "8. Current processes:"
+          ps aux 2>/dev/null | grep -E "chrom|PID" | head -10 || echo "   (ps failed)"
 
-    console.log("  🔍 ===== END CHROMIUM DIAGNOSTIC TESTS =====")
+          echo ""
+          echo "=== End Chromium CDP Test ==="
+          `
+        ]
+      })
+      console.log(`  📋 Chrome CDP test result (exit ${chromeTest.exitCode}):\n${chromeTest.stdout || "(no output)"}`)
+      if (chromeTest.stderr) console.log(`  ⚠️ Chrome CDP test stderr: ${chromeTest.stderr}`)
+    } catch (error) {
+      console.log(`  ❌ Chrome CDP test failed with error: ${error instanceof Error ? error.message : String(error)}`)
+    }
+    console.log("  🔍 ===== END CHROMIUM DIAGNOSTIC TEST =====")
 
     // Install d3k globally from npm
     if (debug) console.log("  📦 Installing d3k globally from npm...")

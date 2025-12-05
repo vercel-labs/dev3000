@@ -67,6 +67,7 @@ interface DevEnvironmentOptions {
   disabledMcpConfigs?: McpConfigTarget[] // Which MCP config files should be skipped
   debugPort?: number // Chrome debugging port (default 9222, auto-incremented for multiple instances)
   headless?: boolean // Run Chrome in headless mode (for serverless/CI environments)
+  cdpTimeout?: number // CDP navigation timeout in seconds (default 30)
 }
 
 class Logger {
@@ -2208,7 +2209,8 @@ export class DevEnvironment {
       this.options.port, // App server port to monitor
       this.options.mcpPort, // MCP server port to ignore
       this.options.debugPort, // Chrome debug port
-      this.options.headless // Headless mode for serverless/CI environments
+      this.options.headless, // Headless mode for serverless/CI environments
+      this.options.cdpTimeout // CDP navigation timeout in seconds
     )
 
     try {

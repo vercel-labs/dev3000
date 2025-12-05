@@ -297,6 +297,7 @@ program
   )
   .option("--no-chrome-devtools-mcp", "Disable chrome-devtools MCP integration (enabled by default)")
   .option("--headless", "Run Chrome in headless mode (for serverless/CI environments)")
+  .option("--cdp-timeout <seconds>", "CDP navigation timeout in seconds (default: 30)", "30")
   .option("--kill-mcp", "Kill the MCP server on port 3684 and exit")
   .action(async (options) => {
     // Handle --kill-mcp option
@@ -453,7 +454,8 @@ program
         dateTimeFormat: options.dateTime || "local",
         pluginReactScan: options.pluginReactScan || false,
         chromeDevtoolsMcp: options.chromeDevtoolsMcp !== false, // Default to true unless explicitly disabled
-        disabledMcpConfigs
+        disabledMcpConfigs,
+        cdpTimeout: Number.parseInt(options.cdpTimeout, 10)
       })
     } catch (error) {
       console.error(chalk.red("❌ Failed to start development environment:"), error)
