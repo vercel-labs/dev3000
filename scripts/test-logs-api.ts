@@ -211,8 +211,8 @@ async function runTests() {
     // Also kill any orphaned next-server processes that might be consuming CPU
     try {
       const { execSync } = await import("child_process")
-      // Only kill next-server processes that are using high CPU (likely orphaned)
-      execSync('pkill -9 -f "next-server.*v15" 2>/dev/null || true', { stdio: "ignore" })
+      // Kill any next-server processes (matches any version like v15, v16, etc.)
+      execSync('pkill -9 -f "next-server" 2>/dev/null || true', { stdio: "ignore" })
       console.log("✅ Cleaned up any orphaned next-server processes")
     } catch (_e) {
       // No orphaned processes - not critical
