@@ -57,13 +57,15 @@ export async function cloudFixWorkflow(params: {
   console.log(`[Workflow] VERCEL_OIDC_TOKEN available: ${!!vercelOidcToken}`)
 
   // Step 0: Create d3k sandbox if repoUrl provided
-  // This step also captures CLS data from inside the sandbox
+  // This step also captures CLS data and a "before" screenshot from inside the sandbox
   let sandboxInfo: {
     mcpUrl: string
     devUrl: string
     bypassToken?: string
     clsData?: unknown
     mcpError?: string | null
+    beforeScreenshotUrl?: string | null
+    chromiumPath?: string
   } | null = null
   if (repoUrl) {
     sandboxInfo = await createD3kSandbox(repoUrl, repoBranch || "main", projectName, vercelToken, vercelOidcToken)
@@ -72,13 +74,15 @@ export async function cloudFixWorkflow(params: {
   // Step 1: Fetch real logs (using sandbox MCP if available, otherwise devUrl directly)
   // If we got CLS data from Step 0, pass it to Step 1 to avoid re-fetching
   // Use bypass token from sandbox if available, otherwise use provided one
+  // Also pass the beforeScreenshotUrl from Step 0 if available
   const effectiveBypassToken = sandboxInfo?.bypassToken || bypassToken
   const step1Result = await fetchRealLogs(
     sandboxInfo?.mcpUrl || devUrl,
     effectiveBypassToken,
     sandboxInfo?.devUrl,
     sandboxInfo?.clsData,
-    sandboxInfo?.mcpError
+    sandboxInfo?.mcpError,
+    sandboxInfo?.beforeScreenshotUrl
   )
   const { logAnalysis, beforeScreenshotUrl } = step1Result
 
@@ -130,11 +134,12 @@ async function fetchRealLogs(
   bypassToken?: string,
   sandboxDevUrl?: string,
   clsData?: unknown,
-  mcpError?: string | null
+  mcpError?: string | null,
+  beforeScreenshotUrlFromStep0?: string | null
 ): Promise<{ logAnalysis: string; beforeScreenshotUrl: string | null }> {
   "use step"
   const { fetchRealLogs } = await import("./steps")
-  return fetchRealLogs(mcpUrlOrDevUrl, bypassToken, sandboxDevUrl, clsData, mcpError)
+  return fetchRealLogs(mcpUrlOrDevUrl, bypassToken, sandboxDevUrl, clsData, mcpError, beforeScreenshotUrlFromStep0)
 }
 
 async function analyzeLogsWithAgent(logAnalysis: string, devUrl: string) {

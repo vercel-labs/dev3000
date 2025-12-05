@@ -2,10 +2,20 @@
 
 import Image from "next/image"
 import Link from "next/link"
-import { useState } from "react"
+import { useCallback, useRef, useState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import type { WorkflowRun } from "@/lib/workflow-storage"
 
@@ -23,6 +33,11 @@ interface WorkflowsClientProps {
 
 export default function WorkflowsClient({ user, initialRuns }: WorkflowsClientProps) {
   const [isSigningOut, setIsSigningOut] = useState(false)
+  const [runs, setRuns] = useState<WorkflowRun[]>(initialRuns)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const lastSelectedIndex = useRef<number | null>(null)
 
   async function handleSignOut() {
     setIsSigningOut(true)
@@ -35,6 +50,85 @@ export default function WorkflowsClient({ user, initialRuns }: WorkflowsClientPr
     }
   }
 
+  const handleSelectAll = useCallback(
+    (checked: boolean) => {
+      if (checked) {
+        setSelectedIds(new Set(runs.map((run) => run.id)))
+      } else {
+        setSelectedIds(new Set())
+      }
+      lastSelectedIndex.current = null
+    },
+    [runs]
+  )
+
+  const handleSelectRow = useCallback(
+    (runId: string, index: number, event: React.MouseEvent) => {
+      setSelectedIds((prev) => {
+        const newSelected = new Set(prev)
+
+        // Handle shift-click for range selection
+        if (event.shiftKey && lastSelectedIndex.current !== null) {
+          const start = Math.min(lastSelectedIndex.current, index)
+          const end = Math.max(lastSelectedIndex.current, index)
+
+          // Select all items in the range
+          for (let i = start; i <= end; i++) {
+            newSelected.add(runs[i].id)
+          }
+        } else {
+          // Regular click - toggle selection
+          if (newSelected.has(runId)) {
+            newSelected.delete(runId)
+          } else {
+            newSelected.add(runId)
+          }
+        }
+
+        return newSelected
+      })
+
+      lastSelectedIndex.current = index
+    },
+    [runs]
+  )
+
+  const handleDelete = async () => {
+    setIsDeleting(true)
+    try {
+      const response = await fetch("/api/workflows", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          runIds: Array.from(selectedIds)
+        })
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        // Remove deleted runs from state
+        setRuns((prev) => prev.filter((run) => !selectedIds.has(run.id)))
+        setSelectedIds(new Set())
+        setIsDeleteDialogOpen(false)
+      } else {
+        console.error("Failed to delete workflows:", result.error)
+        alert(`Failed to delete workflows: ${result.error}`)
+      }
+    } catch (error) {
+      console.error("Failed to delete workflows:", error)
+      alert("Failed to delete workflows. Please try again.")
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
+  const allSelected = runs.length > 0 && selectedIds.size === runs.length
+  const someSelected = selectedIds.size > 0 && selectedIds.size < runs.length
+
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -45,6 +139,11 @@ export default function WorkflowsClient({ user, initialRuns }: WorkflowsClientPr
             <p className="mt-1 text-sm text-gray-500">Signed in as {user.email}</p>
           </div>
           <div className="flex gap-3">
+            {selectedIds.size > 0 && (
+              <Button variant="destructive" onClick={() => setIsDeleteDialogOpen(true)}>
+                Delete {selectedIds.size} selected
+              </Button>
+            )}
             <Button asChild>
               <Link href="/workflows/new">New Workflow</Link>
             </Button>
@@ -54,7 +153,7 @@ export default function WorkflowsClient({ user, initialRuns }: WorkflowsClientPr
           </div>
         </div>
 
-        {initialRuns.length === 0 ? (
+        {runs.length === 0 ? (
           <Card className="p-12 text-center">
             <CardContent>
               <p className="text-muted-foreground">No workflow runs yet</p>
@@ -66,6 +165,22 @@ export default function WorkflowsClient({ user, initialRuns }: WorkflowsClientPr
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-8 pr-0">
+                    <Checkbox
+                      checked={allSelected}
+                      ref={(el) => {
+                        if (el) {
+                          // Set indeterminate state for "some selected"
+                          const input = el.querySelector("button") as HTMLButtonElement
+                          if (input) {
+                            input.dataset.state = someSelected ? "indeterminate" : allSelected ? "checked" : "unchecked"
+                          }
+                        }
+                      }}
+                      onCheckedChange={handleSelectAll}
+                      aria-label="Select all"
+                    />
+                  </TableHead>
                   <TableHead>Project</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Timestamp</TableHead>
@@ -76,8 +191,19 @@ export default function WorkflowsClient({ user, initialRuns }: WorkflowsClientPr
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {initialRuns.map((run) => (
-                  <TableRow key={`${run.id}-${run.timestamp}`}>
+                {runs.map((run, index) => (
+                  <TableRow
+                    key={`${run.id}-${run.timestamp}`}
+                    className={selectedIds.has(run.id) ? "bg-muted/50" : undefined}
+                  >
+                    <TableCell className="pr-0">
+                      <Checkbox
+                        checked={selectedIds.has(run.id)}
+                        onClick={(e) => handleSelectRow(run.id, index, e)}
+                        onCheckedChange={() => {}}
+                        aria-label={`Select ${run.projectName}`}
+                      />
+                    </TableCell>
                     <TableCell>
                       <div className="font-medium">{run.projectName}</div>
                       <div className="text-xs text-muted-foreground">{run.id}</div>
@@ -160,6 +286,29 @@ export default function WorkflowsClient({ user, initialRuns }: WorkflowsClientPr
             </Table>
           </Card>
         )}
+
+        <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Delete Workflow Runs</DialogTitle>
+              <DialogDescription>
+                Are you sure you want to delete {selectedIds.size} workflow run{selectedIds.size === 1 ? "" : "s"}? This
+                will permanently delete all associated data including screenshots and reports. This action cannot be
+                undone.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button variant="outline" disabled={isDeleting}>
+                  Cancel
+                </Button>
+              </DialogClose>
+              <Button variant="destructive" onClick={handleDelete} disabled={isDeleting}>
+                {isDeleting ? "Deleting..." : `Delete ${selectedIds.size} run${selectedIds.size === 1 ? "" : "s"}`}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   )

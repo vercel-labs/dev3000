@@ -4,11 +4,155 @@
  */
 
 import { put } from "@vercel/blob"
+import type { Sandbox } from "@vercel/sandbox"
 import { createGateway, generateText } from "ai"
 import { createD3kSandbox as createD3kSandboxUtil } from "@/lib/cloud/d3k-sandbox"
 
 /**
+ * Helper function to properly consume sandbox command output
+ * The Vercel Sandbox SDK returns a result object with an async logs() iterator
+ */
+async function runSandboxCommand(
+  sandbox: Sandbox,
+  cmd: string,
+  args: string[]
+): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+  const result = await sandbox.runCommand({ cmd, args })
+  let stdout = ""
+  let stderr = ""
+  for await (const log of result.logs()) {
+    if (log.stream === "stdout") {
+      stdout += log.data
+    } else {
+      stderr += log.data
+    }
+  }
+  await result.wait()
+  return { exitCode: result.exitCode, stdout, stderr }
+}
+
+/**
+ * Capture a screenshot using puppeteer-core inside the sandbox
+ * Returns the base64 encoded PNG image data
+ */
+async function captureScreenshotInSandbox(
+  sandbox: Sandbox,
+  appUrl: string,
+  chromiumPath: string,
+  label: string
+): Promise<string | null> {
+  console.log(`[Screenshot] Capturing ${label} screenshot of ${appUrl}...`)
+
+  // Create a Node.js script to capture screenshot with puppeteer-core
+  const screenshotScript = `
+const puppeteer = require('puppeteer-core');
+
+(async () => {
+  let browser;
+  try {
+    browser = await puppeteer.launch({
+      executablePath: '${chromiumPath}',
+      headless: true,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu',
+        '--single-process'
+      ]
+    });
+
+    const page = await browser.newPage();
+    await page.setViewport({ width: 1280, height: 720 });
+
+    // Navigate with a reasonable timeout
+    await page.goto('${appUrl}', {
+      waitUntil: 'networkidle2',
+      timeout: 30000
+    });
+
+    // Wait a bit for any animations/layout shifts
+    await new Promise(r => setTimeout(r, 2000));
+
+    // Take screenshot as base64
+    const screenshot = await page.screenshot({
+      encoding: 'base64',
+      fullPage: false
+    });
+
+    console.log(screenshot);
+
+    await browser.close();
+  } catch (error) {
+    console.error('Screenshot error:', error.message);
+    if (browser) await browser.close();
+    process.exit(1);
+  }
+})();
+`
+
+  try {
+    // Write the script to a temp file
+    const writeResult = await runSandboxCommand(sandbox, "sh", [
+      "-c",
+      `cat > /tmp/screenshot.js << 'SCRIPT_EOF'
+${screenshotScript}
+SCRIPT_EOF`
+    ])
+
+    if (writeResult.exitCode !== 0) {
+      console.log(`[Screenshot] Failed to write script: ${writeResult.stderr}`)
+      return null
+    }
+
+    // Run the script
+    const screenshotResult = await runSandboxCommand(sandbox, "node", ["/tmp/screenshot.js"])
+
+    if (screenshotResult.exitCode !== 0) {
+      console.log(`[Screenshot] Failed to capture: ${screenshotResult.stderr}`)
+      return null
+    }
+
+    // The stdout should be the base64 image
+    const base64Data = screenshotResult.stdout.trim()
+    if (base64Data && base64Data.length > 100) {
+      console.log(`[Screenshot] Captured ${label} screenshot (${base64Data.length} bytes base64)`)
+      return base64Data
+    }
+
+    console.log(`[Screenshot] No valid screenshot data returned`)
+    return null
+  } catch (error) {
+    console.log(`[Screenshot] Error: ${error instanceof Error ? error.message : String(error)}`)
+    return null
+  }
+}
+
+/**
+ * Upload a base64 screenshot to Vercel Blob
+ */
+async function uploadScreenshot(base64Data: string, label: string, projectName: string): Promise<string | null> {
+  try {
+    const imageBuffer = Buffer.from(base64Data, "base64")
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-")
+    const filename = `screenshot-${label}-${projectName}-${timestamp}.png`
+
+    const blob = await put(filename, imageBuffer, {
+      access: "public",
+      contentType: "image/png"
+    })
+
+    console.log(`[Screenshot] Uploaded ${label} screenshot: ${blob.url}`)
+    return blob.url
+  } catch (error) {
+    console.log(`[Screenshot] Upload failed: ${error instanceof Error ? error.message : String(error)}`)
+    return null
+  }
+}
+
+/**
  * Step 0: Create d3k sandbox with MCP tools pre-configured
+ * Also captures a "before" screenshot of the app
  */
 export async function createD3kSandbox(
   repoUrl: string,
@@ -48,33 +192,44 @@ export async function createD3kSandbox(
   console.log(`[Step 0] Dev URL: ${sandboxResult.devUrl}`)
   console.log(`[Step 0] MCP URL: ${sandboxResult.mcpUrl}`)
 
+  // Get the chromium path for screenshots
+  console.log(`[Step 0] Getting Chromium path for screenshots...`)
+  let chromiumPath = "/tmp/chromium"
+  try {
+    const chromiumResult = await runSandboxCommand(sandboxResult.sandbox, "node", [
+      "-e",
+      "require('@sparticuz/chromium').executablePath().then(p => console.log(p))"
+    ])
+    if (chromiumResult.exitCode === 0 && chromiumResult.stdout.trim()) {
+      chromiumPath = chromiumResult.stdout.trim()
+      console.log(`[Step 0] Chromium path: ${chromiumPath}`)
+    }
+  } catch {
+    console.log(`[Step 0] Could not get chromium path, using default: ${chromiumPath}`)
+  }
+
+  // Capture "BEFORE" screenshot - this shows the app before any fixes
+  console.log(`[Step 0] Capturing BEFORE screenshot...`)
+  let beforeScreenshotUrl: string | null = null
+  try {
+    const beforeBase64 = await captureScreenshotInSandbox(
+      sandboxResult.sandbox,
+      "http://localhost:3000",
+      chromiumPath,
+      "before"
+    )
+    if (beforeBase64) {
+      beforeScreenshotUrl = await uploadScreenshot(beforeBase64, "before", projectName)
+    }
+  } catch (error) {
+    console.log(`[Step 0] Before screenshot failed: ${error instanceof Error ? error.message : String(error)}`)
+  }
+
   // Now capture CLS and errors using MCP from INSIDE the sandbox
-  // We must do this in Step 0 while we have the sandbox object
   console.log(`[Step 0] Capturing CLS metrics from inside sandbox...`)
 
   let clsData: unknown = null
   let mcpError: string | null = null
-
-  // Helper function to properly consume sandbox command output
-  // The Vercel Sandbox SDK returns a result object with an async logs() iterator
-  async function runSandboxCommand(
-    sandbox: typeof sandboxResult.sandbox,
-    cmd: string,
-    args: string[]
-  ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-    const result = await sandbox.runCommand({ cmd, args })
-    let stdout = ""
-    let stderr = ""
-    for await (const log of result.logs()) {
-      if (log.stream === "stdout") {
-        stdout += log.data
-      } else {
-        stderr += log.data
-      }
-    }
-    await result.wait()
-    return { exitCode: result.exitCode, stdout, stderr }
-  }
 
   try {
     // Call fix_my_app MCP tool via curl from inside the sandbox
@@ -163,7 +318,9 @@ export async function createD3kSandbox(
     devUrl: sandboxResult.devUrl,
     bypassToken: sandboxResult.bypassToken,
     clsData,
-    mcpError
+    mcpError,
+    beforeScreenshotUrl,
+    chromiumPath
   }
 }
 
@@ -176,14 +333,18 @@ export async function fetchRealLogs(
   bypassToken?: string,
   sandboxDevUrl?: string,
   clsData?: unknown,
-  mcpError?: string | null
+  mcpError?: string | null,
+  beforeScreenshotUrlFromStep0?: string | null
 ) {
   "use step"
 
-  // If we already have CLS data from Step 0, use it
+  // If we already have CLS data from Step 0, use it along with the screenshot
   if (clsData) {
     console.log("[Step 1] Using CLS data captured in Step 0")
-    return { logAnalysis: JSON.stringify(clsData, null, 2), beforeScreenshotUrl: null }
+    if (beforeScreenshotUrlFromStep0) {
+      console.log(`[Step 1] Before screenshot from Step 0: ${beforeScreenshotUrlFromStep0}`)
+    }
+    return { logAnalysis: JSON.stringify(clsData, null, 2), beforeScreenshotUrl: beforeScreenshotUrlFromStep0 || null }
   }
 
   // If there was an MCP error in Step 0, log it
@@ -712,7 +873,9 @@ This screenshot was captured when the sandbox dev server first loaded, proving t
   const enhancedMarkdown = `# Fix Proposal for ${projectName}
 
 **Generated**: ${timestamp}
+
 **Powered by**: [dev3000](https://github.com/vercel-labs/dev3000) with Claude Code
+
 **Dev Server**: ${devUrl}
 
 ---
