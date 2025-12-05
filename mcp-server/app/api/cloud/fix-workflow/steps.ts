@@ -33,7 +33,7 @@ async function runSandboxCommand(
 
 /**
  * Capture a screenshot using puppeteer-core inside the sandbox
- * Returns the base64 encoded PNG image data
+ * Returns the base64 encoded PNG image data and logs the page title
  */
 async function captureScreenshotInSandbox(
   sandbox: Sandbox,
@@ -46,6 +46,7 @@ async function captureScreenshotInSandbox(
 
   // Create a Node.js script to capture screenshot with puppeteer-core
   // The script is placed in the sandbox cwd so it can find puppeteer-core from node_modules
+  // Output format: JSON with { title, screenshot } on first line, then base64 data
   const screenshotScript = `
 const puppeteer = require('puppeteer-core');
 
@@ -72,6 +73,10 @@ const puppeteer = require('puppeteer-core');
       waitUntil: 'networkidle2',
       timeout: 30000
     });
+
+    // Get the page title for verification
+    const title = await page.title();
+    console.error('PAGE_TITLE:' + title);
 
     // Wait a bit for any animations/layout shifts
     await new Promise(r => setTimeout(r, 2000));
@@ -125,6 +130,12 @@ SCRIPT_EOF`
       }
     }
     await screenshotResult.wait()
+
+    // Extract page title from stderr (format: PAGE_TITLE:xxx)
+    const titleMatch = stderr.match(/PAGE_TITLE:(.*)/)
+    if (titleMatch) {
+      console.log(`[Screenshot] Page title: "${titleMatch[1]}"`)
+    }
 
     if (screenshotResult.exitCode !== 0) {
       console.log(`[Screenshot] Failed to capture: ${stderr}`)
@@ -774,7 +785,13 @@ Format your response as a clear, structured report that helps identify what's br
       const response = await fetch(urlWithBypass, { method: "GET", headers })
       const body = await response.text()
 
+      // Extract and log page title from HTML
+      const titleMatch = body.match(/<title[^>]*>([^<]*)<\/title>/i)
+      const pageTitle = titleMatch ? titleMatch[1].trim() : "(no title found)"
+      console.log(`[Step 1] HTTP fallback - Page title: "${pageTitle}"`)
+
       let logAnalysis = `Dev Server URL: ${devUrl}\n`
+      logAnalysis += `Page Title: ${pageTitle}\n`
       logAnalysis += `HTTP Status: ${response.status} ${response.statusText}\n\n`
       logAnalysis += `Note: Browser automation failed, using fallback HTTP fetch.\n\n`
 
