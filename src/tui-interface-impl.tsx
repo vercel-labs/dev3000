@@ -1,9 +1,8 @@
 import chalk from "chalk"
 import { createReadStream, unwatchFile, watchFile } from "fs"
 import { Box, render, Text, useInput, useStdout } from "ink"
-// Note: ink-spinner causes constant re-renders due to animation, so we use a static indicator instead
-// import Spinner from "ink-spinner"
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
+import Spinner from "ink-spinner"
+import { memo, useEffect, useRef, useState } from "react"
 import type { Readable } from "stream"
 import { LOG_COLORS } from "./constants/log-colors.js"
 
@@ -54,19 +53,6 @@ const TYPE_COLORS: Record<string, string> = {
   HEAD: LOG_COLORS.SERVER,
   OPTIONS: LOG_COLORS.SERVER
 }
-
-// LogSlot renders either a log line or an empty placeholder
-// Using slot-based identity means React reuses the same component instance
-// and only updates props, which produces more stable ANSI output for incremental rendering
-const LogSlot = memo(
-  ({ log, isCompact, isVeryCompact }: { log: LogEntry | undefined; isCompact: boolean; isVeryCompact: boolean }) => {
-    if (!log) {
-      // Empty placeholder - single space to maintain line height
-      return <Text> </Text>
-    }
-    return <LogLine log={log} isCompact={isCompact} isVeryCompact={isVeryCompact} />
-  }
-)
 
 // Memoized log line component to prevent re-parsing on every render
 const LogLine = memo(
@@ -283,7 +269,7 @@ const TUIApp = ({
     let pendingLogs: LogEntry[] = []
     let flushTimeout: NodeJS.Timeout | null = null
 
-    // Batch log updates to prevent flashing on rapid writes
+    // Batch log updates to prevent excessive renders
     const flushPendingLogs = () => {
       if (pendingLogs.length === 0) return
 
@@ -319,13 +305,12 @@ const TUIApp = ({
 
       pendingLogs.push(newLog)
 
-      // Debounce: flush after 500ms of no new logs
-      // Aggressive batching to minimize redraws - scrolling logs inherently cause
-      // full line redraws because every line's content shifts when a new log is added
+      // Debounce: flush after 50ms of no new logs
+      // Terminal synchronized updates prevent flicker, so we can be more responsive
       if (flushTimeout) {
         clearTimeout(flushTimeout)
       }
-      flushTimeout = setTimeout(flushPendingLogs, 500)
+      flushTimeout = setTimeout(flushPendingLogs, 50)
     }
 
     // Create a read stream for the log file
@@ -353,8 +338,8 @@ const TUIApp = ({
       appendLog(chalk.red(`Error reading log file: ${error.message}`))
     })
 
-    // Watch for new content - use 250ms interval to reduce re-render frequency
-    watchFile(logFile, { interval: 250 }, (curr, prev) => {
+    // Watch for new content
+    watchFile(logFile, { interval: 100 }, (curr, prev) => {
       if (curr.size > prev.size) {
         // File has grown, read new content
         const stream = createReadStream(logFile, {
@@ -389,54 +374,41 @@ const TUIApp = ({
     }
   }, [logFile])
 
-  // Calculate visible logs - memoized to prevent recalculation on every render
-  const filteredLogs = useMemo(() => logs.filter((log) => log.id > clearFromLogId), [logs, clearFromLogId])
+  // Handle keyboard input
+  useInput((input, key) => {
+    if (key.ctrl && input === "c") {
+      // Send SIGINT to trigger main process shutdown handler
+      process.kill(process.pid, "SIGINT")
+    } else if (key.ctrl && input === "l") {
+      // Ctrl-L: Clear logs box - set clear point to last log ID
+      const lastLogId = logs.length > 0 ? logs[logs.length - 1].id : logIdCounter.current
+      setClearFromLogId(lastLogId)
+      setScrollOffset(0) // Reset scroll to bottom
+    } else if (key.upArrow) {
+      const filteredCount = logs.filter((log) => log.id > clearFromLogId).length
+      setScrollOffset((prev) => Math.min(prev + 1, Math.max(0, filteredCount - maxVisibleLogs)))
+    } else if (key.downArrow) {
+      setScrollOffset((prev) => Math.max(0, prev - 1))
+    } else if (key.pageUp) {
+      const filteredCount = logs.filter((log) => log.id > clearFromLogId).length
+      setScrollOffset((prev) => Math.min(prev + maxVisibleLogs, Math.max(0, filteredCount - maxVisibleLogs)))
+    } else if (key.pageDown) {
+      setScrollOffset((prev) => Math.max(0, prev - maxVisibleLogs))
+    } else if (input === "G" && key.shift) {
+      // Shift+G to go to end
+      setScrollOffset(0)
+    } else if (input === "g" && !key.shift) {
+      // g to go to beginning
+      const filteredCount = logs.filter((log) => log.id > clearFromLogId).length
+      setScrollOffset(Math.max(0, filteredCount - maxVisibleLogs))
+    }
+  })
 
-  // Memoize the filtered count to avoid recalculating in input handler
-  const filteredCount = filteredLogs.length
-
-  // Handle keyboard input with memoized callback
-  const handleInput = useCallback(
-    (
-      input: string,
-      key: { ctrl: boolean; upArrow: boolean; downArrow: boolean; pageUp: boolean; pageDown: boolean; shift: boolean }
-    ) => {
-      if (key.ctrl && input === "c") {
-        // Send SIGINT to trigger main process shutdown handler
-        process.kill(process.pid, "SIGINT")
-      } else if (key.ctrl && input === "l") {
-        // Ctrl-L: Clear logs box - set clear point to last log ID
-        const lastLogId = logs.length > 0 ? logs[logs.length - 1].id : logIdCounter.current
-        setClearFromLogId(lastLogId)
-        setScrollOffset(0) // Reset scroll to bottom
-      } else if (key.upArrow) {
-        setScrollOffset((prev) => Math.min(prev + 1, Math.max(0, filteredCount - maxVisibleLogs)))
-      } else if (key.downArrow) {
-        setScrollOffset((prev) => Math.max(0, prev - 1))
-      } else if (key.pageUp) {
-        setScrollOffset((prev) => Math.min(prev + maxVisibleLogs, Math.max(0, filteredCount - maxVisibleLogs)))
-      } else if (key.pageDown) {
-        setScrollOffset((prev) => Math.max(0, prev - maxVisibleLogs))
-      } else if (input === "G" && key.shift) {
-        // Shift+G to go to end
-        setScrollOffset(0)
-      } else if (input === "g" && !key.shift) {
-        // g to go to beginning
-        setScrollOffset(Math.max(0, filteredCount - maxVisibleLogs))
-      }
-    },
-    [logs, filteredCount, maxVisibleLogs]
-  )
-
-  useInput(handleInput)
-
-  const visibleLogs = useMemo(
-    () =>
-      filteredLogs.slice(
-        Math.max(0, filteredLogs.length - maxVisibleLogs - scrollOffset),
-        filteredLogs.length - scrollOffset
-      ),
-    [filteredLogs, maxVisibleLogs, scrollOffset]
+  // Calculate visible logs - filter to only show logs after the clear point
+  const filteredLogs = logs.filter((log) => log.id > clearFromLogId)
+  const visibleLogs = filteredLogs.slice(
+    Math.max(0, filteredLogs.length - maxVisibleLogs - scrollOffset),
+    filteredLogs.length - scrollOffset
   )
 
   // Render compact header for small terminals
@@ -499,7 +471,7 @@ const TUIApp = ({
             <Box flexDirection="column" flexGrow={1}>
               <Box>
                 <Text color="cyan">🌐 App: http://localhost:{appPort} </Text>
-                {!portConfirmed && <Text dimColor>...</Text>}
+                {!portConfirmed && <Spinner type="dots" />}
               </Box>
               <Text color="cyan">🤖 MCP: http://localhost:{mcpPort}</Text>
               <Text color="cyan">
@@ -527,22 +499,21 @@ const TUIApp = ({
 
       {/* Logs Box - explicit height for stable initial render */}
       <Box flexDirection="column" borderStyle="single" borderColor="gray" paddingX={1} height={logsBoxHeight}>
-        {/* Static header - avoid changing text to prevent line-based diff from re-rendering */}
         {!isVeryCompact && (
           <Text color="gray" dimColor>
-            Logs{scrollOffset > 0 ? ` (scrolled ${scrollOffset}↑)` : ""}
+            Logs ({filteredLogs.length} total{scrollOffset > 0 && `, scrolled up ${scrollOffset} lines`})
           </Text>
         )}
 
-        {/* Logs content area - use slot-based keys for stable React reconciliation */}
+        {/* Logs content area */}
         <Box flexDirection="column">
-          {Array.from({ length: maxVisibleLogs }).map((_, slotIndex) => {
-            const log = visibleLogs[slotIndex]
-            // Use slot index as key (not log.id) so React reuses the same component
-            // when logs scroll, only updating props instead of remounting
-            // biome-ignore lint/suspicious/noArrayIndexKey: intentional - slot position is stable identity
-            return <LogSlot key={slotIndex} log={log} isCompact={isCompact} isVeryCompact={isVeryCompact} />
-          })}
+          {visibleLogs.length === 0 ? (
+            <Text dimColor>Waiting for logs...</Text>
+          ) : (
+            visibleLogs.map((log) => (
+              <LogLine key={log.id} log={log} isCompact={isCompact} isVeryCompact={isVeryCompact} />
+            ))
+          )}
         </Box>
 
         {/* Scroll indicator - only show when scrolled up and not in very compact mode */}
@@ -611,12 +582,7 @@ export async function runTUI(options: TUIOptions): Promise<{
             appPortUpdater = fn
           }}
         />,
-        {
-          exitOnCtrlC: false,
-          patchConsole: true,
-          // Prevent flickering: only update changed lines instead of full screen redraw
-          incrementalRendering: true
-        }
+        { exitOnCtrlC: false }
       )
 
       // Give React one tick to set up the updaters
