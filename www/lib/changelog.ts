@@ -10,6 +10,19 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.118",
+    date: "2025-12-05",
+    type: "minor",
+    highlights: [
+      "Update Next.js auto-generated type reference",
+      "Remove network-idle screenshot spam",
+      "Update AGENTS.md with correct vercel logs instructions",
+      "Fix Step 1 timeout by ensuring clsData always truthy from Step 0",
+      "Add CORS headers to /api/workflows endpoint"
+    ]
+  },
+
+  {
     version: "0.0.117",
     date: "2025-12-05",
     type: "patch",

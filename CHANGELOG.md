@@ -4,6 +4,16 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.118] - 2025-12-05
+
+**Feature Release**
+
+- Update Next.js auto-generated type reference
+- Remove network-idle screenshot spam
+- Update AGENTS.md with correct vercel logs instructions
+- Fix Step 1 timeout by ensuring clsData always truthy from Step 0
+- Add CORS headers to /api/workflows endpoint
+
 ## [0.0.117] - 2025-12-05
 
 **Patch Release**
