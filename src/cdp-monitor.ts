@@ -35,6 +35,7 @@ export class CDPMonitor {
   private cdpUrl: string | null = null
   private lastScreenshotTime: number = 0
   private minScreenshotInterval: number = 1000 // Minimum 1 second between screenshots
+  private navigationInProgress: boolean = false // Track if a navigation event recently occurred
   private chromePids: Set<number> = new Set() // Track all Chrome PIDs for this instance
   private onWindowClosedCallback: (() => void) | null = null // Callback for when window is manually closed
   private appServerPort?: string // Port of the user's app server to monitor
@@ -906,7 +907,8 @@ export class CDPMonitor {
 
       this.logger("browser", `[NAVIGATION] ${url}`)
 
-      // Don't take a screenshot here - wait for page load
+      // Mark that we're in a navigation - we'll take a screenshot when it settles
+      this.navigationInProgress = true
     })
 
     // Page load events for better screenshot timing
@@ -1362,6 +1364,12 @@ export class CDPMonitor {
   }
 
   private scheduleNetworkIdleScreenshot(): void {
+    // Only take network-idle screenshots after a navigation event
+    // This prevents screenshot spam from background AJAX/fetch polls
+    if (!this.navigationInProgress) {
+      return
+    }
+
     // Only schedule if we have 0 pending requests
     if (this.pendingRequests === 0) {
       if (this.networkIdleTimer) {
@@ -1370,7 +1378,9 @@ export class CDPMonitor {
 
       // Wait 500ms of network idle before taking screenshot
       this.networkIdleTimer = setTimeout(() => {
-        this.takeScreenshot("network-idle")
+        this.takeScreenshot("navigation-settled")
+        // Reset navigation flag since we've captured the settled state
+        this.navigationInProgress = false
         this.networkIdleTimer = null
       }, 500)
     }
