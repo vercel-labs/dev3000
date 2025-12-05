@@ -4,6 +4,16 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.115] - 2025-12-05
+
+**Patch Release**
+
+- Fix tui-interface-impl test after upstream refactor
+- Update next-env.d.ts types import path
+- Simplify
+- Always write session info after CDP monitoring for sandbox support
+- Prevent flashing
+
 ## [0.0.114] - 2025-12-04
 
 **Patch Release**

@@ -10,6 +10,19 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.115",
+    date: "2025-12-05",
+    type: "patch",
+    highlights: [
+      "Fix tui-interface-impl test after upstream refactor",
+      "Update next-env.d.ts types import path",
+      "Simplify",
+      "Always write session info after CDP monitoring for sandbox support",
+      "Prevent flashing"
+    ]
+  },
+
+  {
     version: "0.0.114",
     date: "2025-12-04",
     type: "patch",
