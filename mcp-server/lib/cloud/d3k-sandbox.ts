@@ -383,9 +383,16 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     const mcpUrl = sandbox.domain(3684)
     if (debug) console.log(`  ✅ MCP server ready: ${mcpUrl}`)
 
-    // Give d3k a bit more time to fully initialize MCPs and browser
-    if (debug) console.log("  ⏳ Waiting for d3k to initialize MCPs and browser...")
-    await new Promise((resolve) => setTimeout(resolve, 10000))
+    // Wait for CDP URL to be available (needed for chrome-devtools MCP)
+    // This is more reliable than a fixed timeout because it actually waits for
+    // d3k to connect to Chrome and write the CDP URL to the session file
+    if (debug) console.log("  ⏳ Waiting for d3k to initialize Chrome and populate CDP URL...")
+    const cdpUrl = await waitForCdpUrl(sandbox, 30000, debug) // 30 second timeout
+    if (cdpUrl) {
+      if (debug) console.log(`  ✅ CDP URL ready: ${cdpUrl}`)
+    } else {
+      console.log("  ⚠️ CDP URL not found - chrome-devtools MCP features may not work")
+    }
 
     // Dump ALL d3k logs after initialization for debugging
     // This is critical for understanding what d3k is doing in the sandbox
@@ -496,4 +503,74 @@ async function waitForServer(sandbox: Sandbox, port: number, timeoutMs: number, 
     `Server on port ${port} did not become ready within ${timeoutMs}ms. ` +
       `Last status: ${lastStatus ?? "no response"}, Last error: ${lastError ?? "none"}`
   )
+}
+
+/**
+ * Wait for d3k to populate the CDP URL in its session file
+ * This is necessary because d3k writes the session file before Chrome is fully connected,
+ * and we need the CDP URL to be available before calling MCP tools that use chrome-devtools.
+ */
+async function waitForCdpUrl(sandbox: Sandbox, timeoutMs: number, debug = false): Promise<string | null> {
+  const startTime = Date.now()
+  let cdpUrl: string | null = null
+
+  while (Date.now() - startTime < timeoutMs) {
+    try {
+      // Read the session files from ~/.d3k/ in the sandbox
+      const cmdResult = await sandbox.runCommand({
+        cmd: "sh",
+        args: [
+          "-c",
+          'for f in /home/vercel-sandbox/.d3k/*.json; do [ -f "$f" ] && cat "$f" 2>/dev/null && echo ""; done'
+        ]
+      })
+
+      // Collect logs from the command
+      let stdout = ""
+      for await (const log of cmdResult.logs()) {
+        if (log.stream === "stdout") {
+          stdout += log.data
+        }
+      }
+      await cmdResult.wait()
+
+      const result = { exitCode: cmdResult.exitCode, stdout }
+
+      if (result.exitCode === 0 && result.stdout.trim()) {
+        // Parse each JSON object (one per line)
+        const lines = result.stdout.trim().split("\n")
+        for (const line of lines) {
+          if (line.trim().startsWith("{")) {
+            try {
+              const sessionData = JSON.parse(line)
+              if (sessionData.cdpUrl?.startsWith("ws://")) {
+                cdpUrl = sessionData.cdpUrl
+                if (debug) {
+                  console.log(`  ✅ CDP URL found: ${cdpUrl}`)
+                }
+                return cdpUrl
+              }
+            } catch {
+              // Skip invalid JSON lines
+            }
+          }
+        }
+      }
+
+      if (debug && (Date.now() - startTime) % 5000 < 1000) {
+        console.log(`  ⏳ Waiting for CDP URL... (${Math.round((Date.now() - startTime) / 1000)}s)`)
+      }
+    } catch (error) {
+      if (debug) {
+        console.log(`  ⚠️ Error checking CDP URL: ${error instanceof Error ? error.message : String(error)}`)
+      }
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+  }
+
+  if (debug) {
+    console.log(`  ⚠️ CDP URL not available after ${timeoutMs}ms - chrome-devtools MCP may not work`)
+  }
+  return null
 }
