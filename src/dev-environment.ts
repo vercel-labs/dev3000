@@ -2210,18 +2210,19 @@ export class DevEnvironment {
         // this.logger.log("browser", "[Screencast] Auto-capture enabled for navigation events")
       }
 
-      if (cdpUrl || chromePids.length > 0) {
-        writeSessionInfo(
-          projectName,
-          this.options.logFile,
-          this.options.port,
-          this.options.mcpPort,
-          cdpUrl || undefined,
-          chromePids,
-          this.options.serverCommand
-        )
-        this.debugLog(`Updated session info with CDP URL: ${cdpUrl}, Chrome PIDs: [${chromePids.join(", ")}]`)
-      }
+      // Always write session info after CDP monitoring starts - this is critical for
+      // sandbox environments where external tools poll for the cdpUrl in the session file
+      writeSessionInfo(
+        projectName,
+        this.options.logFile,
+        this.options.port,
+        this.options.mcpPort,
+        cdpUrl || undefined,
+        chromePids,
+        this.options.serverCommand
+      )
+      this.debugLog(`Updated session info with CDP URL: ${cdpUrl}, Chrome PIDs: [${chromePids.join(", ")}]`)
+      this.logger.log("browser", `[CDP] Session info written with cdpUrl: ${cdpUrl ? "available" : "null"}`)
 
       // Navigate to the app
       await this.cdpMonitor.navigateToApp(this.options.port)
