@@ -81,10 +81,10 @@ export async function cloudFixWorkflow(params: {
     gitDiff?: string | null
   } | null = null
   if (repoUrl) {
-    await updateProgress(0, "Creating development sandbox...")
+    await updateProgress(0, `Cloning ${repoUrl.split("/").slice(-1)[0] || "repository"}...`)
     sandboxInfo = await createD3kSandbox(repoUrl, repoBranch || "main", projectName, vercelToken, vercelOidcToken)
     if (sandboxInfo?.devUrl) {
-      await updateProgress(0, "Sandbox ready, analyzing...", sandboxInfo.devUrl)
+      await updateProgress(0, `Sandbox live at ${sandboxInfo.devUrl.replace("https://", "")}`, sandboxInfo.devUrl)
     }
   }
 
@@ -92,7 +92,7 @@ export async function cloudFixWorkflow(params: {
   // If we got CLS data from Step 0, pass it to Step 1 to avoid re-fetching
   // Use bypass token from sandbox if available, otherwise use provided one
   // Also pass the beforeScreenshotUrl from Step 0 if available
-  await updateProgress(1, "Fetching logs and analyzing errors...")
+  await updateProgress(1, "Capturing performance metrics (CLS, LCP, errors)...")
   const effectiveBypassToken = sandboxInfo?.bypassToken || bypassToken
   const step1Result = await fetchRealLogs(
     sandboxInfo?.mcpUrl || devUrl,
@@ -103,13 +103,25 @@ export async function cloudFixWorkflow(params: {
     sandboxInfo?.beforeScreenshotUrl
   )
   const { logAnalysis, beforeScreenshotUrl } = step1Result
+  await updateProgress(1, `Captured ${logAnalysis.length > 5000 ? "detailed" : "initial"} diagnostics`)
 
   // Step 2: Invoke AI agent to analyze logs and create fix
-  await updateProgress(2, "AI analyzing logs and generating fixes...")
+  await updateProgress(2, "Claude analyzing logs and generating fixes...")
   const fixProposal = await analyzeLogsWithAgent(logAnalysis, sandboxInfo?.devUrl || devUrl)
 
+  // Provide feedback on what was found
+  const hasError = fixProposal.toLowerCase().includes("error") || fixProposal.toLowerCase().includes("issue")
+  const hasFix = fixProposal.includes("```diff")
+  if (hasFix) {
+    await updateProgress(2, "Claude generated a fix proposal with code changes")
+  } else if (hasError) {
+    await updateProgress(2, "Claude identified issues but no code fix needed")
+  } else {
+    await updateProgress(2, "Claude analysis complete - system appears healthy")
+  }
+
   // Step 3: Upload to blob storage with full context, screenshot, and git diff
-  await updateProgress(3, "Uploading report to storage...")
+  await updateProgress(3, "Compiling full report with screenshots...")
   const blobResult = await uploadToBlob(
     fixProposal,
     projectName,
@@ -118,14 +130,19 @@ export async function cloudFixWorkflow(params: {
     beforeScreenshotUrl,
     sandboxInfo?.gitDiff
   )
+  await updateProgress(3, "Report uploaded to Vercel Blob")
 
   // Step 4: Create GitHub PR if repo info provided AND there are actual fixes to apply
   let prResult = null
   const hasGitPatch = fixProposal.includes("```diff")
   if (repoOwner && repoName && hasGitPatch) {
-    await updateProgress(4, "Creating GitHub PR with fixes...")
+    await updateProgress(4, `Creating PR on ${repoOwner}/${repoName}...`)
     prResult = await createGitHubPR(fixProposal, blobResult.blobUrl, repoOwner, repoName, baseBranch, projectName)
+    if (prResult?.success) {
+      await updateProgress(4, `PR #${prResult.prNumber} created successfully`)
+    }
   } else if (repoOwner && repoName && !hasGitPatch) {
+    await updateProgress(4, "No code changes needed - skipping PR")
     console.log("[Workflow] No git patch found - skipping PR creation (system is healthy)")
   }
 
