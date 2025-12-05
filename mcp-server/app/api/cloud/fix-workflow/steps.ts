@@ -391,21 +391,30 @@ LOADINGHTML
               // Try to parse the text as JSON if it contains structured data
               try {
                 clsData = JSON.parse(item.text)
-                console.log(`[Step 0] Successfully parsed CLS data`)
-                break
+                console.log(`[Step 0] Successfully parsed CLS data as JSON`)
               } catch {
                 // If not JSON, treat as plain text
                 clsData = { rawOutput: item.text }
+                console.log(`[Step 0] CLS data stored as rawOutput (not JSON)`)
               }
+              break
             }
           }
         }
 
-        console.log(`[Step 0] CLS data captured:`, JSON.stringify(clsData).substring(0, 500))
+        if (clsData) {
+          console.log(`[Step 0] CLS data captured:`, JSON.stringify(clsData).substring(0, 500))
+        } else {
+          console.log(`[Step 0] No CLS data extracted from MCP response`)
+          console.log(`[Step 0] Response structure: ${JSON.stringify(mcpResponse).substring(0, 500)}`)
+        }
       } catch (parseError) {
         mcpError = `Failed to parse MCP response: ${parseError instanceof Error ? parseError.message : String(parseError)}`
         console.log(`[Step 0] ${mcpError}`)
         console.log(`[Step 0] Raw stdout: ${stdout.substring(0, 1000)}`)
+        // Use raw stdout as fallback CLS data so Step 1 doesn't hang
+        clsData = { rawMcpOutput: stdout.substring(0, 10000), parseError: mcpError }
+        console.log(`[Step 0] Using raw stdout as fallback CLS data`)
       }
     } else if (exitCode !== 0 && !mcpError) {
       mcpError = `MCP command failed with exit code ${exitCode}`
@@ -418,6 +427,19 @@ LOADINGHTML
     mcpError = `MCP execution error: ${error instanceof Error ? error.message : String(error)}`
     console.log(`[Step 0] ${mcpError}`)
   }
+
+  // IMPORTANT: Ensure clsData is ALWAYS set to something truthy so Step 1 doesn't hang on timeouts
+  // Even if MCP failed, we should have sandbox logs that Step 1 can use
+  if (!clsData) {
+    console.log(`[Step 0] WARNING: No CLS data captured, creating placeholder to prevent Step 1 timeout`)
+    clsData = {
+      warning: "MCP fix_my_app did not return data",
+      mcpError: mcpError || "Unknown error",
+      sandboxDevUrl: sandboxResult.devUrl,
+      sandboxMcpUrl: sandboxResult.mcpUrl
+    }
+  }
+  console.log(`[Step 0] Final clsData truthy check: ${!!clsData}`)
 
   // Dump all sandbox logs before returning for debugging
   console.log(`[Step 0] === Dumping sandbox logs before returning ===`)
@@ -481,14 +503,23 @@ export async function fetchRealLogs(
 ) {
   "use step"
 
-  // If we already have CLS data from Step 0, use it along with the screenshot
+  // Debug: Log what we received from Step 0
+  console.log(`[Step 1] Received clsData: ${clsData ? "truthy" : "falsy"}, type: ${typeof clsData}`)
   if (clsData) {
-    console.log("[Step 1] Using CLS data captured in Step 0")
+    console.log(`[Step 1] clsData preview: ${JSON.stringify(clsData).substring(0, 200)}`)
+  }
+
+  // If we already have CLS data from Step 0, use it along with the screenshot
+  // This early return prevents the long MCP timeout delays
+  if (clsData) {
+    console.log("[Step 1] ✅ Using CLS data captured in Step 0 (skipping MCP calls)")
     if (beforeScreenshotUrlFromStep0) {
       console.log(`[Step 1] Before screenshot from Step 0: ${beforeScreenshotUrlFromStep0}`)
     }
     return { logAnalysis: JSON.stringify(clsData, null, 2), beforeScreenshotUrl: beforeScreenshotUrlFromStep0 || null }
   }
+
+  console.log("[Step 1] ⚠️ No CLS data from Step 0, will try MCP calls (may timeout)")
 
   // If there was an MCP error in Step 0, log it
   if (mcpError) {
