@@ -300,6 +300,52 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
       }
     }
 
+    // Validate Chromium binary exists and is executable
+    if (debug) console.log(`  🔍 Validating Chromium binary at: ${chromiumPath}`)
+    const validateChromiumResult = await runCommandWithLogs(sandbox, {
+      cmd: "sh",
+      args: [
+        "-c",
+        `
+        echo "=== Chromium Binary Validation ==="
+        echo "1. Checking if file exists..."
+        if [ -f "${chromiumPath}" ]; then
+          echo "   ✅ File exists"
+          ls -la "${chromiumPath}"
+        else
+          echo "   ❌ File does NOT exist at ${chromiumPath}"
+          echo "   Checking /tmp directory..."
+          ls -la /tmp/ | head -20
+          exit 1
+        fi
+
+        echo "2. Checking if file is executable..."
+        if [ -x "${chromiumPath}" ]; then
+          echo "   ✅ File is executable"
+        else
+          echo "   ❌ File is NOT executable"
+          echo "   Attempting to make it executable..."
+          chmod +x "${chromiumPath}" && echo "   ✅ Made executable" || echo "   ❌ Failed to chmod"
+        fi
+
+        echo "3. Checking file type..."
+        file "${chromiumPath}" 2>&1 || echo "   ⚠️ file command failed"
+
+        echo "4. Testing Chromium launch with --version..."
+        "${chromiumPath}" --version 2>&1 || echo "   ⚠️ --version failed (may need deps)"
+
+        echo "5. Testing headless mode briefly..."
+        timeout 5 "${chromiumPath}" --headless=new --no-sandbox --disable-gpu --dump-dom about:blank 2>&1 | head -5 || echo "   ⚠️ Headless test completed or timed out"
+
+        echo "=== End Chromium Validation ==="
+        `
+      ]
+    })
+    console.log(`  📋 Chromium validation:\n${validateChromiumResult.stdout}`)
+    if (validateChromiumResult.stderr) {
+      console.log(`  ⚠️ Chromium validation stderr:\n${validateChromiumResult.stderr}`)
+    }
+
     // Install d3k globally from npm
     if (debug) console.log("  📦 Installing d3k globally from npm...")
     const d3kInstallResult = await runCommandWithLogs(sandbox, {
