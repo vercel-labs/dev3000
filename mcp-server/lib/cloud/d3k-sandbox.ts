@@ -355,16 +355,21 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
       args: [
         "-c",
         `
+        set -x  # Enable command tracing for debugging
+
         echo "=== Direct Chrome CDP Launch Test ==="
-        echo "This tests if Chrome can start with --remote-debugging-port=9222"
-        echo "If this fails, d3k won't be able to start Chrome either."
+        echo "Chromium path: ${chromiumPath}"
         echo ""
 
         # Kill any existing Chrome processes first
         pkill -f chromium 2>/dev/null || true
         sleep 1
 
-        echo "1. Starting Chrome headless with CDP port..."
+        # Create a temp file for Chrome stderr
+        CHROME_STDERR=/tmp/chrome_stderr.log
+        rm -f $CHROME_STDERR
+
+        echo "1. Starting Chrome headless with CDP port (stderr -> $CHROME_STDERR)..."
         "${chromiumPath}" \\
           --headless=new \\
           --no-sandbox \\
@@ -374,36 +379,52 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
           --disable-software-rasterizer \\
           --remote-debugging-port=9222 \\
           --remote-debugging-address=127.0.0.1 \\
-          about:blank &
+          about:blank 2>$CHROME_STDERR &
         CHROME_PID=$!
         echo "   Chrome PID: $CHROME_PID"
 
-        echo "2. Waiting 3 seconds for Chrome to start..."
+        # Wait a tiny bit to let Chrome start (or crash)
+        sleep 0.5
+
+        # Check if it's still running immediately after launch
+        echo "2. Checking immediate process status..."
+        if ps -p $CHROME_PID > /dev/null 2>&1; then
+          echo "   ✅ Chrome process is still alive after 0.5s"
+        else
+          echo "   ❌ Chrome process DIED within 0.5s!"
+          echo "   Chrome stderr output:"
+          cat $CHROME_STDERR 2>/dev/null || echo "   (no stderr captured)"
+          echo "   Checking for core dumps..."
+          ls -la /tmp/core* 2>/dev/null || echo "   (no core dumps)"
+        fi
+
+        echo "3. Waiting 3 more seconds for Chrome to fully start..."
         sleep 3
 
-        echo "3. Checking if Chrome process is running..."
+        echo "4. Final process status check..."
         if ps -p $CHROME_PID > /dev/null 2>&1; then
           echo "   ✅ Chrome process is RUNNING (PID $CHROME_PID)"
         else
-          echo "   ❌ Chrome process DIED immediately"
-          echo "   Checking dmesg for kernel messages..."
-          dmesg 2>/dev/null | tail -10 || echo "   (dmesg not available)"
+          echo "   ❌ Chrome process DIED"
+          echo "   Chrome stderr output:"
+          cat $CHROME_STDERR 2>/dev/null || echo "   (no stderr captured)"
         fi
 
-        echo "4. Checking what's listening on port 9222..."
-        netstat -tlnp 2>/dev/null | grep 9222 || ss -tlnp 2>/dev/null | grep 9222 || echo "   ⚠️ Nothing listening on port 9222"
+        echo "5. Chrome stderr (first 50 lines):"
+        head -50 $CHROME_STDERR 2>/dev/null || echo "   (no stderr file)"
 
-        echo "5. Trying to connect to CDP endpoint..."
-        curl -s http://127.0.0.1:9222/json/version 2>&1 | head -20 || echo "   ⚠️ Could not connect to CDP endpoint"
+        echo "6. Checking what's listening on port 9222..."
+        ss -tlnp 2>/dev/null | grep 9222 || netstat -tlnp 2>/dev/null | grep 9222 || echo "   ⚠️ Nothing listening on port 9222"
 
-        echo "6. Trying to get browser websocket URL..."
-        curl -s http://127.0.0.1:9222/json/version 2>&1 | grep -o '"webSocketDebuggerUrl":"[^"]*"' || echo "   ⚠️ No webSocketDebuggerUrl found"
+        echo "7. Trying to connect to CDP endpoint..."
+        curl -s --connect-timeout 5 http://127.0.0.1:9222/json/version 2>&1 || echo "   ⚠️ Could not connect to CDP endpoint"
 
-        echo "7. Process list (Chrome-related)..."
-        ps aux | grep -E '(chromium|chrome)' | grep -v grep | head -10 || echo "   No Chrome processes found"
+        echo "8. All processes:"
+        ps aux | head -20
 
-        echo "8. Killing test Chrome process..."
+        echo "9. Killing test Chrome process..."
         kill $CHROME_PID 2>/dev/null || true
+        rm -f $CHROME_STDERR
 
         echo "=== End Direct Chrome CDP Test ==="
         `
