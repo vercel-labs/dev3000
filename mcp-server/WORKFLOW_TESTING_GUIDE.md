@@ -2,6 +2,23 @@
 
 Quick reference for testing mcp-server workflows end-to-end with proper monitoring.
 
+## After Committing Code Changes
+
+When you push code to main, Vercel auto-deploys. **Don't wait for the user** - proactively monitor and verify:
+
+1. **Start monitoring immediately after push:**
+   ```bash
+   vercel logs d3k-mcp.vercel.app --scope team_nLlpyC6REAqxydlFKbrMDlud
+   ```
+
+2. **Watch for deployment completion:**
+   - New log activity indicates the new deployment is live
+   - Or check `vercel ls --scope team_nLlpyC6REAqxydlFKbrMDlud` to see latest deployment
+
+3. **Proceed with testing:**
+   - Once deployed, start the workflow test immediately
+   - Don't wait for user confirmation - be proactive
+
 ## Prerequisites
 
 ### 1. Verify OIDC Token is Valid

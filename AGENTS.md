@@ -15,6 +15,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `pnpm run typecheck` - Fix all TypeScript errors before committing
 - Never bypass pre-commit hooks or use --no-verify. Fix all issues until the code passes.
 
+**AFTER COMMITTING**: When you push to main, Vercel auto-deploys. Monitor the deployment:
+1. Start monitoring logs immediately after push: `vercel logs d3k-mcp.vercel.app --scope team_nLlpyC6REAqxydlFKbrMDlud`
+2. Wait for deployment to complete (watch for new log activity or check `vercel ls`)
+3. Once deployed, proceed with testing the changes - don't wait for user confirmation
+
 **PACKAGE MANAGER**: This project uses pnpm exclusively. Never use npm or yarn.
 
 **TURBOPACK**: NEVER disable turbopack in favor of webpack. This project uses turbopack exclusively for Next.js builds. Do not switch to webpack under any circumstances.
