@@ -399,6 +399,67 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
         `  🔧 Command: cd ${sandboxCwd} && MCP_SKIP_PERMISSIONS=true d3k --no-tui --debug --headless --browser ${chromiumPath}`
       )
 
+    // DIAGNOSTIC: First test if spawn() with the chromium path works inside the sandbox
+    // This isolates whether the issue is with d3k's spawn() vs shell commands
+    console.log("  🔍 ===== TESTING spawn() with chromium directly =====")
+    try {
+      const spawnTestScript = `
+        exec 2>&1
+        echo "Testing if Node can spawn Chrome directly..."
+        node -e "
+          const { spawn } = require('child_process');
+          const chromePath = '${chromiumPath}';
+          const args = [
+            '--remote-debugging-port=9222',
+            '--user-data-dir=/tmp/spawn-test-profile',
+            '--no-first-run',
+            '--headless=new',
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-gpu',
+            '--disable-dev-shm-usage',
+            'about:blank'
+          ];
+          console.log('Spawning:', chromePath, args.join(' '));
+          const proc = spawn(chromePath, args, { stdio: 'pipe', detached: false });
+          proc.on('error', (e) => console.log('SPAWN ERROR:', e.message));
+          proc.stderr.on('data', (d) => console.log('STDERR:', d.toString().trim()));
+          proc.stdout.on('data', (d) => console.log('STDOUT:', d.toString().trim()));
+          setTimeout(() => {
+            const running = proc.pid && !proc.killed;
+            console.log('Chrome PID:', proc.pid, 'Running:', running);
+            if (running) {
+              require('http').get('http://localhost:9222/json/version', (res) => {
+                let data = '';
+                res.on('data', chunk => data += chunk);
+                res.on('end', () => {
+                  console.log('CDP Response:', data.substring(0, 200));
+                  proc.kill();
+                  process.exit(0);
+                });
+              }).on('error', (e) => {
+                console.log('CDP Error:', e.message);
+                proc.kill();
+                process.exit(1);
+              });
+            } else {
+              console.log('Chrome not running after spawn');
+              process.exit(1);
+            }
+          }, 3000);
+        "
+      `
+      const spawnTest = await runCommandWithLogs(sandbox, {
+        cmd: "sh",
+        args: ["-c", spawnTestScript]
+      })
+      console.log(`  📋 spawn() test result (exit ${spawnTest.exitCode}):\n${spawnTest.stdout || "(no output)"}`)
+      if (spawnTest.stderr) console.log(`  ⚠️ spawn() test stderr: ${spawnTest.stderr}`)
+    } catch (error) {
+      console.log(`  ❌ spawn() test failed: ${error instanceof Error ? error.message : String(error)}`)
+    }
+    console.log("  🔍 ===== END spawn() TEST =====")
+
     // Start d3k in detached mode with --headless flag
     // This tells d3k to launch Chrome in headless mode, which works in serverless environments
     // We explicitly pass --browser with the path from @sparticuz/chromium
