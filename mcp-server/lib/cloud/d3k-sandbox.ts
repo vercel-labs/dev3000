@@ -466,11 +466,13 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     // Logs are written to /home/vercel-sandbox/.d3k/logs/ and can be read later.
     // IMPORTANT: Do NOT start infinite log streaming loops here - they prevent
     // the workflow step function from completing properly.
+    // DIAGNOSTIC: Also capture stdout/stderr to d3k-startup.log for debugging
+    const d3kStartupLog = "/home/vercel-sandbox/.d3k/logs/d3k-startup.log"
     await sandbox.runCommand({
       cmd: "sh",
       args: [
         "-c",
-        `cd ${sandboxCwd} && MCP_SKIP_PERMISSIONS=true d3k --no-tui --debug --headless --browser ${chromiumPath}`
+        `mkdir -p /home/vercel-sandbox/.d3k/logs && cd ${sandboxCwd} && MCP_SKIP_PERMISSIONS=true d3k --no-tui --debug --headless --browser ${chromiumPath} > ${d3kStartupLog} 2>&1`
       ],
       detached: true
     })
@@ -558,6 +560,21 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
       if (debug) console.log(`  ✅ CDP URL ready: ${cdpUrl}`)
     } else {
       console.log("  ⚠️ CDP URL not found - chrome-devtools MCP features may not work")
+      // DIAGNOSTIC: Dump all logs immediately when CDP fails - this is critical for debugging
+      console.log("  📋 === d3k LOG DUMP (CDP URL not found) ===")
+      try {
+        const cdpFailLogs = await runCommandWithLogs(sandbox, {
+          cmd: "sh",
+          args: [
+            "-c",
+            'for log in /home/vercel-sandbox/.d3k/logs/*.log; do [ -f "$log" ] && echo "\\n=== $log ===" && cat "$log" || true; done 2>/dev/null || echo "No log files found"'
+          ]
+        })
+        console.log(cdpFailLogs.stdout)
+      } catch (logErr) {
+        console.log(`  ⚠️ Could not read logs: ${logErr instanceof Error ? logErr.message : String(logErr)}`)
+      }
+      console.log("  📋 === END d3k LOG DUMP ===")
     }
 
     // Dump ALL d3k logs after initialization for debugging
