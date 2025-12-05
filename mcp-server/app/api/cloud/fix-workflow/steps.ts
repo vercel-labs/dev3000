@@ -39,11 +39,13 @@ async function captureScreenshotInSandbox(
   sandbox: Sandbox,
   appUrl: string,
   chromiumPath: string,
-  label: string
+  label: string,
+  sandboxCwd = "/vercel/sandbox"
 ): Promise<string | null> {
   console.log(`[Screenshot] Capturing ${label} screenshot of ${appUrl}...`)
 
   // Create a Node.js script to capture screenshot with puppeteer-core
+  // The script is placed in the sandbox cwd so it can find puppeteer-core from node_modules
   const screenshotScript = `
 const puppeteer = require('puppeteer-core');
 
@@ -92,10 +94,11 @@ const puppeteer = require('puppeteer-core');
 `
 
   try {
-    // Write the script to a temp file
+    // Write the script to the sandbox cwd so it can find puppeteer-core from node_modules
+    const scriptPath = `${sandboxCwd}/_screenshot.js`
     const writeResult = await runSandboxCommand(sandbox, "sh", [
       "-c",
-      `cat > /tmp/screenshot.js << 'SCRIPT_EOF'
+      `cat > ${scriptPath} << 'SCRIPT_EOF'
 ${screenshotScript}
 SCRIPT_EOF`
     ])
@@ -105,16 +108,31 @@ SCRIPT_EOF`
       return null
     }
 
-    // Run the script
-    const screenshotResult = await runSandboxCommand(sandbox, "node", ["/tmp/screenshot.js"])
+    // Run the script from the sandbox directory so node can find puppeteer-core in node_modules
+    const screenshotResult = await sandbox.runCommand({
+      cmd: "node",
+      args: [scriptPath],
+      cwd: sandboxCwd
+    })
+
+    let stdout = ""
+    let stderr = ""
+    for await (const log of screenshotResult.logs()) {
+      if (log.stream === "stdout") {
+        stdout += log.data
+      } else {
+        stderr += log.data
+      }
+    }
+    await screenshotResult.wait()
 
     if (screenshotResult.exitCode !== 0) {
-      console.log(`[Screenshot] Failed to capture: ${screenshotResult.stderr}`)
+      console.log(`[Screenshot] Failed to capture: ${stderr}`)
       return null
     }
 
     // The stdout should be the base64 image
-    const base64Data = screenshotResult.stdout.trim()
+    const base64Data = stdout.trim()
     if (base64Data && base64Data.length > 100) {
       console.log(`[Screenshot] Captured ${label} screenshot (${base64Data.length} bytes base64)`)
       return base64Data
