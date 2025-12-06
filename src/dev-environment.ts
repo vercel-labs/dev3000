@@ -1214,6 +1214,16 @@ export class DevEnvironment {
           console.error(chalk.red("[ERROR]"), entry.rawMessage)
         }
       })
+
+      // Check for Next.js lock file error - show in TUI status since it's a critical startup error
+      if (text.includes("Unable to acquire lock")) {
+        const errorMsg = "❌ Another Next.js dev server is running. Kill it or remove .next/dev/lock"
+        if (this.tui) {
+          this.tui.updateStatus(errorMsg)
+        } else {
+          console.error(chalk.red(errorMsg))
+        }
+      }
     })
 
     this.serverProcess.on("exit", (code) => {
