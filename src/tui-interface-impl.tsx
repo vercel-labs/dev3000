@@ -14,6 +14,9 @@ export interface TUIOptions {
   serversOnly?: boolean
   version: string
   projectName?: string
+  updateAvailable?: {
+    latestVersion: string
+  } | null
 }
 
 interface LogEntry {
@@ -148,16 +151,20 @@ const TUIApp = ({
   serversOnly,
   version,
   projectName,
+  updateAvailable,
   onStatusUpdate,
-  onAppPortUpdate
+  onAppPortUpdate,
+  onUpdateAvailableUpdate
 }: TUIOptions & {
   onStatusUpdate: (fn: (status: string | null) => void) => void
   onAppPortUpdate: (fn: (port: string) => void) => void
+  onUpdateAvailableUpdate: (fn: (info: { latestVersion: string } | null) => void) => void
 }) => {
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [scrollOffset, setScrollOffset] = useState(0)
   const [initStatus, setInitStatus] = useState<string | null>(null)
   const [appPort, setAppPort] = useState<string>(initialAppPort)
+  const [updateInfo, setUpdateInfo] = useState<{ latestVersion: string } | null>(updateAvailable || null)
   const [portConfirmed, setPortConfirmed] = useState<boolean>(false)
   const logIdCounter = useRef(0)
   const [clearFromLogId, setClearFromLogId] = useState<number>(0) // Track log ID to clear from
@@ -228,6 +235,13 @@ const TUIApp = ({
       setPortConfirmed(true)
     })
   }, [onAppPortUpdate])
+
+  // Provide update available function to parent
+  useEffect(() => {
+    onUpdateAvailableUpdate((info: { latestVersion: string } | null) => {
+      setUpdateInfo(info)
+    })
+  }, [onUpdateAvailableUpdate])
 
   // Calculate available lines for logs dynamically based on terminal height and mode
   const calculateMaxVisibleLogs = () => {
@@ -524,13 +538,18 @@ const TUIApp = ({
 
       {/* Bottom status line - no border, just text */}
       <Box paddingX={1} justifyContent="space-between">
-        <Text color="#A18CE5">
-          ⏵⏵{" "}
-          {isVeryCompact
-            ? logFile.split("/").slice(-2, -1)[0] || "logs" // Just show directory name
-            : logFile.replace(process.env.HOME || "", "~")}
-        </Text>
-        <Text color="#A18CE5">{ctrlCMessage}</Text>
+        <Box>
+          <Text color="#A18CE5">
+            ⏵⏵{" "}
+            {isVeryCompact
+              ? logFile.split("/").slice(-2, -1)[0] || "logs" // Just show directory name
+              : logFile.replace(process.env.HOME || "", "~")}
+          </Text>
+        </Box>
+        <Box gap={2}>
+          {updateInfo && <Text color="yellow">↑ v{updateInfo.latestVersion} available (d3k upgrade)</Text>}
+          <Text color="#A18CE5">{ctrlCMessage}</Text>
+        </Box>
       </Box>
     </Box>
   )
@@ -540,11 +559,13 @@ export async function runTUI(options: TUIOptions): Promise<{
   app: { unmount: () => void }
   updateStatus: (status: string | null) => void
   updateAppPort: (port: string) => void
+  updateUpdateAvailable: (info: { latestVersion: string } | null) => void
 }> {
   return new Promise((resolve, reject) => {
     try {
       let statusUpdater: ((status: string | null) => void) | null = null
       let appPortUpdater: ((port: string) => void) | null = null
+      let updateAvailableUpdater: ((info: { latestVersion: string } | null) => void) | null = null
 
       // Wrap stdout.write to add synchronized update escape sequences
       // This tells the terminal to buffer all output until the end marker
@@ -581,6 +602,9 @@ export async function runTUI(options: TUIOptions): Promise<{
           onAppPortUpdate={(fn) => {
             appPortUpdater = fn
           }}
+          onUpdateAvailableUpdate={(fn) => {
+            updateAvailableUpdater = fn
+          }}
         />,
         { exitOnCtrlC: false }
       )
@@ -597,6 +621,11 @@ export async function runTUI(options: TUIOptions): Promise<{
           updateAppPort: (port: string) => {
             if (appPortUpdater) {
               appPortUpdater(port)
+            }
+          },
+          updateUpdateAvailable: (info: { latestVersion: string } | null) => {
+            if (updateAvailableUpdater) {
+              updateAvailableUpdater(info)
             }
           }
         })

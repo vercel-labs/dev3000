@@ -14,6 +14,7 @@ import { detectAIAgent } from "./utils/agent-detection.js"
 import { formatMcpConfigTargets, parseDisabledMcpConfigs } from "./utils/mcp-configs.js"
 import { getProjectName } from "./utils/project-name.js"
 import { loadUserConfig } from "./utils/user-config.js"
+import { checkForUpdates, getUpgradeCommand, performUpgrade } from "./utils/version-check.js"
 
 interface ProjectConfig {
   type: "node" | "python" | "rails"
@@ -493,6 +494,52 @@ cloud
       await cloudCheckPR({ ...options, prNumber })
     } catch (error) {
       console.error(chalk.red("❌ Cloud check-pr failed:"), error)
+      process.exit(1)
+    }
+  })
+
+// Upgrade command
+program
+  .command("upgrade")
+  .description("Upgrade dev3000 to the latest version")
+  .option("--check", "Only check for updates without upgrading")
+  .action(async (options) => {
+    console.log(chalk.cyan("Checking for updates...\n"))
+
+    const versionInfo = await checkForUpdates()
+
+    console.log(chalk.white(`Current version: ${chalk.yellow(versionInfo.currentVersion)}`))
+
+    if (versionInfo.latestVersion) {
+      console.log(chalk.white(`Latest version:  ${chalk.green(versionInfo.latestVersion)}`))
+    } else {
+      console.log(chalk.gray("Could not fetch latest version from npm registry"))
+    }
+
+    if (!versionInfo.updateAvailable) {
+      console.log(chalk.green("\n✓ You're already on the latest version!"))
+      process.exit(0)
+    }
+
+    console.log(chalk.yellow(`\n↑ Update available: ${versionInfo.currentVersion} → ${versionInfo.latestVersion}`))
+
+    if (options.check) {
+      const upgradeCmd = getUpgradeCommand(versionInfo.packageManager)
+      console.log(chalk.cyan(`\nTo upgrade, run: ${chalk.white(upgradeCmd)}`))
+      console.log(chalk.gray(`Or run: ${chalk.white("d3k upgrade")}`))
+      process.exit(0)
+    }
+
+    console.log("")
+    const result = performUpgrade()
+
+    if (result.success) {
+      console.log(chalk.green("\n✓ Upgrade completed successfully!"))
+      console.log(chalk.gray("Run 'd3k --version' to verify the new version."))
+    } else {
+      console.error(chalk.red(`\n✗ Upgrade failed: ${result.error}`))
+      const upgradeCmd = getUpgradeCommand(versionInfo.packageManager)
+      console.log(chalk.yellow(`\nTry running manually: ${chalk.white(upgradeCmd)}`))
       process.exit(1)
     }
   })

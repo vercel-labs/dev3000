@@ -6,6 +6,9 @@ export interface TUIOptions {
   serversOnly?: boolean
   version: string
   projectName?: string
+  updateAvailable?: {
+    latestVersion: string
+  } | null
 }
 
 type InkApp = { unmount: () => void }
@@ -15,6 +18,7 @@ export class DevTUI {
   private app: InkApp | null = null
   private updateStatusFn: ((status: string | null) => void) | null = null
   private updateAppPortFn: ((port: string) => void) | null = null
+  private updateUpdateAvailableFn: ((info: { latestVersion: string } | null) => void) | null = null
 
   constructor(options: TUIOptions) {
     this.options = options
@@ -41,10 +45,11 @@ export class DevTUI {
 
       // Use dynamic import to load the TSX implementation at runtime
       const { runTUI } = await import("./tui-interface-impl.js")
-      const { app, updateStatus, updateAppPort } = await runTUI(this.options)
+      const { app, updateStatus, updateAppPort, updateUpdateAvailable } = await runTUI(this.options)
       this.app = app
       this.updateStatusFn = updateStatus
       this.updateAppPortFn = updateAppPort
+      this.updateUpdateAvailableFn = updateUpdateAvailable
 
       // Restore original error logging after startup
       setTimeout(() => {
@@ -65,6 +70,12 @@ export class DevTUI {
   updateAppPort(port: string): void {
     if (this.updateAppPortFn) {
       this.updateAppPortFn(port)
+    }
+  }
+
+  updateUpdateAvailable(info: { latestVersion: string } | null): void {
+    if (this.updateUpdateAvailableFn) {
+      this.updateUpdateAvailableFn(info)
     }
   }
 

@@ -25,6 +25,7 @@ import { DevTUI } from "./tui-interface.js"
 import { formatMcpConfigTargets, MCP_CONFIG_TARGETS, type McpConfigTarget } from "./utils/mcp-configs.js"
 import { getProjectDisplayName, getProjectName } from "./utils/project-name.js"
 import { formatTimestamp } from "./utils/timestamp.js"
+import { checkForUpdates } from "./utils/version-check.js"
 
 // MCP names
 const MCP_NAMES = {
@@ -911,6 +912,9 @@ export class DevEnvironment {
       const projectName = getProjectName()
       const projectDisplayName = getProjectDisplayName()
 
+      // Check for updates in parallel with TUI startup (non-blocking)
+      const updateCheckPromise = checkForUpdates().catch(() => null)
+
       // Start TUI interface with initial status and updated port
       this.tui = new DevTUI({
         appPort: this.options.port, // This may have been updated by checkPortsAvailable
@@ -919,10 +923,19 @@ export class DevEnvironment {
         commandName: this.options.commandName,
         serversOnly: this.options.serversOnly,
         version: this.version,
-        projectName: projectDisplayName
+        projectName: projectDisplayName,
+        updateAvailable: null // Will be updated async
       })
 
       await this.tui.start()
+
+      // Update TUI with version check result (non-blocking)
+      updateCheckPromise.then((versionInfo) => {
+        if (versionInfo?.updateAvailable && versionInfo.latestVersion && this.tui) {
+          this.debugLog(`Update available: ${versionInfo.currentVersion} -> ${versionInfo.latestVersion}`)
+          this.tui.updateUpdateAvailable({ latestVersion: versionInfo.latestVersion })
+        }
+      })
 
       // Check ports in background after TUI is visible
       await this.tui.updateStatus("Checking ports...")
@@ -1140,6 +1153,20 @@ export class DevEnvironment {
         console.log(chalk.cyan("🖥️  Servers-only mode - use Chrome extension for browser monitoring"))
       }
       console.log(chalk.cyan("\nUse Ctrl-C to stop.\n"))
+
+      // Check for updates in non-TUI mode (non-blocking)
+      checkForUpdates()
+        .then((versionInfo) => {
+          if (versionInfo?.updateAvailable && versionInfo.latestVersion) {
+            console.log(
+              chalk.yellow(`\n↑ Update available: v${versionInfo.currentVersion} → v${versionInfo.latestVersion}`)
+            )
+            console.log(chalk.gray(`  Run 'd3k upgrade' to update\n`))
+          }
+        })
+        .catch(() => {
+          // Silently ignore update check failures
+        })
     }
 
     // Start health monitoring after everything is ready
