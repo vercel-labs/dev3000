@@ -93,22 +93,16 @@ async function runTests() {
     console.log("✅ Screenshot endpoint working")
 
     // Test 4: Logs page
-    // Note: This test may fail with Next.js canary versions due to SSR issues
-    // The API endpoints are more critical and are tested above
     console.log("\n📄 Testing /logs page...")
     const logsPageResponse = await fetch(`${mcpUrl}/logs`)
     if (!logsPageResponse.ok) {
-      // Log warning but don't fail - this is a known issue with Next.js canary SSR
-      console.log(`⚠️ Logs page returned ${logsPageResponse.status} - may be Next.js canary SSR issue`)
-      console.log("   API endpoints work correctly, so this is non-critical")
-    } else {
-      const pageContent = await logsPageResponse.text()
-      if (!pageContent.includes("<!DOCTYPE html>")) {
-        console.log("⚠️ Logs page didn't return expected HTML")
-      } else {
-        console.log("✅ Logs page working")
-      }
+      throw new Error(`Logs page failed: ${logsPageResponse.status} ${logsPageResponse.statusText}`)
     }
+    const pageContent = await logsPageResponse.text()
+    if (!pageContent.includes("<!DOCTYPE html>")) {
+      throw new Error("Logs page didn't return HTML")
+    }
+    console.log("✅ Logs page working")
 
     // Test 5: Verify screenshot URLs in log data via API
     console.log("\n🖼️ Testing screenshot URLs in log entries...")
