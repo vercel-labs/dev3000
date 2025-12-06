@@ -528,17 +528,18 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
 
         const result = await response.json()
 
-        // Set activeRunId for polling (even if workflow already completed)
+        // Set activeRunId for polling - let polling handle status updates
         if (result.runId) {
           setActiveRunId(result.runId)
         }
 
-        if (result.success) {
-          setWorkflowResult(result)
-          setWorkflowStatus("Workflow completed successfully!")
-        } else {
+        // Don't immediately show completion - let polling verify the workflow status
+        // The API may return success=true but polling should confirm the backend state
+        // This prevents showing "completed" while the workflow is still running
+        if (!result.success) {
           setWorkflowStatus(`Workflow failed: ${result.error}`)
         }
+        // If success, let polling update the status when it confirms the run is "done"
       } catch (fetchError) {
         clearTimeout(timeoutId)
         if (fetchError instanceof Error && fetchError.name === "AbortError") {
