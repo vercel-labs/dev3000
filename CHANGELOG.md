@@ -4,6 +4,16 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.119] - 2025-12-06
+
+**Feature Release**
+
+- Remove Next.js canary workaround from test-logs-api.ts
+- Switch from Next.js canary to latest (16.0.7)
+- Add server/instrumentation.js for Vercel build compatibility
+- Fix Chrome launch issues and improve release test reliability
+- Update pnpm.overrides to Next.js 16.1.0-canary.15
+
 ## [0.0.118] - 2025-12-05
 
 **Feature Release**

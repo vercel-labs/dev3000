@@ -10,6 +10,19 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.119",
+    date: "2025-12-06",
+    type: "minor",
+    highlights: [
+      "Remove Next.js canary workaround from test-logs-api.ts",
+      "Switch from Next.js canary to latest (16.0.7)",
+      "Add server/instrumentation.js for Vercel build compatibility",
+      "Fix Chrome launch issues and improve release test reliability",
+      "Update pnpm.overrides to Next.js 16.1.0-canary.15"
+    ]
+  },
+
+  {
     version: "0.0.118",
     date: "2025-12-05",
     type: "minor",
