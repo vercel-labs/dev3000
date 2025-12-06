@@ -959,71 +959,75 @@ export async function analyzeLogsWithAgent(logAnalysis: string, devUrl: string) 
   // Use Claude Sonnet 4 via AI Gateway
   const model = gateway("anthropic/claude-sonnet-4-20250514")
 
-  const prompt = `You are a senior software engineer performing a THOROUGH code review and debugging session.
+  const prompt = `You are a CLS (Cumulative Layout Shift) specialist engineer. Your ONLY focus is fixing layout shift issues.
 
 The dev server is running at: ${devUrl}
 
 Here's the diagnostic data captured from the running application:
 ${logAnalysis}
 
-## YOUR MISSION: Find and fix SOMETHING
+## YOUR MISSION: Fix CLS Issues
 
-You MUST try your hardest to find at least one issue to fix. The user is paying for this analysis and expects actionable results.
+CLS (Cumulative Layout Shift) measures visual stability. A good CLS score is 0.1 or less. You must find and fix any layout shift issues.
 
-Look for ANY of these issues:
-1. **Console errors or warnings** - JavaScript errors, React warnings, TypeScript issues
-2. **Performance issues** - CLS (Cumulative Layout Shift) > 0.1, slow renders, layout jank
-3. **Network errors** - Failed API calls, 4xx/5xx responses, CORS issues
-4. **Hydration mismatches** - Server/client HTML differences
-5. **Accessibility issues** - Missing alt text, improper ARIA labels
-6. **Best practice violations** - Missing error boundaries, no loading states, inline styles
-7. **Code quality issues** - Missing TypeScript types, unhandled promise rejections
-8. **Security issues** - XSS vulnerabilities, exposed secrets, unsafe innerHTML
-9. **SEO issues** - Missing meta tags, improper heading structure
-10. **MCP/diagnostic errors** - If the MCP capture itself had issues, that indicates a problem to investigate
+### What causes CLS:
+1. **Images without dimensions** - <img> tags missing width/height attributes cause layout shifts when images load
+2. **Dynamic content insertion** - Content that appears after initial render (ads, banners, notifications)
+3. **Web fonts causing FOIT/FOUT** - Text that shifts when custom fonts load
+4. **Async loaded components** - React components that render after data fetches without placeholder space
+5. **Animations that trigger layout** - CSS animations affecting width/height/position
 
-Even if the logs say "no errors found" or seem empty, STILL PROVIDE A FIX for something that could be improved. Common improvements:
-- Add error boundaries to React components
-- Add loading/skeleton states
-- Improve TypeScript types
-- Add proper error handling
-- Fix accessibility issues
-- Add meta tags for SEO
+### How to fix CLS:
+1. **Add width/height to images**: Always specify explicit dimensions or use aspect-ratio CSS
+2. **Reserve space for dynamic content**: Use min-height, skeleton loaders, or CSS aspect-ratio
+3. **Use font-display: optional or swap**: Prevent font-related layout shifts
+4. **Add Suspense with sized fallbacks**: Wrap async components with fallbacks that match final size
+5. **Use transform animations**: Prefer transform/opacity over width/height/top/left
+
+### Look for in the diagnostic data:
+- CLS score > 0.1 (needs fixing)
+- CLS score > 0.25 (critical - very bad user experience)
+- Layout shift entries showing which elements shifted
+- Images without explicit dimensions in the DOM
+- Dynamic content without reserved space
 
 ## Required Output Format
 
-## Issue
-[Description of the issue - be specific, not vague]
+## CLS Issue
+[Specific description of what's causing the layout shift]
+
+## CLS Score
+[The measured CLS score from the diagnostics, or "Unknown" if not captured]
 
 ## Root Cause
-[Technical explanation of WHY this is happening]
+[Technical explanation - which element shifted and why]
 
 ## Proposed Fix
-[Clear explanation of the solution]
+[Clear explanation of how to prevent this shift]
 
 ## Git Patch
 \`\`\`diff
-diff --git a/path/to/file.ts b/path/to/file.ts
+diff --git a/path/to/file.tsx b/path/to/file.tsx
 index abc123..def456 100644
---- a/path/to/file.ts
-+++ b/path/to/file.ts
-@@ -10,7 +10,7 @@ function example() {
+--- a/path/to/file.tsx
++++ b/path/to/file.tsx
+@@ -10,7 +10,7 @@ function Component() {
    unchanged line
 -  old line to remove
 +  new line to add
    unchanged line
 \`\`\`
 
-## Reasoning
-[Why this fix works and improves the application]
+## Expected Impact
+[How much this fix should reduce CLS score]
 
 ## CRITICAL RULES:
-1. You MUST include a Git Patch section with a valid unified diff
-2. The patch MUST be applicable with 'git apply'
-3. Only respond with "✅ SYSTEM HEALTHY" if the app is GENUINELY perfect (very rare)
-4. If you're unsure, err on the side of providing a fix rather than saying healthy
-5. Be specific about file paths - use the project structure from the logs
-6. If diagnostic capture failed, propose fixing the diagnostic infrastructure itself`
+1. ONLY focus on CLS/layout shift issues - ignore other types of errors unless they cause layout shifts
+2. You MUST include a Git Patch with a valid unified diff
+3. The patch MUST be applicable with 'git apply'
+4. If CLS score is 0 or very low (< 0.05), respond with "✅ NO CLS ISSUES - Score: [score]"
+5. Be specific about file paths based on the project structure
+6. If CLS data wasn't captured properly, explain what data would be needed`
 
   const { text } = await generateText({
     model,
