@@ -558,6 +558,12 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     const cdpUrl = await waitForCdpUrl(sandbox, 30000, debug) // 30 second timeout
     if (cdpUrl) {
       if (debug) console.log(`  ✅ CDP URL ready: ${cdpUrl}`)
+
+      // CRITICAL: Wait for d3k to complete navigation to the app
+      // d3k writes session info BEFORE navigating, so CDP URL being ready doesn't
+      // mean the page has loaded. We need to wait for navigation to complete.
+      if (debug) console.log("  ⏳ Waiting for d3k to complete page navigation...")
+      await waitForPageNavigation(sandbox, 30000, debug)
     } else {
       console.log("  ⚠️ CDP URL not found - chrome-devtools MCP features may not work")
       // DIAGNOSTIC: Dump all logs immediately when CDP fails - this is critical for debugging
@@ -756,4 +762,79 @@ async function waitForCdpUrl(sandbox: Sandbox, timeoutMs: number, debug = false)
     console.log(`  ⚠️ CDP URL not available after ${timeoutMs}ms - chrome-devtools MCP may not work`)
   }
   return null
+}
+
+/**
+ * Wait for d3k to complete navigation to the app page
+ * d3k logs "[CDP] Navigated to http://localhost:PORT" when navigation is initiated.
+ * We look for evidence in logs that the page has started loading.
+ */
+async function waitForPageNavigation(sandbox: Sandbox, timeoutMs: number, debug = false): Promise<boolean> {
+  const startTime = Date.now()
+
+  // Helper function to run commands and collect output
+  async function runCommandWithLogs(
+    sandbox: Sandbox,
+    options: Parameters<Sandbox["runCommand"]>[0]
+  ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+    const result = await sandbox.runCommand(options)
+    let stdout = ""
+    let stderr = ""
+    for await (const log of result.logs()) {
+      if (log.stream === "stdout") {
+        stdout += log.data
+      } else {
+        stderr += log.data
+      }
+    }
+    await result.wait()
+    return { exitCode: result.exitCode, stdout, stderr }
+  }
+
+  while (Date.now() - startTime < timeoutMs) {
+    try {
+      // Check d3k logs for evidence of navigation
+      // d3k logs "[CDP] Navigated to http://localhost:PORT" after Page.navigate
+      const logsResult = await runCommandWithLogs(sandbox, {
+        cmd: "sh",
+        args: [
+          "-c",
+          'grep -r "Navigated to http://localhost" /home/vercel-sandbox/.d3k/logs/*.log 2>/dev/null | head -1 || true'
+        ]
+      })
+
+      if (logsResult.stdout.includes("Navigated to http://localhost")) {
+        if (debug) {
+          console.log(`  ✅ d3k has navigated to the app (detected in logs)`)
+        }
+
+        // Wait an additional 3 seconds for the page to fully load and settle
+        // This gives time for JavaScript to execute and CLS metrics to be captured
+        if (debug) {
+          console.log(`  ⏳ Waiting 3 more seconds for page to fully load...`)
+        }
+        await new Promise((resolve) => setTimeout(resolve, 3000))
+
+        return true
+      }
+
+      if (debug && (Date.now() - startTime) % 5000 < 1000) {
+        console.log(`  ⏳ Waiting for page navigation... (${Math.round((Date.now() - startTime) / 1000)}s)`)
+      }
+    } catch (error) {
+      if (debug) {
+        console.log(`  ⚠️ Error checking for navigation: ${error instanceof Error ? error.message : String(error)}`)
+      }
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+  }
+
+  // If we didn't detect navigation in logs, still wait a bit as a fallback
+  // The page might have loaded but logging might not have captured it
+  if (debug) {
+    console.log(`  ⚠️ Did not detect navigation in logs after ${timeoutMs}ms, waiting 5s as fallback...`)
+  }
+  await new Promise((resolve) => setTimeout(resolve, 5000))
+  return false
 }
