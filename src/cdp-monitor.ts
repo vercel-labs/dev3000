@@ -1,4 +1,4 @@
-import { type ChildProcess, spawn } from "child_process"
+import { type ChildProcess, execSync, spawn } from "child_process"
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs"
 import { tmpdir } from "os"
 import { dirname, join } from "path"
@@ -255,7 +255,44 @@ export class CDPMonitor {
     this.debugLog("Runtime crash monitoring enabled for Chrome process")
   }
 
+  /**
+   * Kill any existing Chrome process using this profile directory.
+   * This prevents issues where Chrome defers to an existing instance
+   * instead of starting a new one with CDP enabled.
+   */
+  private killExistingChromeWithProfile(): void {
+    try {
+      // Find Chrome processes using this profile directory
+      const result = execSync(`ps aux | grep -i "user-data-dir=${this.profileDir}" | grep -v grep | awk '{print $2}'`, {
+        encoding: "utf-8",
+        stdio: ["pipe", "pipe", "pipe"]
+      }).trim()
+
+      if (result) {
+        const pids = result.split("\n").filter(Boolean)
+        for (const pid of pids) {
+          this.debugLog(`Killing existing Chrome process ${pid} using profile ${this.profileDir}`)
+          try {
+            process.kill(Number.parseInt(pid, 10), "SIGTERM")
+          } catch {
+            // Process may have already exited
+          }
+        }
+        // Give Chrome a moment to clean up
+        if (pids.length > 0) {
+          execSync("sleep 0.5")
+        }
+      }
+    } catch {
+      // No existing Chrome found or ps/grep not available
+      this.debugLog("No existing Chrome process found with this profile")
+    }
+  }
+
   private async launchChrome(): Promise<void> {
+    // Kill any existing Chrome using this profile to prevent CDP conflicts
+    this.killExistingChromeWithProfile()
+
     return new Promise((resolve, reject) => {
       // Use custom browser path if provided, otherwise try different Chrome executables based on platform
       const chromeCommands = this.browserPath
@@ -380,6 +417,11 @@ export class CDPMonitor {
             this.logger("browser", `[CDP] ${timeoutMsg}`)
             this.debugLog(timeoutMsg)
             processExited = true
+            // Kill the unresponsive Chrome process before trying next browser
+            if (this.browser && !this.browser.killed) {
+              this.debugLog("Killing unresponsive Chrome process before trying next browser")
+              this.browser.kill("SIGTERM")
+            }
             setTimeout(tryNextChrome, 100)
             return
           }

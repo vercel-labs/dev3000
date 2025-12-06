@@ -17,6 +17,7 @@
     "mcp-server/.next/*.js",
     "mcp-server/.next/*.js.map",
     "mcp-server/.next/server/app/",
+    "mcp-server/.next/server/pages/",
     "mcp-server/.next/server/chunks/",
     "mcp-server/.next/server/*.js",
     "mcp-server/.next/server/*.json",
