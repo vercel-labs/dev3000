@@ -959,54 +959,71 @@ export async function analyzeLogsWithAgent(logAnalysis: string, devUrl: string) 
   // Use Claude Sonnet 4 via AI Gateway
   const model = gateway("anthropic/claude-sonnet-4-20250514")
 
-  const prompt = `You are a skilled software engineer debugging an application.
+  const prompt = `You are a senior software engineer performing a THOROUGH code review and debugging session.
 
 The dev server is running at: ${devUrl}
 
-Here's the log analysis from the MCP fix_my_app tool:
+Here's the diagnostic data captured from the running application:
 ${logAnalysis}
 
-Your task:
-1. Identify the most critical error or issue from the logs
-2. Determine the root cause
-3. Propose a specific code fix with file paths and changes
-4. Create a git-style unified diff that can be applied with 'git apply'
-5. Explain why this fix will resolve the issue
+## YOUR MISSION: Find and fix SOMETHING
 
-Format your response EXACTLY as follows:
+You MUST try your hardest to find at least one issue to fix. The user is paying for this analysis and expects actionable results.
+
+Look for ANY of these issues:
+1. **Console errors or warnings** - JavaScript errors, React warnings, TypeScript issues
+2. **Performance issues** - CLS (Cumulative Layout Shift) > 0.1, slow renders, layout jank
+3. **Network errors** - Failed API calls, 4xx/5xx responses, CORS issues
+4. **Hydration mismatches** - Server/client HTML differences
+5. **Accessibility issues** - Missing alt text, improper ARIA labels
+6. **Best practice violations** - Missing error boundaries, no loading states, inline styles
+7. **Code quality issues** - Missing TypeScript types, unhandled promise rejections
+8. **Security issues** - XSS vulnerabilities, exposed secrets, unsafe innerHTML
+9. **SEO issues** - Missing meta tags, improper heading structure
+10. **MCP/diagnostic errors** - If the MCP capture itself had issues, that indicates a problem to investigate
+
+Even if the logs say "no errors found" or seem empty, STILL PROVIDE A FIX for something that could be improved. Common improvements:
+- Add error boundaries to React components
+- Add loading/skeleton states
+- Improve TypeScript types
+- Add proper error handling
+- Fix accessibility issues
+- Add meta tags for SEO
+
+## Required Output Format
 
 ## Issue
-[Brief description of the issue]
+[Description of the issue - be specific, not vague]
 
 ## Root Cause
-[Explanation of what's causing the issue]
+[Technical explanation of WHY this is happening]
 
 ## Proposed Fix
-[High-level explanation of the fix]
+[Clear explanation of the solution]
 
 ## Git Patch
 \`\`\`diff
-[Full unified diff format that can be applied with 'git apply' or 'patch']
-[Include file paths, line numbers, and exact changes]
-[Example format:]
-[diff --git a/path/to/file.ts b/path/to/file.ts]
-[index abc123..def456 100644]
-[--- a/path/to/file.ts]
-[+++ b/path/to/file.ts]
-[@@ -10,7 +10,7 @@ function example() {]
-[ unchanged line]
-[-  old line to remove]
-[+  new line to add]
-[ unchanged line]
+diff --git a/path/to/file.ts b/path/to/file.ts
+index abc123..def456 100644
+--- a/path/to/file.ts
++++ b/path/to/file.ts
+@@ -10,7 +10,7 @@ function example() {
+   unchanged line
+-  old line to remove
++  new line to add
+   unchanged line
 \`\`\`
 
 ## Reasoning
-[Why this fix will work]
+[Why this fix works and improves the application]
 
-IMPORTANT:
-- The Git Patch section must be a valid unified diff that can be applied directly with 'git apply'.
-- If no errors are found, respond with "✅ **SYSTEM HEALTHY** - No errors found" and do NOT include a Git Patch section.
-- Only include a Git Patch if there are actual issues that need fixing.`
+## CRITICAL RULES:
+1. You MUST include a Git Patch section with a valid unified diff
+2. The patch MUST be applicable with 'git apply'
+3. Only respond with "✅ SYSTEM HEALTHY" if the app is GENUINELY perfect (very rare)
+4. If you're unsure, err on the side of providing a fix rather than saying healthy
+5. Be specific about file paths - use the project structure from the logs
+6. If diagnostic capture failed, propose fixing the diagnostic infrastructure itself`
 
   const { text } = await generateText({
     model,
