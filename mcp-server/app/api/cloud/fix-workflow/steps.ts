@@ -180,6 +180,136 @@ async function uploadScreenshot(base64Data: string, label: string, projectName: 
 }
 
 /**
+ * Fetch d3k's CLS jank screenshots from the sandbox MCP server and upload to Vercel Blob
+ * Returns URLs to the uploaded screenshots and metadata
+ */
+async function fetchAndUploadD3kArtifacts(
+  sandbox: Sandbox,
+  _mcpUrl: string,
+  projectName: string
+): Promise<{
+  clsScreenshots: Array<{ label: string; blobUrl: string; timestamp: number }>
+  screencastSessionId: string | null
+  fullLogs: string | null
+  metadata: Record<string, unknown> | null
+}> {
+  const result: {
+    clsScreenshots: Array<{ label: string; blobUrl: string; timestamp: number }>
+    screencastSessionId: string | null
+    fullLogs: string | null
+    metadata: Record<string, unknown> | null
+  } = {
+    clsScreenshots: [],
+    screencastSessionId: null,
+    fullLogs: null,
+    metadata: null
+  }
+
+  console.log(`[D3k Artifacts] Fetching screenshots and logs from sandbox MCP server...`)
+
+  try {
+    // 1. Fetch full d3k logs from the sandbox
+    console.log(`[D3k Artifacts] Fetching d3k logs...`)
+    const logsResult = await runSandboxCommand(sandbox, "sh", [
+      "-c",
+      'for log in /home/vercel-sandbox/.d3k/logs/*.log; do [ -f "$log" ] && cat "$log" || true; done 2>/dev/null || echo "No log files found"'
+    ])
+    if (logsResult.exitCode === 0 && logsResult.stdout) {
+      result.fullLogs = logsResult.stdout
+      console.log(`[D3k Artifacts] Captured ${result.fullLogs.length} chars of d3k logs`)
+    }
+
+    // 2. Parse logs to find screenshot URLs and session ID
+    if (result.fullLogs) {
+      // Extract screenshot filenames from logs like:
+      // [CDP]   Before: http://localhost:3684/api/screenshots/2025-12-06T21-39-24Z-jank-388ms.png
+      const screenshotRegex = /http:\/\/localhost:\d+\/api\/screenshots\/([^\s]+\.png)/g
+      const screenshotMatches = [...result.fullLogs.matchAll(screenshotRegex)]
+      const uniqueFilenames = [...new Set(screenshotMatches.map((m) => m[1]))]
+      console.log(`[D3k Artifacts] Found ${uniqueFilenames.length} screenshot filenames in logs`)
+
+      // Extract session ID from screencast URL like:
+      // [SCREENCAST] View frame analysis: http://localhost:3684/video/2025-12-06T21-39-24Z
+      const sessionMatch = result.fullLogs.match(/\/video\/([^\s]+)/)
+      if (sessionMatch) {
+        result.screencastSessionId = sessionMatch[1]
+        console.log(`[D3k Artifacts] Screencast session ID: ${result.screencastSessionId}`)
+      }
+
+      // 3. Fetch and upload each screenshot to Vercel Blob
+      for (const filename of uniqueFilenames) {
+        try {
+          // Fetch screenshot from sandbox MCP server
+          console.log(`[D3k Artifacts] Fetching screenshot: ${filename}`)
+
+          // Use curl from inside sandbox to get the screenshot as base64
+          const fetchResult = await runSandboxCommand(sandbox, "sh", [
+            "-c",
+            `curl -s http://localhost:3684/api/screenshots/${filename} | base64`
+          ])
+
+          if (fetchResult.exitCode === 0 && fetchResult.stdout.trim().length > 100) {
+            const base64Data = fetchResult.stdout.trim()
+
+            // Upload to Vercel Blob
+            const imageBuffer = Buffer.from(base64Data, "base64")
+            const blobFilename = `d3k-cls-${projectName}-${filename}`
+            const blob = await put(blobFilename, imageBuffer, {
+              access: "public",
+              contentType: "image/png"
+            })
+
+            // Extract timestamp from filename like "2025-12-06T21-39-24Z-jank-388ms.png"
+            const timestampMatch = filename.match(/-(\d+)ms\.png$/)
+            const timestamp = timestampMatch ? parseInt(timestampMatch[1], 10) : 0
+
+            result.clsScreenshots.push({
+              label: filename,
+              blobUrl: blob.url,
+              timestamp
+            })
+
+            console.log(`[D3k Artifacts] Uploaded ${filename} -> ${blob.url}`)
+          } else {
+            console.log(`[D3k Artifacts] Failed to fetch ${filename}: empty or error`)
+          }
+        } catch (error) {
+          console.log(
+            `[D3k Artifacts] Error fetching screenshot ${filename}: ${error instanceof Error ? error.message : String(error)}`
+          )
+        }
+      }
+
+      // 4. Fetch metadata JSON if available
+      if (result.screencastSessionId) {
+        try {
+          const metadataResult = await runSandboxCommand(sandbox, "sh", [
+            "-c",
+            `curl -s http://localhost:3684/api/screenshots/${result.screencastSessionId}-metadata.json`
+          ])
+          if (metadataResult.exitCode === 0 && metadataResult.stdout.trim().startsWith("{")) {
+            result.metadata = JSON.parse(metadataResult.stdout.trim())
+            console.log(
+              `[D3k Artifacts] Captured metadata: CLS score ${(result.metadata as { totalCLS?: number })?.totalCLS}`
+            )
+          }
+        } catch {
+          console.log(`[D3k Artifacts] Could not fetch metadata`)
+        }
+      }
+    }
+
+    console.log(
+      `[D3k Artifacts] Summary: ${result.clsScreenshots.length} screenshots, ${result.fullLogs ? "logs captured" : "no logs"}, metadata: ${result.metadata ? "yes" : "no"}`
+    )
+  } catch (error) {
+    console.log(`[D3k Artifacts] Error: ${error instanceof Error ? error.message : String(error)}`)
+  }
+
+  return result
+}
+
+/**
  * Step 0: Create d3k sandbox with MCP tools pre-configured
  * Also captures a "before" screenshot of the app
  */
@@ -475,6 +605,10 @@ LOADINGHTML
     )
   }
 
+  // Fetch d3k artifacts (CLS screenshots, full logs, metadata) BEFORE sandbox terminates
+  console.log(`[Step 0] Fetching d3k artifacts from sandbox...`)
+  const d3kArtifacts = await fetchAndUploadD3kArtifacts(sandboxResult.sandbox, sandboxResult.mcpUrl, projectName)
+
   // Note: We cannot return the cleanup function or sandbox object as they're not serializable
   // Sandbox cleanup will happen automatically when the sandbox times out
   return {
@@ -485,7 +619,8 @@ LOADINGHTML
     mcpError,
     beforeScreenshotUrl,
     chromiumPath,
-    gitDiff
+    gitDiff,
+    d3kArtifacts
   }
 }
 
@@ -1048,7 +1183,13 @@ export async function uploadToBlob(
   logAnalysis: string,
   devUrl: string,
   beforeScreenshotUrl?: string | null,
-  gitDiff?: string | null
+  gitDiff?: string | null,
+  d3kArtifacts?: {
+    clsScreenshots: Array<{ label: string; blobUrl: string; timestamp: number }>
+    screencastSessionId: string | null
+    fullLogs: string | null
+    metadata: Record<string, unknown> | null
+  }
 ) {
   "use step"
 
@@ -1058,6 +1199,12 @@ export async function uploadToBlob(
   }
   if (gitDiff) {
     console.log(`[Step 3] Including git diff (${gitDiff.length} chars)`)
+  }
+  if (d3kArtifacts) {
+    console.log(`[Step 3] Including d3k artifacts: ${d3kArtifacts.clsScreenshots.length} CLS screenshots`)
+    if (d3kArtifacts.fullLogs) {
+      console.log(`[Step 3] Including full d3k logs (${d3kArtifacts.fullLogs.length} chars)`)
+    }
   }
 
   // Create screenshot section if we have a screenshot
@@ -1072,6 +1219,75 @@ This screenshot was captured when the sandbox dev server first loaded, proving t
 
 `
     : ""
+
+  // Create CLS screenshots section with before/after comparison
+  let clsScreenshotsSection = ""
+  if (d3kArtifacts?.clsScreenshots && d3kArtifacts.clsScreenshots.length > 0) {
+    // Sort by timestamp
+    const sortedScreenshots = [...d3kArtifacts.clsScreenshots].sort((a, b) => a.timestamp - b.timestamp)
+
+    clsScreenshotsSection = `## CLS (Layout Shift) Screenshots
+
+These screenshots were captured by d3k during page navigation to detect layout shifts.
+
+`
+    // If we have exactly 2 screenshots, show before/after
+    if (sortedScreenshots.length === 2) {
+      clsScreenshotsSection += `### Before (${sortedScreenshots[0].timestamp}ms)
+![Before Layout Shift](${sortedScreenshots[0].blobUrl})
+
+### After (${sortedScreenshots[1].timestamp}ms)
+![After Layout Shift](${sortedScreenshots[1].blobUrl})
+
+`
+    } else {
+      // Show all screenshots in order
+      for (const screenshot of sortedScreenshots) {
+        clsScreenshotsSection += `### ${screenshot.timestamp}ms
+![Screenshot at ${screenshot.timestamp}ms](${screenshot.blobUrl})
+
+`
+      }
+    }
+
+    // Add CLS metadata if available
+    if (d3kArtifacts.metadata) {
+      const meta = d3kArtifacts.metadata as {
+        totalCLS?: number
+        clsGrade?: string
+        layoutShifts?: Array<{
+          score: number
+          timestamp: number
+          sources?: Array<{ node?: string; previousRect?: object; currentRect?: object }>
+        }>
+      }
+      if (meta.totalCLS !== undefined) {
+        const clsEmoji = meta.clsGrade === "good" ? "✅" : meta.clsGrade === "needs-improvement" ? "⚠️" : "❌"
+        clsScreenshotsSection += `### CLS Score: ${meta.totalCLS.toFixed(4)} ${clsEmoji}
+- Grade: ${meta.clsGrade || "unknown"}
+- Shifts detected: ${meta.layoutShifts?.length || 0}
+
+`
+        // Add details about each shift
+        if (meta.layoutShifts && meta.layoutShifts.length > 0) {
+          clsScreenshotsSection += `#### Layout Shift Details
+`
+          for (let i = 0; i < meta.layoutShifts.length; i++) {
+            const shift = meta.layoutShifts[i]
+            const elements =
+              shift.sources
+                ?.map((s) => s.node || "unknown")
+                .filter(Boolean)
+                .join(", ") || "unidentified"
+            clsScreenshotsSection += `- Shift #${i + 1}: score=${shift.score.toFixed(4)}, time=${shift.timestamp}ms, elements=[${elements}]
+`
+          }
+          clsScreenshotsSection += "\n"
+        }
+      }
+    }
+    clsScreenshotsSection += "---\n\n"
+  }
 
   // Create git diff section if we have a diff from the sandbox
   const gitDiffSection = gitDiff
@@ -1088,6 +1304,25 @@ ${gitDiff}
 `
     : ""
 
+  // Create full d3k logs section if available (collapsible)
+  let fullLogsSection = ""
+  if (d3kArtifacts?.fullLogs) {
+    fullLogsSection = `## Full d3k Logs
+
+<details>
+<summary>Click to expand d3k session logs (${d3kArtifacts.fullLogs.length} characters)</summary>
+
+\`\`\`
+${d3kArtifacts.fullLogs}
+\`\`\`
+
+</details>
+
+---
+
+`
+  }
+
   // Create enhanced markdown with full context and attribution
   const timestamp = new Date().toISOString()
   const enhancedMarkdown = `# Fix Proposal for ${projectName}
@@ -1100,7 +1335,7 @@ ${gitDiff}
 
 ---
 
-${screenshotSection}${gitDiffSection}## Original Log Analysis
+${screenshotSection}${clsScreenshotsSection}${gitDiffSection}${fullLogsSection}## Original Log Analysis
 
 \`\`\`
 ${logAnalysis}
@@ -1141,12 +1376,25 @@ Learn more at https://github.com/vercel-labs/dev3000
 
   console.log(`[Step 3] Fix proposal uploaded to: ${blob.url}`)
 
+  // Upload git diff as a separate blob file for easy access
+  let gitDiffBlobUrl: string | null = null
+  if (gitDiff) {
+    const diffFilename = `diff-${projectName}-${filenameTimestamp}.patch`
+    const diffBlob = await put(diffFilename, gitDiff, {
+      access: "public",
+      contentType: "text/x-patch"
+    })
+    gitDiffBlobUrl = diffBlob.url
+    console.log(`[Step 3] Git diff uploaded separately to: ${gitDiffBlobUrl}`)
+  }
+
   return {
     success: true,
     projectName,
     fixProposal,
     blobUrl: blob.url,
     beforeScreenshotUrl: beforeScreenshotUrl || null,
+    gitDiffBlobUrl,
     message: "Fix analysis completed and uploaded to blob storage"
   }
 }

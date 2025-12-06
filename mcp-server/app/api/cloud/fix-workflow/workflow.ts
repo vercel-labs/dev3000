@@ -69,7 +69,7 @@ export async function cloudFixWorkflow(params: {
   }
 
   // Step 0: Create d3k sandbox if repoUrl provided
-  // This step also captures CLS data, "before" screenshot, and git diff from inside the sandbox
+  // This step also captures CLS data, "before" screenshot, git diff, and d3k artifacts from inside the sandbox
   let sandboxInfo: {
     mcpUrl: string
     devUrl: string
@@ -79,6 +79,12 @@ export async function cloudFixWorkflow(params: {
     beforeScreenshotUrl?: string | null
     chromiumPath?: string
     gitDiff?: string | null
+    d3kArtifacts?: {
+      clsScreenshots: Array<{ label: string; blobUrl: string; timestamp: number }>
+      screencastSessionId: string | null
+      fullLogs: string | null
+      metadata: Record<string, unknown> | null
+    }
   } | null = null
   if (repoUrl) {
     await updateProgress(0, "Creating development sandbox...")
@@ -120,7 +126,7 @@ export async function cloudFixWorkflow(params: {
     await updateProgress(2, "AI analysis complete - system appears healthy")
   }
 
-  // Step 3: Upload to blob storage with full context, screenshot, and git diff
+  // Step 3: Upload to blob storage with full context, screenshot, git diff, and d3k artifacts
   await updateProgress(3, "Compiling full report with screenshots...")
   const blobResult = await uploadToBlob(
     fixProposal,
@@ -128,7 +134,8 @@ export async function cloudFixWorkflow(params: {
     logAnalysis,
     sandboxInfo?.devUrl || devUrl,
     beforeScreenshotUrl,
-    sandboxInfo?.gitDiff
+    sandboxInfo?.gitDiff,
+    sandboxInfo?.d3kArtifacts
   )
   await updateProgress(3, "Report uploaded to Vercel Blob")
 
@@ -193,11 +200,17 @@ async function uploadToBlob(
   logAnalysis: string,
   devUrl: string,
   beforeScreenshotUrl?: string | null,
-  gitDiff?: string | null
+  gitDiff?: string | null,
+  d3kArtifacts?: {
+    clsScreenshots: Array<{ label: string; blobUrl: string; timestamp: number }>
+    screencastSessionId: string | null
+    fullLogs: string | null
+    metadata: Record<string, unknown> | null
+  }
 ) {
   "use step"
   const { uploadToBlob } = await import("./steps")
-  return uploadToBlob(fixProposal, projectName, logAnalysis, devUrl, beforeScreenshotUrl, gitDiff)
+  return uploadToBlob(fixProposal, projectName, logAnalysis, devUrl, beforeScreenshotUrl, gitDiff, d3kArtifacts)
 }
 
 async function createGitHubPR(
