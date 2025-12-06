@@ -109,21 +109,27 @@ function detectPackageManagerForRun(): string {
 }
 
 /**
+ * Detect if we're in a sandbox environment (Vercel Sandbox, Docker, etc.)
+ * where lsof and other system utilities may not be available.
+ */
+function isInSandbox(): boolean {
+  return (
+    process.env.VERCEL_SANDBOX === "1" ||
+    process.env.VERCEL === "1" ||
+    existsSync("/.dockerenv") ||
+    existsSync("/run/.containerenv")
+  )
+}
+
+/**
  * Check if a port is available for binding (no process is listening on it).
  * Used for finding available ports before starting servers.
  * In sandbox environments, skips checking since lsof often doesn't exist.
  */
 async function isPortAvailable(port: string): Promise<boolean> {
-  // Detect if we're in a sandbox environment (Vercel Sandbox, Docker, etc.)
-  const isSandbox =
-    process.env.VERCEL_SANDBOX === "1" ||
-    process.env.VERCEL === "1" ||
-    existsSync("/.dockerenv") ||
-    existsSync("/run/.containerenv")
-
   // In sandboxed environments, skip port checking - lsof often doesn't exist
   // and port conflicts are rare due to process isolation
-  if (isSandbox) {
+  if (isInSandbox()) {
     return true
   }
 
@@ -767,17 +773,24 @@ export class DevEnvironment {
   }
 
   private async killMcpServer(): Promise<void> {
+    // In sandbox environments, skip lsof-based process cleanup
+    if (isInSandbox()) {
+      this.debugLog("killMcpServer skipped: Running in sandbox environment")
+      return
+    }
+
     try {
       // First, get the PIDs
       const getPidsProcess = spawn("lsof", ["-ti", `:${this.options.mcpPort}`], {
         stdio: "pipe"
       })
 
-      const pids = await new Promise<string>((resolve) => {
+      const pids = await new Promise<string>((resolve, reject) => {
         let output = ""
         getPidsProcess.stdout?.on("data", (data) => {
           output += data.toString()
         })
+        getPidsProcess.on("error", (err) => reject(err))
         getPidsProcess.on("exit", () => resolve(output.trim()))
       })
 
@@ -808,16 +821,24 @@ export class DevEnvironment {
   private async checkProcessHealth(): Promise<boolean> {
     if (this.isShuttingDown) return true // Skip health check if already shutting down
 
+    // In sandbox environments, skip lsof-based health checks since lsof doesn't exist
+    // Trust that the sandbox manages process lifecycle
+    if (isInSandbox()) {
+      this.debugLog("Health check skipped: Running in sandbox environment")
+      return true
+    }
+
     try {
       const ports = [this.options.port, this.options.mcpPort]
 
       for (const port of ports) {
-        const result = await new Promise<string>((resolve) => {
+        const result = await new Promise<string>((resolve, reject) => {
           const proc = spawn("lsof", ["-ti", `:${port}`], { stdio: "pipe" })
           let output = ""
           proc.stdout?.on("data", (data) => {
             output += data.toString()
           })
+          proc.on("error", (err) => reject(err))
           proc.on("exit", () => resolve(output.trim()))
         })
 
