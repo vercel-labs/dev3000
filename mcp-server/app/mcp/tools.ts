@@ -9,6 +9,19 @@ import { WebSocket } from "ws"
 
 const execAsync = promisify(exec)
 
+/**
+ * Detect if we're in a sandbox environment (Vercel Sandbox, Docker, etc.)
+ * where lsof and other system utilities may not be available.
+ */
+function isInSandbox(): boolean {
+  return (
+    process.env.VERCEL_SANDBOX === "1" ||
+    process.env.VERCEL === "1" ||
+    existsSync("/.dockerenv") ||
+    existsSync("/run/.containerenv")
+  )
+}
+
 // Tool descriptions
 export const TOOL_DESCRIPTIONS = {
   fix_my_app:
@@ -3901,6 +3914,19 @@ export async function restartDevServer(params: {
 
     // Fallback: Use dev3000's own restart mechanism
     logToDevFile("Restart Dev Server: Using dev3000 restart mechanism")
+
+    // In sandbox environments, lsof doesn't exist - skip process killing
+    if (isInSandbox()) {
+      logToDevFile("Restart Dev Server: Skipping lsof-based kill in sandbox environment")
+      return {
+        content: [
+          {
+            type: "text",
+            text: `⚠️ **RESTART NOT SUPPORTED IN SANDBOX**\n\nDev server restart is not supported in sandbox environments (Vercel Sandbox, Docker containers).\n\nThe \`lsof\` utility needed for process management is not available.\n\n💡 If running in Vercel Sandbox, the dev server is managed by the sandbox infrastructure.`
+          }
+        ]
+      }
+    }
 
     // Kill processes on the app port
     const killCommand = `lsof -ti :${appPort} | xargs kill 2>/dev/null || true`

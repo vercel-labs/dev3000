@@ -2406,8 +2406,12 @@ export class DevEnvironment {
       console.log(chalk.yellow(`🛑 Shutting down ${this.options.commandName} due to critical failure...`))
     }
 
-    // Kill processes on both ports
+    // Kill processes on both ports (skip in sandbox - lsof doesn't exist)
     const killPortProcess = async (port: string, name: string) => {
+      if (isInSandbox()) {
+        console.log(chalk.gray(`ℹ️ Skipping ${name} port kill in sandbox environment`))
+        return
+      }
       try {
         const { spawn } = await import("child_process")
         const killProcess = spawn("sh", ["-c", `lsof -ti:${port} | xargs kill -9`], { stdio: "inherit" })
@@ -2605,8 +2609,13 @@ export class DevEnvironment {
     // Now we keep .mcp.json, .cursor/mcp.json, and opencode.json configured
     // for the next dev3000 run, providing a better developer experience
 
-    // Kill processes on both ports
+    // Kill processes on both ports (skip in sandbox - lsof doesn't exist)
     const killPortProcess = async (port: string, name: string) => {
+      // Skip lsof-based kill in sandbox environments
+      if (isInSandbox()) {
+        this.debugLog(`Skipping ${name} port kill in sandbox environment`)
+        return
+      }
       try {
         const { spawn } = await import("child_process")
 
