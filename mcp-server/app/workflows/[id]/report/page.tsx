@@ -43,7 +43,23 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
         </div>
 
         <div className="bg-card border border-border rounded-lg p-8">
-          <Streamdown mode="static">
+          <Streamdown
+            mode="static"
+            components={{
+              img: (props) => {
+                const src = typeof props.src === "string" ? props.src : undefined
+                return (
+                  <a href={src} target="_blank" rel="noopener noreferrer" className="inline-block">
+                    <img
+                      src={src}
+                      alt={props.alt}
+                      className="w-48 h-auto rounded border border-border hover:border-primary transition-colors cursor-pointer"
+                    />
+                  </a>
+                )
+              }
+            }}
+          >
             {markdown}
           </Streamdown>
         </div>
