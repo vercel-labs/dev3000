@@ -52,6 +52,32 @@ To test the d3k-in-the-cloud workflow:
 - Automatic screenshots on errors and navigation
 - Works with any web framework (Next.js, Vite, Rails, etc.)
 
+## Sandbox/Cloud Environment Constraints
+
+**CRITICAL: No `lsof` in Vercel Sandbox or Docker containers!**
+
+When writing code that runs in:
+- Vercel Sandbox (cloud workflows)
+- Docker containers
+- Any constrained environment
+
+**NEVER use `lsof`** - it doesn't exist in these environments and will crash with `spawn lsof ENOENT`.
+
+Instead, use the `isInSandbox()` helper function (defined in `src/dev-environment.ts` and `mcp-server/app/mcp/tools.ts`) to detect sandbox environments and skip lsof-based operations:
+
+```typescript
+function isInSandbox(): boolean {
+  return (
+    process.env.VERCEL_SANDBOX === "1" ||
+    process.env.VERCEL === "1" ||
+    existsSync("/.dockerenv") ||
+    existsSync("/run/.containerenv")
+  )
+}
+```
+
+Other unavailable commands in sandbox: `netstat`, `ss` (sometimes), most system utilities.
+
 ## Memories
 
 - number 3 sounds pretty reliable, number 2 sounds second best and those are better than the other two I think
