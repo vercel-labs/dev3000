@@ -2,7 +2,7 @@ import chalk from "chalk"
 import { createReadStream, unwatchFile, watchFile } from "fs"
 import { Box, render, Text, useInput, useStdout } from "ink"
 import Spinner from "ink-spinner"
-import { useEffect, useRef, useState } from "react"
+import { memo, useEffect, useRef, useState } from "react"
 import type { Readable } from "stream"
 import { LOG_COLORS } from "./constants/log-colors.js"
 
@@ -14,6 +14,9 @@ export interface TUIOptions {
   serversOnly?: boolean
   version: string
   projectName?: string
+  updateAvailable?: {
+    latestVersion: string
+  } | null
 }
 
 interface LogEntry {
@@ -29,6 +32,117 @@ const COMPACT_LOGO = "d3k"
 // Full ASCII logo lines as array for easier rendering
 const FULL_LOGO = ["   ▐▌▄▄▄▄ █  ▄ ", "   ▐▌   █ █▄▀  ", "▗▞▀▜▌▀▀▀█ █ ▀▄ ", "▝▚▄▟▌▄▄▄█ █  █ "]
 
+// Type colors map - defined outside component to avoid recreation
+const TYPE_COLORS: Record<string, string> = {
+  NETWORK: LOG_COLORS.NETWORK,
+  ERROR: LOG_COLORS.ERROR,
+  WARNING: LOG_COLORS.WARNING,
+  INFO: LOG_COLORS.INFO,
+  LOG: LOG_COLORS.LOG,
+  DEBUG: LOG_COLORS.DEBUG,
+  SCREENSHOT: LOG_COLORS.SCREENSHOT,
+  DOM: LOG_COLORS.DOM,
+  CDP: LOG_COLORS.CDP,
+  CHROME: LOG_COLORS.CHROME,
+  CRASH: LOG_COLORS.CRASH,
+  REPLAY: LOG_COLORS.REPLAY,
+  NAVIGATION: LOG_COLORS.NAVIGATION,
+  INTERACTION: LOG_COLORS.INTERACTION,
+  GET: LOG_COLORS.SERVER,
+  POST: LOG_COLORS.SERVER,
+  PUT: LOG_COLORS.SERVER,
+  DELETE: LOG_COLORS.SERVER,
+  PATCH: LOG_COLORS.SERVER,
+  HEAD: LOG_COLORS.SERVER,
+  OPTIONS: LOG_COLORS.SERVER
+}
+
+// Memoized log line component to prevent re-parsing on every render
+const LogLine = memo(
+  ({ log, isCompact, isVeryCompact }: { log: LogEntry; isCompact: boolean; isVeryCompact: boolean }) => {
+    // Parse log line to colorize different parts
+    const parts = log.content.match(/^\[(.*?)\] \[(.*?)\] (?:\[(.*?)\] )?(.*)$/)
+
+    if (parts) {
+      let [, timestamp, source, type, message] = parts
+
+      // Extract HTTP method from SERVER logs as a secondary tag
+      if (source === "SERVER" && !type && message) {
+        const methodMatch = message.match(/^(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\s/)
+        if (methodMatch) {
+          type = methodMatch[1]
+          message = message.slice(type.length + 1) // Remove method from message
+        }
+      }
+
+      // Replace warning emoji in ERROR/WARNING messages for consistent terminal rendering
+      if (message && (type === "ERROR" || type === "WARNING")) {
+        message = message.replace(/⚠/g, "[!]")
+      }
+
+      // In very compact mode, simplify the output
+      if (isVeryCompact) {
+        const shortSource = source === "BROWSER" ? "B" : "S"
+        const shortType = type ? type.split(".")[0].charAt(0) : ""
+        return (
+          <Text wrap="truncate-end">
+            <Text dimColor>[{shortSource}]</Text>
+            {shortType && <Text dimColor>[{shortType}]</Text>}
+            <Text> {message}</Text>
+          </Text>
+        )
+      }
+
+      // Use shared color constants
+      const sourceColor = source === "BROWSER" ? LOG_COLORS.BROWSER : LOG_COLORS.SERVER
+
+      // In compact mode, skip padding
+      if (isCompact) {
+        return (
+          <Text wrap="truncate-end">
+            <Text dimColor>[{timestamp}]</Text>
+            <Text> </Text>
+            <Text color={sourceColor} bold>
+              [{source.charAt(0)}]
+            </Text>
+            {type && (
+              <>
+                <Text> </Text>
+                <Text color={TYPE_COLORS[type] || "#A0A0A0"}>[{type}]</Text>
+              </>
+            )}
+            <Text> {message}</Text>
+          </Text>
+        )
+      }
+
+      // Normal mode with minimal padding
+      return (
+        <Text wrap="truncate-end">
+          <Text dimColor>[{timestamp}]</Text>
+          <Text> </Text>
+          <Text color={sourceColor} bold>
+            [{source}]
+          </Text>
+          {type ? (
+            <>
+              <Text> </Text>
+              <Text color={TYPE_COLORS[type] || "#A0A0A0"}>[{type}]</Text>
+              <Text> </Text>
+            </>
+          ) : (
+            <Text> </Text>
+          )}
+          <Text>{message}</Text>
+        </Text>
+      )
+    }
+
+    // Fallback for unparsed lines
+    return <Text wrap="truncate-end">{log.content}</Text>
+  }
+)
+
 const TUIApp = ({
   appPort: initialAppPort,
   mcpPort,
@@ -37,16 +151,20 @@ const TUIApp = ({
   serversOnly,
   version,
   projectName,
+  updateAvailable,
   onStatusUpdate,
-  onAppPortUpdate
+  onAppPortUpdate,
+  onUpdateAvailableUpdate
 }: TUIOptions & {
   onStatusUpdate: (fn: (status: string | null) => void) => void
   onAppPortUpdate: (fn: (port: string) => void) => void
+  onUpdateAvailableUpdate: (fn: (info: { latestVersion: string } | null) => void) => void
 }) => {
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [scrollOffset, setScrollOffset] = useState(0)
-  const [initStatus, setInitStatus] = useState<string | null>("Initializing...")
+  const [initStatus, setInitStatus] = useState<string | null>(null)
   const [appPort, setAppPort] = useState<string>(initialAppPort)
+  const [updateInfo, setUpdateInfo] = useState<{ latestVersion: string } | null>(updateAvailable || null)
   const [portConfirmed, setPortConfirmed] = useState<boolean>(false)
   const logIdCounter = useRef(0)
   const [clearFromLogId, setClearFromLogId] = useState<number>(0) // Track log ID to clear from
@@ -118,6 +236,13 @@ const TUIApp = ({
     })
   }, [onAppPortUpdate])
 
+  // Provide update available function to parent
+  useEffect(() => {
+    onUpdateAvailableUpdate((info: { latestVersion: string } | null) => {
+      setUpdateInfo(info)
+    })
+  }, [onUpdateAvailableUpdate])
+
   // Calculate available lines for logs dynamically based on terminal height and mode
   const calculateMaxVisibleLogs = () => {
     if (isVeryCompact) {
@@ -131,10 +256,10 @@ const TUIApp = ({
       const headerBorderLines = 2 // Top border (with title) + bottom border
       const headerContentLines = 5 // Logo is 4 lines tall, +1 for padding
       const logBoxBorderLines = 2 // Top and bottom border of log box
-      const logBoxHeaderLines = 2 // "Logs (X total)" text (no blank line after)
-      const logBoxFooterLines = scrollOffset > 0 ? 2 : 0 // "(X lines below)" when scrolled
+      const logBoxHeaderLines = 1 // "Logs (X total)" text
+      const logBoxFooterLines = 1 // Always reserve space for "(X lines below)" to keep layout stable
       const bottomStatusLine = 1 // Log path and quit message
-      const safetyBuffer = 1 // Small buffer to prevent header from being pushed up
+      const safetyBuffer = 0 // No buffer needed with explicit heights
       const totalReservedLines =
         headerBorderLines +
         headerContentLines +
@@ -155,6 +280,32 @@ const TUIApp = ({
   useEffect(() => {
     let logStream: Readable | undefined
     let buffer = ""
+    let pendingLogs: LogEntry[] = []
+    let flushTimeout: NodeJS.Timeout | null = null
+
+    // Batch log updates to prevent excessive renders
+    const flushPendingLogs = () => {
+      if (pendingLogs.length === 0) return
+
+      const logsToAdd = pendingLogs
+      pendingLogs = []
+      flushTimeout = null
+
+      setLogs((prevLogs) => {
+        const updated = [...prevLogs, ...logsToAdd]
+        // Keep only last N logs to prevent memory issues
+        if (updated.length > maxLogs) {
+          return updated.slice(-maxLogs)
+        }
+        return updated
+      })
+
+      // Auto-scroll to bottom only if user is already at the bottom
+      // Otherwise, increment scroll offset by count of new logs
+      setScrollOffset((currentOffset) => {
+        return currentOffset === 0 ? 0 : Math.min(maxScrollOffsetRef.current, currentOffset + logsToAdd.length)
+      })
+    }
 
     const appendLog = (line: string) => {
       if (NEXTJS_MCP_404_REGEX.test(line)) {
@@ -166,20 +317,14 @@ const TUIApp = ({
         content: line
       }
 
-      setLogs((prevLogs) => {
-        const updated = [...prevLogs, newLog]
-        // Keep only last N logs to prevent memory issues
-        if (updated.length > maxLogs) {
-          return updated.slice(-maxLogs)
-        }
-        return updated
-      })
+      pendingLogs.push(newLog)
 
-      // Auto-scroll to bottom only if user is already at the bottom
-      // Otherwise, increment scroll offset by 1, accounting for the appended log and max scroll offset
-      setScrollOffset((currentOffset) => {
-        return currentOffset === 0 ? 0 : Math.min(maxScrollOffsetRef.current, currentOffset + 1)
-      })
+      // Debounce: flush after 50ms of no new logs
+      // Terminal synchronized updates prevent flicker, so we can be more responsive
+      if (flushTimeout) {
+        clearTimeout(flushTimeout)
+      }
+      flushTimeout = setTimeout(flushPendingLogs, 50)
     }
 
     // Create a read stream for the log file
@@ -235,6 +380,9 @@ const TUIApp = ({
     return () => {
       if (logStream) {
         logStream.destroy()
+      }
+      if (flushTimeout) {
+        clearTimeout(flushTimeout)
       }
       unwatchFile(logFile)
     }
@@ -354,139 +502,31 @@ const TUIApp = ({
     )
   }
 
+  // Calculate the height for the logs box to ensure stable layout from first render
+  // This prevents the layout from shifting as logs fill in
+  const logsBoxHeight = maxVisibleLogs + 3 // +3 for header line, borders
+
   return (
-    <Box flexDirection="column" height="100%">
+    <Box flexDirection="column" height={termHeight}>
       {/* Header Box - responsive to terminal size */}
       {isCompact ? renderCompactHeader() : renderNormalHeader()}
 
-      {/* Logs Box - flexGrow makes it expand to fill available height */}
-      <Box flexDirection="column" borderStyle="single" borderColor="gray" paddingX={1} flexGrow={1} minHeight={0}>
+      {/* Logs Box - explicit height for stable initial render */}
+      <Box flexDirection="column" borderStyle="single" borderColor="gray" paddingX={1} height={logsBoxHeight}>
         {!isVeryCompact && (
           <Text color="gray" dimColor>
             Logs ({filteredLogs.length} total{scrollOffset > 0 && `, scrolled up ${scrollOffset} lines`})
           </Text>
         )}
 
-        {/* Logs content area - also uses flexGrow to expand */}
-        <Box flexDirection="column" flexGrow={1}>
+        {/* Logs content area */}
+        <Box flexDirection="column">
           {visibleLogs.length === 0 ? (
             <Text dimColor>Waiting for logs...</Text>
           ) : (
-            visibleLogs.map((log) => {
-              // Parse log line to colorize different parts
-              const parts = log.content.match(/^\[(.*?)\] \[(.*?)\] (?:\[(.*?)\] )?(.*)$/)
-
-              if (parts) {
-                let [, timestamp, source, type, message] = parts
-
-                // Extract HTTP method from SERVER logs as a secondary tag
-                if (source === "SERVER" && !type && message) {
-                  const methodMatch = message.match(/^(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\s/)
-                  if (methodMatch) {
-                    type = methodMatch[1]
-                    message = message.slice(type.length + 1) // Remove method from message
-                  }
-                }
-
-                // Replace warning emoji in ERROR/WARNING messages for consistent terminal rendering
-                if (message && (type === "ERROR" || type === "WARNING")) {
-                  message = message.replace(/⚠/g, "[!]")
-                }
-
-                // In very compact mode, simplify the output
-                if (isVeryCompact) {
-                  const shortSource = source === "BROWSER" ? "B" : "S"
-                  const shortType = type ? type.split(".")[0].charAt(0) : ""
-                  return (
-                    <Text key={log.id} wrap="truncate-end">
-                      <Text dimColor>[{shortSource}]</Text>
-                      {shortType && <Text dimColor>[{shortType}]</Text>}
-                      <Text> {message}</Text>
-                    </Text>
-                  )
-                }
-
-                // Use shared color constants
-                const sourceColor = source === "BROWSER" ? LOG_COLORS.BROWSER : LOG_COLORS.SERVER
-                const typeColors: Record<string, string> = {
-                  NETWORK: LOG_COLORS.NETWORK,
-                  ERROR: LOG_COLORS.ERROR,
-                  WARNING: LOG_COLORS.WARNING,
-                  INFO: LOG_COLORS.INFO,
-                  LOG: LOG_COLORS.LOG,
-                  DEBUG: LOG_COLORS.DEBUG,
-                  SCREENSHOT: LOG_COLORS.SCREENSHOT,
-                  DOM: LOG_COLORS.DOM,
-                  CDP: LOG_COLORS.CDP,
-                  CHROME: LOG_COLORS.CHROME,
-                  CRASH: LOG_COLORS.CRASH,
-                  REPLAY: LOG_COLORS.REPLAY,
-                  NAVIGATION: LOG_COLORS.NAVIGATION,
-                  INTERACTION: LOG_COLORS.INTERACTION,
-                  GET: LOG_COLORS.SERVER,
-                  POST: LOG_COLORS.SERVER,
-                  PUT: LOG_COLORS.SERVER,
-                  DELETE: LOG_COLORS.SERVER,
-                  PATCH: LOG_COLORS.SERVER,
-                  HEAD: LOG_COLORS.SERVER,
-                  OPTIONS: LOG_COLORS.SERVER
-                }
-
-                // In compact mode, skip padding
-                if (isCompact) {
-                  return (
-                    <Text key={log.id} wrap="truncate-end">
-                      <Text dimColor>[{timestamp}]</Text>
-                      <Text> </Text>
-                      <Text color={sourceColor} bold>
-                        [{source.charAt(0)}]
-                      </Text>
-                      {type && (
-                        <>
-                          <Text> </Text>
-                          <Text color={typeColors[type] || "#A0A0A0"}>[{type}]</Text>
-                        </>
-                      )}
-                      <Text> {message}</Text>
-                    </Text>
-                  )
-                }
-
-                // Normal mode with minimal padding
-                // Single space after source
-                const sourceSpacing = ""
-
-                // Single space after type
-                const typeSpacing = ""
-
-                return (
-                  <Text key={log.id} wrap="truncate-end">
-                    <Text dimColor>[{timestamp}]</Text>
-                    <Text> </Text>
-                    <Text color={sourceColor} bold>
-                      [{source}]
-                    </Text>
-                    {type ? (
-                      <>
-                        <Text>{sourceSpacing} </Text>
-                        <Text color={typeColors[type] || "#A0A0A0"}>[{type}]</Text>
-                        <Text>{typeSpacing} </Text>
-                      </>
-                    ) : (
-                      <Text> </Text>
-                    )}
-                    <Text>{message}</Text>
-                  </Text>
-                )
-              }
-
-              // Fallback for unparsed lines
-              return (
-                <Text key={log.id} wrap="truncate-end">
-                  {log.content}
-                </Text>
-              )
-            })
+            visibleLogs.map((log) => (
+              <LogLine key={log.id} log={log} isCompact={isCompact} isVeryCompact={isVeryCompact} />
+            ))
           )}
         </Box>
 
@@ -498,13 +538,18 @@ const TUIApp = ({
 
       {/* Bottom status line - no border, just text */}
       <Box paddingX={1} justifyContent="space-between">
-        <Text color="#A18CE5">
-          ⏵⏵{" "}
-          {isVeryCompact
-            ? logFile.split("/").slice(-2, -1)[0] || "logs" // Just show directory name
-            : logFile.replace(process.env.HOME || "", "~")}
-        </Text>
-        <Text color="#A18CE5">{ctrlCMessage}</Text>
+        <Box>
+          <Text color="#A18CE5">
+            ⏵⏵{" "}
+            {isVeryCompact
+              ? logFile.split("/").slice(-2, -1)[0] || "logs" // Just show directory name
+              : logFile.replace(process.env.HOME || "", "~")}
+          </Text>
+        </Box>
+        <Box gap={2}>
+          {updateInfo && <Text color="yellow">↑ v{updateInfo.latestVersion} available (d3k upgrade)</Text>}
+          <Text color="#A18CE5">{ctrlCMessage}</Text>
+        </Box>
       </Box>
     </Box>
   )
@@ -514,11 +559,39 @@ export async function runTUI(options: TUIOptions): Promise<{
   app: { unmount: () => void }
   updateStatus: (status: string | null) => void
   updateAppPort: (port: string) => void
+  updateUpdateAvailable: (info: { latestVersion: string } | null) => void
 }> {
   return new Promise((resolve, reject) => {
     try {
       let statusUpdater: ((status: string | null) => void) | null = null
       let appPortUpdater: ((port: string) => void) | null = null
+      let updateAvailableUpdater: ((info: { latestVersion: string } | null) => void) | null = null
+
+      // Wrap stdout.write to add synchronized update escape sequences
+      // This tells the terminal to buffer all output until the end marker
+      // Supported by iTerm2, Kitty, WezTerm, and other modern terminals
+      const originalWrite = process.stdout.write.bind(process.stdout)
+      const syncStart = "\x1b[?2026h" // Begin synchronized update (DECSM 2026)
+      const syncEnd = "\x1b[?2026l" // End synchronized update (DECRM 2026)
+
+      process.stdout.write = ((
+        chunk: string | Uint8Array,
+        encodingOrCb?: BufferEncoding | ((err?: Error | null) => void),
+        cb?: (err?: Error | null) => void
+      ): boolean => {
+        if (typeof chunk === "string" && chunk.length > 0) {
+          // Wrap output in synchronized update markers to prevent partial renders
+          const wrapped = syncStart + chunk + syncEnd
+          if (typeof encodingOrCb === "function") {
+            return originalWrite(wrapped, encodingOrCb)
+          }
+          return originalWrite(wrapped, encodingOrCb, cb)
+        }
+        if (typeof encodingOrCb === "function") {
+          return originalWrite(chunk, encodingOrCb)
+        }
+        return originalWrite(chunk, encodingOrCb, cb)
+      }) as typeof process.stdout.write
 
       const app = render(
         <TUIApp
@@ -529,12 +602,15 @@ export async function runTUI(options: TUIOptions): Promise<{
           onAppPortUpdate={(fn) => {
             appPortUpdater = fn
           }}
+          onUpdateAvailableUpdate={(fn) => {
+            updateAvailableUpdater = fn
+          }}
         />,
         { exitOnCtrlC: false }
       )
 
-      // Give React time to set up the updaters
-      setTimeout(() => {
+      // Give React one tick to set up the updaters
+      setImmediate(() => {
         resolve({
           app,
           updateStatus: (status: string | null) => {
@@ -546,9 +622,14 @@ export async function runTUI(options: TUIOptions): Promise<{
             if (appPortUpdater) {
               appPortUpdater(port)
             }
+          },
+          updateUpdateAvailable: (info: { latestVersion: string } | null) => {
+            if (updateAvailableUpdater) {
+              updateAvailableUpdater(info)
+            }
           }
         })
-      }, 100)
+      })
     } catch (error) {
       console.error("Error in runTUI render:", error)
       reject(error)

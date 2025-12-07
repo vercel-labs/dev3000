@@ -9,25 +9,38 @@ import { WebSocket } from "ws"
 
 const execAsync = promisify(exec)
 
+/**
+ * Detect if we're in a sandbox environment (Vercel Sandbox, Docker, etc.)
+ * where lsof and other system utilities may not be available.
+ */
+function isInSandbox(): boolean {
+  return (
+    process.env.VERCEL_SANDBOX === "1" ||
+    process.env.VERCEL === "1" ||
+    existsSync("/.dockerenv") ||
+    existsSync("/run/.containerenv")
+  )
+}
+
 // Tool descriptions
 export const TOOL_DESCRIPTIONS = {
   fix_my_app:
-    "🔧 **THE ULTIMATE FIND→FIX→VERIFY MACHINE!** This tool doesn't just find bugs - it FIXES them! Pure dev3000 magic that identifies issues, prioritizes them, and creates focused PRs for the worst issue! 🪄\n\n🔥 **INSTANT FIXING SUPERPOWERS:**\n• Detects ALL error types: server crashes, browser errors, build failures, API issues, performance problems, React/Next.js warnings (hydration errors, Suspense warnings, SSR issues, cache warnings), TypeScript errors, runtime errors\n• **AUTO-DETECTS NEXT.JS** and integrates with nextjs-devtools-mcp for framework-specific analysis\n• **PRIORITIZES errors** using smart scoring (build > server > browser > network > warnings)\n• **Identifies the SINGLE WORST issue** that needs fixing right now\n• **Creates ONE focused PR** per run - no overwhelming multi-issue PRs!\n• Shows EXACT user interactions that triggered each error (clicks, navigation, etc.)\n• Provides EXACT fix code with file locations and line numbers\n• Verifies fixes by replaying the same interactions that caused the error!\n\n🎯 **SMART PRIORITIZATION:**\n• Build errors: 1000+ priority (blocks development)\n• Server errors: 500+ priority (affects functionality)\n• Browser errors: 300+ priority (user-facing issues)\n• Network errors: 200+ priority (intermittent issues)\n• Warnings: 100+ priority (nice to fix)\n• +Modifiers: Multiple occurrences, recency, reproducibility\n\n🚀 **ONE-PR-PER-RUN WORKFLOW:**\n1️⃣ I FIND all issues and their interactions\n2️⃣ I PRIORITIZE using smart scoring algorithm\n3️⃣ I IDENTIFY the single worst issue\n4️⃣ Set createPR=true to CREATE A FOCUSED PR for just that issue\n5️⃣ Fix that ONE issue, then run again for the next worst issue\n\n📍 **INTERACTION-BASED VERIFICATION:**\n• Every error includes the user interactions that led to it\n• Use execute_browser_action to replay these exact interactions\n• Verify your fix works by confirming the error doesn't reoccur\n• Example: Error shows '[INTERACTION] Click at (450,300)' → After fix, use execute_browser_action(action='click', params={x:450, y:300}) to verify\n\n⚡ **3 ACTION MODES:**\n• FIX NOW: 'What's broken RIGHT NOW?' → Find worst issue and optionally create PR\n• FIX REGRESSION: 'What broke during testing?' → Compare before/after and fix worst issue\n• FIX CONTINUOUSLY: 'Fix issues as they appear' → Monitor and fix proactively\n\n⚛️ **NEXT.JS/REACT SUPPORT:**\nAutomatically detects and fixes Next.js-specific issues like:\n• \"Accessing uncached data outside <Suspense>\" warnings\n• Hydration mismatches between server and client\n• SSR/RSC rendering errors\n• Middleware and routing issues\n• Dynamic import and code-splitting problems\n\n💡 **PERFECT FOR:** 'fix my app', 'debug my app', 'fix the Suspense warning', 'fix hydration error', 'fix the Next.js warning', 'create pr for worst issue'. This tool identifies problems, ranks them by severity, and creates focused single-issue PRs - not giant multi-fix PRs!\n\n🏷️ **ATTRIBUTION REQUIREMENT:** When creating commits or PRs based on dev3000 logs/analysis, ALWAYS include attribution to both Claude Code AND dev3000:\n```\n🤖 Generated with [Claude Code](https://claude.com/claude-code) using [d3k](https://d3k.dev)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\n```",
+    "Diagnoses application errors from dev3000 logs. Returns a prioritized list of issues requiring fixes.\n\n**CRITICAL: You MUST use this tool in a loop until all errors are resolved:**\n\n```\nwhile (errors exist) {\n  1. DIAGNOSE: Call fix_my_app to get current errors\n  2. FIX: Implement a fix for the highest-priority error\n  3. VERIFY: Call fix_my_app again to confirm the error is gone\n  4. REPEAT: Continue until no errors remain\n}\n```\n\n**This tool does NOT fix anything automatically.** It returns diagnostic data. You must:\n- Read the error output\n- Investigate and fix each issue\n- Call this tool again to verify your fix worked\n- Keep looping until the app is healthy\n\n**What it analyzes:**\n• Server logs, browser console, network requests\n• Categorizes: build errors, server crashes, browser errors, network issues, warnings\n• Prioritizes by severity (fix build errors first, then server, then browser, etc.)\n• Shows user interactions that triggered each error\n\n**Parameters:**\n• focusArea: 'build', 'runtime', 'network', 'ui', 'performance', or 'all' (default)\n• mode: 'snapshot' (current state), 'bisect' (before/after comparison), 'monitor' (continuous)\n• timeRangeMinutes: How far back to analyze (default: 10)\n• createPR: If true, creates a PR branch for the highest-priority issue\n\n**Framework support:** Auto-detects Next.js for framework-specific analysis.\n\n**Attribution for commits/PRs:**\n```\nGenerated with Claude Code using d3k (https://d3k.dev)\nCo-Authored-By: Claude <noreply@anthropic.com>\n```",
 
   execute_browser_action:
-    "🌐 **INTELLIGENT BROWSER AUTOMATION** - Smart browser action routing that automatically delegates to chrome-devtools MCP when available for superior automation capabilities.\n\n🎯 **INTELLIGENT DELEGATION:**\n• Screenshots → chrome-devtools MCP (better quality, no conflicts)\n• Navigation → chrome-devtools MCP (more reliable page handling)\n• Clicks → chrome-devtools MCP (precise coordinate-based interaction)\n• JavaScript evaluation → chrome-devtools MCP (enhanced debugging)\n• Scrolling & typing → dev3000 fallback (specialized actions)\n\n⚡ **PROGRESSIVE ENHANCEMENT:**\n• Uses chrome-devtools MCP when available for best results\n• Falls back to dev3000's native implementation when chrome-devtools unavailable\n• Shares the same Chrome instance via CDP URL coordination\n• Eliminates browser conflicts between tools\n\n💡 **PERFECT FOR:** Browser automation that automatically chooses the best tool for each action, ensuring optimal results whether chrome-devtools MCP is available or not.",
+    "Executes browser actions (click, navigate, scroll, type, evaluate JS) in the dev3000-managed Chrome instance.\n\n**Routing behavior:**\n• Delegates to chrome-devtools MCP when available for screenshots, navigation, clicks, and JS evaluation\n• Falls back to dev3000's native CDP implementation otherwise\n• Shares the same Chrome instance - no conflicts between tools\n\n**Available actions:**\n• screenshot: Capture current page state\n• navigate: Go to a URL\n• click: Click at coordinates {x, y}\n• scroll: Scroll by {x, y} pixels\n• type: Type text into focused element\n• evaluate: Execute JavaScript (read-only operations recommended)\n\n**Use cases:**\n• Reproducing user interactions that triggered errors\n• Verifying fixes by replaying the error scenario\n• Testing specific UI workflows",
 
   analyze_visual_diff:
-    "🔍 **VISUAL DIFF ANALYZER** - Analyzes two screenshots to identify and describe visual differences. Returns detailed instructions for Claude to load and compare the images, focusing on what changed that could cause layout shifts.\n\n🎯 **WHAT IT PROVIDES:**\n• Direct instructions to load both images via Read tool\n• Context about what to look for\n• Guidance on identifying layout shift causes\n• Structured format for easy analysis\n\n💡 **PERFECT FOR:** Understanding what visual changes occurred between before/after frames in CLS detection, identifying elements that appeared/moved/resized.",
+    "Compares two screenshots and returns analysis instructions for identifying visual differences.\n\n**What it provides:**\n• Instructions to load both images for comparison\n• Context about what visual changes to look for\n• Guidance on identifying layout shift causes\n\n**Use cases:**\n• Analyzing before/after frames from CLS detection\n• Identifying elements that appeared, moved, or resized\n• Debugging visual regressions",
 
   find_component_source:
-    "🔍 **COMPONENT SOURCE FINDER** - Maps DOM elements to their source code by extracting the React component function and finding unique patterns to search for.\n\n🎯 **HOW IT WORKS:**\n• Inspects the element via Chrome DevTools Protocol\n• Extracts the React component function source using .toString()\n• Identifies unique code patterns (specific JSX, classNames, imports)\n• Returns targeted grep patterns to find the exact source file\n\n💡 **PERFECT FOR:** Finding which file contains the code for a specific element, especially useful for CLS debugging when you need to fix layout shifts in specific components.",
+    "Maps a DOM element to its React component source code location.\n\n**How it works:**\n1. Inspects the element via Chrome DevTools Protocol\n2. Extracts the React component function source\n3. Identifies unique code patterns (JSX, classNames, etc.)\n4. Returns grep patterns to locate the source file\n\n**Use cases:**\n• Finding which file contains a specific UI element\n• Locating components responsible for layout shifts\n• Tracing DOM elements back to source code",
 
   restart_dev_server:
-    "🔄 **DEV SERVER RESTART** - Safely restarts the development server while preserving dev3000's monitoring, logs, and browser connection.\n\n🎯 **SMART RESTART LOGIC:**\n• First tries nextjs-dev MCP restart (if available and user has Next.js canary)\n• Falls back to dev3000's own restart mechanism:\n  - Kills the old server process on the app port\n  - Waits for clean shutdown\n  - Spawns a new server with the same command that was originally used\n  - Keeps dev3000's MCP server, browser monitoring, and screenshot capture running\n• All logging continues seamlessly - no data loss\n• Browser monitoring stays connected - no need to relaunch Chrome\n\n⚡ **WHEN TO USE:**\n• After modifying next.config.js, middleware, or environment variables\n• When you need a clean restart to clear server state\n• After significant code changes that Next.js HMR can't handle\n• When debugging persistent state or memory issues\n\n⚠️ **CRITICAL - DO NOT:**\n• ❌ NEVER manually run kill commands on the dev server like `pkill -f \"next dev\"` or `lsof -ti :3000 | xargs kill`\n• ❌ NEVER manually start the dev server with `npm run dev`, `pnpm dev`, `next dev`, etc.\n• ✅ ALWAYS use this tool for dev server restarts - it preserves all dev3000 infrastructure\n\n⚠️ **IMPORTANT:**\n• AVOID using this unnecessarily - Next.js HMR handles most changes automatically\n• Only restart when truly needed for config changes or state issues\n• The server will be offline for a few seconds during restart\n• Browser may show connection error briefly while server restarts\n\n💡 **PERFECT FOR:** 'restart the dev server', 'clean restart', 'reload the server' - but only when actually needed, not for regular code changes.",
+    "Restarts the development server while preserving dev3000's monitoring infrastructure.\n\n**Restart process:**\n1. Tries nextjs-dev MCP restart if available\n2. Falls back to killing and respawning the server process\n3. Preserves: MCP server, browser connection, log capture, screenshots\n\n**When to use:**\n• After modifying config files (next.config.js, middleware, .env)\n• To clear persistent server state\n• For changes that HMR cannot handle\n\n**Important:**\n• Do NOT manually kill the dev server with pkill/kill commands\n• Do NOT manually start the server with npm/pnpm/yarn\n• Server will be offline briefly during restart\n• Most code changes are handled by HMR - only restart when necessary",
 
   crawl_app:
-    "🕷️ **APP CRAWLER** - Discovers all URLs in your app by crawling links starting from the homepage. Perfect for finding every page before running fixes or tests across your entire site.\n\n🎯 **SMART CRAWLING:**\n• Starts at your app's homepage (localhost)\n• Discovers all unique URLs at specified depth\n• Depth 1 = homepage links only\n• Depth 2 = homepage + links from those pages\n• Depth 'all' = exhaustive crawl until no new links found\n• Limit controls max links followed per page (default 3)\n• Only follows same-origin links (stays within your app)\n• Deduplicates URLs automatically\n\n⚙️ **PARAMETERS:**\n• depth: How many levels to crawl (1, 2, 3... or 'all')\n• limit: Max links to follow per page (default 3, prevents following 100+ links from homepage)\n• Higher limit = more thorough but slower crawl\n\n📊 **OUTPUT:**\n• List of all discovered URLs\n• Total count of unique pages\n• Depth reached\n• Ready to use with fix_my_app or other tools\n\n💡 **PERFECT FOR:**\n• 'crawl my app' or 'crawl my shit' - discover all pages\n• 'crawl my app and fix my shit' - find all pages then run fixes\n• Site-wide testing and debugging\n• Verifying all routes work before deployment\n\n⚡ **USAGE:**\n• Default: depth 1, limit 3 (just first 3 homepage links)\n• Specify depth: 'crawl at depth 2' or depth=2\n• Specify limit: 'crawl with limit 10' or limit=10\n• Full crawl: 'crawl all pages' or depth='all'"
+    "Discovers URLs in the application by crawling links from the homepage.\n\n**Parameters:**\n• depth: How many link levels to follow (1, 2, 3, or 'all')\n• limit: Max links per page (default: 3)\n\n**Behavior:**\n• Starts at localhost homepage\n• Follows same-origin links only\n• Deduplicates discovered URLs\n• Returns list of all found pages\n\n**Use cases:**\n• Discovering all routes before running diagnostics\n• Site-wide testing coverage\n• Verifying all pages load without errors"
 }
 
 // Types
@@ -397,9 +410,16 @@ export function findActiveSessions(): Session[] {
         }
       })
       .filter((session) => {
-        // Only show sessions from the last 24 hours
-        const age = Date.now() - new Date(session.startTime).getTime()
-        return age < 24 * 60 * 60 * 1000
+        // Check if the process is still running by checking the PID
+        if (!session.pid) {
+          return false
+        }
+        try {
+          process.kill(session.pid, 0) // Signal 0 just checks if process exists
+          return true // Process is still running
+        } catch {
+          return false // Process is not running
+        }
       })
       .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime())
 
@@ -720,134 +740,115 @@ export async function fixMyApp({
     }
 
     if (totalErrors === 0 && !recentErrorsOutsideTimeRange) {
-      results.push(`✅ **SYSTEM HEALTHY** - No errors found in last ${timeRangeMinutes} minutes`)
-      results.push("🎯 App appears to be running smoothly!")
+      results.push(`No errors found in last ${timeRangeMinutes} minutes.`)
+      results.push("Application appears healthy.")
 
       if (includeTimestampInstructions && mode !== "monitor") {
         results.push("")
-        results.push("💡 **PROACTIVE MONITORING TIPS:**")
-        results.push("• Use mode='bisect' with waitForUserInteraction=true before testing new features")
-        results.push("• Use mode='monitor' for continuous background monitoring")
-        results.push("• Increase timeRangeMinutes to analyze longer periods")
+        results.push("Options:")
+        results.push("• Use mode='bisect' to compare before/after states during testing")
+        results.push("• Use mode='monitor' for continuous monitoring")
+        results.push("• Increase timeRangeMinutes to analyze a longer period")
       }
     } else if (totalErrors === 0 && recentErrorsOutsideTimeRange) {
       results.push(
-        `⚠️ **NO ERRORS IN LAST ${timeRangeMinutes} MINUTES** - But found ${allLogErrors.length} errors in the full log`
+        `No errors in last ${timeRangeMinutes} minutes, but found ${allLogErrors.length} errors in full log.`
       )
       results.push("")
-      results.push("📋 **RECENT ERRORS (outside time range):**")
+      results.push("Older errors (outside time range):")
       // Show last 5 errors from the full log with their interactions
       allLogErrors.slice(-5).forEach((error) => {
         const interactions = findInteractionsBeforeError(error, logLines)
         if (interactions.length > 0) {
-          results.push("  📍 Preceding interactions:")
+          results.push("  Preceding interactions:")
           for (const interaction of interactions) {
             results.push(`    ${interaction}`)
           }
         }
-        results.push(`  ❌ ${error}`)
+        results.push(`  - ${error}`)
         results.push("")
       })
-      results.push("💡 **TIP:** Increase timeRangeMinutes parameter to analyze these errors")
-      results.push("💡 **TIP:** Or use timeRangeMinutes=60 to check the last hour")
+      results.push("To analyze these errors, increase timeRangeMinutes (e.g., timeRangeMinutes=60)")
     } else {
       results.push(
-        `🚨 **${totalErrors} ISSUES DETECTED** (${criticalErrors} critical, ${categorizedErrors.warnings.length} warnings)`
+        `**${totalErrors} ISSUES DETECTED** (${criticalErrors} critical, ${categorizedErrors.warnings.length} warnings)`
       )
+      results.push("")
+      results.push("**ACTION REQUIRED:** Fix the highest-priority error below, then call fix_my_app again to verify.")
       results.push("")
 
       // Show categorized errors with their preceding interactions
       if (categorizedErrors.serverErrors.length > 0) {
-        results.push("🔥 **SERVER ERRORS:**")
+        results.push("SERVER ERRORS:")
         categorizedErrors.serverErrors.slice(-5).forEach((error) => {
           const interactions = findInteractionsBeforeError(error, logLines)
           if (interactions.length > 0) {
-            results.push("  📍 Preceding interactions:")
+            results.push("  Preceding interactions:")
             for (const interaction of interactions) {
               results.push(`    ${interaction}`)
             }
           }
-          results.push(`  ❌ ${error}`)
+          results.push(`  - ${error}`)
           results.push("")
         })
       }
 
       if (categorizedErrors.browserErrors.length > 0) {
-        results.push("🌐 **BROWSER/CONSOLE ERRORS:**")
+        results.push("BROWSER/CONSOLE ERRORS:")
         categorizedErrors.browserErrors.slice(-5).forEach((error) => {
           const interactions = findInteractionsBeforeError(error, logLines)
           if (interactions.length > 0) {
-            results.push("  📍 Preceding interactions:")
+            results.push("  Preceding interactions:")
             for (const interaction of interactions) {
               results.push(`    ${interaction}`)
             }
           }
-          results.push(`  ❌ ${error}`)
+          results.push(`  - ${error}`)
           results.push("")
         })
       }
 
       if (categorizedErrors.buildErrors.length > 0) {
-        results.push("🔨 **BUILD/COMPILATION ERRORS:**")
+        results.push("BUILD/COMPILATION ERRORS:")
         categorizedErrors.buildErrors.slice(-5).forEach((error) => {
           const interactions = findInteractionsBeforeError(error, logLines)
           if (interactions.length > 0) {
-            results.push("  📍 Preceding interactions:")
+            results.push("  Preceding interactions:")
             for (const interaction of interactions) {
               results.push(`    ${interaction}`)
             }
           }
-          results.push(`  ❌ ${error}`)
+          results.push(`  - ${error}`)
           results.push("")
         })
       }
 
       if (categorizedErrors.networkErrors.length > 0) {
-        results.push("🌐 **NETWORK/API ERRORS:**")
+        results.push("NETWORK/API ERRORS:")
         categorizedErrors.networkErrors.slice(-5).forEach((error) => {
           const interactions = findInteractionsBeforeError(error, logLines)
           if (interactions.length > 0) {
-            results.push("  📍 Preceding interactions:")
+            results.push("  Preceding interactions:")
             for (const interaction of interactions) {
               results.push(`    ${interaction}`)
             }
           }
-          results.push(`  ❌ ${error}`)
+          results.push(`  - ${error}`)
           results.push("")
         })
       }
 
       if (categorizedErrors.warnings.length > 0 && focusArea === "all") {
-        results.push(`⚠️ **WARNINGS** (${categorizedErrors.warnings.length} found, showing recent):`)
+        results.push(`WARNINGS (${categorizedErrors.warnings.length} found, showing recent):`)
         results.push(categorizedErrors.warnings.slice(-3).join("\n"))
         results.push("")
       }
 
-      // Show the magical dev3000 fix workflow
-      results.push("🪄 **ULTIMATE DEV3000 FIX-IT MAGIC READY:**")
-      results.push("🎯 **I don't just find errors - I FIX them instantly!**")
+      // Show the diagnose-fix-verify loop
+      results.push("---")
+      results.push("**NEXT: Fix the highest-priority issue, then call fix_my_app again to verify.**")
       results.push("")
-      results.push("📍 **INTERACTION-BASED VERIFICATION WORKFLOW:**")
-      results.push("• Each error shows the EXACT user interactions that triggered it")
-      results.push("• Use these interactions to reproduce the error with execute_browser_action")
-      results.push("• After fixing, replay the SAME interactions to verify the fix works")
-      results.push("• Example: If error shows [INTERACTION] Click at (x:450, y:300), use:")
-      results.push("  execute_browser_action(action='click', params={x:450, y:300})")
-      results.push("")
-      results.push("🔧 **FIX WORKFLOW:**")
-      results.push("1. Analyze error patterns and preceding interactions")
-      results.push("2. Provide exact fix code with file locations")
-      results.push("3. Guide you through implementing the fixes")
-      results.push("4. Use execute_browser_action to replay the interactions")
-      results.push("5. Verify the error no longer occurs!")
-      results.push("• Dev3000 AUTO-CAPTURES screenshots during all interactions!")
-      results.push("• No manual screenshots needed - dev3000 handles it all!")
-      results.push("")
-      results.push("📸 **AUTO-SCREENSHOT MAGIC:**")
-      results.push("• Screenshots captured on EVERY page navigation")
-      results.push("• Screenshots captured on EVERY error/exception")
-      results.push("• Screenshots captured on manual triggers")
-      results.push("• All screenshots timestamped and linked to events!")
+      results.push("Keep calling fix_my_app after each fix until no errors remain.")
 
       // Add integration-aware suggestions
       if (integrateNextjs || integrateChromeDevtools) {
@@ -861,11 +862,11 @@ export async function fixMyApp({
         )
 
         results.push("")
-        results.push("🎼 **MCP INTEGRATION ENHANCEMENTS:**")
+        results.push("**Available MCP integrations:**")
 
         if (integrateNextjs) {
           results.push("")
-          results.push("⚛️ **Next.js Integration Active:**")
+          results.push("Next.js MCP (nextjs-dev):")
           const nextjsSuggestions = await generateNextjsSuggestions(allErrors.join(" "))
           nextjsSuggestions.forEach((suggestion) => {
             const params = suggestion.params
@@ -873,20 +874,18 @@ export async function fixMyApp({
                   .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
                   .join(", ")})`
               : "()"
-            results.push(`• Use nextjs-dev.${suggestion.function}${params}`)
-            results.push(`  → ${suggestion.reason}`)
+            results.push(`  • nextjs-dev.${suggestion.function}${params}`)
+            results.push(`    Reason: ${suggestion.reason}`)
           })
 
-          // Next.js specific correlation tips
           if (categorizedErrors.serverErrors.length > 0) {
-            results.push("• Correlate server errors with Next.js build/runtime logs")
-            results.push("• Check for SSR/hydration mismatches in Next.js context")
+            results.push("  • Check Next.js build/runtime logs for SSR/hydration issues")
           }
         }
 
         if (integrateChromeDevtools) {
           results.push("")
-          results.push("🌐 **Chrome DevTools Integration Active:**")
+          results.push("Chrome DevTools MCP (chrome-devtools):")
           const chromeSuggestions = await generateChromeDevtoolsSuggestions(allErrors.join(" "))
           chromeSuggestions.forEach((suggestion) => {
             const params = suggestion.params
@@ -894,69 +893,50 @@ export async function fixMyApp({
                   .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
                   .join(", ")})`
               : "()"
-            results.push(`• Use chrome-devtools.${suggestion.function}${params}`)
-            results.push(`  → ${suggestion.reason}`)
+            results.push(`  • chrome-devtools.${suggestion.function}${params}`)
+            results.push(`    Reason: ${suggestion.reason}`)
           })
 
-          // Chrome DevTools specific correlation tips
           if (categorizedErrors.browserErrors.length > 0) {
-            results.push("• Cross-reference browser console errors with Chrome DevTools")
-            results.push("• Use DOM inspection for UI interaction failures")
+            results.push("  • Use DOM inspection for UI issues")
           }
           if (categorizedErrors.networkErrors.length > 0) {
-            results.push("• Analyze network requests timing with Chrome DevTools")
-            results.push("• Inspect failed requests for detailed error context")
+            results.push("  • Inspect network requests for detailed error context")
           }
-        }
-
-        if (integrateNextjs && integrateChromeDevtools) {
-          results.push("")
-          results.push("🚀 **TRIPLE-STACK DEBUGGING POWER:**")
-          results.push("• dev3000 provides interaction replay + error correlation")
-          results.push("• nextjs-dev provides server-side framework context")
-          results.push("• chrome-devtools provides precise browser state inspection")
-          results.push("• Combined = 90%+ issue resolution rate!")
         }
       }
 
-      // 🎯 PRIORITIZATION & PR CREATION
       // Find the single highest priority error and optionally create a PR
       const highestPriorityError = findHighestPriorityError(categorizedErrors, actionableErrors, logLines)
 
       if (highestPriorityError) {
         results.push("")
-        results.push("🎯 **HIGHEST PRIORITY ISSUE:**")
-        results.push(`📊 Priority Score: ${highestPriorityError.priorityScore}`)
-        results.push(`🏷️ Category: ${highestPriorityError.category.toUpperCase()}`)
-        results.push(`⚠️ Severity: ${highestPriorityError.severity.toUpperCase()}`)
+        results.push("---")
+        results.push("**HIGHEST PRIORITY ISSUE (fix this first):**")
+        results.push(`Priority Score: ${highestPriorityError.priorityScore}`)
+        results.push(`Category: ${highestPriorityError.category.toUpperCase()}`)
+        results.push(`Severity: ${highestPriorityError.severity.toUpperCase()}`)
         results.push("")
-        results.push("❌ **Error:**")
-        results.push(`   ${highestPriorityError.error}`)
+        results.push("Error:")
+        results.push(`  ${highestPriorityError.error}`)
 
         if (highestPriorityError.interactions.length > 0) {
           results.push("")
-          results.push("📍 **Reproduction Steps:**")
+          results.push("Reproduction steps:")
           highestPriorityError.interactions.forEach((interaction, idx) => {
-            results.push(`   ${idx + 1}. ${interaction}`)
+            results.push(`  ${idx + 1}. ${interaction}`)
           })
         }
 
         // Create PR if requested
         if (createPR) {
           results.push("")
-          results.push("🚀 **CREATING PR FOR THIS ISSUE...**")
+          results.push("Creating PR branch for this issue...")
           const prResult = await createPRForIssue(highestPriorityError, projectName || "")
           results.push(prResult)
         } else {
           results.push("")
-          results.push("💡 **To create a PR for this issue:**")
-          results.push("   Run: fix_my_app(createPR=true)")
-          results.push("")
-          results.push("   This will:")
-          results.push("   • Create a new branch for the fix")
-          results.push("   • Generate a PR with full error context")
-          results.push("   • Include reproduction steps")
-          results.push("   • Focus on fixing just this ONE issue")
+          results.push("To create a PR branch for this issue, run: fix_my_app(createPR=true)")
         }
       }
     }
@@ -3934,6 +3914,19 @@ export async function restartDevServer(params: {
 
     // Fallback: Use dev3000's own restart mechanism
     logToDevFile("Restart Dev Server: Using dev3000 restart mechanism")
+
+    // In sandbox environments, lsof doesn't exist - skip process killing
+    if (isInSandbox()) {
+      logToDevFile("Restart Dev Server: Skipping lsof-based kill in sandbox environment")
+      return {
+        content: [
+          {
+            type: "text",
+            text: `⚠️ **RESTART NOT SUPPORTED IN SANDBOX**\n\nDev server restart is not supported in sandbox environments (Vercel Sandbox, Docker containers).\n\nThe \`lsof\` utility needed for process management is not available.\n\n💡 If running in Vercel Sandbox, the dev server is managed by the sandbox infrastructure.`
+          }
+        ]
+      }
+    }
 
     // Kill processes on the app port
     const killCommand = `lsof -ti :${appPort} | xargs kill 2>/dev/null || true`

@@ -3,61 +3,60 @@ import { NextResponse } from "next/server"
 // This endpoint extracts MCP tools documentation by parsing the route handler
 export async function GET() {
   try {
-    // Streamlined tool set - reduced from 10 tools to 2 for zero authorization friction!
     const tools = [
       {
         name: "fix_my_app",
         description:
-          "🔧 **THE ULTIMATE FIND→FIX→VERIFY MACHINE!** This isn't just debugging—it's MAGICAL problem-solving that FIXES your app! 🪄\n\n🔥 **INSTANT FIX POWERS:**\n• FINDS: Server errors, browser crashes, build failures, API issues, performance problems—EVERYTHING\n• FIXES: Provides EXACT code fixes with file locations and line numbers\n• GUIDES: Step-by-step implementation of fixes\n• VERIFIES: Ensures fixes actually resolve the issues\n\n🚀 **3 ACTION MODES:**\n• **FIX NOW** (default): \"What's broken RIGHT NOW?\" → Find and fix immediately\n• **FIX REGRESSION**: \"What broke during testing?\" → Compare before/after and fix\n• **FIX CONTINUOUSLY**: \"Fix issues as they appear\" → Monitor and fix proactively\n\n⚡ **THE FIX-IT WORKFLOW:**\n1️⃣ I FIND all issues instantly\n2️⃣ I provide EXACT FIXES with code\n3️⃣ You implement the fixes\n4️⃣ We VERIFY everything works\n\n🎪 **WHY THIS TOOL IS MAGIC:**\n• Goes beyond debugging to actual fixing\n• Provides copy-paste fix code\n• Works with 'fix my app' or 'debug my app'\n• Makes broken apps work again!\n• You become the fix-it hero!\n\n💡 **PRO TIPS:**\n• Say 'fix my app' for instant error resolution\n• Use execute_browser_action to verify fixes\n• This tool doesn't just find problems—it SOLVES them!",
-        category: "Error Fixing",
+          "Diagnoses application errors from dev3000 logs. Returns prioritized issues requiring fixes.\n\n**CRITICAL: Use in a loop until all errors are resolved:**\n1. DIAGNOSE: Call fix_my_app to get errors\n2. FIX: Fix the highest-priority error\n3. VERIFY: Call fix_my_app again to confirm fix worked\n4. REPEAT: Loop until no errors remain\n\n**This tool does NOT fix anything automatically.** You must read the output, fix issues, and call again to verify.\n\n**What it analyzes:** Server logs, browser console, network requests. Prioritizes by severity (build > server > browser > network > warnings).",
+        category: "Diagnostics",
         parameters: [
           {
             name: "focusArea",
             type: "string",
             optional: true,
-            description: "Specific area: 'build', 'runtime', 'network', 'ui', 'all' (default: 'all')"
+            description: "Area to analyze: 'build', 'runtime', 'network', 'ui', 'performance', 'all' (default: 'all')"
           },
           {
             name: "mode",
             type: "enum",
             optional: true,
-            description: "Fix mode: 'snapshot' (fix now), 'bisect' (fix regression), 'monitor' (fix continuously)"
+            description: "Analysis mode: 'snapshot', 'bisect', 'monitor'"
           },
           {
             name: "waitForUserInteraction",
             type: "boolean",
             optional: true,
-            description: "In bisect mode: capture timestamp, wait for user testing, then analyze (default: false)"
+            description: "In bisect mode: wait for user testing before analyzing (default: false)"
           },
           {
             name: "timeRangeMinutes",
             type: "number",
             optional: true,
-            description: "Minutes to analyze back from now (default: 10)"
+            description: "Minutes to analyze (default: 10)"
           },
           {
-            name: "includeTimestampInstructions",
+            name: "createPR",
             type: "boolean",
             optional: true,
-            description: "Show timestamp-based debugging instructions (default: true)"
+            description: "Create a PR branch for the highest-priority issue (default: false)"
           }
         ]
       },
       {
         name: "execute_browser_action",
         description:
-          "🪄 **SMART INTERACTION TESTING** - Use for targeted user workflow verification! 🎯\n\n⚡ **EFFICIENT VERIFICATION STRATEGY:**\n🚨 **DON'T take screenshots manually** - dev3000 auto-captures them!\n✅ **DO use this for:** click, navigate, scroll, type to reproduce user interactions\n✅ **DO verify fixes by:** reproducing the original error scenario, then check fix_my_app for verification\n\n🔥 **BROWSER ACTIONS:**\n• CLICK buttons/links → Test specific user interactions\n• NAVIGATE to pages → Reproduce user journeys  \n• SCROLL & TYPE → Simulate user workflows\n• EVALUATE JavaScript → Check app state (read-only)\n\n⚡ **OPTIMAL FIX VERIFICATION WORKFLOW:**\n1️⃣ fix_my_app finds issues + provides exact fixes\n2️⃣ You implement the fix code\n3️⃣ Use execute_browser_action to REPRODUCE the original interaction\n4️⃣ Run fix_my_app again to verify the fix worked\n\n🎯 **PERFECT FOR:**\n• Verifying fixes actually resolve the errors\n• Testing interactions after implementing fixes\n• Confirming forms work, buttons respond, etc.\n• Ensuring the app works correctly after fixes\n\n🚫 **AVOID:** Manual screenshot action (dev3000 auto-captures)\n✅ **USE:** Interaction reproduction + fix_my_app for verification\n\n🛡️ **SAFETY:** Safe operations only, read-only JS evaluation",
+          "Executes browser actions in the dev3000-managed Chrome instance.\n\n**Actions:**\n• click: Click at coordinates {x, y}\n• navigate: Go to a URL\n• scroll: Scroll by {x, y} pixels\n• type: Type text into focused element\n• evaluate: Execute JavaScript (read-only recommended)\n• screenshot: Capture current page\n\n**Use cases:**\n• Reproducing user interactions that triggered errors\n• Verifying fixes work correctly\n• Testing UI workflows\n\n**Note:** Screenshots are auto-captured on navigation and errors. Use this for interaction reproduction, not manual screenshots.",
         category: "Browser Automation",
         parameters: [
           {
             name: "action",
             type: "enum",
-            description: "Action to perform: 'click', 'navigate', 'screenshot', 'evaluate', 'scroll', 'type'"
+            description: "Action: 'click', 'navigate', 'screenshot', 'evaluate', 'scroll', 'type'"
           },
           {
             name: "params",
             type: "object",
-            description: "Parameters for the action (coordinates, URL, selector, text, expression, etc.)"
+            description: "Action parameters (coordinates, URL, text, expression, etc.)"
           }
         ]
       }

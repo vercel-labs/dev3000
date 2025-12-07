@@ -25,13 +25,25 @@ import { DevTUI } from "./tui-interface.js"
 import { formatMcpConfigTargets, MCP_CONFIG_TARGETS, type McpConfigTarget } from "./utils/mcp-configs.js"
 import { getProjectDisplayName, getProjectName } from "./utils/project-name.js"
 import { formatTimestamp } from "./utils/timestamp.js"
+import { checkForUpdates } from "./utils/version-check.js"
 
 // MCP names
 const MCP_NAMES = {
   DEV3000: "dev3000",
   CHROME_DEVTOOLS: "dev3000-chrome-devtools",
-  NEXTJS_DEV: "dev3000-nextjs-dev"
+  NEXTJS_DEV: "dev3000-nextjs-dev",
+  VERCEL: "vercel"
 } as const
+
+// Vercel MCP URL (public OAuth-based MCP)
+const VERCEL_MCP_URL = "https://mcp.vercel.com"
+
+/**
+ * Check if the current project has a .vercel directory (indicating a Vercel project)
+ */
+function hasVercelProject(): boolean {
+  return existsSync(join(process.cwd(), ".vercel"))
+}
 
 interface DevEnvironmentOptions {
   port: string
@@ -55,6 +67,7 @@ interface DevEnvironmentOptions {
   chromeDevtoolsMcp?: boolean // Whether to enable chrome-devtools MCP integration
   disabledMcpConfigs?: McpConfigTarget[] // Which MCP config files should be skipped
   debugPort?: number // Chrome debugging port (default 9222, auto-incremented for multiple instances)
+  headless?: boolean // Run Chrome in headless mode (for serverless/CI environments)
 }
 
 class Logger {
@@ -95,17 +108,28 @@ function detectPackageManagerForRun(): string {
   return "npm" // fallback
 }
 
-async function isPortAvailable(port: string): Promise<boolean> {
-  // Detect if we're in a sandbox environment (Vercel Sandbox, Docker, etc.)
-  const isSandbox =
+/**
+ * Detect if we're in a sandbox environment (Vercel Sandbox, Docker, etc.)
+ * where lsof and other system utilities may not be available.
+ */
+function isInSandbox(): boolean {
+  return (
     process.env.VERCEL_SANDBOX === "1" ||
     process.env.VERCEL === "1" ||
     existsSync("/.dockerenv") ||
     existsSync("/run/.containerenv")
+  )
+}
 
+/**
+ * Check if a port is available for binding (no process is listening on it).
+ * Used for finding available ports before starting servers.
+ * In sandbox environments, skips checking since lsof often doesn't exist.
+ */
+async function isPortAvailable(port: string): Promise<boolean> {
   // In sandboxed environments, skip port checking - lsof often doesn't exist
   // and port conflicts are rare due to process isolation
-  if (isSandbox) {
+  if (isInSandbox()) {
     return true
   }
 
@@ -145,6 +169,42 @@ async function isPortAvailable(port: string): Promise<boolean> {
     return !result // If no output, port is available
   } catch {
     return true // Assume port is available if check fails
+  }
+}
+
+/**
+ * Check if a server is actually listening and responding on a port.
+ * Used for waiting for a dev server to start up.
+ * Works in all environments including sandboxes by using HTTP requests.
+ */
+async function isServerListening(port: string | number): Promise<boolean> {
+  try {
+    // Use HTTP HEAD request to check if server is responding
+    // This works in sandboxes where lsof doesn't exist
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 2000) // 2 second timeout
+
+    try {
+      await fetch(`http://localhost:${port}/`, {
+        method: "HEAD",
+        signal: controller.signal
+      })
+      clearTimeout(timeout)
+      // Any response (even 4xx/5xx) means server is listening
+      return true
+    } catch (error: unknown) {
+      clearTimeout(timeout)
+      // ECONNREFUSED means no server is listening
+      // AbortError means timeout (server might be starting)
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      if (errorMsg.includes("ECONNREFUSED") || errorMsg.includes("fetch failed") || errorMsg.includes("aborted")) {
+        return false
+      }
+      // Other errors (like network issues) - assume not listening
+      return false
+    }
+  } catch {
+    return false
   }
 }
 
@@ -269,8 +329,15 @@ async function ensureMcpServers(mcpPort: string, _appPort: string, _enableChrome
       added = true
     }
 
-    // REMOVED: No longer auto-configure chrome-devtools and nextjs-dev
-    // dev3000 MCP server now orchestrates these internally via the gateway pattern
+    // Add Vercel MCP if this is a Vercel project (.vercel directory exists)
+    // Vercel MCP uses OAuth authentication handled by the client (Claude Code)
+    if (hasVercelProject() && !settings.mcpServers[MCP_NAMES.VERCEL]) {
+      settings.mcpServers[MCP_NAMES.VERCEL] = {
+        type: "http",
+        url: VERCEL_MCP_URL
+      }
+      added = true
+    }
 
     // Write if we added anything
     if (added) {
@@ -328,8 +395,15 @@ async function ensureCursorMcpServers(
       added = true
     }
 
-    // REMOVED: No longer auto-configure chrome-devtools and nextjs-dev
-    // dev3000 MCP server now orchestrates these internally via the gateway pattern
+    // Add Vercel MCP if this is a Vercel project (.vercel directory exists)
+    // Vercel MCP uses OAuth authentication handled by the client (Cursor)
+    if (hasVercelProject() && !settings.mcpServers[MCP_NAMES.VERCEL]) {
+      settings.mcpServers[MCP_NAMES.VERCEL] = {
+        type: "http",
+        url: VERCEL_MCP_URL
+      }
+      added = true
+    }
 
     // Write if we added anything
     if (added) {
@@ -390,8 +464,16 @@ async function ensureOpenCodeMcpServers(
       added = true
     }
 
-    // REMOVED: No longer auto-configure chrome-devtools and nextjs-dev
-    // dev3000 MCP server now orchestrates these internally via the gateway pattern
+    // Add Vercel MCP if this is a Vercel project (.vercel directory exists)
+    // Vercel MCP uses OAuth authentication handled by the client (OpenCode)
+    if (hasVercelProject() && !settings.mcp[MCP_NAMES.VERCEL]) {
+      settings.mcp[MCP_NAMES.VERCEL] = {
+        type: "remote",
+        url: VERCEL_MCP_URL,
+        enabled: true
+      }
+      added = true
+    }
 
     // Write if we added anything
     if (added) {
@@ -691,17 +773,24 @@ export class DevEnvironment {
   }
 
   private async killMcpServer(): Promise<void> {
+    // In sandbox environments, skip lsof-based process cleanup
+    if (isInSandbox()) {
+      this.debugLog("killMcpServer skipped: Running in sandbox environment")
+      return
+    }
+
     try {
       // First, get the PIDs
       const getPidsProcess = spawn("lsof", ["-ti", `:${this.options.mcpPort}`], {
         stdio: "pipe"
       })
 
-      const pids = await new Promise<string>((resolve) => {
+      const pids = await new Promise<string>((resolve, reject) => {
         let output = ""
         getPidsProcess.stdout?.on("data", (data) => {
           output += data.toString()
         })
+        getPidsProcess.on("error", (err) => reject(err))
         getPidsProcess.on("exit", () => resolve(output.trim()))
       })
 
@@ -732,16 +821,24 @@ export class DevEnvironment {
   private async checkProcessHealth(): Promise<boolean> {
     if (this.isShuttingDown) return true // Skip health check if already shutting down
 
+    // In sandbox environments, skip lsof-based health checks since lsof doesn't exist
+    // Trust that the sandbox manages process lifecycle
+    if (isInSandbox()) {
+      this.debugLog("Health check skipped: Running in sandbox environment")
+      return true
+    }
+
     try {
       const ports = [this.options.port, this.options.mcpPort]
 
       for (const port of ports) {
-        const result = await new Promise<string>((resolve) => {
+        const result = await new Promise<string>((resolve, reject) => {
           const proc = spawn("lsof", ["-ti", `:${port}`], { stdio: "pipe" })
           let output = ""
           proc.stdout?.on("data", (data) => {
             output += data.toString()
           })
+          proc.on("error", (err) => reject(err))
           proc.on("exit", () => resolve(output.trim()))
         })
 
@@ -832,12 +929,12 @@ export class DevEnvironment {
     }
 
     if (canUseTUI) {
-      // Clear console and start TUI immediately for fast render
-      console.clear()
-
       // Get unique project name
       const projectName = getProjectName()
       const projectDisplayName = getProjectDisplayName()
+
+      // Check for updates in parallel with TUI startup (non-blocking)
+      const updateCheckPromise = checkForUpdates().catch(() => null)
 
       // Start TUI interface with initial status and updated port
       this.tui = new DevTUI({
@@ -847,13 +944,19 @@ export class DevEnvironment {
         commandName: this.options.commandName,
         serversOnly: this.options.serversOnly,
         version: this.version,
-        projectName: projectDisplayName
+        projectName: projectDisplayName,
+        updateAvailable: null // Will be updated async
       })
 
       await this.tui.start()
 
-      // Give TUI a moment to fully initialize
-      await new Promise((resolve) => setTimeout(resolve, 50))
+      // Update TUI with version check result (non-blocking)
+      updateCheckPromise.then((versionInfo) => {
+        if (versionInfo?.updateAvailable && versionInfo.latestVersion && this.tui) {
+          this.debugLog(`Update available: ${versionInfo.currentVersion} -> ${versionInfo.latestVersion}`)
+          this.tui.updateUpdateAvailable({ latestVersion: versionInfo.latestVersion })
+        }
+      })
 
       // Check ports in background after TUI is visible
       await this.tui.updateStatus("Checking ports...")
@@ -1071,6 +1174,20 @@ export class DevEnvironment {
         console.log(chalk.cyan("🖥️  Servers-only mode - use Chrome extension for browser monitoring"))
       }
       console.log(chalk.cyan("\nUse Ctrl-C to stop.\n"))
+
+      // Check for updates in non-TUI mode (non-blocking)
+      checkForUpdates()
+        .then((versionInfo) => {
+          if (versionInfo?.updateAvailable && versionInfo.latestVersion) {
+            console.log(
+              chalk.yellow(`\n↑ Update available: v${versionInfo.currentVersion} → v${versionInfo.latestVersion}`)
+            )
+            console.log(chalk.gray(`  Run 'd3k upgrade' to update\n`))
+          }
+        })
+        .catch(() => {
+          // Silently ignore update check failures
+        })
     }
 
     // Start health monitoring after everything is ready
@@ -1118,6 +1235,16 @@ export class DevEnvironment {
           console.error(chalk.red("[ERROR]"), entry.rawMessage)
         }
       })
+
+      // Check for Next.js lock file error - show in TUI status since it's a critical startup error
+      if (text.includes("Unable to acquire lock")) {
+        const errorMsg = "❌ Another Next.js dev server is running. Kill it or remove .next/dev/lock"
+        if (this.tui) {
+          this.tui.updateStatus(errorMsg)
+        } else {
+          console.error(chalk.red(errorMsg))
+        }
+      }
     })
 
     this.serverProcess.on("exit", (code) => {
@@ -1629,19 +1756,19 @@ export class DevEnvironment {
       try {
         this.debugLog(`Server check attempt ${attempts + 1}/${maxAttempts}: checking port ${currentPort}`)
 
-        // Check if port is in use (server is listening) without making HTTP requests
-        const portInUse = !(await isPortAvailable(currentPort))
+        // Use HTTP-based check which works in sandboxes where lsof doesn't exist
+        const serverListening = await isServerListening(currentPort)
 
         const attemptTime = Date.now() - attemptStartTime
 
-        if (portInUse) {
+        if (serverListening) {
           const totalTime = Date.now() - startTime
           this.debugLog(
             `Server is ready! Port ${currentPort} is listening. Total wait time: ${totalTime}ms (${attempts + 1} attempts)`
           )
           return true
         } else {
-          this.debugLog(`Port ${currentPort} not yet in use after ${attemptTime}ms`)
+          this.debugLog(`Port ${currentPort} not yet responding after ${attemptTime}ms`)
         }
       } catch (error) {
         const attemptTime = Date.now() - attemptStartTime
@@ -2179,7 +2306,8 @@ export class DevEnvironment {
       this.options.pluginReactScan,
       this.options.port, // App server port to monitor
       this.options.mcpPort, // MCP server port to ignore
-      this.options.debugPort // Chrome debug port
+      this.options.debugPort, // Chrome debug port
+      this.options.headless // Headless mode for serverless/CI environments
     )
 
     try {
@@ -2214,18 +2342,19 @@ export class DevEnvironment {
         // this.logger.log("browser", "[Screencast] Auto-capture enabled for navigation events")
       }
 
-      if (cdpUrl || chromePids.length > 0) {
-        writeSessionInfo(
-          projectName,
-          this.options.logFile,
-          this.options.port,
-          this.options.mcpPort,
-          cdpUrl || undefined,
-          chromePids,
-          this.options.serverCommand
-        )
-        this.debugLog(`Updated session info with CDP URL: ${cdpUrl}, Chrome PIDs: [${chromePids.join(", ")}]`)
-      }
+      // Always write session info after CDP monitoring starts - this is critical for
+      // sandbox environments where external tools poll for the cdpUrl in the session file
+      writeSessionInfo(
+        projectName,
+        this.options.logFile,
+        this.options.port,
+        this.options.mcpPort,
+        cdpUrl || undefined,
+        chromePids,
+        this.options.serverCommand
+      )
+      this.debugLog(`Updated session info with CDP URL: ${cdpUrl}, Chrome PIDs: [${chromePids.join(", ")}]`)
+      this.logger.log("browser", `[CDP] Session info written with cdpUrl: ${cdpUrl ? "available" : "null"}`)
 
       // Navigate to the app
       await this.cdpMonitor.navigateToApp(this.options.port)
@@ -2277,8 +2406,12 @@ export class DevEnvironment {
       console.log(chalk.yellow(`🛑 Shutting down ${this.options.commandName} due to critical failure...`))
     }
 
-    // Kill processes on both ports
+    // Kill processes on both ports (skip in sandbox - lsof doesn't exist)
     const killPortProcess = async (port: string, name: string) => {
+      if (isInSandbox()) {
+        console.log(chalk.gray(`ℹ️ Skipping ${name} port kill in sandbox environment`))
+        return
+      }
       try {
         const { spawn } = await import("child_process")
         const killProcess = spawn("sh", ["-c", `lsof -ti:${port} | xargs kill -9`], { stdio: "inherit" })
@@ -2476,8 +2609,13 @@ export class DevEnvironment {
     // Now we keep .mcp.json, .cursor/mcp.json, and opencode.json configured
     // for the next dev3000 run, providing a better developer experience
 
-    // Kill processes on both ports
+    // Kill processes on both ports (skip in sandbox - lsof doesn't exist)
     const killPortProcess = async (port: string, name: string) => {
+      // Skip lsof-based kill in sandbox environments
+      if (isInSandbox()) {
+        this.debugLog(`Skipping ${name} port kill in sandbox environment`)
+        return
+      }
       try {
         const { spawn } = await import("child_process")
 
@@ -2532,6 +2670,27 @@ export class DevEnvironment {
     if (!this.options.tui) {
       console.log(chalk.yellow("🔄 Killing app server..."))
     }
+
+    // First, try to kill the process group if we have the server process reference
+    // This is important because the server is spawned with detached: true, which creates
+    // its own process group. Killing the entire group ensures child processes (like
+    // Next.js's next-server and webpack workers) are also killed.
+    if (this.serverProcess?.pid) {
+      try {
+        // Negative PID kills the entire process group
+        const pgid = -this.serverProcess.pid
+        this.debugLog(`Killing process group ${pgid} (server PID: ${this.serverProcess.pid})`)
+        process.kill(pgid, "SIGKILL")
+        if (!this.options.tui) {
+          console.log(chalk.green(`✅ Killed server process group (PID: ${this.serverProcess.pid})`))
+        }
+      } catch (error) {
+        // Process group may already be dead or may not exist
+        this.debugLog(`Could not kill process group: ${error}`)
+      }
+    }
+
+    // Fallback: kill any remaining processes on the port
     await killPortProcess(this.options.port, "your app server")
 
     // Add a small delay to let the kill process complete

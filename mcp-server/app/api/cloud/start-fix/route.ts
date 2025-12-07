@@ -102,12 +102,21 @@ export async function POST(request: Request) {
         userId,
         projectName,
         timestamp: new Date().toISOString(),
-        status: "running"
+        status: "running",
+        currentStep: "Starting workflow...",
+        stepNumber: 0
       })
       console.log(`[Start Fix] Saved workflow run metadata (running): ${runId}`)
     }
 
-    const run = await start(cloudFixWorkflow, [workflowParams])
+    // Pass runId and userId to workflow for progress tracking
+    const workflowParamsWithTracking = {
+      ...workflowParams,
+      runId,
+      userId
+    }
+
+    const run = await start(cloudFixWorkflow, [workflowParamsWithTracking])
 
     console.log(`[Start Fix] Workflow started, waiting for completion...`)
 
@@ -132,11 +141,12 @@ export async function POST(request: Request) {
         userId,
         projectName,
         timestamp: new Date().toISOString(),
-        status: "success",
+        status: "done",
         reportBlobUrl: result.blobUrl,
-        prUrl: result.pr?.prUrl
+        prUrl: result.pr?.prUrl,
+        beforeScreenshotUrl: result.beforeScreenshotUrl || undefined
       })
-      console.log(`[Start Fix] Updated workflow run metadata to success: ${runId}`)
+      console.log(`[Start Fix] Updated workflow run metadata to done: ${runId}`)
     }
 
     return Response.json(

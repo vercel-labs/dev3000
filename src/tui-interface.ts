@@ -6,6 +6,9 @@ export interface TUIOptions {
   serversOnly?: boolean
   version: string
   projectName?: string
+  updateAvailable?: {
+    latestVersion: string
+  } | null
 }
 
 type InkApp = { unmount: () => void }
@@ -15,6 +18,7 @@ export class DevTUI {
   private app: InkApp | null = null
   private updateStatusFn: ((status: string | null) => void) | null = null
   private updateAppPortFn: ((port: string) => void) | null = null
+  private updateUpdateAvailableFn: ((info: { latestVersion: string } | null) => void) | null = null
 
   constructor(options: TUIOptions) {
     this.options = options
@@ -22,6 +26,11 @@ export class DevTUI {
 
   async start(): Promise<void> {
     try {
+      // Enter alternate screen buffer immediately to prevent scroll history pollution
+      // This must happen before any other output
+      // Note: alternate screen buffer starts clean, no need to clear
+      process.stdout.write("\x1b[?1049h")
+
       // Temporarily suppress React hook warnings during TUI startup
       const originalError = console.error
       const suppressReactHookWarnings = (...args: unknown[]) => {
@@ -36,10 +45,11 @@ export class DevTUI {
 
       // Use dynamic import to load the TSX implementation at runtime
       const { runTUI } = await import("./tui-interface-impl.js")
-      const { app, updateStatus, updateAppPort } = await runTUI(this.options)
+      const { app, updateStatus, updateAppPort, updateUpdateAvailable } = await runTUI(this.options)
       this.app = app
       this.updateStatusFn = updateStatus
       this.updateAppPortFn = updateAppPort
+      this.updateUpdateAvailableFn = updateUpdateAvailable
 
       // Restore original error logging after startup
       setTimeout(() => {
@@ -63,9 +73,17 @@ export class DevTUI {
     }
   }
 
+  updateUpdateAvailable(info: { latestVersion: string } | null): void {
+    if (this.updateUpdateAvailableFn) {
+      this.updateUpdateAvailableFn(info)
+    }
+  }
+
   async shutdown(): Promise<void> {
     if (this.app) {
       this.app.unmount()
     }
+    // Exit alternate screen buffer to restore previous terminal content
+    process.stdout.write("\x1b[?1049l")
   }
 }

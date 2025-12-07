@@ -1,4 +1,4 @@
-import { type ChildProcess, spawn } from "child_process"
+import { type ChildProcess, execSync, spawn } from "child_process"
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs"
 import { tmpdir } from "os"
 import { dirname, join } from "path"
@@ -35,10 +35,12 @@ export class CDPMonitor {
   private cdpUrl: string | null = null
   private lastScreenshotTime: number = 0
   private minScreenshotInterval: number = 1000 // Minimum 1 second between screenshots
+  private navigationInProgress: boolean = false // Track if a navigation event recently occurred
   private chromePids: Set<number> = new Set() // Track all Chrome PIDs for this instance
   private onWindowClosedCallback: (() => void) | null = null // Callback for when window is manually closed
   private appServerPort?: string // Port of the user's app server to monitor
   private mcpServerPort?: string // Port of dev3000's MCP server to ignore
+  private headless: boolean = false // Run Chrome in headless mode
 
   constructor(
     profileDir: string,
@@ -49,7 +51,8 @@ export class CDPMonitor {
     pluginReactScan: boolean = false,
     appServerPort?: string,
     mcpServerPort?: string,
-    debugPort?: number
+    debugPort?: number,
+    headless: boolean = false
   ) {
     this.profileDir = profileDir
     this.screenshotDir = screenshotDir
@@ -59,6 +62,7 @@ export class CDPMonitor {
     this.debug = debug
     this.browserPath = browserPath
     this.pluginReactScan = pluginReactScan
+    this.headless = headless
     // Use custom debug port if provided, otherwise use default 9222
     if (debugPort) {
       this.debugPort = debugPort
@@ -251,7 +255,44 @@ export class CDPMonitor {
     this.debugLog("Runtime crash monitoring enabled for Chrome process")
   }
 
+  /**
+   * Kill any existing Chrome process using this profile directory.
+   * This prevents issues where Chrome defers to an existing instance
+   * instead of starting a new one with CDP enabled.
+   */
+  private killExistingChromeWithProfile(): void {
+    try {
+      // Find Chrome processes using this profile directory
+      const result = execSync(`ps aux | grep -i "user-data-dir=${this.profileDir}" | grep -v grep | awk '{print $2}'`, {
+        encoding: "utf-8",
+        stdio: ["pipe", "pipe", "pipe"]
+      }).trim()
+
+      if (result) {
+        const pids = result.split("\n").filter(Boolean)
+        for (const pid of pids) {
+          this.debugLog(`Killing existing Chrome process ${pid} using profile ${this.profileDir}`)
+          try {
+            process.kill(Number.parseInt(pid, 10), "SIGTERM")
+          } catch {
+            // Process may have already exited
+          }
+        }
+        // Give Chrome a moment to clean up
+        if (pids.length > 0) {
+          execSync("sleep 0.5")
+        }
+      }
+    } catch {
+      // No existing Chrome found or ps/grep not available
+      this.debugLog("No existing Chrome process found with this profile")
+    }
+  }
+
   private async launchChrome(): Promise<void> {
+    // Kill any existing Chrome using this profile to prevent CDP conflicts
+    this.killExistingChromeWithProfile()
+
     return new Promise((resolve, reject) => {
       // Use custom browser path if provided, otherwise try different Chrome executables based on platform
       const chromeCommands = this.browserPath
@@ -266,6 +307,11 @@ export class CDPMonitor {
           ]
 
       const browserType = this.browserPath ? "custom browser" : "Chrome"
+      // Always log critical startup info (not just in debug mode)
+      this.logger("browser", `[CDP] Launching ${browserType} on port ${this.debugPort}, headless=${this.headless}`)
+      if (this.browserPath) {
+        this.logger("browser", `[CDP] Custom browser path: ${this.browserPath}`)
+      }
       this.debugLog(`Attempting to launch ${browserType} for CDP monitoring on port ${this.debugPort}`)
       this.debugLog(`Profile directory: ${this.profileDir}`)
       if (this.browserPath) {
@@ -276,7 +322,9 @@ export class CDPMonitor {
 
       const tryNextChrome = () => {
         if (attemptIndex >= chromeCommands.length) {
-          reject(new Error("Failed to launch Chrome: all browser paths exhausted"))
+          const errorMsg = `Failed to launch Chrome: all ${chromeCommands.length} browser paths exhausted`
+          this.logger("browser", `[CDP] ${errorMsg}`)
+          reject(new Error(errorMsg))
           return
         }
 
@@ -284,28 +332,41 @@ export class CDPMonitor {
         this.debugLog(`Trying Chrome path [${attemptIndex}]: ${chromePath}`)
         attemptIndex++
 
-        this.browser = spawn(
-          chromePath,
-          [
-            `--remote-debugging-port=${this.debugPort}`,
-            `--user-data-dir=${this.profileDir}`,
-            "--new-window", // Force new window instead of reusing existing instance
-            "--no-first-run",
-            "--no-default-browser-check",
-            "--disable-component-extensions-with-background-pages",
-            "--disable-background-networking",
-            "--disable-sync",
-            "--metrics-recording-only",
-            "--disable-default-apps",
-            "--disable-session-crashed-bubble",
-            "--disable-restore-session-state",
-            this.createLoadingPage()
-          ],
-          {
-            stdio: "pipe",
-            detached: false // Keep it attached so it dies with parent
-          }
-        )
+        // Build Chrome args - add headless flag if enabled
+        const chromeArgs = [
+          `--remote-debugging-port=${this.debugPort}`,
+          `--user-data-dir=${this.profileDir}`,
+          "--no-first-run",
+          "--no-default-browser-check",
+          "--disable-component-extensions-with-background-pages",
+          "--disable-background-networking",
+          "--disable-sync",
+          "--metrics-recording-only",
+          "--disable-default-apps",
+          "--disable-session-crashed-bubble",
+          "--disable-restore-session-state"
+        ]
+
+        if (this.headless) {
+          // Use new headless mode (Chrome 112+) which has better compatibility
+          chromeArgs.push("--headless=new")
+          // Additional flags needed for headless in serverless environments
+          chromeArgs.push("--no-sandbox")
+          chromeArgs.push("--disable-setuid-sandbox")
+          chromeArgs.push("--disable-gpu")
+          chromeArgs.push("--disable-dev-shm-usage")
+          this.debugLog("Launching Chrome in headless mode")
+        } else {
+          chromeArgs.push("--new-window") // Force new window (only for non-headless)
+        }
+
+        // Add initial page
+        chromeArgs.push(this.createLoadingPage())
+
+        this.browser = spawn(chromePath, chromeArgs, {
+          stdio: "pipe",
+          detached: false // Keep it attached so it dies with parent
+        })
 
         if (!this.browser) {
           this.debugLog(`Failed to spawn Chrome process for path: ${chromePath}`)
@@ -316,6 +377,8 @@ export class CDPMonitor {
         let processExited = false
 
         this.browser.on("error", (error) => {
+          // Always log spawn errors - critical for debugging sandbox issues
+          this.logger("browser", `[CDP] Chrome spawn error: ${error.message}`)
           this.debugLog(`Chrome launch error for ${chromePath}: ${error.message}`)
           if (!this.isShuttingDown && !processExited) {
             processExited = true
@@ -325,6 +388,8 @@ export class CDPMonitor {
 
         this.browser.on("exit", (code, signal) => {
           if (!this.isShuttingDown && !processExited && code !== 0) {
+            // Always log early exit - critical for debugging sandbox issues
+            this.logger("browser", `[CDP] Chrome exited early with code ${code}, signal ${signal}`)
             this.debugLog(`Chrome exited early for ${chromePath} with code ${code}, signal ${signal}`)
             processExited = true
             setTimeout(tryNextChrome, 100)
@@ -348,8 +413,15 @@ export class CDPMonitor {
           }
 
           if (attempts >= maxAttempts) {
-            this.debugLog(`Chrome readiness check timed out after ${maxAttempts * 500}ms`)
+            const timeoutMsg = `Chrome readiness check timed out after ${maxAttempts * 500}ms`
+            this.logger("browser", `[CDP] ${timeoutMsg}`)
+            this.debugLog(timeoutMsg)
             processExited = true
+            // Kill the unresponsive Chrome process before trying next browser
+            if (this.browser && !this.browser.killed) {
+              this.debugLog("Killing unresponsive Chrome process before trying next browser")
+              this.browser.kill("SIGTERM")
+            }
             setTimeout(tryNextChrome, 100)
             return
           }
@@ -360,6 +432,7 @@ export class CDPMonitor {
               signal: AbortSignal.timeout(500)
             })
             if (response.ok) {
+              this.logger("browser", `[CDP] Chrome successfully started (after ${attempts * 500}ms)`)
               this.debugLog(`Chrome successfully started with path: ${chromePath} (after ${attempts * 500}ms)`)
 
               // Discover all Chrome PIDs for this instance
@@ -876,7 +949,8 @@ export class CDPMonitor {
 
       this.logger("browser", `[NAVIGATION] ${url}`)
 
-      // Don't take a screenshot here - wait for page load
+      // Mark that we're in a navigation - we'll take a screenshot when it settles
+      this.navigationInProgress = true
     })
 
     // Page load events for better screenshot timing
@@ -996,35 +1070,11 @@ export class CDPMonitor {
         this.logger("browser", `[CDP] Navigation failed: ${result.errorText}`)
       }
 
-      // Wait for navigation to complete
+      // No need to wait for navigation to complete - Chrome will fire events as the page loads
+      // and we'll capture errors/logs via our CDP event handlers. This allows slow-compiling
+      // apps (like Next.js on first load) to take as long as they need.
       if (result.frameId) {
-        this.debugLog(`Waiting for frame ${result.frameId} to finish loading...`)
-        try {
-          // Enable Page events if not already enabled
-          await this.sendCDPCommand("Page.enable")
-
-          // Wait for frameStoppedLoading event
-          await new Promise<void>((resolve) => {
-            const timeout = setTimeout(() => {
-              this.debugLog("Navigation wait timed out after 10s")
-              resolve()
-            }, 10000)
-
-            const handler = (data: Buffer) => {
-              const message = JSON.parse(data.toString())
-              if (message.method === "Page.frameStoppedLoading" && message.params.frameId === result.frameId) {
-                clearTimeout(timeout)
-                this.connection?.ws.removeListener("message", handler)
-                this.debugLog(`Frame ${result.frameId} finished loading`)
-                resolve()
-              }
-            }
-
-            this.connection?.ws.on("message", handler)
-          })
-        } catch (waitError) {
-          this.debugLog(`Error waiting for navigation: ${waitError}`)
-        }
+        this.debugLog(`Navigation initiated for frame ${result.frameId} - not blocking on load completion`)
       }
     } catch (error) {
       this.debugLog(`Navigation failed: ${error}`)
@@ -1356,6 +1406,12 @@ export class CDPMonitor {
   }
 
   private scheduleNetworkIdleScreenshot(): void {
+    // Only take network-idle screenshots after a navigation event
+    // This prevents screenshot spam from background AJAX/fetch polls
+    if (!this.navigationInProgress) {
+      return
+    }
+
     // Only schedule if we have 0 pending requests
     if (this.pendingRequests === 0) {
       if (this.networkIdleTimer) {
@@ -1364,7 +1420,9 @@ export class CDPMonitor {
 
       // Wait 500ms of network idle before taking screenshot
       this.networkIdleTimer = setTimeout(() => {
-        this.takeScreenshot("network-idle")
+        this.takeScreenshot("navigation-settled")
+        // Reset navigation flag since we've captured the settled state
+        this.navigationInProgress = false
         this.networkIdleTimer = null
       }, 500)
     }

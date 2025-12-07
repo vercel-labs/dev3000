@@ -280,7 +280,47 @@ const handler = createMcpHandler(
       }
     >()
 
+    // Whitelist of tools to proxy from downstream MCPs
+    // This reduces token usage by only exposing commonly used tools
+    // NOTE: dev3000 already has CDP for basic automation (screenshot, click, navigate, etc.)
+    // so we only proxy advanced analysis tools that dev3000 doesn't provide natively
+    const PROXIED_TOOL_WHITELIST: Record<string, string[]> = {
+      "chrome-devtools": [
+        // Performance & CLS/Jank Analysis (actual tool names from chrome-devtools-mcp)
+        "performance_start_trace",
+        "performance_stop_trace",
+        "performance_analyze_insight",
+        // DOM/Page Analysis
+        "take_snapshot"
+      ],
+      // nextjs-dev: Include most tools for framework-specific debugging
+      "nextjs-dev": [
+        "browser_eval",
+        "enable_cache_components",
+        "init",
+        "nextjs_docs",
+        "nextjs_index",
+        "nextjs_call",
+        "upgrade_nextjs_16"
+      ]
+    }
+
+    const shouldProxyTool = (mcpName: string, toolName: string): boolean => {
+      const whitelist = PROXIED_TOOL_WHITELIST[mcpName]
+      if (!whitelist) {
+        // If MCP not in whitelist, proxy all its tools (for unknown MCPs)
+        return true
+      }
+      return whitelist.includes(toolName)
+    }
+
     const registerOrUpdateProxiedTool = (mcpName: string, tool: Tool): boolean => {
+      // Filter tools based on whitelist
+      if (!shouldProxyTool(mcpName, tool.name)) {
+        console.log(`[MCP Orchestrator] Filtered out tool ${mcpName}:${tool.name} (not in whitelist)`)
+        return false
+      }
+
       const proxiedToolName = `${mcpName}_${tool.name}`
       const existing = registeredProxiedTools.get(proxiedToolName)
       const description = `[${mcpName}] ${tool.description || ""}`

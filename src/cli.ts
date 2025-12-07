@@ -14,6 +14,7 @@ import { detectAIAgent } from "./utils/agent-detection.js"
 import { formatMcpConfigTargets, parseDisabledMcpConfigs } from "./utils/mcp-configs.js"
 import { getProjectName } from "./utils/project-name.js"
 import { loadUserConfig } from "./utils/user-config.js"
+import { checkForUpdates, getUpgradeCommand, performUpgrade } from "./utils/version-check.js"
 
 interface ProjectConfig {
   type: "node" | "python" | "rails"
@@ -22,6 +23,7 @@ interface ProjectConfig {
   pythonCommand?: string // Only for python projects
   defaultScript: string
   defaultPort: string
+  noProjectDetected?: boolean // True if no valid project was found
 }
 
 function detectPythonCommand(debug = false): string {
@@ -50,33 +52,53 @@ function detectPythonCommand(debug = false): string {
 }
 
 async function detectProjectType(debug = false): Promise<ProjectConfig> {
-  // Check for Python project
-  if (existsSync("requirements.txt") || existsSync("pyproject.toml")) {
-    if (debug) {
-      console.log(`[DEBUG] Python project detected (found requirements.txt or pyproject.toml)`)
+  // Helper to check if package.json has a dev script (indicates Node.js project)
+  const hasNodeDevScript = (): boolean => {
+    try {
+      if (existsSync("package.json")) {
+        const packageJson = JSON.parse(readFileSync("package.json", "utf-8"))
+        return !!packageJson.scripts?.dev
+      }
+    } catch {
+      // Ignore parse errors
     }
-    return {
-      type: "python",
-      defaultScript: "main.py",
-      defaultPort: "8000", // Common Python web server port
-      pythonCommand: detectPythonCommand(debug)
-    }
+    return false
   }
 
-  // Check for Rails project
-  if (existsSync("Gemfile") && existsSync("config/application.rb")) {
-    if (debug) {
-      console.log(`[DEBUG] Rails project detected (found Gemfile and config/application.rb)`)
-    }
-    return {
-      type: "rails",
-      defaultScript: "server",
-      defaultPort: "3000" // Rails default port
-    }
-  }
-
-  // Check for Node.js project using package-manager-detector
+  // Check for Node.js project FIRST if package.json has a dev script
+  // This takes priority over Python/Rails detection for hybrid projects
   const detected = await detect()
+  if (detected && hasNodeDevScript()) {
+    if (debug) {
+      console.log(`[DEBUG] Node.js project detected (package.json with dev script takes priority)`)
+    }
+    // Continue to Node.js detection below
+  } else {
+    // Check for Python project (only if no Node.js dev script)
+    if (existsSync("requirements.txt") || existsSync("pyproject.toml")) {
+      if (debug) {
+        console.log(`[DEBUG] Python project detected (found requirements.txt or pyproject.toml)`)
+      }
+      return {
+        type: "python",
+        defaultScript: "main.py",
+        defaultPort: "8000", // Common Python web server port
+        pythonCommand: detectPythonCommand(debug)
+      }
+    }
+
+    // Check for Rails project
+    if (existsSync("Gemfile") && existsSync("config/application.rb")) {
+      if (debug) {
+        console.log(`[DEBUG] Rails project detected (found Gemfile and config/application.rb)`)
+      }
+      return {
+        type: "rails",
+        defaultScript: "server",
+        defaultPort: "3000" // Rails default port
+      }
+    }
+  }
 
   // Helper to detect framework for Node.js projects
   const detectFramework = (): "nextjs" | "svelte" | "other" => {
@@ -130,10 +152,29 @@ async function detectProjectType(debug = false): Promise<ProjectConfig> {
     }
   }
 
-  // Fallback to npm for Node.js
+  // Check if this is a valid project directory
+  // If we get here, no lock files or project markers were found
+  // Check if package.json exists - if not, this isn't a valid project directory
+  if (!existsSync("package.json")) {
+    if (debug) {
+      console.log(`[DEBUG] No project files detected - not a valid project directory`)
+    }
+    return {
+      type: "node",
+      framework: "other",
+      packageManager: "npm",
+      defaultScript: "dev",
+      defaultPort: "3000",
+      noProjectDetected: true // Flag to indicate no project was found
+    }
+  }
+
+  // Fallback to npm for Node.js (package.json exists but no lock file)
   const framework = detectFramework()
   if (debug) {
-    console.log(`[DEBUG] No project files detected, defaulting to Node.js with npm and ${framework} framework`)
+    console.log(
+      `[DEBUG] Node.js project detected (package.json exists, no lock file), defaulting to npm and ${framework} framework`
+    )
   }
   return {
     type: "node",
@@ -256,6 +297,7 @@ program
     "Comma or space separated list of MCP config files to skip (.mcp.json, .cursor/mcp.json, opencode.json). Use 'all' to disable all."
   )
   .option("--no-chrome-devtools-mcp", "Disable chrome-devtools MCP integration (enabled by default)")
+  .option("--headless", "Run Chrome in headless mode (for serverless/CI environments)")
   .option("--kill-mcp", "Kill the MCP server on port 3684 and exit")
   .action(async (options) => {
     // Handle --kill-mcp option
@@ -277,6 +319,21 @@ program
     // Detect project type and configuration
     const projectConfig = await detectProjectType(options.debug)
     const userConfig = loadUserConfig()
+
+    // Check if we're in a valid project directory
+    if (projectConfig.noProjectDetected) {
+      console.error(chalk.red("\n❌ No project detected in current directory.\n"))
+      console.error(chalk.white("dev3000 requires a project with one of these files:"))
+      console.error(chalk.gray("  • package.json (Node.js/JavaScript)"))
+      console.error(chalk.gray("  • requirements.txt or pyproject.toml (Python)"))
+      console.error(chalk.gray("  • Gemfile + config/application.rb (Rails)\n"))
+      console.error(chalk.cyan("💡 To get started:"))
+      console.error(chalk.gray("  • Navigate to an existing project directory, or"))
+      console.error(chalk.gray("  • Create a new project (e.g., 'npx create-next-app@latest'), or"))
+      console.error(chalk.gray("  • Use --command to run a custom command:\n"))
+      console.error(chalk.yellow(`    d3k --command "node server.js" -p 3000\n`))
+      process.exit(1)
+    }
 
     // Detect if running under an AI agent and auto-disable TUI
     const agentDetection = detectAIAgent()
@@ -437,6 +494,52 @@ cloud
       await cloudCheckPR({ ...options, prNumber })
     } catch (error) {
       console.error(chalk.red("❌ Cloud check-pr failed:"), error)
+      process.exit(1)
+    }
+  })
+
+// Upgrade command
+program
+  .command("upgrade")
+  .description("Upgrade dev3000 to the latest version")
+  .option("--check", "Only check for updates without upgrading")
+  .action(async (options) => {
+    console.log(chalk.cyan("Checking for updates...\n"))
+
+    const versionInfo = await checkForUpdates()
+
+    console.log(chalk.white(`Current version: ${chalk.yellow(versionInfo.currentVersion)}`))
+
+    if (versionInfo.latestVersion) {
+      console.log(chalk.white(`Latest version:  ${chalk.green(versionInfo.latestVersion)}`))
+    } else {
+      console.log(chalk.gray("Could not fetch latest version from npm registry"))
+    }
+
+    if (!versionInfo.updateAvailable) {
+      console.log(chalk.green("\n✓ You're already on the latest version!"))
+      process.exit(0)
+    }
+
+    console.log(chalk.yellow(`\n↑ Update available: ${versionInfo.currentVersion} → ${versionInfo.latestVersion}`))
+
+    if (options.check) {
+      const upgradeCmd = getUpgradeCommand(versionInfo.packageManager)
+      console.log(chalk.cyan(`\nTo upgrade, run: ${chalk.white(upgradeCmd)}`))
+      console.log(chalk.gray(`Or run: ${chalk.white("d3k upgrade")}`))
+      process.exit(0)
+    }
+
+    console.log("")
+    const result = performUpgrade()
+
+    if (result.success) {
+      console.log(chalk.green("\n✓ Upgrade completed successfully!"))
+      console.log(chalk.gray("Run 'd3k --version' to verify the new version."))
+    } else {
+      console.error(chalk.red(`\n✗ Upgrade failed: ${result.error}`))
+      const upgradeCmd = getUpgradeCommand(versionInfo.packageManager)
+      console.log(chalk.yellow(`\nTry running manually: ${chalk.white(upgradeCmd)}`))
       process.exit(1)
     }
   })

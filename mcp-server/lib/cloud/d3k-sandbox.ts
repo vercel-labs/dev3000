@@ -80,19 +80,40 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     console.log(`  Token type: ${process.env.VERCEL_OIDC_TOKEN ? "OIDC" : "static"}`)
   }
 
-  // Create sandbox
+  // Helper function to run commands and collect output properly
+  async function runCommandWithLogs(
+    sandbox: Sandbox,
+    options: Parameters<Sandbox["runCommand"]>[0]
+  ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+    const result = await sandbox.runCommand(options)
+
+    let stdout = ""
+    let stderr = ""
+    for await (const log of result.logs()) {
+      if (log.stream === "stdout") {
+        stdout += log.data
+        if (debug && options.stdout !== process.stdout) console.log(log.data)
+      } else {
+        stderr += log.data
+        if (debug && options.stderr !== process.stderr) console.debug(log.data)
+      }
+    }
+
+    await result.wait()
+
+    return {
+      exitCode: result.exitCode,
+      stdout,
+      stderr
+    }
+  }
+
+  // Create sandbox WITHOUT source parameter
+  // We'll manually clone the repo after sandbox creation for better control
   // biome-ignore lint/suspicious/noExplicitAny: ms type inference issue
   const timeoutMs = ms(timeout as any) as unknown as number
   const sandbox = await Sandbox.create({
-    teamId: process.env.VERCEL_TEAM_ID || "team_nLlpyC6REAqxydlFKbrMDlud",
-    projectId: process.env.VERCEL_PROJECT_ID || "prj_21F00Vr3bXzc1VSC8D9j2YJUzd0Q",
-    token,
-    source: {
-      url: `${repoUrl}.git`,
-      type: "git",
-      ...(branch ? { revision: branch } : {})
-    },
-    resources: { vcpus: 4 },
+    resources: { vcpus: 8 },
     timeout: timeoutMs,
     ports: [3000, 3684], // App port + MCP server port
     runtime: "node22"
@@ -103,31 +124,75 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
   try {
     const sandboxCwd = projectDir ? `/vercel/sandbox/${projectDir}` : "/vercel/sandbox"
 
+    // Manually clone the repository
+    if (debug) console.log(`  📦 Cloning repository: ${repoUrl}`)
+
+    // Create the target directory
+    const mkdirResult = await runCommandWithLogs(sandbox, {
+      cmd: "mkdir",
+      args: ["-p", sandboxCwd]
+    })
+
+    if (mkdirResult.exitCode !== 0) {
+      throw new Error(`Failed to create directory ${sandboxCwd}: ${mkdirResult.stderr}`)
+    }
+
+    // Clone the repository
+    const gitArgs = ["clone"]
+
+    // Add depth for faster cloning
+    gitArgs.push("--depth", "1")
+
+    // Add revision if it's a commit SHA (40 characters)
+    if (branch && branch.length === 40) {
+      gitArgs.push("--revision", branch)
+    }
+
+    gitArgs.push(`${repoUrl}.git`, sandboxCwd)
+
+    const gitClone = await runCommandWithLogs(sandbox, {
+      cmd: "git",
+      args: gitArgs,
+      env: {
+        GIT_TERMINAL_PROMPT: "0"
+      }
+    })
+
+    if (gitClone.exitCode !== 0) {
+      throw new Error(`Git clone failed with exit code: ${gitClone.exitCode}. Error: ${gitClone.stderr}`)
+    }
+
+    // If branch is a branch name (not a commit SHA), checkout the branch
+    if (branch && branch.length !== 40) {
+      if (debug) console.log(`  🔀 Checking out branch: ${branch}`)
+      const gitCheckout = await runCommandWithLogs(sandbox, {
+        cmd: "git",
+        args: ["checkout", branch],
+        cwd: sandboxCwd,
+        env: {
+          GIT_TERMINAL_PROMPT: "0"
+        }
+      })
+
+      if (gitCheckout.exitCode !== 0) {
+        throw new Error(`Git checkout failed with exit code: ${gitCheckout.exitCode}. Error: ${gitCheckout.stderr}`)
+      }
+    }
+
+    if (debug) console.log("  ✅ Repository cloned")
+
     // Verify sandbox directory contents
     if (debug) console.log("  📂 Checking sandbox directory contents...")
     try {
-      const lsResult = await sandbox.runCommand({
+      const lsResult = await runCommandWithLogs(sandbox, {
         cmd: "ls",
         args: ["-la", sandboxCwd]
       })
-      if (lsResult.exitCode === 0 && lsResult.stdout) {
-        try {
-          const stdout =
-            typeof lsResult.stdout === "string"
-              ? lsResult.stdout
-              : typeof lsResult.stdout === "function"
-                ? await lsResult.stdout()
-                : String(lsResult.stdout || "")
-
-          console.log(`  📂 Contents of ${sandboxCwd}:`)
-          console.log(stdout)
-        } catch (stdoutError) {
-          console.log(
-            `  ⚠️ Could not read directory listing stdout: ${stdoutError instanceof Error ? stdoutError.message : String(stdoutError)}`
-          )
-        }
+      if (lsResult.exitCode === 0) {
+        console.log(`  📂 Contents of ${sandboxCwd}:`)
+        console.log(lsResult.stdout)
       } else {
-        console.log("  ⚠️ Could not read directory listing (stdout is undefined)")
+        console.log("  ⚠️ Could not read directory listing")
       }
     } catch (error) {
       console.log(`  ⚠️ Could not list directory: ${error instanceof Error ? error.message : String(error)}`)
@@ -136,7 +201,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     // Check for package.json
     if (debug) console.log("  📄 Verifying package.json exists...")
     try {
-      const pkgCheck = await sandbox.runCommand({
+      const pkgCheck = await runCommandWithLogs(sandbox, {
         cmd: "test",
         args: ["-f", `${sandboxCwd}/package.json`]
       })
@@ -151,7 +216,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
 
     // Install project dependencies
     if (debug) console.log("  📦 Installing project dependencies...")
-    const installResult = await sandbox.runCommand({
+    const installResult = await runCommandWithLogs(sandbox, {
       cmd: packageManager,
       args: ["install"],
       cwd: sandboxCwd,
@@ -165,9 +230,153 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
 
     if (debug) console.log("  ✅ Project dependencies installed")
 
+    // Install system dependencies for Chromium
+    // The Vercel Sandbox uses Amazon Linux 2023 which has dnf package manager
+    // These packages provide shared libraries that Chromium needs (nspr, nss, etc.)
+    if (debug) console.log("  🔧 Installing system dependencies for Chromium...")
+    const sysDepsResult = await runCommandWithLogs(sandbox, {
+      cmd: "sh",
+      args: [
+        "-c",
+        "sudo dnf install -y nspr nss atk at-spi2-atk cups-libs libdrm libxkbcommon libXcomposite libXdamage libXfixes libXrandr mesa-libgbm alsa-lib cairo pango glib2 gtk3 libX11 libXext libXcursor libXi libXtst > /tmp/sys-deps-install.log 2>&1"
+      ]
+    })
+
+    if (sysDepsResult.exitCode !== 0) {
+      console.log(`  ⚠️ System dependencies installation failed (exit code ${sysDepsResult.exitCode})`)
+      // Try to read the log for debugging
+      try {
+        const logResult = await runCommandWithLogs(sandbox, {
+          cmd: "sh",
+          args: ["-c", "cat /tmp/sys-deps-install.log 2>&1 | tail -20"]
+        })
+        if (logResult.stdout) {
+          console.log(`  📋 Install log: ${logResult.stdout}`)
+        }
+      } catch {
+        // Ignore log read errors
+      }
+      console.log("  ⚠️ Continuing anyway - browser automation may not work")
+    } else {
+      if (debug) console.log("  ✅ System dependencies installed")
+    }
+
+    // Install Chromium browser for headless browser automation using @sparticuz/chromium
+    // The Vercel Sandbox doesn't have apt-get or Chrome installed by default
+    // @sparticuz/chromium is designed for serverless environments and provides a pre-compiled Chromium
+    if (debug) console.log("  🌐 Installing @sparticuz/chromium for serverless browser automation...")
+    const chromiumInstallResult = await runCommandWithLogs(sandbox, {
+      cmd: packageManager,
+      args: ["add", "@sparticuz/chromium", "puppeteer-core"],
+      cwd: sandboxCwd,
+      stdout: debug ? process.stdout : undefined,
+      stderr: debug ? process.stderr : undefined
+    })
+
+    if (chromiumInstallResult.exitCode !== 0) {
+      console.log(`  ⚠️ @sparticuz/chromium installation failed (exit code ${chromiumInstallResult.exitCode})`)
+      console.log("  ⚠️ Continuing anyway - d3k may work without browser automation")
+    } else {
+      if (debug) console.log("  ✅ @sparticuz/chromium installed")
+    }
+
+    // Create a helper script to extract the Chromium executable path from @sparticuz/chromium
+    // This package downloads and extracts Chromium at runtime
+    if (debug) console.log("  🔍 Getting Chromium executable path from @sparticuz/chromium...")
+    const getChromiumPathResult = await runCommandWithLogs(sandbox, {
+      cmd: "node",
+      args: ["-e", "require('@sparticuz/chromium').executablePath().then(p => console.log(p))"],
+      cwd: sandboxCwd
+    })
+
+    let chromiumPath = "/usr/bin/chromium" // fallback
+    if (getChromiumPathResult.exitCode === 0 && getChromiumPathResult.stdout.trim()) {
+      chromiumPath = getChromiumPathResult.stdout.trim()
+      if (debug) console.log(`  ✅ Chromium path from @sparticuz/chromium: ${chromiumPath}`)
+    } else {
+      console.log(`  ⚠️ Could not get Chromium path from @sparticuz/chromium, using fallback: ${chromiumPath}`)
+      if (getChromiumPathResult.stderr) {
+        console.log(`  ⚠️ Error: ${getChromiumPathResult.stderr.substring(0, 500)}`)
+      }
+    }
+
+    // CRITICAL TEST: Run Chrome CDP test in a single shell command
+    // Previous tests showed that using separate commands can fail with 400 errors
+    // if a command doesn't exist (like 'file'). So we do everything in one sh -c.
+    console.log("  🔍 ===== CHROMIUM DIAGNOSTIC TEST =====")
+    try {
+      const chromeTest = await runCommandWithLogs(sandbox, {
+        cmd: "sh",
+        args: [
+          "-c",
+          `
+          # Redirect stderr to stdout so we capture everything
+          exec 2>&1
+
+          echo "=== Chromium CDP Test ==="
+          echo "Chromium path: ${chromiumPath}"
+          echo ""
+
+          echo "1. Checking if file exists..."
+          ls -la "${chromiumPath}" 2>&1 || echo "   ❌ File not found"
+
+          echo ""
+          echo "2. Checking file type (if 'file' command exists)..."
+          file "${chromiumPath}" 2>&1 || echo "   (file command not available)"
+
+          echo ""
+          echo "3. Testing --version..."
+          "${chromiumPath}" --version 2>&1 || echo "   ❌ --version failed"
+
+          echo ""
+          echo "4. Starting Chrome headless with CDP port..."
+          echo "   Command: ${chromiumPath} --headless=new --no-sandbox --disable-gpu --remote-debugging-port=9222 about:blank"
+
+          # Start Chrome in background
+          "${chromiumPath}" --headless=new --no-sandbox --disable-setuid-sandbox --disable-gpu --disable-dev-shm-usage --remote-debugging-port=9222 --remote-debugging-address=127.0.0.1 about:blank &
+          PID=$!
+          echo "   Chrome PID: $PID"
+
+          # Wait 2 seconds
+          sleep 2
+
+          echo ""
+          echo "5. Checking if Chrome is still running..."
+          if ps -p $PID > /dev/null 2>&1; then
+            echo "   ✅ Chrome is RUNNING after 2s"
+
+            echo ""
+            echo "6. Trying to connect to CDP endpoint..."
+            curl -s --max-time 3 http://127.0.0.1:9222/json/version 2>&1 || echo "   ⚠️ CDP connection failed"
+
+            echo ""
+            echo "7. Killing test Chrome process..."
+            kill $PID 2>/dev/null
+          else
+            echo "   ❌ Chrome DIED within 2s"
+            wait $PID 2>/dev/null
+            echo "   Exit code: $?"
+          fi
+
+          echo ""
+          echo "8. Current processes:"
+          ps aux 2>/dev/null | grep -E "chrom|PID" | head -10 || echo "   (ps failed)"
+
+          echo ""
+          echo "=== End Chromium CDP Test ==="
+          `
+        ]
+      })
+      console.log(`  📋 Chrome CDP test result (exit ${chromeTest.exitCode}):\n${chromeTest.stdout || "(no output)"}`)
+      if (chromeTest.stderr) console.log(`  ⚠️ Chrome CDP test stderr: ${chromeTest.stderr}`)
+    } catch (error) {
+      console.log(`  ❌ Chrome CDP test failed with error: ${error instanceof Error ? error.message : String(error)}`)
+    }
+    console.log("  🔍 ===== END CHROMIUM DIAGNOSTIC TEST =====")
+
     // Install d3k globally from npm
     if (debug) console.log("  📦 Installing d3k globally from npm...")
-    const d3kInstallResult = await sandbox.runCommand({
+    const d3kInstallResult = await runCommandWithLogs(sandbox, {
       cmd: "pnpm",
       args: ["i", "-g", "dev3000"],
       stdout: debug ? process.stdout : undefined,
@@ -183,20 +392,92 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     // Start d3k (which will auto-configure MCPs and start browser)
     if (debug) console.log("  🚀 Starting d3k...")
     if (debug) console.log(`  📂 Working directory: ${sandboxCwd}`)
-    if (debug) console.log(`  🔧 Command: cd ${sandboxCwd} && MCP_SKIP_PERMISSIONS=true d3k --no-tui --debug`)
 
-    // Start d3k in detached mode
-    // We run it detached so it continues running independently in the sandbox.
+    // Use chromium path from @sparticuz/chromium (or fallback)
+    if (debug)
+      console.log(
+        `  🔧 Command: cd ${sandboxCwd} && MCP_SKIP_PERMISSIONS=true d3k --no-tui --debug --headless --browser ${chromiumPath}`
+      )
+
+    // DIAGNOSTIC: First test if spawn() with the chromium path works inside the sandbox
+    // This isolates whether the issue is with d3k's spawn() vs shell commands
+    console.log("  🔍 ===== TESTING spawn() with chromium directly =====")
+    try {
+      const spawnTestScript = `
+        exec 2>&1
+        echo "Testing if Node can spawn Chrome directly..."
+        node -e "
+          const { spawn } = require('child_process');
+          const chromePath = '${chromiumPath}';
+          const args = [
+            '--remote-debugging-port=9222',
+            '--user-data-dir=/tmp/spawn-test-profile',
+            '--no-first-run',
+            '--headless=new',
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-gpu',
+            '--disable-dev-shm-usage',
+            'about:blank'
+          ];
+          console.log('Spawning:', chromePath, args.join(' '));
+          const proc = spawn(chromePath, args, { stdio: 'pipe', detached: false });
+          proc.on('error', (e) => console.log('SPAWN ERROR:', e.message));
+          proc.stderr.on('data', (d) => console.log('STDERR:', d.toString().trim()));
+          proc.stdout.on('data', (d) => console.log('STDOUT:', d.toString().trim()));
+          setTimeout(() => {
+            const running = proc.pid && !proc.killed;
+            console.log('Chrome PID:', proc.pid, 'Running:', running);
+            if (running) {
+              require('http').get('http://localhost:9222/json/version', (res) => {
+                let data = '';
+                res.on('data', chunk => data += chunk);
+                res.on('end', () => {
+                  console.log('CDP Response:', data.substring(0, 200));
+                  proc.kill();
+                  process.exit(0);
+                });
+              }).on('error', (e) => {
+                console.log('CDP Error:', e.message);
+                proc.kill();
+                process.exit(1);
+              });
+            } else {
+              console.log('Chrome not running after spawn');
+              process.exit(1);
+            }
+          }, 3000);
+        "
+      `
+      const spawnTest = await runCommandWithLogs(sandbox, {
+        cmd: "sh",
+        args: ["-c", spawnTestScript]
+      })
+      console.log(`  📋 spawn() test result (exit ${spawnTest.exitCode}):\n${spawnTest.stdout || "(no output)"}`)
+      if (spawnTest.stderr) console.log(`  ⚠️ spawn() test stderr: ${spawnTest.stderr}`)
+    } catch (error) {
+      console.log(`  ❌ spawn() test failed: ${error instanceof Error ? error.message : String(error)}`)
+    }
+    console.log("  🔍 ===== END spawn() TEST =====")
+
+    // Start d3k in detached mode with --headless flag
+    // This tells d3k to launch Chrome in headless mode, which works in serverless environments
+    // We explicitly pass --browser with the path from @sparticuz/chromium
     // Logs are written to /home/vercel-sandbox/.d3k/logs/ and can be read later.
     // IMPORTANT: Do NOT start infinite log streaming loops here - they prevent
     // the workflow step function from completing properly.
+    // DIAGNOSTIC: Also capture stdout/stderr to d3k-startup.log for debugging
+    const d3kStartupLog = "/home/vercel-sandbox/.d3k/logs/d3k-startup.log"
     await sandbox.runCommand({
       cmd: "sh",
-      args: ["-c", `cd ${sandboxCwd} && MCP_SKIP_PERMISSIONS=true d3k --no-tui --debug`],
+      args: [
+        "-c",
+        `mkdir -p /home/vercel-sandbox/.d3k/logs && cd ${sandboxCwd} && MCP_SKIP_PERMISSIONS=true d3k --no-tui --debug --headless --browser ${chromiumPath} > ${d3kStartupLog} 2>&1`
+      ],
       detached: true
     })
 
-    if (debug) console.log("  ✅ d3k started in detached mode")
+    if (debug) console.log("  ✅ d3k started in detached mode (headless)")
 
     // Give d3k a moment to start and create log files
     if (debug) console.log("  ⏳ Waiting for d3k to start...")
@@ -205,52 +486,28 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     // Debug: Check d3k process and log files
     if (debug) {
       console.log("  🔍 Checking d3k process status...")
-      const psCheck = await sandbox.runCommand({
+      const psCheck = await runCommandWithLogs(sandbox, {
         cmd: "sh",
         args: ["-c", "ps aux | grep -E '(d3k|pnpm|next)' | grep -v grep || echo 'No d3k/pnpm/next processes found'"]
       })
-      if (psCheck.stdout) {
-        const stdout =
-          typeof psCheck.stdout === "string"
-            ? psCheck.stdout
-            : typeof psCheck.stdout === "function"
-              ? await psCheck.stdout()
-              : String(psCheck.stdout || "")
-        console.log(`  📋 Process list:\n${stdout}`)
-      }
+      console.log(`  📋 Process list:\n${psCheck.stdout}`)
 
       console.log("  🔍 Checking for d3k log files...")
-      const logsCheck = await sandbox.runCommand({
+      const logsCheck = await runCommandWithLogs(sandbox, {
         cmd: "sh",
         args: ["-c", "ls -lah /home/vercel-sandbox/.d3k/logs/ 2>/dev/null || echo 'No .d3k/logs directory found'"]
       })
-      if (logsCheck.stdout) {
-        const stdout =
-          typeof logsCheck.stdout === "string"
-            ? logsCheck.stdout
-            : typeof logsCheck.stdout === "function"
-              ? await logsCheck.stdout()
-              : String(logsCheck.stdout || "")
-        console.log(`  📋 Log files:\n${stdout}`)
-      }
+      console.log(`  📋 Log files:\n${logsCheck.stdout}`)
 
       // Check ALL d3k log files for initial content
-      const allLogsCheck = await sandbox.runCommand({
+      const allLogsCheck = await runCommandWithLogs(sandbox, {
         cmd: "sh",
         args: [
           "-c",
-          'for log in /home/vercel-sandbox/.d3k/logs/*.log 2>/dev/null; do echo "=== $log ==="  && head -50 "$log" || true; done'
+          'for log in /home/vercel-sandbox/.d3k/logs/*.log; do [ -f "$log" ] && echo "=== $log ===" && head -50 "$log" || true; done 2>/dev/null || true'
         ]
       })
-      if (allLogsCheck.stdout) {
-        const stdout =
-          typeof allLogsCheck.stdout === "string"
-            ? allLogsCheck.stdout
-            : typeof allLogsCheck.stdout === "function"
-              ? await allLogsCheck.stdout()
-              : String(allLogsCheck.stdout || "")
-        console.log(`  📋 Initial log content:\n${stdout}`)
-      }
+      console.log(`  📋 Initial log content:\n${allLogsCheck.stdout}`)
     }
 
     // Note: We do NOT start infinite log streaming loops here because they prevent
@@ -269,19 +526,13 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
       try {
         // d3k creates log files with pattern: {projectName}-{timestamp}.log
         // Use cat with wildcard to capture all log files
-        const logsCheck = await sandbox.runCommand({
+        const logsCheck = await runCommandWithLogs(sandbox, {
           cmd: "sh",
           args: ["-c", "cat /home/vercel-sandbox/.d3k/logs/*.log 2>/dev/null || echo 'No log files found'"]
         })
-        if (logsCheck.exitCode === 0 && logsCheck.stdout) {
-          const stdout =
-            typeof logsCheck.stdout === "string"
-              ? logsCheck.stdout
-              : typeof logsCheck.stdout === "function"
-                ? await logsCheck.stdout()
-                : String(logsCheck.stdout || "")
+        if (logsCheck.exitCode === 0) {
           console.log("  📋 All d3k logs:")
-          console.log(stdout)
+          console.log(logsCheck.stdout)
         }
       } catch (logError) {
         console.log(`  ⚠️ Could not read d3k logs: ${logError instanceof Error ? logError.message : String(logError)}`)
@@ -300,10 +551,52 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     const mcpUrl = sandbox.domain(3684)
     if (debug) console.log(`  ✅ MCP server ready: ${mcpUrl}`)
 
-    // Give d3k a bit more time to fully initialize MCPs and browser
-    // Logs are now streaming to the workflow output instead of being written to a file
-    if (debug) console.log("  ⏳ Waiting for d3k to initialize MCPs and browser...")
-    await new Promise((resolve) => setTimeout(resolve, 10000))
+    // Wait for CDP URL to be available (needed for chrome-devtools MCP)
+    // This is more reliable than a fixed timeout because it actually waits for
+    // d3k to connect to Chrome and write the CDP URL to the session file
+    if (debug) console.log("  ⏳ Waiting for d3k to initialize Chrome and populate CDP URL...")
+    const cdpUrl = await waitForCdpUrl(sandbox, 30000, debug) // 30 second timeout
+    if (cdpUrl) {
+      if (debug) console.log(`  ✅ CDP URL ready: ${cdpUrl}`)
+
+      // CRITICAL: Wait for d3k to complete navigation to the app
+      // d3k writes session info BEFORE navigating, so CDP URL being ready doesn't
+      // mean the page has loaded. We need to wait for navigation to complete.
+      if (debug) console.log("  ⏳ Waiting for d3k to complete page navigation...")
+      await waitForPageNavigation(sandbox, 30000, debug)
+    } else {
+      console.log("  ⚠️ CDP URL not found - chrome-devtools MCP features may not work")
+      // DIAGNOSTIC: Dump all logs immediately when CDP fails - this is critical for debugging
+      console.log("  📋 === d3k LOG DUMP (CDP URL not found) ===")
+      try {
+        const cdpFailLogs = await runCommandWithLogs(sandbox, {
+          cmd: "sh",
+          args: [
+            "-c",
+            'for log in /home/vercel-sandbox/.d3k/logs/*.log; do [ -f "$log" ] && echo "\\n=== $log ===" && cat "$log" || true; done 2>/dev/null || echo "No log files found"'
+          ]
+        })
+        console.log(cdpFailLogs.stdout)
+      } catch (logErr) {
+        console.log(`  ⚠️ Could not read logs: ${logErr instanceof Error ? logErr.message : String(logErr)}`)
+      }
+      console.log("  📋 === END d3k LOG DUMP ===")
+    }
+
+    // Dump ALL d3k logs after initialization for debugging
+    // This is critical for understanding what d3k is doing in the sandbox
+    if (debug) {
+      console.log("  📋 === d3k FULL LOG DUMP (after initialization) ===")
+      const fullLogsCheck = await runCommandWithLogs(sandbox, {
+        cmd: "sh",
+        args: [
+          "-c",
+          'for log in /home/vercel-sandbox/.d3k/logs/*.log; do [ -f "$log" ] && echo "\\n=== $log ===" && cat "$log" || true; done 2>/dev/null || echo "No log files found"'
+        ]
+      })
+      console.log(fullLogsCheck.stdout)
+      console.log("  📋 === END d3k LOG DUMP ===")
+    }
 
     // Verify we can actually fetch the dev server URL
     console.log(`  🔍 Testing dev server accessibility at ${devUrl}...`)
@@ -399,4 +692,149 @@ async function waitForServer(sandbox: Sandbox, port: number, timeoutMs: number, 
     `Server on port ${port} did not become ready within ${timeoutMs}ms. ` +
       `Last status: ${lastStatus ?? "no response"}, Last error: ${lastError ?? "none"}`
   )
+}
+
+/**
+ * Wait for d3k to populate the CDP URL in its session file
+ * This is necessary because d3k writes the session file before Chrome is fully connected,
+ * and we need the CDP URL to be available before calling MCP tools that use chrome-devtools.
+ */
+async function waitForCdpUrl(sandbox: Sandbox, timeoutMs: number, debug = false): Promise<string | null> {
+  const startTime = Date.now()
+  let cdpUrl: string | null = null
+
+  while (Date.now() - startTime < timeoutMs) {
+    try {
+      // Read the session files from ~/.d3k/ in the sandbox
+      const cmdResult = await sandbox.runCommand({
+        cmd: "sh",
+        args: [
+          "-c",
+          'for f in /home/vercel-sandbox/.d3k/*.json; do [ -f "$f" ] && cat "$f" 2>/dev/null && echo ""; done'
+        ]
+      })
+
+      // Collect logs from the command
+      let stdout = ""
+      for await (const log of cmdResult.logs()) {
+        if (log.stream === "stdout") {
+          stdout += log.data
+        }
+      }
+      await cmdResult.wait()
+
+      const result = { exitCode: cmdResult.exitCode, stdout }
+
+      if (result.exitCode === 0 && result.stdout.trim()) {
+        // Parse each JSON object (one per line)
+        const lines = result.stdout.trim().split("\n")
+        for (const line of lines) {
+          if (line.trim().startsWith("{")) {
+            try {
+              const sessionData = JSON.parse(line)
+              if (sessionData.cdpUrl?.startsWith("ws://")) {
+                cdpUrl = sessionData.cdpUrl
+                if (debug) {
+                  console.log(`  ✅ CDP URL found: ${cdpUrl}`)
+                }
+                return cdpUrl
+              }
+            } catch {
+              // Skip invalid JSON lines
+            }
+          }
+        }
+      }
+
+      if (debug && (Date.now() - startTime) % 5000 < 1000) {
+        console.log(`  ⏳ Waiting for CDP URL... (${Math.round((Date.now() - startTime) / 1000)}s)`)
+      }
+    } catch (error) {
+      if (debug) {
+        console.log(`  ⚠️ Error checking CDP URL: ${error instanceof Error ? error.message : String(error)}`)
+      }
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+  }
+
+  if (debug) {
+    console.log(`  ⚠️ CDP URL not available after ${timeoutMs}ms - chrome-devtools MCP may not work`)
+  }
+  return null
+}
+
+/**
+ * Wait for d3k to complete navigation to the app page
+ * d3k logs "[CDP] Navigated to http://localhost:PORT" when navigation is initiated.
+ * We look for evidence in logs that the page has started loading.
+ */
+async function waitForPageNavigation(sandbox: Sandbox, timeoutMs: number, debug = false): Promise<boolean> {
+  const startTime = Date.now()
+
+  // Helper function to run commands and collect output
+  async function runCommandWithLogs(
+    sandbox: Sandbox,
+    options: Parameters<Sandbox["runCommand"]>[0]
+  ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+    const result = await sandbox.runCommand(options)
+    let stdout = ""
+    let stderr = ""
+    for await (const log of result.logs()) {
+      if (log.stream === "stdout") {
+        stdout += log.data
+      } else {
+        stderr += log.data
+      }
+    }
+    await result.wait()
+    return { exitCode: result.exitCode, stdout, stderr }
+  }
+
+  while (Date.now() - startTime < timeoutMs) {
+    try {
+      // Check d3k logs for evidence of navigation
+      // d3k logs "[CDP] Navigated to http://localhost:PORT" after Page.navigate
+      const logsResult = await runCommandWithLogs(sandbox, {
+        cmd: "sh",
+        args: [
+          "-c",
+          'grep -r "Navigated to http://localhost" /home/vercel-sandbox/.d3k/logs/*.log 2>/dev/null | head -1 || true'
+        ]
+      })
+
+      if (logsResult.stdout.includes("Navigated to http://localhost")) {
+        if (debug) {
+          console.log(`  ✅ d3k has navigated to the app (detected in logs)`)
+        }
+
+        // Wait an additional 3 seconds for the page to fully load and settle
+        // This gives time for JavaScript to execute and CLS metrics to be captured
+        if (debug) {
+          console.log(`  ⏳ Waiting 3 more seconds for page to fully load...`)
+        }
+        await new Promise((resolve) => setTimeout(resolve, 3000))
+
+        return true
+      }
+
+      if (debug && (Date.now() - startTime) % 5000 < 1000) {
+        console.log(`  ⏳ Waiting for page navigation... (${Math.round((Date.now() - startTime) / 1000)}s)`)
+      }
+    } catch (error) {
+      if (debug) {
+        console.log(`  ⚠️ Error checking for navigation: ${error instanceof Error ? error.message : String(error)}`)
+      }
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+  }
+
+  // If we didn't detect navigation in logs, still wait a bit as a fallback
+  // The page might have loaded but logging might not have captured it
+  if (debug) {
+    console.log(`  ⚠️ Did not detect navigation in logs after ${timeoutMs}ms, waiting 5s as fallback...`)
+  }
+  await new Promise((resolve) => setTimeout(resolve, 5000))
+  return false
 }

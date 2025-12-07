@@ -4,6 +4,99 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.119] - 2025-12-06
+
+**Feature Release**
+
+- Remove Next.js canary workaround from test-logs-api.ts
+- Switch from Next.js canary to latest (16.0.7)
+- Add server/instrumentation.js for Vercel build compatibility
+- Fix Chrome launch issues and improve release test reliability
+- Update pnpm.overrides to Next.js 16.1.0-canary.15
+
+## [0.0.118] - 2025-12-05
+
+**Feature Release**
+
+- Update Next.js auto-generated type reference
+- Remove network-idle screenshot spam
+- Update AGENTS.md with correct vercel logs instructions
+- Fix Step 1 timeout by ensuring clsData always truthy from Step 0
+- Add CORS headers to /api/workflows endpoint
+
+## [0.0.117] - 2025-12-05
+
+**Patch Release**
+
+- Fix server detection in sandbox environments
+
+## [0.0.116] - 2025-12-05
+
+**Feature Release**
+
+- Add Vercel MCP tools section to WORKFLOW_TESTING_GUIDE
+- Rewrite tool descriptions to enforce diagnose-fix-verify loop
+- Capture d3k stdout/stderr to d3k-startup.log and dump logs on CDP failure
+- Add always-on diagnostic logging to CDPMonitor for sandbox debugging
+- Add Node.js spawn() diagnostic test for Chrome in sandbox
+
+## [0.0.115] - 2025-12-05
+
+**Patch Release**
+
+- Fix tui-interface-impl test after upstream refactor
+- Update next-env.d.ts types import path
+- Simplify
+- Always write session info after CDP monitoring for sandbox support
+- Prevent flashing
+
+## [0.0.114] - 2025-12-04
+
+**Patch Release**
+
+- Remove unused next dependency from root package.json
+- Fix process cleanup to kill entire process group on shutdown
+
+## [0.0.113] - 2025-12-04
+
+**Feature Release**
+
+- Update Next.js type definitions after build
+- Add --headless flag for Chrome in serverless/CI environments
+- Add screenshot columns to workflows table and fix SSE parsing
+- Fix sandbox MCP response parsing and add log dumping
+- Fix WORKFLOW_TESTING_GUIDE.md to use correct mcp-server production team
+
+## [0.0.112] - 2025-12-02
+
+**Feature Release**
+
+- TUI improvements and MCP tool whitelist fixes for v0.0.112
+- Upgrade workflow to 4.0.1-beta.23 with upstream @workflow/errors fix
+- Trigger Vercel rebuild with workflow@4.0.1-beta.22 and @workflow/errors
+- Update pnpm-lock.yaml for @workflow/errors dependency
+- Add @workflow/errors as direct dependency for Vercel builds
+
+## [0.0.111] - 2025-12-02
+
+**Feature Release**
+
+- Fix workflow@4.0.1-beta.22 build by adding pnpm override
+- Upgrade workflow to 4.0.1-beta.22 with @workflow/errors dependency
+- Emphasize CLI-only verification and add MCP tool whitelist
+- Update WORKFLOW_TESTING_GUIDE to use d3k MCP tools instead of curl
+- Revert workflow upgrade due to peer dependency issue
+
+## [0.0.110] - 2025-12-01
+
+**Patch Release**
+
+- Update Next.js type references after route cleanup
+- Remove Phase 1 POC artifacts
+- Clean up unused artifacts and improve workflow testing
+- Fix React duplicate key warnings on workflows page
+- Trigger deployment
+
 ## [0.0.109] - 2025-11-18
 
 **Patch Release**
