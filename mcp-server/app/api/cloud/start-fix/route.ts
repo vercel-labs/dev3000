@@ -34,6 +34,7 @@ export async function POST(request: Request) {
   let userId: string | undefined
   let projectName: string | undefined
   let runId: string | undefined
+  let runTimestamp: string | undefined
 
   try {
     // Get user's access token from cookies or Authorization header
@@ -97,11 +98,12 @@ export async function POST(request: Request) {
     // Save workflow run metadata at start if userId and projectName provided
     if (userId && projectName) {
       runId = randomUUID()
+      runTimestamp = new Date().toISOString()
       await saveWorkflowRun({
         id: runId,
         userId,
         projectName,
-        timestamp: new Date().toISOString(),
+        timestamp: runTimestamp,
         status: "running",
         currentStep: "Starting workflow...",
         stepNumber: 0
@@ -134,13 +136,13 @@ export async function POST(request: Request) {
       console.log(`[Start Fix] GitHub PR created: ${result.pr.prUrl}`)
     }
 
-    // Update workflow run metadata with success status
-    if (userId && projectName && runId) {
+    // Update workflow run metadata with success status (use same timestamp to overwrite)
+    if (userId && projectName && runId && runTimestamp) {
       await saveWorkflowRun({
         id: runId,
         userId,
         projectName,
-        timestamp: new Date().toISOString(),
+        timestamp: runTimestamp,
         status: "done",
         reportBlobUrl: result.blobUrl,
         prUrl: result.pr?.prUrl,
@@ -166,13 +168,13 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("[Start Fix] Error running workflow:", error)
 
-    // Update workflow run metadata with failure status
-    if (userId && projectName && runId) {
+    // Update workflow run metadata with failure status (use same timestamp to overwrite)
+    if (userId && projectName && runId && runTimestamp) {
       await saveWorkflowRun({
         id: runId,
         userId,
         projectName,
-        timestamp: new Date().toISOString(),
+        timestamp: runTimestamp,
         status: "failure",
         error: error instanceof Error ? error.message : String(error)
       }).catch((err) => console.error("[Start Fix] Failed to save error metadata:", err))
