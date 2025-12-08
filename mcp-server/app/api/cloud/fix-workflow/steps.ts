@@ -7,6 +7,27 @@ import { put } from "@vercel/blob"
 import type { Sandbox } from "@vercel/sandbox"
 import { createGateway, generateText } from "ai"
 import { createD3kSandbox as createD3kSandboxUtil } from "@/lib/cloud/d3k-sandbox"
+import type { WorkflowReport } from "@/types"
+
+/**
+ * Save or update a workflow report to blob storage
+ * This is called incrementally as data becomes available throughout the workflow
+ */
+export async function saveReportToBlob(
+  report: Partial<WorkflowReport> & { id: string; projectName: string; timestamp: string }
+): Promise<string> {
+  // Use consistent filename based on report ID so updates overwrite the same file
+  const filename = `report-${report.id}.json`
+
+  const blob = await put(filename, JSON.stringify(report, null, 2), {
+    access: "public",
+    contentType: "application/json",
+    addRandomSuffix: false // Important: ensures we can update the same file
+  })
+
+  console.log(`[Report] Saved report ${report.id} to: ${blob.url}`)
+  return blob.url
+}
 
 /**
  * Helper function to properly consume sandbox command output
@@ -311,14 +332,15 @@ async function fetchAndUploadD3kArtifacts(
 
 /**
  * Step 0: Create d3k sandbox with MCP tools pre-configured
- * Also captures a "before" screenshot of the app
+ * Also captures a "before" screenshot of the app and saves initial report to blob
  */
 export async function createD3kSandbox(
   repoUrl: string,
   branch: string,
   projectName: string,
   vercelToken?: string,
-  vercelOidcToken?: string
+  vercelOidcToken?: string,
+  runId?: string
 ) {
   "use step"
 
@@ -609,6 +631,77 @@ LOADINGHTML
   console.log(`[Step 0] Fetching d3k artifacts from sandbox...`)
   const d3kArtifacts = await fetchAndUploadD3kArtifacts(sandboxResult.sandbox, sandboxResult.mcpUrl, projectName)
 
+  // Save initial report to blob storage immediately
+  // This ensures we capture CLS data, screenshots, and logs even if later steps fail
+  const reportId = runId || `report-${Date.now()}`
+  const timestamp = new Date().toISOString()
+
+  // Extract CLS data from d3kArtifacts metadata for the initial report
+  let clsScore: number | undefined
+  let clsGrade: "good" | "needs-improvement" | "poor" | undefined
+  let layoutShifts:
+    | Array<{
+        score: number
+        timestamp: number
+        elements: string[]
+      }>
+    | undefined
+
+  if (d3kArtifacts?.metadata) {
+    const meta = d3kArtifacts.metadata as {
+      totalCLS?: number
+      clsGrade?: string
+      layoutShifts?: Array<{
+        score: number
+        timestamp: number
+        sources?: Array<{ node?: string }>
+      }>
+    }
+    clsScore = meta.totalCLS
+    if (meta.clsGrade === "good" || meta.clsGrade === "needs-improvement" || meta.clsGrade === "poor") {
+      clsGrade = meta.clsGrade
+    }
+    if (meta.layoutShifts) {
+      layoutShifts = meta.layoutShifts.map((shift) => ({
+        score: shift.score,
+        timestamp: shift.timestamp,
+        elements: shift.sources?.map((s) => s.node || "unknown").filter(Boolean) || []
+      }))
+    }
+  }
+
+  // Build and save initial report with all data captured so far
+  const initialReport: Partial<WorkflowReport> & { id: string; projectName: string; timestamp: string } = {
+    id: reportId,
+    projectName,
+    timestamp,
+    sandboxDevUrl: sandboxResult.devUrl,
+    sandboxMcpUrl: sandboxResult.mcpUrl,
+    clsScore,
+    clsGrade,
+    layoutShifts,
+    beforeScreenshotUrl: beforeScreenshotUrl || undefined,
+    clsScreenshots: d3kArtifacts?.clsScreenshots?.map((s) => ({
+      timestamp: s.timestamp,
+      blobUrl: s.blobUrl,
+      label: s.label
+    })),
+    d3kLogs: d3kArtifacts?.fullLogs || undefined,
+    // Placeholder for agent analysis - will be filled in Step 3
+    agentAnalysis: "Analysis in progress..."
+  }
+
+  console.log(`[Step 0] Saving initial report to blob storage...`)
+  console.log(`[Step 0] Report ID: ${reportId}`)
+  console.log(`[Step 0] CLS Score: ${clsScore ?? "not captured"}`)
+  console.log(`[Step 0] CLS Screenshots: ${initialReport.clsScreenshots?.length ?? 0}`)
+  if (initialReport.d3kLogs) {
+    console.log(`[Step 0] d3k logs: ${initialReport.d3kLogs.length} chars`)
+  }
+
+  const reportBlobUrl = await saveReportToBlob(initialReport)
+  console.log(`[Step 0] Initial report saved: ${reportBlobUrl}`)
+
   // Note: We cannot return the cleanup function or sandbox object as they're not serializable
   // Sandbox cleanup will happen automatically when the sandbox times out
   return {
@@ -620,7 +713,9 @@ LOADINGHTML
     beforeScreenshotUrl,
     chromiumPath,
     gitDiff,
-    d3kArtifacts
+    d3kArtifacts,
+    reportId,
+    reportBlobUrl
   }
 }
 
@@ -1175,8 +1270,9 @@ index abc123..def456 100644
 }
 
 /**
- * Step 3: Upload fix proposal to blob storage as JSON and return URL
- * Now saves structured JSON data that the report page renders with JSX
+ * Step 3: Update the report with AI agent analysis
+ * The initial report was saved in Step 0 with CLS data, screenshots, and logs
+ * This step updates it with the agent's fix proposal
  */
 export async function uploadToBlob(
   fixProposal: string,
@@ -1197,9 +1293,8 @@ export async function uploadToBlob(
 ) {
   "use step"
 
-  console.log("[Step 3] Uploading fix proposal to blob storage as JSON...")
-
-  const timestamp = new Date().toISOString()
+  const reportId = runId || `report-${Date.now()}`
+  console.log(`[Step 3] Updating report ${reportId} with agent analysis...`)
 
   // Extract CLS data from d3kArtifacts metadata
   let clsScore: number | undefined
@@ -1235,26 +1330,12 @@ export async function uploadToBlob(
     }
   }
 
-  // Build the WorkflowReport JSON
-  // Import type inline to avoid circular dependency issues with workflow bundler
-  const report: {
-    id: string
-    projectName: string
-    timestamp: string
-    sandboxDevUrl: string
-    sandboxMcpUrl?: string
-    clsScore?: number
-    clsGrade?: "good" | "needs-improvement" | "poor"
-    layoutShifts?: Array<{ score: number; timestamp: number; elements: string[] }>
-    beforeScreenshotUrl?: string
-    clsScreenshots?: Array<{ timestamp: number; blobUrl: string; label?: string }>
-    agentAnalysis: string
-    agentAnalysisModel?: string
-    d3kLogs?: string
-  } = {
-    id: runId || `report-${Date.now()}`,
+  // Build the complete report with agent analysis
+  // This overwrites the initial report saved in Step 0, adding the agent analysis
+  const report: Partial<WorkflowReport> & { id: string; projectName: string; timestamp: string } = {
+    id: reportId,
     projectName,
-    timestamp,
+    timestamp: new Date().toISOString(),
     sandboxDevUrl,
     sandboxMcpUrl: sandboxMcpUrl || undefined,
     clsScore,
@@ -1272,32 +1353,20 @@ export async function uploadToBlob(
   }
 
   // Log what we're saving
-  console.log(`[Step 3] Report ID: ${report.id}`)
-  console.log(`[Step 3] CLS Score: ${report.clsScore ?? "not captured"}`)
-  console.log(`[Step 3] CLS Screenshots: ${report.clsScreenshots?.length ?? 0}`)
+  console.log(`[Step 3] Agent analysis length: ${fixProposal.length} chars`)
   console.log(`[Step 3] Agent model: ${report.agentAnalysisModel ?? "not specified"}`)
-  if (report.d3kLogs) {
-    console.log(`[Step 3] d3k logs: ${report.d3kLogs.length} chars`)
-  }
 
-  // Upload to Vercel Blob Storage as JSON
-  const filenameTimestamp = timestamp.replace(/[:.]/g, "-")
-  const filename = `report-${projectName}-${filenameTimestamp}.json`
-
-  const blob = await put(filename, JSON.stringify(report, null, 2), {
-    access: "public",
-    contentType: "application/json"
-  })
-
-  console.log(`[Step 3] Report JSON uploaded to: ${blob.url}`)
+  // Save updated report (overwrites the initial report from Step 0)
+  const blobUrl = await saveReportToBlob(report)
+  console.log(`[Step 3] Report updated: ${blobUrl}`)
 
   return {
     success: true,
     projectName,
     fixProposal,
-    blobUrl: blob.url,
+    blobUrl,
     beforeScreenshotUrl: beforeScreenshotUrl || null,
-    message: "Fix analysis completed and uploaded to blob storage"
+    message: "Fix analysis completed and report updated"
   }
 }
 

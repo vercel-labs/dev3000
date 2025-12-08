@@ -70,6 +70,7 @@ export async function cloudFixWorkflow(params: {
 
   // Step 0: Create d3k sandbox if repoUrl provided
   // This step also captures CLS data, "before" screenshot, git diff, and d3k artifacts from inside the sandbox
+  // It also saves an initial report to blob storage so we have data even if later steps fail
   let sandboxInfo: {
     mcpUrl: string
     devUrl: string
@@ -85,12 +86,24 @@ export async function cloudFixWorkflow(params: {
       fullLogs: string | null
       metadata: Record<string, unknown> | null
     }
+    reportId?: string
+    reportBlobUrl?: string
   } | null = null
   if (repoUrl) {
     await updateProgress(0, "Creating development sandbox...")
-    sandboxInfo = await createD3kSandbox(repoUrl, repoBranch || "main", projectName, vercelToken, vercelOidcToken)
+    sandboxInfo = await createD3kSandbox(
+      repoUrl,
+      repoBranch || "main",
+      projectName,
+      vercelToken,
+      vercelOidcToken,
+      runId // Pass runId so Step 0 can save the initial report with consistent ID
+    )
     if (sandboxInfo?.devUrl) {
       await updateProgress(0, "Sandbox ready, starting dev server...", sandboxInfo.devUrl)
+    }
+    if (sandboxInfo?.reportBlobUrl) {
+      console.log(`[Workflow] Initial report saved: ${sandboxInfo.reportBlobUrl}`)
     }
   }
 
@@ -172,11 +185,12 @@ async function createD3kSandbox(
   branch: string,
   projectName: string,
   vercelToken?: string,
-  vercelOidcToken?: string
+  vercelOidcToken?: string,
+  runId?: string
 ) {
   "use step"
   const { createD3kSandbox } = await import("./steps")
-  return createD3kSandbox(repoUrl, branch, projectName, vercelToken, vercelOidcToken)
+  return createD3kSandbox(repoUrl, branch, projectName, vercelToken, vercelOidcToken, runId)
 }
 
 async function fetchRealLogs(
