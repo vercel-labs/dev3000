@@ -1175,218 +1175,121 @@ index abc123..def456 100644
 }
 
 /**
- * Step 3: Upload fix proposal to blob storage and return URL
+ * Step 3: Upload fix proposal to blob storage as JSON and return URL
+ * Now saves structured JSON data that the report page renders with JSX
  */
 export async function uploadToBlob(
   fixProposal: string,
   projectName: string,
-  logAnalysis: string,
-  devUrl: string,
+  _logAnalysis: string,
+  sandboxDevUrl: string,
   beforeScreenshotUrl?: string | null,
-  gitDiff?: string | null,
+  _gitDiff?: string | null,
   d3kArtifacts?: {
     clsScreenshots: Array<{ label: string; blobUrl: string; timestamp: number }>
     screencastSessionId: string | null
     fullLogs: string | null
     metadata: Record<string, unknown> | null
-  }
+  },
+  runId?: string,
+  sandboxMcpUrl?: string,
+  agentAnalysisModel?: string
 ) {
   "use step"
 
-  console.log("[Step 3] Uploading fix proposal to blob storage...")
-  if (beforeScreenshotUrl) {
-    console.log(`[Step 3] Including before screenshot: ${beforeScreenshotUrl}`)
-  }
-  if (gitDiff) {
-    console.log(`[Step 3] Including git diff (${gitDiff.length} chars)`)
-  }
-  if (d3kArtifacts) {
-    console.log(`[Step 3] Including d3k artifacts: ${d3kArtifacts.clsScreenshots.length} CLS screenshots`)
-    if (d3kArtifacts.fullLogs) {
-      console.log(`[Step 3] Including full d3k logs (${d3kArtifacts.fullLogs.length} chars)`)
-    }
-  }
+  console.log("[Step 3] Uploading fix proposal to blob storage as JSON...")
 
-  // Create screenshot section if we have a screenshot
-  const screenshotSection = beforeScreenshotUrl
-    ? `## Before Screenshot
-
-This screenshot was captured when the sandbox dev server first loaded, proving the page rendered successfully.
-
-![Before Screenshot](${beforeScreenshotUrl})
-
----
-
-`
-    : ""
-
-  // Create CLS screenshots section with before/after comparison
-  let clsScreenshotsSection = ""
-  if (d3kArtifacts?.clsScreenshots && d3kArtifacts.clsScreenshots.length > 0) {
-    // Sort by timestamp
-    const sortedScreenshots = [...d3kArtifacts.clsScreenshots].sort((a, b) => a.timestamp - b.timestamp)
-
-    clsScreenshotsSection = `## CLS (Layout Shift) Screenshots
-
-These screenshots were captured by d3k during page navigation to detect layout shifts.
-
-`
-    // If we have exactly 2 screenshots, show before/after
-    if (sortedScreenshots.length === 2) {
-      clsScreenshotsSection += `### Before (${sortedScreenshots[0].timestamp}ms)
-![Before Layout Shift](${sortedScreenshots[0].blobUrl})
-
-### After (${sortedScreenshots[1].timestamp}ms)
-![After Layout Shift](${sortedScreenshots[1].blobUrl})
-
-`
-    } else {
-      // Show all screenshots in order
-      for (const screenshot of sortedScreenshots) {
-        clsScreenshotsSection += `### ${screenshot.timestamp}ms
-![Screenshot at ${screenshot.timestamp}ms](${screenshot.blobUrl})
-
-`
-      }
-    }
-
-    // Add CLS metadata if available
-    if (d3kArtifacts.metadata) {
-      const meta = d3kArtifacts.metadata as {
-        totalCLS?: number
-        clsGrade?: string
-        layoutShifts?: Array<{
-          score: number
-          timestamp: number
-          sources?: Array<{ node?: string; previousRect?: object; currentRect?: object }>
-        }>
-      }
-      if (meta.totalCLS !== undefined) {
-        const clsEmoji = meta.clsGrade === "good" ? "✅" : meta.clsGrade === "needs-improvement" ? "⚠️" : "❌"
-        clsScreenshotsSection += `### CLS Score: ${meta.totalCLS.toFixed(4)} ${clsEmoji}
-- Grade: ${meta.clsGrade || "unknown"}
-- Shifts detected: ${meta.layoutShifts?.length || 0}
-
-`
-        // Add details about each shift
-        if (meta.layoutShifts && meta.layoutShifts.length > 0) {
-          clsScreenshotsSection += `#### Layout Shift Details
-`
-          for (let i = 0; i < meta.layoutShifts.length; i++) {
-            const shift = meta.layoutShifts[i]
-            const elements =
-              shift.sources
-                ?.map((s) => s.node || "unknown")
-                .filter(Boolean)
-                .join(", ") || "unidentified"
-            clsScreenshotsSection += `- Shift #${i + 1}: score=${shift.score.toFixed(4)}, time=${shift.timestamp}ms, elements=[${elements}]
-`
-          }
-          clsScreenshotsSection += "\n"
-        }
-      }
-    }
-    clsScreenshotsSection += "---\n\n"
-  }
-
-  // Create git diff section if we have a diff from the sandbox
-  const gitDiffSection = gitDiff
-    ? `## Actual Git Diff from Sandbox
-
-The following diff shows the actual changes made by d3k in the sandbox environment:
-
-\`\`\`diff
-${gitDiff}
-\`\`\`
-
----
-
-`
-    : ""
-
-  // Create full d3k logs section if available (collapsible)
-  let fullLogsSection = ""
-  if (d3kArtifacts?.fullLogs) {
-    fullLogsSection = `## Full d3k Logs
-
-<details>
-<summary>Click to expand d3k session logs (${d3kArtifacts.fullLogs.length} characters)</summary>
-
-\`\`\`
-${d3kArtifacts.fullLogs}
-\`\`\`
-
-</details>
-
----
-
-`
-  }
-
-  // Create enhanced markdown with full context and attribution
   const timestamp = new Date().toISOString()
-  const enhancedMarkdown = `# Fix Proposal for ${projectName}
 
-**Generated**: ${timestamp}
+  // Extract CLS data from d3kArtifacts metadata
+  let clsScore: number | undefined
+  let clsGrade: "good" | "needs-improvement" | "poor" | undefined
+  let layoutShifts:
+    | Array<{
+        score: number
+        timestamp: number
+        elements: string[]
+      }>
+    | undefined
 
-**Powered by**: [dev3000](https://github.com/vercel-labs/dev3000) with Claude Code
+  if (d3kArtifacts?.metadata) {
+    const meta = d3kArtifacts.metadata as {
+      totalCLS?: number
+      clsGrade?: string
+      layoutShifts?: Array<{
+        score: number
+        timestamp: number
+        sources?: Array<{ node?: string }>
+      }>
+    }
+    clsScore = meta.totalCLS
+    if (meta.clsGrade === "good" || meta.clsGrade === "needs-improvement" || meta.clsGrade === "poor") {
+      clsGrade = meta.clsGrade
+    }
+    if (meta.layoutShifts) {
+      layoutShifts = meta.layoutShifts.map((shift) => ({
+        score: shift.score,
+        timestamp: shift.timestamp,
+        elements: shift.sources?.map((s) => s.node || "unknown").filter(Boolean) || []
+      }))
+    }
+  }
 
-**Dev Server**: ${devUrl}
+  // Build the WorkflowReport JSON
+  // Import type inline to avoid circular dependency issues with workflow bundler
+  const report: {
+    id: string
+    projectName: string
+    timestamp: string
+    sandboxDevUrl: string
+    sandboxMcpUrl?: string
+    clsScore?: number
+    clsGrade?: "good" | "needs-improvement" | "poor"
+    layoutShifts?: Array<{ score: number; timestamp: number; elements: string[] }>
+    beforeScreenshotUrl?: string
+    clsScreenshots?: Array<{ timestamp: number; blobUrl: string; label?: string }>
+    agentAnalysis: string
+    agentAnalysisModel?: string
+    d3kLogs?: string
+  } = {
+    id: runId || `report-${Date.now()}`,
+    projectName,
+    timestamp,
+    sandboxDevUrl,
+    sandboxMcpUrl: sandboxMcpUrl || undefined,
+    clsScore,
+    clsGrade,
+    layoutShifts,
+    beforeScreenshotUrl: beforeScreenshotUrl || undefined,
+    clsScreenshots: d3kArtifacts?.clsScreenshots?.map((s) => ({
+      timestamp: s.timestamp,
+      blobUrl: s.blobUrl,
+      label: s.label
+    })),
+    agentAnalysis: fixProposal,
+    agentAnalysisModel: agentAnalysisModel || undefined,
+    d3kLogs: d3kArtifacts?.fullLogs || undefined
+  }
 
----
+  // Log what we're saving
+  console.log(`[Step 3] Report ID: ${report.id}`)
+  console.log(`[Step 3] CLS Score: ${report.clsScore ?? "not captured"}`)
+  console.log(`[Step 3] CLS Screenshots: ${report.clsScreenshots?.length ?? 0}`)
+  console.log(`[Step 3] Agent model: ${report.agentAnalysisModel ?? "not specified"}`)
+  if (report.d3kLogs) {
+    console.log(`[Step 3] d3k logs: ${report.d3kLogs.length} chars`)
+  }
 
-${screenshotSection}${clsScreenshotsSection}${gitDiffSection}${fullLogsSection}## Original Log Analysis
-
-\`\`\`
-${logAnalysis}
-\`\`\`
-
----
-
-${fixProposal}
-
----
-
-## Attribution
-
-This fix proposal was automatically generated by [dev3000](https://github.com/vercel-labs/dev3000),
-an AI-powered debugging tool that analyzes your application logs and suggests fixes.
-
-**Co-Authored-By**: Claude (dev3000) <noreply@anthropic.com>
-
-### About dev3000
-
-dev3000 monitors your development server, captures errors in real-time, and uses AI to:
-- Analyze error logs and stack traces
-- Identify root causes
-- Generate actionable fix proposals with git patches
-- Suggest specific code changes
-
-Learn more at https://github.com/vercel-labs/dev3000
-`
-
-  // Upload to Vercel Blob Storage
+  // Upload to Vercel Blob Storage as JSON
   const filenameTimestamp = timestamp.replace(/[:.]/g, "-")
-  const filename = `fix-${projectName}-${filenameTimestamp}.md`
+  const filename = `report-${projectName}-${filenameTimestamp}.json`
 
-  const blob = await put(filename, enhancedMarkdown, {
+  const blob = await put(filename, JSON.stringify(report, null, 2), {
     access: "public",
-    contentType: "text/markdown"
+    contentType: "application/json"
   })
 
-  console.log(`[Step 3] Fix proposal uploaded to: ${blob.url}`)
-
-  // Upload git diff as a separate blob file for easy access
-  let gitDiffBlobUrl: string | null = null
-  if (gitDiff) {
-    const diffFilename = `diff-${projectName}-${filenameTimestamp}.patch`
-    const diffBlob = await put(diffFilename, gitDiff, {
-      access: "public",
-      contentType: "text/x-patch"
-    })
-    gitDiffBlobUrl = diffBlob.url
-    console.log(`[Step 3] Git diff uploaded separately to: ${gitDiffBlobUrl}`)
-  }
+  console.log(`[Step 3] Report JSON uploaded to: ${blob.url}`)
 
   return {
     success: true,
@@ -1394,7 +1297,6 @@ Learn more at https://github.com/vercel-labs/dev3000
     fixProposal,
     blobUrl: blob.url,
     beforeScreenshotUrl: beforeScreenshotUrl || null,
-    gitDiffBlobUrl,
     message: "Fix analysis completed and uploaded to blob storage"
   }
 }

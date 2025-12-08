@@ -47,3 +47,46 @@ export interface LogListResponse {
 export interface LogListError {
   error: string
 }
+
+/**
+ * Workflow report data stored as JSON in blob storage
+ * This is the full report data, separate from WorkflowRun metadata
+ */
+export interface WorkflowReport {
+  // Core identifiers
+  id: string
+  projectName: string
+  timestamp: string
+
+  // Sandbox URLs
+  sandboxDevUrl: string
+  sandboxMcpUrl?: string
+
+  // CLS data
+  clsScore?: number
+  clsGrade?: "good" | "needs-improvement" | "poor"
+  layoutShifts?: Array<{
+    score: number
+    timestamp: number
+    elements: string[]
+  }>
+
+  // Screenshots
+  beforeScreenshotUrl?: string
+  clsScreenshots?: Array<{
+    timestamp: number
+    blobUrl: string
+    label?: string
+  }>
+
+  // AI agent analysis
+  agentAnalysis: string
+  agentAnalysisModel?: string // e.g. "anthropic/claude-sonnet-4-20250514"
+
+  // d3k logs
+  d3kLogs?: string
+
+  // PR info (future)
+  prUrl?: string
+  prDiff?: string
+}

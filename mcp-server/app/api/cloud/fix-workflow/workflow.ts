@@ -126,8 +126,9 @@ export async function cloudFixWorkflow(params: {
     await updateProgress(2, "AI analysis complete - system appears healthy")
   }
 
-  // Step 3: Upload to blob storage with full context, screenshot, git diff, and d3k artifacts
+  // Step 3: Upload to blob storage as JSON with full context
   await updateProgress(3, "Compiling full report with screenshots...")
+  const agentAnalysisModel = "anthropic/claude-sonnet-4-20250514" // Model used in analyzeLogsWithAgent
   const blobResult = await uploadToBlob(
     fixProposal,
     projectName,
@@ -135,7 +136,10 @@ export async function cloudFixWorkflow(params: {
     sandboxInfo?.devUrl || devUrl,
     beforeScreenshotUrl,
     sandboxInfo?.gitDiff,
-    sandboxInfo?.d3kArtifacts
+    sandboxInfo?.d3kArtifacts,
+    runId,
+    sandboxInfo?.mcpUrl,
+    agentAnalysisModel
   )
   await updateProgress(3, "Report uploaded to Vercel Blob")
 
@@ -206,11 +210,25 @@ async function uploadToBlob(
     screencastSessionId: string | null
     fullLogs: string | null
     metadata: Record<string, unknown> | null
-  }
+  },
+  runId?: string,
+  sandboxMcpUrl?: string,
+  agentAnalysisModel?: string
 ) {
   "use step"
   const { uploadToBlob } = await import("./steps")
-  return uploadToBlob(fixProposal, projectName, logAnalysis, devUrl, beforeScreenshotUrl, gitDiff, d3kArtifacts)
+  return uploadToBlob(
+    fixProposal,
+    projectName,
+    logAnalysis,
+    devUrl,
+    beforeScreenshotUrl,
+    gitDiff,
+    d3kArtifacts,
+    runId,
+    sandboxMcpUrl,
+    agentAnalysisModel
+  )
 }
 
 async function createGitHubPR(
