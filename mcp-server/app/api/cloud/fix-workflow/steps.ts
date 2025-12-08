@@ -1069,6 +1069,8 @@ Please investigate and fix any CLS issues.`
   })
 
   console.log(`[Agent] Completed in ${steps.length} step(s)`)
+  console.log(`[Agent] Final text length: ${text.length} chars`)
+  console.log(`[Agent] Text preview: ${text.substring(0, 200)}...`)
 
   // Log tool usage summary
   const toolCalls = steps.flatMap((s) => s.toolCalls || [])
@@ -1081,6 +1083,11 @@ Please investigate and fix any CLS issues.`
       {} as Record<string, number>
     )
     console.log(`[Agent] Tool usage: ${JSON.stringify(toolSummary)}`)
+  }
+
+  // If text is very short, log warning
+  if (text.length < 100) {
+    console.log(`[Agent] WARNING: Agent returned very short text, may indicate tool-only response`)
   }
 
   return text
