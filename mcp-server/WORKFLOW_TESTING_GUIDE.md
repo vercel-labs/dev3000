@@ -69,7 +69,27 @@ pnpm d3k
 
 **IMPORTANT**: Always use d3k MCP tools for testing workflows. Do NOT use curl or manual API calls - use d3k's browser automation instead.
 
-### Step 1: Navigate to Workflow Form and Trigger
+### Step 1: Start Monitoring Production Logs FIRST (BEFORE Triggering)
+
+**⚠️ CRITICAL ORDER OF OPERATIONS:**
+1. **FIRST** start monitoring production logs in the background
+2. **THEN** navigate to the workflow form and click Start Workflow
+
+The `vercel logs` command only streams logs that occur AFTER you start monitoring. If you start monitoring after clicking "Start Workflow", you will miss the initial API calls and workflow startup logs!
+
+```bash
+# STEP 1A: Get the latest deployment URL
+DEPLOYMENT=$(vercel ls --scope team_nLlpyC6REAqxydlFKbrMDlud | grep dev3000 | head -1 | awk '{print $2}')
+echo "Will monitor: $DEPLOYMENT"
+
+# STEP 1B: Start monitoring in background (do this BEFORE triggering!)
+vercel logs $DEPLOYMENT --scope team_nLlpyC6REAqxydlFKbrMDlud 2>&1 &
+echo "Monitoring started - NOW you can trigger the workflow"
+```
+
+### Step 2: Navigate to Workflow Form and Trigger
+
+**Only do this AFTER monitoring is running!**
 
 Use d3k browser automation (via `execute_browser_action` MCP tool):
 
@@ -92,27 +112,19 @@ execute_browser_action({
 })
 ```
 
-### Step 2: Start Monitoring Production Logs BEFORE Triggering Workflow
+### Step 3: Watch for Workflow Progress
 
-**CRITICAL**: The `vercel logs` command only streams logs that occur AFTER you start monitoring. You must start monitoring BEFORE clicking "Start Workflow" or you will miss the logs!
+Once you've triggered the workflow, your background log monitor will show progress. Look for these key milestones:
+
+1. `[Workflow] Starting cloud fix workflow...` - Workflow started
+2. `Cloning into '/vercel/sandbox'...` - Repo being cloned
+3. `✅ Project dependencies installed` - npm/pnpm install complete
+4. `✅ d3k started in detached mode` - d3k running in sandbox
+5. `[Agent] Starting AI agent with d3k sandbox tools...` - AI agent running
+6. `[Agent] Completed in X step(s)` - Agent finished
 
 ❌ **DO NOT TRUST THE UI**: UI showing "Writing code..." does NOT mean the workflow is running
 ✅ **ONLY TRUST PRODUCTION LOGS**: Use `vercel logs` CLI to verify actual execution
-
-**⚠️ IMPORTANT: Start monitoring in a separate terminal BEFORE triggering the workflow:**
-
-```bash
-# Terminal 1: Start monitoring FIRST (before clicking Start Workflow)
-# NOTE: Monitor the mcp-server production project, NOT the test project!
-DEPLOYMENT=$(vercel ls --scope team_nLlpyC6REAqxydlFKbrMDlud | grep dev3000 | head -1 | awk '{print $2}')
-echo "Monitoring: $DEPLOYMENT"
-vercel logs $DEPLOYMENT --scope team_nLlpyC6REAqxydlFKbrMDlud
-
-# Terminal 2: THEN trigger the workflow via browser automation
-# (or use the Vercel Dashboard to view logs in real-time)
-```
-
-**Why this matters:** The `vercel logs` CLI streams logs in real-time but does NOT show historical logs. If you start monitoring after the workflow begins, you'll see "waiting for new logs..." and miss the actual execution logs.
 
 ## Monitor Logs Correctly
 
@@ -189,16 +201,47 @@ vercel logs $DEPLOYMENT --scope team_nLlpyC6REAqxydlFKbrMDlud 2>&1 | tail -100
 - `[Workflow] Starting cloud fix workflow...` - Workflow initiated in production
 - `[Step 0] Creating d3k sandbox...` - Sandbox creation started
 - `[Step 0] Sandbox created successfully` - Sandbox is ready
-- `[Step 0] Executing MCP command inside sandbox...` - Running fix_my_app
 - `[Step 0] Dev URL: https://sb-XXXXX.vercel.run` - Sandbox URL available
-- `[Step 1] Analyzing logs with AI agent...` - AI analysis phase
-- `[Step 2] Uploading to blob storage...` - Report generation
-- `[Step 3] Creating GitHub PR...` - PR creation (if enabled)
+- `[Step 0] Executing MCP command inside sandbox...` - Running fix_my_app for CLS data
+- `[Step 0] Saving initial report to blob storage...` - First report save (before agent)
+- `[Step 0] Running AI agent with sandbox tools...` - **Agent runs in Step 0 with tool access**
+- `[Agent] Starting AI agent with d3k sandbox tools...` - Agent initialization
+- `[Agent] Completed in X step(s)` - Agent finished using tools
+- `[Agent] Tool usage: {"readFile":3,"grepSearch":2,...}` - Tools the agent used
+- `[Step 0] Agent analysis completed (N chars)` - Agent produced analysis
+- `[Step 0] Report updated with agent analysis` - Final report saved
+- `[Step 1] Using CLS data from sandbox` - Step 1 uses cached data (fast)
+- `[Step 2] AI agent completed analysis with code access` - Uses Step 0 result
+- `[Step 3] Compiling full report...` - Report finalization
+- `[Step 4] Creating GitHub PR...` - PR creation (if enabled)
 
 **If production logs show NOTHING**:
 - ❌ Workflow was NOT created despite UI showing progress
 - Most likely cause: Expired OIDC token
 - Solution: Run `vercel env pull .env.local --scope team_nLlpyC6REAqxydlFKbrMDlud` and restart dev server
+
+### AI Agent Tools (Step 0)
+
+The AI agent in Step 0 has access to these d3k-specific tools for analyzing code in the sandbox:
+
+| Tool | Description | Example Use |
+|------|-------------|-------------|
+| `readFile` | Read file contents from sandbox | Read component source code |
+| `globSearch` | Find files by pattern | Find all `.tsx` files in `app/` |
+| `grepSearch` | Search file contents | Find imports, function definitions |
+| `listDirectory` | List directory contents | Explore project structure |
+| `findComponentSource` | Map DOM element to React source | Trace CLS-causing elements to code |
+| `writeFile` | Write/edit files in sandbox | Apply fixes directly |
+| `getGitDiff` | Get git diff of changes | See what the agent modified |
+
+**In production logs, you'll see:**
+```
+[Agent] Starting AI agent with d3k sandbox tools...
+[Agent] Tool call: grepSearch({pattern: "className.*fixed", glob: "**/*.tsx"})
+[Agent] Tool call: readFile({path: "app/components/Header.tsx"})
+[Agent] Completed in 5 step(s)
+[Agent] Tool usage: {"readFile":3,"grepSearch":2,"findComponentSource":1}
+```
 
 ### Checking Final Workflow Results
 
@@ -221,11 +264,17 @@ Typical workflow execution:
 | Step | Duration | What's Happening |
 |------|----------|------------------|
 | Step 0: Sandbox Creation | 1-2 min | Clone repo, install deps, start d3k |
-| Step 0: MCP Execution | 5-10 min | Run fix_my_app inside sandbox |
-| Step 1: AI Analysis | 2-5 min | Analyze logs, generate fixes |
-| Step 2: Blob Upload | 10-30 sec | Save report to Vercel Blob |
-| Step 3: PR Creation | 10-30 sec | Create GitHub PR (optional) |
-| **Total** | **8-18 min** | Full workflow execution |
+| Step 0: CLS/Metrics Capture | 30-60 sec | Run fix_my_app for performance data |
+| Step 0: Initial Report Save | 5-10 sec | Save first report to blob (before agent) |
+| Step 0: AI Agent Analysis | 2-5 min | Agent uses tools (readFile, grep, etc.) in sandbox |
+| Step 0: Report Update | 5-10 sec | Save agent analysis to blob |
+| Step 1: Log Processing | 5-10 sec | Uses cached CLS data from Step 0 (fast) |
+| Step 2: Analysis Pass-through | 5 sec | Uses agent result from Step 0 |
+| Step 3: Final Report | 10-30 sec | Compile and save final report to Vercel Blob |
+| Step 4: PR Creation | 10-30 sec | Create GitHub PR (optional, only if code changes) |
+| **Total** | **4-10 min** | Full workflow execution |
+
+**Key Architecture Note**: The AI agent now runs **inside Step 0** while the sandbox is active, giving it direct access to read/write files via tools. This is faster than the previous approach where the agent ran separately without code access.
 
 **UI Timeout**: Frontend polls for 5 minutes, may show "timeout" error even if backend succeeds.
 

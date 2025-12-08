@@ -232,7 +232,8 @@ export async function saveReportToBlob(
   const blob = await put(filename, JSON.stringify(report, null, 2), {
     access: "public",
     contentType: "application/json",
-    addRandomSuffix: false // Important: ensures we can update the same file
+    addRandomSuffix: false, // Important: ensures we can update the same file
+    allowOverwrite: true // Required: allows updating the same file on subsequent saves
   })
 
   console.log(`[Report] Saved report ${report.id} to: ${blob.url}`)
