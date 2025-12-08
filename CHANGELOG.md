@@ -4,6 +4,16 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.120] - 2025-12-08
+
+**Feature Release**
+
+- Fix orphaned Playwright/Chrome processes on startup
+- Add debug logging for agent text output
+- Fix blob overwrite error and update testing guide
+- Add agentic AI with d3k sandbox tools for CLS fixing
+- Save workflow reports incrementally to blob storage
+
 ## [0.0.119] - 2025-12-06
 
 **Feature Release**

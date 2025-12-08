@@ -10,6 +10,19 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.120",
+    date: "2025-12-08",
+    type: "minor",
+    highlights: [
+      "Fix orphaned Playwright/Chrome processes on startup",
+      "Add debug logging for agent text output",
+      "Fix blob overwrite error and update testing guide",
+      "Add agentic AI with d3k sandbox tools for CLS fixing",
+      "Save workflow reports incrementally to blob storage"
+    ]
+  },
+
+  {
     version: "0.0.119",
     date: "2025-12-06",
     type: "minor",
