@@ -88,6 +88,7 @@ export async function cloudFixWorkflow(params: {
     }
     reportId?: string
     reportBlobUrl?: string
+    agentAnalysis?: string | null
   } | null = null
   if (repoUrl) {
     await updateProgress(0, "Creating development sandbox...")
@@ -100,33 +101,54 @@ export async function cloudFixWorkflow(params: {
       runId // Pass runId so Step 0 can save the initial report with consistent ID
     )
     if (sandboxInfo?.devUrl) {
-      await updateProgress(0, "Sandbox ready, starting dev server...", sandboxInfo.devUrl)
+      await updateProgress(0, "Sandbox ready, capturing CLS metrics...", sandboxInfo.devUrl)
     }
     if (sandboxInfo?.reportBlobUrl) {
-      console.log(`[Workflow] Initial report saved: ${sandboxInfo.reportBlobUrl}`)
+      console.log(`[Workflow] Report saved: ${sandboxInfo.reportBlobUrl}`)
+    }
+    if (sandboxInfo?.agentAnalysis) {
+      console.log(`[Workflow] Agent analysis completed in Step 0`)
     }
   }
 
-  // Step 1: Fetch real logs (using sandbox MCP if available, otherwise devUrl directly)
-  // If we got CLS data from Step 0, pass it to Step 1 to avoid re-fetching
-  // Use bypass token from sandbox if available, otherwise use provided one
-  // Also pass the beforeScreenshotUrl from Step 0 if available
-  await updateProgress(1, "Capturing performance metrics (CLS, LCP, errors)...")
-  const effectiveBypassToken = sandboxInfo?.bypassToken || bypassToken
-  const step1Result = await fetchRealLogs(
-    sandboxInfo?.mcpUrl || devUrl,
-    effectiveBypassToken,
-    sandboxInfo?.devUrl,
-    sandboxInfo?.clsData,
-    sandboxInfo?.mcpError,
-    sandboxInfo?.beforeScreenshotUrl
-  )
-  const { logAnalysis, beforeScreenshotUrl } = step1Result
-  await updateProgress(1, `Captured ${logAnalysis.length > 5000 ? "detailed" : "initial"} diagnostics`)
+  // Step 1: Fetch real logs (only if we don't have sandbox data)
+  // Skip if we already got CLS data and agent analysis from Step 0
+  let logAnalysis = ""
+  let beforeScreenshotUrl: string | null = sandboxInfo?.beforeScreenshotUrl || null
 
-  // Step 2: Invoke AI agent to analyze logs and create fix
-  await updateProgress(2, "AI agent analyzing logs and generating fixes...")
-  const fixProposal = await analyzeLogsWithAgent(logAnalysis, sandboxInfo?.devUrl || devUrl)
+  if (!sandboxInfo?.clsData) {
+    await updateProgress(1, "Capturing performance metrics (CLS, LCP, errors)...")
+    const effectiveBypassToken = sandboxInfo?.bypassToken || bypassToken
+    const step1Result = await fetchRealLogs(
+      sandboxInfo?.mcpUrl || devUrl,
+      effectiveBypassToken,
+      sandboxInfo?.devUrl,
+      sandboxInfo?.clsData,
+      sandboxInfo?.mcpError,
+      sandboxInfo?.beforeScreenshotUrl
+    )
+    logAnalysis = step1Result.logAnalysis
+    beforeScreenshotUrl = step1Result.beforeScreenshotUrl
+    await updateProgress(1, `Captured ${logAnalysis.length > 5000 ? "detailed" : "initial"} diagnostics`)
+  } else {
+    logAnalysis = JSON.stringify(sandboxInfo.clsData, null, 2)
+    await updateProgress(1, "Using CLS data from sandbox")
+  }
+
+  // Step 2: AI agent analysis
+  // If we already ran the agent in Step 0 (with sandbox tools), use that result
+  // Otherwise, run the basic agent without sandbox access
+  let fixProposal: string
+
+  if (sandboxInfo?.agentAnalysis) {
+    // Agent already ran with sandbox tools in Step 0
+    fixProposal = sandboxInfo.agentAnalysis
+    await updateProgress(2, "AI agent completed analysis with code access")
+  } else {
+    // Fallback: run agent without sandbox (limited mode)
+    await updateProgress(2, "AI agent analyzing logs (limited mode)...")
+    fixProposal = await analyzeLogsWithAgent(logAnalysis, sandboxInfo?.devUrl || devUrl)
+  }
 
   // Provide feedback on what was found
   const hasError = fixProposal.toLowerCase().includes("error") || fixProposal.toLowerCase().includes("issue")

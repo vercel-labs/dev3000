@@ -5,9 +5,219 @@
 
 import { put } from "@vercel/blob"
 import type { Sandbox } from "@vercel/sandbox"
-import { createGateway, generateText } from "ai"
+import { createGateway, generateText, stepCountIs, tool } from "ai"
+import { z } from "zod"
 import { createD3kSandbox as createD3kSandboxUtil } from "@/lib/cloud/d3k-sandbox"
 import type { WorkflowReport } from "@/types"
+
+/**
+ * D3K Sandbox Tools
+ * These tools allow the AI agent to interact with the sandbox environment
+ * where d3k is running, giving it access to code, search, and MCP capabilities
+ */
+
+/**
+ * Create tools that execute against the sandbox
+ * These are d3k-specific - they know about the sandbox structure and d3k MCP
+ */
+function createD3kSandboxTools(sandbox: Sandbox, mcpUrl: string) {
+  const SANDBOX_CWD = "/vercel/sandbox"
+
+  return {
+    /**
+     * Read a file from the sandbox
+     */
+    readFile: tool({
+      description:
+        "Read a file from the codebase. Use this to understand code before proposing fixes. Path should be relative to project root (e.g., 'src/components/Header.tsx').",
+      inputSchema: z.object({
+        path: z.string().describe("File path relative to project root"),
+        maxLines: z.number().optional().describe("Maximum lines to read (default: 500)")
+      }),
+      execute: async ({ path, maxLines = 500 }: { path: string; maxLines?: number }) => {
+        const fullPath = `${SANDBOX_CWD}/${path}`
+        const result = await runSandboxCommand(sandbox, "sh", [
+          "-c",
+          `head -n ${maxLines} "${fullPath}" 2>&1 || echo "ERROR: File not found or unreadable"`
+        ])
+        if (result.stdout.startsWith("ERROR:")) {
+          return `Failed to read ${path}: ${result.stdout}`
+        }
+        return `Contents of ${path}:\n\`\`\`\n${result.stdout}\n\`\`\``
+      }
+    }),
+
+    /**
+     * Search for files by glob pattern
+     */
+    globSearch: tool({
+      description:
+        "Find files matching a glob pattern. Use this to discover relevant files. Examples: '**/*.tsx', 'src/components/*.ts', '**/Header*'",
+      inputSchema: z.object({
+        pattern: z.string().describe("Glob pattern to match files"),
+        maxResults: z.number().optional().describe("Maximum results (default: 20)")
+      }),
+      execute: async ({ pattern, maxResults = 20 }: { pattern: string; maxResults?: number }) => {
+        const result = await runSandboxCommand(sandbox, "sh", [
+          "-c",
+          `cd ${SANDBOX_CWD} && find . -type f -name "${pattern}" 2>/dev/null | head -n ${maxResults} | sed 's|^\\./||'`
+        ])
+        if (!result.stdout.trim()) {
+          return `No files found matching pattern: ${pattern}`
+        }
+        const files = result.stdout.trim().split("\n")
+        return `Found ${files.length} file(s) matching "${pattern}":\n${files.map((f) => `- ${f}`).join("\n")}`
+      }
+    }),
+
+    /**
+     * Search file contents with grep
+     */
+    grepSearch: tool({
+      description:
+        "Search for text/patterns in files. Use this to find where specific code, classes, or functions are defined or used.",
+      inputSchema: z.object({
+        pattern: z.string().describe("Search pattern (regex supported)"),
+        fileGlob: z.string().optional().describe("File pattern to search in (e.g., '*.tsx')"),
+        maxResults: z.number().optional().describe("Maximum results (default: 20)")
+      }),
+      execute: async ({
+        pattern,
+        fileGlob,
+        maxResults = 20
+      }: {
+        pattern: string
+        fileGlob?: string
+        maxResults?: number
+      }) => {
+        const includeArg = fileGlob ? `--include="${fileGlob}"` : ""
+        const result = await runSandboxCommand(sandbox, "sh", [
+          "-c",
+          `cd ${SANDBOX_CWD} && grep -rn ${includeArg} "${pattern}" . 2>/dev/null | head -n ${maxResults}`
+        ])
+        if (!result.stdout.trim()) {
+          return `No matches found for pattern: ${pattern}`
+        }
+        return `Search results for "${pattern}":\n${result.stdout}`
+      }
+    }),
+
+    /**
+     * List directory contents
+     */
+    listDirectory: tool({
+      description: "List files and directories at a path. Use this to explore the project structure.",
+      inputSchema: z.object({
+        path: z.string().optional().describe("Directory path relative to project root (default: root)")
+      }),
+      execute: async ({ path = "" }: { path?: string }) => {
+        const fullPath = path ? `${SANDBOX_CWD}/${path}` : SANDBOX_CWD
+        const result = await runSandboxCommand(sandbox, "sh", ["-c", `ls -la "${fullPath}" 2>&1`])
+        return `Contents of ${path || "/"}:\n${result.stdout}`
+      }
+    }),
+
+    /**
+     * Call d3k MCP tool - find_component_source
+     * This is d3k-specific: maps DOM elements to React component source
+     */
+    findComponentSource: tool({
+      description:
+        "Find the source file for a React component by its DOM selector. Use this when you know which element caused a layout shift and need to find the source file to fix it. d3k-specific tool.",
+      inputSchema: z.object({
+        selector: z.string().describe("CSS selector for the DOM element (e.g., 'nav', '.header', '#main')")
+      }),
+      execute: async ({ selector }: { selector: string }) => {
+        try {
+          const mcpResponse = await fetch(`${mcpUrl}/mcp`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              jsonrpc: "2.0",
+              id: 1,
+              method: "tools/call",
+              params: {
+                name: "find_component_source",
+                arguments: { selector }
+              }
+            })
+          })
+
+          if (!mcpResponse.ok) {
+            return `Failed to call find_component_source: HTTP ${mcpResponse.status}`
+          }
+
+          const text = await mcpResponse.text()
+          // Parse SSE response
+          const lines = text.split("\n")
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              try {
+                const json = JSON.parse(line.substring(6))
+                if (json.result?.content) {
+                  for (const content of json.result.content) {
+                    if (content.type === "text") {
+                      return content.text
+                    }
+                  }
+                }
+              } catch {
+                // Continue to next line on parse failure
+              }
+            }
+          }
+          return `No result from find_component_source for selector: ${selector}`
+        } catch (error) {
+          return `Error calling find_component_source: ${error instanceof Error ? error.message : String(error)}`
+        }
+      }
+    }),
+
+    /**
+     * Write/edit a file in the sandbox
+     */
+    writeFile: tool({
+      description:
+        "Write content to a file. Use this to apply fixes. For small edits, prefer editFile. For creating new files or complete rewrites, use this.",
+      inputSchema: z.object({
+        path: z.string().describe("File path relative to project root"),
+        content: z.string().describe("Complete file content to write")
+      }),
+      execute: async ({ path, content }: { path: string; content: string }) => {
+        const fullPath = `${SANDBOX_CWD}/${path}`
+        // Escape content for shell
+        const escapedContent = content.replace(/'/g, "'\\''")
+        const result = await runSandboxCommand(sandbox, "sh", [
+          "-c",
+          `cat > "${fullPath}" << 'FILEEOF'\n${escapedContent}\nFILEEOF`
+        ])
+        if (result.exitCode !== 0) {
+          return `Failed to write ${path}: ${result.stderr}`
+        }
+        return `Successfully wrote ${content.length} characters to ${path}`
+      }
+    }),
+
+    /**
+     * Get git diff of changes made so far
+     */
+    getGitDiff: tool({
+      description:
+        "Get the git diff of all changes made in the sandbox. Use this to review your fixes before finalizing.",
+      inputSchema: z.object({}),
+      execute: async () => {
+        const result = await runSandboxCommand(sandbox, "sh", [
+          "-c",
+          `cd ${SANDBOX_CWD} && git diff --no-color 2>/dev/null || echo "No changes or not a git repo"`
+        ])
+        if (!result.stdout.trim() || result.stdout.includes("No changes")) {
+          return "No changes have been made yet."
+        }
+        return `Current changes:\n\`\`\`diff\n${result.stdout}\n\`\`\``
+      }
+    })
+  }
+}
 
 /**
  * Save or update a workflow report to blob storage
@@ -687,7 +897,7 @@ LOADINGHTML
       label: s.label
     })),
     d3kLogs: d3kArtifacts?.fullLogs || undefined,
-    // Placeholder for agent analysis - will be filled in Step 3
+    // Placeholder for agent analysis - will be filled below
     agentAnalysis: "Analysis in progress..."
   }
 
@@ -702,6 +912,42 @@ LOADINGHTML
   const reportBlobUrl = await saveReportToBlob(initialReport)
   console.log(`[Step 0] Initial report saved: ${reportBlobUrl}`)
 
+  // Run AI agent analysis while we still have sandbox access
+  // This allows the agent to read/write files and use d3k MCP tools
+  console.log(`[Step 0] Running AI agent with sandbox tools...`)
+  let agentAnalysis: string | null = null
+  try {
+    const logAnalysis = clsData ? JSON.stringify(clsData, null, 2) : "No CLS data captured"
+    agentAnalysis = await runAgentWithSandboxTools(
+      sandboxResult.sandbox,
+      sandboxResult.mcpUrl,
+      sandboxResult.devUrl,
+      logAnalysis
+    )
+    console.log(`[Step 0] Agent analysis completed (${agentAnalysis.length} chars)`)
+
+    // Update report with agent analysis
+    initialReport.agentAnalysis = agentAnalysis
+    initialReport.agentAnalysisModel = "anthropic/claude-sonnet-4-20250514"
+    await saveReportToBlob(initialReport)
+    console.log(`[Step 0] Report updated with agent analysis`)
+
+    // Capture git diff after agent made changes
+    const diffResult = await runSandboxCommand(sandboxResult.sandbox, "sh", [
+      "-c",
+      "cd /vercel/sandbox && git diff --no-color 2>/dev/null || echo 'No git diff available'"
+    ])
+    if (diffResult.exitCode === 0 && diffResult.stdout.trim() && diffResult.stdout.trim() !== "No git diff available") {
+      gitDiff = diffResult.stdout.trim()
+      console.log(`[Step 0] Agent made changes - git diff captured (${gitDiff.length} chars)`)
+    }
+  } catch (agentError) {
+    console.log(
+      `[Step 0] Agent analysis failed: ${agentError instanceof Error ? agentError.message : String(agentError)}`
+    )
+    agentAnalysis = `Agent analysis failed: ${agentError instanceof Error ? agentError.message : String(agentError)}`
+  }
+
   // Note: We cannot return the cleanup function or sandbox object as they're not serializable
   // Sandbox cleanup will happen automatically when the sandbox times out
   return {
@@ -715,8 +961,128 @@ LOADINGHTML
     gitDiff,
     d3kArtifacts,
     reportId,
-    reportBlobUrl
+    reportBlobUrl,
+    agentAnalysis
   }
+}
+
+/**
+ * Run AI agent with sandbox tools
+ * This is called from within Step 0 while we have sandbox access
+ */
+async function runAgentWithSandboxTools(
+  sandbox: Sandbox,
+  mcpUrl: string,
+  devUrl: string,
+  logAnalysis: string
+): Promise<string> {
+  console.log("[Agent] Starting AI agent with d3k sandbox tools...")
+
+  // Create AI Gateway instance
+  const gateway = createGateway({
+    apiKey: process.env.AI_GATEWAY_API_KEY,
+    baseURL: "https://ai-gateway.vercel.sh/v1/ai"
+  })
+
+  const model = gateway("anthropic/claude-sonnet-4-20250514")
+  const tools = createD3kSandboxTools(sandbox, mcpUrl)
+
+  const systemPrompt = `You are a CLS (Cumulative Layout Shift) specialist engineer working with d3k, a development debugging tool. Your ONLY focus is fixing layout shift issues.
+
+## TOOLS AVAILABLE
+You have access to tools to explore and modify the codebase:
+- **readFile**: Read source files to understand the code
+- **globSearch**: Find files by pattern (e.g., '*.tsx', '**/Header*')
+- **grepSearch**: Search for code patterns
+- **listDirectory**: Explore project structure
+- **findComponentSource**: d3k-specific tool to map DOM elements to React source files
+- **writeFile**: Write fixes to files
+- **getGitDiff**: Review changes you've made
+
+## WORKFLOW
+1. First, understand the CLS issue from the diagnostic data
+2. Use findComponentSource or grepSearch to locate the source files
+3. Read the relevant files to understand the code
+4. Write fixes using writeFile
+5. Use getGitDiff to verify your changes
+6. Provide a summary of what you fixed
+
+## CLS KNOWLEDGE
+
+CLS (Cumulative Layout Shift) measures visual stability. A good CLS score is 0.1 or less.
+
+### What causes CLS:
+1. **Images without dimensions** - <img> tags missing width/height cause layout shifts when images load
+2. **Dynamic content insertion** - Content that appears after initial render
+3. **Web fonts causing FOIT/FOUT** - Text that shifts when custom fonts load
+4. **Async loaded components** - React components rendering after data fetches
+5. **Animations that trigger layout** - CSS animations affecting dimensions
+
+### How to fix CLS:
+1. **Add width/height to images**: Always specify explicit dimensions or use aspect-ratio
+2. **Reserve space**: Use min-height, skeleton loaders, or CSS aspect-ratio
+3. **Use font-display**: Prevent font-related shifts with 'optional' or 'swap'
+4. **Suspense with sized fallbacks**: Wrap async components with properly sized placeholders
+5. **Use transform animations**: Prefer transform/opacity over dimension changes
+
+## OUTPUT FORMAT
+
+After investigating and fixing, provide:
+
+## Summary
+[Brief description of what was found and fixed]
+
+## CLS Score
+[The measured score from diagnostics]
+
+## Root Cause
+[What element(s) caused the shift and why]
+
+## Fix Applied
+[What changes were made]
+
+## Git Diff
+\`\`\`diff
+[Actual diff from getGitDiff]
+\`\`\`
+
+## RULES
+1. ONLY fix CLS/layout shift issues
+2. If CLS score is < 0.05, report "✅ NO CLS ISSUES - Score: [score]"
+3. Always read files before modifying them
+4. Make minimal, targeted fixes`
+
+  const userPrompt = `The dev server is running at: ${devUrl}
+
+Here's the diagnostic data captured from the running application:
+${logAnalysis}
+
+Please investigate and fix any CLS issues.`
+
+  const { text, steps } = await generateText({
+    model,
+    system: systemPrompt,
+    prompt: userPrompt,
+    tools,
+    stopWhen: stepCountIs(20) // Allow up to 20 tool call steps
+  })
+
+  console.log(`[Agent] Completed in ${steps.length} step(s)`)
+
+  // Log tool usage summary
+  const toolCalls = steps.flatMap((s) => s.toolCalls || [])
+  if (toolCalls.length > 0) {
+    const toolSummary = toolCalls.reduce(
+      (acc, tc) => {
+        acc[tc.toolName] = (acc[tc.toolName] || 0) + 1
+        return acc
+      },
+      {} as Record<string, number>
+    )
+    console.log(`[Agent] Tool usage: ${JSON.stringify(toolSummary)}`)
+  }
+
+  return text
 }
 
 /**
@@ -1173,12 +1539,21 @@ Format your response as a clear, structured report that helps identify what's br
 
 /**
  * Step 2: Invoke AI agent to analyze logs and propose fixes
- * Uses AI SDK with AI Gateway for multi-model support
+ * Uses AI SDK with AI Gateway + d3k sandbox tools for code access
+ *
+ * When sandbox is provided, the agent can:
+ * - Read files to understand the codebase
+ * - Search for relevant code with glob/grep
+ * - Find component sources via d3k MCP
+ * - Write fixes directly to the sandbox
+ * - Get git diff of changes
  */
-export async function analyzeLogsWithAgent(logAnalysis: string, devUrl: string) {
+export async function analyzeLogsWithAgent(logAnalysis: string, devUrl: string, sandbox?: Sandbox, mcpUrl?: string) {
   "use step"
 
   console.log("[Step 2] Invoking AI agent to analyze logs...")
+  console.log(`[Step 2] Sandbox available: ${!!sandbox}`)
+  console.log(`[Step 2] MCP URL: ${mcpUrl || "not provided"}`)
 
   // Create AI Gateway instance
   const gateway = createGateway({
@@ -1189,84 +1564,130 @@ export async function analyzeLogsWithAgent(logAnalysis: string, devUrl: string) 
   // Use Claude Sonnet 4 via AI Gateway
   const model = gateway("anthropic/claude-sonnet-4-20250514")
 
-  const prompt = `You are a CLS (Cumulative Layout Shift) specialist engineer. Your ONLY focus is fixing layout shift issues.
+  // Create d3k sandbox tools if sandbox is available
+  const tools = sandbox && mcpUrl ? createD3kSandboxTools(sandbox, mcpUrl) : undefined
 
-The dev server is running at: ${devUrl}
+  const systemPrompt = `You are a CLS (Cumulative Layout Shift) specialist engineer working with d3k, a development debugging tool. Your ONLY focus is fixing layout shift issues.
+
+${
+  tools
+    ? `## TOOLS AVAILABLE
+You have access to tools to explore and modify the codebase:
+- **readFile**: Read source files to understand the code
+- **globSearch**: Find files by pattern (e.g., '*.tsx', '**/Header*')
+- **grepSearch**: Search for code patterns
+- **listDirectory**: Explore project structure
+- **findComponentSource**: d3k-specific tool to map DOM elements to React source files
+- **writeFile**: Write fixes to files
+- **getGitDiff**: Review changes you've made
+
+## WORKFLOW
+1. First, understand the CLS issue from the diagnostic data
+2. Use findComponentSource or grepSearch to locate the source files
+3. Read the relevant files to understand the code
+4. Write fixes using writeFile
+5. Use getGitDiff to verify your changes
+6. Provide a summary of what you fixed`
+    : `## LIMITED MODE
+No sandbox access - you can only analyze the diagnostic data and propose fixes.
+You cannot read or modify the actual source code.`
+}
+
+## CLS KNOWLEDGE
+
+CLS (Cumulative Layout Shift) measures visual stability. A good CLS score is 0.1 or less.
+
+### What causes CLS:
+1. **Images without dimensions** - <img> tags missing width/height cause layout shifts when images load
+2. **Dynamic content insertion** - Content that appears after initial render
+3. **Web fonts causing FOIT/FOUT** - Text that shifts when custom fonts load
+4. **Async loaded components** - React components rendering after data fetches
+5. **Animations that trigger layout** - CSS animations affecting dimensions
+
+### How to fix CLS:
+1. **Add width/height to images**: Always specify explicit dimensions or use aspect-ratio
+2. **Reserve space**: Use min-height, skeleton loaders, or CSS aspect-ratio
+3. **Use font-display**: Prevent font-related shifts with 'optional' or 'swap'
+4. **Suspense with sized fallbacks**: Wrap async components with properly sized placeholders
+5. **Use transform animations**: Prefer transform/opacity over dimension changes
+
+## OUTPUT FORMAT
+
+After investigating and fixing (if tools available), provide:
+
+## Summary
+[Brief description of what was found and fixed]
+
+## CLS Score
+[The measured score from diagnostics]
+
+## Root Cause
+[What element(s) caused the shift and why]
+
+## Fix Applied
+[What changes were made, or proposed changes if no sandbox access]
+
+## Git Diff
+\`\`\`diff
+[Actual diff from getGitDiff, or proposed diff if no sandbox]
+\`\`\`
+
+## RULES
+1. ONLY fix CLS/layout shift issues
+2. If CLS score is < 0.05, report "✅ NO CLS ISSUES - Score: [score]"
+3. Always read files before modifying them
+4. Make minimal, targeted fixes`
+
+  const userPrompt = `The dev server is running at: ${devUrl}
 
 Here's the diagnostic data captured from the running application:
 ${logAnalysis}
 
-## YOUR MISSION: Fix CLS Issues
+Please investigate and fix any CLS issues.`
 
-CLS (Cumulative Layout Shift) measures visual stability. A good CLS score is 0.1 or less. You must find and fix any layout shift issues.
+  if (tools) {
+    // Agentic mode with tools
+    console.log("[Step 2] Running in agentic mode with d3k sandbox tools...")
 
-### What causes CLS:
-1. **Images without dimensions** - <img> tags missing width/height attributes cause layout shifts when images load
-2. **Dynamic content insertion** - Content that appears after initial render (ads, banners, notifications)
-3. **Web fonts causing FOIT/FOUT** - Text that shifts when custom fonts load
-4. **Async loaded components** - React components that render after data fetches without placeholder space
-5. **Animations that trigger layout** - CSS animations affecting width/height/position
+    const { text, steps } = await generateText({
+      model,
+      system: systemPrompt,
+      prompt: userPrompt,
+      tools,
+      stopWhen: stepCountIs(20) // Allow up to 20 tool call steps
+    })
 
-### How to fix CLS:
-1. **Add width/height to images**: Always specify explicit dimensions or use aspect-ratio CSS
-2. **Reserve space for dynamic content**: Use min-height, skeleton loaders, or CSS aspect-ratio
-3. **Use font-display: optional or swap**: Prevent font-related layout shifts
-4. **Add Suspense with sized fallbacks**: Wrap async components with fallbacks that match final size
-5. **Use transform animations**: Prefer transform/opacity over width/height/top/left
+    console.log(`[Step 2] Agent completed in ${steps.length} step(s)`)
+    console.log(`[Step 2] AI agent response (first 500 chars): ${text.substring(0, 500)}...`)
 
-### Look for in the diagnostic data:
-- CLS score > 0.1 (needs fixing)
-- CLS score > 0.25 (critical - very bad user experience)
-- Layout shift entries showing which elements shifted
-- Images without explicit dimensions in the DOM
-- Dynamic content without reserved space
+    // Log tool usage summary
+    const toolCalls = steps.flatMap((s) => s.toolCalls || [])
+    if (toolCalls.length > 0) {
+      const toolSummary = toolCalls.reduce(
+        (acc, tc) => {
+          acc[tc.toolName] = (acc[tc.toolName] || 0) + 1
+          return acc
+        },
+        {} as Record<string, number>
+      )
+      console.log(`[Step 2] Tool usage: ${JSON.stringify(toolSummary)}`)
+    }
 
-## Required Output Format
+    return text
+  } else {
+    // Non-agentic fallback (no sandbox)
+    console.log("[Step 2] Running in limited mode (no sandbox access)...")
 
-## CLS Issue
-[Specific description of what's causing the layout shift]
+    const { text } = await generateText({
+      model,
+      system: systemPrompt,
+      prompt: userPrompt
+    })
 
-## CLS Score
-[The measured CLS score from the diagnostics, or "Unknown" if not captured]
+    console.log(`[Step 2] AI agent response (first 500 chars): ${text.substring(0, 500)}...`)
 
-## Root Cause
-[Technical explanation - which element shifted and why]
-
-## Proposed Fix
-[Clear explanation of how to prevent this shift]
-
-## Git Patch
-\`\`\`diff
-diff --git a/path/to/file.tsx b/path/to/file.tsx
-index abc123..def456 100644
---- a/path/to/file.tsx
-+++ b/path/to/file.tsx
-@@ -10,7 +10,7 @@ function Component() {
-   unchanged line
--  old line to remove
-+  new line to add
-   unchanged line
-\`\`\`
-
-## Expected Impact
-[How much this fix should reduce CLS score]
-
-## CRITICAL RULES:
-1. ONLY focus on CLS/layout shift issues - ignore other types of errors unless they cause layout shifts
-2. You MUST include a Git Patch with a valid unified diff
-3. The patch MUST be applicable with 'git apply'
-4. If CLS score is 0 or very low (< 0.05), respond with "✅ NO CLS ISSUES - Score: [score]"
-5. Be specific about file paths based on the project structure
-6. If CLS data wasn't captured properly, explain what data would be needed`
-
-  const { text } = await generateText({
-    model,
-    prompt
-  })
-
-  console.log(`[Step 2] AI agent response (first 500 chars): ${text.substring(0, 500)}...`)
-
-  return text
+    return text
+  }
 }
 
 /**
