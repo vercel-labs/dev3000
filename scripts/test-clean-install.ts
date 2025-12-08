@@ -329,7 +329,8 @@ RUN d3k --version
       writeFileSync(join(testDir, "package.json"), JSON.stringify(packageJson, null, 2))
 
       // Find an available port for testing
-      const testPort = await this.findAvailablePort(3500)
+      // Use ports > 4000 to avoid conflicts with user's running d3k instances on 3000-range ports
+      const testPort = await this.findAvailablePort(4500)
 
       // Create a simple HTTP server that actually listens on the test port
       const serverCode = `

@@ -7,10 +7,12 @@ console.log("🧪 Testing d3k with logs API...")
 // Don't kill existing processes - let d3k handle port conflicts
 console.log("🚀 Starting d3k test...")
 
-// Start d3k in the www directory with a random high port to avoid conflicts
-const TEST_PORT = "3210"
-console.log(`🚀 Starting d3k in www directory on port ${TEST_PORT}...`)
-const d3kProcess = spawn("d3k", ["--no-tui", "--debug", "--port", TEST_PORT], {
+// Start d3k in the www directory with high ports to avoid conflicts with user's running d3k instances
+// Use ports > 4000 to leave the common 3000-range ports alone
+const TEST_PORT = "4210"
+const TEST_MCP_PORT = "4684"
+console.log(`🚀 Starting d3k in www directory on port ${TEST_PORT} (MCP: ${TEST_MCP_PORT})...`)
+const d3kProcess = spawn("d3k", ["--no-tui", "--debug", "--port", TEST_PORT, "--port-mcp", TEST_MCP_PORT], {
   cwd: join(process.cwd(), "www"),
   env: {
     ...process.env,
@@ -47,7 +49,7 @@ async function runTests() {
   // Clear the timeouts since we're now running tests
   clearTimeout(connectTimeout)
   clearTimeout(testTimeout)
-  const mcpUrl = "http://localhost:3684"
+  const mcpUrl = `http://localhost:${TEST_MCP_PORT}`
   let allTestsPassed = true
   let testError: Error | null = null
 
