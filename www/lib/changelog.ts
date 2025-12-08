@@ -13,9 +13,7 @@ export const changelog: Release[] = [
     version: "0.0.121",
     date: "2025-12-08",
     type: "patch",
-    highlights: [
-      "Use high ports (>4000) in release tests to avoid conflicts"
-    ]
+    highlights: ["Use high ports (>4000) in release tests to avoid conflicts"]
   },
 
   {
