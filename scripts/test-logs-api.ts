@@ -16,7 +16,9 @@ const d3kProcess = spawn("d3k", ["--no-tui", "--debug", "--port", TEST_PORT, "--
   cwd: join(process.cwd(), "www"),
   env: {
     ...process.env,
-    PATH: `${process.env.PATH}:${join(process.cwd(), "node_modules/.bin")}`
+    PATH: `${process.env.PATH}:${join(process.cwd(), "node_modules/.bin")}`,
+    // Set PORT env var so Next.js actually uses our test port instead of defaulting to 3000
+    PORT: TEST_PORT
   }
 })
 
