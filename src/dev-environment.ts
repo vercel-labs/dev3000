@@ -122,6 +122,99 @@ function isInSandbox(): boolean {
 }
 
 /**
+ * Clean up orphaned Playwright/MCP Chrome processes from previous d3k sessions.
+ * These processes can become orphaned when d3k crashes or is force-killed,
+ * leaving Chrome instances that prevent new sessions from starting properly.
+ *
+ * This function identifies and kills:
+ * - Chrome processes spawned by ms-playwright for MCP servers
+ * - mcp-server-playwright node processes
+ * - Chrome using d3k-specific profile directories
+ */
+async function cleanupOrphanedPlaywrightProcesses(debugLog: (msg: string) => void): Promise<void> {
+  // Skip in sandbox environments where ps/grep may not work
+  if (isInSandbox()) {
+    debugLog("Skipping orphaned process cleanup in sandbox environment")
+    return
+  }
+
+  try {
+    const { execSync } = await import("child_process")
+
+    // Patterns that identify d3k/MCP-related Chrome processes
+    const patterns = [
+      "ms-playwright/mcp-chrome", // Playwright MCP Chrome user data dir
+      "mcp-server-playwright", // Playwright MCP server node process
+      ".d3k/chrome-profiles" // d3k's own Chrome profiles
+    ]
+
+    for (const pattern of patterns) {
+      try {
+        // Find PIDs matching the pattern
+        const result = execSync(`ps aux | grep -i "${pattern}" | grep -v grep | awk '{print $2}'`, {
+          encoding: "utf-8",
+          stdio: ["pipe", "pipe", "pipe"]
+        }).trim()
+
+        if (result) {
+          const pids = result.split("\n").filter(Boolean)
+          debugLog(`Found ${pids.length} orphaned process(es) matching "${pattern}": [${pids.join(", ")}]`)
+
+          for (const pid of pids) {
+            try {
+              const pidNum = parseInt(pid, 10)
+              // First try SIGTERM for graceful shutdown
+              process.kill(pidNum, "SIGTERM")
+              debugLog(`Sent SIGTERM to orphaned process ${pid}`)
+
+              // Give it a moment to terminate
+              await new Promise((resolve) => setTimeout(resolve, 100))
+
+              // Check if still alive and force kill if needed
+              try {
+                process.kill(pidNum, 0) // Check if process exists
+                process.kill(pidNum, "SIGKILL")
+                debugLog(`Sent SIGKILL to stubborn process ${pid}`)
+              } catch {
+                // Process already dead, good
+              }
+            } catch (error) {
+              // Process may have already exited or we don't have permission
+              debugLog(`Could not kill process ${pid}: ${error}`)
+            }
+          }
+        }
+      } catch {
+        // grep returns exit code 1 when no matches found, which is fine
+      }
+    }
+
+    // Also clean up any stale Chrome lock files that might prevent new instances
+    const lockFilePaths = [
+      join(homedir(), "Library/Caches/ms-playwright/mcp-chrome/SingletonLock"),
+      join(homedir(), "Library/Caches/ms-playwright/mcp-chrome/SingletonSocket"),
+      join(homedir(), "Library/Caches/ms-playwright/mcp-chrome/SingletonCookie")
+    ]
+
+    for (const lockFile of lockFilePaths) {
+      try {
+        if (existsSync(lockFile)) {
+          unlinkSync(lockFile)
+          debugLog(`Removed stale lock file: ${lockFile}`)
+        }
+      } catch {
+        // Ignore errors - file might be locked by running process
+      }
+    }
+
+    debugLog("Orphaned process cleanup completed")
+  } catch (error) {
+    debugLog(`Error during orphaned process cleanup: ${error}`)
+    // Non-fatal - continue with startup
+  }
+}
+
+/**
  * Check if a port is available for binding (no process is listening on it).
  * Used for finding available ports before starting servers.
  * In sandbox environments, skips checking since lsof often doesn't exist.
@@ -705,6 +798,10 @@ export class DevEnvironment {
   }
 
   private async checkPortsAvailable(silent: boolean = false) {
+    // Clean up orphaned Playwright/Chrome processes from previous crashed sessions
+    // This prevents "kill EPERM" errors when MCP tries to spawn new browsers
+    await cleanupOrphanedPlaywrightProcesses((msg) => this.debugLog(msg))
+
     // Always kill any existing MCP server to ensure clean state
     if (this.options.mcpPort) {
       const isPortInUse = !(await isPortAvailable(this.options.mcpPort.toString()))
