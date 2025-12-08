@@ -51,12 +51,16 @@ echo -e "${YELLOW}Testing MCP server startup...${NC}"
 TEST_DIR=$(mktemp -d)
 cd "$TEST_DIR"
 
+# Use high ports (>4000) to avoid conflicts with user's running d3k on port 3000
+TEST_APP_PORT=4100
+TEST_MCP_PORT=4685
+
 # Create minimal test app
 cat > package.json << EOF
 {
   "name": "test-app",
   "scripts": {
-    "dev": "node -e 'console.log(\"Test server running\"); setInterval(() => {}, 1000)'"
+    "dev": "node -e 'console.log(\"Test server running on port $TEST_APP_PORT\"); setInterval(() => {}, 1000)'"
   }
 }
 EOF
@@ -64,7 +68,7 @@ EOF
 # Run d3k in background and capture output
 OUTPUT_FILE=$(mktemp)
 # d3k should be available in PATH from the npm install
-d3k --debug --servers-only --no-tui > "$OUTPUT_FILE" 2>&1 &
+d3k --debug --servers-only --no-tui --port $TEST_APP_PORT --port-mcp $TEST_MCP_PORT > "$OUTPUT_FILE" 2>&1 &
 D3K_PID=$!
 
 # Wait for MCP server to start (max 20 seconds)
