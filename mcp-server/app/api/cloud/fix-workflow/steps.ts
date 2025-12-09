@@ -529,6 +529,37 @@ async function fetchAndUploadD3kArtifacts(
           console.log(`[D3k Artifacts] Could not fetch metadata`)
         }
       }
+
+      // 5. FALLBACK: Parse CLS score directly from logs if metadata is unavailable or missing totalCLS
+      // This is a fallback because the metadata endpoint may not always be available
+      if (!result.metadata || (result.metadata as { totalCLS?: number })?.totalCLS === undefined) {
+        console.log(`[D3k Artifacts] Attempting to parse CLS from logs as fallback...`)
+        // Parse layout shift scores from logs like:
+        // [BROWSER] [CDP] Layout shift detected (element: DIV, position: static, score: 0.4716, time: 1025ms)
+        const clsRegex = /Layout shift detected.*score:\s*([\d.]+)/g
+        const clsMatches = [...result.fullLogs.matchAll(clsRegex)]
+        if (clsMatches.length > 0) {
+          const scores = clsMatches.map((m) => parseFloat(m[1]))
+          const totalCLS = scores.reduce((sum, s) => sum + s, 0)
+          const clsGrade: "good" | "needs-improvement" | "poor" =
+            totalCLS <= 0.1 ? "good" : totalCLS <= 0.25 ? "needs-improvement" : "poor"
+
+          console.log(`[D3k Artifacts] Parsed ${scores.length} layout shifts from logs, total CLS: ${totalCLS}`)
+          result.metadata = {
+            ...result.metadata,
+            totalCLS,
+            clsGrade,
+            layoutShifts: scores.map((score, i) => ({
+              score,
+              timestamp: i * 100, // Approximate timestamps
+              sources: []
+            })),
+            parsedFromLogs: true // Flag to indicate this was parsed from logs
+          }
+        } else {
+          console.log(`[D3k Artifacts] No layout shift data found in logs`)
+        }
+      }
     }
 
     console.log(
