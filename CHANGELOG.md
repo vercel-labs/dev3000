@@ -4,6 +4,14 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.122] - 2025-12-09
+
+**Patch Release**
+
+- Stop tracking auto-generated next-env.d.ts
+- Use high ports in test-release.sh MCP startup test
+- Fix test to actually use high port by setting PORT env var
+
 ## [0.0.121] - 2025-12-08
 
 **Patch Release**

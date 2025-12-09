@@ -10,6 +10,17 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.122",
+    date: "2025-12-09",
+    type: "patch",
+    highlights: [
+      "Stop tracking auto-generated next-env.d.ts",
+      "Use high ports in test-release.sh MCP startup test",
+      "Fix test to actually use high port by setting PORT env var"
+    ]
+  },
+
+  {
     version: "0.0.121",
     date: "2025-12-08",
     type: "patch",
