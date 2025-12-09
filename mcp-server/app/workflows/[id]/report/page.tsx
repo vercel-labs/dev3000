@@ -1,4 +1,4 @@
-import { ArrowLeft, Download, FileDown } from "lucide-react"
+import { ArrowLeft, Download } from "lucide-react"
 import Image from "next/image"
 import { redirect } from "next/navigation"
 import { getCurrentUser } from "@/lib/auth"
@@ -212,144 +212,144 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
                 </div>
               </div>
             )}
-          </div>
-        )}
 
-        {/* Screenshots Section */}
-        {(report.beforeScreenshotUrl ||
-          report.afterScreenshotUrl ||
-          (report.clsScreenshots && report.clsScreenshots.length > 0)) && (
-          <div className="bg-card border border-border rounded-lg p-6 mb-6">
-            <h2 className="text-xl font-semibold mb-4">Screenshots</h2>
+            {/* Screenshots embedded in CLS section */}
+            {(report.beforeScreenshotUrl ||
+              report.afterScreenshotUrl ||
+              (report.clsScreenshots && report.clsScreenshots.length > 0)) && (
+              <div className="mt-6 pt-4 border-t border-border">
+                <h3 className="text-sm font-medium text-muted-foreground mb-3">Screenshots</h3>
 
-            {/* Before/After comparison if we have both */}
-            {report.beforeScreenshotUrl && report.afterScreenshotUrl ? (
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <div className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Before Fix</div>
-                    <a href={report.beforeScreenshotUrl} target="_blank" rel="noopener noreferrer">
-                      <Image
-                        src={report.beforeScreenshotUrl}
-                        alt="Before fix screenshot"
-                        width={400}
-                        height={225}
-                        unoptimized
-                        className="w-full h-auto rounded border border-border hover:border-primary transition-colors cursor-pointer"
-                      />
-                    </a>
-                  </div>
-                  <div>
-                    <div className="text-xs text-muted-foreground uppercase tracking-wide mb-2">After Fix</div>
-                    <a href={report.afterScreenshotUrl} target="_blank" rel="noopener noreferrer">
-                      <Image
-                        src={report.afterScreenshotUrl}
-                        alt="After fix screenshot"
-                        width={400}
-                        height={225}
-                        unoptimized
-                        className="w-full h-auto rounded border border-border hover:border-primary transition-colors cursor-pointer"
-                      />
-                    </a>
-                  </div>
-                </div>
-
-                {/* CLS timeline screenshots if available */}
-                {report.clsScreenshots && report.clsScreenshots.length > 0 && (
-                  <CollapsibleSection title="CLS Timeline Screenshots" defaultOpen={false}>
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {report.clsScreenshots.map((screenshot) => (
-                        <a
-                          key={`screenshot-${screenshot.timestamp}`}
-                          href={screenshot.blobUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-block"
-                        >
+                {/* Before/After comparison if we have both */}
+                {report.beforeScreenshotUrl && report.afterScreenshotUrl ? (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <div className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Before Fix</div>
+                        <a href={report.beforeScreenshotUrl} target="_blank" rel="noopener noreferrer">
                           <Image
-                            src={screenshot.blobUrl}
-                            alt={screenshot.label || "CLS Screenshot"}
-                            width={192}
-                            height={108}
+                            src={report.beforeScreenshotUrl}
+                            alt="Before fix screenshot"
+                            width={400}
+                            height={225}
                             unoptimized
-                            className="w-48 h-auto rounded border border-border hover:border-primary transition-colors cursor-pointer"
+                            className="w-full h-auto rounded border border-border hover:border-primary transition-colors cursor-pointer"
                           />
-                          <span className="text-xs text-muted-foreground mt-1 block">
-                            {screenshot.label || "Shift"}
-                          </span>
                         </a>
-                      ))}
+                      </div>
+                      <div>
+                        <div className="text-xs text-muted-foreground uppercase tracking-wide mb-2">After Fix</div>
+                        <a href={report.afterScreenshotUrl} target="_blank" rel="noopener noreferrer">
+                          <Image
+                            src={report.afterScreenshotUrl}
+                            alt="After fix screenshot"
+                            width={400}
+                            height={225}
+                            unoptimized
+                            className="w-full h-auto rounded border border-border hover:border-primary transition-colors cursor-pointer"
+                          />
+                        </a>
+                      </div>
                     </div>
-                  </CollapsibleSection>
+
+                    {/* CLS timeline screenshots if available */}
+                    {report.clsScreenshots && report.clsScreenshots.length > 0 && (
+                      <CollapsibleSection title="CLS Timeline Screenshots" defaultOpen={false}>
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {report.clsScreenshots.map((screenshot) => (
+                            <a
+                              key={`screenshot-${screenshot.timestamp}`}
+                              href={screenshot.blobUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-block"
+                            >
+                              <Image
+                                src={screenshot.blobUrl}
+                                alt={screenshot.label || "CLS Screenshot"}
+                                width={192}
+                                height={108}
+                                unoptimized
+                                className="w-48 h-auto rounded border border-border hover:border-primary transition-colors cursor-pointer"
+                              />
+                              <span className="text-xs text-muted-foreground mt-1 block">
+                                {screenshot.label || "Shift"}
+                              </span>
+                            </a>
+                          ))}
+                        </div>
+                      </CollapsibleSection>
+                    )}
+                  </div>
+                ) : (
+                  /* Original layout if we don't have both before/after */
+                  <div className="flex flex-wrap gap-2">
+                    {report.beforeScreenshotUrl && (
+                      <a
+                        href={report.beforeScreenshotUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-block"
+                      >
+                        <Image
+                          src={report.beforeScreenshotUrl}
+                          alt="Before screenshot"
+                          width={192}
+                          height={108}
+                          unoptimized
+                          className="w-48 h-auto rounded border border-border hover:border-primary transition-colors cursor-pointer"
+                        />
+                        <span className="text-xs text-muted-foreground mt-1 block">Before</span>
+                      </a>
+                    )}
+                    {report.afterScreenshotUrl && (
+                      <a
+                        href={report.afterScreenshotUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-block"
+                      >
+                        <Image
+                          src={report.afterScreenshotUrl}
+                          alt="After screenshot"
+                          width={192}
+                          height={108}
+                          unoptimized
+                          className="w-48 h-auto rounded border border-border hover:border-primary transition-colors cursor-pointer"
+                        />
+                        <span className="text-xs text-muted-foreground mt-1 block">After</span>
+                      </a>
+                    )}
+                    {report.clsScreenshots?.map((screenshot) => (
+                      <a
+                        key={`screenshot-${screenshot.timestamp}`}
+                        href={screenshot.blobUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-block"
+                      >
+                        <Image
+                          src={screenshot.blobUrl}
+                          alt={screenshot.label || "CLS Screenshot"}
+                          width={192}
+                          height={108}
+                          unoptimized
+                          className="w-48 h-auto rounded border border-border hover:border-primary transition-colors cursor-pointer"
+                        />
+                        <span className="text-xs text-muted-foreground mt-1 block">{screenshot.label || "Shift"}</span>
+                      </a>
+                    ))}
+                  </div>
                 )}
-              </div>
-            ) : (
-              /* Original layout if we don't have both before/after */
-              <div className="flex flex-wrap gap-2">
-                {report.beforeScreenshotUrl && (
-                  <a
-                    href={report.beforeScreenshotUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-block"
-                  >
-                    <Image
-                      src={report.beforeScreenshotUrl}
-                      alt="Before screenshot"
-                      width={192}
-                      height={108}
-                      unoptimized
-                      className="w-48 h-auto rounded border border-border hover:border-primary transition-colors cursor-pointer"
-                    />
-                    <span className="text-xs text-muted-foreground mt-1 block">Before</span>
-                  </a>
-                )}
-                {report.afterScreenshotUrl && (
-                  <a
-                    href={report.afterScreenshotUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-block"
-                  >
-                    <Image
-                      src={report.afterScreenshotUrl}
-                      alt="After screenshot"
-                      width={192}
-                      height={108}
-                      unoptimized
-                      className="w-48 h-auto rounded border border-border hover:border-primary transition-colors cursor-pointer"
-                    />
-                    <span className="text-xs text-muted-foreground mt-1 block">After</span>
-                  </a>
-                )}
-                {report.clsScreenshots?.map((screenshot) => (
-                  <a
-                    key={`screenshot-${screenshot.timestamp}`}
-                    href={screenshot.blobUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-block"
-                  >
-                    <Image
-                      src={screenshot.blobUrl}
-                      alt={screenshot.label || "CLS Screenshot"}
-                      width={192}
-                      height={108}
-                      unoptimized
-                      className="w-48 h-auto rounded border border-border hover:border-primary transition-colors cursor-pointer"
-                    />
-                    <span className="text-xs text-muted-foreground mt-1 block">{screenshot.label || "Shift"}</span>
-                  </a>
-                ))}
               </div>
             )}
           </div>
         )}
 
-        {/* AI Agent Analysis Section */}
+        {/* d3k Agent Analysis Section */}
         <div className="bg-card border border-border rounded-lg p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold">AI Agent Analysis</h2>
+            <h2 className="text-xl font-semibold">d3k Agent Analysis</h2>
             {report.agentAnalysisModel && (
               <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
                 {report.agentAnalysisModel}
@@ -357,6 +357,21 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
             )}
           </div>
           <AgentAnalysis content={report.agentAnalysis} />
+
+          {/* Git Diff integrated into agent section */}
+          {report.gitDiff && (
+            <div className="mt-6 pt-4 border-t border-border">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-medium">d3k Agent Fix: git diff</h3>
+                <DiffDownloadButton diff={report.gitDiff} projectName={report.projectName} />
+              </div>
+              <CollapsibleSection title="View Diff" defaultOpen={false}>
+                <pre className="bg-muted/50 rounded p-4 text-xs font-mono overflow-x-auto whitespace-pre-wrap max-h-96 overflow-y-auto">
+                  {report.gitDiff}
+                </pre>
+              </CollapsibleSection>
+            </div>
+          )}
         </div>
 
         {/* D3k Logs Section (Collapsible) */}
@@ -365,42 +380,6 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
             <pre className="bg-muted/50 rounded p-4 text-xs font-mono overflow-x-auto whitespace-pre-wrap max-h-96 overflow-y-auto">
               {report.d3kLogs}
             </pre>
-          </CollapsibleSection>
-        )}
-
-        {/* Git Diff Section (Collapsible with Download) */}
-        {report.gitDiff && (
-          <CollapsibleSection title="Proposed Changes (Git Diff)" defaultOpen={false}>
-            <div className="space-y-4">
-              <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-                <div className="flex items-start gap-3">
-                  <FileDown className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
-                  <div className="flex-1">
-                    <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-1">How to apply this diff</h4>
-                    <ol className="text-sm text-blue-800 dark:text-blue-200 space-y-1 list-decimal list-inside">
-                      <li>Download the diff file using the button below</li>
-                      <li>
-                        Navigate to your project root in terminal:{" "}
-                        <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">cd your-project</code>
-                      </li>
-                      <li>
-                        Apply the patch:{" "}
-                        <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">
-                          git apply ~/Downloads/d3k-fix.diff
-                        </code>
-                      </li>
-                      <li>Review the changes and test locally</li>
-                    </ol>
-                  </div>
-                </div>
-                <div className="mt-3">
-                  <DiffDownloadButton diff={report.gitDiff} projectName={report.projectName} />
-                </div>
-              </div>
-              <pre className="bg-muted/50 rounded p-4 text-xs font-mono overflow-x-auto whitespace-pre-wrap max-h-96 overflow-y-auto">
-                {report.gitDiff}
-              </pre>
-            </div>
           </CollapsibleSection>
         )}
 

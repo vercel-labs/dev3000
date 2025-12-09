@@ -23,6 +23,22 @@ interface ParsedTranscript {
 }
 
 /**
+ * Simplify tool names for display
+ */
+function formatToolName(name: string): string {
+  const toolNameMap: Record<string, string> = {
+    grepSearch: "grep",
+    globSearch: "glob",
+    listDirectory: "ls",
+    readFile: "read",
+    writeFile: "write",
+    findComponentSource: "find-component",
+    getGitDiff: "git-diff"
+  }
+  return toolNameMap[name] || name
+}
+
+/**
  * Parse the agent transcript markdown into structured data
  */
 function parseTranscript(content: string): ParsedTranscript {
@@ -193,37 +209,43 @@ export function AgentAnalysis({ content }: { content: string }) {
             )}
 
             {/* Steps - filter out empty ones or collapse them */}
-            {stepsWithContent.map((step) => (
-              <StepSection
-                key={step.stepNumber}
-                title={`Step ${step.stepNumber}`}
-                badge={step.toolCalls.length > 0 ? step.toolCalls.map((tc) => tc.name).join(", ") : undefined}
-              >
-                <div className="mt-2 space-y-2">
-                  {step.assistantText && (
-                    <div className="text-sm">
-                      <span className="font-medium text-muted-foreground">Assistant:</span>
-                      <p className="mt-1">{step.assistantText}</p>
-                    </div>
-                  )}
-                  {step.toolCalls.map((tc, i) => (
-                    <div key={`tc-${step.stepNumber}-${i}`} className="text-xs space-y-1">
-                      <div className="font-medium text-muted-foreground">
-                        Tool: <span className="text-foreground">{tc.name}</span>
+            {stepsWithContent.map((step) => {
+              // Determine badge: tool names if has tools, "conclusion" if final step with just text
+              const isLastStep = step.stepNumber === Math.max(...stepsWithContent.map((s) => s.stepNumber))
+              const badge =
+                step.toolCalls.length > 0
+                  ? step.toolCalls.map((tc) => formatToolName(tc.name)).join(", ")
+                  : isLastStep && step.assistantText
+                    ? "conclusion"
+                    : undefined
+
+              return (
+                <StepSection key={step.stepNumber} title={`Step ${step.stepNumber}`} badge={badge}>
+                  <div className="mt-2 space-y-2">
+                    {step.assistantText && (
+                      <div className="text-sm prose prose-sm dark:prose-invert max-w-none">
+                        <Streamdown mode="static">{step.assistantText}</Streamdown>
                       </div>
-                      {tc.args && tc.args !== "{}" && (
-                        <pre className="bg-muted/50 p-2 rounded overflow-x-auto">{tc.args}</pre>
-                      )}
-                      {tc.result && tc.result !== "[undefined]" && (
-                        <pre className="bg-muted/50 p-2 rounded overflow-x-auto whitespace-pre-wrap max-h-32 overflow-y-auto">
-                          {tc.result}
-                        </pre>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </StepSection>
-            ))}
+                    )}
+                    {step.toolCalls.map((tc, i) => (
+                      <div key={`tc-${step.stepNumber}-${i}`} className="text-xs space-y-1">
+                        <div className="font-medium text-muted-foreground">
+                          Tool: <span className="text-foreground">{formatToolName(tc.name)}</span>
+                        </div>
+                        {tc.args && tc.args !== "{}" && (
+                          <pre className="bg-muted/50 p-2 rounded overflow-x-auto">{tc.args}</pre>
+                        )}
+                        {tc.result && tc.result !== "[undefined]" && (
+                          <pre className="bg-muted/50 p-2 rounded overflow-x-auto whitespace-pre-wrap max-h-32 overflow-y-auto">
+                            {tc.result}
+                          </pre>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </StepSection>
+              )
+            })}
 
             {/* Summary of empty steps */}
             {emptySteps > 0 && (
