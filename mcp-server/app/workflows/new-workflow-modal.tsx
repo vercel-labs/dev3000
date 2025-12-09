@@ -279,12 +279,19 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
         return
       }
 
-      // Load stored token for this project from localStorage
-      const storageKey = `d3k_bypass_token_${selectedProject.id}`
-      const storedToken = localStorage.getItem(storageKey)
-      if (storedToken) {
-        console.log("[Bypass Token] Found stored token for project", selectedProject.id)
-        setBypassToken(storedToken)
+      // First priority: URL param (bypass or bypassToken)
+      const urlBypassToken = searchParams.get("bypass") || searchParams.get("bypassToken")
+      if (urlBypassToken) {
+        console.log("[Bypass Token] Found token in URL param")
+        setBypassToken(urlBypassToken)
+      } else {
+        // Second priority: Load stored token for this project from localStorage
+        const storageKey = `d3k_bypass_token_${selectedProject.id}`
+        const storedToken = localStorage.getItem(storageKey)
+        if (storedToken) {
+          console.log("[Bypass Token] Found stored token for project", selectedProject.id)
+          setBypassToken(storedToken)
+        }
       }
 
       const latestDeployment = selectedProject.latestDeployments[0]
@@ -320,7 +327,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
     }
 
     checkDeploymentProtection()
-  }, [selectedProject, step])
+  }, [selectedProject, step, searchParams])
 
   // Restore project from URL once projects are loaded
   useEffect(() => {
