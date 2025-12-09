@@ -1949,7 +1949,22 @@ export async function uploadToBlob(
   }
 
   // Build the complete report with agent analysis
-  // This overwrites the initial report saved in Step 0, adding the agent analysis
+  // Preserve verification data that was saved in Step 0 (afterClsScore, afterScreenshotUrl, etc.)
+  // by fetching the existing report first
+  let existingReport: Partial<WorkflowReport> = {}
+  try {
+    const existingBlobUrl = `https://oeyjlew0wdsxgm6o.public.blob.vercel-storage.com/report-${reportId}.json`
+    const existingResponse = await fetch(existingBlobUrl)
+    if (existingResponse.ok) {
+      existingReport = await existingResponse.json()
+      console.log(
+        `[Step 3] Loaded existing report - has verification data: afterClsScore=${existingReport.afterClsScore}, afterScreenshotUrl=${existingReport.afterScreenshotUrl ? "present" : "absent"}`
+      )
+    }
+  } catch (e) {
+    console.log(`[Step 3] Could not load existing report: ${e instanceof Error ? e.message : String(e)}`)
+  }
+
   const report: Partial<WorkflowReport> & { id: string; projectName: string; timestamp: string } = {
     id: reportId,
     projectName,
@@ -1968,7 +1983,13 @@ export async function uploadToBlob(
     agentAnalysis: fixProposal,
     agentAnalysisModel: agentAnalysisModel || undefined,
     d3kLogs: d3kArtifacts?.fullLogs || undefined,
-    gitDiff: gitDiff || undefined
+    gitDiff: gitDiff || undefined,
+    // Preserve verification data from Step 0
+    afterClsScore: existingReport.afterClsScore,
+    afterClsGrade: existingReport.afterClsGrade,
+    afterScreenshotUrl: existingReport.afterScreenshotUrl,
+    verificationStatus: existingReport.verificationStatus,
+    verificationError: existingReport.verificationError
   }
 
   // Log what we're saving
