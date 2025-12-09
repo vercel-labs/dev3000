@@ -322,6 +322,7 @@ async function isChromeDevtoolsMcpSupported(): Promise<boolean> {
   try {
     // Try different Chrome binary paths
     const chromePaths = [
+      "/tmp/chromium", // Vercel Sandbox (@sparticuz/chromium)
       "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", // macOS
       "/opt/google/chrome/chrome", // Linux
       "chrome", // PATH
@@ -2160,6 +2161,12 @@ export class DevEnvironment {
 
   private async discoverMcpsAfterBrowserStart() {
     try {
+      // Skip MCP discovery in sandbox environments (no Claude Code running there)
+      if (isInSandbox()) {
+        this.debugLog("Skipping MCP discovery in sandbox environment")
+        return
+      }
+
       this.debugLog("Starting MCP discovery after browser startup")
 
       // Call the MCP discovery function - make HTTP request to our own MCP server
