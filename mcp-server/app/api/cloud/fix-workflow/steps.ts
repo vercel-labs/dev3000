@@ -1119,6 +1119,16 @@ LOADINGHTML
         console.log(`[Step 0] Waiting 3s for HMR to apply changes...`)
         await new Promise((resolve) => setTimeout(resolve, 3000))
 
+        // CRITICAL: Clear d3k logs before verification navigation
+        // The log files are cumulative and contain layout shifts from the entire session.
+        // We need to clear them so we only measure CLS from the post-fix page load.
+        console.log(`[Step 0] Clearing d3k logs before verification (to get fresh CLS measurement)...`)
+        const clearLogsResult = await runSandboxCommand(sandboxResult.sandbox, "sh", [
+          "-c",
+          "rm -f /home/vercel-sandbox/.d3k/logs/*.log 2>/dev/null; echo 'Logs cleared'"
+        ])
+        console.log(`[Step 0] Cleared logs: ${clearLogsResult.stdout?.trim() || clearLogsResult.stderr || "done"}`)
+
         // Navigate browser to refresh the page (this triggers fresh CLS measurement by d3k)
         console.log(`[Step 0] Triggering browser navigation for fresh CLS measurement...`)
         const navCommand = `curl -s -X POST http://localhost:3684/mcp -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"navigate","params":{"url":"http://localhost:3000"}}}}'`
