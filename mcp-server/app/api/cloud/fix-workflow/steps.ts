@@ -215,6 +215,138 @@ function createD3kSandboxTools(sandbox: Sandbox, mcpUrl: string) {
         }
         return `Current changes:\n\`\`\`diff\n${result.stdout}\n\`\`\``
       }
+    }),
+
+    /**
+     * Verify changes by reloading the app and checking for errors
+     * This tool lets the agent check if its fixes broke the code
+     */
+    verifyChanges: tool({
+      description: `CRITICAL: Call this after making any file changes to verify they don't break the app.
+This tool:
+1. Waits for HMR to apply your changes
+2. Navigates the browser to reload the app
+3. Checks for compilation errors, runtime errors, and page load failures
+4. Returns any errors found so you can fix them
+
+If this returns errors, you MUST fix them before finishing. Keep iterating until verifyChanges returns success.`,
+      inputSchema: z.object({
+        waitMs: z.number().optional().describe("Milliseconds to wait for HMR (default: 2000)")
+      }),
+      execute: async ({ waitMs = 2000 }: { waitMs?: number }) => {
+        console.log(`[verifyChanges] Starting verification (waiting ${waitMs}ms for HMR)...`)
+
+        // Wait for HMR to apply changes
+        await new Promise((resolve) => setTimeout(resolve, waitMs))
+
+        const errors: string[] = []
+
+        try {
+          // 1. Navigate browser to reload the page
+          console.log(`[verifyChanges] Navigating browser to http://localhost:3000...`)
+          const navCommand = `curl -s -X POST http://localhost:3684/mcp -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"navigate","params":{"url":"http://localhost:3000"}}}}'`
+          const navResult = await runSandboxCommand(sandbox, "bash", ["-c", navCommand])
+
+          if (navResult.exitCode !== 0) {
+            errors.push(`Browser navigation failed: ${navResult.stderr || "unknown error"}`)
+          } else {
+            // Parse navigation response to check for errors
+            try {
+              const navResponse = JSON.parse(navResult.stdout)
+              const content = navResponse.result?.content?.[0]?.text || ""
+              if (content.includes("error") || content.includes("failed")) {
+                errors.push(`Navigation issue: ${content.substring(0, 500)}`)
+              }
+            } catch {
+              // Couldn't parse, continue checking
+            }
+          }
+
+          // Wait for page to load
+          await new Promise((resolve) => setTimeout(resolve, 2000))
+
+          // 2. Check d3k logs for compilation/runtime errors
+          console.log(`[verifyChanges] Checking d3k logs for errors...`)
+          const logsResult = await runSandboxCommand(sandbox, "sh", [
+            "-c",
+            'for log in /home/vercel-sandbox/.d3k/logs/*.log; do [ -f "$log" ] && tail -50 "$log" || true; done 2>/dev/null'
+          ])
+
+          const logs = logsResult.stdout || ""
+
+          // Check for compilation errors
+          if (logs.includes("Failed to compile") || logs.includes("Compilation failed")) {
+            const compileMatch = logs.match(/Failed to compile[\s\S]*?(?=\n\n|\[|$)/)?.[0]
+            errors.push(`COMPILATION ERROR:\n${compileMatch || "Check the dev server logs"}`)
+          }
+
+          // Check for syntax errors
+          if (logs.includes("SyntaxError") || logs.includes("Unexpected token")) {
+            const syntaxMatch = logs.match(/SyntaxError[\s\S]*?(?=\n\n|\[|$)/)?.[0]
+            errors.push(`SYNTAX ERROR:\n${syntaxMatch || "Syntax error detected"}`)
+          }
+
+          // Check for module/import errors
+          if (logs.includes("Module not found") || logs.includes("Cannot find module")) {
+            const moduleMatch = logs.match(/(?:Module not found|Cannot find module)[\s\S]*?(?=\n\n|\[|$)/)?.[0]
+            errors.push(`MODULE ERROR:\n${moduleMatch || "Module import error"}`)
+          }
+
+          // Check for TypeScript errors
+          if (logs.includes("Type error") || logs.match(/TS\d{4}:/)) {
+            const tsMatch = logs.match(/(?:Type error|TS\d{4}:)[\s\S]*?(?=\n\n|\[|$)/)?.[0]
+            errors.push(`TYPESCRIPT ERROR:\n${tsMatch || "TypeScript error detected"}`)
+          }
+
+          // Check for runtime errors in browser console
+          if (logs.includes("[BROWSER]") && logs.includes("error")) {
+            const browserErrors = logs
+              .split("\n")
+              .filter((line) => line.includes("[BROWSER]") && line.toLowerCase().includes("error"))
+              .slice(0, 5)
+            if (browserErrors.length > 0) {
+              errors.push(`BROWSER ERRORS:\n${browserErrors.join("\n")}`)
+            }
+          }
+
+          // 3. Try to fetch the page directly to check if it loads
+          console.log(`[verifyChanges] Testing page load...`)
+          const pageResult = await runSandboxCommand(sandbox, "sh", [
+            "-c",
+            'curl -s -o /dev/null -w "%{http_code}" http://localhost:3000 2>&1'
+          ])
+
+          const httpCode = pageResult.stdout.trim()
+          if (httpCode && httpCode !== "200") {
+            // Fetch page content to see the error
+            const pageContent = await runSandboxCommand(sandbox, "sh", [
+              "-c",
+              "curl -s http://localhost:3000 2>&1 | head -100"
+            ])
+            errors.push(`PAGE LOAD ERROR (HTTP ${httpCode}):\n${pageContent.stdout.substring(0, 500)}`)
+          }
+        } catch (error) {
+          errors.push(`Verification error: ${error instanceof Error ? error.message : String(error)}`)
+        }
+
+        if (errors.length > 0) {
+          console.log(`[verifyChanges] Found ${errors.length} error(s)`)
+          return `❌ VERIFICATION FAILED - Your changes broke the app!
+
+${errors.join("\n\n---\n\n")}
+
+You MUST fix these errors before finishing. Read the error messages, fix the code, then call verifyChanges again.`
+        }
+
+        console.log(`[verifyChanges] No errors found - verification passed`)
+        return `✅ VERIFICATION PASSED - Your changes appear to work correctly.
+- No compilation errors
+- No syntax errors
+- No TypeScript errors
+- Page loads successfully (HTTP 200)
+
+You can now proceed to call getGitDiff and provide your final summary.`
+      }
     })
   }
 }
@@ -1126,15 +1258,25 @@ You have access to tools to explore and modify the codebase:
 - **listDirectory**: Explore project structure
 - **findComponentSource**: d3k-specific tool to map DOM elements to React source files
 - **writeFile**: Write fixes to files
+- **verifyChanges**: CRITICAL - Check if your changes broke the app (compilation errors, syntax errors, etc.)
 - **getGitDiff**: Review changes you've made
 
-## WORKFLOW
+## WORKFLOW (MUST FOLLOW THIS ORDER)
 1. First, understand the CLS issue from the diagnostic data
 2. Use findComponentSource or grepSearch to locate the source files
 3. Read the relevant files to understand the code
 4. Write fixes using writeFile
-5. Use getGitDiff to verify your changes
-6. Provide a summary of what you fixed
+5. **IMMEDIATELY call verifyChanges** to check for compilation/runtime errors
+6. **If verifyChanges returns errors**: Fix them and call verifyChanges again. REPEAT until it passes.
+7. Only after verifyChanges passes, call getGitDiff
+8. Provide a summary of what you fixed
+
+## CRITICAL: VERIFICATION LOOP
+After EVERY writeFile call, you MUST:
+1. Call verifyChanges to check if your code compiles and runs
+2. If it returns errors, fix them and verify again
+3. NEVER finish without a passing verifyChanges result
+4. If you can't fix the errors, REVERT your changes (re-read the original file and write it back)
 
 ## CLS KNOWLEDGE
 
@@ -1163,7 +1305,7 @@ After investigating and fixing, provide:
 
 ## CLS Score
 - **Before**: [The measured score from diagnostics]
-- **After**: [If you made fixes, call getGitDiff to confirm changes were applied]
+- **After**: [Verification status - did your fix compile and run?]
 
 ## Root Cause
 [What element(s) caused the shift and why]
@@ -1171,22 +1313,22 @@ After investigating and fixing, provide:
 ## Fix Applied
 [What changes were made]
 
+## Verification Result
+[Result from verifyChanges - must be PASSED]
+
 ## Git Diff
 \`\`\`diff
 [Actual diff from getGitDiff - ALWAYS call this at the end]
 \`\`\`
 
-## WORKFLOW REQUIREMENT
-After making any fixes, you MUST:
-1. Call getGitDiff to verify your changes were applied
-2. Report both the BEFORE CLS score (from diagnostics) and confirm changes are ready for verification
-
 ## RULES
 1. ONLY fix CLS/layout shift issues
-2. If CLS score is < 0.05, report "✅ NO CLS ISSUES - Score: [score]"
+2. If CLS score is < 0.05, report "NO CLS ISSUES - Score: [score]"
 3. Always read files before modifying them
 4. Make minimal, targeted fixes
-5. ALWAYS call getGitDiff at the end to confirm your changes`
+5. **ALWAYS call verifyChanges after writeFile** - this is non-negotiable
+6. **If verifyChanges fails, fix the errors** - don't leave broken code
+7. ALWAYS call getGitDiff at the end to confirm your changes`
 
   const userPrompt = `The dev server is running at: ${devUrl}
 
@@ -1805,15 +1947,25 @@ You have access to tools to explore and modify the codebase:
 - **listDirectory**: Explore project structure
 - **findComponentSource**: d3k-specific tool to map DOM elements to React source files
 - **writeFile**: Write fixes to files
+- **verifyChanges**: CRITICAL - Check if your changes broke the app (compilation errors, syntax errors, etc.)
 - **getGitDiff**: Review changes you've made
 
-## WORKFLOW
+## WORKFLOW (MUST FOLLOW THIS ORDER)
 1. First, understand the CLS issue from the diagnostic data
 2. Use findComponentSource or grepSearch to locate the source files
 3. Read the relevant files to understand the code
 4. Write fixes using writeFile
-5. Use getGitDiff to verify your changes
-6. Provide a summary of what you fixed`
+5. **IMMEDIATELY call verifyChanges** to check for compilation/runtime errors
+6. **If verifyChanges returns errors**: Fix them and call verifyChanges again. REPEAT until it passes.
+7. Only after verifyChanges passes, call getGitDiff
+8. Provide a summary of what you fixed
+
+## CRITICAL: VERIFICATION LOOP
+After EVERY writeFile call, you MUST:
+1. Call verifyChanges to check if your code compiles and runs
+2. If it returns errors, fix them and verify again
+3. NEVER finish without a passing verifyChanges result
+4. If you can't fix the errors, REVERT your changes (re-read the original file and write it back)`
     : `## LIMITED MODE
 No sandbox access - you can only analyze the diagnostic data and propose fixes.
 You cannot read or modify the actual source code.`
@@ -1853,6 +2005,9 @@ After investigating and fixing (if tools available), provide:
 ## Fix Applied
 [What changes were made, or proposed changes if no sandbox access]
 
+## Verification Result
+[Result from verifyChanges - must be PASSED if tools available]
+
 ## Git Diff
 \`\`\`diff
 [Actual diff from getGitDiff, or proposed diff if no sandbox]
@@ -1860,9 +2015,11 @@ After investigating and fixing (if tools available), provide:
 
 ## RULES
 1. ONLY fix CLS/layout shift issues
-2. If CLS score is < 0.05, report "✅ NO CLS ISSUES - Score: [score]"
+2. If CLS score is < 0.05, report "NO CLS ISSUES - Score: [score]"
 3. Always read files before modifying them
-4. Make minimal, targeted fixes`
+4. Make minimal, targeted fixes
+5. **ALWAYS call verifyChanges after writeFile** - this is non-negotiable
+6. **If verifyChanges fails, fix the errors** - don't leave broken code`
 
   const userPrompt = `The dev server is running at: ${devUrl}
 
