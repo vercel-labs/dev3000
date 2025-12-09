@@ -2078,6 +2078,12 @@ export class DevEnvironment {
 
   private async discoverMcpsAfterServerStart() {
     try {
+      // Skip MCP discovery in sandbox environments (no Claude Code running there)
+      if (isInSandbox()) {
+        this.debugLog("Skipping MCP discovery in sandbox environment (after server start)")
+        return
+      }
+
       this.debugLog("Starting MCP discovery after dev server startup")
 
       // Call the MCP discovery function - make HTTP request to our own MCP server
