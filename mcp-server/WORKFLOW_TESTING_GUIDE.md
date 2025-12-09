@@ -98,7 +98,7 @@ Use d3k browser automation (via `execute_browser_action` MCP tool):
 execute_browser_action({
   action: "navigate",
   params: {
-    url: "http://localhost:3000/workflows/new?type=cloud-fix&team=team_aMS4jZUlMooxyr9VgMKJf9uT&project=prj_0ITI5UHrH4Kp92G5OLEMrlgVX08p"
+    url: "http://localhost:3000/workflows/new?type=cloud-fix&team=team_aMS4jZUlMooxyr9VgMKJf9uT&project=prj_0ITI5UHrH4Kp92G5OLEMrlgVX08p&bypass=Hl0A8oVWb6LuIl4Tg3HSTTFwu5HOyq3h"
   }
 })
 
