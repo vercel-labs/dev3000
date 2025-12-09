@@ -934,13 +934,18 @@ LOADINGHTML
     console.log(`[Step 0] Report updated with agent analysis`)
 
     // Capture git diff after agent made changes
+    console.log(`[Step 0] Checking for git diff after agent execution...`)
     const diffResult = await runSandboxCommand(sandboxResult.sandbox, "sh", [
       "-c",
       "cd /vercel/sandbox && git diff --no-color 2>/dev/null || echo 'No git diff available'"
     ])
+    console.log(`[Step 0] Git diff exit code: ${diffResult.exitCode}`)
+    console.log(`[Step 0] Git diff stdout length: ${diffResult.stdout?.length ?? 0}`)
+    console.log(`[Step 0] Git diff preview: ${diffResult.stdout?.substring(0, 200)}...`)
+
     if (diffResult.exitCode === 0 && diffResult.stdout.trim() && diffResult.stdout.trim() !== "No git diff available") {
       gitDiff = diffResult.stdout.trim()
-      console.log(`[Step 0] Agent made changes - git diff captured (${gitDiff.length} chars)`)
+      console.log(`[Step 0] ✅ Agent made changes - git diff captured (${gitDiff.length} chars)`)
 
       // === VERIFICATION STEP ===
       // If the agent made changes, reload the page and capture the new CLS score
@@ -1032,6 +1037,9 @@ LOADINGHTML
         initialReport.verificationError = verifyError instanceof Error ? verifyError.message : String(verifyError)
         await saveReportToBlob(initialReport)
       }
+    } else {
+      console.log(`[Step 0] ⚠️ No git diff detected - skipping verification step`)
+      console.log(`[Step 0] This means the agent did not make any file changes`)
     }
   } catch (agentError) {
     console.log(
@@ -1125,7 +1133,8 @@ After investigating and fixing, provide:
 [Brief description of what was found and fixed]
 
 ## CLS Score
-[The measured score from diagnostics]
+- **Before**: [The measured score from diagnostics]
+- **After**: [If you made fixes, call getGitDiff to confirm changes were applied]
 
 ## Root Cause
 [What element(s) caused the shift and why]
@@ -1135,14 +1144,20 @@ After investigating and fixing, provide:
 
 ## Git Diff
 \`\`\`diff
-[Actual diff from getGitDiff]
+[Actual diff from getGitDiff - ALWAYS call this at the end]
 \`\`\`
+
+## WORKFLOW REQUIREMENT
+After making any fixes, you MUST:
+1. Call getGitDiff to verify your changes were applied
+2. Report both the BEFORE CLS score (from diagnostics) and confirm changes are ready for verification
 
 ## RULES
 1. ONLY fix CLS/layout shift issues
 2. If CLS score is < 0.05, report "✅ NO CLS ISSUES - Score: [score]"
 3. Always read files before modifying them
-4. Make minimal, targeted fixes`
+4. Make minimal, targeted fixes
+5. ALWAYS call getGitDiff at the end to confirm your changes`
 
   const userPrompt = `The dev server is running at: ${devUrl}
 
