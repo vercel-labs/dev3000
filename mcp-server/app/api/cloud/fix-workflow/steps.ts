@@ -963,15 +963,29 @@ LOADINGHTML
         const verifyResult = await runSandboxCommand(sandboxResult.sandbox, "bash", ["-c", verifyCommand])
 
         if (verifyResult.exitCode === 0 && verifyResult.stdout) {
+          console.log(`[Step 0] Verification response length: ${verifyResult.stdout.length}`)
+          console.log(`[Step 0] Verification response preview: ${verifyResult.stdout.substring(0, 500)}`)
           try {
             const verifyResponse = JSON.parse(verifyResult.stdout)
             if (verifyResponse.result?.content) {
               for (const item of verifyResponse.result.content) {
                 if (item.type === "text" && item.text) {
+                  console.log(`[Step 0] Verification item text preview: ${item.text.substring(0, 300)}`)
                   try {
                     const afterData = JSON.parse(item.text)
+                    console.log(`[Step 0] Parsed verification data keys: ${Object.keys(afterData).join(", ")}`)
                     // Extract CLS score from verification data
-                    const afterClsScore = afterData.clsScore ?? afterData.totalCLS ?? afterData.cls
+                    // The data may be nested in d3kLogData.performanceIssues or similar
+                    let afterClsScore: number | undefined = afterData.clsScore ?? afterData.totalCLS ?? afterData.cls
+                    // Try to extract from nested structures
+                    if (typeof afterClsScore !== "number" && afterData.d3kLogData?.performanceIssues) {
+                      for (const issue of afterData.d3kLogData.performanceIssues) {
+                        if (issue.clsScore !== undefined) {
+                          afterClsScore = issue.clsScore
+                          break
+                        }
+                      }
+                    }
                     if (typeof afterClsScore === "number") {
                       console.log(`[Step 0] After-fix CLS score: ${afterClsScore}`)
 
