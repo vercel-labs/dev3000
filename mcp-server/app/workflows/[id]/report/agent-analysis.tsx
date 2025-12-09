@@ -3,6 +3,7 @@
 import { ChevronDown, ChevronRight } from "lucide-react"
 import { type ReactNode, useMemo, useState } from "react"
 import { Streamdown } from "streamdown"
+import { DiffDownloadButton } from "./diff-download-button"
 
 interface ParsedStep {
   stepNumber: number
@@ -162,8 +163,23 @@ function StepSection({
   )
 }
 
-export function AgentAnalysis({ content }: { content: string }) {
+export function AgentAnalysis({
+  content,
+  gitDiff,
+  projectName
+}: {
+  content: string
+  gitDiff?: string
+  projectName?: string
+}) {
   const parsed = useMemo(() => parseTranscript(content), [content])
+
+  // Strip "## Git Diff" section from finalOutput if present (we'll show it separately)
+  const cleanedFinalOutput = useMemo(() => {
+    if (!parsed.finalOutput) return undefined
+    // Remove ## Git Diff section and everything after it (the diff block)
+    return parsed.finalOutput.replace(/## Git Diff[\s\S]*$/, "").trim()
+  }, [parsed.finalOutput])
 
   // If we couldn't parse the transcript structure, fall back to raw rendering
   if (!parsed.finalOutput && parsed.steps.length === 0) {
@@ -176,10 +192,25 @@ export function AgentAnalysis({ content }: { content: string }) {
 
   return (
     <div className="space-y-4">
-      {/* Final Output - shown prominently at the top */}
-      {parsed.finalOutput && (
+      {/* Final Output - shown prominently at the top (with Git Diff section stripped) */}
+      {cleanedFinalOutput && (
         <div className="prose prose-sm dark:prose-invert max-w-none">
-          <Streamdown mode="static">{parsed.finalOutput}</Streamdown>
+          <Streamdown mode="static">{cleanedFinalOutput}</Streamdown>
+        </div>
+      )}
+
+      {/* Git Diff - shown with download button and collapsed diff */}
+      {gitDiff && (
+        <div className="mt-4 pt-4 border-t border-border">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-medium">Git Diff</h3>
+            <DiffDownloadButton diff={gitDiff} projectName={projectName || "project"} />
+          </div>
+          <StepSection title="View Diff">
+            <pre className="mt-2 bg-muted/50 rounded p-4 text-xs font-mono overflow-x-auto whitespace-pre-wrap max-h-96 overflow-y-auto">
+              {gitDiff}
+            </pre>
+          </StepSection>
         </div>
       )}
 

@@ -6,7 +6,6 @@ import { getWorkflowRun } from "@/lib/workflow-storage"
 import type { WorkflowReport } from "@/types"
 import { AgentAnalysis } from "./agent-analysis"
 import { CollapsibleSection } from "./collapsible-section"
-import { DiffDownloadButton } from "./diff-download-button"
 
 export default async function WorkflowReportPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser()
@@ -356,22 +355,7 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
               </span>
             )}
           </div>
-          <AgentAnalysis content={report.agentAnalysis} />
-
-          {/* Git Diff integrated into agent section */}
-          {report.gitDiff && (
-            <div className="mt-6 pt-4 border-t border-border">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-medium">d3k Agent Fix: git diff</h3>
-                <DiffDownloadButton diff={report.gitDiff} projectName={report.projectName} />
-              </div>
-              <CollapsibleSection title="View Diff" defaultOpen={false}>
-                <pre className="bg-muted/50 rounded p-4 text-xs font-mono overflow-x-auto whitespace-pre-wrap max-h-96 overflow-y-auto">
-                  {report.gitDiff}
-                </pre>
-              </CollapsibleSection>
-            </div>
-          )}
+          <AgentAnalysis content={report.agentAnalysis} gitDiff={report.gitDiff} projectName={report.projectName} />
         </div>
 
         {/* D3k Logs Section (Collapsible) */}
