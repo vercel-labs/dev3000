@@ -89,6 +89,13 @@ export interface WorkflowReport {
   // Git diff of changes made by agent
   gitDiff?: string
 
+  // After-fix verification data (proves the fix worked)
+  afterClsScore?: number
+  afterClsGrade?: "good" | "needs-improvement" | "poor"
+  afterScreenshotUrl?: string
+  verificationStatus?: "improved" | "unchanged" | "degraded" | "error"
+  verificationError?: string
+
   // PR info (future)
   prUrl?: string
   prDiff?: string

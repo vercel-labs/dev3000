@@ -941,6 +941,97 @@ LOADINGHTML
     if (diffResult.exitCode === 0 && diffResult.stdout.trim() && diffResult.stdout.trim() !== "No git diff available") {
       gitDiff = diffResult.stdout.trim()
       console.log(`[Step 0] Agent made changes - git diff captured (${gitDiff.length} chars)`)
+
+      // === VERIFICATION STEP ===
+      // If the agent made changes, reload the page and capture the new CLS score
+      console.log(`[Step 0] Starting verification - reloading page to capture after-fix CLS...`)
+
+      try {
+        // Wait a moment for HMR to apply the changes
+        console.log(`[Step 0] Waiting 3s for HMR to apply changes...`)
+        await new Promise((resolve) => setTimeout(resolve, 3000))
+
+        // Call fix_my_app again to capture the new CLS score
+        console.log(`[Step 0] Calling fix_my_app for post-fix verification...`)
+        const verifyCommand = `curl -s -X POST http://localhost:3684/mcp -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"fix_my_app","arguments":{"mode":"snapshot","focusArea":"performance","returnRawData":true}}}'`
+
+        const verifyResult = await runSandboxCommand(sandboxResult.sandbox, "bash", ["-c", verifyCommand])
+
+        if (verifyResult.exitCode === 0 && verifyResult.stdout) {
+          try {
+            const verifyResponse = JSON.parse(verifyResult.stdout)
+            if (verifyResponse.result?.content) {
+              for (const item of verifyResponse.result.content) {
+                if (item.type === "text" && item.text) {
+                  try {
+                    const afterData = JSON.parse(item.text)
+                    // Extract CLS score from verification data
+                    const afterClsScore = afterData.clsScore ?? afterData.totalCLS ?? afterData.cls
+                    if (typeof afterClsScore === "number") {
+                      console.log(`[Step 0] After-fix CLS score: ${afterClsScore}`)
+
+                      // Determine verification status
+                      const beforeScore = clsScore ?? 1.0 // Use captured score or assume bad
+                      let verificationStatus: "improved" | "unchanged" | "degraded"
+                      if (afterClsScore < beforeScore * 0.9) {
+                        verificationStatus = "improved"
+                      } else if (afterClsScore > beforeScore * 1.1) {
+                        verificationStatus = "degraded"
+                      } else {
+                        verificationStatus = "unchanged"
+                      }
+
+                      const afterClsGrade: "good" | "needs-improvement" | "poor" =
+                        afterClsScore <= 0.1 ? "good" : afterClsScore <= 0.25 ? "needs-improvement" : "poor"
+
+                      console.log(
+                        `[Step 0] Verification status: ${verificationStatus} (before: ${beforeScore}, after: ${afterClsScore})`
+                      )
+
+                      // Update the report with verification data
+                      initialReport.afterClsScore = afterClsScore
+                      initialReport.afterClsGrade = afterClsGrade
+                      initialReport.verificationStatus = verificationStatus
+                      await saveReportToBlob(initialReport)
+                      console.log(`[Step 0] Report updated with verification data`)
+                    }
+                  } catch {
+                    console.log(`[Step 0] Could not parse verification CLS data as JSON`)
+                  }
+                  break
+                }
+              }
+            }
+          } catch (parseErr) {
+            console.log(
+              `[Step 0] Failed to parse verification response: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`
+            )
+          }
+        }
+
+        // Capture "after" screenshot
+        console.log(`[Step 0] Capturing AFTER screenshot...`)
+        const afterBase64 = await captureScreenshotInSandbox(
+          sandboxResult.sandbox,
+          "http://localhost:3000",
+          chromiumPath,
+          "after"
+        )
+        if (afterBase64) {
+          const afterScreenshotUrl = await uploadScreenshot(afterBase64, "after", projectName)
+          if (afterScreenshotUrl) {
+            initialReport.afterScreenshotUrl = afterScreenshotUrl
+            await saveReportToBlob(initialReport)
+            console.log(`[Step 0] After screenshot uploaded: ${afterScreenshotUrl}`)
+          }
+        }
+      } catch (verifyError) {
+        console.log(
+          `[Step 0] Verification failed: ${verifyError instanceof Error ? verifyError.message : String(verifyError)}`
+        )
+        initialReport.verificationError = verifyError instanceof Error ? verifyError.message : String(verifyError)
+        await saveReportToBlob(initialReport)
+      }
     }
   } catch (agentError) {
     console.log(
@@ -1121,30 +1212,35 @@ Please investigate and fix any CLS issues.`
     }
 
     // Add tool calls and results
+    // AI SDK step structure uses typed tool calls/results - cast to access properties
     if (step.toolCalls && step.toolCalls.length > 0) {
-      for (const toolCall of step.toolCalls) {
-        const tc = toolCall as { toolName: string; args?: unknown }
-        transcript.push("")
-        transcript.push(`**Tool Call: ${tc.toolName}**`)
-        transcript.push("```json")
-        transcript.push(JSON.stringify(tc.args ?? {}, null, 2))
-        transcript.push("```")
-      }
-    }
+      for (let j = 0; j < step.toolCalls.length; j++) {
+        const toolCall = step.toolCalls[j] as unknown as { toolName: string; args?: unknown }
+        const toolResult = step.toolResults?.[j] as unknown as { result?: unknown } | undefined
 
-    if (step.toolResults && step.toolResults.length > 0) {
-      for (const toolResult of step.toolResults) {
-        const tr = toolResult as { result?: unknown }
         transcript.push("")
-        transcript.push(`**Tool Result:**`)
+        transcript.push(`**Tool Call: ${toolCall.toolName}**`)
+        transcript.push("```json")
+        // args can be an object or undefined
+        const argsStr = toolCall.args ? JSON.stringify(toolCall.args, null, 2) : "{}"
+        transcript.push(argsStr)
+        transcript.push("```")
+
+        transcript.push("")
+        transcript.push("**Tool Result:**")
+        // Get the result - it's directly on the toolResult object
+        let resultStr: string
+        if (toolResult === undefined) {
+          resultStr = "[no result]"
+        } else if (toolResult.result === undefined) {
+          resultStr = "[undefined]"
+        } else if (typeof toolResult.result === "string") {
+          resultStr = toolResult.result
+        } else {
+          resultStr = JSON.stringify(toolResult.result, null, 2) ?? "[null]"
+        }
+
         // Truncate very long results (like file contents) for readability
-        const result = tr.result
-        const resultStr =
-          result === undefined
-            ? "[undefined]"
-            : typeof result === "string"
-              ? result
-              : (JSON.stringify(result) ?? "[null]")
         if (resultStr.length > 2000) {
           transcript.push("```")
           transcript.push(`${resultStr.substring(0, 2000)}\n... [truncated, ${resultStr.length} chars total]`)

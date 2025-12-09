@@ -55,7 +55,7 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
           <span className="text-muted-foreground">Fix Report</span>
         </div>
 
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-4">
           <div>
             <h1 className="text-3xl font-bold">{report.projectName}</h1>
             <p className="text-muted-foreground mt-1">{new Date(report.timestamp).toLocaleString()}</p>
@@ -70,18 +70,128 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
           </a>
         </div>
 
-        {/* CLS Score Section */}
+        {/* Sandbox Info (at top, always visible) */}
+        {(report.sandboxDevUrl || report.sandboxMcpUrl) && (
+          <div className="text-sm text-muted-foreground mb-6">
+            <ul className="flex flex-wrap gap-x-6 gap-y-1">
+              {report.sandboxDevUrl && (
+                <li>
+                  <span className="text-muted-foreground">Dev: </span>
+                  <a
+                    href={report.sandboxDevUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-mono text-xs hover:underline"
+                  >
+                    {report.sandboxDevUrl}
+                  </a>
+                </li>
+              )}
+              {report.sandboxMcpUrl && (
+                <li>
+                  <span className="text-muted-foreground">MCP: </span>
+                  <a
+                    href={report.sandboxMcpUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-mono text-xs hover:underline"
+                  >
+                    {report.sandboxMcpUrl}
+                  </a>
+                </li>
+              )}
+            </ul>
+          </div>
+        )}
+
+        {/* CLS Score Section - Before/After Comparison */}
         {report.clsScore !== undefined && (
           <div className="bg-card border border-border rounded-lg p-6 mb-6">
             <h2 className="text-xl font-semibold mb-4">Cumulative Layout Shift (CLS)</h2>
-            <div className="flex items-center gap-4 mb-4">
-              <div className="text-4xl font-bold">{report.clsScore.toFixed(4)}</div>
-              {report.clsGrade && (
-                <span className={`px-3 py-1 rounded-full text-sm font-medium ${gradeColor(report.clsGrade)}`}>
-                  {report.clsGrade}
-                </span>
-              )}
-            </div>
+
+            {/* Show before/after if we have verification data */}
+            {report.afterClsScore !== undefined ? (
+              <div className="space-y-4">
+                {/* Verification Status Banner */}
+                <div
+                  className={`rounded-lg p-4 ${
+                    report.verificationStatus === "improved"
+                      ? "bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800"
+                      : report.verificationStatus === "degraded"
+                        ? "bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800"
+                        : "bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800"
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-lg">
+                      {report.verificationStatus === "improved"
+                        ? "✅"
+                        : report.verificationStatus === "degraded"
+                          ? "❌"
+                          : "⚠️"}
+                    </span>
+                    <span className="font-semibold">
+                      {report.verificationStatus === "improved"
+                        ? "Fix Verified - CLS Improved!"
+                        : report.verificationStatus === "degraded"
+                          ? "Fix May Have Caused Regression"
+                          : "CLS Unchanged After Fix"}
+                    </span>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    {report.verificationStatus === "improved"
+                      ? `CLS reduced by ${(((report.clsScore - report.afterClsScore) / report.clsScore) * 100).toFixed(0)}%`
+                      : report.verificationStatus === "degraded"
+                        ? `CLS increased by ${(((report.afterClsScore - report.clsScore) / report.clsScore) * 100).toFixed(0)}%`
+                        : "The fix did not significantly impact CLS score"}
+                  </p>
+                </div>
+
+                {/* Before / After Comparison */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="text-center p-4 bg-muted/30 rounded-lg">
+                    <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Before</div>
+                    <div className="text-3xl font-bold">{report.clsScore.toFixed(4)}</div>
+                    {report.clsGrade && (
+                      <span
+                        className={`inline-block mt-2 px-2 py-0.5 rounded-full text-xs font-medium ${gradeColor(report.clsGrade)}`}
+                      >
+                        {report.clsGrade}
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-center p-4 bg-muted/30 rounded-lg">
+                    <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">After</div>
+                    <div className="text-3xl font-bold">{report.afterClsScore.toFixed(4)}</div>
+                    {report.afterClsGrade && (
+                      <span
+                        className={`inline-block mt-2 px-2 py-0.5 rounded-full text-xs font-medium ${gradeColor(report.afterClsGrade)}`}
+                      >
+                        {report.afterClsGrade}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* Original display if no verification data */
+              <div className="flex items-center gap-4 mb-4">
+                <div className="text-4xl font-bold">{report.clsScore.toFixed(4)}</div>
+                {report.clsGrade && (
+                  <span className={`px-3 py-1 rounded-full text-sm font-medium ${gradeColor(report.clsGrade)}`}>
+                    {report.clsGrade}
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Verification Error */}
+            {report.verificationError && (
+              <div className="mt-4 p-3 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded text-sm text-red-800 dark:text-red-200">
+                <span className="font-medium">Verification Error: </span>
+                {report.verificationError}
+              </div>
+            )}
 
             {/* Layout Shifts Details */}
             {report.layoutShifts && report.layoutShifts.length > 0 && (
@@ -106,43 +216,133 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
         )}
 
         {/* Screenshots Section */}
-        {(report.beforeScreenshotUrl || (report.clsScreenshots && report.clsScreenshots.length > 0)) && (
+        {(report.beforeScreenshotUrl ||
+          report.afterScreenshotUrl ||
+          (report.clsScreenshots && report.clsScreenshots.length > 0)) && (
           <div className="bg-card border border-border rounded-lg p-6 mb-6">
             <h2 className="text-xl font-semibold mb-4">Screenshots</h2>
-            <div className="flex flex-wrap gap-2">
-              {report.beforeScreenshotUrl && (
-                <a href={report.beforeScreenshotUrl} target="_blank" rel="noopener noreferrer" className="inline-block">
-                  <Image
-                    src={report.beforeScreenshotUrl}
-                    alt="Before screenshot"
-                    width={192}
-                    height={108}
-                    unoptimized
-                    className="w-48 h-auto rounded border border-border hover:border-primary transition-colors cursor-pointer"
-                  />
-                  <span className="text-xs text-muted-foreground mt-1 block">Before</span>
-                </a>
-              )}
-              {report.clsScreenshots?.map((screenshot) => (
-                <a
-                  key={`screenshot-${screenshot.timestamp}`}
-                  href={screenshot.blobUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-block"
-                >
-                  <Image
-                    src={screenshot.blobUrl}
-                    alt={screenshot.label || "CLS Screenshot"}
-                    width={192}
-                    height={108}
-                    unoptimized
-                    className="w-48 h-auto rounded border border-border hover:border-primary transition-colors cursor-pointer"
-                  />
-                  <span className="text-xs text-muted-foreground mt-1 block">{screenshot.label || "Shift"}</span>
-                </a>
-              ))}
-            </div>
+
+            {/* Before/After comparison if we have both */}
+            {report.beforeScreenshotUrl && report.afterScreenshotUrl ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <div className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Before Fix</div>
+                    <a href={report.beforeScreenshotUrl} target="_blank" rel="noopener noreferrer">
+                      <Image
+                        src={report.beforeScreenshotUrl}
+                        alt="Before fix screenshot"
+                        width={400}
+                        height={225}
+                        unoptimized
+                        className="w-full h-auto rounded border border-border hover:border-primary transition-colors cursor-pointer"
+                      />
+                    </a>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground uppercase tracking-wide mb-2">After Fix</div>
+                    <a href={report.afterScreenshotUrl} target="_blank" rel="noopener noreferrer">
+                      <Image
+                        src={report.afterScreenshotUrl}
+                        alt="After fix screenshot"
+                        width={400}
+                        height={225}
+                        unoptimized
+                        className="w-full h-auto rounded border border-border hover:border-primary transition-colors cursor-pointer"
+                      />
+                    </a>
+                  </div>
+                </div>
+
+                {/* CLS timeline screenshots if available */}
+                {report.clsScreenshots && report.clsScreenshots.length > 0 && (
+                  <CollapsibleSection title="CLS Timeline Screenshots" defaultOpen={false}>
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {report.clsScreenshots.map((screenshot) => (
+                        <a
+                          key={`screenshot-${screenshot.timestamp}`}
+                          href={screenshot.blobUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-block"
+                        >
+                          <Image
+                            src={screenshot.blobUrl}
+                            alt={screenshot.label || "CLS Screenshot"}
+                            width={192}
+                            height={108}
+                            unoptimized
+                            className="w-48 h-auto rounded border border-border hover:border-primary transition-colors cursor-pointer"
+                          />
+                          <span className="text-xs text-muted-foreground mt-1 block">
+                            {screenshot.label || "Shift"}
+                          </span>
+                        </a>
+                      ))}
+                    </div>
+                  </CollapsibleSection>
+                )}
+              </div>
+            ) : (
+              /* Original layout if we don't have both before/after */
+              <div className="flex flex-wrap gap-2">
+                {report.beforeScreenshotUrl && (
+                  <a
+                    href={report.beforeScreenshotUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block"
+                  >
+                    <Image
+                      src={report.beforeScreenshotUrl}
+                      alt="Before screenshot"
+                      width={192}
+                      height={108}
+                      unoptimized
+                      className="w-48 h-auto rounded border border-border hover:border-primary transition-colors cursor-pointer"
+                    />
+                    <span className="text-xs text-muted-foreground mt-1 block">Before</span>
+                  </a>
+                )}
+                {report.afterScreenshotUrl && (
+                  <a
+                    href={report.afterScreenshotUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block"
+                  >
+                    <Image
+                      src={report.afterScreenshotUrl}
+                      alt="After screenshot"
+                      width={192}
+                      height={108}
+                      unoptimized
+                      className="w-48 h-auto rounded border border-border hover:border-primary transition-colors cursor-pointer"
+                    />
+                    <span className="text-xs text-muted-foreground mt-1 block">After</span>
+                  </a>
+                )}
+                {report.clsScreenshots?.map((screenshot) => (
+                  <a
+                    key={`screenshot-${screenshot.timestamp}`}
+                    href={screenshot.blobUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-block"
+                  >
+                    <Image
+                      src={screenshot.blobUrl}
+                      alt={screenshot.label || "CLS Screenshot"}
+                      width={192}
+                      height={108}
+                      unoptimized
+                      className="w-48 h-auto rounded border border-border hover:border-primary transition-colors cursor-pointer"
+                    />
+                    <span className="text-xs text-muted-foreground mt-1 block">{screenshot.label || "Shift"}</span>
+                  </a>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -158,26 +358,6 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
           </div>
           <AgentAnalysis content={report.agentAnalysis} />
         </div>
-
-        {/* Sandbox Info (Collapsible) */}
-        {(report.sandboxDevUrl || report.sandboxMcpUrl) && (
-          <CollapsibleSection title="Sandbox Details" defaultOpen={false}>
-            <dl className="space-y-2 text-sm">
-              {report.sandboxDevUrl && (
-                <div className="flex gap-2">
-                  <dt className="text-muted-foreground w-24">Dev URL:</dt>
-                  <dd className="font-mono text-xs">{report.sandboxDevUrl}</dd>
-                </div>
-              )}
-              {report.sandboxMcpUrl && (
-                <div className="flex gap-2">
-                  <dt className="text-muted-foreground w-24">MCP URL:</dt>
-                  <dd className="font-mono text-xs">{report.sandboxMcpUrl}</dd>
-                </div>
-              )}
-            </dl>
-          </CollapsibleSection>
-        )}
 
         {/* D3k Logs Section (Collapsible) */}
         {report.d3kLogs && (
