@@ -9,6 +9,38 @@ RED='\033[0;31m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
+# Cleanup function to kill any stray next-server processes from our test
+cleanup_test_processes() {
+    echo -e "${YELLOW}Cleaning up any stray test processes...${NC}"
+
+    # Kill any next-server processes running on our test MCP port (4685)
+    # Use lsof to find processes on the port, then kill them
+    if command -v lsof &> /dev/null; then
+        local pids=$(lsof -ti:4685 2>/dev/null || true)
+        if [ -n "$pids" ]; then
+            echo "Killing processes on port 4685: $pids"
+            echo "$pids" | xargs kill -9 2>/dev/null || true
+        fi
+
+        pids=$(lsof -ti:4100 2>/dev/null || true)
+        if [ -n "$pids" ]; then
+            echo "Killing processes on port 4100: $pids"
+            echo "$pids" | xargs kill -9 2>/dev/null || true
+        fi
+    fi
+
+    # Also kill any orphaned next-server processes from test-app
+    # These would have been started by our test and may still be running
+    pkill -9 -f "next-server.*test-app" 2>/dev/null || true
+    pkill -9 -f "pnpm run start.*test-app" 2>/dev/null || true
+
+    # Give processes time to die
+    sleep 1
+}
+
+# Set trap to cleanup on exit (success or failure)
+trap cleanup_test_processes EXIT
+
 # Run standard tests
 echo -e "${YELLOW}Running unit tests...${NC}"
 pnpm run test
@@ -99,8 +131,15 @@ if [ $COUNTER -eq 20 ]; then
     kill -INT $D3K_PID 2>/dev/null || true
     sleep 2
     kill $D3K_PID 2>/dev/null || true
+    # Force kill any stray next-server processes before exiting
+    cleanup_test_processes
     exit 1
 fi
+
+# Force kill any lingering next-server processes from this test
+# The d3k process may have exited but the MCP server (next-server) can linger
+echo -e "${YELLOW}Ensuring all test server processes are stopped...${NC}"
+cleanup_test_processes
 
 # Cleanup
 cd - > /dev/null
