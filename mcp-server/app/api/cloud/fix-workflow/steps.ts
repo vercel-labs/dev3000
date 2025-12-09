@@ -185,11 +185,11 @@ function createD3kSandboxTools(sandbox: Sandbox, mcpUrl: string) {
       }),
       execute: async ({ path, content }: { path: string; content: string }) => {
         const fullPath = `${SANDBOX_CWD}/${path}`
-        // Escape content for shell
-        const escapedContent = content.replace(/'/g, "'\\''")
+        // Use single-quoted heredoc delimiter ('FILEEOF') which treats content literally
+        // No escaping needed - content is passed through as-is
         const result = await runSandboxCommand(sandbox, "sh", [
           "-c",
-          `cat > "${fullPath}" << 'FILEEOF'\n${escapedContent}\nFILEEOF`
+          `cat > "${fullPath}" << 'FILEEOF'\n${content}\nFILEEOF`
         ])
         if (result.exitCode !== 0) {
           return `Failed to write ${path}: ${result.stderr}`
