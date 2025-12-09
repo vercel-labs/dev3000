@@ -86,6 +86,9 @@ export interface WorkflowReport {
   // d3k logs
   d3kLogs?: string
 
+  // Git diff of changes made by agent
+  gitDiff?: string
+
   // PR info (future)
   prUrl?: string
   prDiff?: string

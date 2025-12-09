@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/lib/auth"
 import { getWorkflowRun } from "@/lib/workflow-storage"
 import type { WorkflowReport } from "@/types"
 import { AgentAnalysis } from "./agent-analysis"
+import { CollapsibleSection } from "./collapsible-section"
 
 export default async function WorkflowReportPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser()
@@ -156,6 +157,25 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
           </div>
           <AgentAnalysis content={report.agentAnalysis} />
         </div>
+
+        {/* Git Diff Section */}
+        {report.gitDiff && (
+          <div className="bg-card border border-border rounded-lg p-6 mb-6">
+            <h2 className="text-xl font-semibold mb-4">Changes Made</h2>
+            <pre className="bg-muted/50 rounded p-4 text-xs font-mono overflow-x-auto whitespace-pre-wrap">
+              {report.gitDiff}
+            </pre>
+          </div>
+        )}
+
+        {/* D3k Logs Section (Collapsible) */}
+        {report.d3kLogs && (
+          <CollapsibleSection title="d3k Debug Logs" defaultOpen={false}>
+            <pre className="bg-muted/50 rounded p-4 text-xs font-mono overflow-x-auto whitespace-pre-wrap max-h-96 overflow-y-auto">
+              {report.d3kLogs}
+            </pre>
+          </CollapsibleSection>
+        )}
 
         {/* Sandbox Info */}
         {(report.sandboxDevUrl || report.sandboxMcpUrl) && (

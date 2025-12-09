@@ -1709,7 +1709,7 @@ export async function uploadToBlob(
   _logAnalysis: string,
   sandboxDevUrl: string,
   beforeScreenshotUrl?: string | null,
-  _gitDiff?: string | null,
+  gitDiff?: string | null,
   d3kArtifacts?: {
     clsScreenshots: Array<{ label: string; blobUrl: string; timestamp: number }>
     screencastSessionId: string | null
@@ -1778,11 +1778,13 @@ export async function uploadToBlob(
     })),
     agentAnalysis: fixProposal,
     agentAnalysisModel: agentAnalysisModel || undefined,
-    d3kLogs: d3kArtifacts?.fullLogs || undefined
+    d3kLogs: d3kArtifacts?.fullLogs || undefined,
+    gitDiff: gitDiff || undefined
   }
 
   // Log what we're saving
   console.log(`[Step 3] Agent analysis length: ${fixProposal.length} chars`)
+  console.log(`[Step 3] Git diff length: ${gitDiff?.length ?? 0} chars`)
   console.log(`[Step 3] Agent model: ${report.agentAnalysisModel ?? "not specified"}`)
 
   // Save updated report (overwrites the initial report from Step 0)
