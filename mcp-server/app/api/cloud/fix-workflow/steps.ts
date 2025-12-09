@@ -1090,7 +1090,80 @@ Please investigate and fix any CLS issues.`
     console.log(`[Agent] WARNING: Agent returned very short text, may indicate tool-only response`)
   }
 
-  return text
+  // Build complete transcript including prompt, all tool calls, and responses
+  // This provides full visibility into what the agent did
+  const transcript: string[] = []
+
+  // Add the system prompt and user prompt
+  transcript.push("## System Prompt")
+  transcript.push("```")
+  transcript.push(systemPrompt)
+  transcript.push("```")
+  transcript.push("")
+  transcript.push("## User Prompt")
+  transcript.push("```")
+  transcript.push(userPrompt)
+  transcript.push("```")
+  transcript.push("")
+  transcript.push("## Agent Execution")
+  transcript.push("")
+
+  // Add each step with tool calls and results
+  for (let i = 0; i < steps.length; i++) {
+    const step = steps[i]
+    transcript.push(`### Step ${i + 1}`)
+
+    // Add assistant text if present
+    if (step.text) {
+      transcript.push("")
+      transcript.push("**Assistant:**")
+      transcript.push(step.text)
+    }
+
+    // Add tool calls and results
+    if (step.toolCalls && step.toolCalls.length > 0) {
+      for (const toolCall of step.toolCalls) {
+        const tc = toolCall as { toolName: string; args?: unknown }
+        transcript.push("")
+        transcript.push(`**Tool Call: ${tc.toolName}**`)
+        transcript.push("```json")
+        transcript.push(JSON.stringify(tc.args ?? {}, null, 2))
+        transcript.push("```")
+      }
+    }
+
+    if (step.toolResults && step.toolResults.length > 0) {
+      for (const toolResult of step.toolResults) {
+        const tr = toolResult as { result?: unknown }
+        transcript.push("")
+        transcript.push(`**Tool Result:**`)
+        // Truncate very long results (like file contents) for readability
+        const result = tr.result
+        const resultStr = typeof result === "string" ? result : JSON.stringify(result)
+        if (resultStr.length > 2000) {
+          transcript.push("```")
+          transcript.push(`${resultStr.substring(0, 2000)}\n... [truncated, ${resultStr.length} chars total]`)
+          transcript.push("```")
+        } else {
+          transcript.push("```")
+          transcript.push(resultStr)
+          transcript.push("```")
+        }
+      }
+    }
+
+    transcript.push("")
+  }
+
+  // Add final output
+  transcript.push("## Final Output")
+  transcript.push("")
+  transcript.push(text)
+
+  const fullTranscript = transcript.join("\n")
+  console.log(`[Agent] Full transcript length: ${fullTranscript.length} chars`)
+
+  return fullTranscript
 }
 
 /**

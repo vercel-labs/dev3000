@@ -1,4 +1,4 @@
-import { ArrowLeft, Download } from "lucide-react"
+import { ArrowLeft, Download, FileDown } from "lucide-react"
 import Image from "next/image"
 import { redirect } from "next/navigation"
 import { getCurrentUser } from "@/lib/auth"
@@ -6,6 +6,7 @@ import { getWorkflowRun } from "@/lib/workflow-storage"
 import type { WorkflowReport } from "@/types"
 import { AgentAnalysis } from "./agent-analysis"
 import { CollapsibleSection } from "./collapsible-section"
+import { DiffDownloadButton } from "./diff-download-button"
 
 export default async function WorkflowReportPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser()
@@ -158,29 +159,9 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
           <AgentAnalysis content={report.agentAnalysis} />
         </div>
 
-        {/* Git Diff Section */}
-        {report.gitDiff && (
-          <div className="bg-card border border-border rounded-lg p-6 mb-6">
-            <h2 className="text-xl font-semibold mb-4">Changes Made</h2>
-            <pre className="bg-muted/50 rounded p-4 text-xs font-mono overflow-x-auto whitespace-pre-wrap">
-              {report.gitDiff}
-            </pre>
-          </div>
-        )}
-
-        {/* D3k Logs Section (Collapsible) */}
-        {report.d3kLogs && (
-          <CollapsibleSection title="d3k Debug Logs" defaultOpen={false}>
-            <pre className="bg-muted/50 rounded p-4 text-xs font-mono overflow-x-auto whitespace-pre-wrap max-h-96 overflow-y-auto">
-              {report.d3kLogs}
-            </pre>
-          </CollapsibleSection>
-        )}
-
-        {/* Sandbox Info */}
+        {/* Sandbox Info (Collapsible) */}
         {(report.sandboxDevUrl || report.sandboxMcpUrl) && (
-          <div className="bg-card border border-border rounded-lg p-6 mb-6">
-            <h2 className="text-xl font-semibold mb-4">Sandbox Details</h2>
+          <CollapsibleSection title="Sandbox Details" defaultOpen={false}>
             <dl className="space-y-2 text-sm">
               {report.sandboxDevUrl && (
                 <div className="flex gap-2">
@@ -195,7 +176,52 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
                 </div>
               )}
             </dl>
-          </div>
+          </CollapsibleSection>
+        )}
+
+        {/* D3k Logs Section (Collapsible) */}
+        {report.d3kLogs && (
+          <CollapsibleSection title="d3k Debug Logs" defaultOpen={false}>
+            <pre className="bg-muted/50 rounded p-4 text-xs font-mono overflow-x-auto whitespace-pre-wrap max-h-96 overflow-y-auto">
+              {report.d3kLogs}
+            </pre>
+          </CollapsibleSection>
+        )}
+
+        {/* Git Diff Section (Collapsible with Download) */}
+        {report.gitDiff && (
+          <CollapsibleSection title="Proposed Changes (Git Diff)" defaultOpen={false}>
+            <div className="space-y-4">
+              <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                <div className="flex items-start gap-3">
+                  <FileDown className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1">
+                    <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-1">How to apply this diff</h4>
+                    <ol className="text-sm text-blue-800 dark:text-blue-200 space-y-1 list-decimal list-inside">
+                      <li>Download the diff file using the button below</li>
+                      <li>
+                        Navigate to your project root in terminal:{" "}
+                        <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">cd your-project</code>
+                      </li>
+                      <li>
+                        Apply the patch:{" "}
+                        <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">
+                          git apply ~/Downloads/d3k-fix.diff
+                        </code>
+                      </li>
+                      <li>Review the changes and test locally</li>
+                    </ol>
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <DiffDownloadButton diff={report.gitDiff} projectName={report.projectName} />
+                </div>
+              </div>
+              <pre className="bg-muted/50 rounded p-4 text-xs font-mono overflow-x-auto whitespace-pre-wrap max-h-96 overflow-y-auto">
+                {report.gitDiff}
+              </pre>
+            </div>
+          </CollapsibleSection>
         )}
 
         <div className="mt-6 flex gap-4">
