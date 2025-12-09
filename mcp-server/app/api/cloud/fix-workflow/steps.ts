@@ -1139,7 +1139,12 @@ Please investigate and fix any CLS issues.`
         transcript.push(`**Tool Result:**`)
         // Truncate very long results (like file contents) for readability
         const result = tr.result
-        const resultStr = typeof result === "string" ? result : JSON.stringify(result)
+        const resultStr =
+          result === undefined
+            ? "[undefined]"
+            : typeof result === "string"
+              ? result
+              : (JSON.stringify(result) ?? "[null]")
         if (resultStr.length > 2000) {
           transcript.push("```")
           transcript.push(`${resultStr.substring(0, 2000)}\n... [truncated, ${resultStr.length} chars total]`)
