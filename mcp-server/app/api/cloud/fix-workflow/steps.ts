@@ -956,76 +956,60 @@ LOADINGHTML
         console.log(`[Step 0] Waiting 3s for HMR to apply changes...`)
         await new Promise((resolve) => setTimeout(resolve, 3000))
 
-        // Call fix_my_app again to capture the new CLS score
-        console.log(`[Step 0] Calling fix_my_app for post-fix verification...`)
-        const verifyCommand = `curl -s -X POST http://localhost:3684/mcp -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"fix_my_app","arguments":{"mode":"snapshot","focusArea":"performance","returnRawData":true}}}'`
+        // Navigate browser to refresh the page (this triggers fresh CLS measurement by d3k)
+        console.log(`[Step 0] Triggering browser navigation for fresh CLS measurement...`)
+        const navCommand = `curl -s -X POST http://localhost:3684/mcp -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"navigate","params":{"url":"http://localhost:3000"}}}}'`
+        const navResult = await runSandboxCommand(sandboxResult.sandbox, "bash", ["-c", navCommand])
+        console.log(`[Step 0] Navigation result: exit ${navResult.exitCode}`)
 
-        const verifyResult = await runSandboxCommand(sandboxResult.sandbox, "bash", ["-c", verifyCommand])
+        // Wait for page to load and d3k to capture new CLS metrics
+        console.log(`[Step 0] Waiting 5s for page load and CLS measurement...`)
+        await new Promise((resolve) => setTimeout(resolve, 5000))
 
-        if (verifyResult.exitCode === 0 && verifyResult.stdout) {
-          console.log(`[Step 0] Verification response length: ${verifyResult.stdout.length}`)
-          console.log(`[Step 0] Verification response preview: ${verifyResult.stdout.substring(0, 500)}`)
-          try {
-            const verifyResponse = JSON.parse(verifyResult.stdout)
-            if (verifyResponse.result?.content) {
-              for (const item of verifyResponse.result.content) {
-                if (item.type === "text" && item.text) {
-                  console.log(`[Step 0] Verification item text preview: ${item.text.substring(0, 300)}`)
-                  try {
-                    const afterData = JSON.parse(item.text)
-                    console.log(`[Step 0] Parsed verification data keys: ${Object.keys(afterData).join(", ")}`)
-                    // Extract CLS score from verification data
-                    // The data may be nested in d3kLogData.performanceIssues or similar
-                    let afterClsScore: number | undefined = afterData.clsScore ?? afterData.totalCLS ?? afterData.cls
-                    // Try to extract from nested structures
-                    if (typeof afterClsScore !== "number" && afterData.d3kLogData?.performanceIssues) {
-                      for (const issue of afterData.d3kLogData.performanceIssues) {
-                        if (issue.clsScore !== undefined) {
-                          afterClsScore = issue.clsScore
-                          break
-                        }
-                      }
-                    }
-                    if (typeof afterClsScore === "number") {
-                      console.log(`[Step 0] After-fix CLS score: ${afterClsScore}`)
+        // Re-fetch d3k artifacts to get updated CLS metadata
+        console.log(`[Step 0] Re-fetching d3k artifacts for updated CLS score...`)
+        const afterArtifacts = await fetchAndUploadD3kArtifacts(
+          sandboxResult.sandbox,
+          sandboxResult.mcpUrl,
+          `${projectName}-after`
+        )
 
-                      // Determine verification status
-                      const beforeScore = clsScore ?? 1.0 // Use captured score or assume bad
-                      let verificationStatus: "improved" | "unchanged" | "degraded"
-                      if (afterClsScore < beforeScore * 0.9) {
-                        verificationStatus = "improved"
-                      } else if (afterClsScore > beforeScore * 1.1) {
-                        verificationStatus = "degraded"
-                      } else {
-                        verificationStatus = "unchanged"
-                      }
+        // Extract the new CLS score from the updated metadata
+        if (afterArtifacts.metadata) {
+          const afterMeta = afterArtifacts.metadata as { totalCLS?: number; clsGrade?: string }
+          const afterClsScore = afterMeta.totalCLS
+          console.log(`[Step 0] After-fix artifacts metadata: totalCLS=${afterClsScore}`)
 
-                      const afterClsGrade: "good" | "needs-improvement" | "poor" =
-                        afterClsScore <= 0.1 ? "good" : afterClsScore <= 0.25 ? "needs-improvement" : "poor"
+          if (typeof afterClsScore === "number") {
+            console.log(`[Step 0] After-fix CLS score: ${afterClsScore}`)
 
-                      console.log(
-                        `[Step 0] Verification status: ${verificationStatus} (before: ${beforeScore}, after: ${afterClsScore})`
-                      )
-
-                      // Update the report with verification data
-                      initialReport.afterClsScore = afterClsScore
-                      initialReport.afterClsGrade = afterClsGrade
-                      initialReport.verificationStatus = verificationStatus
-                      await saveReportToBlob(initialReport)
-                      console.log(`[Step 0] Report updated with verification data`)
-                    }
-                  } catch {
-                    console.log(`[Step 0] Could not parse verification CLS data as JSON`)
-                  }
-                  break
-                }
-              }
+            // Determine verification status
+            const beforeScore = clsScore ?? 1.0 // Use captured score or assume bad
+            let verificationStatus: "improved" | "unchanged" | "degraded"
+            if (afterClsScore < beforeScore * 0.9) {
+              verificationStatus = "improved"
+            } else if (afterClsScore > beforeScore * 1.1) {
+              verificationStatus = "degraded"
+            } else {
+              verificationStatus = "unchanged"
             }
-          } catch (parseErr) {
+
+            const afterClsGrade: "good" | "needs-improvement" | "poor" =
+              afterClsScore <= 0.1 ? "good" : afterClsScore <= 0.25 ? "needs-improvement" : "poor"
+
             console.log(
-              `[Step 0] Failed to parse verification response: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`
+              `[Step 0] Verification status: ${verificationStatus} (before: ${beforeScore}, after: ${afterClsScore})`
             )
+
+            // Update the report with verification data
+            initialReport.afterClsScore = afterClsScore
+            initialReport.afterClsGrade = afterClsGrade
+            initialReport.verificationStatus = verificationStatus
+            await saveReportToBlob(initialReport)
+            console.log(`[Step 0] Report updated with verification data`)
           }
+        } else {
+          console.log(`[Step 0] No metadata in after-fix artifacts - CLS verification not possible`)
         }
 
         // Capture "after" screenshot
