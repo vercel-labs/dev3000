@@ -10,6 +10,19 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.123",
+    date: "2025-12-09",
+    type: "minor",
+    highlights: [
+      "Fix Chrome version detection and MCP discovery in sandbox",
+      "Fix undefined resultStr error in agent transcript building",
+      "Trigger redeploy",
+      "Improve agent analysis capture and report page UX",
+      "Add git diff and d3k logs display to workflow report page"
+    ]
+  },
+
+  {
     version: "0.0.122",
     date: "2025-12-09",
     type: "patch",

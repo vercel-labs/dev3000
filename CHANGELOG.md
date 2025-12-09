@@ -4,6 +4,16 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.123] - 2025-12-09
+
+**Feature Release**
+
+- Fix Chrome version detection and MCP discovery in sandbox
+- Fix undefined resultStr error in agent transcript building
+- Trigger redeploy
+- Improve agent analysis capture and report page UX
+- Add git diff and d3k logs display to workflow report page
+
 ## [0.0.122] - 2025-12-09
 
 **Patch Release**
