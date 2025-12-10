@@ -93,12 +93,21 @@ echo "Monitoring started - NOW you can trigger the workflow"
 
 Use d3k browser automation (via `execute_browser_action` MCP tool):
 
+**Before navigating**, read the bypass token from the environment:
+```bash
+# Read WORKFLOW_TEST_BYPASS_TOKEN from .env.local
+grep WORKFLOW_TEST_BYPASS_TOKEN /Users/elsigh/src/vercel-labs/dev3000/mcp-server/.env.local
+```
+
+Then construct the URL with the token value:
+
 ```typescript
 // Navigate to workflow form with all required parameters
+// Replace <BYPASS_TOKEN> with the value from WORKFLOW_TEST_BYPASS_TOKEN in .env.local
 execute_browser_action({
   action: "navigate",
   params: {
-    url: "http://localhost:3000/workflows/new?type=cloud-fix&team=team_aMS4jZUlMooxyr9VgMKJf9uT&project=prj_0ITI5UHrH4Kp92G5OLEMrlgVX08p&bypass=Hl0A8oVWb6LuIl4Tg3HSTTFwu5HOyq3h"
+    url: "http://localhost:3000/workflows/new?type=cloud-fix&team=team_aMS4jZUlMooxyr9VgMKJf9uT&project=prj_0ITI5UHrH4Kp92G5OLEMrlgVX08p&bypass=<BYPASS_TOKEN>"
   }
 })
 
