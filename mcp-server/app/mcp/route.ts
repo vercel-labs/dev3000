@@ -51,10 +51,73 @@ const getPackageRunner = (): { command: string; args: string[] } | null => {
   }
 }
 
+// Check if chrome-devtools-mcp is externally configured (e.g., in user's .mcp.json)
+// This helps avoid spawning a duplicate that would cause CDP conflicts
+const isExternalChromeDevtoolsConfigured = (): boolean => {
+  try {
+    const { existsSync, readFileSync } = require("node:fs")
+    const cwd = process.cwd()
+
+    // Check common MCP config locations
+    const configPaths = [
+      join(cwd, ".mcp.json"), // Claude Code / OpenAI
+      join(cwd, ".cursor", "mcp.json"), // Cursor
+      join(homedir(), ".claude", "settings.json") // Claude global settings
+    ]
+
+    for (const configPath of configPaths) {
+      if (!existsSync(configPath)) continue
+
+      try {
+        const content = readFileSync(configPath, "utf-8")
+        const config = JSON.parse(content)
+
+        // Check mcpServers object for chrome-devtools variants
+        const servers = config.mcpServers || config.mcp || {}
+        for (const [name, serverConfig] of Object.entries(servers)) {
+          // Skip if this is dev3000's own entry
+          if (name === "dev3000") continue
+
+          // Check if it's chrome-devtools-mcp by name or command
+          const nameLower = name.toLowerCase()
+          if (nameLower.includes("chrome-devtools") || nameLower.includes("chromedevtools")) {
+            console.log(
+              `[MCP Orchestrator] Detected external chrome-devtools-mcp (${name}). ` +
+                "dev3000 will use its native CDP implementation instead of spawning a duplicate."
+            )
+            return true
+          }
+
+          // Also check the command/args if available
+          const cfg = serverConfig as Record<string, unknown>
+          const command = String(cfg.command || "")
+          const args = Array.isArray(cfg.args) ? cfg.args.join(" ") : ""
+          if (command.includes("chrome-devtools-mcp") || args.includes("chrome-devtools-mcp")) {
+            console.log(
+              `[MCP Orchestrator] Detected external chrome-devtools-mcp (${name}). ` +
+                "dev3000 will use its native CDP implementation instead of spawning a duplicate."
+            )
+            return true
+          }
+        }
+      } catch {
+        // Skip invalid config files
+      }
+    }
+
+    return false
+  } catch {
+    return false
+  }
+}
+
 // Initialize MCP client manager for orchestration
 // This will spawn and connect to chrome-devtools and next-devtools-mcp as stdio processes
 const initializeOrchestration = async () => {
   const clientManager = getMCPClientManager()
+
+  // Check if chrome-devtools is already configured externally
+  const externalChromeDevtools = isExternalChromeDevtoolsConfigured()
 
   // Helper to get config from session files in ~/.d3k/
   const getConfigFromSessions = () => {
@@ -75,16 +138,27 @@ const initializeOrchestration = async () => {
           const sessionData = JSON.parse(readFileSync(sessionPath, "utf-8"))
 
           // Configure chrome-devtools MCP if CDP URL is available
-          if (sessionData.cdpUrl && !config.chromeDevtools) {
-            // Use --wsEndpoint for direct WebSocket CDP connection
-            const cdpUrl = sessionData.cdpUrl // Keep ws:// URL as-is
+          // Skip if externally configured to avoid CDP conflicts
+          if (sessionData.cdpUrl && !config.chromeDevtools && !externalChromeDevtools) {
+            // Extract the HTTP endpoint from the WebSocket URL
+            // The cdpUrl is typically ws://localhost:9222/devtools/page/<targetId>
+            // chrome-devtools-mcp needs --browserUrl http://localhost:9222 to properly
+            // manage browser contexts (avoids "Target.getBrowserContexts: Not allowed" errors)
             const runner = getPackageRunner()
 
             if (runner) {
-              config.chromeDevtools = {
-                command: runner.command,
-                args: [...runner.args, "chrome-devtools-mcp@latest", "--wsEndpoint", cdpUrl],
-                enabled: true
+              try {
+                const wsUrl = new URL(sessionData.cdpUrl)
+                // Convert ws:// to http:// and use just the origin (no path)
+                const browserUrl = `http://${wsUrl.host}`
+
+                config.chromeDevtools = {
+                  command: runner.command,
+                  args: [...runner.args, "chrome-devtools-mcp@latest", "--browserUrl", browserUrl],
+                  enabled: true
+                }
+              } catch {
+                console.warn("[MCP Orchestrator] Failed to parse CDP URL:", sessionData.cdpUrl)
               }
             } else {
               console.warn("[MCP Orchestrator] Cannot configure chrome-devtools MCP: no package runner available")
