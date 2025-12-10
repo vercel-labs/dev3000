@@ -378,9 +378,16 @@ program
       // Node.js project
       serverCommand = `${projectConfig.packageManager} run ${script}`
       // Append port for Node.js projects when user explicitly sets it
-      // Use -- to pass arguments through npm/pnpm/yarn to the underlying command
       if (userSetPort) {
-        serverCommand += ` -- --port ${port}`
+        // Different frameworks need different port argument syntax
+        // Note: We don't use -- separator as it conflicts with scripts that already have args
+        if (projectConfig.framework === "nextjs") {
+          // Next.js uses -p or --port flag
+          serverCommand += ` -p ${port}`
+        } else {
+          // Other frameworks (Vite, etc.) typically use --port
+          serverCommand += ` --port ${port}`
+        }
       }
     }
 
