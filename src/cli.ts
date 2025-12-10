@@ -366,11 +366,22 @@ program
       }
     } else if (projectConfig.type === "python") {
       serverCommand = `${projectConfig.pythonCommand} ${script}`
+      // Python frameworks typically use --port or -p, but it varies by framework
+      // For now, we'll let users handle Python port config manually
     } else if (projectConfig.type === "rails") {
       serverCommand = `bundle exec rails ${script}`
+      // Append port for Rails when user explicitly sets it
+      if (userSetPort) {
+        serverCommand += ` -p ${port}`
+      }
     } else {
       // Node.js project
       serverCommand = `${projectConfig.packageManager} run ${script}`
+      // Append port for Node.js projects when user explicitly sets it
+      // Use -- to pass arguments through npm/pnpm/yarn to the underlying command
+      if (userSetPort) {
+        serverCommand += ` -- --port ${port}`
+      }
     }
 
     // Check for circular dependency - detect if the script would invoke dev3000 itself
