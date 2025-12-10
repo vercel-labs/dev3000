@@ -15,10 +15,17 @@
 export function extractProjectNameFromLogFilename(filename: string): string | null {
   // Pattern matches: <project-name>-YYYY-MM-DDTHH-MM-SS-SSSZ.log
   // The timestamp always starts with YYYY-MM-DD which is a reliable anchor
-  const match = filename.match(/^(.+?)-(\d{4}-\d{2}-\d{2}T[\d-]+Z)\.log$/)
-  if (match) {
-    return match[1]
+  const timestampMatch = filename.match(/^(.+?)-(\d{4}-\d{2}-\d{2}T[\d-]+Z)\.log$/)
+  if (timestampMatch) {
+    return timestampMatch[1]
   }
+
+  // Also handle current log file pattern: <project-name>-d3k.log
+  const d3kMatch = filename.match(/^(.+)-d3k\.log$/)
+  if (d3kMatch) {
+    return d3kMatch[1]
+  }
+
   return null
 }
 

@@ -38,8 +38,12 @@ describe("extractProjectNameFromLogFilename", () => {
     expect(extractProjectNameFromLogFilename("")).toBeNull()
   })
 
-  it("should handle d3k.log files (legacy current log symlink)", () => {
-    expect(extractProjectNameFromLogFilename("tailwindui-studio-d3k.log")).toBeNull()
+  it("should extract project name from current log file (-d3k.log pattern)", () => {
+    expect(extractProjectNameFromLogFilename("tailwindui-studio-d3k.log")).toBe("tailwindui-studio")
+  })
+
+  it("should extract project name from nested project name with -d3k.log pattern", () => {
+    expect(extractProjectNameFromLogFilename("dev3000-mcp-server-d3k.log")).toBe("dev3000-mcp-server")
   })
 })
 
@@ -62,6 +66,14 @@ describe("logFilenameMatchesProject", () => {
 
   it("should return false for invalid filename", () => {
     expect(logFilenameMatchesProject("invalid-file.log", "project")).toBe(false)
+  })
+
+  it("should match current log file (-d3k.log pattern)", () => {
+    expect(logFilenameMatchesProject("tailwindui-studio-d3k.log", "tailwindui-studio")).toBe(true)
+  })
+
+  it("should match partial project name in current log file", () => {
+    expect(logFilenameMatchesProject("dev3000-mcp-server-d3k.log", "mcp-server")).toBe(true)
   })
 })
 
