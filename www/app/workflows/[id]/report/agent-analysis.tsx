@@ -221,24 +221,20 @@ function StepSection({
 
   return (
     <div className="border border-border rounded mb-2">
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-muted/50 transition-colors text-sm"
-      >
-        <div className="flex items-center gap-2">
+      <div className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-muted/50 transition-colors text-sm">
+        <button type="button" onClick={() => setIsOpen(!isOpen)} className="flex items-center gap-2 flex-1">
           {isOpen ? (
             <ChevronDown className="h-4 w-4 text-muted-foreground" />
           ) : (
             <ChevronRight className="h-4 w-4 text-muted-foreground" />
           )}
           <span className="font-medium">{title}</span>
-        </div>
+        </button>
         <div className="flex items-center gap-2">
           {headerAction}
           {badge && <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">{badge}</span>}
         </div>
-      </button>
+      </div>
       {isOpen && <div className="px-3 pb-3 border-t border-border">{children}</div>}
     </div>
   )
