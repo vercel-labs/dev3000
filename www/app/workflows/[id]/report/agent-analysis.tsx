@@ -22,6 +22,83 @@ interface ParsedTranscript {
   finalOutput?: string
 }
 
+// Workflow phases that group AI steps by activity type
+interface WorkflowPhase {
+  name: string
+  description: string
+  steps: ParsedStep[]
+  toolCount: number
+}
+
+/**
+ * Categorize tool calls into workflow phases
+ */
+function categorizeToolCall(toolName: string): "research" | "implementation" | "verification" {
+  const researchTools = ["globSearch", "grepSearch", "listDirectory", "readFile", "findComponentSource"]
+  const verificationTools = ["verifyChanges", "getGitDiff"]
+
+  if (researchTools.includes(toolName)) return "research"
+  if (verificationTools.includes(toolName)) return "verification"
+  return "implementation" // writeFile and others
+}
+
+/**
+ * Group AI steps into logical workflow phases
+ */
+function groupIntoPhases(steps: ParsedStep[]): WorkflowPhase[] {
+  const phases: WorkflowPhase[] = []
+
+  // Phase 1: Research - all steps with read/glob/grep/ls tools
+  const researchSteps = steps.filter((s) => s.toolCalls.some((tc) => categorizeToolCall(tc.name) === "research"))
+  if (researchSteps.length > 0) {
+    phases.push({
+      name: "Research",
+      description: "Investigating codebase and understanding the issue",
+      steps: researchSteps,
+      toolCount: researchSteps.reduce((sum, s) => sum + s.toolCalls.length, 0)
+    })
+  }
+
+  // Phase 2: Implementation - steps with write tools
+  const implementationSteps = steps.filter((s) =>
+    s.toolCalls.some((tc) => categorizeToolCall(tc.name) === "implementation")
+  )
+  if (implementationSteps.length > 0) {
+    phases.push({
+      name: "Implementation",
+      description: "Making code changes to fix the issue",
+      steps: implementationSteps,
+      toolCount: implementationSteps.reduce((sum, s) => sum + s.toolCalls.length, 0)
+    })
+  }
+
+  // Phase 3: Verification - steps with verify/diff tools
+  const verificationSteps = steps.filter((s) =>
+    s.toolCalls.some((tc) => categorizeToolCall(tc.name) === "verification")
+  )
+  if (verificationSteps.length > 0) {
+    phases.push({
+      name: "Verification",
+      description: "Confirming the fix works correctly",
+      steps: verificationSteps,
+      toolCount: verificationSteps.reduce((sum, s) => sum + s.toolCalls.length, 0)
+    })
+  }
+
+  // Phase 4: Analysis - steps with only assistant text (thinking/planning)
+  const analysisSteps = steps.filter((s) => s.toolCalls.length === 0 && s.assistantText && s.assistantText.length > 50)
+  if (analysisSteps.length > 0) {
+    phases.push({
+      name: "Analysis",
+      description: "Agent reasoning and planning",
+      steps: analysisSteps,
+      toolCount: 0
+    })
+  }
+
+  return phases
+}
+
 /**
  * Simplify tool names for display
  */
@@ -217,6 +294,9 @@ export function AgentAnalysis({
 }) {
   const parsed = useMemo(() => parseTranscript(content), [content])
 
+  // Group steps into workflow phases
+  const phases = useMemo(() => groupIntoPhases(parsed.steps.filter((s) => s.hasContent)), [parsed.steps])
+
   // Strip "## Git Diff" section from finalOutput if present (we'll show it separately)
   const cleanedFinalOutput = useMemo(() => {
     if (!parsed.finalOutput) return undefined
@@ -229,9 +309,8 @@ export function AgentAnalysis({
     return <Streamdown mode="static">{content}</Streamdown>
   }
 
-  // Count steps with meaningful content
-  const stepsWithContent = parsed.steps.filter((s) => s.hasContent)
-  const emptySteps = parsed.steps.length - stepsWithContent.length
+  // Calculate total tool calls for badge
+  const totalToolCalls = phases.reduce((sum, p) => sum + p.toolCount, 0)
 
   return (
     <div className="space-y-4">
@@ -249,12 +328,9 @@ export function AgentAnalysis({
         </div>
       )}
 
-      {/* Collapsible Agent Execution Details */}
-      {parsed.steps.length > 0 && (
-        <StepSection
-          title="Agent Execution Transcript"
-          badge={`${stepsWithContent.length} steps${emptySteps > 0 ? ` (${emptySteps} empty)` : ""}`}
-        >
+      {/* Collapsible Agent Execution Details - grouped by workflow phase */}
+      {phases.length > 0 && (
+        <StepSection title="Agent Execution Transcript" badge={`${phases.length} phases, ${totalToolCalls} tool calls`}>
           <div className="mt-3 space-y-3">
             {/* System Prompt - collapsed */}
             {parsed.systemPrompt && (
@@ -274,51 +350,42 @@ export function AgentAnalysis({
               </StepSection>
             )}
 
-            {/* Steps - filter out empty ones or collapse them */}
-            {stepsWithContent.map((step) => {
-              // Determine badge: tool names if has tools, "conclusion" if final step with just text
-              const isLastStep = step.stepNumber === Math.max(...stepsWithContent.map((s) => s.stepNumber))
-              const badge =
-                step.toolCalls.length > 0
-                  ? step.toolCalls.map((tc) => formatToolName(tc.name)).join(", ")
-                  : isLastStep && step.assistantText
-                    ? "conclusion"
-                    : undefined
-
-              return (
-                <StepSection key={step.stepNumber} title={`Step ${step.stepNumber}`} badge={badge}>
-                  <div className="mt-2 space-y-2">
-                    {step.assistantText && (
-                      <div className="text-sm prose prose-sm dark:prose-invert max-w-none">
-                        <Streamdown mode="static">{step.assistantText}</Streamdown>
-                      </div>
-                    )}
-                    {step.toolCalls.map((tc, i) => (
-                      <div key={`tc-${step.stepNumber}-${i}`} className="text-xs space-y-1">
-                        <div className="font-medium text-muted-foreground">
-                          Tool: <span className="text-foreground">{formatToolName(tc.name)}</span>
+            {/* Workflow phases instead of individual steps */}
+            {phases.map((phase) => (
+              <StepSection
+                key={phase.name}
+                title={phase.name}
+                badge={phase.toolCount > 0 ? `${phase.toolCount} tool calls` : `${phase.steps.length} steps`}
+              >
+                <div className="mt-2 space-y-3">
+                  <p className="text-xs text-muted-foreground">{phase.description}</p>
+                  {phase.steps.map((step) => (
+                    <div key={step.stepNumber} className="space-y-2 border-l-2 border-muted pl-3">
+                      {step.assistantText && (
+                        <div className="text-sm prose prose-sm dark:prose-invert max-w-none">
+                          <Streamdown mode="static">{step.assistantText}</Streamdown>
                         </div>
-                        {tc.args && tc.args !== "{}" && (
-                          <pre className="bg-muted/50 p-2 rounded overflow-x-auto">{tc.args}</pre>
-                        )}
-                        {tc.result && tc.result !== "[undefined]" && (
-                          <pre className="bg-muted/50 p-2 rounded overflow-x-auto whitespace-pre-wrap max-h-32 overflow-y-auto">
-                            {tc.result}
-                          </pre>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </StepSection>
-              )
-            })}
-
-            {/* Summary of empty steps */}
-            {emptySteps > 0 && (
-              <p className="text-xs text-muted-foreground italic">
-                {emptySteps} step{emptySteps > 1 ? "s" : ""} with empty or undefined results hidden
-              </p>
-            )}
+                      )}
+                      {step.toolCalls.map((tc, i) => (
+                        <div key={`tc-${step.stepNumber}-${i}`} className="text-xs space-y-1">
+                          <div className="font-medium text-muted-foreground">
+                            Tool: <span className="text-foreground">{formatToolName(tc.name)}</span>
+                          </div>
+                          {tc.args && tc.args !== "{}" && (
+                            <pre className="bg-muted/50 p-2 rounded overflow-x-auto">{tc.args}</pre>
+                          )}
+                          {tc.result && tc.result !== "[undefined]" && (
+                            <pre className="bg-muted/50 p-2 rounded overflow-x-auto whitespace-pre-wrap max-h-32 overflow-y-auto">
+                              {tc.result}
+                            </pre>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              </StepSection>
+            ))}
           </div>
         </StepSection>
       )}
