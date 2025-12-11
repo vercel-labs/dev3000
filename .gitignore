@@ -17,3 +17,7 @@ next-devtools-mcp/
 
 mcp-server/next-env.d.ts
 
+# Large video files
+www/public/d3k-christmas-duet.mp4
+www/public/d3k-christmas-duet2.mp4
+
