@@ -1,6 +1,21 @@
 # Workflow Testing Guide
 
-Quick reference for testing mcp-server workflows end-to-end with proper monitoring.
+Quick reference for testing d3k workflows end-to-end with proper monitoring.
+
+## Architecture Overview
+
+**Important**: Workflows now run in `www` (d3k.dev), not mcp-server.
+
+- **All Environments**: The frontend always calls `https://dev3000.ai/api/cloud/start-fix` directly
+- **No local workflow execution** - workflows always execute on Vercel production infrastructure
+- **CORS enabled** - the production API has CORS headers configured
+- **Auth via header** - requests include `Authorization: Bearer <token>` for authentication
+
+This ensures:
+- Workflows appear in Vercel Dashboard under AI → Workflows
+- Full durability guarantees from Vercel Workflow DevKit
+- Proper observability and monitoring
+- Consistent behavior between local testing and production
 
 ## After Committing Code Changes
 
@@ -8,12 +23,16 @@ When you push code to main, Vercel auto-deploys. **Don't wait for the user** - p
 
 1. **Start monitoring immediately after push:**
    ```bash
-   vercel logs d3k-mcp.vercel.app --scope team_nLlpyC6REAqxydlFKbrMDlud
+   # Get the latest deployment
+   vercel ls --scope team_nLlpyC6REAqxydlFKbrMDlud | head -10
+
+   # Monitor logs (use the specific deployment URL, not d3k.dev)
+   vercel logs dev3000-XXXXX.vercel.sh --scope team_nLlpyC6REAqxydlFKbrMDlud
    ```
 
 2. **Watch for deployment completion:**
    - New log activity indicates the new deployment is live
-   - Or check `vercel ls --scope team_nLlpyC6REAqxydlFKbrMDlud` to see latest deployment
+   - Status changes from "Building" to "Ready"
 
 3. **Proceed with testing:**
    - Once deployed, start the workflow test immediately
@@ -21,49 +40,18 @@ When you push code to main, Vercel auto-deploys. **Don't wait for the user** - p
 
 ## Prerequisites
 
-### 1. Verify OIDC Token is Valid
+### 1. Ensure www Dev Server is Running
 
 ```bash
-cd /Users/elsigh/src/vercel-labs/dev3000/mcp-server
-
-# Check token expiration
-node -e "
-require('dotenv').config({ path: '.env.local' });
-const token = process.env.VERCEL_OIDC_TOKEN || '';
-if (token) {
-  const payload = token.split('.')[1];
-  const decoded = JSON.parse(Buffer.from(payload, 'base64').toString());
-  const exp = new Date(decoded.exp * 1000);
-  const now = new Date();
-  console.log('Token expires:', exp.toISOString());
-  console.log('Current time:', now.toISOString());
-  console.log('Expired:', now > exp ? 'YES ❌' : 'NO ✅');
-  if (now > exp) {
-    console.log('Expired', Math.floor((now - exp) / 1000 / 60), 'minutes ago');
-  } else {
-    console.log('Time until expiry:', Math.floor((exp - now) / 1000 / 60), 'minutes');
-  }
-}
-"
+cd /Users/elsigh/src/vercel-labs/dev3000/www
+pnpm dev
 ```
 
-**If expired**, refresh the token:
-```bash
-vercel env pull .env.local --scope team_nLlpyC6REAqxydlFKbrMDlud
-```
+The local dev server must be running to serve the UI, even though workflows execute on production.
 
-Then restart the dev server (kill and restart d3k).
+### 2. Verify User is Authenticated
 
-### 2. Ensure d3k is Running
-
-```bash
-# Check if d3k is running on mcp-server
-pgrep -f "d3k.*mcp-server" || echo "d3k not running"
-
-# If not running, start it
-cd /Users/elsigh/src/vercel-labs/dev3000/mcp-server
-pnpm d3k
-```
+Visit `http://localhost:3000/workflows` - you should see your workflows list. If redirected to sign-in, authenticate via Vercel OAuth.
 
 ## Test Workflow Creation
 
@@ -95,8 +83,8 @@ Use d3k browser automation (via `execute_browser_action` MCP tool):
 
 **Before navigating**, read the bypass token from the environment:
 ```bash
-# Read WORKFLOW_TEST_BYPASS_TOKEN from .env.local
-grep WORKFLOW_TEST_BYPASS_TOKEN /Users/elsigh/src/vercel-labs/dev3000/mcp-server/.env.local
+# Read WORKFLOW_TEST_BYPASS_TOKEN from www/.env.local
+grep WORKFLOW_TEST_BYPASS_TOKEN /Users/elsigh/src/vercel-labs/dev3000/www/.env.local
 ```
 
 Then construct the URL with the token value:
@@ -135,28 +123,32 @@ Once you've triggered the workflow, your background log monitor will show progre
 ❌ **DO NOT TRUST THE UI**: UI showing "Writing code..." does NOT mean the workflow is running
 ✅ **ONLY TRUST PRODUCTION LOGS**: Use `vercel logs` CLI to verify actual execution
 
+## How Local Dev Works Now
+
+When you run the workflow from `localhost:3000`:
+
+1. Browser calls `https://dev3000.ai/api/cloud/start-fix` directly (cross-origin)
+2. Authorization header is included with the user's access token
+3. Workflow executes on Vercel's production infrastructure
+4. Production logs appear in Vercel CLI monitoring
+5. Workflow appears in Vercel Dashboard under AI → Workflows
+
+**Key code in `www/app/workflows/new-workflow-modal.tsx`:**
+```typescript
+// Always call the production API directly (dev3000.ai, not d3k.dev which redirects)
+const apiUrl = "https://dev3000.ai/api/cloud/start-fix"
+
+// Authorization header is included
+const headers: HeadersInit = { "Content-Type": "application/json" }
+headers.Authorization = `Bearer ${accessToken}`
+```
+
 ## Monitor Logs Correctly
 
 ### CRITICAL: Production Logs Are the ONLY Source of Truth
 
 ❌ **DO NOT RELY ON**: UI status, local logs alone, or assumptions
 ✅ **ALWAYS VERIFY WITH**: Vercel CLI production logs
-
-### Monitor Local Logs (shows API calls)
-
-```bash
-# Find latest log file
-ls -lat ~/.d3k/logs/ | head -5
-
-# Monitor workflow activity
-grep -i "workflow\|sandbox\|step" ~/.d3k/logs/dev3000-mcp-server-*.log | tail -50
-```
-
-**What to look for in local logs:**
-- `[Workflow] Starting cloud fix workflow...`
-- `POST /api/cloud/start-fix 200 in Xms`
-
-**Important**: Local logs showing "200 OK" does NOT mean the workflow succeeded in production!
 
 ### Production Logs via Vercel MCP Tools (RECOMMENDED)
 
@@ -193,7 +185,7 @@ mcp__vercel__web_fetch_vercel_url({
 **Use CLI when MCP tools are not available:**
 
 ```bash
-# Step 1: Get latest deployment URL for mcp-server production
+# Step 1: Get latest deployment URL for www production
 DEPLOYMENT=$(vercel ls --scope team_nLlpyC6REAqxydlFKbrMDlud | grep dev3000 | head -1 | awk '{print $2}')
 echo "Checking logs for: $DEPLOYMENT"
 
@@ -225,9 +217,12 @@ vercel logs $DEPLOYMENT --scope team_nLlpyC6REAqxydlFKbrMDlud 2>&1 | tail -100
 - `[Step 4] Creating GitHub PR...` - PR creation (if enabled)
 
 **If production logs show NOTHING**:
-- ❌ Workflow was NOT created despite UI showing progress
-- Most likely cause: Expired OIDC token
-- Solution: Run `vercel env pull .env.local --scope team_nLlpyC6REAqxydlFKbrMDlud` and restart dev server
+- ❌ Workflow was NOT created
+- Possible causes:
+  - Rewrite not working (check `next.config.ts`)
+  - CORS issues with cross-origin request
+  - Authentication token not included in request
+- Solution: Check browser network tab for actual request destination
 
 ### AI Agent Tools (Step 0)
 
@@ -257,7 +252,7 @@ The AI agent in Step 0 has access to these d3k-specific tools for analyzing code
 After production logs confirm completion, you can check results via CLI:
 
 ```bash
-# List all deployments for mcp-server production
+# List all deployments for www production
 vercel ls --scope team_nLlpyC6REAqxydlFKbrMDlud | head -20
 
 # Or check the workflows page in browser (ONLY after production logs confirm completion)
@@ -265,6 +260,24 @@ vercel ls --scope team_nLlpyC6REAqxydlFKbrMDlud | head -20
 ```
 
 **Remember**: Only check UI AFTER production logs confirm the workflow completed. UI status alone is unreliable.
+
+## Checking Workflow Observability
+
+Workflows should now appear in the Vercel Dashboard:
+
+1. Go to https://vercel.com/vercel/dev3000-www
+2. Navigate to **AI → Workflows** (not Observability → Workflows)
+3. You should see your workflow runs listed
+
+If workflows don't appear:
+- Verify the workflow SDK (`workflow` package) is configured correctly
+- Check that `withWorkflow()` wrapper is in `next.config.ts`
+- Ensure the workflow is actually running on production (check logs)
+
+You can also use the Workflow CLI to inspect runs:
+```bash
+npx workflow inspect runs --backend vercel --team vercel --project dev3000-www --env production
+```
 
 ## Expected Timeline
 
@@ -290,8 +303,11 @@ Typical workflow execution:
 ## Troubleshooting
 
 ### Issue: "No logs in production"
-**Cause**: OIDC token expired
-**Fix**: Run `vercel env pull .env.local --scope team_nLlpyC6REAqxydlFKbrMDlud` and restart dev server
+**Cause**: Workflow request not reaching production
+**Fix**:
+1. Check browser Network tab - verify request goes to `dev3000.ai`
+2. Check for CORS errors in console
+3. Verify Authorization header is present in the request
 
 ### Issue: "Workflow stuck in 'running' state"
 **Cause**: Workflow exceeded 10-minute Vercel Function timeout
@@ -305,12 +321,19 @@ Typical workflow execution:
 **Cause**: Looking at wrong deployment or wrong time range
 **Fix**: Get latest deployment from `vercel ls` and check dashboard with correct timestamp
 
+### Issue: "Workflows not appearing in Vercel Dashboard"
+**Cause**: Workflows not reaching Vercel infrastructure
+**Fix**:
+1. Check Network tab - requests should go to `d3k.dev`
+2. Verify the workflow completed successfully (check production logs)
+3. Check Vercel Dashboard under **AI → Workflows** (not Observability)
+
 ### Issue: "MCP error: Cannot read properties of undefined (reading 'output')"
 **Cause**: The MCP tool response format changed or there's a bug in parsing the response in the workflow code
 **Symptoms**:
 - Logs show: `[Step 1] Note: MCP error from Step 0: MCP execution error: Cannot read properties of undefined (reading 'output')`
 - Workflow times out at 300 seconds
-**Fix**: Check `mcp-server/app/api/cloud/fix-workflow/workflow.ts` for how MCP responses are parsed
+**Fix**: Check `www/app/api/cloud/fix-workflow/workflow.ts` for how MCP responses are parsed
 
 ### Issue: "Sandbox page hangs (HTTP HEAD works but full page doesn't load)"
 **Cause**: SSR/rendering issues in the sandbox, or the sandbox dev server crashed after initial startup
@@ -326,11 +349,11 @@ Typical workflow execution:
 #!/bin/bash
 # Quick workflow test script
 
-echo "1. Checking OIDC token..."
-node -e "require('dotenv').config({ path: '.env.local' }); const token = process.env.VERCEL_OIDC_TOKEN || ''; if (token) { const payload = token.split('.')[1]; const decoded = JSON.parse(Buffer.from(payload, 'base64').toString()); const exp = new Date(decoded.exp * 1000); const now = new Date(); console.log(now > exp ? '❌ EXPIRED' : '✅ Valid'); } else { console.log('❌ No token'); }"
+echo "1. Checking www dev server..."
+curl -s http://localhost:3000 > /dev/null && echo "✅ Dev server running" || echo "❌ Dev server not running"
 
-echo "2. Getting latest mcp-server deployment..."
-DEPLOYMENT=$(vercel ls --scope team_nLlpyC6REAqxydlFKbrMDlud | head -2 | tail -1)
+echo "2. Getting latest www deployment..."
+DEPLOYMENT=$(vercel ls --scope team_nLlpyC6REAqxydlFKbrMDlud | grep dev3000 | head -1 | awk '{print $2}')
 echo "Latest: $DEPLOYMENT"
 
 echo "3. Triggering workflow via d3k..."
@@ -351,7 +374,7 @@ When a workflow creates a sandbox, it logs the Dev URL like:
 
 **From Vercel production logs:**
 ```bash
-# Get latest mcp-server deployment
+# Get latest www deployment
 DEPLOYMENT=$(vercel ls --scope team_nLlpyC6REAqxydlFKbrMDlud | grep dev3000 | head -1 | awk '{print $2}')
 
 # Extract Dev URL
@@ -361,7 +384,7 @@ vercel logs $DEPLOYMENT --scope team_nLlpyC6REAqxydlFKbrMDlud 2>&1 | grep "Dev U
 **From real-time monitoring:**
 ```bash
 # Monitor logs and extract Dev URL as it appears
-vercel logs --follow d3k-mcp.vercel.sh --scope team_nLlpyC6REAqxydlFKbrMDlud 2>&1 | grep -o "https://sb-[a-z0-9]*\.vercel\.run"
+vercel logs --follow $DEPLOYMENT --scope team_nLlpyC6REAqxydlFKbrMDlud 2>&1 | grep -o "https://sb-[a-z0-9]*\.vercel\.run"
 ```
 
 ### Test Dev URL with Browser Automation
@@ -429,7 +452,7 @@ curl -I https://sb-XXXXX.vercel.run
 #!/bin/bash
 # Extract and test Dev URL from latest workflow
 
-echo "1. Getting latest mcp-server deployment..."
+echo "1. Getting latest www deployment..."
 DEPLOYMENT=$(vercel ls --scope team_nLlpyC6REAqxydlFKbrMDlud | grep dev3000 | head -1 | awk '{print $2}')
 echo "   Deployment: $DEPLOYMENT"
 
@@ -458,11 +481,13 @@ echo "   execute_browser_action({ action: 'navigate', params: { url: '$DEV_URL' 
 
 ## Summary
 
-**Always check BOTH:**
-1. ✅ Local logs (`~/.d3k/logs/`) - Shows API was called
-2. ✅ Production logs (Vercel dashboard or CLI) - Shows workflow actually executed
-3. ✅ Test Dev URLs (if sandbox created) - Verify sandbox is accessible
+**Key Points:**
+1. ✅ Frontend calls `https://dev3000.ai/api/cloud/start-fix` directly
+2. ✅ Authorization header is included for authentication
+3. ✅ Monitor production logs (Vercel CLI) - NOT local logs
+4. ✅ Workflows appear in Vercel Dashboard under AI → Workflows
+5. ✅ Test Dev URLs (if sandbox created) - Verify sandbox is accessible
 
-**If production logs are empty**, workflow was never created - check OIDC token!
+**If production logs are empty**, workflow request didn't reach production - check Network tab for CORS/auth errors!
 
 **If Dev URL returns 502**, the dev server isn't binding to 0.0.0.0 for external access.

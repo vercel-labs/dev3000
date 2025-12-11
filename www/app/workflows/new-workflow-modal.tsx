@@ -487,9 +487,11 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       // Initial status - will be updated by polling
       setWorkflowStatus("Starting workflow...")
 
-      // Use same-origin API - works for both local dev (falls back to production via rewrite)
-      // and production deployment
-      const apiUrl = "/api/cloud/start-fix"
+      // Always call the production API directly - this ensures workflows run on Vercel
+      // infrastructure with full durability and observability, whether we're running
+      // locally or in production. The production API has CORS headers configured.
+      // NOTE: Use dev3000.ai directly (not d3k.dev) to avoid redirect which breaks CORS preflight
+      const apiUrl = "https://dev3000.ai/api/cloud/start-fix"
 
       console.log("[Start Workflow] API URL:", apiUrl)
       console.log("[Start Workflow] Request body:", body)
