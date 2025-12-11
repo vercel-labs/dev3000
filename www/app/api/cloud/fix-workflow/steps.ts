@@ -456,61 +456,92 @@ async function fetchAndUploadD3kArtifacts(
   }
 
   try {
-    // Call fix_my_jank MCP tool to get CLS data
-    console.log(`[D3k Artifacts] Calling fix_my_jank...`)
-    const response = await fetch(`${mcpUrl}/mcp`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        jsonrpc: "2.0",
-        id: 1,
-        method: "tools/call",
-        params: {
-          name: "fix_my_jank",
-          arguments: { timeRangeMinutes: 5 }
-        }
-      })
+    // Fetch CLS metadata from d3k server's jank API
+    // First, find the screencast session by listing screenshots
+    const baseUrl = mcpUrl.replace(/\/mcp$/, "")
+    console.log(`[D3k Artifacts] Fetching CLS metadata from ${baseUrl}/api/jank/...`)
+
+    // Try to get the session ID from screenshots list
+    const listResponse = await fetch(`${baseUrl}/api/screenshots/list`, {
+      method: "GET",
+      headers: { Accept: "application/json" }
     })
 
-    if (response.ok) {
-      const text = await response.text()
-      // Parse SSE response
-      for (const line of text.split("\n")) {
-        if (line.startsWith("data: ")) {
-          try {
-            const json = JSON.parse(line.substring(6))
-            if (json.result?.content) {
-              for (const content of json.result.content) {
-                if (content.type === "text") {
-                  // Try to parse as JSON metadata
-                  try {
-                    const parsed = JSON.parse(content.text)
-                    if (parsed.clsScore !== undefined || parsed.totalCLS !== undefined) {
-                      result.metadata = parsed
-                    }
-                  } catch {
-                    // Not JSON, might be diagnostic text
-                  }
-                } else if (content.type === "image") {
-                  // Upload screenshot to blob
-                  const imageData = content.data
-                  const timestamp = Date.now()
-                  const filename = `cls-screenshot-${projectName}-${timestamp}.png`
-                  const imageBuffer = Buffer.from(imageData, "base64")
-                  const blob = await put(filename, imageBuffer, {
-                    access: "public",
-                    contentType: "image/png"
-                  })
-                  result.clsScreenshots.push({
-                    label: `cls-${timestamp}`,
-                    blobUrl: blob.url,
-                    timestamp
-                  })
-                }
-              }
+    if (listResponse.ok) {
+      const listData = (await listResponse.json()) as { files?: string[] }
+      const screenshotFiles = listData.files || []
+
+      // Extract session ID from first screenshot filename
+      // Filenames are like: screencast-abc123-jank-100ms.png or 2025-12-11T18-57-08-789Z-page-loaded.png
+      let sessionId: string | null = null
+      for (const filename of screenshotFiles) {
+        const match = filename.match(/^(screencast-[^-]+)/)
+        if (match) {
+          sessionId = match[1]
+          break
+        }
+      }
+
+      if (sessionId) {
+        console.log(`[D3k Artifacts] Found session: ${sessionId}`)
+
+        // Call the jank API which returns structured CLS data
+        const jankResponse = await fetch(`${baseUrl}/api/jank/${sessionId}`, {
+          method: "GET",
+          headers: { Accept: "application/json" }
+        })
+
+        if (jankResponse.ok) {
+          const jankData = (await jankResponse.json()) as {
+            actualCLS?: number
+            grade?: string
+            clsMarkers?: Array<{ timestamp: number; score?: number }>
+          }
+
+          if (jankData.actualCLS !== undefined) {
+            result.metadata = {
+              totalCLS: jankData.actualCLS,
+              clsGrade: jankData.grade,
+              layoutShifts: jankData.clsMarkers?.map((m) => ({
+                timestamp: m.timestamp,
+                score: m.score || 0
+              }))
             }
-          } catch {
-            // Parse error, continue
+            console.log(`[D3k Artifacts] CLS metadata: totalCLS=${jankData.actualCLS}, grade=${jankData.grade}`)
+          }
+        }
+      }
+
+      // Upload screenshots to blob storage
+      if (screenshotFiles.length > 0) {
+        console.log(`[D3k Artifacts] Uploading ${screenshotFiles.length} screenshots...`)
+        const recentScreenshots = screenshotFiles.slice(-5)
+        for (const filename of recentScreenshots) {
+          try {
+            const imageResponse = await fetch(`${baseUrl}/api/screenshots/${filename}`)
+            if (imageResponse.ok) {
+              const imageBuffer = Buffer.from(await imageResponse.arrayBuffer())
+              const timestampMatch = filename.match(/^(\d{4}-\d{2}-\d{2}T[\d-]+Z)/)
+              const timestamp = timestampMatch
+                ? new Date(timestampMatch[1].replace(/-(\d{2})-(\d{2})-(\d{3})Z/, ":$1:$2.$3Z")).getTime()
+                : Date.now()
+              const blobFilename = `cls-screenshot-${projectName}-${timestamp}.png`
+
+              const blob = await put(blobFilename, imageBuffer, {
+                access: "public",
+                contentType: "image/png"
+              })
+
+              result.clsScreenshots.push({
+                label: filename.replace(".png", ""),
+                blobUrl: blob.url,
+                timestamp
+              })
+            }
+          } catch (err) {
+            console.log(
+              `[D3k Artifacts] Error uploading ${filename}: ${err instanceof Error ? err.message : String(err)}`
+            )
           }
         }
       }
@@ -525,13 +556,6 @@ async function fetchAndUploadD3kArtifacts(
       result.fullLogs = logsResult.stdout
     }
 
-    // If no screenshots from MCP response, try to fetch them from the d3k server
-    if (result.clsScreenshots.length === 0) {
-      console.log(`[D3k Artifacts] No screenshots in MCP response, fetching from d3k server...`)
-      const screenshots = await fetchScreenshotsFromD3k(mcpUrl, projectName)
-      result.clsScreenshots = screenshots
-    }
-
     console.log(
       `[D3k Artifacts] Summary: ${result.clsScreenshots.length} screenshots, metadata: ${result.metadata ? "yes" : "no"}`
     )
@@ -540,87 +564,6 @@ async function fetchAndUploadD3kArtifacts(
   }
 
   return result
-}
-
-/**
- * Fetch screenshots from d3k server's screenshot API and upload to blob storage
- */
-async function fetchScreenshotsFromD3k(
-  mcpUrl: string,
-  projectName: string
-): Promise<Array<{ label: string; blobUrl: string; timestamp: number }>> {
-  const screenshots: Array<{ label: string; blobUrl: string; timestamp: number }> = []
-
-  try {
-    // d3k MCP server runs on a different port - extract base URL
-    // mcpUrl is like https://sb-xxxxx.vercel.run (the MCP sandbox URL)
-    // The d3k server API endpoints are at the same host
-    const baseUrl = mcpUrl.replace(/\/mcp$/, "")
-
-    // Fetch list of screenshots from d3k API
-    console.log(`[D3k Screenshots] Fetching screenshot list from ${baseUrl}/api/screenshots/list`)
-    const listResponse = await fetch(`${baseUrl}/api/screenshots/list`, {
-      method: "GET",
-      headers: { Accept: "application/json" }
-    })
-
-    if (!listResponse.ok) {
-      console.log(`[D3k Screenshots] List API returned ${listResponse.status}`)
-      return screenshots
-    }
-
-    // The API returns { files: ["filename1.png", "filename2.png", ...] }
-    const listData = (await listResponse.json()) as { files?: string[] }
-    const screenshotFiles = listData.files || []
-
-    console.log(`[D3k Screenshots] Found ${screenshotFiles.length} screenshots`)
-
-    // Fetch and upload each screenshot (limit to most recent 5)
-    const recentScreenshots = screenshotFiles.slice(-5)
-    for (const filename of recentScreenshots) {
-      try {
-        console.log(`[D3k Screenshots] Fetching ${filename}...`)
-
-        const imageResponse = await fetch(`${baseUrl}/api/screenshots/${filename}`)
-        if (!imageResponse.ok) {
-          console.log(`[D3k Screenshots] Failed to fetch ${filename}: ${imageResponse.status}`)
-          continue
-        }
-
-        const imageBuffer = Buffer.from(await imageResponse.arrayBuffer())
-        // Extract timestamp from filename if it has ISO format, otherwise use current time
-        // Filenames are like: 2025-12-11T18-57-08-789Z-page-loaded.png
-        const timestampMatch = filename.match(/^(\d{4}-\d{2}-\d{2}T[\d-]+Z)/)
-        const timestamp = timestampMatch
-          ? new Date(timestampMatch[1].replace(/-(\d{2})-(\d{2})-(\d{3})Z/, ":$1:$2.$3Z")).getTime()
-          : Date.now()
-        const blobFilename = `cls-screenshot-${projectName}-${timestamp}.png`
-
-        const blob = await put(blobFilename, imageBuffer, {
-          access: "public",
-          contentType: "image/png"
-        })
-
-        screenshots.push({
-          label: filename.replace(".png", ""),
-          blobUrl: blob.url,
-          timestamp
-        })
-
-        console.log(`[D3k Screenshots] Uploaded ${filename} to ${blob.url}`)
-      } catch (err) {
-        console.log(
-          `[D3k Screenshots] Error processing screenshot: ${err instanceof Error ? err.message : String(err)}`
-        )
-      }
-    }
-  } catch (error) {
-    console.log(
-      `[D3k Screenshots] Error fetching screenshots: ${error instanceof Error ? error.message : String(error)}`
-    )
-  }
-
-  return screenshots
 }
 
 /**
