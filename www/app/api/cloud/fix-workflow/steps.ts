@@ -569,16 +569,16 @@ async function fetchScreenshotsFromD3k(
       return screenshots
     }
 
-    const listData = (await listResponse.json()) as { screenshots?: Array<{ filename: string; timestamp?: number }> }
-    const screenshotFiles = listData.screenshots || []
+    // The API returns { files: ["filename1.png", "filename2.png", ...] }
+    const listData = (await listResponse.json()) as { files?: string[] }
+    const screenshotFiles = listData.files || []
 
     console.log(`[D3k Screenshots] Found ${screenshotFiles.length} screenshots`)
 
     // Fetch and upload each screenshot (limit to most recent 5)
     const recentScreenshots = screenshotFiles.slice(-5)
-    for (const file of recentScreenshots) {
+    for (const filename of recentScreenshots) {
       try {
-        const filename = file.filename
         console.log(`[D3k Screenshots] Fetching ${filename}...`)
 
         const imageResponse = await fetch(`${baseUrl}/api/screenshots/${filename}`)
@@ -588,7 +588,12 @@ async function fetchScreenshotsFromD3k(
         }
 
         const imageBuffer = Buffer.from(await imageResponse.arrayBuffer())
-        const timestamp = file.timestamp || Date.now()
+        // Extract timestamp from filename if it has ISO format, otherwise use current time
+        // Filenames are like: 2025-12-11T18-57-08-789Z-page-loaded.png
+        const timestampMatch = filename.match(/^(\d{4}-\d{2}-\d{2}T[\d-]+Z)/)
+        const timestamp = timestampMatch
+          ? new Date(timestampMatch[1].replace(/-(\d{2})-(\d{2})-(\d{3})Z/, ":$1:$2.$3Z")).getTime()
+          : Date.now()
         const blobFilename = `cls-screenshot-${projectName}-${timestamp}.png`
 
         const blob = await put(blobFilename, imageBuffer, {
