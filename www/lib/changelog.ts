@@ -10,6 +10,19 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.124",
+    date: "2025-12-11",
+    type: "patch",
+    highlights: [
+      "Fix Next.js port argument passing - remove -- separator",
+      "Pass port argument to dev server when -p is specified",
+      "Fix log file selector not showing previous logs",
+      "Fix chrome-devtools-mcp CDP conflicts",
+      "Replace hardcoded bypass token with env var reference in guide"
+    ]
+  },
+
+  {
     version: "0.0.123",
     date: "2025-12-09",
     type: "minor",

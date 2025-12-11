@@ -4,6 +4,16 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.124] - 2025-12-11
+
+**Patch Release**
+
+- Fix Next.js port argument passing - remove -- separator
+- Pass port argument to dev server when -p is specified
+- Fix log file selector not showing previous logs
+- Fix chrome-devtools-mcp CDP conflicts
+- Replace hardcoded bypass token with env var reference in guide
+
 ## [0.0.123] - 2025-12-09
 
 **Feature Release**
