@@ -14,16 +14,22 @@ export async function middleware(request: NextRequest) {
   const accessToken = request.cookies.get("access_token")?.value
   const refreshToken = request.cookies.get("refresh_token")?.value
 
+  console.log("[Middleware] Path:", request.nextUrl.pathname)
+  console.log("[Middleware] Has access token:", !!accessToken)
+  console.log("[Middleware] Has refresh token:", !!refreshToken)
+
   // Only check auth on protected routes
   const protectedPaths = ["/workflows"]
   const isProtectedPath = protectedPaths.some((path) => request.nextUrl.pathname.startsWith(path))
 
   if (!isProtectedPath) {
+    console.log("[Middleware] Not a protected path, continuing")
     return NextResponse.next()
   }
 
   // If no tokens at all, let the page handle redirect
   if (!accessToken && !refreshToken) {
+    console.log("[Middleware] No tokens found, letting page handle redirect")
     return NextResponse.next()
   }
 
@@ -58,19 +64,20 @@ export async function middleware(request: NextRequest) {
   // If we have an access token, verify it's still valid
   if (accessToken) {
     try {
-      const apiResponse = await fetch("https://api.vercel.com/v2/user", {
+      const response = await fetch("https://api.vercel.com/v2/user", {
         headers: {
           Authorization: `Bearer ${accessToken}`
         }
       })
 
       // Token is valid, continue
-      if (apiResponse.ok) {
+      if (response.ok) {
+        console.log("[Middleware] Access token is valid")
         return NextResponse.next()
       }
 
       // Token expired (401), try to refresh
-      if (apiResponse.status === 401 && refreshToken) {
+      if (response.status === 401 && refreshToken) {
         console.log("[Middleware] Access token expired, attempting refresh...")
         const newAccessToken = await attemptRefresh(refreshToken)
 
