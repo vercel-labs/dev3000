@@ -554,6 +554,47 @@ async function fetchAndUploadD3kArtifacts(
     ])
     if (logsResult.stdout.trim()) {
       result.fullLogs = logsResult.stdout
+
+      // Fallback: Parse CLS from logs if metadata wasn't found via jank API
+      if (!result.metadata) {
+        // Match log lines like: [CDP] Detected 1 layout shifts (CLS: 0.4716)
+        const clsMatch = logsResult.stdout.match(/\[CDP\] Detected (\d+) layout shifts \(CLS: ([\d.]+)\)/)
+        if (clsMatch) {
+          const shiftCount = parseInt(clsMatch[1], 10)
+          const clsScore = parseFloat(clsMatch[2])
+          console.log(`[D3k Artifacts] Parsed CLS from logs: ${clsScore} (${shiftCount} shifts)`)
+
+          // Determine grade based on CLS thresholds (Google Core Web Vitals)
+          let clsGrade: "good" | "needs-improvement" | "poor"
+          if (clsScore <= 0.1) {
+            clsGrade = "good"
+          } else if (clsScore <= 0.25) {
+            clsGrade = "needs-improvement"
+          } else {
+            clsGrade = "poor"
+          }
+
+          // Parse individual shift details from subsequent log lines
+          // Match lines like: [CDP]   - <DIV> shifted right by 57px
+          const shiftDetailRegex = /\[CDP\]\s+-\s+<(\w+)>\s+shifted\s+(.+)/g
+          const layoutShifts: Array<{ element: string; movement: string }> = []
+          const shiftDetails = logsResult.stdout.matchAll(shiftDetailRegex)
+          for (const detailMatch of shiftDetails) {
+            layoutShifts.push({
+              element: detailMatch[1],
+              movement: detailMatch[2]
+            })
+          }
+
+          result.metadata = {
+            totalCLS: clsScore,
+            clsGrade,
+            shiftCount,
+            layoutShifts: layoutShifts.length > 0 ? layoutShifts : undefined,
+            source: "parsed-from-logs"
+          }
+        }
+      }
     }
 
     console.log(
