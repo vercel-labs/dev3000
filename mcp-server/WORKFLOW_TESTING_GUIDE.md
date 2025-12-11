@@ -165,7 +165,7 @@ When Claude Code has the Vercel MCP configured, use these tools for easier debug
 ```typescript
 // List recent deployments to find the correct one
 mcp__vercel__list_deployments({
-  projectId: "prj_21F00Vr3bXzc1VSC8D9j2YJUzd0Q",  // dev3000-mcp project
+  projectId: "prj_kGnFvhhj2wowBx8zWEkciJnGMLFW",  // dev3000-www project
   teamId: "team_nLlpyC6REAqxydlFKbrMDlud"         // vercel team
 })
 
@@ -184,7 +184,7 @@ mcp__vercel__web_fetch_vercel_url({
 
 **Key IDs for this project:**
 - Team ID (Vercel): `team_nLlpyC6REAqxydlFKbrMDlud`
-- Project ID (mcp-server): `prj_21F00Vr3bXzc1VSC8D9j2YJUzd0Q`
+- Project ID (www): `prj_kGnFvhhj2wowBx8zWEkciJnGMLFW`
 - Test Team (elsigh-pro): `team_aMS4jZUlMooxyr9VgMKJf9uT`
 - Test Project: `prj_0ITI5UHrH4Kp92G5OLEMrlgVX08p`
 
