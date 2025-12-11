@@ -10,6 +10,19 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.126",
+    date: "2025-12-11",
+    type: "minor",
+    highlights: [
+      "Remove nextjs-dev_browser_eval tool from MCP proxy whitelist",
+      "Add withWorkflow wrapper to Next.js config",
+      "Add /api/teams endpoint and use same-origin API for workflows",
+      "Update WORKFLOW_TESTING_GUIDE with correct www project ID",
+      "Refactor workflow into discrete steps with sandbox reconnection"
+    ]
+  },
+
+  {
     version: "0.0.125",
     date: "2025-12-11",
     type: "patch",

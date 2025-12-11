@@ -4,6 +4,16 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.126] - 2025-12-11
+
+**Feature Release**
+
+- Remove nextjs-dev_browser_eval tool from MCP proxy whitelist
+- Add withWorkflow wrapper to Next.js config
+- Add /api/teams endpoint and use same-origin API for workflows
+- Update WORKFLOW_TESTING_GUIDE with correct www project ID
+- Refactor workflow into discrete steps with sandbox reconnection
+
 ## [0.0.125] - 2025-12-11
 
 **Patch Release**
