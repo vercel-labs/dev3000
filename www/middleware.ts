@@ -11,21 +11,19 @@ interface RefreshTokenResponse {
 }
 
 export async function middleware(request: NextRequest) {
-  const accessToken = request.cookies.get("access_token")?.value
-  const refreshToken = request.cookies.get("refresh_token")?.value
-
-  console.log("[Middleware] Path:", request.nextUrl.pathname)
-  console.log("[Middleware] Has access token:", !!accessToken)
-  console.log("[Middleware] Has refresh token:", !!refreshToken)
-
   // Only check auth on protected routes
   const protectedPaths = ["/workflows"]
   const isProtectedPath = protectedPaths.some((path) => request.nextUrl.pathname.startsWith(path))
 
+  // Skip logging and auth checks for non-protected paths
   if (!isProtectedPath) {
-    console.log("[Middleware] Not a protected path, continuing")
     return NextResponse.next()
   }
+
+  const accessToken = request.cookies.get("access_token")?.value
+  const refreshToken = request.cookies.get("refresh_token")?.value
+
+  console.log("[Middleware] Protected path:", request.nextUrl.pathname, "| tokens:", !!accessToken, !!refreshToken)
 
   // If no tokens at all, let the page handle redirect
   if (!accessToken && !refreshToken) {
