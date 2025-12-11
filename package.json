@@ -1,6 +1,6 @@
 {
   "name": "dev3000",
-  "version": "0.0.124",
+  "version": "0.0.125-canary",
   "description": "AI-powered development tools with browser monitoring and MCP server integration",
   "type": "module",
   "main": "dist/index.js",
@@ -89,7 +89,10 @@
   },
   "pnpm": {
     "peerDependencyRules": {
-      "allowAny": ["react", "react-dom"]
+      "allowAny": [
+        "react",
+        "react-dom"
+      ]
     }
   },
   "engines": {
