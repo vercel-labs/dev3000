@@ -368,8 +368,10 @@ const handler = createMcpHandler(
         "take_snapshot"
       ],
       // nextjs-dev: Include most tools for framework-specific debugging
+      // NOTE: browser_eval is intentionally excluded - it spawns a separate headless
+      // Playwright browser that doesn't share cookies with the d3k Chrome browser.
+      // Use execute_browser_action instead for browser automation.
       "nextjs-dev": [
-        "browser_eval",
         "enable_cache_components",
         "init",
         "nextjs_docs",

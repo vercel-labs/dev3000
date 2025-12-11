@@ -43,7 +43,6 @@ export interface D3kSandboxResult {
  * - fix_my_app (with browser automation)
  * - nextjs-dev MCP tools
  * - chrome-devtools MCP tools
- * - browser_eval (Playwright)
  */
 export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSandboxResult> {
   const {
