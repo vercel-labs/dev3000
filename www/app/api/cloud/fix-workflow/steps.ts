@@ -525,6 +525,13 @@ async function fetchAndUploadD3kArtifacts(
       result.fullLogs = logsResult.stdout
     }
 
+    // If no screenshots from MCP response, try to fetch them from the d3k server
+    if (result.clsScreenshots.length === 0) {
+      console.log(`[D3k Artifacts] No screenshots in MCP response, fetching from d3k server...`)
+      const screenshots = await fetchScreenshotsFromD3k(mcpUrl, projectName)
+      result.clsScreenshots = screenshots
+    }
+
     console.log(
       `[D3k Artifacts] Summary: ${result.clsScreenshots.length} screenshots, metadata: ${result.metadata ? "yes" : "no"}`
     )
@@ -533,6 +540,82 @@ async function fetchAndUploadD3kArtifacts(
   }
 
   return result
+}
+
+/**
+ * Fetch screenshots from d3k server's screenshot API and upload to blob storage
+ */
+async function fetchScreenshotsFromD3k(
+  mcpUrl: string,
+  projectName: string
+): Promise<Array<{ label: string; blobUrl: string; timestamp: number }>> {
+  const screenshots: Array<{ label: string; blobUrl: string; timestamp: number }> = []
+
+  try {
+    // d3k MCP server runs on a different port - extract base URL
+    // mcpUrl is like https://sb-xxxxx.vercel.run (the MCP sandbox URL)
+    // The d3k server API endpoints are at the same host
+    const baseUrl = mcpUrl.replace(/\/mcp$/, "")
+
+    // Fetch list of screenshots from d3k API
+    console.log(`[D3k Screenshots] Fetching screenshot list from ${baseUrl}/api/screenshots/list`)
+    const listResponse = await fetch(`${baseUrl}/api/screenshots/list`, {
+      method: "GET",
+      headers: { Accept: "application/json" }
+    })
+
+    if (!listResponse.ok) {
+      console.log(`[D3k Screenshots] List API returned ${listResponse.status}`)
+      return screenshots
+    }
+
+    const listData = (await listResponse.json()) as { screenshots?: Array<{ filename: string; timestamp?: number }> }
+    const screenshotFiles = listData.screenshots || []
+
+    console.log(`[D3k Screenshots] Found ${screenshotFiles.length} screenshots`)
+
+    // Fetch and upload each screenshot (limit to most recent 5)
+    const recentScreenshots = screenshotFiles.slice(-5)
+    for (const file of recentScreenshots) {
+      try {
+        const filename = file.filename
+        console.log(`[D3k Screenshots] Fetching ${filename}...`)
+
+        const imageResponse = await fetch(`${baseUrl}/api/screenshots/${filename}`)
+        if (!imageResponse.ok) {
+          console.log(`[D3k Screenshots] Failed to fetch ${filename}: ${imageResponse.status}`)
+          continue
+        }
+
+        const imageBuffer = Buffer.from(await imageResponse.arrayBuffer())
+        const timestamp = file.timestamp || Date.now()
+        const blobFilename = `cls-screenshot-${projectName}-${timestamp}.png`
+
+        const blob = await put(blobFilename, imageBuffer, {
+          access: "public",
+          contentType: "image/png"
+        })
+
+        screenshots.push({
+          label: filename.replace(".png", ""),
+          blobUrl: blob.url,
+          timestamp
+        })
+
+        console.log(`[D3k Screenshots] Uploaded ${filename} to ${blob.url}`)
+      } catch (err) {
+        console.log(
+          `[D3k Screenshots] Error processing screenshot: ${err instanceof Error ? err.message : String(err)}`
+        )
+      }
+    }
+  } catch (error) {
+    console.log(
+      `[D3k Screenshots] Error fetching screenshots: ${error instanceof Error ? error.message : String(error)}`
+    )
+  }
+
+  return screenshots
 }
 
 /**
