@@ -14,6 +14,7 @@ export interface WorkflowRun {
   beforeScreenshotUrl?: string
   afterScreenshotUrl?: string
   sandboxUrl?: string // Dev URL from sandbox for live viewing
+  isPublic?: boolean // If true, the report can be viewed without authentication
 }
 
 /**
@@ -68,6 +69,45 @@ export async function listWorkflowRuns(userId: string): Promise<WorkflowRun[]> {
 export async function getWorkflowRun(userId: string, runId: string): Promise<WorkflowRun | null> {
   const runs = await listWorkflowRuns(userId)
   return runs.find((run) => run.id === runId) || null
+}
+
+/**
+ * Get a workflow run by ID without requiring userId (for public access)
+ * This searches across all users' workflows - only returns if isPublic is true
+ */
+export async function getPublicWorkflowRun(runId: string): Promise<WorkflowRun | null> {
+  const prefix = "workflows/"
+  const { blobs } = await list({ prefix })
+
+  // Search through all workflow blobs to find the matching run ID
+  for (const blob of blobs) {
+    try {
+      const response = await fetch(blob.url)
+      const run: WorkflowRun = await response.json()
+      if (run.id === runId && run.isPublic) {
+        return run
+      }
+    } catch {
+      // Skip invalid blobs
+    }
+  }
+
+  return null
+}
+
+/**
+ * Toggle public status of a workflow run
+ */
+export async function setWorkflowPublic(userId: string, runId: string, isPublic: boolean): Promise<WorkflowRun | null> {
+  const run = await getWorkflowRun(userId, runId)
+  if (!run) {
+    return null
+  }
+
+  run.isPublic = isPublic
+  await saveWorkflowRun(run)
+  console.log(`[Workflow Storage] Set run ${runId} public status to: ${isPublic}`)
+  return run
 }
 
 /**

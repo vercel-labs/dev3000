@@ -1,21 +1,41 @@
 import { ArrowLeft, Download } from "lucide-react"
+import type { Metadata } from "next"
 import Image from "next/image"
 import { redirect } from "next/navigation"
 import { getCurrentUser } from "@/lib/auth"
-import { getWorkflowRun } from "@/lib/workflow-storage"
+import { getPublicWorkflowRun, getWorkflowRun } from "@/lib/workflow-storage"
 import type { WorkflowReport } from "@/types"
 import { AgentAnalysis } from "./agent-analysis"
 import { CollapsibleSection } from "./collapsible-section"
+import { ScreenshotPlayer } from "./screenshot-player"
+import { ShareButton } from "./share-button"
+
+export const metadata: Metadata = {
+  title: "dev3000 workflow report"
+}
 
 export default async function WorkflowReportPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser()
   const { id } = await params
 
-  if (!user) {
-    redirect("/signin")
+  // First, try to get the run as a public report (no auth required)
+  let run = await getPublicWorkflowRun(id)
+  let isOwner = false
+
+  // If not public, require authentication and check ownership
+  if (!run) {
+    if (!user) {
+      redirect("/signin")
+    }
+    run = await getWorkflowRun(user.id, id)
+    isOwner = !!run
+  } else if (user) {
+    // Check if the logged-in user is the owner of this public report
+    const ownedRun = await getWorkflowRun(user.id, id)
+    isOwner = !!ownedRun
   }
 
-  const run = await getWorkflowRun(user.id, id)
+  const isPublicView = !isOwner && !!run?.isPublic
 
   if (!run || !run.reportBlobUrl) {
     redirect("/workflows")
@@ -43,15 +63,25 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8 max-w-4xl">
         <div className="flex items-center gap-4 mb-6">
-          <a
-            href="/workflows"
-            className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            <span className="font-semibold">d3k</span>
-          </a>
-          <span className="text-muted-foreground">/</span>
-          <span className="text-muted-foreground">Fix Report</span>
+          {isPublicView ? (
+            <span className="inline-flex items-center gap-2 text-muted-foreground">
+              <span className="font-semibold">d3k</span>
+              <span>/</span>
+              <span>Public Report</span>
+            </span>
+          ) : (
+            <>
+              <a
+                href="/workflows"
+                className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                <span className="font-semibold">d3k</span>
+              </a>
+              <span className="text-muted-foreground">/</span>
+              <span className="text-muted-foreground">Fix Report</span>
+            </>
+          )}
         </div>
 
         <div className="flex items-center justify-between mb-4">
@@ -59,14 +89,17 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
             <h1 className="text-3xl font-bold">{report.projectName}</h1>
             <p className="text-muted-foreground mt-1">{new Date(report.timestamp).toLocaleString()}</p>
           </div>
-          <a
-            href={run.reportBlobUrl}
-            download
-            className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
-          >
-            <Download className="h-4 w-4" />
-            Download JSON
-          </a>
+          <div className="flex items-center gap-3">
+            {isOwner && <ShareButton runId={id} initialIsPublic={run.isPublic ?? false} />}
+            <a
+              href={run.reportBlobUrl}
+              download
+              className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+            >
+              <Download className="h-4 w-4" />
+              Download JSON
+            </a>
+          </div>
         </div>
 
         {/* Sandbox Info (at top, always visible) */}
@@ -213,18 +246,33 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
             )}
 
             {/* Screenshots embedded in CLS section */}
-            {(report.beforeScreenshotUrl ||
-              report.afterScreenshotUrl ||
-              (report.clsScreenshots && report.clsScreenshots.length > 0)) && (
+            {(report.beforeScreenshots?.length ||
+              report.afterScreenshots?.length ||
+              report.clsScreenshots?.length ||
+              report.beforeScreenshotUrl ||
+              report.afterScreenshotUrl) && (
               <div className="mt-6 pt-4 border-t border-border">
                 <h3 className="text-sm font-medium text-muted-foreground mb-3">Screenshots</h3>
 
-                {/* Before/After comparison if we have both */}
-                {report.beforeScreenshotUrl && report.afterScreenshotUrl ? (
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <div className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Before Fix</div>
+                {/* Animated players for before/after screenshot sequences */}
+                {report.beforeScreenshots?.length ||
+                report.afterScreenshots?.length ||
+                report.clsScreenshots?.length ? (
+                  <div className="grid grid-cols-2 gap-4">
+                    {/* Before Fix - use beforeScreenshots or fallback to clsScreenshots */}
+                    {report.beforeScreenshots?.length || report.clsScreenshots?.length ? (
+                      <ScreenshotPlayer
+                        screenshots={report.beforeScreenshots || report.clsScreenshots || []}
+                        title="Before Fix"
+                        autoPlay={true}
+                        fps={8}
+                        loop={true}
+                      />
+                    ) : report.beforeScreenshotUrl ? (
+                      <div className="bg-muted/30 rounded-lg overflow-hidden">
+                        <div className="px-3 py-2 border-b border-border bg-muted/50">
+                          <span className="text-xs text-muted-foreground uppercase tracking-wide">Before Fix</span>
+                        </div>
                         <a href={report.beforeScreenshotUrl} target="_blank" rel="noopener noreferrer">
                           <Image
                             src={report.beforeScreenshotUrl}
@@ -232,12 +280,26 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
                             width={400}
                             height={225}
                             unoptimized
-                            className="w-full h-auto rounded border border-border hover:border-primary transition-colors cursor-pointer"
+                            className="w-full h-auto"
                           />
                         </a>
                       </div>
-                      <div>
-                        <div className="text-xs text-muted-foreground uppercase tracking-wide mb-2">After Fix</div>
+                    ) : null}
+
+                    {/* After Fix */}
+                    {report.afterScreenshots?.length ? (
+                      <ScreenshotPlayer
+                        screenshots={report.afterScreenshots}
+                        title="After Fix"
+                        autoPlay={true}
+                        fps={8}
+                        loop={true}
+                      />
+                    ) : report.afterScreenshotUrl ? (
+                      <div className="bg-muted/30 rounded-lg overflow-hidden">
+                        <div className="px-3 py-2 border-b border-border bg-muted/50">
+                          <span className="text-xs text-muted-foreground uppercase tracking-wide">After Fix</span>
+                        </div>
                         <a href={report.afterScreenshotUrl} target="_blank" rel="noopener noreferrer">
                           <Image
                             src={report.afterScreenshotUrl}
@@ -245,99 +307,49 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
                             width={400}
                             height={225}
                             unoptimized
-                            className="w-full h-auto rounded border border-border hover:border-primary transition-colors cursor-pointer"
+                            className="w-full h-auto"
                           />
                         </a>
                       </div>
-                    </div>
-
-                    {/* CLS timeline screenshots if available */}
-                    {report.clsScreenshots && report.clsScreenshots.length > 0 && (
-                      <CollapsibleSection title="CLS Timeline Screenshots" defaultOpen={false}>
-                        <div className="flex flex-wrap gap-2 mt-2">
-                          {report.clsScreenshots.map((screenshot) => (
-                            <a
-                              key={`screenshot-${screenshot.timestamp}`}
-                              href={screenshot.blobUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-block"
-                            >
-                              <Image
-                                src={screenshot.blobUrl}
-                                alt={screenshot.label || "CLS Screenshot"}
-                                width={192}
-                                height={108}
-                                unoptimized
-                                className="w-48 h-auto rounded border border-border hover:border-primary transition-colors cursor-pointer"
-                              />
-                              <span className="text-xs text-muted-foreground mt-1 block">
-                                {screenshot.label || "Shift"}
-                              </span>
-                            </a>
-                          ))}
-                        </div>
-                      </CollapsibleSection>
-                    )}
+                    ) : null}
                   </div>
                 ) : (
-                  /* Original layout if we don't have both before/after */
-                  <div className="flex flex-wrap gap-2">
+                  /* Fallback: static images only */
+                  <div className="grid grid-cols-2 gap-4">
                     {report.beforeScreenshotUrl && (
-                      <a
-                        href={report.beforeScreenshotUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-block"
-                      >
-                        <Image
-                          src={report.beforeScreenshotUrl}
-                          alt="Before screenshot"
-                          width={192}
-                          height={108}
-                          unoptimized
-                          className="w-48 h-auto rounded border border-border hover:border-primary transition-colors cursor-pointer"
-                        />
-                        <span className="text-xs text-muted-foreground mt-1 block">Before</span>
-                      </a>
+                      <div className="bg-muted/30 rounded-lg overflow-hidden">
+                        <div className="px-3 py-2 border-b border-border bg-muted/50">
+                          <span className="text-xs text-muted-foreground uppercase tracking-wide">Before Fix</span>
+                        </div>
+                        <a href={report.beforeScreenshotUrl} target="_blank" rel="noopener noreferrer">
+                          <Image
+                            src={report.beforeScreenshotUrl}
+                            alt="Before fix screenshot"
+                            width={400}
+                            height={225}
+                            unoptimized
+                            className="w-full h-auto"
+                          />
+                        </a>
+                      </div>
                     )}
                     {report.afterScreenshotUrl && (
-                      <a
-                        href={report.afterScreenshotUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-block"
-                      >
-                        <Image
-                          src={report.afterScreenshotUrl}
-                          alt="After screenshot"
-                          width={192}
-                          height={108}
-                          unoptimized
-                          className="w-48 h-auto rounded border border-border hover:border-primary transition-colors cursor-pointer"
-                        />
-                        <span className="text-xs text-muted-foreground mt-1 block">After</span>
-                      </a>
+                      <div className="bg-muted/30 rounded-lg overflow-hidden">
+                        <div className="px-3 py-2 border-b border-border bg-muted/50">
+                          <span className="text-xs text-muted-foreground uppercase tracking-wide">After Fix</span>
+                        </div>
+                        <a href={report.afterScreenshotUrl} target="_blank" rel="noopener noreferrer">
+                          <Image
+                            src={report.afterScreenshotUrl}
+                            alt="After fix screenshot"
+                            width={400}
+                            height={225}
+                            unoptimized
+                            className="w-full h-auto"
+                          />
+                        </a>
+                      </div>
                     )}
-                    {report.clsScreenshots?.map((screenshot) => (
-                      <a
-                        key={`screenshot-${screenshot.timestamp}`}
-                        href={screenshot.blobUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-block"
-                      >
-                        <Image
-                          src={screenshot.blobUrl}
-                          alt={screenshot.label || "CLS Screenshot"}
-                          width={192}
-                          height={108}
-                          unoptimized
-                          className="w-48 h-auto rounded border border-border hover:border-primary transition-colors cursor-pointer"
-                        />
-                        <span className="text-xs text-muted-foreground mt-1 block">{screenshot.label || "Shift"}</span>
-                      </a>
-                    ))}
                   </div>
                 )}
               </div>
@@ -368,9 +380,11 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
         )}
 
         <div className="mt-6 flex gap-4">
-          <a href="/workflows" className="px-4 py-2 border border-border rounded-md hover:bg-muted transition-colors">
-            ← Back to Workflows
-          </a>
+          {!isPublicView && (
+            <a href="/workflows" className="px-4 py-2 border border-border rounded-md hover:bg-muted transition-colors">
+              ← Back to Workflows
+            </a>
+          )}
           {run.prUrl && (
             <a
               href={run.prUrl}
