@@ -205,9 +205,16 @@ export function getUpgradeCommand(packageManager: "npm" | "pnpm" | "yarn" | null
 /**
  * Compare two semver versions
  * Returns true if version2 is greater than version1
+ *
+ * Pre-release versions (e.g., 0.0.125-canary) are considered older than
+ * their corresponding stable versions (e.g., 0.0.125).
  */
 export function isNewerVersion(current: string, latest: string): boolean {
-  // Strip any pre-release tags for comparison
+  // Extract pre-release tags
+  const currentPrerelease = current.includes("-") ? current.split("-")[1] : null
+  const latestPrerelease = latest.includes("-") ? latest.split("-")[1] : null
+
+  // Strip any pre-release tags for base version comparison
   const cleanCurrent = current.replace(/-.*$/, "")
   const cleanLatest = latest.replace(/-.*$/, "")
 
@@ -220,6 +227,13 @@ export function isNewerVersion(current: string, latest: string): boolean {
 
     if (v2 > v1) return true
     if (v2 < v1) return false
+  }
+
+  // Base versions are equal - check pre-release status
+  // A stable version (no prerelease) is newer than a prerelease version
+  // e.g., 0.0.125 > 0.0.125-canary
+  if (currentPrerelease && !latestPrerelease) {
+    return true // latest is stable, current is prerelease -> update available
   }
 
   return false
