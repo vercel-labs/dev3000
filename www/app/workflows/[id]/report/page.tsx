@@ -265,7 +265,7 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
                         screenshots={report.beforeScreenshots || report.clsScreenshots || []}
                         title="Before Fix"
                         autoPlay={true}
-                        fps={8}
+                        fps={2}
                         loop={true}
                       />
                     ) : report.beforeScreenshotUrl ? (
@@ -292,7 +292,7 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
                         screenshots={report.afterScreenshots}
                         title="After Fix"
                         autoPlay={true}
-                        fps={8}
+                        fps={2}
                         loop={true}
                       />
                     ) : report.afterScreenshotUrl ? (
