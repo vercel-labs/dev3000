@@ -487,9 +487,9 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       // Initial status - will be updated by polling
       setWorkflowStatus("Starting workflow...")
 
-      // Always use production API endpoint for workflow execution
-      const apiBaseUrl = "https://d3k-mcp.vercel.sh"
-      const apiUrl = `${apiBaseUrl}/api/cloud/start-fix`
+      // Use same-origin API - works for both local dev (falls back to production via rewrite)
+      // and production deployment
+      const apiUrl = "/api/cloud/start-fix"
 
       console.log("[Start Workflow] API URL:", apiUrl)
       console.log("[Start Workflow] Request body:", body)
