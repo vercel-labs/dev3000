@@ -372,7 +372,7 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
 
         {/* D3k Logs Section (Collapsible) */}
         {report.d3kLogs && (
-          <CollapsibleSection title="d3k Debug Logs" defaultOpen={false}>
+          <CollapsibleSection title="d3k Logs" defaultOpen={false}>
             <pre className="bg-muted/50 rounded p-4 text-xs font-mono overflow-x-auto whitespace-pre-wrap max-h-96 overflow-y-auto">
               {report.d3kLogs}
             </pre>

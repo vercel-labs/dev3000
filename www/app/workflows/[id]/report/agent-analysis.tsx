@@ -3,7 +3,6 @@
 import { ChevronDown, ChevronRight } from "lucide-react"
 import { type ReactNode, useMemo, useState } from "react"
 import { Streamdown } from "streamdown"
-import { DiffDownloadButton } from "./diff-download-button"
 
 interface ParsedStep {
   stepNumber: number
@@ -132,12 +131,14 @@ function StepSection({
   title,
   children,
   defaultOpen = false,
-  badge
+  badge,
+  headerAction
 }: {
   title: string
   children: ReactNode
   defaultOpen?: boolean
   badge?: string
+  headerAction?: ReactNode
 }) {
   const [isOpen, setIsOpen] = useState(defaultOpen)
 
@@ -156,10 +157,52 @@ function StepSection({
           )}
           <span className="font-medium">{title}</span>
         </div>
-        {badge && <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">{badge}</span>}
+        <div className="flex items-center gap-2">
+          {headerAction}
+          {badge && <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">{badge}</span>}
+        </div>
       </button>
       {isOpen && <div className="px-3 pb-3 border-t border-border">{children}</div>}
     </div>
+  )
+}
+
+/**
+ * Git Diff section with collapsible diff and download link in title bar
+ */
+function DiffSection({ gitDiff, projectName }: { gitDiff: string; projectName: string }) {
+  const handleDownload = (e: React.MouseEvent) => {
+    e.stopPropagation() // Prevent collapsible toggle
+    const cleanName = projectName.replace(/[^a-zA-Z0-9-_]/g, "-").toLowerCase()
+    const filename = `d3k-fix-${cleanName}.diff`
+    const blob = new Blob([gitDiff], { type: "text/plain" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
+  return (
+    <StepSection
+      title="View Diff"
+      headerAction={
+        <button
+          type="button"
+          onClick={handleDownload}
+          className="text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline"
+        >
+          download .diff
+        </button>
+      }
+    >
+      <pre className="mt-2 text-xs bg-muted/50 p-2 rounded overflow-x-auto whitespace-pre-wrap max-h-96 overflow-y-auto">
+        {gitDiff}
+      </pre>
+    </StepSection>
   )
 }
 
@@ -199,18 +242,10 @@ export function AgentAnalysis({
         </div>
       )}
 
-      {/* Git Diff - shown with download button and collapsed diff */}
+      {/* Git Diff - shown with download link in title bar */}
       {gitDiff && (
         <div className="mt-4 pt-4 border-t border-border">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-medium">Git Diff</h3>
-            <DiffDownloadButton diff={gitDiff} projectName={projectName || "project"} />
-          </div>
-          <StepSection title="View Diff">
-            <pre className="mt-2 bg-muted/50 rounded p-4 text-xs font-mono overflow-x-auto whitespace-pre-wrap max-h-96 overflow-y-auto">
-              {gitDiff}
-            </pre>
-          </StepSection>
+          <DiffSection gitDiff={gitDiff} projectName={projectName || "project"} />
         </div>
       )}
 
