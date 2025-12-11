@@ -19,7 +19,7 @@
     "lucide-react": "^0.544.0",
     "mcp-handler": "1.0.2",
     "ms": "^2.1.3",
-    "next": "latest",
+    "next": "16.0.9",
     "pixelmatch": "^7.1.0",
     "pngjs": "^7.0.0",
     "react": "19.3.0-canary-09f05694-20251201",
