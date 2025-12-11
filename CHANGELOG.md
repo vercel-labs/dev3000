@@ -4,6 +4,13 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.125] - 2025-12-11
+
+**Patch Release**
+
+- Replace catalog: references with actual versions in mcp-server
+- Move workflows UI from mcp-server to www
+
 ## [0.0.124] - 2025-12-11
 
 **Patch Release**
