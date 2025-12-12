@@ -224,21 +224,19 @@ export async function verifyFixAndCaptureAfter(
   console.log(`[Step 2] Waiting 3s for HMR to apply changes...`)
   await new Promise((resolve) => setTimeout(resolve, 3000))
 
-  // Clear d3k screenshots via MCP server API to get completely fresh captures
-  // CRITICAL: Must clear via HTTP API because the MCP server runs in its own sandbox
-  // with its own filesystem - clearing via shell commands in the dev sandbox doesn't affect it
-  const baseUrl = mcpUrl.replace(/\/mcp$/, "")
-  console.log(`[Step 2] Clearing d3k screenshots via MCP API at ${baseUrl}/api/screenshots/clear...`)
+  // Clear d3k screenshots via sandbox shell command to get completely fresh captures
+  // CRITICAL: The screenshots are stored in the sandbox filesystem at /tmp/dev3000-mcp-deps/public/screenshots
+  // We must delete them from the sandbox directly using a shell command
+  console.log(`[Step 2] Clearing d3k screenshots via sandbox shell command...`)
   try {
-    const clearResponse = await fetch(`${baseUrl}/api/screenshots/clear`, { method: "DELETE" })
-    if (clearResponse.ok) {
-      const clearResult = (await clearResponse.json()) as { deletedCount?: number }
-      console.log(`[Step 2] Cleared ${clearResult.deletedCount ?? 0} screenshots via MCP API`)
-    } else {
-      console.log(`[Step 2] WARNING: Failed to clear screenshots via MCP API: ${clearResponse.status}`)
-    }
+    const clearResult = await runSandboxCommand(sandbox, "sh", [
+      "-c",
+      "rm -f /tmp/dev3000-mcp-deps/public/screenshots/*.png 2>/dev/null; ls /tmp/dev3000-mcp-deps/public/screenshots/*.png 2>/dev/null | wc -l || echo 0"
+    ])
+    const remainingCount = parseInt(clearResult.stdout.trim(), 10) || 0
+    console.log(`[Step 2] Cleared screenshots. Remaining: ${remainingCount}`)
   } catch (clearError) {
-    console.log(`[Step 2] WARNING: Error clearing screenshots via MCP API:`, clearError)
+    console.log(`[Step 2] WARNING: Error clearing screenshots via shell:`, clearError)
   }
 
   // Navigate to a blank page first, then back to the dev URL
