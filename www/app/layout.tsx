@@ -6,6 +6,7 @@ import { Geist, Geist_Mono } from "next/font/google"
 import type React from "react"
 import { Suspense } from "react"
 import { ThemeProvider } from "@/components/theme-provider"
+import { DEV3000_URL } from "@/lib/constants"
 import "./globals.css"
 
 const geistSans = Geist({
@@ -18,10 +19,8 @@ const geistMono = Geist_Mono({
   variable: "--font-geist-mono"
 })
 
-const BASE_URL = "https://dev3000.ai"
-
 export const metadata: Metadata = {
-  metadataBase: new URL(BASE_URL),
+  metadataBase: new URL(DEV3000_URL),
   title: "dev3000 - AI-Powered Debugging & Development Monitoring | Vercel Labs",
   description:
     "Capture your web app's complete development timeline with dev3000. Unified server logs, browser events, console messages, network requests, and automatic screenshots for AI debugging. Perfect for Next.js, React, and modern web development.",
@@ -45,7 +44,7 @@ export const metadata: Metadata = {
     title: "dev3000 - AI-Powered Debugging & Development Monitoring",
     description:
       "Capture your web app's complete development timeline for AI debugging. Unified logs, browser events, and automatic screenshots.",
-    url: BASE_URL,
+    url: DEV3000_URL,
     siteName: "dev3000",
     type: "website",
     locale: "en_US"

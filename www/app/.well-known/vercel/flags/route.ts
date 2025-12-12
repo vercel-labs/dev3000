@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { DEV3000_URL } from "@/lib/constants"
 
 export async function GET() {
   // Simple endpoint that returns feature flag definitions
@@ -8,7 +9,7 @@ export async function GET() {
     definitions: {
       "demo-cls-bugs": {
         description: "Enable intentional CLS bugs for demo purposes",
-        origin: "https://dev3000.ai",
+        origin: DEV3000_URL,
         options: [
           { value: false, label: "Disabled" },
           { value: true, label: "Enabled" }

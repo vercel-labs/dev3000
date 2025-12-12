@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Progress } from "@/components/ui/progress"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Spinner } from "@/components/ui/spinner"
+import { DEV3000_API_URL } from "@/lib/constants"
 
 interface Team {
   id: string
@@ -209,7 +210,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
     const pollStatus = async () => {
       try {
         // Use production API for consistent status (same domain as start-fix)
-        const response = await fetch(`https://dev3000.ai/api/workflows?userId=${userId}`)
+        const response = await fetch(`${DEV3000_API_URL}/api/workflows?userId=${userId}`)
         if (!response.ok) return
 
         const data = await response.json()
@@ -491,7 +492,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       // infrastructure with full durability and observability, whether we're running
       // locally or in production. The production API has CORS headers configured.
       // NOTE: Use dev3000.ai directly (not d3k.dev) to avoid redirect which breaks CORS preflight
-      const apiUrl = "https://dev3000.ai/api/cloud/start-fix"
+      const apiUrl = `${DEV3000_API_URL}/api/cloud/start-fix`
 
       console.log("[Start Workflow] API URL:", apiUrl)
       console.log("[Start Workflow] Request body:", body)
