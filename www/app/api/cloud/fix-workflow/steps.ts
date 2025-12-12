@@ -224,25 +224,23 @@ export async function verifyFixAndCaptureAfter(
   console.log(`[Step 2] Waiting 3s for HMR to apply changes...`)
   await new Promise((resolve) => setTimeout(resolve, 3000))
 
-  // Clear d3k screenshots AND metadata files via sandbox shell command to get completely fresh captures
-  // CRITICAL: Files can be in multiple directories depending on SCREENSHOT_DIR env var:
-  // - /tmp/d3k/screenshots (set in vercel.json SCREENSHOT_DIR)
-  // - /tmp/dev3000-mcp-deps/public/screenshots (fallback default)
-  // - /home/vercel-sandbox/.d3k/screenshots (older location)
-  // We must clear BOTH .png AND -metadata.json files to ensure fresh CLS data
-  console.log(`[Step 2] Clearing d3k screenshots AND metadata files from ALL possible directories...`)
+  // Clear d3k screenshots AND metadata files via MCP server API
+  // CRITICAL: The MCP server runs in a SEPARATE sandbox from the dev server!
+  // We must call the MCP server's HTTP API to clear its files, not the dev sandbox's filesystem.
+  console.log(`[Step 2] Clearing d3k screenshots AND metadata files via MCP API...`)
+  const mcpBaseUrl = mcpUrl.replace(/\/mcp$/, "")
   try {
-    const clearResult = await runSandboxCommand(sandbox, "sh", [
-      "-c",
-      `rm -f /tmp/d3k/screenshots/*.png /tmp/d3k/screenshots/*-metadata.json 2>/dev/null; \
-       rm -f /tmp/dev3000-mcp-deps/public/screenshots/*.png /tmp/dev3000-mcp-deps/public/screenshots/*-metadata.json 2>/dev/null; \
-       rm -f /home/vercel-sandbox/.d3k/screenshots/*.png /home/vercel-sandbox/.d3k/screenshots/*-metadata.json 2>/dev/null; \
-       echo "Remaining files:"; \
-       (ls /tmp/d3k/screenshots/* 2>/dev/null; ls /tmp/dev3000-mcp-deps/public/screenshots/* 2>/dev/null; ls /home/vercel-sandbox/.d3k/screenshots/* 2>/dev/null) | wc -l || echo 0`
-    ])
-    console.log(`[Step 2] Clear result: ${clearResult.stdout.trim()}`)
+    const clearResponse = await fetch(`${mcpBaseUrl}/api/screenshots/clear`, {
+      method: "DELETE"
+    })
+    if (clearResponse.ok) {
+      const clearResult = (await clearResponse.json()) as { deletedCount?: number; directory?: string }
+      console.log(`[Step 2] Cleared ${clearResult.deletedCount || 0} files from MCP server`)
+    } else {
+      console.log(`[Step 2] WARNING: Clear API returned ${clearResponse.status}`)
+    }
   } catch (clearError) {
-    console.log(`[Step 2] WARNING: Error clearing files via shell:`, clearError)
+    console.log(`[Step 2] WARNING: Error calling MCP clear API:`, clearError)
   }
 
   // Navigate to a blank page first, then back to the dev URL

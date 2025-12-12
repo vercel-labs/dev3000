@@ -12,7 +12,7 @@ export async function DELETE() {
   try {
     const screenshotDir = process.env.SCREENSHOT_DIR || join(tmpdir(), "dev3000-mcp-deps", "public", "screenshots")
 
-    const files = readdirSync(screenshotDir).filter((f) => f.endsWith(".png"))
+    const files = readdirSync(screenshotDir).filter((f) => f.endsWith(".png") || f.endsWith("-metadata.json"))
 
     let deletedCount = 0
     for (const file of files) {
