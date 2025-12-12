@@ -2,7 +2,7 @@ import { randomUUID } from "crypto"
 import { start } from "workflow/api"
 import { clearWorkflowLog, workflowError, workflowLog } from "@/lib/workflow-logger"
 import { saveWorkflowRun } from "@/lib/workflow-storage"
-import { cloudFixWorkflow } from "../fix-workflow/workflow"
+import { cloudFixWorkflowV2 } from "../fix-workflow/workflow-v2"
 
 /**
  * API Route to Start Cloud Fix Workflow
@@ -83,20 +83,19 @@ export async function POST(request: Request) {
       workflowLog(`[Start Fix] GitHub: ${repoOwner}/${repoName} (base: ${baseBranch || "main"})`)
     }
 
-    // Start the workflow and get a Run object
-    // Pass serializable data instead of Request object
-    // The workflow will fetch real logs from the devUrl and optionally create a PR
-    const workflowParams: Parameters<typeof cloudFixWorkflow>[0] = {
-      devUrl,
-      projectName,
-      vercelToken: accessToken, // Pass user's access token for sandbox creation
-      vercelOidcToken, // Pass OIDC token from request header for sandbox creation
-      ...(repoOwner && { repoOwner }),
-      ...(repoName && { repoName }),
-      ...(baseBranch && { baseBranch }),
-      ...(bypassToken && { bypassToken }),
-      ...(repoUrl && { repoUrl }),
-      ...(repoBranch && { repoBranch })
+    // Validate required fields for v2 workflow
+    if (!repoUrl) {
+      return Response.json(
+        { success: false, error: "repoUrl is required for the workflow" },
+        { status: 400, headers: corsHeaders }
+      )
+    }
+
+    if (!projectName) {
+      return Response.json(
+        { success: false, error: "projectName is required for the workflow" },
+        { status: 400, headers: corsHeaders }
+      )
     }
 
     // Save workflow run metadata at start if userId and projectName provided
@@ -109,20 +108,23 @@ export async function POST(request: Request) {
         projectName,
         timestamp: runTimestamp,
         status: "running",
-        currentStep: "Starting workflow...",
-        stepNumber: 0
+        currentStep: "Step 1: Initializing sandbox...",
+        stepNumber: 1
       })
       workflowLog(`[Start Fix] Saved workflow run metadata (running): ${runId}`)
     }
 
-    // Pass runId and userId to workflow for progress tracking
-    const workflowParamsWithTracking = {
-      ...workflowParams,
+    // V2 workflow params - simplified "local-style" architecture
+    const workflowParams = {
+      repoUrl,
+      repoBranch: repoBranch || baseBranch || "main",
+      projectName,
+      vercelOidcToken,
       runId,
       userId
     }
 
-    const run = await start(cloudFixWorkflow, [workflowParamsWithTracking])
+    const run = await start(cloudFixWorkflowV2, [workflowParams])
 
     workflowLog(`[Start Fix] Workflow started, waiting for completion...`)
 
