@@ -1,6 +1,6 @@
 "use client"
 
-import { ChevronDown, ChevronRight } from "lucide-react"
+import { ChevronDown, ChevronRight, Download } from "lucide-react"
 import { type ReactNode, useMemo, useState } from "react"
 import { Streamdown } from "streamdown"
 
@@ -266,9 +266,10 @@ function DiffSection({ gitDiff, projectName }: { gitDiff: string; projectName: s
         <button
           type="button"
           onClick={handleDownload}
-          className="text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline"
+          className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors"
         >
-          download .diff
+          <Download className="h-3 w-3" />
+          Download .diff
         </button>
       }
     >
