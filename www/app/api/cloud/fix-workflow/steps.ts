@@ -138,8 +138,9 @@ export async function agentFixLoopStep(
 
   workflowLog(`[Agent] Status: ${status}, Before: ${beforeCls}, After: ${finalCls.clsScore}`)
 
-  // Combine d3k logs from init and after agent run
-  const combinedD3kLogs = `=== Step 1: Init (before agent) ===\n${initD3kLogs}\n\n=== Step 2: After agent fix ===\n${finalCls.d3kLogs}`
+  // Combine d3k logs - Step 2 only shows NEW logs (not already in Step 1)
+  const newLogsInStep2 = finalCls.d3kLogs.replace(initD3kLogs, "").trim()
+  const combinedD3kLogs = `=== Step 1: Init (before agent) ===\n${initD3kLogs}\n\n=== Step 2: After agent fix ===\n${newLogsInStep2 || "(no new logs)"}`
 
   // Generate report inline
   const report: WorkflowReport = {
