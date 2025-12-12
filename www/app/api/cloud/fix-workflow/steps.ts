@@ -278,30 +278,79 @@ export async function verifyFixAndCaptureAfter(
   console.log(`[Step 2] Waiting 5s for page load...`)
   await new Promise((resolve) => setTimeout(resolve, 5000))
 
-  // Explicitly capture screenshots via the MCP API
+  // Explicitly capture screenshots via inline Node.js script in sandbox
   // This is needed because screencast capture isn't running during verification
-  console.log(`[Step 2] Capturing after-fix screenshots via MCP API...`)
+  // and the npm package's MCP server doesn't have a capture endpoint
+  console.log(`[Step 2] Capturing after-fix screenshots via CDP in sandbox...`)
+
+  // Node.js script to capture screenshot via CDP
+  const captureScript = `
+const WebSocket = require('ws');
+const fs = require('fs');
+const path = require('path');
+const http = require('http');
+
+async function captureScreenshot(label) {
+  // Find CDP endpoint from Chrome debugging port
+  const pages = await new Promise((resolve, reject) => {
+    http.get('http://localhost:9222/json', (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => resolve(JSON.parse(data)));
+      res.on('error', reject);
+    }).on('error', reject);
+  });
+
+  const activePage = pages.find(p => p.type === 'page' && !p.url.startsWith('chrome://'));
+  if (!activePage) throw new Error('No active page');
+
+  const ws = new WebSocket(activePage.webSocketDebuggerUrl);
+
+  return new Promise((resolve, reject) => {
+    ws.on('open', () => {
+      ws.send(JSON.stringify({ id: 1, method: 'Page.captureScreenshot', params: { format: 'png' } }));
+    });
+    ws.on('message', (data) => {
+      const msg = JSON.parse(data);
+      if (msg.id === 1) {
+        ws.close();
+        if (msg.error) { reject(new Error(msg.error.message)); return; }
+
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const filename = timestamp + '-' + label + '.png';
+        const dir = '/tmp/dev3000-mcp-deps/public/screenshots';
+        fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(path.join(dir, filename), Buffer.from(msg.result.data, 'base64'));
+        console.log('CAPTURED:' + filename);
+        resolve(filename);
+      }
+    });
+    ws.on('error', reject);
+    setTimeout(() => { ws.close(); reject(new Error('timeout')); }, 10000);
+  });
+}
+
+captureScreenshot(process.argv[2] || 'after-fix').then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); });
+`
+
   const capturedScreenshots: string[] = []
   for (const label of ["page-loaded", "after-fix-1", "after-fix-2"]) {
     try {
-      const captureResponse = await fetch(`${mcpBaseUrl}/api/screenshots/capture`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ label })
-      })
-      if (captureResponse.ok) {
-        const captureResult = (await captureResponse.json()) as { filename?: string }
-        if (captureResult.filename) {
-          capturedScreenshots.push(captureResult.filename)
-          console.log(`[Step 2] Captured: ${captureResult.filename}`)
-        }
+      const captureResult = await runSandboxCommand(sandbox, "node", ["-e", captureScript, label])
+      const captured = captureResult.stdout.match(/CAPTURED:(.+\.png)/)?.[1]
+      if (captured) {
+        capturedScreenshots.push(captured)
+        console.log(`[Step 2] Captured: ${captured}`)
       } else {
-        console.log(`[Step 2] Capture ${label} failed: ${captureResponse.status}`)
+        console.log(`[Step 2] Capture ${label} output: ${captureResult.stdout.slice(0, 200)}`)
+        if (captureResult.stderr) {
+          console.log(`[Step 2] Capture ${label} stderr: ${captureResult.stderr.slice(0, 200)}`)
+        }
       }
     } catch (err) {
       console.log(`[Step 2] Capture ${label} error: ${err instanceof Error ? err.message : String(err)}`)
     }
-    // Small delay between captures to observe any layout shifts
+    // Small delay between captures
     await new Promise((resolve) => setTimeout(resolve, 500))
   }
   console.log(`[Step 2] Captured ${capturedScreenshots.length} screenshots`)
