@@ -284,37 +284,65 @@ export async function verifyFixAndCaptureAfter(
   console.log(`[Step 2] Capturing after-fix screenshots via CDP in sandbox...`)
 
   // Node.js script to capture screenshot via CDP
+  // Tries multiple methods to find CDP endpoint: session file, then localhost:9222
   const captureScript = `
 const WebSocket = require('ws');
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
+const os = require('os');
 
-async function captureScreenshot(label) {
-  // Find CDP endpoint from Chrome debugging port
+async function getCdpUrl() {
+  // Method 1: Read from d3k session file (like execute_browser_action does)
+  const sessionsDir = path.join(os.tmpdir(), 'dev3000-sessions');
+  console.log('DEBUG: Looking for sessions in', sessionsDir);
+  if (fs.existsSync(sessionsDir)) {
+    const files = fs.readdirSync(sessionsDir).filter(f => f.endsWith('.json'));
+    console.log('DEBUG: Found session files:', files);
+    for (const file of files) {
+      try {
+        const data = JSON.parse(fs.readFileSync(path.join(sessionsDir, file), 'utf-8'));
+        if (data.cdpUrl) {
+          console.log('DEBUG: Found CDP URL from session:', data.cdpUrl);
+          return data.cdpUrl;
+        }
+      } catch {}
+    }
+  }
+
+  // Method 2: Try localhost:9222 (Chrome debugging port)
+  console.log('DEBUG: Trying localhost:9222');
   const pages = await new Promise((resolve, reject) => {
     http.get('http://localhost:9222/json', (res) => {
       let data = '';
       res.on('data', chunk => data += chunk);
       res.on('end', () => resolve(JSON.parse(data)));
       res.on('error', reject);
-    }).on('error', reject);
+    }).on('error', (e) => { console.log('DEBUG: localhost:9222 failed:', e.message); reject(e); });
   });
-
   const activePage = pages.find(p => p.type === 'page' && !p.url.startsWith('chrome://'));
-  if (!activePage) throw new Error('No active page');
+  if (activePage) {
+    console.log('DEBUG: Found CDP from 9222:', activePage.webSocketDebuggerUrl);
+    return activePage.webSocketDebuggerUrl;
+  }
+  throw new Error('No CDP URL found');
+}
 
-  const ws = new WebSocket(activePage.webSocketDebuggerUrl);
+async function captureScreenshot(label) {
+  const cdpUrl = await getCdpUrl();
+  console.log('DEBUG: Connecting to', cdpUrl);
+  const ws = new WebSocket(cdpUrl);
 
   return new Promise((resolve, reject) => {
     ws.on('open', () => {
+      console.log('DEBUG: WebSocket connected, capturing screenshot');
       ws.send(JSON.stringify({ id: 1, method: 'Page.captureScreenshot', params: { format: 'png' } }));
     });
     ws.on('message', (data) => {
       const msg = JSON.parse(data);
       if (msg.id === 1) {
         ws.close();
-        if (msg.error) { reject(new Error(msg.error.message)); return; }
+        if (msg.error) { console.log('DEBUG: Screenshot error:', msg.error); reject(new Error(msg.error.message)); return; }
 
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         const filename = timestamp + '-' + label + '.png';
@@ -325,12 +353,12 @@ async function captureScreenshot(label) {
         resolve(filename);
       }
     });
-    ws.on('error', reject);
-    setTimeout(() => { ws.close(); reject(new Error('timeout')); }, 10000);
+    ws.on('error', (e) => { console.log('DEBUG: WebSocket error:', e.message); reject(e); });
+    setTimeout(() => { ws.close(); reject(new Error('timeout')); }, 15000);
   });
 }
 
-captureScreenshot(process.argv[2] || 'after-fix').then(() => process.exit(0)).catch(e => { console.error(e); process.exit(1); });
+captureScreenshot(process.argv[2] || 'after-fix').then(() => process.exit(0)).catch(e => { console.error('ERROR:', e.message); process.exit(1); });
 `
 
   const capturedScreenshots: string[] = []
