@@ -541,12 +541,38 @@ async function fetchAndUploadD3kArtifacts(
       const screenshotFiles = listData.files || []
 
       // Extract session ID from first screenshot filename
-      // Filenames are like: screencast-abc123-jank-100ms.png or 2025-12-11T18-57-08-789Z-page-loaded.png
+      // Filenames can be:
+      // - screencast-abc123-jank-100ms.png (old format)
+      // - 2025-12-11T18-57-08-789Z-page-loaded.png (new format, session ID is the ISO timestamp)
       let sessionId: string | null = null
-      for (const filename of screenshotFiles) {
-        const match = filename.match(/^(screencast-[^-]+)/)
-        if (match) {
-          sessionId = match[1]
+
+      // Filter by minTimestamp first if we're looking for "after" captures
+      let filesToSearch = screenshotFiles
+      if (minTimestamp) {
+        filesToSearch = screenshotFiles.filter((filename) => {
+          const timestampMatch = filename.match(/^(\d{4}-\d{2}-\d{2}T[\d-]+Z)/)
+          if (timestampMatch) {
+            const fileTimestamp = new Date(
+              timestampMatch[1].replace(/-(\d{2})-(\d{2})-(\d{3})Z/, ":$1:$2.$3Z")
+            ).getTime()
+            return fileTimestamp > minTimestamp
+          }
+          return false
+        })
+        console.log(`[D3k Artifacts] Filtered to ${filesToSearch.length} files with timestamp > ${minTimestamp}`)
+      }
+
+      for (const filename of filesToSearch) {
+        // Try old screencast format first
+        const screencastMatch = filename.match(/^(screencast-[^-]+)/)
+        if (screencastMatch) {
+          sessionId = screencastMatch[1]
+          break
+        }
+        // Try new ISO timestamp format: 2025-12-11T18-57-08-789Z-page-loaded.png
+        const isoMatch = filename.match(/^(\d{4}-\d{2}-\d{2}T[\d-]+Z)/)
+        if (isoMatch) {
+          sessionId = isoMatch[1]
           break
         }
       }
