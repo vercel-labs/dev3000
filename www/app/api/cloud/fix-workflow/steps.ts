@@ -264,13 +264,14 @@ export async function verifyFixAndCaptureAfter(
   console.log(`[Step 2] Navigating away and back to trigger fresh CLS capture...`)
 
   // Navigate to about:blank first
-  const blankNavCommand = `curl -s -X POST http://localhost:3684/mcp -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"navigate","params":{"url":"about:blank"}}}}'`
+  // Note: Must include Accept header for MCP SSE transport
+  const blankNavCommand = `curl -s -X POST http://localhost:3684/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"navigate","params":{"url":"about:blank"}}}}'`
   const blankNavResult = await runSandboxCommand(sandbox, "bash", ["-c", blankNavCommand])
   console.log(`[Step 2] Navigate to about:blank result: ${blankNavResult.stdout.slice(0, 200)}`)
   await new Promise((resolve) => setTimeout(resolve, 1000))
 
   // Navigate back to the dev URL - this triggers a fresh page load and CLS capture
-  const devNavCommand = `curl -s -X POST http://localhost:3684/mcp -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"navigate","params":{"url":"${devUrl}"}}}}'`
+  const devNavCommand = `curl -s -X POST http://localhost:3684/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"navigate","params":{"url":"${devUrl}"}}}}'`
   const devNavResult = await runSandboxCommand(sandbox, "bash", ["-c", devNavCommand])
   console.log(`[Step 2] Navigate to ${devUrl} result: ${devNavResult.stdout.slice(0, 200)}`)
 
@@ -278,48 +279,10 @@ export async function verifyFixAndCaptureAfter(
   console.log(`[Step 2] Waiting 5s for page load...`)
   await new Promise((resolve) => setTimeout(resolve, 5000))
 
-  // Capture screenshots via chrome-devtools MCP tool (uses chrome-devtools-mcp's CDP connection)
-  // The take_screenshot tool is now whitelisted and proxied through d3k's MCP server
-  console.log(`[Step 2] Capturing after-fix screenshots via chrome-devtools MCP tool...`)
-
-  const capturedScreenshots: string[] = []
-  for (const label of ["page-loaded", "after-fix-1", "after-fix-2"]) {
-    try {
-      // Call chrome-devtools_take_screenshot via MCP
-      const screenshotCommand = `curl -s -X POST http://localhost:3684/mcp -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"chrome-devtools_take_screenshot","arguments":{}}}'`
-      const screenshotResult = await runSandboxCommand(sandbox, "bash", ["-c", screenshotCommand])
-      console.log(`[Step 2] Screenshot ${label} response: ${screenshotResult.stdout.slice(0, 300)}`)
-
-      // Parse response to get base64 data
-      try {
-        const response = JSON.parse(screenshotResult.stdout)
-        if (response.result?.content?.[0]?.text) {
-          // The screenshot is returned as base64 in the content
-          const base64Data = response.result.content[0].text
-          if (base64Data && base64Data.length > 100) {
-            // Save to screenshot directory
-            const timestamp = new Date().toISOString().replace(/[:.]/g, "-")
-            const filename = `${timestamp}-${label}.png`
-            const saveCommand = `mkdir -p /tmp/dev3000-mcp-deps/public/screenshots && echo '${base64Data}' | base64 -d > /tmp/dev3000-mcp-deps/public/screenshots/${filename}`
-            await runSandboxCommand(sandbox, "bash", ["-c", saveCommand])
-            capturedScreenshots.push(filename)
-            console.log(`[Step 2] Captured: ${filename}`)
-          }
-        } else if (response.error) {
-          console.log(`[Step 2] Screenshot ${label} error: ${JSON.stringify(response.error)}`)
-        }
-      } catch (parseErr) {
-        console.log(
-          `[Step 2] Screenshot ${label} parse error: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`
-        )
-      }
-    } catch (err) {
-      console.log(`[Step 2] Screenshot ${label} error: ${err instanceof Error ? err.message : String(err)}`)
-    }
-    // Small delay between captures
-    await new Promise((resolve) => setTimeout(resolve, 500))
-  }
-  console.log(`[Step 2] Captured ${capturedScreenshots.length} screenshots`)
+  // d3k automatically captures screenshots during navigation via its screencast system
+  // The navigation above should have triggered page-loaded, error, and navigation-delayed captures
+  console.log(`[Step 2] Waiting for d3k's automatic screenshot captures to complete...`)
+  await new Promise((resolve) => setTimeout(resolve, 2000))
 
   // List screenshots AFTER capture
   try {
