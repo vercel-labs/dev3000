@@ -224,16 +224,22 @@ export async function verifyFixAndCaptureAfter(
   console.log(`[Step 2] Waiting 3s for HMR to apply changes...`)
   await new Promise((resolve) => setTimeout(resolve, 3000))
 
-  // Clear ALL d3k artifacts (screenshots, logs, metadata) to get completely fresh captures
-  // CRITICAL: Clear BOTH possible screenshot directories:
-  // 1. /tmp/d3k/screenshots - used by d3k MCP server when SCREENSHOT_DIR is set (vercel.json)
-  // 2. /tmp/dev3000-mcp-deps/public/screenshots - fallback when SCREENSHOT_DIR is not set
-  // 3. /home/vercel-sandbox/.d3k/screenshots - old path (kept for compatibility)
-  console.log(`[Step 2] Clearing d3k artifacts for fresh capture...`)
-  await runSandboxCommand(sandbox, "sh", [
-    "-c",
-    "rm -rf /tmp/d3k/screenshots/* /tmp/dev3000-mcp-deps/public/screenshots/* /home/vercel-sandbox/.d3k/screenshots/* /home/vercel-sandbox/.d3k/logs/* 2>/dev/null; echo 'D3k artifacts cleared'"
-  ])
+  // Clear d3k screenshots via MCP server API to get completely fresh captures
+  // CRITICAL: Must clear via HTTP API because the MCP server runs in its own sandbox
+  // with its own filesystem - clearing via shell commands in the dev sandbox doesn't affect it
+  const baseUrl = mcpUrl.replace(/\/mcp$/, "")
+  console.log(`[Step 2] Clearing d3k screenshots via MCP API at ${baseUrl}/api/screenshots/clear...`)
+  try {
+    const clearResponse = await fetch(`${baseUrl}/api/screenshots/clear`, { method: "DELETE" })
+    if (clearResponse.ok) {
+      const clearResult = (await clearResponse.json()) as { deletedCount?: number }
+      console.log(`[Step 2] Cleared ${clearResult.deletedCount ?? 0} screenshots via MCP API`)
+    } else {
+      console.log(`[Step 2] WARNING: Failed to clear screenshots via MCP API: ${clearResponse.status}`)
+    }
+  } catch (clearError) {
+    console.log(`[Step 2] WARNING: Error clearing screenshots via MCP API:`, clearError)
+  }
 
   // Navigate to a blank page first, then back to the dev URL
   // This forces a full page navigation instead of just reload, which triggers fresh CLS capture
