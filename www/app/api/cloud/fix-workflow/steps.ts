@@ -293,12 +293,19 @@ const http = require('http');
 const os = require('os');
 
 async function getCdpUrl() {
-  // Method 1: Read from ~/.d3k/ session files (where cloud-fix writes them)
+  // List all possible session file locations
+  console.log('DEBUG: os.homedir()=', os.homedir());
+  console.log('DEBUG: os.tmpdir()=', os.tmpdir());
+  console.log('DEBUG: process.cwd()=', process.cwd());
+
+  // Check what's in ~/.d3k/ (list all files)
   const homeD3kDir = path.join(os.homedir(), '.d3k');
   console.log('DEBUG: Looking for sessions in', homeD3kDir);
   if (fs.existsSync(homeD3kDir)) {
-    const files = fs.readdirSync(homeD3kDir).filter(f => f.endsWith('.json'));
-    console.log('DEBUG: Found session files:', files);
+    const allFiles = fs.readdirSync(homeD3kDir);
+    console.log('DEBUG: ALL files in ~/.d3k/:', allFiles);
+    const files = allFiles.filter(f => f.endsWith('.json'));
+    console.log('DEBUG: JSON session files:', files);
     for (const file of files) {
       try {
         const data = JSON.parse(fs.readFileSync(path.join(homeD3kDir, file), 'utf-8'));
