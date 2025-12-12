@@ -16,23 +16,20 @@ function writeToLogFile(level: string, message: string): void {
 }
 
 /**
- * Workflow logger that writes to both console and /tmp file
- * Useful for debugging workflow execution locally
+ * Workflow logger that writes ONLY to /tmp file (saves memory/tokens)
+ * Read logs with: cat /tmp/d3k-workflow-test-log
  */
 export function workflowLog(message: string): void {
-  console.log(message)
   writeToLogFile("INFO", message)
 }
 
 /**
- * Workflow error logger that writes to both console.error and /tmp file
+ * Workflow error logger that writes ONLY to /tmp file
  */
 export function workflowError(message: string, error?: unknown): void {
   if (error) {
-    console.error(message, error)
     writeToLogFile("ERROR", `${message} ${error instanceof Error ? error.message : String(error)}`)
   } else {
-    console.error(message)
     writeToLogFile("ERROR", message)
   }
 }
