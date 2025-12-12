@@ -274,22 +274,50 @@ export async function verifyFixAndCaptureAfter(
   const devNavResult = await runSandboxCommand(sandbox, "bash", ["-c", devNavCommand])
   console.log(`[Step 2] Navigate to ${devUrl} result: ${devNavResult.stdout.slice(0, 200)}`)
 
-  // Wait for page to load and CLS to be captured (longer to ensure screencast frames are captured)
-  console.log(`[Step 2] Waiting 15s for page load and CLS capture...`)
-  await new Promise((resolve) => setTimeout(resolve, 15000))
+  // Wait for page to load
+  console.log(`[Step 2] Waiting 5s for page load...`)
+  await new Promise((resolve) => setTimeout(resolve, 5000))
 
-  // List screenshots AFTER navigation
+  // Explicitly capture screenshots via the MCP API
+  // This is needed because screencast capture isn't running during verification
+  console.log(`[Step 2] Capturing after-fix screenshots via MCP API...`)
+  const capturedScreenshots: string[] = []
+  for (const label of ["page-loaded", "after-fix-1", "after-fix-2"]) {
+    try {
+      const captureResponse = await fetch(`${mcpBaseUrl}/api/screenshots/capture`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ label })
+      })
+      if (captureResponse.ok) {
+        const captureResult = (await captureResponse.json()) as { filename?: string }
+        if (captureResult.filename) {
+          capturedScreenshots.push(captureResult.filename)
+          console.log(`[Step 2] Captured: ${captureResult.filename}`)
+        }
+      } else {
+        console.log(`[Step 2] Capture ${label} failed: ${captureResponse.status}`)
+      }
+    } catch (err) {
+      console.log(`[Step 2] Capture ${label} error: ${err instanceof Error ? err.message : String(err)}`)
+    }
+    // Small delay between captures to observe any layout shifts
+    await new Promise((resolve) => setTimeout(resolve, 500))
+  }
+  console.log(`[Step 2] Captured ${capturedScreenshots.length} screenshots`)
+
+  // List screenshots AFTER capture
   try {
     const afterListResponse = await fetch(`${mcpBaseUrl}/api/screenshots/list`)
     if (afterListResponse.ok) {
       const afterList = (await afterListResponse.json()) as { files?: string[] }
-      console.log(`[Step 2] Screenshots AFTER navigation: ${(afterList.files || []).length} files`)
+      console.log(`[Step 2] Screenshots AFTER capture: ${(afterList.files || []).length} files`)
       console.log(
         `[Step 2] File list: ${(afterList.files || []).slice(0, 5).join(", ")}${(afterList.files || []).length > 5 ? "..." : ""}`
       )
     }
   } catch {
-    console.log(`[Step 2] Could not list screenshots after navigation`)
+    console.log(`[Step 2] Could not list screenshots after capture`)
   }
 
   // Fetch fresh d3k artifacts - only use files captured AFTER our timestamp
