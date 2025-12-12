@@ -208,8 +208,8 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
 
     const pollStatus = async () => {
       try {
-        // Use production API for consistent status
-        const response = await fetch(`https://d3k-mcp.vercel.sh/api/workflows?userId=${userId}`)
+        // Use production API for consistent status (same domain as start-fix)
+        const response = await fetch(`https://dev3000.ai/api/workflows?userId=${userId}`)
         if (!response.ok) return
 
         const data = await response.json()
