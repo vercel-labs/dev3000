@@ -264,16 +264,20 @@ export async function verifyFixAndCaptureAfter(
   console.log(`[Step 2] Navigating away and back to trigger fresh CLS capture...`)
 
   // Navigate to about:blank first
-  // Note: Must include Accept header for MCP SSE transport
-  const blankNavCommand = `curl -s -X POST http://localhost:3684/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"navigate","params":{"url":"about:blank"}}}}'`
+  // Note: Must include Accept header for MCP SSE transport, and timeout to prevent hanging
+  const blankNavCommand = `curl -s -m 30 -X POST http://localhost:3684/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"navigate","params":{"url":"about:blank"}}}}'`
+  console.log(`[Step 2] Executing: navigate to about:blank`)
   const blankNavResult = await runSandboxCommand(sandbox, "bash", ["-c", blankNavCommand])
-  console.log(`[Step 2] Navigate to about:blank result: ${blankNavResult.stdout.slice(0, 200)}`)
+  console.log(`[Step 2] about:blank stdout: ${blankNavResult.stdout.slice(0, 500)}`)
+  console.log(`[Step 2] about:blank stderr: ${blankNavResult.stderr?.slice(0, 200) || "(none)"}`)
   await new Promise((resolve) => setTimeout(resolve, 1000))
 
   // Navigate back to the dev URL - this triggers a fresh page load and CLS capture
-  const devNavCommand = `curl -s -X POST http://localhost:3684/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"navigate","params":{"url":"${devUrl}"}}}}'`
+  const devNavCommand = `curl -s -m 30 -X POST http://localhost:3684/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"navigate","params":{"url":"${devUrl}"}}}}'`
+  console.log(`[Step 2] Executing: navigate to ${devUrl}`)
   const devNavResult = await runSandboxCommand(sandbox, "bash", ["-c", devNavCommand])
-  console.log(`[Step 2] Navigate to ${devUrl} result: ${devNavResult.stdout.slice(0, 200)}`)
+  console.log(`[Step 2] ${devUrl} stdout: ${devNavResult.stdout.slice(0, 500)}`)
+  console.log(`[Step 2] ${devUrl} stderr: ${devNavResult.stderr?.slice(0, 200) || "(none)"}`)
 
   // Wait for page to load
   console.log(`[Step 2] Waiting 5s for page load...`)
