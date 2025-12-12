@@ -224,21 +224,23 @@ export async function verifyFixAndCaptureAfter(
   console.log(`[Step 2] Waiting 3s for HMR to apply changes...`)
   await new Promise((resolve) => setTimeout(resolve, 3000))
 
-  // Clear d3k logs before verification to get fresh CLS measurement
-  console.log(`[Step 2] Clearing d3k logs for fresh measurement...`)
+  // Clear screenshots folder (not logs) to get fresh captures for "after" state
+  // Keep the logs so we have history of before/after
+  console.log(`[Step 2] Clearing screenshots for fresh capture...`)
   await runSandboxCommand(sandbox, "sh", [
     "-c",
-    "rm -f /home/vercel-sandbox/.d3k/logs/*.log 2>/dev/null; echo 'Logs cleared'"
+    "rm -f /home/vercel-sandbox/.d3k/screenshots/*.png 2>/dev/null; echo 'Screenshots cleared'"
   ])
 
-  // Navigate browser to reload the page
-  console.log(`[Step 2] Reloading page for verification...`)
-  const navCommand = `curl -s -X POST http://localhost:3684/mcp -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"navigate","params":{"url":"http://localhost:3000"}}}}'`
-  await runSandboxCommand(sandbox, "bash", ["-c", navCommand])
+  // Hard reload the page to trigger fresh CLS measurement
+  // Use evaluate to call location.reload(true) for a proper hard refresh
+  console.log(`[Step 2] Hard reloading page for verification...`)
+  const reloadCommand = `curl -s -X POST http://localhost:3684/mcp -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"evaluate","params":{"expression":"location.reload(true)"}}}}'`
+  await runSandboxCommand(sandbox, "bash", ["-c", reloadCommand])
 
-  // Wait for page to load and CLS to be captured
-  console.log(`[Step 2] Waiting 5s for page load and CLS capture...`)
-  await new Promise((resolve) => setTimeout(resolve, 5000))
+  // Wait for page to load and CLS to be captured (longer to ensure screencast frames)
+  console.log(`[Step 2] Waiting 8s for page load and CLS capture...`)
+  await new Promise((resolve) => setTimeout(resolve, 8000))
 
   // Fetch fresh d3k artifacts
   console.log(`[Step 2] Fetching after-fix d3k artifacts...`)
@@ -513,9 +515,10 @@ async function fetchAndUploadD3kArtifacts(
       }
 
       // Upload screenshots to blob storage
+      // Take up to 20 screenshots to capture loading sequences and CLS animation
       if (screenshotFiles.length > 0) {
         console.log(`[D3k Artifacts] Uploading ${screenshotFiles.length} screenshots...`)
-        const recentScreenshots = screenshotFiles.slice(-5)
+        const recentScreenshots = screenshotFiles.slice(-20)
         for (const filename of recentScreenshots) {
           try {
             const imageResponse = await fetch(`${baseUrl}/api/screenshots/${filename}`)
