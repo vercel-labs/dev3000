@@ -245,34 +245,51 @@ export async function verifyFixAndCaptureAfter(
     console.log(`[Step 2] WARNING: Error calling MCP clear API:`, clearError)
   }
 
+  // List screenshots BEFORE navigation for comparison
+  try {
+    const beforeListResponse = await fetch(`${mcpBaseUrl}/api/screenshots/list`)
+    if (beforeListResponse.ok) {
+      const beforeList = (await beforeListResponse.json()) as { files?: string[] }
+      console.log(`[Step 2] Screenshots BEFORE navigation: ${(beforeList.files || []).length} files`)
+      console.log(
+        `[Step 2] File list: ${(beforeList.files || []).slice(0, 5).join(", ")}${(beforeList.files || []).length > 5 ? "..." : ""}`
+      )
+    }
+  } catch {
+    console.log(`[Step 2] Could not list screenshots before navigation`)
+  }
+
   // Navigate to a blank page first, then back to the dev URL
   // This forces a full page navigation instead of just reload, which triggers fresh CLS capture
   console.log(`[Step 2] Navigating away and back to trigger fresh CLS capture...`)
 
   // Navigate to about:blank first
   const blankNavCommand = `curl -s -X POST http://localhost:3684/mcp -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"navigate","params":{"url":"about:blank"}}}}'`
-  await runSandboxCommand(sandbox, "bash", ["-c", blankNavCommand])
+  const blankNavResult = await runSandboxCommand(sandbox, "bash", ["-c", blankNavCommand])
+  console.log(`[Step 2] Navigate to about:blank result: ${blankNavResult.stdout.slice(0, 200)}`)
   await new Promise((resolve) => setTimeout(resolve, 1000))
 
   // Navigate back to the dev URL - this triggers a fresh page load and CLS capture
   const devNavCommand = `curl -s -X POST http://localhost:3684/mcp -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"navigate","params":{"url":"${devUrl}"}}}}'`
-  await runSandboxCommand(sandbox, "bash", ["-c", devNavCommand])
+  const devNavResult = await runSandboxCommand(sandbox, "bash", ["-c", devNavCommand])
+  console.log(`[Step 2] Navigate to ${devUrl} result: ${devNavResult.stdout.slice(0, 200)}`)
 
   // Wait for page to load and CLS to be captured (longer to ensure screencast frames are captured)
-  console.log(`[Step 2] Waiting 10s for page load and CLS capture...`)
-  await new Promise((resolve) => setTimeout(resolve, 10000))
+  console.log(`[Step 2] Waiting 15s for page load and CLS capture...`)
+  await new Promise((resolve) => setTimeout(resolve, 15000))
 
-  // Verify new files were captured - check ALL possible directories for both screenshots and metadata
-  const screenshotCheck = await runSandboxCommand(sandbox, "sh", [
-    "-c",
-    "(ls /tmp/d3k/screenshots/*-jank-*.png 2>/dev/null; ls /tmp/d3k/screenshots/*-metadata.json 2>/dev/null; ls /tmp/dev3000-mcp-deps/public/screenshots/*-jank-*.png 2>/dev/null; ls /tmp/dev3000-mcp-deps/public/screenshots/*-metadata.json 2>/dev/null; ls /home/vercel-sandbox/.d3k/screenshots/*-jank-*.png 2>/dev/null; ls /home/vercel-sandbox/.d3k/screenshots/*-metadata.json 2>/dev/null) | wc -l"
-  ])
-  const newFileCount = parseInt(screenshotCheck.stdout.trim(), 10) || 0
-  console.log(`[Step 2] New d3k files captured: ${newFileCount}`)
-
-  if (newFileCount === 0) {
-    console.log(`[Step 2] WARNING: No new d3k files captured, waiting longer...`)
-    await new Promise((resolve) => setTimeout(resolve, 5000))
+  // List screenshots AFTER navigation
+  try {
+    const afterListResponse = await fetch(`${mcpBaseUrl}/api/screenshots/list`)
+    if (afterListResponse.ok) {
+      const afterList = (await afterListResponse.json()) as { files?: string[] }
+      console.log(`[Step 2] Screenshots AFTER navigation: ${(afterList.files || []).length} files`)
+      console.log(
+        `[Step 2] File list: ${(afterList.files || []).slice(0, 5).join(", ")}${(afterList.files || []).length > 5 ? "..." : ""}`
+      )
+    }
+  } catch {
+    console.log(`[Step 2] Could not list screenshots after navigation`)
   }
 
   // Fetch fresh d3k artifacts - only use files captured AFTER our timestamp
