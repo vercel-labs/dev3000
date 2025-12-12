@@ -57,7 +57,6 @@ export function ScreenshotPlayer({ screenshots, title, autoPlay = true, fps = 8,
   }
 
   const currentScreenshot = sortedScreenshots[currentFrame]
-  const progress = sortedScreenshots.length > 1 ? (currentFrame / (sortedScreenshots.length - 1)) * 100 : 100
   const hasMultipleFrames = sortedScreenshots.length > 1
 
   return (
@@ -80,13 +79,6 @@ export function ScreenshotPlayer({ screenshots, title, autoPlay = true, fps = 8,
           />
         </div>
       </a>
-
-      {/* Progress bar - only show for multiple frames */}
-      {hasMultipleFrames && (
-        <div className="h-1 bg-muted">
-          <div className="h-full bg-primary transition-all duration-100" style={{ width: `${progress}%` }} />
-        </div>
-      )}
 
       {/* Controls - only show for multiple frames */}
       {hasMultipleFrames && (

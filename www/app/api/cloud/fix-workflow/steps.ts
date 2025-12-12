@@ -224,25 +224,25 @@ export async function verifyFixAndCaptureAfter(
   console.log(`[Step 2] Waiting 3s for HMR to apply changes...`)
   await new Promise((resolve) => setTimeout(resolve, 3000))
 
-  // Clear d3k screenshots via sandbox shell command to get completely fresh captures
-  // CRITICAL: Screenshots can be in multiple directories depending on SCREENSHOT_DIR env var:
+  // Clear d3k screenshots AND metadata files via sandbox shell command to get completely fresh captures
+  // CRITICAL: Files can be in multiple directories depending on SCREENSHOT_DIR env var:
   // - /tmp/d3k/screenshots (set in vercel.json SCREENSHOT_DIR)
   // - /tmp/dev3000-mcp-deps/public/screenshots (fallback default)
   // - /home/vercel-sandbox/.d3k/screenshots (older location)
-  // We must clear ALL of them to ensure fresh screenshots
-  console.log(`[Step 2] Clearing d3k screenshots from ALL possible directories...`)
+  // We must clear BOTH .png AND -metadata.json files to ensure fresh CLS data
+  console.log(`[Step 2] Clearing d3k screenshots AND metadata files from ALL possible directories...`)
   try {
     const clearResult = await runSandboxCommand(sandbox, "sh", [
       "-c",
-      `rm -f /tmp/d3k/screenshots/*.png 2>/dev/null; \
-       rm -f /tmp/dev3000-mcp-deps/public/screenshots/*.png 2>/dev/null; \
-       rm -f /home/vercel-sandbox/.d3k/screenshots/*.png 2>/dev/null; \
-       echo "Remaining screenshots:"; \
-       (ls /tmp/d3k/screenshots/*.png 2>/dev/null; ls /tmp/dev3000-mcp-deps/public/screenshots/*.png 2>/dev/null; ls /home/vercel-sandbox/.d3k/screenshots/*.png 2>/dev/null) | wc -l || echo 0`
+      `rm -f /tmp/d3k/screenshots/*.png /tmp/d3k/screenshots/*-metadata.json 2>/dev/null; \
+       rm -f /tmp/dev3000-mcp-deps/public/screenshots/*.png /tmp/dev3000-mcp-deps/public/screenshots/*-metadata.json 2>/dev/null; \
+       rm -f /home/vercel-sandbox/.d3k/screenshots/*.png /home/vercel-sandbox/.d3k/screenshots/*-metadata.json 2>/dev/null; \
+       echo "Remaining files:"; \
+       (ls /tmp/d3k/screenshots/* 2>/dev/null; ls /tmp/dev3000-mcp-deps/public/screenshots/* 2>/dev/null; ls /home/vercel-sandbox/.d3k/screenshots/* 2>/dev/null) | wc -l || echo 0`
     ])
-    console.log(`[Step 2] Screenshot clear result: ${clearResult.stdout.trim()}`)
+    console.log(`[Step 2] Clear result: ${clearResult.stdout.trim()}`)
   } catch (clearError) {
-    console.log(`[Step 2] WARNING: Error clearing screenshots via shell:`, clearError)
+    console.log(`[Step 2] WARNING: Error clearing files via shell:`, clearError)
   }
 
   // Navigate to a blank page first, then back to the dev URL
@@ -262,16 +262,16 @@ export async function verifyFixAndCaptureAfter(
   console.log(`[Step 2] Waiting 10s for page load and CLS capture...`)
   await new Promise((resolve) => setTimeout(resolve, 10000))
 
-  // Verify new screenshots were captured - check ALL possible directories
+  // Verify new files were captured - check ALL possible directories for both screenshots and metadata
   const screenshotCheck = await runSandboxCommand(sandbox, "sh", [
     "-c",
-    "(ls /tmp/d3k/screenshots/*.png 2>/dev/null; ls /tmp/dev3000-mcp-deps/public/screenshots/*.png 2>/dev/null; ls /home/vercel-sandbox/.d3k/screenshots/*.png 2>/dev/null) | wc -l"
+    "(ls /tmp/d3k/screenshots/*-jank-*.png 2>/dev/null; ls /tmp/d3k/screenshots/*-metadata.json 2>/dev/null; ls /tmp/dev3000-mcp-deps/public/screenshots/*-jank-*.png 2>/dev/null; ls /tmp/dev3000-mcp-deps/public/screenshots/*-metadata.json 2>/dev/null; ls /home/vercel-sandbox/.d3k/screenshots/*-jank-*.png 2>/dev/null; ls /home/vercel-sandbox/.d3k/screenshots/*-metadata.json 2>/dev/null) | wc -l"
   ])
-  const newScreenshotCount = parseInt(screenshotCheck.stdout.trim(), 10) || 0
-  console.log(`[Step 2] New screenshots captured: ${newScreenshotCount}`)
+  const newFileCount = parseInt(screenshotCheck.stdout.trim(), 10) || 0
+  console.log(`[Step 2] New d3k files captured: ${newFileCount}`)
 
-  if (newScreenshotCount === 0) {
-    console.log(`[Step 2] WARNING: No new screenshots captured, waiting longer...`)
+  if (newFileCount === 0) {
+    console.log(`[Step 2] WARNING: No new d3k files captured, waiting longer...`)
     await new Promise((resolve) => setTimeout(resolve, 5000))
   }
 
