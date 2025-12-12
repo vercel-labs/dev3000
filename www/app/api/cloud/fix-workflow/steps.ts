@@ -293,17 +293,33 @@ const http = require('http');
 const os = require('os');
 
 async function getCdpUrl() {
-  // Method 1: Read from d3k session file (like execute_browser_action does)
-  const sessionsDir = path.join(os.tmpdir(), 'dev3000-sessions');
-  console.log('DEBUG: Looking for sessions in', sessionsDir);
-  if (fs.existsSync(sessionsDir)) {
-    const files = fs.readdirSync(sessionsDir).filter(f => f.endsWith('.json'));
+  // Method 1: Read from ~/.d3k/ session files (where cloud-fix writes them)
+  const homeD3kDir = path.join(os.homedir(), '.d3k');
+  console.log('DEBUG: Looking for sessions in', homeD3kDir);
+  if (fs.existsSync(homeD3kDir)) {
+    const files = fs.readdirSync(homeD3kDir).filter(f => f.endsWith('.json'));
     console.log('DEBUG: Found session files:', files);
     for (const file of files) {
       try {
-        const data = JSON.parse(fs.readFileSync(path.join(sessionsDir, file), 'utf-8'));
+        const data = JSON.parse(fs.readFileSync(path.join(homeD3kDir, file), 'utf-8'));
         if (data.cdpUrl) {
           console.log('DEBUG: Found CDP URL from session:', data.cdpUrl);
+          return data.cdpUrl;
+        }
+      } catch {}
+    }
+  }
+
+  // Method 2: Try /tmp/dev3000-sessions (fallback)
+  const tmpSessionsDir = path.join(os.tmpdir(), 'dev3000-sessions');
+  console.log('DEBUG: Trying fallback sessions in', tmpSessionsDir);
+  if (fs.existsSync(tmpSessionsDir)) {
+    const files = fs.readdirSync(tmpSessionsDir).filter(f => f.endsWith('.json'));
+    for (const file of files) {
+      try {
+        const data = JSON.parse(fs.readFileSync(path.join(tmpSessionsDir, file), 'utf-8'));
+        if (data.cdpUrl) {
+          console.log('DEBUG: Found CDP URL from tmp session:', data.cdpUrl);
           return data.cdpUrl;
         }
       } catch {}
