@@ -25,7 +25,7 @@ export async function GET(request: Request) {
     }
 
     // Fetch projects from Vercel API
-    console.log("Fetching projects from Vercel API:", apiUrl.toString())
+    // console.log("Fetching projects from Vercel API:", apiUrl.toString())
     const response = await fetch(apiUrl.toString(), {
       headers: {
         Authorization: `Bearer ${accessToken}`
@@ -42,8 +42,9 @@ export async function GET(request: Request) {
     }
 
     const data = await response.json()
-    console.log("Projects API response:", JSON.stringify(data, null, 2))
-    console.log(`Fetched ${data.projects?.length || 0} projects from Vercel API`)
+    // Verbose logging commented out - was flooding d3k logs
+    // console.log("Projects API response:", JSON.stringify(data, null, 2))
+    console.log(`[Projects API] Fetched ${data.projects?.length || 0} projects`)
 
     // Handle case where no projects exist
     if (!data.projects || data.projects.length === 0) {

@@ -32,11 +32,12 @@ export async function GET(request: Request) {
       return Response.json({ error: "userId is required" }, { status: 400, headers: corsHeaders })
     }
 
-    console.log(`[Workflows API] Fetching runs for user: ${userId}`)
+    // Verbose logging commented out - polling hits this endpoint frequently and floods d3k logs
+    // console.log(`[Workflows API] Fetching runs for user: ${userId}`)
 
     const runs = await listWorkflowRuns(userId)
 
-    console.log(`[Workflows API] Found ${runs.length} runs`)
+    // console.log(`[Workflows API] Found ${runs.length} runs`)
 
     return Response.json(
       {
