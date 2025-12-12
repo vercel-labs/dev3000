@@ -2,7 +2,7 @@ import { randomUUID } from "crypto"
 import { start } from "workflow/api"
 import { clearWorkflowLog, workflowError, workflowLog } from "@/lib/workflow-logger"
 import { saveWorkflowRun } from "@/lib/workflow-storage"
-import { cloudFixWorkflowV2 } from "../fix-workflow/workflow-v2"
+import { cloudFixWorkflow } from "../fix-workflow/workflow"
 
 /**
  * API Route to Start Cloud Fix Workflow
@@ -124,7 +124,7 @@ export async function POST(request: Request) {
       userId
     }
 
-    const run = await start(cloudFixWorkflowV2, [workflowParams])
+    const run = await start(cloudFixWorkflow, [workflowParams])
 
     workflowLog(`[Start Fix] Workflow started, waiting for completion...`)
 
