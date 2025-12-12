@@ -111,16 +111,29 @@ export async function agentFixLoopStep(
 
   // Force a fresh page reload to capture new CLS measurement
   // The agent might not have called diagnose after its last change
+  //
+  // IMPORTANT: We use Page.reload instead of navigating to about:blank and back.
+  // Reason: d3k's screencast manager checks window.location.href when navigation starts.
+  // When navigating FROM about:blank TO localhost, the URL check still sees about:blank
+  // (because the navigation just started), so it SKIPS capture. Page.reload avoids this.
   workflowLog("[Agent] Forcing page reload to capture final CLS...")
   const D3K_MCP_PORT = 3684
-  const blankCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"navigate","params":{"url":"about:blank"}}}}'`
-  await runSandboxCommand(sandbox, "bash", ["-c", blankCmd])
-  await new Promise((resolve) => setTimeout(resolve, 500))
 
-  const navCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"navigate","params":{"url":"${devUrl}"}}}}'`
-  await runSandboxCommand(sandbox, "bash", ["-c", navCmd])
+  // First navigate to the devUrl (in case we're not there)
+  const navCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"navigate","params":{"url":"${devUrl}"}}}}'`
+  const navResult = await runSandboxCommand(sandbox, "bash", ["-c", navCmd])
+  workflowLog(
+    `[Agent] Navigate to devUrl result: exit=${navResult.exitCode}, stdout=${navResult.stdout.substring(0, 200)}`
+  )
+  await new Promise((resolve) => setTimeout(resolve, 2000))
+
+  // Now reload the page to trigger fresh CLS capture
+  // Use CDP Page.reload directly via the browser action's evaluate
+  const reloadCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"evaluate","params":{"expression":"location.reload()"}}}}'`
+  const reloadResult = await runSandboxCommand(sandbox, "bash", ["-c", reloadCmd])
+  workflowLog(`[Agent] Reload result: exit=${reloadResult.exitCode}, stdout=${reloadResult.stdout.substring(0, 200)}`)
   workflowLog("[Agent] Waiting for CLS to be captured...")
-  await new Promise((resolve) => setTimeout(resolve, 5000)) // 5 seconds for CLS to be detected
+  await new Promise((resolve) => setTimeout(resolve, 8000)) // 8 seconds for CLS to be detected
 
   // Get final CLS measurement
   const finalCls = await fetchClsData(sandbox, mcpUrl, `${projectName}-after`)
@@ -232,15 +245,18 @@ This navigates the page fresh to get accurate measurements.`,
       execute: async ({ reason }: { reason: string }) => {
         workflowLog(`[diagnose] Running: ${reason}`)
 
-        // Navigate away and back to trigger fresh CLS capture
-        const blankCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"navigate","params":{"url":"about:blank"}}}}'`
-        await runSandboxCommand(sandbox, "bash", ["-c", blankCmd])
-        await new Promise((resolve) => setTimeout(resolve, 500))
-
-        const navCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"navigate","params":{"url":"${devUrl}"}}}}'`
+        // Reload the page to trigger fresh CLS capture
+        // NOTE: We use location.reload() instead of navigating to about:blank and back.
+        // Navigating FROM about:blank TO localhost fails because d3k's URL check sees
+        // about:blank (the old URL) when navigation starts and skips CLS capture.
+        const navCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"navigate","params":{"url":"${devUrl}"}}}}'`
         await runSandboxCommand(sandbox, "bash", ["-c", navCmd])
+        await new Promise((resolve) => setTimeout(resolve, 1000))
 
-        await new Promise((resolve) => setTimeout(resolve, 4000))
+        const reloadCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"evaluate","params":{"expression":"location.reload()"}}}}'`
+        await runSandboxCommand(sandbox, "bash", ["-c", reloadCmd])
+
+        await new Promise((resolve) => setTimeout(resolve, 5000))
 
         // Read d3k logs for CLS data
         const logsResult = await runSandboxCommand(sandbox, "sh", [
@@ -506,10 +522,19 @@ async function fetchClsData(
     // The log file accumulates multiple CLS measurements over time.
     // We need the most recent one to see if fixes worked.
     const clsMatches = [...logsResult.stdout.matchAll(/\[CDP\] Detected (\d+) layout shifts \(CLS: ([\d.]+)\)/g)]
+    workflowLog(`[fetchClsData] Found ${clsMatches.length} CLS entries in logs`)
+    if (clsMatches.length > 0) {
+      // Log all CLS values found
+      const allValues = clsMatches.map((m, i) => `#${i + 1}: ${m[2]}`).join(", ")
+      workflowLog(`[fetchClsData] All CLS values: ${allValues}`)
+    }
     const clsMatch = clsMatches.length > 0 ? clsMatches[clsMatches.length - 1] : null
     if (clsMatch) {
       result.clsScore = parseFloat(clsMatch[2])
       result.clsGrade = result.clsScore <= 0.1 ? "good" : result.clsScore <= 0.25 ? "needs-improvement" : "poor"
+      workflowLog(`[fetchClsData] Using LAST CLS: ${result.clsScore} (${result.clsGrade})`)
+    } else {
+      workflowLog("[fetchClsData] No CLS entries found in logs!")
     }
 
     // Fetch screenshots
