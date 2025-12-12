@@ -263,7 +263,7 @@ export async function verifyFixAndCaptureAfter(
   // This forces a full page navigation instead of just reload, which triggers fresh CLS capture
   console.log(`[Step 2] Navigating away and back to trigger fresh CLS capture...`)
 
-  // Navigate to about:blank first
+  // Step 2: Navigate to about:blank first
   // Note: Must include Accept header for MCP SSE transport, and timeout to prevent hanging
   const blankNavCommand = `curl -s -m 30 -X POST http://localhost:3684/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"navigate","params":{"url":"about:blank"}}}}'`
   console.log(`[Step 2] Executing: navigate to about:blank`)
