@@ -23,8 +23,8 @@ When you push code to main, Vercel auto-deploys. **Don't wait for the user** - p
 
 1. **Start monitoring immediately after push:**
    ```bash
-   # Get the latest deployment
-   vercel ls --scope team_nLlpyC6REAqxydlFKbrMDlud | head -10
+   # Get the latest deployment for dev3000-www (NOT dev3000-mcp!)
+   vercel ls dev3000-www --scope team_nLlpyC6REAqxydlFKbrMDlud | head -10
 
    # Monitor logs (use the specific deployment URL, not d3k.dev)
    vercel logs dev3000-XXXXX.vercel.sh --scope team_nLlpyC6REAqxydlFKbrMDlud
@@ -66,8 +66,8 @@ Visit `http://localhost:3000/workflows` - you should see your workflows list. If
 The `vercel logs` command only streams logs that occur AFTER you start monitoring. If you start monitoring after clicking "Start Workflow", you will miss the initial API calls and workflow startup logs!
 
 ```bash
-# STEP 1A: Get the latest deployment URL
-DEPLOYMENT=$(vercel ls --scope team_nLlpyC6REAqxydlFKbrMDlud | grep dev3000 | head -1 | awk '{print $2}')
+# STEP 1A: Get the latest deployment URL for dev3000-www
+DEPLOYMENT=$(vercel ls dev3000-www --scope team_nLlpyC6REAqxydlFKbrMDlud | grep https | head -1 | awk '{print $2}')
 echo "Will monitor: $DEPLOYMENT"
 
 # STEP 1B: Start monitoring in background (do this BEFORE triggering!)
@@ -186,7 +186,7 @@ mcp__vercel__web_fetch_vercel_url({
 
 ```bash
 # Step 1: Get latest deployment URL for www production
-DEPLOYMENT=$(vercel ls --scope team_nLlpyC6REAqxydlFKbrMDlud | grep dev3000 | head -1 | awk '{print $2}')
+DEPLOYMENT=$(vercel ls dev3000-www --scope team_nLlpyC6REAqxydlFKbrMDlud | grep https | head -1 | awk '{print $2}')
 echo "Checking logs for: $DEPLOYMENT"
 
 # Step 2: Monitor production logs for workflow activity (streams in real-time)
@@ -253,7 +253,7 @@ After production logs confirm completion, you can check results via CLI:
 
 ```bash
 # List all deployments for www production
-vercel ls --scope team_nLlpyC6REAqxydlFKbrMDlud | head -20
+vercel ls dev3000-www --scope team_nLlpyC6REAqxydlFKbrMDlud | head -20
 
 # Or check the workflows page in browser (ONLY after production logs confirm completion)
 # Navigate to: http://localhost:3000/workflows
@@ -353,7 +353,7 @@ echo "1. Checking www dev server..."
 curl -s http://localhost:3000 > /dev/null && echo "✅ Dev server running" || echo "❌ Dev server not running"
 
 echo "2. Getting latest www deployment..."
-DEPLOYMENT=$(vercel ls --scope team_nLlpyC6REAqxydlFKbrMDlud | grep dev3000 | head -1 | awk '{print $2}')
+DEPLOYMENT=$(vercel ls dev3000-www --scope team_nLlpyC6REAqxydlFKbrMDlud | grep https | head -1 | awk '{print $2}')
 echo "Latest: $DEPLOYMENT"
 
 echo "3. Triggering workflow via d3k..."
@@ -453,7 +453,7 @@ curl -I https://sb-XXXXX.vercel.run
 # Extract and test Dev URL from latest workflow
 
 echo "1. Getting latest www deployment..."
-DEPLOYMENT=$(vercel ls --scope team_nLlpyC6REAqxydlFKbrMDlud | grep dev3000 | head -1 | awk '{print $2}')
+DEPLOYMENT=$(vercel ls dev3000-www --scope team_nLlpyC6REAqxydlFKbrMDlud | grep https | head -1 | awk '{print $2}')
 echo "   Deployment: $DEPLOYMENT"
 
 echo "2. Extracting Dev URL from logs..."
