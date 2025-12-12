@@ -438,6 +438,11 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       return
     }
 
+    // Reset any previous workflow result to prevent showing stale data
+    setWorkflowResult(null)
+    setActiveRunId(null)
+    setSandboxUrl(null)
+
     setStep("running")
     setWorkflowStatus("Starting workflow...")
 
