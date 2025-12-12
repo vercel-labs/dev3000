@@ -225,16 +225,22 @@ export async function verifyFixAndCaptureAfter(
   await new Promise((resolve) => setTimeout(resolve, 3000))
 
   // Clear d3k screenshots via sandbox shell command to get completely fresh captures
-  // CRITICAL: The screenshots are stored in the sandbox filesystem at /tmp/dev3000-mcp-deps/public/screenshots
-  // We must delete them from the sandbox directly using a shell command
-  console.log(`[Step 2] Clearing d3k screenshots via sandbox shell command...`)
+  // CRITICAL: Screenshots can be in multiple directories depending on SCREENSHOT_DIR env var:
+  // - /tmp/d3k/screenshots (set in vercel.json SCREENSHOT_DIR)
+  // - /tmp/dev3000-mcp-deps/public/screenshots (fallback default)
+  // - /home/vercel-sandbox/.d3k/screenshots (older location)
+  // We must clear ALL of them to ensure fresh screenshots
+  console.log(`[Step 2] Clearing d3k screenshots from ALL possible directories...`)
   try {
     const clearResult = await runSandboxCommand(sandbox, "sh", [
       "-c",
-      "rm -f /tmp/dev3000-mcp-deps/public/screenshots/*.png 2>/dev/null; ls /tmp/dev3000-mcp-deps/public/screenshots/*.png 2>/dev/null | wc -l || echo 0"
+      `rm -f /tmp/d3k/screenshots/*.png 2>/dev/null; \
+       rm -f /tmp/dev3000-mcp-deps/public/screenshots/*.png 2>/dev/null; \
+       rm -f /home/vercel-sandbox/.d3k/screenshots/*.png 2>/dev/null; \
+       echo "Remaining screenshots:"; \
+       (ls /tmp/d3k/screenshots/*.png 2>/dev/null; ls /tmp/dev3000-mcp-deps/public/screenshots/*.png 2>/dev/null; ls /home/vercel-sandbox/.d3k/screenshots/*.png 2>/dev/null) | wc -l || echo 0`
     ])
-    const remainingCount = parseInt(clearResult.stdout.trim(), 10) || 0
-    console.log(`[Step 2] Cleared screenshots. Remaining: ${remainingCount}`)
+    console.log(`[Step 2] Screenshot clear result: ${clearResult.stdout.trim()}`)
   } catch (clearError) {
     console.log(`[Step 2] WARNING: Error clearing screenshots via shell:`, clearError)
   }
