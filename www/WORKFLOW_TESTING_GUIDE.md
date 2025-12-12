@@ -57,6 +57,23 @@ Visit `http://localhost:3000/workflows` - you should see your workflows list. If
 
 **IMPORTANT**: Always use d3k MCP tools for testing workflows. Do NOT use curl or manual API calls - use d3k's browser automation instead.
 
+### Claude Quick Reference: Get Bypass Token
+
+Before navigating to the workflow form, **you must get the bypass token**. Run this command:
+
+```bash
+# Get the bypass token value (copy just the value, not the variable name)
+grep WORKFLOW_TEST_BYPASS_TOKEN /Users/elsigh/src/vercel-labs/dev3000/www/.env.local | cut -d'"' -f2
+```
+
+Then construct the URL: `http://localhost:3000/workflows/new?type=cloud-fix&team=team_aMS4jZUlMooxyr9VgMKJf9uT&project=prj_0ITI5UHrH4Kp92G5OLEMrlgVX08p&bypass=<PASTE_TOKEN_HERE>`
+
+**Note**: The UI may not auto-fill the bypass field from the URL. If needed, use JavaScript to set it manually:
+```javascript
+const input = document.querySelector('input[placeholder*="bypass"]');
+if (input) { input.value = '<TOKEN>'; input.dispatchEvent(new Event('input', {bubbles: true})); }
+```
+
 ### Step 1: Start Monitoring Production Logs FIRST (BEFORE Triggering)
 
 **⚠️ CRITICAL ORDER OF OPERATIONS:**
