@@ -234,8 +234,10 @@ This navigates the page fresh to get accurate measurements.`,
         ])
         const logs = logsResult.stdout || ""
 
-        // Parse CLS
-        const clsMatch = logs.match(/\[CDP\] Detected (\d+) layout shifts \(CLS: ([\d.]+)\)/)
+        // Parse CLS - CRITICAL: Get the LAST match, not the first!
+        // The logs accumulate multiple CLS measurements over time.
+        const clsMatches = [...logs.matchAll(/\[CDP\] Detected (\d+) layout shifts \(CLS: ([\d.]+)\)/g)]
+        const clsMatch = clsMatches.length > 0 ? clsMatches[clsMatches.length - 1] : null
         if (clsMatch) {
           const shiftCount = parseInt(clsMatch[1], 10)
           const clsScore = parseFloat(clsMatch[2])
@@ -485,7 +487,11 @@ async function fetchClsData(
     // Store the full logs
     result.d3kLogs = logsResult.stdout || ""
 
-    const clsMatch = logsResult.stdout.match(/\[CDP\] Detected (\d+) layout shifts \(CLS: ([\d.]+)\)/)
+    // CRITICAL: Use matchAll and get the LAST match, not the first!
+    // The log file accumulates multiple CLS measurements over time.
+    // We need the most recent one to see if fixes worked.
+    const clsMatches = [...logsResult.stdout.matchAll(/\[CDP\] Detected (\d+) layout shifts \(CLS: ([\d.]+)\)/g)]
+    const clsMatch = clsMatches.length > 0 ? clsMatches[clsMatches.length - 1] : null
     if (clsMatch) {
       result.clsScore = parseFloat(clsMatch[2])
       result.clsGrade = result.clsScore <= 0.1 ? "good" : result.clsScore <= 0.25 ? "needs-improvement" : "poor"
