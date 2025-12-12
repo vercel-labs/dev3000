@@ -266,10 +266,10 @@ function DiffSection({ gitDiff, projectName }: { gitDiff: string; projectName: s
         <button
           type="button"
           onClick={handleDownload}
-          className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors"
+          className="inline-flex items-center justify-center p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded transition-colors"
+          title="Download .diff file"
         >
-          <Download className="h-3 w-3" />
-          Download .diff
+          <Download className="h-4 w-4" />
         </button>
       }
     >

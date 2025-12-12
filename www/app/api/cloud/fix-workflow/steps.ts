@@ -206,7 +206,7 @@ export async function runAgentWithTools(
 export async function verifyFixAndCaptureAfter(
   sandboxId: string,
   mcpUrl: string,
-  _devUrl: string,
+  devUrl: string,
   beforeClsScore: number | null,
   projectName: string
 ): Promise<VerificationResult> {
@@ -224,23 +224,42 @@ export async function verifyFixAndCaptureAfter(
   console.log(`[Step 2] Waiting 3s for HMR to apply changes...`)
   await new Promise((resolve) => setTimeout(resolve, 3000))
 
-  // Clear screenshots folder (not logs) to get fresh captures for "after" state
-  // Keep the logs so we have history of before/after
-  console.log(`[Step 2] Clearing screenshots for fresh capture...`)
+  // Clear ALL d3k artifacts (screenshots, logs, metadata) to get completely fresh captures
+  console.log(`[Step 2] Clearing d3k artifacts for fresh capture...`)
   await runSandboxCommand(sandbox, "sh", [
     "-c",
-    "rm -f /home/vercel-sandbox/.d3k/screenshots/*.png 2>/dev/null; echo 'Screenshots cleared'"
+    "rm -rf /home/vercel-sandbox/.d3k/screenshots/* /home/vercel-sandbox/.d3k/logs/* 2>/dev/null; echo 'D3k artifacts cleared'"
   ])
 
-  // Hard reload the page to trigger fresh CLS measurement
-  // Use evaluate to call location.reload(true) for a proper hard refresh
-  console.log(`[Step 2] Hard reloading page for verification...`)
-  const reloadCommand = `curl -s -X POST http://localhost:3684/mcp -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"evaluate","params":{"expression":"location.reload(true)"}}}}'`
-  await runSandboxCommand(sandbox, "bash", ["-c", reloadCommand])
+  // Navigate to a blank page first, then back to the dev URL
+  // This forces a full page navigation instead of just reload, which triggers fresh CLS capture
+  console.log(`[Step 2] Navigating away and back to trigger fresh CLS capture...`)
 
-  // Wait for page to load and CLS to be captured (longer to ensure screencast frames)
-  console.log(`[Step 2] Waiting 8s for page load and CLS capture...`)
-  await new Promise((resolve) => setTimeout(resolve, 8000))
+  // Navigate to about:blank first
+  const blankNavCommand = `curl -s -X POST http://localhost:3684/mcp -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"navigate","params":{"url":"about:blank"}}}}'`
+  await runSandboxCommand(sandbox, "bash", ["-c", blankNavCommand])
+  await new Promise((resolve) => setTimeout(resolve, 1000))
+
+  // Navigate back to the dev URL - this triggers a fresh page load and CLS capture
+  const devNavCommand = `curl -s -X POST http://localhost:3684/mcp -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"navigate","params":{"url":"${devUrl}"}}}}'`
+  await runSandboxCommand(sandbox, "bash", ["-c", devNavCommand])
+
+  // Wait for page to load and CLS to be captured (longer to ensure screencast frames are captured)
+  console.log(`[Step 2] Waiting 10s for page load and CLS capture...`)
+  await new Promise((resolve) => setTimeout(resolve, 10000))
+
+  // Verify new screenshots were captured
+  const screenshotCheck = await runSandboxCommand(sandbox, "sh", [
+    "-c",
+    "ls -la /home/vercel-sandbox/.d3k/screenshots/*.png 2>/dev/null | wc -l"
+  ])
+  const newScreenshotCount = parseInt(screenshotCheck.stdout.trim(), 10) || 0
+  console.log(`[Step 2] New screenshots captured: ${newScreenshotCount}`)
+
+  if (newScreenshotCount === 0) {
+    console.log(`[Step 2] WARNING: No new screenshots captured, waiting longer...`)
+    await new Promise((resolve) => setTimeout(resolve, 5000))
+  }
 
   // Fetch fresh d3k artifacts
   console.log(`[Step 2] Fetching after-fix d3k artifacts...`)
