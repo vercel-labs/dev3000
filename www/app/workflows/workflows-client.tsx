@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { useCallback, useRef, useState } from "react"
+import useSWR from "swr"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -30,13 +31,26 @@ interface WorkflowsClientProps {
   initialRuns: WorkflowRun[]
 }
 
+const fetcher = async (url: string) => {
+  const res = await fetch(url)
+  const data = await res.json()
+  if (!data.success) throw new Error(data.error)
+  return data.runs as WorkflowRun[]
+}
+
 export default function WorkflowsClient({ user, initialRuns }: WorkflowsClientProps) {
   const [isSigningOut, setIsSigningOut] = useState(false)
-  const [runs, setRuns] = useState<WorkflowRun[]>(initialRuns)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const lastSelectedIndex = useRef<number | null>(null)
+
+  // Use SWR for data fetching with polling every 5 seconds
+  const { data: runs = initialRuns, mutate } = useSWR(`/api/workflows?userId=${user.id}`, fetcher, {
+    fallbackData: initialRuns,
+    refreshInterval: 5000, // Poll every 5 seconds
+    revalidateOnFocus: true
+  })
 
   async function handleSignOut() {
     setIsSigningOut(true)
@@ -109,8 +123,8 @@ export default function WorkflowsClient({ user, initialRuns }: WorkflowsClientPr
       const result = await response.json()
 
       if (result.success) {
-        // Remove deleted runs from state
-        setRuns((prev) => prev.filter((run) => !selectedIds.has(run.id)))
+        // Revalidate SWR data after deletion
+        await mutate()
         setSelectedIds(new Set())
         setIsDeleteDialogOpen(false)
       } else {
