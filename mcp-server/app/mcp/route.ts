@@ -365,7 +365,9 @@ const handler = createMcpHandler(
         "performance_stop_trace",
         "performance_analyze_insight",
         // DOM/Page Analysis
-        "take_snapshot"
+        "take_snapshot",
+        // Screenshot capture for verification (uses chrome-devtools-mcp's CDP connection)
+        "take_screenshot"
       ],
       // nextjs-dev: Include most tools for framework-specific debugging
       // NOTE: browser_eval is intentionally excluded - it spawns a separate headless

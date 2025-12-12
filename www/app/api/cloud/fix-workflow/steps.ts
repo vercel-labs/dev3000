@@ -278,128 +278,43 @@ export async function verifyFixAndCaptureAfter(
   console.log(`[Step 2] Waiting 5s for page load...`)
   await new Promise((resolve) => setTimeout(resolve, 5000))
 
-  // Explicitly capture screenshots via inline Node.js script in sandbox
-  // This is needed because screencast capture isn't running during verification
-  // and the npm package's MCP server doesn't have a capture endpoint
-  console.log(`[Step 2] Capturing after-fix screenshots via CDP in sandbox...`)
-
-  // Node.js script to capture screenshot via CDP
-  // Tries multiple methods to find CDP endpoint: session file, then localhost:9222
-  const captureScript = `
-const WebSocket = require('ws');
-const fs = require('fs');
-const path = require('path');
-const http = require('http');
-const os = require('os');
-
-async function getCdpUrl() {
-  // List all possible session file locations
-  console.log('DEBUG: os.homedir()=', os.homedir());
-  console.log('DEBUG: os.tmpdir()=', os.tmpdir());
-  console.log('DEBUG: process.cwd()=', process.cwd());
-
-  // Check what's in ~/.d3k/ (list all files)
-  const homeD3kDir = path.join(os.homedir(), '.d3k');
-  console.log('DEBUG: Looking for sessions in', homeD3kDir);
-  if (fs.existsSync(homeD3kDir)) {
-    const allFiles = fs.readdirSync(homeD3kDir);
-    console.log('DEBUG: ALL files in ~/.d3k/:', allFiles);
-    const files = allFiles.filter(f => f.endsWith('.json'));
-    console.log('DEBUG: JSON session files:', files);
-    for (const file of files) {
-      try {
-        const data = JSON.parse(fs.readFileSync(path.join(homeD3kDir, file), 'utf-8'));
-        if (data.cdpUrl) {
-          console.log('DEBUG: Found CDP URL from session:', data.cdpUrl);
-          return data.cdpUrl;
-        }
-      } catch {}
-    }
-  }
-
-  // Method 2: Try /tmp/dev3000-sessions (fallback)
-  const tmpSessionsDir = path.join(os.tmpdir(), 'dev3000-sessions');
-  console.log('DEBUG: Trying fallback sessions in', tmpSessionsDir);
-  if (fs.existsSync(tmpSessionsDir)) {
-    const files = fs.readdirSync(tmpSessionsDir).filter(f => f.endsWith('.json'));
-    for (const file of files) {
-      try {
-        const data = JSON.parse(fs.readFileSync(path.join(tmpSessionsDir, file), 'utf-8'));
-        if (data.cdpUrl) {
-          console.log('DEBUG: Found CDP URL from tmp session:', data.cdpUrl);
-          return data.cdpUrl;
-        }
-      } catch {}
-    }
-  }
-
-  // Method 2: Try localhost:9222 (Chrome debugging port)
-  console.log('DEBUG: Trying localhost:9222');
-  const pages = await new Promise((resolve, reject) => {
-    http.get('http://localhost:9222/json', (res) => {
-      let data = '';
-      res.on('data', chunk => data += chunk);
-      res.on('end', () => resolve(JSON.parse(data)));
-      res.on('error', reject);
-    }).on('error', (e) => { console.log('DEBUG: localhost:9222 failed:', e.message); reject(e); });
-  });
-  const activePage = pages.find(p => p.type === 'page' && !p.url.startsWith('chrome://'));
-  if (activePage) {
-    console.log('DEBUG: Found CDP from 9222:', activePage.webSocketDebuggerUrl);
-    return activePage.webSocketDebuggerUrl;
-  }
-  throw new Error('No CDP URL found');
-}
-
-async function captureScreenshot(label) {
-  const cdpUrl = await getCdpUrl();
-  console.log('DEBUG: Connecting to', cdpUrl);
-  const ws = new WebSocket(cdpUrl);
-
-  return new Promise((resolve, reject) => {
-    ws.on('open', () => {
-      console.log('DEBUG: WebSocket connected, capturing screenshot');
-      ws.send(JSON.stringify({ id: 1, method: 'Page.captureScreenshot', params: { format: 'png' } }));
-    });
-    ws.on('message', (data) => {
-      const msg = JSON.parse(data);
-      if (msg.id === 1) {
-        ws.close();
-        if (msg.error) { console.log('DEBUG: Screenshot error:', msg.error); reject(new Error(msg.error.message)); return; }
-
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const filename = timestamp + '-' + label + '.png';
-        const dir = '/tmp/dev3000-mcp-deps/public/screenshots';
-        fs.mkdirSync(dir, { recursive: true });
-        fs.writeFileSync(path.join(dir, filename), Buffer.from(msg.result.data, 'base64'));
-        console.log('CAPTURED:' + filename);
-        resolve(filename);
-      }
-    });
-    ws.on('error', (e) => { console.log('DEBUG: WebSocket error:', e.message); reject(e); });
-    setTimeout(() => { ws.close(); reject(new Error('timeout')); }, 15000);
-  });
-}
-
-captureScreenshot(process.argv[2] || 'after-fix').then(() => process.exit(0)).catch(e => { console.error('ERROR:', e.message); process.exit(1); });
-`
+  // Capture screenshots via chrome-devtools MCP tool (uses chrome-devtools-mcp's CDP connection)
+  // The take_screenshot tool is now whitelisted and proxied through d3k's MCP server
+  console.log(`[Step 2] Capturing after-fix screenshots via chrome-devtools MCP tool...`)
 
   const capturedScreenshots: string[] = []
   for (const label of ["page-loaded", "after-fix-1", "after-fix-2"]) {
     try {
-      const captureResult = await runSandboxCommand(sandbox, "node", ["-e", captureScript, label])
-      const captured = captureResult.stdout.match(/CAPTURED:(.+\.png)/)?.[1]
-      if (captured) {
-        capturedScreenshots.push(captured)
-        console.log(`[Step 2] Captured: ${captured}`)
-      } else {
-        console.log(`[Step 2] Capture ${label} output: ${captureResult.stdout.slice(0, 200)}`)
-        if (captureResult.stderr) {
-          console.log(`[Step 2] Capture ${label} stderr: ${captureResult.stderr.slice(0, 200)}`)
+      // Call chrome-devtools_take_screenshot via MCP
+      const screenshotCommand = `curl -s -X POST http://localhost:3684/mcp -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"chrome-devtools_take_screenshot","arguments":{}}}'`
+      const screenshotResult = await runSandboxCommand(sandbox, "bash", ["-c", screenshotCommand])
+      console.log(`[Step 2] Screenshot ${label} response: ${screenshotResult.stdout.slice(0, 300)}`)
+
+      // Parse response to get base64 data
+      try {
+        const response = JSON.parse(screenshotResult.stdout)
+        if (response.result?.content?.[0]?.text) {
+          // The screenshot is returned as base64 in the content
+          const base64Data = response.result.content[0].text
+          if (base64Data && base64Data.length > 100) {
+            // Save to screenshot directory
+            const timestamp = new Date().toISOString().replace(/[:.]/g, "-")
+            const filename = `${timestamp}-${label}.png`
+            const saveCommand = `mkdir -p /tmp/dev3000-mcp-deps/public/screenshots && echo '${base64Data}' | base64 -d > /tmp/dev3000-mcp-deps/public/screenshots/${filename}`
+            await runSandboxCommand(sandbox, "bash", ["-c", saveCommand])
+            capturedScreenshots.push(filename)
+            console.log(`[Step 2] Captured: ${filename}`)
+          }
+        } else if (response.error) {
+          console.log(`[Step 2] Screenshot ${label} error: ${JSON.stringify(response.error)}`)
         }
+      } catch (parseErr) {
+        console.log(
+          `[Step 2] Screenshot ${label} parse error: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`
+        )
       }
     } catch (err) {
-      console.log(`[Step 2] Capture ${label} error: ${err instanceof Error ? err.message : String(err)}`)
+      console.log(`[Step 2] Screenshot ${label} error: ${err instanceof Error ? err.message : String(err)}`)
     }
     // Small delay between captures
     await new Promise((resolve) => setTimeout(resolve, 500))
