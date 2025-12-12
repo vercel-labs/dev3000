@@ -4,11 +4,12 @@
  * Each step reconnects to the sandbox via sandboxId, making the workflow
  * more debuggable and allowing proper step isolation.
  *
- * Step 0: Create sandbox, start d3k, capture "before" CLS/screenshots
- * Step 1: Run AI agent with sandbox tools to fix CLS issues
- * Step 2: Verify fix by reloading page and capturing "after" CLS/screenshots
- * Step 3: Compile final report to blob storage
- * Step 4: Create GitHub PR and cleanup sandbox
+ * Internal steps (0-indexed) → Display steps (1-indexed for users):
+ *   Step 0 → Step 1: Init - Create sandbox, start d3k, capture "before" CLS/screenshots
+ *   Step 1 → Step 2: Agentic Loop - Run AI agent + verify fix (up to 3 retries)
+ *   Step 2 → Step 3: Generate Report - Compile final report to blob storage
+ *
+ * TODO: Step 3 → Step 4: Create GitHub PR (commented out until workflow is stable)
  */
 
 // Note: Can't use workflowLog here - workflows can't import fs modules
@@ -75,9 +76,10 @@ export async function cloudFixWorkflow(params: {
     projectName,
     vercelToken,
     vercelOidcToken: vercelOidcTokenParam,
-    repoOwner,
-    repoName,
-    baseBranch = "main",
+    // TODO: Uncomment when PR step is re-enabled
+    repoOwner: _repoOwner,
+    repoName: _repoName,
+    baseBranch: _baseBranch = "main",
     repoUrl,
     repoBranch,
     runId,
@@ -94,10 +96,12 @@ export async function cloudFixWorkflow(params: {
 
   const vercelOidcToken = vercelOidcTokenParam || process.env.VERCEL_OIDC_TOKEN
 
-  // Helper to update progress
-  const updateProgress = async (stepNumber: number, currentStep: string, sandboxUrl?: string) => {
+  // Helper to update progress (adds +1 to stepNumber for user-facing display)
+  const updateProgress = async (internalStep: number, currentStep: string, sandboxUrl?: string) => {
     if (runId && userId) {
-      await updateWorkflowProgressStep(userId, runId, projectName, timestamp, stepNumber, currentStep, sandboxUrl)
+      // Display step numbers start at 1 for users (internal step 0 → display step 1)
+      const displayStep = internalStep + 1
+      await updateWorkflowProgressStep(userId, runId, projectName, timestamp, displayStep, currentStep, sandboxUrl)
     }
   }
 
@@ -107,9 +111,10 @@ export async function cloudFixWorkflow(params: {
   }
 
   // ============================================================
-  // STEP 0: Create sandbox, start d3k, capture "before" state
+  // STEP 0 (displays as Step 1): Init
+  // Create sandbox, start d3k, capture "before" state
   // ============================================================
-  await updateProgress(0, "Creating development sandbox...")
+  await updateProgress(0, "Initializing sandbox...")
 
   const sandboxSetup = await createSandboxAndCaptureBefore(
     repoUrl,
@@ -120,14 +125,15 @@ export async function cloudFixWorkflow(params: {
     vercelOidcToken
   )
 
-  await updateProgress(0, "Sandbox ready, captured before metrics", sandboxSetup.devUrl)
+  await updateProgress(0, "Init complete, captured before CLS", sandboxSetup.devUrl)
   workflowLog(`[Workflow] Sandbox created: ${sandboxSetup.sandboxId}`)
   workflowLog(`[Workflow] Dev URL: ${sandboxSetup.devUrl}`)
   workflowLog(`[Workflow] Before CLS: ${sandboxSetup.clsScore}`)
   workflowLog(`[Workflow] Before Screenshots: ${sandboxSetup.beforeScreenshots.length}`)
 
   // ============================================================
-  // STEP 1 & 2: Agent fix loop - retry until CLS improves (max 3 attempts)
+  // STEP 1 (displays as Step 2): Agentic Loop
+  // Run AI agent + verify fix (up to 3 retries)
   // ============================================================
   const MAX_FIX_ATTEMPTS = 3
   let agentResult: AgentResult = { agentAnalysis: "", gitDiff: null, hasChanges: false }
@@ -143,7 +149,7 @@ export async function cloudFixWorkflow(params: {
 
   for (let attempt = 1; attempt <= MAX_FIX_ATTEMPTS; attempt++) {
     workflowLog(`[Workflow] Fix attempt ${attempt}/${MAX_FIX_ATTEMPTS}`)
-    await updateProgress(1, `AI agent fixing CLS (attempt ${attempt}/${MAX_FIX_ATTEMPTS})...`)
+    await updateProgress(1, `Agentic loop: fixing CLS (attempt ${attempt}/${MAX_FIX_ATTEMPTS})...`)
 
     // Run agent with d3k context and feedback from previous failed attempt
     agentResult = await runAgentWithTools(
@@ -157,11 +163,11 @@ export async function cloudFixWorkflow(params: {
     )
 
     if (agentResult.hasChanges) {
-      await updateProgress(1, `Attempt ${attempt}: Agent made code changes`)
+      await updateProgress(1, `Agentic loop: agent made changes (attempt ${attempt})`)
       workflowLog(`[Workflow] Agent made changes, git diff: ${agentResult.gitDiff?.length || 0} chars`)
 
       // Verify the fix
-      await updateProgress(2, `Verifying fix (attempt ${attempt})...`)
+      await updateProgress(1, `Agentic loop: verifying fix (attempt ${attempt})...`)
 
       verificationResult = await verifyFixAndCaptureAfter(
         sandboxSetup.sandboxId,
@@ -176,7 +182,7 @@ export async function cloudFixWorkflow(params: {
 
       // Check if fix worked
       if (verificationResult.verificationStatus === "improved") {
-        await updateProgress(2, `CLS improved on attempt ${attempt}!`)
+        await updateProgress(1, `Agentic loop: CLS improved on attempt ${attempt}!`)
         workflowLog(`[Workflow] SUCCESS: CLS improved on attempt ${attempt}`)
         break // Exit loop - fix worked!
       }
@@ -195,7 +201,7 @@ export async function cloudFixWorkflow(params: {
         workflowLog(`[Workflow] Fix attempt ${attempt} failed, will retry with feedback`)
       }
     } else {
-      await updateProgress(1, `Attempt ${attempt}: No changes made`)
+      await updateProgress(1, `Agentic loop: no changes made (attempt ${attempt})`)
       workflowLog("[Workflow] Agent completed without making changes")
 
       if (attempt < MAX_FIX_ATTEMPTS && attemptFeedback) {
@@ -211,17 +217,18 @@ export async function cloudFixWorkflow(params: {
 
   // Final status after all attempts
   if (verificationResult) {
-    await updateProgress(2, `Final: ${verificationResult.verificationStatus} after ${MAX_FIX_ATTEMPTS} attempts`)
+    await updateProgress(1, `Agentic loop complete: ${verificationResult.verificationStatus}`)
     workflowLog(`[Workflow] Final After Screenshots: ${verificationResult.afterScreenshots.length}`)
   } else {
-    await updateProgress(2, "No verification - agent made no changes")
+    await updateProgress(1, "Agentic loop complete: no changes made")
     workflowLog("[Workflow] Skipping verification - no changes made")
   }
 
   // ============================================================
-  // STEP 3: Compile final report
+  // STEP 2 (displays as Step 3): Generate Report
+  // Compile final report to blob storage
   // ============================================================
-  await updateProgress(3, "Compiling final report...")
+  await updateProgress(2, "Generating report...")
 
   const reportResult = await compileReport(
     sandboxSetup.reportId,
@@ -237,43 +244,43 @@ export async function cloudFixWorkflow(params: {
     verificationResult
   )
 
-  await updateProgress(3, "Report compiled and uploaded")
+  await updateProgress(2, "Report generated")
   workflowLog(`[Workflow] Report URL: ${reportResult.blobUrl}`)
 
   // ============================================================
-  // STEP 4: Create PR and cleanup sandbox
+  // TODO: STEP 3 (displays as Step 4): Create GitHub PR
+  // Commented out until workflow is stable
   // ============================================================
-  let prResult: PRResult | null = null
+  // let prResult: PRResult | null = null
+  //
+  // if (repoOwner && repoName && agentResult.hasChanges) {
+  //   await updateProgress(3, `Creating PR on ${repoOwner}/${repoName}...`)
+  //
+  //   prResult = await createPRAndCleanup(
+  //     sandboxSetup.sandboxId,
+  //     agentResult.gitDiff || "",
+  //     reportResult.blobUrl,
+  //     repoOwner,
+  //     repoName,
+  //     baseBranch,
+  //     projectName
+  //   )
+  //
+  //   if (prResult.success) {
+  //     await updateProgress(3, `PR #${prResult.prNumber} created`)
+  //   } else {
+  //     await updateProgress(3, "PR creation failed")
+  //   }
+  // }
 
-  if (repoOwner && repoName && agentResult.hasChanges) {
-    await updateProgress(4, `Creating PR on ${repoOwner}/${repoName}...`)
-
-    prResult = await createPRAndCleanup(
-      sandboxSetup.sandboxId,
-      agentResult.gitDiff || "",
-      reportResult.blobUrl,
-      repoOwner,
-      repoName,
-      baseBranch,
-      projectName
-    )
-
-    if (prResult.success) {
-      await updateProgress(4, `PR #${prResult.prNumber} created`)
-    } else {
-      await updateProgress(4, "PR creation failed")
-    }
-  } else {
-    // Just cleanup the sandbox
-    await updateProgress(4, "Cleaning up sandbox...")
-    await cleanupSandbox(sandboxSetup.sandboxId)
-    await updateProgress(4, "Cleanup complete")
-  }
+  // Always cleanup the sandbox
+  await cleanupSandbox(sandboxSetup.sandboxId)
+  workflowLog("[Workflow] Sandbox cleaned up")
 
   return Response.json({
     blobUrl: reportResult.blobUrl,
     reportId: reportResult.reportId,
-    pr: prResult
+    pr: null
   })
 }
 
@@ -350,7 +357,8 @@ async function compileReport(
   )
 }
 
-async function createPRAndCleanup(
+// TODO: Uncomment when PR step is re-enabled
+async function _createPRAndCleanup(
   sandboxId: string,
   gitDiff: string,
   reportBlobUrl: string,

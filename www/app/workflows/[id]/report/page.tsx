@@ -136,10 +136,40 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
           </div>
         )}
 
-        {/* CLS Score Section - Before/After Comparison */}
+        {/* ================================================================ */}
+        {/* STEP 1: Init - d3k Logs and Initial CLS Capture */}
+        {/* ================================================================ */}
+        <div className="bg-card border border-border rounded-lg p-6 mb-6">
+          <h2 className="text-xl font-semibold mb-4">
+            <span className="text-muted-foreground text-sm font-normal mr-2">Step 1</span>
+            Init
+          </h2>
+          <p className="text-sm text-muted-foreground mb-4">
+            Created sandbox, started d3k monitoring, captured initial CLS measurements
+          </p>
+
+          {/* D3k Logs in Init Section */}
+          {report.d3kLogs && (
+            <CollapsibleSection title="d3k Diagnostic Logs" defaultOpen={false}>
+              <pre className="bg-muted/50 rounded p-4 text-xs font-mono overflow-x-auto whitespace-pre-wrap max-h-96 overflow-y-auto">
+                {report.d3kLogs}
+              </pre>
+            </CollapsibleSection>
+          )}
+        </div>
+
+        {/* ================================================================ */}
+        {/* STEP 2: Agentic Loop - CLS Before/After and Agent Analysis */}
+        {/* ================================================================ */}
         {report.clsScore !== undefined && (
           <div className="bg-card border border-border rounded-lg p-6 mb-6">
-            <h2 className="text-xl font-semibold mb-4">Cumulative Layout Shift (CLS)</h2>
+            <h2 className="text-xl font-semibold mb-4">
+              <span className="text-muted-foreground text-sm font-normal mr-2">Step 2</span>
+              Agentic Loop
+            </h2>
+            <p className="text-sm text-muted-foreground mb-4">AI agent attempted to fix CLS issues (up to 3 retries)</p>
+
+            <h3 className="text-lg font-medium mb-3">CLS Results</h3>
 
             {/* Show before/after if we have verification data */}
             {report.afterClsScore !== undefined ? (
@@ -354,29 +384,20 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
                 )}
               </div>
             )}
-          </div>
-        )}
 
-        {/* d3k Agent Analysis Section */}
-        <div className="bg-card border border-border rounded-lg p-6 mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold">d3k Agent Analysis</h2>
-            {report.agentAnalysisModel && (
-              <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
-                {report.agentAnalysisModel}
-              </span>
-            )}
+            {/* Agent Analysis within Step 2 */}
+            <div className="mt-6 pt-6 border-t border-border">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium">Agent Analysis</h3>
+                {report.agentAnalysisModel && (
+                  <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
+                    {report.agentAnalysisModel}
+                  </span>
+                )}
+              </div>
+              <AgentAnalysis content={report.agentAnalysis} gitDiff={report.gitDiff} projectName={report.projectName} />
+            </div>
           </div>
-          <AgentAnalysis content={report.agentAnalysis} gitDiff={report.gitDiff} projectName={report.projectName} />
-        </div>
-
-        {/* D3k Logs Section (Collapsible) */}
-        {report.d3kLogs && (
-          <CollapsibleSection title="d3k Logs" defaultOpen={false}>
-            <pre className="bg-muted/50 rounded p-4 text-xs font-mono overflow-x-auto whitespace-pre-wrap max-h-96 overflow-y-auto">
-              {report.d3kLogs}
-            </pre>
-          </CollapsibleSection>
         )}
 
         <div className="mt-6 flex gap-4">
