@@ -159,7 +159,8 @@ export async function runAgentWithTools(
   sandboxId: string,
   mcpUrl: string,
   devUrl: string,
-  clsData: unknown
+  clsData: unknown,
+  previousAttemptFeedback?: string | null
 ): Promise<AgentResult> {
   workflowLog(`[Step 1] Reconnecting to sandbox: ${sandboxId}`)
 
@@ -173,9 +174,12 @@ export async function runAgentWithTools(
 
   // Run the AI agent
   workflowLog(`[Step 1] Running AI agent with sandbox tools...`)
+  if (previousAttemptFeedback) {
+    workflowLog(`[Step 1] Including feedback from previous failed attempt`)
+  }
   const logAnalysis = clsData ? JSON.stringify(clsData, null, 2) : "No CLS data captured"
 
-  const agentAnalysis = await runAgentWithSandboxTools(sandbox, mcpUrl, devUrl, logAnalysis)
+  const agentAnalysis = await runAgentWithSandboxTools(sandbox, mcpUrl, devUrl, logAnalysis, previousAttemptFeedback)
   workflowLog(`[Step 1] Agent analysis: ${agentAnalysis.length} chars`)
 
   // Check for git diff to see if changes were made
@@ -889,9 +893,13 @@ async function runAgentWithSandboxTools(
   sandbox: Sandbox,
   mcpUrl: string,
   devUrl: string,
-  logAnalysis: string
+  logAnalysis: string,
+  previousAttemptFeedback?: string | null
 ): Promise<string> {
   workflowLog("[Agent] Starting AI agent with d3k sandbox tools...")
+  if (previousAttemptFeedback) {
+    workflowLog("[Agent] This is a RETRY attempt with feedback from previous failure")
+  }
 
   const gateway = createGateway({
     apiKey: process.env.AI_GATEWAY_API_KEY,
@@ -950,8 +958,12 @@ After fixing, provide:
 4. Make minimal, targeted fixes
 5. Always verify changes work`
 
-  const userPrompt = `Dev server: ${devUrl}
+  const feedbackSection = previousAttemptFeedback
+    ? `\n\n## CRITICAL - PREVIOUS ATTEMPT FAILED\n${previousAttemptFeedback}\n\nYou MUST try a different approach this time.\n`
+    : ""
 
+  const userPrompt = `Dev server: ${devUrl}
+${feedbackSection}
 Diagnostic data:
 ${logAnalysis}
 

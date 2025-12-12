@@ -126,47 +126,85 @@ export async function cloudFixWorkflow(params: {
   workflowLog(`[Workflow] Before Screenshots: ${sandboxSetup.beforeScreenshots.length}`)
 
   // ============================================================
-  // STEP 1: Run AI agent with sandbox tools
+  // STEP 1 & 2: Agent fix loop - retry until CLS improves (max 3 attempts)
   // ============================================================
-  await updateProgress(1, "AI agent analyzing and fixing CLS issues...")
-
-  const agentResult = await runAgentWithTools(
-    sandboxSetup.sandboxId,
-    sandboxSetup.mcpUrl,
-    sandboxSetup.devUrl,
-    sandboxSetup.clsData
-  )
-
-  if (agentResult.hasChanges) {
-    await updateProgress(1, "AI agent made code changes")
-    workflowLog(`[Workflow] Agent made changes, git diff: ${agentResult.gitDiff?.length || 0} chars`)
-  } else {
-    await updateProgress(1, "AI agent completed - no changes needed")
-    workflowLog("[Workflow] Agent completed without making changes")
-  }
-
-  // ============================================================
-  // STEP 2: Verify fix (only if agent made changes)
-  // ============================================================
+  const MAX_FIX_ATTEMPTS = 3
+  let agentResult: AgentResult = { agentAnalysis: "", gitDiff: null, hasChanges: false }
   let verificationResult: VerificationResult | null = null
+  let attemptFeedback: string | null = null
 
-  if (agentResult.hasChanges) {
-    await updateProgress(2, "Verifying fix - reloading page...")
+  for (let attempt = 1; attempt <= MAX_FIX_ATTEMPTS; attempt++) {
+    workflowLog(`[Workflow] Fix attempt ${attempt}/${MAX_FIX_ATTEMPTS}`)
+    await updateProgress(1, `AI agent fixing CLS (attempt ${attempt}/${MAX_FIX_ATTEMPTS})...`)
 
-    verificationResult = await verifyFixAndCaptureAfter(
+    // Run agent with feedback from previous failed attempt
+    agentResult = await runAgentWithTools(
       sandboxSetup.sandboxId,
       sandboxSetup.mcpUrl,
       sandboxSetup.devUrl,
-      sandboxSetup.clsScore,
-      projectName
+      sandboxSetup.clsData,
+      attemptFeedback
     )
 
-    await updateProgress(2, `Verification: ${verificationResult.verificationStatus}`)
-    workflowLog(`[Workflow] After CLS: ${verificationResult.afterClsScore}`)
-    workflowLog(`[Workflow] After Screenshots: ${verificationResult.afterScreenshots.length}`)
-    workflowLog(`[Workflow] Status: ${verificationResult.verificationStatus}`)
+    if (agentResult.hasChanges) {
+      await updateProgress(1, `Attempt ${attempt}: Agent made code changes`)
+      workflowLog(`[Workflow] Agent made changes, git diff: ${agentResult.gitDiff?.length || 0} chars`)
+
+      // Verify the fix
+      await updateProgress(2, `Verifying fix (attempt ${attempt})...`)
+
+      verificationResult = await verifyFixAndCaptureAfter(
+        sandboxSetup.sandboxId,
+        sandboxSetup.mcpUrl,
+        sandboxSetup.devUrl,
+        sandboxSetup.clsScore,
+        projectName
+      )
+
+      workflowLog(`[Workflow] After CLS: ${verificationResult.afterClsScore}`)
+      workflowLog(`[Workflow] Status: ${verificationResult.verificationStatus}`)
+
+      // Check if fix worked
+      if (verificationResult.verificationStatus === "improved") {
+        await updateProgress(2, `CLS improved on attempt ${attempt}!`)
+        workflowLog(`[Workflow] SUCCESS: CLS improved on attempt ${attempt}`)
+        break // Exit loop - fix worked!
+      }
+
+      // Fix didn't work - prepare feedback for next attempt
+      if (attempt < MAX_FIX_ATTEMPTS) {
+        attemptFeedback =
+          `IMPORTANT: Your previous fix attempt (#${attempt}) did NOT improve CLS. ` +
+          `Before: ${sandboxSetup.clsScore?.toFixed(4)}, After: ${verificationResult.afterClsScore.toFixed(4)} (${verificationResult.verificationStatus}). ` +
+          `The changes you made were:\n${agentResult.gitDiff}\n\n` +
+          `Please try a DIFFERENT approach. Common issues: ` +
+          `1) Reserved space doesn't match actual content size, ` +
+          `2) CSS syntax errors in inline styles, ` +
+          `3) Missing min-height/min-width on parent containers. ` +
+          `Verify your fix addresses the actual layout shift dimensions from the CLS data.`
+        workflowLog(`[Workflow] Fix attempt ${attempt} failed, will retry with feedback`)
+      }
+    } else {
+      await updateProgress(1, `Attempt ${attempt}: No changes made`)
+      workflowLog("[Workflow] Agent completed without making changes")
+
+      if (attempt < MAX_FIX_ATTEMPTS && attemptFeedback) {
+        // If no changes on retry, that's a problem - encourage trying
+        attemptFeedback =
+          `IMPORTANT: You made NO changes on attempt ${attempt}. ` +
+          `The CLS score is still ${sandboxSetup.clsScore?.toFixed(4)} (poor). ` +
+          `You MUST make code changes to fix the layout shifts. Review the CLS data and modify the components causing shifts.`
+      }
+      break // No changes = nothing to verify, exit loop
+    }
+  }
+
+  // Final status after all attempts
+  if (verificationResult) {
+    await updateProgress(2, `Final: ${verificationResult.verificationStatus} after ${MAX_FIX_ATTEMPTS} attempts`)
+    workflowLog(`[Workflow] Final After Screenshots: ${verificationResult.afterScreenshots.length}`)
   } else {
-    await updateProgress(2, "Skipped - no changes to verify")
+    await updateProgress(2, "No verification - agent made no changes")
     workflowLog("[Workflow] Skipping verification - no changes made")
   }
 
@@ -250,11 +288,12 @@ async function runAgentWithTools(
   sandboxId: string,
   mcpUrl: string,
   devUrl: string,
-  clsData: unknown
+  clsData: unknown,
+  previousAttemptFeedback?: string | null
 ): Promise<AgentResult> {
   "use step"
   const { runAgentWithTools } = await import("./steps")
-  return runAgentWithTools(sandboxId, mcpUrl, devUrl, clsData)
+  return runAgentWithTools(sandboxId, mcpUrl, devUrl, clsData, previousAttemptFeedback)
 }
 
 async function verifyFixAndCaptureAfter(
