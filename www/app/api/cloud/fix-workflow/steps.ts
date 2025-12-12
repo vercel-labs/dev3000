@@ -195,6 +195,8 @@ export async function runAgentWithTools(
   mcpUrl: string,
   devUrl: string,
   clsData: unknown,
+  jankScreenshots: Array<{ label: string; blobUrl: string }>,
+  d3kLogs: string | null,
   previousAttemptFeedback?: string | null
 ): Promise<AgentResult> {
   workflowLog(`[Step 1] Reconnecting to sandbox: ${sandboxId}`)
@@ -209,12 +211,21 @@ export async function runAgentWithTools(
 
   // Run the AI agent
   workflowLog(`[Step 1] Running AI agent with sandbox tools...`)
+  workflowLog(`[Step 1] Jank screenshots: ${jankScreenshots.length}, d3k logs: ${d3kLogs ? "yes" : "no"}`)
   if (previousAttemptFeedback) {
     workflowLog(`[Step 1] Including feedback from previous failed attempt`)
   }
   const logAnalysis = clsData ? JSON.stringify(clsData, null, 2) : "No CLS data captured"
 
-  const agentAnalysis = await runAgentWithSandboxTools(sandbox, mcpUrl, devUrl, logAnalysis, previousAttemptFeedback)
+  const agentAnalysis = await runAgentWithSandboxTools(
+    sandbox,
+    mcpUrl,
+    devUrl,
+    logAnalysis,
+    jankScreenshots,
+    d3kLogs,
+    previousAttemptFeedback
+  )
   workflowLog(`[Step 1] Agent analysis: ${agentAnalysis.length} chars`)
 
   // Check for git diff to see if changes were made
@@ -757,10 +768,78 @@ async function fetchAndUploadD3kArtifacts(
 /**
  * Create tools for AI agent to use in sandbox
  */
-function createD3kSandboxTools(sandbox: Sandbox, _mcpUrl: string) {
+function createD3kSandboxTools(sandbox: Sandbox, _mcpUrl: string, devUrl: string) {
   const SANDBOX_CWD = "/vercel/sandbox"
+  const D3K_MCP_PORT = 3684
 
   return {
+    measureCLS: tool({
+      description:
+        "Measure CLS by navigating the page and getting fresh metrics from d3k. " +
+        "Use this AFTER making changes to verify they actually fixed the layout shifts. " +
+        "Returns the new CLS score and details about any remaining shifts.",
+      inputSchema: z.object({
+        waitMs: z.number().optional().describe("Milliseconds to wait for page load and CLS capture (default: 5000)")
+      }),
+      execute: async ({ waitMs = 5000 }: { waitMs?: number }) => {
+        workflowLog("[measureCLS] Starting fresh CLS measurement...")
+
+        // Navigate to about:blank first to reset
+        const blankCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"navigate","params":{"url":"about:blank"}}}}'`
+        await runSandboxCommand(sandbox, "bash", ["-c", blankCmd])
+        await new Promise((resolve) => setTimeout(resolve, 500))
+
+        // Navigate back to dev URL to trigger fresh CLS capture
+        const navCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"navigate","params":{"url":"${devUrl}"}}}}'`
+        await runSandboxCommand(sandbox, "bash", ["-c", navCmd])
+
+        // Wait for page load and CLS capture
+        await new Promise((resolve) => setTimeout(resolve, waitMs))
+
+        // Read d3k logs to get fresh CLS data
+        const logsResult = await runSandboxCommand(sandbox, "sh", [
+          "-c",
+          'for log in /home/vercel-sandbox/.d3k/logs/*.log; do [ -f "$log" ] && tail -100 "$log" || true; done 2>/dev/null'
+        ])
+        const logs = logsResult.stdout || ""
+
+        // Parse CLS from logs
+        const clsMatch = logs.match(/\[CDP\] Detected (\d+) layout shifts \(CLS: ([\d.]+)\)/)
+        if (clsMatch) {
+          const shiftCount = parseInt(clsMatch[1], 10)
+          const clsScore = parseFloat(clsMatch[2])
+
+          // Parse individual shift details
+          const shiftDetailRegex = /\[CDP\]\s+-\s+<(\w+)>\s+shifted\s+(.+)/g
+          const shifts: string[] = []
+          const shiftDetails = logs.matchAll(shiftDetailRegex)
+          for (const match of shiftDetails) {
+            shifts.push(`- <${match[1]}> shifted ${match[2]}`)
+          }
+
+          const grade = clsScore <= 0.1 ? "good ✅" : clsScore <= 0.25 ? "needs-improvement ⚠️" : "poor ❌"
+
+          return `## Fresh CLS Measurement
+
+**CLS Score: ${clsScore.toFixed(4)}** (${grade})
+**Layout Shifts: ${shiftCount}**
+
+${shifts.length > 0 ? `### Elements that shifted:\n${shifts.join("\n")}` : "No shift details captured."}
+
+${clsScore <= 0.1 ? "🎉 CLS is now GOOD! Your fix worked!" : "⚠️ CLS still needs improvement. Try a different approach."}`
+        }
+
+        return `## CLS Measurement
+
+Could not detect CLS data in d3k logs. This might mean:
+1. No layout shifts occurred (good!)
+2. The page didn't fully load yet
+3. d3k didn't capture the shifts
+
+Check the page manually or try running measureCLS again with a longer waitMs.`
+      }
+    }),
+
     readFile: tool({
       description: "Read a file from the codebase.",
       inputSchema: z.object({
@@ -920,9 +999,12 @@ async function runAgentWithSandboxTools(
   mcpUrl: string,
   devUrl: string,
   logAnalysis: string,
+  jankScreenshots: Array<{ label: string; blobUrl: string }>,
+  d3kLogs: string | null,
   previousAttemptFeedback?: string | null
 ): Promise<string> {
   workflowLog("[Agent] Starting AI agent with d3k sandbox tools...")
+  workflowLog(`[Agent] Jank screenshots provided: ${jankScreenshots.length}`)
   if (previousAttemptFeedback) {
     workflowLog("[Agent] This is a RETRY attempt with feedback from previous failure")
   }
@@ -933,67 +1015,111 @@ async function runAgentWithSandboxTools(
   })
 
   const model = gateway("anthropic/claude-sonnet-4-20250514")
-  const tools = createD3kSandboxTools(sandbox, mcpUrl)
+  const tools = createD3kSandboxTools(sandbox, mcpUrl, devUrl)
 
-  const systemPrompt = `You are a CLS (Cumulative Layout Shift) specialist engineer. Your ONLY focus is fixing layout shift issues.
+  const systemPrompt = `You are a CLS (Cumulative Layout Shift) specialist engineer working with d3k, an AI-powered debugging tool that monitors layout shifts in real-time.
 
-## TOOLS AVAILABLE
+## WHAT IS d3k?
+d3k is running in this sandbox and has already captured CLS data during the initial page load. It monitors the browser via Chrome DevTools Protocol and detects exactly which elements shifted, by how much, and when. The diagnostic data you receive comes directly from d3k's CLS detection.
+
+## YOUR TOOLS
+
+### CLS Verification (USE THIS!)
+- **measureCLS**: Navigate the page and get FRESH CLS metrics from d3k. Use this AFTER making changes to verify they actually work. This is your most important tool for validation!
+
+### Code Tools
 - readFile: Read source files
-- globSearch: Find files by pattern
+- globSearch: Find files by pattern (e.g., "*.tsx", "layout.*")
 - grepSearch: Search for code patterns
 - listDirectory: Explore project structure
 - writeFile: Write fixes to files
-- verifyChanges: Check if changes work
+- verifyChanges: Check for build/compilation errors
 - getGitDiff: Review your changes
 
 ## WORKFLOW
-1. Understand the CLS issue from diagnostic data
-2. Find the source files causing the issue
-3. Read the relevant files
-4. Write fixes using writeFile
-5. Call verifyChanges to check for errors
-6. If errors, fix them and verify again
-7. Call getGitDiff at the end
+1. **Analyze the d3k diagnostic data** - It tells you EXACTLY which elements shifted and by how much
+2. **Find the source files** - Use the element tags (DIV, MAIN, A, etc.) to find the components
+3. **Read the relevant files** - Understand the current implementation
+4. **Write your fix** - Make minimal, targeted changes to prevent the shifts
+5. **Verify no errors** - Use verifyChanges to check for compilation errors
+6. **MEASURE CLS** - Use measureCLS to get fresh CLS data and confirm your fix worked
+7. **Iterate if needed** - If CLS is still bad, try a different approach
+8. **Get final diff** - Use getGitDiff at the end
 
 ## CLS KNOWLEDGE
-CLS measures visual stability. Good score is 0.1 or less.
+CLS measures visual stability. Scores: ≤0.1 = good, ≤0.25 = needs improvement, >0.25 = poor.
 
-Causes:
-- Images without dimensions
-- Dynamic content insertion
-- Web fonts causing FOIT/FOUT
-- Async components without placeholders
+### Common Causes (from d3k element shift data):
+- **Elements moving right**: Usually sidebar/margin issues - space not reserved from initial render
+- **Elements moving down**: Content above expanding - delayed loading, async components, fonts
+- **Large shifts (>100px)**: Major layout changes - fixed/absolute positioning issues, missing dimensions
 
-Fixes:
-- Add width/height to images
-- Reserve space with min-height or skeleton loaders
-- Use font-display: optional
-- Wrap async components with sized Suspense fallbacks
+### Fixes:
+- For delayed sidebars: Ensure space is ALWAYS reserved with CSS (not conditional rendering)
+- For async content: Use skeleton loaders with EXACT dimensions matching final content
+- For images: Add explicit width/height or aspect-ratio
+- For fonts: Use font-display: optional or preload critical fonts
+- For conditional content: Keep element in DOM with visibility:hidden or opacity:0, not conditional {show && ...}
+
+## CRITICAL TIPS
+1. The shift dimensions in the diagnostic data are EXACT - your fix must reserve that EXACT space
+2. Use measureCLS after EVERY fix attempt to verify - don't guess!
+3. If a fix doesn't work, the issue is likely that space isn't being reserved at the RIGHT TIME (initial render)
+4. Fixed/absolute positioned elements don't take up document flow - siblings need explicit margins
 
 ## OUTPUT FORMAT
 After fixing, provide:
-- Summary of what was fixed
-- Root cause
-- Verification result
-- Git diff
-
-## RULES
-1. Only fix CLS issues
-2. If CLS < 0.05, report "NO CLS ISSUES"
-3. Always read files before modifying
-4. Make minimal, targeted fixes
-5. Always verify changes work`
+- Summary: What you fixed and why
+- Root cause: The specific elements/code causing shifts
+- measureCLS result: The new CLS score after your fix
+- Verification: Build status`
 
   const feedbackSection = previousAttemptFeedback
     ? `\n\n## CRITICAL - PREVIOUS ATTEMPT FAILED\n${previousAttemptFeedback}\n\nYou MUST try a different approach this time.\n`
     : ""
 
-  const userPrompt = `Dev server: ${devUrl}
-${feedbackSection}
-Diagnostic data:
-${logAnalysis}
+  // Build jank screenshots section
+  const jankScreenshotsSection =
+    jankScreenshots.length > 0
+      ? `\n## d3k Jank Screenshots (Visual Evidence)
+These screenshots show the exact moment of layout shift:
+${jankScreenshots.map((s) => `- ${s.label}: ${s.blobUrl}`).join("\n")}
+`
+      : ""
 
-Please investigate and fix any CLS issues.`
+  // Extract key CLS details from d3k logs
+  let d3kLogsSection = ""
+  if (d3kLogs) {
+    // Extract CLS detection lines
+    const clsLines = d3kLogs
+      .split("\n")
+      .filter(
+        (line) =>
+          line.includes("[CDP] Detected") ||
+          line.includes("[CDP]   -") ||
+          line.includes("CLS #") ||
+          line.includes("shifted")
+      )
+      .slice(0, 20) // Limit to avoid too much context
+      .join("\n")
+
+    if (clsLines) {
+      d3kLogsSection = `\n## d3k CLS Detection Logs
+\`\`\`
+${clsLines}
+\`\`\`
+`
+    }
+  }
+
+  const userPrompt = `## Dev Server
+${devUrl}
+${feedbackSection}
+## d3k Diagnostic Data (Source of Truth)
+${logAnalysis}
+${d3kLogsSection}${jankScreenshotsSection}
+## Your Task
+Fix the CLS issues identified by d3k. Use measureCLS after making changes to verify your fix works!`
 
   const { text, steps } = await generateText({
     model,

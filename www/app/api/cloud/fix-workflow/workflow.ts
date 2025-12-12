@@ -134,16 +134,25 @@ export async function cloudFixWorkflow(params: {
   let verificationResult: VerificationResult | null = null
   let attemptFeedback: string | null = null
 
+  // Filter beforeScreenshots to only jank screenshots for agent context
+  const jankScreenshots = sandboxSetup.beforeScreenshots
+    .filter((s) => s.label?.includes("jank"))
+    .map((s) => ({ label: s.label || "", blobUrl: s.blobUrl }))
+
+  workflowLog(`[Workflow] Jank screenshots for agent: ${jankScreenshots.length}`)
+
   for (let attempt = 1; attempt <= MAX_FIX_ATTEMPTS; attempt++) {
     workflowLog(`[Workflow] Fix attempt ${attempt}/${MAX_FIX_ATTEMPTS}`)
     await updateProgress(1, `AI agent fixing CLS (attempt ${attempt}/${MAX_FIX_ATTEMPTS})...`)
 
-    // Run agent with feedback from previous failed attempt
+    // Run agent with d3k context and feedback from previous failed attempt
     agentResult = await runAgentWithTools(
       sandboxSetup.sandboxId,
       sandboxSetup.mcpUrl,
       sandboxSetup.devUrl,
       sandboxSetup.clsData,
+      jankScreenshots,
+      sandboxSetup.d3kLogs,
       attemptFeedback
     )
 
@@ -290,11 +299,13 @@ async function runAgentWithTools(
   mcpUrl: string,
   devUrl: string,
   clsData: unknown,
+  jankScreenshots: Array<{ label: string; blobUrl: string }>,
+  d3kLogs: string | null,
   previousAttemptFeedback?: string | null
 ): Promise<AgentResult> {
   "use step"
   const { runAgentWithTools } = await import("./steps")
-  return runAgentWithTools(sandboxId, mcpUrl, devUrl, clsData, previousAttemptFeedback)
+  return runAgentWithTools(sandboxId, mcpUrl, devUrl, clsData, jankScreenshots, d3kLogs, previousAttemptFeedback)
 }
 
 async function verifyFixAndCaptureAfter(
