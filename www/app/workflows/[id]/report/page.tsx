@@ -148,11 +148,11 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
             Created sandbox, started d3k monitoring, captured initial CLS measurements
           </p>
 
-          {/* D3k Logs in Init Section */}
-          {report.d3kLogs && (
+          {/* D3k Logs in Init Section - use initD3kLogs if available, fall back to d3kLogs */}
+          {(report.initD3kLogs || report.d3kLogs) && (
             <CollapsibleSection title="d3k Diagnostic Logs" defaultOpen={false}>
               <pre className="bg-muted/50 rounded p-4 text-xs font-mono overflow-x-auto whitespace-pre-wrap max-h-96 overflow-y-auto">
-                {report.d3kLogs}
+                {report.initD3kLogs || report.d3kLogs}
               </pre>
             </CollapsibleSection>
           )}
@@ -168,6 +168,15 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
               Agentic Loop
             </h2>
             <p className="text-sm text-muted-foreground mb-4">AI agent attempted to fix CLS issues (up to 3 retries)</p>
+
+            {/* D3k Logs after agent fix */}
+            {report.afterD3kLogs && (
+              <CollapsibleSection title="d3k Diagnostic Logs (After Fix)" defaultOpen={false}>
+                <pre className="bg-muted/50 rounded p-4 text-xs font-mono overflow-x-auto whitespace-pre-wrap max-h-96 overflow-y-auto">
+                  {report.afterD3kLogs}
+                </pre>
+              </CollapsibleSection>
+            )}
 
             <h3 className="text-lg font-medium mb-3">CLS Results</h3>
 

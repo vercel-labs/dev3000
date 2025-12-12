@@ -50,7 +50,9 @@ export interface WorkflowReport {
   agentAnalysisModel?: string // e.g. "anthropic/claude-sonnet-4-20250514"
 
   // d3k logs
-  d3kLogs?: string
+  d3kLogs?: string // Combined (backward compat)
+  initD3kLogs?: string // Step 1: before agent
+  afterD3kLogs?: string // Step 2: after agent fix
 
   // Git diff of changes made by agent
   gitDiff?: string

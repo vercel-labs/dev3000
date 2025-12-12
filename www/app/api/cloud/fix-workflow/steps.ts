@@ -109,6 +109,19 @@ export async function agentFixLoopStep(
   // Run the agent with the new "diagnose" tool
   const agentResult = await runAgentWithDiagnoseTool(sandbox, devUrl, mcpUrl, beforeCls, beforeGrade)
 
+  // Force a fresh page reload to capture new CLS measurement
+  // The agent might not have called diagnose after its last change
+  workflowLog("[Agent] Forcing page reload to capture final CLS...")
+  const D3K_MCP_PORT = 3684
+  const blankCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"navigate","params":{"url":"about:blank"}}}}'`
+  await runSandboxCommand(sandbox, "bash", ["-c", blankCmd])
+  await new Promise((resolve) => setTimeout(resolve, 500))
+
+  const navCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"navigate","params":{"url":"${devUrl}"}}}}'`
+  await runSandboxCommand(sandbox, "bash", ["-c", navCmd])
+  workflowLog("[Agent] Waiting for CLS to be captured...")
+  await new Promise((resolve) => setTimeout(resolve, 5000)) // 5 seconds for CLS to be detected
+
   // Get final CLS measurement
   const finalCls = await fetchClsData(sandbox, mcpUrl, `${projectName}-after`)
 
@@ -138,9 +151,9 @@ export async function agentFixLoopStep(
 
   workflowLog(`[Agent] Status: ${status}, Before: ${beforeCls}, After: ${finalCls.clsScore}`)
 
-  // Combine d3k logs - Step 2 only shows NEW logs (not already in Step 1)
-  const newLogsInStep2 = finalCls.d3kLogs.replace(initD3kLogs, "").trim()
-  const combinedD3kLogs = `=== Step 1: Init (before agent) ===\n${initD3kLogs}\n\n=== Step 2: After agent fix ===\n${newLogsInStep2 || "(no new logs)"}`
+  // Separate d3k logs for Step 1 (init) and Step 2 (after fix)
+  const afterD3kLogs = finalCls.d3kLogs.replace(initD3kLogs, "").trim() || "(no new logs)"
+  const combinedD3kLogs = `=== Step 1: Init (before agent) ===\n${initD3kLogs}\n\n=== Step 2: After agent fix ===\n${afterD3kLogs}`
 
   // Generate report inline
   const report: WorkflowReport = {
@@ -159,7 +172,9 @@ export async function agentFixLoopStep(
     agentAnalysis: agentResult.transcript,
     agentAnalysisModel: "anthropic/claude-sonnet-4-20250514",
     gitDiff: gitDiff ?? undefined,
-    d3kLogs: combinedD3kLogs
+    d3kLogs: combinedD3kLogs,
+    initD3kLogs: initD3kLogs,
+    afterD3kLogs: afterD3kLogs
   }
 
   const blob = await put(`report-${reportId}.json`, JSON.stringify(report, null, 2), {
