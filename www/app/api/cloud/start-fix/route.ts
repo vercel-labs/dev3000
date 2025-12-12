@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto"
 import { start } from "workflow/api"
+import { clearWorkflowLog, workflowError, workflowLog } from "@/lib/workflow-logger"
 import { saveWorkflowRun } from "@/lib/workflow-storage"
 import { cloudFixWorkflow } from "../fix-workflow/workflow"
 
@@ -57,26 +58,29 @@ export async function POST(request: Request) {
       )
     }
 
+    // Clear workflow log file at start of new workflow
+    clearWorkflowLog()
+
     // Get VERCEL_OIDC_TOKEN from request header (runtime token)
     const vercelOidcToken = request.headers.get("x-vercel-oidc-token") || process.env.VERCEL_OIDC_TOKEN
-    console.log(`[Start Fix] VERCEL_OIDC_TOKEN available: ${!!vercelOidcToken}`)
+    workflowLog(`[Start Fix] VERCEL_OIDC_TOKEN available: ${!!vercelOidcToken}`)
 
     const body = await request.json()
     const { devUrl, repoOwner, repoName, baseBranch, bypassToken, repoUrl, repoBranch } = body
     userId = body.userId
     projectName = body.projectName
 
-    console.log("[Start Fix] Starting cloud fix workflow...")
-    console.log(`[Start Fix] Dev URL: ${devUrl}`)
-    console.log(`[Start Fix] Project: ${projectName}`)
-    console.log(`[Start Fix] User ID: ${userId}`)
-    console.log(`[Start Fix] Bypass Token: ${bypassToken ? "provided" : "not provided"}`)
+    workflowLog("[Start Fix] Starting cloud fix workflow...")
+    workflowLog(`[Start Fix] Dev URL: ${devUrl}`)
+    workflowLog(`[Start Fix] Project: ${projectName}`)
+    workflowLog(`[Start Fix] User ID: ${userId}`)
+    workflowLog(`[Start Fix] Bypass Token: ${bypassToken ? "provided" : "not provided"}`)
     if (repoUrl) {
-      console.log(`[Start Fix] Will create sandbox from: ${repoUrl}`)
-      console.log(`[Start Fix] Branch: ${repoBranch || "main"}`)
+      workflowLog(`[Start Fix] Will create sandbox from: ${repoUrl}`)
+      workflowLog(`[Start Fix] Branch: ${repoBranch || "main"}`)
     }
     if (repoOwner && repoName) {
-      console.log(`[Start Fix] GitHub: ${repoOwner}/${repoName} (base: ${baseBranch || "main"})`)
+      workflowLog(`[Start Fix] GitHub: ${repoOwner}/${repoName} (base: ${baseBranch || "main"})`)
     }
 
     // Start the workflow and get a Run object
@@ -108,7 +112,7 @@ export async function POST(request: Request) {
         currentStep: "Starting workflow...",
         stepNumber: 0
       })
-      console.log(`[Start Fix] Saved workflow run metadata (running): ${runId}`)
+      workflowLog(`[Start Fix] Saved workflow run metadata (running): ${runId}`)
     }
 
     // Pass runId and userId to workflow for progress tracking
@@ -120,7 +124,7 @@ export async function POST(request: Request) {
 
     const run = await start(cloudFixWorkflow, [workflowParamsWithTracking])
 
-    console.log(`[Start Fix] Workflow started, waiting for completion...`)
+    workflowLog(`[Start Fix] Workflow started, waiting for completion...`)
 
     // Wait for workflow to complete and get the Response
     const workflowResponse = await run.returnValue
@@ -128,12 +132,12 @@ export async function POST(request: Request) {
     // Parse the JSON result from the Response
     const result = await workflowResponse.json()
 
-    console.log(`[Start Fix] Workflow completed successfully`)
+    workflowLog(`[Start Fix] Workflow completed successfully`)
     if (result.blobUrl) {
-      console.log(`[Start Fix] Fix proposal uploaded to: ${result.blobUrl}`)
+      workflowLog(`[Start Fix] Fix proposal uploaded to: ${result.blobUrl}`)
     }
     if (result.pr?.prUrl) {
-      console.log(`[Start Fix] GitHub PR created: ${result.pr.prUrl}`)
+      workflowLog(`[Start Fix] GitHub PR created: ${result.pr.prUrl}`)
     }
 
     // Update workflow run metadata with success status (use same timestamp to overwrite)
@@ -148,7 +152,7 @@ export async function POST(request: Request) {
         prUrl: result.pr?.prUrl,
         beforeScreenshotUrl: result.beforeScreenshotUrl || undefined
       })
-      console.log(`[Start Fix] Updated workflow run metadata to done: ${runId}`)
+      workflowLog(`[Start Fix] Updated workflow run metadata to done: ${runId}`)
     }
 
     return Response.json(
@@ -166,7 +170,7 @@ export async function POST(request: Request) {
       }
     )
   } catch (error) {
-    console.error("[Start Fix] Error running workflow:", error)
+    workflowError("[Start Fix] Error running workflow:", error)
 
     // Update workflow run metadata with failure status (use same timestamp to overwrite)
     if (userId && projectName && runId && runTimestamp) {
@@ -177,8 +181,8 @@ export async function POST(request: Request) {
         timestamp: runTimestamp,
         status: "failure",
         error: error instanceof Error ? error.message : String(error)
-      }).catch((err) => console.error("[Start Fix] Failed to save error metadata:", err))
-      console.log(`[Start Fix] Updated workflow run metadata to failure: ${runId}`)
+      }).catch((err) => workflowError("[Start Fix] Failed to save error metadata:", err))
+      workflowLog(`[Start Fix] Updated workflow run metadata to failure: ${runId}`)
     }
 
     return Response.json(

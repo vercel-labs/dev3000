@@ -10,6 +10,7 @@ import { Sandbox } from "@vercel/sandbox"
 import { createGateway, generateText, stepCountIs, tool } from "ai"
 import { z } from "zod"
 import { createD3kSandbox as createD3kSandboxUtil } from "@/lib/cloud/d3k-sandbox"
+import { workflowLog } from "@/lib/workflow-logger"
 import type { WorkflowReport } from "@/types"
 
 // ============================================================
@@ -65,15 +66,15 @@ export async function createSandboxAndCaptureBefore(
   _vercelToken?: string,
   vercelOidcToken?: string
 ): Promise<SandboxSetupResult> {
-  console.log(`[Step 0] Creating sandbox for ${projectName}...`)
-  console.log(`[Step 0] Repository: ${repoUrl}`)
-  console.log(`[Step 0] Branch: ${branch}`)
-  console.log(`[Step 0] Report ID: ${reportId}`)
+  workflowLog(`[Step 0] Creating sandbox for ${projectName}...`)
+  workflowLog(`[Step 0] Repository: ${repoUrl}`)
+  workflowLog(`[Step 0] Branch: ${branch}`)
+  workflowLog(`[Step 0] Report ID: ${reportId}`)
 
   // Set VERCEL_OIDC_TOKEN if passed from workflow context
   if (vercelOidcToken && !process.env.VERCEL_OIDC_TOKEN) {
     process.env.VERCEL_OIDC_TOKEN = vercelOidcToken
-    console.log(`[Step 0] Set VERCEL_OIDC_TOKEN from workflow context`)
+    workflowLog(`[Step 0] Set VERCEL_OIDC_TOKEN from workflow context`)
   }
 
   // Create sandbox with longer timeout for multi-step workflow
@@ -87,27 +88,27 @@ export async function createSandboxAndCaptureBefore(
   })
 
   const sandboxId = sandboxResult.sandbox.sandboxId
-  console.log(`[Step 0] Sandbox created: ${sandboxId}`)
-  console.log(`[Step 0] Dev URL: ${sandboxResult.devUrl}`)
-  console.log(`[Step 0] MCP URL: ${sandboxResult.mcpUrl}`)
+  workflowLog(`[Step 0] Sandbox created: ${sandboxId}`)
+  workflowLog(`[Step 0] Dev URL: ${sandboxResult.devUrl}`)
+  workflowLog(`[Step 0] MCP URL: ${sandboxResult.mcpUrl}`)
 
   // Get chromium path for screenshots
   let chromiumPath = "/tmp/chromium"
   try {
     const chromiumResult = await runSandboxCommand(sandboxResult.sandbox, "node", [
       "-e",
-      "require('@sparticuz/chromium').executablePath().then(p => console.log(p))"
+      "require('@sparticuz/chromium').executablePath().then(p => workflowLog(p))"
     ])
     if (chromiumResult.exitCode === 0 && chromiumResult.stdout.trim()) {
       chromiumPath = chromiumResult.stdout.trim()
-      console.log(`[Step 0] Chromium path: ${chromiumPath}`)
+      workflowLog(`[Step 0] Chromium path: ${chromiumPath}`)
     }
   } catch {
-    console.log(`[Step 0] Using default chromium path: ${chromiumPath}`)
+    workflowLog(`[Step 0] Using default chromium path: ${chromiumPath}`)
   }
 
   // Wait for d3k to be fully ready and capture initial CLS data
-  console.log(`[Step 0] Waiting for d3k to capture CLS data...`)
+  workflowLog(`[Step 0] Waiting for d3k to capture CLS data...`)
   await new Promise((resolve) => setTimeout(resolve, 5000))
 
   // Fetch d3k artifacts (CLS screenshots, metadata, logs)
@@ -125,7 +126,7 @@ export async function createSandboxAndCaptureBefore(
       clsGrade = clsScore <= 0.1 ? "good" : clsScore <= 0.25 ? "needs-improvement" : "poor"
     }
     clsData = d3kArtifacts.metadata
-    console.log(`[Step 0] Before CLS: ${clsScore} (${clsGrade})`)
+    workflowLog(`[Step 0] Before CLS: ${clsScore} (${clsGrade})`)
   }
 
   // Map screenshots to beforeScreenshots format
@@ -134,7 +135,7 @@ export async function createSandboxAndCaptureBefore(
     blobUrl: s.blobUrl,
     label: s.label
   }))
-  console.log(`[Step 0] Before Screenshots: ${beforeScreenshots.length}`)
+  workflowLog(`[Step 0] Before Screenshots: ${beforeScreenshots.length}`)
 
   return {
     sandboxId,
@@ -160,25 +161,25 @@ export async function runAgentWithTools(
   devUrl: string,
   clsData: unknown
 ): Promise<AgentResult> {
-  console.log(`[Step 1] Reconnecting to sandbox: ${sandboxId}`)
+  workflowLog(`[Step 1] Reconnecting to sandbox: ${sandboxId}`)
 
   // Reconnect to existing sandbox
   const sandbox = await Sandbox.get({ sandboxId })
-  console.log(`[Step 1] Sandbox status: ${sandbox.status}`)
+  workflowLog(`[Step 1] Sandbox status: ${sandbox.status}`)
 
   if (sandbox.status !== "running") {
     throw new Error(`Sandbox ${sandboxId} is not running (status: ${sandbox.status})`)
   }
 
   // Run the AI agent
-  console.log(`[Step 1] Running AI agent with sandbox tools...`)
+  workflowLog(`[Step 1] Running AI agent with sandbox tools...`)
   const logAnalysis = clsData ? JSON.stringify(clsData, null, 2) : "No CLS data captured"
 
   const agentAnalysis = await runAgentWithSandboxTools(sandbox, mcpUrl, devUrl, logAnalysis)
-  console.log(`[Step 1] Agent analysis: ${agentAnalysis.length} chars`)
+  workflowLog(`[Step 1] Agent analysis: ${agentAnalysis.length} chars`)
 
   // Check for git diff to see if changes were made
-  console.log(`[Step 1] Checking for git diff...`)
+  workflowLog(`[Step 1] Checking for git diff...`)
   const diffResult = await runSandboxCommand(sandbox, "sh", [
     "-c",
     "cd /vercel/sandbox && git diff --no-color 2>/dev/null || echo ''"
@@ -187,9 +188,9 @@ export async function runAgentWithTools(
   const gitDiff = diffResult.stdout.trim() || null
   const hasChanges = !!gitDiff && gitDiff.length > 0
 
-  console.log(`[Step 1] Has changes: ${hasChanges}`)
+  workflowLog(`[Step 1] Has changes: ${hasChanges}`)
   if (hasChanges) {
-    console.log(`[Step 1] Git diff: ${gitDiff?.length || 0} chars`)
+    workflowLog(`[Step 1] Git diff: ${gitDiff?.length || 0} chars`)
   }
 
   return {
@@ -210,24 +211,24 @@ export async function verifyFixAndCaptureAfter(
   beforeClsScore: number | null,
   projectName: string
 ): Promise<VerificationResult> {
-  console.log(`[Step 2] Reconnecting to sandbox: ${sandboxId}`)
+  workflowLog(`[Step 2] Reconnecting to sandbox: ${sandboxId}`)
 
   // Reconnect to existing sandbox
   const sandbox = await Sandbox.get({ sandboxId })
-  console.log(`[Step 2] Sandbox status: ${sandbox.status}`)
+  workflowLog(`[Step 2] Sandbox status: ${sandbox.status}`)
 
   if (sandbox.status !== "running") {
     throw new Error(`Sandbox ${sandboxId} is not running (status: ${sandbox.status})`)
   }
 
   // Wait for HMR to apply changes
-  console.log(`[Step 2] Waiting 3s for HMR to apply changes...`)
+  workflowLog(`[Step 2] Waiting 3s for HMR to apply changes...`)
   await new Promise((resolve) => setTimeout(resolve, 3000))
 
   // Record timestamp BEFORE navigation to filter for only NEW screenshots/metadata
   // This is more reliable than clearing files, which may not work if npm package doesn't support metadata clearing
   const afterCaptureTimestamp = Date.now()
-  console.log(`[Step 2] Timestamp before navigation: ${afterCaptureTimestamp}`)
+  workflowLog(`[Step 2] Timestamp before navigation: ${afterCaptureTimestamp}`)
 
   // Also try to clear via MCP API (may not clear metadata if using older npm package)
   const mcpBaseUrl = mcpUrl.replace(/\/mcp$/, "")
@@ -237,12 +238,14 @@ export async function verifyFixAndCaptureAfter(
     })
     if (clearResponse.ok) {
       const clearResult = (await clearResponse.json()) as { deletedCount?: number; directory?: string }
-      console.log(`[Step 2] Cleared ${clearResult.deletedCount || 0} files from MCP server`)
+      workflowLog(`[Step 2] Cleared ${clearResult.deletedCount || 0} files from MCP server`)
     } else {
-      console.log(`[Step 2] WARNING: Clear API returned ${clearResponse.status}`)
+      workflowLog(`[Step 2] WARNING: Clear API returned ${clearResponse.status}`)
     }
   } catch (clearError) {
-    console.log(`[Step 2] WARNING: Error calling MCP clear API:`, clearError)
+    workflowLog(
+      `[Step 2] WARNING: Error calling MCP clear API: ${clearError instanceof Error ? clearError.message : String(clearError)}`
+    )
   }
 
   // List screenshots BEFORE navigation for comparison
@@ -250,42 +253,42 @@ export async function verifyFixAndCaptureAfter(
     const beforeListResponse = await fetch(`${mcpBaseUrl}/api/screenshots/list`)
     if (beforeListResponse.ok) {
       const beforeList = (await beforeListResponse.json()) as { files?: string[] }
-      console.log(`[Step 2] Screenshots BEFORE navigation: ${(beforeList.files || []).length} files`)
-      console.log(
+      workflowLog(`[Step 2] Screenshots BEFORE navigation: ${(beforeList.files || []).length} files`)
+      workflowLog(
         `[Step 2] File list: ${(beforeList.files || []).slice(0, 5).join(", ")}${(beforeList.files || []).length > 5 ? "..." : ""}`
       )
     }
   } catch {
-    console.log(`[Step 2] Could not list screenshots before navigation`)
+    workflowLog(`[Step 2] Could not list screenshots before navigation`)
   }
 
   // Navigate to a blank page first, then back to the dev URL
   // This forces a full page navigation instead of just reload, which triggers fresh CLS capture
-  console.log(`[Step 2] Navigating away and back to trigger fresh CLS capture...`)
+  workflowLog(`[Step 2] Navigating away and back to trigger fresh CLS capture...`)
 
   // Step 2: Navigate to about:blank first
   // Note: Must include Accept header for MCP SSE transport, and timeout to prevent hanging
   const blankNavCommand = `curl -s -m 30 -X POST http://localhost:3684/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"navigate","params":{"url":"about:blank"}}}}'`
-  console.log(`[Step 2] Executing: navigate to about:blank`)
+  workflowLog(`[Step 2] Executing: navigate to about:blank`)
   const blankNavResult = await runSandboxCommand(sandbox, "bash", ["-c", blankNavCommand])
-  console.log(`[Step 2] about:blank stdout: ${blankNavResult.stdout.slice(0, 500)}`)
-  console.log(`[Step 2] about:blank stderr: ${blankNavResult.stderr?.slice(0, 200) || "(none)"}`)
+  workflowLog(`[Step 2] about:blank stdout: ${blankNavResult.stdout.slice(0, 500)}`)
+  workflowLog(`[Step 2] about:blank stderr: ${blankNavResult.stderr?.slice(0, 200) || "(none)"}`)
   await new Promise((resolve) => setTimeout(resolve, 1000))
 
   // Navigate back to the dev URL - this triggers a fresh page load and CLS capture
   const devNavCommand = `curl -s -m 30 -X POST http://localhost:3684/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"navigate","params":{"url":"${devUrl}"}}}}'`
-  console.log(`[Step 2] Executing: navigate to ${devUrl}`)
+  workflowLog(`[Step 2] Executing: navigate to ${devUrl}`)
   const devNavResult = await runSandboxCommand(sandbox, "bash", ["-c", devNavCommand])
-  console.log(`[Step 2] ${devUrl} stdout: ${devNavResult.stdout.slice(0, 500)}`)
-  console.log(`[Step 2] ${devUrl} stderr: ${devNavResult.stderr?.slice(0, 200) || "(none)"}`)
+  workflowLog(`[Step 2] ${devUrl} stdout: ${devNavResult.stdout.slice(0, 500)}`)
+  workflowLog(`[Step 2] ${devUrl} stderr: ${devNavResult.stderr?.slice(0, 200) || "(none)"}`)
 
   // Wait for page to load
-  console.log(`[Step 2] Waiting 5s for page load...`)
+  workflowLog(`[Step 2] Waiting 5s for page load...`)
   await new Promise((resolve) => setTimeout(resolve, 5000))
 
   // d3k automatically captures screenshots during navigation via its screencast system
   // The navigation above should have triggered page-loaded, error, and navigation-delayed captures
-  console.log(`[Step 2] Waiting for d3k's automatic screenshot captures to complete...`)
+  workflowLog(`[Step 2] Waiting for d3k's automatic screenshot captures to complete...`)
   await new Promise((resolve) => setTimeout(resolve, 2000))
 
   // List screenshots AFTER capture
@@ -293,17 +296,17 @@ export async function verifyFixAndCaptureAfter(
     const afterListResponse = await fetch(`${mcpBaseUrl}/api/screenshots/list`)
     if (afterListResponse.ok) {
       const afterList = (await afterListResponse.json()) as { files?: string[] }
-      console.log(`[Step 2] Screenshots AFTER capture: ${(afterList.files || []).length} files`)
-      console.log(
+      workflowLog(`[Step 2] Screenshots AFTER capture: ${(afterList.files || []).length} files`)
+      workflowLog(
         `[Step 2] File list: ${(afterList.files || []).slice(0, 5).join(", ")}${(afterList.files || []).length > 5 ? "..." : ""}`
       )
     }
   } catch {
-    console.log(`[Step 2] Could not list screenshots after capture`)
+    workflowLog(`[Step 2] Could not list screenshots after capture`)
   }
 
   // Fetch fresh d3k artifacts - only use files captured AFTER our timestamp
-  console.log(`[Step 2] Fetching after-fix d3k artifacts (filtering for timestamp > ${afterCaptureTimestamp})...`)
+  workflowLog(`[Step 2] Fetching after-fix d3k artifacts (filtering for timestamp > ${afterCaptureTimestamp})...`)
   const afterArtifacts = await fetchAndUploadD3kArtifacts(
     sandbox,
     mcpUrl,
@@ -317,7 +320,7 @@ export async function verifyFixAndCaptureAfter(
     const meta = afterArtifacts.metadata as { totalCLS?: number }
     afterClsScore = meta.totalCLS ?? 0
   }
-  console.log(`[Step 2] After CLS: ${afterClsScore}`)
+  workflowLog(`[Step 2] After CLS: ${afterClsScore}`)
 
   // Determine grade and verification status
   const afterClsGrade: "good" | "needs-improvement" | "poor" =
@@ -333,7 +336,7 @@ export async function verifyFixAndCaptureAfter(
     verificationStatus = "unchanged"
   }
 
-  console.log(`[Step 2] Verification: ${verificationStatus} (before: ${beforeScore}, after: ${afterClsScore})`)
+  workflowLog(`[Step 2] Verification: ${verificationStatus} (before: ${beforeScore}, after: ${afterClsScore})`)
 
   // Map screenshots to afterScreenshots format
   const afterScreenshots = afterArtifacts.clsScreenshots.map((s) => ({
@@ -341,7 +344,7 @@ export async function verifyFixAndCaptureAfter(
     blobUrl: s.blobUrl,
     label: s.label
   }))
-  console.log(`[Step 2] After Screenshots: ${afterScreenshots.length}`)
+  workflowLog(`[Step 2] After Screenshots: ${afterScreenshots.length}`)
 
   return {
     afterClsScore,
@@ -368,7 +371,7 @@ export async function compileReport(
   gitDiff: string | null,
   verificationResult: VerificationResult | null
 ): Promise<ReportResult> {
-  console.log(`[Step 3] Compiling report: ${reportId}`)
+  workflowLog(`[Step 3] Compiling report: ${reportId}`)
 
   const report: WorkflowReport = {
     id: reportId,
@@ -395,7 +398,7 @@ export async function compileReport(
 
   // Save to blob storage
   const blobUrl = await saveReportToBlob(report)
-  console.log(`[Step 3] Report saved: ${blobUrl}`)
+  workflowLog(`[Step 3] Report saved: ${blobUrl}`)
 
   return {
     blobUrl,
@@ -416,13 +419,13 @@ export async function createPRAndCleanup(
   baseBranch: string,
   _projectName: string
 ): Promise<PRResult> {
-  console.log(`[Step 4] Creating PR for ${repoOwner}/${repoName}...`)
+  workflowLog(`[Step 4] Creating PR for ${repoOwner}/${repoName}...`)
 
   // TODO: Implement actual PR creation via GitHub API
   // For now, just log and return success
-  console.log(`[Step 4] Git diff length: ${gitDiff.length}`)
-  console.log(`[Step 4] Report URL: ${reportBlobUrl}`)
-  console.log(`[Step 4] Base branch: ${baseBranch}`)
+  workflowLog(`[Step 4] Git diff length: ${gitDiff.length}`)
+  workflowLog(`[Step 4] Report URL: ${reportBlobUrl}`)
+  workflowLog(`[Step 4] Base branch: ${baseBranch}`)
 
   // Cleanup sandbox
   await cleanupSandbox(sandboxId)
@@ -440,18 +443,18 @@ export async function createPRAndCleanup(
 // ============================================================
 
 export async function cleanupSandbox(sandboxId: string): Promise<void> {
-  console.log(`[Cleanup] Stopping sandbox: ${sandboxId}`)
+  workflowLog(`[Cleanup] Stopping sandbox: ${sandboxId}`)
 
   try {
     const sandbox = await Sandbox.get({ sandboxId })
     if (sandbox.status === "running") {
       await sandbox.stop()
-      console.log(`[Cleanup] Sandbox stopped`)
+      workflowLog(`[Cleanup] Sandbox stopped`)
     } else {
-      console.log(`[Cleanup] Sandbox already stopped (status: ${sandbox.status})`)
+      workflowLog(`[Cleanup] Sandbox already stopped (status: ${sandbox.status})`)
     }
   } catch (error) {
-    console.log(`[Cleanup] Error stopping sandbox: ${error instanceof Error ? error.message : String(error)}`)
+    workflowLog(`[Cleanup] Error stopping sandbox: ${error instanceof Error ? error.message : String(error)}`)
   }
 }
 
@@ -528,7 +531,7 @@ async function fetchAndUploadD3kArtifacts(
     // Fetch CLS metadata from d3k server's jank API
     // First, find the screencast session by listing screenshots
     const baseUrl = mcpUrl.replace(/\/mcp$/, "")
-    console.log(`[D3k Artifacts] Fetching CLS metadata from ${baseUrl}/api/jank/...`)
+    workflowLog(`[D3k Artifacts] Fetching CLS metadata from ${baseUrl}/api/jank/...`)
 
     // Try to get the session ID from screenshots list
     const listResponse = await fetch(`${baseUrl}/api/screenshots/list`, {
@@ -559,7 +562,7 @@ async function fetchAndUploadD3kArtifacts(
           }
           return false
         })
-        console.log(`[D3k Artifacts] Filtered to ${filesToSearch.length} files with timestamp > ${minTimestamp}`)
+        workflowLog(`[D3k Artifacts] Filtered to ${filesToSearch.length} files with timestamp > ${minTimestamp}`)
       }
 
       for (const filename of filesToSearch) {
@@ -578,7 +581,7 @@ async function fetchAndUploadD3kArtifacts(
       }
 
       if (sessionId) {
-        console.log(`[D3k Artifacts] Found session: ${sessionId}`)
+        workflowLog(`[D3k Artifacts] Found session: ${sessionId}`)
 
         // Call the jank API which returns structured CLS data
         const jankResponse = await fetch(`${baseUrl}/api/jank/${sessionId}`, {
@@ -602,7 +605,7 @@ async function fetchAndUploadD3kArtifacts(
                 score: m.score || 0
               }))
             }
-            console.log(`[D3k Artifacts] CLS metadata: totalCLS=${jankData.actualCLS}, grade=${jankData.grade}`)
+            workflowLog(`[D3k Artifacts] CLS metadata: totalCLS=${jankData.actualCLS}, grade=${jankData.grade}`)
           }
         }
       }
@@ -623,12 +626,12 @@ async function fetchAndUploadD3kArtifacts(
             }
             return false // Exclude files without parseable timestamps
           })
-          console.log(
+          workflowLog(
             `[D3k Artifacts] Filtered ${screenshotFiles.length} -> ${filesToProcess.length} screenshots (minTimestamp: ${minTimestamp})`
           )
         }
 
-        console.log(`[D3k Artifacts] Uploading ${filesToProcess.length} screenshots...`)
+        workflowLog(`[D3k Artifacts] Uploading ${filesToProcess.length} screenshots...`)
         const recentScreenshots = filesToProcess.slice(-20)
         for (const filename of recentScreenshots) {
           try {
@@ -653,7 +656,7 @@ async function fetchAndUploadD3kArtifacts(
               })
             }
           } catch (err) {
-            console.log(
+            workflowLog(
               `[D3k Artifacts] Error uploading ${filename}: ${err instanceof Error ? err.message : String(err)}`
             )
           }
@@ -676,7 +679,7 @@ async function fetchAndUploadD3kArtifacts(
         if (clsMatch) {
           const shiftCount = parseInt(clsMatch[1], 10)
           const clsScore = parseFloat(clsMatch[2])
-          console.log(`[D3k Artifacts] Parsed CLS from logs: ${clsScore} (${shiftCount} shifts)`)
+          workflowLog(`[D3k Artifacts] Parsed CLS from logs: ${clsScore} (${shiftCount} shifts)`)
 
           // Determine grade based on CLS thresholds (Google Core Web Vitals)
           let clsGrade: "good" | "needs-improvement" | "poor"
@@ -711,11 +714,11 @@ async function fetchAndUploadD3kArtifacts(
       }
     }
 
-    console.log(
+    workflowLog(
       `[D3k Artifacts] Summary: ${result.clsScreenshots.length} screenshots, metadata: ${result.metadata ? "yes" : "no"}`
     )
   } catch (error) {
-    console.log(`[D3k Artifacts] Error: ${error instanceof Error ? error.message : String(error)}`)
+    workflowLog(`[D3k Artifacts] Error: ${error instanceof Error ? error.message : String(error)}`)
   }
 
   return result
@@ -888,7 +891,7 @@ async function runAgentWithSandboxTools(
   devUrl: string,
   logAnalysis: string
 ): Promise<string> {
-  console.log("[Agent] Starting AI agent with d3k sandbox tools...")
+  workflowLog("[Agent] Starting AI agent with d3k sandbox tools...")
 
   const gateway = createGateway({
     apiKey: process.env.AI_GATEWAY_API_KEY,
@@ -962,7 +965,7 @@ Please investigate and fix any CLS issues.`
     stopWhen: stepCountIs(20)
   })
 
-  console.log(`[Agent] Completed in ${steps.length} step(s)`)
+  workflowLog(`[Agent] Completed in ${steps.length} step(s)`)
 
   // Build transcript
   const transcript: string[] = []

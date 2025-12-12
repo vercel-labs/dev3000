@@ -11,6 +11,8 @@
  * Step 4: Create GitHub PR and cleanup sandbox
  */
 
+import { workflowLog } from "@/lib/workflow-logger"
+
 // Types for data passed between steps
 interface SandboxSetupResult {
   sandboxId: string
@@ -82,11 +84,11 @@ export async function cloudFixWorkflow(params: {
   } = params
   const timestamp = new Date().toISOString()
 
-  console.log("[Workflow] Starting cloud fix workflow (refactored)...")
-  console.log(`[Workflow] Project: ${projectName}`)
-  console.log(`[Workflow] Timestamp: ${timestamp}`)
+  workflowLog("[Workflow] Starting cloud fix workflow (refactored)...")
+  workflowLog(`[Workflow] Project: ${projectName}`)
+  workflowLog(`[Workflow] Timestamp: ${timestamp}`)
   if (repoUrl) {
-    console.log(`[Workflow] Repo: ${repoUrl} (branch: ${repoBranch || "main"})`)
+    workflowLog(`[Workflow] Repo: ${repoUrl} (branch: ${repoBranch || "main"})`)
   }
 
   const vercelOidcToken = vercelOidcTokenParam || process.env.VERCEL_OIDC_TOKEN
@@ -118,10 +120,10 @@ export async function cloudFixWorkflow(params: {
   )
 
   await updateProgress(0, "Sandbox ready, captured before metrics", sandboxSetup.devUrl)
-  console.log(`[Workflow] Sandbox created: ${sandboxSetup.sandboxId}`)
-  console.log(`[Workflow] Dev URL: ${sandboxSetup.devUrl}`)
-  console.log(`[Workflow] Before CLS: ${sandboxSetup.clsScore}`)
-  console.log(`[Workflow] Before Screenshots: ${sandboxSetup.beforeScreenshots.length}`)
+  workflowLog(`[Workflow] Sandbox created: ${sandboxSetup.sandboxId}`)
+  workflowLog(`[Workflow] Dev URL: ${sandboxSetup.devUrl}`)
+  workflowLog(`[Workflow] Before CLS: ${sandboxSetup.clsScore}`)
+  workflowLog(`[Workflow] Before Screenshots: ${sandboxSetup.beforeScreenshots.length}`)
 
   // ============================================================
   // STEP 1: Run AI agent with sandbox tools
@@ -137,10 +139,10 @@ export async function cloudFixWorkflow(params: {
 
   if (agentResult.hasChanges) {
     await updateProgress(1, "AI agent made code changes")
-    console.log(`[Workflow] Agent made changes, git diff: ${agentResult.gitDiff?.length || 0} chars`)
+    workflowLog(`[Workflow] Agent made changes, git diff: ${agentResult.gitDiff?.length || 0} chars`)
   } else {
     await updateProgress(1, "AI agent completed - no changes needed")
-    console.log("[Workflow] Agent completed without making changes")
+    workflowLog("[Workflow] Agent completed without making changes")
   }
 
   // ============================================================
@@ -160,12 +162,12 @@ export async function cloudFixWorkflow(params: {
     )
 
     await updateProgress(2, `Verification: ${verificationResult.verificationStatus}`)
-    console.log(`[Workflow] After CLS: ${verificationResult.afterClsScore}`)
-    console.log(`[Workflow] After Screenshots: ${verificationResult.afterScreenshots.length}`)
-    console.log(`[Workflow] Status: ${verificationResult.verificationStatus}`)
+    workflowLog(`[Workflow] After CLS: ${verificationResult.afterClsScore}`)
+    workflowLog(`[Workflow] After Screenshots: ${verificationResult.afterScreenshots.length}`)
+    workflowLog(`[Workflow] Status: ${verificationResult.verificationStatus}`)
   } else {
     await updateProgress(2, "Skipped - no changes to verify")
-    console.log("[Workflow] Skipping verification - no changes made")
+    workflowLog("[Workflow] Skipping verification - no changes made")
   }
 
   // ============================================================
@@ -188,7 +190,7 @@ export async function cloudFixWorkflow(params: {
   )
 
   await updateProgress(3, "Report compiled and uploaded")
-  console.log(`[Workflow] Report URL: ${reportResult.blobUrl}`)
+  workflowLog(`[Workflow] Report URL: ${reportResult.blobUrl}`)
 
   // ============================================================
   // STEP 4: Create PR and cleanup sandbox
