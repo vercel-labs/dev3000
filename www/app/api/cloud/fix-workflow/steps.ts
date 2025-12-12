@@ -15,6 +15,39 @@ import type { WorkflowReport } from "@/types"
 // Note: Can't use workflowLog from lib - workflows can't import fs modules
 const workflowLog = console.log
 
+/**
+ * Parse timestamp from d3k screenshot filename.
+ * Handles two formats:
+ * - With milliseconds: 2025-12-12T15-36-21-424Z-page-loaded.png
+ * - Without milliseconds (jank): 2025-12-12T15-36-21Z-jank-67ms.png
+ *
+ * @returns timestamp in milliseconds, or null if parsing fails
+ */
+function parseScreenshotTimestamp(filename: string): number | null {
+  // Match ISO-like timestamp at start of filename
+  // Format: YYYY-MM-DDTHH-MM-SS[-mmm]Z where mmm is optional milliseconds
+  const timestampMatch = filename.match(/^(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2})(-\d{3})?Z/)
+  if (!timestampMatch) {
+    return null
+  }
+
+  const [, dateTimePart, msPart] = timestampMatch
+  // Convert 2025-12-12T15-36-21 to 2025-12-12T15:36:21
+  const isoDateTime = dateTimePart.replace(/T(\d{2})-(\d{2})-(\d{2})$/, "T$1:$2:$3")
+
+  // Add milliseconds if present, otherwise use .000
+  const milliseconds = msPart ? msPart.slice(1) : "000" // Remove leading dash
+  const fullIso = `${isoDateTime}.${milliseconds}Z`
+
+  const date = new Date(fullIso)
+  if (Number.isNaN(date.getTime())) {
+    workflowLog(`[D3k Artifacts] WARNING: Failed to parse timestamp from ${filename} (parsed as ${fullIso})`)
+    return null
+  }
+
+  return date.getTime()
+}
+
 // ============================================================
 // Type definitions for step return values
 // ============================================================
@@ -559,11 +592,8 @@ async function fetchAndUploadD3kArtifacts(
       let filesToSearch = screenshotFiles
       if (minTimestamp) {
         filesToSearch = screenshotFiles.filter((filename) => {
-          const timestampMatch = filename.match(/^(\d{4}-\d{2}-\d{2}T[\d-]+Z)/)
-          if (timestampMatch) {
-            const fileTimestamp = new Date(
-              timestampMatch[1].replace(/-(\d{2})-(\d{2})-(\d{3})Z/, ":$1:$2.$3Z")
-            ).getTime()
+          const fileTimestamp = parseScreenshotTimestamp(filename)
+          if (fileTimestamp !== null) {
             return fileTimestamp > minTimestamp
           }
           return false
@@ -623,11 +653,8 @@ async function fetchAndUploadD3kArtifacts(
         let filesToProcess = screenshotFiles
         if (minTimestamp) {
           filesToProcess = screenshotFiles.filter((filename) => {
-            const timestampMatch = filename.match(/^(\d{4}-\d{2}-\d{2}T[\d-]+Z)/)
-            if (timestampMatch) {
-              const fileTimestamp = new Date(
-                timestampMatch[1].replace(/-(\d{2})-(\d{2})-(\d{3})Z/, ":$1:$2.$3Z")
-              ).getTime()
+            const fileTimestamp = parseScreenshotTimestamp(filename)
+            if (fileTimestamp !== null) {
               return fileTimestamp > minTimestamp
             }
             return false // Exclude files without parseable timestamps
@@ -644,10 +671,7 @@ async function fetchAndUploadD3kArtifacts(
             const imageResponse = await fetch(`${baseUrl}/api/screenshots/${filename}`)
             if (imageResponse.ok) {
               const imageBuffer = Buffer.from(await imageResponse.arrayBuffer())
-              const timestampMatch = filename.match(/^(\d{4}-\d{2}-\d{2}T[\d-]+Z)/)
-              const timestamp = timestampMatch
-                ? new Date(timestampMatch[1].replace(/-(\d{2})-(\d{2})-(\d{3})Z/, ":$1:$2.$3Z")).getTime()
-                : Date.now()
+              const timestamp = parseScreenshotTimestamp(filename) ?? Date.now()
               const blobFilename = `cls-screenshot-${projectName}-${timestamp}.png`
 
               const blob = await put(blobFilename, imageBuffer, {
