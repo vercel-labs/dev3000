@@ -12,7 +12,7 @@ import { cloudFixWorkflowV2 } from "./workflow-v2"
 export async function POST(request: Request) {
   try {
     const url = new URL(request.url)
-    const version = url.searchParams.get("version") || "v1"
+    const version = url.searchParams.get("version") || "v2"
 
     const body = await request.json()
     const { devUrl, projectName, repoOwner, repoName, baseBranch, repoUrl, repoBranch, runId, userId } = body
