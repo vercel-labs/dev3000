@@ -33,6 +33,7 @@ export async function initSandboxStep(
   beforeCls: number | null
   beforeGrade: "good" | "needs-improvement" | "poor" | null
   beforeScreenshots: Array<{ timestamp: number; blobUrl: string; label?: string }>
+  initD3kLogs: string
 }> {
   workflowLog(`[Init] Creating sandbox for ${projectName}...`)
 
@@ -61,6 +62,7 @@ export async function initSandboxStep(
   const clsData = await fetchClsData(sandboxResult.sandbox, sandboxResult.mcpUrl, projectName)
 
   workflowLog(`[Init] Before CLS: ${clsData.clsScore} (${clsData.clsGrade})`)
+  workflowLog(`[Init] Captured ${clsData.d3kLogs.length} chars of d3k logs`)
 
   return {
     sandboxId: sandboxResult.sandbox.sandboxId,
@@ -69,7 +71,8 @@ export async function initSandboxStep(
     reportId,
     beforeCls: clsData.clsScore,
     beforeGrade: clsData.clsGrade,
-    beforeScreenshots: clsData.screenshots
+    beforeScreenshots: clsData.screenshots,
+    initD3kLogs: clsData.d3kLogs
   }
 }
 
@@ -84,6 +87,7 @@ export async function agentFixLoopStep(
   beforeCls: number | null,
   beforeGrade: "good" | "needs-improvement" | "poor" | null,
   beforeScreenshots: Array<{ timestamp: number; blobUrl: string; label?: string }>,
+  initD3kLogs: string,
   projectName: string,
   reportId: string
 ): Promise<{
@@ -134,6 +138,9 @@ export async function agentFixLoopStep(
 
   workflowLog(`[Agent] Status: ${status}, Before: ${beforeCls}, After: ${finalCls.clsScore}`)
 
+  // Combine d3k logs from init and after agent run
+  const combinedD3kLogs = `=== Step 1: Init (before agent) ===\n${initD3kLogs}\n\n=== Step 2: After agent fix ===\n${finalCls.d3kLogs}`
+
   // Generate report inline
   const report: WorkflowReport = {
     id: reportId,
@@ -150,7 +157,8 @@ export async function agentFixLoopStep(
     verificationStatus: status === "no-changes" ? "unchanged" : status,
     agentAnalysis: agentResult.transcript,
     agentAnalysisModel: "anthropic/claude-sonnet-4-20250514",
-    gitDiff: gitDiff ?? undefined
+    gitDiff: gitDiff ?? undefined,
+    d3kLogs: combinedD3kLogs
   }
 
   const blob = await put(`report-${reportId}.json`, JSON.stringify(report, null, 2), {
@@ -378,7 +386,7 @@ Start by running diagnose to see the current state.`
 
 Start with diagnose to see what's shifting, then fix it.`,
     tools,
-    stopWhen: stepCountIs(25) // Allow more steps for iteration
+    stopWhen: stepCountIs(10) // Reduced for debugging - increase when things work
   })
 
   workflowLog(`[Agent] Completed in ${steps.length} steps`)
@@ -457,11 +465,13 @@ async function fetchClsData(
   clsScore: number | null
   clsGrade: "good" | "needs-improvement" | "poor" | null
   screenshots: Array<{ timestamp: number; blobUrl: string; label?: string }>
+  d3kLogs: string
 }> {
   const result = {
     clsScore: null as number | null,
     clsGrade: null as "good" | "needs-improvement" | "poor" | null,
-    screenshots: [] as Array<{ timestamp: number; blobUrl: string; label?: string }>
+    screenshots: [] as Array<{ timestamp: number; blobUrl: string; label?: string }>,
+    d3kLogs: ""
   }
 
   try {
@@ -470,6 +480,9 @@ async function fetchClsData(
       "-c",
       'for log in /home/vercel-sandbox/.d3k/logs/*.log; do [ -f "$log" ] && cat "$log"; done 2>/dev/null || echo ""'
     ])
+
+    // Store the full logs
+    result.d3kLogs = logsResult.stdout || ""
 
     const clsMatch = logsResult.stdout.match(/\[CDP\] Detected (\d+) layout shifts \(CLS: ([\d.]+)\)/)
     if (clsMatch) {

@@ -21,6 +21,7 @@ interface InitResult {
   beforeCls: number | null
   beforeGrade: "good" | "needs-improvement" | "poor" | null
   beforeScreenshots: Array<{ timestamp: number; blobUrl: string; label?: string }>
+  initD3kLogs: string
 }
 
 interface FixResult {
@@ -82,6 +83,7 @@ export async function cloudFixWorkflow(params: {
     initResult.beforeCls,
     initResult.beforeGrade,
     initResult.beforeScreenshots,
+    initResult.initD3kLogs,
     projectName,
     reportId
   )
@@ -124,12 +126,23 @@ async function agentFixLoop(
   beforeCls: number | null,
   beforeGrade: "good" | "needs-improvement" | "poor" | null,
   beforeScreenshots: Array<{ timestamp: number; blobUrl: string; label?: string }>,
+  initD3kLogs: string,
   projectName: string,
   reportId: string
 ): Promise<FixResult> {
   "use step"
   const { agentFixLoopStep } = await import("./steps")
-  return agentFixLoopStep(sandboxId, devUrl, mcpUrl, beforeCls, beforeGrade, beforeScreenshots, projectName, reportId)
+  return agentFixLoopStep(
+    sandboxId,
+    devUrl,
+    mcpUrl,
+    beforeCls,
+    beforeGrade,
+    beforeScreenshots,
+    initD3kLogs,
+    projectName,
+    reportId
+  )
 }
 
 async function cleanupSandbox(sandboxId: string): Promise<void> {
