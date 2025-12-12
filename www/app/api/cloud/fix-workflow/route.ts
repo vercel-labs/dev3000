@@ -32,38 +32,43 @@ export async function POST(request: Request) {
         return Response.json({ error: "v2 workflow requires repoUrl" }, { status: 400 })
       }
 
-      // @ts-expect-error - Workflow SDK types are incomplete
-      workflowRun = await start(cloudFixWorkflowV2, {
-        repoUrl,
-        repoBranch: repoBranch || "main",
-        projectName,
-        runId,
-        userId
-      })
+      workflowRun = await start(cloudFixWorkflowV2, [
+        {
+          repoUrl,
+          repoBranch: repoBranch || "main",
+          projectName,
+          runId,
+          userId
+        }
+      ])
     } else {
       // V1 workflow - original multi-step architecture
       if (!devUrl && !repoUrl) {
         return Response.json({ error: "Missing required field: devUrl or repoUrl" }, { status: 400 })
       }
 
-      // @ts-expect-error - Workflow SDK types are incomplete
-      workflowRun = await start(cloudFixWorkflow, {
-        devUrl,
-        projectName,
-        repoOwner,
-        repoName,
-        baseBranch: baseBranch || "main",
-        repoUrl,
-        repoBranch,
-        runId,
-        userId
-      })
+      workflowRun = await start(cloudFixWorkflow, [
+        {
+          devUrl,
+          projectName,
+          repoOwner,
+          repoName,
+          baseBranch: baseBranch || "main",
+          repoUrl,
+          repoBranch,
+          runId,
+          userId
+        }
+      ])
     }
 
     console.log(`[API] Workflow started: ${workflowRun.id}`)
 
-    // Wait for workflow to complete
-    const result = await workflowRun.result()
+    // Wait for workflow to complete and get the Response
+    const workflowResponse = await workflowRun.returnValue
+
+    // Parse the result - the workflow returns a Response.json()
+    const result = await workflowResponse.json()
 
     console.log(`[API] Workflow completed: ${result.status}`)
 
