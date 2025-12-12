@@ -224,10 +224,12 @@ export async function verifyFixAndCaptureAfter(
   console.log(`[Step 2] Waiting 3s for HMR to apply changes...`)
   await new Promise((resolve) => setTimeout(resolve, 3000))
 
-  // Clear d3k screenshots AND metadata files via MCP server API
-  // CRITICAL: The MCP server runs in a SEPARATE sandbox from the dev server!
-  // We must call the MCP server's HTTP API to clear its files, not the dev sandbox's filesystem.
-  console.log(`[Step 2] Clearing d3k screenshots AND metadata files via MCP API...`)
+  // Record timestamp BEFORE navigation to filter for only NEW screenshots/metadata
+  // This is more reliable than clearing files, which may not work if npm package doesn't support metadata clearing
+  const afterCaptureTimestamp = Date.now()
+  console.log(`[Step 2] Timestamp before navigation: ${afterCaptureTimestamp}`)
+
+  // Also try to clear via MCP API (may not clear metadata if using older npm package)
   const mcpBaseUrl = mcpUrl.replace(/\/mcp$/, "")
   try {
     const clearResponse = await fetch(`${mcpBaseUrl}/api/screenshots/clear`, {
@@ -273,9 +275,14 @@ export async function verifyFixAndCaptureAfter(
     await new Promise((resolve) => setTimeout(resolve, 5000))
   }
 
-  // Fetch fresh d3k artifacts
-  console.log(`[Step 2] Fetching after-fix d3k artifacts...`)
-  const afterArtifacts = await fetchAndUploadD3kArtifacts(sandbox, mcpUrl, `${projectName}-after`)
+  // Fetch fresh d3k artifacts - only use files captured AFTER our timestamp
+  console.log(`[Step 2] Fetching after-fix d3k artifacts (filtering for timestamp > ${afterCaptureTimestamp})...`)
+  const afterArtifacts = await fetchAndUploadD3kArtifacts(
+    sandbox,
+    mcpUrl,
+    `${projectName}-after`,
+    afterCaptureTimestamp
+  )
 
   // Extract after CLS score
   let afterClsScore = 0
@@ -465,11 +472,13 @@ export async function saveReportToBlob(
 
 /**
  * Fetch d3k artifacts (screenshots, metadata, logs) from sandbox
+ * @param minTimestamp - Optional: only include screenshots with timestamp > this value (for filtering "after" captures)
  */
 async function fetchAndUploadD3kArtifacts(
   sandbox: Sandbox,
   mcpUrl: string,
-  projectName: string
+  projectName: string,
+  minTimestamp?: number
 ): Promise<{
   clsScreenshots: Array<{ label: string; blobUrl: string; timestamp: number }>
   screencastSessionId: string | null
@@ -548,8 +557,26 @@ async function fetchAndUploadD3kArtifacts(
       // Upload screenshots to blob storage
       // Take up to 20 screenshots to capture loading sequences and CLS animation
       if (screenshotFiles.length > 0) {
-        console.log(`[D3k Artifacts] Uploading ${screenshotFiles.length} screenshots...`)
-        const recentScreenshots = screenshotFiles.slice(-20)
+        // Filter by minTimestamp if provided (for "after" captures)
+        let filesToProcess = screenshotFiles
+        if (minTimestamp) {
+          filesToProcess = screenshotFiles.filter((filename) => {
+            const timestampMatch = filename.match(/^(\d{4}-\d{2}-\d{2}T[\d-]+Z)/)
+            if (timestampMatch) {
+              const fileTimestamp = new Date(
+                timestampMatch[1].replace(/-(\d{2})-(\d{2})-(\d{3})Z/, ":$1:$2.$3Z")
+              ).getTime()
+              return fileTimestamp > minTimestamp
+            }
+            return false // Exclude files without parseable timestamps
+          })
+          console.log(
+            `[D3k Artifacts] Filtered ${screenshotFiles.length} -> ${filesToProcess.length} screenshots (minTimestamp: ${minTimestamp})`
+          )
+        }
+
+        console.log(`[D3k Artifacts] Uploading ${filesToProcess.length} screenshots...`)
+        const recentScreenshots = filesToProcess.slice(-20)
         for (const filename of recentScreenshots) {
           try {
             const imageResponse = await fetch(`${baseUrl}/api/screenshots/${filename}`)
