@@ -10,8 +10,10 @@ import { Sandbox } from "@vercel/sandbox"
 import { createGateway, generateText, stepCountIs, tool } from "ai"
 import { z } from "zod"
 import { createD3kSandbox as createD3kSandboxUtil } from "@/lib/cloud/d3k-sandbox"
-import { workflowLog } from "@/lib/workflow-logger"
 import type { WorkflowReport } from "@/types"
+
+// Note: Can't use workflowLog from lib - workflows can't import fs modules
+const workflowLog = console.log
 
 // ============================================================
 // Type definitions for step return values

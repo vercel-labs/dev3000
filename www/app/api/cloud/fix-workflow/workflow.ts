@@ -11,7 +11,8 @@
  * Step 4: Create GitHub PR and cleanup sandbox
  */
 
-import { workflowLog } from "@/lib/workflow-logger"
+// Note: Can't use workflowLog here - workflows can't import fs modules
+const workflowLog = console.log
 
 // Types for data passed between steps
 interface SandboxSetupResult {
