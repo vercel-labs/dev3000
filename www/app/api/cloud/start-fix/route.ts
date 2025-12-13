@@ -38,6 +38,11 @@ export async function POST(request: Request) {
   let runTimestamp: string | undefined
 
   try {
+    // Check for test bypass token (allows testing without browser auth)
+    const testBypassToken = request.headers.get("x-test-bypass-token")
+    const isTestMode =
+      testBypassToken === process.env.WORKFLOW_TEST_BYPASS_TOKEN && process.env.WORKFLOW_TEST_BYPASS_TOKEN
+
     // Get user's access token from cookies or Authorization header
     const { cookies: getCookies } = await import("next/headers")
     const cookieStore = await getCookies()
@@ -51,11 +56,15 @@ export async function POST(request: Request) {
       }
     }
 
-    if (!accessToken) {
+    if (!accessToken && !isTestMode) {
       return Response.json(
         { success: false, error: "Not authenticated. Please sign in to use workflows." },
         { status: 401, headers: corsHeaders }
       )
+    }
+
+    if (isTestMode) {
+      workflowLog("[Start Fix] Running in TEST MODE with bypass token")
     }
 
     // Clear workflow log file at start of new workflow
@@ -67,7 +76,7 @@ export async function POST(request: Request) {
 
     const body = await request.json()
     const { devUrl, repoOwner, repoName, baseBranch, bypassToken, repoUrl, repoBranch } = body
-    userId = body.userId
+    userId = body.userId || (isTestMode ? "test-user" : undefined)
     projectName = body.projectName
 
     workflowLog("[Start Fix] Starting cloud fix workflow...")
