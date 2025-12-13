@@ -934,7 +934,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                     </AlertDescription>
                   </Alert>
                 )}
-                {workflowResult && (
+                {workflowResult && workflowStatus.includes("completed successfully") && (
                   <div className="space-y-3">
                     {workflowResult.blobUrl && workflowResult.runId && (
                       <Alert className="bg-green-50 border-green-200">
@@ -966,7 +966,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                     )}
                   </div>
                 )}
-                {workflowResult && (
+                {workflowResult && workflowStatus.includes("completed successfully") && (
                   <button
                     type="button"
                     onClick={() => {
