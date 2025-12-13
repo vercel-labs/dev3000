@@ -707,6 +707,24 @@ export class CDPMonitor {
       maxDepth: 32
     })
     this.debugLog("CDP domains enabled successfully")
+
+    // Set viewport for headless mode to ensure consistent CLS measurements
+    // Without this, headless Chrome defaults to 800x600 which can cause
+    // different layout behavior than typical desktop viewports
+    if (this.headless) {
+      this.debugLog("Setting viewport for headless mode (1920x1080)")
+      try {
+        await this.sendCDPCommand("Emulation.setDeviceMetricsOverride", {
+          width: 1920,
+          height: 1080,
+          deviceScaleFactor: 1,
+          mobile: false
+        })
+        this.logger("browser", "[CDP] Set viewport to 1920x1080 for headless mode")
+      } catch (error) {
+        this.debugLog(`Failed to set viewport: ${error}`)
+      }
+    }
   }
 
   private setupEventHandlers(): void {
