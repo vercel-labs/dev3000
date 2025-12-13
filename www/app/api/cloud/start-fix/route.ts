@@ -38,7 +38,7 @@ export async function POST(request: Request) {
   let runTimestamp: string | undefined
 
   try {
-    // Check for test bypass token (allows testing without browser auth)
+    // Check for test bypass token (allows testing without browser auth via CLI)
     const testBypassToken = request.headers.get("x-test-bypass-token")
     const isTestMode =
       testBypassToken === process.env.WORKFLOW_TEST_BYPASS_TOKEN && process.env.WORKFLOW_TEST_BYPASS_TOKEN
