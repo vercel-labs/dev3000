@@ -2022,6 +2022,11 @@ export async function executeBrowserAction({
                     cdpResult = await sendCDPCommand(ws, messageId++, "Page.navigate", { url: params.url })
                     break
 
+                  case "reload":
+                    // Use CDP Page.reload for reliable page refresh that triggers CLS capture
+                    cdpResult = await sendCDPCommand(ws, messageId++, "Page.reload", {})
+                    break
+
                   case "screenshot":
                     ws.close()
                     resolve({

@@ -138,16 +138,20 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
 
     // Clone the repository
     const gitArgs = ["clone"]
+    const repoUrlWithGit = repoUrl.endsWith(".git") ? repoUrl : `${repoUrl}.git`
+    const isCommitSha = /^[0-9a-f]{40}$/i.test(branch)
 
-    // Add depth for faster cloning
-    gitArgs.push("--depth", "1")
-
-    // Add revision if it's a commit SHA (40 characters)
-    if (branch && branch.length === 40) {
-      gitArgs.push("--revision", branch)
+    if (!isCommitSha) {
+      // Shallow clone and target the requested branch when we're not pinning a commit
+      gitArgs.push("--depth", "1")
+      if (branch) {
+        gitArgs.push("--branch", branch)
+      }
+    } else if (debug) {
+      console.log("  ⚠️ Provided branch is a commit SHA - performing full clone to allow checkout")
     }
 
-    gitArgs.push(`${repoUrl}.git`, sandboxCwd)
+    gitArgs.push(repoUrlWithGit, sandboxCwd)
 
     const gitClone = await runCommandWithLogs(sandbox, {
       cmd: "git",
@@ -161,9 +165,9 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
       throw new Error(`Git clone failed with exit code: ${gitClone.exitCode}. Error: ${gitClone.stderr}`)
     }
 
-    // If branch is a branch name (not a commit SHA), checkout the branch
-    if (branch && branch.length !== 40) {
-      if (debug) console.log(`  🔀 Checking out branch: ${branch}`)
+    // Ensure we are on the requested branch or commit (commit SHA requires checkout after full clone)
+    if (branch) {
+      if (debug) console.log(`  🔀 Checking out ref: ${branch}`)
       const gitCheckout = await runCommandWithLogs(sandbox, {
         cmd: "git",
         args: ["checkout", branch],
