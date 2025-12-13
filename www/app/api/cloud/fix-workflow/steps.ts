@@ -129,10 +129,12 @@ export async function agentFixLoopStep(
   await new Promise((resolve) => setTimeout(resolve, 2000))
 
   // Now reload the page to trigger fresh CLS capture
-  // Use evaluate with location.reload() since there's no native "reload" action
-  const reloadCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"evaluate","params":{"expression":"location.reload()"}}}}'`
+  // Use native CDP Page.reload action for reliable page refresh
+  const reloadCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"reload"}}}'`
   const reloadResult = await runSandboxCommand(sandbox, "bash", ["-c", reloadCmd])
-  workflowLog(`[Agent] Reload via location.reload() result: exit=${reloadResult.exitCode}, stdout=${reloadResult.stdout.substring(0, 200)}`)
+  workflowLog(
+    `[Agent] Page.reload result: exit=${reloadResult.exitCode}, stdout=${reloadResult.stdout.substring(0, 200)}`
+  )
   workflowLog("[Agent] Waiting for CLS to be captured...")
   await new Promise((resolve) => setTimeout(resolve, 8000)) // 8 seconds for CLS to be detected
 
@@ -253,7 +255,7 @@ This navigates the page fresh to get accurate measurements.`,
         await runSandboxCommand(sandbox, "bash", ["-c", navCmd])
         await new Promise((resolve) => setTimeout(resolve, 1000))
 
-        const reloadCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"evaluate","params":{"expression":"location.reload()"}}}}' `
+        const reloadCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"reload"}}}'`
         await runSandboxCommand(sandbox, "bash", ["-c", reloadCmd])
 
         await new Promise((resolve) => setTimeout(resolve, 5000))
