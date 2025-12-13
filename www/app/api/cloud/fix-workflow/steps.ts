@@ -520,6 +520,12 @@ async function fetchClsData(
     // Store the full logs
     result.d3kLogs = logsResult.stdout || ""
 
+    // Log diagnostic info about the log file
+    workflowLog(`[fetchClsData] Log file size: ${result.d3kLogs.length} chars`)
+    // Show last 500 chars of logs for debugging
+    const logTail = result.d3kLogs.slice(-500)
+    workflowLog(`[fetchClsData] Log tail: ${logTail.replace(/\n/g, "\\n").substring(0, 300)}...`)
+
     // CRITICAL: Use matchAll and get the LAST match, not the first!
     // The log file accumulates multiple CLS measurements over time.
     // We need the most recent one to see if fixes worked.
