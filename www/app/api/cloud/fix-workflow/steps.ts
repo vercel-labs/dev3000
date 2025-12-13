@@ -119,8 +119,9 @@ export async function agentFixLoopStep(
   workflowLog("[Agent] Forcing page reload to capture final CLS...")
   const D3K_MCP_PORT = 3684
 
-  // First navigate to the devUrl (in case we're not there)
-  const navCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"navigate","params":{"url":"${devUrl}"}}}}'`
+  // First navigate to localhost (NOT the public devUrl!) so CLS capture works
+  // The screencast-manager only captures for localhost:3000, not the public sb-xxx.vercel.run URL
+  const navCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"navigate","params":{"url":"http://localhost:3000"}}}}'`
   const navResult = await runSandboxCommand(sandbox, "bash", ["-c", navCmd])
   workflowLog(
     `[Agent] Navigate to devUrl result: exit=${navResult.exitCode}, stdout=${navResult.stdout.substring(0, 200)}`
@@ -246,10 +247,9 @@ This navigates the page fresh to get accurate measurements.`,
         workflowLog(`[diagnose] Running: ${reason}`)
 
         // Reload the page to trigger fresh CLS capture
-        // NOTE: We use location.reload() instead of navigating to about:blank and back.
-        // Navigating FROM about:blank TO localhost fails because d3k's URL check sees
-        // about:blank (the old URL) when navigation starts and skips CLS capture.
-        const navCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"navigate","params":{"url":"${devUrl}"}}}}'`
+        // NOTE: Navigate to localhost:3000, not the public devUrl!
+        // The screencast-manager only captures CLS for localhost:3000, not sb-xxx.vercel.run
+        const navCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"navigate","params":{"url":"http://localhost:3000"}}}}'`
         await runSandboxCommand(sandbox, "bash", ["-c", navCmd])
         await new Promise((resolve) => setTimeout(resolve, 1000))
 
