@@ -935,34 +935,24 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                   </Alert>
                 )}
                 {workflowResult && workflowStatus.includes("completed successfully") && (
-                  <div className="space-y-3">
+                  <div className="space-y-2">
                     {workflowResult.blobUrl && workflowResult.runId && (
-                      <Alert className="bg-green-50 border-green-200">
-                        <AlertTitle className="text-green-900">Fix Proposal Generated</AlertTitle>
-                        <AlertDescription>
-                          <Link
-                            href={`/workflows/${workflowResult.runId}/report`}
-                            className="text-primary hover:underline"
-                          >
-                            View Report
-                          </Link>
-                        </AlertDescription>
-                      </Alert>
+                      <Link
+                        href={`/workflows/${workflowResult.runId}/report`}
+                        className="block w-full px-4 py-2 bg-green-50 border border-green-200 rounded-md text-green-900 hover:bg-green-100 text-center"
+                      >
+                        View Analysis Report →
+                      </Link>
                     )}
                     {workflowResult.pr?.prUrl && (
-                      <Alert className="bg-green-50 border-green-200">
-                        <AlertTitle className="text-green-900">GitHub PR Created</AlertTitle>
-                        <AlertDescription>
-                          <a
-                            href={workflowResult.pr.prUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-primary hover:underline"
-                          >
-                            View Pull Request
-                          </a>
-                        </AlertDescription>
-                      </Alert>
+                      <a
+                        href={workflowResult.pr.prUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block w-full px-4 py-2 bg-blue-50 border border-blue-200 rounded-md text-blue-900 hover:bg-blue-100 text-center"
+                      >
+                        View GitHub PR →
+                      </a>
                     )}
                   </div>
                 )}
