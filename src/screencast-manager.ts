@@ -117,12 +117,15 @@ export class ScreencastManager {
     // }
 
     // Navigation started - check URL before capturing
-    // Note: Page.frameStartedNavigating fires earlier than Page.frameStartedLoading
-    if (message.method === "Page.frameStartedNavigating") {
-      this.captureTrigger = "navigation"
-      this.checkUrlAndStartCapture()
-    } else if (message.method === "Page.frameStartedLoading") {
+    // Page.frameStartedLoading fires at the start of navigation
+    // Page.frameNavigated fires after the frame navigates (including reloads)
+    if (message.method === "Page.frameStartedLoading") {
       this.captureTrigger = "load"
+      this.checkUrlAndStartCapture()
+    } else if (message.method === "Page.frameNavigated") {
+      // Page.frameNavigated fires for both navigations and reloads
+      // This is essential for capturing CLS after Page.reload()
+      this.captureTrigger = "navigation"
       this.checkUrlAndStartCapture()
     }
 
