@@ -62,30 +62,62 @@ export class ScreencastManager {
       return
     }
 
-    try {
-      this.ws = new WebSocket(this.cdpUrl)
+    return new Promise((resolve, reject) => {
+      try {
+        this.ws = new WebSocket(this.cdpUrl)
+        let pageEnableId: number
+        let runtimeEnableId: number
+        let pageEnabled = false
+        let runtimeEnabled = false
 
-      this.ws.on("open", () => {
-        // Enable Page domain to receive navigation events
-        this.send("Page.enable", {})
-        // Enable Runtime domain for URL checking
-        this.send("Runtime.enable", {})
-      })
+        const checkReady = () => {
+          if (pageEnabled && runtimeEnabled) {
+            resolve()
+          }
+        }
 
-      this.ws.on("message", (data) => {
-        this.handleMessage(JSON.parse(data.toString()))
-      })
+        this.ws.on("open", () => {
+          // Enable Page domain to receive navigation events
+          pageEnableId = this.messageId++
+          this.send("Page.enable", {}, pageEnableId)
+          // Enable Runtime domain for URL checking
+          runtimeEnableId = this.messageId++
+          this.send("Runtime.enable", {}, runtimeEnableId)
+        })
 
-      this.ws.on("error", () => {
+        this.ws.on("message", (data) => {
+          const message = JSON.parse(data.toString())
+          // Check for enable confirmations
+          if (message.id === pageEnableId) {
+            pageEnabled = true
+            checkReady()
+          } else if (message.id === runtimeEnableId) {
+            runtimeEnabled = true
+            checkReady()
+          }
+          this.handleMessage(message)
+        })
+
+        this.ws.on("error", () => {
+          // Silently handle errors
+          reject(new Error("WebSocket error"))
+        })
+
+        this.ws.on("close", () => {
+          this.ws = null
+        })
+
+        // Timeout after 5 seconds
+        setTimeout(() => {
+          if (!pageEnabled || !runtimeEnabled) {
+            resolve() // Resolve anyway to not block startup
+          }
+        }, 5000)
+      } catch (error) {
         // Silently handle errors
-      })
-
-      this.ws.on("close", () => {
-        this.ws = null
-      })
-    } catch {
-      // Silently handle errors
-    }
+        reject(error)
+      }
+    })
   }
 
   /**
