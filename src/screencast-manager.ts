@@ -154,8 +154,11 @@ export class ScreencastManager {
       )
 
       // Wait for response (hacky but works for now)
+      let handled = false
       const checkResponse = (message: { id?: number; result?: { result?: { value?: string } } }): void => {
+        if (handled) return
         if (message.id === evalId && message.result?.result?.value) {
+          handled = true
           const url = message.result.result.value
           // this.logFn(`[CDP] Current URL: ${url}`)
 
@@ -181,10 +184,16 @@ export class ScreencastManager {
       if (this.ws) {
         this.ws.on("message", responseHandler)
 
-        // Timeout after 500ms
+        // Timeout after 500ms - fall back to capturing anyway
         setTimeout(() => {
           if (this.ws) {
             this.ws.off("message", responseHandler)
+            // IMPORTANT: If URL check times out (e.g., during page reload when context is destroyed),
+            // start capture anyway to ensure we don't miss CLS measurements
+            if (!handled) {
+              handled = true
+              this.onNavigationStart()
+            }
           }
         }, 500)
       }
