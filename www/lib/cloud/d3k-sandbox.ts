@@ -377,10 +377,10 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     }
     console.log("  🔍 ===== END CHROMIUM DIAGNOSTIC TEST =====")
 
-    // Install d3k globally from GitHub release (viewport fix for consistent CLS)
+    // Install d3k globally from GitHub release (mobile viewport for realistic CLS)
     // TODO: Revert to "dev3000" once v0.0.128 is published to npm
     const d3kTarballUrl =
-      "https://github.com/vercel-labs/dev3000/releases/download/v0.0.127-canary-viewport2/dev3000-0.0.127-canary.tgz"
+      "https://github.com/vercel-labs/dev3000/releases/download/v0.0.127-canary-mobile-viewport/dev3000-0.0.127-canary.tgz"
     if (debug) console.log(`  📦 Installing d3k globally from GitHub release: ${d3kTarballUrl}`)
     const d3kInstallResult = await runCommandWithLogs(sandbox, {
       cmd: "pnpm",

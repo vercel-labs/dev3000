@@ -709,18 +709,19 @@ export class CDPMonitor {
     this.debugLog("CDP domains enabled successfully")
 
     // Set viewport for headless mode to ensure consistent CLS measurements
-    // Without this, headless Chrome defaults to 800x600 which can cause
-    // different layout behavior than typical desktop viewports
+    // Use mobile viewport (412x915 - Pixel 7) since CLS issues are most
+    // impactful on mobile and this produces more realistic test results.
+    // Without this, headless Chrome defaults to 800x600.
     if (this.headless) {
-      this.debugLog("Setting viewport for headless mode (1920x1080)")
+      this.debugLog("Setting viewport for headless mode (412x915 mobile)")
       try {
         await this.sendCDPCommand("Emulation.setDeviceMetricsOverride", {
-          width: 1920,
-          height: 1080,
-          deviceScaleFactor: 1,
-          mobile: false
+          width: 412,
+          height: 915,
+          deviceScaleFactor: 2.625,
+          mobile: true
         })
-        this.logger("browser", "[CDP] Set viewport to 1920x1080 for headless mode")
+        this.logger("browser", "[CDP] Set viewport to 412x915 (mobile) for headless mode")
       } catch (error) {
         this.debugLog(`Failed to set viewport: ${error}`)
       }
