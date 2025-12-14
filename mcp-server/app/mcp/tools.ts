@@ -197,7 +197,10 @@ function calculateErrorPriority(
   }
 
   // Count occurrences of similar errors
-  const errorPattern = errorLine.replace(/\d+/g, "\\d+").substring(0, 100)
+  // Strip ANSI escape codes before constructing regex pattern (fixes #74)
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escape codes require control characters
+  const cleanLine = errorLine.replace(/\x1b\[[0-9;]*m/g, "")
+  const errorPattern = cleanLine.replace(/\d+/g, "\\d+").substring(0, 100)
   const occurrences = allErrors.filter((e) => new RegExp(errorPattern).test(e)).length
   if (occurrences > 1) {
     score += (occurrences - 1) * 50
