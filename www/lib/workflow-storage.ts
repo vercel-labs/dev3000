@@ -44,11 +44,25 @@ export async function listWorkflowRuns(userId: string): Promise<WorkflowRun[]> {
 
   const { blobs } = await list({ prefix })
 
+  // Debug: log what blobs were found (helps diagnose ghost/stale blob issues)
+  if (blobs.length > 0) {
+    console.log(
+      `[Workflow Storage] Found ${blobs.length} blob(s) for prefix "${prefix}": ${blobs.map((b) => b.pathname).join(", ")}`
+    )
+  }
+
   // Fetch and parse each blob
   const runs = await Promise.all(
     blobs.map(async (blob) => {
       try {
         const response = await fetch(blob.url)
+        // Check for non-OK responses (404, 403, etc return HTML error pages)
+        if (!response.ok) {
+          console.error(
+            `[Workflow Storage] HTTP ${response.status} fetching ${blob.url} (content-type: ${response.headers.get("content-type")})`
+          )
+          return null
+        }
         const run: WorkflowRun = await response.json()
         return run
       } catch (error) {
