@@ -116,8 +116,17 @@ execute_browser_action({
   }
 })
 
-// Wait for page to load (2-3 seconds)
-// Then click "Start Workflow" button
+// IMPORTANT: Wait 15-20 seconds for the project details to load from Vercel API
+// The modal needs to fetch teams, projects, and branches before showing the Start button
+// You can poll for readiness:
+execute_browser_action({
+  action: "evaluate",
+  params: {
+    expression: "document.body.innerHTML.includes('Start Workflow')"
+  }
+})
+
+// Once the above returns true, click "Start Workflow" button
 execute_browser_action({
   action: "evaluate",
   params: {
