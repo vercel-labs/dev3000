@@ -392,28 +392,41 @@ No layout shifts detected in logs. Either:
     })
   }
 
-  const systemPrompt = `You are a CLS fix specialist. Your job is simple:
+  const systemPrompt = `You are a CLS fix specialist. Fix the layout shift issue efficiently.
 
-1. **diagnose** - See current CLS score and which elements shifted
-2. **Find the code** - Use globSearch/grepSearch/readFile to find the components
-3. **Fix it** - Use writeFile to fix the layout shift
-4. **Verify** - Run diagnose again to confirm CLS improved
+## CRITICAL: You MUST write a fix!
+Your goal is to WRITE CODE that fixes the CLS issue, not just analyze it.
+You have limited steps - be efficient and focused.
 
-## CLS Fix Patterns
-- Elements shifting right: Add fixed width/margin from initial render
-- Elements shifting down: Reserve space with min-height or skeleton
-- Delayed content: Use visibility:hidden instead of conditional rendering
-- Images: Add explicit width/height
+## Workflow (4-6 steps max):
+1. **diagnose** - See what's shifting (1 step)
+2. **Find code** - Search for the shifting element in code (1-2 steps)
+3. **writeFile** - FIX THE CODE (1 step) ← THIS IS REQUIRED!
+4. **diagnose** - Verify fix worked (1 step)
 
-## Key Rule
-ALWAYS run diagnose after making changes to verify they worked!
-Keep iterating until CLS is ≤0.1 (GOOD).
+## CLS Fix Patterns (use these!):
+- Conditional rendering causing shift → Use \`visibility: hidden\` instead of \`return null\`
+- Delayed content appearing → Reserve space with min-height or fixed dimensions
+- Elements shifting down → Add height/min-height from initial render
+- Images without dimensions → Add explicit width/height
+
+## Example Fix:
+BEFORE (causes CLS):
+\`\`\`tsx
+if (!show) return null
+return <div style={{height: '200px'}}>Content</div>
+\`\`\`
+
+AFTER (no CLS):
+\`\`\`tsx
+return <div style={{height: '200px', visibility: show ? 'visible' : 'hidden'}}>Content</div>
+\`\`\`
 
 ## Current Status
 Before CLS: ${beforeCls?.toFixed(4) || "unknown"} (${beforeGrade || "unknown"})
 Target: CLS ≤ 0.1 (GOOD)
 
-Start by running diagnose to see the current state.`
+Start with diagnose, then QUICKLY find and fix the code. Do not over-analyze!`
 
   const { text, steps } = await generateText({
     model,
@@ -422,7 +435,7 @@ Start by running diagnose to see the current state.`
 
 Start with diagnose to see what's shifting, then fix it.`,
     tools,
-    stopWhen: stepCountIs(10) // Reduced for debugging - increase when things work
+    stopWhen: stepCountIs(15) // Enough for: diagnose + find(2) + read + write + diagnose + buffer
   })
 
   workflowLog(`[Agent] Completed in ${steps.length} steps`)
