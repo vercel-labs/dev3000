@@ -141,10 +141,10 @@ export async function agentFixLoopStep(
   // Get final CLS measurement
   const finalCls = await fetchClsData(sandbox, mcpUrl, `${projectName}-after`)
 
-  // Get git diff
+  // Get git diff (exclude package.json which gets modified by sandbox initialization)
   const diffResult = await runSandboxCommand(sandbox, "sh", [
     "-c",
-    "cd /vercel/sandbox && git diff --no-color 2>/dev/null || echo ''"
+    "cd /vercel/sandbox && git diff --no-color -- . ':!package.json' ':!package-lock.json' ':!pnpm-lock.yaml' 2>/dev/null || echo ''"
   ])
   const gitDiff = diffResult.stdout.trim() || null
   const hasChanges = !!gitDiff && gitDiff.length > 0
