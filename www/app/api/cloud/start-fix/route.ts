@@ -159,6 +159,7 @@ export async function POST(request: Request) {
         projectName,
         timestamp: runTimestamp,
         status: "done",
+        completedAt: new Date().toISOString(),
         reportBlobUrl: result.blobUrl,
         prUrl: result.pr?.prUrl,
         beforeScreenshotUrl: result.beforeScreenshotUrl || undefined
@@ -191,6 +192,7 @@ export async function POST(request: Request) {
         projectName,
         timestamp: runTimestamp,
         status: "failure",
+        completedAt: new Date().toISOString(),
         error: error instanceof Error ? error.message : String(error)
       }).catch((err) => workflowError("[Start Fix] Failed to save error metadata:", err))
       workflowLog(`[Start Fix] Updated workflow run metadata to failure: ${runId}`)

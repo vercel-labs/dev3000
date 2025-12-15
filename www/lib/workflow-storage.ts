@@ -8,6 +8,7 @@ export interface WorkflowRun {
   status: "running" | "done" | "failure"
   currentStep?: string // Current step being executed (for live progress)
   stepNumber?: number // 0-4 to show progress (0=sandbox, 1=logs, 2=ai, 3=upload, 4=pr)
+  completedAt?: string // ISO timestamp when workflow finished (for duration calc)
   reportBlobUrl?: string
   prUrl?: string
   error?: string

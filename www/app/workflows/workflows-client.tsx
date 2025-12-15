@@ -38,6 +38,18 @@ const fetcher = async (url: string) => {
   return data.runs as WorkflowRun[]
 }
 
+function formatDuration(start: Date, end: Date): string {
+  const diffMs = end.getTime() - start.getTime()
+  const diffSec = Math.floor(diffMs / 1000)
+  const minutes = Math.floor(diffSec / 60)
+  const seconds = diffSec % 60
+
+  if (minutes > 0) {
+    return `${minutes}m ${seconds}s`
+  }
+  return `${seconds}s`
+}
+
 export default function WorkflowsClient({ user, initialRuns }: WorkflowsClientProps) {
   const [isSigningOut, setIsSigningOut] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -204,6 +216,7 @@ export default function WorkflowsClient({ user, initialRuns }: WorkflowsClientPr
                     <TableHead>Project ({runs.length})</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Timestamp</TableHead>
+                    <TableHead>Duration</TableHead>
                     <TableHead>Report</TableHead>
                     <TableHead>PR</TableHead>
                   </TableRow>
@@ -244,6 +257,15 @@ export default function WorkflowsClient({ user, initialRuns }: WorkflowsClientPr
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         {new Date(run.timestamp).toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {run.completedAt ? (
+                          formatDuration(new Date(run.timestamp), new Date(run.completedAt))
+                        ) : run.status === "running" ? (
+                          <span className="text-blue-600">Running...</span>
+                        ) : (
+                          "-"
+                        )}
                       </TableCell>
                       <TableCell>
                         {run.reportBlobUrl ? (
