@@ -129,16 +129,22 @@ export async function POST(request: Request) {
 
     // Save workflow run metadata NOW that we have the Vercel runId
     if (userId && projectName && runId) {
-      await saveWorkflowRun({
-        id: runId,
-        userId,
-        projectName,
-        timestamp: runTimestamp,
-        status: "running",
-        currentStep: "Step 1: Initializing sandbox...",
-        stepNumber: 1
-      })
-      workflowLog(`[Start Fix] Saved workflow run metadata (running): ${runId}`)
+      try {
+        await saveWorkflowRun({
+          id: runId,
+          userId,
+          projectName,
+          timestamp: runTimestamp,
+          status: "running",
+          currentStep: "Step 1: Initializing sandbox...",
+          stepNumber: 1
+        })
+        workflowLog(`[Start Fix] Saved workflow run metadata (running): ${runId}`)
+      } catch (saveError) {
+        workflowLog(`[Start Fix] ERROR saving workflow metadata: ${saveError}`)
+      }
+    } else {
+      workflowLog(`[Start Fix] SKIPPING save - missing: userId=${!!userId}, projectName=${!!projectName}, runId=${!!runId}`)
     }
 
     // Wait for workflow to complete and get the Response
