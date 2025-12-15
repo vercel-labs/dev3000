@@ -124,6 +124,8 @@ export async function POST(request: Request) {
     runTimestamp = new Date().toISOString()
 
     workflowLog(`[Start Fix] Workflow started with Vercel runId: ${runId}`)
+    workflowLog(`[Start Fix] Debug - userId: ${userId}, projectName: ${projectName}, runId: ${runId}`)
+    workflowLog(`[Start Fix] Debug - run object keys: ${Object.keys(run).join(", ")}`)
 
     // Save workflow run metadata NOW that we have the Vercel runId
     if (userId && projectName && runId) {
