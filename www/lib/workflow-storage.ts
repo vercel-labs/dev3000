@@ -1,4 +1,4 @@
-import { del, list, put } from "@vercel/blob"
+import { del, head, list, put } from "@vercel/blob"
 
 export interface WorkflowRun {
   id: string
@@ -52,17 +52,49 @@ export async function listWorkflowRuns(userId: string): Promise<WorkflowRun[]> {
   }
 
   // Fetch and parse each blob
+  // Note: Use head() first to verify blob exists, then fetch with special headers
+  // to avoid Vercel Security Checkpoint when fetching from serverless functions
   const runs = await Promise.all(
     blobs.map(async (blob) => {
       try {
-        const response = await fetch(blob.url)
-        // Check for non-OK responses (404, 403, etc return HTML error pages)
+        // First verify blob exists using authenticated head() call
+        const blobInfo = await head(blob.url)
+        if (!blobInfo) {
+          console.error(`[Workflow Storage] Blob not found: ${blob.url}`)
+          return null
+        }
+
+        // Check content type from head - if not JSON, skip it
+        if (!blobInfo.contentType?.includes("application/json")) {
+          console.error(`[Workflow Storage] Unexpected content type ${blobInfo.contentType} for ${blob.url}`)
+          return null
+        }
+
+        // Use downloadUrl if available (authenticated), otherwise fall back to public url
+        const fetchUrl = blobInfo.downloadUrl || blob.url
+        const response = await fetch(fetchUrl, {
+          headers: {
+            Accept: "application/json"
+          }
+        })
+
+        // Check for non-OK responses (security checkpoint returns 200 but HTML)
         if (!response.ok) {
           console.error(
-            `[Workflow Storage] HTTP ${response.status} fetching ${blob.url} (content-type: ${response.headers.get("content-type")})`
+            `[Workflow Storage] HTTP ${response.status} fetching ${fetchUrl} (content-type: ${response.headers.get("content-type")})`
           )
           return null
         }
+
+        // Double-check response is actually JSON (security checkpoint returns text/html)
+        const contentType = response.headers.get("content-type")
+        if (contentType && !contentType.includes("application/json")) {
+          console.error(
+            `[Workflow Storage] Response is not JSON: ${contentType} for ${fetchUrl} (likely Vercel Security Checkpoint)`
+          )
+          return null
+        }
+
         const run: WorkflowRun = await response.json()
         return run
       } catch (error) {
@@ -97,7 +129,23 @@ export async function getPublicWorkflowRun(runId: string): Promise<WorkflowRun |
   // Search through all workflow blobs to find the matching run ID
   for (const blob of blobs) {
     try {
-      const response = await fetch(blob.url)
+      // Use authenticated head() call to verify blob and get downloadUrl
+      const blobInfo = await head(blob.url)
+      if (!blobInfo || !blobInfo.contentType?.includes("application/json")) {
+        continue
+      }
+
+      const fetchUrl = blobInfo.downloadUrl || blob.url
+      const response = await fetch(fetchUrl, {
+        headers: { Accept: "application/json" }
+      })
+
+      // Skip if response is HTML (security checkpoint)
+      const contentType = response.headers.get("content-type")
+      if (contentType && !contentType.includes("application/json")) {
+        continue
+      }
+
       const run: WorkflowRun = await response.json()
       if (run.id === runId && run.isPublic) {
         return run
