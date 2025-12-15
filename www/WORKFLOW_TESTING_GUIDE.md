@@ -503,135 +503,115 @@ This section documents the expected CLS behavior for the primary test project us
 ### Test Project Details
 
 - **Repository**: https://github.com/elsigh/tailwind-plus-transmit
-- **CLS-causing component**: `src/components/DelayedSidebar.tsx`
+- **CLS-causing component**: `src/app/(main)/layout.tsx` (`LayoutCLSBlock` function)
 - **Vercel Project ID**: `prj_0ITI5UHrH4Kp92G5OLEMrlgVX08p`
 - **Team**: `team_aMS4jZUlMooxyr9VgMKJf9uT` (elsigh-pro)
 
 ### How the CLS Issue Works
 
-The `DelayedSidebar` component intentionally causes CLS by:
-1. Rendering with `width: 0` initially
-2. After 400ms delay, setting `width: auto`
-3. This sudden width change pushes content, causing layout shift
+The `LayoutCLSBlock` component intentionally causes massive CLS by:
+1. Rendering `null` initially (no space reserved)
+2. After 500ms delay, rendering a 200vh tall promotional banner
+3. This pushes ALL page content down, causing massive layout shift
 
 ```tsx
-// src/components/DelayedSidebar.tsx
-<header
-  className="bg-slate-50 lg:fixed lg:inset-y-0 lg:left-0 lg:flex lg:items-start lg:overflow-y-auto xl:w-120"
-  style={{
-    width: show ? 'auto' : '0',  // CLS trigger: width changes after 400ms
-    transition: 'none',
-  }}
->
-```
+// src/app/(main)/layout.tsx - LayoutCLSBlock function
+function LayoutCLSBlock() {
+  const [show, setShow] = useState(false)
 
-### CRITICAL: Viewport-Dependent CLS Behavior
+  useEffect(() => {
+    const timer = setTimeout(() => setShow(true), 500)  // 500ms delay
+    return () => clearTimeout(timer)
+  }, [])
 
-The CLS issue is **viewport-dependent** due to the `lg:fixed` Tailwind class:
+  if (!show) return null  // ❌ No space reserved - causes CLS!
 
-| Viewport Width | CSS Applied | Sidebar Position | CLS Impact |
-|----------------|-------------|------------------|------------|
-| **≥1024px** (lg breakpoint) | `lg:fixed` | Fixed position | **No CLS** (fixed elements don't affect flow) |
-| **<1024px** | No `lg:fixed` | In document flow | **High CLS** (width change shifts content) |
-
-### Expected CLS Measurements
-
-Based on testing (December 2024):
-
-| Environment | Viewport | CLS Score | Grade |
-|-------------|----------|-----------|-------|
-| **Local (Macbook Pro)** | 1512x857 @ 2x DPR | ~0.0001 | GOOD |
-| **Cloud (headless 1920x1080)** | 1920x1080 @ 1x DPR | ~0.027 | GOOD |
-| **Cloud (headless 800x600)** | 800x600 @ 1x DPR | ~0.47 | POOR |
-| **Cloud (headless 412x915 mobile)** | 412x915 @ 2.625x DPR | ~0.32 | POOR |
-
-### Local Development Viewport Reference
-
-When testing locally on a Macbook Pro 14" (or similar Retina display):
-
-```json
-{
-  "width": 1512,
-  "height": 857,
-  "devicePixelRatio": 2,
-  "screenWidth": 1512,
-  "screenHeight": 982
+  return (
+    <div style={{ height: '200vh' }} className="bg-gradient-to-b from-red-600 ...">
+      {/* 200vh tall promotional banner */}
+    </div>
+  )
 }
 ```
 
-**Note**: The 1512px viewport is above the `lg:` breakpoint (1024px), so `lg:fixed` applies and CLS is negligible.
+**Key**: This test case causes CLS at **ALL viewport sizes** (no viewport-dependent behavior).
 
-### Cloud Headless Viewport Configuration
+### Local Baseline Test Results (December 2024)
 
-The cloud sandbox uses headless Chrome. The viewport is configured in `src/cdp-monitor.ts`:
+Tested on Macbook Pro 14" with d3k v0.0.126:
 
-```typescript
-// Current configuration (as of Dec 2024):
-if (this.headless) {
-  await this.sendCDPCommand("Emulation.setDeviceMetricsOverride", {
-    width: 1920,    // or 412 for mobile
-    height: 1080,   // or 915 for mobile
-    deviceScaleFactor: 1,  // or 2.625 for mobile
-    mobile: false   // or true for mobile
-  })
-}
-```
+| Metric | Before Fix | After Fix |
+|--------|------------|-----------|
+| **CLS Score** | 0.3175 | 0 |
+| **Grade** | POOR | GOOD |
+| **Shift Count** | 1 | 0 |
+| **Shift Time** | ~588-659ms | N/A |
 
-### Matching Local and Cloud
-
-To reproduce local CLS measurements in the cloud, update `src/cdp-monitor.ts` to use:
-
-```typescript
-// Match Macbook Pro viewport:
-{
-  width: 1512,
-  height: 857,
-  deviceScaleFactor: 2,
-  mobile: false
-}
-```
-
-**Important**: At viewports ≥1024px, CLS will be negligible (~0.0001) because the sidebar is fixed-positioned. This is correct behavior but means there's nothing for the agent to "fix".
-
-### Testing CLS Fixes
-
-To test the CLS fix workflow effectively, you need a viewport where CLS actually occurs:
-
-**Option 1: Use viewport <1024px**
-- Configure headless Chrome to use viewport width <1024px (e.g., 800x600 or mobile viewport)
-- This triggers the CLS issue, giving the agent something to fix
-- CLS should drop from ~0.32-0.47 to ~0.05-0.10 after fix
-
-**Option 2: Modify the test case**
-- Remove `lg:fixed` from DelayedSidebar to cause CLS at all viewport sizes
-- Or create a new test case that causes CLS regardless of viewport
+**Viewport used**: 1512x857 @ 2x devicePixelRatio
 
 ### The Fix
 
-The standard fix for this CLS issue is to use `visibility: hidden` instead of `width: 0`:
+The standard fix is to use `visibility: hidden` instead of conditional rendering:
 
 ```tsx
 // BEFORE (causes CLS):
-style={{ width: show ? 'auto' : '0' }}
+if (!show) return null
+return (
+  <div style={{ height: '200vh' }} ...>
 
 // AFTER (no CLS):
-style={{ visibility: show ? 'visible' : 'hidden' }}
+return (
+  <div style={{ height: '200vh', visibility: show ? 'visible' : 'hidden' }} ...>
 ```
 
-This reserves space for the sidebar from initial render, preventing content shift.
+This reserves the 200vh space from initial render, preventing content shift when the banner appears.
+
+### Agent Prompt (Cloud Workflow)
+
+The cloud workflow uses this system prompt for the AI agent:
+
+```
+You are a CLS fix specialist. Your job is simple:
+
+1. **diagnose** - See current CLS score and which elements shifted
+2. **Find the code** - Use globSearch/grepSearch/readFile to find the components
+3. **Fix it** - Use writeFile to fix the layout shift
+4. **Verify** - Run diagnose again to confirm CLS improved
+
+## CLS Fix Patterns
+- Elements shifting right: Add fixed width/margin from initial render
+- Elements shifting down: Reserve space with min-height or skeleton
+- Delayed content: Use visibility:hidden instead of conditional rendering
+- Images: Add explicit width/height
+
+## Key Rule
+ALWAYS run diagnose after making changes to verify they worked!
+Keep iterating until CLS is ≤0.1 (GOOD).
+```
+
+### Expected Cloud Workflow Results
+
+The cloud workflow should achieve results similar to local testing:
+
+| Metric | Expected Before | Expected After | Target |
+|--------|-----------------|----------------|--------|
+| **CLS Score** | ~0.32 | ~0 | ≤0.1 (GOOD) |
+| **Result** | POOR | GOOD | improved |
 
 ### Verification Commands
 
 ```bash
 # Check CLS in local d3k logs:
-grep -E "CLS|layout shift" ~/.d3k/logs/tailwind-plus-transmit-*.log | tail -10
+grep -E "Detected.*CLS" ~/.d3k/logs/tailwind-plus-transmit-*.log | tail -5
 
-# Expected output (local at 1512px):
-# [CDP] Detected 1 layout shifts (CLS: 0.0001)
+# Expected output BEFORE fix:
+# [CDP] Detected 1 layout shifts (CLS: 0.3175)
 
-# Expected output (cloud at <1024px):
-# [CDP] Detected N layout shifts (CLS: 0.32)  # Before fix
-# [CDP] Detected N layout shifts (CLS: 0.05)  # After fix
+# Expected output AFTER fix:
+# (No "Detected" lines - CLS is 0)
+
+# Check CLS observer is running:
+grep "CLS observer installed" ~/.d3k/logs/tailwind-plus-transmit-*.log | tail -3
 ```
 
 ### Cloud Tarball Configuration
@@ -643,8 +623,27 @@ The d3k tarball used in cloud sandboxes is configured in `www/lib/cloud/d3k-sand
 const d3kTarballUrl = "https://github.com/vercel-labs/dev3000/releases/download/v0.0.127-canary-viewport2/dev3000-0.0.127-canary.tgz"
 ```
 
-When updating viewport configuration:
-1. Update `src/cdp-monitor.ts` with new viewport
+### Cloud Headless Viewport
+
+The cloud sandbox uses headless Chrome with viewport configured in `src/cdp-monitor.ts`:
+
+```typescript
+if (this.headless) {
+  await this.sendCDPCommand("Emulation.setDeviceMetricsOverride", {
+    width: 1920,
+    height: 1080,
+    deviceScaleFactor: 1,
+    mobile: false
+  })
+}
+```
+
+**Note**: The new test case (LayoutCLSBlock) causes CLS at all viewport sizes, so viewport configuration is less critical than before. However, matching the local viewport (1512x857) would give the most comparable results.
+
+### Updating the Tarball
+
+When updating viewport or other d3k configuration:
+1. Update `src/cdp-monitor.ts` with changes
 2. Run `pnpm build` (MUST build before packing!)
 3. Run `pnpm pack --pack-destination /tmp/package`
 4. Create GitHub release with the tarball
