@@ -263,43 +263,60 @@ This navigates the page fresh to get accurate measurements.`,
         // Read d3k logs for CLS data
         const logsResult = await runSandboxCommand(sandbox, "sh", [
           "-c",
-          'for log in /home/vercel-sandbox/.d3k/logs/*.log; do [ -f "$log" ] && tail -100 "$log" || true; done 2>/dev/null'
+          'for log in /home/vercel-sandbox/.d3k/logs/*.log; do [ -f "$log" ] && tail -200 "$log" || true; done 2>/dev/null'
         ])
         const logs = logsResult.stdout || ""
 
-        // Parse CLS - CRITICAL: Get the LAST match, not the first!
-        // The logs accumulate multiple CLS measurements over time.
-        const clsMatches = [...logs.matchAll(/\[CDP\] Detected (\d+) layout shifts \(CLS: ([\d.]+)\)/g)]
-        const clsMatch = clsMatches.length > 0 ? clsMatches[clsMatches.length - 1] : null
-        if (clsMatch) {
-          const shiftCount = parseInt(clsMatch[1], 10)
-          const clsScore = parseFloat(clsMatch[2])
-          const grade = clsScore <= 0.1 ? "GOOD" : clsScore <= 0.25 ? "NEEDS-IMPROVEMENT" : "POOR"
+        // Use timestamp-based logic to get CLS from the MOST RECENT page load
+        // When CLS = 0, there's no "Detected" line - only "CLS observer installed"
+        const observerMatches = [...logs.matchAll(/\[(\d{2}:\d{2}:\d{2}\.\d{3})\].*CLS observer installed/g)]
+        const clsMatches = [
+          ...logs.matchAll(/\[(\d{2}:\d{2}:\d{2}\.\d{3})\].*\[CDP\] Detected (\d+) layout shifts \(CLS: ([\d.]+)\)/g)
+        ]
 
-          // Parse shift details
-          const shiftDetailRegex = /\[CDP\]\s+-\s+<(\w+)>\s+shifted\s+(.+)/g
-          const shifts: string[] = []
-          for (const match of logs.matchAll(shiftDetailRegex)) {
-            shifts.push(`  - <${match[1]}> shifted ${match[2]}`)
-          }
+        if (observerMatches.length > 0) {
+          const lastObserverTime = observerMatches[observerMatches.length - 1][1]
+          const clsAfterObserver = clsMatches.filter((m) => m[1] > lastObserverTime)
 
-          const emoji = clsScore <= 0.1 ? "✅" : clsScore <= 0.25 ? "⚠️" : "❌"
+          if (clsAfterObserver.length > 0) {
+            // CLS detected after page load
+            const lastCls = clsAfterObserver[clsAfterObserver.length - 1]
+            const shiftCount = parseInt(lastCls[2], 10)
+            const clsScore = parseFloat(lastCls[3])
+            const grade = clsScore <= 0.1 ? "GOOD" : clsScore <= 0.25 ? "NEEDS-IMPROVEMENT" : "POOR"
 
-          return `## CLS Diagnosis ${emoji}
+            // Parse shift details from recent logs
+            const shiftDetailRegex = /\[CDP\]\s+-\s+<(\w+)>\s+shifted\s+(.+)/g
+            const shifts: string[] = []
+            for (const match of logs.matchAll(shiftDetailRegex)) {
+              shifts.push(`  - <${match[1]}> shifted ${match[2]}`)
+            }
+
+            const emoji = clsScore <= 0.1 ? "✅" : clsScore <= 0.25 ? "⚠️" : "❌"
+
+            return `## CLS Diagnosis ${emoji}
 
 **Score: ${clsScore.toFixed(4)}** (${grade})
 **Shifts: ${shiftCount}**
 ${shifts.length > 0 ? `\n### Elements that shifted:\n${shifts.join("\n")}` : ""}
 
 ${clsScore <= 0.1 ? "🎉 CLS is GOOD! Fix successful!" : `⚠️ CLS still ${grade}. Before was: ${beforeCls?.toFixed(4) || "unknown"}`}`
+          } else {
+            // No CLS detected after observer = CLS is 0!
+            return `## CLS Diagnosis ✅
+
+**Score: 0.0000** (GOOD)
+**Shifts: 0**
+
+🎉 CLS is GOOD! No layout shifts detected. Fix successful!`
+          }
         }
 
+        // Fallback: no observer found
         return `## CLS Diagnosis
 
-No layout shifts detected in logs. Either:
-1. CLS is 0 (good!)
-2. Page didn't fully load
-3. Try diagnose again`
+No CLS observer found in logs. Page may not have fully loaded.
+Try running diagnose again.`
       }
     }),
 
@@ -539,21 +556,50 @@ async function fetchClsData(
     const logTail = result.d3kLogs.slice(-500)
     workflowLog(`[fetchClsData] Log tail: ${logTail.replace(/\n/g, "\\n").substring(0, 300)}...`)
 
-    // CRITICAL: Use matchAll and get the LAST match, not the first!
-    // The log file accumulates multiple CLS measurements over time.
-    // We need the most recent one to see if fixes worked.
-    const clsMatches = [...logsResult.stdout.matchAll(/\[CDP\] Detected (\d+) layout shifts \(CLS: ([\d.]+)\)/g)]
-    workflowLog(`[fetchClsData] Found ${clsMatches.length} CLS entries in logs`)
-    if (clsMatches.length > 0) {
-      // Log all CLS values found
-      const allValues = clsMatches.map((m, i) => `#${i + 1}: ${m[2]}`).join(", ")
-      workflowLog(`[fetchClsData] All CLS values: ${allValues}`)
-    }
-    const clsMatch = clsMatches.length > 0 ? clsMatches[clsMatches.length - 1] : null
-    if (clsMatch) {
-      result.clsScore = parseFloat(clsMatch[2])
+    // CRITICAL: We need to determine CLS from the MOST RECENT page load.
+    // When CLS = 0, there's NO "Detected X layout shifts" line - only "CLS observer installed".
+    // So we need to:
+    // 1. Find the LAST "CLS observer installed" entry (marks a new page load)
+    // 2. Check if there are any "Detected X layout shifts" entries AFTER it
+    // 3. If none, CLS = 0 (no shifts detected on that page load)
+
+    const logs = logsResult.stdout
+
+    // Find all timestamps for "CLS observer installed" (marks new page loads)
+    const observerMatches = [...logs.matchAll(/\[(\d{2}:\d{2}:\d{2}\.\d{3})\].*CLS observer installed/g)]
+    // Find all CLS detection entries with timestamps
+    const clsMatches = [
+      ...logs.matchAll(/\[(\d{2}:\d{2}:\d{2}\.\d{3})\].*\[CDP\] Detected (\d+) layout shifts \(CLS: ([\d.]+)\)/g)
+    ]
+
+    workflowLog(`[fetchClsData] Found ${observerMatches.length} observer installs, ${clsMatches.length} CLS entries`)
+
+    if (observerMatches.length > 0) {
+      const lastObserverTime = observerMatches[observerMatches.length - 1][1]
+      workflowLog(`[fetchClsData] Last observer install at: ${lastObserverTime}`)
+
+      // Find CLS entries AFTER the last observer install
+      const clsAfterObserver = clsMatches.filter((m) => m[1] > lastObserverTime)
+      workflowLog(`[fetchClsData] CLS entries after last observer: ${clsAfterObserver.length}`)
+
+      if (clsAfterObserver.length > 0) {
+        // Use the LAST CLS entry after the observer
+        const lastCls = clsAfterObserver[clsAfterObserver.length - 1]
+        result.clsScore = parseFloat(lastCls[3])
+        result.clsGrade = result.clsScore <= 0.1 ? "good" : result.clsScore <= 0.25 ? "needs-improvement" : "poor"
+        workflowLog(`[fetchClsData] CLS after observer: ${result.clsScore} (${result.clsGrade})`)
+      } else {
+        // No CLS detected after observer = CLS is 0!
+        result.clsScore = 0
+        result.clsGrade = "good"
+        workflowLog("[fetchClsData] No CLS detected after observer install = CLS is 0! (GOOD)")
+      }
+    } else if (clsMatches.length > 0) {
+      // Fallback: no observer found, use last CLS entry
+      const lastCls = clsMatches[clsMatches.length - 1]
+      result.clsScore = parseFloat(lastCls[3])
       result.clsGrade = result.clsScore <= 0.1 ? "good" : result.clsScore <= 0.25 ? "needs-improvement" : "poor"
-      workflowLog(`[fetchClsData] Using LAST CLS: ${result.clsScore} (${result.clsGrade})`)
+      workflowLog(`[fetchClsData] Fallback - using LAST CLS: ${result.clsScore} (${result.clsGrade})`)
     } else {
       workflowLog("[fetchClsData] No CLS entries found in logs!")
     }
