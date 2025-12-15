@@ -935,38 +935,42 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                   </Alert>
                 )}
                 {workflowResult && workflowStatus.includes("completed successfully") && (
-                  <div className="space-y-2">
-                    {workflowResult.blobUrl && workflowResult.runId && (
-                      <Link
-                        href={`/workflows/${workflowResult.runId}/report`}
-                        className="block w-full px-4 py-2 bg-green-50 border border-green-200 rounded-md text-green-900 hover:bg-green-100 text-center"
+                  <div className="space-y-3">
+                    {/* Main action buttons - side by side */}
+                    <div className="flex gap-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onClose()
+                          router.push("/workflows")
+                        }}
+                        className="flex-1 px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
                       >
-                        View Analysis Report →
-                      </Link>
-                    )}
+                        Done
+                      </button>
+                      {workflowResult.blobUrl && workflowResult.runId && (
+                        <Link
+                          href={`/workflows/${workflowResult.runId}/report`}
+                          className="flex-1 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 text-center"
+                        >
+                          View Report
+                        </Link>
+                      )}
+                    </div>
+                    {/* PR link as secondary text link */}
                     {workflowResult.pr?.prUrl && (
-                      <a
-                        href={workflowResult.pr.prUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="block w-full px-4 py-2 bg-blue-50 border border-blue-200 rounded-md text-blue-900 hover:bg-blue-100 text-center"
-                      >
-                        View GitHub PR →
-                      </a>
+                      <div className="text-center">
+                        <a
+                          href={workflowResult.pr.prUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-blue-600 hover:underline"
+                        >
+                          View GitHub PR →
+                        </a>
+                      </div>
                     )}
                   </div>
-                )}
-                {workflowResult && workflowStatus.includes("completed successfully") && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onClose()
-                      router.push("/workflows")
-                    }}
-                    className="w-full px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                  >
-                    Done
-                  </button>
                 )}
               </div>
             </div>
