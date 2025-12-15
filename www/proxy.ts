@@ -10,7 +10,7 @@ interface RefreshTokenResponse {
   refresh_token: string
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   // Only check auth on protected routes
   const protectedPaths = ["/workflows"]
   const isProtectedPath = protectedPaths.some((path) => request.nextUrl.pathname.startsWith(path))
