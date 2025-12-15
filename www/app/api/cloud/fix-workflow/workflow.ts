@@ -42,39 +42,32 @@ export async function cloudFixWorkflow(params: {
   repoBranch?: string
   projectName: string
   vercelOidcToken?: string
-  runId?: string
-  userId?: string
 }) {
   "use workflow"
 
-  const { projectName, repoUrl, repoBranch = "main", vercelOidcToken, runId, userId } = params
-  const timestamp = new Date().toISOString()
-  const reportId = runId || crypto.randomUUID()
+  const { projectName, repoUrl, repoBranch = "main", vercelOidcToken } = params
+  // Generate a reportId for blob naming (separate from Vercel's wrun_xxx ID)
+  const reportId = crypto.randomUUID()
 
   workflowLog("[Workflow] Starting cloud fix workflow...")
   workflowLog(`[Workflow] Project: ${projectName}, Repo: ${repoUrl}`)
 
-  // Helper to update progress
-  const updateProgress = async (step: number, message: string, sandboxUrl?: string) => {
-    if (runId && userId) {
-      await updateWorkflowProgressStep(userId, runId, projectName, timestamp, step, message, sandboxUrl)
-    }
-  }
+  // Note: Progress updates are now handled by the parent route via Vercel's workflow status
+  // The workflow's wrun_xxx ID is not available inside the workflow itself
 
   // ============================================================
   // STEP 1: Init - Create sandbox and capture before state
   // ============================================================
-  await updateProgress(1, "Initializing sandbox...")
+  workflowLog("[Workflow] Step 1: Initializing sandbox...")
 
   const initResult = await initSandbox(repoUrl, repoBranch, projectName, reportId, vercelOidcToken)
 
-  await updateProgress(1, `Init complete - CLS: ${initResult.beforeCls?.toFixed(4) || "N/A"}`, initResult.devUrl)
   workflowLog(`[Workflow] Sandbox: ${initResult.sandboxId}, CLS: ${initResult.beforeCls}`)
 
   // ============================================================
   // STEP 2: Agent Fix Loop - Single step with internal iteration
   // ============================================================
-  await updateProgress(2, "Agent fixing CLS issues...")
+  workflowLog("[Workflow] Step 2: Agent fixing CLS issues...")
 
   const fixResult = await agentFixLoop(
     initResult.sandboxId,
@@ -88,7 +81,6 @@ export async function cloudFixWorkflow(params: {
     reportId
   )
 
-  await updateProgress(2, `Fix complete - Status: ${fixResult.status}`)
   workflowLog(`[Workflow] Result: ${fixResult.status}, After CLS: ${fixResult.afterCls}`)
 
   // Cleanup sandbox
@@ -149,18 +141,4 @@ async function cleanupSandbox(sandboxId: string): Promise<void> {
   "use step"
   const steps = await import("./steps")
   return steps.cleanupSandbox(sandboxId)
-}
-
-async function updateWorkflowProgressStep(
-  userId: string,
-  runId: string,
-  projectName: string,
-  timestamp: string,
-  stepNumber: number,
-  currentStep: string,
-  sandboxUrl?: string
-) {
-  "use step"
-  const { updateWorkflowProgress } = await import("@/lib/workflow-storage")
-  return updateWorkflowProgress(userId, runId, projectName, timestamp, stepNumber, currentStep, sandboxUrl)
 }

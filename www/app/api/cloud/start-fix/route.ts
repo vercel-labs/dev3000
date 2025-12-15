@@ -1,4 +1,3 @@
-import { randomUUID } from "crypto"
 import { start } from "workflow/api"
 import { clearWorkflowLog, workflowError, workflowLog } from "@/lib/workflow-logger"
 import { saveWorkflowRun } from "@/lib/workflow-storage"
@@ -107,10 +106,27 @@ export async function POST(request: Request) {
       )
     }
 
-    // Save workflow run metadata at start if userId and projectName provided
-    if (userId && projectName) {
-      runId = randomUUID()
-      runTimestamp = new Date().toISOString()
+    // V2 workflow params - simplified "local-style" architecture
+    // Note: runId will be set after start() returns the Vercel workflow ID
+    const workflowParams = {
+      repoUrl,
+      repoBranch: repoBranch || baseBranch || "main",
+      projectName,
+      vercelOidcToken
+    }
+
+    // Start the workflow first - this gives us the Vercel runId
+    const run = await start(cloudFixWorkflow, [workflowParams])
+
+    // Get the Vercel workflow runId (e.g., "wrun_01KCHS4GR00...")
+    // @ts-expect-error - run.id exists at runtime but may not be in types
+    runId = run.id as string
+    runTimestamp = new Date().toISOString()
+
+    workflowLog(`[Start Fix] Workflow started with Vercel runId: ${runId}`)
+
+    // Save workflow run metadata NOW that we have the Vercel runId
+    if (userId && projectName && runId) {
       await saveWorkflowRun({
         id: runId,
         userId,
@@ -122,20 +138,6 @@ export async function POST(request: Request) {
       })
       workflowLog(`[Start Fix] Saved workflow run metadata (running): ${runId}`)
     }
-
-    // V2 workflow params - simplified "local-style" architecture
-    const workflowParams = {
-      repoUrl,
-      repoBranch: repoBranch || baseBranch || "main",
-      projectName,
-      vercelOidcToken,
-      runId,
-      userId
-    }
-
-    const run = await start(cloudFixWorkflow, [workflowParams])
-
-    workflowLog(`[Start Fix] Workflow started, waiting for completion...`)
 
     // Wait for workflow to complete and get the Response
     const workflowResponse = await run.returnValue

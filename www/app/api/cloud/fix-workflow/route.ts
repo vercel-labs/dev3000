@@ -8,7 +8,7 @@ import { cloudFixWorkflow } from "./workflow"
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { projectName, repoUrl, repoBranch, runId, userId } = body
+    const { projectName, repoUrl, repoBranch } = body
 
     // Validate required fields
     if (!projectName) {
@@ -25,9 +25,7 @@ export async function POST(request: Request) {
       {
         repoUrl,
         repoBranch: repoBranch || "main",
-        projectName,
-        runId,
-        userId
+        projectName
       }
     ])
 
