@@ -496,6 +496,163 @@ echo "4. Use dev3000 MCP to test in browser:"
 echo "   execute_browser_action({ action: 'navigate', params: { url: '$DEV_URL' } })"
 ```
 
+## CLS Test Case Reference: tailwind-plus-transmit
+
+This section documents the expected CLS behavior for the primary test project used in cloud workflow testing.
+
+### Test Project Details
+
+- **Repository**: https://github.com/elsigh/tailwind-plus-transmit
+- **CLS-causing component**: `src/components/DelayedSidebar.tsx`
+- **Vercel Project ID**: `prj_0ITI5UHrH4Kp92G5OLEMrlgVX08p`
+- **Team**: `team_aMS4jZUlMooxyr9VgMKJf9uT` (elsigh-pro)
+
+### How the CLS Issue Works
+
+The `DelayedSidebar` component intentionally causes CLS by:
+1. Rendering with `width: 0` initially
+2. After 400ms delay, setting `width: auto`
+3. This sudden width change pushes content, causing layout shift
+
+```tsx
+// src/components/DelayedSidebar.tsx
+<header
+  className="bg-slate-50 lg:fixed lg:inset-y-0 lg:left-0 lg:flex lg:items-start lg:overflow-y-auto xl:w-120"
+  style={{
+    width: show ? 'auto' : '0',  // CLS trigger: width changes after 400ms
+    transition: 'none',
+  }}
+>
+```
+
+### CRITICAL: Viewport-Dependent CLS Behavior
+
+The CLS issue is **viewport-dependent** due to the `lg:fixed` Tailwind class:
+
+| Viewport Width | CSS Applied | Sidebar Position | CLS Impact |
+|----------------|-------------|------------------|------------|
+| **≥1024px** (lg breakpoint) | `lg:fixed` | Fixed position | **No CLS** (fixed elements don't affect flow) |
+| **<1024px** | No `lg:fixed` | In document flow | **High CLS** (width change shifts content) |
+
+### Expected CLS Measurements
+
+Based on testing (December 2024):
+
+| Environment | Viewport | CLS Score | Grade |
+|-------------|----------|-----------|-------|
+| **Local (Macbook Pro)** | 1512x857 @ 2x DPR | ~0.0001 | GOOD |
+| **Cloud (headless 1920x1080)** | 1920x1080 @ 1x DPR | ~0.027 | GOOD |
+| **Cloud (headless 800x600)** | 800x600 @ 1x DPR | ~0.47 | POOR |
+| **Cloud (headless 412x915 mobile)** | 412x915 @ 2.625x DPR | ~0.32 | POOR |
+
+### Local Development Viewport Reference
+
+When testing locally on a Macbook Pro 14" (or similar Retina display):
+
+```json
+{
+  "width": 1512,
+  "height": 857,
+  "devicePixelRatio": 2,
+  "screenWidth": 1512,
+  "screenHeight": 982
+}
+```
+
+**Note**: The 1512px viewport is above the `lg:` breakpoint (1024px), so `lg:fixed` applies and CLS is negligible.
+
+### Cloud Headless Viewport Configuration
+
+The cloud sandbox uses headless Chrome. The viewport is configured in `src/cdp-monitor.ts`:
+
+```typescript
+// Current configuration (as of Dec 2024):
+if (this.headless) {
+  await this.sendCDPCommand("Emulation.setDeviceMetricsOverride", {
+    width: 1920,    // or 412 for mobile
+    height: 1080,   // or 915 for mobile
+    deviceScaleFactor: 1,  // or 2.625 for mobile
+    mobile: false   // or true for mobile
+  })
+}
+```
+
+### Matching Local and Cloud
+
+To reproduce local CLS measurements in the cloud, update `src/cdp-monitor.ts` to use:
+
+```typescript
+// Match Macbook Pro viewport:
+{
+  width: 1512,
+  height: 857,
+  deviceScaleFactor: 2,
+  mobile: false
+}
+```
+
+**Important**: At viewports ≥1024px, CLS will be negligible (~0.0001) because the sidebar is fixed-positioned. This is correct behavior but means there's nothing for the agent to "fix".
+
+### Testing CLS Fixes
+
+To test the CLS fix workflow effectively, you need a viewport where CLS actually occurs:
+
+**Option 1: Use viewport <1024px**
+- Configure headless Chrome to use viewport width <1024px (e.g., 800x600 or mobile viewport)
+- This triggers the CLS issue, giving the agent something to fix
+- CLS should drop from ~0.32-0.47 to ~0.05-0.10 after fix
+
+**Option 2: Modify the test case**
+- Remove `lg:fixed` from DelayedSidebar to cause CLS at all viewport sizes
+- Or create a new test case that causes CLS regardless of viewport
+
+### The Fix
+
+The standard fix for this CLS issue is to use `visibility: hidden` instead of `width: 0`:
+
+```tsx
+// BEFORE (causes CLS):
+style={{ width: show ? 'auto' : '0' }}
+
+// AFTER (no CLS):
+style={{ visibility: show ? 'visible' : 'hidden' }}
+```
+
+This reserves space for the sidebar from initial render, preventing content shift.
+
+### Verification Commands
+
+```bash
+# Check CLS in local d3k logs:
+grep -E "CLS|layout shift" ~/.d3k/logs/tailwind-plus-transmit-*.log | tail -10
+
+# Expected output (local at 1512px):
+# [CDP] Detected 1 layout shifts (CLS: 0.0001)
+
+# Expected output (cloud at <1024px):
+# [CDP] Detected N layout shifts (CLS: 0.32)  # Before fix
+# [CDP] Detected N layout shifts (CLS: 0.05)  # After fix
+```
+
+### Cloud Tarball Configuration
+
+The d3k tarball used in cloud sandboxes is configured in `www/lib/cloud/d3k-sandbox.ts`:
+
+```typescript
+// Current tarball (check for latest):
+const d3kTarballUrl = "https://github.com/vercel-labs/dev3000/releases/download/v0.0.127-canary-viewport2/dev3000-0.0.127-canary.tgz"
+```
+
+When updating viewport configuration:
+1. Update `src/cdp-monitor.ts` with new viewport
+2. Run `pnpm build` (MUST build before packing!)
+3. Run `pnpm pack --pack-destination /tmp/package`
+4. Create GitHub release with the tarball
+5. Update `d3k-sandbox.ts` with new tarball URL
+6. Commit and push to deploy
+
+---
+
 ## Summary
 
 **Key Points:**
