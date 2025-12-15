@@ -35,6 +35,7 @@ export async function POST(request: Request) {
   let projectName: string | undefined
   let runId: string | undefined
   let runTimestamp: string | undefined
+  let vercelRunId: string | undefined
 
   try {
     // Check for test bypass token (allows testing without browser auth via CLI)
@@ -119,16 +120,25 @@ export async function POST(request: Request) {
     const run = await start(cloudFixWorkflow, [workflowParams])
 
     // Get the Vercel workflow runId (e.g., "wrun_01KCHS4GR00...")
+    // The SDK may return id at runtime even if not in types
+    // If not available, generate a fallback UUID so we can still track the workflow
     // @ts-expect-error - run.id exists at runtime but may not be in types
-    runId = run.id as string
+    vercelRunId = run.id as string | undefined
+    runId = vercelRunId || `local_${crypto.randomUUID()}`
     runTimestamp = new Date().toISOString()
 
-    workflowLog(`[Start Fix] Workflow started with Vercel runId: ${runId}`)
-    workflowLog(`[Start Fix] Debug - userId: ${userId}, projectName: ${projectName}, runId: ${runId}`)
-    workflowLog(`[Start Fix] Debug - run object keys: ${Object.keys(run).join(", ")}`)
+    // Log the run object structure for debugging (these logs go to Vercel function logs)
+    const runKeys = Object.keys(run)
+    console.log(`[Start Fix] run object keys: ${runKeys.join(", ")}`)
+    console.log(`[Start Fix] Vercel runId from SDK: ${vercelRunId || "undefined"}`)
+    console.log(`[Start Fix] Using runId: ${runId}`)
+    console.log(`[Start Fix] userId: ${userId}, projectName: ${projectName}`)
 
-    // Save workflow run metadata NOW that we have the Vercel runId
-    if (userId && projectName && runId) {
+    workflowLog(`[Start Fix] Workflow started with runId: ${runId}`)
+
+    // Save workflow run metadata NOW - runId is guaranteed (either from SDK or fallback UUID)
+    // userId and projectName are validated above
+    if (userId && projectName) {
       try {
         await saveWorkflowRun({
           id: runId,
@@ -139,12 +149,13 @@ export async function POST(request: Request) {
           currentStep: "Step 1: Initializing sandbox...",
           stepNumber: 1
         })
-        workflowLog(`[Start Fix] Saved workflow run metadata (running): ${runId}`)
+        console.log(`[Start Fix] Saved workflow run metadata (running): ${runId}`)
       } catch (saveError) {
-        workflowLog(`[Start Fix] ERROR saving workflow metadata: ${saveError}`)
+        console.error(`[Start Fix] ERROR saving workflow metadata:`, saveError)
+        // Continue even if save fails - the workflow should still run
       }
     } else {
-      workflowLog(`[Start Fix] SKIPPING save - missing: userId=${!!userId}, projectName=${!!projectName}, runId=${!!runId}`)
+      console.error(`[Start Fix] Cannot save - missing userId (${!!userId}) or projectName (${!!projectName})`)
     }
 
     // Wait for workflow to complete and get the Response
@@ -185,7 +196,13 @@ export async function POST(request: Request) {
         runId,
         blobUrl: result.blobUrl,
         fixProposal: result.fixProposal,
-        pr: result.pr
+        pr: result.pr,
+        // Debug info to verify metadata was saved
+        _debug: {
+          userId,
+          vercelRunId: vercelRunId || null,
+          runIdSource: vercelRunId ? "vercel-sdk" : "fallback-uuid"
+        }
       },
       {
         headers: corsHeaders
