@@ -35,7 +35,6 @@ export async function POST(request: Request) {
   let projectName: string | undefined
   let runId: string | undefined
   let runTimestamp: string | undefined
-  let vercelRunId: string | undefined
 
   try {
     // Check for test bypass token (allows testing without browser auth via CLI)
@@ -107,32 +106,25 @@ export async function POST(request: Request) {
       )
     }
 
+    // Generate runId BEFORE starting workflow (following workflow-builder-template pattern)
+    // The SDK's start() doesn't reliably return an id, so we generate our own
+    runId = `d3k_${crypto.randomUUID()}`
+    runTimestamp = new Date().toISOString()
+
+    console.log(`[Start Fix] Generated runId: ${runId}`)
+    console.log(`[Start Fix] userId: ${userId}, projectName: ${projectName}`)
+
     // V2 workflow params - simplified "local-style" architecture
-    // Note: runId will be set after start() returns the Vercel workflow ID
     const workflowParams = {
       repoUrl,
       repoBranch: repoBranch || baseBranch || "main",
       projectName,
-      vercelOidcToken
+      vercelOidcToken,
+      runId // Pass runId to workflow for tracking
     }
 
-    // Start the workflow first - this gives us the Vercel runId
+    // Start the workflow (fire-and-forget style, we track via our own runId)
     const run = await start(cloudFixWorkflow, [workflowParams])
-
-    // Get the Vercel workflow runId (e.g., "wrun_01KCHS4GR00...")
-    // The SDK may return id at runtime even if not in types
-    // If not available, generate a fallback UUID so we can still track the workflow
-    // @ts-expect-error - run.id exists at runtime but may not be in types
-    vercelRunId = run.id as string | undefined
-    runId = vercelRunId || `local_${crypto.randomUUID()}`
-    runTimestamp = new Date().toISOString()
-
-    // Log the run object structure for debugging (these logs go to Vercel function logs)
-    const runKeys = Object.keys(run)
-    console.log(`[Start Fix] run object keys: ${runKeys.join(", ")}`)
-    console.log(`[Start Fix] Vercel runId from SDK: ${vercelRunId || "undefined"}`)
-    console.log(`[Start Fix] Using runId: ${runId}`)
-    console.log(`[Start Fix] userId: ${userId}, projectName: ${projectName}`)
 
     workflowLog(`[Start Fix] Workflow started with runId: ${runId}`)
 
@@ -200,8 +192,7 @@ export async function POST(request: Request) {
         // Debug info to verify metadata was saved
         _debug: {
           userId,
-          vercelRunId: vercelRunId || null,
-          runIdSource: vercelRunId ? "vercel-sdk" : "fallback-uuid"
+          runIdGenerated: true
         }
       },
       {
