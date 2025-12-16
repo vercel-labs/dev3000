@@ -171,24 +171,6 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
     }
   }, [isOpen, router])
 
-  // Reset stale workflow state when modal opens with completed workflow
-  // This handles the case where user navigates away and back after completing a workflow
-  useEffect(() => {
-    if (isOpen && step === "running" && workflowResult) {
-      // A workflow completed previously - reset for new workflow
-      // Always start fresh from Step 1 (type selection)
-      setStep("type")
-      setSelectedType("")
-      setSelectedTeam(null)
-      setSelectedProject(null)
-      setWorkflowStatus("")
-      setWorkflowResult(null)
-      setActiveRunId(null)
-      setSandboxUrl(null)
-      // Clear URL params to match the reset state
-      router.replace("/workflows/new", { scroll: false })
-    }
-  }, [isOpen, step, workflowResult, router])
 
   // Load teams when needed
   // biome-ignore lint/correctness/useExhaustiveDependencies: loadTeams is stable and doesn't need to be a dependency
