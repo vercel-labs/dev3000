@@ -2,6 +2,39 @@
 
 Quick reference for testing d3k workflows end-to-end with proper monitoring.
 
+## Quick Start (Copy-Paste Ready)
+
+**For Claude: Follow these exact steps every time you test a workflow.**
+
+### Step 1: Get bypass token and construct URL
+```bash
+# Get bypass token
+BYPASS=$(grep WORKFLOW_TEST_BYPASS_TOKEN /Users/elsigh/src/vercel-labs/dev3000/www/.env.local | cut -d'"' -f2)
+echo "URL: http://localhost:3000/workflows/new?type=cloud-fix&team=team_aMS4jZUlMooxyr9VgMKJf9uT&project=prj_0ITI5UHrH4Kp92G5OLEMrlgVX08p&bypass=$BYPASS"
+```
+
+### Step 2: Start log monitoring (background)
+```bash
+vercel logs $(vercel ls --scope team_nLlpyC6REAqxydlFKbrMDlud 2>/dev/null | head -1) --scope team_nLlpyC6REAqxydlFKbrMDlud &
+```
+
+### Step 3: Navigate and click Start Workflow
+```typescript
+// Navigate (use the full URL from Step 1)
+execute_browser_action({ action: "navigate", params: { url: "<FULL_URL_FROM_STEP_1>" }})
+
+// Wait 10 seconds, then click Start Workflow
+execute_browser_action({ action: "evaluate", params: { expression: "Array.from(document.querySelectorAll('button')).find(btn => btn.textContent.includes('Start Workflow'))?.click()" }})
+```
+
+### Step 4: Watch logs for progress
+Look for these in the logs:
+- `[Start Fix] Generated runId: d3k_xxx` - Workflow started with proper ID
+- `[Workflow] Starting cloud fix workflow...` - Workflow running
+- `[Workflow] Result: improved` - Success!
+
+---
+
 ## Architecture Overview
 
 **Important**: Workflows now run in `www` (d3k.dev), not mcp-server.
