@@ -553,7 +553,10 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       console.log("[Start Workflow] Body keys:", Object.keys(body))
       console.log("[Start Workflow] body.repoUrl:", body.repoUrl)
       console.log("[Start Workflow] body.repoOwner:", body.repoOwner)
-      console.log("[Start Workflow] body.githubPat:", body.githubPat ? "SET (length: " + body.githubPat.length + ")" : "NOT SET")
+      console.log(
+        "[Start Workflow] body.githubPat:",
+        body.githubPat ? "SET (length: " + body.githubPat.length + ")" : "NOT SET"
+      )
 
       // Create an AbortController for timeout handling
       const controller = new AbortController()
@@ -564,6 +567,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
         console.log("[Start Workflow] About to stringify body...")
         const bodyString = JSON.stringify(body)
         console.log("[Start Workflow] Body stringified successfully, length:", bodyString.length)
+        console.log("[Start Workflow] FULL BODY STRING:", bodyString)
         console.log("[Start Workflow] Calling fetch with URL:", apiUrl)
 
         // Get access token for Authorization header (needed for cross-origin requests)

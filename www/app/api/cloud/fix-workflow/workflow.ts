@@ -77,6 +77,11 @@ export async function cloudFixWorkflow(params: {
 
   workflowLog("[Workflow] Starting cloud fix workflow...")
   workflowLog(`[Workflow] Project: ${projectName}, Repo: ${repoUrl}`)
+  workflowLog(`[Workflow] Received params:`)
+  workflowLog(`[Workflow]   - githubPat: ${githubPat ? `present (${githubPat.length} chars)` : "NOT PROVIDED"}`)
+  workflowLog(`[Workflow]   - repoOwner: ${repoOwner || "NOT PROVIDED"}`)
+  workflowLog(`[Workflow]   - repoName: ${repoName || "NOT PROVIDED"}`)
+  workflowLog(`[Workflow]   - baseBranch: ${baseBranch}`)
 
   // Note: Progress updates are now handled by the parent route via Vercel's workflow status
   // The workflow's wrun_xxx ID is not available inside the workflow itself
@@ -114,6 +119,14 @@ export async function cloudFixWorkflow(params: {
   // STEP 3: Create PR (only if we have changes and a GitHub PAT)
   // ============================================================
   let prResult: { prUrl: string; prNumber: number; branch: string } | null = null
+
+  // Debug logging for PR creation params
+  workflowLog(`[Workflow] PR creation check:`)
+  workflowLog(`[Workflow]   - gitDiff: ${fixResult.gitDiff ? `present (${fixResult.gitDiff.length} chars)` : "null/empty"}`)
+  workflowLog(`[Workflow]   - githubPat: ${githubPat ? `present (${githubPat.length} chars)` : "NOT PROVIDED"}`)
+  workflowLog(`[Workflow]   - repoOwner: ${repoOwner || "NOT PROVIDED"}`)
+  workflowLog(`[Workflow]   - repoName: ${repoName || "NOT PROVIDED"}`)
+  workflowLog(`[Workflow]   - baseBranch: ${baseBranch}`)
 
   if (fixResult.gitDiff && githubPat && repoOwner && repoName) {
     workflowLog("[Workflow] Step 3: Creating GitHub PR...")
