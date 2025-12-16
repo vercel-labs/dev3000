@@ -182,10 +182,6 @@ export async function POST(request: Request) {
     if (result.pr?.prUrl) {
       workflowLog(`[Start Fix] GitHub PR created: ${result.pr.prUrl}`)
     }
-    // Debug: Log what PR params the workflow received
-    if (result._prParamsReceived) {
-      workflowLog(`[Start Fix] PR params received by workflow: ${JSON.stringify(result._prParamsReceived)}`)
-    }
 
     // Update workflow run metadata with success status (use same timestamp to overwrite)
     if (userId && projectName && runId && runTimestamp) {
@@ -201,8 +197,7 @@ export async function POST(request: Request) {
         prUrl: result.pr?.prUrl,
         prError: result.prError || undefined,
         beforeScreenshotUrl: result.beforeScreenshotUrl || undefined,
-        customPrompt: workflowType === "prompt" ? customPrompt : undefined,
-        prParamsDebug: result._prParamsReceived
+        customPrompt: workflowType === "prompt" ? customPrompt : undefined
       })
       workflowLog(`[Start Fix] Updated workflow run metadata to done: ${runId}`)
     }
@@ -219,8 +214,7 @@ export async function POST(request: Request) {
         // Debug info to verify metadata was saved
         _debug: {
           userId,
-          runIdGenerated: true,
-          prParamsReceived: result._prParamsReceived
+          runIdGenerated: true
         }
       },
       {

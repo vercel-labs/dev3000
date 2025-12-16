@@ -176,18 +176,19 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   useEffect(() => {
     if (isOpen && step === "running" && workflowResult) {
       // A workflow completed previously - reset for new workflow
-      const typeParam = searchParams.get("type")
-      const teamParam = searchParams.get("team")
-      const projectParam = searchParams.get("project")
-      const targetStep: WorkflowStep = !typeParam ? "type" : projectParam ? "options" : teamParam ? "project" : "team"
-
-      setStep(targetStep)
+      // Always start fresh from Step 1 (type selection)
+      setStep("type")
+      setSelectedType("")
+      setSelectedTeam(null)
+      setSelectedProject(null)
       setWorkflowStatus("")
       setWorkflowResult(null)
       setActiveRunId(null)
       setSandboxUrl(null)
+      // Clear URL params to match the reset state
+      router.replace("/workflows/new", { scroll: false })
     }
-  }, [isOpen, step, workflowResult, searchParams])
+  }, [isOpen, step, workflowResult, router])
 
   // Load teams when needed
   // biome-ignore lint/correctness/useExhaustiveDependencies: loadTeams is stable and doesn't need to be a dependency
@@ -1103,10 +1104,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                     <div className="flex gap-3">
                       <button
                         type="button"
-                        onClick={() => {
-                          onClose()
-                          router.push("/workflows")
-                        }}
+                        onClick={onClose}
                         className="flex-1 px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
                       >
                         Done

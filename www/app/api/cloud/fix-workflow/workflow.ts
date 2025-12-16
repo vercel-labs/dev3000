@@ -77,11 +77,6 @@ export async function cloudFixWorkflow(params: {
 
   workflowLog("[Workflow] Starting cloud fix workflow...")
   workflowLog(`[Workflow] Project: ${projectName}, Repo: ${repoUrl}`)
-  workflowLog(`[Workflow] Received params:`)
-  workflowLog(`[Workflow]   - githubPat: ${githubPat ? `present (${githubPat.length} chars)` : "NOT PROVIDED"}`)
-  workflowLog(`[Workflow]   - repoOwner: ${repoOwner || "NOT PROVIDED"}`)
-  workflowLog(`[Workflow]   - repoName: ${repoName || "NOT PROVIDED"}`)
-  workflowLog(`[Workflow]   - baseBranch: ${baseBranch}`)
 
   // Note: Progress updates are now handled by the parent route via Vercel's workflow status
   // The workflow's wrun_xxx ID is not available inside the workflow itself
@@ -120,16 +115,6 @@ export async function cloudFixWorkflow(params: {
   // ============================================================
   let prResult: { prUrl: string; prNumber: number; branch: string } | null = null
   let prError: string | null = null
-
-  // Debug logging for PR creation params
-  workflowLog(`[Workflow] PR creation check:`)
-  workflowLog(
-    `[Workflow]   - gitDiff: ${fixResult.gitDiff ? `present (${fixResult.gitDiff.length} chars)` : "null/empty"}`
-  )
-  workflowLog(`[Workflow]   - githubPat: ${githubPat ? `present (${githubPat.length} chars)` : "NOT PROVIDED"}`)
-  workflowLog(`[Workflow]   - repoOwner: ${repoOwner || "NOT PROVIDED"}`)
-  workflowLog(`[Workflow]   - repoName: ${repoName || "NOT PROVIDED"}`)
-  workflowLog(`[Workflow]   - baseBranch: ${baseBranch}`)
 
   if (fixResult.gitDiff && githubPat && repoOwner && repoName) {
     workflowLog("[Workflow] Step 3: Creating GitHub PR...")
@@ -178,17 +163,7 @@ export async function cloudFixWorkflow(params: {
     beforeCls: fixResult.beforeCls,
     afterCls: fixResult.afterCls,
     pr: prResult,
-    prError,
-    // Debug: show what PR params the workflow received
-    _prParamsReceived: {
-      hasGitDiff: !!fixResult.gitDiff,
-      gitDiffLength: fixResult.gitDiff?.length ?? 0,
-      hasGithubPat: !!githubPat,
-      githubPatLength: githubPat?.length ?? 0,
-      repoOwner: repoOwner ?? null,
-      repoName: repoName ?? null,
-      baseBranch
-    }
+    prError
   })
 }
 

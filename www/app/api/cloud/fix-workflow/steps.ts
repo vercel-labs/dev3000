@@ -724,25 +724,7 @@ export async function createPullRequestStep(
   reportId: string,
   progressContext?: ProgressContext | null
 ): Promise<{ prUrl: string; prNumber: number; branch: string } | { error: string } | null> {
-  // Defensive logging - log immediately on function entry
-  console.log("[PR] === FUNCTION ENTRY ===")
-  console.log(`[PR] sandboxId: ${sandboxId}`)
-  console.log(`[PR] repoOwner: ${repoOwner}`)
-  console.log(`[PR] repoName: ${repoName}`)
-  console.log(`[PR] baseBranch: ${baseBranch}`)
-  console.log(`[PR] reportId: ${reportId}`)
-  console.log(`[PR] beforeCls: ${beforeCls}`)
-  console.log(`[PR] afterCls: ${afterCls}`)
-  console.log(`[PR] githubPat type: ${typeof githubPat}`)
-  console.log(`[PR] githubPat truthy: ${!!githubPat}`)
-  if (githubPat) {
-    console.log(`[PR] githubPat length: ${githubPat.length}`)
-    console.log(`[PR] githubPat prefix: ${githubPat.substring(0, 10)}...`)
-  }
-  console.log("[PR] === END PARAMS ===")
-
   workflowLog(`[PR] Creating PR for ${repoOwner}/${repoName}...`)
-  workflowLog(`[PR] GitHub PAT provided: ${githubPat ? "yes (length: " + githubPat.length + ")" : "NO"}`)
   await updateProgress(progressContext, 5, "Creating GitHub PR...")
 
   try {
