@@ -14,6 +14,7 @@ export interface WorkflowRun {
   completedAt?: string // ISO timestamp when workflow finished (for duration calc)
   reportBlobUrl?: string
   prUrl?: string
+  prError?: string // Error from PR creation step (if any)
   error?: string
   beforeScreenshotUrl?: string
   afterScreenshotUrl?: string

@@ -723,7 +723,7 @@ export async function createPullRequestStep(
   afterCls: number | null,
   reportId: string,
   progressContext?: ProgressContext | null
-): Promise<{ prUrl: string; prNumber: number; branch: string } | null> {
+): Promise<{ prUrl: string; prNumber: number; branch: string } | { error: string } | null> {
   // Defensive logging - log immediately on function entry
   console.log("[PR] === FUNCTION ENTRY ===")
   console.log(`[PR] sandboxId: ${sandboxId}`)
@@ -772,7 +772,7 @@ export async function createPullRequestStep(
     ])
     if (branchResult.exitCode !== 0) {
       workflowLog(`[PR] Failed to create branch: ${branchResult.stderr}`)
-      return null
+      return { error: `Failed to create branch: ${branchResult.stderr || branchResult.stdout}` }
     }
 
     // Stage all changes (excluding package manager lock files which may have been modified)
@@ -804,7 +804,7 @@ Automated CLS fix by d3k
     ])
     if (commitResult.exitCode !== 0) {
       workflowLog(`[PR] Failed to commit: ${commitResult.stderr}`)
-      return null
+      return { error: `Failed to commit: ${commitResult.stderr || commitResult.stdout}` }
     }
 
     // Configure git to use PAT for authentication
@@ -819,7 +819,7 @@ Automated CLS fix by d3k
     ])
     if (pushResult.exitCode !== 0) {
       workflowLog(`[PR] Failed to push: ${pushResult.stderr || pushResult.stdout}`)
-      return null
+      return { error: `Failed to push: ${pushResult.stderr || pushResult.stdout}` }
     }
 
     // Create PR via GitHub API
@@ -860,7 +860,7 @@ The AI agent analyzed the page for layout shifts and applied fixes to reduce CLS
     if (!prResponse.ok) {
       const errorText = await prResponse.text()
       workflowLog(`[PR] GitHub API error: ${prResponse.status} - ${errorText}`)
-      return null
+      return { error: `GitHub API error ${prResponse.status}: ${errorText}` }
     }
 
     const prData = (await prResponse.json()) as { html_url: string; number: number }
@@ -900,7 +900,8 @@ The AI agent analyzed the page for layout shifts and applied fixes to reduce CLS
       branch: branchName
     }
   } catch (err) {
-    workflowLog(`[PR] Error: ${err instanceof Error ? err.message : String(err)}`)
-    return null
+    const errorMsg = err instanceof Error ? err.message : String(err)
+    workflowLog(`[PR] Error: ${errorMsg}`)
+    return { error: `Exception: ${errorMsg}` }
   }
 }

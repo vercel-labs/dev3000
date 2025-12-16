@@ -199,6 +199,7 @@ export async function POST(request: Request) {
         completedAt: new Date().toISOString(),
         reportBlobUrl: result.blobUrl,
         prUrl: result.pr?.prUrl,
+        prError: result.prError || undefined,
         beforeScreenshotUrl: result.beforeScreenshotUrl || undefined,
         customPrompt: workflowType === "prompt" ? customPrompt : undefined,
         prParamsDebug: result._prParamsReceived

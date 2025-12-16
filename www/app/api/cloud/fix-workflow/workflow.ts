@@ -119,6 +119,7 @@ export async function cloudFixWorkflow(params: {
   // STEP 3: Create PR (only if we have changes and a GitHub PAT)
   // ============================================================
   let prResult: { prUrl: string; prNumber: number; branch: string } | null = null
+  let prError: string | null = null
 
   // Debug logging for PR creation params
   workflowLog(`[Workflow] PR creation check:`)
@@ -133,7 +134,7 @@ export async function cloudFixWorkflow(params: {
   if (fixResult.gitDiff && githubPat && repoOwner && repoName) {
     workflowLog("[Workflow] Step 3: Creating GitHub PR...")
 
-    prResult = await createPullRequest(
+    const prStepResult = await createPullRequest(
       initResult.sandboxId,
       githubPat,
       repoOwner,
@@ -146,10 +147,16 @@ export async function cloudFixWorkflow(params: {
       progressContext
     )
 
-    if (prResult) {
+    // Check if result is an error object
+    if (prStepResult && "error" in prStepResult) {
+      prError = (prStepResult as { error: string }).error
+      workflowLog(`[Workflow] PR creation failed: ${prError}`)
+    } else if (prStepResult && "prUrl" in prStepResult) {
+      prResult = prStepResult
       workflowLog(`[Workflow] PR created: ${prResult.prUrl}`)
     } else {
-      workflowLog("[Workflow] PR creation failed or skipped")
+      prError = "Unknown PR creation failure"
+      workflowLog("[Workflow] PR creation failed with unknown error")
     }
   } else {
     if (!fixResult.gitDiff) {
@@ -171,6 +178,7 @@ export async function cloudFixWorkflow(params: {
     beforeCls: fixResult.beforeCls,
     afterCls: fixResult.afterCls,
     pr: prResult,
+    prError,
     // Debug: show what PR params the workflow received
     _prParamsReceived: {
       hasGitDiff: !!fixResult.gitDiff,
@@ -254,7 +262,7 @@ async function createPullRequest(
   afterCls: number | null,
   reportId: string,
   progressContext?: ProgressContext | null
-): Promise<{ prUrl: string; prNumber: number; branch: string } | null> {
+): Promise<{ prUrl: string; prNumber: number; branch: string } | { error: string } | null> {
   "use step"
   const { createPullRequestStep } = await import("./steps")
   return createPullRequestStep(
