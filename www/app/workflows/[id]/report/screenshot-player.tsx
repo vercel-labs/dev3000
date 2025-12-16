@@ -16,11 +16,20 @@ interface ScreenshotPlayerProps {
   autoPlay?: boolean
   fps?: number
   loop?: boolean
+  loopDelayMs?: number // Pause at end before looping (default: 10000ms)
 }
 
-export function ScreenshotPlayer({ screenshots, title, autoPlay = true, fps = 8, loop = true }: ScreenshotPlayerProps) {
+export function ScreenshotPlayer({
+  screenshots,
+  title,
+  autoPlay = true,
+  fps = 8,
+  loop = true,
+  loopDelayMs = 10000
+}: ScreenshotPlayerProps) {
   const [currentFrame, setCurrentFrame] = useState(0)
   const [isPlaying, setIsPlaying] = useState(autoPlay)
+  const [isPausedAtEnd, setIsPausedAtEnd] = useState(false)
 
   // Sort screenshots by timestamp
   const sortedScreenshots = [...screenshots].sort((a, b) => a.timestamp - b.timestamp)
@@ -28,7 +37,11 @@ export function ScreenshotPlayer({ screenshots, title, autoPlay = true, fps = 8,
   const nextFrame = useCallback(() => {
     setCurrentFrame((prev) => {
       if (prev >= sortedScreenshots.length - 1) {
-        if (loop) return 0
+        if (loop) {
+          // Pause at end before looping
+          setIsPausedAtEnd(true)
+          return prev
+        }
         setIsPlaying(false)
         return prev
       }
@@ -45,12 +58,24 @@ export function ScreenshotPlayer({ screenshots, title, autoPlay = true, fps = 8,
     })
   }, [sortedScreenshots.length, loop])
 
+  // Handle loop delay - wait at end then restart
   useEffect(() => {
-    if (!isPlaying || sortedScreenshots.length === 0) return
+    if (!isPausedAtEnd || !isPlaying) return
+
+    const timeout = setTimeout(() => {
+      setCurrentFrame(0)
+      setIsPausedAtEnd(false)
+    }, loopDelayMs)
+
+    return () => clearTimeout(timeout)
+  }, [isPausedAtEnd, isPlaying, loopDelayMs])
+
+  useEffect(() => {
+    if (!isPlaying || sortedScreenshots.length === 0 || isPausedAtEnd) return
 
     const interval = setInterval(nextFrame, 1000 / fps)
     return () => clearInterval(interval)
-  }, [isPlaying, sortedScreenshots.length, fps, nextFrame])
+  }, [isPlaying, sortedScreenshots.length, fps, nextFrame, isPausedAtEnd])
 
   if (sortedScreenshots.length === 0) {
     return <div className="bg-muted/30 rounded-lg p-8 text-center text-muted-foreground">No screenshots available</div>

@@ -171,7 +171,6 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
     }
   }, [isOpen, router])
 
-
   // Load teams when needed
   // biome-ignore lint/correctness/useExhaustiveDependencies: loadTeams is stable and doesn't need to be a dependency
   useEffect(() => {
