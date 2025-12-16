@@ -725,10 +725,13 @@ export async function createPullRequestStep(
   progressContext?: ProgressContext | null
 ): Promise<{ prUrl: string; prNumber: number; branch: string } | null> {
   workflowLog(`[PR] Creating PR for ${repoOwner}/${repoName}...`)
+  workflowLog(`[PR] GitHub PAT provided: ${githubPat ? "yes (length: " + githubPat.length + ")" : "NO"}`)
   await updateProgress(progressContext, 5, "Creating GitHub PR...")
 
   try {
+    workflowLog(`[PR] Getting sandbox ${sandboxId}...`)
     const sandbox = await Sandbox.get({ sandboxId })
+    workflowLog(`[PR] Sandbox status: ${sandbox.status}`)
     if (sandbox.status !== "running") {
       throw new Error(`Sandbox not running: ${sandbox.status}`)
     }
@@ -737,10 +740,12 @@ export async function createPullRequestStep(
     const branchName = `d3k/fix-cls-${Date.now()}`
 
     // Configure git user (required for commits)
-    await runSandboxCommand(sandbox, "sh", [
+    workflowLog(`[PR] Configuring git user...`)
+    const gitConfigResult = await runSandboxCommand(sandbox, "sh", [
       "-c",
       `cd ${SANDBOX_CWD} && git config user.email "d3k-bot@vercel.com" && git config user.name "d3k bot"`
     ])
+    workflowLog(`[PR] Git config result: exit=${gitConfigResult.exitCode}`)
 
     // Create and checkout new branch
     workflowLog(`[PR] Creating branch: ${branchName}`)
