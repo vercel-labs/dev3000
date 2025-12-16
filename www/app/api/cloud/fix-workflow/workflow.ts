@@ -122,7 +122,9 @@ export async function cloudFixWorkflow(params: {
 
   // Debug logging for PR creation params
   workflowLog(`[Workflow] PR creation check:`)
-  workflowLog(`[Workflow]   - gitDiff: ${fixResult.gitDiff ? `present (${fixResult.gitDiff.length} chars)` : "null/empty"}`)
+  workflowLog(
+    `[Workflow]   - gitDiff: ${fixResult.gitDiff ? `present (${fixResult.gitDiff.length} chars)` : "null/empty"}`
+  )
   workflowLog(`[Workflow]   - githubPat: ${githubPat ? `present (${githubPat.length} chars)` : "NOT PROVIDED"}`)
   workflowLog(`[Workflow]   - repoOwner: ${repoOwner || "NOT PROVIDED"}`)
   workflowLog(`[Workflow]   - repoName: ${repoName || "NOT PROVIDED"}`)
@@ -168,7 +170,17 @@ export async function cloudFixWorkflow(params: {
     status: fixResult.status,
     beforeCls: fixResult.beforeCls,
     afterCls: fixResult.afterCls,
-    pr: prResult
+    pr: prResult,
+    // Debug: show what PR params the workflow received
+    _prParamsReceived: {
+      hasGitDiff: !!fixResult.gitDiff,
+      gitDiffLength: fixResult.gitDiff?.length ?? 0,
+      hasGithubPat: !!githubPat,
+      githubPatLength: githubPat?.length ?? 0,
+      repoOwner: repoOwner ?? null,
+      repoName: repoName ?? null,
+      baseBranch
+    }
   })
 }
 
