@@ -107,6 +107,12 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   const [branchesError, setBranchesError] = useState(false)
   const loadedTeamIdRef = useRef<string | null>(null)
 
+  // Check if GitHub repo info is available from project link or deployment metadata
+  const hasGitHubRepoInfo = Boolean(
+    selectedProject?.link?.repo ||
+      selectedProject?.latestDeployments?.[0]?.meta?.githubRepo
+  )
+
   // Restore state from URL whenever searchParams change (after initial load)
   // This handles the case where user navigates via browser back/forward
   useEffect(() => {
@@ -811,7 +817,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                         Automatically create GitHub PR with fixes
                       </Label>
                     </div>
-                    {autoCreatePR && selectedProject?.link?.repo && (
+                    {autoCreatePR && hasGitHubRepoInfo && (
                       <div>
                         <Label htmlFor={baseBranchId} className="mb-2">
                           Base Branch
@@ -857,7 +863,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                         )}
                       </div>
                     )}
-                    {autoCreatePR && !selectedProject?.link?.repo && (
+                    {autoCreatePR && !hasGitHubRepoInfo && (
                       <div className="text-sm text-amber-600">
                         This project is not connected to a GitHub repository. PRs cannot be created automatically.
                       </div>
@@ -913,7 +919,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                         </p>
                       </div>
                     )}
-                    {autoCreatePR && selectedProject?.link?.repo && (
+                    {autoCreatePR && hasGitHubRepoInfo && (
                       <div>
                         <label
                           htmlFor={githubPatId}
