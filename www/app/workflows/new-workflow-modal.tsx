@@ -1,6 +1,6 @@
 "use client"
 
-import { AlertCircle } from "lucide-react"
+import { AlertCircle, HelpCircle } from "lucide-react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useId, useRef, useState } from "react"
@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Progress } from "@/components/ui/progress"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Spinner } from "@/components/ui/spinner"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { DEV3000_API_URL } from "@/lib/constants"
 
 interface Team {
@@ -60,6 +61,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   const autoCreatePRId = useId()
   const bypassTokenId = useId()
   const customPromptId = useId()
+  const githubPatId = useId()
 
   // Initialize step from URL params to avoid CLS from cascading useEffects
   const initialStep = (() => {
@@ -93,6 +95,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   const [isCheckingProtection, setIsCheckingProtection] = useState(false)
   const [needsBypassToken, setNeedsBypassToken] = useState(false)
   const [customPrompt, setCustomPrompt] = useState("")
+  const [githubPat, setGithubPat] = useState("")
   const [availableBranches, setAvailableBranches] = useState<
     Array<{ name: string; lastDeployment: { url: string; createdAt: number } }>
   >([])
@@ -267,6 +270,17 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
 
     return () => clearInterval(interval)
   }, [activeRunId, userId, step])
+
+  // Load GitHub PAT from localStorage when on options step
+  useEffect(() => {
+    if (step === "options" && !githubPat) {
+      const storedPat = localStorage.getItem("d3k_github_pat")
+      if (storedPat) {
+        console.log("[GitHub PAT] Loaded from localStorage")
+        setGithubPat(storedPat)
+      }
+    }
+  }, [step, githubPat])
 
   // Check if deployment is protected when project is selected and on options step
   useEffect(() => {
@@ -471,7 +485,11 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
 
       // Map URL param type to workflow type
       const workflowType =
-        _selectedType === "cloud-fix" ? "cls-fix" : _selectedType === "next-16-migration" ? "next-16-migration" : "prompt"
+        _selectedType === "cloud-fix"
+          ? "cls-fix"
+          : _selectedType === "next-16-migration"
+            ? "next-16-migration"
+            : "prompt"
 
       // biome-ignore lint/suspicious/noExplicitAny: Request body type depends on conditional fields
       const body: any = {
@@ -480,7 +498,8 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
         userId,
         bypassToken,
         workflowType,
-        customPrompt: workflowType === "prompt" ? customPrompt : undefined
+        customPrompt: workflowType === "prompt" ? customPrompt : undefined,
+        githubPat: autoCreatePR && githubPat ? githubPat : undefined
       }
 
       // If we have repo info, pass it for sandbox creation
@@ -673,9 +692,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                   className="block w-full p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 text-left transition-colors"
                 >
                   <div className="font-semibold">Prompt</div>
-                  <div className="text-sm text-gray-600 mt-1">
-                    Run a custom AI workflow with your own instructions
-                  </div>
+                  <div className="text-sm text-gray-600 mt-1">Run a custom AI workflow with your own instructions</div>
                 </Link>
               </div>
               {/* Reserve space for Back link to prevent CLS */}
@@ -884,6 +901,65 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                               Vercel Dashboard → Project Settings → Deployment Protection
                             </a>
                           )}
+                        </p>
+                      </div>
+                    )}
+                    {autoCreatePR && selectedProject?.link?.repo && (
+                      <div>
+                        <label
+                          htmlFor={githubPatId}
+                          className="flex items-center gap-1 text-sm font-medium text-gray-700 mb-1"
+                        >
+                          GitHub Personal Access Token
+                          <span className="text-gray-400">(optional)</span>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button type="button" className="text-gray-400 hover:text-gray-600">
+                                <HelpCircle className="h-4 w-4" />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent side="right" className="max-w-sm text-left p-3">
+                              <p className="font-semibold mb-2">How to create a GitHub PAT:</p>
+                              <ol className="list-decimal list-inside space-y-1 text-xs">
+                                <li>Go to github.com/settings/tokens?type=beta</li>
+                                <li>Click &quot;Generate new token&quot;</li>
+                                <li>Give it a name like &quot;d3k-testing&quot;</li>
+                                <li>Set expiration (e.g., 30 days)</li>
+                                <li>Under Repository access, select your repo</li>
+                                <li>
+                                  Under Permissions, set:
+                                  <ul className="list-disc list-inside ml-3">
+                                    <li>Contents: Read and write</li>
+                                    <li>Pull requests: Read and write</li>
+                                  </ul>
+                                </li>
+                                <li>Click Generate token</li>
+                                <li>Copy the token (starts with github_pat_)</li>
+                              </ol>
+                            </TooltipContent>
+                          </Tooltip>
+                        </label>
+                        <input
+                          type="password"
+                          id={githubPatId}
+                          value={githubPat}
+                          onChange={(e) => {
+                            const newPat = e.target.value
+                            setGithubPat(newPat)
+                            // Save to localStorage
+                            if (newPat) {
+                              localStorage.setItem("d3k_github_pat", newPat)
+                              console.log("[GitHub PAT] Saved to localStorage")
+                            } else {
+                              localStorage.removeItem("d3k_github_pat")
+                              console.log("[GitHub PAT] Removed from localStorage")
+                            }
+                          }}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md font-mono text-sm"
+                          placeholder="github_pat_xxxx or ghp_xxxx"
+                        />
+                        <p className="mt-1 text-xs text-gray-500">
+                          Required to create PRs. Stored locally in your browser.
                         </p>
                       </div>
                     )}

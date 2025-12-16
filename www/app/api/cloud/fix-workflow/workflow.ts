@@ -46,10 +46,28 @@ export async function cloudFixWorkflow(params: {
   userId?: string // For progress updates
   timestamp?: string // For progress updates
   workflowType?: string // For progress updates
+  // PR creation params
+  githubPat?: string
+  repoOwner?: string
+  repoName?: string
+  baseBranch?: string
 }) {
   "use workflow"
 
-  const { projectName, repoUrl, repoBranch = "main", vercelOidcToken, runId, userId, timestamp, workflowType } = params
+  const {
+    projectName,
+    repoUrl,
+    repoBranch = "main",
+    vercelOidcToken,
+    runId,
+    userId,
+    timestamp,
+    workflowType,
+    githubPat,
+    repoOwner,
+    repoName,
+    baseBranch = "main"
+  } = params
   // Use runId if provided (from start-fix route), otherwise generate one
   // The reportId is used for blob naming and tracking
   const reportId = runId || crypto.randomUUID()
@@ -92,6 +110,42 @@ export async function cloudFixWorkflow(params: {
 
   workflowLog(`[Workflow] Result: ${fixResult.status}, After CLS: ${fixResult.afterCls}`)
 
+  // ============================================================
+  // STEP 3: Create PR (only if we have changes and a GitHub PAT)
+  // ============================================================
+  let prResult: { prUrl: string; prNumber: number; branch: string } | null = null
+
+  if (fixResult.gitDiff && githubPat && repoOwner && repoName) {
+    workflowLog("[Workflow] Step 3: Creating GitHub PR...")
+
+    prResult = await createPullRequest(
+      initResult.sandboxId,
+      githubPat,
+      repoOwner,
+      repoName,
+      baseBranch,
+      projectName,
+      fixResult.beforeCls,
+      fixResult.afterCls,
+      reportId,
+      progressContext
+    )
+
+    if (prResult) {
+      workflowLog(`[Workflow] PR created: ${prResult.prUrl}`)
+    } else {
+      workflowLog("[Workflow] PR creation failed or skipped")
+    }
+  } else {
+    if (!fixResult.gitDiff) {
+      workflowLog("[Workflow] Skipping PR: No changes to commit")
+    } else if (!githubPat) {
+      workflowLog("[Workflow] Skipping PR: No GitHub PAT provided")
+    } else {
+      workflowLog("[Workflow] Skipping PR: Missing repo owner/name")
+    }
+  }
+
   // Cleanup sandbox
   await cleanupSandbox(initResult.sandboxId)
 
@@ -100,7 +154,8 @@ export async function cloudFixWorkflow(params: {
     reportId: fixResult.reportId,
     status: fixResult.status,
     beforeCls: fixResult.beforeCls,
-    afterCls: fixResult.afterCls
+    afterCls: fixResult.afterCls,
+    pr: prResult
   })
 }
 
@@ -161,4 +216,32 @@ async function cleanupSandbox(sandboxId: string): Promise<void> {
   "use step"
   const steps = await import("./steps")
   return steps.cleanupSandbox(sandboxId)
+}
+
+async function createPullRequest(
+  sandboxId: string,
+  githubPat: string,
+  repoOwner: string,
+  repoName: string,
+  baseBranch: string,
+  projectName: string,
+  beforeCls: number | null,
+  afterCls: number | null,
+  reportId: string,
+  progressContext?: ProgressContext | null
+): Promise<{ prUrl: string; prNumber: number; branch: string } | null> {
+  "use step"
+  const { createPullRequestStep } = await import("./steps")
+  return createPullRequestStep(
+    sandboxId,
+    githubPat,
+    repoOwner,
+    repoName,
+    baseBranch,
+    projectName,
+    beforeCls,
+    afterCls,
+    reportId,
+    progressContext
+  )
 }

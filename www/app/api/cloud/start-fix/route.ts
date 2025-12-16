@@ -76,7 +76,7 @@ export async function POST(request: Request) {
     workflowLog(`[Start Fix] VERCEL_OIDC_TOKEN available: ${!!vercelOidcToken}`)
 
     const body = await request.json()
-    const { devUrl, repoOwner, repoName, baseBranch, bypassToken, repoUrl, repoBranch } = body
+    const { devUrl, repoOwner, repoName, baseBranch, bypassToken, repoUrl, repoBranch, githubPat } = body
     // Validate workflowType is a valid WorkflowType
     const validWorkflowTypes: WorkflowType[] = ["cls-fix", "prompt", "next-16-migration"]
     if (body.workflowType && validWorkflowTypes.includes(body.workflowType)) {
@@ -91,6 +91,7 @@ export async function POST(request: Request) {
     workflowLog(`[Start Fix] Project: ${projectName}`)
     workflowLog(`[Start Fix] User ID: ${userId}`)
     workflowLog(`[Start Fix] Bypass Token: ${bypassToken ? "provided" : "not provided"}`)
+    workflowLog(`[Start Fix] GitHub PAT: ${githubPat ? "provided" : "not provided"}`)
     if (repoUrl) {
       workflowLog(`[Start Fix] Will create sandbox from: ${repoUrl}`)
       workflowLog(`[Start Fix] Branch: ${repoBranch || "main"}`)
@@ -131,7 +132,12 @@ export async function POST(request: Request) {
       runId, // Pass runId to workflow for tracking
       userId, // For progress updates
       timestamp: runTimestamp, // For progress updates
-      workflowType // For progress updates
+      workflowType, // For progress updates
+      // PR creation params
+      githubPat,
+      repoOwner,
+      repoName,
+      baseBranch: baseBranch || "main"
     }
 
     // Start the workflow (fire-and-forget style, we track via our own runId)

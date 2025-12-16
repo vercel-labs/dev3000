@@ -26,7 +26,12 @@ interface ProgressContext {
 }
 
 // Helper to update workflow progress
-async function updateProgress(ctx: ProgressContext | null | undefined, stepNumber: number, currentStep: string, sandboxUrl?: string) {
+async function updateProgress(
+  ctx: ProgressContext | null | undefined,
+  stepNumber: number,
+  currentStep: string,
+  sandboxUrl?: string
+) {
   if (!ctx) return
   try {
     await saveWorkflowRun({
@@ -98,7 +103,12 @@ export async function initSandboxStep(
 
   workflowLog(`[Init] Before CLS: ${clsData.clsScore} (${clsData.clsGrade})`)
   workflowLog(`[Init] Captured ${clsData.d3kLogs.length} chars of d3k logs`)
-  await updateProgress(progressContext, 1, `Initial CLS: ${clsData.clsScore?.toFixed(3) || "unknown"} (${clsData.clsGrade || "measuring..."})`, sandboxResult.devUrl)
+  await updateProgress(
+    progressContext,
+    1,
+    `Initial CLS: ${clsData.clsScore?.toFixed(3) || "unknown"} (${clsData.clsGrade || "measuring..."})`,
+    sandboxResult.devUrl
+  )
 
   return {
     sandboxId: sandboxResult.sandbox.sandboxId,
@@ -205,7 +215,12 @@ export async function agentFixLoopStep(
   }
 
   workflowLog(`[Agent] Status: ${status}, Before: ${beforeCls}, After: ${finalCls.clsScore}`)
-  await updateProgress(progressContext, 4, `Generating report... (CLS: ${beforeCls?.toFixed(3) || "?"} → ${finalCls.clsScore?.toFixed(3) || "?"})`, devUrl)
+  await updateProgress(
+    progressContext,
+    4,
+    `Generating report... (CLS: ${beforeCls?.toFixed(3) || "?"} → ${finalCls.clsScore?.toFixed(3) || "?"})`,
+    devUrl
+  )
 
   // Separate d3k logs for Step 1 (init) and Step 2 (after fix)
   const afterD3kLogs = finalCls.d3kLogs.replace(initD3kLogs, "").trim() || "(no new logs)"
@@ -690,5 +705,180 @@ export async function cleanupSandbox(sandboxId: string): Promise<void> {
     workflowLog("[Cleanup] Sandbox stopped")
   } catch (err) {
     workflowLog(`[Cleanup] Error stopping sandbox: ${err instanceof Error ? err.message : String(err)}`)
+  }
+}
+
+// ============================================================
+// STEP 3: Create Pull Request
+// ============================================================
+
+export async function createPullRequestStep(
+  sandboxId: string,
+  githubPat: string,
+  repoOwner: string,
+  repoName: string,
+  baseBranch: string,
+  _projectName: string,
+  beforeCls: number | null,
+  afterCls: number | null,
+  reportId: string,
+  progressContext?: ProgressContext | null
+): Promise<{ prUrl: string; prNumber: number; branch: string } | null> {
+  workflowLog(`[PR] Creating PR for ${repoOwner}/${repoName}...`)
+  await updateProgress(progressContext, 5, "Creating GitHub PR...")
+
+  try {
+    const sandbox = await Sandbox.get({ sandboxId })
+    if (sandbox.status !== "running") {
+      throw new Error(`Sandbox not running: ${sandbox.status}`)
+    }
+
+    const SANDBOX_CWD = "/vercel/sandbox"
+    const branchName = `d3k/fix-cls-${Date.now()}`
+
+    // Configure git user (required for commits)
+    await runSandboxCommand(sandbox, "sh", [
+      "-c",
+      `cd ${SANDBOX_CWD} && git config user.email "d3k-bot@vercel.com" && git config user.name "d3k bot"`
+    ])
+
+    // Create and checkout new branch
+    workflowLog(`[PR] Creating branch: ${branchName}`)
+    const branchResult = await runSandboxCommand(sandbox, "sh", [
+      "-c",
+      `cd ${SANDBOX_CWD} && git checkout -b "${branchName}"`
+    ])
+    if (branchResult.exitCode !== 0) {
+      workflowLog(`[PR] Failed to create branch: ${branchResult.stderr}`)
+      return null
+    }
+
+    // Stage all changes (excluding package manager lock files which may have been modified)
+    await runSandboxCommand(sandbox, "sh", [
+      "-c",
+      `cd ${SANDBOX_CWD} && git add -A && git reset -- package-lock.json pnpm-lock.yaml yarn.lock 2>/dev/null || true`
+    ])
+
+    // Create commit message
+    const clsImprovement =
+      beforeCls !== null && afterCls !== null
+        ? `CLS: ${beforeCls.toFixed(3)} → ${afterCls.toFixed(3)}`
+        : "CLS improvements"
+
+    const commitMessage = `fix: ${clsImprovement}
+
+Automated CLS fix by d3k
+
+- Before CLS: ${beforeCls?.toFixed(3) || "unknown"}
+- After CLS: ${afterCls?.toFixed(3) || "unknown"}
+
+🤖 Generated with d3k (https://d3k.dev)`
+
+    // Commit changes
+    workflowLog("[PR] Committing changes...")
+    const commitResult = await runSandboxCommand(sandbox, "sh", [
+      "-c",
+      `cd ${SANDBOX_CWD} && git commit -m '${commitMessage.replace(/'/g, "'\\''")}'`
+    ])
+    if (commitResult.exitCode !== 0) {
+      workflowLog(`[PR] Failed to commit: ${commitResult.stderr}`)
+      return null
+    }
+
+    // Configure git to use PAT for authentication
+    // Use the PAT in the remote URL for pushing
+    const authUrl = `https://x-access-token:${githubPat}@github.com/${repoOwner}/${repoName}.git`
+
+    // Push to GitHub
+    workflowLog("[PR] Pushing to GitHub...")
+    const pushResult = await runSandboxCommand(sandbox, "sh", [
+      "-c",
+      `cd ${SANDBOX_CWD} && git push "${authUrl}" "${branchName}" 2>&1`
+    ])
+    if (pushResult.exitCode !== 0) {
+      workflowLog(`[PR] Failed to push: ${pushResult.stderr || pushResult.stdout}`)
+      return null
+    }
+
+    // Create PR via GitHub API
+    workflowLog("[PR] Creating pull request...")
+    const prTitle = `fix: Reduce CLS (${beforeCls?.toFixed(3) || "?"} → ${afterCls?.toFixed(3) || "?"})`
+    const prBody = `## 🎯 CLS Fix by d3k
+
+This PR contains automated fixes to reduce Cumulative Layout Shift (CLS).
+
+### Results
+| Metric | Before | After |
+|--------|--------|-------|
+| CLS Score | ${beforeCls?.toFixed(3) || "unknown"} | ${afterCls?.toFixed(3) || "unknown"} |
+| Grade | ${beforeCls !== null ? (beforeCls <= 0.1 ? "Good ✅" : beforeCls <= 0.25 ? "Needs Improvement ⚠️" : "Poor ❌") : "unknown"} | ${afterCls !== null ? (afterCls <= 0.1 ? "Good ✅" : afterCls <= 0.25 ? "Needs Improvement ⚠️" : "Poor ❌") : "unknown"} |
+
+### What was fixed
+The AI agent analyzed the page for layout shifts and applied fixes to reduce CLS.
+
+---
+🤖 Generated with [d3k](https://d3k.dev)`
+
+    const prResponse = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/pulls`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${githubPat}`,
+        Accept: "application/vnd.github.v3+json",
+        "Content-Type": "application/json",
+        "User-Agent": "d3k-workflow"
+      },
+      body: JSON.stringify({
+        title: prTitle,
+        body: prBody,
+        head: branchName,
+        base: baseBranch
+      })
+    })
+
+    if (!prResponse.ok) {
+      const errorText = await prResponse.text()
+      workflowLog(`[PR] GitHub API error: ${prResponse.status} - ${errorText}`)
+      return null
+    }
+
+    const prData = (await prResponse.json()) as { html_url: string; number: number }
+    workflowLog(`[PR] Created: ${prData.html_url}`)
+    await updateProgress(progressContext, 5, `PR created: #${prData.number}`)
+
+    // Update the report blob to include the PR URL
+    try {
+      workflowLog(`[PR] Updating report ${reportId} with PR URL...`)
+      const reportBlobUrl = `https://qkkfhcqmsjpmk4fp.public.blob.vercel-storage.com/report-${reportId}.json`
+      const reportResponse = await fetch(reportBlobUrl)
+      if (reportResponse.ok) {
+        const report = (await reportResponse.json()) as Record<string, unknown>
+        report.prUrl = prData.html_url
+
+        // Re-upload the updated report
+        await put(`report-${reportId}.json`, JSON.stringify(report, null, 2), {
+          access: "public",
+          contentType: "application/json",
+          addRandomSuffix: false,
+          allowOverwrite: true
+        })
+        workflowLog(`[PR] Report updated with PR URL`)
+      } else {
+        workflowLog(`[PR] Could not fetch report to update: ${reportResponse.status}`)
+      }
+    } catch (reportErr) {
+      workflowLog(
+        `[PR] Failed to update report with PR URL: ${reportErr instanceof Error ? reportErr.message : String(reportErr)}`
+      )
+      // Don't fail the whole step, PR was still created successfully
+    }
+
+    return {
+      prUrl: prData.html_url,
+      prNumber: prData.number,
+      branch: branchName
+    }
+  } catch (err) {
+    workflowLog(`[PR] Error: ${err instanceof Error ? err.message : String(err)}`)
+    return null
   }
 }

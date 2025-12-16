@@ -81,6 +81,18 @@ export default function WorkflowsClient({ user, initialRuns }: WorkflowsClientPr
     setIsSigningOut(true)
     try {
       await fetch("/api/auth/signout", { method: "POST" })
+      // Clear all d3k-related localStorage items on logout
+      const keysToRemove: string[] = []
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i)
+        if (key?.startsWith("d3k_")) {
+          keysToRemove.push(key)
+        }
+      }
+      for (const key of keysToRemove) {
+        localStorage.removeItem(key)
+      }
+      console.log("[Sign Out] Cleared localStorage keys:", keysToRemove)
       window.location.href = "/"
     } catch (error) {
       console.error("Failed to sign out:", error)
