@@ -1,6 +1,6 @@
 import { start } from "workflow/api"
 import { clearWorkflowLog, workflowError, workflowLog } from "@/lib/workflow-logger"
-import { saveWorkflowRun } from "@/lib/workflow-storage"
+import { saveWorkflowRun, type WorkflowType } from "@/lib/workflow-storage"
 import { cloudFixWorkflow } from "../fix-workflow/workflow"
 
 /**
@@ -35,6 +35,8 @@ export async function POST(request: Request) {
   let projectName: string | undefined
   let runId: string | undefined
   let runTimestamp: string | undefined
+  let workflowType: WorkflowType = "cls-fix"
+  let customPrompt: string | undefined
 
   try {
     // Check for test bypass token (allows testing without browser auth via CLI)
@@ -75,6 +77,12 @@ export async function POST(request: Request) {
 
     const body = await request.json()
     const { devUrl, repoOwner, repoName, baseBranch, bypassToken, repoUrl, repoBranch } = body
+    // Validate workflowType is a valid WorkflowType
+    const validWorkflowTypes: WorkflowType[] = ["cls-fix", "prompt", "next-16-migration"]
+    if (body.workflowType && validWorkflowTypes.includes(body.workflowType)) {
+      workflowType = body.workflowType
+    }
+    customPrompt = body.customPrompt
     userId = body.userId || (isTestMode ? "test-user" : undefined)
     projectName = body.projectName
 
@@ -120,7 +128,10 @@ export async function POST(request: Request) {
       repoBranch: repoBranch || baseBranch || "main",
       projectName,
       vercelOidcToken,
-      runId // Pass runId to workflow for tracking
+      runId, // Pass runId to workflow for tracking
+      userId, // For progress updates
+      timestamp: runTimestamp, // For progress updates
+      workflowType // For progress updates
     }
 
     // Start the workflow (fire-and-forget style, we track via our own runId)
@@ -138,8 +149,10 @@ export async function POST(request: Request) {
           projectName,
           timestamp: runTimestamp,
           status: "running",
+          type: workflowType,
           currentStep: "Step 1: Initializing sandbox...",
-          stepNumber: 1
+          stepNumber: 1,
+          customPrompt: workflowType === "prompt" ? customPrompt : undefined
         })
         console.log(`[Start Fix] Saved workflow run metadata (running): ${runId}`)
       } catch (saveError) {
@@ -172,10 +185,12 @@ export async function POST(request: Request) {
         projectName,
         timestamp: runTimestamp,
         status: "done",
+        type: workflowType,
         completedAt: new Date().toISOString(),
         reportBlobUrl: result.blobUrl,
         prUrl: result.pr?.prUrl,
-        beforeScreenshotUrl: result.beforeScreenshotUrl || undefined
+        beforeScreenshotUrl: result.beforeScreenshotUrl || undefined,
+        customPrompt: workflowType === "prompt" ? customPrompt : undefined
       })
       workflowLog(`[Start Fix] Updated workflow run metadata to done: ${runId}`)
     }
@@ -210,8 +225,10 @@ export async function POST(request: Request) {
         projectName,
         timestamp: runTimestamp,
         status: "failure",
+        type: workflowType,
         completedAt: new Date().toISOString(),
-        error: error instanceof Error ? error.message : String(error)
+        error: error instanceof Error ? error.message : String(error),
+        customPrompt: workflowType === "prompt" ? customPrompt : undefined
       }).catch((err) => workflowError("[Start Fix] Failed to save error metadata:", err))
       workflowLog(`[Start Fix] Updated workflow run metadata to failure: ${runId}`)
     }

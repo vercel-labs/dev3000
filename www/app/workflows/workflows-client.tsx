@@ -50,6 +50,19 @@ function formatDuration(start: Date, end: Date): string {
   return `${seconds}s`
 }
 
+function formatWorkflowType(type?: string): string {
+  switch (type) {
+    case "cls-fix":
+      return "CLS Fix"
+    case "prompt":
+      return "Prompt"
+    case "next-16-migration":
+      return "Next 16"
+    default:
+      return "CLS Fix" // Default for existing workflows without type
+  }
+}
+
 export default function WorkflowsClient({ user, initialRuns }: WorkflowsClientProps) {
   const [isSigningOut, setIsSigningOut] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -214,6 +227,7 @@ export default function WorkflowsClient({ user, initialRuns }: WorkflowsClientPr
                       />
                     </TableHead>
                     <TableHead>Project ({runs.length})</TableHead>
+                    <TableHead>Type</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Timestamp</TableHead>
                     <TableHead>Duration</TableHead>
@@ -238,6 +252,9 @@ export default function WorkflowsClient({ user, initialRuns }: WorkflowsClientPr
                       <TableCell>
                         <div className="font-medium">{run.projectName}</div>
                         <div className="text-xs text-muted-foreground">{run.id}</div>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-sm text-muted-foreground">{formatWorkflowType(run.type)}</span>
                       </TableCell>
                       <TableCell>
                         <Badge

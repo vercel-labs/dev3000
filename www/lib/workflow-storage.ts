@@ -1,11 +1,14 @@
 import { del, head, list, put } from "@vercel/blob"
 
+export type WorkflowType = "cls-fix" | "prompt" | "next-16-migration"
+
 export interface WorkflowRun {
   id: string
   userId: string
   projectName: string
   timestamp: string
   status: "running" | "done" | "failure"
+  type?: WorkflowType // Workflow type (cls-fix, prompt, etc.)
   currentStep?: string // Current step being executed (for live progress)
   stepNumber?: number // 0-4 to show progress (0=sandbox, 1=logs, 2=ai, 3=upload, 4=pr)
   completedAt?: string // ISO timestamp when workflow finished (for duration calc)
@@ -16,6 +19,7 @@ export interface WorkflowRun {
   afterScreenshotUrl?: string
   sandboxUrl?: string // Dev URL from sandbox for live viewing
   isPublic?: boolean // If true, the report can be viewed without authentication
+  customPrompt?: string // For prompt type: the user's custom instruction
 }
 
 /**

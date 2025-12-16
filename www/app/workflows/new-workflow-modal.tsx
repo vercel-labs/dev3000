@@ -59,6 +59,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   const baseBranchId = useId()
   const autoCreatePRId = useId()
   const bypassTokenId = useId()
+  const customPromptId = useId()
 
   // Initialize step from URL params to avoid CLS from cascading useEffects
   const initialStep = (() => {
@@ -91,6 +92,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   const [bypassToken, setBypassToken] = useState("")
   const [isCheckingProtection, setIsCheckingProtection] = useState(false)
   const [needsBypassToken, setNeedsBypassToken] = useState(false)
+  const [customPrompt, setCustomPrompt] = useState("")
   const [availableBranches, setAvailableBranches] = useState<
     Array<{ name: string; lastDeployment: { url: string; createdAt: number } }>
   >([])
@@ -147,6 +149,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       setAutoCreatePR(true)
       setBypassToken("")
       setNeedsBypassToken(false)
+      setCustomPrompt("")
       setProjectsError(null)
       setAvailableBranches([])
       setLoadingBranches(false)
@@ -466,12 +469,18 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
         repoName = selectedProject.link.repo
       }
 
+      // Map URL param type to workflow type
+      const workflowType =
+        _selectedType === "cloud-fix" ? "cls-fix" : _selectedType === "next-16-migration" ? "next-16-migration" : "prompt"
+
       // biome-ignore lint/suspicious/noExplicitAny: Request body type depends on conditional fields
       const body: any = {
         devUrl,
         projectName: selectedProject.name,
         userId,
-        bypassToken
+        bypassToken,
+        workflowType,
+        customPrompt: workflowType === "prompt" ? customPrompt : undefined
       }
 
       // If we have repo info, pass it for sandbox creation
@@ -645,9 +654,9 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                   href="/workflows/new?type=cloud-fix"
                   className="block w-full p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 text-left transition-colors"
                 >
-                  <div className="font-semibold">CLS Detection & Fix</div>
+                  <div className="font-semibold">CLS Fix</div>
                   <div className="text-sm text-gray-600 mt-1">
-                    Analyze deployment logs for errors and generate fix proposals
+                    Detect and fix Cumulative Layout Shift issues automatically
                   </div>
                 </Link>
                 <Link
@@ -657,6 +666,15 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                   <div className="font-semibold">Next.js 16 Migration</div>
                   <div className="text-sm text-gray-600 mt-1">
                     Upgrade your project to Next.js 16 with automated codemods and fixes
+                  </div>
+                </Link>
+                <Link
+                  href="/workflows/new?type=prompt"
+                  className="block w-full p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 text-left transition-colors"
+                >
+                  <div className="font-semibold">Prompt</div>
+                  <div className="text-sm text-gray-600 mt-1">
+                    Run a custom AI workflow with your own instructions
                   </div>
                 </Link>
               </div>
@@ -869,6 +887,26 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                         </p>
                       </div>
                     )}
+                    {_selectedType === "prompt" && (
+                      <div>
+                        <Label htmlFor={customPromptId} className="block text-sm font-medium text-gray-700 mb-1">
+                          Custom Instructions
+                          <span className="text-red-500 ml-1">*</span>
+                        </Label>
+                        <textarea
+                          id={customPromptId}
+                          value={customPrompt}
+                          onChange={(e) => setCustomPrompt(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm min-h-[120px]"
+                          placeholder="Describe what you want the AI to do with your codebase..."
+                          required
+                        />
+                        <p className="mt-1 text-xs text-gray-500">
+                          Be specific about what changes you want. The AI will analyze your codebase and implement the
+                          requested changes.
+                        </p>
+                      </div>
+                    )}
                   </div>
                   <div className="flex gap-3 mt-6">
                     <Link
@@ -880,7 +918,9 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                     <button
                       type="button"
                       onClick={startWorkflow}
-                      disabled={needsBypassToken && !bypassToken}
+                      disabled={
+                        (needsBypassToken && !bypassToken) || (_selectedType === "prompt" && !customPrompt.trim())
+                      }
                       className="flex-1 px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       Start Workflow

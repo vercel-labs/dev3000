@@ -11,9 +11,40 @@ import { Sandbox } from "@vercel/sandbox"
 import { createGateway, generateText, stepCountIs, tool } from "ai"
 import { z } from "zod"
 import { createD3kSandbox as createD3kSandboxUtil } from "@/lib/cloud/d3k-sandbox"
+import { saveWorkflowRun, type WorkflowType } from "@/lib/workflow-storage"
 import type { WorkflowReport } from "@/types"
 
 const workflowLog = console.log
+
+// Progress context for updating workflow status
+interface ProgressContext {
+  userId: string
+  timestamp: string
+  runId: string
+  projectName: string
+  workflowType?: string
+}
+
+// Helper to update workflow progress
+async function updateProgress(ctx: ProgressContext | null | undefined, stepNumber: number, currentStep: string, sandboxUrl?: string) {
+  if (!ctx) return
+  try {
+    await saveWorkflowRun({
+      id: ctx.runId,
+      userId: ctx.userId,
+      projectName: ctx.projectName,
+      timestamp: ctx.timestamp,
+      status: "running",
+      type: (ctx.workflowType as WorkflowType) || "cls-fix",
+      stepNumber,
+      currentStep,
+      sandboxUrl
+    })
+    workflowLog(`[Progress] Updated: Step ${stepNumber} - ${currentStep}`)
+  } catch (err) {
+    workflowLog(`[Progress] Failed to update: ${err instanceof Error ? err.message : String(err)}`)
+  }
+}
 
 // ============================================================
 // STEP 1: Init Sandbox
@@ -24,7 +55,8 @@ export async function initSandboxStep(
   branch: string,
   projectName: string,
   reportId: string,
-  vercelOidcToken?: string
+  vercelOidcToken?: string,
+  progressContext?: ProgressContext | null
 ): Promise<{
   sandboxId: string
   devUrl: string
@@ -36,6 +68,7 @@ export async function initSandboxStep(
   initD3kLogs: string
 }> {
   workflowLog(`[Init] Creating sandbox for ${projectName}...`)
+  await updateProgress(progressContext, 1, "Creating sandbox environment...")
 
   if (vercelOidcToken && !process.env.VERCEL_OIDC_TOKEN) {
     process.env.VERCEL_OIDC_TOKEN = vercelOidcToken
@@ -53,9 +86,11 @@ export async function initSandboxStep(
 
   workflowLog(`[Init] Sandbox: ${sandboxResult.sandbox.sandboxId}`)
   workflowLog(`[Init] Dev URL: ${sandboxResult.devUrl}`)
+  await updateProgress(progressContext, 1, "Sandbox created, starting dev server...", sandboxResult.devUrl)
 
   // Wait for d3k to capture initial CLS
   workflowLog(`[Init] Waiting for d3k CLS capture...`)
+  await updateProgress(progressContext, 1, "Dev server running, capturing initial CLS...")
   await new Promise((resolve) => setTimeout(resolve, 5000))
 
   // Get CLS data from d3k
@@ -63,6 +98,7 @@ export async function initSandboxStep(
 
   workflowLog(`[Init] Before CLS: ${clsData.clsScore} (${clsData.clsGrade})`)
   workflowLog(`[Init] Captured ${clsData.d3kLogs.length} chars of d3k logs`)
+  await updateProgress(progressContext, 1, `Initial CLS: ${clsData.clsScore?.toFixed(3) || "unknown"} (${clsData.clsGrade || "measuring..."})`, sandboxResult.devUrl)
 
   return {
     sandboxId: sandboxResult.sandbox.sandboxId,
@@ -89,7 +125,8 @@ export async function agentFixLoopStep(
   beforeScreenshots: Array<{ timestamp: number; blobUrl: string; label?: string }>,
   initD3kLogs: string,
   projectName: string,
-  reportId: string
+  reportId: string,
+  progressContext?: ProgressContext | null
 ): Promise<{
   reportBlobUrl: string
   reportId: string
@@ -100,6 +137,7 @@ export async function agentFixLoopStep(
   gitDiff: string | null
 }> {
   workflowLog(`[Agent] Reconnecting to sandbox: ${sandboxId}`)
+  await updateProgress(progressContext, 2, "AI agent analyzing CLS issues...", devUrl)
 
   const sandbox = await Sandbox.get({ sandboxId })
   if (sandbox.status !== "running") {
@@ -108,6 +146,7 @@ export async function agentFixLoopStep(
 
   // Run the agent with the new "diagnose" tool
   const agentResult = await runAgentWithDiagnoseTool(sandbox, devUrl, mcpUrl, beforeCls, beforeGrade)
+  await updateProgress(progressContext, 3, "Agent finished, verifying CLS improvements...", devUrl)
 
   // Force a fresh page reload to capture new CLS measurement
   // The agent might not have called diagnose after its last change
@@ -166,6 +205,7 @@ export async function agentFixLoopStep(
   }
 
   workflowLog(`[Agent] Status: ${status}, Before: ${beforeCls}, After: ${finalCls.clsScore}`)
+  await updateProgress(progressContext, 4, `Generating report... (CLS: ${beforeCls?.toFixed(3) || "?"} → ${finalCls.clsScore?.toFixed(3) || "?"})`, devUrl)
 
   // Separate d3k logs for Step 1 (init) and Step 2 (after fix)
   const afterD3kLogs = finalCls.d3kLogs.replace(initD3kLogs, "").trim() || "(no new logs)"
