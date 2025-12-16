@@ -200,7 +200,8 @@ export async function POST(request: Request) {
         reportBlobUrl: result.blobUrl,
         prUrl: result.pr?.prUrl,
         beforeScreenshotUrl: result.beforeScreenshotUrl || undefined,
-        customPrompt: workflowType === "prompt" ? customPrompt : undefined
+        customPrompt: workflowType === "prompt" ? customPrompt : undefined,
+        prParamsDebug: result._prParamsReceived
       })
       workflowLog(`[Start Fix] Updated workflow run metadata to done: ${runId}`)
     }
