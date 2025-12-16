@@ -1,6 +1,6 @@
 "use client"
 
-import { Pause, Play, SkipBack, SkipForward } from "lucide-react"
+import { Pause, Play, RotateCcw, SkipBack, SkipForward } from "lucide-react"
 import Image from "next/image"
 import { useCallback, useEffect, useState } from "react"
 
@@ -119,11 +119,26 @@ export function ScreenshotPlayer({
 
           <button
             type="button"
-            onClick={() => setIsPlaying(!isPlaying)}
+            onClick={() => {
+              if (isPausedAtEnd) {
+                // Replay from beginning
+                setCurrentFrame(0)
+                setIsPausedAtEnd(false)
+                setIsPlaying(true)
+              } else {
+                setIsPlaying(!isPlaying)
+              }
+            }}
             className="p-1 hover:bg-muted rounded transition-colors"
-            title={isPlaying ? "Pause" : "Play"}
+            title={isPausedAtEnd ? "Replay" : isPlaying ? "Pause" : "Play"}
           >
-            {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+            {isPausedAtEnd ? (
+              <RotateCcw className="h-4 w-4" />
+            ) : isPlaying ? (
+              <Pause className="h-4 w-4" />
+            ) : (
+              <Play className="h-4 w-4" />
+            )}
           </button>
 
           <button
