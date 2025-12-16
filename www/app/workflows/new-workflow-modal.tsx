@@ -43,6 +43,10 @@ interface Project {
       sha: string
       message: string
     } | null
+    meta: {
+      githubOrg: string
+      githubRepo: string
+    } | null
   }>
 }
 
@@ -474,13 +478,18 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       const devUrl = `https://${latestDeployment.url}`
       console.log("[Start Workflow] devUrl:", devUrl)
 
-      // Extract repo info from project link
+      // Extract repo info from project link or deployment metadata
       let repoOwner: string | undefined
       let repoName: string | undefined
 
       if (selectedProject.link?.org && selectedProject.link?.repo) {
         repoOwner = selectedProject.link.org
         repoName = selectedProject.link.repo
+      } else if (latestDeployment.meta?.githubOrg && latestDeployment.meta?.githubRepo) {
+        // Fallback: use deployment metadata when project.link is missing
+        repoOwner = latestDeployment.meta.githubOrg
+        repoName = latestDeployment.meta.githubRepo
+        console.log(`[Start Workflow] Using repo info from deployment meta: ${repoOwner}/${repoName}`)
       }
 
       // Map URL param type to workflow type

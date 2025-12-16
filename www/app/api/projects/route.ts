@@ -77,6 +77,13 @@ export async function GET(request: Request) {
                 sha: deployment.gitSource.sha,
                 message: deployment.gitSource.message
               }
+            : null,
+          // Include GitHub metadata for PR creation (fallback when project.link is missing)
+          meta: deployment.meta
+            ? {
+                githubOrg: deployment.meta.githubOrg,
+                githubRepo: deployment.meta.githubRepo
+              }
             : null
         })) || []
     }))
