@@ -109,8 +109,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
 
   // Check if GitHub repo info is available from project link or deployment metadata
   const hasGitHubRepoInfo = Boolean(
-    selectedProject?.link?.repo ||
-      selectedProject?.latestDeployments?.[0]?.meta?.githubRepo
+    selectedProject?.link?.repo || selectedProject?.latestDeployments?.[0]?.meta?.githubRepo
   )
 
   // Restore state from URL whenever searchParams change (after initial load)
@@ -488,14 +487,21 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       let repoOwner: string | undefined
       let repoName: string | undefined
 
+      // Debug: log what we have
+      console.log("[Start Workflow] project.link:", selectedProject.link)
+      console.log("[Start Workflow] latestDeployment.meta:", latestDeployment.meta)
+
       if (selectedProject.link?.org && selectedProject.link?.repo) {
         repoOwner = selectedProject.link.org
         repoName = selectedProject.link.repo
+        console.log(`[Start Workflow] Using repo info from project.link: ${repoOwner}/${repoName}`)
       } else if (latestDeployment.meta?.githubOrg && latestDeployment.meta?.githubRepo) {
         // Fallback: use deployment metadata when project.link is missing
         repoOwner = latestDeployment.meta.githubOrg
         repoName = latestDeployment.meta.githubRepo
         console.log(`[Start Workflow] Using repo info from deployment meta: ${repoOwner}/${repoName}`)
+      } else {
+        console.log("[Start Workflow] WARNING: No repo info found in project.link or deployment.meta")
       }
 
       // Map URL param type to workflow type
@@ -544,6 +550,10 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
 
       console.log("[Start Workflow] API URL:", apiUrl)
       console.log("[Start Workflow] Request body:", body)
+      console.log("[Start Workflow] Body keys:", Object.keys(body))
+      console.log("[Start Workflow] body.repoUrl:", body.repoUrl)
+      console.log("[Start Workflow] body.repoOwner:", body.repoOwner)
+      console.log("[Start Workflow] body.githubPat:", body.githubPat ? "SET (length: " + body.githubPat.length + ")" : "NOT SET")
 
       // Create an AbortController for timeout handling
       const controller = new AbortController()
