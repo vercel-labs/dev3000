@@ -2553,7 +2553,6 @@ export async function getMcpCapabilities({
     results.push("💡 **Troubleshooting:**")
     results.push("• Check that MCPs are properly configured in Claude Code")
     results.push("• Verify dev3000 can access Claude cache directories")
-    results.push("• Try running `discover_available_mcps()` first")
 
     return {
       content: [{ type: "text", text: results.join("\n") }]

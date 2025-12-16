@@ -1107,12 +1107,6 @@ export class DevEnvironment {
       await this.tui.updateStatus(`Waiting for ${this.options.commandName} MCP server...`)
       await this.waitForMcpServer()
 
-      // Progressive MCP discovery - after dev server is ready (non-blocking)
-      // Run in background to avoid delaying browser startup
-      this.discoverMcpsAfterServerStart().catch((error) => {
-        this.debugLog(`MCP discovery after server start failed: ${error.message}`)
-      })
-
       // Configure AI CLI integrations (both dev3000 and chrome-devtools MCPs)
       if (!this.options.serversOnly) {
         await this.tui.updateStatus("Configuring AI CLI integrations...")
@@ -1133,12 +1127,6 @@ export class DevEnvironment {
       if (!this.options.serversOnly && serverStarted) {
         await this.tui.updateStatus(`Starting ${this.options.commandName} browser...`)
         await this.startCDPMonitoringSync()
-
-        // Progressive MCP discovery - after browser is ready (non-blocking)
-        // Run in background to avoid delaying startup completion
-        this.discoverMcpsAfterBrowserStart().catch((error) => {
-          this.debugLog(`MCP discovery after browser start failed: ${error.message}`)
-        })
       } else if (!this.options.serversOnly) {
         this.debugLog("Browser monitoring skipped - server failed to start")
       } else {
@@ -1201,12 +1189,6 @@ export class DevEnvironment {
       this.spinner.text = `Waiting for ${this.options.commandName} MCP server...`
       await this.waitForMcpServer()
 
-      // Progressive MCP discovery - after dev server is ready (non-blocking)
-      // Run in background to avoid delaying browser startup
-      this.discoverMcpsAfterServerStart().catch((error) => {
-        this.debugLog(`MCP discovery after server start failed: ${error.message}`)
-      })
-
       // Configure AI CLI integrations (both dev3000 and chrome-devtools MCPs)
       if (!this.options.serversOnly) {
         this.spinner.text = "Configuring AI CLI integrations..."
@@ -1227,12 +1209,6 @@ export class DevEnvironment {
       if (!this.options.serversOnly && serverStarted) {
         this.spinner.text = `Starting ${this.options.commandName} browser...`
         await this.startCDPMonitoringSync()
-
-        // Progressive MCP discovery - after browser is ready (non-blocking)
-        // Run in background to avoid delaying startup completion
-        this.discoverMcpsAfterBrowserStart().catch((error) => {
-          this.debugLog(`MCP discovery after browser start failed: ${error.message}`)
-        })
       } else if (!this.options.serversOnly) {
         this.debugLog("Browser monitoring skipped - server failed to start")
       } else {
@@ -2076,196 +2052,6 @@ export class DevEnvironment {
     throw new Error(`MCP server failed to start after ${maxAttempts} seconds. Check the logs for errors.`)
   }
 
-  private async discoverMcpsAfterServerStart() {
-    try {
-      // Skip MCP discovery in sandbox environments (no Claude Code running there)
-      if (isInSandbox()) {
-        this.debugLog("Skipping MCP discovery in sandbox environment (after server start)")
-        return
-      }
-
-      this.debugLog("Starting MCP discovery after dev server startup")
-
-      // Call the MCP discovery function - make HTTP request to our own MCP server
-      const mcpUrl = `http://localhost:${this.options.mcpPort}/mcp`
-      const projectName = getProjectName()
-
-      this.debugLog(`Running MCP discovery for project: ${projectName} via ${mcpUrl}`)
-
-      const requestPayload = {
-        jsonrpc: "2.0",
-        id: 1,
-        method: "tools/call",
-        params: {
-          name: "discover_available_mcps",
-          arguments: {
-            projectName: projectName
-          }
-        }
-      }
-
-      const response = await fetch(mcpUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json, text/event-stream"
-        },
-        body: JSON.stringify(requestPayload)
-      })
-
-      if (!response.ok) {
-        throw new Error(`MCP request failed: ${response.status} ${response.statusText}`)
-      }
-
-      // Handle both JSON and SSE responses
-      const contentType = response.headers.get("content-type") || ""
-      let result: { error?: { message: string }; result?: { content?: Array<{ text?: string }> } }
-
-      if (contentType.includes("text/event-stream")) {
-        // Parse Server-Sent Events format
-        const sseText = await response.text()
-        const dataLine = sseText.split("\n").find((line) => line.startsWith("data: "))
-        if (dataLine) {
-          result = JSON.parse(dataLine.substring(6)) // Remove "data: " prefix
-        } else {
-          throw new Error("No data found in SSE response")
-        }
-      } else {
-        // Parse regular JSON
-        result = await response.json()
-      }
-
-      if (result.error) {
-        throw new Error(`MCP error: ${result.error.message}`)
-      }
-
-      // Parse the discovered MCPs from the response
-      const responseText = result.result?.content?.[0]?.text || ""
-      const discoveredMcps = this.parseMcpDiscoveryResult(responseText)
-
-      if (discoveredMcps.length > 0) {
-        this.debugLog(`MCP discovery found: ${discoveredMcps.join(", ")}`)
-
-        // Log discovery results to the main log file with [D3K] tags
-        const discoveryMessage = `MCP Discovery: Found ${discoveredMcps.join(", ")} after dev server startup`
-        this.logD3K(discoveryMessage)
-
-        // Additional logging for each MCP
-        for (const mcp of discoveredMcps) {
-          this.logD3K(`MCP Integration: ${mcp} MCP detected via process/port scanning`)
-        }
-      } else {
-        this.debugLog("MCP discovery found no MCPs after dev server startup")
-        this.logD3K("MCP Discovery: No MCPs detected after dev server startup")
-      }
-    } catch (error) {
-      this.debugLog(`MCP discovery error after server start: ${error}`)
-      // Non-fatal - just log the error
-      this.logD3K(`MCP Discovery Error: ${error instanceof Error ? error.message : String(error)}`)
-    }
-  }
-
-  private async discoverMcpsAfterBrowserStart() {
-    try {
-      // Skip MCP discovery in sandbox environments (no Claude Code running there)
-      if (isInSandbox()) {
-        this.debugLog("Skipping MCP discovery in sandbox environment")
-        return
-      }
-
-      this.debugLog("Starting MCP discovery after browser startup")
-
-      // Call the MCP discovery function - make HTTP request to our own MCP server
-      const mcpUrl = `http://localhost:${this.options.mcpPort}/mcp`
-      const projectName = getProjectName()
-
-      this.debugLog(`Running final MCP discovery for project: ${projectName} via ${mcpUrl}`)
-
-      const requestPayload = {
-        jsonrpc: "2.0",
-        id: 1,
-        method: "tools/call",
-        params: {
-          name: "discover_available_mcps",
-          arguments: {
-            projectName: projectName
-          }
-        }
-      }
-
-      const response = await fetch(mcpUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json, text/event-stream"
-        },
-        body: JSON.stringify(requestPayload)
-      })
-
-      if (!response.ok) {
-        throw new Error(`MCP request failed: ${response.status} ${response.statusText}`)
-      }
-
-      // Handle both JSON and SSE responses
-      const contentType = response.headers.get("content-type") || ""
-      let result: { error?: { message: string }; result?: { content?: Array<{ text?: string }> } }
-
-      if (contentType.includes("text/event-stream")) {
-        // Parse Server-Sent Events format
-        const sseText = await response.text()
-        const dataLine = sseText.split("\n").find((line) => line.startsWith("data: "))
-        if (dataLine) {
-          result = JSON.parse(dataLine.substring(6)) // Remove "data: " prefix
-        } else {
-          throw new Error("No data found in SSE response")
-        }
-      } else {
-        // Parse regular JSON
-        result = await response.json()
-      }
-
-      if (result.error) {
-        throw new Error(`MCP error: ${result.error.message}`)
-      }
-
-      // Parse the discovered MCPs from the response
-      const responseText = result.result?.content?.[0]?.text || ""
-      const discoveredMcps = this.parseMcpDiscoveryResult(responseText)
-
-      if (discoveredMcps.length > 0) {
-        this.debugLog(`Final MCP discovery found: ${discoveredMcps.join(", ")}`)
-
-        // Log discovery results to the main log file with [D3K] tags
-        const discoveryMessage = `MCP Discovery: Final scan found ${discoveredMcps.join(", ")} after browser startup`
-        this.logD3K(discoveryMessage)
-
-        // Log integration summary
-        const integrationTypes = []
-        if (discoveredMcps.includes("nextjs-dev")) integrationTypes.push("Next.js")
-        if (discoveredMcps.includes("chrome-devtools")) integrationTypes.push("Chrome DevTools")
-
-        if (integrationTypes.length > 0) {
-          this.logD3K(`MCP Integration: Activated integrations [${integrationTypes.join(", ")}]`)
-          this.logD3K(
-            `Orchestrator Mode: dev3000 is now running as debugging orchestrator with ${integrationTypes.length} MCP integration(s)`
-          )
-
-          // If chrome-devtools is detected, share CDP URL for coordination
-          if (discoveredMcps.includes("chrome-devtools")) {
-            this.shareCdpUrlWithChromeDevtools()
-          }
-        }
-      } else {
-        this.debugLog("Final MCP discovery found no MCPs")
-        this.logD3K("MCP Discovery: Final scan completed - running in standalone mode")
-      }
-    } catch (error) {
-      this.debugLog(`MCP discovery error after browser start: ${error}`)
-      // Non-fatal - just log the error
-      this.logD3K(`MCP Discovery Error: ${error instanceof Error ? error.message : String(error)}`)
-    }
-  }
-
   private initializeD3KLog() {
     try {
       const debugLogDir = join(homedir(), ".d3k", "logs")
@@ -2301,79 +2087,6 @@ export class DevEnvironment {
     } catch {
       // Ignore D3K log write errors - non-critical
     }
-  }
-
-  private shareCdpUrlWithChromeDevtools() {
-    if (!this.cdpMonitor) return
-
-    const cdpUrl = this.cdpMonitor.getCdpUrl()
-    if (cdpUrl) {
-      this.logD3K(`CDP Integration: Chrome DevTools can connect to existing browser at ${cdpUrl}`)
-      this.logD3K(`CDP Coordination: Use this URL to avoid launching duplicate Chrome instances`)
-      this.logD3K(
-        `CDP Enhanced Workflow: chrome-devtools can now take screenshots, inject JS, and debug using dev3000's browser`
-      )
-      this.logD3K(`CDP Claude Suggestion: When using chrome-devtools MCP, connect to: ${cdpUrl}`)
-
-      // Also update session info to make CDP URL immediately available
-      const projectName = getProjectName()
-      writeSessionInfo(
-        projectName,
-        this.options.logFile,
-        this.options.port,
-        this.options.mcpPort,
-        cdpUrl,
-        this.cdpMonitor.getChromePids(),
-        this.options.serverCommand
-      )
-    } else {
-      this.logD3K("CDP Integration: CDP URL not yet available - browser may still be starting")
-
-      // Retry after a short delay since browser might still be initializing
-      setTimeout(() => {
-        if (this.cdpMonitor) {
-          const delayedCdpUrl = this.cdpMonitor.getCdpUrl()
-          if (delayedCdpUrl) {
-            this.logD3K(`CDP Integration: Chrome DevTools can now connect to ${delayedCdpUrl}`)
-            this.logD3K(`CDP Delayed Coordination: Browser initialization complete`)
-
-            const projectName = getProjectName()
-            writeSessionInfo(
-              projectName,
-              this.options.logFile,
-              this.options.port,
-              this.options.mcpPort,
-              delayedCdpUrl,
-              this.cdpMonitor.getChromePids(),
-              this.options.serverCommand
-            )
-          }
-        }
-      }, 2000) // Wait 2 seconds for browser to fully initialize
-    }
-  }
-
-  private parseMcpDiscoveryResult(responseText: string): string[] {
-    // Parse the MCP discovery response text to extract discovered MCPs
-    // Example: "🔍 **MCP DISCOVERY RESULTS**\n\nDiscovered MCPs: chrome-devtools, nextjs-dev"
-    const mcps: string[] = []
-
-    // Look for the "Discovered MCPs:" line
-    const match = responseText.match(/Discovered MCPs:\s*([^\n]+)/i)
-    if (match?.[1]) {
-      const mcpList = match[1].trim()
-      if (mcpList !== "none") {
-        // Split by comma and clean up each MCP name
-        mcps.push(
-          ...mcpList
-            .split(",")
-            .map((name) => name.trim())
-            .filter(Boolean)
-        )
-      }
-    }
-
-    return mcps
   }
 
   private async startCDPMonitoringSync() {
