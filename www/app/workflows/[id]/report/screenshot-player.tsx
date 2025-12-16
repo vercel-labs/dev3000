@@ -17,6 +17,8 @@ interface ScreenshotPlayerProps {
   fps?: number
   loop?: boolean
   loopDelayMs?: number // Pause at end before looping (default: 10000ms)
+  onLoopComplete?: () => void // Called when a loop completes (at end of loop delay)
+  onUserInteraction?: () => void // Called when user clicks any control
 }
 
 export function ScreenshotPlayer({
@@ -25,7 +27,9 @@ export function ScreenshotPlayer({
   autoPlay = true,
   fps = 8,
   loop = true,
-  loopDelayMs = 10000
+  loopDelayMs = 10000,
+  onLoopComplete,
+  onUserInteraction
 }: ScreenshotPlayerProps) {
   const [currentFrame, setCurrentFrame] = useState(0)
   const [isPlaying, setIsPlaying] = useState(autoPlay)
@@ -65,10 +69,16 @@ export function ScreenshotPlayer({
     const timeout = setTimeout(() => {
       setCurrentFrame(0)
       setIsPausedAtEnd(false)
+      onLoopComplete?.()
     }, loopDelayMs)
 
     return () => clearTimeout(timeout)
-  }, [isPausedAtEnd, isPlaying, loopDelayMs])
+  }, [isPausedAtEnd, isPlaying, loopDelayMs, onLoopComplete])
+
+  // Respond to autoPlay prop changes (for coordinated playback)
+  useEffect(() => {
+    setIsPlaying(autoPlay)
+  }, [autoPlay])
 
   useEffect(() => {
     if (!isPlaying || sortedScreenshots.length === 0 || isPausedAtEnd) return
@@ -110,7 +120,10 @@ export function ScreenshotPlayer({
         <div className="flex items-center gap-2 px-3 py-2 bg-muted/50">
           <button
             type="button"
-            onClick={prevFrame}
+            onClick={() => {
+              onUserInteraction?.()
+              prevFrame()
+            }}
             className="p-1 hover:bg-muted rounded transition-colors"
             title="Previous frame"
           >
@@ -120,6 +133,7 @@ export function ScreenshotPlayer({
           <button
             type="button"
             onClick={() => {
+              onUserInteraction?.()
               if (isPausedAtEnd) {
                 // Replay from beginning
                 setCurrentFrame(0)
@@ -143,7 +157,10 @@ export function ScreenshotPlayer({
 
           <button
             type="button"
-            onClick={nextFrame}
+            onClick={() => {
+              onUserInteraction?.()
+              nextFrame()
+            }}
             className="p-1 hover:bg-muted rounded transition-colors"
             title="Next frame"
           >

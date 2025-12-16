@@ -7,6 +7,7 @@ import { getPublicWorkflowRun, getWorkflowRun } from "@/lib/workflow-storage"
 import type { WorkflowReport } from "@/types"
 import { AgentAnalysis } from "./agent-analysis"
 import { CollapsibleSection } from "./collapsible-section"
+import { CoordinatedPlayers } from "./coordinated-players"
 import { ScreenshotPlayer } from "./screenshot-player"
 import { ShareButton } from "./share-button"
 
@@ -294,9 +295,19 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
                 <h3 className="text-sm font-medium text-muted-foreground mb-3">Screenshots</h3>
 
                 {/* Animated players for before/after screenshot sequences */}
-                {report.beforeScreenshots?.length ||
-                report.afterScreenshots?.length ||
-                report.clsScreenshots?.length ? (
+                {(report.beforeScreenshots?.length || report.clsScreenshots?.length) &&
+                report.afterScreenshots?.length ? (
+                  /* Both before and after have animated screenshots - use coordinated player */
+                  <CoordinatedPlayers
+                    beforeScreenshots={report.beforeScreenshots || report.clsScreenshots || []}
+                    afterScreenshots={report.afterScreenshots}
+                    fps={2}
+                    loopDelayMs={10000}
+                  />
+                ) : report.beforeScreenshots?.length ||
+                  report.afterScreenshots?.length ||
+                  report.clsScreenshots?.length ? (
+                  /* Only one side has animated screenshots - use individual players */
                   <div className="grid grid-cols-2 gap-4">
                     {/* Before Fix - use beforeScreenshots or fallback to clsScreenshots */}
                     {report.beforeScreenshots?.length || report.clsScreenshots?.length ? (
