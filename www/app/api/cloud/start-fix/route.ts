@@ -78,7 +78,7 @@ export async function POST(request: Request) {
     const body = await request.json()
     const { devUrl, repoOwner, repoName, baseBranch, bypassToken, repoUrl, repoBranch, githubPat, startPath } = body
     // Validate workflowType is a valid WorkflowType
-    const validWorkflowTypes: WorkflowType[] = ["cls-fix", "prompt", "next-16-migration"]
+    const validWorkflowTypes: WorkflowType[] = ["cls-fix", "prompt"]
     if (body.workflowType && validWorkflowTypes.includes(body.workflowType)) {
       workflowType = body.workflowType
     }
@@ -135,6 +135,7 @@ export async function POST(request: Request) {
       timestamp: runTimestamp, // For progress updates
       workflowType, // For progress updates
       startPath: startPath || "/", // Page path to analyze (e.g., "/about")
+      customPrompt: workflowType === "prompt" ? customPrompt : undefined, // User's custom instructions
       // PR creation params
       githubPat,
       repoOwner,

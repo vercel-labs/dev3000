@@ -138,6 +138,7 @@ export async function agentFixLoopStep(
   projectName: string,
   reportId: string,
   startPath: string,
+  customPrompt?: string,
   progressContext?: ProgressContext | null
 ): Promise<{
   reportBlobUrl: string
@@ -157,7 +158,15 @@ export async function agentFixLoopStep(
   }
 
   // Run the agent with the new "diagnose" tool
-  const agentResult = await runAgentWithDiagnoseTool(sandbox, devUrl, mcpUrl, beforeCls, beforeGrade, startPath)
+  const agentResult = await runAgentWithDiagnoseTool(
+    sandbox,
+    devUrl,
+    mcpUrl,
+    beforeCls,
+    beforeGrade,
+    startPath,
+    customPrompt
+  )
   await updateProgress(progressContext, 3, "Agent finished, verifying CLS improvements...", devUrl)
 
   // Force a fresh page reload to capture new CLS measurement
@@ -281,7 +290,8 @@ async function runAgentWithDiagnoseTool(
   _mcpUrl: string,
   beforeCls: number | null,
   beforeGrade: "good" | "needs-improvement" | "poor" | null,
-  startPath: string
+  startPath: string,
+  customPrompt?: string
 ): Promise<{ transcript: string; summary: string }> {
   const SANDBOX_CWD = "/vercel/sandbox"
   const D3K_MCP_PORT = 3684
@@ -469,49 +479,20 @@ Try running diagnose again.`
     })
   }
 
-  const systemPrompt = `You are a CLS fix specialist. Fix the layout shift issue efficiently.
+  // Build system prompt based on whether this is a custom prompt or CLS fix
+  const systemPrompt = customPrompt
+    ? buildEnhancedPrompt(customPrompt, startPath, devUrl)
+    : buildClsFixPrompt(beforeCls, beforeGrade, startPath)
 
-## CRITICAL: You MUST write a fix!
-Your goal is to WRITE CODE that fixes the CLS issue, not just analyze it.
-You have limited steps - be efficient and focused.
-
-## Workflow (4-6 steps max):
-1. **diagnose** - See what's shifting (1 step)
-2. **Find code** - Search for the shifting element in code (1-2 steps)
-3. **writeFile** - FIX THE CODE (1 step) ← THIS IS REQUIRED!
-4. **diagnose** - Verify fix worked (1 step)
-
-## CLS Fix Patterns (use these!):
-- Conditional rendering causing shift → Use \`visibility: hidden\` instead of \`return null\`
-- Delayed content appearing → Reserve space with min-height or fixed dimensions
-- Elements shifting down → Add height/min-height from initial render
-- Images without dimensions → Add explicit width/height
-
-## Example Fix:
-BEFORE (causes CLS):
-\`\`\`tsx
-if (!show) return null
-return <div style={{height: '200px'}}>Content</div>
-\`\`\`
-
-AFTER (no CLS):
-\`\`\`tsx
-return <div style={{height: '200px', visibility: show ? 'visible' : 'hidden'}}>Content</div>
-\`\`\`
-
-## Current Status
-Before CLS: ${beforeCls?.toFixed(4) || "unknown"} (${beforeGrade || "unknown"})
-Target: CLS ≤ 0.1 (GOOD)
-Page: ${startPath}
-
-Start with diagnose, then QUICKLY find and fix the code. Do not over-analyze!`
+  // Build user prompt based on workflow type
+  const userPromptMessage = customPrompt
+    ? `Proceed with the task. The dev server is running at ${devUrl}`
+    : `Fix the CLS issues on the ${startPath} page of this app. Dev URL: ${devUrl}\n\nStart with diagnose to see what's shifting, then fix it.`
 
   const { text, steps } = await generateText({
     model,
     system: systemPrompt,
-    prompt: `Fix the CLS issues on the ${startPath} page of this app. Dev URL: ${devUrl}
-
-Start with diagnose to see what's shifting, then fix it.`,
+    prompt: userPromptMessage,
     tools,
     stopWhen: stepCountIs(15) // Enough for: diagnose + find(2) + read + write + diagnose + buffer
   })
@@ -892,4 +873,105 @@ The AI agent analyzed the page for layout shifts and applied fixes to reduce CLS
     workflowLog(`[PR] Error: ${errorMsg}`)
     return { error: `Exception: ${errorMsg}` }
   }
+}
+
+// ============================================================
+// Prompt Builders
+// ============================================================
+
+/**
+ * Build the CLS-specific system prompt (default for cls-fix workflow type)
+ */
+function buildClsFixPrompt(
+  beforeCls: number | null,
+  beforeGrade: "good" | "needs-improvement" | "poor" | null,
+  startPath: string
+): string {
+  return `You are a CLS fix specialist. Fix the layout shift issue efficiently.
+
+## CRITICAL: You MUST write a fix!
+Your goal is to WRITE CODE that fixes the CLS issue, not just analyze it.
+You have limited steps - be efficient and focused.
+
+## Workflow (4-6 steps max):
+1. **diagnose** - See what's shifting (1 step)
+2. **Find code** - Search for the shifting element in code (1-2 steps)
+3. **writeFile** - FIX THE CODE (1 step) ← THIS IS REQUIRED!
+4. **diagnose** - Verify fix worked (1 step)
+
+## CLS Fix Patterns (use these!):
+- Conditional rendering causing shift → Use \`visibility: hidden\` instead of \`return null\`
+- Delayed content appearing → Reserve space with min-height or fixed dimensions
+- Elements shifting down → Add height/min-height from initial render
+- Images without dimensions → Add explicit width/height
+
+## Example Fix:
+BEFORE (causes CLS):
+\`\`\`tsx
+if (!show) return null
+return <div style={{height: '200px'}}>Content</div>
+\`\`\`
+
+AFTER (no CLS):
+\`\`\`tsx
+return <div style={{height: '200px', visibility: show ? 'visible' : 'hidden'}}>Content</div>
+\`\`\`
+
+## Current Status
+Before CLS: ${beforeCls?.toFixed(4) || "unknown"} (${beforeGrade || "unknown"})
+Target: CLS ≤ 0.1 (GOOD)
+Page: ${startPath}
+
+Start with diagnose, then QUICKLY find and fix the code. Do not over-analyze!`
+}
+
+/**
+ * Build an enhanced system prompt that wraps the user's custom instructions
+ * with d3k tooling guidance and best practices
+ */
+function buildEnhancedPrompt(userPrompt: string, startPath: string, devUrl: string): string {
+  return `You are an AI developer assistant with access to a live development environment.
+You can make changes to the codebase and see results in real-time.
+
+## YOUR TASK
+${userPrompt}
+
+## DEVELOPMENT ENVIRONMENT
+- **App URL**: ${devUrl}
+- **Start Page**: ${startPath}
+- **Working Directory**: /vercel/sandbox (this is a git repository)
+
+## AVAILABLE TOOLS
+
+### Code Tools
+- **readFile** - Read any file in the codebase
+- **writeFile** - Create or modify files (changes are applied immediately via Hot Module Replacement)
+- **searchFiles** - Search for files by glob pattern (e.g., "**/*.tsx")
+- **grep** - Search file contents for text patterns
+- **listDir** - List directory contents
+- **gitDiff** - See your changes so far
+
+### Browser & Debugging Tools
+- **diagnose** - Navigate to the page and get diagnostic information including:
+  - Layout shift (CLS) measurements
+  - Console errors
+  - Screenshot of current state
+  Use this BEFORE making changes to capture the "before" state!
+  Use this AFTER making changes to verify they worked!
+
+## WORKFLOW GUIDELINES
+
+1. **Start with diagnose** - Always capture the initial state before making changes
+2. **Explore first** - Use readFile, searchFiles, and grep to understand the codebase
+3. **Make targeted changes** - Edit only what's necessary
+4. **Verify with diagnose** - After changes, use diagnose to confirm they work
+5. **Be efficient** - You have limited steps, so be focused
+
+## IMPORTANT NOTES
+- Changes are saved immediately when you use writeFile
+- Hot Module Replacement (HMR) applies changes without full page reload
+- Always use diagnose after making changes to capture the "after" state
+- The diagnose tool will show you any console errors or layout shifts
+
+Now, complete the task described above. Start by using the diagnose tool to capture the current state of the page.`
 }

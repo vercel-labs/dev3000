@@ -508,12 +508,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       }
 
       // Map URL param type to workflow type
-      const workflowType =
-        _selectedType === "cloud-fix"
-          ? "cls-fix"
-          : _selectedType === "next-16-migration"
-            ? "next-16-migration"
-            : "prompt"
+      const workflowType = _selectedType === "cloud-fix" ? "cls-fix" : "prompt"
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Request body type depends on conditional fields
       const body: any = {
@@ -709,15 +704,6 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                   <div className="font-semibold">CLS Fix</div>
                   <div className="text-sm text-gray-600 mt-1">
                     Detect and fix Cumulative Layout Shift issues automatically
-                  </div>
-                </Link>
-                <Link
-                  href="/workflows/new?type=next-16-migration"
-                  className="block w-full p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 text-left transition-colors"
-                >
-                  <div className="font-semibold">Next.js 16 Migration</div>
-                  <div className="text-sm text-gray-600 mt-1">
-                    Upgrade your project to Next.js 16 with automated codemods and fixes
                   </div>
                 </Link>
                 <Link

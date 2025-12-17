@@ -1,6 +1,6 @@
 import { del, head, list, put } from "@vercel/blob"
 
-export type WorkflowType = "cls-fix" | "prompt" | "next-16-migration"
+export type WorkflowType = "cls-fix" | "prompt"
 
 export interface WorkflowRun {
   id: string

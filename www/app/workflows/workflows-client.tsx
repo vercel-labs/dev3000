@@ -56,8 +56,6 @@ function formatWorkflowType(type?: string): string {
       return "CLS Fix"
     case "prompt":
       return "Prompt"
-    case "next-16-migration":
-      return "Next 16"
     default:
       return "CLS Fix" // Default for existing workflows without type
   }
