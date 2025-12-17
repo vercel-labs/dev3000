@@ -60,6 +60,7 @@ export async function initSandboxStep(
   branch: string,
   projectName: string,
   reportId: string,
+  startPath: string,
   vercelOidcToken?: string,
   progressContext?: ProgressContext | null
 ): Promise<{
@@ -136,6 +137,7 @@ export async function agentFixLoopStep(
   initD3kLogs: string,
   projectName: string,
   reportId: string,
+  startPath: string,
   progressContext?: ProgressContext | null
 ): Promise<{
   reportBlobUrl: string
@@ -155,7 +157,7 @@ export async function agentFixLoopStep(
   }
 
   // Run the agent with the new "diagnose" tool
-  const agentResult = await runAgentWithDiagnoseTool(sandbox, devUrl, mcpUrl, beforeCls, beforeGrade)
+  const agentResult = await runAgentWithDiagnoseTool(sandbox, devUrl, mcpUrl, beforeCls, beforeGrade, startPath)
   await updateProgress(progressContext, 3, "Agent finished, verifying CLS improvements...", devUrl)
 
   // Force a fresh page reload to capture new CLS measurement
@@ -170,7 +172,8 @@ export async function agentFixLoopStep(
 
   // First navigate to localhost (NOT the public devUrl!) so CLS capture works
   // The screencast-manager only captures for localhost:3000, not the public sb-xxx.vercel.run URL
-  const navCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"navigate","params":{"url":"http://localhost:3000"}}}}'`
+  const targetUrl = `http://localhost:3000${startPath}`
+  const navCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"navigate","params":{"url":"${targetUrl}"}}}}'`
   const navResult = await runSandboxCommand(sandbox, "bash", ["-c", navCmd])
   workflowLog(
     `[Agent] Navigate to devUrl result: exit=${navResult.exitCode}, stdout=${navResult.stdout.substring(0, 200)}`
@@ -277,7 +280,8 @@ async function runAgentWithDiagnoseTool(
   devUrl: string,
   _mcpUrl: string,
   beforeCls: number | null,
-  beforeGrade: "good" | "needs-improvement" | "poor" | null
+  beforeGrade: "good" | "needs-improvement" | "poor" | null,
+  startPath: string
 ): Promise<{ transcript: string; summary: string }> {
   const SANDBOX_CWD = "/vercel/sandbox"
   const D3K_MCP_PORT = 3684
@@ -304,9 +308,10 @@ This navigates the page fresh to get accurate measurements.`,
         workflowLog(`[diagnose] Running: ${reason}`)
 
         // Reload the page to trigger fresh CLS capture
-        // NOTE: Navigate to localhost:3000, not the public devUrl!
+        // NOTE: Navigate to localhost:3000 + startPath, not the public devUrl!
         // The screencast-manager only captures CLS for localhost:3000, not sb-xxx.vercel.run
-        const navCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"navigate","params":{"url":"http://localhost:3000"}}}}'`
+        const diagnoseUrl = `http://localhost:3000${startPath}`
+        const navCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"navigate","params":{"url":"${diagnoseUrl}"}}}}'`
         await runSandboxCommand(sandbox, "bash", ["-c", navCmd])
         await new Promise((resolve) => setTimeout(resolve, 1000))
 
@@ -497,13 +502,14 @@ return <div style={{height: '200px', visibility: show ? 'visible' : 'hidden'}}>C
 ## Current Status
 Before CLS: ${beforeCls?.toFixed(4) || "unknown"} (${beforeGrade || "unknown"})
 Target: CLS ≤ 0.1 (GOOD)
+Page: ${startPath}
 
 Start with diagnose, then QUICKLY find and fix the code. Do not over-analyze!`
 
   const { text, steps } = await generateText({
     model,
     system: systemPrompt,
-    prompt: `Fix the CLS issues in this app. Dev URL: ${devUrl}
+    prompt: `Fix the CLS issues on the ${startPath} page of this app. Dev URL: ${devUrl}
 
 Start with diagnose to see what's shifting, then fix it.`,
     tools,

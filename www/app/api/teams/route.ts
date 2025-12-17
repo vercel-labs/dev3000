@@ -65,7 +65,7 @@ export async function GET() {
 
     // Add actual teams
     if (teamsData.teams && Array.isArray(teamsData.teams)) {
-      // biome-ignore lint/suspicious/noExplicitAny: Vercel API response shape is external
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Vercel API response shape is external
       for (const team of teamsData.teams as any[]) {
         teams.push({
           id: team.id,

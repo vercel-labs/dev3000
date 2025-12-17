@@ -46,6 +46,7 @@ export async function cloudFixWorkflow(params: {
   userId?: string // For progress updates
   timestamp?: string // For progress updates
   workflowType?: string // For progress updates
+  startPath?: string // Page path to analyze (e.g., "/about")
   // PR creation params
   githubPat?: string
   repoOwner?: string
@@ -63,6 +64,7 @@ export async function cloudFixWorkflow(params: {
     userId,
     timestamp,
     workflowType,
+    startPath = "/",
     githubPat,
     repoOwner,
     repoName,
@@ -86,7 +88,7 @@ export async function cloudFixWorkflow(params: {
   // ============================================================
   workflowLog("[Workflow] Step 1: Initializing sandbox...")
 
-  const initResult = await initSandbox(repoUrl, repoBranch, projectName, reportId, vercelOidcToken, progressContext)
+  const initResult = await initSandbox(repoUrl, repoBranch, projectName, reportId, startPath, vercelOidcToken, progressContext)
 
   workflowLog(`[Workflow] Sandbox: ${initResult.sandboxId}, CLS: ${initResult.beforeCls}`)
 
@@ -105,6 +107,7 @@ export async function cloudFixWorkflow(params: {
     initResult.initD3kLogs,
     projectName,
     reportId,
+    startPath,
     progressContext
   )
 
@@ -184,12 +187,13 @@ async function initSandbox(
   branch: string,
   projectName: string,
   reportId: string,
+  startPath: string,
   vercelOidcToken?: string,
   progressContext?: ProgressContext | null
 ): Promise<InitResult> {
   "use step"
   const { initSandboxStep } = await import("./steps")
-  return initSandboxStep(repoUrl, branch, projectName, reportId, vercelOidcToken, progressContext)
+  return initSandboxStep(repoUrl, branch, projectName, reportId, startPath, vercelOidcToken, progressContext)
 }
 
 async function agentFixLoop(
@@ -202,6 +206,7 @@ async function agentFixLoop(
   initD3kLogs: string,
   projectName: string,
   reportId: string,
+  startPath: string,
   progressContext?: ProgressContext | null
 ): Promise<FixResult> {
   "use step"
@@ -216,6 +221,7 @@ async function agentFixLoop(
     initD3kLogs,
     projectName,
     reportId,
+    startPath,
     progressContext
   )
 }

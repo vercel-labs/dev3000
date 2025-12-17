@@ -206,7 +206,7 @@ async function getChangedFiles(owner: string, repo: string, prNumber: string): P
     }
 
     const files = await response.json()
-    // biome-ignore lint/suspicious/noExplicitAny: GitHub API file objects have dynamic structure
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- GitHub API file objects have dynamic structure
     return files.map((file: any) => file.filename)
   } catch (error) {
     console.error("Error getting changed files:", error)
@@ -217,7 +217,7 @@ async function getChangedFiles(owner: string, repo: string, prNumber: string): P
 /**
  * Post comment on PR with results
  */
-// biome-ignore lint/suspicious/noExplicitAny: Workflow result object has dynamic structure
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Workflow result object has dynamic structure
 async function postPRComment(owner: string, repo: string, prNumber: string, result: any) {
   try {
     const statusEmoji = result.success ? "✅" : "❌"
@@ -258,7 +258,7 @@ ${result.performance?.slowPagesCount > 0 ? `\n⚠️ **Performance**: ${result.p
 /**
  * Set GitHub Check status
  */
-// biome-ignore lint/suspicious/noExplicitAny: Workflow result object has dynamic structure
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Workflow result object has dynamic structure
 async function setGitHubCheck(owner: string, repo: string, sha: string, result: any) {
   try {
     const status = result.success ? "success" : "failure"

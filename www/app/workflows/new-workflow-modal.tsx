@@ -66,6 +66,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   const bypassTokenId = useId()
   const customPromptId = useId()
   const githubPatId = useId()
+  const startPathId = useId()
 
   // Initialize step from URL params to avoid CLS from cascading useEffects
   const initialStep = (() => {
@@ -89,7 +90,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   const [loadingProjects, setLoadingProjects] = useState(false)
   const [projectsError, setProjectsError] = useState<string | null>(null)
   const [workflowStatus, setWorkflowStatus] = useState<string>("")
-  // biome-ignore lint/suspicious/noExplicitAny: API response type is dynamic
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- API response type is dynamic
   const [workflowResult, setWorkflowResult] = useState<any>(null)
   const [activeRunId, setActiveRunId] = useState<string | null>(null)
   const [sandboxUrl, setSandboxUrl] = useState<string | null>(null)
@@ -100,6 +101,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   const [needsBypassToken, setNeedsBypassToken] = useState(false)
   const [customPrompt, setCustomPrompt] = useState("")
   const [githubPat, setGithubPat] = useState("")
+  const [startPath, setStartPath] = useState("/")
   const [availableBranches, setAvailableBranches] = useState<
     Array<{ name: string; lastDeployment: { url: string; createdAt: number } }>
   >([])
@@ -162,6 +164,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       setBypassToken("")
       setNeedsBypassToken(false)
       setCustomPrompt("")
+      setStartPath("/")
       setProjectsError(null)
       setAvailableBranches([])
       setLoadingBranches(false)
@@ -203,7 +206,6 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   }, [selectedTeam, loadingProjects])
 
   // Load branches when project and team are selected and on options step
-  // biome-ignore lint/correctness/useExhaustiveDependencies: loadBranches is stable and doesn't need to be a dependency
   useEffect(() => {
     if (
       selectedProject &&
@@ -215,10 +217,10 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
     ) {
       loadBranches(selectedProject, selectedTeam)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- loadBranches is stable and doesn't need to be a dependency
   }, [selectedProject, selectedTeam, step, availableBranches.length, loadingBranches, branchesError])
 
   // Poll workflow status when running
-  // biome-ignore lint/correctness/useExhaustiveDependencies: selectedProject is used for matching but shouldn't re-trigger polling
   useEffect(() => {
     if (!userId || step !== "running") return
 
@@ -232,14 +234,14 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
         if (!data.success || !data.runs) return
 
         // Find the run - either by activeRunId or by matching project + running status
-        // biome-ignore lint/suspicious/noExplicitAny: API response type is dynamic
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- API response type is dynamic
         let run: any = null
         if (activeRunId) {
-          // biome-ignore lint/suspicious/noExplicitAny: API response type is dynamic
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- API response type is dynamic
           run = data.runs.find((r: any) => r.id === activeRunId)
         } else if (selectedProject) {
           // Find the most recent running workflow for this project
-          // biome-ignore lint/suspicious/noExplicitAny: API response type is dynamic
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- API response type is dynamic
           run = data.runs.find((r: any) => r.projectName === selectedProject.name && r.status === "running")
           if (run) {
             setActiveRunId(run.id)
@@ -278,6 +280,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
     pollStatus()
 
     return () => clearInterval(interval)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- selectedProject is used for matching but shouldn't re-trigger polling
   }, [activeRunId, userId, step])
 
   // Load GitHub PAT from localStorage when on options step
@@ -512,7 +515,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
             ? "next-16-migration"
             : "prompt"
 
-      // biome-ignore lint/suspicious/noExplicitAny: Request body type depends on conditional fields
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Request body type depends on conditional fields
       const body: any = {
         devUrl,
         projectName: selectedProject.name,
@@ -520,7 +523,8 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
         bypassToken,
         workflowType,
         customPrompt: workflowType === "prompt" ? customPrompt : undefined,
-        githubPat: autoCreatePR && githubPat ? githubPat : undefined
+        githubPat: autoCreatePR && githubPat ? githubPat : undefined,
+        startPath: startPath !== "/" ? startPath : undefined // Only send if not default
       }
 
       // If we have repo info, pass it for sandbox creation
@@ -992,6 +996,22 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                         </p>
                       </div>
                     )}
+                    <div>
+                      <Label htmlFor={startPathId} className="block text-sm font-medium text-gray-700 mb-1">
+                        Start Path
+                      </Label>
+                      <input
+                        type="text"
+                        id={startPathId}
+                        value={startPath}
+                        onChange={(e) => setStartPath(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md font-mono text-sm"
+                        placeholder="/"
+                      />
+                      <p className="mt-1 text-xs text-gray-500">
+                        The page path to analyze for CLS (e.g., &quot;/&quot;, &quot;/about&quot;, &quot;/products&quot;)
+                      </p>
+                    </div>
                     {_selectedType === "prompt" && (
                       <div>
                         <Label htmlFor={customPromptId} className="block text-sm font-medium text-gray-700 mb-1">
