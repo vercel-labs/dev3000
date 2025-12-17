@@ -102,7 +102,12 @@ const CHROME_FLAGS = [
 /**
  * Helper to run commands in sandbox and collect output
  */
-async function runCommand(sandbox: Sandbox, cmd: string, args: string[], options?: { cwd?: string }): Promise<CommandResult> {
+async function runCommand(
+  sandbox: Sandbox,
+  cmd: string,
+  args: string[],
+  options?: { cwd?: string }
+): Promise<CommandResult> {
   const result = await sandbox.runCommand({
     cmd,
     args,
@@ -163,20 +168,20 @@ export class SandboxChrome {
 
     // Step 1: Install system dependencies
     log("[SandboxChrome] Installing system dependencies...")
-    await this.installSystemDependencies(sandbox, { debug })
+    await SandboxChrome.installSystemDependencies(sandbox, { debug })
 
     // Step 2: Install @sparticuz/chromium
     log("[SandboxChrome] Installing @sparticuz/chromium...")
-    await this.installChromium(sandbox, { cwd, packageManager, debug })
+    await SandboxChrome.installChromium(sandbox, { cwd, packageManager, debug })
 
     // Step 3: Get executable path
     log("[SandboxChrome] Getting Chromium executable path...")
-    const executablePath = await this.getExecutablePath(sandbox, { cwd, debug })
+    const executablePath = await SandboxChrome.getExecutablePath(sandbox, { cwd, debug })
     log(`[SandboxChrome] Chromium path: ${executablePath}`)
 
     // Step 4: Launch Chrome
     log("[SandboxChrome] Launching Chrome...")
-    const cdpUrl = await this.launch(sandbox, executablePath, {
+    const cdpUrl = await SandboxChrome.launch(sandbox, executablePath, {
       port,
       headless,
       userDataDir,
@@ -278,7 +283,13 @@ export class SandboxChrome {
       debug?: boolean
     } = {}
   ): Promise<string> {
-    const { port = 9222, headless = true, userDataDir = "/tmp/chrome-profile", timeout = 30000, debug = false } = options
+    const {
+      port = 9222,
+      headless = true,
+      userDataDir = "/tmp/chrome-profile",
+      timeout = 30000,
+      debug = false
+    } = options
     const log = debug ? console.log.bind(console) : () => {}
 
     // Build Chrome flags
@@ -302,7 +313,7 @@ export class SandboxChrome {
     await runCommand(sandbox, "sh", ["-c", chromeCmd])
 
     // Wait for CDP to be ready
-    const cdpUrl = await this.waitForCdp(sandbox, port, timeout, debug)
+    const cdpUrl = await SandboxChrome.waitForCdp(sandbox, port, timeout, debug)
 
     return cdpUrl
   }
@@ -347,7 +358,11 @@ export class SandboxChrome {
    * Run a diagnostic test to verify Chrome can run in the sandbox
    * Useful for debugging Chrome issues
    */
-  static async runDiagnostic(sandbox: Sandbox, executablePath: string, options: { debug?: boolean } = {}): Promise<{
+  static async runDiagnostic(
+    sandbox: Sandbox,
+    executablePath: string,
+    options: { debug?: boolean } = {}
+  ): Promise<{
     success: boolean
     chromePath: string
     version: string | null

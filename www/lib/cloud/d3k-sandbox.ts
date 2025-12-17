@@ -249,7 +249,9 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
       chromiumPath = await SandboxChrome.getExecutablePath(sandbox, { cwd: sandboxCwd, debug })
       if (debug) console.log(`  ✅ Chromium path: ${chromiumPath}`)
     } catch (error) {
-      console.log(`  ⚠️ Could not get Chromium path, using fallback: ${error instanceof Error ? error.message : String(error)}`)
+      console.log(
+        `  ⚠️ Could not get Chromium path, using fallback: ${error instanceof Error ? error.message : String(error)}`
+      )
       chromiumPath = "/usr/bin/chromium" // fallback
     }
 
@@ -265,14 +267,11 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
       console.log("  🔍 ===== END CHROMIUM DIAGNOSTIC TEST =====")
     }
 
-    // Install d3k globally from GitHub release (viewport fix for consistent CLS)
-    // TODO: Revert to "dev3000" once v0.0.128 is published to npm
-    const d3kTarballUrl =
-      "https://github.com/vercel-labs/dev3000/releases/download/v0.0.127-canary-viewport2/dev3000-0.0.127-canary.tgz"
-    if (debug) console.log(`  📦 Installing d3k globally from GitHub release: ${d3kTarballUrl}`)
+    // Install d3k globally from npm (always use latest)
+    if (debug) console.log("  📦 Installing d3k globally from npm (dev3000@latest)")
     const d3kInstallResult = await runCommandWithLogs(sandbox, {
       cmd: "pnpm",
-      args: ["i", "-g", d3kTarballUrl],
+      args: ["i", "-g", "dev3000@latest"],
       stdout: debug ? process.stdout : undefined,
       stderr: debug ? process.stderr : undefined
     })
