@@ -4,6 +4,16 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.127] - 2025-12-16
+
+**Feature Release**
+
+- Reduce log noise by making CDP layout shift logs conditional on --debug flag
+- Add GitHub PAT support for automatic PR creation in workflows
+- Simplify workflow architecture (v2) with better progress streaming
+- Fix CLS measurement with 1920x1080 viewport in headless mode
+- Improve workflow report UI with coordinated screenshot players
+
 ## [0.0.126] - 2025-12-11
 
 **Feature Release**

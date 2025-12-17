@@ -10,6 +10,19 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.127",
+    date: "2025-12-16",
+    type: "minor",
+    highlights: [
+      "Reduce log noise by making CDP layout shift logs conditional on --debug flag",
+      "Add GitHub PAT support for automatic PR creation in workflows",
+      "Simplify workflow architecture (v2) with better progress streaming",
+      "Fix CLS measurement with 1920x1080 viewport in headless mode",
+      "Improve workflow report UI with coordinated screenshot players"
+    ]
+  },
+
+  {
     version: "0.0.126",
     date: "2025-12-11",
     type: "minor",
