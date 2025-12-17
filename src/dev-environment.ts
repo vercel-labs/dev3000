@@ -2159,7 +2159,8 @@ export class DevEnvironment {
             // Pass through CDP messages directly - they already have their own category tags
             this.logger.log("browser", msg)
           },
-          this.options.port.toString()
+          this.options.port.toString(),
+          this.options.debug
         )
         await this.screencastManager.start()
         // this.logger.log("browser", "[Screencast] Auto-capture enabled for navigation events")

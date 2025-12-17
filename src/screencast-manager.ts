@@ -45,7 +45,8 @@ export class ScreencastManager {
   constructor(
     private cdpUrl: string,
     private logFn: (msg: string) => void,
-    appPort?: string
+    appPort?: string,
+    private debug: boolean = false
   ) {
     this.screenshotDir = process.env.SCREENSHOT_DIR || join(tmpdir(), "dev3000-mcp-deps", "public", "screenshots")
     this.appPort = appPort || process.env.APP_PORT || "3000"
@@ -556,19 +557,22 @@ export class ScreencastManager {
             const element = shift.sources?.[0]?.node || "unidentified"
             const position = shift.sources?.[0]?.position
 
-            // Log with context about whether we can verify this shift
-            if (!shift.sources?.[0] || element === "unidentified" || position === null || position === undefined) {
-              this.logFn(
-                `[CDP] Unverified shift detected (score: ${shift.score.toFixed(4)}, time: ${shift.timestamp.toFixed(0)}ms) - element could not be identified, likely fixed overlay noise`
-              )
-            } else if (position === "fixed" || position === "absolute") {
-              this.logFn(
-                `[CDP] Fixed/absolute element shift detected (${element}, position: ${position}, score: ${shift.score.toFixed(4)}) - will be filtered as overlay noise`
-              )
-            } else {
-              this.logFn(
-                `[CDP] Layout shift detected (element: ${element}, position: ${position}, score: ${shift.score.toFixed(4)}, time: ${shift.timestamp.toFixed(0)}ms)`
-              )
+            // Only log verbose CDP diagnostics when debug mode is enabled
+            if (this.debug) {
+              // Log with context about whether we can verify this shift
+              if (!shift.sources?.[0] || element === "unidentified" || position === null || position === undefined) {
+                this.logFn(
+                  `[CDP] Unverified shift detected (score: ${shift.score.toFixed(4)}, time: ${shift.timestamp.toFixed(0)}ms) - element could not be identified, likely fixed overlay noise`
+                )
+              } else if (position === "fixed" || position === "absolute") {
+                this.logFn(
+                  `[CDP] Fixed/absolute element shift detected (${element}, position: ${position}, score: ${shift.score.toFixed(4)}) - will be filtered as overlay noise`
+                )
+              } else {
+                this.logFn(
+                  `[CDP] Layout shift detected (element: ${element}, position: ${position}, score: ${shift.score.toFixed(4)}, time: ${shift.timestamp.toFixed(0)}ms)`
+                )
+              }
             }
           })
         }
