@@ -1,5 +1,6 @@
 import { Sandbox } from "@vercel/sandbox"
 import ms from "ms"
+import { SandboxChrome } from "./sandbox-chrome"
 
 export interface D3kSandboxConfig {
   repoUrl: string
@@ -233,149 +234,36 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
 
     if (debug) console.log("  ✅ Project dependencies installed")
 
-    // Install system dependencies for Chromium
-    // The Vercel Sandbox uses Amazon Linux 2023 which has dnf package manager
-    // These packages provide shared libraries that Chromium needs (nspr, nss, etc.)
-    if (debug) console.log("  🔧 Installing system dependencies for Chromium...")
-    const sysDepsResult = await runCommandWithLogs(sandbox, {
-      cmd: "sh",
-      args: [
-        "-c",
-        "sudo dnf install -y nspr nss atk at-spi2-atk cups-libs libdrm libxkbcommon libXcomposite libXdamage libXfixes libXrandr mesa-libgbm alsa-lib cairo pango glib2 gtk3 libX11 libXext libXcursor libXi libXtst > /tmp/sys-deps-install.log 2>&1"
-      ]
-    })
+    // Install Chrome/Chromium using the SandboxChrome module
+    // This handles system dependencies, @sparticuz/chromium installation, and path extraction
+    if (debug) console.log("  🔧 Setting up Chrome using SandboxChrome module...")
 
-    if (sysDepsResult.exitCode !== 0) {
-      console.log(`  ⚠️ System dependencies installation failed (exit code ${sysDepsResult.exitCode})`)
-      // Try to read the log for debugging
-      try {
-        const logResult = await runCommandWithLogs(sandbox, {
-          cmd: "sh",
-          args: ["-c", "cat /tmp/sys-deps-install.log 2>&1 | tail -20"]
-        })
-        if (logResult.stdout) {
-          console.log(`  📋 Install log: ${logResult.stdout}`)
-        }
-      } catch {
-        // Ignore log read errors
-      }
-      console.log("  ⚠️ Continuing anyway - browser automation may not work")
-    } else {
-      if (debug) console.log("  ✅ System dependencies installed")
-    }
+    await SandboxChrome.installSystemDependencies(sandbox, { debug })
+    if (debug) console.log("  ✅ System dependencies installed")
 
-    // Install Chromium browser for headless browser automation using @sparticuz/chromium
-    // The Vercel Sandbox doesn't have apt-get or Chrome installed by default
-    // @sparticuz/chromium is designed for serverless environments and provides a pre-compiled Chromium
-    if (debug) console.log("  🌐 Installing @sparticuz/chromium for serverless browser automation...")
-    const chromiumInstallResult = await runCommandWithLogs(sandbox, {
-      cmd: packageManager,
-      args: ["add", "@sparticuz/chromium", "puppeteer-core"],
-      cwd: sandboxCwd,
-      stdout: debug ? process.stdout : undefined,
-      stderr: debug ? process.stderr : undefined
-    })
+    await SandboxChrome.installChromium(sandbox, { cwd: sandboxCwd, packageManager, debug })
+    if (debug) console.log("  ✅ @sparticuz/chromium installed")
 
-    if (chromiumInstallResult.exitCode !== 0) {
-      console.log(`  ⚠️ @sparticuz/chromium installation failed (exit code ${chromiumInstallResult.exitCode})`)
-      console.log("  ⚠️ Continuing anyway - d3k may work without browser automation")
-    } else {
-      if (debug) console.log("  ✅ @sparticuz/chromium installed")
-    }
-
-    // Create a helper script to extract the Chromium executable path from @sparticuz/chromium
-    // This package downloads and extracts Chromium at runtime
-    if (debug) console.log("  🔍 Getting Chromium executable path from @sparticuz/chromium...")
-    const getChromiumPathResult = await runCommandWithLogs(sandbox, {
-      cmd: "node",
-      args: ["-e", "require('@sparticuz/chromium').executablePath().then(p => console.log(p))"],
-      cwd: sandboxCwd
-    })
-
-    let chromiumPath = "/usr/bin/chromium" // fallback
-    if (getChromiumPathResult.exitCode === 0 && getChromiumPathResult.stdout.trim()) {
-      chromiumPath = getChromiumPathResult.stdout.trim()
-      if (debug) console.log(`  ✅ Chromium path from @sparticuz/chromium: ${chromiumPath}`)
-    } else {
-      console.log(`  ⚠️ Could not get Chromium path from @sparticuz/chromium, using fallback: ${chromiumPath}`)
-      if (getChromiumPathResult.stderr) {
-        console.log(`  ⚠️ Error: ${getChromiumPathResult.stderr.substring(0, 500)}`)
-      }
-    }
-
-    // CRITICAL TEST: Run Chrome CDP test in a single shell command
-    // Previous tests showed that using separate commands can fail with 400 errors
-    // if a command doesn't exist (like 'file'). So we do everything in one sh -c.
-    console.log("  🔍 ===== CHROMIUM DIAGNOSTIC TEST =====")
+    let chromiumPath: string
     try {
-      const chromeTest = await runCommandWithLogs(sandbox, {
-        cmd: "sh",
-        args: [
-          "-c",
-          `
-          # Redirect stderr to stdout so we capture everything
-          exec 2>&1
-
-          echo "=== Chromium CDP Test ==="
-          echo "Chromium path: ${chromiumPath}"
-          echo ""
-
-          echo "1. Checking if file exists..."
-          ls -la "${chromiumPath}" 2>&1 || echo "   ❌ File not found"
-
-          echo ""
-          echo "2. Checking file type (if 'file' command exists)..."
-          file "${chromiumPath}" 2>&1 || echo "   (file command not available)"
-
-          echo ""
-          echo "3. Testing --version..."
-          "${chromiumPath}" --version 2>&1 || echo "   ❌ --version failed"
-
-          echo ""
-          echo "4. Starting Chrome headless with CDP port..."
-          echo "   Command: ${chromiumPath} --headless=new --no-sandbox --disable-gpu --remote-debugging-port=9222 about:blank"
-
-          # Start Chrome in background
-          "${chromiumPath}" --headless=new --no-sandbox --disable-setuid-sandbox --disable-gpu --disable-dev-shm-usage --remote-debugging-port=9222 --remote-debugging-address=127.0.0.1 about:blank &
-          PID=$!
-          echo "   Chrome PID: $PID"
-
-          # Wait 2 seconds
-          sleep 2
-
-          echo ""
-          echo "5. Checking if Chrome is still running..."
-          if ps -p $PID > /dev/null 2>&1; then
-            echo "   ✅ Chrome is RUNNING after 2s"
-
-            echo ""
-            echo "6. Trying to connect to CDP endpoint..."
-            curl -s --max-time 3 http://127.0.0.1:9222/json/version 2>&1 || echo "   ⚠️ CDP connection failed"
-
-            echo ""
-            echo "7. Killing test Chrome process..."
-            kill $PID 2>/dev/null
-          else
-            echo "   ❌ Chrome DIED within 2s"
-            wait $PID 2>/dev/null
-            echo "   Exit code: $?"
-          fi
-
-          echo ""
-          echo "8. Current processes:"
-          ps aux 2>/dev/null | grep -E "chrom|PID" | head -10 || echo "   (ps failed)"
-
-          echo ""
-          echo "=== End Chromium CDP Test ==="
-          `
-        ]
-      })
-      console.log(`  📋 Chrome CDP test result (exit ${chromeTest.exitCode}):\n${chromeTest.stdout || "(no output)"}`)
-      if (chromeTest.stderr) console.log(`  ⚠️ Chrome CDP test stderr: ${chromeTest.stderr}`)
+      chromiumPath = await SandboxChrome.getExecutablePath(sandbox, { cwd: sandboxCwd, debug })
+      if (debug) console.log(`  ✅ Chromium path: ${chromiumPath}`)
     } catch (error) {
-      console.log(`  ❌ Chrome CDP test failed with error: ${error instanceof Error ? error.message : String(error)}`)
+      console.log(`  ⚠️ Could not get Chromium path, using fallback: ${error instanceof Error ? error.message : String(error)}`)
+      chromiumPath = "/usr/bin/chromium" // fallback
     }
-    console.log("  🔍 ===== END CHROMIUM DIAGNOSTIC TEST =====")
+
+    // Run Chrome diagnostic test using SandboxChrome module
+    if (debug) {
+      console.log("  🔍 ===== CHROMIUM DIAGNOSTIC TEST =====")
+      const diagnostic = await SandboxChrome.runDiagnostic(sandbox, chromiumPath, { debug })
+      console.log(`  📋 Diagnostic result:`)
+      console.log(`     Path: ${diagnostic.chromePath}`)
+      console.log(`     Version: ${diagnostic.version || "unknown"}`)
+      console.log(`     CDP works: ${diagnostic.cdpWorks ? "✅ Yes" : "❌ No"}`)
+      if (diagnostic.error) console.log(`     Error: ${diagnostic.error}`)
+      console.log("  🔍 ===== END CHROMIUM DIAGNOSTIC TEST =====")
+    }
 
     // Install d3k globally from GitHub release (viewport fix for consistent CLS)
     // TODO: Revert to "dev3000" once v0.0.128 is published to npm
@@ -404,67 +292,6 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
       console.log(
         `  🔧 Command: cd ${sandboxCwd} && MCP_SKIP_PERMISSIONS=true d3k --no-tui --debug --headless --browser ${chromiumPath}`
       )
-
-    // DIAGNOSTIC: First test if spawn() with the chromium path works inside the sandbox
-    // This isolates whether the issue is with d3k's spawn() vs shell commands
-    console.log("  🔍 ===== TESTING spawn() with chromium directly =====")
-    try {
-      const spawnTestScript = `
-        exec 2>&1
-        echo "Testing if Node can spawn Chrome directly..."
-        node -e "
-          const { spawn } = require('child_process');
-          const chromePath = '${chromiumPath}';
-          const args = [
-            '--remote-debugging-port=9222',
-            '--user-data-dir=/tmp/spawn-test-profile',
-            '--no-first-run',
-            '--headless=new',
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-gpu',
-            '--disable-dev-shm-usage',
-            'about:blank'
-          ];
-          console.log('Spawning:', chromePath, args.join(' '));
-          const proc = spawn(chromePath, args, { stdio: 'pipe', detached: false });
-          proc.on('error', (e) => console.log('SPAWN ERROR:', e.message));
-          proc.stderr.on('data', (d) => console.log('STDERR:', d.toString().trim()));
-          proc.stdout.on('data', (d) => console.log('STDOUT:', d.toString().trim()));
-          setTimeout(() => {
-            const running = proc.pid && !proc.killed;
-            console.log('Chrome PID:', proc.pid, 'Running:', running);
-            if (running) {
-              require('http').get('http://localhost:9222/json/version', (res) => {
-                let data = '';
-                res.on('data', chunk => data += chunk);
-                res.on('end', () => {
-                  console.log('CDP Response:', data.substring(0, 200));
-                  proc.kill();
-                  process.exit(0);
-                });
-              }).on('error', (e) => {
-                console.log('CDP Error:', e.message);
-                proc.kill();
-                process.exit(1);
-              });
-            } else {
-              console.log('Chrome not running after spawn');
-              process.exit(1);
-            }
-          }, 3000);
-        "
-      `
-      const spawnTest = await runCommandWithLogs(sandbox, {
-        cmd: "sh",
-        args: ["-c", spawnTestScript]
-      })
-      console.log(`  📋 spawn() test result (exit ${spawnTest.exitCode}):\n${spawnTest.stdout || "(no output)"}`)
-      if (spawnTest.stderr) console.log(`  ⚠️ spawn() test stderr: ${spawnTest.stderr}`)
-    } catch (error) {
-      console.log(`  ❌ spawn() test failed: ${error instanceof Error ? error.message : String(error)}`)
-    }
-    console.log("  🔍 ===== END spawn() TEST =====")
 
     // Start d3k in detached mode with --headless flag
     // This tells d3k to launch Chrome in headless mode, which works in serverless environments

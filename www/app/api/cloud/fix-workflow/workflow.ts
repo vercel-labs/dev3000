@@ -88,7 +88,15 @@ export async function cloudFixWorkflow(params: {
   // ============================================================
   workflowLog("[Workflow] Step 1: Initializing sandbox...")
 
-  const initResult = await initSandbox(repoUrl, repoBranch, projectName, reportId, startPath, vercelOidcToken, progressContext)
+  const initResult = await initSandbox(
+    repoUrl,
+    repoBranch,
+    projectName,
+    reportId,
+    startPath,
+    vercelOidcToken,
+    progressContext
+  )
 
   workflowLog(`[Workflow] Sandbox: ${initResult.sandboxId}, CLS: ${initResult.beforeCls}`)
 

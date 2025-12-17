@@ -1009,7 +1009,8 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                         placeholder="/"
                       />
                       <p className="mt-1 text-xs text-gray-500">
-                        The page path to analyze for CLS (e.g., &quot;/&quot;, &quot;/about&quot;, &quot;/products&quot;)
+                        The page path to analyze for CLS (e.g., &quot;/&quot;, &quot;/about&quot;,
+                        &quot;/products&quot;)
                       </p>
                     </div>
                     {_selectedType === "prompt" && (
