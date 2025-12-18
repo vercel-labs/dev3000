@@ -396,6 +396,103 @@ Try running diagnose again.`
       }
     }),
 
+    // Get all Core Web Vitals (LCP, FCP, TTFB, CLS, INP)
+    getWebVitals: tool({
+      description: `Get all Core Web Vitals performance metrics from the page.
+Returns LCP (Largest Contentful Paint), FCP (First Contentful Paint), TTFB (Time to First Byte), CLS (Cumulative Layout Shift), and INP (Interaction to Next Paint) if available.
+Use this to diagnose and verify performance improvements.`,
+      inputSchema: z.object({
+        reason: z.string().describe("Why you're checking performance metrics")
+      }),
+      execute: async ({ reason }: { reason: string }) => {
+        workflowLog(`[getWebVitals] Running: ${reason}`)
+
+        // Navigate and reload to get fresh metrics
+        const diagnoseUrl = `http://localhost:3000${startPath}`
+        const navCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"navigate","params":{"url":"${diagnoseUrl}"}}}}'`
+        await runSandboxCommand(sandbox, "bash", ["-c", navCmd])
+        await new Promise((resolve) => setTimeout(resolve, 3000))
+
+        // Read d3k logs for performance metrics
+        const logsResult = await runSandboxCommand(sandbox, "sh", [
+          "-c",
+          'for log in /home/vercel-sandbox/.d3k/logs/*.log; do [ -f "$log" ] && tail -500 "$log" || true; done 2>/dev/null'
+        ])
+        const logs = logsResult.stdout || ""
+
+        // Parse Core Web Vitals from logs
+        const metrics: Record<string, { value: number | string; grade: string }> = {}
+
+        // LCP (Largest Contentful Paint) - good: ≤2.5s, needs improvement: ≤4s, poor: >4s
+        const lcpMatch = logs.match(/LCP[:\s]+(\d+(?:\.\d+)?)\s*(ms|s)?/i)
+        if (lcpMatch) {
+          let lcpMs = parseFloat(lcpMatch[1])
+          if (lcpMatch[2] === "s") lcpMs *= 1000
+          const grade = lcpMs <= 2500 ? "GOOD ✅" : lcpMs <= 4000 ? "NEEDS IMPROVEMENT ⚠️" : "POOR ❌"
+          metrics.LCP = { value: `${lcpMs.toFixed(0)}ms`, grade }
+        }
+
+        // FCP (First Contentful Paint) - good: ≤1.8s, needs improvement: ≤3s, poor: >3s
+        const fcpMatch = logs.match(/FCP[:\s]+(\d+(?:\.\d+)?)\s*(ms|s)?/i)
+        if (fcpMatch) {
+          let fcpMs = parseFloat(fcpMatch[1])
+          if (fcpMatch[2] === "s") fcpMs *= 1000
+          const grade = fcpMs <= 1800 ? "GOOD ✅" : fcpMs <= 3000 ? "NEEDS IMPROVEMENT ⚠️" : "POOR ❌"
+          metrics.FCP = { value: `${fcpMs.toFixed(0)}ms`, grade }
+        }
+
+        // TTFB (Time to First Byte) - good: ≤800ms, needs improvement: ≤1800ms, poor: >1800ms
+        const ttfbMatch = logs.match(/TTFB[:\s]+(\d+(?:\.\d+)?)\s*(ms|s)?/i)
+        if (ttfbMatch) {
+          let ttfbMs = parseFloat(ttfbMatch[1])
+          if (ttfbMatch[2] === "s") ttfbMs *= 1000
+          const grade = ttfbMs <= 800 ? "GOOD ✅" : ttfbMs <= 1800 ? "NEEDS IMPROVEMENT ⚠️" : "POOR ❌"
+          metrics.TTFB = { value: `${ttfbMs.toFixed(0)}ms`, grade }
+        }
+
+        // CLS (Cumulative Layout Shift) - good: ≤0.1, needs improvement: ≤0.25, poor: >0.25
+        const clsMatch = logs.match(/CLS[:\s]+([\d.]+)/i)
+        if (clsMatch) {
+          const cls = parseFloat(clsMatch[1])
+          const grade = cls <= 0.1 ? "GOOD ✅" : cls <= 0.25 ? "NEEDS IMPROVEMENT ⚠️" : "POOR ❌"
+          metrics.CLS = { value: cls.toFixed(4), grade }
+        }
+
+        // INP (Interaction to Next Paint) - good: ≤200ms, needs improvement: ≤500ms, poor: >500ms
+        const inpMatch = logs.match(/INP[:\s]+(\d+(?:\.\d+)?)\s*(ms)?/i)
+        if (inpMatch) {
+          const inpMs = parseFloat(inpMatch[1])
+          const grade = inpMs <= 200 ? "GOOD ✅" : inpMs <= 500 ? "NEEDS IMPROVEMENT ⚠️" : "POOR ❌"
+          metrics.INP = { value: `${inpMs.toFixed(0)}ms`, grade }
+        }
+
+        // Build report
+        if (Object.keys(metrics).length === 0) {
+          return `## Web Vitals Report
+
+No performance metrics found in logs yet. The page may still be loading, or metrics haven't been captured.
+
+Try running this tool again after a few seconds, or use the \`diagnose\` tool to trigger a page reload.`
+        }
+
+        let report = "## Web Vitals Report\n\n"
+        for (const [name, data] of Object.entries(metrics)) {
+          report += `**${name}:** ${data.value} (${data.grade})\n`
+        }
+
+        // Add thresholds reference
+        report += `
+### Thresholds Reference
+- **LCP** (Largest Contentful Paint): Good ≤2.5s, Needs Improvement ≤4s
+- **FCP** (First Contentful Paint): Good ≤1.8s, Needs Improvement ≤3s
+- **TTFB** (Time to First Byte): Good ≤800ms, Needs Improvement ≤1.8s
+- **CLS** (Cumulative Layout Shift): Good ≤0.1, Needs Improvement ≤0.25
+- **INP** (Interaction to Next Paint): Good ≤200ms, Needs Improvement ≤500ms`
+
+        return report
+      }
+    }),
+
     readFile: tool({
       description: "Read a file from the codebase.",
       inputSchema: z.object({
@@ -979,16 +1076,19 @@ ${userPrompt}
 - **gitDiff** - See your changes so far
 
 ### Browser & Debugging Tools
-- **diagnose** - Navigate to the page and get diagnostic information including:
-  - Layout shift (CLS) measurements
-  - Console errors
-  - Screenshot of current state
-  Use this BEFORE making changes to capture the "before" state!
-  Use this AFTER making changes to verify they worked!
+- **diagnose** - Navigate to the page and get CLS (layout shift) measurements
+  Use this for CLS-specific debugging
+- **getWebVitals** - Get all Core Web Vitals performance metrics:
+  - LCP (Largest Contentful Paint) - loading performance
+  - FCP (First Contentful Paint) - initial render time
+  - TTFB (Time to First Byte) - server response time
+  - CLS (Cumulative Layout Shift) - visual stability
+  - INP (Interaction to Next Paint) - interactivity
+  Use this for performance optimization tasks!
 
 ## WORKFLOW GUIDELINES
 
-1. **Start with diagnose** - Always capture the initial state before making changes
+1. **Start with getWebVitals or diagnose** - Capture the initial performance metrics
 2. **Explore first** - Use readFile, searchFiles, and grep to understand the codebase
 3. **Make targeted changes** - Edit only what's necessary
 4. **Verify with diagnose** - After changes, use diagnose to confirm they work
