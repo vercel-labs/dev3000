@@ -505,27 +505,45 @@ Try running diagnose again.`
 
   workflowLog(`[Agent] Completed in ${steps.length} steps`)
 
-  // Build transcript
+  // Build transcript in format expected by agent-analysis.tsx parser
   const transcript: string[] = []
+
+  // Include system prompt for full transparency
+  transcript.push("## System Prompt")
+  transcript.push("```")
+  transcript.push(systemPrompt)
+  transcript.push("```")
+  transcript.push("")
+
+  // Include user prompt
+  transcript.push("## User Prompt")
+  transcript.push("```")
+  transcript.push(userPromptMessage)
+  transcript.push("```")
+  transcript.push("")
+
   transcript.push(`## Agent Execution (${steps.length} steps)\n`)
 
   for (let i = 0; i < steps.length; i++) {
     const step = steps[i]
     transcript.push(`### Step ${i + 1}`)
 
-    if (step.text) transcript.push(step.text)
+    // Assistant text (reasoning/thinking)
+    if (step.text) {
+      transcript.push("**Assistant:**")
+      transcript.push(step.text)
+    }
 
+    // Tool calls and results
     if (step.toolCalls?.length) {
       for (let j = 0; j < step.toolCalls.length; j++) {
         const tc = step.toolCalls[j] as unknown as { toolName: string; input?: unknown }
         const tr = step.toolResults?.[j] as unknown as { output?: unknown } | undefined
 
-        transcript.push(`\n**${tc.toolName}**`)
-        if (tc.input && Object.keys(tc.input as object).length > 0) {
-          transcript.push("```json")
-          transcript.push(JSON.stringify(tc.input, null, 2))
-          transcript.push("```")
-        }
+        transcript.push(`\n**Tool Call: ${tc.toolName}**`)
+        transcript.push("```json")
+        transcript.push(JSON.stringify(tc.input || {}, null, 2))
+        transcript.push("```")
 
         let result =
           tr?.output !== undefined
@@ -534,6 +552,7 @@ Try running diagnose again.`
               : JSON.stringify(tr.output)
             : "[no result]"
         if (result.length > 1500) result = `${result.substring(0, 1500)}\n...[truncated]`
+        transcript.push("**Tool Result:**")
         transcript.push("```")
         transcript.push(result)
         transcript.push("```")
@@ -542,7 +561,8 @@ Try running diagnose again.`
     transcript.push("")
   }
 
-  transcript.push("## Summary")
+  transcript.push("## Final Output")
+  transcript.push("")
   transcript.push(text)
 
   return {
