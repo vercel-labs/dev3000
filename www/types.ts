@@ -1,6 +1,17 @@
 // Types for workflow reports and cloud workflows
 
 /**
+ * Core Web Vitals metrics with grades
+ */
+export interface WebVitals {
+  lcp?: { value: number; grade: "good" | "needs-improvement" | "poor" } // Largest Contentful Paint (ms)
+  fcp?: { value: number; grade: "good" | "needs-improvement" | "poor" } // First Contentful Paint (ms)
+  ttfb?: { value: number; grade: "good" | "needs-improvement" | "poor" } // Time to First Byte (ms)
+  cls?: { value: number; grade: "good" | "needs-improvement" | "poor" } // Cumulative Layout Shift
+  inp?: { value: number; grade: "good" | "needs-improvement" | "poor" } // Interaction to Next Paint (ms)
+}
+
+/**
  * Workflow report data stored as JSON in blob storage
  * This is the full report data, separate from WorkflowRun metadata
  */
@@ -19,7 +30,7 @@ export interface WorkflowReport {
   sandboxDevUrl: string
   sandboxMcpUrl?: string
 
-  // CLS data
+  // CLS data (legacy - kept for backward compat, prefer webVitals)
   clsScore?: number
   clsGrade?: "good" | "needs-improvement" | "poor"
   layoutShifts?: Array<{
@@ -27,6 +38,10 @@ export interface WorkflowReport {
     timestamp: number
     elements: string[]
   }>
+
+  // Core Web Vitals - before and after metrics (for ALL workflow types)
+  beforeWebVitals?: WebVitals
+  afterWebVitals?: WebVitals
 
   // Screenshots - single images (legacy/fallback)
   beforeScreenshotUrl?: string

@@ -444,6 +444,118 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
             </>
           )}
 
+          {/* Web Vitals - shown for all workflow types when available */}
+          {(report.beforeWebVitals || report.afterWebVitals) && (
+            <div className="mt-6 pt-6 border-t border-border">
+              <h3 className="text-lg font-medium mb-4">Core Web Vitals</h3>
+              <div className="grid grid-cols-2 gap-4">
+                {/* Before */}
+                <div className="bg-muted/30 rounded-lg p-4">
+                  <div className="text-xs text-muted-foreground uppercase tracking-wide mb-3">Before</div>
+                  {report.beforeWebVitals ? (
+                    <div className="space-y-2">
+                      {report.beforeWebVitals.lcp && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm">LCP</span>
+                          <span className={`text-sm font-medium ${report.beforeWebVitals.lcp.grade === "good" ? "text-green-600" : report.beforeWebVitals.lcp.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}>
+                            {report.beforeWebVitals.lcp.value.toFixed(0)}ms
+                          </span>
+                        </div>
+                      )}
+                      {report.beforeWebVitals.fcp && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm">FCP</span>
+                          <span className={`text-sm font-medium ${report.beforeWebVitals.fcp.grade === "good" ? "text-green-600" : report.beforeWebVitals.fcp.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}>
+                            {report.beforeWebVitals.fcp.value.toFixed(0)}ms
+                          </span>
+                        </div>
+                      )}
+                      {report.beforeWebVitals.ttfb && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm">TTFB</span>
+                          <span className={`text-sm font-medium ${report.beforeWebVitals.ttfb.grade === "good" ? "text-green-600" : report.beforeWebVitals.ttfb.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}>
+                            {report.beforeWebVitals.ttfb.value.toFixed(0)}ms
+                          </span>
+                        </div>
+                      )}
+                      {report.beforeWebVitals.cls && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm">CLS</span>
+                          <span className={`text-sm font-medium ${report.beforeWebVitals.cls.grade === "good" ? "text-green-600" : report.beforeWebVitals.cls.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}>
+                            {report.beforeWebVitals.cls.value.toFixed(4)}
+                          </span>
+                        </div>
+                      )}
+                      {report.beforeWebVitals.inp && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm">INP</span>
+                          <span className={`text-sm font-medium ${report.beforeWebVitals.inp.grade === "good" ? "text-green-600" : report.beforeWebVitals.inp.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}>
+                            {report.beforeWebVitals.inp.value.toFixed(0)}ms
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="text-sm text-muted-foreground">No metrics captured</span>
+                  )}
+                </div>
+                {/* After */}
+                <div className="bg-muted/30 rounded-lg p-4">
+                  <div className="text-xs text-muted-foreground uppercase tracking-wide mb-3">After</div>
+                  {report.afterWebVitals ? (
+                    <div className="space-y-2">
+                      {report.afterWebVitals.lcp && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm">LCP</span>
+                          <span className={`text-sm font-medium ${report.afterWebVitals.lcp.grade === "good" ? "text-green-600" : report.afterWebVitals.lcp.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}>
+                            {report.afterWebVitals.lcp.value.toFixed(0)}ms
+                          </span>
+                        </div>
+                      )}
+                      {report.afterWebVitals.fcp && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm">FCP</span>
+                          <span className={`text-sm font-medium ${report.afterWebVitals.fcp.grade === "good" ? "text-green-600" : report.afterWebVitals.fcp.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}>
+                            {report.afterWebVitals.fcp.value.toFixed(0)}ms
+                          </span>
+                        </div>
+                      )}
+                      {report.afterWebVitals.ttfb && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm">TTFB</span>
+                          <span className={`text-sm font-medium ${report.afterWebVitals.ttfb.grade === "good" ? "text-green-600" : report.afterWebVitals.ttfb.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}>
+                            {report.afterWebVitals.ttfb.value.toFixed(0)}ms
+                          </span>
+                        </div>
+                      )}
+                      {report.afterWebVitals.cls && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm">CLS</span>
+                          <span className={`text-sm font-medium ${report.afterWebVitals.cls.grade === "good" ? "text-green-600" : report.afterWebVitals.cls.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}>
+                            {report.afterWebVitals.cls.value.toFixed(4)}
+                          </span>
+                        </div>
+                      )}
+                      {report.afterWebVitals.inp && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm">INP</span>
+                          <span className={`text-sm font-medium ${report.afterWebVitals.inp.grade === "good" ? "text-green-600" : report.afterWebVitals.inp.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}>
+                            {report.afterWebVitals.inp.value.toFixed(0)}ms
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="text-sm text-muted-foreground">No metrics captured</span>
+                  )}
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground mt-3">
+                LCP: Largest Contentful Paint • FCP: First Contentful Paint • TTFB: Time to First Byte • CLS: Cumulative Layout Shift • INP: Interaction to Next Paint
+              </p>
+            </div>
+          )}
+
           {/* Agent Analysis - shown for all workflow types */}
           <div className="mt-6 pt-6 border-t border-border">
             <div className="flex items-center justify-between mb-4">

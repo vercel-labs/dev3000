@@ -241,6 +241,13 @@ export async function agentFixLoopStep(
   // Determine workflow type from progress context
   const workflowType = (progressContext?.workflowType as "cls-fix" | "prompt") || "cls-fix"
 
+  // Parse Web Vitals from d3k logs (before and after)
+  const beforeWebVitals = parseWebVitalsFromLogs(initD3kLogs)
+  const afterWebVitals = parseWebVitalsFromLogs(finalCls.d3kLogs)
+
+  workflowLog(`[Agent] Before Web Vitals: ${JSON.stringify(beforeWebVitals)}`)
+  workflowLog(`[Agent] After Web Vitals: ${JSON.stringify(afterWebVitals)}`)
+
   // Generate report inline
   const report: WorkflowReport = {
     id: reportId,
@@ -254,9 +261,11 @@ export async function agentFixLoopStep(
     clsScore: beforeCls ?? undefined,
     clsGrade: beforeGrade ?? undefined,
     beforeScreenshots,
+    beforeWebVitals: Object.keys(beforeWebVitals).length > 0 ? beforeWebVitals : undefined,
     afterClsScore: finalCls.clsScore ?? undefined,
     afterClsGrade: finalCls.clsGrade ?? undefined,
     afterScreenshots: finalCls.screenshots,
+    afterWebVitals: Object.keys(afterWebVitals).length > 0 ? afterWebVitals : undefined,
     verificationStatus: status === "no-changes" ? "unchanged" : status,
     agentAnalysis: agentResult.transcript,
     agentAnalysisModel: "anthropic/claude-sonnet-4-20250514",
@@ -802,6 +811,73 @@ async function fetchClsData(
   }
 
   return result
+}
+
+/**
+ * Parse Web Vitals from d3k logs
+ * Returns all Core Web Vitals with grades
+ */
+function parseWebVitalsFromLogs(logs: string): import("@/types").WebVitals {
+  const vitals: import("@/types").WebVitals = {}
+
+  // Helper to determine grade
+  const gradeValue = (
+    value: number,
+    goodThreshold: number,
+    needsImprovementThreshold: number
+  ): "good" | "needs-improvement" | "poor" => {
+    if (value <= goodThreshold) return "good"
+    if (value <= needsImprovementThreshold) return "needs-improvement"
+    return "poor"
+  }
+
+  // LCP (Largest Contentful Paint) - good: ≤2500ms, needs improvement: ≤4000ms
+  const lcpMatch = logs.match(/LCP[:\s]+(\d+(?:\.\d+)?)\s*(ms|s)?/i)
+  if (lcpMatch) {
+    let value = parseFloat(lcpMatch[1])
+    if (lcpMatch[2] === "s") value *= 1000
+    vitals.lcp = { value, grade: gradeValue(value, 2500, 4000) }
+  }
+
+  // FCP (First Contentful Paint) - good: ≤1800ms, needs improvement: ≤3000ms
+  const fcpMatch = logs.match(/FCP[:\s]+(\d+(?:\.\d+)?)\s*(ms|s)?/i)
+  if (fcpMatch) {
+    let value = parseFloat(fcpMatch[1])
+    if (fcpMatch[2] === "s") value *= 1000
+    vitals.fcp = { value, grade: gradeValue(value, 1800, 3000) }
+  }
+
+  // TTFB (Time to First Byte) - good: ≤800ms, needs improvement: ≤1800ms
+  const ttfbMatch = logs.match(/TTFB[:\s]+(\d+(?:\.\d+)?)\s*(ms|s)?/i)
+  if (ttfbMatch) {
+    let value = parseFloat(ttfbMatch[1])
+    if (ttfbMatch[2] === "s") value *= 1000
+    vitals.ttfb = { value, grade: gradeValue(value, 800, 1800) }
+  }
+
+  // CLS (Cumulative Layout Shift) - good: ≤0.1, needs improvement: ≤0.25
+  // Try multiple patterns for CLS
+  const clsPatterns = [
+    /CLS[:\s]+([\d.]+)(?!\s*ms)/i, // CLS: 0.123 (not followed by ms)
+    /Detected \d+ layout shifts \(CLS: ([\d.]+)\)/i // d3k format
+  ]
+  for (const pattern of clsPatterns) {
+    const clsMatch = logs.match(pattern)
+    if (clsMatch) {
+      const value = parseFloat(clsMatch[1])
+      vitals.cls = { value, grade: gradeValue(value, 0.1, 0.25) }
+      break
+    }
+  }
+
+  // INP (Interaction to Next Paint) - good: ≤200ms, needs improvement: ≤500ms
+  const inpMatch = logs.match(/INP[:\s]+(\d+(?:\.\d+)?)\s*(ms)?/i)
+  if (inpMatch) {
+    const value = parseFloat(inpMatch[1])
+    vitals.inp = { value, grade: gradeValue(value, 200, 500) }
+  }
+
+  return vitals
 }
 
 // ============================================================
