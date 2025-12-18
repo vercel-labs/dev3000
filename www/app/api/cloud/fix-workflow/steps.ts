@@ -238,11 +238,17 @@ export async function agentFixLoopStep(
   const afterD3kLogs = finalCls.d3kLogs.replace(initD3kLogs, "").trim() || "(no new logs)"
   const combinedD3kLogs = `=== Step 1: Init (before agent) ===\n${initD3kLogs}\n\n=== Step 2: After agent fix ===\n${afterD3kLogs}`
 
+  // Determine workflow type from progress context
+  const workflowType = (progressContext?.workflowType as "cls-fix" | "prompt") || "cls-fix"
+
   // Generate report inline
   const report: WorkflowReport = {
     id: reportId,
     projectName,
     timestamp: new Date().toISOString(),
+    workflowType,
+    customPrompt: customPrompt ?? undefined,
+    systemPrompt: agentResult.systemPrompt,
     sandboxDevUrl: devUrl,
     sandboxMcpUrl: mcpUrl,
     clsScore: beforeCls ?? undefined,
@@ -292,7 +298,7 @@ async function runAgentWithDiagnoseTool(
   beforeGrade: "good" | "needs-improvement" | "poor" | null,
   startPath: string,
   customPrompt?: string
-): Promise<{ transcript: string; summary: string }> {
+): Promise<{ transcript: string; summary: string; systemPrompt: string }> {
   const SANDBOX_CWD = "/vercel/sandbox"
   const D3K_MCP_PORT = 3684
 
@@ -541,7 +547,8 @@ Try running diagnose again.`
 
   return {
     transcript: transcript.join("\n"),
-    summary: text
+    summary: text,
+    systemPrompt
   }
 }
 

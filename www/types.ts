@@ -10,6 +10,11 @@ export interface WorkflowReport {
   projectName: string
   timestamp: string
 
+  // Workflow type and prompts
+  workflowType?: "cls-fix" | "prompt"
+  customPrompt?: string // User's original prompt (for prompt workflows)
+  systemPrompt?: string // The full system prompt used by the agent
+
   // Sandbox URLs
   sandboxDevUrl: string
   sandboxMcpUrl?: string

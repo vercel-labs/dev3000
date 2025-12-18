@@ -162,24 +162,47 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
         {/* ================================================================ */}
         {/* STEP 2: Agentic Loop - CLS Before/After and Agent Analysis */}
         {/* ================================================================ */}
-        {report.clsScore !== undefined && (
-          <div className="bg-card border border-border rounded-lg p-6 mb-6">
-            <h2 className="text-xl font-semibold mb-4">
-              <span className="text-muted-foreground text-sm font-normal mr-2">Step 2</span>
-              Agentic Loop
-            </h2>
-            <p className="text-sm text-muted-foreground mb-4">AI agent attempted to fix CLS issues (up to 3 retries)</p>
+        <div className="bg-card border border-border rounded-lg p-6 mb-6">
+          <h2 className="text-xl font-semibold mb-4">
+            <span className="text-muted-foreground text-sm font-normal mr-2">Step 2</span>
+            Agentic Loop
+          </h2>
+          <p className="text-sm text-muted-foreground mb-4">
+            {report.workflowType === "prompt"
+              ? "AI agent executed custom task"
+              : "AI agent attempted to fix CLS issues (up to 3 retries)"}
+          </p>
 
-            {/* D3k Logs after agent fix */}
-            {report.afterD3kLogs && (
-              <CollapsibleSection title="d3k Diagnostic Logs (After Fix)" defaultOpen={false}>
-                <pre className="bg-muted/50 rounded p-4 text-xs font-mono overflow-x-auto whitespace-pre-wrap max-h-96 overflow-y-auto">
-                  {report.afterD3kLogs}
-                </pre>
-              </CollapsibleSection>
-            )}
+          {/* Custom Prompt Section (for prompt workflow type) */}
+          {report.workflowType === "prompt" && report.customPrompt && (
+            <div className="mb-4">
+              <h3 className="text-sm font-medium text-muted-foreground mb-2">Your Task</h3>
+              <div className="bg-muted/50 rounded p-4 text-sm whitespace-pre-wrap">{report.customPrompt}</div>
+            </div>
+          )}
 
-            <h3 className="text-lg font-medium mb-3">CLS Results</h3>
+          {/* System Prompt (always shown in collapsible) */}
+          {report.systemPrompt && (
+            <CollapsibleSection title="System Prompt" defaultOpen={false}>
+              <pre className="bg-muted/50 rounded p-4 text-xs font-mono overflow-x-auto whitespace-pre-wrap max-h-96 overflow-y-auto">
+                {report.systemPrompt}
+              </pre>
+            </CollapsibleSection>
+          )}
+
+          {/* D3k Logs after agent fix */}
+          {report.afterD3kLogs && (
+            <CollapsibleSection title="d3k Diagnostic Logs (After Fix)" defaultOpen={false}>
+              <pre className="bg-muted/50 rounded p-4 text-xs font-mono overflow-x-auto whitespace-pre-wrap max-h-96 overflow-y-auto">
+                {report.afterD3kLogs}
+              </pre>
+            </CollapsibleSection>
+          )}
+
+          {/* CLS Results - only show for cls-fix workflow type */}
+          {(report.workflowType === "cls-fix" || !report.workflowType) && report.clsScore !== undefined && (
+            <>
+              <h3 className="text-lg font-medium mb-3">CLS Results</h3>
 
             {/* Show before/after if we have verification data */}
             {report.afterClsScore !== undefined ? (
@@ -404,21 +427,22 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
                 )}
               </div>
             )}
+            </>
+          )}
 
-            {/* Agent Analysis within Step 2 */}
-            <div className="mt-6 pt-6 border-t border-border">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-medium">Agent Analysis</h3>
-                {report.agentAnalysisModel && (
-                  <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
-                    {report.agentAnalysisModel}
-                  </span>
-                )}
-              </div>
-              <AgentAnalysis content={report.agentAnalysis} gitDiff={report.gitDiff} projectName={report.projectName} />
+          {/* Agent Analysis - shown for all workflow types */}
+          <div className="mt-6 pt-6 border-t border-border">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-medium">Agent Analysis</h3>
+              {report.agentAnalysisModel && (
+                <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
+                  {report.agentAnalysisModel}
+                </span>
+              )}
             </div>
+            <AgentAnalysis content={report.agentAnalysis} gitDiff={report.gitDiff} projectName={report.projectName} />
           </div>
-        )}
+        </div>
 
         <div className="mt-6 flex gap-4">
           {!isPublicView && (
