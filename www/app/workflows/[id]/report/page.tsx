@@ -46,6 +46,9 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
   const response = await fetch(run.reportBlobUrl)
   const report: WorkflowReport = await response.json()
 
+  // Use report's workflowType, fallback to run's type (for backward compat with old reports)
+  const workflowType = report.workflowType || run.type || "cls-fix"
+
   // Helper to format CLS grade
   const gradeColor = (grade?: string) => {
     switch (grade) {
@@ -92,12 +95,12 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
               <p className="text-muted-foreground">{new Date(report.timestamp).toLocaleString()}</p>
               <span
                 className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                  report.workflowType === "prompt"
+                  workflowType === "prompt"
                     ? "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300"
                     : "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300"
                 }`}
               >
-                {report.workflowType === "prompt" ? "Custom Prompt" : "CLS Fix"}
+                {workflowType === "prompt" ? "Custom Prompt" : "CLS Fix"}
               </span>
             </div>
           </div>
@@ -179,13 +182,13 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
             Agentic Loop
           </h2>
           <p className="text-sm text-muted-foreground mb-4">
-            {report.workflowType === "prompt"
+            {workflowType === "prompt"
               ? "AI agent executed custom task"
               : "AI agent attempted to fix CLS issues (up to 3 retries)"}
           </p>
 
           {/* Custom Prompt Section (for prompt workflow type) */}
-          {report.workflowType === "prompt" && report.customPrompt && (
+          {workflowType === "prompt" && report.customPrompt && (
             <div className="mb-4">
               <h3 className="text-sm font-medium text-muted-foreground mb-2">Your Task</h3>
               <div className="bg-muted/50 rounded p-4 text-sm whitespace-pre-wrap">{report.customPrompt}</div>
@@ -211,7 +214,7 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
           )}
 
           {/* CLS Results - only show for cls-fix workflow type */}
-          {(report.workflowType === "cls-fix" || !report.workflowType) && report.clsScore !== undefined && (
+          {workflowType === "cls-fix" && report.clsScore !== undefined && (
             <>
               <h3 className="text-lg font-medium mb-3">CLS Results</h3>
 
