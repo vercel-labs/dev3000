@@ -85,144 +85,118 @@ export async function cloudFixWorkflow(params: {
   // Note: Progress updates are now handled by the parent route via Vercel's workflow status
   // The workflow's wrun_xxx ID is not available inside the workflow itself
 
-  // Helper to save failure status
-  const saveFailureStatus = async (error: Error) => {
-    if (progressContext) {
-      try {
-        const { saveWorkflowRun } = await import("@/lib/workflow-storage")
-        await saveWorkflowRun({
-          id: progressContext.runId,
-          userId: progressContext.userId,
-          projectName: progressContext.projectName,
-          timestamp: progressContext.timestamp,
-          status: "failure",
-          type: (progressContext.workflowType as "cls-fix" | "prompt") || "cls-fix",
-          completedAt: new Date().toISOString(),
-          error: error.message
-        })
-        workflowLog(`[Workflow] Saved failure status for ${progressContext.runId}`)
-      } catch (saveErr) {
-        workflowLog(`[Workflow] Failed to save failure status: ${saveErr}`)
-      }
-    }
-  }
-
   try {
-  // ============================================================
-  // STEP 1: Init - Create sandbox and capture before state
-  // ============================================================
-  workflowLog("[Workflow] Step 1: Initializing sandbox...")
+    // ============================================================
+    // STEP 1: Init - Create sandbox and capture before state
+    // ============================================================
+    workflowLog("[Workflow] Step 1: Initializing sandbox...")
 
-  const initResult = await initSandbox(
-    repoUrl,
-    repoBranch,
-    projectName,
-    reportId,
-    startPath,
-    vercelOidcToken,
-    progressContext
-  )
-
-  workflowLog(`[Workflow] Sandbox: ${initResult.sandboxId}, CLS: ${initResult.beforeCls}`)
-
-  // ============================================================
-  // STEP 2: Agent Fix Loop - Single step with internal iteration
-  // ============================================================
-  workflowLog("[Workflow] Step 2: Agent fixing CLS issues...")
-
-  const fixResult = await agentFixLoop(
-    initResult.sandboxId,
-    initResult.devUrl,
-    initResult.mcpUrl,
-    initResult.beforeCls,
-    initResult.beforeGrade,
-    initResult.beforeScreenshots,
-    initResult.initD3kLogs,
-    projectName,
-    reportId,
-    startPath,
-    customPrompt,
-    progressContext
-  )
-
-  workflowLog(`[Workflow] Result: ${fixResult.status}, After CLS: ${fixResult.afterCls}`)
-
-  // ============================================================
-  // STEP 3: Create PR (only if we have changes and a GitHub PAT)
-  // ============================================================
-  let prResult: { prUrl: string; prNumber: number; branch: string } | null = null
-  let prError: string | null = null
-
-  if (fixResult.gitDiff && githubPat && repoOwner && repoName) {
-    workflowLog("[Workflow] Step 3: Creating GitHub PR...")
-
-    const prStepResult = await createPullRequest(
-      initResult.sandboxId,
-      githubPat,
-      repoOwner,
-      repoName,
-      baseBranch,
+    const initResult = await initSandbox(
+      repoUrl,
+      repoBranch,
       projectName,
-      fixResult.beforeCls,
-      fixResult.afterCls,
       reportId,
+      startPath,
+      vercelOidcToken,
       progressContext
     )
 
-    // Check if result is an error object
-    if (prStepResult && "error" in prStepResult) {
-      prError = (prStepResult as { error: string }).error
-      workflowLog(`[Workflow] PR creation failed: ${prError}`)
-    } else if (prStepResult && "prUrl" in prStepResult) {
-      prResult = prStepResult
-      workflowLog(`[Workflow] PR created: ${prResult.prUrl}`)
-    } else {
-      prError = "Unknown PR creation failure"
-      workflowLog("[Workflow] PR creation failed with unknown error")
-    }
-  } else {
-    if (!fixResult.gitDiff) {
-      workflowLog("[Workflow] Skipping PR: No changes to commit")
-    } else if (!githubPat) {
-      workflowLog("[Workflow] Skipping PR: No GitHub PAT provided")
-    } else {
-      workflowLog("[Workflow] Skipping PR: Missing repo owner/name")
-    }
-  }
+    workflowLog(`[Workflow] Sandbox: ${initResult.sandboxId}, CLS: ${initResult.beforeCls}`)
 
-  // Cleanup sandbox
-  await cleanupSandbox(initResult.sandboxId)
+    // ============================================================
+    // STEP 2: Agent Fix Loop - Single step with internal iteration
+    // ============================================================
+    workflowLog("[Workflow] Step 2: Agent fixing CLS issues...")
 
-  // Save final "done" status (this is crucial since API returns immediately)
-  if (progressContext) {
-    const { saveWorkflowRun } = await import("@/lib/workflow-storage")
-    await saveWorkflowRun({
-      id: progressContext.runId,
-      userId: progressContext.userId,
-      projectName: progressContext.projectName,
-      timestamp: progressContext.timestamp,
-      status: "done",
-      type: (progressContext.workflowType as "cls-fix" | "prompt") || "cls-fix",
-      completedAt: new Date().toISOString(),
-      reportBlobUrl: fixResult.reportBlobUrl,
-      prUrl: prResult?.prUrl,
-      prError: prError || undefined
+    const fixResult = await agentFixLoop(
+      initResult.sandboxId,
+      initResult.devUrl,
+      initResult.mcpUrl,
+      initResult.beforeCls,
+      initResult.beforeGrade,
+      initResult.beforeScreenshots,
+      initResult.initD3kLogs,
+      projectName,
+      reportId,
+      startPath,
+      customPrompt,
+      progressContext
+    )
+
+    workflowLog(`[Workflow] Result: ${fixResult.status}, After CLS: ${fixResult.afterCls}`)
+
+    // ============================================================
+    // STEP 3: Create PR (only if we have changes and a GitHub PAT)
+    // ============================================================
+    let prResult: { prUrl: string; prNumber: number; branch: string } | null = null
+    let prError: string | null = null
+
+    if (fixResult.gitDiff && githubPat && repoOwner && repoName) {
+      workflowLog("[Workflow] Step 3: Creating GitHub PR...")
+
+      const prStepResult = await createPullRequest(
+        initResult.sandboxId,
+        githubPat,
+        repoOwner,
+        repoName,
+        baseBranch,
+        projectName,
+        fixResult.beforeCls,
+        fixResult.afterCls,
+        reportId,
+        progressContext
+      )
+
+      // Check if result is an error object
+      if (prStepResult && "error" in prStepResult) {
+        prError = (prStepResult as { error: string }).error
+        workflowLog(`[Workflow] PR creation failed: ${prError}`)
+      } else if (prStepResult && "prUrl" in prStepResult) {
+        prResult = prStepResult
+        workflowLog(`[Workflow] PR created: ${prResult.prUrl}`)
+      } else {
+        prError = "Unknown PR creation failure"
+        workflowLog("[Workflow] PR creation failed with unknown error")
+      }
+    } else {
+      if (!fixResult.gitDiff) {
+        workflowLog("[Workflow] Skipping PR: No changes to commit")
+      } else if (!githubPat) {
+        workflowLog("[Workflow] Skipping PR: No GitHub PAT provided")
+      } else {
+        workflowLog("[Workflow] Skipping PR: Missing repo owner/name")
+      }
+    }
+
+    // Cleanup sandbox
+    await cleanupSandbox(initResult.sandboxId)
+
+    // Save final "done" status (this is crucial since API returns immediately)
+    if (progressContext) {
+      await saveDoneStatus(
+        progressContext,
+        fixResult.reportBlobUrl,
+        prResult?.prUrl || null,
+        prError
+      )
+      workflowLog(`[Workflow] Saved final "done" status for ${progressContext.runId}`)
+    }
+
+    return Response.json({
+      blobUrl: fixResult.reportBlobUrl,
+      reportId: fixResult.reportId,
+      status: fixResult.status,
+      beforeCls: fixResult.beforeCls,
+      afterCls: fixResult.afterCls,
+      pr: prResult,
+      prError
     })
-    workflowLog(`[Workflow] Saved final "done" status for ${progressContext.runId}`)
-  }
-
-  return Response.json({
-    blobUrl: fixResult.reportBlobUrl,
-    reportId: fixResult.reportId,
-    status: fixResult.status,
-    beforeCls: fixResult.beforeCls,
-    afterCls: fixResult.afterCls,
-    pr: prResult,
-    prError
-  })
   } catch (error) {
     workflowLog(`[Workflow] Error: ${error instanceof Error ? error.message : String(error)}`)
-    await saveFailureStatus(error instanceof Error ? error : new Error(String(error)))
+    // Save failure status via step function
+    if (progressContext) {
+      await saveFailureStatus(progressContext, error instanceof Error ? error.message : String(error))
+    }
     throw error // Re-throw so the workflow framework knows it failed
   }
 }
@@ -317,4 +291,46 @@ async function createPullRequest(
     reportId,
     progressContext
   )
+}
+
+async function saveDoneStatus(
+  progressContext: ProgressContext,
+  reportBlobUrl: string,
+  prUrl: string | null,
+  prError: string | null
+): Promise<void> {
+  "use step"
+  const { saveWorkflowRun } = await import("@/lib/workflow-storage")
+  await saveWorkflowRun({
+    id: progressContext.runId,
+    userId: progressContext.userId,
+    projectName: progressContext.projectName,
+    timestamp: progressContext.timestamp,
+    status: "done",
+    type: (progressContext.workflowType as "cls-fix" | "prompt") || "cls-fix",
+    completedAt: new Date().toISOString(),
+    reportBlobUrl,
+    prUrl: prUrl || undefined,
+    prError: prError || undefined
+  })
+}
+
+async function saveFailureStatus(progressContext: ProgressContext, errorMessage: string): Promise<void> {
+  "use step"
+  try {
+    const { saveWorkflowRun } = await import("@/lib/workflow-storage")
+    await saveWorkflowRun({
+      id: progressContext.runId,
+      userId: progressContext.userId,
+      projectName: progressContext.projectName,
+      timestamp: progressContext.timestamp,
+      status: "failure",
+      type: (progressContext.workflowType as "cls-fix" | "prompt") || "cls-fix",
+      completedAt: new Date().toISOString(),
+      error: errorMessage
+    })
+    console.log(`[Workflow] Saved failure status for ${progressContext.runId}`)
+  } catch (saveErr) {
+    console.log(`[Workflow] Failed to save failure status: ${saveErr}`)
+  }
 }
