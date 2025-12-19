@@ -143,8 +143,9 @@ export async function POST(request: Request) {
       baseBranch: baseBranch || "main"
     }
 
-    // Start the workflow (fire-and-forget style, we track via our own runId)
-    const run = await start(cloudFixWorkflow, [workflowParams])
+    // Start the workflow (fire-and-forget style)
+    // The workflow will update its own status to "done" or "failure" when complete
+    void start(cloudFixWorkflow, [workflowParams])
 
     workflowLog(`[Start Fix] Workflow started with runId: ${runId}`)
 
@@ -172,48 +173,16 @@ export async function POST(request: Request) {
       console.error(`[Start Fix] Cannot save - missing userId (${!!userId}) or projectName (${!!projectName})`)
     }
 
-    // Wait for workflow to complete and get the Response
-    const workflowResponse = await run.returnValue
-
-    // Parse the JSON result from the Response
-    const result = await workflowResponse.json()
-
-    workflowLog(`[Start Fix] Workflow completed successfully`)
-    if (result.blobUrl) {
-      workflowLog(`[Start Fix] Fix proposal uploaded to: ${result.blobUrl}`)
-    }
-    if (result.pr?.prUrl) {
-      workflowLog(`[Start Fix] GitHub PR created: ${result.pr.prUrl}`)
-    }
-
-    // Update workflow run metadata with success status (use same timestamp to overwrite)
-    if (userId && projectName && runId && runTimestamp) {
-      await saveWorkflowRun({
-        id: runId,
-        userId,
-        projectName,
-        timestamp: runTimestamp,
-        status: "done",
-        type: workflowType,
-        completedAt: new Date().toISOString(),
-        reportBlobUrl: result.blobUrl,
-        prUrl: result.pr?.prUrl,
-        prError: result.prError || undefined,
-        beforeScreenshotUrl: result.beforeScreenshotUrl || undefined,
-        customPrompt: workflowType === "prompt" ? customPrompt : undefined
-      })
-      workflowLog(`[Start Fix] Updated workflow run metadata to done: ${runId}`)
-    }
+    // Return immediately - the workflow runs in the background
+    // Client should poll /api/workflows to track progress
+    workflowLog(`[Start Fix] Returning immediately, workflow running in background`)
 
     return Response.json(
       {
         success: true,
-        message: "Cloud fix workflow completed successfully",
+        message: "Workflow started successfully",
         projectName,
         runId,
-        blobUrl: result.blobUrl,
-        fixProposal: result.fixProposal,
-        pr: result.pr,
         // Debug info to verify metadata was saved
         _debug: {
           userId,

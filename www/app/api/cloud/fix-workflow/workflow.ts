@@ -85,6 +85,29 @@ export async function cloudFixWorkflow(params: {
   // Note: Progress updates are now handled by the parent route via Vercel's workflow status
   // The workflow's wrun_xxx ID is not available inside the workflow itself
 
+  // Helper to save failure status
+  const saveFailureStatus = async (error: Error) => {
+    if (progressContext) {
+      try {
+        const { saveWorkflowRun } = await import("@/lib/workflow-storage")
+        await saveWorkflowRun({
+          id: progressContext.runId,
+          userId: progressContext.userId,
+          projectName: progressContext.projectName,
+          timestamp: progressContext.timestamp,
+          status: "failure",
+          type: (progressContext.workflowType as "cls-fix" | "prompt") || "cls-fix",
+          completedAt: new Date().toISOString(),
+          error: error.message
+        })
+        workflowLog(`[Workflow] Saved failure status for ${progressContext.runId}`)
+      } catch (saveErr) {
+        workflowLog(`[Workflow] Failed to save failure status: ${saveErr}`)
+      }
+    }
+  }
+
+  try {
   // ============================================================
   // STEP 1: Init - Create sandbox and capture before state
   // ============================================================
@@ -170,6 +193,24 @@ export async function cloudFixWorkflow(params: {
   // Cleanup sandbox
   await cleanupSandbox(initResult.sandboxId)
 
+  // Save final "done" status (this is crucial since API returns immediately)
+  if (progressContext) {
+    const { saveWorkflowRun } = await import("@/lib/workflow-storage")
+    await saveWorkflowRun({
+      id: progressContext.runId,
+      userId: progressContext.userId,
+      projectName: progressContext.projectName,
+      timestamp: progressContext.timestamp,
+      status: "done",
+      type: (progressContext.workflowType as "cls-fix" | "prompt") || "cls-fix",
+      completedAt: new Date().toISOString(),
+      reportBlobUrl: fixResult.reportBlobUrl,
+      prUrl: prResult?.prUrl,
+      prError: prError || undefined
+    })
+    workflowLog(`[Workflow] Saved final "done" status for ${progressContext.runId}`)
+  }
+
   return Response.json({
     blobUrl: fixResult.reportBlobUrl,
     reportId: fixResult.reportId,
@@ -179,6 +220,11 @@ export async function cloudFixWorkflow(params: {
     pr: prResult,
     prError
   })
+  } catch (error) {
+    workflowLog(`[Workflow] Error: ${error instanceof Error ? error.message : String(error)}`)
+    await saveFailureStatus(error instanceof Error ? error : new Error(String(error)))
+    throw error // Re-throw so the workflow framework knows it failed
+  }
 }
 
 // ============================================================
