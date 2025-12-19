@@ -321,237 +321,285 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
                   </div>
                 </div>
               )}
+            </>
+          )}
 
-              {/* Screenshots embedded in CLS section */}
-              {(report.beforeScreenshots?.length ||
+          {/* Screenshots - shown for ALL workflow types */}
+          {(report.beforeScreenshots?.length ||
+            report.afterScreenshots?.length ||
+            report.clsScreenshots?.length ||
+            report.beforeScreenshotUrl ||
+            report.afterScreenshotUrl) && (
+            <div className="mt-6 pt-4 border-t border-border">
+              <h3 className="text-lg font-medium mb-3">Screenshots</h3>
+
+              {/* Animated players for before/after screenshot sequences */}
+              {(report.beforeScreenshots?.length || report.clsScreenshots?.length) &&
+              report.afterScreenshots?.length ? (
+                /* Both before and after have animated screenshots - use coordinated player */
+                <CoordinatedPlayers
+                  beforeScreenshots={report.beforeScreenshots || report.clsScreenshots || []}
+                  afterScreenshots={report.afterScreenshots}
+                  fps={2}
+                  loopDelayMs={10000}
+                />
+              ) : report.beforeScreenshots?.length ||
                 report.afterScreenshots?.length ||
-                report.clsScreenshots?.length ||
-                report.beforeScreenshotUrl ||
-                report.afterScreenshotUrl) && (
-                <div className="mt-6 pt-4 border-t border-border">
-                  <h3 className="text-sm font-medium text-muted-foreground mb-3">Screenshots</h3>
-
-                  {/* Animated players for before/after screenshot sequences */}
-                  {(report.beforeScreenshots?.length || report.clsScreenshots?.length) &&
-                  report.afterScreenshots?.length ? (
-                    /* Both before and after have animated screenshots - use coordinated player */
-                    <CoordinatedPlayers
-                      beforeScreenshots={report.beforeScreenshots || report.clsScreenshots || []}
-                      afterScreenshots={report.afterScreenshots}
+                report.clsScreenshots?.length ? (
+                /* Only one side has animated screenshots - use individual players */
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Before - use beforeScreenshots or fallback to clsScreenshots */}
+                  {report.beforeScreenshots?.length || report.clsScreenshots?.length ? (
+                    <ScreenshotPlayer
+                      screenshots={report.beforeScreenshots || report.clsScreenshots || []}
+                      title="Before"
+                      autoPlay={true}
                       fps={2}
-                      loopDelayMs={10000}
+                      loop={true}
                     />
-                  ) : report.beforeScreenshots?.length ||
-                    report.afterScreenshots?.length ||
-                    report.clsScreenshots?.length ? (
-                    /* Only one side has animated screenshots - use individual players */
-                    <div className="grid grid-cols-2 gap-4">
-                      {/* Before Fix - use beforeScreenshots or fallback to clsScreenshots */}
-                      {report.beforeScreenshots?.length || report.clsScreenshots?.length ? (
-                        <ScreenshotPlayer
-                          screenshots={report.beforeScreenshots || report.clsScreenshots || []}
-                          title="Before Fix"
-                          autoPlay={true}
-                          fps={2}
-                          loop={true}
+                  ) : report.beforeScreenshotUrl ? (
+                    <div className="bg-muted/30 rounded-lg overflow-hidden">
+                      <div className="px-3 py-2 border-b border-border bg-muted/50">
+                        <span className="text-xs text-muted-foreground uppercase tracking-wide">Before</span>
+                      </div>
+                      <a href={report.beforeScreenshotUrl} target="_blank" rel="noopener noreferrer">
+                        <Image
+                          src={report.beforeScreenshotUrl}
+                          alt="Before screenshot"
+                          width={400}
+                          height={225}
+                          unoptimized
+                          className="w-full h-auto"
                         />
-                      ) : report.beforeScreenshotUrl ? (
-                        <div className="bg-muted/30 rounded-lg overflow-hidden">
-                          <div className="px-3 py-2 border-b border-border bg-muted/50">
-                            <span className="text-xs text-muted-foreground uppercase tracking-wide">Before Fix</span>
-                          </div>
-                          <a href={report.beforeScreenshotUrl} target="_blank" rel="noopener noreferrer">
-                            <Image
-                              src={report.beforeScreenshotUrl}
-                              alt="Before fix screenshot"
-                              width={400}
-                              height={225}
-                              unoptimized
-                              className="w-full h-auto"
-                            />
-                          </a>
-                        </div>
-                      ) : null}
-
-                      {/* After Fix */}
-                      {report.afterScreenshots?.length ? (
-                        <ScreenshotPlayer
-                          screenshots={report.afterScreenshots}
-                          title="After Fix"
-                          autoPlay={true}
-                          fps={2}
-                          loop={true}
-                        />
-                      ) : report.afterScreenshotUrl ? (
-                        <div className="bg-muted/30 rounded-lg overflow-hidden">
-                          <div className="px-3 py-2 border-b border-border bg-muted/50">
-                            <span className="text-xs text-muted-foreground uppercase tracking-wide">After Fix</span>
-                          </div>
-                          <a href={report.afterScreenshotUrl} target="_blank" rel="noopener noreferrer">
-                            <Image
-                              src={report.afterScreenshotUrl}
-                              alt="After fix screenshot"
-                              width={400}
-                              height={225}
-                              unoptimized
-                              className="w-full h-auto"
-                            />
-                          </a>
-                        </div>
-                      ) : null}
+                      </a>
                     </div>
-                  ) : (
-                    /* Fallback: static images only */
-                    <div className="grid grid-cols-2 gap-4">
-                      {report.beforeScreenshotUrl && (
-                        <div className="bg-muted/30 rounded-lg overflow-hidden">
-                          <div className="px-3 py-2 border-b border-border bg-muted/50">
-                            <span className="text-xs text-muted-foreground uppercase tracking-wide">Before Fix</span>
-                          </div>
-                          <a href={report.beforeScreenshotUrl} target="_blank" rel="noopener noreferrer">
-                            <Image
-                              src={report.beforeScreenshotUrl}
-                              alt="Before fix screenshot"
-                              width={400}
-                              height={225}
-                              unoptimized
-                              className="w-full h-auto"
-                            />
-                          </a>
-                        </div>
-                      )}
-                      {report.afterScreenshotUrl && (
-                        <div className="bg-muted/30 rounded-lg overflow-hidden">
-                          <div className="px-3 py-2 border-b border-border bg-muted/50">
-                            <span className="text-xs text-muted-foreground uppercase tracking-wide">After Fix</span>
-                          </div>
-                          <a href={report.afterScreenshotUrl} target="_blank" rel="noopener noreferrer">
-                            <Image
-                              src={report.afterScreenshotUrl}
-                              alt="After fix screenshot"
-                              width={400}
-                              height={225}
-                              unoptimized
-                              className="w-full h-auto"
-                            />
-                          </a>
-                        </div>
-                      )}
+                  ) : null}
+
+                  {/* After */}
+                  {report.afterScreenshots?.length ? (
+                    <ScreenshotPlayer
+                      screenshots={report.afterScreenshots}
+                      title="After"
+                      autoPlay={true}
+                      fps={2}
+                      loop={true}
+                    />
+                  ) : report.afterScreenshotUrl ? (
+                    <div className="bg-muted/30 rounded-lg overflow-hidden">
+                      <div className="px-3 py-2 border-b border-border bg-muted/50">
+                        <span className="text-xs text-muted-foreground uppercase tracking-wide">After</span>
+                      </div>
+                      <a href={report.afterScreenshotUrl} target="_blank" rel="noopener noreferrer">
+                        <Image
+                          src={report.afterScreenshotUrl}
+                          alt="After screenshot"
+                          width={400}
+                          height={225}
+                          unoptimized
+                          className="w-full h-auto"
+                        />
+                      </a>
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                /* Fallback: static images only */
+                <div className="grid grid-cols-2 gap-4">
+                  {report.beforeScreenshotUrl && (
+                    <div className="bg-muted/30 rounded-lg overflow-hidden">
+                      <div className="px-3 py-2 border-b border-border bg-muted/50">
+                        <span className="text-xs text-muted-foreground uppercase tracking-wide">Before</span>
+                      </div>
+                      <a href={report.beforeScreenshotUrl} target="_blank" rel="noopener noreferrer">
+                        <Image
+                          src={report.beforeScreenshotUrl}
+                          alt="Before screenshot"
+                          width={400}
+                          height={225}
+                          unoptimized
+                          className="w-full h-auto"
+                        />
+                      </a>
+                    </div>
+                  )}
+                  {report.afterScreenshotUrl && (
+                    <div className="bg-muted/30 rounded-lg overflow-hidden">
+                      <div className="px-3 py-2 border-b border-border bg-muted/50">
+                        <span className="text-xs text-muted-foreground uppercase tracking-wide">After</span>
+                      </div>
+                      <a href={report.afterScreenshotUrl} target="_blank" rel="noopener noreferrer">
+                        <Image
+                          src={report.afterScreenshotUrl}
+                          alt="After screenshot"
+                          width={400}
+                          height={225}
+                          unoptimized
+                          className="w-full h-auto"
+                        />
+                      </a>
                     </div>
                   )}
                 </div>
               )}
-            </>
+            </div>
           )}
 
-          {/* Web Vitals - shown for all workflow types when available */}
-          {(report.beforeWebVitals || report.afterWebVitals) && (
+          {/* Web Vitals - shown for all workflow types when we have metrics or CLS scores */}
+          {(report.beforeWebVitals ||
+            report.afterWebVitals ||
+            report.clsScore !== undefined ||
+            report.afterClsScore !== undefined) && (
             <div className="mt-6 pt-6 border-t border-border">
               <h3 className="text-lg font-medium mb-4">Core Web Vitals</h3>
               <div className="grid grid-cols-2 gap-4">
                 {/* Before */}
                 <div className="bg-muted/30 rounded-lg p-4">
                   <div className="text-xs text-muted-foreground uppercase tracking-wide mb-3">Before</div>
-                  {report.beforeWebVitals ? (
-                    <div className="space-y-2">
-                      {report.beforeWebVitals.lcp && (
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm">LCP</span>
-                          <span className={`text-sm font-medium ${report.beforeWebVitals.lcp.grade === "good" ? "text-green-600" : report.beforeWebVitals.lcp.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}>
-                            {report.beforeWebVitals.lcp.value.toFixed(0)}ms
-                          </span>
-                        </div>
+                  <div className="space-y-2">
+                    {report.beforeWebVitals?.lcp && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm">LCP</span>
+                        <span
+                          className={`text-sm font-medium ${report.beforeWebVitals.lcp.grade === "good" ? "text-green-600" : report.beforeWebVitals.lcp.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}
+                        >
+                          {report.beforeWebVitals.lcp.value.toFixed(0)}ms
+                        </span>
+                      </div>
+                    )}
+                    {report.beforeWebVitals?.fcp && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm">FCP</span>
+                        <span
+                          className={`text-sm font-medium ${report.beforeWebVitals.fcp.grade === "good" ? "text-green-600" : report.beforeWebVitals.fcp.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}
+                        >
+                          {report.beforeWebVitals.fcp.value.toFixed(0)}ms
+                        </span>
+                      </div>
+                    )}
+                    {report.beforeWebVitals?.ttfb && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm">TTFB</span>
+                        <span
+                          className={`text-sm font-medium ${report.beforeWebVitals.ttfb.grade === "good" ? "text-green-600" : report.beforeWebVitals.ttfb.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}
+                        >
+                          {report.beforeWebVitals.ttfb.value.toFixed(0)}ms
+                        </span>
+                      </div>
+                    )}
+                    {/* CLS - use beforeWebVitals.cls if available, else fall back to clsScore */}
+                    {(report.beforeWebVitals?.cls || report.clsScore !== undefined) && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm">CLS</span>
+                        <span
+                          className={`text-sm font-medium ${
+                            (report.beforeWebVitals?.cls?.grade || report.clsGrade) === "good"
+                              ? "text-green-600"
+                              : (report.beforeWebVitals?.cls?.grade || report.clsGrade) === "needs-improvement"
+                                ? "text-yellow-600"
+                                : "text-red-600"
+                          }`}
+                        >
+                          {(report.beforeWebVitals?.cls?.value ?? report.clsScore)?.toFixed(4)}
+                        </span>
+                      </div>
+                    )}
+                    {report.beforeWebVitals?.inp && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm">INP</span>
+                        <span
+                          className={`text-sm font-medium ${report.beforeWebVitals.inp.grade === "good" ? "text-green-600" : report.beforeWebVitals.inp.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}
+                        >
+                          {report.beforeWebVitals.inp.value.toFixed(0)}ms
+                        </span>
+                      </div>
+                    )}
+                    {/* Show message if no metrics at all */}
+                    {!report.beforeWebVitals?.lcp &&
+                      !report.beforeWebVitals?.fcp &&
+                      !report.beforeWebVitals?.ttfb &&
+                      !report.beforeWebVitals?.cls &&
+                      !report.beforeWebVitals?.inp &&
+                      report.clsScore === undefined && (
+                        <span className="text-sm text-muted-foreground">No metrics captured</span>
                       )}
-                      {report.beforeWebVitals.fcp && (
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm">FCP</span>
-                          <span className={`text-sm font-medium ${report.beforeWebVitals.fcp.grade === "good" ? "text-green-600" : report.beforeWebVitals.fcp.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}>
-                            {report.beforeWebVitals.fcp.value.toFixed(0)}ms
-                          </span>
-                        </div>
-                      )}
-                      {report.beforeWebVitals.ttfb && (
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm">TTFB</span>
-                          <span className={`text-sm font-medium ${report.beforeWebVitals.ttfb.grade === "good" ? "text-green-600" : report.beforeWebVitals.ttfb.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}>
-                            {report.beforeWebVitals.ttfb.value.toFixed(0)}ms
-                          </span>
-                        </div>
-                      )}
-                      {report.beforeWebVitals.cls && (
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm">CLS</span>
-                          <span className={`text-sm font-medium ${report.beforeWebVitals.cls.grade === "good" ? "text-green-600" : report.beforeWebVitals.cls.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}>
-                            {report.beforeWebVitals.cls.value.toFixed(4)}
-                          </span>
-                        </div>
-                      )}
-                      {report.beforeWebVitals.inp && (
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm">INP</span>
-                          <span className={`text-sm font-medium ${report.beforeWebVitals.inp.grade === "good" ? "text-green-600" : report.beforeWebVitals.inp.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}>
-                            {report.beforeWebVitals.inp.value.toFixed(0)}ms
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <span className="text-sm text-muted-foreground">No metrics captured</span>
-                  )}
+                  </div>
                 </div>
                 {/* After */}
                 <div className="bg-muted/30 rounded-lg p-4">
                   <div className="text-xs text-muted-foreground uppercase tracking-wide mb-3">After</div>
-                  {report.afterWebVitals ? (
-                    <div className="space-y-2">
-                      {report.afterWebVitals.lcp && (
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm">LCP</span>
-                          <span className={`text-sm font-medium ${report.afterWebVitals.lcp.grade === "good" ? "text-green-600" : report.afterWebVitals.lcp.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}>
-                            {report.afterWebVitals.lcp.value.toFixed(0)}ms
-                          </span>
-                        </div>
+                  <div className="space-y-2">
+                    {report.afterWebVitals?.lcp && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm">LCP</span>
+                        <span
+                          className={`text-sm font-medium ${report.afterWebVitals.lcp.grade === "good" ? "text-green-600" : report.afterWebVitals.lcp.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}
+                        >
+                          {report.afterWebVitals.lcp.value.toFixed(0)}ms
+                        </span>
+                      </div>
+                    )}
+                    {report.afterWebVitals?.fcp && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm">FCP</span>
+                        <span
+                          className={`text-sm font-medium ${report.afterWebVitals.fcp.grade === "good" ? "text-green-600" : report.afterWebVitals.fcp.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}
+                        >
+                          {report.afterWebVitals.fcp.value.toFixed(0)}ms
+                        </span>
+                      </div>
+                    )}
+                    {report.afterWebVitals?.ttfb && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm">TTFB</span>
+                        <span
+                          className={`text-sm font-medium ${report.afterWebVitals.ttfb.grade === "good" ? "text-green-600" : report.afterWebVitals.ttfb.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}
+                        >
+                          {report.afterWebVitals.ttfb.value.toFixed(0)}ms
+                        </span>
+                      </div>
+                    )}
+                    {/* CLS - use afterWebVitals.cls if available, else fall back to afterClsScore */}
+                    {(report.afterWebVitals?.cls || report.afterClsScore !== undefined) && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm">CLS</span>
+                        <span
+                          className={`text-sm font-medium ${
+                            (report.afterWebVitals?.cls?.grade || report.afterClsGrade) === "good"
+                              ? "text-green-600"
+                              : (report.afterWebVitals?.cls?.grade || report.afterClsGrade) === "needs-improvement"
+                                ? "text-yellow-600"
+                                : "text-red-600"
+                          }`}
+                        >
+                          {(report.afterWebVitals?.cls?.value ?? report.afterClsScore)?.toFixed(4)}
+                        </span>
+                      </div>
+                    )}
+                    {report.afterWebVitals?.inp && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm">INP</span>
+                        <span
+                          className={`text-sm font-medium ${report.afterWebVitals.inp.grade === "good" ? "text-green-600" : report.afterWebVitals.inp.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}
+                        >
+                          {report.afterWebVitals.inp.value.toFixed(0)}ms
+                        </span>
+                      </div>
+                    )}
+                    {/* Show message if no metrics at all */}
+                    {!report.afterWebVitals?.lcp &&
+                      !report.afterWebVitals?.fcp &&
+                      !report.afterWebVitals?.ttfb &&
+                      !report.afterWebVitals?.cls &&
+                      !report.afterWebVitals?.inp &&
+                      report.afterClsScore === undefined && (
+                        <span className="text-sm text-muted-foreground">No metrics captured</span>
                       )}
-                      {report.afterWebVitals.fcp && (
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm">FCP</span>
-                          <span className={`text-sm font-medium ${report.afterWebVitals.fcp.grade === "good" ? "text-green-600" : report.afterWebVitals.fcp.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}>
-                            {report.afterWebVitals.fcp.value.toFixed(0)}ms
-                          </span>
-                        </div>
-                      )}
-                      {report.afterWebVitals.ttfb && (
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm">TTFB</span>
-                          <span className={`text-sm font-medium ${report.afterWebVitals.ttfb.grade === "good" ? "text-green-600" : report.afterWebVitals.ttfb.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}>
-                            {report.afterWebVitals.ttfb.value.toFixed(0)}ms
-                          </span>
-                        </div>
-                      )}
-                      {report.afterWebVitals.cls && (
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm">CLS</span>
-                          <span className={`text-sm font-medium ${report.afterWebVitals.cls.grade === "good" ? "text-green-600" : report.afterWebVitals.cls.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}>
-                            {report.afterWebVitals.cls.value.toFixed(4)}
-                          </span>
-                        </div>
-                      )}
-                      {report.afterWebVitals.inp && (
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm">INP</span>
-                          <span className={`text-sm font-medium ${report.afterWebVitals.inp.grade === "good" ? "text-green-600" : report.afterWebVitals.inp.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}>
-                            {report.afterWebVitals.inp.value.toFixed(0)}ms
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <span className="text-sm text-muted-foreground">No metrics captured</span>
-                  )}
+                  </div>
                 </div>
               </div>
               <p className="text-xs text-muted-foreground mt-3">
-                LCP: Largest Contentful Paint • FCP: First Contentful Paint • TTFB: Time to First Byte • CLS: Cumulative Layout Shift • INP: Interaction to Next Paint
+                LCP: Largest Contentful Paint • FCP: First Contentful Paint • TTFB: Time to First Byte • CLS: Cumulative
+                Layout Shift • INP: Interaction to Next Paint
               </p>
             </div>
           )}

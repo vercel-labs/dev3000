@@ -157,6 +157,11 @@ export async function agentFixLoopStep(
     throw new Error(`Sandbox not running: ${sandbox.status}`)
   }
 
+  // Capture "before" Web Vitals via CDP before the agent makes any changes
+  workflowLog("[Agent] Capturing before Web Vitals via CDP...")
+  const capturedBeforeWebVitals = await fetchWebVitalsViaCDP(sandbox)
+  workflowLog(`[Agent] Before Web Vitals captured: ${JSON.stringify(capturedBeforeWebVitals)}`)
+
   // Run the agent with the new "diagnose" tool
   const agentResult = await runAgentWithDiagnoseTool(
     sandbox,
@@ -241,9 +246,19 @@ export async function agentFixLoopStep(
   // Determine workflow type from progress context
   const workflowType = (progressContext?.workflowType as "cls-fix" | "prompt") || "cls-fix"
 
-  // Parse Web Vitals from d3k logs (before and after)
-  const beforeWebVitals = parseWebVitalsFromLogs(initD3kLogs)
-  const afterWebVitals = parseWebVitalsFromLogs(finalCls.d3kLogs)
+  // Fetch "after" Web Vitals directly from browser via CDP (more reliable than parsing logs)
+  workflowLog("[Agent] Fetching after Web Vitals via CDP...")
+  const afterWebVitals = await fetchWebVitalsViaCDP(sandbox)
+
+  // Use the capturedBeforeWebVitals we got at the start of this function
+  // Merge with the beforeCls we got from init step if CDP didn't capture it
+  const beforeWebVitals: import("@/types").WebVitals = { ...capturedBeforeWebVitals }
+  if (!beforeWebVitals.cls && beforeCls !== null) {
+    beforeWebVitals.cls = {
+      value: beforeCls,
+      grade: beforeCls <= 0.1 ? "good" : beforeCls <= 0.25 ? "needs-improvement" : "poor"
+    }
+  }
 
   workflowLog(`[Agent] Before Web Vitals: ${JSON.stringify(beforeWebVitals)}`)
   workflowLog(`[Agent] After Web Vitals: ${JSON.stringify(afterWebVitals)}`)
@@ -416,74 +431,100 @@ Use this to diagnose and verify performance improvements.`,
       execute: async ({ reason }: { reason: string }) => {
         workflowLog(`[getWebVitals] Running: ${reason}`)
 
-        // Navigate and reload to get fresh metrics
+        // Navigate to get fresh metrics
         const diagnoseUrl = `http://localhost:3000${startPath}`
         const navCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"navigate","params":{"url":"${diagnoseUrl}"}}}}'`
         await runSandboxCommand(sandbox, "bash", ["-c", navCmd])
         await new Promise((resolve) => setTimeout(resolve, 3000))
 
-        // Read d3k logs for performance metrics
-        const logsResult = await runSandboxCommand(sandbox, "sh", [
-          "-c",
-          'for log in /home/vercel-sandbox/.d3k/logs/*.log; do [ -f "$log" ] && tail -500 "$log" || true; done 2>/dev/null'
-        ])
-        const logs = logsResult.stdout || ""
+        // Get Web Vitals directly from browser using execute_browser_action with evaluate
+        const webVitalsScript = `(function() {
+          const lcpEntries = performance.getEntriesByType('largest-contentful-paint');
+          const fcpEntries = performance.getEntriesByName('first-contentful-paint');
+          const clsEntries = performance.getEntriesByType('layout-shift');
+          const fidEntries = performance.getEntriesByType('first-input');
+          const navTiming = performance.getEntriesByType('navigation')[0] || performance.timing;
+          return JSON.stringify({
+            lcp: lcpEntries.length > 0 ? lcpEntries[lcpEntries.length - 1].startTime : null,
+            fcp: fcpEntries.length > 0 ? fcpEntries[0].startTime : null,
+            ttfb: navTiming.responseStart ? (navTiming.responseStart - (navTiming.startTime || navTiming.navigationStart || 0)) : null,
+            cls: clsEntries.reduce((sum, e) => sum + (e.hadRecentInput ? 0 : e.value), 0),
+            fid: fidEntries.length > 0 ? fidEntries[0].processingStart - fidEntries[0].startTime : null
+          });
+        })()`
 
-        // Parse Core Web Vitals from logs
-        const metrics: Record<string, { value: number | string; grade: string }> = {}
+        const evalCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '${JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "tools/call",
+          params: {
+            name: "execute_browser_action",
+            arguments: {
+              action: "evaluate",
+              params: { expression: webVitalsScript }
+            }
+          }
+        }).replace(/'/g, "'\\''")}'`
+
+        const evalResult = await runSandboxCommand(sandbox, "bash", ["-c", evalCmd])
+        workflowLog(`[getWebVitals] Eval result: ${evalResult.stdout.substring(0, 500)}`)
+
+        // Parse the result
+        let vitals: { lcp: number | null; fcp: number | null; ttfb: number | null; cls: number; fid: number | null } = {
+          lcp: null,
+          fcp: null,
+          ttfb: null,
+          cls: 0,
+          fid: null
+        }
+
+        try {
+          // Parse MCP response to get the evaluate result
+          const mcpResponse = JSON.parse(evalResult.stdout)
+          if (mcpResponse.result?.content?.[0]?.text) {
+            const resultText = mcpResponse.result.content[0].text
+            // Extract the JSON from the result text
+            const jsonMatch = resultText.match(/\{[^}]+\}/)
+            if (jsonMatch) {
+              vitals = JSON.parse(jsonMatch[0])
+            }
+          }
+        } catch (e) {
+          workflowLog(`[getWebVitals] Failed to parse result: ${e}`)
+        }
+
+        // Build report with grades
+        const metrics: Record<string, { value: string; grade: string }> = {}
 
         // LCP (Largest Contentful Paint) - good: ≤2.5s, needs improvement: ≤4s, poor: >4s
-        const lcpMatch = logs.match(/LCP[:\s]+(\d+(?:\.\d+)?)\s*(ms|s)?/i)
-        if (lcpMatch) {
-          let lcpMs = parseFloat(lcpMatch[1])
-          if (lcpMatch[2] === "s") lcpMs *= 1000
-          const grade = lcpMs <= 2500 ? "GOOD ✅" : lcpMs <= 4000 ? "NEEDS IMPROVEMENT ⚠️" : "POOR ❌"
-          metrics.LCP = { value: `${lcpMs.toFixed(0)}ms`, grade }
+        if (vitals.lcp !== null) {
+          const grade = vitals.lcp <= 2500 ? "GOOD ✅" : vitals.lcp <= 4000 ? "NEEDS IMPROVEMENT ⚠️" : "POOR ❌"
+          metrics.LCP = { value: `${vitals.lcp.toFixed(0)}ms`, grade }
         }
 
         // FCP (First Contentful Paint) - good: ≤1.8s, needs improvement: ≤3s, poor: >3s
-        const fcpMatch = logs.match(/FCP[:\s]+(\d+(?:\.\d+)?)\s*(ms|s)?/i)
-        if (fcpMatch) {
-          let fcpMs = parseFloat(fcpMatch[1])
-          if (fcpMatch[2] === "s") fcpMs *= 1000
-          const grade = fcpMs <= 1800 ? "GOOD ✅" : fcpMs <= 3000 ? "NEEDS IMPROVEMENT ⚠️" : "POOR ❌"
-          metrics.FCP = { value: `${fcpMs.toFixed(0)}ms`, grade }
+        if (vitals.fcp !== null) {
+          const grade = vitals.fcp <= 1800 ? "GOOD ✅" : vitals.fcp <= 3000 ? "NEEDS IMPROVEMENT ⚠️" : "POOR ❌"
+          metrics.FCP = { value: `${vitals.fcp.toFixed(0)}ms`, grade }
         }
 
         // TTFB (Time to First Byte) - good: ≤800ms, needs improvement: ≤1800ms, poor: >1800ms
-        const ttfbMatch = logs.match(/TTFB[:\s]+(\d+(?:\.\d+)?)\s*(ms|s)?/i)
-        if (ttfbMatch) {
-          let ttfbMs = parseFloat(ttfbMatch[1])
-          if (ttfbMatch[2] === "s") ttfbMs *= 1000
-          const grade = ttfbMs <= 800 ? "GOOD ✅" : ttfbMs <= 1800 ? "NEEDS IMPROVEMENT ⚠️" : "POOR ❌"
-          metrics.TTFB = { value: `${ttfbMs.toFixed(0)}ms`, grade }
+        if (vitals.ttfb !== null) {
+          const grade = vitals.ttfb <= 800 ? "GOOD ✅" : vitals.ttfb <= 1800 ? "NEEDS IMPROVEMENT ⚠️" : "POOR ❌"
+          metrics.TTFB = { value: `${vitals.ttfb.toFixed(0)}ms`, grade }
         }
 
         // CLS (Cumulative Layout Shift) - good: ≤0.1, needs improvement: ≤0.25, poor: >0.25
-        const clsMatch = logs.match(/CLS[:\s]+([\d.]+)/i)
-        if (clsMatch) {
-          const cls = parseFloat(clsMatch[1])
-          const grade = cls <= 0.1 ? "GOOD ✅" : cls <= 0.25 ? "NEEDS IMPROVEMENT ⚠️" : "POOR ❌"
-          metrics.CLS = { value: cls.toFixed(4), grade }
-        }
+        const clsGrade = vitals.cls <= 0.1 ? "GOOD ✅" : vitals.cls <= 0.25 ? "NEEDS IMPROVEMENT ⚠️" : "POOR ❌"
+        metrics.CLS = { value: vitals.cls.toFixed(4), grade: clsGrade }
 
-        // INP (Interaction to Next Paint) - good: ≤200ms, needs improvement: ≤500ms, poor: >500ms
-        const inpMatch = logs.match(/INP[:\s]+(\d+(?:\.\d+)?)\s*(ms)?/i)
-        if (inpMatch) {
-          const inpMs = parseFloat(inpMatch[1])
-          const grade = inpMs <= 200 ? "GOOD ✅" : inpMs <= 500 ? "NEEDS IMPROVEMENT ⚠️" : "POOR ❌"
-          metrics.INP = { value: `${inpMs.toFixed(0)}ms`, grade }
+        // FID/INP (First Input Delay) - good: ≤100ms, needs improvement: ≤300ms, poor: >300ms
+        if (vitals.fid !== null) {
+          const grade = vitals.fid <= 100 ? "GOOD ✅" : vitals.fid <= 300 ? "NEEDS IMPROVEMENT ⚠️" : "POOR ❌"
+          metrics.FID = { value: `${vitals.fid.toFixed(0)}ms`, grade }
         }
 
         // Build report
-        if (Object.keys(metrics).length === 0) {
-          return `## Web Vitals Report
-
-No performance metrics found in logs yet. The page may still be loading, or metrics haven't been captured.
-
-Try running this tool again after a few seconds, or use the \`diagnose\` tool to trigger a page reload.`
-        }
-
         let report = "## Web Vitals Report\n\n"
         for (const [name, data] of Object.entries(metrics)) {
           report += `**${name}:** ${data.value} (${data.grade})\n`
@@ -496,7 +537,7 @@ Try running this tool again after a few seconds, or use the \`diagnose\` tool to
 - **FCP** (First Contentful Paint): Good ≤1.8s, Needs Improvement ≤3s
 - **TTFB** (Time to First Byte): Good ≤800ms, Needs Improvement ≤1.8s
 - **CLS** (Cumulative Layout Shift): Good ≤0.1, Needs Improvement ≤0.25
-- **INP** (Interaction to Next Paint): Good ≤200ms, Needs Improvement ≤500ms`
+- **FID** (First Input Delay): Good ≤100ms, Needs Improvement ≤300ms`
 
         return report
       }
@@ -814,11 +855,12 @@ async function fetchClsData(
 }
 
 /**
- * Parse Web Vitals from d3k logs
- * Returns all Core Web Vitals with grades
+ * Fetch Web Vitals directly from browser via CDP evaluate
+ * This is more reliable than parsing logs
  */
-function parseWebVitalsFromLogs(logs: string): import("@/types").WebVitals {
+async function fetchWebVitalsViaCDP(sandbox: Sandbox): Promise<import("@/types").WebVitals> {
   const vitals: import("@/types").WebVitals = {}
+  const D3K_MCP_PORT = 3684
 
   // Helper to determine grade
   const gradeValue = (
@@ -831,52 +873,73 @@ function parseWebVitalsFromLogs(logs: string): import("@/types").WebVitals {
     return "poor"
   }
 
-  // LCP (Largest Contentful Paint) - good: ≤2500ms, needs improvement: ≤4000ms
-  const lcpMatch = logs.match(/LCP[:\s]+(\d+(?:\.\d+)?)\s*(ms|s)?/i)
-  if (lcpMatch) {
-    let value = parseFloat(lcpMatch[1])
-    if (lcpMatch[2] === "s") value *= 1000
-    vitals.lcp = { value, grade: gradeValue(value, 2500, 4000) }
-  }
+  try {
+    // Get Web Vitals directly from browser using execute_browser_action with evaluate
+    const webVitalsScript = `(function() {
+      const lcpEntries = performance.getEntriesByType('largest-contentful-paint');
+      const fcpEntries = performance.getEntriesByName('first-contentful-paint');
+      const clsEntries = performance.getEntriesByType('layout-shift');
+      const fidEntries = performance.getEntriesByType('first-input');
+      const navTiming = performance.getEntriesByType('navigation')[0] || performance.timing;
+      return JSON.stringify({
+        lcp: lcpEntries.length > 0 ? lcpEntries[lcpEntries.length - 1].startTime : null,
+        fcp: fcpEntries.length > 0 ? fcpEntries[0].startTime : null,
+        ttfb: navTiming.responseStart ? (navTiming.responseStart - (navTiming.startTime || navTiming.navigationStart || 0)) : null,
+        cls: clsEntries.reduce((sum, e) => sum + (e.hadRecentInput ? 0 : e.value), 0)
+      });
+    })()`
 
-  // FCP (First Contentful Paint) - good: ≤1800ms, needs improvement: ≤3000ms
-  const fcpMatch = logs.match(/FCP[:\s]+(\d+(?:\.\d+)?)\s*(ms|s)?/i)
-  if (fcpMatch) {
-    let value = parseFloat(fcpMatch[1])
-    if (fcpMatch[2] === "s") value *= 1000
-    vitals.fcp = { value, grade: gradeValue(value, 1800, 3000) }
-  }
+    const evalCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '${JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: {
+        name: "execute_browser_action",
+        arguments: {
+          action: "evaluate",
+          params: { expression: webVitalsScript }
+        }
+      }
+    }).replace(/'/g, "'\\''")}'`
 
-  // TTFB (Time to First Byte) - good: ≤800ms, needs improvement: ≤1800ms
-  const ttfbMatch = logs.match(/TTFB[:\s]+(\d+(?:\.\d+)?)\s*(ms|s)?/i)
-  if (ttfbMatch) {
-    let value = parseFloat(ttfbMatch[1])
-    if (ttfbMatch[2] === "s") value *= 1000
-    vitals.ttfb = { value, grade: gradeValue(value, 800, 1800) }
-  }
+    const evalResult = await runSandboxCommand(sandbox, "bash", ["-c", evalCmd])
+    workflowLog(`[fetchWebVitals] CDP result: ${evalResult.stdout.substring(0, 300)}`)
 
-  // CLS (Cumulative Layout Shift) - good: ≤0.1, needs improvement: ≤0.25
-  // Try multiple patterns for CLS
-  const clsPatterns = [
-    /CLS[:\s]+([\d.]+)(?!\s*ms)/i, // CLS: 0.123 (not followed by ms)
-    /Detected \d+ layout shifts \(CLS: ([\d.]+)\)/i // d3k format
-  ]
-  for (const pattern of clsPatterns) {
-    const clsMatch = logs.match(pattern)
-    if (clsMatch) {
-      const value = parseFloat(clsMatch[1])
-      vitals.cls = { value, grade: gradeValue(value, 0.1, 0.25) }
-      break
+    // Parse the MCP response
+    const mcpResponse = JSON.parse(evalResult.stdout)
+    if (mcpResponse.result?.content?.[0]?.text) {
+      const resultText = mcpResponse.result.content[0].text
+      // Extract the JSON from the result text - look for the value field
+      const valueMatch = resultText.match(/"value":\s*"(\{[^"]+\})"/)
+      if (valueMatch) {
+        const rawVitals = JSON.parse(valueMatch[1].replace(/\\"/g, '"'))
+
+        // LCP (Largest Contentful Paint) - good: ≤2500ms, needs improvement: ≤4000ms
+        if (rawVitals.lcp !== null && rawVitals.lcp !== undefined) {
+          vitals.lcp = { value: rawVitals.lcp, grade: gradeValue(rawVitals.lcp, 2500, 4000) }
+        }
+
+        // FCP (First Contentful Paint) - good: ≤1800ms, needs improvement: ≤3000ms
+        if (rawVitals.fcp !== null && rawVitals.fcp !== undefined) {
+          vitals.fcp = { value: rawVitals.fcp, grade: gradeValue(rawVitals.fcp, 1800, 3000) }
+        }
+
+        // TTFB (Time to First Byte) - good: ≤800ms, needs improvement: ≤1800ms
+        if (rawVitals.ttfb !== null && rawVitals.ttfb !== undefined) {
+          vitals.ttfb = { value: rawVitals.ttfb, grade: gradeValue(rawVitals.ttfb, 800, 1800) }
+        }
+
+        // CLS (Cumulative Layout Shift) - good: ≤0.1, needs improvement: ≤0.25
+        if (rawVitals.cls !== null && rawVitals.cls !== undefined) {
+          vitals.cls = { value: rawVitals.cls, grade: gradeValue(rawVitals.cls, 0.1, 0.25) }
+        }
+      }
     }
+  } catch (err) {
+    workflowLog(`[fetchWebVitals] Error: ${err instanceof Error ? err.message : String(err)}`)
   }
 
-  // INP (Interaction to Next Paint) - good: ≤200ms, needs improvement: ≤500ms
-  const inpMatch = logs.match(/INP[:\s]+(\d+(?:\.\d+)?)\s*(ms)?/i)
-  if (inpMatch) {
-    const value = parseFloat(inpMatch[1])
-    vitals.inp = { value, grade: gradeValue(value, 200, 500) }
-  }
-
+  workflowLog(`[fetchWebVitals] Result: ${JSON.stringify(vitals)}`)
   return vitals
 }
 
