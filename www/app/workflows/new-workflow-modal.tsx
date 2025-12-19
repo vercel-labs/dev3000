@@ -571,14 +571,25 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
 
         // Get access token for Authorization header (needed for cross-origin requests)
         const tokenResponse = await fetch("/api/auth/token")
+        console.log("[Start Workflow] Token response status:", tokenResponse.status)
+
+        if (!tokenResponse.ok) {
+          const tokenError = await tokenResponse.text()
+          console.error("[Start Workflow] Token fetch failed:", tokenResponse.status, tokenError)
+          throw new Error(`Authentication failed: ${tokenError}`)
+        }
+
         const tokenData = await tokenResponse.json()
         const accessToken = tokenData.accessToken
+        console.log("[Start Workflow] Got access token:", accessToken ? "yes (length: " + accessToken.length + ")" : "NO TOKEN")
+
+        if (!accessToken) {
+          throw new Error("No access token available. Please sign in again.")
+        }
 
         const headers: HeadersInit = { "Content-Type": "application/json" }
-        if (accessToken) {
-          // Always include Authorization header for production API
-          headers.Authorization = `Bearer ${accessToken}`
-        }
+        // Always include Authorization header for production API
+        headers.Authorization = `Bearer ${accessToken}`
 
         const response = await fetch(apiUrl, {
           method: "POST",
