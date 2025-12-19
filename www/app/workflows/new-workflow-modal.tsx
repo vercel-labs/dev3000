@@ -581,7 +581,10 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
 
         const tokenData = await tokenResponse.json()
         const accessToken = tokenData.accessToken
-        console.log("[Start Workflow] Got access token:", accessToken ? "yes (length: " + accessToken.length + ")" : "NO TOKEN")
+        console.log(
+          "[Start Workflow] Got access token:",
+          accessToken ? "yes (length: " + accessToken.length + ")" : "NO TOKEN"
+        )
 
         if (!accessToken) {
           throw new Error("No access token available. Please sign in again.")

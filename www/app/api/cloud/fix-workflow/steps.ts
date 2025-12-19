@@ -858,7 +858,7 @@ async function fetchClsData(
 
 /**
  * Fetch Web Vitals directly from browser via CDP evaluate
- * This is more reliable than parsing logs
+ * Forces a page refresh first to ensure fresh metrics are captured
  */
 async function fetchWebVitalsViaCDP(sandbox: Sandbox): Promise<import("@/types").WebVitals> {
   const vitals: import("@/types").WebVitals = {}
@@ -876,6 +876,29 @@ async function fetchWebVitalsViaCDP(sandbox: Sandbox): Promise<import("@/types")
   }
 
   try {
+    // First, refresh the page to get fresh metrics (LCP/FCP/TTFB are only captured once per page load)
+    workflowLog("[fetchWebVitals] Refreshing page to capture fresh metrics...")
+    const refreshCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '${JSON.stringify(
+      {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/call",
+        params: {
+          name: "execute_browser_action",
+          arguments: {
+            action: "evaluate",
+            params: { expression: "location.reload(); 'refreshing'" }
+          }
+        }
+      }
+    ).replace(/'/g, "'\\''")}'`
+
+    await runSandboxCommand(sandbox, "bash", ["-c", refreshCmd])
+
+    // Wait for page to fully load and metrics to be captured
+    workflowLog("[fetchWebVitals] Waiting for page load and metrics capture...")
+    await new Promise((resolve) => setTimeout(resolve, 5000))
+
     // Get Web Vitals directly from browser using execute_browser_action with evaluate
     const webVitalsScript = `(function() {
       const lcpEntries = performance.getEntriesByType('largest-contentful-paint');
