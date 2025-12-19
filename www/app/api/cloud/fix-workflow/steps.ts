@@ -899,6 +899,36 @@ async function fetchWebVitalsViaCDP(sandbox: Sandbox): Promise<import("@/types")
     workflowLog("[fetchWebVitals] Waiting for page load and metrics capture...")
     await new Promise((resolve) => setTimeout(resolve, 5000))
 
+    // IMPORTANT: LCP needs to be "finalized" by user interaction or visibility change
+    // Without this, performance.getEntriesByType('largest-contentful-paint') returns empty
+    workflowLog("[fetchWebVitals] Triggering user interaction to finalize LCP...")
+    const finalizeLcpCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '${JSON.stringify(
+      {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/call",
+        params: {
+          name: "execute_browser_action",
+          arguments: {
+            action: "evaluate",
+            params: {
+              expression: `
+                // Dispatch a click event to finalize LCP
+                document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+                // Also try dispatching to document for good measure
+                document.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+                'lcp-finalized'
+              `
+            }
+          }
+        }
+      }
+    ).replace(/'/g, "'\\''")}'`
+
+    await runSandboxCommand(sandbox, "bash", ["-c", finalizeLcpCmd])
+    // Small wait for finalization to propagate
+    await new Promise((resolve) => setTimeout(resolve, 500))
+
     // Get Web Vitals directly from browser using execute_browser_action with evaluate
     const webVitalsScript = `(function() {
       const lcpEntries = performance.getEntriesByType('largest-contentful-paint');

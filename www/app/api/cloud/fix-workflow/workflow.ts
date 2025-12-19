@@ -173,12 +173,7 @@ export async function cloudFixWorkflow(params: {
 
     // Save final "done" status (this is crucial since API returns immediately)
     if (progressContext) {
-      await saveDoneStatus(
-        progressContext,
-        fixResult.reportBlobUrl,
-        prResult?.prUrl || null,
-        prError
-      )
+      await saveDoneStatus(progressContext, fixResult.reportBlobUrl, prResult?.prUrl || null, prError)
       workflowLog(`[Workflow] Saved final "done" status for ${progressContext.runId}`)
     }
 
