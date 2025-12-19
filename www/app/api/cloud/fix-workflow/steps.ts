@@ -907,35 +907,47 @@ async function fetchWebVitalsViaCDP(sandbox: Sandbox): Promise<import("@/types")
     ).replace(/'/g, "'\\''")}'`
 
     const evalResult = await runSandboxCommand(sandbox, "bash", ["-c", evalCmd])
-    workflowLog(`[fetchWebVitals] CDP result: ${evalResult.stdout.substring(0, 300)}`)
+    workflowLog(`[fetchWebVitals] CDP result: ${evalResult.stdout.substring(0, 500)}`)
 
     // Parse the MCP response
     const mcpResponse = JSON.parse(evalResult.stdout)
     if (mcpResponse.result?.content?.[0]?.text) {
       const resultText = mcpResponse.result.content[0].text
-      // Extract the JSON from the result text - look for the value field
-      const valueMatch = resultText.match(/"value":\s*"(\{[^"]+\})"/)
-      if (valueMatch) {
-        const rawVitals = JSON.parse(valueMatch[1].replace(/\\"/g, '"'))
+      workflowLog(`[fetchWebVitals] Result text: ${resultText.substring(0, 300)}`)
 
-        // LCP (Largest Contentful Paint) - good: ≤2500ms, needs improvement: ≤4000ms
-        if (rawVitals.lcp !== null && rawVitals.lcp !== undefined) {
-          vitals.lcp = { value: rawVitals.lcp, grade: gradeValue(rawVitals.lcp, 2500, 4000) }
-        }
+      // The response format is: Browser action 'evaluate' executed successfully. Result: { "result": { "type": "string", "value": "{...}" } }
+      // Extract the inner Result JSON and parse it
+      const resultJsonMatch = resultText.match(/Result:\s*(\{[\s\S]*\})/)
+      if (resultJsonMatch) {
+        try {
+          const innerResult = JSON.parse(resultJsonMatch[1])
+          if (innerResult.result?.value) {
+            // The value is a JSON string that needs to be parsed
+            const rawVitals = JSON.parse(innerResult.result.value)
+            workflowLog(`[fetchWebVitals] Parsed vitals: ${JSON.stringify(rawVitals)}`)
 
-        // FCP (First Contentful Paint) - good: ≤1800ms, needs improvement: ≤3000ms
-        if (rawVitals.fcp !== null && rawVitals.fcp !== undefined) {
-          vitals.fcp = { value: rawVitals.fcp, grade: gradeValue(rawVitals.fcp, 1800, 3000) }
-        }
+            // LCP (Largest Contentful Paint) - good: ≤2500ms, needs improvement: ≤4000ms
+            if (rawVitals.lcp !== null && rawVitals.lcp !== undefined) {
+              vitals.lcp = { value: rawVitals.lcp, grade: gradeValue(rawVitals.lcp, 2500, 4000) }
+            }
 
-        // TTFB (Time to First Byte) - good: ≤800ms, needs improvement: ≤1800ms
-        if (rawVitals.ttfb !== null && rawVitals.ttfb !== undefined) {
-          vitals.ttfb = { value: rawVitals.ttfb, grade: gradeValue(rawVitals.ttfb, 800, 1800) }
-        }
+            // FCP (First Contentful Paint) - good: ≤1800ms, needs improvement: ≤3000ms
+            if (rawVitals.fcp !== null && rawVitals.fcp !== undefined) {
+              vitals.fcp = { value: rawVitals.fcp, grade: gradeValue(rawVitals.fcp, 1800, 3000) }
+            }
 
-        // CLS (Cumulative Layout Shift) - good: ≤0.1, needs improvement: ≤0.25
-        if (rawVitals.cls !== null && rawVitals.cls !== undefined) {
-          vitals.cls = { value: rawVitals.cls, grade: gradeValue(rawVitals.cls, 0.1, 0.25) }
+            // TTFB (Time to First Byte) - good: ≤800ms, needs improvement: ≤1800ms
+            if (rawVitals.ttfb !== null && rawVitals.ttfb !== undefined) {
+              vitals.ttfb = { value: rawVitals.ttfb, grade: gradeValue(rawVitals.ttfb, 800, 1800) }
+            }
+
+            // CLS (Cumulative Layout Shift) - good: ≤0.1, needs improvement: ≤0.25
+            if (rawVitals.cls !== null && rawVitals.cls !== undefined) {
+              vitals.cls = { value: rawVitals.cls, grade: gradeValue(rawVitals.cls, 0.1, 0.25) }
+            }
+          }
+        } catch (parseErr) {
+          workflowLog(`[fetchWebVitals] Failed to parse inner result: ${parseErr}`)
         }
       }
     }
