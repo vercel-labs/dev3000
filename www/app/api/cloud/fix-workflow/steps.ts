@@ -857,8 +857,9 @@ async function fetchClsData(
 }
 
 /**
- * Fetch Web Vitals directly from browser via CDP evaluate
- * Forces a page refresh first to ensure fresh metrics are captured
+ * Fetch Web Vitals using Chrome DevTools MCP performance trace
+ * Uses performance_start_trace/performance_stop_trace for reliable metrics
+ * Falls back to Performance API evaluation if trace fails
  */
 async function fetchWebVitalsViaCDP(sandbox: Sandbox): Promise<import("@/types").WebVitals> {
   const vitals: import("@/types").WebVitals = {}
@@ -876,139 +877,193 @@ async function fetchWebVitalsViaCDP(sandbox: Sandbox): Promise<import("@/types")
   }
 
   try {
-    // First, refresh the page to get fresh metrics (LCP/FCP/TTFB are only captured once per page load)
-    workflowLog("[fetchWebVitals] Refreshing page to capture fresh metrics...")
-    const refreshCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '${JSON.stringify(
+    // Method 1: Try Chrome DevTools MCP performance trace (most reliable for LCP, CLS, INP)
+    workflowLog("[fetchWebVitals] Starting Chrome DevTools performance trace...")
+    const startTraceCmd = `curl -s -m 60 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '${JSON.stringify(
       {
         jsonrpc: "2.0",
         id: 1,
         method: "tools/call",
         params: {
-          name: "execute_browser_action",
+          name: "chrome-devtools_performance_start_trace",
           arguments: {
-            action: "evaluate",
-            params: { expression: "location.reload(); 'refreshing'" }
+            reload: true, // Reload page to capture fresh metrics
+            autoStop: true // Automatically stop after page load
           }
         }
       }
     ).replace(/'/g, "'\\''")}'`
 
-    await runSandboxCommand(sandbox, "bash", ["-c", refreshCmd])
+    const startTraceResult = await runSandboxCommand(sandbox, "bash", ["-c", startTraceCmd])
+    workflowLog(`[fetchWebVitals] Start trace result: ${startTraceResult.stdout.substring(0, 500)}`)
 
-    // Wait for page to fully load and metrics to be captured
-    workflowLog("[fetchWebVitals] Waiting for page load and metrics capture...")
-    await new Promise((resolve) => setTimeout(resolve, 5000))
+    // Wait for the trace to capture page load and auto-stop (up to 15 seconds)
+    workflowLog("[fetchWebVitals] Waiting for trace to complete...")
+    await new Promise((resolve) => setTimeout(resolve, 8000))
 
-    // IMPORTANT: LCP needs to be "finalized" by user interaction or visibility change
-    // Without this, performance.getEntriesByType('largest-contentful-paint') returns empty
-    workflowLog("[fetchWebVitals] Triggering user interaction to finalize LCP...")
-    const finalizeLcpCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '${JSON.stringify(
+    // Stop the trace and get results (in case autoStop didn't trigger)
+    workflowLog("[fetchWebVitals] Stopping performance trace...")
+    const stopTraceCmd = `curl -s -m 60 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '${JSON.stringify(
       {
         jsonrpc: "2.0",
         id: 1,
         method: "tools/call",
         params: {
-          name: "execute_browser_action",
-          arguments: {
-            action: "evaluate",
-            params: {
-              expression: `
-                // Dispatch a click event to finalize LCP
-                document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-                // Also try dispatching to document for good measure
-                document.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-                'lcp-finalized'
-              `
-            }
-          }
+          name: "chrome-devtools_performance_stop_trace",
+          arguments: {}
         }
       }
     ).replace(/'/g, "'\\''")}'`
 
-    await runSandboxCommand(sandbox, "bash", ["-c", finalizeLcpCmd])
-    // Small wait for finalization to propagate
-    await new Promise((resolve) => setTimeout(resolve, 500))
+    const stopTraceResult = await runSandboxCommand(sandbox, "bash", ["-c", stopTraceCmd])
+    workflowLog(`[fetchWebVitals] Stop trace result: ${stopTraceResult.stdout.substring(0, 1000)}`)
 
-    // Get Web Vitals directly from browser using execute_browser_action with evaluate
-    const webVitalsScript = `(function() {
-      const lcpEntries = performance.getEntriesByType('largest-contentful-paint');
-      const fcpEntries = performance.getEntriesByName('first-contentful-paint');
-      const clsEntries = performance.getEntriesByType('layout-shift');
-      const fidEntries = performance.getEntriesByType('first-input');
-      const navTiming = performance.getEntriesByType('navigation')[0] || performance.timing;
-      return JSON.stringify({
-        lcp: lcpEntries.length > 0 ? lcpEntries[lcpEntries.length - 1].startTime : null,
-        fcp: fcpEntries.length > 0 ? fcpEntries[0].startTime : null,
-        ttfb: navTiming.responseStart ? (navTiming.responseStart - (navTiming.startTime || navTiming.navigationStart || 0)) : null,
-        cls: clsEntries.reduce((sum, e) => sum + (e.hadRecentInput ? 0 : e.value), 0)
-      });
-    })()`
+    // Parse the trace results for Web Vitals
+    try {
+      const traceResponse = JSON.parse(stopTraceResult.stdout)
+      const resultText = traceResponse.result?.content?.[0]?.text || ""
+      workflowLog(`[fetchWebVitals] Trace result text: ${resultText.substring(0, 500)}`)
 
-    const evalCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '${JSON.stringify(
-      {
-        jsonrpc: "2.0",
-        id: 1,
-        method: "tools/call",
-        params: {
-          name: "execute_browser_action",
-          arguments: {
-            action: "evaluate",
-            params: { expression: webVitalsScript }
-          }
-        }
+      // Parse LCP from trace (format: "LCP: 1234ms" or similar)
+      const lcpMatch = resultText.match(/LCP[:\s]+(\d+(?:\.\d+)?)\s*(?:ms|milliseconds)/i)
+      if (lcpMatch) {
+        const lcpValue = parseFloat(lcpMatch[1])
+        vitals.lcp = { value: lcpValue, grade: gradeValue(lcpValue, 2500, 4000) }
+        workflowLog(`[fetchWebVitals] Extracted LCP from trace: ${lcpValue}ms`)
       }
-    ).replace(/'/g, "'\\''")}'`
 
-    const evalResult = await runSandboxCommand(sandbox, "bash", ["-c", evalCmd])
-    workflowLog(`[fetchWebVitals] CDP result: ${evalResult.stdout.substring(0, 500)}`)
+      // Parse CLS from trace (format: "CLS: 0.123" or similar)
+      const clsMatch = resultText.match(/CLS[:\s]+(\d+(?:\.\d+)?)/i)
+      if (clsMatch) {
+        const clsValue = parseFloat(clsMatch[1])
+        vitals.cls = { value: clsValue, grade: gradeValue(clsValue, 0.1, 0.25) }
+        workflowLog(`[fetchWebVitals] Extracted CLS from trace: ${clsValue}`)
+      }
 
-    // Parse the MCP response
-    const mcpResponse = JSON.parse(evalResult.stdout)
-    if (mcpResponse.result?.content?.[0]?.text) {
-      const resultText = mcpResponse.result.content[0].text
-      workflowLog(`[fetchWebVitals] Result text: ${resultText.substring(0, 300)}`)
+      // Parse FCP from trace
+      const fcpMatch = resultText.match(/FCP[:\s]+(\d+(?:\.\d+)?)\s*(?:ms|milliseconds)/i)
+      if (fcpMatch) {
+        const fcpValue = parseFloat(fcpMatch[1])
+        vitals.fcp = { value: fcpValue, grade: gradeValue(fcpValue, 1800, 3000) }
+        workflowLog(`[fetchWebVitals] Extracted FCP from trace: ${fcpValue}ms`)
+      }
 
-      // The response format is: Browser action 'evaluate' executed successfully. Result: { "result": { "type": "string", "value": "{...}" } }
-      // Extract the inner Result JSON and parse it
-      const resultJsonMatch = resultText.match(/Result:\s*(\{[\s\S]*\})/)
-      if (resultJsonMatch) {
-        try {
-          const innerResult = JSON.parse(resultJsonMatch[1])
-          if (innerResult.result?.value) {
-            // The value is a JSON string that needs to be parsed
-            const rawVitals = JSON.parse(innerResult.result.value)
-            workflowLog(`[fetchWebVitals] Parsed vitals: ${JSON.stringify(rawVitals)}`)
+      // Parse TTFB from trace
+      const ttfbMatch = resultText.match(/TTFB[:\s]+(\d+(?:\.\d+)?)\s*(?:ms|milliseconds)/i)
+      if (ttfbMatch) {
+        const ttfbValue = parseFloat(ttfbMatch[1])
+        vitals.ttfb = { value: ttfbValue, grade: gradeValue(ttfbValue, 800, 1800) }
+        workflowLog(`[fetchWebVitals] Extracted TTFB from trace: ${ttfbValue}ms`)
+      }
 
-            // LCP (Largest Contentful Paint) - good: ≤2500ms, needs improvement: ≤4000ms
-            if (rawVitals.lcp !== null && rawVitals.lcp !== undefined) {
-              vitals.lcp = { value: rawVitals.lcp, grade: gradeValue(rawVitals.lcp, 2500, 4000) }
-            }
+      // Parse INP from trace
+      const inpMatch = resultText.match(/INP[:\s]+(\d+(?:\.\d+)?)\s*(?:ms|milliseconds)/i)
+      if (inpMatch) {
+        const inpValue = parseFloat(inpMatch[1])
+        vitals.inp = { value: inpValue, grade: gradeValue(inpValue, 200, 500) }
+        workflowLog(`[fetchWebVitals] Extracted INP from trace: ${inpValue}ms`)
+      }
+    } catch (traceParseErr) {
+      workflowLog(`[fetchWebVitals] Trace parse error: ${traceParseErr}`)
+    }
 
-            // FCP (First Contentful Paint) - good: ≤1800ms, needs improvement: ≤3000ms
-            if (rawVitals.fcp !== null && rawVitals.fcp !== undefined) {
-              vitals.fcp = { value: rawVitals.fcp, grade: gradeValue(rawVitals.fcp, 1800, 3000) }
-            }
+    // Method 2: Fallback to Performance API if trace didn't provide metrics
+    if (!vitals.lcp || !vitals.cls) {
+      workflowLog("[fetchWebVitals] Trace incomplete, falling back to Performance API...")
 
-            // TTFB (Time to First Byte) - good: ≤800ms, needs improvement: ≤1800ms
-            if (rawVitals.ttfb !== null && rawVitals.ttfb !== undefined) {
-              vitals.ttfb = { value: rawVitals.ttfb, grade: gradeValue(rawVitals.ttfb, 800, 1800) }
-            }
-
-            // CLS (Cumulative Layout Shift) - good: ≤0.1, needs improvement: ≤0.25
-            if (rawVitals.cls !== null && rawVitals.cls !== undefined) {
-              vitals.cls = { value: rawVitals.cls, grade: gradeValue(rawVitals.cls, 0.1, 0.25) }
+      // Trigger user interaction to finalize LCP (required for Performance API)
+      const finalizeLcpCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '${JSON.stringify(
+        {
+          jsonrpc: "2.0",
+          id: 1,
+          method: "tools/call",
+          params: {
+            name: "execute_browser_action",
+            arguments: {
+              action: "evaluate",
+              params: {
+                expression: `
+                  document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+                  document.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+                  'lcp-finalized'
+                `
+              }
             }
           }
-        } catch (parseErr) {
-          workflowLog(`[fetchWebVitals] Failed to parse inner result: ${parseErr}`)
         }
+      ).replace(/'/g, "'\\''")}'`
+
+      await runSandboxCommand(sandbox, "bash", ["-c", finalizeLcpCmd])
+      await new Promise((resolve) => setTimeout(resolve, 500))
+
+      // Get Web Vitals from Performance API
+      const webVitalsScript = `(function() {
+        const lcpEntries = performance.getEntriesByType('largest-contentful-paint');
+        const fcpEntries = performance.getEntriesByName('first-contentful-paint');
+        const clsEntries = performance.getEntriesByType('layout-shift');
+        const navTiming = performance.getEntriesByType('navigation')[0] || performance.timing;
+        return JSON.stringify({
+          lcp: lcpEntries.length > 0 ? lcpEntries[lcpEntries.length - 1].startTime : null,
+          fcp: fcpEntries.length > 0 ? fcpEntries[0].startTime : null,
+          ttfb: navTiming.responseStart ? (navTiming.responseStart - (navTiming.startTime || navTiming.navigationStart || 0)) : null,
+          cls: clsEntries.reduce((sum, e) => sum + (e.hadRecentInput ? 0 : e.value), 0)
+        });
+      })()`
+
+      const evalCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '${JSON.stringify(
+        {
+          jsonrpc: "2.0",
+          id: 1,
+          method: "tools/call",
+          params: {
+            name: "execute_browser_action",
+            arguments: {
+              action: "evaluate",
+              params: { expression: webVitalsScript }
+            }
+          }
+        }
+      ).replace(/'/g, "'\\''")}'`
+
+      const evalResult = await runSandboxCommand(sandbox, "bash", ["-c", evalCmd])
+      workflowLog(`[fetchWebVitals] Fallback CDP result: ${evalResult.stdout.substring(0, 500)}`)
+
+      try {
+        const mcpResponse = JSON.parse(evalResult.stdout)
+        if (mcpResponse.result?.content?.[0]?.text) {
+          const resultText = mcpResponse.result.content[0].text
+          const resultJsonMatch = resultText.match(/Result:\s*(\{[\s\S]*\})/)
+          if (resultJsonMatch) {
+            const innerResult = JSON.parse(resultJsonMatch[1])
+            if (innerResult.result?.value) {
+              const rawVitals = JSON.parse(innerResult.result.value)
+              workflowLog(`[fetchWebVitals] Fallback vitals: ${JSON.stringify(rawVitals)}`)
+
+              // Only use fallback values if we don't already have them from trace
+              if (!vitals.lcp && rawVitals.lcp !== null) {
+                vitals.lcp = { value: rawVitals.lcp, grade: gradeValue(rawVitals.lcp, 2500, 4000) }
+              }
+              if (!vitals.fcp && rawVitals.fcp !== null) {
+                vitals.fcp = { value: rawVitals.fcp, grade: gradeValue(rawVitals.fcp, 1800, 3000) }
+              }
+              if (!vitals.ttfb && rawVitals.ttfb !== null) {
+                vitals.ttfb = { value: rawVitals.ttfb, grade: gradeValue(rawVitals.ttfb, 800, 1800) }
+              }
+              if (!vitals.cls && rawVitals.cls !== null) {
+                vitals.cls = { value: rawVitals.cls, grade: gradeValue(rawVitals.cls, 0.1, 0.25) }
+              }
+            }
+          }
+        }
+      } catch (fallbackErr) {
+        workflowLog(`[fetchWebVitals] Fallback parse error: ${fallbackErr}`)
       }
     }
   } catch (err) {
     workflowLog(`[fetchWebVitals] Error: ${err instanceof Error ? err.message : String(err)}`)
   }
 
-  workflowLog(`[fetchWebVitals] Result: ${JSON.stringify(vitals)}`)
+  workflowLog(`[fetchWebVitals] Final result: ${JSON.stringify(vitals)}`)
   return vitals
 }
 
