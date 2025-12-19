@@ -453,18 +453,20 @@ Use this to diagnose and verify performance improvements.`,
           });
         })()`
 
-        const evalCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '${JSON.stringify({
-          jsonrpc: "2.0",
-          id: 1,
-          method: "tools/call",
-          params: {
-            name: "execute_browser_action",
-            arguments: {
-              action: "evaluate",
-              params: { expression: webVitalsScript }
+        const evalCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '${JSON.stringify(
+          {
+            jsonrpc: "2.0",
+            id: 1,
+            method: "tools/call",
+            params: {
+              name: "execute_browser_action",
+              arguments: {
+                action: "evaluate",
+                params: { expression: webVitalsScript }
+              }
             }
           }
-        }).replace(/'/g, "'\\''")}'`
+        ).replace(/'/g, "'\\''")}'`
 
         const evalResult = await runSandboxCommand(sandbox, "bash", ["-c", evalCmd])
         workflowLog(`[getWebVitals] Eval result: ${evalResult.stdout.substring(0, 500)}`)
@@ -889,18 +891,20 @@ async function fetchWebVitalsViaCDP(sandbox: Sandbox): Promise<import("@/types")
       });
     })()`
 
-    const evalCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '${JSON.stringify({
-      jsonrpc: "2.0",
-      id: 1,
-      method: "tools/call",
-      params: {
-        name: "execute_browser_action",
-        arguments: {
-          action: "evaluate",
-          params: { expression: webVitalsScript }
+    const evalCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '${JSON.stringify(
+      {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/call",
+        params: {
+          name: "execute_browser_action",
+          arguments: {
+            action: "evaluate",
+            params: { expression: webVitalsScript }
+          }
         }
       }
-    }).replace(/'/g, "'\\''")}'`
+    ).replace(/'/g, "'\\''")}'`
 
     const evalResult = await runSandboxCommand(sandbox, "bash", ["-c", evalCmd])
     workflowLog(`[fetchWebVitals] CDP result: ${evalResult.stdout.substring(0, 300)}`)
