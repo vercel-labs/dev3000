@@ -920,13 +920,17 @@ async function fetchWebVitalsViaCDP(sandbox: Sandbox): Promise<import("@/types")
     ).replace(/'/g, "'\\''")}'`
 
     const stopTraceResult = await runSandboxCommand(sandbox, "bash", ["-c", stopTraceCmd])
-    workflowLog(`[fetchWebVitals] Stop trace result: ${stopTraceResult.stdout.substring(0, 1000)}`)
+    workflowLog(`[fetchWebVitals] Stop trace result (${stopTraceResult.stdout.length} chars): ${stopTraceResult.stdout.substring(0, 1000)}`)
 
     // Parse the trace results for Web Vitals
     try {
       const traceResponse = JSON.parse(stopTraceResult.stdout)
+      workflowLog(`[fetchWebVitals] Trace response keys: ${Object.keys(traceResponse).join(", ")}`)
+      if (traceResponse.error) {
+        workflowLog(`[fetchWebVitals] Trace MCP error: ${JSON.stringify(traceResponse.error)}`)
+      }
       const resultText = traceResponse.result?.content?.[0]?.text || ""
-      workflowLog(`[fetchWebVitals] Trace result text: ${resultText.substring(0, 500)}`)
+      workflowLog(`[fetchWebVitals] Trace result text (${resultText.length} chars): ${resultText.substring(0, 500)}`)
 
       // Parse LCP from trace (format: "LCP: 1234ms" or similar)
       const lcpMatch = resultText.match(/LCP[:\s]+(\d+(?:\.\d+)?)\s*(?:ms|milliseconds)/i)
@@ -972,6 +976,7 @@ async function fetchWebVitalsViaCDP(sandbox: Sandbox): Promise<import("@/types")
     }
 
     // Method 2: Fallback to Performance API if trace didn't provide metrics
+    workflowLog(`[fetchWebVitals] After trace: vitals=${JSON.stringify(vitals)}, lcp=${!!vitals.lcp}, cls=${!!vitals.cls}`)
     if (!vitals.lcp || !vitals.cls) {
       workflowLog("[fetchWebVitals] Trace incomplete, falling back to Performance API...")
 
@@ -1030,15 +1035,23 @@ async function fetchWebVitalsViaCDP(sandbox: Sandbox): Promise<import("@/types")
       ).replace(/'/g, "'\\''")}'`
 
       const evalResult = await runSandboxCommand(sandbox, "bash", ["-c", evalCmd])
-      workflowLog(`[fetchWebVitals] Fallback CDP result: ${evalResult.stdout.substring(0, 500)}`)
+      workflowLog(`[fetchWebVitals] Fallback CDP result (${evalResult.stdout.length} chars): ${evalResult.stdout.substring(0, 800)}`)
 
       try {
         const mcpResponse = JSON.parse(evalResult.stdout)
+        workflowLog(`[fetchWebVitals] Fallback MCP response keys: ${Object.keys(mcpResponse).join(", ")}`)
+        if (mcpResponse.error) {
+          workflowLog(`[fetchWebVitals] Fallback MCP error: ${JSON.stringify(mcpResponse.error)}`)
+        }
         if (mcpResponse.result?.content?.[0]?.text) {
           const resultText = mcpResponse.result.content[0].text
+          workflowLog(`[fetchWebVitals] Fallback resultText (${resultText.length} chars): ${resultText.substring(0, 500)}`)
           const resultJsonMatch = resultText.match(/Result:\s*(\{[\s\S]*\})/)
+          workflowLog(`[fetchWebVitals] Fallback regex match: ${resultJsonMatch ? "YES" : "NO"}`)
           if (resultJsonMatch) {
+            workflowLog(`[fetchWebVitals] Fallback matched JSON: ${resultJsonMatch[1].substring(0, 300)}`)
             const innerResult = JSON.parse(resultJsonMatch[1])
+            workflowLog(`[fetchWebVitals] Fallback innerResult keys: ${Object.keys(innerResult).join(", ")}`)
             // The execute_browser_action tool returns {value: "<json>"}, not {result: {value: ...}}
             if (innerResult.value) {
               const rawVitals = JSON.parse(innerResult.value)
