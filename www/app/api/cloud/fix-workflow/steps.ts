@@ -485,10 +485,14 @@ Use this to diagnose and verify performance improvements.`,
           const mcpResponse = JSON.parse(evalResult.stdout)
           if (mcpResponse.result?.content?.[0]?.text) {
             const resultText = mcpResponse.result.content[0].text
-            // Extract the JSON from the result text
-            const jsonMatch = resultText.match(/\{[^}]+\}/)
-            if (jsonMatch) {
-              vitals = JSON.parse(jsonMatch[0])
+            // Extract the JSON object after "Result:" - use a more robust regex that handles nested JSON
+            const resultJsonMatch = resultText.match(/Result:\s*(\{[\s\S]*\})/)
+            if (resultJsonMatch) {
+              const innerResult = JSON.parse(resultJsonMatch[1])
+              // The execute_browser_action tool returns {value: "<json>"}, not {result: {value: ...}}
+              if (innerResult.value) {
+                vitals = JSON.parse(innerResult.value)
+              }
             }
           }
         } catch (e) {
@@ -1035,8 +1039,9 @@ async function fetchWebVitalsViaCDP(sandbox: Sandbox): Promise<import("@/types")
           const resultJsonMatch = resultText.match(/Result:\s*(\{[\s\S]*\})/)
           if (resultJsonMatch) {
             const innerResult = JSON.parse(resultJsonMatch[1])
-            if (innerResult.result?.value) {
-              const rawVitals = JSON.parse(innerResult.result.value)
+            // The execute_browser_action tool returns {value: "<json>"}, not {result: {value: ...}}
+            if (innerResult.value) {
+              const rawVitals = JSON.parse(innerResult.value)
               workflowLog(`[fetchWebVitals] Fallback vitals: ${JSON.stringify(rawVitals)}`)
 
               // Only use fallback values if we don't already have them from trace
