@@ -119,60 +119,93 @@ const initializeOrchestration = async () => {
   // Check if chrome-devtools is already configured externally
   const externalChromeDevtools = isExternalChromeDevtoolsConfigured()
 
-  // Helper to get config from session files in ~/.d3k/
+  // Helper to get config from session files in ~/.d3k/ or CDP_URL env var
   const getConfigFromSessions = () => {
     const config: Parameters<typeof clientManager.initialize>[0] = {}
     const sessionDir = join(homedir(), ".d3k")
 
-    try {
-      // Read all *.json session files
-      const { readdirSync, existsSync } = require("node:fs")
-      if (!existsSync(sessionDir)) return config
+    // Helper to configure chrome-devtools from a CDP URL
+    const configureFromCdpUrl = (cdpUrl: string): boolean => {
+      if (config.chromeDevtools || externalChromeDevtools) return false
 
-      const sessionFiles = readdirSync(sessionDir).filter((f: string) => f.endsWith(".json"))
-
-      // Use the most recent session with CDP URL
-      for (const file of sessionFiles) {
-        try {
-          const sessionPath = join(sessionDir, file)
-          const sessionData = JSON.parse(readFileSync(sessionPath, "utf-8"))
-
-          // Configure chrome-devtools MCP if CDP URL is available
-          // Skip if externally configured to avoid CDP conflicts
-          if (sessionData.cdpUrl && !config.chromeDevtools && !externalChromeDevtools) {
-            // Extract the HTTP endpoint from the WebSocket URL
-            // The cdpUrl is typically ws://localhost:9222/devtools/page/<targetId>
-            // chrome-devtools-mcp needs --browserUrl http://localhost:9222 to properly
-            // manage browser contexts (avoids "Target.getBrowserContexts: Not allowed" errors)
-            const runner = getPackageRunner()
-
-            if (runner) {
-              try {
-                const wsUrl = new URL(sessionData.cdpUrl)
-                // Convert ws:// to http:// and use just the origin (no path)
-                const browserUrl = `http://${wsUrl.host}`
-
-                config.chromeDevtools = {
-                  command: runner.command,
-                  args: [...runner.args, "chrome-devtools-mcp@latest", "--browserUrl", browserUrl],
-                  enabled: true
-                }
-              } catch {
-                console.warn("[MCP Orchestrator] Failed to parse CDP URL:", sessionData.cdpUrl)
-              }
-            } else {
-              console.warn("[MCP Orchestrator] Cannot configure chrome-devtools MCP: no package runner available")
-            }
-          }
-
-          // Break early if we have chrome-devtools - only need one session for CDP URL
-          if (config.chromeDevtools) break
-        } catch {
-          // Skip invalid session files
-        }
+      const runner = getPackageRunner()
+      if (!runner) {
+        console.warn("[MCP Orchestrator] Cannot configure chrome-devtools MCP: no package runner available")
+        return false
       }
-    } catch (error) {
-      console.warn("[MCP Orchestrator] Failed to read session files:", error)
+
+      try {
+        const wsUrl = new URL(cdpUrl)
+        // Convert ws:// to http:// and use just the origin (no path)
+        const browserUrl = `http://${wsUrl.host}`
+
+        config.chromeDevtools = {
+          command: runner.command,
+          args: [...runner.args, "chrome-devtools-mcp@latest", "--browserUrl", browserUrl],
+          enabled: true
+        }
+        console.log(`[MCP Orchestrator] Configured chrome-devtools MCP with browserUrl: ${browserUrl}`)
+        return true
+      } catch {
+        console.warn("[MCP Orchestrator] Failed to parse CDP URL:", cdpUrl)
+        return false
+      }
+    }
+
+    // PRIORITY 1: Use CDP_URL environment variable if set (passed by dev3000 parent process)
+    // This ensures we connect to the Chrome instance that THIS dev3000 instance spawned,
+    // avoiding port mismatches when multiple dev3000 instances are running
+    const envCdpUrl = process.env.CDP_URL
+    if (envCdpUrl) {
+      console.log(`[MCP Orchestrator] Using CDP_URL from environment: ${envCdpUrl}`)
+      configureFromCdpUrl(envCdpUrl)
+    }
+
+    // PRIORITY 2: Fall back to session files if CDP_URL env var is not set
+    if (!config.chromeDevtools) {
+      try {
+        // Read all *.json session files
+        const { readdirSync, existsSync, statSync } = require("node:fs")
+        if (!existsSync(sessionDir)) return config
+
+        const sessionFiles = readdirSync(sessionDir)
+          .filter((f: string) => f.endsWith(".json"))
+          // Sort by modification time (most recent first) to use the active session
+          .sort((a: string, b: string) => {
+            try {
+              const statA = statSync(join(sessionDir, a))
+              const statB = statSync(join(sessionDir, b))
+              return statB.mtimeMs - statA.mtimeMs
+            } catch {
+              return 0
+            }
+          })
+
+        // Use the most recent session with CDP URL
+        for (const file of sessionFiles) {
+          try {
+            const sessionPath = join(sessionDir, file)
+            const sessionData = JSON.parse(readFileSync(sessionPath, "utf-8"))
+
+            // Configure chrome-devtools MCP if CDP URL is available
+            // Skip if externally configured to avoid CDP conflicts
+            if (sessionData.cdpUrl && !config.chromeDevtools && !externalChromeDevtools) {
+              // Extract the HTTP endpoint from the WebSocket URL
+              // The cdpUrl is typically ws://localhost:9222/devtools/page/<targetId>
+              // chrome-devtools-mcp needs --browserUrl http://localhost:9222 to properly
+              // manage browser contexts (avoids "Target.getBrowserContexts: Not allowed" errors)
+              configureFromCdpUrl(sessionData.cdpUrl)
+            }
+
+            // Break early if we have chrome-devtools - only need one session for CDP URL
+            if (config.chromeDevtools) break
+          } catch {
+            // Skip invalid session files
+          }
+        }
+      } catch (error) {
+        console.warn("[MCP Orchestrator] Failed to read session files:", error)
+      }
     }
 
     // Configure framework-specific MCPs based on detected framework

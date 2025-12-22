@@ -10,6 +10,18 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.128",
+    date: "2025-12-22",
+    type: "patch",
+    highlights: [
+      "Use Chrome DevTools MCP performance trace for Web Vitals capture",
+      "Fix Web Vitals capture to finalize LCP with user interaction",
+      "Fix chrome-devtools MCP port mismatch by sorting session files by modification time",
+      "Add CDP_URL environment variable support for MCP orchestration"
+    ]
+  },
+
+  {
     version: "0.0.127",
     date: "2025-12-16",
     type: "minor",

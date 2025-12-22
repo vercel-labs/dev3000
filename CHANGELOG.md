@@ -4,6 +4,15 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.128] - 2025-12-22
+
+**Patch Release**
+
+- Use Chrome DevTools MCP performance trace for Web Vitals capture
+- Fix Web Vitals capture to finalize LCP with user interaction
+- Fix chrome-devtools MCP port mismatch by sorting session files by modification time
+- Add CDP_URL environment variable support for MCP orchestration
+
 ## [0.0.127] - 2025-12-16
 
 **Feature Release**
