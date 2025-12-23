@@ -159,7 +159,8 @@ export async function agentFixLoopStep(
 
   // Capture "before" Web Vitals via CDP before the agent makes any changes
   workflowLog("[Agent] Capturing before Web Vitals via CDP...")
-  const capturedBeforeWebVitals = await fetchWebVitalsViaCDP(sandbox)
+  const { vitals: capturedBeforeWebVitals, diagnosticLogs: beforeWebVitalsDiagnostics } =
+    await fetchWebVitalsViaCDP(sandbox)
   workflowLog(`[Agent] Before Web Vitals captured: ${JSON.stringify(capturedBeforeWebVitals)}`)
 
   // Run the agent with the new "diagnose" tool
@@ -248,11 +249,13 @@ export async function agentFixLoopStep(
 
   // Fetch "after" Web Vitals directly from browser via CDP (more reliable than parsing logs)
   workflowLog("[Agent] Fetching after Web Vitals via CDP...")
-  const afterWebVitals = await fetchWebVitalsViaCDP(sandbox)
+  const { vitals: afterWebVitalsResult, diagnosticLogs: afterWebVitalsDiagnostics } =
+    await fetchWebVitalsViaCDP(sandbox)
 
   // Use the capturedBeforeWebVitals we got at the start of this function
   // Merge with the beforeCls we got from init step if CDP didn't capture it
   const beforeWebVitals: import("@/types").WebVitals = { ...capturedBeforeWebVitals }
+  const afterWebVitals = afterWebVitalsResult
   if (!beforeWebVitals.cls && beforeCls !== null) {
     beforeWebVitals.cls = {
       value: beforeCls,
@@ -287,7 +290,11 @@ export async function agentFixLoopStep(
     gitDiff: gitDiff ?? undefined,
     d3kLogs: combinedD3kLogs,
     initD3kLogs: initD3kLogs,
-    afterD3kLogs: afterD3kLogs
+    afterD3kLogs: afterD3kLogs,
+    webVitalsDiagnostics: {
+      before: beforeWebVitalsDiagnostics,
+      after: afterWebVitalsDiagnostics
+    }
   }
 
   const blob = await put(`report-${reportId}.json`, JSON.stringify(report, null, 2), {
@@ -865,9 +872,18 @@ async function fetchClsData(
  * Uses performance_start_trace/performance_stop_trace for reliable metrics
  * Falls back to Performance API evaluation if trace fails
  */
-async function fetchWebVitalsViaCDP(sandbox: Sandbox): Promise<import("@/types").WebVitals> {
+async function fetchWebVitalsViaCDP(
+  sandbox: Sandbox
+): Promise<{ vitals: import("@/types").WebVitals; diagnosticLogs: string[] }> {
   const vitals: import("@/types").WebVitals = {}
+  const diagnosticLogs: string[] = []
   const D3K_MCP_PORT = 3684
+
+  // Helper to log and capture diagnostics
+  const diagLog = (msg: string) => {
+    workflowLog(msg)
+    diagnosticLogs.push(msg)
+  }
 
   // Helper to determine grade
   const gradeValue = (
@@ -882,7 +898,7 @@ async function fetchWebVitalsViaCDP(sandbox: Sandbox): Promise<import("@/types")
 
   try {
     // Method 1: Try Chrome DevTools MCP performance trace (most reliable for LCP, CLS, INP)
-    workflowLog("[fetchWebVitals] Starting Chrome DevTools performance trace...")
+    diagLog("[fetchWebVitals] Starting Chrome DevTools performance trace...")
     const startTraceCmd = `curl -s -m 60 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '${JSON.stringify(
       {
         jsonrpc: "2.0",
@@ -899,14 +915,14 @@ async function fetchWebVitalsViaCDP(sandbox: Sandbox): Promise<import("@/types")
     ).replace(/'/g, "'\\''")}'`
 
     const startTraceResult = await runSandboxCommand(sandbox, "bash", ["-c", startTraceCmd])
-    workflowLog(`[fetchWebVitals] Start trace result: ${startTraceResult.stdout.substring(0, 500)}`)
+    diagLog(`[fetchWebVitals] Start trace result: ${startTraceResult.stdout.substring(0, 500)}`)
 
     // Wait for the trace to capture page load and auto-stop (up to 15 seconds)
-    workflowLog("[fetchWebVitals] Waiting for trace to complete...")
+    diagLog("[fetchWebVitals] Waiting for trace to complete...")
     await new Promise((resolve) => setTimeout(resolve, 8000))
 
     // Stop the trace and get results (in case autoStop didn't trigger)
-    workflowLog("[fetchWebVitals] Stopping performance trace...")
+    diagLog("[fetchWebVitals] Stopping performance trace...")
     const stopTraceCmd = `curl -s -m 60 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '${JSON.stringify(
       {
         jsonrpc: "2.0",
@@ -920,24 +936,26 @@ async function fetchWebVitalsViaCDP(sandbox: Sandbox): Promise<import("@/types")
     ).replace(/'/g, "'\\''")}'`
 
     const stopTraceResult = await runSandboxCommand(sandbox, "bash", ["-c", stopTraceCmd])
-    workflowLog(`[fetchWebVitals] Stop trace result (${stopTraceResult.stdout.length} chars): ${stopTraceResult.stdout.substring(0, 1000)}`)
+    workflowLog(
+      `[fetchWebVitals] Stop trace result (${stopTraceResult.stdout.length} chars): ${stopTraceResult.stdout.substring(0, 1000)}`
+    )
 
     // Parse the trace results for Web Vitals
     try {
       const traceResponse = JSON.parse(stopTraceResult.stdout)
-      workflowLog(`[fetchWebVitals] Trace response keys: ${Object.keys(traceResponse).join(", ")}`)
+      diagLog(`[fetchWebVitals] Trace response keys: ${Object.keys(traceResponse).join(", ")}`)
       if (traceResponse.error) {
-        workflowLog(`[fetchWebVitals] Trace MCP error: ${JSON.stringify(traceResponse.error)}`)
+        diagLog(`[fetchWebVitals] Trace MCP error: ${JSON.stringify(traceResponse.error)}`)
       }
       const resultText = traceResponse.result?.content?.[0]?.text || ""
-      workflowLog(`[fetchWebVitals] Trace result text (${resultText.length} chars): ${resultText.substring(0, 500)}`)
+      diagLog(`[fetchWebVitals] Trace result text (${resultText.length} chars): ${resultText.substring(0, 500)}`)
 
       // Parse LCP from trace (format: "LCP: 1234ms" or similar)
       const lcpMatch = resultText.match(/LCP[:\s]+(\d+(?:\.\d+)?)\s*(?:ms|milliseconds)/i)
       if (lcpMatch) {
         const lcpValue = parseFloat(lcpMatch[1])
         vitals.lcp = { value: lcpValue, grade: gradeValue(lcpValue, 2500, 4000) }
-        workflowLog(`[fetchWebVitals] Extracted LCP from trace: ${lcpValue}ms`)
+        diagLog(`[fetchWebVitals] Extracted LCP from trace: ${lcpValue}ms`)
       }
 
       // Parse CLS from trace (format: "CLS: 0.123" or similar)
@@ -945,7 +963,7 @@ async function fetchWebVitalsViaCDP(sandbox: Sandbox): Promise<import("@/types")
       if (clsMatch) {
         const clsValue = parseFloat(clsMatch[1])
         vitals.cls = { value: clsValue, grade: gradeValue(clsValue, 0.1, 0.25) }
-        workflowLog(`[fetchWebVitals] Extracted CLS from trace: ${clsValue}`)
+        diagLog(`[fetchWebVitals] Extracted CLS from trace: ${clsValue}`)
       }
 
       // Parse FCP from trace
@@ -953,7 +971,7 @@ async function fetchWebVitalsViaCDP(sandbox: Sandbox): Promise<import("@/types")
       if (fcpMatch) {
         const fcpValue = parseFloat(fcpMatch[1])
         vitals.fcp = { value: fcpValue, grade: gradeValue(fcpValue, 1800, 3000) }
-        workflowLog(`[fetchWebVitals] Extracted FCP from trace: ${fcpValue}ms`)
+        diagLog(`[fetchWebVitals] Extracted FCP from trace: ${fcpValue}ms`)
       }
 
       // Parse TTFB from trace
@@ -961,7 +979,7 @@ async function fetchWebVitalsViaCDP(sandbox: Sandbox): Promise<import("@/types")
       if (ttfbMatch) {
         const ttfbValue = parseFloat(ttfbMatch[1])
         vitals.ttfb = { value: ttfbValue, grade: gradeValue(ttfbValue, 800, 1800) }
-        workflowLog(`[fetchWebVitals] Extracted TTFB from trace: ${ttfbValue}ms`)
+        diagLog(`[fetchWebVitals] Extracted TTFB from trace: ${ttfbValue}ms`)
       }
 
       // Parse INP from trace
@@ -969,16 +987,18 @@ async function fetchWebVitalsViaCDP(sandbox: Sandbox): Promise<import("@/types")
       if (inpMatch) {
         const inpValue = parseFloat(inpMatch[1])
         vitals.inp = { value: inpValue, grade: gradeValue(inpValue, 200, 500) }
-        workflowLog(`[fetchWebVitals] Extracted INP from trace: ${inpValue}ms`)
+        diagLog(`[fetchWebVitals] Extracted INP from trace: ${inpValue}ms`)
       }
     } catch (traceParseErr) {
-      workflowLog(`[fetchWebVitals] Trace parse error: ${traceParseErr}`)
+      diagLog(`[fetchWebVitals] Trace parse error: ${traceParseErr}`)
     }
 
     // Method 2: Fallback to Performance API if trace didn't provide metrics
-    workflowLog(`[fetchWebVitals] After trace: vitals=${JSON.stringify(vitals)}, lcp=${!!vitals.lcp}, cls=${!!vitals.cls}`)
+    workflowLog(
+      `[fetchWebVitals] After trace: vitals=${JSON.stringify(vitals)}, lcp=${!!vitals.lcp}, cls=${!!vitals.cls}`
+    )
     if (!vitals.lcp || !vitals.cls) {
-      workflowLog("[fetchWebVitals] Trace incomplete, falling back to Performance API...")
+      diagLog("[fetchWebVitals] Trace incomplete, falling back to Performance API...")
 
       // Trigger user interaction to finalize LCP (required for Performance API)
       const finalizeLcpCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '${JSON.stringify(
@@ -1035,27 +1055,31 @@ async function fetchWebVitalsViaCDP(sandbox: Sandbox): Promise<import("@/types")
       ).replace(/'/g, "'\\''")}'`
 
       const evalResult = await runSandboxCommand(sandbox, "bash", ["-c", evalCmd])
-      workflowLog(`[fetchWebVitals] Fallback CDP result (${evalResult.stdout.length} chars): ${evalResult.stdout.substring(0, 800)}`)
+      workflowLog(
+        `[fetchWebVitals] Fallback CDP result (${evalResult.stdout.length} chars): ${evalResult.stdout.substring(0, 800)}`
+      )
 
       try {
         const mcpResponse = JSON.parse(evalResult.stdout)
-        workflowLog(`[fetchWebVitals] Fallback MCP response keys: ${Object.keys(mcpResponse).join(", ")}`)
+        diagLog(`[fetchWebVitals] Fallback MCP response keys: ${Object.keys(mcpResponse).join(", ")}`)
         if (mcpResponse.error) {
-          workflowLog(`[fetchWebVitals] Fallback MCP error: ${JSON.stringify(mcpResponse.error)}`)
+          diagLog(`[fetchWebVitals] Fallback MCP error: ${JSON.stringify(mcpResponse.error)}`)
         }
         if (mcpResponse.result?.content?.[0]?.text) {
           const resultText = mcpResponse.result.content[0].text
-          workflowLog(`[fetchWebVitals] Fallback resultText (${resultText.length} chars): ${resultText.substring(0, 500)}`)
+          workflowLog(
+            `[fetchWebVitals] Fallback resultText (${resultText.length} chars): ${resultText.substring(0, 500)}`
+          )
           const resultJsonMatch = resultText.match(/Result:\s*(\{[\s\S]*\})/)
-          workflowLog(`[fetchWebVitals] Fallback regex match: ${resultJsonMatch ? "YES" : "NO"}`)
+          diagLog(`[fetchWebVitals] Fallback regex match: ${resultJsonMatch ? "YES" : "NO"}`)
           if (resultJsonMatch) {
-            workflowLog(`[fetchWebVitals] Fallback matched JSON: ${resultJsonMatch[1].substring(0, 300)}`)
+            diagLog(`[fetchWebVitals] Fallback matched JSON: ${resultJsonMatch[1].substring(0, 300)}`)
             const innerResult = JSON.parse(resultJsonMatch[1])
-            workflowLog(`[fetchWebVitals] Fallback innerResult keys: ${Object.keys(innerResult).join(", ")}`)
+            diagLog(`[fetchWebVitals] Fallback innerResult keys: ${Object.keys(innerResult).join(", ")}`)
             // The execute_browser_action tool returns {value: "<json>"}, not {result: {value: ...}}
             if (innerResult.value) {
               const rawVitals = JSON.parse(innerResult.value)
-              workflowLog(`[fetchWebVitals] Fallback vitals: ${JSON.stringify(rawVitals)}`)
+              diagLog(`[fetchWebVitals] Fallback vitals: ${JSON.stringify(rawVitals)}`)
 
               // Only use fallback values if we don't already have them from trace
               if (!vitals.lcp && rawVitals.lcp !== null) {
@@ -1074,15 +1098,15 @@ async function fetchWebVitalsViaCDP(sandbox: Sandbox): Promise<import("@/types")
           }
         }
       } catch (fallbackErr) {
-        workflowLog(`[fetchWebVitals] Fallback parse error: ${fallbackErr}`)
+        diagLog(`[fetchWebVitals] Fallback parse error: ${fallbackErr}`)
       }
     }
   } catch (err) {
-    workflowLog(`[fetchWebVitals] Error: ${err instanceof Error ? err.message : String(err)}`)
+    diagLog(`[fetchWebVitals] Error: ${err instanceof Error ? err.message : String(err)}`)
   }
 
-  workflowLog(`[fetchWebVitals] Final result: ${JSON.stringify(vitals)}`)
-  return vitals
+  diagLog(`[fetchWebVitals] Final result: ${JSON.stringify(vitals)}`)
+  return { vitals, diagnosticLogs }
 }
 
 // ============================================================

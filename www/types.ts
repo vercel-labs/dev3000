@@ -74,6 +74,12 @@ export interface WorkflowReport {
   initD3kLogs?: string // Step 1: before agent
   afterD3kLogs?: string // Step 2: after agent fix
 
+  // Web Vitals diagnostic logs (for debugging capture issues)
+  webVitalsDiagnostics?: {
+    before?: string[]
+    after?: string[]
+  }
+
   // Git diff of changes made by agent
   gitDiff?: string
 
