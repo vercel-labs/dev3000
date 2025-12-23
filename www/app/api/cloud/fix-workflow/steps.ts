@@ -1111,9 +1111,11 @@ async function fetchWebVitalsViaCDP(
             diagLog(`[fetchWebVitals] Fallback matched JSON: ${resultJsonMatch[1].substring(0, 300)}`)
             const innerResult = JSON.parse(resultJsonMatch[1])
             diagLog(`[fetchWebVitals] Fallback innerResult keys: ${Object.keys(innerResult).join(", ")}`)
-            // The execute_browser_action tool returns {value: "<json>"}, not {result: {value: ...}}
-            if (innerResult.value) {
-              const rawVitals = JSON.parse(innerResult.value)
+            // Handle both formats: {value: "<json>"} and {result: {value: "<json>"}}
+            const vitalsString = innerResult.value || innerResult.result?.value
+            if (vitalsString) {
+              diagLog(`[fetchWebVitals] Fallback vitalsString: ${vitalsString.substring(0, 200)}`)
+              const rawVitals = JSON.parse(vitalsString)
               diagLog(`[fetchWebVitals] Fallback vitals: ${JSON.stringify(rawVitals)}`)
 
               // Only use fallback values if we don't already have them from trace
