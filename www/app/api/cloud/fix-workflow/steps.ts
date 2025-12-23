@@ -488,8 +488,10 @@ Use this to diagnose and verify performance improvements.`,
         }
 
         try {
-          // Parse MCP response to get the evaluate result
-          const mcpResponse = JSON.parse(evalResult.stdout)
+          // Parse MCP response to get the evaluate result (may be SSE format)
+          const mcpResponse = parseMcpResponse(evalResult.stdout) as {
+            result?: { content?: Array<{ type: string; text: string }> }
+          }
           if (mcpResponse.result?.content?.[0]?.text) {
             const resultText = mcpResponse.result.content[0].text
             // Extract the JSON object after "Result:" - use a more robust regex that handles nested JSON
@@ -868,6 +870,33 @@ async function fetchClsData(
 }
 
 /**
+ * Parse MCP response which may be in SSE format or plain JSON
+ * SSE format: "event: message\ndata: {...JSON...}\n\n"
+ * Plain JSON: "{...JSON...}"
+ */
+function parseMcpResponse(rawResponse: string): unknown {
+  const trimmed = rawResponse.trim()
+
+  // Check if it's SSE format (starts with "event:" or "data:")
+  if (trimmed.startsWith("event:") || trimmed.startsWith("data:")) {
+    // Extract the JSON from the data: line
+    const lines = trimmed.split("\n")
+    for (const line of lines) {
+      if (line.startsWith("data:")) {
+        const jsonStr = line.substring(5).trim() // Remove "data:" prefix
+        if (jsonStr) {
+          return JSON.parse(jsonStr)
+        }
+      }
+    }
+    throw new Error("No data: line found in SSE response")
+  }
+
+  // Plain JSON
+  return JSON.parse(trimmed)
+}
+
+/**
  * Fetch Web Vitals using Chrome DevTools MCP performance trace
  * Uses performance_start_trace/performance_stop_trace for reliable metrics
  * Falls back to Performance API evaluation if trace fails
@@ -942,7 +971,10 @@ async function fetchWebVitalsViaCDP(
 
     // Parse the trace results for Web Vitals
     try {
-      const traceResponse = JSON.parse(stopTraceResult.stdout)
+      const traceResponse = parseMcpResponse(stopTraceResult.stdout) as {
+        result?: { content?: Array<{ type: string; text: string }> }
+        error?: unknown
+      }
       diagLog(`[fetchWebVitals] Trace response keys: ${Object.keys(traceResponse).join(", ")}`)
       if (traceResponse.error) {
         diagLog(`[fetchWebVitals] Trace MCP error: ${JSON.stringify(traceResponse.error)}`)
@@ -1060,7 +1092,10 @@ async function fetchWebVitalsViaCDP(
       )
 
       try {
-        const mcpResponse = JSON.parse(evalResult.stdout)
+        const mcpResponse = parseMcpResponse(evalResult.stdout) as {
+          result?: { content?: Array<{ type: string; text: string }> }
+          error?: unknown
+        }
         diagLog(`[fetchWebVitals] Fallback MCP response keys: ${Object.keys(mcpResponse).join(", ")}`)
         if (mcpResponse.error) {
           diagLog(`[fetchWebVitals] Fallback MCP error: ${JSON.stringify(mcpResponse.error)}`)
