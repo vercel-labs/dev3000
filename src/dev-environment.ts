@@ -39,6 +39,20 @@ const MCP_NAMES = {
 const VERCEL_MCP_URL = "https://mcp.vercel.com"
 
 /**
+ * Patterns for identifying orphaned MCP-related processes to clean up on startup.
+ *
+ * IMPORTANT: This list must NOT include ".d3k/chrome-profiles" or any pattern
+ * that would match Chrome instances from OTHER running d3k instances.
+ * Each d3k instance handles its own profile cleanup via killExistingChromeWithProfile().
+ *
+ * @see cleanupOrphanedPlaywrightProcesses
+ */
+export const ORPHANED_PROCESS_CLEANUP_PATTERNS = [
+  "ms-playwright/mcp-chrome", // Playwright MCP Chrome user data dir
+  "mcp-server-playwright" // Playwright MCP server node process
+] as const
+
+/**
  * Check if the current project has a .vercel directory (indicating a Vercel project)
  */
 function hasVercelProject(): boolean {
@@ -141,14 +155,7 @@ async function cleanupOrphanedPlaywrightProcesses(debugLog: (msg: string) => voi
   try {
     const { execSync } = await import("child_process")
 
-    // Patterns that identify d3k/MCP-related Chrome processes
-    const patterns = [
-      "ms-playwright/mcp-chrome", // Playwright MCP Chrome user data dir
-      "mcp-server-playwright", // Playwright MCP server node process
-      ".d3k/chrome-profiles" // d3k's own Chrome profiles
-    ]
-
-    for (const pattern of patterns) {
+    for (const pattern of ORPHANED_PROCESS_CLEANUP_PATTERNS) {
       try {
         // Find PIDs matching the pattern
         const result = execSync(`ps aux | grep -i "${pattern}" | grep -v grep | awk '{print $2}'`, {

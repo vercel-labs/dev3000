@@ -16,12 +16,13 @@ describe("getProjectName", () => {
     vi.clearAllMocks()
   })
 
-  it("should use package.json name when available", () => {
+  it("should use package.json name with path hash when available", () => {
     mockExistsSync.mockReturnValue(true)
     mockReadFileSync.mockReturnValue(JSON.stringify({ name: "my-awesome-project" }))
 
     const result = getProjectName("/home/user/projects/frontend")
-    expect(result).toBe("my-awesome-project")
+    // Should include path hash for uniqueness across different directories
+    expect(result).toMatch(/^my-awesome-project-[a-f0-9]{6}$/)
   })
 
   it("should sanitize package.json name with special characters", () => {
@@ -29,7 +30,22 @@ describe("getProjectName", () => {
     mockReadFileSync.mockReturnValue(JSON.stringify({ name: "@company/my.project!" }))
 
     const result = getProjectName("/home/user/projects/frontend")
-    expect(result).toBe("company-my-project")
+    expect(result).toMatch(/^company-my-project-[a-f0-9]{6}$/)
+  })
+
+  it("should generate different names for different directories with same package.json name", () => {
+    // This test ensures multiple d3k instances in different directories
+    // don't share Chrome profiles and kill each other's browser windows
+    mockExistsSync.mockReturnValue(true)
+    mockReadFileSync.mockReturnValue(JSON.stringify({ name: "my-app" }))
+
+    const result1 = getProjectName("/home/user/project-a")
+    const result2 = getProjectName("/home/user/project-b")
+
+    // Both should have the same base name but different hashes
+    expect(result1).toMatch(/^my-app-[a-f0-9]{6}$/)
+    expect(result2).toMatch(/^my-app-[a-f0-9]{6}$/)
+    expect(result1).not.toBe(result2)
   })
 
   it("should use pyproject.toml name for Python projects", () => {
@@ -37,7 +53,7 @@ describe("getProjectName", () => {
     mockReadFileSync.mockReturnValue('[project]\nname = "django-app"\nversion = "1.0.0"')
 
     const result = getProjectName("/home/user/projects/python-app")
-    expect(result).toBe("django-app")
+    expect(result).toMatch(/^django-app-[a-f0-9]{6}$/)
   })
 
   it("should use Rails app name from application.rb", () => {
@@ -45,7 +61,7 @@ describe("getProjectName", () => {
     mockReadFileSync.mockReturnValue("module MyRailsApp\n  class Application < Rails::Application\n  end\nend")
 
     const result = getProjectName("/home/user/projects/rails-app")
-    expect(result).toBe("myrailsapp")
+    expect(result).toMatch(/^myrailsapp-[a-f0-9]{6}$/)
   })
 
   it("should add parent directory for generic names", () => {
@@ -90,11 +106,17 @@ describe("getProjectDisplayName", () => {
     expect(displayName).toBe("my-app")
   })
 
-  it("should return package.json name without modification", () => {
+  it("should remove hash suffix from package.json name for display", () => {
     mockExistsSync.mockReturnValue(true)
     mockReadFileSync.mockReturnValue(JSON.stringify({ name: "my-project" }))
 
-    const displayName = getProjectDisplayName("/home/user/projects/frontend")
+    const cwd = "/home/user/projects/frontend"
+    const fullName = getProjectName(cwd)
+    const displayName = getProjectDisplayName(cwd)
+
+    // Full name should have hash
+    expect(fullName).toMatch(/^my-project-[a-f0-9]{6}$/)
+    // Display name should have hash removed
     expect(displayName).toBe("my-project")
   })
 })

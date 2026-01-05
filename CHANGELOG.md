@@ -4,6 +4,15 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.129] - 2026-01-04
+
+**Bug Fix Release**
+
+- Fix multiple d3k instances killing each other's Chrome browsers
+  - Removed overly broad `.d3k/chrome-profiles` pattern from orphaned process cleanup
+  - Each d3k instance now only manages its own Chrome profile, not all d3k profiles
+  - Added path hash to project names for additional profile isolation
+
 ## [0.0.128] - 2025-12-22
 
 **Patch Release**

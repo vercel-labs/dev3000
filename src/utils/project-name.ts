@@ -92,11 +92,12 @@ export function getProjectName(cwd: string = process.cwd()): string {
     } else {
       projectName = dirName
     }
-
-    // Add a short hash of the full path for uniqueness
-    const pathHash = createHash("sha256").update(cwd).digest("hex").substring(0, 6)
-    projectName = `${projectName}-${pathHash}`
   }
+
+  // Always add a path hash to ensure uniqueness across different directories
+  // that might have the same package.json name or directory name
+  const pathHash = createHash("sha256").update(cwd).digest("hex").substring(0, 6)
+  projectName = `${projectName}-${pathHash}`
 
   // Sanitize the project name (replace special chars, limit length)
   return projectName
