@@ -454,8 +454,15 @@ const handler = createMcpHandler(
           return clientManager.callTool(mcpName, tool.name, params)
         })
 
-        // Allow arbitrary argument objects to pass through to downstream MCPs
-        proxiedTool.inputSchema = z.object({}).passthrough()
+        // Preserve the original input schema from the downstream MCP so Claude can see
+        // required parameters. The MCP protocol uses JSON Schema, so we pass it through
+        // directly. Fall back to passthrough if no schema is provided.
+        if (tool.inputSchema && typeof tool.inputSchema === "object") {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- MCP uses JSON Schema, not Zod
+          proxiedTool.inputSchema = tool.inputSchema as any
+        } else {
+          proxiedTool.inputSchema = z.object({}).passthrough()
+        }
 
         proxiedTool.update({
           annotations
