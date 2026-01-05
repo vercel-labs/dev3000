@@ -33,7 +33,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc && mkdir -p dist/src && cp src/loading.html dist/src/ && cp src/tui-interface-impl.tsx dist/src/",
+    "build": "tsc && mkdir -p dist/src && cp src/loading.html dist/src/ && cp src/tui-interface-impl.tsx dist/src/ && cp -r src/skills dist/",
     "typegen": "./scripts/typegen.sh",
     "typecheck": "pnpm -r run typecheck",
     "format": "biome format --write .",

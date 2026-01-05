@@ -585,6 +585,42 @@ async function ensureOpenCodeMcpServers(
   }
 }
 
+/**
+ * Ensure d3k skill is installed in project's .claude/skills/d3k/
+ * This provides Claude with context about how to use d3k's MCP tools
+ */
+async function ensureD3kSkill(): Promise<void> {
+  try {
+    const skillDir = join(process.cwd(), ".claude", "skills", "d3k")
+    const skillPath = join(skillDir, "SKILL.md")
+
+    // Skip if skill already exists
+    if (existsSync(skillPath)) {
+      return
+    }
+
+    // Find the bundled skill file
+    const __filename = fileURLToPath(import.meta.url)
+    const __dirname = dirname(__filename)
+    const bundledSkillPath = join(__dirname, "skills", "d3k", "SKILL.md")
+
+    // Check if bundled skill exists
+    if (!existsSync(bundledSkillPath)) {
+      return // Skill not bundled, skip silently
+    }
+
+    // Create skill directory
+    if (!existsSync(skillDir)) {
+      mkdirSync(skillDir, { recursive: true })
+    }
+
+    // Copy skill file to project
+    copyFileSync(bundledSkillPath, skillPath)
+  } catch (_error) {
+    // Ignore errors - skill installation is optional
+  }
+}
+
 // REMOVED: cleanup functions are no longer needed
 // MCP config files are now kept persistent across dev3000 restarts
 
@@ -998,6 +1034,7 @@ export class DevEnvironment {
 
     if (enabledTargets.includes("claude")) {
       await ensureMcpServers(this.options.mcpPort || "3684", this.options.port, this.chromeDevtoolsSupported)
+      await ensureD3kSkill() // Install d3k skill for Claude Code
       configuredTargets.push("claude")
     }
 

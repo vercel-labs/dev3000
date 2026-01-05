@@ -1,19 +1,5 @@
 #!/bin/sh
 
-# Run linting with auto-fix
 pnpm run lint:fix
-
-# Run next typegen in both directories
-echo "🔧 Running next typegen..."
-#(cd www && pnpm run typegen)
-#(cd mcp-server && pnpm run typegen)
-
-# Note: We don't add .next/types files as those are build artifacts
-# Only add mcp-server/next-env.d.ts if modified (www/next-env.d.ts is gitignored)
-#git add "mcp-server/next-env.d.ts" 2>/dev/null || true
-
-# Run typecheck (which now also runs typegen)
 pnpm run typecheck
-
-# Run tests
 pnpm run test

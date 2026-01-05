@@ -4,10 +4,14 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [0.0.129] - 2026-01-04
+## [0.0.129] - 2026-01-05
 
-**Bug Fix Release**
+**Feature + Bug Fix Release**
 
+- Auto-install d3k skill for Claude Code
+  - Skill is installed to `.claude/skills/d3k/` alongside MCP config
+  - Provides Claude with context about `fix_my_app` and other d3k tools
+  - Skill and MCP work together: MCP provides tools, skill provides guidance
 - Fix multiple d3k instances killing each other's Chrome browsers
   - Removed overly broad `.d3k/chrome-profiles` pattern from orphaned process cleanup
   - Each d3k instance now only manages its own Chrome profile, not all d3k profiles
