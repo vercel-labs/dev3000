@@ -1634,7 +1634,12 @@ export class DevEnvironment {
     this.debugLog("MCP server directory found")
 
     // Check if MCP server dependencies are installed, install if missing
-    const isGlobalInstall = mcpServerPath.includes(".pnpm")
+    // Detect global install by checking if the mcp-server path is outside the current working directory
+    // This handles both pnpm (.pnpm) and npm (/lib/node_modules/) global installs
+    const isGlobalInstall =
+      mcpServerPath.includes(".pnpm") ||
+      mcpServerPath.includes("/lib/node_modules/") ||
+      !mcpServerPath.startsWith(process.cwd())
     this.debugLog(`Is global install: ${isGlobalInstall}`)
     let nodeModulesPath = join(mcpServerPath, "node_modules")
     let actualWorkingDir = mcpServerPath
@@ -1918,8 +1923,11 @@ export class DevEnvironment {
   private async installMcpServerDeps(mcpServerPath: string): Promise<void> {
     return new Promise<void>((resolve, reject) => {
       // For global installs, we need to install to a writable location
-      // Check if this is a global install by looking for .pnpm in the path
-      const isGlobalInstall = mcpServerPath.includes(".pnpm")
+      // Detect global install by checking if the path is outside the current working directory
+      const isGlobalInstall =
+        mcpServerPath.includes(".pnpm") ||
+        mcpServerPath.includes("/lib/node_modules/") ||
+        !mcpServerPath.startsWith(process.cwd())
 
       let workingDir = mcpServerPath
       if (isGlobalInstall) {

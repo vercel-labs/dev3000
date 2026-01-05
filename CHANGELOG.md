@@ -16,6 +16,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - Removed overly broad `.d3k/chrome-profiles` pattern from orphaned process cleanup
   - Each d3k instance now only manages its own Chrome profile, not all d3k profiles
   - Added path hash to project names for additional profile isolation
+- Fix npm global install support (not just pnpm)
+  - Improved global install detection to handle npm installs
+  - Added Next.js 16.1.0 as direct dependency to ensure version alignment
+  - Fixes MCP server 500 errors due to Next.js version mismatch
 
 ## [0.0.128] - 2025-12-22
 
