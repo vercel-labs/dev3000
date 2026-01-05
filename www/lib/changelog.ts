@@ -10,6 +10,15 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.130",
+    date: "2026-01-05",
+    type: "minor",
+    highlights: [
+      "Add --with-agent flag for split-screen mode with tmux"
+    ]
+  },
+
+  {
     version: "0.0.129",
     date: "2026-01-05",
     type: "minor",

@@ -4,6 +4,12 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.130] - 2026-01-05
+
+**Feature Release**
+
+- Add --with-agent flag for split-screen mode with tmux
+
 ## [0.0.129] - 2026-01-05
 
 **Feature Release**
