@@ -24,107 +24,105 @@ export async function GET(_request: Request, { params }: { params: Promise<{ ver
           height: "100%",
           display: "flex",
           flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
           fontFamily: "Inter, system-ui, sans-serif",
           color: "#ffffff",
-          padding: "60px"
+          padding: "48px 56px"
         }}
       >
-        {/* Logo */}
+        {/* Header row: Logo + Version */}
         <div
           style={{
             display: "flex",
             alignItems: "center",
-            gap: "20px",
-            marginBottom: "40px"
-          }}
-        >
-          <div
-            style={{
-              width: "80px",
-              height: "80px",
-              background: "#ffffff",
-              borderRadius: "12px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "28px",
-              fontWeight: "bold",
-              color: "#0f0f23",
-              fontFamily: "Monaco, monospace"
-            }}
-          >
-            d3k
-          </div>
-          <div
-            style={{
-              display: "block",
-              fontSize: "48px",
-              fontWeight: "700",
-              color: "#ffffff"
-            }}
-          >
-            dev3000
-          </div>
-        </div>
-
-        {/* Version Info */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "16px",
+            justifyContent: "space-between",
+            width: "100%",
             marginBottom: "32px"
           }}
         >
           <div
             style={{
-              display: "block",
-              fontSize: "32px",
-              fontWeight: "700",
-              color: "#ffffff"
+              display: "flex",
+              alignItems: "center",
+              gap: "16px"
             }}
           >
-            {`v${release.version} Highlights`}
+            <div
+              style={{
+                width: "56px",
+                height: "56px",
+                background: "#ffffff",
+                borderRadius: "10px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "20px",
+                fontWeight: "bold",
+                color: "#0f0f23",
+                fontFamily: "Monaco, monospace"
+              }}
+            >
+              d3k
+            </div>
+            <div
+              style={{
+                display: "block",
+                fontSize: "36px",
+                fontWeight: "700",
+                color: "#ffffff"
+              }}
+            >
+              dev3000
+            </div>
+          </div>
+          <div
+            style={{
+              display: "block",
+              fontSize: "20px",
+              color: "#9ca3af"
+            }}
+          >
+            {release.date}
           </div>
         </div>
 
-        {/* Highlights List */}
+        {/* Version headline */}
+        <div
+          style={{
+            display: "block",
+            fontSize: "42px",
+            fontWeight: "700",
+            color: "#ffffff",
+            marginBottom: "28px"
+          }}
+        >
+          {`v${release.version} Release`}
+        </div>
+
+        {/* Highlights List - much larger text */}
         <div
           style={{
             display: "flex",
             flexDirection: "column",
-            gap: "12px",
-            maxWidth: "800px",
-            marginBottom: "32px",
-            textAlign: "left"
+            gap: "20px",
+            flex: 1
           }}
         >
-          {release.highlights.slice(0, 3).map((highlight) => (
+          {release.highlights.slice(0, 4).map((highlight) => (
             <div
               key={`${release.version}-highlight-${highlight}`}
               style={{
-                display: "block",
-                fontSize: "16px",
-                color: "#d1d5db",
-                textAlign: "left"
+                display: "flex",
+                alignItems: "flex-start",
+                gap: "16px",
+                fontSize: "28px",
+                color: "#e5e7eb",
+                lineHeight: 1.3
               }}
             >
-              {`• ${stripMarkdown(highlight)}`}
+              <span style={{ color: "#a78bfa" }}>•</span>
+              <span>{stripMarkdown(highlight)}</span>
             </div>
           ))}
-        </div>
-
-        {/* Date */}
-        <div
-          style={{
-            display: "block",
-            fontSize: "18px",
-            color: "#9ca3af"
-          }}
-        >
-          {`Released ${release.date}`}
         </div>
       </div>,
       {
