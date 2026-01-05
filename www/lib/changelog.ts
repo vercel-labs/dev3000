@@ -13,9 +13,7 @@ export const changelog: Release[] = [
     version: "0.0.130",
     date: "2026-01-05",
     type: "minor",
-    highlights: [
-      "Add --with-agent flag for split-screen mode with tmux"
-    ]
+    highlights: ["Add --with-agent flag for split-screen mode with tmux"]
   },
 
   {
