@@ -6,20 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.0.129] - 2026-01-05
 
-**Feature + Bug Fix Release**
+**Feature Release**
 
-- Auto-install d3k skill for Claude Code
-  - Skill is installed to `.claude/skills/d3k/` alongside MCP config
-  - Provides Claude with context about `fix_my_app` and other d3k tools
-  - Skill and MCP work together: MCP provides tools, skill provides guidance
+- Fix npm global install detection and Next.js version mismatch
+- Add auto-install d3k skill for Claude Code
 - Fix multiple d3k instances killing each other's Chrome browsers
-  - Removed overly broad `.d3k/chrome-profiles` pattern from orphaned process cleanup
-  - Each d3k instance now only manages its own Chrome profile, not all d3k profiles
-  - Added path hash to project names for additional profile isolation
-- Fix npm global install support (not just pnpm)
-  - Improved global install detection to handle npm installs
-  - Added Next.js 16.1.0 as direct dependency to ensure version alignment
-  - Fixes MCP server 500 errors due to Next.js version mismatch
+- Fix Web Vitals parsing to handle both response formats
+- Fix MCP response parsing for SSE format
 
 ## [0.0.128] - 2025-12-22
 

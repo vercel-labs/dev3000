@@ -10,6 +10,19 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.129",
+    date: "2026-01-05",
+    type: "minor",
+    highlights: [
+      "Fix npm global install detection and Next.js version mismatch",
+      "Add auto-install d3k skill for Claude Code",
+      "Fix multiple d3k instances killing each other's Chrome browsers",
+      "Fix Web Vitals parsing to handle both response formats",
+      "Fix MCP response parsing for SSE format"
+    ]
+  },
+
+  {
     version: "0.0.128",
     date: "2025-12-22",
     type: "patch",
