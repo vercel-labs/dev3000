@@ -16,6 +16,78 @@ import { getProjectName } from "./utils/project-name.js"
 import { loadUserConfig } from "./utils/user-config.js"
 import { checkForUpdates, getUpgradeCommand, performUpgrade } from "./utils/version-check.js"
 
+/**
+ * Launch d3k with an agent using tmux for proper terminal multiplexing.
+ * This creates a split-screen with the agent on the left and d3k logs on the right.
+ */
+async function launchWithTmux(agentCommand: string): Promise<void> {
+  const { execSync, spawn } = await import("child_process")
+
+  // Check if tmux is installed
+  try {
+    execSync("which tmux", { stdio: "ignore" })
+  } catch {
+    console.error(chalk.red("\n❌ tmux is not installed."))
+    console.error(chalk.yellow("\nThe --with-agent flag requires tmux for split-screen mode."))
+    console.error(chalk.cyan("\nTo install tmux:"))
+    console.error(chalk.gray("  macOS:  brew install tmux"))
+    console.error(chalk.gray("  Ubuntu: sudo apt install tmux"))
+    console.error(chalk.gray("  Fedora: sudo dnf install tmux"))
+    console.error(chalk.yellow("\nAlternatively, run d3k and your agent in separate terminal tabs.\n"))
+    process.exit(1)
+  }
+
+  // Generate a unique session name
+  const sessionName = `d3k-${Date.now()}`
+
+  // Get the d3k command path (same as what user ran)
+  const d3kCommand = process.argv[1].endsWith("d3k") ? "d3k" : "dev3000"
+
+  console.log(chalk.hex("#A18CE5")(`\n🚀 Launching split-screen mode with tmux...\n`))
+  console.log(chalk.gray(`   Left pane:  ${agentCommand}`))
+  console.log(chalk.gray(`   Right pane: ${d3kCommand}\n`))
+  console.log(chalk.cyan(`   Tmux controls:`))
+  console.log(chalk.gray(`   • Ctrl+B then ←/→ to switch panes`))
+  console.log(chalk.gray(`   • Ctrl+B then d to detach (keeps running)`))
+  console.log(chalk.gray(`   • tmux attach -t ${sessionName} to reattach\n`))
+
+  // Create tmux session with horizontal split (left: agent, right: d3k)
+  // -d creates detached, then we attach
+  try {
+    // Create new session with d3k in the first pane (will be right side)
+    execSync(`tmux new-session -d -s "${sessionName}" -x "$(tput cols)" -y "$(tput lines)" "${d3kCommand}"`, {
+      stdio: "inherit",
+      shell: "/bin/bash"
+    })
+
+    // Split horizontally and run agent in the new pane (left side)
+    // -b puts the new pane before (left of) the current one
+    // -p 65 gives the agent 65% of the width
+    execSync(`tmux split-window -h -b -p 65 -t "${sessionName}" "${agentCommand}"`, {
+      stdio: "inherit",
+      shell: "/bin/bash"
+    })
+
+    // Attach to the session
+    const tmux = spawn("tmux", ["attach-session", "-t", sessionName], {
+      stdio: "inherit"
+    })
+
+    tmux.on("exit", (code) => {
+      // Clean up the session if it still exists
+      try {
+        execSync(`tmux kill-session -t "${sessionName}" 2>/dev/null`, { stdio: "ignore" })
+      } catch {
+        // Session might already be killed
+      }
+      process.exit(code || 0)
+    })
+  } catch (error) {
+    console.error(chalk.red("\n❌ Failed to start tmux session:"), error)
+    process.exit(1)
+  }
+}
+
 interface ProjectConfig {
   type: "node" | "python" | "rails"
   framework?: "nextjs" | "svelte" | "other" // For node projects
@@ -299,7 +371,16 @@ program
   .option("--no-chrome-devtools-mcp", "Disable chrome-devtools MCP integration (enabled by default)")
   .option("--headless", "Run Chrome in headless mode (for serverless/CI environments)")
   .option("--kill-mcp", "Kill the MCP server on port 3684 and exit")
+  .option(
+    "--with-agent <command>",
+    'Run an agent (e.g. claude) in split-screen mode using tmux. Example: --with-agent "claude"'
+  )
   .action(async (options) => {
+    // Handle --with-agent by spawning tmux with split panes
+    if (options.withAgent) {
+      await launchWithTmux(options.withAgent)
+      return
+    }
     // Handle --kill-mcp option
     if (options.killMcp) {
       console.log(chalk.yellow("🛑 Killing MCP server on port 3684..."))

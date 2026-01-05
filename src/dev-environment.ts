@@ -82,6 +82,7 @@ interface DevEnvironmentOptions {
   disabledMcpConfigs?: McpConfigTarget[] // Which MCP config files should be skipped
   debugPort?: number // Chrome debugging port (default 9222, auto-incremented for multiple instances)
   headless?: boolean // Run Chrome in headless mode (for serverless/CI environments)
+  withAgent?: string // Command to run an embedded agent (e.g. "claude --dangerously-skip-permissions")
 }
 
 class Logger {
@@ -847,12 +848,10 @@ export class DevEnvironment {
     await cleanupOrphanedPlaywrightProcesses((msg) => this.debugLog(msg))
 
     // Always kill any existing MCP server to ensure clean state
+    // We ALWAYS try to kill, even if port appears free - there can be race conditions
     if (this.options.mcpPort) {
-      const isPortInUse = !(await isPortAvailable(this.options.mcpPort.toString()))
-      if (isPortInUse) {
-        this.debugLog(`Killing existing process on port ${this.options.mcpPort}`)
-        await this.killMcpServer()
-      }
+      this.debugLog(`Ensuring port ${this.options.mcpPort} is free (always kill)`)
+      await this.killMcpServer()
     }
 
     // Check if user explicitly set ports via CLI flags
@@ -920,23 +919,30 @@ export class DevEnvironment {
       return
     }
 
-    try {
-      // First, get the PIDs
-      const getPidsProcess = spawn("lsof", ["-ti", `:${this.options.mcpPort}`], {
-        stdio: "pipe"
-      })
-
-      const pids = await new Promise<string>((resolve, reject) => {
-        let output = ""
-        getPidsProcess.stdout?.on("data", (data) => {
-          output += data.toString()
+    // Retry loop to ensure port is fully released
+    const maxRetries = 5
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        // First, get the PIDs
+        const getPidsProcess = spawn("lsof", ["-ti", `:${this.options.mcpPort}`], {
+          stdio: "pipe"
         })
-        getPidsProcess.on("error", (err) => reject(err))
-        getPidsProcess.on("exit", () => resolve(output.trim()))
-      })
 
-      if (pids) {
-        this.debugLog(`Found MCP server processes: ${pids}`)
+        const pids = await new Promise<string>((resolve, reject) => {
+          let output = ""
+          getPidsProcess.stdout?.on("data", (data) => {
+            output += data.toString()
+          })
+          getPidsProcess.on("error", (err) => reject(err))
+          getPidsProcess.on("exit", () => resolve(output.trim()))
+        })
+
+        if (!pids) {
+          this.debugLog(`Port ${this.options.mcpPort} is free (attempt ${attempt})`)
+          return // Port is already free
+        }
+
+        this.debugLog(`Found MCP server processes (attempt ${attempt}): ${pids}`)
 
         // Kill each PID individually with kill -9
         const pidList = pids.split("\n").filter(Boolean)
@@ -950,13 +956,23 @@ export class DevEnvironment {
           })
         }
 
-        // Give it time to fully release the port
-        this.debugLog(`Waiting for port ${this.options.mcpPort} to be released...`)
-        await new Promise((resolve) => setTimeout(resolve, 1000))
+        // Give it time to fully release the port (longer waits, macOS can be slow)
+        const waitTime = 1000 * attempt
+        this.debugLog(`Waiting ${waitTime}ms for port ${this.options.mcpPort} to be released...`)
+        await new Promise((resolve) => setTimeout(resolve, waitTime))
+
+        // Check if port is now free
+        const available = await isPortAvailable(this.options.mcpPort!.toString())
+        if (available) {
+          this.debugLog(`Port ${this.options.mcpPort} released successfully`)
+          return
+        }
+      } catch (error) {
+        this.debugLog(`Error killing MCP server (attempt ${attempt}): ${error}`)
       }
-    } catch (error) {
-      this.debugLog(`Error killing MCP server: ${error}`)
     }
+
+    this.debugLog(`Warning: Port ${this.options.mcpPort} may still be in use after ${maxRetries} attempts`)
   }
 
   private async checkProcessHealth(): Promise<boolean> {
