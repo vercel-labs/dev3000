@@ -7,6 +7,21 @@ echo "🚀 Starting release process..."
 echo "🧪 Running pre-release tests (including clean install tests)..."
 pnpm run test-release
 
+# Build compiled binaries for all platforms
+echo "🔨 Building compiled binaries..."
+bun run scripts/build-binaries.ts
+
+# Copy built binaries to platform package
+echo "📁 Copying binaries to platform package..."
+PLATFORM_PKG_DIR="packages/dev3000-darwin-arm64"
+DIST_BIN_DIR="dist-bin/dev3000-darwin-arm64"
+rm -rf "$PLATFORM_PKG_DIR/bin" "$PLATFORM_PKG_DIR/mcp-server" "$PLATFORM_PKG_DIR/skills" "$PLATFORM_PKG_DIR/src"
+cp -r "$DIST_BIN_DIR/bin" "$PLATFORM_PKG_DIR/"
+cp -r "$DIST_BIN_DIR/mcp-server" "$PLATFORM_PKG_DIR/"
+cp -r "$DIST_BIN_DIR/skills" "$PLATFORM_PKG_DIR/"
+cp -r "$DIST_BIN_DIR/src" "$PLATFORM_PKG_DIR/"
+echo "✅ Binaries ready for publishing"
+
 # Get current version and check if it's a canary version
 CURRENT_VERSION=$(node -p "require('./package.json').version")
 echo "📋 Current version: $CURRENT_VERSION"

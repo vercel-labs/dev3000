@@ -1,21 +1,14 @@
 #!/bin/bash
 #
-# Usage:
-#   ./scripts/publish.sh              # Build and publish main + platform packages
-#   ./scripts/publish.sh --skip-build # Skip binary build (use existing dist-bin)
+# Publishes the release prepared by scripts/release.sh to npm
+# Run scripts/release.sh first to build binaries, bump version, and create tag
 #
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 
-echo "📦 Starting multi-package npm publish process..."
-
-SKIP_BUILD=false
-if [ "$1" = "--skip-build" ]; then
-  SKIP_BUILD=true
-  echo "⏭️  Skipping binary build (using existing dist-bin)"
-fi
+echo "📦 Starting npm publish process..."
 
 # Get current version
 CURRENT_VERSION=$(node -p "require('./package.json').version")
@@ -51,48 +44,15 @@ if ! git tag -l | grep -q "^$TAG_NAME$"; then
   exit 1
 fi
 
-# Build binaries if not skipped
-if [ "$SKIP_BUILD" = false ]; then
-  echo "🔨 Building compiled binaries..."
-  bun run scripts/build-binaries.ts
-fi
-
-# Verify dist-bin was created
-DIST_BIN_DIR="$ROOT_DIR/dist-bin/dev3000-darwin-arm64"
-if [ ! -d "$DIST_BIN_DIR" ]; then
-  echo "❌ dist-bin/dev3000-darwin-arm64 not found. Run without --skip-build."
+# Verify platform package binaries exist (built by release.sh)
+PLATFORM_PKG_DIR="$ROOT_DIR/packages/dev3000-darwin-arm64"
+if [ ! -d "$PLATFORM_PKG_DIR/bin" ] || [ ! -d "$PLATFORM_PKG_DIR/mcp-server" ]; then
+  echo "❌ Platform package binaries not found at $PLATFORM_PKG_DIR"
+  echo "💡 Run ./scripts/release.sh first to build binaries."
   exit 1
 fi
 
-# Copy built binaries to platform package
-echo "📁 Copying built binaries to platform package..."
-PLATFORM_PKG_DIR="$ROOT_DIR/packages/dev3000-darwin-arm64"
-rm -rf "$PLATFORM_PKG_DIR/bin" "$PLATFORM_PKG_DIR/mcp-server" "$PLATFORM_PKG_DIR/skills" "$PLATFORM_PKG_DIR/src"
-cp -r "$DIST_BIN_DIR/bin" "$PLATFORM_PKG_DIR/"
-cp -r "$DIST_BIN_DIR/mcp-server" "$PLATFORM_PKG_DIR/"
-cp -r "$DIST_BIN_DIR/skills" "$PLATFORM_PKG_DIR/"
-cp -r "$DIST_BIN_DIR/src" "$PLATFORM_PKG_DIR/"
-
-# Update platform package version to match
-echo "📋 Updating platform package version to $CURRENT_VERSION..."
-node -e "
-  const fs = require('fs');
-  const pkgPath = '$PLATFORM_PKG_DIR/package.json';
-  const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-  pkg.version = '$CURRENT_VERSION';
-  fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
-"
-
-# Update main package optionalDependencies to match version
-echo "📋 Updating optionalDependencies in main package..."
-node -e "
-  const fs = require('fs');
-  const pkgPath = '$ROOT_DIR/package.json';
-  const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-  pkg.optionalDependencies = pkg.optionalDependencies || {};
-  pkg.optionalDependencies['dev3000-darwin-arm64'] = '$CURRENT_VERSION';
-  fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
-"
+echo "✅ Found platform package binaries"
 
 # Confirm publication
 echo ""
