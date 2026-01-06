@@ -29,6 +29,9 @@ export function generateTmuxCommands(config: TmuxSessionConfig): string[] {
     // Hide the tmux status bar for a cleaner look
     `tmux set-option -t "${sessionName}" status off`,
 
+    // When any pane exits, kill the entire session (so Ctrl-C in either pane exits both)
+    `tmux set-hook -t "${sessionName}" pane-exited "kill-session -t ${sessionName}"`,
+
     // Make inactive pane borders subtle gray, active pane border purple to show focus
     `tmux set-option -t "${sessionName}" pane-border-style "fg=#333333"`,
     `tmux set-option -t "${sessionName}" pane-active-border-style "fg=#A18CE5"`,
@@ -37,8 +40,8 @@ export function generateTmuxCommands(config: TmuxSessionConfig): string[] {
     // -b puts the new pane before (left of) the current one
     `tmux split-window -h -b -p ${paneWidthPercent} -t "${sessionName}" "${agentWithDelay}"`,
 
-    // Kill entire session when any pane exits (crash or normal exit)
-    `tmux set-hook -t "${sessionName}" pane-exited "kill-session -t ${sessionName}"`
+    // Focus on the agent pane (left side, pane 0 after split with -b)
+    `tmux select-pane -t "${sessionName}:0.0"`
   ]
 }
 

@@ -35,7 +35,7 @@ describe("tmux-helpers", () => {
 
     it("should generate correct number of commands", () => {
       const commands = generateTmuxCommands(baseConfig)
-      expect(commands).toHaveLength(7)
+      expect(commands).toHaveLength(8)
     })
 
     it("should create session with d3k command first", () => {
@@ -53,26 +53,31 @@ describe("tmux-helpers", () => {
       expect(commands[2]).toBe('tmux set-option -t "d3k-test-123" status off')
     })
 
+    it("should set pane-exited hook to kill session", () => {
+      const commands = generateTmuxCommands(baseConfig)
+      expect(commands[3]).toBe('tmux set-hook -t "d3k-test-123" pane-exited "kill-session -t d3k-test-123"')
+    })
+
     it("should set pane border styles with purple active border", () => {
       const commands = generateTmuxCommands(baseConfig)
-      expect(commands[3]).toBe('tmux set-option -t "d3k-test-123" pane-border-style "fg=#333333"')
-      expect(commands[4]).toBe('tmux set-option -t "d3k-test-123" pane-active-border-style "fg=#A18CE5"')
+      expect(commands[4]).toBe('tmux set-option -t "d3k-test-123" pane-border-style "fg=#333333"')
+      expect(commands[5]).toBe('tmux set-option -t "d3k-test-123" pane-active-border-style "fg=#A18CE5"')
     })
 
     it("should split window with agent on left side with correct percentage", () => {
       const commands = generateTmuxCommands(baseConfig)
-      expect(commands[5]).toContain("split-window -h -b -p 65")
-      expect(commands[5]).toContain("d3k-test-123")
+      expect(commands[6]).toContain("split-window -h -b -p 65")
+      expect(commands[6]).toContain("d3k-test-123")
     })
 
     it("should include sleep delay before agent command", () => {
       const commands = generateTmuxCommands(baseConfig)
-      expect(commands[5]).toContain("sleep 5 && claude")
+      expect(commands[6]).toContain("sleep 5 && claude")
     })
 
-    it("should set pane-exited hook to kill session", () => {
+    it("should select agent pane after split", () => {
       const commands = generateTmuxCommands(baseConfig)
-      expect(commands[6]).toBe('tmux set-hook -t "d3k-test-123" pane-exited "kill-session -t d3k-test-123"')
+      expect(commands[7]).toBe('tmux select-pane -t "d3k-test-123:0.0"')
     })
 
     it("should handle zero delay correctly", () => {
@@ -82,8 +87,8 @@ describe("tmux-helpers", () => {
       }
       const commands = generateTmuxCommands(config)
       // Should not have sleep prefix
-      expect(commands[5]).toContain('"claude"')
-      expect(commands[5]).not.toContain("sleep")
+      expect(commands[6]).toContain('"claude"')
+      expect(commands[6]).not.toContain("sleep")
     })
 
     it("should handle different pane widths", () => {
@@ -92,7 +97,7 @@ describe("tmux-helpers", () => {
         paneWidthPercent: 50
       }
       const commands = generateTmuxCommands(config)
-      expect(commands[5]).toContain("-p 50")
+      expect(commands[6]).toContain("-p 50")
     })
 
     it("should handle different agent commands", () => {
@@ -101,7 +106,7 @@ describe("tmux-helpers", () => {
         agentCommand: "opencode"
       }
       const commands = generateTmuxCommands(config)
-      expect(commands[5]).toContain("opencode")
+      expect(commands[6]).toContain("opencode")
     })
 
     it("should properly escape session name in all commands", () => {
@@ -149,8 +154,9 @@ describe("tmux-helpers", () => {
 
       // Commands should be in correct order for tmux
       expect(commands[0]).toContain("new-session")
-      expect(commands[5]).toContain("split-window")
-      expect(commands[6]).toContain("set-hook")
+      expect(commands[3]).toContain("set-hook")
+      expect(commands[6]).toContain("split-window")
+      expect(commands[7]).toContain("select-pane")
     })
 
     it("should generate valid commands for OpenCode", () => {
@@ -164,7 +170,7 @@ describe("tmux-helpers", () => {
       const commands = generateTmuxCommands(config)
 
       expect(commands[0]).toContain("dev3000")
-      expect(commands[5]).toContain("opencode")
+      expect(commands[6]).toContain("opencode")
     })
   })
 })

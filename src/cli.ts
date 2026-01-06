@@ -11,6 +11,7 @@ import { cloudCheckPR } from "./commands/cloud-check-pr.js"
 import { cloudFix } from "./commands/cloud-fix.js"
 import { createPersistentLogFile, findAvailablePort, startDevEnvironment } from "./dev-environment.js"
 import { detectAIAgent } from "./utils/agent-detection.js"
+import { getAvailableAgents } from "./utils/agent-selection.js"
 import { formatMcpConfigTargets, parseDisabledMcpConfigs } from "./utils/mcp-configs.js"
 import { getProjectName } from "./utils/project-name.js"
 import {
@@ -20,7 +21,7 @@ import {
   getTmuxInstallInstructions,
   isTmuxInstalled
 } from "./utils/tmux-helpers.js"
-import { loadUserConfig } from "./utils/user-config.js"
+import { loadUserConfig, saveUserConfig } from "./utils/user-config.js"
 import { checkForUpdates, getUpgradeCommand, performUpgrade } from "./utils/version-check.js"
 
 /**
@@ -28,7 +29,24 @@ import { checkForUpdates, getUpgradeCommand, performUpgrade } from "./utils/vers
  * This creates a split-screen with the agent on the left and d3k logs on the right.
  */
 async function launchWithTmux(agentCommand: string): Promise<void> {
-  const { execSync, spawn } = await import("child_process")
+  const { execSync } = await import("child_process")
+  const { appendFileSync, writeFileSync } = await import("fs")
+
+  // Log file for debugging crashes
+  const crashLogPath = join(homedir(), ".d3k", "crash.log")
+
+  const logCrash = (message: string, error?: unknown) => {
+    const timestamp = new Date().toISOString()
+    const errorStr = error instanceof Error ? `${error.message}\n${error.stack}` : String(error || "")
+    const logEntry = `[${timestamp}] ${message}${errorStr ? `\n${errorStr}` : ""}\n`
+    try {
+      appendFileSync(crashLogPath, logEntry)
+    } catch {
+      // Ignore write errors
+    }
+    console.error(chalk.red(message))
+    if (error) console.error(error)
+  }
 
   // Check if tmux is installed
   if (!(await isTmuxInstalled())) {
@@ -48,9 +66,6 @@ async function launchWithTmux(agentCommand: string): Promise<void> {
   // Get the d3k command path (same as what user ran)
   const d3kCommand = process.argv[1].endsWith("d3k") ? "d3k" : "dev3000"
 
-  // Clear screen before launching tmux (prevents leftover text after exit)
-  process.stdout.write("\x1b[2J\x1b[0f")
-
   // Generate tmux commands using the helper
   const commands = generateTmuxCommands({
     sessionName,
@@ -60,35 +75,93 @@ async function launchWithTmux(agentCommand: string): Promise<void> {
     paneWidthPercent: DEFAULT_TMUX_CONFIG.paneWidthPercent
   })
 
+  // Create a shell script that sets up tmux and attaches
+  // This ensures clean terminal state by exec'ing into tmux
+  const scriptPath = join(homedir(), ".d3k", "launch-tmux.sh")
+  const scriptContent = `#!/bin/bash
+# Reset terminal state
+stty sane 2>/dev/null || true
+reset 2>/dev/null || true
+
+# Setup tmux session
+${commands.join(" && \\\n")}
+
+# Replace this process with tmux attach
+exec tmux attach-session -t "${sessionName}"
+`
+
   try {
-    // Execute all setup commands
-    for (const cmd of commands) {
-      execSync(cmd, {
-        stdio: "inherit",
-        shell: "/bin/bash"
-      })
+    // Write the launch script
+    writeFileSync(scriptPath, scriptContent, { mode: 0o755 })
+
+    // Spawn bash with the script, inheriting stdio
+    // The script will exec into tmux, replacing bash
+    const { spawnSync } = await import("child_process")
+    const result = spawnSync("bash", [scriptPath], {
+      stdio: "inherit",
+      shell: false
+    })
+
+    // Clean up session on exit
+    try {
+      execSync(`tmux kill-session -t "${sessionName}" 2>/dev/null`, { stdio: "ignore" })
+    } catch {
+      // Session might already be killed
     }
 
-    // Attach to the session
-    const tmux = spawn("tmux", ["attach-session", "-t", sessionName], {
-      stdio: "inherit"
-    })
-
-    tmux.on("exit", (code) => {
-      // Clean up the session if it still exists
-      try {
-        execSync(`tmux kill-session -t "${sessionName}" 2>/dev/null`, { stdio: "ignore" })
-      } catch {
-        // Session might already be killed
-      }
-      // Clear screen after tmux exits for clean terminal
-      process.stdout.write("\x1b[2J\x1b[0f")
-      process.exit(code || 0)
-    })
+    process.exit(result.status || 0)
   } catch (error) {
-    console.error(chalk.red("\n❌ Failed to start tmux session:"), error)
+    logCrash("Failed to start tmux session", error)
     process.exit(1)
   }
+}
+
+/**
+ * Show interactive agent selection prompt using Ink.
+ * Returns the selected agent config, or null if user chose "No agent".
+ */
+async function promptAgentSelection(defaultAgentName?: string): Promise<{ name: string; command: string } | null> {
+  const { render } = await import("ink")
+  const React = await import("react")
+  const { AgentSelector } = await import("./components/AgentSelector.js")
+
+  const agents = getAvailableAgents()
+
+  // Store the result to return after Ink exits
+  let selectedResult: { name: string; command: string } | null = null
+
+  try {
+    const { unmount, waitUntilExit } = render(
+      React.createElement(AgentSelector, {
+        agents,
+        defaultAgentName,
+        onComplete: (result: { agent: { name: string; command: string } | null }) => {
+          selectedResult = result.agent
+          // Always save the selection for next time
+          try {
+            if (result.agent) {
+              saveUserConfig({ defaultAgent: result.agent })
+            } else {
+              // User chose "No agent" - clear the saved default
+              saveUserConfig({ defaultAgent: undefined })
+            }
+          } catch (_error) {
+            console.warn(chalk.yellow("Warning: Could not save agent preference"))
+          }
+          // Unmount after saving
+          unmount()
+        }
+      })
+    )
+
+    // Wait for Ink to fully exit
+    await waitUntilExit()
+  } catch (error) {
+    console.error(chalk.red("Error in agent selection:"), error)
+    return null
+  }
+
+  return selectedResult
 }
 
 interface ProjectConfig {
@@ -400,9 +473,42 @@ program
       process.exit(0)
     }
 
+    // Handle agent selection for split-screen mode (default behavior in TTY)
+    // Skip if --no-tui, --debug flags are used, or if already inside tmux (to avoid nested prompts)
+    const insideTmux = !!process.env.TMUX
+    if (process.stdin.isTTY && !options.noTui && !options.debug && !insideTmux) {
+      // Check if tmux is available before showing prompt
+      if (!(await isTmuxInstalled())) {
+        console.warn(chalk.yellow("⚠️ tmux not installed - agent split-screen mode unavailable"))
+        console.warn(chalk.gray("  Install tmux to enable: brew install tmux (macOS)"))
+        // Continue with normal startup
+      } else {
+        // Always show prompt, pre-selecting the last-used option
+        const userConfig = loadUserConfig()
+        const selectedAgent = await promptAgentSelection(userConfig.defaultAgent?.name)
+
+        if (selectedAgent) {
+          if (selectedAgent.name === "debug") {
+            // User chose debug mode - enable debug and continue with normal startup
+            options.debug = true
+          } else {
+            // User selected an agent - launch with tmux
+            if (options.debug) {
+              console.log(`[DEBUG] Launching tmux with agent command: ${selectedAgent.command}`)
+            }
+            await launchWithTmux(selectedAgent.command)
+            return
+          }
+        } else if (options.debug) {
+          console.log("[DEBUG] No agent selected, continuing with normal startup")
+        }
+        // User chose "No agent" or "debug" - continue with normal startup
+      }
+    }
+
     // Detect project type and configuration
     const projectConfig = await detectProjectType(options.debug)
-    const userConfig = loadUserConfig()
+    const userConfigForMcp = loadUserConfig()
 
     // Check if we're in a valid project directory
     if (projectConfig.noProjectDetected) {
@@ -437,7 +543,7 @@ program
     const userSetPort = options.port !== undefined
     const userSetMcpPort = process.argv.includes("--port-mcp") || process.argv.includes("-p-mcp")
     const disableMcpConfigsInput =
-      options.disableMcpConfigs ?? process.env.DEV3000_DISABLE_MCP_CONFIGS ?? userConfig.disableMcpConfigs
+      options.disableMcpConfigs ?? process.env.DEV3000_DISABLE_MCP_CONFIGS ?? userConfigForMcp.disableMcpConfigs
     const disabledMcpConfigs = parseDisabledMcpConfigs(disableMcpConfigsInput)
 
     // Generate server command based on custom command or project type
