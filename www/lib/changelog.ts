@@ -13,9 +13,7 @@ export const changelog: Release[] = [
     version: "0.0.133",
     date: "2026-01-06",
     type: "minor",
-    highlights: [
-      "Add skill installer for Vercel DX skills"
-    ]
+    highlights: ["Add skill installer for Vercel DX skills"]
   },
 
   {
