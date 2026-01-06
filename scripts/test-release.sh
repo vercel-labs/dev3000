@@ -55,25 +55,32 @@ rm -f dev3000-*.tgz
 # Create fresh tarball
 TARBALL=$(pnpm pack 2>&1 | tail -n 1)
 
-# Test 1: Clean npm global install (most common scenario)
+# Test 1: Clean npm global install (requires bun)
 echo -e "${YELLOW}Testing clean npm global install...${NC}"
-TEST_HOME=$(mktemp -d)
-export npm_config_prefix="$TEST_HOME/npm-global"
-mkdir -p "$npm_config_prefix"
-export PATH="$npm_config_prefix/bin:$PATH"
 
-# Install dev3000 globally with npm
-if npm install -g "./$TARBALL"; then
-    # Test that it runs
-    if d3k --version | grep -q -E "^[0-9]+\.[0-9]+\.[0-9]+"; then
-        echo -e "${GREEN}✅ Clean npm install test passed${NC}"
+# Check if bun is available (required for d3k)
+if ! command -v bun &> /dev/null; then
+    echo -e "${YELLOW}⚠️  Skipping npm install test - bun is required but not installed${NC}"
+    echo -e "${YELLOW}   d3k requires bun runtime. Install with: curl -fsSL https://bun.sh/install | bash${NC}"
+else
+    TEST_HOME=$(mktemp -d)
+    export npm_config_prefix="$TEST_HOME/npm-global"
+    mkdir -p "$npm_config_prefix"
+    export PATH="$npm_config_prefix/bin:$PATH"
+
+    # Install dev3000 globally with npm
+    if npm install -g "./$TARBALL"; then
+        # Test that it runs
+        if d3k --version | grep -q -E "^[0-9]+\.[0-9]+\.[0-9]+"; then
+            echo -e "${GREEN}✅ Clean npm install test passed${NC}"
+        else
+            echo -e "${RED}❌ d3k command failed to run${NC}"
+            exit 1
+        fi
     else
-        echo -e "${RED}❌ d3k command failed to run${NC}"
+        echo -e "${RED}❌ Failed to install with npm${NC}"
         exit 1
     fi
-else
-    echo -e "${RED}❌ Failed to install with npm${NC}"
-    exit 1
 fi
 
 # Don't cleanup yet - we need the installed d3k for the next test

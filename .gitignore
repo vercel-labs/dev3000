@@ -1,5 +1,6 @@
 node_modules/
 dist/
+dist-bin/
 *.log
 .DS_Store
 .env*
@@ -14,6 +15,12 @@ next-devtools-mcp/
 .vercel
 .env*.local
 *.tsbuildinfo
+
+# Platform package build artifacts (only package.json should be committed)
+packages/*/bin/
+packages/*/mcp-server/
+packages/*/skills/
+packages/*/src/
 
 mcp-server/next-env.d.ts
 

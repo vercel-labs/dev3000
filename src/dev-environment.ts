@@ -23,9 +23,12 @@ import { ScreencastManager } from "./screencast-manager.js"
 import { type LogEntry, NextJsErrorDetector, OutputProcessor, StandardLogParser } from "./services/parsers/index.js"
 import { DevTUI } from "./tui-interface.js"
 import { formatMcpConfigTargets, MCP_CONFIG_TARGETS, type McpConfigTarget } from "./utils/mcp-configs.js"
-import { getProjectDisplayName, getProjectName } from "./utils/project-name.js"
+import { getProjectDir, getProjectDisplayName, getProjectName } from "./utils/project-name.js"
 import { formatTimestamp } from "./utils/timestamp.js"
-import { checkForUpdates } from "./utils/version-check.js"
+import { checkForUpdates, performUpgradeAsync } from "./utils/version-check.js"
+
+// Declare the compile-time injected version (set by bun build --define)
+declare const __D3K_VERSION__: string | undefined
 
 // MCP names
 const MCP_NAMES = {
@@ -57,6 +60,104 @@ export const ORPHANED_PROCESS_CLEANUP_PATTERNS = [
  */
 function hasVercelProject(): boolean {
   return existsSync(join(process.cwd(), ".vercel"))
+}
+
+/**
+ * Options for graceful process termination.
+ */
+export interface GracefulKillOptions {
+  /** Process ID to terminate */
+  pid: number
+  /** Delay in ms to wait for graceful shutdown (default: 500) */
+  gracePeriodMs?: number
+  /** Function to send signals (for testing) */
+  killFn?: (pid: number, signal: NodeJS.Signals | number) => void
+  /** Function to delay (for testing) */
+  delayFn?: (ms: number) => Promise<void>
+  /** Optional debug logger */
+  debugLog?: (msg: string) => void
+}
+
+/**
+ * Result of graceful kill operation.
+ */
+export interface GracefulKillResult {
+  /** Whether the process was terminated */
+  terminated: boolean
+  /** Whether graceful shutdown succeeded (SIGTERM was enough) */
+  graceful: boolean
+  /** Whether force kill (SIGKILL) was needed */
+  forcedKill: boolean
+}
+
+/**
+ * Gracefully terminate a process by first trying SIGTERM, waiting for graceful
+ * shutdown, then falling back to SIGKILL if needed.
+ *
+ * This is important for processes like Next.js dev server that need to clean up
+ * resources (like .next/dev/lock) before exiting.
+ *
+ * @param options - Kill options including PID and optional overrides for testing
+ * @returns Result indicating how the process was terminated
+ */
+export async function gracefulKillProcess(options: GracefulKillOptions): Promise<GracefulKillResult> {
+  const {
+    pid,
+    gracePeriodMs = 500,
+    killFn = (p, s) => process.kill(p, s),
+    delayFn = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+    debugLog = () => {}
+  } = options
+
+  const result: GracefulKillResult = {
+    terminated: false,
+    graceful: false,
+    forcedKill: false
+  }
+
+  // Try process group first (negative PID), fall back to direct PID
+  const pgid = -pid
+
+  // Step 1: Send SIGTERM for graceful shutdown
+  debugLog(`Sending SIGTERM to process group ${pgid} (PID: ${pid})`)
+  try {
+    killFn(pgid, "SIGTERM")
+  } catch {
+    // Process group may not exist, try direct kill
+    try {
+      killFn(pid, "SIGTERM")
+    } catch {
+      // Process may already be dead
+      debugLog(`Process ${pid} not found for SIGTERM`)
+      return result
+    }
+  }
+
+  // Step 2: Wait for graceful shutdown
+  await delayFn(gracePeriodMs)
+
+  // Step 3: Check if process is still running
+  try {
+    // Signal 0 checks if process exists without killing it
+    killFn(pid, 0)
+
+    // Process still running, need to force kill
+    debugLog(`Process still running after SIGTERM, sending SIGKILL`)
+    try {
+      killFn(pgid, "SIGKILL")
+    } catch {
+      killFn(pid, "SIGKILL")
+    }
+    result.terminated = true
+    result.forcedKill = true
+  } catch {
+    // Process already dead - graceful shutdown succeeded
+    debugLog(`Process terminated gracefully after SIGTERM`)
+    result.terminated = true
+    result.graceful = true
+  }
+
+  return result
 }
 
 interface DevEnvironmentOptions {
@@ -518,7 +619,11 @@ async function ensureCursorMcpServers(
 
 /**
  * Ensure MCP server configurations are added to project's opencode.json
- * OpenCode uses a different structure: "mcp" instead of "mcpServers" and "type": "local" for stdio servers
+ * OpenCode uses a different structure: "mcp" instead of "mcpServers"
+ *
+ * IMPORTANT: OpenCode has issues with "type": "remote" for HTTP MCP servers.
+ * The workaround is to use "type": "local" with mcp-remote package to proxy requests.
+ * See: https://github.com/sst/opencode/issues/1595
  */
 async function ensureOpenCodeMcpServers(
   mcpPort: string,
@@ -533,8 +638,10 @@ async function ensureOpenCodeMcpServers(
       mcp?: Record<
         string,
         {
-          type?: "remote"
+          type?: "local" | "remote"
+          command?: string[]
           url?: string
+          oauth?: Record<string, unknown>
           enabled?: boolean
         }
       >
@@ -552,33 +659,50 @@ async function ensureOpenCodeMcpServers(
       settings.mcp = {}
     }
 
-    let added = false
+    let changed = false
 
-    // Add dev3000 MCP server - use npx with mcp-client to connect to HTTP server
-    // NOTE: dev3000 now acts as an MCP orchestrator/gateway that internally
-    // spawns and connects to chrome-devtools-mcp and next-devtools-mcp as stdio processes
-    if (!settings.mcp[MCP_NAMES.DEV3000]) {
-      settings.mcp[MCP_NAMES.DEV3000] = {
-        type: "remote",
-        url: `http://localhost:${mcpPort}/mcp`,
-        enabled: true
-      }
-      added = true
+    // Always update dev3000 MCP server config to ensure correct format
+    // Try simple remote type first - no OAuth needed for local dev3000
+    const expectedDev3000Config = {
+      type: "remote" as const,
+      url: `http://localhost:${mcpPort}/mcp`,
+      enabled: true
+    }
+    const currentDev3000 = settings.mcp[MCP_NAMES.DEV3000]
+    if (
+      !currentDev3000 ||
+      currentDev3000.type !== expectedDev3000Config.type ||
+      currentDev3000.url !== expectedDev3000Config.url
+    ) {
+      settings.mcp[MCP_NAMES.DEV3000] = expectedDev3000Config
+      changed = true
     }
 
-    // Add Vercel MCP if this is a Vercel project (.vercel directory exists)
-    // Vercel MCP uses OAuth authentication handled by the client (OpenCode)
-    if (hasVercelProject() && !settings.mcp[MCP_NAMES.VERCEL]) {
-      settings.mcp[MCP_NAMES.VERCEL] = {
-        type: "remote",
+    // Always update Vercel MCP if this is a Vercel project (.vercel directory exists)
+    // Vercel MCP requires OAuth, so use OpenCode's native remote type with oauth: {}
+    // This triggers OpenCode's built-in OAuth flow instead of mcp-remote
+    // See: https://github.com/sst/opencode/issues/5444
+    if (hasVercelProject()) {
+      const expectedVercelConfig = {
+        type: "remote" as const,
         url: VERCEL_MCP_URL,
+        oauth: {},
         enabled: true
       }
-      added = true
+      const currentVercel = settings.mcp[MCP_NAMES.VERCEL]
+      if (
+        !currentVercel ||
+        currentVercel.type !== expectedVercelConfig.type ||
+        currentVercel.url !== expectedVercelConfig.url ||
+        !currentVercel.oauth
+      ) {
+        settings.mcp[MCP_NAMES.VERCEL] = expectedVercelConfig
+        changed = true
+      }
     }
 
-    // Write if we added anything
-    if (added) {
+    // Write if we changed anything
+    if (changed) {
       writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, "utf-8")
     }
   } catch (_error) {
@@ -629,8 +753,8 @@ export function createPersistentLogFile(): string {
   // Get unique project name
   const projectName = getProjectName()
 
-  // Use ~/.d3k/logs directory for persistent, accessible logs
-  const logBaseDir = join(homedir(), ".d3k", "logs")
+  // Use ~/.d3k/{projectName}/logs directory for persistent, accessible logs
+  const logBaseDir = join(getProjectDir(), "logs")
   try {
     if (!existsSync(logBaseDir)) {
       mkdirSync(logBaseDir, { recursive: true })
@@ -658,12 +782,12 @@ function writeSessionInfo(
   framework?: "nextjs" | "svelte" | "other",
   serverPid?: number
 ): void {
-  const sessionDir = join(homedir(), ".d3k")
+  const projectDir = getProjectDir()
 
   try {
-    // Create ~/.d3k directory if it doesn't exist
-    if (!existsSync(sessionDir)) {
-      mkdirSync(sessionDir, { recursive: true })
+    // Create project directory if it doesn't exist
+    if (!existsSync(projectDir)) {
+      mkdirSync(projectDir, { recursive: true })
     }
 
     // Session file contains project info
@@ -682,8 +806,8 @@ function writeSessionInfo(
       serverPid: serverPid || null
     }
 
-    // Write session file - use project name as filename for easy lookup
-    const sessionFile = join(sessionDir, `${projectName}.json`)
+    // Write session file in project directory
+    const sessionFile = join(projectDir, "session.json")
     writeFileSync(sessionFile, JSON.stringify(sessionInfo, null, 2))
   } catch (error) {
     // Non-fatal - just log a warning
@@ -693,8 +817,7 @@ function writeSessionInfo(
 
 // Get Chrome PIDs for this instance
 function getSessionChromePids(projectName: string): number[] {
-  const sessionDir = join(homedir(), ".d3k")
-  const sessionFile = join(sessionDir, `${projectName}.json`)
+  const sessionFile = join(homedir(), ".d3k", projectName, "session.json")
 
   try {
     if (existsSync(sessionFile)) {
@@ -709,8 +832,7 @@ function getSessionChromePids(projectName: string): number[] {
 
 // Get server PID for this instance
 function getSessionServerPid(projectName: string): number | null {
-  const sessionDir = join(homedir(), ".d3k")
-  const sessionFile = join(sessionDir, `${projectName}.json`)
+  const sessionFile = join(homedir(), ".d3k", projectName, "session.json")
 
   try {
     if (existsSync(sessionFile)) {
@@ -723,16 +845,24 @@ function getSessionServerPid(projectName: string): number | null {
   return null
 }
 
-function createLogFileInDir(baseDir: string, projectName: string): string {
-  // Create timestamp
-  const timestamp = new Date().toISOString().replace(/[:.]/g, "-")
+function createLogFileInDir(baseDir: string, _projectName: string): string {
+  // Create short timestamp: MMDD-HHmmss (e.g., 0106-171301)
+  const now = new Date()
+  const timestamp = [
+    String(now.getMonth() + 1).padStart(2, "0"),
+    String(now.getDate()).padStart(2, "0"),
+    "-",
+    String(now.getHours()).padStart(2, "0"),
+    String(now.getMinutes()).padStart(2, "0"),
+    String(now.getSeconds()).padStart(2, "0")
+  ].join("")
 
-  // Create log file path
-  const logFileName = `${projectName}-${timestamp}.log`
+  // Create log file path (project name already in directory path)
+  const logFileName = `${timestamp}.log`
   const logFilePath = join(baseDir, logFileName)
 
-  // Prune old logs for this project (keep only 10 most recent)
-  pruneOldLogs(baseDir, projectName)
+  // Prune old logs (keep only 10 most recent)
+  pruneOldLogs(baseDir)
 
   // Create the log file
   writeFileSync(logFilePath, "")
@@ -740,11 +870,11 @@ function createLogFileInDir(baseDir: string, projectName: string): string {
   return logFilePath
 }
 
-function pruneOldLogs(baseDir: string, projectName: string): void {
+function pruneOldLogs(baseDir: string): void {
   try {
-    // Find all log files for this project
+    // Find all log files in directory
     const files = readdirSync(baseDir)
-      .filter((file) => file.startsWith(`${projectName}-`) && file.endsWith(".log"))
+      .filter((file) => file.endsWith(".log"))
       .map((file) => ({
         name: file,
         path: join(baseDir, file),
@@ -763,8 +893,8 @@ function pruneOldLogs(baseDir: string, projectName: string): void {
         }
       }
     }
-  } catch (error) {
-    console.warn(chalk.yellow(`⚠️ Could not prune logs: ${error}`))
+  } catch (_error) {
+    // Silently ignore prune errors
   }
 }
 
@@ -803,9 +933,20 @@ export class DevEnvironment {
     this.logger = new Logger(options.logFile, options.tail || false, options.dateTimeFormat || "local")
     this.outputProcessor = new OutputProcessor(new StandardLogParser(), new NextJsErrorDetector())
 
-    // Set up MCP server public directory for web-accessible screenshots
-    const currentFile = fileURLToPath(import.meta.url)
-    const packageRoot = dirname(dirname(currentFile))
+    // Detect if running from compiled binary
+    const execPath = process.execPath
+    const isCompiledBinary = execPath.includes("dev3000-darwin-") || execPath.endsWith("/dev3000")
+
+    let packageRoot: string
+    if (isCompiledBinary) {
+      // For compiled binaries: bin/dev3000 -> package root
+      const binDir = dirname(execPath)
+      packageRoot = dirname(binDir)
+    } else {
+      // Normal install: dist/dev-environment.js -> package root
+      const currentFile = fileURLToPath(import.meta.url)
+      packageRoot = dirname(dirname(currentFile))
+    }
 
     // Always use MCP server's public directory for screenshots to ensure they're web-accessible
     // and avoid permission issues with /var/log paths
@@ -816,29 +957,34 @@ export class DevEnvironment {
     this.lockFile = join(tmpdir(), `dev3000-${projectName}.lock`)
     this.mcpPublicDir = join(packageRoot, "mcp-server", "public", "screenshots")
 
-    // Read version from package.json for startup message
+    // Read version - for compiled binaries, use injected version; otherwise read from package.json
     this.version = "0.0.0"
-    try {
-      const packageJsonPath = join(packageRoot, "package.json")
-      const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8"))
-      this.version = packageJson.version
-
-      // Use git to detect if we're in the dev3000 source repository
+    // Check for compile-time injected version first
+    if (typeof __D3K_VERSION__ !== "undefined") {
+      this.version = __D3K_VERSION__
+    } else {
       try {
-        const { execSync } = require("child_process")
-        const gitRemote = execSync("git remote get-url origin 2>/dev/null", {
-          cwd: packageRoot,
-          encoding: "utf8"
-        }).trim()
+        const packageJsonPath = join(packageRoot, "package.json")
+        const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8"))
+        this.version = packageJson.version
 
-        if (gitRemote.includes("vercel-labs/dev3000") && !this.version.includes("canary")) {
-          this.version += "-local"
+        // Use git to detect if we're in the dev3000 source repository
+        try {
+          const { execSync } = require("child_process")
+          const gitRemote = execSync("git remote get-url origin 2>/dev/null", {
+            cwd: packageRoot,
+            encoding: "utf8"
+          }).trim()
+
+          if (gitRemote.includes("vercel-labs/dev3000") && !this.version.includes("canary")) {
+            this.version += "-local"
+          }
+        } catch {
+          // Not in git repo or no git - use version as-is
         }
-      } catch {
-        // Not in git repo or no git - use version as-is
+      } catch (_error) {
+        // Use fallback version
       }
-    } catch (_error) {
-      // Use fallback version
     }
 
     // Initialize spinner for clean output management (only if not in TUI mode)
@@ -980,7 +1126,7 @@ export class DevEnvironment {
         await new Promise((resolve) => setTimeout(resolve, waitTime))
 
         // Check if port is now free
-        const available = await isPortAvailable(this.options.mcpPort!.toString())
+        const available = await isPortAvailable(this.options.mcpPort?.toString() ?? "")
         if (available) {
           this.debugLog(`Port ${this.options.mcpPort} released successfully`)
           return
@@ -1121,16 +1267,29 @@ export class DevEnvironment {
         serversOnly: this.options.serversOnly,
         version: this.version,
         projectName: projectDisplayName,
-        updateAvailable: null // Will be updated async
+        updateInfo: null // Will be updated async after auto-upgrade
       })
 
       await this.tui.start()
 
-      // Update TUI with version check result (non-blocking)
-      updateCheckPromise.then((versionInfo) => {
+      // Auto-upgrade if update available (non-blocking)
+      updateCheckPromise.then(async (versionInfo) => {
         if (versionInfo?.updateAvailable && versionInfo.latestVersion && this.tui) {
-          this.debugLog(`Update available: ${versionInfo.currentVersion} -> ${versionInfo.latestVersion}`)
-          this.tui.updateUpdateAvailable({ latestVersion: versionInfo.latestVersion })
+          this.debugLog(
+            `Update available: ${versionInfo.currentVersion} -> ${versionInfo.latestVersion}, auto-upgrading...`
+          )
+          // Perform upgrade in background
+          const result = await performUpgradeAsync()
+          if (result.success) {
+            const newVersion = result.newVersion || versionInfo.latestVersion
+            this.debugLog(`Auto-upgrade successful: ${newVersion}`)
+            // Show "Updated to vX.X.X" message (auto-hides after 10s)
+            this.tui.updateUpdateInfo({ type: "updated", newVersion })
+          } else {
+            // Upgrade failed - show update available instead
+            this.debugLog(`Auto-upgrade failed: ${result.error}, showing update available`)
+            this.tui.updateUpdateInfo({ type: "available", latestVersion: versionInfo.latestVersion })
+          }
         }
       })
 
@@ -1174,7 +1333,7 @@ export class DevEnvironment {
       if (!serverStarted) {
         await this.tui.updateStatus("❌ Server failed to start")
         console.error(chalk.red("\n❌ Your app server failed to start after 30 seconds."))
-        console.error(chalk.yellow(`Check the logs at ~/.d3k/logs/${getProjectName()}-d3k.log for errors.`))
+        console.error(chalk.yellow(`Check the logs at ~/.d3k/${getProjectName()}/logs/ for errors.`))
         console.error(chalk.yellow("Exiting without launching browser."))
         process.exit(1)
       }
@@ -1260,7 +1419,7 @@ export class DevEnvironment {
       if (!serverStarted) {
         this.spinner.fail("Server failed to start")
         console.error(chalk.red("\n❌ Your app server failed to start after 30 seconds."))
-        console.error(chalk.yellow(`Check the logs at ~/.d3k/logs/${getProjectName()}-d3k.log for errors.`))
+        console.error(chalk.yellow(`Check the logs at ~/.d3k/${getProjectName()}/logs/ for errors.`))
         console.error(chalk.yellow("Exiting without launching browser."))
         process.exit(1)
       }
@@ -1329,14 +1488,24 @@ export class DevEnvironment {
       }
       console.log(chalk.cyan("\nUse Ctrl-C to stop.\n"))
 
-      // Check for updates in non-TUI mode (non-blocking)
+      // Auto-upgrade in non-TUI mode (non-blocking)
       checkForUpdates()
-        .then((versionInfo) => {
+        .then(async (versionInfo) => {
           if (versionInfo?.updateAvailable && versionInfo.latestVersion) {
-            console.log(
-              chalk.yellow(`\n↑ Update available: v${versionInfo.currentVersion} → v${versionInfo.latestVersion}`)
+            this.debugLog(
+              `Update available: ${versionInfo.currentVersion} -> ${versionInfo.latestVersion}, auto-upgrading...`
             )
-            console.log(chalk.gray(`  Run 'd3k upgrade' to update\n`))
+            const result = await performUpgradeAsync()
+            if (result.success) {
+              const newVersion = result.newVersion || versionInfo.latestVersion
+              console.log(chalk.green(`\n✓ Updated to v${newVersion}`))
+            } else {
+              // Upgrade failed - show update available
+              console.log(
+                chalk.yellow(`\n↑ Update available: v${versionInfo.currentVersion} → v${versionInfo.latestVersion}`)
+              )
+              console.log(chalk.gray(`  Run 'd3k upgrade' to update\n`))
+            }
           }
         })
         .catch(() => {
@@ -1598,12 +1767,12 @@ export class DevEnvironment {
 
     // Always write to d3k debug log file (even when not in debug mode)
     try {
-      const debugLogDir = join(homedir(), ".d3k")
-      if (!existsSync(debugLogDir)) {
-        mkdirSync(debugLogDir, { recursive: true })
+      const projectDir = getProjectDir()
+      if (!existsSync(projectDir)) {
+        mkdirSync(projectDir, { recursive: true })
       }
 
-      const debugLogFile = join(debugLogDir, "d3k.log")
+      const debugLogFile = join(projectDir, "debug.log")
       const logEntry = `[${timestamp}] [DEBUG] ${message}\n`
       appendFileSync(debugLogFile, logEntry)
     } catch {
@@ -1673,9 +1842,29 @@ export class DevEnvironment {
     // to ensure the port is free before we check availability
 
     // Get the path to our bundled MCP server
-    const currentFile = fileURLToPath(import.meta.url)
-    const packageRoot = dirname(dirname(currentFile)) // Go up from dist/ to package root
-    let mcpServerPath = join(packageRoot, "mcp-server")
+    // Handle both normal npm install and compiled binary cases
+    let mcpServerPath: string
+
+    // Check if we're running from a compiled binary
+    // Compiled binaries have process.execPath pointing to the binary itself
+    const execPath = process.execPath
+    const isCompiledBinary = execPath.includes("dev3000-darwin-") || execPath.endsWith("/dev3000")
+
+    if (isCompiledBinary) {
+      // For compiled binaries, mcp-server is a sibling to the bin directory
+      // Structure: packages/dev3000-darwin-arm64/bin/dev3000 -> packages/dev3000-darwin-arm64/mcp-server
+      const binDir = dirname(execPath)
+      const packageDir = dirname(binDir)
+      mcpServerPath = join(packageDir, "mcp-server")
+      this.debugLog(`Compiled binary detected, MCP server path: ${mcpServerPath}`)
+    } else {
+      // Normal npm install - mcp-server is in the package root
+      const currentFile = fileURLToPath(import.meta.url)
+      const packageRoot = dirname(dirname(currentFile)) // Go up from dist/ to package root
+      mcpServerPath = join(packageRoot, "mcp-server")
+      this.debugLog(`Standard install detected, MCP server path: ${mcpServerPath}`)
+    }
+
     this.debugLog(`Initial MCP server path: ${mcpServerPath}`)
 
     // For pnpm global installs, resolve symlinks to get the real path
@@ -2172,14 +2361,13 @@ export class DevEnvironment {
 
   private initializeD3KLog() {
     try {
-      const debugLogDir = join(homedir(), ".d3k", "logs")
-      if (!existsSync(debugLogDir)) {
-        mkdirSync(debugLogDir, { recursive: true })
+      const projectDir = getProjectDir()
+      if (!existsSync(projectDir)) {
+        mkdirSync(projectDir, { recursive: true })
       }
 
-      // Create project-specific D3K log file and clear it for new session
-      const projectName = getProjectName()
-      const d3kLogFile = join(debugLogDir, `${projectName}-d3k.log`)
+      // Create D3K log file and clear it for new session
+      const d3kLogFile = join(projectDir, "d3k.log")
       writeFileSync(d3kLogFile, "")
     } catch {
       // Ignore D3K log initialization errors - non-critical
@@ -2193,14 +2381,12 @@ export class DevEnvironment {
     const logEntry = `[${timestamp}] [D3K] ${message}\n`
 
     try {
-      const debugLogDir = join(homedir(), ".d3k", "logs")
-      if (!existsSync(debugLogDir)) {
-        mkdirSync(debugLogDir, { recursive: true })
+      const projectDir = getProjectDir()
+      if (!existsSync(projectDir)) {
+        mkdirSync(projectDir, { recursive: true })
       }
 
-      // Create project-specific D3K log file to avoid confusion between multiple instances
-      const projectName = getProjectName()
-      const d3kLogFile = join(debugLogDir, `${projectName}-d3k.log`)
+      const d3kLogFile = join(projectDir, "d3k.log")
       appendFileSync(d3kLogFile, logEntry)
     } catch {
       // Ignore D3K log write errors - non-critical
@@ -2329,7 +2515,7 @@ export class DevEnvironment {
 
     // Clean up session file
     try {
-      const sessionFile = join(homedir(), ".d3k", `${projectName}.json`)
+      const sessionFile = join(homedir(), ".d3k", projectName, "session.json")
       if (existsSync(sessionFile)) {
         unlinkSync(sessionFile)
       }
@@ -2523,7 +2709,7 @@ export class DevEnvironment {
 
     // Clean up session file
     try {
-      const sessionFile = join(homedir(), ".d3k", `${projectName}.json`)
+      const sessionFile = join(homedir(), ".d3k", projectName, "session.json")
       if (existsSync(sessionFile)) {
         unlinkSync(sessionFile)
       }
@@ -2660,12 +2846,16 @@ export class DevEnvironment {
     // Next.js's next-server and webpack workers) are also killed.
     if (this.serverProcess?.pid) {
       try {
-        // Negative PID kills the entire process group
-        const pgid = -this.serverProcess.pid
-        this.debugLog(`Killing process group ${pgid} (server PID: ${this.serverProcess.pid})`)
-        process.kill(pgid, "SIGKILL")
-        if (!this.options.tui) {
-          console.log(chalk.green(`✅ Killed server process group (PID: ${this.serverProcess.pid})`))
+        // Use graceful kill: SIGTERM first, wait, then SIGKILL if needed
+        // This allows Next.js to clean up .next/dev/lock before terminating
+        const result = await gracefulKillProcess({
+          pid: this.serverProcess.pid,
+          debugLog: (msg) => this.debugLog(msg)
+        })
+
+        if (!this.options.tui && result.terminated) {
+          const method = result.graceful ? "gracefully" : "forcefully"
+          console.log(chalk.green(`✅ Killed server process group ${method} (PID: ${this.serverProcess.pid})`))
         }
       } catch (error) {
         // Process group may already be dead or may not exist

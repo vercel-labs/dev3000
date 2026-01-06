@@ -13,7 +13,13 @@ import { createPersistentLogFile, findAvailablePort, startDevEnvironment } from 
 import { detectAIAgent } from "./utils/agent-detection.js"
 import { getAvailableAgents } from "./utils/agent-selection.js"
 import { formatMcpConfigTargets, parseDisabledMcpConfigs } from "./utils/mcp-configs.js"
-import { getProjectName } from "./utils/project-name.js"
+import { getProjectDir } from "./utils/project-name.js"
+import {
+  type AvailableSkill,
+  checkForNewSkills,
+  installSelectedSkills,
+  markSkillsAsSeen
+} from "./utils/skill-installer.js"
 import {
   DEFAULT_TMUX_CONFIG,
   generateSessionName,
@@ -162,6 +168,47 @@ async function promptAgentSelection(defaultAgentName?: string): Promise<{ name: 
   }
 
   return selectedResult
+}
+
+/**
+ * Show interactive skill selection prompt using Ink.
+ * Returns the selected skills, or empty array if user skipped.
+ */
+async function promptSkillSelection(skills: AvailableSkill[]): Promise<AvailableSkill[]> {
+  const { render } = await import("ink")
+  const React = await import("react")
+  const { SkillSelector } = await import("./components/SkillSelector.js")
+
+  let selectedSkills: AvailableSkill[] = []
+  let skipped = false
+
+  try {
+    const { unmount, waitUntilExit } = render(
+      React.createElement(SkillSelector, {
+        skills,
+        onComplete: (selected: AvailableSkill[]) => {
+          selectedSkills = selected
+          unmount()
+        },
+        onSkip: () => {
+          skipped = true
+          unmount()
+        }
+      })
+    )
+
+    await waitUntilExit()
+  } catch (error) {
+    console.error(chalk.red("Error in skill selection:"), error)
+    return []
+  }
+
+  // If user skipped, mark skills as seen so we don't ask again
+  if (skipped) {
+    markSkillsAsSeen(skills)
+  }
+
+  return selectedSkills
 }
 
 interface ProjectConfig {
@@ -333,8 +380,16 @@ async function detectProjectType(debug = false): Promise<ProjectConfig> {
   }
 }
 
-// Read version from package.json
+// Declare the compile-time injected version (set by bun build --define)
+declare const __D3K_VERSION__: string | undefined
+
+// Read version from package.json or use compile-time injected version
 function getVersion(): string {
+  // Check for compile-time injected version first (for standalone binaries)
+  if (typeof __D3K_VERSION__ !== "undefined") {
+    return __D3K_VERSION__
+  }
+
   try {
     const currentFile = fileURLToPath(import.meta.url)
     const packageRoot = dirname(dirname(currentFile)) // Go up from dist/ to package root
@@ -477,6 +532,40 @@ program
     // Skip if --no-tui, --debug flags are used, or if already inside tmux (to avoid nested prompts)
     const insideTmux = !!process.env.TMUX
     if (process.stdin.isTTY && !options.noTui && !options.debug && !insideTmux) {
+      // Clear the terminal so d3k UI starts at the top of the screen
+      process.stdout.write("\x1B[2J\x1B[0f")
+
+      // Show loading message while checking for skills
+      process.stdout.write(chalk.gray(" Checking for skill updates...\r"))
+
+      // Check for new/updated skills from vercel-labs/agent-skills
+      try {
+        const newSkills = await checkForNewSkills()
+
+        // Clear the loading message
+        process.stdout.write("\x1B[2J\x1B[0f")
+
+        if (newSkills.length > 0) {
+          const selected = await promptSkillSelection(newSkills)
+          if (selected.length > 0) {
+            console.log(chalk.cyan(`Installing ${selected.length} skill(s)...`))
+            const result = await installSelectedSkills(selected, (skill, index, total) => {
+              console.log(chalk.gray(`  [${index + 1}/${total}] ${skill.name}...`))
+            })
+            if (result.success.length > 0) {
+              console.log(chalk.green(`✓ Installed: ${result.success.join(", ")}`))
+            }
+            if (result.failed.length > 0) {
+              console.log(chalk.yellow(`⚠ Failed: ${result.failed.join(", ")}`))
+            }
+            console.log("")
+          }
+        }
+      } catch {
+        // Clear and continue silently on errors (network issues, etc.)
+        process.stdout.write("\x1B[2J\x1B[0f")
+      }
+
       // Check if tmux is available before showing prompt
       if (!(await isTmuxInstalled())) {
         console.warn(chalk.yellow("⚠️ tmux not installed - agent split-screen mode unavailable"))
@@ -634,9 +723,8 @@ program
       // Create persistent log file
       const logFile = createPersistentLogFile()
 
-      // Get unique project name to create profile dir
-      const projectName = getProjectName()
-      const profileDir = join(homedir(), ".d3k", "chrome-profiles", projectName)
+      // Get project directory for chrome profile
+      const profileDir = join(getProjectDir(), "chrome-profile")
 
       // Find available Chrome debug port (starting from 9222)
       // Each d3k instance needs its own debug port to avoid conflicts

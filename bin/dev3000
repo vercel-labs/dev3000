@@ -1,0 +1,90 @@
+#!/usr/bin/env node
+/**
+ * Platform wrapper script for d3k
+ *
+ * This script detects the current platform and executes the appropriate
+ * pre-compiled binary from the platform-specific optional dependency.
+ */
+
+import { spawnSync } from "child_process"
+import { existsSync } from "fs"
+import { createRequire } from "module"
+import { arch, platform } from "os"
+import { dirname, join } from "path"
+import { fileURLToPath } from "url"
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+const require = createRequire(import.meta.url)
+
+// Map of platform-arch to package name
+const PLATFORMS = {
+  "darwin-arm64": "dev3000-darwin-arm64",
+  // "darwin-x64": "dev3000-darwin-x64",  // Add later
+  // "linux-x64": "dev3000-linux-x64",    // Add later
+  // "linux-arm64": "dev3000-linux-arm64", // Add later
+}
+
+function findBinary() {
+  const key = `${platform()}-${arch()}`
+  const pkgName = PLATFORMS[key]
+
+  if (!pkgName) {
+    console.error(`\n  Unsupported platform: ${key}`)
+    console.error(`  Currently only macOS ARM64 (Apple Silicon) is supported.`)
+    console.error(`\n  If you're on an Intel Mac, please open an issue at:`)
+    console.error(`  https://github.com/vercel-labs/dev3000/issues\n`)
+    process.exit(1)
+  }
+
+  // Try to find the binary in node_modules
+  // It could be in the local node_modules or a parent directory
+  const possiblePaths = [
+    // Installed as a dependency
+    join(__dirname, "..", "node_modules", pkgName, "bin", "dev3000"),
+    // Installed globally (npm)
+    join(__dirname, "..", "..", pkgName, "bin", "dev3000"),
+    // Installed globally (pnpm)
+    join(__dirname, "..", "node_modules", ".pnpm", `${pkgName}@*`, "node_modules", pkgName, "bin", "dev3000"),
+  ]
+
+  for (const binPath of possiblePaths) {
+    if (existsSync(binPath)) {
+      return binPath
+    }
+  }
+
+  // Try to resolve through require
+  try {
+    const pkgPath = require.resolve(`${pkgName}/package.json`)
+    const pkgDir = join(pkgPath, "..")
+    const binPath = join(pkgDir, "bin", "dev3000")
+    if (existsSync(binPath)) {
+      return binPath
+    }
+  } catch {
+    // Package not found via require.resolve
+  }
+
+  console.error(`\n  Could not find ${pkgName} binary.`)
+  console.error(`  Please ensure the package is properly installed:`)
+  console.error(`    npm install -g dev3000`)
+  console.error(`  or`)
+  console.error(`    pnpm install -g dev3000\n`)
+  process.exit(1)
+}
+
+function main() {
+  const binPath = findBinary()
+
+  // Execute the binary with all arguments passed through
+  const result = spawnSync(binPath, process.argv.slice(2), {
+    stdio: "inherit",
+    shell: false,
+  })
+
+  // Exit with the same code as the binary
+  process.exit(result.status || 0)
+}
+
+main()

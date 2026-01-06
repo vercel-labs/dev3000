@@ -6,6 +6,11 @@ import { memo, useEffect, useRef, useState } from "react"
 import type { Readable } from "stream"
 import { LOG_COLORS } from "./constants/log-colors.js"
 
+export type UpdateInfo =
+  | { type: "available"; latestVersion: string }
+  | { type: "updated"; newVersion: string; autoHide?: boolean }
+  | null
+
 export interface TUIOptions {
   appPort: string
   mcpPort: string
@@ -14,9 +19,7 @@ export interface TUIOptions {
   serversOnly?: boolean
   version: string
   projectName?: string
-  updateAvailable?: {
-    latestVersion: string
-  } | null
+  updateInfo?: UpdateInfo
 }
 
 interface LogEntry {
@@ -151,20 +154,20 @@ const TUIApp = ({
   serversOnly,
   version,
   projectName,
-  updateAvailable,
+  updateInfo: initialUpdateInfo,
   onStatusUpdate,
   onAppPortUpdate,
-  onUpdateAvailableUpdate
+  onUpdateInfoUpdate
 }: TUIOptions & {
   onStatusUpdate: (fn: (status: string | null) => void) => void
   onAppPortUpdate: (fn: (port: string) => void) => void
-  onUpdateAvailableUpdate: (fn: (info: { latestVersion: string } | null) => void) => void
+  onUpdateInfoUpdate: (fn: (info: UpdateInfo) => void) => void
 }) => {
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [scrollOffset, setScrollOffset] = useState(0)
   const [initStatus, setInitStatus] = useState<string | null>(null)
   const [appPort, setAppPort] = useState<string>(initialAppPort)
-  const [updateInfo, setUpdateInfo] = useState<{ latestVersion: string } | null>(updateAvailable || null)
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo>(initialUpdateInfo || null)
   const [portConfirmed, setPortConfirmed] = useState<boolean>(false)
   const logIdCounter = useRef(0)
   const [clearFromLogId, setClearFromLogId] = useState<number>(0) // Track log ID to clear from
@@ -238,12 +241,18 @@ const TUIApp = ({
     })
   }, [onAppPortUpdate])
 
-  // Provide update available function to parent
+  // Provide update info function to parent
   useEffect(() => {
-    onUpdateAvailableUpdate((info: { latestVersion: string } | null) => {
+    onUpdateInfoUpdate((info: UpdateInfo) => {
       setUpdateInfo(info)
+      // Auto-hide "updated" messages after 10 seconds
+      if (info?.type === "updated" && info.autoHide !== false) {
+        setTimeout(() => {
+          setUpdateInfo(null)
+        }, 10000)
+      }
     })
-  }, [onUpdateAvailableUpdate])
+  }, [onUpdateInfoUpdate])
 
   // Calculate available lines for logs dynamically based on terminal height and mode
   const calculateMaxVisibleLogs = () => {
@@ -256,7 +265,7 @@ const TUIApp = ({
     } else {
       // Normal mode calculation - account for all UI elements
       const headerBorderLines = 2 // Top border (with title) + bottom border
-      const headerContentLines = 5 // Logo is 4 lines tall, +1 for padding
+      const headerContentLines = 4 // Logo is 4 lines tall
       const logBoxBorderLines = 2 // Top and bottom border of log box
       const logBoxHeaderLines = 1 // "Logs (X total)" text
       const logBoxFooterLines = 1 // Always reserve space for "(X lines below)" to keep layout stable
@@ -471,7 +480,7 @@ const TUIApp = ({
         <Text color="#A18CE5">{topBorderLine}</Text>
 
         {/* Content with side borders only */}
-        <Box borderStyle="round" borderColor="#A18CE5" borderTop={false} paddingX={1} paddingY={1}>
+        <Box borderStyle="round" borderColor="#A18CE5" borderTop={false} paddingX={1}>
           <Box flexDirection="row" gap={1}>
             {/* ASCII Logo on the left */}
             {/* biome-ignore format: preserve ASCII art alignment */}
@@ -549,7 +558,10 @@ const TUIApp = ({
           </Text>
         </Box>
         <Box gap={2}>
-          {updateInfo && <Text color="yellow">↑ v{updateInfo.latestVersion} available (d3k upgrade)</Text>}
+          {updateInfo?.type === "available" && (
+            <Text color="yellow">↑ v{updateInfo.latestVersion} available (d3k upgrade)</Text>
+          )}
+          {updateInfo?.type === "updated" && <Text color="green">✓ Updated to v{updateInfo.newVersion}</Text>}
           <Text color="#A18CE5">{ctrlCMessage}</Text>
         </Box>
       </Box>
@@ -561,13 +573,13 @@ export async function runTUI(options: TUIOptions): Promise<{
   app: { unmount: () => void }
   updateStatus: (status: string | null) => void
   updateAppPort: (port: string) => void
-  updateUpdateAvailable: (info: { latestVersion: string } | null) => void
+  updateUpdateInfo: (info: UpdateInfo) => void
 }> {
   return new Promise((resolve, reject) => {
     try {
       let statusUpdater: ((status: string | null) => void) | null = null
       let appPortUpdater: ((port: string) => void) | null = null
-      let updateAvailableUpdater: ((info: { latestVersion: string } | null) => void) | null = null
+      let updateInfoUpdater: ((info: UpdateInfo) => void) | null = null
 
       // Wrap stdout.write to add synchronized update escape sequences
       // This tells the terminal to buffer all output until the end marker
@@ -604,8 +616,8 @@ export async function runTUI(options: TUIOptions): Promise<{
           onAppPortUpdate={(fn) => {
             appPortUpdater = fn
           }}
-          onUpdateAvailableUpdate={(fn) => {
-            updateAvailableUpdater = fn
+          onUpdateInfoUpdate={(fn) => {
+            updateInfoUpdater = fn
           }}
         />,
         { exitOnCtrlC: false }
@@ -625,9 +637,9 @@ export async function runTUI(options: TUIOptions): Promise<{
               appPortUpdater(port)
             }
           },
-          updateUpdateAvailable: (info: { latestVersion: string } | null) => {
-            if (updateAvailableUpdater) {
-              updateAvailableUpdater(info)
+          updateUpdateInfo: (info: UpdateInfo) => {
+            if (updateInfoUpdater) {
+              updateInfoUpdater(info)
             }
           }
         })

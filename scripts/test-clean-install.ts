@@ -169,11 +169,35 @@ RUN d3k --version
   }
 
   /**
+   * Check if bun runtime is available (required for d3k)
+   */
+  private isBunAvailable(): boolean {
+    try {
+      execSync("which bun", { stdio: "ignore" })
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  /**
    * Test installation in isolated directory with clean environment using npm
+   * Note: Requires bun runtime to be installed
    */
   async testCleanEnvInstall(tarballPath: string): Promise<TestResult> {
     const startTime = Date.now()
     const testName = "Clean Environment Install (npm)"
+
+    // Check if bun is available (required for d3k)
+    if (!this.isBunAvailable()) {
+      log(`\n📦 Skipping ${testName} - bun runtime required`, YELLOW)
+      return {
+        name: testName,
+        passed: "skipped",
+        error: "bun runtime not installed (required for d3k)",
+        duration: 0
+      }
+    }
 
     try {
       log(`\n📦 Testing ${testName}...`, BLUE)
@@ -184,11 +208,14 @@ RUN d3k --version
 
       mkdirSync(npmPrefix, { recursive: true })
 
-      // Set up clean environment with minimal PATH
+      // Set up clean environment with minimal PATH (include bun)
+      const bunPath = execSync("which bun", { encoding: "utf-8" }).trim()
+      const bunDir = bunPath.substring(0, bunPath.lastIndexOf("/"))
+
       const cleanEnv = {
         ...this.getCleanEnv(),
         npm_config_prefix: npmPrefix,
-        PATH: `${join(npmPrefix, "bin")}:${this.getCleanPath()}`
+        PATH: `${join(npmPrefix, "bin")}:${bunDir}:${this.getCleanPath()}`
       }
 
       // Install dev3000 globally using npm
@@ -246,42 +273,56 @@ RUN d3k --version
 
   /**
    * Test with minimal PATH using npm
+   * Note: Requires bun runtime to be installed
    */
   async testMinimalPath(tarballPath: string): Promise<TestResult> {
     const startTime = Date.now()
     const testName = "Minimal PATH Test (npm)"
 
+    // Check if bun is available (required for d3k)
+    if (!this.isBunAvailable()) {
+      log(`\n🛤️ Skipping ${testName} - bun runtime required`, YELLOW)
+      return {
+        name: testName,
+        passed: "skipped",
+        error: "bun runtime not installed (required for d3k)",
+        duration: 0
+      }
+    }
+
     try {
       log(`\n🛤️ Testing ${testName}...`, BLUE)
 
-      // Get Node.js binary location
+      // Get Node.js and bun binary locations
       const nodePath = process.execPath
       const nodeDir = nodePath.substring(0, nodePath.lastIndexOf("/"))
+      const bunPath = execSync("which bun", { encoding: "utf-8" }).trim()
+      const bunDir = bunPath.substring(0, bunPath.lastIndexOf("/"))
 
-      // Create a test script that runs with minimal PATH
+      // Create a test script that runs with minimal PATH (including bun)
       const testScript = `
         set -e
-        # Include Node.js in minimal PATH
-        export PATH="${nodeDir}:/usr/local/bin:/usr/bin:/bin"
-        
+        # Include Node.js and bun in minimal PATH
+        export PATH="${nodeDir}:${bunDir}:/usr/local/bin:/usr/bin:/bin"
+
         # Create temporary directory for npm global installs
         TEMP_DIR=$(mktemp -d)
         export npm_config_prefix="$TEMP_DIR/npm-global"
         mkdir -p "$npm_config_prefix"
-        
+
         # Add npm global bin to PATH
         export PATH="$npm_config_prefix/bin:$PATH"
-        
+
         # Install and test dev3000
         echo "Installing dev3000 with npm..."
         npm install -g ${tarballPath}
-        
+
         # Verify d3k is available
         which d3k || (echo "d3k not found in PATH" && exit 1)
-        
+
         # Test it runs
         d3k --version
-        
+
         # Cleanup
         rm -rf "$TEMP_DIR"
       `

@@ -1,5 +1,6 @@
 import { createHash } from "crypto"
 import { existsSync, readFileSync } from "fs"
+import { homedir } from "os"
 import { basename, dirname, join } from "path"
 
 /**
@@ -116,4 +117,14 @@ export function getProjectDisplayName(cwd: string = process.cwd()): string {
   const fullName = getProjectName(cwd)
   // Remove hash suffix if present
   return fullName.replace(/-[a-f0-9]{6}$/, "")
+}
+
+/**
+ * Get the d3k data directory for a project
+ * All project-specific files are stored here: logs, chrome profile, skills, session info
+ * Structure: ~/.d3k/{projectName}/
+ */
+export function getProjectDir(cwd: string = process.cwd()): string {
+  const projectName = getProjectName(cwd)
+  return join(homedir(), ".d3k", projectName)
 }

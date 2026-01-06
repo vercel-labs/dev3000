@@ -34,7 +34,7 @@ export const KNOWN_AGENTS: KnownAgent[] = [
   { name: "opencode", binary: "opencode", displayName: "opencode" },
   { name: "gemini", binary: "gemini", displayName: "gemini" },
   { name: "cline", binary: "cline", displayName: "cline" },
-  { name: "cursor", binary: "cursor", displayName: "cursor" }
+  { name: "cursor-agent", binary: "cursor-agent", displayName: "cursor-agent" }
 ]
 
 export function checkBinaryExists(binary: string): boolean {

@@ -328,8 +328,8 @@ export async function cloudFix(options: CloudFixOptions = {}): Promise<void> {
     // Write session info file before starting MCP server
     console.log("📝 Writing session info...")
     const sessionScript = `
-mkdir -p ~/.d3k
-cat > ~/.d3k/${project.name}.json << 'EOF'
+mkdir -p ~/.d3k/${project.name}
+cat > ~/.d3k/${project.name}/session.json << 'EOF'
 {
   "projectName": "${project.name}",
   "logFilePath": "/tmp/dev3000.log",
@@ -351,7 +351,7 @@ EOF
       args: ["-c", sessionScript]
     })
 
-    console.log(`  ✅ Session info written to ~/.d3k/${project.name}.json`)
+    console.log(`  ✅ Session info written to ~/.d3k/${project.name}/session.json`)
     console.log()
 
     // Start MCP server in detached mode on port 3684
@@ -483,9 +483,9 @@ import os from 'os';
   console.log('CDP URL:', cdpUrl);
 
   // Write session info for MCP server
-  const sessionDir = path.join(os.homedir(), '.d3k');
-  if (!fs.existsSync(sessionDir)) {
-    fs.mkdirSync(sessionDir, { recursive: true });
+  const projectDir = path.join(os.homedir(), '.d3k', '${project.name}');
+  if (!fs.existsSync(projectDir)) {
+    fs.mkdirSync(projectDir, { recursive: true });
   }
 
   const sessionInfo = {
@@ -502,7 +502,7 @@ import os from 'os';
     framework: 'nextjs'
   };
 
-  const sessionFile = path.join(sessionDir, '${project.name}.json');
+  const sessionFile = path.join(projectDir, 'session.json');
   fs.writeFileSync(sessionFile, JSON.stringify(sessionInfo, null, 2));
   console.log('Session info written to', sessionFile);
   console.log('Session file contents:', JSON.stringify(sessionInfo, null, 2));
@@ -585,7 +585,7 @@ import os from 'os';
     // Check session file
     const sessionCheckResult = await sandbox.runCommand({
       cmd: "sh",
-      args: ["-c", `cat ~/.d3k/${project.name}.json 2>&1 || echo 'Session file not found'`]
+      args: ["-c", `cat ~/.d3k/${project.name}/session.json 2>&1 || echo 'Session file not found'`]
     })
     const sessionOut = await sessionCheckResult.stdout()
     console.log("  Session file contents:")

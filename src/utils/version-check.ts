@@ -4,6 +4,9 @@ import { homedir } from "os"
 import { dirname, join } from "path"
 import { fileURLToPath } from "url"
 
+// Declare the compile-time injected version (set by bun build --define)
+declare const __D3K_VERSION__: string | undefined
+
 interface VersionInfo {
   currentVersion: string
   latestVersion: string | null
@@ -68,6 +71,11 @@ function writeCachedVersion(version: string): void {
  * Get the current installed version of dev3000
  */
 export function getCurrentVersion(): string {
+  // Check for compile-time injected version first (for standalone binaries)
+  if (typeof __D3K_VERSION__ !== "undefined") {
+    return __D3K_VERSION__
+  }
+
   try {
     const currentFile = fileURLToPath(import.meta.url)
     const packageRoot = dirname(dirname(dirname(currentFile))) // Go up from dist/utils to package root
@@ -247,16 +255,21 @@ export async function checkForUpdates(): Promise<VersionInfo> {
   const latestVersion = await fetchLatestVersion()
   const packageManager = detectPackageManager()
 
+  // Don't auto-update if on a canary/prerelease version
+  // Canary users should upgrade manually
+  const isCanary = currentVersion.includes("-")
+  const updateAvailable = !isCanary && latestVersion !== null && isNewerVersion(currentVersion, latestVersion)
+
   return {
     currentVersion,
     latestVersion,
-    updateAvailable: latestVersion !== null && isNewerVersion(currentVersion, latestVersion),
+    updateAvailable,
     packageManager
   }
 }
 
 /**
- * Perform the upgrade
+ * Perform the upgrade (blocking, with stdio output)
  */
 export function performUpgrade(): { success: boolean; error?: string } {
   const packageManager = detectPackageManager()
@@ -278,4 +291,58 @@ export function performUpgrade(): { success: boolean; error?: string } {
       error: error instanceof Error ? error.message : "Unknown error during upgrade"
     }
   }
+}
+
+/**
+ * Perform the upgrade asynchronously (non-blocking, for background updates)
+ * Returns the new version on success, or null on failure
+ */
+export async function performUpgradeAsync(): Promise<{ success: boolean; newVersion?: string; error?: string }> {
+  const packageManager = detectPackageManager()
+  const command = getUpgradeCommand(packageManager)
+
+  return new Promise((resolve) => {
+    try {
+      // Run upgrade silently in background
+      execSync(command, {
+        stdio: "ignore",
+        timeout: 120000 // 2 minute timeout
+      })
+
+      // After upgrade, fetch the new version by checking what's installed
+      // Clear the module cache and re-read package.json isn't reliable after global install
+      // Instead, use npm/pnpm to query the installed version
+      try {
+        const versionCommand =
+          packageManager === "pnpm"
+            ? "pnpm list -g dev3000 --json"
+            : packageManager === "yarn"
+              ? "yarn global list --json"
+              : "npm list -g dev3000 --json"
+
+        const result = execSync(versionCommand, { encoding: "utf8", timeout: 5000 })
+        const parsed = JSON.parse(result)
+
+        // Extract version based on package manager format
+        let newVersion: string | undefined
+        if (packageManager === "pnpm") {
+          // pnpm format: array of packages
+          newVersion = parsed?.[0]?.dependencies?.dev3000?.version
+        } else if (packageManager === "npm") {
+          // npm format: { dependencies: { dev3000: { version: "x.x.x" } } }
+          newVersion = parsed?.dependencies?.dev3000?.version
+        }
+
+        resolve({ success: true, newVersion })
+      } catch {
+        // Couldn't get version, but upgrade succeeded
+        resolve({ success: true })
+      }
+    } catch (error) {
+      resolve({
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error during upgrade"
+      })
+    }
+  })
 }

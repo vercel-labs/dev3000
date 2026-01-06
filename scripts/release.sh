@@ -70,7 +70,20 @@ node -e "
     const fs = require('fs');
     const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
     pkg.version = '$NEXT_VERSION';
+    // Also update optionalDependencies to match
+    pkg.optionalDependencies = pkg.optionalDependencies || {};
+    pkg.optionalDependencies['dev3000-darwin-arm64'] = '$NEXT_VERSION';
     fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+"
+
+# Update platform package version
+echo "⬆️ Updating platform package version to $NEXT_VERSION..."
+node -e "
+    const fs = require('fs');
+    const pkgPath = 'packages/dev3000-darwin-arm64/package.json';
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+    pkg.version = '$NEXT_VERSION';
+    fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
 "
 
 # Update changelog
@@ -83,7 +96,7 @@ npx tsx scripts/generate-changelog-md.ts
 
 # Commit version change and changelog
 echo "📝 Committing version change and changelog..."
-git add package.json mcp-server/package.json www/package.json www/lib/changelog.ts CHANGELOG.md
+git add package.json packages/dev3000-darwin-arm64/package.json mcp-server/package.json www/package.json www/lib/changelog.ts CHANGELOG.md
 git commit -m "Release v$NEXT_VERSION
 
 🤖 Generated with [Claude Code](https://claude.ai/code)
