@@ -539,16 +539,59 @@ server.listen(${testPort}, () => {
     }
   }
 
+  /**
+   * Check if the platform package is available on npm
+   */
+  private isPlatformPackagePublished(): boolean {
+    try {
+      execSync("npm view dev3000-darwin-arm64 version", { stdio: "pipe" })
+      return true
+    } catch {
+      return false
+    }
+  }
+
   async runAllTests(tarballPath: string) {
     log("🧹 Starting Clean Environment Tests", GREEN)
     log(`📦 Testing with: ${tarballPath}`, YELLOW)
 
-    // Run tests
-    this.results.push(await this.testDockerInstall(tarballPath))
-    this.results.push(await this.testCleanEnvInstall(tarballPath))
-    this.results.push(await this.testMinimalPath(tarballPath))
-    this.results.push(await this.testPnpmInstall(tarballPath))
-    this.results.push(await this.testServerStartup(tarballPath))
+    // Check if platform package is available on npm
+    // If not, skip install tests (expected for first release with compiled binary architecture)
+    const platformPackageAvailable = this.isPlatformPackagePublished()
+    if (!platformPackageAvailable) {
+      log("⚠️  Platform package (dev3000-darwin-arm64) not yet published to npm", YELLOW)
+      log("   Skipping global install tests - this is expected for first release with compiled binaries", YELLOW)
+      log("   Only running MCP server startup test\n", YELLOW)
+
+      // Skip install tests, only run Docker (which has its own skip logic) and MCP server test
+      this.results.push(await this.testDockerInstall(tarballPath))
+      this.results.push({
+        name: "Clean Environment Install (npm)",
+        passed: "skipped",
+        error: "Platform package not yet published to npm",
+        duration: 0
+      })
+      this.results.push({
+        name: "Minimal PATH Test (npm)",
+        passed: "skipped",
+        error: "Platform package not yet published to npm",
+        duration: 0
+      })
+      this.results.push({
+        name: "pnpm Global Install Test",
+        passed: "skipped",
+        error: "Platform package not yet published to npm",
+        duration: 0
+      })
+      this.results.push(await this.testServerStartup(tarballPath))
+    } else {
+      // Run all tests
+      this.results.push(await this.testDockerInstall(tarballPath))
+      this.results.push(await this.testCleanEnvInstall(tarballPath))
+      this.results.push(await this.testMinimalPath(tarballPath))
+      this.results.push(await this.testPnpmInstall(tarballPath))
+      this.results.push(await this.testServerStartup(tarballPath))
+    }
 
     // Summary
     log("\n📊 Test Results Summary", GREEN)
