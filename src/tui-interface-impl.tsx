@@ -169,7 +169,9 @@ const TUIApp = ({
   const logIdCounter = useRef(0)
   const [clearFromLogId, setClearFromLogId] = useState<number>(0) // Track log ID to clear from
   const { stdout } = useStdout()
-  const ctrlCMessageDefault = "^L clear ^C quit"
+  // Show pane switching hint if running inside tmux
+  const isInTmux = !!process.env.TMUX
+  const ctrlCMessageDefault = isInTmux ? "^B←→ panes  ^L clear  ^C quit" : "^L clear ^C quit"
   const [ctrlCMessage, setCtrlCMessage] = useState(ctrlCMessageDefault)
   const maxScrollOffsetRef = useRef(0)
 
@@ -226,7 +228,7 @@ const TUIApp = ({
         setInitStatus(status)
       }
     })
-  }, [onStatusUpdate])
+  }, [onStatusUpdate, ctrlCMessageDefault])
 
   // Provide app port update function to parent
   useEffect(() => {

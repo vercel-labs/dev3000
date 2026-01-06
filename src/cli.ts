@@ -1,4 +1,4 @@
-#!/usr/bin/env -S node --no-warnings
+#!/usr/bin/env bun
 
 import chalk from "chalk"
 import { Command } from "commander"
@@ -48,12 +48,8 @@ async function launchWithTmux(agentCommand: string): Promise<void> {
   // Get the d3k command path (same as what user ran)
   const d3kCommand = process.argv[1].endsWith("d3k") ? "d3k" : "dev3000"
 
-  console.log(chalk.hex("#A18CE5")(`\n🚀 Launching split-screen mode with tmux...\n`))
-  console.log(chalk.gray(`   Left pane:  ${agentCommand}`))
-  console.log(chalk.gray(`   Right pane: ${d3kCommand}\n`))
-  console.log(chalk.cyan(`   Tmux controls:`))
-  console.log(chalk.gray(`   • Ctrl+B then ←/→ to switch panes`))
-  console.log(chalk.gray(`   • Ctrl+B then d to detach, tmux attach -t ${sessionName} to reattach\n`))
+  // Clear screen before launching tmux (prevents leftover text after exit)
+  process.stdout.write("\x1b[2J\x1b[0f")
 
   // Generate tmux commands using the helper
   const commands = generateTmuxCommands({
@@ -85,6 +81,8 @@ async function launchWithTmux(agentCommand: string): Promise<void> {
       } catch {
         // Session might already be killed
       }
+      // Clear screen after tmux exits for clean terminal
+      process.stdout.write("\x1b[2J\x1b[0f")
       process.exit(code || 0)
     })
   } catch (error) {

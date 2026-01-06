@@ -4,6 +4,18 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.131] - 2026-01-06
+
+**Feature Release**
+
+- Switch CLI runtime from Node.js to Bun for better performance
+- Add purple active pane border in tmux split-screen mode to show focus
+- Add `^B←→ panes` hint to TUI footer when running in tmux
+- Fix Next.js server not being killed on exit (use PID-based cleanup)
+- Fix MCP tools/list crash caused by JSON Schema vs Zod schema mismatch
+- Improve error messages with recent log entries for faster debugging
+- Clean terminal output before/after tmux sessions
+
 ## [0.0.130] - 2026-01-05
 
 **Feature Release**

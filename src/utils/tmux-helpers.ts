@@ -29,6 +29,10 @@ export function generateTmuxCommands(config: TmuxSessionConfig): string[] {
     // Hide the tmux status bar for a cleaner look
     `tmux set-option -t "${sessionName}" status off`,
 
+    // Make inactive pane borders subtle gray, active pane border purple to show focus
+    `tmux set-option -t "${sessionName}" pane-border-style "fg=#333333"`,
+    `tmux set-option -t "${sessionName}" pane-active-border-style "fg=#A18CE5"`,
+
     // Split horizontally and run agent in the new pane (left side)
     // -b puts the new pane before (left of) the current one
     `tmux split-window -h -b -p ${paneWidthPercent} -t "${sessionName}" "${agentWithDelay}"`,

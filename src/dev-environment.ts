@@ -655,7 +655,8 @@ function writeSessionInfo(
   cdpUrl?: string | null,
   chromePids?: number[],
   serverCommand?: string,
-  framework?: "nextjs" | "svelte" | "other"
+  framework?: "nextjs" | "svelte" | "other",
+  serverPid?: number
 ): void {
   const sessionDir = join(homedir(), ".d3k")
 
@@ -677,7 +678,8 @@ function writeSessionInfo(
       cwd: process.cwd(),
       chromePids: chromePids || [],
       serverCommand: serverCommand || null,
-      framework: framework || null
+      framework: framework || null,
+      serverPid: serverPid || null
     }
 
     // Write session file - use project name as filename for easy lookup
@@ -703,6 +705,22 @@ function getSessionChromePids(projectName: string): number[] {
     // Non-fatal - return empty array
   }
   return []
+}
+
+// Get server PID for this instance
+function getSessionServerPid(projectName: string): number | null {
+  const sessionDir = join(homedir(), ".d3k")
+  const sessionFile = join(sessionDir, `${projectName}.json`)
+
+  try {
+    if (existsSync(sessionFile)) {
+      const sessionInfo = JSON.parse(readFileSync(sessionFile, "utf8"))
+      return sessionInfo.serverPid || null
+    }
+  } catch (_error) {
+    // Non-fatal - return null
+  }
+  return null
 }
 
 function createLogFileInDir(baseDir: string, projectName: string): string {
@@ -1204,7 +1222,8 @@ export class DevEnvironment {
         cdpUrl,
         chromePids,
         this.options.serverCommand,
-        this.options.framework
+        this.options.framework,
+        this.serverProcess?.pid
       )
 
       // Clear status - ready!
@@ -1288,7 +1307,8 @@ export class DevEnvironment {
         cdpUrl,
         chromePids,
         this.options.serverCommand,
-        this.options.framework
+        this.options.framework,
+        this.serverProcess?.pid
       )
 
       // Complete startup with success message only in non-TUI mode
@@ -1518,7 +1538,9 @@ export class DevEnvironment {
           this.options.mcpPort,
           cdpUrl || undefined,
           chromePids,
-          this.options.serverCommand
+          this.options.serverCommand,
+          this.options.framework,
+          this.serverProcess?.pid
         )
         this.debugLog(`Updated session info with new port: ${this.options.port}`)
       }
@@ -1613,6 +1635,34 @@ export class DevEnvironment {
     } catch (_error) {
       // Fallback if we can't read the log file
       console.log(chalk.yellow(`💡 Check logs for details: ${this.options.logFile}`))
+    }
+  }
+
+  private checkForCommonIssues() {
+    try {
+      if (!existsSync(this.options.logFile)) return
+
+      const logContent = readFileSync(this.options.logFile, "utf8")
+
+      // Check for Next.js lock file issue (this fix also kills the process holding the port)
+      if (logContent.includes("Unable to acquire lock") && logContent.includes(".next/dev/lock")) {
+        console.log(chalk.yellow("\n💡 Detected Next.js lock file issue!"))
+        console.log(chalk.white("   Another Next.js dev server may be running or crashed without cleanup."))
+        console.log(chalk.white("   To fix, run:"))
+        console.log(chalk.cyan("   rm -f .next/dev/lock && pkill -f 'next dev'"))
+        return // pkill also fixes the port-in-use issue, so skip that check
+      }
+
+      // Check for port in use (only if not a Next.js lock issue)
+      const portInUseMatch = logContent.match(/Port (\d+) is in use by process (\d+)/)
+      if (portInUseMatch) {
+        const [, port, pid] = portInUseMatch
+        console.log(chalk.yellow(`\n💡 Port ${port} was already in use by process ${pid}`))
+        console.log(chalk.white("   To kill that process, run:"))
+        console.log(chalk.cyan(`   kill -9 ${pid}`))
+      }
+    } catch {
+      // Ignore errors reading log file
     }
   }
 
@@ -2243,7 +2293,9 @@ export class DevEnvironment {
         this.options.mcpPort,
         cdpUrl || undefined,
         chromePids,
-        this.options.serverCommand
+        this.options.serverCommand,
+        this.options.framework,
+        this.serverProcess?.pid
       )
       this.debugLog(`Updated session info with CDP URL: ${cdpUrl}, Chrome PIDs: [${chromePids.join(", ")}]`)
       this.logger.log("browser", `[CDP] Session info written with cdpUrl: ${cdpUrl ? "available" : "null"}`)
@@ -2271,9 +2323,12 @@ export class DevEnvironment {
       this.screencastManager = null
     }
 
+    // Read server PID from session file BEFORE deleting it (needed for cleanup)
+    const projectName = getProjectName()
+    const savedServerPid = getSessionServerPid(projectName)
+
     // Clean up session file
     try {
-      const projectName = getProjectName()
       const sessionFile = join(homedir(), ".d3k", `${projectName}.json`)
       if (existsSync(sessionFile)) {
         unlinkSync(sessionFile)
@@ -2324,6 +2379,23 @@ export class DevEnvironment {
     console.log(chalk.cyan("🔄 Killing app server..."))
     await killPortProcess(this.options.port, "your app server")
 
+    // Kill server process and its children using the saved PID (from before session file was deleted)
+    if (!isInSandbox() && savedServerPid) {
+      try {
+        const { spawnSync } = await import("child_process")
+        // Kill all child processes of the server
+        spawnSync("pkill", ["-P", savedServerPid.toString()], { stdio: "ignore" })
+        // Kill the server process itself
+        try {
+          process.kill(savedServerPid, "SIGKILL")
+        } catch {
+          // Process may already be dead
+        }
+      } catch {
+        // Ignore pkill errors
+      }
+    }
+
     // Shutdown CDP monitor if it was started
     if (this.cdpMonitor) {
       try {
@@ -2336,12 +2408,13 @@ export class DevEnvironment {
     }
 
     console.log(chalk.red(`❌ ${this.options.commandName} exited due to server failure`))
-    const projectName = getProjectName()
-    console.log(
-      chalk.yellow(
-        `Check the logs at ~/.d3k/logs/${projectName}-d3k.log for errors. Feeling like helping? Run dev3000 --debug and file an issue at https://github.com/vercel-labs/dev3000/issues`
-      )
-    )
+
+    // Show recent log entries to help diagnose the issue
+    this.showRecentLogs()
+
+    // Check for common issues and provide specific guidance
+    this.checkForCommonIssues()
+
     process.exit(1)
   }
 
@@ -2420,6 +2493,21 @@ export class DevEnvironment {
           process.exit(1)
         })
     })
+
+    // Handle SIGHUP (sent by tmux when session/pane is killed)
+    process.on("SIGHUP", () => {
+      this.debugLog("SIGHUP received (tmux session closing)")
+      if (this.isShuttingDown) return
+      this.isShuttingDown = true
+
+      this.handleShutdown()
+        .then(() => {
+          process.exit(0)
+        })
+        .catch(() => {
+          process.exit(1)
+        })
+    })
   }
 
   private async handleShutdown() {
@@ -2429,9 +2517,12 @@ export class DevEnvironment {
     // Release the lock file
     this.releaseLock()
 
+    // Read server PID from session file BEFORE deleting it (needed for cleanup)
+    const projectName = getProjectName()
+    const savedServerPid = getSessionServerPid(projectName)
+
     // Clean up session file
     try {
-      const projectName = getProjectName()
       const sessionFile = join(homedir(), ".d3k", `${projectName}.json`)
       if (existsSync(sessionFile)) {
         unlinkSync(sessionFile)
@@ -2590,9 +2681,24 @@ export class DevEnvironment {
 
     // Double-check: try to kill any remaining processes on the app port
     try {
-      const { spawn } = await import("child_process")
-      spawn("sh", ["-c", `pkill -f ":${this.options.port}"`], { stdio: "ignore" })
+      const { spawnSync } = await import("child_process")
+      // Kill by port
+      spawnSync("sh", ["-c", `pkill -f ":${this.options.port}"`], { stdio: "ignore" })
       this.debugLog(`Sent pkill signal for port ${this.options.port}`)
+
+      // Kill server process and its children using the saved PID (from before session file was deleted)
+      if (savedServerPid) {
+        // Kill all child processes of the server
+        spawnSync("pkill", ["-P", savedServerPid.toString()], { stdio: "ignore" })
+        this.debugLog(`Killed children of server PID ${savedServerPid}`)
+        // Kill the server process itself
+        try {
+          process.kill(savedServerPid, "SIGKILL")
+          this.debugLog(`Killed server PID ${savedServerPid}`)
+        } catch {
+          // Process may already be dead
+        }
+      }
     } catch {
       // Ignore pkill errors
     }
