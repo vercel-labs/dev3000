@@ -10,6 +10,15 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.133",
+    date: "2026-01-06",
+    type: "minor",
+    highlights: [
+      "Add skill installer for Vercel DX skills"
+    ]
+  },
+
+  {
     version: "0.0.132",
     date: "2026-01-06",
     type: "minor",

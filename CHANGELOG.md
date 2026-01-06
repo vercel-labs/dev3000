@@ -4,6 +4,12 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.133] - 2026-01-06
+
+**Feature Release**
+
+- Add skill installer for Vercel DX skills
+
 ## [0.0.132] - 2026-01-06
 
 **Feature Release**
