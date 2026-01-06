@@ -10,6 +10,18 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.131",
+    date: "2026-01-06",
+    type: "minor",
+    highlights: [
+      "Switch CLI runtime from Node.js to Bun for better performance",
+      "Add purple active pane border in tmux split-screen mode to show focus",
+      "Fix Next.js server not being killed on exit (use PID-based cleanup)",
+      "Fix MCP tools/list crash caused by JSON Schema vs Zod schema mismatch"
+    ]
+  },
+
+  {
     version: "0.0.130",
     date: "2026-01-05",
     type: "minor",
