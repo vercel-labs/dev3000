@@ -1,9 +1,13 @@
 {
   "name": "dev3000-darwin-arm64",
-  "version": "0.0.132-canary",
+  "version": "0.0.132",
   "description": "d3k binary for macOS ARM64 (Apple Silicon)",
-  "os": ["darwin"],
-  "cpu": ["arm64"],
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "arm64"
+  ],
   "bin": {
     "dev3000": "./bin/dev3000"
   },

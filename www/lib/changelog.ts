@@ -10,6 +10,19 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.132",
+    date: "2026-01-06",
+    type: "minor",
+    highlights: [
+      "Update pnpm-lock.yaml",
+      "Skip clean install tests when platform package not on npm",
+      "Fix release tests to skip npm install when platform package not on npm",
+      "Add Bun compilation, graceful shutdown, and OpenCode MCP support",
+      "Add agent selection prompt as default startup behavior"
+    ]
+  },
+
+  {
     version: "0.0.131",
     date: "2026-01-06",
     type: "minor",
