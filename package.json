@@ -93,7 +93,7 @@
     "vitest": "^3.2.4"
   },
   "optionalDependencies": {
-    "dev3000-darwin-arm64": "0.0.133"
+    "@d3k/darwin-arm64": "0.0.133"
   },
   "pnpm": {
     "peerDependencyRules": {

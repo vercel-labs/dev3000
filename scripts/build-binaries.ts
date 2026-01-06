@@ -25,8 +25,8 @@ function getPackageVersion(): string {
 
 // Target platforms (darwin-arm64 only for now)
 const TARGETS = [
-  { os: "darwin", arch: "arm64", name: "dev3000-darwin-arm64" }
-  // { os: "darwin", arch: "x64", name: "dev3000-darwin-x64" },  // Add later
+  { os: "darwin", arch: "arm64", name: "d3k-darwin-arm64" }
+  // { os: "darwin", arch: "x64", name: "d3k-darwin-x64" },  // Add later
 ] as const
 
 async function cleanDistBin() {
@@ -142,7 +142,7 @@ async function main() {
 
     console.log("\n✅ Build complete!")
     console.log(`\nTo test the binary directly:`)
-    console.log(`  ./dist-bin/dev3000-darwin-arm64/bin/dev3000 --version`)
+    console.log(`  ./dist-bin/d3k-darwin-arm64/bin/dev3000 --version`)
   } catch (error) {
     console.error("\n❌ Build failed:", error)
     process.exit(1)

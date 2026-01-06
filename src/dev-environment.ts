@@ -935,7 +935,8 @@ export class DevEnvironment {
 
     // Detect if running from compiled binary
     const execPath = process.execPath
-    const isCompiledBinary = execPath.includes("dev3000-darwin-") || execPath.endsWith("/dev3000")
+    const isCompiledBinary =
+      execPath.includes("@d3k/darwin-") || execPath.includes("d3k-darwin-") || execPath.endsWith("/dev3000")
 
     let packageRoot: string
     if (isCompiledBinary) {
@@ -1848,11 +1849,12 @@ export class DevEnvironment {
     // Check if we're running from a compiled binary
     // Compiled binaries have process.execPath pointing to the binary itself
     const execPath = process.execPath
-    const isCompiledBinary = execPath.includes("dev3000-darwin-") || execPath.endsWith("/dev3000")
+    const isCompiledBinary =
+      execPath.includes("@d3k/darwin-") || execPath.includes("d3k-darwin-") || execPath.endsWith("/dev3000")
 
     if (isCompiledBinary) {
       // For compiled binaries, mcp-server is a sibling to the bin directory
-      // Structure: packages/dev3000-darwin-arm64/bin/dev3000 -> packages/dev3000-darwin-arm64/mcp-server
+      // Structure: packages/d3k-darwin-arm64/bin/dev3000 -> packages/d3k-darwin-arm64/mcp-server
       const binDir = dirname(execPath)
       const packageDir = dirname(binDir)
       mcpServerPath = join(packageDir, "mcp-server")

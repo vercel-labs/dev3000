@@ -544,7 +544,7 @@ server.listen(${testPort}, () => {
    */
   private isPlatformPackagePublished(): boolean {
     try {
-      execSync("npm view dev3000-darwin-arm64 version", { stdio: "pipe" })
+      execSync("npm view @d3k/darwin-arm64 version", { stdio: "pipe" })
       return true
     } catch {
       return false
@@ -559,7 +559,7 @@ server.listen(${testPort}, () => {
     // If not, skip install tests (expected for first release with compiled binary architecture)
     const platformPackageAvailable = this.isPlatformPackagePublished()
     if (!platformPackageAvailable) {
-      log("⚠️  Platform package (dev3000-darwin-arm64) not yet published to npm", YELLOW)
+      log("⚠️  Platform package (@d3k/darwin-arm64) not yet published to npm", YELLOW)
       log("   Skipping global install tests - this is expected for first release with compiled binaries", YELLOW)
       log("   Only running MCP server startup test\n", YELLOW)
 

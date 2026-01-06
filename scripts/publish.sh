@@ -45,7 +45,7 @@ if ! git tag -l | grep -q "^$TAG_NAME$"; then
 fi
 
 # Verify platform package binaries exist (built by release.sh)
-PLATFORM_PKG_DIR="$ROOT_DIR/packages/dev3000-darwin-arm64"
+PLATFORM_PKG_DIR="$ROOT_DIR/packages/d3k-darwin-arm64"
 if [ ! -d "$PLATFORM_PKG_DIR/bin" ] || [ ! -d "$PLATFORM_PKG_DIR/mcp-server" ]; then
   echo "❌ Platform package binaries not found at $PLATFORM_PKG_DIR"
   echo "💡 Run ./scripts/release.sh first to build binaries."
@@ -57,7 +57,7 @@ echo "✅ Found platform package binaries"
 # Confirm publication
 echo ""
 echo "🚀 Ready to publish:"
-echo "   1. dev3000-darwin-arm64@$CURRENT_VERSION (platform binary)"
+echo "   1. @d3k/darwin-arm64@$CURRENT_VERSION (platform binary)"
 echo "   2. dev3000@$CURRENT_VERSION (main package)"
 read -p "Continue? (y/N): " -n 1 -r
 echo
@@ -67,12 +67,12 @@ if [[ ! $REPLY =~ ^[Yy]$ ]]; then
 fi
 
 # Publish platform package first
-echo "📦 Publishing dev3000-darwin-arm64@$CURRENT_VERSION..."
+echo "📦 Publishing @d3k/darwin-arm64@$CURRENT_VERSION..."
 cd "$PLATFORM_PKG_DIR"
 npm publish --access public
 cd "$ROOT_DIR"
 
-echo "✅ Published dev3000-darwin-arm64@$CURRENT_VERSION"
+echo "✅ Published @d3k/darwin-arm64@$CURRENT_VERSION"
 
 # Publish main package
 echo "📦 Publishing dev3000@$CURRENT_VERSION..."
@@ -104,7 +104,7 @@ node -e "
   const pkgPath = '$ROOT_DIR/package.json';
   const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
   pkg.optionalDependencies = pkg.optionalDependencies || {};
-  pkg.optionalDependencies['dev3000-darwin-arm64'] = '$NEXT_CANARY_VERSION';
+  pkg.optionalDependencies['@d3k/darwin-arm64'] = '$NEXT_CANARY_VERSION';
   fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
 "
 
@@ -113,7 +113,7 @@ echo "🧪 Testing canary version..."
 pnpm test
 
 # Commit and push canary version
-git add package.json packages/dev3000-darwin-arm64/package.json
+git add package.json packages/d3k-darwin-arm64/package.json
 git commit -m "Bump to v$NEXT_CANARY_VERSION for local development
 
 🤖 Generated with [Claude Code](https://claude.ai/code)
@@ -122,5 +122,5 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 git push origin main
 
 echo "🎉 Publication completed successfully!"
-echo "📦 Published: dev3000@$CURRENT_VERSION + dev3000-darwin-arm64@$CURRENT_VERSION"
+echo "📦 Published: dev3000@$CURRENT_VERSION + @d3k/darwin-arm64@$CURRENT_VERSION"
 echo "🧪 Local development now on: v$NEXT_CANARY_VERSION"

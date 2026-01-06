@@ -64,7 +64,7 @@ if ! command -v bun &> /dev/null; then
     echo -e "${YELLOW}   d3k requires bun runtime. Install with: curl -fsSL https://bun.sh/install | bash${NC}"
 else
     # Check if platform package exists on npm (needed for new compiled binary architecture)
-    if ! npm view dev3000-darwin-arm64 version &> /dev/null; then
+    if ! npm view @d3k/darwin-arm64 version &> /dev/null; then
         echo -e "${YELLOW}⚠️  Skipping npm install test - platform package not yet published to npm${NC}"
         echo -e "${YELLOW}   This is expected for the first release with compiled binary architecture${NC}"
         echo -e "${YELLOW}   Using canary-installed version for subsequent tests${NC}"

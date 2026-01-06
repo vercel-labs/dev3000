@@ -15,8 +15,8 @@ bun run scripts/build-binaries.ts
 
 # Copy built binaries to platform package
 echo "📁 Copying binaries to platform package..."
-PLATFORM_PKG_DIR="$ROOT_DIR/packages/dev3000-darwin-arm64"
-DIST_BIN_DIR="$ROOT_DIR/dist-bin/dev3000-darwin-arm64"
+PLATFORM_PKG_DIR="$ROOT_DIR/packages/d3k-darwin-arm64"
+DIST_BIN_DIR="$ROOT_DIR/dist-bin/d3k-darwin-arm64"
 
 rm -rf "$PLATFORM_PKG_DIR/bin" "$PLATFORM_PKG_DIR/mcp-server" "$PLATFORM_PKG_DIR/skills" "$PLATFORM_PKG_DIR/src"
 cp -r "$DIST_BIN_DIR/bin" "$PLATFORM_PKG_DIR/"
@@ -43,7 +43,7 @@ MAIN_PACKAGE_FILE=$(pnpm pack 2>&1 | tail -n 1)
 echo "✅ Created: $MAIN_PACKAGE_FILE"
 
 echo "♻️ Removing previous global installs (if any)..."
-pnpm remove -g dev3000 dev3000-darwin-arm64 >/dev/null 2>&1 || true
+pnpm remove -g dev3000 @d3k/darwin-arm64 >/dev/null 2>&1 || true
 
 # Install platform package first, then main package
 echo "📥 Installing platform package globally..."
@@ -51,7 +51,7 @@ pnpm add -g "file:$PLATFORM_PKG_DIR/$PLATFORM_PACKAGE_FILE"
 
 # pnpm blocks postinstall scripts by default, so fix permissions manually
 echo "🔧 Fixing executable permissions..."
-INSTALLED_PKG_DIR="$(pnpm root -g)/dev3000-darwin-arm64"
+INSTALLED_PKG_DIR="$(pnpm root -g)/@d3k/darwin-arm64"
 chmod +x "$INSTALLED_PKG_DIR/mcp-server/node_modules/.bin/"* 2>/dev/null || true
 
 echo "📥 Installing main package globally..."

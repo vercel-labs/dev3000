@@ -13,8 +13,8 @@ bun run scripts/build-binaries.ts
 
 # Copy built binaries to platform package
 echo "📁 Copying binaries to platform package..."
-PLATFORM_PKG_DIR="packages/dev3000-darwin-arm64"
-DIST_BIN_DIR="dist-bin/dev3000-darwin-arm64"
+PLATFORM_PKG_DIR="packages/d3k-darwin-arm64"
+DIST_BIN_DIR="dist-bin/d3k-darwin-arm64"
 rm -rf "$PLATFORM_PKG_DIR/bin" "$PLATFORM_PKG_DIR/mcp-server" "$PLATFORM_PKG_DIR/skills" "$PLATFORM_PKG_DIR/src"
 cp -r "$DIST_BIN_DIR/bin" "$PLATFORM_PKG_DIR/"
 cp -r "$DIST_BIN_DIR/mcp-server" "$PLATFORM_PKG_DIR/"
@@ -87,7 +87,7 @@ node -e "
     pkg.version = '$NEXT_VERSION';
     // Also update optionalDependencies to match
     pkg.optionalDependencies = pkg.optionalDependencies || {};
-    pkg.optionalDependencies['dev3000-darwin-arm64'] = '$NEXT_VERSION';
+    pkg.optionalDependencies['@d3k/darwin-arm64'] = '$NEXT_VERSION';
     fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
 "
 
@@ -95,7 +95,7 @@ node -e "
 echo "⬆️ Updating platform package version to $NEXT_VERSION..."
 node -e "
     const fs = require('fs');
-    const pkgPath = 'packages/dev3000-darwin-arm64/package.json';
+    const pkgPath = 'packages/d3k-darwin-arm64/package.json';
     const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
     pkg.version = '$NEXT_VERSION';
     fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
@@ -111,7 +111,7 @@ npx tsx scripts/generate-changelog-md.ts
 
 # Commit version change and changelog
 echo "📝 Committing version change and changelog..."
-git add package.json packages/dev3000-darwin-arm64/package.json mcp-server/package.json www/package.json www/lib/changelog.ts CHANGELOG.md
+git add package.json packages/d3k-darwin-arm64/package.json mcp-server/package.json www/package.json www/lib/changelog.ts CHANGELOG.md
 git commit -m "Release v$NEXT_VERSION
 
 🤖 Generated with [Claude Code](https://claude.ai/code)
