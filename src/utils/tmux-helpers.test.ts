@@ -40,7 +40,11 @@ describe("tmux-helpers", () => {
 
     it("should create session with d3k command first", () => {
       const commands = generateTmuxCommands(baseConfig)
-      expect(commands[0]).toBe('tmux new-session -d -s "d3k-test-123" "d3k"')
+      expect(commands[0]).toContain('tmux new-session -d -s "d3k-test-123"')
+      expect(commands[0]).toContain("d3k")
+      // Should have error handling wrapper
+      expect(commands[0]).toContain("EXIT_CODE")
+      expect(commands[0]).toContain("Press Enter to close")
     })
 
     it("should set history limit to 10000", () => {
@@ -118,8 +122,8 @@ describe("tmux-helpers", () => {
         agentDelay: 0
       }
       const commands = generateTmuxCommands(config)
-      // Should not have sleep prefix
-      expect(commands[9]).toContain('"claude"')
+      // Should not have sleep prefix, but should have the agent command
+      expect(commands[9]).toContain("claude")
       expect(commands[9]).not.toContain("sleep")
     })
 
