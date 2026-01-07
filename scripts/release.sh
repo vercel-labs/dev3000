@@ -7,21 +7,6 @@ echo "🚀 Starting release process..."
 echo "🧪 Running pre-release tests (including clean install tests)..."
 pnpm run test-release
 
-# Build compiled binaries for all platforms
-echo "🔨 Building compiled binaries..."
-bun run scripts/build-binaries.ts
-
-# Copy built binaries to platform package
-echo "📁 Copying binaries to platform package..."
-PLATFORM_PKG_DIR="packages/d3k-darwin-arm64"
-DIST_BIN_DIR="dist-bin/d3k-darwin-arm64"
-rm -rf "$PLATFORM_PKG_DIR/bin" "$PLATFORM_PKG_DIR/mcp-server" "$PLATFORM_PKG_DIR/skills" "$PLATFORM_PKG_DIR/src"
-cp -r "$DIST_BIN_DIR/bin" "$PLATFORM_PKG_DIR/"
-cp -r "$DIST_BIN_DIR/mcp-server" "$PLATFORM_PKG_DIR/"
-cp -r "$DIST_BIN_DIR/skills" "$PLATFORM_PKG_DIR/"
-cp -r "$DIST_BIN_DIR/src" "$PLATFORM_PKG_DIR/"
-echo "✅ Binaries ready for publishing"
-
 # Get current version and check if it's a canary version
 CURRENT_VERSION=$(node -p "require('./package.json').version")
 echo "📋 Current version: $CURRENT_VERSION"
@@ -54,6 +39,43 @@ fi
 echo "📋 Next version will be: $NEXT_VERSION"
 TAG_NAME="v$NEXT_VERSION"
 
+# Update version in package.json BEFORE building binaries (so version is embedded correctly)
+echo "⬆️ Bumping version to $NEXT_VERSION..."
+node -e "
+    const fs = require('fs');
+    const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+    pkg.version = '$NEXT_VERSION';
+    // Also update optionalDependencies to match
+    pkg.optionalDependencies = pkg.optionalDependencies || {};
+    pkg.optionalDependencies['@d3k/darwin-arm64'] = '$NEXT_VERSION';
+    fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+"
+
+# Update platform package version
+echo "⬆️ Updating platform package version to $NEXT_VERSION..."
+node -e "
+    const fs = require('fs');
+    const pkgPath = 'packages/d3k-darwin-arm64/package.json';
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+    pkg.version = '$NEXT_VERSION';
+    fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
+"
+
+# Build compiled binaries for all platforms (AFTER version bump so version is correct)
+echo "🔨 Building compiled binaries..."
+bun run scripts/build-binaries.ts
+
+# Copy built binaries to platform package
+echo "📁 Copying binaries to platform package..."
+PLATFORM_PKG_DIR="packages/d3k-darwin-arm64"
+DIST_BIN_DIR="dist-bin/d3k-darwin-arm64"
+rm -rf "$PLATFORM_PKG_DIR/bin" "$PLATFORM_PKG_DIR/mcp-server" "$PLATFORM_PKG_DIR/skills" "$PLATFORM_PKG_DIR/src"
+cp -r "$DIST_BIN_DIR/bin" "$PLATFORM_PKG_DIR/"
+cp -r "$DIST_BIN_DIR/mcp-server" "$PLATFORM_PKG_DIR/"
+cp -r "$DIST_BIN_DIR/skills" "$PLATFORM_PKG_DIR/"
+cp -r "$DIST_BIN_DIR/src" "$PLATFORM_PKG_DIR/"
+echo "✅ Binaries ready for publishing"
+
 # Function to cleanup existing tags
 cleanup_existing_tag() {
     echo "⚠️ Tag $TAG_NAME already exists. Cleaning up..."
@@ -78,28 +100,6 @@ cleanup_existing_tag() {
 if git tag -l "$TAG_NAME" | grep -q "^$TAG_NAME$" || git ls-remote --tags origin 2>/dev/null | grep -q "refs/tags/$TAG_NAME$"; then
     cleanup_existing_tag
 fi
-
-# Update version in package.json manually to avoid pnpm version creating tags automatically
-echo "⬆️ Bumping version to $NEXT_VERSION..."
-node -e "
-    const fs = require('fs');
-    const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-    pkg.version = '$NEXT_VERSION';
-    // Also update optionalDependencies to match
-    pkg.optionalDependencies = pkg.optionalDependencies || {};
-    pkg.optionalDependencies['@d3k/darwin-arm64'] = '$NEXT_VERSION';
-    fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
-"
-
-# Update platform package version
-echo "⬆️ Updating platform package version to $NEXT_VERSION..."
-node -e "
-    const fs = require('fs');
-    const pkgPath = 'packages/d3k-darwin-arm64/package.json';
-    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-    pkg.version = '$NEXT_VERSION';
-    fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
-"
 
 # Update changelog
 echo "📝 Updating changelog..."
