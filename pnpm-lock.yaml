@@ -89,8 +89,8 @@ importers:
         version: 3.2.4(@types/debug@4.1.12)(@types/node@24.10.1)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.21.0)
     optionalDependencies:
       '@d3k/darwin-arm64':
-        specifier: 0.0.136
-        version: 0.0.136
+        specifier: 0.0.137-canary
+        version: 0.0.137-canary
 
   mcp-server:
     dependencies:
@@ -439,7 +439,7 @@ packages:
     resolution: {integrity: sha512-6o7Y2SeO9vFKB8lArHXehNuusnpddKPk7xqL7T2/b+OvXMRIXUO1rR4wcv1hAFUAT9avGZshty3Wlua/XA7TvA==}
     engines: {node: '>=18'}
 
-  '@d3k/darwin-arm64@0.0.136':
+  '@d3k/darwin-arm64@0.0.137-canary':
     resolution: {integrity: sha512-placeholder}
     os: [darwin]
     cpu: [arm64]
@@ -7028,7 +7028,7 @@ snapshots:
     dependencies:
       json-schema: 0.4.0
 
-  '@d3k/darwin-arm64@0.0.136':
+  '@d3k/darwin-arm64@0.0.137-canary':
     optional: true
 
   '@alcalzone/ansi-tokenize@0.2.2':
