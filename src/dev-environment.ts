@@ -439,11 +439,13 @@ export async function tryHttpsConnection(port: string | number): Promise<boolean
       },
       () => {
         // Any response means server is listening
+        req.destroy()
         resolve(true)
       }
     )
 
     req.on("error", () => {
+      req.destroy()
       resolve(false)
     })
 

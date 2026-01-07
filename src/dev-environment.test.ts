@@ -1,9 +1,12 @@
+import https from "https"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
   gracefulKillProcess,
   isServerListening,
   ORPHANED_PROCESS_CLEANUP_PATTERNS,
-  type ServerListeningResult
+  type ServerListeningResult,
+  tryHttpConnection,
+  tryHttpsConnection
 } from "./dev-environment"
 
 describe("ORPHANED_PROCESS_CLEANUP_PATTERNS", () => {
@@ -205,12 +208,125 @@ describe("gracefulKillProcess", () => {
   })
 })
 
-describe("isServerListening", () => {
-  // These tests verify the HTTPS fallback logic for server detection.
-  // When a server runs with --experimental-https (like Next.js), the HTTP
-  // check fails but the HTTPS check should succeed.
-
+describe("tryHttpConnection", () => {
   let originalFetch: typeof global.fetch
+
+  beforeEach(() => {
+    originalFetch = global.fetch
+  })
+
+  afterEach(() => {
+    global.fetch = originalFetch
+  })
+
+  it("should return true when server responds with 200", async () => {
+    global.fetch = vi.fn().mockResolvedValue(new Response(null, { status: 200 }))
+    expect(await tryHttpConnection(3000)).toBe(true)
+  })
+
+  it("should return true even for 4xx/5xx responses", async () => {
+    global.fetch = vi.fn().mockResolvedValue(new Response(null, { status: 500 }))
+    expect(await tryHttpConnection(3000)).toBe(true)
+  })
+
+  it("should return false on ECONNREFUSED", async () => {
+    global.fetch = vi.fn().mockRejectedValue(new Error("fetch failed: ECONNREFUSED"))
+    expect(await tryHttpConnection(3000)).toBe(false)
+  })
+
+  it("should return false on timeout/abort", async () => {
+    global.fetch = vi.fn().mockRejectedValue(new Error("aborted"))
+    expect(await tryHttpConnection(3000)).toBe(false)
+  })
+
+  it("should accept string port numbers", async () => {
+    global.fetch = vi.fn().mockResolvedValue(new Response(null, { status: 200 }))
+    expect(await tryHttpConnection("3000")).toBe(true)
+    expect(global.fetch).toHaveBeenCalledWith("http://localhost:3000/", expect.objectContaining({ method: "HEAD" }))
+  })
+})
+
+describe("tryHttpsConnection", () => {
+  it("should return true when HTTPS server responds", async () => {
+    const mockRequest = vi.spyOn(https, "request").mockImplementation((_options, callback) => {
+      setImmediate(() => (callback as () => void)?.())
+      const mockReq = {
+        on: () => mockReq,
+        destroy: vi.fn(),
+        end: vi.fn()
+      }
+      return mockReq as unknown as ReturnType<typeof https.request>
+    })
+
+    expect(await tryHttpsConnection(3000)).toBe(true)
+    mockRequest.mockRestore()
+  })
+
+  it("should return false on connection error", async () => {
+    const mockRequest = vi.spyOn(https, "request").mockImplementation(() => {
+      const mockReq = {
+        on: (event: string, handler: () => void) => {
+          if (event === "error") setImmediate(handler)
+          return mockReq
+        },
+        destroy: vi.fn(),
+        end: vi.fn()
+      }
+      return mockReq as unknown as ReturnType<typeof https.request>
+    })
+
+    expect(await tryHttpsConnection(3000)).toBe(false)
+    mockRequest.mockRestore()
+  })
+
+  it("should return false on timeout", async () => {
+    const mockRequest = vi.spyOn(https, "request").mockImplementation(() => {
+      const mockReq = {
+        on: (event: string, handler: () => void) => {
+          if (event === "timeout") setImmediate(handler)
+          return mockReq
+        },
+        destroy: vi.fn(),
+        end: vi.fn()
+      }
+      return mockReq as unknown as ReturnType<typeof https.request>
+    })
+
+    expect(await tryHttpsConnection(3000)).toBe(false)
+    mockRequest.mockRestore()
+  })
+})
+
+describe("isServerListening", () => {
+  let originalFetch: typeof global.fetch
+
+  // Helper to mock HTTPS success
+  const mockHttpsSuccess = () => {
+    return vi.spyOn(https, "request").mockImplementation((_options, callback) => {
+      setImmediate(() => (callback as () => void)?.())
+      const mockReq = {
+        on: () => mockReq,
+        destroy: vi.fn(),
+        end: vi.fn()
+      }
+      return mockReq as unknown as ReturnType<typeof https.request>
+    })
+  }
+
+  // Helper to mock HTTPS failure
+  const mockHttpsFailure = () => {
+    return vi.spyOn(https, "request").mockImplementation(() => {
+      const mockReq = {
+        on: (event: string, handler: () => void) => {
+          if (event === "error") setImmediate(handler)
+          return mockReq
+        },
+        destroy: vi.fn(),
+        end: vi.fn()
+      }
+      return mockReq as unknown as ReturnType<typeof https.request>
+    })
+  }
 
   beforeEach(() => {
     originalFetch = global.fetch
@@ -221,50 +337,88 @@ describe("isServerListening", () => {
     vi.restoreAllMocks()
   })
 
-  it("should return { listening: true, https: false } when HTTP server responds", async () => {
-    // Mock fetch to simulate HTTP server responding
+  it("should return { listening: true, https: false } when HTTP succeeds", async () => {
     global.fetch = vi.fn().mockResolvedValue(new Response(null, { status: 200 }))
 
     const result = await isServerListening(3000)
 
     expect(result).toEqual({ listening: true, https: false })
-    expect(global.fetch).toHaveBeenCalledWith("http://localhost:3000/", expect.objectContaining({ method: "HEAD" }))
   })
 
-  it("should return { listening: true, https: false } even for 4xx/5xx responses", async () => {
-    // Any HTTP response means server is listening, even errors
-    global.fetch = vi.fn().mockResolvedValue(new Response(null, { status: 500 }))
-
-    const result = await isServerListening(3000)
-
-    expect(result).toEqual({ listening: true, https: false })
-  })
-
-  it("should return { listening: false, https: false } when no server is running", async () => {
-    // Mock fetch to simulate ECONNREFUSED (no server)
-    global.fetch = vi.fn().mockRejectedValue(new Error("fetch failed: ECONNREFUSED"))
-
-    const result = await isServerListening(9999)
-
-    expect(result).toEqual({ listening: false, https: false })
-  })
-
-  it("should accept string port numbers", async () => {
+  it("should NOT try HTTPS when HTTP succeeds", async () => {
     global.fetch = vi.fn().mockResolvedValue(new Response(null, { status: 200 }))
+    const mockRequest = mockHttpsSuccess()
 
-    const result = await isServerListening("3000")
+    await isServerListening(3000)
 
-    expect(result).toEqual({ listening: true, https: false })
-    expect(global.fetch).toHaveBeenCalledWith("http://localhost:3000/", expect.objectContaining({ method: "HEAD" }))
+    // HTTPS should not be called when HTTP succeeds
+    expect(mockRequest).not.toHaveBeenCalled()
+    mockRequest.mockRestore()
   })
 
-  it("should return { listening: false, https: false } on timeout", async () => {
-    // Mock fetch to simulate timeout via AbortError
-    global.fetch = vi.fn().mockRejectedValue(new Error("aborted"))
+  it("should return { listening: false, https: false } when both fail", async () => {
+    global.fetch = vi.fn().mockRejectedValue(new Error("fetch failed"))
+    const mockRequest = mockHttpsFailure()
 
     const result = await isServerListening(3000)
 
     expect(result).toEqual({ listening: false, https: false })
+    mockRequest.mockRestore()
+  })
+
+  describe("HTTPS fallback scenarios", () => {
+    it("should fall back to HTTPS when HTTP returns ECONNREFUSED", async () => {
+      global.fetch = vi.fn().mockRejectedValue(new Error("fetch failed: ECONNREFUSED"))
+      const mockRequest = mockHttpsSuccess()
+
+      const result = await isServerListening(3000)
+
+      expect(result).toEqual({ listening: true, https: true })
+      expect(mockRequest).toHaveBeenCalled()
+      mockRequest.mockRestore()
+    })
+
+    it("should fall back to HTTPS when HTTP times out", async () => {
+      global.fetch = vi.fn().mockRejectedValue(new Error("aborted"))
+      const mockRequest = mockHttpsSuccess()
+
+      const result = await isServerListening(3000)
+
+      expect(result).toEqual({ listening: true, https: true })
+      expect(mockRequest).toHaveBeenCalled()
+      mockRequest.mockRestore()
+    })
+
+    it("should fall back to HTTPS when HTTP fails with network error", async () => {
+      global.fetch = vi.fn().mockRejectedValue(new Error("network error"))
+      const mockRequest = mockHttpsSuccess()
+
+      const result = await isServerListening(3000)
+
+      expect(result).toEqual({ listening: true, https: true })
+      expect(mockRequest).toHaveBeenCalled()
+      mockRequest.mockRestore()
+    })
+
+    it("should correctly identify HTTPS server on non-standard port", async () => {
+      global.fetch = vi.fn().mockRejectedValue(new Error("fetch failed"))
+      const mockRequest = vi.spyOn(https, "request").mockImplementation((options, callback) => {
+        // Verify correct port is passed to HTTPS request
+        expect(options).toMatchObject({ port: 8443 })
+        setImmediate(() => (callback as () => void)?.())
+        const mockReq = {
+          on: () => mockReq,
+          destroy: vi.fn(),
+          end: vi.fn()
+        }
+        return mockReq as unknown as ReturnType<typeof https.request>
+      })
+
+      const result = await isServerListening(8443)
+
+      expect(result).toEqual({ listening: true, https: true })
+      mockRequest.mockRestore()
+    })
   })
 })
 
