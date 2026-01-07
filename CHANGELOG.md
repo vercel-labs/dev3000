@@ -4,6 +4,13 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.137] - 2026-01-07
+
+**Feature Release**
+
+- Fix tmux --with-agent error handling to show crash output
+- Add vercel-design-guidelines workflow type
+
 ## [0.0.136] - 2026-01-07
 
 **Feature Release**

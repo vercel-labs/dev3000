@@ -10,6 +10,16 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.137",
+    date: "2026-01-07",
+    type: "minor",
+    highlights: [
+      "Fix tmux --with-agent error handling to show crash output",
+      "Add vercel-design-guidelines workflow type"
+    ]
+  },
+
+  {
     version: "0.0.136",
     date: "2026-01-07",
     type: "minor",
