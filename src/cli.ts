@@ -84,13 +84,25 @@ async function launchWithTmux(agentCommand: string): Promise<void> {
   // Create a shell script that sets up tmux and attaches
   // This ensures clean terminal state by exec'ing into tmux
   const scriptPath = join(homedir(), ".d3k", "launch-tmux.sh")
+
+  // Get the first command (new-session) and remaining commands
+  const [newSessionCmd, ...remainingCommands] = commands
+  // Modify new-session to include terminal dimensions (detected at runtime)
+  // This ensures the 80/20 split ratio is maintained when the window is resized on attach
+  const newSessionWithSize = newSessionCmd.replace("tmux new-session -d", "tmux new-session -d -x $COLS -y $LINES")
+
   const scriptContent = `#!/bin/bash
 # Reset terminal state
 stty sane 2>/dev/null || true
 reset 2>/dev/null || true
 
-# Setup tmux session
-${commands.join(" && \\\n")}
+# Get terminal dimensions for proper pane sizing
+COLS=$(tput cols)
+LINES=$(tput lines)
+
+# Setup tmux session with actual terminal size
+${newSessionWithSize} && \\
+${remainingCommands.join(" && \\\n")}
 
 # Replace this process with tmux attach
 exec tmux attach-session -t "${sessionName}"

@@ -29,8 +29,17 @@ export function generateTmuxCommands(config: TmuxSessionConfig): string[] {
     // Hide the tmux status bar for a cleaner look
     `tmux set-option -t "${sessionName}" status off`,
 
+    // Enable mouse support for scrolling, clicking to switch panes, and resizing
+    `tmux set-option -t "${sessionName}" mouse on`,
+
+    // Enable focus events (required for pane-focus-in hook to work)
+    `tmux set-option -g focus-events on`,
+
     // When any pane exits, kill the entire session (so Ctrl-C in either pane exits both)
     `tmux set-hook -t "${sessionName}" pane-exited "kill-session -t ${sessionName}"`,
+
+    // When terminal is resized, maintain the pane width ratio
+    `tmux set-hook -t "${sessionName}" client-resized "resize-pane -t :.0 -x ${paneWidthPercent}%"`,
 
     // Make inactive pane borders subtle gray, active pane border purple to show focus
     `tmux set-option -t "${sessionName}" pane-border-style "fg=#333333"`,
@@ -38,7 +47,19 @@ export function generateTmuxCommands(config: TmuxSessionConfig): string[] {
 
     // Split horizontally and run agent in the new pane (left side)
     // -b puts the new pane before (left of) the current one
-    `tmux split-window -h -b -p ${paneWidthPercent} -t "${sessionName}" "${agentWithDelay}"`,
+    // -l sets the size of the NEW pane (agent)
+    `tmux split-window -h -b -l ${paneWidthPercent}% -t "${sessionName}" "${agentWithDelay}"`,
+
+    // When focus changes (via mouse click or keyboard), resize focused pane to 75%
+    // Note: pane-focus-in is a window-level hook, requires -w flag
+    `tmux set-hook -w -t "${sessionName}" pane-focus-in 'resize-pane -x ${paneWidthPercent}%'`,
+
+    // Bind Ctrl+B Left to focus agent pane (left/pane 0) AND resize it
+    // Use single quotes to prevent shell from interpreting the semicolon
+    `tmux bind-key -T prefix Left 'select-pane -t :.0 ; resize-pane -t :.0 -x ${paneWidthPercent}%'`,
+
+    // Bind Ctrl+B Right to focus d3k pane (right/pane 1) AND resize it
+    `tmux bind-key -T prefix Right 'select-pane -t :.1 ; resize-pane -t :.1 -x ${paneWidthPercent}%'`,
 
     // Focus on the agent pane (left side, pane 0 after split with -b)
     `tmux select-pane -t "${sessionName}:0.0"`
@@ -77,5 +98,5 @@ export function getTmuxInstallInstructions(): string[] {
  */
 export const DEFAULT_TMUX_CONFIG = {
   agentDelay: 5, // 5 seconds for MCP to start
-  paneWidthPercent: 65 // Agent gets 65% of width
+  paneWidthPercent: 75 // Agent gets 75% of width
 }

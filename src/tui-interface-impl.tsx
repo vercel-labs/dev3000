@@ -174,7 +174,7 @@ const TUIApp = ({
   const { stdout } = useStdout()
   // Show pane switching hint if running inside tmux
   const isInTmux = !!process.env.TMUX
-  const ctrlCMessageDefault = isInTmux ? "^B←→ panes  ^L clear  ^C quit" : "^L clear ^C quit"
+  const ctrlCMessageDefault = isInTmux ? "^B←→ focus+resize  ^L clear  ^C quit" : "^L clear ^C quit"
   const [ctrlCMessage, setCtrlCMessage] = useState(ctrlCMessageDefault)
   const maxScrollOffsetRef = useRef(0)
 
@@ -438,7 +438,7 @@ const TUIApp = ({
 
   // Render compact header for small terminals
   const renderCompactHeader = () => (
-    <Box borderStyle="single" borderColor="#A18CE5" paddingX={1} marginBottom={1}>
+    <Box borderStyle="single" borderColor="#A18CE5" paddingX={1}>
       <Box flexDirection="column" width="100%">
         <Box>
           <Text color="#A18CE5" bold>
