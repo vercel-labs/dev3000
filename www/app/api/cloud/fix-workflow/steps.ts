@@ -171,7 +171,8 @@ export async function agentFixLoopStep(
     beforeCls,
     beforeGrade,
     startPath,
-    customPrompt
+    customPrompt,
+    progressContext?.workflowType
   )
   await updateProgress(progressContext, 3, "Agent finished, verifying CLS improvements...", devUrl)
 
@@ -245,7 +246,7 @@ export async function agentFixLoopStep(
   const combinedD3kLogs = `=== Step 1: Init (before agent) ===\n${initD3kLogs}\n\n=== Step 2: After agent fix ===\n${afterD3kLogs}`
 
   // Determine workflow type from progress context
-  const workflowType = (progressContext?.workflowType as "cls-fix" | "prompt") || "cls-fix"
+  const workflowType = (progressContext?.workflowType as "cls-fix" | "prompt" | "design-guidelines") || "cls-fix"
 
   // Fetch "after" Web Vitals directly from browser via CDP (more reliable than parsing logs)
   workflowLog("[Agent] Fetching after Web Vitals via CDP...")
@@ -328,7 +329,8 @@ async function runAgentWithDiagnoseTool(
   beforeCls: number | null,
   beforeGrade: "good" | "needs-improvement" | "poor" | null,
   startPath: string,
-  customPrompt?: string
+  customPrompt?: string,
+  workflowType?: string
 ): Promise<{ transcript: string; summary: string; systemPrompt: string }> {
   const SANDBOX_CWD = "/vercel/sandbox"
   const D3K_MCP_PORT = 3684
@@ -558,6 +560,82 @@ Use this to diagnose and verify performance improvements.`,
       }
     }),
 
+    // Review design guidelines using d3k's vercel-design-guidelines skill
+    reviewDesignGuidelines: tool({
+      description: `Audit the current page against Vercel's design guidelines.
+This fetches the latest guidelines from vercel.com/design/guidelines and checks the page for violations.
+Returns findings grouped by category (Interactions, Animations, Layout, Content, Forms, Performance, Design, Copywriting) with severity levels (Critical, Warning, Suggestion) and specific fix recommendations.
+USE THIS FIRST for design-guidelines workflow!`,
+      inputSchema: z.object({
+        reason: z.string().describe("Why you're running the audit (e.g., 'initial audit', 'verify fixes')")
+      }),
+      execute: async ({ reason }: { reason: string }) => {
+        workflowLog(`[reviewDesignGuidelines] Running: ${reason}`)
+
+        // First navigate to the page to ensure we're auditing the right content
+        const auditUrl = `http://localhost:3000${startPath}`
+        const navCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"navigate","params":{"url":"${auditUrl}"}}}}'`
+        await runSandboxCommand(sandbox, "bash", ["-c", navCmd])
+        await new Promise((resolve) => setTimeout(resolve, 2000))
+
+        // Call the vercel-design-guidelines skill via d3k MCP
+        // The skill will fetch guidelines from vercel.com/design/guidelines and audit the page
+        const skillCmd = `curl -s -m 120 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '${JSON.stringify(
+          {
+            jsonrpc: "2.0",
+            id: 2,
+            method: "tools/call",
+            params: {
+              name: "review_design_guidelines",
+              arguments: {
+                url: auditUrl
+              }
+            }
+          }
+        ).replace(/'/g, "'\\''")}'`
+
+        const result = await runSandboxCommand(sandbox, "bash", ["-c", skillCmd])
+        workflowLog(`[reviewDesignGuidelines] Result length: ${result.stdout.length}`)
+
+        // Parse the MCP response
+        try {
+          const mcpResponse = parseMcpResponse(result.stdout) as {
+            result?: { content?: Array<{ type: string; text: string }> }
+            error?: { message?: string }
+          }
+
+          if (mcpResponse.error) {
+            return `## Design Guidelines Audit Error
+
+Failed to run audit: ${mcpResponse.error.message || "Unknown error"}
+
+Try running the audit again, or check that the page is accessible.`
+          }
+
+          if (mcpResponse.result?.content?.[0]?.text) {
+            return mcpResponse.result.content[0].text
+          }
+
+          return `## Design Guidelines Audit
+
+No results returned. The page may not have loaded correctly.
+Try navigating to ${auditUrl} first using diagnose, then run the audit again.`
+        } catch (parseErr) {
+          workflowLog(`[reviewDesignGuidelines] Parse error: ${parseErr}`)
+          // Return raw output if parsing fails - it might still be useful
+          if (result.stdout.length > 100) {
+            return `## Design Guidelines Audit (Raw Response)
+
+${result.stdout.substring(0, 3000)}${result.stdout.length > 3000 ? "\n...[truncated]" : ""}`
+          }
+          return `## Design Guidelines Audit Error
+
+Failed to parse audit response. Raw output was ${result.stdout.length} characters.
+Error: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`
+        }
+      }
+    }),
+
     readFile: tool({
       description: "Read a file from the codebase.",
       inputSchema: z.object({
@@ -647,15 +725,28 @@ Use this to diagnose and verify performance improvements.`,
     })
   }
 
-  // Build system prompt based on whether this is a custom prompt or CLS fix
-  const systemPrompt = customPrompt
-    ? buildEnhancedPrompt(customPrompt, startPath, devUrl)
-    : buildClsFixPrompt(beforeCls, beforeGrade, startPath)
+  // Determine workflow type
+  const workflowTypeForPrompt = workflowType || "cls-fix"
+
+  // Build system prompt based on workflow type
+  let systemPrompt: string
+  if (workflowTypeForPrompt === "design-guidelines") {
+    systemPrompt = buildDesignGuidelinesPrompt(startPath, devUrl)
+  } else if (customPrompt) {
+    systemPrompt = buildEnhancedPrompt(customPrompt, startPath, devUrl)
+  } else {
+    systemPrompt = buildClsFixPrompt(beforeCls, beforeGrade, startPath)
+  }
 
   // Build user prompt based on workflow type
-  const userPromptMessage = customPrompt
-    ? `Proceed with the task. The dev server is running at ${devUrl}`
-    : `Fix the CLS issues on the ${startPath} page of this app. Dev URL: ${devUrl}\n\nStart with diagnose to see what's shifting, then fix it.`
+  let userPromptMessage: string
+  if (workflowTypeForPrompt === "design-guidelines") {
+    userPromptMessage = `Evaluate and fix design guideline violations on the ${startPath} page. Dev URL: ${devUrl}\n\nStart with getWebVitals to capture the baseline, then read the main files and identify issues to fix.`
+  } else if (customPrompt) {
+    userPromptMessage = `Proceed with the task. The dev server is running at ${devUrl}`
+  } else {
+    userPromptMessage = `Fix the CLS issues on the ${startPath} page of this app. Dev URL: ${devUrl}\n\nStart with diagnose to see what's shifting, then fix it.`
+  }
 
   const { text, steps } = await generateText({
     model,
@@ -1389,6 +1480,62 @@ Target: CLS ≤ 0.1 (GOOD)
 Page: ${startPath}
 
 Start with diagnose, then QUICKLY find and fix the code. Do not over-analyze!`
+}
+
+/**
+ * Build system prompt for the design-guidelines workflow type
+ * This leverages the d3k MCP server's vercel-design-guidelines skill
+ */
+function buildDesignGuidelinesPrompt(startPath: string, devUrl: string): string {
+  return `You are a design guidelines auditor. Your task is to evaluate this web interface against Vercel's design guidelines and implement fixes.
+
+## YOUR MISSION
+1. Use the **reviewDesignGuidelines** tool to audit the page against Vercel's design guidelines
+2. Review the audit findings (Critical, Warning, Suggestion severity levels)
+3. IMPLEMENT FIXES directly in the code for the most important issues
+4. Verify your fixes work
+5. Create a PR with all improvements
+
+## WORKFLOW
+
+1. **Run reviewDesignGuidelines** - This fetches the latest Vercel design guidelines and audits the current page
+2. **Review the findings** - Prioritize by severity (Critical > Warning > Suggestion)
+3. **Read relevant code** - Use readFile, globSearch to find the files that need fixing
+4. **IMPLEMENT FIXES** - Use writeFile to fix issues. YOU MUST WRITE CODE!
+5. **Verify** - Use diagnose or getWebVitals to confirm changes work
+6. **Document** - Track what you fixed in your summary
+
+## AVAILABLE TOOLS
+
+### Design Guidelines Tool (USE THIS FIRST!)
+- **reviewDesignGuidelines** - Audits the page against Vercel's design guidelines. Returns findings grouped by category (Interactions, Animations, Layout, Content, Forms, Performance, Design, Copywriting) with severity levels and specific fix recommendations.
+
+### Code Tools
+- **readFile** - Read any file in the codebase
+- **writeFile** - Create or modify files (HMR applies changes immediately)
+- **globSearch** - Find files by pattern (e.g., "**/*.tsx", "layout.*")
+- **grepSearch** - Search file contents for patterns
+- **listDir** - List directory contents
+- **gitDiff** - See your changes
+
+### Browser Tools
+- **diagnose** - Navigate and get CLS measurements
+- **getWebVitals** - Get all Core Web Vitals (LCP, FCP, TTFB, CLS, INP)
+
+## IMPORTANT RULES
+
+1. **START with reviewDesignGuidelines** - Don't guess, let the tool audit the page first!
+2. **YOU MUST WRITE CODE** - Don't just analyze, actually fix issues!
+3. **Prioritize Critical issues first** - Then Warnings, then Suggestions
+4. **Be efficient** - You have limited steps (15 max), focus on high-impact fixes
+5. **Verify your fixes** - Run diagnose after making changes
+
+## DEVELOPMENT ENVIRONMENT
+- **App URL**: ${devUrl}
+- **Start Page**: ${startPath}
+- **Working Directory**: /vercel/sandbox
+
+Start by using reviewDesignGuidelines to audit the page, then implement fixes for the most critical issues found.`
 }
 
 /**

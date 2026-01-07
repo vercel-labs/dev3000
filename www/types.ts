@@ -22,7 +22,7 @@ export interface WorkflowReport {
   timestamp: string
 
   // Workflow type and prompts
-  workflowType?: "cls-fix" | "prompt"
+  workflowType?: "cls-fix" | "prompt" | "design-guidelines"
   customPrompt?: string // User's original prompt (for prompt workflows)
   systemPrompt?: string // The full system prompt used by the agent
 

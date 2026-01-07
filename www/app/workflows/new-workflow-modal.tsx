@@ -508,7 +508,12 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       }
 
       // Map URL param type to workflow type
-      const workflowType = _selectedType === "cloud-fix" ? "cls-fix" : "prompt"
+      const workflowType =
+        _selectedType === "cloud-fix"
+          ? "cls-fix"
+          : _selectedType === "design-guidelines"
+            ? "design-guidelines"
+            : "prompt"
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Request body type depends on conditional fields
       const body: any = {
@@ -726,6 +731,15 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                 >
                   <div className="font-semibold">Prompt</div>
                   <div className="text-sm text-gray-600 mt-1">Run a custom AI workflow with your own instructions</div>
+                </Link>
+                <Link
+                  href="/workflows/new?type=design-guidelines"
+                  className="block w-full p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 text-left transition-colors"
+                >
+                  <div className="font-semibold">Design Guidelines Review</div>
+                  <div className="text-sm text-gray-600 mt-1">
+                    Evaluate your site against Vercel design guidelines and automatically fix issues
+                  </div>
                 </Link>
               </div>
               {/* Reserve space for Back link to prevent CLS */}

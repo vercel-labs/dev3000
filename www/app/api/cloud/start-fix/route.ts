@@ -78,7 +78,7 @@ export async function POST(request: Request) {
     const body = await request.json()
     const { devUrl, repoOwner, repoName, baseBranch, bypassToken, repoUrl, repoBranch, githubPat, startPath } = body
     // Validate workflowType is a valid WorkflowType
-    const validWorkflowTypes: WorkflowType[] = ["cls-fix", "prompt"]
+    const validWorkflowTypes: WorkflowType[] = ["cls-fix", "prompt", "design-guidelines"]
     if (body.workflowType && validWorkflowTypes.includes(body.workflowType)) {
       workflowType = body.workflowType
     }
