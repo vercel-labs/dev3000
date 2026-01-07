@@ -6,13 +6,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Core Development Rules
 
-**NEVER RUN**: 
-- Do not run `pnpm build` or `pnpm dev` during development - the user tests manually.
+**NEVER RUN**:
+- Do not run `bun run build` or `bun run dev` during development - the user tests manually.
 
 
 **ALWAYS RUN**: When completing any code changes, you MUST run:
-- `pnpm run lint` - Fix all linting errors before committing
-- `pnpm run typecheck` - Fix all TypeScript errors before committing
+- `bun run lint` - Fix all linting errors before committing
+- `bun run typecheck` - Fix all TypeScript errors before committing
 - Never bypass pre-commit hooks or use --no-verify. Fix all issues until the code passes.
 
 **AFTER COMMITTING**: When you push to main, Vercel auto-deploys. Monitor the deployment:
@@ -23,7 +23,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
    - NOTE: `d3k-mcp.vercel.app` doesn't work for `vercel logs` - you need the specific deployment URL
 4. Once deployed, proceed with testing the changes - don't wait for user confirmation
 
-**PACKAGE MANAGER**: This project uses pnpm exclusively. Never use npm or yarn.
+**PACKAGE MANAGER**: This project uses bun exclusively. Do not use npm, pnpm, or yarn.
 
 **TURBOPACK**: NEVER disable turbopack in favor of webpack. This project uses turbopack exclusively for Next.js builds. Do not switch to webpack under any circumstances.
 
@@ -31,7 +31,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 For local testing, use:
 ```bash
-pnpm run canary
+bun run canary
 ```
 
 To test the d3k-in-the-cloud workflow:

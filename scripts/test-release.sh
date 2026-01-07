@@ -32,7 +32,7 @@ cleanup_test_processes() {
     # Also kill any orphaned next-server processes from test-app
     # These would have been started by our test and may still be running
     pkill -9 -f "next-server.*test-app" 2>/dev/null || true
-    pkill -9 -f "pnpm run start.*test-app" 2>/dev/null || true
+    pkill -9 -f "bun run start.*test-app" 2>/dev/null || true
 
     # Give processes time to die
     sleep 1
@@ -43,7 +43,7 @@ trap cleanup_test_processes EXIT
 
 # Run standard tests
 echo -e "${YELLOW}Running unit tests...${NC}"
-pnpm run test
+bun run test
 
 # Build and pack
 echo -e "${YELLOW}Building and packing...${NC}"
@@ -53,7 +53,7 @@ echo -e "${YELLOW}Building and packing...${NC}"
 rm -f dev3000-*.tgz
 
 # Create fresh tarball
-TARBALL=$(pnpm pack 2>&1 | tail -n 1)
+TARBALL=$(bun pack 2>&1 | tail -n 1)
 
 # Test 1: Clean npm global install (requires bun and platform package on npm)
 echo -e "${YELLOW}Testing clean npm global install...${NC}"
@@ -178,7 +178,7 @@ fi
 
 # Test 3: Test MCP Server logs API
 echo -e "${YELLOW}Testing MCP Server logs functionality...${NC}"
-if pnpm exec tsx scripts/test-logs-api.ts; then
+if bun exec tsx scripts/test-logs-api.ts; then
     echo -e "${GREEN}✅ MCP Server logs tests passed${NC}"
 else
     echo -e "${RED}❌ MCP Server logs tests failed${NC}"
@@ -187,7 +187,7 @@ fi
 
 # Test 4: Run the TypeScript clean install test
 echo -e "${YELLOW}Running comprehensive clean install tests...${NC}"
-if pnpm exec tsx scripts/test-clean-install.ts; then
+if bun exec tsx scripts/test-clean-install.ts; then
     echo -e "${GREEN}✅ All clean install tests passed${NC}"
 else
     echo -e "${RED}❌ Clean install tests failed${NC}"

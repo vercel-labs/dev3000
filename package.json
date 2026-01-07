@@ -36,7 +36,7 @@
   "scripts": {
     "build": "tsc && mkdir -p dist/src && cp src/loading.html dist/src/ && cp src/tui-interface-impl.tsx dist/src/ && cp -r src/skills dist/",
     "typegen": "./scripts/typegen.sh",
-    "typecheck": "pnpm -r run typecheck",
+    "typecheck": "bun run --filter '*' typecheck",
     "format": "biome format --write .",
     "lint": "biome check src mcp-server www scripts --vcs-use-ignore-file=true",
     "lint:fix": "biome check --write src mcp-server www scripts",
@@ -95,14 +95,6 @@
   "optionalDependencies": {
     "@d3k/darwin-arm64": "0.0.137"
   },
-  "pnpm": {
-    "peerDependencyRules": {
-      "allowAny": [
-        "react",
-        "react-dom"
-      ]
-    }
-  },
   "engines": {
     "node": ">=18.0.0"
   },
@@ -112,5 +104,9 @@
   },
   "author": "Lindsey Simon <lindsey@vercel.com>",
   "license": "MIT",
-  "packageManager": "pnpm@10.25.0"
+  "packageManager": "bun@1.2.5",
+  "workspaces": [
+    "www",
+    "mcp-server"
+  ]
 }

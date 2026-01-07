@@ -1,5 +1,5 @@
 #!/bin/sh
 
-pnpm run lint:fix
-pnpm run typecheck
-pnpm run test
+bun run lint:fix
+bun run typecheck
+bun run test

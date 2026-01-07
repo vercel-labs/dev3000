@@ -15,7 +15,7 @@ fi
 
 # Build the project first
 echo "🔨 Building project..."
-pnpm run build
+bun run build
 
 # Navigate to www directory
 cd www

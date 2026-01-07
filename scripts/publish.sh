@@ -108,12 +108,12 @@ node -e "
   fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
 "
 
-# Update pnpm-lock.yaml for the optional dependency
-# (pnpm doesn't add entries for packages that don't exist on npm yet)
-echo "🔒 Updating pnpm-lock.yaml for @d3k/darwin-arm64@$NEXT_CANARY_VERSION..."
+# Update bun-lock.yaml for the optional dependency
+# (bun doesn't add entries for packages that don't exist on npm yet)
+echo "🔒 Updating bun-lock.yaml for @d3k/darwin-arm64@$NEXT_CANARY_VERSION..."
 node -e "
   const fs = require('fs');
-  const lockfile = fs.readFileSync('pnpm-lock.yaml', 'utf8');
+  const lockfile = fs.readFileSync('bun-lock.yaml', 'utf8');
 
   // Update the importer's optionalDependencies specifier and version
   let updated = lockfile.replace(
@@ -127,16 +127,16 @@ node -e "
     \"'@d3k/darwin-arm64@$NEXT_CANARY_VERSION'\"
   );
 
-  fs.writeFileSync('pnpm-lock.yaml', updated);
-  console.log('✅ Updated pnpm-lock.yaml');
+  fs.writeFileSync('bun-lock.yaml', updated);
+  console.log('✅ Updated bun-lock.yaml');
 "
 
 # Run tests to make sure everything still works
 echo "🧪 Testing canary version..."
-pnpm test
+bun test
 
 # Commit and push canary version
-git add package.json packages/d3k-darwin-arm64/package.json pnpm-lock.yaml
+git add package.json packages/d3k-darwin-arm64/package.json bun-lock.yaml
 git commit -m "Bump to v$NEXT_CANARY_VERSION for local development
 
 🤖 Generated with [Claude Code](https://claude.ai/code)

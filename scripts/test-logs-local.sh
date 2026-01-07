@@ -6,7 +6,7 @@ echo "🧪 Running logs API test with local build..."
 # Build if needed
 if [ ! -d "dist" ] || [ ! -d "mcp-server/.next" ]; then
     echo "📦 Building first..."
-    pnpm run build
+    bun run build
     ./scripts/build.sh
 fi
 
@@ -14,4 +14,4 @@ fi
 export PATH="$PWD/node_modules/.bin:$PATH"
 
 # Run the test
-pnpm exec tsx scripts/test-logs-api.ts
+bun exec tsx scripts/test-logs-api.ts

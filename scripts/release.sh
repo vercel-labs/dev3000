@@ -5,7 +5,7 @@ echo "🚀 Starting release process..."
 
 # Run comprehensive pre-release tests
 echo "🧪 Running pre-release tests (including clean install tests)..."
-pnpm run test-release
+bun run test-release
 
 # Get current version and check if it's a canary version
 CURRENT_VERSION=$(node -p "require('./package.json').version")
@@ -61,12 +61,12 @@ node -e "
     fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
 "
 
-# Update pnpm-lock.yaml for the optional dependency
-# (pnpm doesn't add entries for packages that don't exist on npm yet)
-echo "🔒 Updating pnpm-lock.yaml for @d3k/darwin-arm64@$NEXT_VERSION..."
+# Update bun-lock.yaml for the optional dependency
+# (bun doesn't add entries for packages that don't exist on npm yet)
+echo "🔒 Updating bun-lock.yaml for @d3k/darwin-arm64@$NEXT_VERSION..."
 node -e "
     const fs = require('fs');
-    const lockfile = fs.readFileSync('pnpm-lock.yaml', 'utf8');
+    const lockfile = fs.readFileSync('bun-lock.yaml', 'utf8');
 
     // Update the importer's optionalDependencies specifier and version
     let updated = lockfile.replace(
@@ -80,8 +80,8 @@ node -e "
         \"'@d3k/darwin-arm64@$NEXT_VERSION'\"
     );
 
-    fs.writeFileSync('pnpm-lock.yaml', updated);
-    console.log('✅ Updated pnpm-lock.yaml');
+    fs.writeFileSync('bun-lock.yaml', updated);
+    console.log('✅ Updated bun-lock.yaml');
 "
 
 # Build compiled binaries for all platforms (AFTER version bump so version is correct)
@@ -126,15 +126,15 @@ fi
 
 # Update changelog
 echo "📝 Updating changelog..."
-npx tsx scripts/update-changelog.ts "v$NEXT_VERSION"
+bunx tsx scripts/update-changelog.ts "v$NEXT_VERSION"
 
 # Generate CHANGELOG.md from changelog.ts
 echo "📝 Generating CHANGELOG.md..."
-npx tsx scripts/generate-changelog-md.ts
+bunx tsx scripts/generate-changelog-md.ts
 
 # Commit version change and changelog
 echo "📝 Committing version change and changelog..."
-git add package.json packages/d3k-darwin-arm64/package.json mcp-server/package.json www/package.json www/lib/changelog.ts CHANGELOG.md pnpm-lock.yaml
+git add package.json packages/d3k-darwin-arm64/package.json mcp-server/package.json www/package.json www/lib/changelog.ts CHANGELOG.md bun-lock.yaml
 git commit -m "Release v$NEXT_VERSION
 
 🤖 Generated with [Claude Code](https://claude.ai/code)

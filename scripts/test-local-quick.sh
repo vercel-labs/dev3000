@@ -7,7 +7,7 @@ echo "🧪 Quick local test of d3k installation..."
 echo "📦 Building..."
 ./scripts/build.sh
 rm -f dev3000-*.tgz
-TARBALL=$(pnpm pack 2>&1 | tail -n 1)
+TARBALL=$(bun pack 2>&1 | tail -n 1)
 
 # Test in isolated environment
 echo "🧪 Testing installation..."
@@ -18,10 +18,10 @@ cd $TEST_DIR
 echo '{"name":"test-d3k","private":true}' > package.json
 
 # Install locally
-npm install "../$TARBALL"
+bun add "../$TARBALL"
 
 # Test that d3k works
-if npx d3k --version; then
+if bunx d3k --version; then
     echo "✅ d3k works!"
 else
     echo "❌ d3k failed"
