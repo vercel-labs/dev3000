@@ -1,5 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "bun run build",
+  "installCommand": "cd .. && bun install",
   "env": {
     "LOG_FILE_PATH": "/tmp/d3k/logs",
     "SCREENSHOT_DIR": "/tmp/d3k/screenshots"

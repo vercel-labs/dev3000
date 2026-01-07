@@ -1,4 +1,4 @@
 {
-  "buildCommand": "pnpm run build",
-  "installCommand": "pnpm install"
+  "buildCommand": "bun run build",
+  "installCommand": "cd .. && bun install"
 }
