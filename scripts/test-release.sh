@@ -63,8 +63,10 @@ if ! command -v bun &> /dev/null; then
     echo -e "${YELLOW}⚠️  Skipping npm install test - bun is required but not installed${NC}"
     echo -e "${YELLOW}   d3k requires bun runtime. Install with: curl -fsSL https://bun.sh/install | bash${NC}"
 else
-    # Check if platform package exists on npm (needed for new compiled binary architecture)
-    if ! npm view @d3k/darwin-arm64 version &> /dev/null; then
+    # Check if platform package with exact version exists on npm (needed for new compiled binary architecture)
+    # Get the required version from package.json
+    REQUIRED_VERSION=$(node -p "require('./package.json').optionalDependencies?.['@d3k/darwin-arm64'] || ''")
+    if [ -z "$REQUIRED_VERSION" ] || ! npm view "@d3k/darwin-arm64@$REQUIRED_VERSION" version &> /dev/null; then
         echo -e "${YELLOW}⚠️  Skipping npm install test - platform package not yet published to npm${NC}"
         echo -e "${YELLOW}   This is expected for the first release with compiled binary architecture${NC}"
         echo -e "${YELLOW}   Using canary-installed version for subsequent tests${NC}"
@@ -90,6 +92,12 @@ else
     fi
 fi
 
+# Track whether we should skip tests that require platform package
+SKIP_PLATFORM_TESTS=false
+if [ -z "$REQUIRED_VERSION" ] || ! npm view "@d3k/darwin-arm64@$REQUIRED_VERSION" version &> /dev/null 2>&1; then
+    SKIP_PLATFORM_TESTS=true
+fi
+
 # Don't cleanup yet - we need the installed d3k for the next test
 # If npm install was skipped, make sure canary-installed d3k is available
 if ! command -v d3k &> /dev/null; then
@@ -97,16 +105,19 @@ if ! command -v d3k &> /dev/null; then
 fi
 
 # Test 2: MCP server startup with minimal environment
-echo -e "${YELLOW}Testing MCP server startup...${NC}"
-TEST_DIR=$(mktemp -d)
-cd "$TEST_DIR"
+if [ "$SKIP_PLATFORM_TESTS" = true ]; then
+    echo -e "${YELLOW}⏭️  Skipping MCP server startup test - platform package not yet published${NC}"
+else
+    echo -e "${YELLOW}Testing MCP server startup...${NC}"
+    TEST_DIR=$(mktemp -d)
+    cd "$TEST_DIR"
 
-# Use high ports (>4000) to avoid conflicts with user's running d3k on port 3000
-TEST_APP_PORT=4100
-TEST_MCP_PORT=4685
+    # Use high ports (>4000) to avoid conflicts with user's running d3k on port 3000
+    TEST_APP_PORT=4100
+    TEST_MCP_PORT=4685
 
-# Create minimal test app
-cat > package.json << EOF
+    # Create minimal test app
+    cat > package.json << EOF
 {
   "name": "test-app",
   "scripts": {
@@ -115,54 +126,55 @@ cat > package.json << EOF
 }
 EOF
 
-# Run d3k in background and capture output
-OUTPUT_FILE=$(mktemp)
-# d3k should be available in PATH from the npm install
-d3k --debug --servers-only --no-tui --port $TEST_APP_PORT --port-mcp $TEST_MCP_PORT > "$OUTPUT_FILE" 2>&1 &
-D3K_PID=$!
+    # Run d3k in background and capture output
+    OUTPUT_FILE=$(mktemp)
+    # d3k should be available in PATH from the npm install
+    d3k --debug --servers-only --no-tui --port $TEST_APP_PORT --port-mcp $TEST_MCP_PORT > "$OUTPUT_FILE" 2>&1 &
+    D3K_PID=$!
 
-# Wait for MCP server to start (max 20 seconds)
-COUNTER=0
-while [ $COUNTER -lt 20 ]; do
-    if grep -q "MCP server process spawned as singleton background service" "$OUTPUT_FILE" || grep -q "Starting MCP server using bundled Next.js" "$OUTPUT_FILE" || grep -q "MCP server logs:" "$OUTPUT_FILE"; then
-        echo -e "${GREEN}✅ MCP server startup test passed${NC}"
-        # Send two SIGINTs for graceful shutdown (like Ctrl-C twice)
+    # Wait for MCP server to start (max 20 seconds)
+    COUNTER=0
+    while [ $COUNTER -lt 20 ]; do
+        if grep -q "MCP server process spawned as singleton background service" "$OUTPUT_FILE" || grep -q "Starting MCP server using bundled Next.js" "$OUTPUT_FILE" || grep -q "MCP server logs:" "$OUTPUT_FILE"; then
+            echo -e "${GREEN}✅ MCP server startup test passed${NC}"
+            # Send two SIGINTs for graceful shutdown (like Ctrl-C twice)
+            kill -INT $D3K_PID 2>/dev/null || true
+            sleep 1
+            kill -INT $D3K_PID 2>/dev/null || true
+            sleep 2
+            # If it's still running after graceful shutdown attempt, force kill
+            kill $D3K_PID 2>/dev/null || true
+            break
+        fi
+        sleep 1
+        COUNTER=$((COUNTER + 1))
+    done
+
+    if [ $COUNTER -eq 20 ]; then
+        echo -e "${RED}❌ MCP server failed to start within 20 seconds${NC}"
+        echo "Debug output:"
+        head -50 "$OUTPUT_FILE"
+        # Send two SIGINTs for graceful shutdown, then force kill if needed
         kill -INT $D3K_PID 2>/dev/null || true
         sleep 1
         kill -INT $D3K_PID 2>/dev/null || true
         sleep 2
-        # If it's still running after graceful shutdown attempt, force kill
         kill $D3K_PID 2>/dev/null || true
-        break
+        # Force kill any stray next-server processes before exiting
+        cleanup_test_processes
+        exit 1
     fi
-    sleep 1
-    COUNTER=$((COUNTER + 1))
-done
 
-if [ $COUNTER -eq 20 ]; then
-    echo -e "${RED}❌ MCP server failed to start within 20 seconds${NC}"
-    echo "Debug output:"
-    head -50 "$OUTPUT_FILE"
-    # Send two SIGINTs for graceful shutdown, then force kill if needed
-    kill -INT $D3K_PID 2>/dev/null || true
-    sleep 1
-    kill -INT $D3K_PID 2>/dev/null || true
-    sleep 2
-    kill $D3K_PID 2>/dev/null || true
-    # Force kill any stray next-server processes before exiting
+    # Force kill any lingering next-server processes from this test
+    # The d3k process may have exited but the MCP server (next-server) can linger
+    echo -e "${YELLOW}Ensuring all test server processes are stopped...${NC}"
     cleanup_test_processes
-    exit 1
+
+    # Cleanup
+    cd - > /dev/null
+    rm -rf "$TEST_DIR"
+    rm -f "$OUTPUT_FILE"
 fi
-
-# Force kill any lingering next-server processes from this test
-# The d3k process may have exited but the MCP server (next-server) can linger
-echo -e "${YELLOW}Ensuring all test server processes are stopped...${NC}"
-cleanup_test_processes
-
-# Cleanup
-cd - > /dev/null
-rm -rf "$TEST_DIR"
-rm -f "$OUTPUT_FILE"
 
 # Test 3: Test MCP Server logs API
 echo -e "${YELLOW}Testing MCP Server logs functionality...${NC}"

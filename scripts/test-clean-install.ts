@@ -540,11 +540,21 @@ server.listen(${testPort}, () => {
   }
 
   /**
-   * Check if the platform package is available on npm
+   * Check if the platform package with the exact version is available on npm
    */
   private isPlatformPackagePublished(): boolean {
     try {
-      execSync("npm view @d3k/darwin-arm64 version", { stdio: "pipe" })
+      // Get the version from package.json
+      const packageJson = JSON.parse(execSync("cat package.json", { encoding: "utf-8" }))
+      const requiredVersion = packageJson.optionalDependencies?.["@d3k/darwin-arm64"]
+
+      if (!requiredVersion) {
+        // No platform package dependency, so "published" is true (not required)
+        return true
+      }
+
+      // Check if the exact version exists on npm
+      execSync(`npm view @d3k/darwin-arm64@${requiredVersion} version`, { stdio: "pipe" })
       return true
     } catch {
       return false
@@ -555,15 +565,15 @@ server.listen(${testPort}, () => {
     log("🧹 Starting Clean Environment Tests", GREEN)
     log(`📦 Testing with: ${tarballPath}`, YELLOW)
 
-    // Check if platform package is available on npm
-    // If not, skip install tests (expected for first release with compiled binary architecture)
+    // Check if platform package with exact version is available on npm
+    // If not, skip install tests (expected for pre-release builds)
     const platformPackageAvailable = this.isPlatformPackagePublished()
     if (!platformPackageAvailable) {
-      log("⚠️  Platform package (@d3k/darwin-arm64) not yet published to npm", YELLOW)
-      log("   Skipping global install tests - this is expected for first release with compiled binaries", YELLOW)
-      log("   Only running MCP server startup test\n", YELLOW)
+      log("⚠️  Platform package (@d3k/darwin-arm64) with required version not published to npm", YELLOW)
+      log("   Skipping all global install tests - this is expected for pre-release builds", YELLOW)
+      log("   Tests will pass once platform package is published\n", YELLOW)
 
-      // Skip install tests, only run Docker (which has its own skip logic) and MCP server test
+      // Skip all tests when platform package isn't available
       this.results.push(await this.testDockerInstall(tarballPath))
       this.results.push({
         name: "Clean Environment Install (npm)",
@@ -583,7 +593,12 @@ server.listen(${testPort}, () => {
         error: "Platform package not yet published to npm",
         duration: 0
       })
-      this.results.push(await this.testServerStartup(tarballPath))
+      this.results.push({
+        name: "MCP Server Startup Test",
+        passed: "skipped",
+        error: "Platform package not yet published to npm (d3k requires platform binary)",
+        duration: 0
+      })
     } else {
       // Run all tests
       this.results.push(await this.testDockerInstall(tarballPath))
