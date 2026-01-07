@@ -12,6 +12,7 @@ export interface TUIOptions {
   version: string
   projectName?: string
   updateInfo?: UpdateInfo
+  useHttps?: boolean
 }
 
 type InkApp = { unmount: () => void }
@@ -22,6 +23,7 @@ export class DevTUI {
   private updateStatusFn: ((status: string | null) => void) | null = null
   private updateAppPortFn: ((port: string) => void) | null = null
   private updateUpdateInfoFn: ((info: UpdateInfo) => void) | null = null
+  private updateUseHttpsFn: ((useHttps: boolean) => void) | null = null
 
   constructor(options: TUIOptions) {
     this.options = options
@@ -48,11 +50,12 @@ export class DevTUI {
 
       // Use dynamic import to load the TSX implementation at runtime
       const { runTUI } = await import("./tui-interface-impl.js")
-      const { app, updateStatus, updateAppPort, updateUpdateInfo } = await runTUI(this.options)
+      const { app, updateStatus, updateAppPort, updateUpdateInfo, updateUseHttps } = await runTUI(this.options)
       this.app = app
       this.updateStatusFn = updateStatus
       this.updateAppPortFn = updateAppPort
       this.updateUpdateInfoFn = updateUpdateInfo
+      this.updateUseHttpsFn = updateUseHttps
 
       // Restore original error logging after startup
       setTimeout(() => {
@@ -79,6 +82,12 @@ export class DevTUI {
   updateUpdateInfo(info: UpdateInfo): void {
     if (this.updateUpdateInfoFn) {
       this.updateUpdateInfoFn(info)
+    }
+  }
+
+  updateUseHttps(useHttps: boolean): void {
+    if (this.updateUseHttpsFn) {
+      this.updateUseHttpsFn(useHttps)
     }
   }
 

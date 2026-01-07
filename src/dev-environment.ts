@@ -14,6 +14,7 @@ import {
   unlinkSync,
   writeFileSync
 } from "fs"
+import https from "https"
 import ora from "ora"
 import { homedir, tmpdir } from "os"
 import { dirname, join } from "path"
@@ -379,12 +380,27 @@ async function isPortAvailable(port: string): Promise<boolean> {
  * Used for waiting for a dev server to start up.
  * Works in all environments including sandboxes by using HTTP requests.
  */
-async function isServerListening(port: string | number): Promise<boolean> {
+export interface ServerListeningResult {
+  listening: boolean
+  https: boolean
+}
+
+export async function isServerListening(port: string | number): Promise<ServerListeningResult> {
+  // Try HTTP first
+  if (await tryHttpConnection(port)) {
+    return { listening: true, https: false }
+  }
+  // Fall back to HTTPS (for servers using --experimental-https or similar)
+  if (await tryHttpsConnection(port)) {
+    return { listening: true, https: true }
+  }
+  return { listening: false, https: false }
+}
+
+export async function tryHttpConnection(port: string | number): Promise<boolean> {
   try {
-    // Use HTTP HEAD request to check if server is responding
-    // This works in sandboxes where lsof doesn't exist
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 2000) // 2 second timeout
+    const timeout = setTimeout(() => controller.abort(), 2000)
 
     try {
       await fetch(`http://localhost:${port}/`, {
@@ -396,9 +412,9 @@ async function isServerListening(port: string | number): Promise<boolean> {
       return true
     } catch (error: unknown) {
       clearTimeout(timeout)
+      const errorMsg = error instanceof Error ? error.message : String(error)
       // ECONNREFUSED means no server is listening
       // AbortError means timeout (server might be starting)
-      const errorMsg = error instanceof Error ? error.message : String(error)
       if (errorMsg.includes("ECONNREFUSED") || errorMsg.includes("fetch failed") || errorMsg.includes("aborted")) {
         return false
       }
@@ -408,6 +424,36 @@ async function isServerListening(port: string | number): Promise<boolean> {
   } catch {
     return false
   }
+}
+
+export async function tryHttpsConnection(port: string | number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const req = https.request(
+      {
+        hostname: "localhost",
+        port: Number(port),
+        path: "/",
+        method: "HEAD",
+        rejectUnauthorized: false, // Accept self-signed certificates
+        timeout: 2000
+      },
+      () => {
+        // Any response means server is listening
+        resolve(true)
+      }
+    )
+
+    req.on("error", () => {
+      resolve(false)
+    })
+
+    req.on("timeout", () => {
+      req.destroy()
+      resolve(false)
+    })
+
+    req.end()
+  })
 }
 
 export async function findAvailablePort(startPort: number): Promise<string> {
@@ -920,7 +966,13 @@ export class DevEnvironment {
   private firstSigintTime: number | null = null
   private chromeDevtoolsSupported: boolean = false
   private portDetected: boolean = false
+  private serverUsesHttps: boolean = false
   private disabledMcpConfigSet: Set<McpConfigTarget>
+
+  /** Returns "https" or "http" based on detected server protocol */
+  private get serverProtocol(): "http" | "https" {
+    return this.serverUsesHttps ? "https" : "http"
+  }
 
   constructor(options: DevEnvironmentOptions) {
     // Handle portMcp vs mcpPort naming
@@ -1477,7 +1529,7 @@ export class DevEnvironment {
       // Regular console output (when TUI is disabled with --no-tui)
       console.log(chalk.cyan(`Logs: ${this.options.logFile}`))
       console.log(chalk.cyan("☝️ Give this to an AI to auto debug and fix your app\n"))
-      console.log(chalk.cyan(`🌐 Your App: http://localhost:${this.options.port}`))
+      console.log(chalk.cyan(`🌐 Your App: ${this.serverProtocol}://localhost:${this.options.port}`))
       console.log(chalk.cyan(`🤖 MCP Server: http://localhost:${this.options.mcpPort}`))
       console.log(
         chalk.cyan(
@@ -1723,8 +1775,11 @@ export class DevEnvironment {
       // Navigate browser to new port if CDP monitor is active
       if (this.cdpMonitor) {
         this.debugLog(`Re-navigating browser from port ${oldPort} to ${detectedPort}`)
-        this.logger.log("browser", `[CDP] Port changed - navigating to http://localhost:${detectedPort}`)
-        this.cdpMonitor.navigateToApp(detectedPort).catch((error: Error) => {
+        this.logger.log(
+          "browser",
+          `[CDP] Port changed - navigating to ${this.serverProtocol}://localhost:${detectedPort}`
+        )
+        this.cdpMonitor.navigateToApp(detectedPort, this.serverUsesHttps).catch((error: Error) => {
           this.debugLog(`Failed to navigate browser to new port: ${error}`)
         })
       }
@@ -2137,14 +2192,20 @@ export class DevEnvironment {
         this.debugLog(`Server check attempt ${attempts + 1}/${maxAttempts}: checking port ${currentPort}`)
 
         // Use HTTP-based check which works in sandboxes where lsof doesn't exist
-        const serverListening = await isServerListening(currentPort)
+        const serverStatus = await isServerListening(currentPort)
 
         const attemptTime = Date.now() - attemptStartTime
 
-        if (serverListening) {
+        if (serverStatus.listening) {
           const totalTime = Date.now() - startTime
+          this.serverUsesHttps = serverStatus.https
+          // Update TUI to show correct protocol
+          if (this.tui) {
+            this.tui.updateUseHttps(serverStatus.https)
+          }
+          const protocol = serverStatus.https ? "HTTPS" : "HTTP"
           this.debugLog(
-            `Server is ready! Port ${currentPort} is listening. Total wait time: ${totalTime}ms (${attempts + 1} attempts)`
+            `Server is ready! Port ${currentPort} is listening (${protocol}). Total wait time: ${totalTime}ms (${attempts + 1} attempts)`
           )
           return true
         } else {
@@ -2489,8 +2550,8 @@ export class DevEnvironment {
       this.logger.log("browser", `[CDP] Session info written with cdpUrl: ${cdpUrl ? "available" : "null"}`)
 
       // Navigate to the app
-      await this.cdpMonitor.navigateToApp(this.options.port)
-      this.logger.log("browser", `[CDP] Navigated to http://localhost:${this.options.port}`)
+      await this.cdpMonitor.navigateToApp(this.options.port, this.serverUsesHttps)
+      this.logger.log("browser", `[CDP] Navigated to ${this.serverProtocol}://localhost:${this.options.port}`)
     } catch (error) {
       // Log error and throw to trigger graceful shutdown
       this.logger.log("browser", `[CDP] Failed to start CDP monitoring: ${error}`)

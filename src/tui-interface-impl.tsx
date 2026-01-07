@@ -20,6 +20,7 @@ export interface TUIOptions {
   version: string
   projectName?: string
   updateInfo?: UpdateInfo
+  useHttps?: boolean
 }
 
 interface LogEntry {
@@ -155,18 +156,22 @@ const TUIApp = ({
   version,
   projectName,
   updateInfo: initialUpdateInfo,
+  useHttps: initialUseHttps,
   onStatusUpdate,
   onAppPortUpdate,
-  onUpdateInfoUpdate
+  onUpdateInfoUpdate,
+  onUseHttpsUpdate
 }: TUIOptions & {
   onStatusUpdate: (fn: (status: string | null) => void) => void
   onAppPortUpdate: (fn: (port: string) => void) => void
   onUpdateInfoUpdate: (fn: (info: UpdateInfo) => void) => void
+  onUseHttpsUpdate: (fn: (useHttps: boolean) => void) => void
 }) => {
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [scrollOffset, setScrollOffset] = useState(0)
   const [initStatus, setInitStatus] = useState<string | null>(null)
   const [appPort, setAppPort] = useState<string>(initialAppPort)
+  const [useHttps, setUseHttps] = useState<boolean>(initialUseHttps || false)
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo>(initialUpdateInfo || null)
   const [portConfirmed, setPortConfirmed] = useState<boolean>(false)
   const logIdCounter = useRef(0)
@@ -253,6 +258,13 @@ const TUIApp = ({
       }
     })
   }, [onUpdateInfoUpdate])
+
+  // Provide useHttps update function to parent
+  useEffect(() => {
+    onUseHttpsUpdate((https: boolean) => {
+      setUseHttps(https)
+    })
+  }, [onUseHttpsUpdate])
 
   // Calculate available lines for logs dynamically based on terminal height and mode
   const calculateMaxVisibleLogs = () => {
@@ -495,7 +507,9 @@ const TUIApp = ({
             {/* Info on the right */}
             <Box flexDirection="column" flexGrow={1}>
               <Box>
-                <Text color="cyan">🌐 App: http://localhost:{appPort} </Text>
+                <Text color="cyan">
+                  🌐 App: {useHttps ? "https" : "http"}://localhost:{appPort}{" "}
+                </Text>
                 {!portConfirmed && <Spinner type="dots" />}
               </Box>
               <Text color="cyan">🤖 MCP: http://localhost:{mcpPort}</Text>
@@ -574,12 +588,14 @@ export async function runTUI(options: TUIOptions): Promise<{
   updateStatus: (status: string | null) => void
   updateAppPort: (port: string) => void
   updateUpdateInfo: (info: UpdateInfo) => void
+  updateUseHttps: (useHttps: boolean) => void
 }> {
   return new Promise((resolve, reject) => {
     try {
       let statusUpdater: ((status: string | null) => void) | null = null
       let appPortUpdater: ((port: string) => void) | null = null
       let updateInfoUpdater: ((info: UpdateInfo) => void) | null = null
+      let httpsUpdater: ((useHttps: boolean) => void) | null = null
 
       // Wrap stdout.write to add synchronized update escape sequences
       // This tells the terminal to buffer all output until the end marker
@@ -619,6 +635,9 @@ export async function runTUI(options: TUIOptions): Promise<{
           onUpdateInfoUpdate={(fn) => {
             updateInfoUpdater = fn
           }}
+          onUseHttpsUpdate={(fn) => {
+            httpsUpdater = fn
+          }}
         />,
         { exitOnCtrlC: false }
       )
@@ -640,6 +659,11 @@ export async function runTUI(options: TUIOptions): Promise<{
           updateUpdateInfo: (info: UpdateInfo) => {
             if (updateInfoUpdater) {
               updateInfoUpdater(info)
+            }
+          },
+          updateUseHttps: (useHttps: boolean) => {
+            if (httpsUpdater) {
+              httpsUpdater(useHttps)
             }
           }
         })

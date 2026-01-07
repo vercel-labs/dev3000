@@ -1,5 +1,10 @@
-import { describe, expect, it, vi } from "vitest"
-import { gracefulKillProcess, ORPHANED_PROCESS_CLEANUP_PATTERNS } from "./dev-environment"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import {
+  gracefulKillProcess,
+  isServerListening,
+  ORPHANED_PROCESS_CLEANUP_PATTERNS,
+  type ServerListeningResult
+} from "./dev-environment"
 
 describe("ORPHANED_PROCESS_CLEANUP_PATTERNS", () => {
   it("should not include patterns that would kill other d3k instances' Chrome browsers", () => {
@@ -197,5 +202,82 @@ describe("gracefulKillProcess", () => {
 
     expect(debugMessages.some((m) => m.includes("SIGTERM"))).toBe(true)
     expect(debugMessages.some((m) => m.includes("gracefully"))).toBe(true)
+  })
+})
+
+describe("isServerListening", () => {
+  // These tests verify the HTTPS fallback logic for server detection.
+  // When a server runs with --experimental-https (like Next.js), the HTTP
+  // check fails but the HTTPS check should succeed.
+
+  let originalFetch: typeof global.fetch
+
+  beforeEach(() => {
+    originalFetch = global.fetch
+  })
+
+  afterEach(() => {
+    global.fetch = originalFetch
+    vi.restoreAllMocks()
+  })
+
+  it("should return { listening: true, https: false } when HTTP server responds", async () => {
+    // Mock fetch to simulate HTTP server responding
+    global.fetch = vi.fn().mockResolvedValue(new Response(null, { status: 200 }))
+
+    const result = await isServerListening(3000)
+
+    expect(result).toEqual({ listening: true, https: false })
+    expect(global.fetch).toHaveBeenCalledWith("http://localhost:3000/", expect.objectContaining({ method: "HEAD" }))
+  })
+
+  it("should return { listening: true, https: false } even for 4xx/5xx responses", async () => {
+    // Any HTTP response means server is listening, even errors
+    global.fetch = vi.fn().mockResolvedValue(new Response(null, { status: 500 }))
+
+    const result = await isServerListening(3000)
+
+    expect(result).toEqual({ listening: true, https: false })
+  })
+
+  it("should return { listening: false, https: false } when no server is running", async () => {
+    // Mock fetch to simulate ECONNREFUSED (no server)
+    global.fetch = vi.fn().mockRejectedValue(new Error("fetch failed: ECONNREFUSED"))
+
+    const result = await isServerListening(9999)
+
+    expect(result).toEqual({ listening: false, https: false })
+  })
+
+  it("should accept string port numbers", async () => {
+    global.fetch = vi.fn().mockResolvedValue(new Response(null, { status: 200 }))
+
+    const result = await isServerListening("3000")
+
+    expect(result).toEqual({ listening: true, https: false })
+    expect(global.fetch).toHaveBeenCalledWith("http://localhost:3000/", expect.objectContaining({ method: "HEAD" }))
+  })
+
+  it("should return { listening: false, https: false } on timeout", async () => {
+    // Mock fetch to simulate timeout via AbortError
+    global.fetch = vi.fn().mockRejectedValue(new Error("aborted"))
+
+    const result = await isServerListening(3000)
+
+    expect(result).toEqual({ listening: false, https: false })
+  })
+})
+
+describe("ServerListeningResult type", () => {
+  it("should have the correct shape", () => {
+    // Type check: ensure the interface is correctly defined
+    const httpResult: ServerListeningResult = { listening: true, https: false }
+    const httpsResult: ServerListeningResult = { listening: true, https: true }
+    const notListening: ServerListeningResult = { listening: false, https: false }
+
+    expect(httpResult.listening).toBe(true)
+    expect(httpResult.https).toBe(false)
+    expect(httpsResult.https).toBe(true)
+    expect(notListening.listening).toBe(false)
   })
 })
