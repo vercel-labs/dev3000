@@ -33,13 +33,13 @@ rm -f "$PLATFORM_PKG_DIR"/*.tgz
 # Pack platform package first
 echo "📦 Packing platform package..."
 cd "$PLATFORM_PKG_DIR"
-PLATFORM_PACKAGE_FILE=$(bun pack 2>&1 | tail -n 1)
+PLATFORM_PACKAGE_FILE=$(npm pack 2>/dev/null | grep '\.tgz$')
 echo "✅ Created: $PLATFORM_PACKAGE_FILE"
 cd "$ROOT_DIR"
 
 # Pack main package
 echo "📦 Packing main package..."
-MAIN_PACKAGE_FILE=$(bun pack 2>&1 | tail -n 1)
+MAIN_PACKAGE_FILE=$(npm pack 2>/dev/null | grep '\.tgz$')
 echo "✅ Created: $MAIN_PACKAGE_FILE"
 
 echo "♻️ Removing previous global installs (if any)..."
@@ -51,7 +51,8 @@ bun add -g "file:$PLATFORM_PKG_DIR/$PLATFORM_PACKAGE_FILE"
 
 # bun blocks postinstall scripts by default, so fix permissions manually
 echo "🔧 Fixing executable permissions..."
-INSTALLED_PKG_DIR="$(bun root -g)/@d3k/darwin-arm64"
+GLOBAL_BIN_DIR="$(bun pm bin -g)"
+INSTALLED_PKG_DIR="${GLOBAL_BIN_DIR%/bin}/install/global/node_modules/@d3k/darwin-arm64"
 chmod +x "$INSTALLED_PKG_DIR/mcp-server/node_modules/.bin/"* 2>/dev/null || true
 
 echo "📥 Installing main package globally..."
