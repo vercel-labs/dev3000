@@ -4,6 +4,15 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.136] - 2026-01-07
+
+**Feature Release**
+
+- Fix tmux pane resize-on-focus and improve split-screen mode
+- Reset to v0.0.135 for publishing
+- Auto-update pnpm-lock.yaml on version bumps
+- Add @d3k/darwin-arm64 to pnpm-lock.yaml for frozen-lockfile
+
 ## [0.0.135] - 2026-01-07
 
 **Patch Release**

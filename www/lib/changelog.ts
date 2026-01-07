@@ -10,6 +10,18 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.136",
+    date: "2026-01-07",
+    type: "minor",
+    highlights: [
+      "Fix tmux pane resize-on-focus and improve split-screen mode",
+      "Reset to v0.0.135 for publishing",
+      "Auto-update pnpm-lock.yaml on version bumps",
+      "Add @d3k/darwin-arm64 to pnpm-lock.yaml for frozen-lockfile"
+    ]
+  },
+
+  {
     version: "0.0.135",
     date: "2026-01-07",
     type: "patch",
