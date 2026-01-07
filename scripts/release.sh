@@ -61,6 +61,29 @@ node -e "
     fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
 "
 
+# Update pnpm-lock.yaml for the optional dependency
+# (pnpm doesn't add entries for packages that don't exist on npm yet)
+echo "🔒 Updating pnpm-lock.yaml for @d3k/darwin-arm64@$NEXT_VERSION..."
+node -e "
+    const fs = require('fs');
+    const lockfile = fs.readFileSync('pnpm-lock.yaml', 'utf8');
+
+    // Update the importer's optionalDependencies specifier and version
+    let updated = lockfile.replace(
+        /('@d3k\/darwin-arm64':\n\s+specifier: )[^\n]+(\n\s+version: )[^\n]+/,
+        \"\\\$1$NEXT_VERSION\\\$2$NEXT_VERSION\"
+    );
+
+    // Update the packages section entry
+    updated = updated.replace(
+        /'@d3k\/darwin-arm64@[^']+'/g,
+        \"'@d3k/darwin-arm64@$NEXT_VERSION'\"
+    );
+
+    fs.writeFileSync('pnpm-lock.yaml', updated);
+    console.log('✅ Updated pnpm-lock.yaml');
+"
+
 # Build compiled binaries for all platforms (AFTER version bump so version is correct)
 echo "🔨 Building compiled binaries..."
 bun run scripts/build-binaries.ts
@@ -111,7 +134,7 @@ npx tsx scripts/generate-changelog-md.ts
 
 # Commit version change and changelog
 echo "📝 Committing version change and changelog..."
-git add package.json packages/d3k-darwin-arm64/package.json mcp-server/package.json www/package.json www/lib/changelog.ts CHANGELOG.md
+git add package.json packages/d3k-darwin-arm64/package.json mcp-server/package.json www/package.json www/lib/changelog.ts CHANGELOG.md pnpm-lock.yaml
 git commit -m "Release v$NEXT_VERSION
 
 🤖 Generated with [Claude Code](https://claude.ai/code)
