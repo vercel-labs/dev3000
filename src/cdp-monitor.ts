@@ -1064,18 +1064,20 @@ export class CDPMonitor {
     }
   }
 
-  async navigateToApp(port: string): Promise<void> {
+  async navigateToApp(port: string, useHttps: boolean = false): Promise<void> {
     if (!this.connection) {
       throw new Error("No CDP connection available")
     }
 
+    const protocol = useHttps ? "https" : "http"
+    const url = `${protocol}://localhost:${port}`
     const navigationStartTime = Date.now()
-    this.debugLog(`Navigating to http://localhost:${port}`)
+    this.debugLog(`Navigating to ${url}`)
 
     // Navigate to the app
     try {
       const result = await this.sendCDPCommand("Page.navigate", {
-        url: `http://localhost:${port}`
+        url
       })
 
       const navigationTime = Date.now() - navigationStartTime
