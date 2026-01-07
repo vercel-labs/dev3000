@@ -1,6 +1,6 @@
 {
   "name": "dev3000",
-  "version": "0.0.133",
+  "version": "0.0.134",
   "description": "AI-powered development tools with browser monitoring and MCP server integration",
   "type": "module",
   "main": "dist/index.js",
@@ -93,7 +93,7 @@
     "vitest": "^3.2.4"
   },
   "optionalDependencies": {
-    "@d3k/darwin-arm64": "0.0.133"
+    "@d3k/darwin-arm64": "0.0.134"
   },
   "pnpm": {
     "peerDependencyRules": {

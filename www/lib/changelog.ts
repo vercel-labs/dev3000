@@ -10,6 +10,17 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.134",
+    date: "2026-01-07",
+    type: "patch",
+    highlights: [
+      "Update pnpm-lock.yaml",
+      "Rename platform package from dev3000-darwin-arm64 to @d3k/darwin-arm64",
+      "Move binary building from publish.sh to release.sh"
+    ]
+  },
+
+  {
     version: "0.0.133",
     date: "2026-01-06",
     type: "minor",

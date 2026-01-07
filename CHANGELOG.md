@@ -4,6 +4,14 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.134] - 2026-01-07
+
+**Patch Release**
+
+- Update pnpm-lock.yaml
+- Rename platform package from dev3000-darwin-arm64 to @d3k/darwin-arm64
+- Move binary building from publish.sh to release.sh
+
 ## [0.0.133] - 2026-01-06
 
 **Feature Release**
