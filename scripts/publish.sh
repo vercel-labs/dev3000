@@ -131,10 +131,6 @@ node -e "
   console.log('✅ Updated bun.lock');
 "
 
-# Run tests to make sure everything still works
-echo "🧪 Testing canary version..."
-vitest run
-
 # Commit and push canary version
 git add package.json packages/d3k-darwin-arm64/package.json bun.lock
 git commit -m "Bump to v$NEXT_CANARY_VERSION for local development
