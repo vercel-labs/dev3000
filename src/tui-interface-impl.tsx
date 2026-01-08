@@ -268,10 +268,10 @@ const TUIApp = ({
   const calculateMaxVisibleLogs = () => {
     if (isVeryCompact) {
       // In very compact mode, use most of the screen for logs, account for bottom status line
-      return Math.max(3, termHeight - 8)
+      return Math.max(3, termHeight - 7)
     } else if (isCompact) {
       // In compact mode, reduce header size, account for bottom status line
-      return Math.max(3, termHeight - 10)
+      return Math.max(3, termHeight - 9)
     } else {
       // Normal mode calculation - account for all UI elements
       const headerBorderLines = 2 // Top border (with title) + bottom border
@@ -280,15 +280,14 @@ const TUIApp = ({
       const logBoxHeaderLines = 1 // "Logs (X total)" text
       const logBoxFooterLines = 1 // Always reserve space for "(X lines below)" to keep layout stable
       const bottomStatusLine = 1 // Log path and quit message
-      const safetyBuffer = 0 // No buffer needed with explicit heights
       const totalReservedLines =
         headerBorderLines +
         headerContentLines +
         logBoxBorderLines +
         logBoxHeaderLines +
         logBoxFooterLines +
-        bottomStatusLine +
-        safetyBuffer
+        bottomStatusLine -
+        1 // Reclaim the extra blank line
       return Math.max(3, termHeight - totalReservedLines)
     }
   }
@@ -562,22 +561,21 @@ const TUIApp = ({
         )}
       </Box>
 
-      {/* Bottom status line - flush against logs box (no extra padding) */}
-      <Box paddingX={1} justifyContent="space-between" marginTop={-1}>
-        <Box>
-          <Text color="#A18CE5">
-            {isCompact ? cleanProjectName || "d3k" : logFile.replace(process.env.HOME || "", "~")}
-          </Text>
-        </Box>
+      {/* Bottom status line */}
+      <Box paddingX={1} justifyContent={isCompact ? "flex-end" : "space-between"}>
         {!isCompact && (
-          <Box gap={2}>
-            {updateInfo?.type === "available" && (
-              <Text color="yellow">↑ v{updateInfo.latestVersion} available (d3k upgrade)</Text>
-            )}
-            {updateInfo?.type === "updated" && <Text color="green">✓ Updated to v{updateInfo.newVersion}</Text>}
-            {ctrlCMessage && <Text color="#A18CE5">{ctrlCMessage}</Text>}
+          <Box>
+            <Text color="#A18CE5">{logFile.replace(process.env.HOME || "", "~")}</Text>
           </Box>
         )}
+        <Box gap={2}>
+          {isCompact && <Text color="#A18CE5">{cleanProjectName || "d3k"}</Text>}
+          {updateInfo?.type === "available" && (
+            <Text color="yellow">↑ v{updateInfo.latestVersion} available (d3k upgrade)</Text>
+          )}
+          {updateInfo?.type === "updated" && <Text color="green">✓ Updated to v{updateInfo.newVersion}</Text>}
+          {ctrlCMessage && <Text color="#A18CE5">{ctrlCMessage}</Text>}
+        </Box>
       </Box>
     </Box>
   )

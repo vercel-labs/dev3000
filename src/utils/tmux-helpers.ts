@@ -30,6 +30,8 @@ export function generateTmuxCommands(config: TmuxSessionConfig): string[] {
 
   // Wrap commands with error handling so users can see crash output
   const d3kWithErrorHandling = wrapCommandWithErrorHandling(d3kCommand, "d3k")
+  // Wait for MCP server to start before launching agent
+  // Using simple sleep since quote escaping in nested bash -c is fragile
   const agentWithDelay = agentDelay > 0 ? `sleep ${agentDelay} && ${agentCommand}` : agentCommand
   const agentWithErrorHandling = wrapCommandWithErrorHandling(agentWithDelay, "agent")
 
@@ -111,6 +113,6 @@ export function getTmuxInstallInstructions(): string[] {
  * Default configuration for tmux split-screen.
  */
 export const DEFAULT_TMUX_CONFIG = {
-  agentDelay: 5, // 5 seconds for MCP to start
+  agentDelay: 2, // seconds to wait for MCP to start
   paneWidthPercent: 75 // Agent gets 75% of width
 }

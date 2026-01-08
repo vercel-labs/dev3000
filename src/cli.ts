@@ -127,6 +127,10 @@ exec tmux attach-session -t "${sessionName}"
       // Session might already be killed
     }
 
+    // Clear screen and print exit message
+    process.stdout.write("\x1b[2J\x1b[H\x1b[3J")
+    console.log(chalk.gray("Thanks for using d3k!"))
+
     process.exit(result.status || 0)
   } catch (error) {
     logCrash("Failed to start tmux session", error)
@@ -176,8 +180,8 @@ async function promptAgentSelection(defaultAgentName?: string): Promise<{ name: 
     // Wait for Ink to fully exit
     await waitUntilExit()
 
-    // Clear terminal to remove any Ink artifacts
-    process.stdout.write("\x1B[2J\x1B[0f")
+    // Clear terminal and scrollback to remove any Ink artifacts
+    process.stdout.write("\x1b[2J\x1b[H\x1b[3J")
   } catch (error) {
     console.error(chalk.red("Error in agent selection:"), error)
     return null
@@ -217,8 +221,8 @@ async function promptSkillSelection(skills: AvailableSkill[]): Promise<Available
 
     await waitUntilExit()
 
-    // Clear terminal to remove any Ink artifacts
-    process.stdout.write("\x1B[2J\x1B[0f")
+    // Clear terminal and scrollback to remove any Ink artifacts
+    process.stdout.write("\x1b[2J\x1b[H\x1b[3J")
   } catch (error) {
     console.error(chalk.red("Error in skill selection:"), error)
     return []
@@ -606,6 +610,8 @@ program
             if (options.debug) {
               console.log(`[DEBUG] Launching tmux with agent command: ${selectedAgent.command}`)
             }
+            // Clear screen and scrollback before launching tmux so when tmux exits, terminal is clean
+            process.stdout.write("\x1b[2J\x1b[H\x1b[3J")
             await launchWithTmux(selectedAgent.command)
             return
           }

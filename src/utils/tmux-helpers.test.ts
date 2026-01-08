@@ -172,7 +172,7 @@ describe("tmux-helpers", () => {
 
   describe("DEFAULT_TMUX_CONFIG", () => {
     it("should have correct default values", () => {
-      expect(DEFAULT_TMUX_CONFIG.agentDelay).toBe(5)
+      expect(DEFAULT_TMUX_CONFIG.agentDelay).toBe(2)
       expect(DEFAULT_TMUX_CONFIG.paneWidthPercent).toBe(75)
     })
   })
