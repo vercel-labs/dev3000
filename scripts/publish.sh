@@ -133,7 +133,7 @@ node -e "
 
 # Run tests to make sure everything still works
 echo "🧪 Testing canary version..."
-bun test
+vitest run
 
 # Commit and push canary version
 git add package.json packages/d3k-darwin-arm64/package.json bun.lock
