@@ -4,6 +4,13 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.139] - 2026-01-08
+
+**Patch Release**
+
+- Update bun.lock
+- Fix bun lock file name in release scripts (bun.lock not bun-lock.yaml)
+
 ## [0.0.137] - 2026-01-07
 
 **Feature Release**
