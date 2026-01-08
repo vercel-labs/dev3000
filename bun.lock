@@ -35,7 +35,7 @@
         "vitest": "^3.2.4",
       },
       "optionalDependencies": {
-        "@d3k/darwin-arm64": "0.0.137",
+        "@d3k/darwin-arm64": "0.0.138",
       },
     },
     "mcp-server": {
