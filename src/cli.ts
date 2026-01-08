@@ -149,7 +149,7 @@ async function promptAgentSelection(defaultAgentName?: string): Promise<{ name: 
   let selectedResult: { name: string; command: string } | null = null
 
   try {
-    const { unmount, waitUntilExit } = render(
+    const { unmount, waitUntilExit, clear } = render(
       React.createElement(AgentSelector, {
         agents,
         defaultAgentName,
@@ -166,7 +166,8 @@ async function promptAgentSelection(defaultAgentName?: string): Promise<{ name: 
           } catch (_error) {
             console.warn(chalk.yellow("Warning: Could not save agent preference"))
           }
-          // Unmount after saving
+          // Clear the Ink output and unmount
+          clear()
           unmount()
         }
       })
@@ -174,6 +175,9 @@ async function promptAgentSelection(defaultAgentName?: string): Promise<{ name: 
 
     // Wait for Ink to fully exit
     await waitUntilExit()
+
+    // Clear terminal to remove any Ink artifacts
+    process.stdout.write("\x1B[2J\x1B[0f")
   } catch (error) {
     console.error(chalk.red("Error in agent selection:"), error)
     return null
@@ -195,21 +199,26 @@ async function promptSkillSelection(skills: AvailableSkill[]): Promise<Available
   let skipped = false
 
   try {
-    const { unmount, waitUntilExit } = render(
+    const { unmount, waitUntilExit, clear } = render(
       React.createElement(SkillSelector, {
         skills,
         onComplete: (selected: AvailableSkill[]) => {
           selectedSkills = selected
+          clear()
           unmount()
         },
         onSkip: () => {
           skipped = true
+          clear()
           unmount()
         }
       })
     )
 
     await waitUntilExit()
+
+    // Clear terminal to remove any Ink artifacts
+    process.stdout.write("\x1B[2J\x1B[0f")
   } catch (error) {
     console.error(chalk.red("Error in skill selection:"), error)
     return []

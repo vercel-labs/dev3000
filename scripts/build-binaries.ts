@@ -39,13 +39,13 @@ async function cleanDistBin() {
 
 async function buildMcpServer() {
   console.log("📦 Building MCP server...")
-  await $`cd ${MCP_SERVER_DIR} && pnpm build`
+  await $`cd ${MCP_SERVER_DIR} && bun run build`
   console.log("✅ MCP server built successfully")
 }
 
 async function buildMainPackage() {
   console.log("📦 Building main package with TypeScript...")
-  await $`cd ${ROOT_DIR} && pnpm build`
+  await $`cd ${ROOT_DIR} && bun run build`
   console.log("✅ Main package built successfully")
 }
 

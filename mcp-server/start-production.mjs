@@ -14,13 +14,17 @@ process.env.PORT = process.env.PORT || "3684"
 process.chdir(__dirname)
 
 // Check if we're in a global install by looking for Next.js in parent directories
+// Note: We use next/dist/bin/next directly instead of .bin/next because the .bin
+// symlinks break when dereferenced during the build process (the relative imports
+// in the .bin/next script point to wrong locations)
 const findNext = () => {
   let currentDir = __dirname
   const maxLevels = 5 // Prevent infinite loop
   let levels = 0
 
   while (levels < maxLevels) {
-    const nextBin = path.join(currentDir, "node_modules", ".bin", "next")
+    // Use the actual next package binary, not the .bin symlink
+    const nextBin = path.join(currentDir, "node_modules", "next", "dist", "bin", "next")
     if (existsSync(nextBin)) {
       return nextBin
     }

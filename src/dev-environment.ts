@@ -1382,7 +1382,7 @@ export class DevEnvironment {
       await this.startMcpServer()
 
       // Wait for servers to be ready
-      await this.tui.updateStatus("Waiting for your app server...")
+      await this.tui.updateStatus("Waiting for app...")
       const serverStarted = await this.waitForServer()
 
       if (!serverStarted) {
@@ -1396,7 +1396,7 @@ export class DevEnvironment {
       // Update TUI with confirmed port (may have changed during server startup)
       this.tui.updateAppPort(this.options.port)
 
-      await this.tui.updateStatus(`Waiting for ${this.options.commandName} MCP server...`)
+      await this.tui.updateStatus("Waiting for MCP...")
       await this.waitForMcpServer()
 
       // Configure AI CLI integrations (both dev3000 and chrome-devtools MCPs)
@@ -1468,7 +1468,7 @@ export class DevEnvironment {
       await this.startMcpServer()
 
       // Wait for servers to be ready
-      this.spinner.text = "Waiting for your app server..."
+      this.spinner.text = "Waiting for app..."
       const serverStarted = await this.waitForServer()
 
       if (!serverStarted) {
@@ -1479,7 +1479,7 @@ export class DevEnvironment {
         process.exit(1)
       }
 
-      this.spinner.text = `Waiting for ${this.options.commandName} MCP server...`
+      this.spinner.text = "Waiting for MCP..."
       await this.waitForMcpServer()
 
       // Configure AI CLI integrations (both dev3000 and chrome-devtools MCPs)

@@ -177,9 +177,7 @@ const TUIApp = ({
   const logIdCounter = useRef(0)
   const [clearFromLogId, setClearFromLogId] = useState<number>(0) // Track log ID to clear from
   const { stdout } = useStdout()
-  // Show pane switching hint if running inside tmux
-  const isInTmux = !!process.env.TMUX
-  const ctrlCMessageDefault = isInTmux ? "^B←→ focus+resize  ^L clear  ^C quit" : "^L clear ^C quit"
+  const ctrlCMessageDefault = "" // Removed - click to focus/resize works now
   const [ctrlCMessage, setCtrlCMessage] = useState(ctrlCMessageDefault)
   const maxScrollOffsetRef = useRef(0)
 
@@ -448,6 +446,9 @@ const TUIApp = ({
     filteredLogs.length - scrollOffset
   )
 
+  // Get clean project name (strip hash suffix like "-935beb")
+  const cleanProjectName = projectName ? projectName.replace(/-[a-f0-9]{6}$/, "") : ""
+
   // Render compact header for small terminals
   const renderCompactHeader = () => (
     <Box borderStyle="single" borderColor="#A18CE5" paddingX={1}>
@@ -456,8 +457,7 @@ const TUIApp = ({
           <Text color="#A18CE5" bold>
             {COMPACT_LOGO}
           </Text>
-          <Text> v{version} </Text>
-          {initStatus && <Text dimColor>- {initStatus}</Text>}
+          <Text dimColor> v{version}</Text>
         </Box>
         {!isVeryCompact && (
           <Box flexDirection="column">
@@ -477,7 +477,8 @@ const TUIApp = ({
   // Render normal header
   const renderNormalHeader = () => {
     // Create custom top border with title embedded (like Claude Code)
-    const title = ` ${commandName} v${version} ${initStatus ? `- ${initStatus} ` : ""}`
+    // Note: commandName omitted since ASCII art already shows "d3k"
+    const title = ` v${version} ${initStatus ? `- ${initStatus} ` : ""}`
     const borderChar = "─"
     const leftPadding = 2
     // Account for border characters and padding
@@ -561,23 +562,22 @@ const TUIApp = ({
         )}
       </Box>
 
-      {/* Bottom status line - no border, just text */}
-      <Box paddingX={1} justifyContent="space-between">
+      {/* Bottom status line - flush against logs box (no extra padding) */}
+      <Box paddingX={1} justifyContent="space-between" marginTop={-1}>
         <Box>
           <Text color="#A18CE5">
-            ⏵⏵{" "}
-            {isVeryCompact
-              ? logFile.split("/").slice(-2, -1)[0] || "logs" // Just show directory name
-              : logFile.replace(process.env.HOME || "", "~")}
+            {isCompact ? cleanProjectName || "d3k" : logFile.replace(process.env.HOME || "", "~")}
           </Text>
         </Box>
-        <Box gap={2}>
-          {updateInfo?.type === "available" && (
-            <Text color="yellow">↑ v{updateInfo.latestVersion} available (d3k upgrade)</Text>
-          )}
-          {updateInfo?.type === "updated" && <Text color="green">✓ Updated to v{updateInfo.newVersion}</Text>}
-          <Text color="#A18CE5">{ctrlCMessage}</Text>
-        </Box>
+        {!isCompact && (
+          <Box gap={2}>
+            {updateInfo?.type === "available" && (
+              <Text color="yellow">↑ v{updateInfo.latestVersion} available (d3k upgrade)</Text>
+            )}
+            {updateInfo?.type === "updated" && <Text color="green">✓ Updated to v{updateInfo.newVersion}</Text>}
+            {ctrlCMessage && <Text color="#A18CE5">{ctrlCMessage}</Text>}
+          </Box>
+        )}
       </Box>
     </Box>
   )
