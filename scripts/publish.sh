@@ -108,12 +108,12 @@ node -e "
   fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
 "
 
-# Update bun-lock.yaml for the optional dependency
+# Update bun.lock for the optional dependency
 # (bun doesn't add entries for packages that don't exist on npm yet)
-echo "🔒 Updating bun-lock.yaml for @d3k/darwin-arm64@$NEXT_CANARY_VERSION..."
+echo "🔒 Updating bun.lock for @d3k/darwin-arm64@$NEXT_CANARY_VERSION..."
 node -e "
   const fs = require('fs');
-  const lockfile = fs.readFileSync('bun-lock.yaml', 'utf8');
+  const lockfile = fs.readFileSync('bun.lock', 'utf8');
 
   // Update the importer's optionalDependencies specifier and version
   let updated = lockfile.replace(
@@ -127,8 +127,8 @@ node -e "
     \"'@d3k/darwin-arm64@$NEXT_CANARY_VERSION'\"
   );
 
-  fs.writeFileSync('bun-lock.yaml', updated);
-  console.log('✅ Updated bun-lock.yaml');
+  fs.writeFileSync('bun.lock', updated);
+  console.log('✅ Updated bun.lock');
 "
 
 # Run tests to make sure everything still works
@@ -136,7 +136,7 @@ echo "🧪 Testing canary version..."
 bun test
 
 # Commit and push canary version
-git add package.json packages/d3k-darwin-arm64/package.json bun-lock.yaml
+git add package.json packages/d3k-darwin-arm64/package.json bun.lock
 git commit -m "Bump to v$NEXT_CANARY_VERSION for local development
 
 🤖 Generated with [Claude Code](https://claude.ai/code)
