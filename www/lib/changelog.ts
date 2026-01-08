@@ -13,10 +13,7 @@ export const changelog: Release[] = [
     version: "0.0.139",
     date: "2026-01-08",
     type: "patch",
-    highlights: [
-      "Update bun.lock",
-      "Fix bun lock file name in release scripts (bun.lock not bun-lock.yaml)"
-    ]
+    highlights: ["Update bun.lock", "Fix bun lock file name in release scripts (bun.lock not bun-lock.yaml)"]
   },
 
   {
