@@ -10,6 +10,18 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.140",
+    date: "2026-01-09",
+    type: "minor",
+    highlights: [
+      "Fix MCP session discovery and add MCP server polling for agent startup",
+      "Replace pnpm with npm in homepage documentation",
+      "Remove redundant test step from publish.sh (tests already run in release.sh)",
+      "Fix publish.sh to use vitest instead of bun test"
+    ]
+  },
+
+  {
     version: "0.0.139",
     date: "2026-01-08",
     type: "patch",

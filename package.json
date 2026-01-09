@@ -1,6 +1,6 @@
 {
   "name": "dev3000",
-  "version": "0.0.140-canary",
+  "version": "0.0.140",
   "description": "AI-powered development tools with browser monitoring and MCP server integration",
   "type": "module",
   "main": "dist/index.js",
@@ -93,7 +93,7 @@
     "vitest": "^3.2.4"
   },
   "optionalDependencies": {
-    "@d3k/darwin-arm64": "0.0.140-canary"
+    "@d3k/darwin-arm64": "0.0.140"
   },
   "engines": {
     "node": ">=18.0.0"

@@ -4,6 +4,15 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.140] - 2026-01-09
+
+**Feature Release**
+
+- Fix MCP session discovery and add MCP server polling for agent startup
+- Replace pnpm with npm in homepage documentation
+- Remove redundant test step from publish.sh (tests already run in release.sh)
+- Fix publish.sh to use vitest instead of bun test
+
 ## [0.0.139] - 2026-01-08
 
 **Patch Release**
