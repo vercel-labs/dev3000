@@ -80,8 +80,9 @@ Key options:
 - `--port <number>` - Development server port (default: 3000)
 - `--mcp-port <number>` - MCP server port (default: 3684)
 - `--disable-mcp-configs <targets>` - Skip auto-writing specific MCP config files (`.mcp.json`, `.cursor/mcp.json`, `opencode.json`). Use `all` to skip everything or set the `DEV3000_DISABLE_MCP_CONFIGS` env var for a default.
-- `--no-browser` - Skip browser monitoring
-- `--playwright` - Use Playwright instead of Chrome extension
+- `--browser <path>` - Use a different browser (see [Browser Options](#browser-options) below)
+- `--servers-only` - Skip browser monitoring entirely
+- `--headless` - Run browser in headless mode (for CI/CD)
 
 ## AI Integration
 
@@ -125,22 +126,48 @@ pnpm lint
 
 ## Browser Options
 
-### Chrome Extension (Default)
+### Chrome (Default)
 
-Automatically installs and manages a Chrome extension for monitoring. Best for most projects.
+By default, dev3000 launches Chrome for browser monitoring. Each project gets a dedicated Chrome profile that preserves login state, cookies, and local storage.
 
-### Playwright Mode
+### Arc Browser
+
+If you use [Arc](https://arc.net/) instead of Chrome:
 
 ```bash
-dev3000 --playwright
+d3k --browser '/Applications/Arc.app/Contents/MacOS/Arc'
 ```
 
-Uses Playwright's browser automation. Better for:
-- CI/CD environments
-- Automated testing
-- Projects that need precise browser control
+### Other Chromium Browsers
 
-The extension has some limitations (stricter security, no incognito mode support) but provides better real-world monitoring.
+Any Chromium-based browser works. Pass the full path to the executable:
+
+```bash
+# Brave
+d3k --browser '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser'
+
+# Edge
+d3k --browser '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge'
+
+# Chromium
+d3k --browser '/Applications/Chromium.app/Contents/MacOS/Chromium'
+```
+
+### Servers Only Mode
+
+Skip browser monitoring entirely and just run the dev server + MCP server:
+
+```bash
+d3k --servers-only
+```
+
+### Headless Mode
+
+For CI/CD environments where no display is available:
+
+```bash
+d3k --headless
+```
 
 ## Logs
 
@@ -160,9 +187,9 @@ Yes, but you'll need to manually configure the MCP server connection. See the [M
 
 Yes. dev3000 works with any web framework (React, Vue, Svelte, vanilla JS, Rails, Django, etc.). It just monitors your dev server and browser.
 
-### What's the difference between the Chrome extension and Playwright?
+### Can I use Arc or other browsers?
 
-The Chrome extension runs in a real browser instance for authentic monitoring. Playwright uses browser automation which is better for CI/CD but may behave slightly differently.
+Yes! Use `--browser '/path/to/browser'` to specify any Chromium-based browser. See [Browser Options](#browser-options) for examples.
 
 ### How do I stop dev3000?
 

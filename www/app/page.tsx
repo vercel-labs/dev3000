@@ -357,6 +357,18 @@ const FAQs: {
     answer: "Yes. Each project gets a dedicated Chrome profile that preserves login state, cookies, and local storage."
   },
   {
+    question: "Can I use Arc or another browser instead of Chrome?",
+    answer: (
+      <>
+        Yes! Use the <code className="bg-muted px-2 py-1 rounded text-sm font-mono">--browser</code> flag with the path
+        to any Chromium-based browser. For Arc:{" "}
+        <code className="bg-muted px-2 py-1 rounded text-sm font-mono">
+          d3k --browser &apos;/Applications/Arc.app/Contents/MacOS/Arc&apos;
+        </code>
+      </>
+    )
+  },
+  {
     question: "Does this only work with Next.js?",
     answer: (
       <>
