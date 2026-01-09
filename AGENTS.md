@@ -8,6 +8,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NEVER RUN**:
 - Do not run `bun run build` or `bun run dev` during development - the user tests manually.
+- Do not run `./scripts/publish.sh` - the user runs this manually (requires npm auth).
+
+**RELEASING**: When the user asks to release:
+- You CAN run `./scripts/release.sh` - this builds, tests, bumps version, and creates the git tag
+- After release.sh completes, tell the user to run `./scripts/publish.sh` themselves
 
 
 **ALWAYS RUN**: When completing any code changes, you MUST run:
