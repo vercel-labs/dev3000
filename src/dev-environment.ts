@@ -2679,32 +2679,25 @@ export class DevEnvironment {
     // Handle Ctrl+C to kill all processes
     process.on("SIGINT", () => {
       this.debugLog("SIGINT received")
-      const now = Date.now()
 
-      // If first Ctrl+C or more than 3 seconds since last one
-      if (!this.firstSigintTime || now - this.firstSigintTime > 3000) {
-        this.firstSigintTime = now
-        this.debugLog("First Ctrl+C detected")
-
-        if (this.options.tui && this.tui) {
-          // In TUI mode, update the TUI status to show warning
-          this.debugLog("Updating TUI status with warning")
-          this.tui.updateStatus("⚠️ Press Ctrl+C again to quit")
-
-          // Clear the message after 3 seconds
-          setTimeout(() => {
-            if (this.tui && !this.isShuttingDown) {
-              this.debugLog("Clearing TUI warning message")
-              this.tui.updateStatus(null)
-            }
-          }, 3000)
-        } else {
+      // In TUI mode, the TUI already handles double-tap protection, so any SIGINT
+      // from TUI means user has already confirmed they want to quit - proceed directly
+      if (this.options.tui && this.tui) {
+        this.debugLog("TUI mode - proceeding directly to shutdown")
+        // Fall through to shutdown code below
+      } else {
+        // Non-TUI mode: implement double-tap protection here
+        const now = Date.now()
+        if (!this.firstSigintTime || now - this.firstSigintTime > 3000) {
+          this.firstSigintTime = now
+          this.debugLog("First Ctrl+C detected")
           console.log(chalk.yellow("\n⚠️ Press Ctrl+C again to quit"))
+          return
         }
-        return
+        this.debugLog("Second Ctrl+C detected")
       }
 
-      // Second Ctrl+C - proceed with shutdown
+      // Proceed with shutdown
       if (this.isShuttingDown) return // Prevent multiple shutdown attempts
       this.isShuttingDown = true
       this.debugLog("Second Ctrl+C detected, starting shutdown")

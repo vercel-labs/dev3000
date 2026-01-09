@@ -443,10 +443,9 @@ class D3kTUI {
       // Handle Ctrl+C with double-tap protection
       if (key.ctrl && key.name === "c") {
         if (ctrlCPending) {
-          // Second Ctrl+C - send TWO SIGINTs because the process handler
-          // also has double-tap protection and we need to trigger actual shutdown
+          // Second Ctrl+C - send SIGINT to trigger shutdown
+          // The process handler knows we're in TUI mode and will proceed directly
           process.kill(process.pid, "SIGINT")
-          setTimeout(() => process.kill(process.pid, "SIGINT"), 50)
         } else {
           // First Ctrl+C - show warning
           ctrlCPending = true
