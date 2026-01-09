@@ -46,8 +46,8 @@ export class DevTUI {
       }
       console.error = suppressReactHookWarnings
 
-      // Use dynamic import to load the TSX implementation at runtime
-      const { runTUI } = await import("./tui-interface-impl.js")
+      // Use dynamic import to load the OpenTUI implementation at runtime
+      const { runTUI } = await import("./tui-interface-opentui.js")
       const { app, updateStatus, updateAppPort, updateUpdateInfo, updateUseHttps } = await runTUI(this.options)
       this.app = app
       this.updateStatusFn = updateStatus

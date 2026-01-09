@@ -64,6 +64,7 @@
   ],
   "dependencies": {
     "@biomejs/biome": "^2.2.4",
+    "@opentui/core": "^0.1.71",
     "@vercel/sandbox": "^1.0.2",
     "ai": "^5.0.87",
     "chalk": "^5.3.0",
