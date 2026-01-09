@@ -10,6 +10,19 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.141",
+    date: "2026-01-09",
+    type: "minor",
+    highlights: [
+      "Update bun.lock",
+      "Fix variable escaping in MCP polling command",
+      "Fix skills not offered after .claude deletion + curl killed in polling",
+      "Convert eslint-disable to biome-ignore comments",
+      "Add release/publish workflow rules to CLAUDE.md"
+    ]
+  },
+
+  {
     version: "0.0.140",
     date: "2026-01-09",
     type: "minor",

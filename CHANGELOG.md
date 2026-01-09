@@ -4,6 +4,16 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.141] - 2026-01-09
+
+**Feature Release**
+
+- Update bun.lock
+- Fix variable escaping in MCP polling command
+- Fix skills not offered after .claude deletion + curl killed in polling
+- Convert eslint-disable to biome-ignore comments
+- Add release/publish workflow rules to CLAUDE.md
+
 ## [0.0.140] - 2026-01-09
 
 **Feature Release**
