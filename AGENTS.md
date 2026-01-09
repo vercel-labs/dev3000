@@ -34,6 +34,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Testing
 
+**BUILD CANARY AFTER d3k CHANGES**: When making changes to the d3k CLI or TUI (anything in `src/`), you MUST run `bun run canary` after committing so the user can test. This is the only way to test d3k changes locally. However, you do NOT need to rebuild canary for:
+- Changes to `www/` (website) - those are tested via `bun run dev` in www/
+- Changes to `mcp-server/` only - those are tested via the deployed MCP server
+
 For local testing, use:
 ```bash
 bun run canary
@@ -50,7 +54,9 @@ To test the d3k-in-the-cloud workflow:
 **Main Files**:
 - `src/cli.ts` - CLI entry point (start/setup commands)
 - `src/dev-environment.ts` - Orchestrates dev server + browser monitoring
-- `src/tui-interface-impl.tsx` - TUI implementation with Ink/React
+- `src/tui-interface.ts` - TUI loader (switches between implementations)
+- `src/tui-interface-opentui.ts` - TUI implementation with OpenTUI (mouse scroll support)
+- `src/tui-interface-impl.tsx` - Legacy TUI implementation with Ink/React
 - `mcp-server/app/mcp/route.ts` - MCP endpoint with debug tools
 
 **Key Features**:
