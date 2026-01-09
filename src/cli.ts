@@ -34,7 +34,7 @@ import { checkForUpdates, getUpgradeCommand, performUpgrade } from "./utils/vers
  * Launch d3k with an agent using tmux for proper terminal multiplexing.
  * This creates a split-screen with the agent on the left and d3k logs on the right.
  */
-async function launchWithTmux(agentCommand: string): Promise<void> {
+async function launchWithTmux(agentCommand: string, mcpPort: number = DEFAULT_TMUX_CONFIG.mcpPort): Promise<void> {
   const { execSync } = await import("child_process")
   const { appendFileSync, writeFileSync } = await import("fs")
 
@@ -77,7 +77,7 @@ async function launchWithTmux(agentCommand: string): Promise<void> {
     sessionName,
     d3kCommand,
     agentCommand,
-    agentDelay: DEFAULT_TMUX_CONFIG.agentDelay,
+    mcpPort,
     paneWidthPercent: DEFAULT_TMUX_CONFIG.paneWidthPercent
   })
 
@@ -534,7 +534,7 @@ program
   .action(async (options) => {
     // Handle --with-agent by spawning tmux with split panes
     if (options.withAgent) {
-      await launchWithTmux(options.withAgent)
+      await launchWithTmux(options.withAgent, parseInt(options.portMcp, 10))
       return
     }
     // Handle --kill-mcp option
@@ -612,7 +612,7 @@ program
             }
             // Clear screen and scrollback before launching tmux so when tmux exits, terminal is clean
             process.stdout.write("\x1b[2J\x1b[H\x1b[3J")
-            await launchWithTmux(selectedAgent.command)
+            await launchWithTmux(selectedAgent.command, parseInt(options.portMcp, 10))
             return
           }
         } else if (options.debug) {

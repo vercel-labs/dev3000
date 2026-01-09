@@ -7,7 +7,7 @@ export interface TmuxSessionConfig {
   sessionName: string
   d3kCommand: string
   agentCommand: string
-  agentDelay: number // seconds to wait before starting agent
+  mcpPort: number // port to poll for MCP server readiness
   paneWidthPercent: number // percentage for agent pane (left side)
 }
 
@@ -23,17 +23,25 @@ function wrapCommandWithErrorHandling(cmd: string, name: string): string {
 }
 
 /**
+ * Generate the command to poll for MCP server readiness before starting the agent.
+ * Uses curl to check if MCP server is responding.
+ */
+function generateMcpPollingCommand(mcpPort: number, agentCommand: string): string {
+  // Simple polling loop using 'until' (avoids '!' which can trigger history expansion)
+  return `echo Waiting for d3k MCP server...; until curl -sf http://localhost:${mcpPort}/ >/dev/null 2>&1; do sleep 1; done; ${agentCommand}`
+}
+
+/**
  * Generate tmux commands for setting up split-screen mode.
  */
 export function generateTmuxCommands(config: TmuxSessionConfig): string[] {
-  const { sessionName, d3kCommand, agentCommand, agentDelay, paneWidthPercent } = config
+  const { sessionName, d3kCommand, agentCommand, mcpPort, paneWidthPercent } = config
 
   // Wrap commands with error handling so users can see crash output
   const d3kWithErrorHandling = wrapCommandWithErrorHandling(d3kCommand, "d3k")
-  // Wait for MCP server to start before launching agent
-  // Using simple sleep since quote escaping in nested bash -c is fragile
-  const agentWithDelay = agentDelay > 0 ? `sleep ${agentDelay} && ${agentCommand}` : agentCommand
-  const agentWithErrorHandling = wrapCommandWithErrorHandling(agentWithDelay, "agent")
+  // Poll for MCP server to be ready before launching agent
+  const agentWithPolling = mcpPort > 0 ? generateMcpPollingCommand(mcpPort, agentCommand) : agentCommand
+  const agentWithErrorHandling = wrapCommandWithErrorHandling(agentWithPolling, "agent")
 
   return [
     // Create new session with d3k in the first pane (will be right side)
@@ -113,6 +121,6 @@ export function getTmuxInstallInstructions(): string[] {
  * Default configuration for tmux split-screen.
  */
 export const DEFAULT_TMUX_CONFIG = {
-  agentDelay: 2, // seconds to wait for MCP to start
+  mcpPort: 3684, // default MCP server port for polling
   paneWidthPercent: 75 // Agent gets 75% of width
 }

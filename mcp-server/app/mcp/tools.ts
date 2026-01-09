@@ -404,21 +404,37 @@ export function findActiveSessions(): Session[] {
   }
 
   try {
-    const files = readdirSync(sessionDir)
-      .filter((f) => f.endsWith(".json"))
-      .map((f) => {
-        const filePath = join(sessionDir, f)
-        const content = JSON.parse(readFileSync(filePath, "utf-8"))
-        const stat = statSync(filePath)
-        return {
-          ...content,
-          sessionFile: filePath,
-          lastModified: stat.mtime
+    // Look for session.json files in subdirectories (new format)
+    // e.g., ~/.d3k/dev3000-www-935beb/session.json
+    const entries = readdirSync(sessionDir, { withFileTypes: true })
+    const sessionFiles: string[] = []
+
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        const sessionFile = join(sessionDir, entry.name, "session.json")
+        if (existsSync(sessionFile)) {
+          sessionFiles.push(sessionFile)
+        }
+      }
+    }
+
+    const files = sessionFiles
+      .map((filePath) => {
+        try {
+          const content = JSON.parse(readFileSync(filePath, "utf-8"))
+          const stat = statSync(filePath)
+          return {
+            ...content,
+            sessionFile: filePath,
+            lastModified: stat.mtime
+          }
+        } catch {
+          return null
         }
       })
-      .filter((session) => {
+      .filter((session): session is NonNullable<typeof session> => {
         // Check if the process is still running by checking the PID
-        if (!session.pid) {
+        if (!session || !session.pid) {
           return false
         }
         try {
