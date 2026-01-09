@@ -33,6 +33,7 @@ export interface TUIOptions {
   projectName?: string
   updateInfo?: UpdateInfo
   useHttps?: boolean
+  onRequestShutdown?: () => void
 }
 
 interface LogEntry {
@@ -459,10 +460,14 @@ class D3kTUI {
       // Handle Ctrl+C with double-tap protection
       if (key.ctrl && key.name === "c") {
         if (ctrlCPending) {
-          // Second Ctrl+C - emit SIGINT event directly to trigger shutdown
-          // Using emit() instead of kill() ensures the handler runs synchronously
-          // The process handler knows we're in TUI mode and will proceed directly
-          process.emit("SIGINT")
+          // Second Ctrl+C - call shutdown callback directly
+          // This bypasses signal handling which can be unreliable in TUI mode
+          if (this.options.onRequestShutdown) {
+            this.options.onRequestShutdown()
+          } else {
+            // Fallback to signal if no callback provided
+            process.emit("SIGINT")
+          }
         } else {
           // First Ctrl+C - show warning
           ctrlCPending = true

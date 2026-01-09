@@ -1324,7 +1324,23 @@ export class DevEnvironment {
         serversOnly: this.options.serversOnly,
         version: this.version,
         projectName: projectDisplayName,
-        updateInfo: null // Will be updated async after auto-upgrade
+        updateInfo: null, // Will be updated async after auto-upgrade
+        onRequestShutdown: () => {
+          // Direct shutdown callback from TUI - bypasses signal handling
+          if (this.isShuttingDown) return
+          this.isShuttingDown = true
+          this.debugLog("TUI requested shutdown via callback")
+          this.tui?.updateStatus("Shutting down...")
+          this.handleShutdown()
+            .then(() => {
+              this.debugLog("Shutdown complete")
+              process.exit(0)
+            })
+            .catch((error) => {
+              this.debugLog(`Shutdown error: ${error}`)
+              process.exit(1)
+            })
+        }
       })
 
       await this.tui.start()

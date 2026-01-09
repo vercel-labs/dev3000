@@ -13,6 +13,7 @@ export interface TUIOptions {
   projectName?: string
   updateInfo?: UpdateInfo
   useHttps?: boolean
+  onRequestShutdown?: () => void
 }
 
 type InkApp = { unmount: () => void }
