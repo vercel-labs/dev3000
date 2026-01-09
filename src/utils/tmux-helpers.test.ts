@@ -29,7 +29,7 @@ describe("tmux-helpers", () => {
       sessionName: "d3k-test-123",
       d3kCommand: "d3k",
       agentCommand: "claude",
-      agentDelay: 5,
+      mcpPort: 3684,
       paneWidthPercent: 75
     }
 
@@ -91,9 +91,11 @@ describe("tmux-helpers", () => {
       expect(commands[9]).toContain("d3k-test-123")
     })
 
-    it("should include sleep delay before agent command", () => {
+    it("should poll MCP server before starting agent", () => {
       const commands = generateTmuxCommands(baseConfig)
-      expect(commands[9]).toContain("sleep 5 && claude")
+      expect(commands[9]).toContain("echo Waiting for d3k MCP server...")
+      expect(commands[9]).toContain("curl -sf http://localhost:3684/")
+      expect(commands[9]).toContain("; claude")
     })
 
     it("should set pane-focus-in hook with window flag to resize on click", () => {
@@ -116,15 +118,15 @@ describe("tmux-helpers", () => {
       expect(commands[13]).toBe('tmux select-pane -t "d3k-test-123:0.0"')
     })
 
-    it("should handle zero delay correctly", () => {
+    it("should skip polling when mcpPort is 0", () => {
       const config: TmuxSessionConfig = {
         ...baseConfig,
-        agentDelay: 0
+        mcpPort: 0
       }
       const commands = generateTmuxCommands(config)
-      // Should not have sleep prefix, but should have the agent command
+      // Should not have polling, but should have the agent command
       expect(commands[9]).toContain("claude")
-      expect(commands[9]).not.toContain("sleep")
+      expect(commands[9]).not.toContain("curl")
     })
 
     it("should handle different pane widths", () => {
@@ -172,7 +174,7 @@ describe("tmux-helpers", () => {
 
   describe("DEFAULT_TMUX_CONFIG", () => {
     it("should have correct default values", () => {
-      expect(DEFAULT_TMUX_CONFIG.agentDelay).toBe(2)
+      expect(DEFAULT_TMUX_CONFIG.mcpPort).toBe(3684)
       expect(DEFAULT_TMUX_CONFIG.paneWidthPercent).toBe(75)
     })
   })
@@ -182,7 +184,7 @@ describe("tmux-helpers", () => {
       sessionName: "d3k-focus-test",
       d3kCommand: "d3k",
       agentCommand: "claude",
-      agentDelay: 5,
+      mcpPort: 3684,
       paneWidthPercent: 75
     }
 
@@ -256,7 +258,7 @@ describe("tmux-helpers", () => {
         sessionName: generateSessionName(),
         d3kCommand: "d3k",
         agentCommand: "claude",
-        agentDelay: DEFAULT_TMUX_CONFIG.agentDelay,
+        mcpPort: DEFAULT_TMUX_CONFIG.mcpPort,
         paneWidthPercent: DEFAULT_TMUX_CONFIG.paneWidthPercent
       }
       const commands = generateTmuxCommands(config)
@@ -281,7 +283,7 @@ describe("tmux-helpers", () => {
         sessionName: generateSessionName(),
         d3kCommand: "dev3000",
         agentCommand: "opencode",
-        agentDelay: DEFAULT_TMUX_CONFIG.agentDelay,
+        mcpPort: DEFAULT_TMUX_CONFIG.mcpPort,
         paneWidthPercent: DEFAULT_TMUX_CONFIG.paneWidthPercent
       }
       const commands = generateTmuxCommands(config)

@@ -119,7 +119,7 @@ export default async function HomePage() {
               <span className="pl-2 font-medium">Install dev3000</span>
               <div className="pl-6 pt-2">
                 <pre className="block w-full">
-                  <code className="code-block">pnpm i -g dev3000</code>
+                  <code className="code-block">npm i -g dev3000</code>
                 </pre>
               </div>
             </li>
@@ -131,7 +131,7 @@ export default async function HomePage() {
                 </p>
                 <pre className="block w-full">
                   <code className="code-block">
-                    <span className="block code-comment"># Instead of running pnpm dev</span>
+                    <span className="block code-comment"># Instead of running npm run dev</span>
                     <span className="block">
                       d3k <span className="code-comment"># or dev3000</span>
                     </span>
@@ -139,7 +139,7 @@ export default async function HomePage() {
                     <span className="block code-comment"># Setting a port</span>
                     <span className="block">d3k -p 5000</span>
                     <span className="block h-[1lh]" />
-                    <span className="block code-comment"># Custom pnpm script</span>
+                    <span className="block code-comment"># Custom npm script</span>
                     <span className="block">d3k -s build-start</span>
                   </code>
                 </pre>
@@ -396,8 +396,8 @@ const FAQs: {
     answer: (
       <>
         Yes. Replace your normal dev command (
-        <code className="bg-muted px-2 py-1 rounded text-sm font-mono">pnpm dev</code>,{" "}
-        <code className="bg-muted px-2 py-1 rounded text-sm font-mono">npm run dev</code>, etc.) with{" "}
+        <code className="bg-muted px-2 py-1 rounded text-sm font-mono">npm run dev</code>,{" "}
+        <code className="bg-muted px-2 py-1 rounded text-sm font-mono">yarn dev</code>, etc.) with{" "}
         <code className="bg-muted px-2 py-1 rounded text-sm font-mono">d3k</code>. Everything else works exactly the
         same—hot reload, environment variables, custom ports, etc.
       </>
@@ -406,7 +406,7 @@ const FAQs: {
   {
     question: "What's the 'sharp' warning during installation?",
     answer:
-      "Ignore it. Sharp is a Next.js image optimization dependency that dev3000 doesn't use. The warning appears because pnpm runs install scripts for all dependencies, but sharp is never invoked at runtime."
+      "Ignore it. Sharp is a Next.js image optimization dependency that dev3000 doesn't use. The warning appears because npm runs install scripts for all dependencies, but sharp is never invoked at runtime."
   }
 ] as const
 
