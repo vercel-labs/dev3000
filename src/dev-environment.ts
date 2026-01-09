@@ -2909,9 +2909,22 @@ export class DevEnvironment {
 
     // IMPORTANT: With shell: true, the shell process exits quickly after spawning
     // the actual command, leaving Next.js orphaned (reparented to PID 1).
-    // So we MUST use lsof-based kill as the primary method, not process group kill.
+    // We use SYNCHRONOUS lsof kill first to ensure it completes before process exits.
 
-    // Primary: Kill any processes on the app port using lsof
+    // Primary: Synchronous kill - most reliable, ensures completion
+    // NOTE: We always try this, even if lsof might not exist - errors are caught
+    try {
+      const { spawnSync } = await import("child_process")
+      const result = spawnSync("sh", ["-c", `lsof -ti:${this.options.port} | xargs kill -9 2>/dev/null`], {
+        stdio: "pipe",
+        timeout: 5000
+      })
+      this.debugLog(`Synchronous kill for port ${this.options.port} exit code: ${result.status}`)
+    } catch (error) {
+      this.debugLog(`Synchronous kill error: ${error}`)
+    }
+
+    // Also try async kill as backup
     await killPortProcess(this.options.port, "your app server")
 
     // Also try to kill the process group if we have the reference (belt and suspenders)
