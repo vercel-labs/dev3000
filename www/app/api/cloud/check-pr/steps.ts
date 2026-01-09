@@ -169,7 +169,7 @@ export async function crawlPreviewPages(previewUrl: string, pagesToCheck: string
 /**
  * Step 3: Verify PR claims against actual behavior
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- AI-generated crawl data has dynamic structure
+// biome-ignore lint/suspicious/noExplicitAny: AI-generated crawl data has dynamic structure
 export async function verifyPRClaims(prTitle: string, prBody: string, crawlResults: any[], changedFiles: string[]) {
   "use step"
 
@@ -323,7 +323,7 @@ export async function checkPerformance(previewUrl: string, pagesToCheck: string[
 /**
  * Step 5: Generate comprehensive report
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Report data has dynamic structure from previous steps
+// biome-ignore lint/suspicious/noExplicitAny: Report data has dynamic structure from previous steps
 export async function generateReport(data: any) {
   "use step"
 

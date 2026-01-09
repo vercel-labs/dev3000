@@ -90,7 +90,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   const [loadingProjects, setLoadingProjects] = useState(false)
   const [projectsError, setProjectsError] = useState<string | null>(null)
   const [workflowStatus, setWorkflowStatus] = useState<string>("")
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- API response type is dynamic
+  // biome-ignore lint/suspicious/noExplicitAny: API response type is dynamic
   const [workflowResult, setWorkflowResult] = useState<any>(null)
   const [activeRunId, setActiveRunId] = useState<string | null>(null)
   const [sandboxUrl, setSandboxUrl] = useState<string | null>(null)
@@ -234,14 +234,14 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
         if (!data.success || !data.runs) return
 
         // Find the run - either by activeRunId or by matching project + running status
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- API response type is dynamic
+        // biome-ignore lint/suspicious/noExplicitAny: API response type is dynamic
         let run: any = null
         if (activeRunId) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- API response type is dynamic
+          // biome-ignore lint/suspicious/noExplicitAny: API response type is dynamic
           run = data.runs.find((r: any) => r.id === activeRunId)
         } else if (selectedProject) {
           // Find the most recent running workflow for this project
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- API response type is dynamic
+          // biome-ignore lint/suspicious/noExplicitAny: API response type is dynamic
           run = data.runs.find((r: any) => r.projectName === selectedProject.name && r.status === "running")
           if (run) {
             setActiveRunId(run.id)
@@ -515,7 +515,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
             ? "design-guidelines"
             : "prompt"
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Request body type depends on conditional fields
+      // biome-ignore lint/suspicious/noExplicitAny: Request body type depends on conditional fields
       const body: any = {
         devUrl,
         projectName: selectedProject.name,

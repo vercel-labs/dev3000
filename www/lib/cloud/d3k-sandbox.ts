@@ -110,7 +110,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
 
   // Create sandbox WITHOUT source parameter
   // We'll manually clone the repo after sandbox creation for better control
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- ms type inference issue
+  // biome-ignore lint/suspicious/noExplicitAny: ms type inference issue
   const timeoutMs = ms(timeout as any) as unknown as number
   const sandbox = await Sandbox.create({
     resources: { vcpus: 8 },

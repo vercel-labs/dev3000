@@ -55,14 +55,14 @@ export async function GET(request: Request) {
     }
 
     // Format projects data
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Vercel API response shape is external
+    // biome-ignore lint/suspicious/noExplicitAny: Vercel API response shape is external
     const projects = data.projects.map((project: any) => ({
       id: project.id,
       name: project.name,
       framework: project.framework,
       link: project.link,
       latestDeployments:
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Vercel API response shape is external
+        // biome-ignore lint/suspicious/noExplicitAny: Vercel API response shape is external
         project.latestDeployments?.map((deployment: any) => ({
           id: deployment.id,
           url: deployment.url,
