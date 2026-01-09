@@ -1350,8 +1350,10 @@ export class DevEnvironment {
         }
       })
 
+      // Show initial status message
+      await this.tui.updateStatus("d3k is checking for Vercel skill updates...")
+
       // Check ports in background after TUI is visible
-      await this.tui.updateStatus("Checking ports...")
       await this.checkPortsAvailable(true) // silent mode for TUI
 
       // Update the app port in TUI (may have changed during port check)

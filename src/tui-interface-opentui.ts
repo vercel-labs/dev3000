@@ -324,7 +324,8 @@ class D3kTUI {
       paddingLeft: 1,
       paddingRight: 1,
       flexDirection: "row",
-      alignItems: "flex-start"
+      alignItems: "flex-start",
+      height: 5
     })
 
     // ASCII logo column
