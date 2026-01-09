@@ -111,7 +111,8 @@ function formatLogLine(content: string, isCompact: boolean): StyledText {
     if (isCompact) {
       const sourceChar = source.charAt(0)
       if (type) {
-        return t`${dim(displayTimestamp)} ${bold(fg(sourceColor)(`[${sourceChar}]`))} ${fg(typeColor)(`[${type}]`)} ${message || ""}`
+        const typeChar = type.charAt(0)
+        return t`${dim(displayTimestamp)} ${bold(fg(sourceColor)(`[${sourceChar}]`))} ${fg(typeColor)(`[${typeChar}]`)} ${message || ""}`
       }
       return t`${dim(displayTimestamp)} ${bold(fg(sourceColor)(`[${sourceChar}]`))} ${message || ""}`
     }
@@ -248,34 +249,37 @@ class D3kTUI {
     })
     this.logsScrollBox.add(this.logsContainer)
 
-    // Bottom status line
-    const statusLine = new BoxRenderable(this.renderer, {
-      id: "status-line",
-      height: 1,
-      flexDirection: "row",
-      justifyContent: "space-between",
-      paddingLeft: 1,
-      paddingRight: 1
-    })
-    mainContainer.add(statusLine)
-
-    // Log file path (left side)
+    // Bottom status line (skip in compact mode - logs take all space)
     if (!isCompact) {
+      const statusLine = new BoxRenderable(this.renderer, {
+        id: "status-line",
+        height: 1,
+        flexDirection: "row",
+        justifyContent: "space-between",
+        paddingLeft: 1,
+        paddingRight: 1
+      })
+      mainContainer.add(statusLine)
+
+      // Log file path (left side)
       const logPath = this.options.logFile.replace(process.env.HOME || "", "~")
       const logPathText = new TextRenderable(this.renderer, {
         id: "log-path",
         content: t`${fg(BRAND_PURPLE)(logPath)}`
       })
       statusLine.add(logPathText)
-    }
 
-    // Status info (right side)
-    this.statusText = new TextRenderable(this.renderer, {
-      id: "status-text",
-      content: this.buildStatusContent(isCompact),
-      marginLeft: "auto"
-    })
-    statusLine.add(this.statusText)
+      // Status info (right side)
+      this.statusText = new TextRenderable(this.renderer, {
+        id: "status-text",
+        content: this.buildStatusContent(false),
+        marginLeft: "auto"
+      })
+      statusLine.add(this.statusText)
+    } else {
+      // In compact mode, no status line - set to null
+      this.statusText = null
+    }
 
     // Handle resize
     this.renderer.root.onSizeChange = () => {
@@ -286,31 +290,21 @@ class D3kTUI {
   private createHeader(isCompact: boolean, isVeryCompact: boolean): BoxRenderable {
     if (!this.renderer) throw new Error("Renderer not initialized")
 
-    // In compact mode, no box border - just a simple container
+    // In compact mode, no box border - just logo and version
     if (isCompact || isVeryCompact) {
       const headerBox = new BoxRenderable(this.renderer, {
         id: "header",
         flexDirection: "row",
-        justifyContent: "space-between",
         paddingLeft: 1,
-        paddingRight: 1,
         height: 1
       })
 
-      // Left: logo and version
+      // Only: logo and version
       const logoText = new TextRenderable(this.renderer, {
         id: "logo-compact",
         content: t`${bold(fg(BRAND_PURPLE)(COMPACT_LOGO))}${dim(`-v${this.options.version}`)}`
       })
       headerBox.add(logoText)
-
-      // Right: App URL
-      const protocol = this.useHttps ? "https" : "http"
-      const appUrl = new TextRenderable(this.renderer, {
-        id: "app-url-compact",
-        content: t`${cyan(`🌐 App: ${protocol}://localhost:${this.appPort}`)}`
-      })
-      headerBox.add(appUrl)
 
       return headerBox
     }
