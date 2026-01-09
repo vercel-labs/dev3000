@@ -35,7 +35,7 @@
         "vitest": "^3.2.4",
       },
       "optionalDependencies": {
-        "@d3k/darwin-arm64": "0.0.140-canary",
+        "@d3k/darwin-arm64": "0.0.141-canary",
       },
     },
     "mcp-server": {
@@ -272,6 +272,8 @@
     "@chevrotain/types": ["@chevrotain/types@11.0.3", "", {}, "sha512-gsiM3G8b58kZC2HaWR50gu6Y1440cHiJ+i3JUvcp/35JchYejb2+5MVeJK0iKThYpAa/P2PYFV4hoi44HD+aHQ=="],
 
     "@chevrotain/utils": ["@chevrotain/utils@11.0.3", "", {}, "sha512-YslZMgtJUyuMbZ+aKvfF3x1f5liK4mWNxghFRv7jqRR9C3R3fAOGTTKvxXDa2Y1s9zSbcpuO0cAxDYsc9SrXoQ=="],
+
+    "@d3k/darwin-arm64": ["@d3k/darwin-arm64@0.0.140", "", { "os": "darwin", "cpu": "arm64", "bin": { "dev3000": "bin/dev3000" } }, "sha512-ag0/klwxcgkXzOheVF2SEPvWy9r/E5Psz2KvvAhpC35/eawhwGxooeNzd+7ggF56ql0zy+BjTiN6SnDN7eWmbg=="],
 
     "@date-fns/tz": ["@date-fns/tz@1.2.0", "", {}, "sha512-LBrd7MiJZ9McsOgxqWX7AaxrDjcFVjWH/tIKJd7pnR7McaslGYOP1QmmiBXdJH/H/yLCT+rcQ7FaPBUxRGUtrg=="],
 
