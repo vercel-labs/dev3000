@@ -169,7 +169,7 @@ class D3kTUI {
       useAlternateScreen: true
     }
 
-    // Temporarily suppress stdout/stderr during renderer creation AND start to hide OpenTUI's
+    // Temporarily suppress stdout/stderr during renderer creation to hide OpenTUI's
     // terminal detection messages (e.g., "info(terminal): Terminal detect...")
     const originalStdoutWrite = process.stdout.write.bind(process.stdout)
     const originalStderrWrite = process.stderr.write.bind(process.stderr)
@@ -177,14 +177,16 @@ class D3kTUI {
     process.stderr.write = () => true
     try {
       this.renderer = await createCliRenderer(config)
-      this.setupUI()
-      this.setupKeyboardHandlers()
-      this.startLogFileWatcher()
-      this.renderer.start()
     } finally {
       process.stdout.write = originalStdoutWrite
       process.stderr.write = originalStderrWrite
     }
+
+    // Setup UI after renderer is created and stdout is restored
+    this.setupUI()
+    this.setupKeyboardHandlers()
+    this.startLogFileWatcher()
+    this.renderer.start()
 
     return {
       app: { unmount: () => this.shutdown() },
