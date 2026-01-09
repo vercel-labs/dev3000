@@ -224,7 +224,8 @@ class D3kTUI {
     this.logsContainer = new BoxRenderable(this.renderer, {
       id: "logs-content",
       flexDirection: "column",
-      width: "100%"
+      width: "100%",
+      overflow: "hidden"
     })
     this.logsScrollBox.add(this.logsContainer)
 
@@ -252,7 +253,8 @@ class D3kTUI {
     // Status info (right side)
     this.statusText = new TextRenderable(this.renderer, {
       id: "status-text",
-      content: this.buildStatusContent(isCompact)
+      content: this.buildStatusContent(isCompact),
+      marginLeft: "auto"
     })
     statusLine.add(this.statusText)
 
@@ -272,7 +274,8 @@ class D3kTUI {
       borderColor: BRAND_PURPLE,
       paddingLeft: 1,
       paddingRight: 1,
-      flexDirection: "row"
+      flexDirection: "row",
+      alignItems: "flex-start"
     })
 
     if (isVeryCompact) {
@@ -571,7 +574,8 @@ class D3kTUI {
       const formatted = formatLogLine(log.content, isCompact)
       const logLine = new TextRenderable(this.renderer, {
         id: `log-${log.id}`,
-        content: formatted
+        content: formatted,
+        wrapMode: isCompact ? "none" : "word"
       })
       this.logsContainer.add(logLine)
     }
