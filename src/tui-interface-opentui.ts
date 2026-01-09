@@ -100,18 +100,26 @@ function formatLogLine(content: string, isCompact: boolean): StyledText {
     const sourceColor = source === "BROWSER" ? LOG_COLORS.BROWSER : LOG_COLORS.SERVER
     const typeColor = TYPE_COLORS[type] || "#A0A0A0"
 
+    // Format timestamp - in compact mode just show HH:MM:SS, otherwise full timestamp without brackets
+    let displayTimestamp = timestamp
+    if (isCompact) {
+      // Extract just the time part (HH:MM:SS) from timestamps like "12:34:56.789"
+      const timeMatch = timestamp.match(/^(\d{1,2}:\d{2}:\d{2})/)
+      displayTimestamp = timeMatch ? timeMatch[1] : timestamp
+    }
+
     if (isCompact) {
       const sourceChar = source.charAt(0)
       if (type) {
-        return t`${dim(`[${timestamp}]`)} ${bold(fg(sourceColor)(`[${sourceChar}]`))} ${fg(typeColor)(`[${type}]`)} ${message || ""}`
+        return t`${dim(displayTimestamp)} ${bold(fg(sourceColor)(`[${sourceChar}]`))} ${fg(typeColor)(`[${type}]`)} ${message || ""}`
       }
-      return t`${dim(`[${timestamp}]`)} ${bold(fg(sourceColor)(`[${sourceChar}]`))} ${message || ""}`
+      return t`${dim(displayTimestamp)} ${bold(fg(sourceColor)(`[${sourceChar}]`))} ${message || ""}`
     }
 
     if (type) {
-      return t`${dim(`[${timestamp}]`)} ${bold(fg(sourceColor)(`[${source}]`))} ${fg(typeColor)(`[${type}]`)} ${message || ""}`
+      return t`${dim(displayTimestamp)} ${bold(fg(sourceColor)(`[${source}]`))} ${fg(typeColor)(`[${type}]`)} ${message || ""}`
     }
-    return t`${dim(`[${timestamp}]`)} ${bold(fg(sourceColor)(`[${source}]`))} ${message || ""}`
+    return t`${dim(displayTimestamp)} ${bold(fg(sourceColor)(`[${source}]`))} ${message || ""}`
   }
 
   return t`${content}`
@@ -278,6 +286,36 @@ class D3kTUI {
   private createHeader(isCompact: boolean, isVeryCompact: boolean): BoxRenderable {
     if (!this.renderer) throw new Error("Renderer not initialized")
 
+    // In compact mode, no box border - just a simple container
+    if (isCompact || isVeryCompact) {
+      const headerBox = new BoxRenderable(this.renderer, {
+        id: "header",
+        flexDirection: "row",
+        justifyContent: "space-between",
+        paddingLeft: 1,
+        paddingRight: 1,
+        height: 1
+      })
+
+      // Left: logo and version
+      const logoText = new TextRenderable(this.renderer, {
+        id: "logo-compact",
+        content: t`${bold(fg(BRAND_PURPLE)(COMPACT_LOGO))}${dim(`-v${this.options.version}`)}`
+      })
+      headerBox.add(logoText)
+
+      // Right: App URL
+      const protocol = this.useHttps ? "https" : "http"
+      const appUrl = new TextRenderable(this.renderer, {
+        id: "app-url-compact",
+        content: t`${cyan(`🌐 App: ${protocol}://localhost:${this.appPort}`)}`
+      })
+      headerBox.add(appUrl)
+
+      return headerBox
+    }
+
+    // Full mode: bordered box with ASCII logo and info
     const headerBox = new BoxRenderable(this.renderer, {
       id: "header",
       border: true,
@@ -289,100 +327,66 @@ class D3kTUI {
       alignItems: "flex-start"
     })
 
-    if (isVeryCompact) {
-      // Very compact: just logo and version
-      const logoText = new TextRenderable(this.renderer, {
-        id: "logo-compact",
-        content: t`${bold(fg(BRAND_PURPLE)(COMPACT_LOGO))} ${dim(`v${this.options.version}`)}`
-      })
-      headerBox.add(logoText)
-    } else if (isCompact) {
-      // Compact mode
-      const leftCol = new BoxRenderable(this.renderer, {
-        id: "header-left",
-        flexDirection: "column"
-      })
-      headerBox.add(leftCol)
+    // ASCII logo column
+    const logoCol = new BoxRenderable(this.renderer, {
+      id: "logo-col",
+      flexDirection: "column",
+      marginRight: 2
+    })
+    headerBox.add(logoCol)
 
+    for (const line of FULL_LOGO) {
       const logoLine = new TextRenderable(this.renderer, {
-        id: "logo",
-        content: t`${bold(fg(BRAND_PURPLE)(COMPACT_LOGO))} ${dim(`v${this.options.version}`)}`
+        content: t`${bold(fg(BRAND_PURPLE)(line))}`
       })
-      leftCol.add(logoLine)
+      logoCol.add(logoLine)
+    }
 
-      const portsLine = new TextRenderable(this.renderer, {
-        id: "ports",
-        content: t`${dim(`App: localhost:${this.appPort} | MCP: localhost:${this.options.mcpPort}`)}`
+    // Info column
+    const infoCol = new BoxRenderable(this.renderer, {
+      id: "info-col",
+      flexDirection: "column",
+      flexGrow: 1
+    })
+    headerBox.add(infoCol)
+
+    const protocol = this.useHttps ? "https" : "http"
+    const portStatus = this.portConfirmed ? "" : " ..."
+    const appLine = new TextRenderable(this.renderer, {
+      id: "app-url",
+      content: this.portConfirmed
+        ? t`${cyan(`🌐 App: ${protocol}://localhost:${this.appPort}`)}`
+        : t`${cyan(`🌐 App: ${protocol}://localhost:${this.appPort}`)}${yellow(portStatus)}`
+    })
+    infoCol.add(appLine)
+
+    const mcpLine = new TextRenderable(this.renderer, {
+      id: "mcp-url",
+      content: t`${cyan(`🤖 MCP: http://localhost:${this.options.mcpPort}`)}`
+    })
+    infoCol.add(mcpLine)
+
+    const logsUrl = this.buildLogsUrl()
+    const logsLine = new TextRenderable(this.renderer, {
+      id: "logs-url-full",
+      content: t`${cyan(`📸 Logs: ${logsUrl}`)}`
+    })
+    infoCol.add(logsLine)
+
+    if (this.options.serversOnly) {
+      const serversLine = new TextRenderable(this.renderer, {
+        id: "servers-only",
+        content: t`${cyan("🖥️ Servers-only mode")}`
       })
-      leftCol.add(portsLine)
+      infoCol.add(serversLine)
+    }
 
-      const logsUrl = this.buildLogsUrl()
-      const logsLine = new TextRenderable(this.renderer, {
-        id: "logs-url",
-        content: t`${dim(`📸 ${logsUrl}`)}`
+    if (this.initStatus) {
+      const statusLine = new TextRenderable(this.renderer, {
+        id: "init-status",
+        content: t`${yellow(this.initStatus)}`
       })
-      leftCol.add(logsLine)
-    } else {
-      // Full header with ASCII logo
-      const logoCol = new BoxRenderable(this.renderer, {
-        id: "logo-col",
-        flexDirection: "column",
-        marginRight: 2
-      })
-      headerBox.add(logoCol)
-
-      for (const line of FULL_LOGO) {
-        const logoLine = new TextRenderable(this.renderer, {
-          content: t`${bold(fg(BRAND_PURPLE)(line))}`
-        })
-        logoCol.add(logoLine)
-      }
-
-      const infoCol = new BoxRenderable(this.renderer, {
-        id: "info-col",
-        flexDirection: "column",
-        flexGrow: 1
-      })
-      headerBox.add(infoCol)
-
-      const protocol = this.useHttps ? "https" : "http"
-      const portStatus = this.portConfirmed ? "" : " ..."
-      const appLine = new TextRenderable(this.renderer, {
-        id: "app-url",
-        content: this.portConfirmed
-          ? t`${cyan(`🌐 App: ${protocol}://localhost:${this.appPort}`)}`
-          : t`${cyan(`🌐 App: ${protocol}://localhost:${this.appPort}`)}${yellow(portStatus)}`
-      })
-      infoCol.add(appLine)
-
-      const mcpLine = new TextRenderable(this.renderer, {
-        id: "mcp-url",
-        content: t`${cyan(`🤖 MCP: http://localhost:${this.options.mcpPort}`)}`
-      })
-      infoCol.add(mcpLine)
-
-      const logsUrl = this.buildLogsUrl()
-      const logsLine = new TextRenderable(this.renderer, {
-        id: "logs-url-full",
-        content: t`${cyan(`📸 Logs: ${logsUrl}`)}`
-      })
-      infoCol.add(logsLine)
-
-      if (this.options.serversOnly) {
-        const serversLine = new TextRenderable(this.renderer, {
-          id: "servers-only",
-          content: t`${cyan("🖥️ Servers-only mode")}`
-        })
-        infoCol.add(serversLine)
-      }
-
-      if (this.initStatus) {
-        const statusLine = new TextRenderable(this.renderer, {
-          id: "init-status",
-          content: t`${yellow(this.initStatus)}`
-        })
-        infoCol.add(statusLine)
-      }
+      infoCol.add(statusLine)
     }
 
     return headerBox
@@ -586,7 +590,7 @@ class D3kTUI {
       const logLine = new TextRenderable(this.renderer, {
         id: `log-${log.id}`,
         content: formatted,
-        wrapMode: isCompact ? "none" : "word"
+        wrapMode: "none"
       })
       this.logsContainer.add(logLine)
     }
