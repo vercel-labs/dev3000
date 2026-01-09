@@ -1330,6 +1330,18 @@ export class DevEnvironment {
           if (this.isShuttingDown) return
           this.isShuttingDown = true
           this.debugLog("TUI requested shutdown via callback")
+
+          // CRITICAL: Kill port processes SYNCHRONOUSLY first, before anything else
+          // This ensures cleanup happens even if the event loop gets interrupted
+          const { spawnSync } = require("child_process")
+          const port = this.options.port
+          this.debugLog(`Synchronous kill for port ${port}`)
+          spawnSync("sh", ["-c", `lsof -ti:${port} | xargs kill -9 2>/dev/null`], {
+            stdio: "pipe",
+            timeout: 5000
+          })
+
+          // Now do the rest of cleanup async
           this.tui?.updateStatus("Shutting down...")
           this.handleShutdown()
             .then(() => {
