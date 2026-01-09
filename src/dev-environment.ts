@@ -2907,38 +2907,33 @@ export class DevEnvironment {
       console.log(chalk.yellow("🔄 Killing app server..."))
     }
 
-    // First, try to kill the process group if we have the server process reference
-    // This is important because the server is spawned with detached: true, which creates
-    // its own process group. Killing the entire group ensures child processes (like
-    // Next.js's next-server and webpack workers) are also killed.
+    // IMPORTANT: With shell: true, the shell process exits quickly after spawning
+    // the actual command, leaving Next.js orphaned (reparented to PID 1).
+    // So we MUST use lsof-based kill as the primary method, not process group kill.
+
+    // Primary: Kill any processes on the app port using lsof
+    await killPortProcess(this.options.port, "your app server")
+
+    // Also try to kill the process group if we have the reference (belt and suspenders)
     if (this.serverProcess?.pid) {
       try {
-        // Use graceful kill: SIGTERM first, wait, then SIGKILL if needed
-        // This allows Next.js to clean up .next/dev/lock before terminating
-        // Use a longer grace period (1000ms) to give Next.js time to clean up
         const result = await gracefulKillProcess({
           pid: this.serverProcess.pid,
-          gracePeriodMs: 1000,
+          gracePeriodMs: 500,
           debugLog: (msg) => this.debugLog(msg)
         })
-
-        if (!this.options.tui && result.terminated) {
-          const method = result.graceful ? "gracefully" : "forcefully"
-          console.log(chalk.green(`✅ Killed server process group ${method} (PID: ${this.serverProcess.pid})`))
+        if (result.terminated) {
+          this.debugLog(`Killed server process group (PID: ${this.serverProcess.pid})`)
         }
       } catch (error) {
-        // Process group may already be dead or may not exist
         this.debugLog(`Could not kill process group: ${error}`)
       }
     }
 
-    // Fallback: kill any remaining processes on the port
-    await killPortProcess(this.options.port, "your app server")
+    // Wait for processes to fully terminate
+    await new Promise((resolve) => setTimeout(resolve, 300))
 
-    // Add a delay to let processes fully terminate
-    await new Promise((resolve) => setTimeout(resolve, 200))
-
-    // Second pass: kill any remaining processes on the port (they may have survived first attempt)
+    // Second pass: kill any remaining processes on the port
     await killPortProcess(this.options.port, "your app server")
 
     // Double-check: try to kill any remaining processes on the app port
@@ -2968,6 +2963,12 @@ export class DevEnvironment {
           // Process may already be dead
         }
       }
+
+      // Final synchronous lsof kill - most reliable method
+      const result = spawnSync("sh", ["-c", `lsof -ti:${this.options.port} | xargs kill -9 2>/dev/null`], {
+        stdio: "pipe"
+      })
+      this.debugLog(`Final lsof kill exit code: ${result.status}`)
     } catch {
       // Ignore pkill errors
     }
