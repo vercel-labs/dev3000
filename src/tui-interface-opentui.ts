@@ -112,9 +112,10 @@ function formatLogLine(content: string, isCompact: boolean): StyledText {
       const sourceChar = source.charAt(0)
       if (type) {
         const typeChar = type.charAt(0)
-        return t`${dim(displayTimestamp)} ${bold(fg(sourceColor)(`[${sourceChar}]`))} ${fg(typeColor)(`[${typeChar}]`)} ${message || ""}`
+        // No bold, no space between tags in compact mode
+        return t`${dim(displayTimestamp)} ${fg(sourceColor)(`[${sourceChar}]`)}${fg(typeColor)(`[${typeChar}]`)} ${message || ""}`
       }
-      return t`${dim(displayTimestamp)} ${bold(fg(sourceColor)(`[${sourceChar}]`))} ${message || ""}`
+      return t`${dim(displayTimestamp)} ${fg(sourceColor)(`[${sourceChar}]`)} ${message || ""}`
     }
 
     if (type) {
