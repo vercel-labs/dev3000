@@ -1142,8 +1142,10 @@ export class DevEnvironment {
     const maxRetries = 5
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        // First, get the PIDs
-        const getPidsProcess = spawn("lsof", ["-ti", `:${this.options.mcpPort}`], {
+        // First, get the PIDs of processes LISTENING on the port
+        // Use -sTCP:LISTEN to only find servers, not clients connecting to the port
+        // This prevents killing curl when it's polling for MCP server readiness
+        const getPidsProcess = spawn("lsof", ["-ti", `:${this.options.mcpPort}`, "-sTCP:LISTEN"], {
           stdio: "pipe"
         })
 

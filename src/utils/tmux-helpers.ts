@@ -25,10 +25,12 @@ function wrapCommandWithErrorHandling(cmd: string, name: string): string {
 /**
  * Generate the command to poll for MCP server readiness before starting the agent.
  * Uses curl to check if MCP server is responding.
+ * Uses a for loop with counter for more robust behavior.
  */
 function generateMcpPollingCommand(mcpPort: number, agentCommand: string): string {
-  // Simple polling loop using 'until' (avoids '!' which can trigger history expansion)
-  return `echo Waiting for d3k MCP server...; until curl -sf http://localhost:${mcpPort}/ >/dev/null 2>&1; do sleep 1; done; ${agentCommand}`
+  // Use a for loop with explicit counter (more portable and robust than 'until')
+  // Wait up to 60 seconds for MCP server to be ready
+  return `echo Waiting for d3k MCP server...; i=0; while [ $i -lt 60 ]; do curl -sf http://localhost:${mcpPort}/ >/dev/null 2>&1 && break; sleep 1; i=$((i+1)); done; ${agentCommand}`
 }
 
 /**

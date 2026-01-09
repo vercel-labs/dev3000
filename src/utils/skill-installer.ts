@@ -37,6 +37,14 @@ function getProjectSkillsDir(): string {
   return path.join(process.cwd(), ".claude", "skills")
 }
 
+/**
+ * Check if a skill is actually installed on disk (not just tracked)
+ */
+function isSkillInstalledOnDisk(skillName: string): boolean {
+  const skillDir = path.join(getProjectSkillsDir(), skillName)
+  return existsSync(skillDir)
+}
+
 // Tracking data stored in ~/.d3k/{projectName}/skills.json
 function getInstalledSkillsPath(): string {
   return path.join(getProjectDir(), "skills.json")
@@ -128,9 +136,10 @@ export function getActionableSkills(available: AvailableSkill[], installed: Inst
   for (const skill of available) {
     const installedInfo = installed.skills[skill.name]
     const seenKey = `${skill.name}:${skill.sha}`
+    const existsOnDisk = isSkillInstalledOnDisk(skill.name)
 
-    if (!installedInfo) {
-      // New skill - check if user already skipped this version
+    if (!installedInfo || !existsOnDisk) {
+      // New skill OR tracked but deleted from disk - check if user already skipped this version
       if (!installed.seenSkills.includes(seenKey)) {
         actionable.push({ ...skill, isNew: true, isUpdate: false })
       }
@@ -140,7 +149,7 @@ export function getActionableSkills(available: AvailableSkill[], installed: Inst
         actionable.push({ ...skill, isNew: false, isUpdate: true })
       }
     }
-    // If sha matches, skill is up to date - skip
+    // If sha matches and exists on disk, skill is up to date - skip
   }
 
   return actionable
