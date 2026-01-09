@@ -31,10 +31,56 @@ import { loadUserConfig, saveUserConfig } from "./utils/user-config.js"
 import { checkForUpdates, getUpgradeCommand, performUpgrade } from "./utils/version-check.js"
 
 /**
+ * Options that should be forwarded to the d3k process spawned by tmux.
+ */
+interface ForwardedOptions {
+  port?: string
+  portMcp?: string
+  script?: string
+  command?: string
+  profileDir?: string
+  browser?: string
+  serversOnly?: boolean
+  headless?: boolean
+  dateTime?: string
+  pluginReactScan?: boolean
+  disableMcpConfigs?: string
+  chromeDevtoolsMcp?: boolean
+}
+
+/**
+ * Build the d3k command string with forwarded options.
+ */
+function buildD3kCommandWithOptions(options: ForwardedOptions): string {
+  const d3kBase = process.argv[1].endsWith("d3k") ? "d3k" : "dev3000"
+  const args: string[] = [d3kBase]
+
+  // Forward options that were explicitly set
+  if (options.port) args.push(`--port ${options.port}`)
+  if (options.portMcp) args.push(`--port-mcp ${options.portMcp}`)
+  if (options.script) args.push(`--script ${options.script}`)
+  if (options.command) args.push(`--command "${options.command.replace(/"/g, '\\"')}"`)
+  if (options.profileDir) args.push(`--profile-dir "${options.profileDir}"`)
+  if (options.browser) args.push(`--browser "${options.browser}"`)
+  if (options.serversOnly) args.push("--servers-only")
+  if (options.headless) args.push("--headless")
+  if (options.dateTime) args.push(`--date-time ${options.dateTime}`)
+  if (options.pluginReactScan) args.push("--plugin-react-scan")
+  if (options.disableMcpConfigs) args.push(`--disable-mcp-configs "${options.disableMcpConfigs}"`)
+  if (options.chromeDevtoolsMcp === false) args.push("--no-chrome-devtools-mcp")
+
+  return args.join(" ")
+}
+
+/**
  * Launch d3k with an agent using tmux for proper terminal multiplexing.
  * This creates a split-screen with the agent on the left and d3k logs on the right.
  */
-async function launchWithTmux(agentCommand: string, mcpPort: number = DEFAULT_TMUX_CONFIG.mcpPort): Promise<void> {
+async function launchWithTmux(
+  agentCommand: string,
+  mcpPort: number = DEFAULT_TMUX_CONFIG.mcpPort,
+  forwardedOptions: ForwardedOptions = {}
+): Promise<void> {
   const { execSync } = await import("child_process")
   const { appendFileSync, writeFileSync } = await import("fs")
 
@@ -69,8 +115,8 @@ async function launchWithTmux(agentCommand: string, mcpPort: number = DEFAULT_TM
   // Generate a unique session name
   const sessionName = generateSessionName()
 
-  // Get the d3k command path (same as what user ran)
-  const d3kCommand = process.argv[1].endsWith("d3k") ? "d3k" : "dev3000"
+  // Build d3k command with forwarded options
+  const d3kCommand = buildD3kCommandWithOptions(forwardedOptions)
 
   // Generate tmux commands using the helper
   const commands = generateTmuxCommands({
@@ -534,7 +580,20 @@ program
   .action(async (options) => {
     // Handle --with-agent by spawning tmux with split panes
     if (options.withAgent) {
-      await launchWithTmux(options.withAgent, parseInt(options.portMcp, 10))
+      await launchWithTmux(options.withAgent, parseInt(options.portMcp, 10), {
+        port: options.port,
+        portMcp: options.portMcp,
+        script: options.script,
+        command: options.command,
+        profileDir: options.profileDir,
+        browser: options.browser,
+        serversOnly: options.serversOnly,
+        headless: options.headless,
+        dateTime: options.dateTime,
+        pluginReactScan: options.pluginReactScan,
+        disableMcpConfigs: options.disableMcpConfigs,
+        chromeDevtoolsMcp: options.chromeDevtoolsMcp
+      })
       return
     }
     // Handle --kill-mcp option
@@ -612,7 +671,20 @@ program
             }
             // Clear screen and scrollback before launching tmux so when tmux exits, terminal is clean
             process.stdout.write("\x1b[2J\x1b[H\x1b[3J")
-            await launchWithTmux(selectedAgent.command, parseInt(options.portMcp, 10))
+            await launchWithTmux(selectedAgent.command, parseInt(options.portMcp, 10), {
+              port: options.port,
+              portMcp: options.portMcp,
+              script: options.script,
+              command: options.command,
+              profileDir: options.profileDir,
+              browser: options.browser,
+              serversOnly: options.serversOnly,
+              headless: options.headless,
+              dateTime: options.dateTime,
+              pluginReactScan: options.pluginReactScan,
+              disableMcpConfigs: options.disableMcpConfigs,
+              chromeDevtoolsMcp: options.chromeDevtoolsMcp
+            })
             return
           }
         } else if (options.debug) {
