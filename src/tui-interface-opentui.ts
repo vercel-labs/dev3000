@@ -190,6 +190,10 @@ class D3kTUI {
     this.startLogFileWatcher()
     this.renderer.start()
 
+    // Force a redraw shortly after startup to clear any stale terminal content
+    // (e.g., "Waiting for d3k MCP server..." message from tmux setup)
+    setTimeout(() => this.rebuildUI(), 500)
+
     return {
       app: { unmount: () => this.shutdown() },
       updateStatus: (status) => this.setStatus(status),
