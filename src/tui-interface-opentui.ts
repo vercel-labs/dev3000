@@ -279,7 +279,20 @@ class D3kTUI {
       })
       statusLine.add(this.statusText)
     } else {
-      // In compact mode, no status line - set to null
+      // In compact mode, show a simple footer explaining d3k's purpose
+      const statusLine = new BoxRenderable(this.renderer, {
+        id: "status-line",
+        height: 1,
+        flexDirection: "row",
+        paddingLeft: 1
+      })
+      mainContainer.add(statusLine)
+
+      const helpText = new TextRenderable(this.renderer, {
+        id: "help-text",
+        content: t`${dim("<- agent has access to ↑")}`
+      })
+      statusLine.add(helpText)
       this.statusText = null
     }
 
@@ -445,9 +458,10 @@ class D3kTUI {
       // Handle Ctrl+C with double-tap protection
       if (key.ctrl && key.name === "c") {
         if (ctrlCPending) {
-          // Second Ctrl+C - send SIGINT to trigger shutdown
+          // Second Ctrl+C - emit SIGINT event directly to trigger shutdown
+          // Using emit() instead of kill() ensures the handler runs synchronously
           // The process handler knows we're in TUI mode and will proceed directly
-          process.kill(process.pid, "SIGINT")
+          process.emit("SIGINT")
         } else {
           // First Ctrl+C - show warning
           ctrlCPending = true
