@@ -2915,8 +2915,10 @@ export class DevEnvironment {
       try {
         // Use graceful kill: SIGTERM first, wait, then SIGKILL if needed
         // This allows Next.js to clean up .next/dev/lock before terminating
+        // Use a longer grace period (1000ms) to give Next.js time to clean up
         const result = await gracefulKillProcess({
           pid: this.serverProcess.pid,
+          gracePeriodMs: 1000,
           debugLog: (msg) => this.debugLog(msg)
         })
 
@@ -2933,15 +2935,25 @@ export class DevEnvironment {
     // Fallback: kill any remaining processes on the port
     await killPortProcess(this.options.port, "your app server")
 
-    // Add a small delay to let the kill process complete
-    await new Promise((resolve) => setTimeout(resolve, 100))
+    // Add a delay to let processes fully terminate
+    await new Promise((resolve) => setTimeout(resolve, 200))
+
+    // Second pass: kill any remaining processes on the port (they may have survived first attempt)
+    await killPortProcess(this.options.port, "your app server")
 
     // Double-check: try to kill any remaining processes on the app port
     try {
       const { spawnSync } = await import("child_process")
-      // Kill by port
+      // Kill by port pattern
       spawnSync("sh", ["-c", `pkill -f ":${this.options.port}"`], { stdio: "ignore" })
       this.debugLog(`Sent pkill signal for port ${this.options.port}`)
+
+      // Specifically kill any remaining next dev processes in the current directory
+      // This catches cases where the shell wrapper exited but next-server survived
+      const cwd = process.cwd()
+      spawnSync("sh", ["-c", `pkill -f "next dev.*${cwd}"`], { stdio: "ignore" })
+      spawnSync("sh", ["-c", `pkill -f "next-server.*${cwd}"`], { stdio: "ignore" })
+      this.debugLog(`Sent pkill signal for next processes in ${cwd}`)
 
       // Kill server process and its children using the saved PID (from before session file was deleted)
       if (savedServerPid) {
