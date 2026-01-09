@@ -11,6 +11,9 @@ const IGNORED_ERROR_CODES = new Set([
 ])
 
 export function registerNodeErrorHandlers() {
+  // Set process title for easier identification in process lists
+  process.title = "d3k-mcp"
+
   // Suppress unhandled rejections for network errors
   process.on("unhandledRejection", (reason: unknown) => {
     // Ignore network-related errors
