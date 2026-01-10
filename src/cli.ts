@@ -851,7 +851,18 @@ program
         pluginReactScan: options.pluginReactScan || false,
         chromeDevtoolsMcp: options.chromeDevtoolsMcp !== false, // Default to true unless explicitly disabled
         disabledMcpConfigs,
-        additionalPorts: options.additionalPorts?.split(",").map((p: string) => p.trim())
+        additionalPorts: options.additionalPorts
+          ?.split(",")
+          .map((p: string) => p.trim())
+          .filter((p: string) => p.length > 0)
+          .filter((p: string) => {
+            const portNum = Number.parseInt(p, 10)
+            if (Number.isNaN(portNum) || portNum < 1 || portNum > 65535) {
+              console.warn(chalk.yellow(`⚠️ Warning: Invalid port number "${p}" in --additional-ports, skipping`))
+              return false
+            }
+            return true
+          })
       })
     } catch (error) {
       console.error(chalk.red("❌ Failed to start development environment:"), error)
