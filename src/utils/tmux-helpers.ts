@@ -89,7 +89,13 @@ export function generateTmuxCommands(config: TmuxSessionConfig): string[] {
     `tmux bind-key -T prefix Right 'select-pane -t :.1 ; resize-pane -t :.1 -x ${paneWidthPercent}%'`,
 
     // Focus on the agent pane (left side, pane 0 after split with -b)
-    `tmux select-pane -t "${sessionName}:0.0"`
+    `tmux select-pane -t "${sessionName}:0.0"`,
+
+    // Trigger a resize after TUI starts to force a redraw and clear stale terminal content
+    // (e.g., "Waiting for d3k MCP server..." message gets cleared when OpenTUI redraws)
+    // The d3k pane is pane 1 (right side), resize it slightly then back to force redraw
+    // Wait 2 seconds to ensure TUI is fully initialized before triggering resize
+    `tmux run-shell -t "${sessionName}" 'sleep 2 && tmux resize-pane -t :.1 -x 24% && sleep 0.1 && tmux resize-pane -t :.1 -x ${100 - paneWidthPercent}%'`
   ]
 }
 

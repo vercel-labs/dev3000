@@ -35,7 +35,7 @@ describe("tmux-helpers", () => {
 
     it("should generate correct number of commands", () => {
       const commands = generateTmuxCommands(baseConfig)
-      expect(commands).toHaveLength(14)
+      expect(commands).toHaveLength(15)
     })
 
     it("should create session with d3k command first", () => {

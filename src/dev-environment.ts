@@ -2730,6 +2730,16 @@ export class DevEnvironment {
       this.isShuttingDown = true
       this.debugLog("Second Ctrl+C detected, starting shutdown")
 
+      // CRITICAL: Kill port processes SYNCHRONOUSLY first, before anything else
+      // This ensures cleanup happens even if the event loop gets interrupted
+      const { spawnSync } = require("child_process")
+      const port = this.options.port
+      this.debugLog(`Synchronous kill for port ${port}`)
+      spawnSync("sh", ["-c", `lsof -ti:${port} | xargs kill -9 2>/dev/null`], {
+        stdio: "pipe",
+        timeout: 5000
+      })
+
       if (this.options.tui && this.tui) {
         // In TUI mode, show shutting down message
         this.debugLog("Updating TUI status with shutdown message")
@@ -2760,6 +2770,16 @@ export class DevEnvironment {
     process.on("SIGTERM", () => {
       if (this.isShuttingDown) return
       this.isShuttingDown = true
+      this.debugLog("SIGTERM received")
+
+      // CRITICAL: Kill port processes SYNCHRONOUSLY first, before anything else
+      const { spawnSync } = require("child_process")
+      const port = this.options.port
+      this.debugLog(`Synchronous kill for port ${port}`)
+      spawnSync("sh", ["-c", `lsof -ti:${port} | xargs kill -9 2>/dev/null`], {
+        stdio: "pipe",
+        timeout: 5000
+      })
 
       this.handleShutdown()
         .then(() => {
@@ -2775,6 +2795,15 @@ export class DevEnvironment {
       this.debugLog("SIGHUP received (tmux session closing)")
       if (this.isShuttingDown) return
       this.isShuttingDown = true
+
+      // CRITICAL: Kill port processes SYNCHRONOUSLY first, before anything else
+      const { spawnSync } = require("child_process")
+      const port = this.options.port
+      this.debugLog(`Synchronous kill for port ${port}`)
+      spawnSync("sh", ["-c", `lsof -ti:${port} | xargs kill -9 2>/dev/null`], {
+        stdio: "pipe",
+        timeout: 5000
+      })
 
       this.handleShutdown()
         .then(() => {

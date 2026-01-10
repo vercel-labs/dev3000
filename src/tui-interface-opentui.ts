@@ -190,9 +190,9 @@ class D3kTUI {
     this.startLogFileWatcher()
     this.renderer.start()
 
-    // Force a redraw shortly after startup to clear any stale terminal content
+    // Explicitly clear alternate screen to remove any stale content
     // (e.g., "Waiting for d3k MCP server..." message from tmux setup)
-    setTimeout(() => this.rebuildUI(), 500)
+    process.stdout.write("\x1b[2J\x1b[H")
 
     return {
       app: { unmount: () => this.shutdown() },
@@ -400,7 +400,7 @@ class D3kTUI {
     if (this.initStatus) {
       const statusLine = new TextRenderable(this.renderer, {
         id: "init-status",
-        content: t`${yellow(this.initStatus)}`
+        content: t`${bold(fg(BRAND_PURPLE)(this.initStatus))}`
       })
       infoCol.add(statusLine)
     }
