@@ -4,6 +4,16 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.142] - 2026-01-10
+
+**Patch Release**
+
+- Fix process cleanup on all exit paths + TUI rendering improvements
+- Fix shutdown: synchronous port kill FIRST in callback before anything else
+- TUI: force redraw 500ms after startup to clear stale content
+- Fix Ctrl+C: use direct callback instead of signals for shutdown
+- Compact mode: remove bold from source tag, no space between tags
+
 ## [0.0.141] - 2026-01-09
 
 **Feature Release**
