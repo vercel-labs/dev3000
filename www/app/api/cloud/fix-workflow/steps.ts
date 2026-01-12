@@ -628,82 +628,6 @@ Use this to diagnose and verify performance improvements.`,
       }
     }),
 
-    // Review design guidelines using d3k's vercel-design-guidelines skill
-    reviewDesignGuidelines: tool({
-      description: `Audit the current page against Vercel's design guidelines.
-This fetches the latest guidelines from vercel.com/design/guidelines and checks the page for violations.
-Returns findings grouped by category (Interactions, Animations, Layout, Content, Forms, Performance, Design, Copywriting) with severity levels (Critical, Warning, Suggestion) and specific fix recommendations.
-USE THIS FIRST for design-guidelines workflow!`,
-      inputSchema: z.object({
-        reason: z.string().describe("Why you're running the audit (e.g., 'initial audit', 'verify fixes')")
-      }),
-      execute: async ({ reason }: { reason: string }) => {
-        workflowLog(`[reviewDesignGuidelines] Running: ${reason}`)
-
-        // First navigate to the page to ensure we're auditing the right content
-        const auditUrl = `http://localhost:3000${startPath}`
-        const navCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"navigate","params":{"url":"${auditUrl}"}}}}'`
-        await runSandboxCommand(sandbox, "bash", ["-c", navCmd])
-        await new Promise((resolve) => setTimeout(resolve, 2000))
-
-        // Call the vercel-design-guidelines skill via d3k MCP
-        // The skill will fetch guidelines from vercel.com/design/guidelines and audit the page
-        const skillCmd = `curl -s -m 120 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '${JSON.stringify(
-          {
-            jsonrpc: "2.0",
-            id: 2,
-            method: "tools/call",
-            params: {
-              name: "review_design_guidelines",
-              arguments: {
-                url: auditUrl
-              }
-            }
-          }
-        ).replace(/'/g, "'\\''")}'`
-
-        const result = await runSandboxCommand(sandbox, "bash", ["-c", skillCmd])
-        workflowLog(`[reviewDesignGuidelines] Result length: ${result.stdout.length}`)
-
-        // Parse the MCP response
-        try {
-          const mcpResponse = parseMcpResponse(result.stdout) as {
-            result?: { content?: Array<{ type: string; text: string }> }
-            error?: { message?: string }
-          }
-
-          if (mcpResponse.error) {
-            return `## Design Guidelines Audit Error
-
-Failed to run audit: ${mcpResponse.error.message || "Unknown error"}
-
-Try running the audit again, or check that the page is accessible.`
-          }
-
-          if (mcpResponse.result?.content?.[0]?.text) {
-            return mcpResponse.result.content[0].text
-          }
-
-          return `## Design Guidelines Audit
-
-No results returned. The page may not have loaded correctly.
-Try navigating to ${auditUrl} first using diagnose, then run the audit again.`
-        } catch (parseErr) {
-          workflowLog(`[reviewDesignGuidelines] Parse error: ${parseErr}`)
-          // Return raw output if parsing fails - it might still be useful
-          if (result.stdout.length > 100) {
-            return `## Design Guidelines Audit (Raw Response)
-
-${result.stdout.substring(0, 3000)}${result.stdout.length > 3000 ? "\n...[truncated]" : ""}`
-          }
-          return `## Design Guidelines Audit Error
-
-Failed to parse audit response. Raw output was ${result.stdout.length} characters.
-Error: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`
-        }
-      }
-    }),
-
     readFile: tool({
       description: "Read a file from the codebase.",
       inputSchema: z.object({
@@ -811,7 +735,7 @@ Error: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`
   if (workflowTypeForPrompt === "design-guidelines") {
     const crawlInfo =
       crawlDepth && crawlDepth !== 1 ? ` Use crawl_app with depth=${crawlDepth} to discover all pages to audit.` : ""
-    userPromptMessage = `Evaluate and fix design guideline violations on the ${startPath} page. Dev URL: ${devUrl}${crawlInfo}\n\n${crawlDepth && crawlDepth !== 1 ? "Start with crawl_app to discover pages, then use reviewDesignGuidelines on the key pages." : "Start with reviewDesignGuidelines to audit the page against Vercel's design guidelines."}`
+    userPromptMessage = `Evaluate and fix design guideline violations on the ${startPath} page. Dev URL: ${devUrl}${crawlInfo}\n\n${crawlDepth && crawlDepth !== 1 ? "Start with crawl_app to discover pages, then fetch the guidelines from vercel.com/design/guidelines and audit the code." : "Start by fetching the design guidelines from vercel.com/design/guidelines, then read and audit the code."}`
   } else if (customPrompt) {
     userPromptMessage = `Proceed with the task. The dev server is running at ${devUrl}`
   } else {
@@ -1595,13 +1519,12 @@ You are in **multi-page crawl mode** with depth=${crawlDepth}. This means you sh
 ### Crawl Workflow:
 1. **FIRST: Use crawl_app** - Run \`crawl_app\` with depth=${crawlDepth} to discover all pages on the site
 2. **Review the discovered URLs** - The crawl_app tool returns a list of all pages found
-3. **Audit each important page** - Use reviewDesignGuidelines on the most important pages (home, main sections)
+3. **Audit each important page** - Read the code and check against the guidelines below
 4. **Aggregate findings** - Combine issues from all pages before fixing
 5. **Fix common issues first** - Issues appearing on multiple pages (like global CSS, layout, nav) should be fixed first
 
 ### crawl_app Tool
 - **crawl_app** - Crawls the site starting from the given URL, discovering linked pages up to the specified depth
-  - Use this BEFORE reviewDesignGuidelines to discover all pages
   - Example: \`crawl_app({ url: "${devUrl}${startPath}", depth: ${crawlDepth === "all" ? '"all"' : crawlDepth} })\`
   - Returns: List of discovered URLs to audit
 
@@ -1610,24 +1533,59 @@ You are in **multi-page crawl mode** with depth=${crawlDepth}. This means you sh
 
   return `You are a design guidelines auditor. Your task is to evaluate this web interface against Vercel's design guidelines and implement fixes.
 
+## VERCEL DESIGN GUIDELINES
+
+You must check the code against these categories. Fetch the latest guidelines from https://vercel.com/design/guidelines for the most up-to-date standards.
+
+### Audit Categories
+
+- **Interactions**: Keyboard accessibility, focus management, hit targets (≥24px, 44px mobile), loading states, URL persistence
+- **Animations**: Reduced motion (\`prefers-reduced-motion\`), GPU acceleration, proper easing, interruptibility, no \`transition: all\`
+- **Layout**: Optical adjustment, alignment, responsive testing, safe areas
+- **Content**: Inline help, skeleton loaders, empty states, typography, accessibility
+- **Forms**: Labels on inputs, validation messages, autocomplete, error handling, submit behavior
+- **Performance**: Minimize re-renders, avoid layout thrashing, virtualization for lists, preloading
+- **Design**: Shadows, borders, radii, contrast (APCA standards), color accessibility
+- **Copywriting**: Active voice, title case for headings, clarity, helpful error messages
+
+### Severity Levels
+
+- **Critical**: Accessibility violations, broken functionality (fix these first!)
+- **Warning**: UX issues, performance concerns
+- **Suggestion**: Polish, best practices
+
+### Quick Checklist (High-Impact Items)
+
+- [ ] All interactive elements keyboard accessible
+- [ ] Visible focus rings on focusable elements
+- [ ] Hit targets ≥24px (44px on mobile)
+- [ ] Form inputs have associated labels
+- [ ] Loading states don't flicker (150-300ms delay, 300-500ms minimum visibility)
+- [ ] \`prefers-reduced-motion\` respected
+- [ ] No \`transition: all\` (specify properties)
+- [ ] Errors show how to fix, not just what's wrong
+- [ ] Color contrast meets APCA standards
+- [ ] No zoom disabled
+
 ## YOUR MISSION
 ${shouldCrawl ? `1. Use **crawl_app** to discover all pages on the site (depth=${crawlDepth})` : ""}
-${shouldCrawl ? "2" : "1"}. Use the **reviewDesignGuidelines** tool to audit ${shouldCrawl ? "discovered pages" : "the page"} against Vercel's design guidelines
-${shouldCrawl ? "3" : "2"}. Review the audit findings (Critical, Warning, Suggestion severity levels)
-${shouldCrawl ? "4" : "3"}. IMPLEMENT FIXES directly in the code for the most important issues
-${shouldCrawl ? "5" : "4"}. Verify your fixes work
-${shouldCrawl ? "6" : "5"}. Create a PR with all improvements
+${shouldCrawl ? "2" : "1"}. **Fetch guidelines** from https://vercel.com/design/guidelines
+${shouldCrawl ? "3" : "2"}. **Read the code** - Use readFile, globSearch to examine components, styles, HTML
+${shouldCrawl ? "4" : "3"}. **Audit against guidelines** - Check each category, note violations with file:line references
+${shouldCrawl ? "5" : "4"}. **IMPLEMENT FIXES** - Write code to fix Critical issues first, then Warnings
+${shouldCrawl ? "6" : "5"}. **Verify** - Use diagnose to confirm changes work
+${shouldCrawl ? "7" : "6"}. **Document** - Track what you fixed in your summary
 ${crawlInstructions}
 ## WORKFLOW
 
 ${
   shouldCrawl
     ? `1. **Run crawl_app** - Discover all pages on the site up to depth=${crawlDepth}
-2. **Run reviewDesignGuidelines on key pages** - Audit the most important pages found
+2. **Fetch guidelines** - Get latest from https://vercel.com/design/guidelines
 3`
-    : "1. **Run reviewDesignGuidelines** - This fetches the latest Vercel design guidelines and audits the current page\n2"
-}. **Review the findings** - Prioritize by severity (Critical > Warning > Suggestion)
-${shouldCrawl ? "4" : "3"}. **Read relevant code** - Use readFile, globSearch to find the files that need fixing
+    : "1. **Fetch guidelines** - Get latest from https://vercel.com/design/guidelines\n2"
+}. **Read the code** - Use globSearch to find components ("**/*.tsx", "**/*.css"), then readFile
+${shouldCrawl ? "4" : "3"}. **Audit** - Check code against each guideline category
 ${shouldCrawl ? "5" : "4"}. **IMPLEMENT FIXES** - Use writeFile to fix issues. YOU MUST WRITE CODE!
 ${shouldCrawl ? "6" : "5"}. **Verify** - Use diagnose or getWebVitals to confirm changes work
 ${shouldCrawl ? "7" : "6"}. **Document** - Track what you fixed in your summary
@@ -1637,13 +1595,10 @@ ${
   shouldCrawl
     ? `
 ### Site Crawler (USE THIS FIRST FOR MULTI-PAGE AUDITS!)
-- **crawl_app** - Crawls the site to discover all pages. Use before reviewDesignGuidelines to find all pages to audit.
+- **crawl_app** - Crawls the site to discover all pages.
 `
     : ""
 }
-### Design Guidelines Tool${shouldCrawl ? "" : " (USE THIS FIRST!)"}
-- **reviewDesignGuidelines** - Audits the page against Vercel's design guidelines. Returns findings grouped by category (Interactions, Animations, Layout, Content, Forms, Performance, Design, Copywriting) with severity levels and specific fix recommendations.
-
 ### Code Tools
 - **readFile** - Read any file in the codebase
 - **writeFile** - Create or modify files (HMR applies changes immediately)
@@ -1653,12 +1608,25 @@ ${
 - **gitDiff** - See your changes
 
 ### Browser Tools
-- **diagnose** - Navigate and get CLS measurements
+- **diagnose** - Navigate and get CLS measurements + screenshots
 - **getWebVitals** - Get all Core Web Vitals (LCP, FCP, TTFB, CLS, INP)
+
+## OUTPUT FORMAT
+
+Present findings as:
+
+\`\`\`
+## {Category} Issues
+
+### {Severity}: {Guideline Name}
+**File:** \`path/to/file.tsx:42\`
+**Issue:** {Description of the violation}
+**Fix:** {Your code fix}
+\`\`\`
 
 ## IMPORTANT RULES
 
-1. **${shouldCrawl ? "START with crawl_app" : "START with reviewDesignGuidelines"}** - ${shouldCrawl ? "Discover pages first, then audit them!" : "Don't guess, let the tool audit the page first!"}
+1. **${shouldCrawl ? "START with crawl_app, then fetch guidelines" : "START by fetching guidelines from vercel.com/design/guidelines"}**
 2. **YOU MUST WRITE CODE** - Don't just analyze, actually fix issues!
 3. **Prioritize Critical issues first** - Then Warnings, then Suggestions
 4. **Be efficient** - You have limited steps (15 max), focus on high-impact fixes
@@ -1670,7 +1638,7 @@ ${
 - **Working Directory**: /vercel/sandbox
 ${shouldCrawl ? `- **Crawl Depth**: ${crawlDepth}` : ""}
 
-${shouldCrawl ? `Start by using crawl_app to discover all pages, then use reviewDesignGuidelines on the most important pages found, and implement fixes for the most critical issues.` : `Start by using reviewDesignGuidelines to audit the page, then implement fixes for the most critical issues found.`}`
+${shouldCrawl ? `Start by using crawl_app to discover all pages, then fetch the guidelines and audit the code.` : `Start by fetching the design guidelines from https://vercel.com/design/guidelines, then read the code and audit it.`}`
 }
 
 /**
