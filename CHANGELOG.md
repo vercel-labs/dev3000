@@ -4,6 +4,22 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.143] - 2026-01-12
+
+**Feature Release**
+
+- Use dynamic import to avoid bundling OpenTUI for linux
+- Add @opentui/core-linux-x64 for cross-compilation support
+- Add Linux x64 platform support
+- Add timing instrumentation to cloud workflows + sandbox snapshotting + ESLint fixes
+
+## [0.0.143] - 2026-01-12
+
+**Feature Release**
+
+- Add Linux x64 platform support for running d3k in the cloud
+- Build binaries for both darwin-arm64 and linux-x64 platforms
+
 ## [0.0.142] - 2026-01-10
 
 **Patch Release**
