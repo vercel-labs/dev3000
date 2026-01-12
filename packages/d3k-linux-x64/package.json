@@ -1,0 +1,29 @@
+{
+  "name": "@d3k/linux-x64",
+  "version": "0.0.143-canary",
+  "description": "d3k binary for Linux x64",
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "bin": {
+    "dev3000": "./bin/dev3000"
+  },
+  "scripts": {
+    "postinstall": "chmod +x mcp-server/node_modules/.bin/* 2>/dev/null || true"
+  },
+  "files": [
+    "bin/",
+    "mcp-server/",
+    "skills/",
+    "src/"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vercel-labs/dev3000.git"
+  },
+  "author": "Lindsey Simon <lindsey@vercel.com>",
+  "license": "MIT"
+}

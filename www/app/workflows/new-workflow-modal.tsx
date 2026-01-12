@@ -103,6 +103,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   const [customPrompt, setCustomPrompt] = useState("")
   const [githubPat, setGithubPat] = useState("")
   const [startPath, setStartPath] = useState("/")
+  const [crawlDepth, setCrawlDepth] = useState<number | "all">(1)
   const [availableBranches, setAvailableBranches] = useState<
     Array<{ name: string; lastDeployment: { url: string; createdAt: number } }>
   >([])
@@ -528,6 +529,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
         bypassToken,
         workflowType,
         customPrompt: workflowType === "prompt" ? customPrompt : undefined,
+        crawlDepth: workflowType === "design-guidelines" ? crawlDepth : undefined,
         githubPat: autoCreatePR && githubPat ? githubPat : undefined,
         startPath: startPath !== "/" ? startPath : undefined // Only send if not default
       }
@@ -1032,6 +1034,29 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                         &quot;/products&quot;)
                       </p>
                     </div>
+                    {_selectedType === "design-guidelines" && (
+                      <div>
+                        <Label htmlFor="crawlDepth" className="block text-sm font-medium text-gray-700 mb-1">
+                          Crawl Depth
+                        </Label>
+                        <select
+                          id="crawlDepth"
+                          value={crawlDepth}
+                          onChange={(e) =>
+                            setCrawlDepth(e.target.value === "all" ? "all" : Number.parseInt(e.target.value, 10))
+                          }
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                        >
+                          <option value={1}>1 - Start page only</option>
+                          <option value={2}>2 - Start page + linked pages</option>
+                          <option value={3}>3 - Two levels of links</option>
+                          <option value="all">All - Crawl entire site</option>
+                        </select>
+                        <p className="mt-1 text-xs text-gray-500">
+                          How many pages to audit. Higher depth = more thorough but slower.
+                        </p>
+                      </div>
+                    )}
                     {_selectedType === "prompt" && (
                       <div>
                         <Label htmlFor={customPromptId} className="block text-sm font-medium text-gray-700 mb-1">

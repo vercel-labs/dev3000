@@ -37,6 +37,7 @@ export async function POST(request: Request) {
   let runTimestamp: string | undefined
   let workflowType: WorkflowType = "cls-fix"
   let customPrompt: string | undefined
+  let crawlDepth: number | "all" | undefined
 
   try {
     // Check for test bypass token (allows testing without browser auth via CLI)
@@ -83,6 +84,7 @@ export async function POST(request: Request) {
       workflowType = body.workflowType
     }
     customPrompt = body.customPrompt
+    crawlDepth = body.crawlDepth
     userId = body.userId || (isTestMode ? "test-user" : undefined)
     projectName = body.projectName
 
@@ -136,6 +138,7 @@ export async function POST(request: Request) {
       workflowType, // For progress updates
       startPath: startPath || "/", // Page path to analyze (e.g., "/about")
       customPrompt: workflowType === "prompt" ? customPrompt : undefined, // User's custom instructions
+      crawlDepth: workflowType === "design-guidelines" ? crawlDepth : undefined, // Crawl depth for design-guidelines
       // PR creation params
       githubPat,
       repoOwner,

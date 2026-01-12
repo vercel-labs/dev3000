@@ -48,6 +48,7 @@ export async function cloudFixWorkflow(params: {
   workflowType?: string // For progress updates
   startPath?: string // Page path to analyze (e.g., "/about")
   customPrompt?: string // User's custom instructions (for "prompt" workflow type)
+  crawlDepth?: number | "all" // How many pages to crawl for design-guidelines workflow
   // PR creation params
   githubPat?: string
   repoOwner?: string
@@ -67,6 +68,7 @@ export async function cloudFixWorkflow(params: {
     workflowType,
     startPath = "/",
     customPrompt,
+    crawlDepth,
     githubPat,
     repoOwner,
     repoName,
@@ -120,6 +122,7 @@ export async function cloudFixWorkflow(params: {
       reportId,
       startPath,
       customPrompt,
+      crawlDepth,
       progressContext
     )
 
@@ -234,6 +237,7 @@ async function agentFixLoop(
   reportId: string,
   startPath: string,
   customPrompt?: string,
+  crawlDepth?: number | "all",
   progressContext?: ProgressContext | null
 ): Promise<FixResult> {
   "use step"
@@ -250,6 +254,7 @@ async function agentFixLoop(
     reportId,
     startPath,
     customPrompt,
+    crawlDepth,
     progressContext
   )
 }

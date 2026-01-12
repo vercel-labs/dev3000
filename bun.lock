@@ -37,6 +37,7 @@
       },
       "optionalDependencies": {
         "@d3k/darwin-arm64": "0.0.143-canary",
+        "@d3k/linux-x64": "0.0.143-canary",
       },
     },
     "mcp-server": {

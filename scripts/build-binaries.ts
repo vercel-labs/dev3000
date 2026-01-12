@@ -23,10 +23,10 @@ function getPackageVersion(): string {
   return packageJson.version
 }
 
-// Target platforms (darwin-arm64 only for now)
+// Target platforms
 const TARGETS = [
-  { os: "darwin", arch: "arm64", name: "d3k-darwin-arm64" }
-  // { os: "darwin", arch: "x64", name: "d3k-darwin-x64" },  // Add later
+  { os: "darwin", arch: "arm64", name: "d3k-darwin-arm64" },
+  { os: "linux", arch: "x64", name: "d3k-linux-x64" }
 ] as const
 
 async function cleanDistBin() {

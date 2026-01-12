@@ -10,7 +10,7 @@ import { put } from "@vercel/blob"
 import { Sandbox } from "@vercel/sandbox"
 import { createGateway, generateText, stepCountIs, tool } from "ai"
 import { z } from "zod"
-import { getOrCreateD3kSandbox, StepTimer, type SandboxTimingData } from "@/lib/cloud/d3k-sandbox"
+import { getOrCreateD3kSandbox, type SandboxTimingData, StepTimer } from "@/lib/cloud/d3k-sandbox"
 import { saveWorkflowRun, type WorkflowType } from "@/lib/workflow-storage"
 import type { WorkflowReport } from "@/types"
 
@@ -181,6 +181,7 @@ export async function agentFixLoopStep(
   reportId: string,
   startPath: string,
   customPrompt?: string,
+  crawlDepth?: number | "all",
   progressContext?: ProgressContext | null
 ): Promise<{
   reportBlobUrl: string
@@ -220,7 +221,8 @@ export async function agentFixLoopStep(
     beforeGrade,
     startPath,
     customPrompt,
-    progressContext?.workflowType
+    progressContext?.workflowType,
+    crawlDepth
   )
   await updateProgress(progressContext, 3, "Agent finished, verifying CLS improvements...", devUrl)
 
@@ -395,7 +397,8 @@ async function runAgentWithDiagnoseTool(
   beforeGrade: "good" | "needs-improvement" | "poor" | null,
   startPath: string,
   customPrompt?: string,
-  workflowType?: string
+  workflowType?: string,
+  crawlDepth?: number | "all"
 ): Promise<{ transcript: string; summary: string; systemPrompt: string }> {
   const SANDBOX_CWD = "/vercel/sandbox"
   const D3K_MCP_PORT = 3684
@@ -796,7 +799,7 @@ Error: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`
   // Build system prompt based on workflow type
   let systemPrompt: string
   if (workflowTypeForPrompt === "design-guidelines") {
-    systemPrompt = buildDesignGuidelinesPrompt(startPath, devUrl)
+    systemPrompt = buildDesignGuidelinesPrompt(startPath, devUrl, crawlDepth)
   } else if (customPrompt) {
     systemPrompt = buildEnhancedPrompt(customPrompt, startPath, devUrl)
   } else {
@@ -806,7 +809,9 @@ Error: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`
   // Build user prompt based on workflow type
   let userPromptMessage: string
   if (workflowTypeForPrompt === "design-guidelines") {
-    userPromptMessage = `Evaluate and fix design guideline violations on the ${startPath} page. Dev URL: ${devUrl}\n\nStart with getWebVitals to capture the baseline, then read the main files and identify issues to fix.`
+    const crawlInfo =
+      crawlDepth && crawlDepth !== 1 ? ` Use crawl_app with depth=${crawlDepth} to discover all pages to audit.` : ""
+    userPromptMessage = `Evaluate and fix design guideline violations on the ${startPath} page. Dev URL: ${devUrl}${crawlInfo}\n\nStart with getWebVitals to capture the baseline, then read the main files and identify issues to fix.`
   } else if (customPrompt) {
     userPromptMessage = `Proceed with the task. The dev server is running at ${devUrl}`
   } else {
@@ -1578,28 +1583,65 @@ Start with diagnose, then QUICKLY find and fix the code. Do not over-analyze!`
  * Build system prompt for the design-guidelines workflow type
  * This leverages the d3k MCP server's vercel-design-guidelines skill
  */
-function buildDesignGuidelinesPrompt(startPath: string, devUrl: string): string {
+function buildDesignGuidelinesPrompt(startPath: string, devUrl: string, crawlDepth?: number | "all"): string {
+  // Determine if we should crawl multiple pages
+  const shouldCrawl = crawlDepth && crawlDepth !== 1
+  const crawlInstructions = shouldCrawl
+    ? `
+## MULTI-PAGE CRAWL MODE
+
+You are in **multi-page crawl mode** with depth=${crawlDepth}. This means you should audit MULTIPLE pages, not just the start page.
+
+### Crawl Workflow:
+1. **FIRST: Use crawl_app** - Run \`crawl_app\` with depth=${crawlDepth} to discover all pages on the site
+2. **Review the discovered URLs** - The crawl_app tool returns a list of all pages found
+3. **Audit each important page** - Use reviewDesignGuidelines on the most important pages (home, main sections)
+4. **Aggregate findings** - Combine issues from all pages before fixing
+5. **Fix common issues first** - Issues appearing on multiple pages (like global CSS, layout, nav) should be fixed first
+
+### crawl_app Tool
+- **crawl_app** - Crawls the site starting from the given URL, discovering linked pages up to the specified depth
+  - Use this BEFORE reviewDesignGuidelines to discover all pages
+  - Example: \`crawl_app({ url: "${devUrl}${startPath}", depth: ${crawlDepth === "all" ? '"all"' : crawlDepth} })\`
+  - Returns: List of discovered URLs to audit
+
+`
+    : ""
+
   return `You are a design guidelines auditor. Your task is to evaluate this web interface against Vercel's design guidelines and implement fixes.
 
 ## YOUR MISSION
-1. Use the **reviewDesignGuidelines** tool to audit the page against Vercel's design guidelines
-2. Review the audit findings (Critical, Warning, Suggestion severity levels)
-3. IMPLEMENT FIXES directly in the code for the most important issues
-4. Verify your fixes work
-5. Create a PR with all improvements
-
+${shouldCrawl ? `1. Use **crawl_app** to discover all pages on the site (depth=${crawlDepth})` : ""}
+${shouldCrawl ? "2" : "1"}. Use the **reviewDesignGuidelines** tool to audit ${shouldCrawl ? "discovered pages" : "the page"} against Vercel's design guidelines
+${shouldCrawl ? "3" : "2"}. Review the audit findings (Critical, Warning, Suggestion severity levels)
+${shouldCrawl ? "4" : "3"}. IMPLEMENT FIXES directly in the code for the most important issues
+${shouldCrawl ? "5" : "4"}. Verify your fixes work
+${shouldCrawl ? "6" : "5"}. Create a PR with all improvements
+${crawlInstructions}
 ## WORKFLOW
 
-1. **Run reviewDesignGuidelines** - This fetches the latest Vercel design guidelines and audits the current page
-2. **Review the findings** - Prioritize by severity (Critical > Warning > Suggestion)
-3. **Read relevant code** - Use readFile, globSearch to find the files that need fixing
-4. **IMPLEMENT FIXES** - Use writeFile to fix issues. YOU MUST WRITE CODE!
-5. **Verify** - Use diagnose or getWebVitals to confirm changes work
-6. **Document** - Track what you fixed in your summary
+${
+  shouldCrawl
+    ? `1. **Run crawl_app** - Discover all pages on the site up to depth=${crawlDepth}
+2. **Run reviewDesignGuidelines on key pages** - Audit the most important pages found
+3`
+    : "1. **Run reviewDesignGuidelines** - This fetches the latest Vercel design guidelines and audits the current page\n2"
+}. **Review the findings** - Prioritize by severity (Critical > Warning > Suggestion)
+${shouldCrawl ? "4" : "3"}. **Read relevant code** - Use readFile, globSearch to find the files that need fixing
+${shouldCrawl ? "5" : "4"}. **IMPLEMENT FIXES** - Use writeFile to fix issues. YOU MUST WRITE CODE!
+${shouldCrawl ? "6" : "5"}. **Verify** - Use diagnose or getWebVitals to confirm changes work
+${shouldCrawl ? "7" : "6"}. **Document** - Track what you fixed in your summary
 
 ## AVAILABLE TOOLS
-
-### Design Guidelines Tool (USE THIS FIRST!)
+${
+  shouldCrawl
+    ? `
+### Site Crawler (USE THIS FIRST FOR MULTI-PAGE AUDITS!)
+- **crawl_app** - Crawls the site to discover all pages. Use before reviewDesignGuidelines to find all pages to audit.
+`
+    : ""
+}
+### Design Guidelines Tool${shouldCrawl ? "" : " (USE THIS FIRST!)"}
 - **reviewDesignGuidelines** - Audits the page against Vercel's design guidelines. Returns findings grouped by category (Interactions, Animations, Layout, Content, Forms, Performance, Design, Copywriting) with severity levels and specific fix recommendations.
 
 ### Code Tools
@@ -1616,7 +1658,7 @@ function buildDesignGuidelinesPrompt(startPath: string, devUrl: string): string 
 
 ## IMPORTANT RULES
 
-1. **START with reviewDesignGuidelines** - Don't guess, let the tool audit the page first!
+1. **${shouldCrawl ? "START with crawl_app" : "START with reviewDesignGuidelines"}** - ${shouldCrawl ? "Discover pages first, then audit them!" : "Don't guess, let the tool audit the page first!"}
 2. **YOU MUST WRITE CODE** - Don't just analyze, actually fix issues!
 3. **Prioritize Critical issues first** - Then Warnings, then Suggestions
 4. **Be efficient** - You have limited steps (15 max), focus on high-impact fixes
@@ -1626,8 +1668,9 @@ function buildDesignGuidelinesPrompt(startPath: string, devUrl: string): string 
 - **App URL**: ${devUrl}
 - **Start Page**: ${startPath}
 - **Working Directory**: /vercel/sandbox
+${shouldCrawl ? `- **Crawl Depth**: ${crawlDepth}` : ""}
 
-Start by using reviewDesignGuidelines to audit the page, then implement fixes for the most critical issues found.`
+${shouldCrawl ? `Start by using crawl_app to discover all pages, then use reviewDesignGuidelines on the most important pages found, and implement fixes for the most critical issues.` : `Start by using reviewDesignGuidelines to audit the page, then implement fixes for the most critical issues found.`}`
 }
 
 /**

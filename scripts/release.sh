@@ -48,39 +48,49 @@ node -e "
     // Also update optionalDependencies to match
     pkg.optionalDependencies = pkg.optionalDependencies || {};
     pkg.optionalDependencies['@d3k/darwin-arm64'] = '$NEXT_VERSION';
+    pkg.optionalDependencies['@d3k/linux-x64'] = '$NEXT_VERSION';
     fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
 "
 
-# Update platform package version
-echo "⬆️ Updating platform package version to $NEXT_VERSION..."
+# Update platform package versions
+echo "⬆️ Updating platform package versions to $NEXT_VERSION..."
 node -e "
     const fs = require('fs');
-    const pkgPath = 'packages/d3k-darwin-arm64/package.json';
-    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-    pkg.version = '$NEXT_VERSION';
-    fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
+    ['packages/d3k-darwin-arm64/package.json', 'packages/d3k-linux-x64/package.json'].forEach(pkgPath => {
+        const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+        pkg.version = '$NEXT_VERSION';
+        fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
+    });
 "
 
-# Update bun.lock for the optional dependency
+# Update bun.lock for the optional dependencies
 # (bun doesn't add entries for packages that don't exist on npm yet)
-echo "🔒 Updating bun.lock for @d3k/darwin-arm64@$NEXT_VERSION..."
+echo "🔒 Updating bun.lock for platform packages@$NEXT_VERSION..."
 node -e "
     const fs = require('fs');
-    const lockfile = fs.readFileSync('bun.lock', 'utf8');
+    let lockfile = fs.readFileSync('bun.lock', 'utf8');
 
-    // Update the importer's optionalDependencies specifier and version
-    let updated = lockfile.replace(
+    // Update darwin-arm64
+    lockfile = lockfile.replace(
         /('@d3k\/darwin-arm64':\n\s+specifier: )[^\n]+(\n\s+version: )[^\n]+/,
         \"\\\$1$NEXT_VERSION\\\$2$NEXT_VERSION\"
     );
-
-    // Update the packages section entry
-    updated = updated.replace(
+    lockfile = lockfile.replace(
         /'@d3k\/darwin-arm64@[^']+'/g,
         \"'@d3k/darwin-arm64@$NEXT_VERSION'\"
     );
 
-    fs.writeFileSync('bun.lock', updated);
+    // Update linux-x64
+    lockfile = lockfile.replace(
+        /('@d3k\/linux-x64':\n\s+specifier: )[^\n]+(\n\s+version: )[^\n]+/,
+        \"\\\$1$NEXT_VERSION\\\$2$NEXT_VERSION\"
+    );
+    lockfile = lockfile.replace(
+        /'@d3k\/linux-x64@[^']+'/g,
+        \"'@d3k/linux-x64@$NEXT_VERSION'\"
+    );
+
+    fs.writeFileSync('bun.lock', lockfile);
     console.log('✅ Updated bun.lock');
 "
 
@@ -88,15 +98,27 @@ node -e "
 echo "🔨 Building compiled binaries..."
 bun run scripts/build-binaries.ts
 
-# Copy built binaries to platform package
-echo "📁 Copying binaries to platform package..."
-PLATFORM_PKG_DIR="packages/d3k-darwin-arm64"
-DIST_BIN_DIR="dist-bin/d3k-darwin-arm64"
-rm -rf "$PLATFORM_PKG_DIR/bin" "$PLATFORM_PKG_DIR/mcp-server" "$PLATFORM_PKG_DIR/skills" "$PLATFORM_PKG_DIR/src"
-cp -r "$DIST_BIN_DIR/bin" "$PLATFORM_PKG_DIR/"
-cp -r "$DIST_BIN_DIR/mcp-server" "$PLATFORM_PKG_DIR/"
-cp -r "$DIST_BIN_DIR/skills" "$PLATFORM_PKG_DIR/"
-cp -r "$DIST_BIN_DIR/src" "$PLATFORM_PKG_DIR/"
+# Copy built binaries to platform packages
+echo "📁 Copying binaries to platform packages..."
+
+# darwin-arm64
+DARWIN_ARM64_PKG_DIR="packages/d3k-darwin-arm64"
+DARWIN_ARM64_DIST_DIR="dist-bin/d3k-darwin-arm64"
+rm -rf "$DARWIN_ARM64_PKG_DIR/bin" "$DARWIN_ARM64_PKG_DIR/mcp-server" "$DARWIN_ARM64_PKG_DIR/skills" "$DARWIN_ARM64_PKG_DIR/src"
+cp -r "$DARWIN_ARM64_DIST_DIR/bin" "$DARWIN_ARM64_PKG_DIR/"
+cp -r "$DARWIN_ARM64_DIST_DIR/mcp-server" "$DARWIN_ARM64_PKG_DIR/"
+cp -r "$DARWIN_ARM64_DIST_DIR/skills" "$DARWIN_ARM64_PKG_DIR/"
+cp -r "$DARWIN_ARM64_DIST_DIR/src" "$DARWIN_ARM64_PKG_DIR/"
+
+# linux-x64
+LINUX_X64_PKG_DIR="packages/d3k-linux-x64"
+LINUX_X64_DIST_DIR="dist-bin/d3k-linux-x64"
+rm -rf "$LINUX_X64_PKG_DIR/bin" "$LINUX_X64_PKG_DIR/mcp-server" "$LINUX_X64_PKG_DIR/skills" "$LINUX_X64_PKG_DIR/src"
+cp -r "$LINUX_X64_DIST_DIR/bin" "$LINUX_X64_PKG_DIR/"
+cp -r "$LINUX_X64_DIST_DIR/mcp-server" "$LINUX_X64_PKG_DIR/"
+cp -r "$LINUX_X64_DIST_DIR/skills" "$LINUX_X64_PKG_DIR/"
+cp -r "$LINUX_X64_DIST_DIR/src" "$LINUX_X64_PKG_DIR/"
+
 echo "✅ Binaries ready for publishing"
 
 # Function to cleanup existing tags
@@ -134,7 +156,7 @@ bunx tsx scripts/generate-changelog-md.ts
 
 # Commit version change and changelog
 echo "📝 Committing version change and changelog..."
-git add package.json packages/d3k-darwin-arm64/package.json mcp-server/package.json www/package.json www/lib/changelog.ts CHANGELOG.md bun.lock
+git add package.json packages/d3k-darwin-arm64/package.json packages/d3k-linux-x64/package.json mcp-server/package.json www/package.json www/lib/changelog.ts CHANGELOG.md bun.lock
 git commit -m "Release v$NEXT_VERSION
 
 🤖 Generated with [Claude Code](https://claude.ai/code)

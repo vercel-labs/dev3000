@@ -10,6 +10,16 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.143",
+    date: "2026-01-12",
+    type: "minor",
+    highlights: [
+      "Add Linux x64 platform support for running d3k in the cloud",
+      "Build binaries for both darwin-arm64 and linux-x64 platforms"
+    ]
+  },
+
+  {
     version: "0.0.142",
     date: "2026-01-10",
     type: "patch",
