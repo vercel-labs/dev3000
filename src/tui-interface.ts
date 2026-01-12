@@ -46,16 +46,14 @@ export class DevTUI {
     }
     console.error = suppressReactHookWarnings
 
-    // Choose TUI implementation based on platform
-    // OpenTUI has native bindings only available on macOS, use Ink-based TUI elsewhere
-    // Use dynamic path construction to prevent bundlers from trying to resolve opentui on linux
-    const tuiModule = process.platform === "darwin" ? "./tui-interface-opentui.js" : "./tui-interface-impl.js"
-
     try {
-      // Dynamic import with runtime-determined path
-      const mod = await (Function("p", "return import(p)")(tuiModule) as Promise<{
-        runTUI: typeof import("./tui-interface-opentui.js").runTUI
-      }>)
+      // Choose TUI implementation based on platform
+      // OpenTUI has native bindings only available on macOS, use Ink-based TUI elsewhere
+      // Use explicit string paths (not variables) so bun compile can statically analyze the imports
+      const mod =
+        process.platform === "darwin"
+          ? await import("./tui-interface-opentui.js")
+          : await import("./tui-interface-impl.js")
       const { app, updateStatus, updateAppPort, updateUpdateInfo, updateUseHttps } = await mod.runTUI(this.options)
       this.app = app
       this.updateStatusFn = updateStatus

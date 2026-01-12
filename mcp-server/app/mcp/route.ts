@@ -10,6 +10,7 @@ import {
   executeBrowserAction,
   findComponentSource,
   fixMyApp,
+  getSkill,
   restartDevServer,
   TOOL_DESCRIPTIONS
 } from "./tools"
@@ -686,6 +687,18 @@ const handler = createMcpHandler(
       },
       async (params) => {
         return crawlApp(params)
+      }
+    )
+
+    // Get skill content tool
+    server.tool(
+      "get_skill",
+      TOOL_DESCRIPTIONS.get_skill,
+      {
+        name: z.string().describe("The skill name (e.g., 'vercel-design-guidelines', 'd3k')")
+      },
+      async (params) => {
+        return getSkill(params)
       }
     )
 

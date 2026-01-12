@@ -7,8 +7,6 @@ export { NextJsErrorDetector } from "./error-detectors/nextjs.js"
 
 // Concrete implementations for Next.js
 export { StandardLogParser } from "./log-parsers/standard.js"
+export type { LogEntry } from "./output-processor.js"
 // Main output processor and types
-export {
-  LogEntry,
-  OutputProcessor
-} from "./output-processor.js"
+export { OutputProcessor } from "./output-processor.js"

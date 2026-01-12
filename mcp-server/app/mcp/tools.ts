@@ -44,7 +44,10 @@ export const TOOL_DESCRIPTIONS = {
     "Restarts the development server while preserving dev3000's monitoring infrastructure.\n\n**Restart process:**\n1. Tries nextjs-dev MCP restart if available\n2. Falls back to killing and respawning the server process\n3. Preserves: MCP server, browser connection, log capture, screenshots\n\n**When to use:**\n• After modifying config files (next.config.js, middleware, .env)\n• To clear persistent server state\n• For changes that HMR cannot handle\n\n**Important:**\n• Do NOT manually kill the dev server with pkill/kill commands\n• Do NOT manually start the server with npm/pnpm/yarn\n• Server will be offline briefly during restart\n• Most code changes are handled by HMR - only restart when necessary",
 
   crawl_app:
-    "Discovers URLs in the application by crawling links from the homepage.\n\n**Parameters:**\n• depth: How many link levels to follow (1, 2, 3, or 'all')\n• limit: Max links per page (default: 3)\n\n**Behavior:**\n• Starts at localhost homepage\n• Follows same-origin links only\n• Deduplicates discovered URLs\n• Returns list of all found pages\n\n**Use cases:**\n• Discovering all routes before running diagnostics\n• Site-wide testing coverage\n• Verifying all pages load without errors"
+    "Discovers URLs in the application by crawling links from the homepage.\n\n**Parameters:**\n• depth: How many link levels to follow (1, 2, 3, or 'all')\n• limit: Max links per page (default: 3)\n\n**Behavior:**\n• Starts at localhost homepage\n• Follows same-origin links only\n• Deduplicates discovered URLs\n• Returns list of all found pages\n\n**Use cases:**\n• Discovering all routes before running diagnostics\n• Site-wide testing coverage\n• Verifying all pages load without errors",
+
+  get_skill:
+    "Get the content of a d3k/Claude Code skill. Skills are prompt templates that provide specialized instructions for specific tasks.\n\n**Parameters:**\n• name: The skill name (e.g., 'vercel-design-guidelines', 'd3k')\n\n**Returns:**\nThe full SKILL.md content which contains instructions on how to perform the skill's task.\n\n**Available skills:**\n• vercel-design-guidelines - Audit web interfaces against Vercel's design guidelines\n• d3k - Core d3k development assistant skill\n\n**Use cases:**\n• Loading design guidelines audit instructions\n• Getting specialized workflow instructions"
 }
 
 // Types
@@ -4279,4 +4282,100 @@ export async function crawlApp(params: CrawlAppParams) {
       ]
     }
   }
+}
+
+// ============================================================
+// Get Skill
+// ============================================================
+
+export interface GetSkillParams {
+  name: string
+}
+
+/**
+ * Get the content of a d3k/Claude Code skill.
+ * Skills are prompt templates stored in .claude/skills/{name}/SKILL.md
+ *
+ * Looks for skills in these locations (in order):
+ * 1. www/.claude/skills/{name}/SKILL.md (www workspace skills)
+ * 2. src/skills/{name}/SKILL.md (core d3k skills)
+ */
+export async function getSkill(params: GetSkillParams) {
+  const { name } = params
+
+  // Possible skill locations (relative to mcp-server directory)
+  const skillPaths = [
+    // www workspace skills (design-guidelines, etc.)
+    join(__dirname, "../../../www/.claude/skills", name, "SKILL.md"),
+    // Core d3k skills
+    join(__dirname, "../../../src/skills", name, "SKILL.md"),
+    // Fallback: dist skills (when running from installed package)
+    join(__dirname, "../../../dist/skills", name, "SKILL.md")
+  ]
+
+  for (const skillPath of skillPaths) {
+    try {
+      if (existsSync(skillPath)) {
+        const content = readFileSync(skillPath, "utf-8")
+        logToDevFile(`Get Skill: Found skill "${name}" at ${skillPath}`)
+
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `# Skill: ${name}\n\n${content}`
+            }
+          ]
+        }
+      }
+    } catch {
+      // Try next path
+    }
+  }
+
+  // Skill not found
+  const availableSkills = listAvailableSkills()
+  logToDevFile(`Get Skill: Skill "${name}" not found. Available: ${availableSkills.join(", ")}`)
+
+  return {
+    content: [
+      {
+        type: "text" as const,
+        text: `❌ Skill "${name}" not found.\n\n**Available skills:**\n${availableSkills.map((s) => `• ${s}`).join("\n") || "• No skills found"}\n\n**Skill locations searched:**\n${skillPaths.map((p) => `• ${p}`).join("\n")}`
+      }
+    ]
+  }
+}
+
+/**
+ * List all available skills by scanning skill directories
+ */
+function listAvailableSkills(): string[] {
+  const skills = new Set<string>()
+
+  const skillDirs = [
+    join(__dirname, "../../../www/.claude/skills"),
+    join(__dirname, "../../../src/skills"),
+    join(__dirname, "../../../dist/skills")
+  ]
+
+  for (const dir of skillDirs) {
+    try {
+      if (existsSync(dir)) {
+        const entries = readdirSync(dir, { withFileTypes: true })
+        for (const entry of entries) {
+          if (entry.isDirectory()) {
+            const skillFile = join(dir, entry.name, "SKILL.md")
+            if (existsSync(skillFile)) {
+              skills.add(entry.name)
+            }
+          }
+        }
+      }
+    } catch {
+      // Ignore errors
+    }
+  }
+
+  return Array.from(skills).sort()
 }
