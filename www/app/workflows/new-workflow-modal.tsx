@@ -1047,8 +1047,8 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                           }
                           className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
                         >
-                          <option value={1}>1 - Start page only</option>
-                          <option value={2}>2 - Start page + linked pages</option>
+                          <option value={1}>1 - Start path only</option>
+                          <option value={2}>2 - Start path + linked pages</option>
                           <option value={3}>3 - Two levels of links</option>
                           <option value="all">All - Crawl entire site</option>
                         </select>

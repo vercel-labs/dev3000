@@ -811,7 +811,7 @@ Error: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`
   if (workflowTypeForPrompt === "design-guidelines") {
     const crawlInfo =
       crawlDepth && crawlDepth !== 1 ? ` Use crawl_app with depth=${crawlDepth} to discover all pages to audit.` : ""
-    userPromptMessage = `Evaluate and fix design guideline violations on the ${startPath} page. Dev URL: ${devUrl}${crawlInfo}\n\nStart with getWebVitals to capture the baseline, then read the main files and identify issues to fix.`
+    userPromptMessage = `Evaluate and fix design guideline violations on the ${startPath} page. Dev URL: ${devUrl}${crawlInfo}\n\n${crawlDepth && crawlDepth !== 1 ? "Start with crawl_app to discover pages, then use reviewDesignGuidelines on the key pages." : "Start with reviewDesignGuidelines to audit the page against Vercel's design guidelines."}`
   } else if (customPrompt) {
     userPromptMessage = `Proceed with the task. The dev server is running at ${devUrl}`
   } else {
