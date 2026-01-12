@@ -734,7 +734,9 @@ Use this to diagnose and verify performance improvements.`,
   let userPromptMessage: string
   if (workflowTypeForPrompt === "design-guidelines") {
     const crawlInfo =
-      crawlDepth && crawlDepth !== 1 ? ` Then use crawl_app with depth=${crawlDepth} to discover all pages to audit.` : ""
+      crawlDepth && crawlDepth !== 1
+        ? ` Then use crawl_app with depth=${crawlDepth} to discover all pages to audit.`
+        : ""
     userPromptMessage = `Evaluate and fix design guideline violations on the ${startPath} page. Dev URL: ${devUrl}\n\nFirst, call get_skill({ name: "vercel-design-guidelines" }) to load the design guidelines skill.${crawlInfo} Then read and audit the code.`
   } else if (customPrompt) {
     userPromptMessage = `Proceed with the task. The dev server is running at ${devUrl}`
@@ -1546,7 +1548,7 @@ This will give you the complete design guidelines audit instructions, including:
 ${crawlInstructions}
 ## YOUR MISSION
 
-${shouldCrawl ? `1. **Load skill** - Call \`get_skill({ name: "vercel-design-guidelines" })\`` : "1. **Load skill** - Call `get_skill({ name: \"vercel-design-guidelines\" })`"}
+${shouldCrawl ? `1. **Load skill** - Call \`get_skill({ name: "vercel-design-guidelines" })\`` : '1. **Load skill** - Call `get_skill({ name: "vercel-design-guidelines" })`'}
 ${shouldCrawl ? `2. **Use crawl_app** to discover all pages on the site (depth=${crawlDepth})` : ""}
 ${shouldCrawl ? "3" : "2"}. **Read the code** - Use readFile, globSearch to examine components, styles, HTML
 ${shouldCrawl ? "4" : "3"}. **Audit against guidelines** - Check each category, note violations with file:line references
