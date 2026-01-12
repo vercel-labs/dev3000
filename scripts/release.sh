@@ -121,6 +121,24 @@ cp -r "$LINUX_X64_DIST_DIR/src" "$LINUX_X64_PKG_DIR/"
 
 echo "✅ Binaries ready for publishing"
 
+# Smoke test: verify compiled binary can start
+echo "🧪 Running compiled binary smoke test..."
+BINARY_PATH="$DARWIN_ARM64_PKG_DIR/bin/dev3000"
+if [ -x "$BINARY_PATH" ]; then
+    # Test --version flag
+    if "$BINARY_PATH" --version > /dev/null 2>&1; then
+        echo "✅ Binary smoke test passed (--version works)"
+    else
+        echo "❌ Binary smoke test FAILED: --version returned error"
+        echo "   This usually means a module failed to bundle correctly."
+        echo "   Check that all imports use static paths that bun can analyze."
+        exit 1
+    fi
+else
+    echo "❌ Binary not found or not executable: $BINARY_PATH"
+    exit 1
+fi
+
 # Function to cleanup existing tags
 cleanup_existing_tag() {
     echo "⚠️ Tag $TAG_NAME already exists. Cleaning up..."
