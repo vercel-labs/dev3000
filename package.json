@@ -95,7 +95,8 @@
   },
   "optionalDependencies": {
     "@d3k/darwin-arm64": "0.0.143-canary",
-    "@d3k/linux-x64": "0.0.143-canary"
+    "@d3k/linux-x64": "0.0.143-canary",
+    "@opentui/core-linux-x64": "^0.1.71"
   },
   "engines": {
     "node": ">=18.0.0"
