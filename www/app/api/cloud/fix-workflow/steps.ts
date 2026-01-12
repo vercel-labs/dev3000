@@ -10,7 +10,7 @@ import { put } from "@vercel/blob"
 import { Sandbox } from "@vercel/sandbox"
 import { createGateway, generateText, stepCountIs, tool } from "ai"
 import { z } from "zod"
-import { createD3kSandbox as createD3kSandboxUtil } from "@/lib/cloud/d3k-sandbox"
+import { getOrCreateD3kSandbox, StepTimer, type SandboxTimingData } from "@/lib/cloud/d3k-sandbox"
 import { saveWorkflowRun, type WorkflowType } from "@/lib/workflow-storage"
 import type { WorkflowReport } from "@/types"
 
@@ -55,12 +55,19 @@ async function updateProgress(
 // STEP 1: Init Sandbox
 // ============================================================
 
+/** Timing data for init step */
+export interface InitStepTiming {
+  totalMs: number
+  sandboxCreation: SandboxTimingData
+  steps: { name: string; durationMs: number; startedAt: string }[]
+}
+
 export async function initSandboxStep(
   repoUrl: string,
   branch: string,
   projectName: string,
   reportId: string,
-  startPath: string,
+  _startPath: string,
   vercelOidcToken?: string,
   progressContext?: ProgressContext | null
 ): Promise<{
@@ -72,7 +79,10 @@ export async function initSandboxStep(
   beforeGrade: "good" | "needs-improvement" | "poor" | null
   beforeScreenshots: Array<{ timestamp: number; blobUrl: string; label?: string }>
   initD3kLogs: string
+  timing: InitStepTiming
 }> {
+  const timer = new StepTimer()
+
   workflowLog(`[Init] Creating sandbox for ${projectName}...`)
   await updateProgress(progressContext, 1, "Creating sandbox environment...")
 
@@ -80,8 +90,10 @@ export async function initSandboxStep(
     process.env.VERCEL_OIDC_TOKEN = vercelOidcToken
   }
 
-  // Create sandbox
-  const sandboxResult = await createD3kSandboxUtil({
+  // Create sandbox using base snapshot (Chrome + d3k pre-installed)
+  // The base snapshot is shared across ALL projects for fast startup
+  timer.start("Create sandbox (getOrCreateD3kSandbox)")
+  const sandboxResult = await getOrCreateD3kSandbox({
     repoUrl,
     branch,
     projectDir: "",
@@ -92,14 +104,22 @@ export async function initSandboxStep(
 
   workflowLog(`[Init] Sandbox: ${sandboxResult.sandbox.sandboxId}`)
   workflowLog(`[Init] Dev URL: ${sandboxResult.devUrl}`)
-  await updateProgress(progressContext, 1, "Sandbox created, starting dev server...", sandboxResult.devUrl)
+  workflowLog(`[Init] From base snapshot: ${sandboxResult.fromSnapshot}`)
+  await updateProgress(
+    progressContext,
+    1,
+    sandboxResult.fromSnapshot ? "Sandbox restored from base snapshot!" : "Sandbox created from scratch",
+    sandboxResult.devUrl
+  )
 
   // Wait for d3k to capture initial CLS
+  timer.start("Wait for CLS capture (5s)")
   workflowLog(`[Init] Waiting for d3k CLS capture...`)
   await updateProgress(progressContext, 1, "Dev server running, capturing initial CLS...")
   await new Promise((resolve) => setTimeout(resolve, 5000))
 
   // Get CLS data from d3k
+  timer.start("Fetch CLS data from d3k")
   const clsData = await fetchClsData(sandboxResult.sandbox, sandboxResult.mcpUrl, projectName)
 
   workflowLog(`[Init] Before CLS: ${clsData.clsScore} (${clsData.clsGrade})`)
@@ -111,6 +131,17 @@ export async function initSandboxStep(
     sandboxResult.devUrl
   )
 
+  timer.end()
+
+  // Log timing breakdown
+  const timingData = timer.getData()
+  workflowLog(`[Init] ⏱️ TIMING BREAKDOWN (total: ${(timingData.totalMs / 1000).toFixed(1)}s)`)
+  for (const step of timingData.steps) {
+    const secs = (step.durationMs / 1000).toFixed(1)
+    const pct = ((step.durationMs / timingData.totalMs) * 100).toFixed(0)
+    workflowLog(`[Init]   ${step.name}: ${secs}s (${pct}%)`)
+  }
+
   return {
     sandboxId: sandboxResult.sandbox.sandboxId,
     devUrl: sandboxResult.devUrl,
@@ -119,13 +150,24 @@ export async function initSandboxStep(
     beforeCls: clsData.clsScore,
     beforeGrade: clsData.clsGrade,
     beforeScreenshots: clsData.screenshots,
-    initD3kLogs: clsData.d3kLogs
+    initD3kLogs: clsData.d3kLogs,
+    timing: {
+      totalMs: timingData.totalMs,
+      sandboxCreation: sandboxResult.timing,
+      steps: timingData.steps
+    }
   }
 }
 
 // ============================================================
 // STEP 2: Agent Fix Loop (with internal iteration)
 // ============================================================
+
+/** Timing data for agent fix loop step */
+export interface AgentStepTiming {
+  totalMs: number
+  steps: { name: string; durationMs: number; startedAt: string }[]
+}
 
 export async function agentFixLoopStep(
   sandboxId: string,
@@ -148,7 +190,11 @@ export async function agentFixLoopStep(
   status: "improved" | "unchanged" | "degraded" | "no-changes"
   agentSummary: string
   gitDiff: string | null
+  timing: AgentStepTiming
 }> {
+  const timer = new StepTimer()
+
+  timer.start("Reconnect to sandbox")
   workflowLog(`[Agent] Reconnecting to sandbox: ${sandboxId}`)
   await updateProgress(progressContext, 2, "AI agent analyzing CLS issues...", devUrl)
 
@@ -158,12 +204,14 @@ export async function agentFixLoopStep(
   }
 
   // Capture "before" Web Vitals via CDP before the agent makes any changes
+  timer.start("Capture before Web Vitals")
   workflowLog("[Agent] Capturing before Web Vitals via CDP...")
   const { vitals: capturedBeforeWebVitals, diagnosticLogs: beforeWebVitalsDiagnostics } =
     await fetchWebVitalsViaCDP(sandbox)
   workflowLog(`[Agent] Before Web Vitals captured: ${JSON.stringify(capturedBeforeWebVitals)}`)
 
   // Run the agent with the new "diagnose" tool
+  timer.start("Run AI agent (with tools)")
   const agentResult = await runAgentWithDiagnoseTool(
     sandbox,
     devUrl,
@@ -183,6 +231,7 @@ export async function agentFixLoopStep(
   // Reason: d3k's screencast manager checks window.location.href when navigation starts.
   // When navigating FROM about:blank TO localhost, the URL check still sees about:blank
   // (because the navigation just started), so it SKIPS capture. Page.reload avoids this.
+  timer.start("Reload page for final CLS")
   workflowLog("[Agent] Forcing page reload to capture final CLS...")
   const D3K_MCP_PORT = 3684
 
@@ -207,9 +256,11 @@ export async function agentFixLoopStep(
   await new Promise((resolve) => setTimeout(resolve, 8000)) // 8 seconds for CLS to be detected
 
   // Get final CLS measurement
+  timer.start("Fetch final CLS data")
   const finalCls = await fetchClsData(sandbox, mcpUrl, `${projectName}-after`)
 
   // Get git diff (exclude package.json which gets modified by sandbox initialization)
+  timer.start("Get git diff")
   const diffResult = await runSandboxCommand(sandbox, "sh", [
     "-c",
     "cd /vercel/sandbox && git diff --no-color -- . ':!package.json' ':!package-lock.json' ':!pnpm-lock.yaml' 2>/dev/null || echo ''"
@@ -249,6 +300,7 @@ export async function agentFixLoopStep(
   const workflowType = (progressContext?.workflowType as "cls-fix" | "prompt" | "design-guidelines") || "cls-fix"
 
   // Fetch "after" Web Vitals directly from browser via CDP (more reliable than parsing logs)
+  timer.start("Fetch after Web Vitals")
   workflowLog("[Agent] Fetching after Web Vitals via CDP...")
   const { vitals: afterWebVitalsResult, diagnosticLogs: afterWebVitalsDiagnostics } =
     await fetchWebVitalsViaCDP(sandbox)
@@ -268,6 +320,7 @@ export async function agentFixLoopStep(
   workflowLog(`[Agent] After Web Vitals: ${JSON.stringify(afterWebVitals)}`)
 
   // Generate report inline
+  timer.start("Generate and upload report")
   const report: WorkflowReport = {
     id: reportId,
     projectName,
@@ -307,6 +360,17 @@ export async function agentFixLoopStep(
 
   workflowLog(`[Agent] Report saved: ${blob.url}`)
 
+  timer.end()
+
+  // Log timing breakdown
+  const timingData = timer.getData()
+  workflowLog(`[Agent] ⏱️ TIMING BREAKDOWN (total: ${(timingData.totalMs / 1000).toFixed(1)}s)`)
+  for (const step of timingData.steps) {
+    const secs = (step.durationMs / 1000).toFixed(1)
+    const pct = ((step.durationMs / timingData.totalMs) * 100).toFixed(0)
+    workflowLog(`[Agent]   ${step.name}: ${secs}s (${pct}%)`)
+  }
+
   return {
     reportBlobUrl: blob.url,
     reportId,
@@ -314,7 +378,8 @@ export async function agentFixLoopStep(
     afterCls: finalCls.clsScore,
     status,
     agentSummary: agentResult.summary,
-    gitDiff
+    gitDiff,
+    timing: timingData
   }
 }
 
@@ -1256,6 +1321,12 @@ export async function cleanupSandbox(sandboxId: string): Promise<void> {
 // STEP 3: Create Pull Request
 // ============================================================
 
+/** Timing data for PR creation step */
+export interface PRStepTiming {
+  totalMs: number
+  steps: { name: string; durationMs: number; startedAt: string }[]
+}
+
 export async function createPullRequestStep(
   sandboxId: string,
   githubPat: string,
@@ -1267,11 +1338,14 @@ export async function createPullRequestStep(
   afterCls: number | null,
   reportId: string,
   progressContext?: ProgressContext | null
-): Promise<{ prUrl: string; prNumber: number; branch: string } | { error: string } | null> {
+): Promise<{ prUrl: string; prNumber: number; branch: string; timing: PRStepTiming } | { error: string } | null> {
+  const timer = new StepTimer()
+
   workflowLog(`[PR] Creating PR for ${repoOwner}/${repoName}...`)
   await updateProgress(progressContext, 5, "Creating GitHub PR...")
 
   try {
+    timer.start("Get sandbox")
     workflowLog(`[PR] Getting sandbox ${sandboxId}...`)
     const sandbox = await Sandbox.get({ sandboxId })
     workflowLog(`[PR] Sandbox status: ${sandbox.status}`)
@@ -1283,6 +1357,7 @@ export async function createPullRequestStep(
     const branchName = `d3k/fix-cls-${Date.now()}`
 
     // Configure git user (required for commits)
+    timer.start("Configure git")
     workflowLog(`[PR] Configuring git user...`)
     const gitConfigResult = await runSandboxCommand(sandbox, "sh", [
       "-c",
@@ -1291,6 +1366,7 @@ export async function createPullRequestStep(
     workflowLog(`[PR] Git config result: exit=${gitConfigResult.exitCode}`)
 
     // Create and checkout new branch
+    timer.start("Create branch")
     workflowLog(`[PR] Creating branch: ${branchName}`)
     const branchResult = await runSandboxCommand(sandbox, "sh", [
       "-c",
@@ -1302,6 +1378,7 @@ export async function createPullRequestStep(
     }
 
     // Stage all changes (excluding package manager lock files which may have been modified)
+    timer.start("Stage and commit")
     await runSandboxCommand(sandbox, "sh", [
       "-c",
       `cd ${SANDBOX_CWD} && git add -A && git reset -- package-lock.json pnpm-lock.yaml yarn.lock 2>/dev/null || true`
@@ -1338,6 +1415,7 @@ Automated CLS fix by d3k
     const authUrl = `https://x-access-token:${githubPat}@github.com/${repoOwner}/${repoName}.git`
 
     // Push to GitHub
+    timer.start("Push to GitHub")
     workflowLog("[PR] Pushing to GitHub...")
     const pushResult = await runSandboxCommand(sandbox, "sh", [
       "-c",
@@ -1349,6 +1427,7 @@ Automated CLS fix by d3k
     }
 
     // Create PR via GitHub API
+    timer.start("Create PR via GitHub API")
     workflowLog("[PR] Creating pull request...")
     const prTitle = `fix: Reduce CLS (${beforeCls?.toFixed(3) || "?"} → ${afterCls?.toFixed(3) || "?"})`
     const prBody = `## 🎯 CLS Fix by d3k
@@ -1394,6 +1473,7 @@ The AI agent analyzed the page for layout shifts and applied fixes to reduce CLS
     await updateProgress(progressContext, 5, `PR created: #${prData.number}`)
 
     // Update the report blob to include the PR URL
+    timer.start("Update report with PR URL")
     try {
       workflowLog(`[PR] Updating report ${reportId} with PR URL...`)
       const reportBlobUrl = `https://qkkfhcqmsjpmk4fp.public.blob.vercel-storage.com/report-${reportId}.json`
@@ -1420,10 +1500,22 @@ The AI agent analyzed the page for layout shifts and applied fixes to reduce CLS
       // Don't fail the whole step, PR was still created successfully
     }
 
+    timer.end()
+
+    // Log timing breakdown
+    const timingData = timer.getData()
+    workflowLog(`[PR] ⏱️ TIMING BREAKDOWN (total: ${(timingData.totalMs / 1000).toFixed(1)}s)`)
+    for (const step of timingData.steps) {
+      const secs = (step.durationMs / 1000).toFixed(1)
+      const pct = ((step.durationMs / timingData.totalMs) * 100).toFixed(0)
+      workflowLog(`[PR]   ${step.name}: ${secs}s (${pct}%)`)
+    }
+
     return {
       prUrl: prData.html_url,
       prNumber: prData.number,
-      branch: branchName
+      branch: branchName,
+      timing: timingData
     }
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err)

@@ -11,6 +11,7 @@ export function useDarkMode() {
       // Check localStorage first
       const saved = localStorage.getItem("dev3000-dark-mode")
       if (saved !== null) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- Intentional: hydration/localStorage initialization
         setDarkMode(JSON.parse(saved))
       } else {
         // Default to system preference

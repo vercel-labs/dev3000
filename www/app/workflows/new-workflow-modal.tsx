@@ -91,6 +91,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   const [projectsError, setProjectsError] = useState<string | null>(null)
   const [workflowStatus, setWorkflowStatus] = useState<string>("")
   // biome-ignore lint/suspicious/noExplicitAny: API response type is dynamic
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [workflowResult, setWorkflowResult] = useState<any>(null)
   const [activeRunId, setActiveRunId] = useState<string | null>(null)
   const [sandboxUrl, setSandboxUrl] = useState<string | null>(null)
@@ -235,13 +236,16 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
 
         // Find the run - either by activeRunId or by matching project + running status
         // biome-ignore lint/suspicious/noExplicitAny: API response type is dynamic
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let run: any = null
         if (activeRunId) {
           // biome-ignore lint/suspicious/noExplicitAny: API response type is dynamic
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           run = data.runs.find((r: any) => r.id === activeRunId)
         } else if (selectedProject) {
           // Find the most recent running workflow for this project
           // biome-ignore lint/suspicious/noExplicitAny: API response type is dynamic
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           run = data.runs.find((r: any) => r.projectName === selectedProject.name && r.status === "running")
           if (run) {
             setActiveRunId(run.id)
@@ -516,6 +520,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
             : "prompt"
 
       // biome-ignore lint/suspicious/noExplicitAny: Request body type depends on conditional fields
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const body: any = {
         devUrl,
         projectName: selectedProject.name,

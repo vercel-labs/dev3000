@@ -87,6 +87,7 @@ async function crawlPreviewPages(previewUrl: string, pagesToCheck: string[]) {
 }
 
 // biome-ignore lint/suspicious/noExplicitAny: AI-generated crawl data has dynamic structure
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function verifyPRClaims(prTitle: string, prBody: string, crawlResults: any[], changedFiles: string[]) {
   "use step"
   const steps = await import("../app/api/cloud/check-pr/steps")
@@ -100,6 +101,7 @@ async function checkPerformance(previewUrl: string, pagesToCheck: string[]) {
 }
 
 // biome-ignore lint/suspicious/noExplicitAny: Report data has dynamic structure from previous steps
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function generateReport(data: any) {
   "use step"
   const steps = await import("../app/api/cloud/check-pr/steps")
