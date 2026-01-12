@@ -4,6 +4,16 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.144] - 2026-01-12
+
+**Feature Release**
+
+- Add compiled binary smoke test to release script
+- Lint auto-fixes
+- Fix TUI module bundling + LogEntry type export
+- Rewrite design-guidelines workflow to use inline skill content
+- Fix design-guidelines workflow to use reviewDesignGuidelines tool
+
 ## [0.0.143] - 2026-01-12
 
 **Feature Release**

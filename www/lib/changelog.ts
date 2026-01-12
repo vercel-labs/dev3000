@@ -10,6 +10,19 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.144",
+    date: "2026-01-12",
+    type: "minor",
+    highlights: [
+      "Add compiled binary smoke test to release script",
+      "Lint auto-fixes",
+      "Fix TUI module bundling + LogEntry type export",
+      "Rewrite design-guidelines workflow to use inline skill content",
+      "Fix design-guidelines workflow to use reviewDesignGuidelines tool"
+    ]
+  },
+
+  {
     version: "0.0.143",
     date: "2026-01-12",
     type: "minor",
