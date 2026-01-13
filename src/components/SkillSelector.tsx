@@ -6,11 +6,17 @@ interface SkillSelectorProps {
   skills: AvailableSkill[]
   onComplete: (selectedSkills: AvailableSkill[]) => void
   onSkip: () => void
+  initiallySelected?: string[] // Names of skills to pre-select (defaults to all)
 }
 
-export function SkillSelector({ skills, onComplete, onSkip }: SkillSelectorProps) {
-  // Start with all skills selected
-  const [selectedSkills, setSelectedSkills] = useState<Set<string>>(new Set(skills.map((s) => s.name)))
+export function SkillSelector({ skills, onComplete, onSkip, initiallySelected }: SkillSelectorProps) {
+  // Start with specified skills selected, or all if not specified
+  const [selectedSkills, setSelectedSkills] = useState<Set<string>>(() => {
+    if (initiallySelected) {
+      return new Set(initiallySelected.filter((name) => skills.some((s) => s.name === name)))
+    }
+    return new Set(skills.map((s) => s.name))
+  })
   const [highlightedIndex, setHighlightedIndex] = useState(0)
 
   // Item 0 is "All Skills", rest are individual skills
@@ -71,8 +77,14 @@ export function SkillSelector({ skills, onComplete, onSkip }: SkillSelectorProps
     )
   }
 
-  const truncateDescription = (desc: string, maxLen: number = 50): string => {
+  // Allow longer descriptions with word wrapping
+  const formatDescription = (desc: string, maxLen: number = 80): string => {
     if (desc.length <= maxLen) return desc
+    // Find a good break point (space) near maxLen
+    const breakPoint = desc.lastIndexOf(" ", maxLen)
+    if (breakPoint > maxLen * 0.6) {
+      return `${desc.substring(0, breakPoint)}...`
+    }
     return `${desc.substring(0, maxLen - 3)}...`
   }
 
@@ -107,7 +119,7 @@ export function SkillSelector({ skills, onComplete, onSkip }: SkillSelectorProps
               <Text color={isHighlighted ? "#A18CE5" : undefined}>
                 {" "}
                 {skill.name} <Text color={skill.isNew ? "green" : "yellow"}>{label}</Text>
-                <Text dimColor> - {truncateDescription(skill.description)}</Text>
+                <Text dimColor> - {formatDescription(skill.description)}</Text>
               </Text>
             </Box>
           )

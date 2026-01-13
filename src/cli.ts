@@ -18,6 +18,7 @@ import { getProjectDir } from "./utils/project-name.js"
 import {
   type AvailableSkill,
   checkForNewSkills,
+  detectsReact,
   installSelectedSkills,
   markSkillsAsSeen
 } from "./utils/skill-installer.js"
@@ -241,7 +242,7 @@ async function promptAgentSelection(defaultAgentName?: string): Promise<{ name: 
  * Show interactive skill selection prompt using Ink.
  * Returns the selected skills, or empty array if user skipped.
  */
-async function promptSkillSelection(skills: AvailableSkill[]): Promise<AvailableSkill[]> {
+async function promptSkillSelection(skills: AvailableSkill[], initiallySelected?: string[]): Promise<AvailableSkill[]> {
   const { render } = await import("ink")
   const React = await import("react")
   const { SkillSelector } = await import("./components/SkillSelector.js")
@@ -253,6 +254,7 @@ async function promptSkillSelection(skills: AvailableSkill[]): Promise<Available
     const { unmount, waitUntilExit, clear } = render(
       React.createElement(SkillSelector, {
         skills,
+        initiallySelected,
         onComplete: (selected: AvailableSkill[]) => {
           selectedSkills = selected
           clear()
@@ -637,7 +639,20 @@ program
         process.stdout.write("\x1B[2J\x1B[0f")
 
         if (newSkills.length > 0) {
-          const selected = await promptSkillSelection(newSkills)
+          // Determine initial selections: all remote skills, plus react-performance for React projects
+          const isReactProject = detectsReact()
+          const initialSelections = newSkills
+            .filter((skill) => {
+              // Always pre-select remote skills (from agent-skills repo)
+              if (skill.sha !== "bundled") return true
+              // For bundled skills, only pre-select react-performance if it's a React project
+              if (skill.name === "react-performance") return isReactProject
+              // Don't pre-select other bundled skills by default
+              return false
+            })
+            .map((s) => s.name)
+
+          const selected = await promptSkillSelection(newSkills, initialSelections)
           if (selected.length > 0) {
             console.log(chalk.cyan(`Installing ${selected.length} skill(s)...`))
             const result = await installSelectedSkills(selected, (skill, index, total) => {

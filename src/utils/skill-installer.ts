@@ -1,5 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs"
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "fs"
 import path from "path"
+import { getSkillsInfo } from "../skills/index.js"
 import { getProjectDir } from "./project-name.js"
 
 const GITHUB_REPO = "vercel-labs/agent-skills"
@@ -35,6 +36,48 @@ export interface InstalledSkills {
 // Skills are installed to project's .claude/skills/ (where Claude Code expects them)
 function getProjectSkillsDir(): string {
   return path.join(process.cwd(), ".claude", "skills")
+}
+
+/**
+ * Detect if the current project uses React by checking package.json
+ */
+export function detectsReact(): boolean {
+  try {
+    const packageJsonPath = path.join(process.cwd(), "package.json")
+    if (!existsSync(packageJsonPath)) {
+      return false
+    }
+    const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf-8"))
+    const deps = { ...packageJson.dependencies, ...packageJson.devDependencies }
+    return Boolean(deps.react || deps["react-dom"] || deps.next || deps["@remix-run/react"])
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Get bundled skills from d3k package that are installable
+ * (excludes the main 'd3k' skill which is for internal use)
+ */
+export function getBundledSkills(): AvailableSkill[] {
+  const bundledSkills: AvailableSkill[] = []
+  const skillsInfo = getSkillsInfo()
+
+  for (const info of skillsInfo) {
+    // Skip the main d3k skill - it's for MCP/CLI internal use
+    if (info.name === "d3k") continue
+
+    bundledSkills.push({
+      name: info.name,
+      description: info.description,
+      path: info.path,
+      sha: "bundled", // Special marker for bundled skills
+      isNew: false,
+      isUpdate: false
+    })
+  }
+
+  return bundledSkills
 }
 
 /**
@@ -155,6 +198,24 @@ export function getActionableSkills(available: AvailableSkill[], installed: Inst
   return actionable
 }
 
+function copyDirectory(srcDir: string, destDir: string): void {
+  if (!existsSync(destDir)) {
+    mkdirSync(destDir, { recursive: true })
+  }
+
+  const entries = readdirSync(srcDir, { withFileTypes: true })
+  for (const entry of entries) {
+    const srcPath = path.join(srcDir, entry.name)
+    const destPath = path.join(destDir, entry.name)
+
+    if (entry.isDirectory()) {
+      copyDirectory(srcPath, destPath)
+    } else {
+      copyFileSync(srcPath, destPath)
+    }
+  }
+}
+
 async function downloadDirectory(dirPath: string, targetDir: string): Promise<void> {
   const response = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${dirPath}`)
   if (!response.ok) {
@@ -192,8 +253,14 @@ export async function installSkill(skill: AvailableSkill): Promise<void> {
     mkdirSync(skillDir, { recursive: true })
   }
 
-  // Download all files recursively
-  await downloadDirectory(skill.path, skillDir)
+  if (skill.sha === "bundled") {
+    // Bundled skill: copy from the d3k package
+    const sourceDir = path.dirname(skill.path) // skill.path is the SKILL.md path, get parent dir
+    copyDirectory(sourceDir, skillDir)
+  } else {
+    // Remote skill: download all files recursively
+    await downloadDirectory(skill.path, skillDir)
+  }
 
   // Update installed.json
   const installed = loadInstalledSkills()
@@ -218,7 +285,15 @@ export function markSkillsAsSeen(skills: AvailableSkill[]): void {
 }
 
 export async function checkForNewSkills(): Promise<AvailableSkill[]> {
-  const available = await fetchAvailableSkills()
+  // Fetch remote skills from GitHub
+  const remoteSkills = await fetchAvailableSkills()
+
+  // Get bundled skills from d3k package
+  const bundledSkills = getBundledSkills()
+
+  // Combine both, with bundled skills first
+  const available = [...bundledSkills, ...remoteSkills]
+
   const installed = loadInstalledSkills()
   return getActionableSkills(available, installed)
 }
