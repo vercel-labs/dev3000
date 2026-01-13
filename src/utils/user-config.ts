@@ -10,6 +10,7 @@ export interface AgentConfig {
 export interface UserConfig {
   disableMcpConfigs?: string
   defaultAgent?: AgentConfig
+  browser?: string
 }
 
 export function getUserConfigPath(): string {
@@ -50,6 +51,9 @@ export function loadUserConfig(): UserConfig {
         config.defaultAgent = { name: agent.name, command: agent.command }
       }
     }
+    if (typeof parsed.browser === "string" && parsed.browser.trim().length > 0) {
+      config.browser = parsed.browser.trim()
+    }
     return config
   } catch {
     return {}
@@ -72,6 +76,11 @@ export function saveUserConfig(updates: Partial<UserConfig>): void {
   // Remove defaultAgent if set to undefined (user chose "No agent")
   if (updates.defaultAgent === undefined && "defaultAgent" in updates) {
     delete merged.defaultAgent
+  }
+
+  // Remove browser if set to undefined
+  if (updates.browser === undefined && "browser" in updates) {
+    delete merged.browser
   }
 
   writeFileSync(configPath, JSON.stringify(merged, null, 2))

@@ -698,6 +698,9 @@ program
     const projectConfig = await detectProjectType(options.debug)
     const userConfigForMcp = loadUserConfig()
 
+    // Apply default browser from config if not explicitly provided
+    const browser = options.browser || userConfigForMcp.browser
+
     // Check if we're in a valid project directory
     if (projectConfig.noProjectDetected) {
       console.error(chalk.red("\n❌ No project detected in current directory.\n"))
@@ -831,6 +834,7 @@ program
 
       await startDevEnvironment({
         ...options,
+        browser,
         port,
         portMcp: options.portMcp,
         debugPort: Number.parseInt(debugPort, 10),
