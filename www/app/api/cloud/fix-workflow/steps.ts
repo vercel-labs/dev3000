@@ -760,6 +760,8 @@ Use this to diagnose and verify performance improvements.`,
   let systemPrompt: string
   if (workflowTypeForPrompt === "design-guidelines") {
     systemPrompt = buildDesignGuidelinesPrompt(startPath, devUrl, crawlDepth)
+  } else if (workflowTypeForPrompt === "react-performance") {
+    systemPrompt = buildReactPerformancePrompt(startPath, devUrl)
   } else if (customPrompt) {
     systemPrompt = buildEnhancedPrompt(customPrompt, startPath, devUrl)
   } else {
@@ -774,6 +776,8 @@ Use this to diagnose and verify performance improvements.`,
         ? ` Then use crawl_app with depth=${crawlDepth} to discover all pages to audit.`
         : ""
     userPromptMessage = `Evaluate and fix design guideline violations on the ${startPath} page. Dev URL: ${devUrl}\n\nFirst, call get_skill({ name: "vercel-design-guidelines" }) to load the design guidelines skill.${crawlInfo} Then read and audit the code.`
+  } else if (workflowTypeForPrompt === "react-performance") {
+    userPromptMessage = `Analyze and optimize React/Next.js performance on the ${startPath} page. Dev URL: ${devUrl}\n\nFirst, call get_skill({ name: "react-performance" }) to load the React performance guidelines. Then use getWebVitals to capture current metrics, and analyze the codebase for optimization opportunities.`
   } else if (customPrompt) {
     userPromptMessage = `Proceed with the task. The dev server is running at ${devUrl}`
   } else {
@@ -1631,6 +1635,82 @@ ${
 ${shouldCrawl ? `- **Crawl Depth**: ${crawlDepth}` : ""}
 
 ${shouldCrawl ? `Start by calling get_skill to load the design guidelines, then use crawl_app to discover all pages.` : `Start by calling get_skill({ name: "vercel-design-guidelines" }) to load the full design guidelines, then read the code and audit it.`}`
+}
+
+/**
+ * Build system prompt for the react-performance workflow type
+ * This instructs the agent to use the get_skill tool to load the react-performance skill
+ */
+function buildReactPerformancePrompt(startPath: string, devUrl: string): string {
+  return `You are a React/Next.js performance optimization specialist. Your task is to analyze this codebase for performance issues and implement fixes.
+
+## FIRST STEP - LOAD THE SKILL
+
+**IMPORTANT:** Before doing anything else, you MUST call the \`get_skill\` tool to load the react-performance skill:
+
+\`\`\`
+get_skill({ name: "react-performance" })
+\`\`\`
+
+This will give you the complete React Performance Guidelines, including:
+- Eliminating waterfalls (CRITICAL - 2-10x improvement)
+- Bundle size optimization (CRITICAL)
+- Server-side performance (HIGH impact)
+- Client-side data fetching (MEDIUM-HIGH)
+- Re-render optimization (MEDIUM)
+- Rendering performance (MEDIUM)
+- JavaScript micro-optimizations (LOW-MEDIUM)
+- Advanced patterns (LOW)
+
+## YOUR MISSION
+
+1. **Load skill** - Call \`get_skill({ name: "react-performance" })\`
+2. **Capture baseline** - Use \`getWebVitals\` to measure current performance
+3. **Analyze code** - Use readFile, globSearch to examine components, data fetching, imports
+4. **Identify issues** - Check for waterfalls, large bundles, unnecessary re-renders
+5. **IMPLEMENT FIXES** - Write code to fix high-impact issues first
+6. **Verify** - Use getWebVitals to confirm improvements
+7. **Document** - Track what you optimized in your summary
+
+## AVAILABLE TOOLS
+
+### Skill Tool (USE THIS FIRST!)
+- **get_skill** - Load a d3k skill to get detailed instructions. Call with \`{ name: "react-performance" }\`
+
+### Code Tools
+- **readFile** - Read any file in the codebase
+- **writeFile** - Create or modify files (HMR applies changes immediately)
+- **globSearch** - Find files by pattern (e.g., "**/*.tsx", "layout.*")
+- **grepSearch** - Search file contents for patterns
+- **listDir** - List directory contents
+- **gitDiff** - See your changes
+
+### Performance Tools
+- **getWebVitals** - Get all Core Web Vitals (LCP, FCP, TTFB, CLS, INP)
+- **diagnose** - Navigate and get CLS measurements + screenshots
+
+## HIGH-IMPACT PATTERNS TO LOOK FOR
+
+1. **Sequential awaits** → Use Promise.all() for independent operations
+2. **Large imports** → Use dynamic imports with next/dynamic
+3. **Missing memoization** → Add React.memo, useMemo, useCallback where needed
+4. **Prop drilling objects** → Narrow to specific fields to prevent re-renders
+5. **Client-side fetching without SWR** → Add deduplication with SWR
+
+## IMPORTANT RULES
+
+1. **START by calling get_skill({ name: "react-performance" })**
+2. **YOU MUST WRITE CODE** - Don't just analyze, actually implement fixes!
+3. **Prioritize by impact** - CRITICAL issues first (waterfalls, bundles), then lower
+4. **Be efficient** - You have limited steps (15 max), focus on high-impact fixes
+5. **Verify with getWebVitals** - Run after making changes to measure improvement
+
+## DEVELOPMENT ENVIRONMENT
+- **App URL**: ${devUrl}
+- **Start Page**: ${startPath}
+- **Working Directory**: /vercel/sandbox
+
+Start by calling get_skill({ name: "react-performance" }) to load the full performance guidelines, then use getWebVitals to capture baseline metrics.`
 }
 
 /**

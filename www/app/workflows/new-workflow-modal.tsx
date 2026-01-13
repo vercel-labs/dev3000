@@ -518,7 +518,9 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
           ? "cls-fix"
           : _selectedType === "design-guidelines"
             ? "design-guidelines"
-            : "prompt"
+            : _selectedType === "react-performance"
+              ? "react-performance"
+              : "prompt"
 
       // biome-ignore lint/suspicious/noExplicitAny: Request body type depends on conditional fields
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -746,6 +748,15 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                   <div className="font-semibold">Design Guidelines Review</div>
                   <div className="text-sm text-gray-600 mt-1">
                     Evaluate your site against Vercel design guidelines and automatically fix issues
+                  </div>
+                </Link>
+                <Link
+                  href="/workflows/new?type=react-performance"
+                  className="block w-full p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 text-left transition-colors"
+                >
+                  <div className="font-semibold">React Performance Review</div>
+                  <div className="text-sm text-gray-600 mt-1">
+                    Analyze React/Next.js code for performance issues and apply optimizations
                   </div>
                 </Link>
               </div>

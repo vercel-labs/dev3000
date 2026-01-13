@@ -328,7 +328,7 @@ async function saveDoneStatus(
     projectName: progressContext.projectName,
     timestamp: progressContext.timestamp,
     status: "done",
-    type: (progressContext.workflowType as "cls-fix" | "prompt" | "design-guidelines") || "cls-fix",
+    type: (progressContext.workflowType as "cls-fix" | "prompt" | "design-guidelines" | "react-performance") || "cls-fix",
     completedAt: new Date().toISOString(),
     reportBlobUrl,
     prUrl: prUrl || undefined,
@@ -346,7 +346,7 @@ async function saveFailureStatus(progressContext: ProgressContext, errorMessage:
       projectName: progressContext.projectName,
       timestamp: progressContext.timestamp,
       status: "failure",
-      type: (progressContext.workflowType as "cls-fix" | "prompt" | "design-guidelines") || "cls-fix",
+      type: (progressContext.workflowType as "cls-fix" | "prompt" | "design-guidelines" | "react-performance") || "cls-fix",
       completedAt: new Date().toISOString(),
       error: errorMessage
     })

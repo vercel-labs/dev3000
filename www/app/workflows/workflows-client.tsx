@@ -58,6 +58,8 @@ function formatWorkflowType(type?: string): string {
       return "Prompt"
     case "design-guidelines":
       return "Design Guidelines"
+    case "react-performance":
+      return "React Performance"
     default:
       return "CLS Fix" // Default for existing workflows without type
   }
