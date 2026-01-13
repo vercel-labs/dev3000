@@ -577,6 +577,7 @@ program
     "--with-agent <command>",
     'Run an agent (e.g. claude) in split-screen mode using tmux. Example: --with-agent "claude"'
   )
+  .option("--no-agent", "Skip agent selection prompt and run d3k standalone")
   .action(async (options) => {
     // Handle --with-agent by spawning tmux with split panes
     if (options.withAgent) {
@@ -613,9 +614,9 @@ program
     }
 
     // Handle agent selection for split-screen mode (default behavior in TTY)
-    // Skip if --no-tui, --debug flags are used, or if already inside tmux (to avoid nested prompts)
+    // Skip if --no-agent, --no-tui, --debug flags are used, or if already inside tmux (to avoid nested prompts)
     const insideTmux = !!process.env.TMUX
-    if (process.stdin.isTTY && !options.noTui && !options.debug && !insideTmux) {
+    if (process.stdin.isTTY && options.agent !== false && options.tui !== false && !options.debug && !insideTmux) {
       // Clear the terminal so d3k UI starts at the top of the screen
       process.stdout.write("\x1B[2J\x1B[0f")
 
