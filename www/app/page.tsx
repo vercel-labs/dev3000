@@ -117,7 +117,18 @@ export default async function HomePage() {
           <ol className="space-y-6 list-decimal list-inside">
             <li className="space-y-2 marker:tabular-nums">
               <span className="pl-2 font-medium">Install dev3000</span>
-              <div className="pl-6 pt-2">
+              <div className="pl-6 pt-2 space-y-3">
+                <p className="text-muted-foreground">
+                  For the best experience, install{" "}
+                  <a href="https://github.com/tmux/tmux" className="underline underline-offset-2">
+                    tmux
+                  </a>{" "}
+                  first:
+                </p>
+                <pre className="block w-full">
+                  <code className="code-block">brew install tmux</code>
+                </pre>
+                <p className="text-muted-foreground">Then install dev3000:</p>
                 <pre className="block w-full">
                   <code className="code-block">npm i -g dev3000</code>
                 </pre>
