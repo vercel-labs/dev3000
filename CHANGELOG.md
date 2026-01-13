@@ -4,6 +4,16 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.145] - 2026-01-13
+
+**Feature Release**
+
+- Add bundled skills to installer with React detection
+- Fix skill discovery in compiled binary from any directory
+- Add react-performance workflow type to d3k cloud
+- Rename /performance skill to /react-performance
+- Add /performance skill with React Performance Guidelines
+
 ## [0.0.144] - 2026-01-12
 
 **Feature Release**

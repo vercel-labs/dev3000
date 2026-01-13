@@ -10,6 +10,19 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.145",
+    date: "2026-01-13",
+    type: "minor",
+    highlights: [
+      "Add bundled skills to installer with React detection",
+      "Fix skill discovery in compiled binary from any directory",
+      "Add react-performance workflow type to d3k cloud",
+      "Rename /performance skill to /react-performance",
+      "Add /performance skill with React Performance Guidelines"
+    ]
+  },
+
+  {
     version: "0.0.144",
     date: "2026-01-12",
     type: "minor",
