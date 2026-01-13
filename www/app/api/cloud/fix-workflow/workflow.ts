@@ -22,6 +22,17 @@ interface InitResult {
   beforeGrade: "good" | "needs-improvement" | "poor" | null
   beforeScreenshots: Array<{ timestamp: number; blobUrl: string; label?: string }>
   initD3kLogs: string
+  // Timing and snapshot info
+  timing: {
+    totalMs: number
+    sandboxCreation: {
+      totalMs: number
+      steps: Array<{ name: string; durationMs: number; startedAt: string }>
+    }
+    steps: Array<{ name: string; durationMs: number; startedAt: string }>
+  }
+  fromSnapshot: boolean
+  snapshotId?: string
 }
 
 interface FixResult {
@@ -123,7 +134,11 @@ export async function cloudFixWorkflow(params: {
       startPath,
       customPrompt,
       crawlDepth,
-      progressContext
+      progressContext,
+      // Pass timing and snapshot info from init step
+      initResult.timing,
+      initResult.fromSnapshot,
+      initResult.snapshotId
     )
 
     workflowLog(`[Workflow] Result: ${fixResult.status}, After CLS: ${fixResult.afterCls}`)
@@ -238,7 +253,10 @@ async function agentFixLoop(
   startPath: string,
   customPrompt?: string,
   crawlDepth?: number | "all",
-  progressContext?: ProgressContext | null
+  progressContext?: ProgressContext | null,
+  initTiming?: InitResult["timing"],
+  fromSnapshot?: boolean,
+  snapshotId?: string
 ): Promise<FixResult> {
   "use step"
   const { agentFixLoopStep } = await import("./steps")
@@ -255,7 +273,10 @@ async function agentFixLoop(
     startPath,
     customPrompt,
     crawlDepth,
-    progressContext
+    progressContext,
+    initTiming,
+    fromSnapshot,
+    snapshotId
   )
 }
 

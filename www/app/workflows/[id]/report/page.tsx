@@ -97,10 +97,16 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
                 className={`px-2 py-0.5 rounded-full text-xs font-medium ${
                   workflowType === "prompt"
                     ? "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300"
-                    : "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300"
+                    : workflowType === "design-guidelines"
+                      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300"
+                      : "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300"
                 }`}
               >
-                {workflowType === "prompt" ? "Custom Prompt" : "CLS Fix"}
+                {workflowType === "prompt"
+                  ? "Custom Prompt"
+                  : workflowType === "design-guidelines"
+                    ? "Design Guidelines"
+                    : "CLS Fix"}
               </span>
             </div>
           </div>
@@ -148,6 +154,106 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
                 </li>
               )}
             </ul>
+          </div>
+        )}
+
+        {/* Timing and Snapshot Info */}
+        {report.timing && (
+          <div className="bg-card border border-border rounded-lg p-4 mb-6">
+            <div className="flex flex-wrap items-center gap-4">
+              {/* Snapshot Status */}
+              <div className="flex items-center gap-2">
+                <span
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+                    report.fromSnapshot
+                      ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                      : "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200"
+                  }`}
+                >
+                  {report.fromSnapshot ? (
+                    <>
+                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                        <path
+                          fillRule="evenodd"
+                          d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                      Snapshot Reused
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                        <path
+                          fillRule="evenodd"
+                          d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                      Fresh Sandbox
+                    </>
+                  )}
+                </span>
+              </div>
+
+              {/* Total Time */}
+              <div className="flex items-center gap-4 text-sm">
+                <span className="text-muted-foreground">
+                  Total:{" "}
+                  <span className="font-medium text-foreground">
+                    {(report.timing.total.totalMs / 1000).toFixed(1)}s
+                  </span>
+                </span>
+                <span className="text-muted-foreground">
+                  Init: <span className="font-mono text-xs">{(report.timing.total.initMs / 1000).toFixed(1)}s</span>
+                </span>
+                <span className="text-muted-foreground">
+                  Agent: <span className="font-mono text-xs">{(report.timing.total.agentMs / 1000).toFixed(1)}s</span>
+                </span>
+                {report.timing.total.prMs && (
+                  <span className="text-muted-foreground">
+                    PR: <span className="font-mono text-xs">{(report.timing.total.prMs / 1000).toFixed(1)}s</span>
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Detailed Step Timing (collapsible) */}
+            <details className="mt-3">
+              <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
+                View step-by-step timing breakdown
+              </summary>
+              <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                {/* Init Steps */}
+                {report.timing.init?.steps && report.timing.init.steps.length > 0 && (
+                  <div>
+                    <div className="font-medium text-muted-foreground mb-1">Init Steps</div>
+                    <ul className="space-y-0.5 font-mono">
+                      {report.timing.init.steps.map((step, i) => (
+                        <li key={`init-${i}`} className="flex justify-between">
+                          <span className="truncate mr-2">{step.name}</span>
+                          <span className="text-muted-foreground">{(step.durationMs / 1000).toFixed(1)}s</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {/* Agent Steps */}
+                {report.timing.agent?.steps && report.timing.agent.steps.length > 0 && (
+                  <div>
+                    <div className="font-medium text-muted-foreground mb-1">Agent Steps</div>
+                    <ul className="space-y-0.5 font-mono">
+                      {report.timing.agent.steps.map((step, i) => (
+                        <li key={`agent-${i}`} className="flex justify-between">
+                          <span className="truncate mr-2">{step.name}</span>
+                          <span className="text-muted-foreground">{(step.durationMs / 1000).toFixed(1)}s</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </details>
           </div>
         )}
 

@@ -4294,88 +4294,73 @@ export interface GetSkillParams {
 
 /**
  * Get the content of a d3k/Claude Code skill.
- * Skills are prompt templates stored in .claude/skills/{name}/SKILL.md
+ * Calls `d3k skill <name>` CLI to leverage the shared skill implementation.
  *
- * Looks for skills in these locations (in order):
- * 1. www/.claude/skills/{name}/SKILL.md (www workspace skills)
- * 2. src/skills/{name}/SKILL.md (core d3k skills)
+ * Skills are prompt templates stored in .claude/skills/{name}/SKILL.md
  */
 export async function getSkill(params: GetSkillParams) {
   const { name } = params
 
-  // Possible skill locations (relative to mcp-server directory)
-  const skillPaths = [
-    // www workspace skills (design-guidelines, etc.)
-    join(__dirname, "../../../www/.claude/skills", name, "SKILL.md"),
-    // Core d3k skills
-    join(__dirname, "../../../src/skills", name, "SKILL.md"),
-    // Fallback: dist skills (when running from installed package)
-    join(__dirname, "../../../dist/skills", name, "SKILL.md")
-  ]
+  logToDevFile(`Get Skill: Fetching skill "${name}" via CLI`)
 
-  for (const skillPath of skillPaths) {
-    try {
-      if (existsSync(skillPath)) {
-        const content = readFileSync(skillPath, "utf-8")
-        logToDevFile(`Get Skill: Found skill "${name}" at ${skillPath}`)
+  try {
+    // Call d3k CLI to get skill content
+    // This leverages the shared skill implementation in src/skills/index.ts
+    const { stdout, stderr } = await execAsync(`d3k skill "${name}"`, {
+      timeout: 5000,
+      env: { ...process.env, NO_COLOR: "1" } // Disable chalk colors for clean output
+    })
 
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: `# Skill: ${name}\n\n${content}`
-            }
-          ]
-        }
-      }
-    } catch {
-      // Try next path
-    }
-  }
-
-  // Skill not found
-  const availableSkills = listAvailableSkills()
-  logToDevFile(`Get Skill: Skill "${name}" not found. Available: ${availableSkills.join(", ")}`)
-
-  return {
-    content: [
-      {
-        type: "text" as const,
-        text: `❌ Skill "${name}" not found.\n\n**Available skills:**\n${availableSkills.map((s) => `• ${s}`).join("\n") || "• No skills found"}\n\n**Skill locations searched:**\n${skillPaths.map((p) => `• ${p}`).join("\n")}`
-      }
-    ]
-  }
-}
-
-/**
- * List all available skills by scanning skill directories
- */
-function listAvailableSkills(): string[] {
-  const skills = new Set<string>()
-
-  const skillDirs = [
-    join(__dirname, "../../../www/.claude/skills"),
-    join(__dirname, "../../../src/skills"),
-    join(__dirname, "../../../dist/skills")
-  ]
-
-  for (const dir of skillDirs) {
-    try {
-      if (existsSync(dir)) {
-        const entries = readdirSync(dir, { withFileTypes: true })
-        for (const entry of entries) {
-          if (entry.isDirectory()) {
-            const skillFile = join(dir, entry.name, "SKILL.md")
-            if (existsSync(skillFile)) {
-              skills.add(entry.name)
-            }
+    if (stderr && !stdout) {
+      // CLI returned error
+      logToDevFile(`Get Skill: CLI error for "${name}": ${stderr}`)
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `❌ ${stderr.trim()}`
           }
+        ]
+      }
+    }
+
+    logToDevFile(`Get Skill: Found skill "${name}" (${stdout.length} chars)`)
+    return {
+      content: [
+        {
+          type: "text" as const,
+          text: stdout
         }
+      ]
+    }
+  } catch (error) {
+    // CLI command failed (skill not found or d3k not available)
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    logToDevFile(`Get Skill: Failed to get skill "${name}": ${errorMessage}`)
+
+    // Try to get available skills for a helpful error message
+    try {
+      const { stdout: listOutput } = await execAsync("d3k skill --list", {
+        timeout: 5000,
+        env: { ...process.env, NO_COLOR: "1" }
+      })
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `❌ Skill "${name}" not found.\n\n${listOutput}`
+          }
+        ]
       }
     } catch {
-      // Ignore errors
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `❌ Skill "${name}" not found. Could not list available skills (d3k CLI may not be available).`
+          }
+        ]
+      }
     }
   }
-
-  return Array.from(skills).sort()
 }

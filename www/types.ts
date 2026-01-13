@@ -93,4 +93,27 @@ export interface WorkflowReport {
   // PR info (future)
   prUrl?: string
   prDiff?: string
+
+  // Sandbox and timing info
+  fromSnapshot?: boolean // Whether sandbox was created from a base snapshot
+  snapshotId?: string // The snapshot ID used (if any)
+  timing?: {
+    total: {
+      initMs: number
+      agentMs: number
+      prMs?: number
+      totalMs: number
+    }
+    init?: {
+      sandboxCreationMs: number
+      fromSnapshot: boolean
+      steps: Array<{ name: string; durationMs: number }>
+    }
+    agent?: {
+      steps: Array<{ name: string; durationMs: number }>
+    }
+    pr?: {
+      steps: Array<{ name: string; durationMs: number }>
+    }
+  }
 }

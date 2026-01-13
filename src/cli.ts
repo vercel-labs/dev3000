@@ -10,6 +10,7 @@ import { fileURLToPath } from "url"
 import { cloudCheckPR } from "./commands/cloud-check-pr.js"
 import { cloudFix } from "./commands/cloud-fix.js"
 import { createPersistentLogFile, findAvailablePort, startDevEnvironment } from "./dev-environment.js"
+import { getSkill, getSkillsInfo, listAvailableSkills } from "./skills/index.js"
 import { detectAIAgent } from "./utils/agent-detection.js"
 import { getAvailableAgents } from "./utils/agent-selection.js"
 import { formatMcpConfigTargets, parseDisabledMcpConfigs } from "./utils/mcp-configs.js"
@@ -942,6 +943,66 @@ program
       console.log(chalk.yellow(`\nTry running manually: ${chalk.white(upgradeCmd)}`))
       process.exit(1)
     }
+  })
+
+// Skill command - get skill content for use in prompts/workflows
+program
+  .command("skill [name]")
+  .description("Get skill content or list available skills")
+  .option("-l, --list", "List all available skills")
+  .option("-v, --verbose", "Show detailed skill information")
+  .action((name, options) => {
+    // List skills if --list flag or no name provided
+    if (options.list || !name) {
+      if (options.verbose) {
+        const skills = getSkillsInfo()
+        if (skills.length === 0) {
+          console.log(chalk.yellow("No skills found."))
+          console.log(chalk.gray("\nSkills are loaded from:"))
+          console.log(chalk.gray("  • .claude/skills/ (project-local)"))
+          console.log(chalk.gray("  • d3k built-in skills"))
+          process.exit(0)
+        }
+
+        console.log(chalk.cyan("Available skills:\n"))
+        for (const skill of skills) {
+          console.log(chalk.white(`  ${chalk.bold(skill.name)}`))
+          console.log(chalk.gray(`    ${skill.description}`))
+          console.log(chalk.gray(`    Path: ${skill.path}\n`))
+        }
+      } else {
+        const skills = listAvailableSkills()
+        if (skills.length === 0) {
+          console.log(chalk.yellow("No skills found."))
+          process.exit(0)
+        }
+
+        console.log(chalk.cyan("Available skills:"))
+        for (const skill of skills) {
+          console.log(chalk.white(`  • ${skill}`))
+        }
+        console.log(chalk.gray("\nUse 'd3k skill <name>' to get skill content"))
+        console.log(chalk.gray("Use 'd3k skill --list --verbose' for details"))
+      }
+      process.exit(0)
+    }
+
+    // Get specific skill content
+    const result = getSkill(name)
+
+    if (!result.found) {
+      console.error(chalk.red(`Error: ${result.error}`))
+      if (result.availableSkills && result.availableSkills.length > 0) {
+        console.log(chalk.yellow("\nAvailable skills:"))
+        for (const skill of result.availableSkills) {
+          console.log(chalk.gray(`  • ${skill}`))
+        }
+      }
+      process.exit(1)
+    }
+
+    // Output skill content to stdout (no formatting, for piping/parsing)
+    console.log(result.content)
   })
 
 program.parse()

@@ -80,6 +80,8 @@ export async function initSandboxStep(
   beforeScreenshots: Array<{ timestamp: number; blobUrl: string; label?: string }>
   initD3kLogs: string
   timing: InitStepTiming
+  fromSnapshot: boolean
+  snapshotId?: string
 }> {
   const timer = new StepTimer()
 
@@ -155,7 +157,9 @@ export async function initSandboxStep(
       totalMs: timingData.totalMs,
       sandboxCreation: sandboxResult.timing,
       steps: timingData.steps
-    }
+    },
+    fromSnapshot: sandboxResult.fromSnapshot,
+    snapshotId: sandboxResult.snapshotId
   }
 }
 
@@ -182,7 +186,10 @@ export async function agentFixLoopStep(
   startPath: string,
   customPrompt?: string,
   crawlDepth?: number | "all",
-  progressContext?: ProgressContext | null
+  progressContext?: ProgressContext | null,
+  initTiming?: InitStepTiming,
+  fromSnapshot?: boolean,
+  snapshotId?: string
 ): Promise<{
   reportBlobUrl: string
   reportId: string
@@ -323,6 +330,31 @@ export async function agentFixLoopStep(
 
   // Generate report inline
   timer.start("Generate and upload report")
+
+  // Get agent timing data before creating the report
+  const agentTimingData = timer.getData()
+
+  // Build timing object for report
+  const initMs = initTiming?.totalMs ?? 0
+  const agentMs = agentTimingData.totalMs
+  const reportTiming: WorkflowReport["timing"] = {
+    total: {
+      initMs,
+      agentMs,
+      totalMs: initMs + agentMs
+    },
+    init: initTiming
+      ? {
+          sandboxCreationMs: initTiming.sandboxCreation.totalMs,
+          fromSnapshot: fromSnapshot ?? false,
+          steps: initTiming.steps.map((s) => ({ name: s.name, durationMs: s.durationMs }))
+        }
+      : undefined,
+    agent: {
+      steps: agentTimingData.steps.map((s) => ({ name: s.name, durationMs: s.durationMs }))
+    }
+  }
+
   const report: WorkflowReport = {
     id: reportId,
     projectName,
@@ -350,7 +382,11 @@ export async function agentFixLoopStep(
     webVitalsDiagnostics: {
       before: beforeWebVitalsDiagnostics,
       after: afterWebVitalsDiagnostics
-    }
+    },
+    // Sandbox and timing info
+    fromSnapshot: fromSnapshot ?? false,
+    snapshotId,
+    timing: reportTiming
   }
 
   const blob = await put(`report-${reportId}.json`, JSON.stringify(report, null, 2), {
