@@ -1,6 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs"
+import { existsSync, readFileSync, writeFileSync } from "fs"
 import { homedir } from "os"
-import { dirname, join } from "path"
+import { join } from "path"
 
 export interface AgentConfig {
   name: string
@@ -14,7 +14,7 @@ export interface UserConfig {
 }
 
 export function getUserConfigPath(): string {
-  return join(homedir(), ".d3k", "config.json")
+  return join(homedir(), ".d3k.json")
 }
 
 function normalizeDisableList(value: unknown): string | undefined {
@@ -62,12 +62,6 @@ export function loadUserConfig(): UserConfig {
 
 export function saveUserConfig(updates: Partial<UserConfig>): void {
   const configPath = getUserConfigPath()
-  const configDir = dirname(configPath)
-
-  // Ensure directory exists
-  if (!existsSync(configDir)) {
-    mkdirSync(configDir, { recursive: true })
-  }
 
   // Load existing config and merge
   const existing = loadUserConfig()

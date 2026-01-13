@@ -578,6 +578,12 @@ program
     'Run an agent (e.g. claude) in split-screen mode using tmux. Example: --with-agent "claude"'
   )
   .action(async (options) => {
+    // Load user config early so it can be used for --with-agent and agent selection flows
+    const userConfig = loadUserConfig()
+
+    // Apply browser default from user config if not explicitly provided via CLI
+    const browserOption = options.browser || userConfig.browser
+
     // Handle --with-agent by spawning tmux with split panes
     if (options.withAgent) {
       await launchWithTmux(options.withAgent, parseInt(options.portMcp, 10), {
@@ -586,7 +592,7 @@ program
         script: options.script,
         command: options.command,
         profileDir: options.profileDir,
-        browser: options.browser,
+        browser: browserOption,
         serversOnly: options.serversOnly,
         headless: options.headless,
         dateTime: options.dateTime,
@@ -657,7 +663,6 @@ program
         // Continue with normal startup
       } else {
         // Always show prompt, pre-selecting the last-used option
-        const userConfig = loadUserConfig()
         const selectedAgent = await promptAgentSelection(userConfig.defaultAgent?.name)
 
         if (selectedAgent) {
@@ -677,7 +682,7 @@ program
               script: options.script,
               command: options.command,
               profileDir: options.profileDir,
-              browser: options.browser,
+              browser: browserOption,
               serversOnly: options.serversOnly,
               headless: options.headless,
               dateTime: options.dateTime,
@@ -696,10 +701,6 @@ program
 
     // Detect project type and configuration
     const projectConfig = await detectProjectType(options.debug)
-    const userConfigForMcp = loadUserConfig()
-
-    // Apply default browser from config if not explicitly provided
-    const browser = options.browser || userConfigForMcp.browser
 
     // Check if we're in a valid project directory
     if (projectConfig.noProjectDetected) {
@@ -734,7 +735,7 @@ program
     const userSetPort = options.port !== undefined
     const userSetMcpPort = process.argv.includes("--port-mcp") || process.argv.includes("-p-mcp")
     const disableMcpConfigsInput =
-      options.disableMcpConfigs ?? process.env.DEV3000_DISABLE_MCP_CONFIGS ?? userConfigForMcp.disableMcpConfigs
+      options.disableMcpConfigs ?? process.env.DEV3000_DISABLE_MCP_CONFIGS ?? userConfig.disableMcpConfigs
     const disabledMcpConfigs = parseDisabledMcpConfigs(disableMcpConfigsInput)
 
     // Generate server command based on custom command or project type
@@ -834,7 +835,7 @@ program
 
       await startDevEnvironment({
         ...options,
-        browser,
+        browser: browserOption,
         port,
         portMcp: options.portMcp,
         debugPort: Number.parseInt(debugPort, 10),

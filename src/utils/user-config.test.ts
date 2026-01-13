@@ -16,8 +16,8 @@ describe("user config", () => {
     vi.restoreAllMocks()
   })
 
-  it("uses ~/.d3k/config.json as config path", () => {
-    const expectedPath = path.join(homedir(), ".d3k", "config.json")
+  it("uses ~/.d3k.json as config path", () => {
+    const expectedPath = path.join(homedir(), ".d3k.json")
     expect(getUserConfigPath()).toBe(expectedPath)
   })
 
