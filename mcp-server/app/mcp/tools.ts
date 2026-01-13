@@ -47,7 +47,10 @@ export const TOOL_DESCRIPTIONS = {
     "Discovers URLs in the application by crawling links from the homepage.\n\n**Parameters:**\n• depth: How many link levels to follow (1, 2, 3, or 'all')\n• limit: Max links per page (default: 3)\n\n**Behavior:**\n• Starts at localhost homepage\n• Follows same-origin links only\n• Deduplicates discovered URLs\n• Returns list of all found pages\n\n**Use cases:**\n• Discovering all routes before running diagnostics\n• Site-wide testing coverage\n• Verifying all pages load without errors",
 
   get_skill:
-    "Get the content of a d3k/Claude Code skill. Skills are prompt templates that provide specialized instructions for specific tasks.\n\n**Parameters:**\n• name: The skill name (e.g., 'vercel-design-guidelines', 'd3k')\n\n**Returns:**\nThe full SKILL.md content which contains instructions on how to perform the skill's task.\n\n**Available skills:**\n• vercel-design-guidelines - Audit web interfaces against Vercel's design guidelines\n• d3k - Core d3k development assistant skill\n\n**Use cases:**\n• Loading design guidelines audit instructions\n• Getting specialized workflow instructions"
+    "Get the content of a d3k/Claude Code skill. Skills are prompt templates that provide specialized instructions for specific tasks.\n\n**Parameters:**\n• name: The skill name (e.g., 'vercel-design-guidelines', 'd3k')\n\n**Returns:**\nThe full SKILL.md content which contains instructions on how to perform the skill's task.\n\n**Available skills:**\n• vercel-design-guidelines - Audit web interfaces against Vercel's design guidelines\n• d3k - Core d3k development assistant skill\n\n**Use cases:**\n• Loading design guidelines audit instructions\n• Getting specialized workflow instructions",
+
+  agent_browser_action:
+    "Execute browser actions using agent-browser (Playwright-based CLI). More reliable than raw CDP in sandbox environments.\n\n**Actions:**\n• open: Open URL {url: string}\n• click: Click element {target: '@ref' or 'selector'}\n• type: Type into focused element {text: string}\n• fill: Fill input field {target, value}\n• scroll: Scroll page {direction: up/down/left/right, amount?}\n• screenshot: Capture screenshot {fullPage?: boolean}\n• snapshot: Get accessibility tree with refs for clicking\n• close: Close browser\n• reload: Reload page\n• back: Navigate back\n\n**Options:**\n• session: Session name for isolation\n• headed: Run with visible browser (default: false)\n\n**Ref-based clicking:**\nSnapshot returns elements with refs like @e1, @e2. Use these refs in click action for reliable element targeting."
 }
 
 // Types
@@ -4361,6 +4364,161 @@ export async function getSkill(params: GetSkillParams) {
           }
         ]
       }
+    }
+  }
+}
+
+// ============================================================
+// Agent Browser Integration (using vercel-labs/agent-browser)
+// ============================================================
+
+export interface AgentBrowserActionParams {
+  action: "open" | "click" | "type" | "fill" | "scroll" | "screenshot" | "snapshot" | "close" | "reload" | "back"
+  params?: Record<string, unknown>
+  session?: string // Session name for isolation
+  headed?: boolean // Run with visible browser window
+}
+
+/**
+ * Execute browser actions using agent-browser CLI
+ * This provides an alternative to raw CDP with better reliability in sandbox environments
+ */
+export async function executeAgentBrowserAction({
+  action,
+  params = {},
+  session,
+  headed = false
+}: AgentBrowserActionParams): Promise<{ content: Array<{ type: "text"; text: string }> }> {
+  try {
+    // Dynamic import of agent-browser wrapper
+    const agentBrowser = await import("../../../src/utils/agent-browser")
+
+    // Check if agent-browser is available
+    if (!agentBrowser.isAgentBrowserAvailable()) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `❌ agent-browser is not available. Make sure it's installed with: bun add agent-browser && npx agent-browser install`
+          }
+        ]
+      }
+    }
+
+    // Build common options
+    const options = {
+      session,
+      headed
+    }
+
+    let result: unknown
+
+    switch (action) {
+      case "open": {
+        const url = typeof params.url === "string" ? params.url : "about:blank"
+        const openResult = await agentBrowser.openUrl(url, options)
+        result = openResult
+        break
+      }
+
+      case "click": {
+        const target = typeof params.target === "string" ? params.target : "@e1"
+        const clickResult = await agentBrowser.click(target, options)
+        result = clickResult
+        break
+      }
+
+      case "type": {
+        const text = typeof params.text === "string" ? params.text : ""
+        const typeResult = await agentBrowser.type(text, options)
+        result = typeResult
+        break
+      }
+
+      case "fill": {
+        const fillTarget = typeof params.target === "string" ? params.target : ""
+        const fillValue = typeof params.value === "string" ? params.value : ""
+        const fillResult = await agentBrowser.fill(fillTarget, fillValue, options)
+        result = fillResult
+        break
+      }
+
+      case "scroll": {
+        const direction = (params.direction as "up" | "down" | "left" | "right") || "down"
+        const amount = typeof params.amount === "number" ? params.amount : undefined
+        const scrollResult = await agentBrowser.scroll(direction, amount, options)
+        result = scrollResult
+        break
+      }
+
+      case "screenshot": {
+        // Generate screenshot path
+        const sessionDir = join(homedir(), ".d3k", "screenshots")
+        const timestamp = new Date().toISOString().replace(/[:.]/g, "-")
+        const screenshotPath = join(sessionDir, `agent-browser-${timestamp}.png`)
+        const fullPage = params.fullPage === true
+        const screenshotResult = await agentBrowser.screenshot(screenshotPath, { ...options, fullPage })
+        result = screenshotResult
+        break
+      }
+
+      case "snapshot": {
+        const interactive = params.interactive !== false
+        const compact = params.compact === true
+        const snapshotResult = await agentBrowser.snapshot({ ...options, interactive, compact })
+        result = {
+          elements: snapshotResult.elements,
+          elementCount: snapshotResult.elements.length,
+          raw: snapshotResult.raw.substring(0, 5000) // Truncate for context efficiency
+        }
+        break
+      }
+
+      case "close": {
+        const closeResult = await agentBrowser.close(options)
+        result = closeResult
+        break
+      }
+
+      case "reload": {
+        const reloadResult = await agentBrowser.reload(options)
+        result = reloadResult
+        break
+      }
+
+      case "back": {
+        const backResult = await agentBrowser.back(options)
+        result = backResult
+        break
+      }
+
+      default:
+        return {
+          content: [
+            {
+              type: "text",
+              text: `❌ Unsupported agent-browser action: ${action}. Supported: open, click, type, fill, scroll, screenshot, snapshot, close, reload, back`
+            }
+          ]
+        }
+    }
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: `✅ agent-browser ${action} completed:\n${JSON.stringify(result, null, 2)}`
+        }
+      ]
+    }
+  } catch (error) {
+    return {
+      content: [
+        {
+          type: "text",
+          text: `❌ agent-browser ${action} failed: ${error instanceof Error ? error.message : String(error)}`
+        }
+      ]
     }
   }
 }

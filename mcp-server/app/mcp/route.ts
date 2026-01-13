@@ -7,6 +7,7 @@ import { z } from "zod"
 import { getMCPClientManager } from "./client-manager"
 import {
   crawlApp,
+  executeAgentBrowserAction,
   executeBrowserAction,
   findComponentSource,
   fixMyApp,
@@ -699,6 +700,35 @@ const handler = createMcpHandler(
       },
       async (params) => {
         return getSkill(params)
+      }
+    )
+
+    // Agent Browser action tool (uses agent-browser CLI)
+    server.tool(
+      "agent_browser_action",
+      TOOL_DESCRIPTIONS.agent_browser_action,
+      {
+        action: z
+          .enum(["open", "click", "type", "fill", "scroll", "screenshot", "snapshot", "close", "reload", "back"])
+          .describe("Browser action to perform"),
+        params: z
+          .record(z.unknown())
+          .optional()
+          .describe(
+            "Action parameters:\n" +
+              "- open: {url: string}\n" +
+              "- click: {target: '@ref' or 'selector'}\n" +
+              "- type: {text: string}\n" +
+              "- fill: {target: string, value: string}\n" +
+              "- scroll: {direction: 'up'|'down'|'left'|'right', amount?: number}\n" +
+              "- screenshot: {fullPage?: boolean}\n" +
+              "- snapshot: {interactive?: boolean, compact?: boolean}"
+          ),
+        session: z.string().optional().describe("Session name for browser isolation"),
+        headed: z.boolean().optional().describe("Run with visible browser window (default: false)")
+      },
+      async (params) => {
+        return executeAgentBrowserAction(params)
       }
     )
 
