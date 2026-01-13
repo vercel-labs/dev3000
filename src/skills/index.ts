@@ -42,7 +42,23 @@ export function getSkillDirectories(cwd?: string): string[] {
   const projectDir = cwd || process.cwd()
   dirs.push(join(projectDir, ".claude", "skills"))
 
-  // 2. Source and dist skills from the d3k package
+  // 2. Check if we're running from a compiled binary (bun compile)
+  // In compiled binaries, import.meta.url returns /$bunfs/... virtual path
+  // We detect this by checking if the URL starts with /$bunfs
+  const moduleUrl = import.meta.url
+  const isCompiledBinary = moduleUrl.startsWith("file:///$bunfs") || moduleUrl.startsWith("/$bunfs")
+
+  if (isCompiledBinary) {
+    // For compiled binaries, process.execPath contains the actual binary path
+    const binaryPath = process.execPath
+    if (binaryPath && existsSync(binaryPath)) {
+      const binDir = dirname(binaryPath) // bin/
+      const packageDir = dirname(binDir) // platform package root (e.g., @d3k/darwin-arm64)
+      dirs.push(join(packageDir, "skills"))
+    }
+  }
+
+  // 3. Source and dist skills from the d3k package
   // Handle both ESM (__dirname equivalent) and different execution contexts
   try {
     const currentFile = fileURLToPath(import.meta.url)
