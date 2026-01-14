@@ -572,7 +572,6 @@ program
   )
   .option("--no-chrome-devtools-mcp", "Disable chrome-devtools MCP integration (enabled by default)")
   .option("--headless", "Run Chrome in headless mode (for serverless/CI environments)")
-  .option("--additional-ports <ports>", "Additional ports to clean up on shutdown (comma-separated, e.g., '8080,4111')")
   .option("--kill-mcp", "Kill the MCP server on port 3684 and exit")
   .option(
     "--with-agent <command>",
@@ -850,19 +849,7 @@ program
         dateTimeFormat: options.dateTime || "local",
         pluginReactScan: options.pluginReactScan || false,
         chromeDevtoolsMcp: options.chromeDevtoolsMcp !== false, // Default to true unless explicitly disabled
-        disabledMcpConfigs,
-        additionalPorts: options.additionalPorts
-          ?.split(",")
-          .map((p: string) => p.trim())
-          .filter((p: string) => p.length > 0)
-          .filter((p: string) => {
-            const portNum = Number.parseInt(p, 10)
-            if (Number.isNaN(portNum) || portNum < 1 || portNum > 65535) {
-              console.warn(chalk.yellow(`⚠️ Warning: Invalid port number "${p}" in --additional-ports, skipping`))
-              return false
-            }
-            return true
-          })
+        disabledMcpConfigs
       })
     } catch (error) {
       console.error(chalk.red("❌ Failed to start development environment:"), error)

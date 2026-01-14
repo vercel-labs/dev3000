@@ -161,6 +161,130 @@ export async function gracefulKillProcess(options: GracefulKillOptions): Promise
   return result
 }
 
+/**
+ * Recursively discover all descendant process IDs of a given root process.
+ * Uses pgrep to find direct children, then recursively finds their children.
+ *
+ * @param rootPid - The root process ID to start from
+ * @param debugLog - Optional debug logger
+ * @returns Array of all descendant PIDs (including the root)
+ */
+export async function discoverDescendantPids(
+  rootPid: number,
+  debugLog: (msg: string) => void = () => {}
+): Promise<number[]> {
+  // Skip in sandbox environments where pgrep may not be available
+  if (isInSandbox()) {
+    debugLog("Skipping descendant PID discovery in sandbox environment")
+    return [rootPid]
+  }
+
+  const allPids: number[] = [rootPid]
+  const visited = new Set<number>([rootPid])
+
+  async function findChildren(parentPid: number): Promise<number[]> {
+    return new Promise((resolve) => {
+      const proc = spawn("pgrep", ["-P", parentPid.toString()], {
+        stdio: "pipe"
+      })
+      let output = ""
+      proc.stdout?.on("data", (data) => {
+        output += data.toString()
+      })
+      proc.on("exit", () => {
+        const pids = output
+          .trim()
+          .split("\n")
+          .filter(Boolean)
+          .map((pid) => parseInt(pid.trim(), 10))
+          .filter((pid) => !Number.isNaN(pid))
+        resolve(pids)
+      })
+      proc.on("error", () => resolve([]))
+    })
+  }
+
+  // BFS to find all descendants
+  const queue = [rootPid]
+  while (queue.length > 0) {
+    const pid = queue.shift()
+    if (pid === undefined) continue
+    const children = await findChildren(pid)
+    for (const childPid of children) {
+      if (!visited.has(childPid)) {
+        visited.add(childPid)
+        allPids.push(childPid)
+        queue.push(childPid)
+      }
+    }
+  }
+
+  debugLog(`Discovered ${allPids.length} descendant PIDs: [${allPids.join(", ")}]`)
+  return allPids
+}
+
+/**
+ * Discover which ports a set of processes are listening on.
+ * Uses lsof to find TCP listening ports for the given PIDs.
+ *
+ * @param pids - Array of process IDs to check
+ * @param debugLog - Optional debug logger
+ * @returns Array of port numbers as strings
+ */
+export async function discoverManagedPorts(
+  pids: number[],
+  debugLog: (msg: string) => void = () => {}
+): Promise<string[]> {
+  // Skip in sandbox environments where lsof may not be available
+  if (isInSandbox()) {
+    debugLog("Skipping managed port discovery in sandbox environment")
+    return []
+  }
+
+  if (pids.length === 0) {
+    return []
+  }
+
+  return new Promise((resolve) => {
+    // Use lsof to find listening TCP ports for the given PIDs
+    // -Pan: no port name resolution, no host name resolution
+    // -i: network files only
+    // -sTCP:LISTEN: only listening TCP connections
+    const proc = spawn("lsof", ["-Pan", "-i", "-sTCP:LISTEN", ...pids.map((pid) => `-p${pid}`)], {
+      stdio: "pipe"
+    })
+
+    let output = ""
+    proc.stdout?.on("data", (data) => {
+      output += data.toString()
+    })
+
+    proc.on("exit", () => {
+      // Parse lsof output to extract port numbers
+      // Format: COMMAND PID USER FD TYPE DEVICE SIZE/OFF NODE NAME
+      // NAME column contains the address:port (e.g., *:3000 or 127.0.0.1:8080)
+      const ports = new Set<string>()
+      const lines = output.trim().split("\n")
+      for (const line of lines) {
+        // Match port at end of line after colon (e.g., *:3000, localhost:8080)
+        const match = line.match(/:(\d+)\s*(?:\(LISTEN\))?$/)
+        if (match) {
+          ports.add(match[1])
+        }
+      }
+
+      const portArray = Array.from(ports)
+      debugLog(`Discovered ${portArray.length} managed ports: [${portArray.join(", ")}]`)
+      resolve(portArray)
+    })
+
+    proc.on("error", () => {
+      debugLog("Failed to discover managed ports (lsof error)")
+      resolve([])
+    })
+  })
+}
+
 interface DevEnvironmentOptions {
   port: string
   mcpPort?: string // Make optional since we'll handle portMcp
@@ -185,7 +309,6 @@ interface DevEnvironmentOptions {
   debugPort?: number // Chrome debugging port (default 9222, auto-incremented for multiple instances)
   headless?: boolean // Run Chrome in headless mode (for serverless/CI environments)
   withAgent?: string // Command to run an embedded agent (e.g. "claude --dangerously-skip-permissions")
-  additionalPorts?: string[] // Additional ports to clean up on shutdown (e.g., for monorepos with multiple services)
 }
 
 class Logger {
@@ -829,7 +952,9 @@ function writeSessionInfo(
   chromePids?: number[],
   serverCommand?: string,
   framework?: "nextjs" | "svelte" | "other",
-  serverPid?: number
+  serverPid?: number,
+  childPids?: number[],
+  managedPorts?: string[]
 ): void {
   const projectDir = getProjectDir()
 
@@ -852,7 +977,9 @@ function writeSessionInfo(
       chromePids: chromePids || [],
       serverCommand: serverCommand || null,
       framework: framework || null,
-      serverPid: serverPid || null
+      serverPid: serverPid || null,
+      childPids: childPids || [],
+      managedPorts: managedPorts || []
     }
 
     // Write session file in project directory
@@ -892,6 +1019,36 @@ function getSessionServerPid(projectName: string): number | null {
     // Non-fatal - return null
   }
   return null
+}
+
+// Get child PIDs for this instance (all descendant processes of the server)
+function getSessionChildPids(projectName: string): number[] {
+  const sessionFile = join(homedir(), ".d3k", projectName, "session.json")
+
+  try {
+    if (existsSync(sessionFile)) {
+      const sessionInfo = JSON.parse(readFileSync(sessionFile, "utf8"))
+      return sessionInfo.childPids || []
+    }
+  } catch (_error) {
+    // Non-fatal - return empty array
+  }
+  return []
+}
+
+// Get managed ports for this instance (ports opened by tracked child processes)
+function getSessionManagedPorts(projectName: string): string[] {
+  const sessionFile = join(homedir(), ".d3k", projectName, "session.json")
+
+  try {
+    if (existsSync(sessionFile)) {
+      const sessionInfo = JSON.parse(readFileSync(sessionFile, "utf8"))
+      return sessionInfo.managedPorts || []
+    }
+  } catch (_error) {
+    // Non-fatal - return empty array
+  }
+  return []
 }
 
 function createLogFileInDir(baseDir: string, _projectName: string): string {
@@ -1461,6 +1618,15 @@ export class DevEnvironment {
       // Write session info for MCP server discovery (include CDP URL if browser monitoring was started)
       const cdpUrl = this.cdpMonitor?.getCdpUrl() || null
       const chromePids = this.cdpMonitor?.getChromePids() || []
+
+      // Discover all child processes spawned by the server command
+      // Wait briefly for process tree to stabilize after server is ready
+      await new Promise((resolve) => setTimeout(resolve, 500))
+      const childPids = this.serverProcess?.pid
+        ? await discoverDescendantPids(this.serverProcess.pid, (msg) => this.debugLog(msg))
+        : []
+      const managedPorts = await discoverManagedPorts(childPids, (msg) => this.debugLog(msg))
+
       writeSessionInfo(
         projectName,
         this.options.logFile,
@@ -1470,7 +1636,9 @@ export class DevEnvironment {
         chromePids,
         this.options.serverCommand,
         this.options.framework,
-        this.serverProcess?.pid
+        this.serverProcess?.pid,
+        childPids,
+        managedPorts
       )
 
       // Clear status - ready!
@@ -1546,6 +1714,15 @@ export class DevEnvironment {
       // Include CDP URL if browser monitoring was started
       const cdpUrl = this.cdpMonitor?.getCdpUrl() || null
       const chromePids = this.cdpMonitor?.getChromePids() || []
+
+      // Discover all child processes spawned by the server command
+      // Wait briefly for process tree to stabilize after server is ready
+      await new Promise((resolve) => setTimeout(resolve, 500))
+      const childPids = this.serverProcess?.pid
+        ? await discoverDescendantPids(this.serverProcess.pid, (msg) => this.debugLog(msg))
+        : []
+      const managedPorts = await discoverManagedPorts(childPids, (msg) => this.debugLog(msg))
+
       writeSessionInfo(
         projectName,
         this.options.logFile,
@@ -1555,7 +1732,9 @@ export class DevEnvironment {
         chromePids,
         this.options.serverCommand,
         this.options.framework,
-        this.serverProcess?.pid
+        this.serverProcess?.pid,
+        childPids,
+        managedPorts
       )
 
       // Complete startup with success message only in non-TUI mode
@@ -1788,6 +1967,9 @@ export class DevEnvironment {
       const chromePids = this.cdpMonitor?.getChromePids() || []
 
       if (cdpUrl || chromePids.length > 0) {
+        // Preserve existing childPids and managedPorts from session
+        const existingChildPids = getSessionChildPids(projectName)
+        const existingManagedPorts = getSessionManagedPorts(projectName)
         writeSessionInfo(
           projectName,
           this.options.logFile,
@@ -1797,7 +1979,9 @@ export class DevEnvironment {
           chromePids,
           this.options.serverCommand,
           this.options.framework,
-          this.serverProcess?.pid
+          this.serverProcess?.pid,
+          existingChildPids,
+          existingManagedPorts
         )
         this.debugLog(`Updated session info with new port: ${this.options.port}`)
       }
@@ -2570,6 +2754,9 @@ export class DevEnvironment {
 
       // Always write session info after CDP monitoring starts - this is critical for
       // sandbox environments where external tools poll for the cdpUrl in the session file
+      // Preserve existing childPids and managedPorts from session
+      const existingChildPids = getSessionChildPids(projectName)
+      const existingManagedPorts = getSessionManagedPorts(projectName)
       writeSessionInfo(
         projectName,
         this.options.logFile,
@@ -2579,7 +2766,9 @@ export class DevEnvironment {
         chromePids,
         this.options.serverCommand,
         this.options.framework,
-        this.serverProcess?.pid
+        this.serverProcess?.pid,
+        existingChildPids,
+        existingManagedPorts
       )
       this.debugLog(`Updated session info with CDP URL: ${cdpUrl}, Chrome PIDs: [${chromePids.join(", ")}]`)
       this.logger.log("browser", `[CDP] Session info written with cdpUrl: ${cdpUrl ? "available" : "null"}`)
@@ -2662,13 +2851,6 @@ export class DevEnvironment {
     // Kill app server only (MCP server remains as singleton)
     console.log(chalk.cyan("🔄 Killing app server..."))
     await killPortProcess(this.options.port, "your app server")
-
-    // Kill additional ports if configured (for monorepos with multiple services)
-    if (this.options.additionalPorts?.length) {
-      for (const port of this.options.additionalPorts) {
-        await killPortProcess(port, `service on port ${port}`)
-      }
-    }
 
     // Kill server process and its children using the saved PID (from before session file was deleted)
     if (!isInSandbox() && savedServerPid) {
@@ -2830,9 +3012,11 @@ export class DevEnvironment {
     // Release the lock file
     this.releaseLock()
 
-    // Read server PID from session file BEFORE deleting it (needed for cleanup)
+    // Read PIDs and ports from session file BEFORE deleting it (needed for cleanup)
     const projectName = getProjectName()
     const savedServerPid = getSessionServerPid(projectName)
+    const savedChildPids = getSessionChildPids(projectName)
+    const savedManagedPorts = getSessionManagedPorts(projectName)
 
     // Clean up session file
     try {
@@ -2967,6 +3151,46 @@ export class DevEnvironment {
       console.log(chalk.yellow("🔄 Killing app server..."))
     }
 
+    // First, kill all tracked child processes (leaf-first for clean shutdown)
+    // This is the most reliable method since we tracked these PIDs at startup
+    if (savedChildPids.length > 0) {
+      this.debugLog(`Killing ${savedChildPids.length} tracked child processes: [${savedChildPids.join(", ")}]`)
+
+      // SIGTERM first (graceful shutdown) - in reverse order to kill children before parents
+      for (const pid of [...savedChildPids].reverse()) {
+        try {
+          process.kill(pid, "SIGTERM")
+        } catch {
+          // Process may already be dead
+        }
+      }
+
+      // Wait briefly for graceful shutdown
+      await new Promise((resolve) => setTimeout(resolve, 300))
+
+      // SIGKILL any remaining (force kill)
+      for (const pid of savedChildPids) {
+        try {
+          process.kill(pid, "SIGKILL")
+          this.debugLog(`Force killed tracked PID ${pid}`)
+        } catch {
+          // Process may already be dead
+        }
+      }
+
+      if (!this.options.tui) {
+        console.log(chalk.green(`✅ Killed ${savedChildPids.length} tracked child process(es)`))
+      }
+    }
+
+    // Also kill by managed ports (backup for any processes we missed)
+    if (savedManagedPorts.length > 0) {
+      this.debugLog(`Killing processes on ${savedManagedPorts.length} managed ports: [${savedManagedPorts.join(", ")}]`)
+      for (const port of savedManagedPorts) {
+        await killPortProcess(port, `tracked service on port ${port}`)
+      }
+    }
+
     // IMPORTANT: With shell: true, the shell process exits quickly after spawning
     // the actual command, leaving Next.js orphaned (reparented to PID 1).
     // We use SYNCHRONOUS lsof kill first to ensure it completes before process exits.
@@ -3009,13 +3233,6 @@ export class DevEnvironment {
     // Second pass: kill any remaining processes on the port
     await killPortProcess(this.options.port, "your app server")
 
-    // Kill additional ports if configured (for monorepos with multiple services)
-    if (this.options.additionalPorts?.length) {
-      for (const port of this.options.additionalPorts) {
-        await killPortProcess(port, `service on port ${port}`)
-      }
-    }
-
     // Double-check: try to kill any remaining processes on the app port
     try {
       const { spawnSync } = await import("child_process")
@@ -3029,15 +3246,6 @@ export class DevEnvironment {
       spawnSync("sh", ["-c", `pkill -f "next dev.*${cwd}"`], { stdio: "ignore" })
       spawnSync("sh", ["-c", `pkill -f "next-server.*${cwd}"`], { stdio: "ignore" })
       this.debugLog(`Sent pkill signal for next processes in ${cwd}`)
-
-      // Also pkill additional ports
-      if (this.options.additionalPorts?.length) {
-        for (const port of this.options.additionalPorts) {
-          spawnSync("sh", ["-c", `pkill -f ":${port}"`], { stdio: "ignore" })
-          this.debugLog(`Sent pkill signal for port ${port}`)
-        }
-      }
-
 
       // Kill server process and its children using the saved PID (from before session file was deleted)
       if (savedServerPid) {
@@ -3058,16 +3266,6 @@ export class DevEnvironment {
         stdio: "pipe"
       })
       this.debugLog(`Final lsof kill exit code: ${result.status}`)
-
-      // Final lsof kill for additional ports too
-      if (this.options.additionalPorts?.length) {
-        for (const port of this.options.additionalPorts) {
-          const portResult = spawnSync("sh", ["-c", `lsof -ti:${port} | xargs kill -9 2>/dev/null`], {
-            stdio: "pipe"
-          })
-          this.debugLog(`Final lsof kill for port ${port} exit code: ${portResult.status}`)
-        }
-      }
     } catch {
       // Ignore pkill errors
     }
