@@ -365,7 +365,7 @@ export class CDPMonitor {
 
         this.browser = spawn(chromePath, chromeArgs, {
           stdio: "pipe",
-          detached: false // Keep it attached so it dies with parent
+          detached: true // Separate process group so Chrome doesn't receive SIGINT on Ctrl+C
         })
 
         if (!this.browser) {
@@ -1553,6 +1553,15 @@ export class CDPMonitor {
     } catch (error) {
       this.logger("browser", `[REPLAY] Failed to execute ${interaction.type}: ${error}`)
     }
+  }
+
+  /**
+   * Signal that shutdown is starting - stops reconnection attempts.
+   * Call this before killing the app server to prevent CDP reconnection loops.
+   */
+  prepareShutdown(): void {
+    this.isShuttingDown = true
+    this.debugLog("Shutdown signaled - reconnection attempts will be blocked")
   }
 
   async shutdown(): Promise<void> {

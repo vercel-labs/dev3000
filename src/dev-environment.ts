@@ -1002,7 +1002,6 @@ export class DevEnvironment {
   private healthCheckTimer: NodeJS.Timeout | null = null
   private tui: DevTUI | null = null
   private portChangeMessage: string | null = null
-  private firstSigintTime: number | null = null
   private chromeDevtoolsSupported: boolean = false
   private portDetected: boolean = false
   private serverUsesHttps: boolean = false
@@ -1367,6 +1366,11 @@ export class DevEnvironment {
           if (this.isShuttingDown) return
           this.isShuttingDown = true
           this.debugLog("TUI requested shutdown via callback")
+
+          // Signal CDP monitor to stop reconnection attempts BEFORE killing the app server
+          if (this.cdpMonitor) {
+            this.cdpMonitor.prepareShutdown()
+          }
 
           // CRITICAL: Kill port processes SYNCHRONOUSLY first, before anything else
           // This ensures cleanup happens even if the event loop gets interrupted
@@ -2657,10 +2661,16 @@ export class DevEnvironment {
       // Non-fatal - ignore cleanup errors
     }
 
-    // Clean up PID file
+    // Check PID file ownership BEFORE deleting (needed for MCP cleanup decision)
+    let weOwnPidFile = false
     try {
       if (existsSync(this.pidFile)) {
-        unlinkSync(this.pidFile)
+        const pidInFile = parseInt(readFileSync(this.pidFile, "utf-8").trim(), 10)
+        weOwnPidFile = pidInFile === process.pid
+        this.debugLog(`PID file check: file has ${pidInFile}, we are ${process.pid}, we own it: ${weOwnPidFile}`)
+        if (weOwnPidFile) {
+          unlinkSync(this.pidFile)
+        }
       }
     } catch (_error) {
       // Non-fatal - ignore cleanup errors
@@ -2736,22 +2746,9 @@ export class DevEnvironment {
       }
     }
 
-    // Kill MCP server only if this is the last d3k instance
-    // Also check if we own the PID file - TUI parent shouldn't do MCP cleanup
-    let weOwnPidFile = false
-    try {
-      if (existsSync(this.pidFile)) {
-        const pidInFile = parseInt(readFileSync(this.pidFile, "utf-8").trim(), 10)
-        weOwnPidFile = pidInFile === process.pid
-      } else {
-        weOwnPidFile = true // PID file already cleaned up - we were the owner
-      }
-    } catch {
-      // Error reading PID file - assume we don't own it
-    }
-
+    // Kill MCP server only if this is the last d3k instance AND we own the PID file
     const otherInstances = countActiveD3kInstances(true) // exclude current process
-    this.debugLog(`Other active d3k instances: ${otherInstances}`)
+    this.debugLog(`Other active d3k instances: ${otherInstances}, weOwnPidFile: ${weOwnPidFile}`)
 
     if (otherInstances === 0 && this.options.mcpPort && !isInSandbox() && weOwnPidFile) {
       console.log(chalk.yellow("🔄 Killing MCP server (last d3k instance)..."))
@@ -2765,6 +2762,8 @@ export class DevEnvironment {
       } catch {
         // Ignore errors
       }
+    } else if (!weOwnPidFile) {
+      this.debugLog("Skipping MCP cleanup - we don't own the PID file (subprocess will handle it)")
     }
 
     console.log(chalk.red(`❌ ${this.options.commandName} exited due to server failure`))
@@ -2781,31 +2780,35 @@ export class DevEnvironment {
   private setupCleanupHandlers() {
     this.debugLog(`Setting up cleanup handlers for ${this.options.tui ? "TUI" : "debug"} mode`)
 
+    // Debug: log when process is about to exit
+    process.on("exit", (code) => {
+      console.log(`[DEBUG] Process exiting with code ${code}`)
+      this.debugLog(`Process exiting with code ${code}`)
+    })
+
     // Handle Ctrl+C to kill all processes
     process.on("SIGINT", () => {
       this.debugLog("SIGINT received")
 
-      // In TUI mode, the TUI already handles double-tap protection, so any SIGINT
-      // from TUI means user has already confirmed they want to quit - proceed directly
+      // In TUI mode, the TUI already handles double-tap protection
       if (this.options.tui && this.tui) {
         this.debugLog("TUI mode - proceeding directly to shutdown")
         // Fall through to shutdown code below
       } else {
-        // Non-TUI mode: implement double-tap protection here
-        const now = Date.now()
-        if (!this.firstSigintTime || now - this.firstSigintTime > 3000) {
-          this.firstSigintTime = now
-          this.debugLog("First Ctrl+C detected")
-          console.log(chalk.yellow("\n⚠️ Press Ctrl+C again to quit"))
-          return
-        }
-        this.debugLog("Second Ctrl+C detected")
+        // Non-TUI mode: proceed directly to shutdown
+        // (double Ctrl+C doesn't work reliably in bun compiled binaries)
+        this.debugLog("Non-TUI mode - proceeding to shutdown")
       }
 
       // Proceed with shutdown
       if (this.isShuttingDown) return // Prevent multiple shutdown attempts
       this.isShuttingDown = true
-      this.debugLog("Second Ctrl+C detected, starting shutdown")
+      this.debugLog("Starting shutdown")
+
+      // Signal CDP monitor to stop reconnection attempts
+      if (this.cdpMonitor) {
+        this.cdpMonitor.prepareShutdown()
+      }
 
       // CRITICAL: Kill port processes SYNCHRONOUSLY first, before anything else
       // This ensures cleanup happens even if the event loop gets interrupted
@@ -2849,6 +2852,11 @@ export class DevEnvironment {
       this.isShuttingDown = true
       this.debugLog("SIGTERM received")
 
+      // Signal CDP monitor to stop reconnection attempts BEFORE killing the app server
+      if (this.cdpMonitor) {
+        this.cdpMonitor.prepareShutdown()
+      }
+
       // CRITICAL: Kill port processes SYNCHRONOUSLY first, before anything else
       const { spawnSync } = require("child_process")
       const port = this.options.port
@@ -2873,7 +2881,13 @@ export class DevEnvironment {
       if (this.isShuttingDown) return
       this.isShuttingDown = true
 
+      // Signal CDP monitor to stop reconnection attempts
+      if (this.cdpMonitor) {
+        this.cdpMonitor.prepareShutdown()
+      }
+
       // CRITICAL: Kill port processes SYNCHRONOUSLY first, before anything else
+      // tmux might kill us quickly, so we can't rely on async cleanup
       const { spawnSync } = require("child_process")
       const port = this.options.port
       this.debugLog(`Synchronous kill for port ${port}`)
@@ -2881,6 +2895,31 @@ export class DevEnvironment {
         stdio: "pipe",
         timeout: 5000
       })
+
+      // CRITICAL: Also kill Chrome PIDs synchronously
+      // Get Chrome PIDs from session file before it gets deleted
+      const projectName = getProjectName()
+      const chromePids = getSessionChromePids(projectName)
+      if (chromePids.length > 0) {
+        this.debugLog(`Synchronously killing Chrome PIDs: [${chromePids.join(", ")}]`)
+        for (const pid of chromePids) {
+          try {
+            process.kill(pid, "SIGTERM")
+          } catch {
+            // Ignore - process may already be dead
+          }
+        }
+      }
+
+      // CRITICAL: Also kill MCP server if we're the last instance
+      const otherInstances = countActiveD3kInstances(true)
+      if (otherInstances === 0 && this.options.mcpPort) {
+        this.debugLog(`Synchronously killing MCP server on port ${this.options.mcpPort}`)
+        spawnSync("sh", ["-c", `lsof -ti:${this.options.mcpPort} -sTCP:LISTEN | xargs kill -9 2>/dev/null`], {
+          stdio: "pipe",
+          timeout: 5000
+        })
+      }
 
       this.handleShutdown()
         .then(() => {
@@ -2913,13 +2952,26 @@ export class DevEnvironment {
       // Non-fatal - ignore cleanup errors
     }
 
-    // Clean up PID file
+    // Check PID file ownership BEFORE deleting (needed for MCP cleanup decision)
+    // Only the process that owns the PID file should clean up the MCP server
+    let weOwnPidFile = false
     try {
       if (existsSync(this.pidFile)) {
-        unlinkSync(this.pidFile)
+        const pidInFile = parseInt(readFileSync(this.pidFile, "utf-8").trim(), 10)
+        weOwnPidFile = pidInFile === process.pid
+        this.debugLog(`PID file check: file has ${pidInFile}, we are ${process.pid}, we own it: ${weOwnPidFile}`)
+        // Only delete the PID file if we own it
+        if (weOwnPidFile) {
+          unlinkSync(this.pidFile)
+          this.debugLog("Deleted our PID file")
+        }
+      } else {
+        // PID file doesn't exist - might have been cleaned by another process
+        this.debugLog("PID file doesn't exist")
       }
     } catch (_error) {
       // Non-fatal - ignore cleanup errors
+      this.debugLog(`PID file check error: ${_error}`)
     }
 
     // Stop TUI if it's running
@@ -3124,28 +3176,12 @@ export class DevEnvironment {
       // Ignore pkill errors
     }
 
-    // Kill MCP server only if this is the last d3k instance
+    // Kill MCP server only if this is the last d3k instance AND we own the PID file
     // (other d3k instances in other projects might still need it)
-    // Also check if we own the PID file - TUI parent shouldn't do MCP cleanup
-    // because the subprocess (which owns the PID file) will handle it
-    let weOwnPidFile = false
-    try {
-      if (existsSync(this.pidFile)) {
-        const pidInFile = parseInt(readFileSync(this.pidFile, "utf-8").trim(), 10)
-        weOwnPidFile = pidInFile === process.pid
-        this.debugLog(`PID file check: file has ${pidInFile}, we are ${process.pid}, we own it: ${weOwnPidFile}`)
-      } else {
-        // PID file already cleaned up - we were the owner
-        weOwnPidFile = true
-        this.debugLog("PID file already cleaned up - assuming we owned it")
-      }
-    } catch {
-      // Error reading PID file - assume we don't own it
-      this.debugLog("Could not read PID file - assuming we don't own it")
-    }
-
+    // The TUI parent shouldn't do MCP cleanup - the subprocess (which owns the PID file) will handle it
+    // Note: weOwnPidFile was already determined at the top of handleShutdown()
     const otherInstances = countActiveD3kInstances(true) // exclude current process
-    this.debugLog(`Other active d3k instances: ${otherInstances}`)
+    this.debugLog(`Other active d3k instances: ${otherInstances}, weOwnPidFile: ${weOwnPidFile}`)
 
     if (otherInstances === 0 && this.options.mcpPort && weOwnPidFile) {
       if (!this.options.tui) {
