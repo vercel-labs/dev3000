@@ -1,10 +1,16 @@
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "fs"
+import { homedir } from "os"
 import path from "path"
 import { getSkillsInfo } from "../skills/index.js"
 import { getProjectDir } from "./project-name.js"
 
 const GITHUB_REPO = "vercel-labs/agent-skills"
-const SKILLS_PATH = "dx/skills"
+const SKILLS_PATH = "skills"
+
+// Folders to ignore when fetching skills
+const IGNORED_SKILL_FOLDERS = ["claude.ai"]
+
+export type InstallLocation = "project" | "global"
 
 export interface AvailableSkill {
   name: string
@@ -36,6 +42,16 @@ export interface InstalledSkills {
 // Skills are installed to project's .claude/skills/ (where Claude Code expects them)
 function getProjectSkillsDir(): string {
   return path.join(process.cwd(), ".claude", "skills")
+}
+
+// Global skills are installed to ~/.claude/skills/
+function getGlobalSkillsDir(): string {
+  return path.join(homedir(), ".claude", "skills")
+}
+
+// Get skills directory based on install location
+export function getSkillsDir(location: InstallLocation): string {
+  return location === "global" ? getGlobalSkillsDir() : getProjectSkillsDir()
 }
 
 /**
@@ -87,10 +103,12 @@ export function getBundledSkills(): AvailableSkill[] {
 
 /**
  * Check if a skill is actually installed on disk (not just tracked)
+ * Checks both project and global locations
  */
 function isSkillInstalledOnDisk(skillName: string): boolean {
-  const skillDir = path.join(getProjectSkillsDir(), skillName)
-  return existsSync(skillDir)
+  const projectSkillDir = path.join(getProjectSkillsDir(), skillName)
+  const globalSkillDir = path.join(getGlobalSkillsDir(), skillName)
+  return existsSync(projectSkillDir) || existsSync(globalSkillDir)
 }
 
 // Tracking data stored in ~/.d3k/{projectName}/skills.json
@@ -143,8 +161,8 @@ export async function fetchAvailableSkills(): Promise<AvailableSkill[]> {
 
     const items = (await response.json()) as GitHubContentItem[]
 
-    // Filter to only directories (actual skills, not .zip files)
-    const skillDirs = items.filter((item) => item.type === "dir")
+    // Filter to only directories (actual skills, not .zip files), excluding ignored folders
+    const skillDirs = items.filter((item) => item.type === "dir" && !IGNORED_SKILL_FOLDERS.includes(item.name))
 
     // Fetch description for each skill
     const skills: AvailableSkill[] = []
@@ -250,8 +268,9 @@ async function downloadDirectory(dirPath: string, targetDir: string): Promise<vo
   }
 }
 
-export async function installSkill(skill: AvailableSkill): Promise<void> {
-  const skillDir = path.join(getProjectSkillsDir(), skill.name)
+export async function installSkill(skill: AvailableSkill, location: InstallLocation = "project"): Promise<void> {
+  const baseDir = getSkillsDir(location)
+  const skillDir = path.join(baseDir, skill.name)
 
   // Create skill directory
   if (!existsSync(skillDir)) {
@@ -305,6 +324,7 @@ export async function checkForNewSkills(): Promise<AvailableSkill[]> {
 
 export async function installSelectedSkills(
   skills: AvailableSkill[],
+  location: InstallLocation = "project",
   onProgress?: (skill: AvailableSkill, index: number, total: number) => void
 ): Promise<{ success: string[]; failed: string[] }> {
   const success: string[] = []
@@ -314,7 +334,7 @@ export async function installSelectedSkills(
     const skill = skills[i]
     onProgress?.(skill, i, skills.length)
     try {
-      await installSkill(skill)
+      await installSkill(skill, location)
       success.push(skill.name)
     } catch {
       failed.push(skill.name)

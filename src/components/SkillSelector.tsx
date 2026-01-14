@@ -1,10 +1,10 @@
 import { Box, Text, useInput } from "ink"
 import { useState } from "react"
-import type { AvailableSkill } from "../utils/skill-installer.js"
+import type { AvailableSkill, InstallLocation } from "../utils/skill-installer.js"
 
 interface SkillSelectorProps {
   skills: AvailableSkill[]
-  onComplete: (selectedSkills: AvailableSkill[]) => void
+  onComplete: (selectedSkills: AvailableSkill[], location: InstallLocation) => void
   onSkip: () => void
   initiallySelected?: string[] // Names of skills to pre-select (defaults to all)
 }
@@ -18,9 +18,11 @@ export function SkillSelector({ skills, onComplete, onSkip, initiallySelected }:
     return new Set(skills.map((s) => s.name))
   })
   const [highlightedIndex, setHighlightedIndex] = useState(0)
+  const [installLocation, setInstallLocation] = useState<InstallLocation>("project")
 
-  // Item 0 is "All Skills", rest are individual skills
-  const totalItems = skills.length + 1 // +1 for "All Skills" option
+  // Items: 0 = "All Skills", 1..n = skills, n+1 = "Install to: project/global"
+  const locationOptionIndex = skills.length + 1
+  const totalItems = skills.length + 2 // +1 for "All Skills", +1 for location option
 
   const allSelected = selectedSkills.size === skills.length
 
@@ -32,7 +34,7 @@ export function SkillSelector({ skills, onComplete, onSkip, initiallySelected }:
 
     if (key.return) {
       const selected = skills.filter((s) => selectedSkills.has(s.name))
-      onComplete(selected)
+      onComplete(selected, installLocation)
       return
     }
 
@@ -54,6 +56,9 @@ export function SkillSelector({ skills, onComplete, onSkip, initiallySelected }:
         } else {
           setSelectedSkills(new Set(skills.map((s) => s.name)))
         }
+      } else if (highlightedIndex === locationOptionIndex) {
+        // Toggle install location
+        setInstallLocation((prev) => (prev === "project" ? "global" : "project"))
       } else {
         // Toggle individual skill
         const skill = skills[highlightedIndex - 1]
@@ -124,6 +129,21 @@ export function SkillSelector({ skills, onComplete, onSkip, initiallySelected }:
             </Box>
           )
         })}
+
+        {/* Install location option */}
+        <Box marginTop={1}>
+          <Text color={highlightedIndex === locationOptionIndex ? "#A18CE5" : undefined}>
+            {highlightedIndex === locationOptionIndex ? ">" : " "} Install to:{" "}
+          </Text>
+          <Text color={installLocation === "project" ? "cyan" : "gray"} bold={installLocation === "project"}>
+            [project]
+          </Text>
+          <Text> </Text>
+          <Text color={installLocation === "global" ? "cyan" : "gray"} bold={installLocation === "global"}>
+            [global]
+          </Text>
+          <Text dimColor>{installLocation === "project" ? " (.claude/skills/)" : " (~/.claude/skills/)"}</Text>
+        </Box>
       </Box>
       <Box marginTop={1}>
         <Text dimColor>Space to toggle, Enter to install, Esc to skip</Text>

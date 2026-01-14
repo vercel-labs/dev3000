@@ -10,6 +10,7 @@
  */
 
 import { existsSync, readdirSync, readFileSync } from "fs"
+import { homedir } from "os"
 import { dirname, join } from "path"
 import { fileURLToPath } from "url"
 
@@ -32,8 +33,9 @@ export interface SkillResult {
  * Get the base directories where skills can be found.
  * Searches in order of priority:
  * 1. Project-local skills (.claude/skills/)
- * 2. Source skills (src/skills/) - for development
- * 3. Dist skills (dist/skills/) - for installed packages
+ * 2. Global skills (~/.claude/skills/)
+ * 3. Source skills (src/skills/) - for development
+ * 4. Dist skills (dist/skills/) - for installed packages
  */
 export function getSkillDirectories(cwd?: string): string[] {
   const dirs: string[] = []
@@ -42,7 +44,10 @@ export function getSkillDirectories(cwd?: string): string[] {
   const projectDir = cwd || process.cwd()
   dirs.push(join(projectDir, ".claude", "skills"))
 
-  // 2. Check if we're running from a compiled binary (bun compile)
+  // 2. Global skills (~/.claude/skills/)
+  dirs.push(join(homedir(), ".claude", "skills"))
+
+  // 3. Check if we're running from a compiled binary (bun compile)
   // In compiled binaries, import.meta.url returns /$bunfs/... virtual path
   // We detect this by checking if the URL starts with /$bunfs
   const moduleUrl = import.meta.url
@@ -58,7 +63,7 @@ export function getSkillDirectories(cwd?: string): string[] {
     }
   }
 
-  // 3. Source and dist skills from the d3k package
+  // 4. Source and dist skills from the d3k package
   // Handle both ESM (__dirname equivalent) and different execution contexts
   try {
     const currentFile = fileURLToPath(import.meta.url)

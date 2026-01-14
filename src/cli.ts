@@ -19,6 +19,7 @@ import {
   type AvailableSkill,
   checkForNewSkills,
   detectsReact,
+  type InstallLocation,
   installSelectedSkills,
   markSkillsAsSeen
 } from "./utils/skill-installer.js"
@@ -240,14 +241,18 @@ async function promptAgentSelection(defaultAgentName?: string): Promise<{ name: 
 
 /**
  * Show interactive skill selection prompt using Ink.
- * Returns the selected skills, or empty array if user skipped.
+ * Returns the selected skills and install location, or empty array if user skipped.
  */
-async function promptSkillSelection(skills: AvailableSkill[], initiallySelected?: string[]): Promise<AvailableSkill[]> {
+async function promptSkillSelection(
+  skills: AvailableSkill[],
+  initiallySelected?: string[]
+): Promise<{ skills: AvailableSkill[]; location: InstallLocation }> {
   const { render } = await import("ink")
   const React = await import("react")
   const { SkillSelector } = await import("./components/SkillSelector.js")
 
   let selectedSkills: AvailableSkill[] = []
+  let installLocation: InstallLocation = "project"
   let skipped = false
 
   try {
@@ -255,8 +260,9 @@ async function promptSkillSelection(skills: AvailableSkill[], initiallySelected?
       React.createElement(SkillSelector, {
         skills,
         initiallySelected,
-        onComplete: (selected: AvailableSkill[]) => {
+        onComplete: (selected: AvailableSkill[], location: InstallLocation) => {
           selectedSkills = selected
+          installLocation = location
           clear()
           unmount()
         },
@@ -274,7 +280,7 @@ async function promptSkillSelection(skills: AvailableSkill[], initiallySelected?
     process.stdout.write("\x1b[2J\x1b[H\x1b[3J")
   } catch (error) {
     console.error(chalk.red("Error in skill selection:"), error)
-    return []
+    return { skills: [], location: "project" }
   }
 
   // If user skipped, mark skills as seen so we don't ask again
@@ -282,7 +288,7 @@ async function promptSkillSelection(skills: AvailableSkill[], initiallySelected?
     markSkillsAsSeen(skills)
   }
 
-  return selectedSkills
+  return { skills: selectedSkills, location: installLocation }
 }
 
 interface ProjectConfig {
@@ -653,10 +659,11 @@ program
             })
             .map((s) => s.name)
 
-          const selected = await promptSkillSelection(newSkills, initialSelections)
+          const { skills: selected, location } = await promptSkillSelection(newSkills, initialSelections)
           if (selected.length > 0) {
-            console.log(chalk.cyan(`Installing ${selected.length} skill(s)...`))
-            const result = await installSelectedSkills(selected, (skill, index, total) => {
+            const locationLabel = location === "global" ? "globally" : "to project"
+            console.log(chalk.cyan(`Installing ${selected.length} skill(s) ${locationLabel}...`))
+            const result = await installSelectedSkills(selected, location, (skill, index, total) => {
               console.log(chalk.gray(`  [${index + 1}/${total}] ${skill.name}...`))
             })
             if (result.success.length > 0) {
