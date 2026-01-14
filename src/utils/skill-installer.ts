@@ -58,14 +58,19 @@ export function detectsReact(): boolean {
 /**
  * Get bundled skills from d3k package that are installable
  * (excludes the main 'd3k' skill which is for internal use)
+ * (excludes project-local skills - those are already installed)
  */
 export function getBundledSkills(): AvailableSkill[] {
   const bundledSkills: AvailableSkill[] = []
   const skillsInfo = getSkillsInfo()
+  const projectSkillsDir = getProjectSkillsDir()
 
   for (const info of skillsInfo) {
     // Skip the main d3k skill - it's for MCP/CLI internal use
     if (info.name === "d3k") continue
+
+    // Skip project-local skills - they're already installed, not "bundled" with d3k
+    if (info.path.startsWith(projectSkillsDir)) continue
 
     bundledSkills.push({
       name: info.name,
