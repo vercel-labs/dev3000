@@ -3168,8 +3168,8 @@ export class DevEnvironment {
       // Wait briefly for graceful shutdown
       await new Promise((resolve) => setTimeout(resolve, 300))
 
-      // SIGKILL any remaining (force kill)
-      for (const pid of savedChildPids) {
+      // SIGKILL any remaining (force kill) - in reverse order to kill children before parents
+      for (const pid of [...savedChildPids].reverse()) {
         try {
           process.kill(pid, "SIGKILL")
           this.debugLog(`Force killed tracked PID ${pid}`)
