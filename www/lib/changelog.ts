@@ -10,6 +10,18 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.147",
+    date: "2026-01-14",
+    type: "minor",
+    highlights: [
+      "Fix release script to exclude bun.lock from clean check",
+      "Fix shutdown cleanup for tmux/TUI mode and debug mode",
+      "Fix MCP cleanup in TUI mode - check PID file ownership",
+      "Feat(cli): add --no-agent flag to skip agent selection prompt"
+    ]
+  },
+
+  {
     version: "0.0.146",
     date: "2026-01-14",
     type: "minor",

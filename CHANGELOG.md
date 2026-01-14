@@ -4,14 +4,14 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [0.0.148] - 2026-01-14
+## [0.0.147] - 2026-01-14
 
-**Bug Fix Release**
+**Feature Release**
 
-- Fix shutdown cleanup for tmux/TUI mode - Chrome and MCP server now properly killed
-- Add `--no-agent` flag to skip agent selection prompt while keeping TUI
-- Add synchronous cleanup in SIGHUP handler for reliable tmux session cleanup
-- Fix PID file ownership check for MCP cleanup decision
+- Fix release script to exclude bun.lock from clean check
+- Fix shutdown cleanup for tmux/TUI mode and debug mode
+- Fix MCP cleanup in TUI mode - check PID file ownership
+- Feat(cli): add --no-agent flag to skip agent selection prompt
 
 ## [0.0.146] - 2026-01-14
 
