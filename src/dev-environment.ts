@@ -239,6 +239,43 @@ function isInSandbox(): boolean {
 }
 
 /**
+ * Count active d3k instances by checking PID files in tmpdir.
+ * Returns the count of running d3k processes (excluding the current one if specified).
+ */
+function countActiveD3kInstances(excludeCurrentPid: boolean = false): number {
+  try {
+    const tmpDir = tmpdir()
+    const files = readdirSync(tmpDir)
+    const pidFiles = files.filter((f) => f.startsWith("dev3000-") && f.endsWith(".pid"))
+
+    let activeCount = 0
+    for (const pidFile of pidFiles) {
+      try {
+        const pidPath = join(tmpDir, pidFile)
+        const pidStr = readFileSync(pidPath, "utf-8").trim()
+        const pid = parseInt(pidStr, 10)
+
+        if (isNaN(pid)) continue
+
+        // Skip current process if requested
+        if (excludeCurrentPid && pid === process.pid) continue
+
+        // Check if process is still running (signal 0 just checks existence)
+        process.kill(pid, 0)
+        activeCount++
+      } catch {
+        // Process doesn't exist or can't be signaled - not active
+      }
+    }
+
+    return activeCount
+  } catch {
+    // Can't read tmpdir - assume we're the only one
+    return excludeCurrentPid ? 0 : 1
+  }
+}
+
+/**
  * Clean up orphaned Playwright/MCP Chrome processes from previous d3k sessions.
  * These processes can become orphaned when d3k crashes or is force-killed,
  * leaving Chrome instances that prevent new sessions from starting properly.
@@ -2620,6 +2657,15 @@ export class DevEnvironment {
       // Non-fatal - ignore cleanup errors
     }
 
+    // Clean up PID file
+    try {
+      if (existsSync(this.pidFile)) {
+        unlinkSync(this.pidFile)
+      }
+    } catch (_error) {
+      // Non-fatal - ignore cleanup errors
+    }
+
     // Stop TUI if it's running
     if (this.tui) {
       await this.tui.shutdown()
@@ -2687,6 +2733,24 @@ export class DevEnvironment {
         console.log(chalk.green("✅ CDP monitor closed"))
       } catch (_error) {
         console.log(chalk.gray("⚠️ CDP monitor shutdown failed"))
+      }
+    }
+
+    // Kill MCP server only if this is the last d3k instance
+    const otherInstances = countActiveD3kInstances(true) // exclude current process
+    this.debugLog(`Other active d3k instances: ${otherInstances}`)
+
+    if (otherInstances === 0 && this.options.mcpPort && !isInSandbox()) {
+      console.log(chalk.yellow("🔄 Killing MCP server (last d3k instance)..."))
+      try {
+        const { spawnSync } = await import("child_process")
+        spawnSync("sh", ["-c", `lsof -ti:${this.options.mcpPort} -sTCP:LISTEN | xargs kill -9 2>/dev/null`], {
+          stdio: "pipe",
+          timeout: 5000
+        })
+        console.log(chalk.green("✅ MCP server stopped"))
+      } catch {
+        // Ignore errors
       }
     }
 
@@ -2831,6 +2895,15 @@ export class DevEnvironment {
       const sessionFile = join(homedir(), ".d3k", projectName, "session.json")
       if (existsSync(sessionFile)) {
         unlinkSync(sessionFile)
+      }
+    } catch (_error) {
+      // Non-fatal - ignore cleanup errors
+    }
+
+    // Clean up PID file
+    try {
+      if (existsSync(this.pidFile)) {
+        unlinkSync(this.pidFile)
       }
     } catch (_error) {
       // Non-fatal - ignore cleanup errors
@@ -3036,6 +3109,36 @@ export class DevEnvironment {
       this.debugLog(`Final lsof kill exit code: ${result.status}`)
     } catch {
       // Ignore pkill errors
+    }
+
+    // Kill MCP server only if this is the last d3k instance
+    // (other d3k instances in other projects might still need it)
+    const otherInstances = countActiveD3kInstances(true) // exclude current process
+    this.debugLog(`Other active d3k instances: ${otherInstances}`)
+
+    if (otherInstances === 0 && this.options.mcpPort) {
+      if (!this.options.tui) {
+        console.log(chalk.yellow("🔄 Killing MCP server (last d3k instance)..."))
+      }
+      this.debugLog(`Killing MCP server on port ${this.options.mcpPort} (no other d3k instances)`)
+
+      try {
+        const { spawnSync } = await import("child_process")
+        const mcpResult = spawnSync(
+          "sh",
+          ["-c", `lsof -ti:${this.options.mcpPort} -sTCP:LISTEN | xargs kill -9 2>/dev/null`],
+          { stdio: "pipe", timeout: 5000 }
+        )
+        this.debugLog(`MCP server kill exit code: ${mcpResult.status}`)
+
+        if (!this.options.tui) {
+          console.log(chalk.green("✅ MCP server stopped"))
+        }
+      } catch (error) {
+        this.debugLog(`Error killing MCP server: ${error}`)
+      }
+    } else if (otherInstances > 0) {
+      this.debugLog(`Keeping MCP server running for ${otherInstances} other d3k instance(s)`)
     }
 
     if (!this.options.tui) {
