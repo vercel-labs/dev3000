@@ -37,8 +37,8 @@
         "vitest": "^3.2.4",
       },
       "optionalDependencies": {
-        "@d3k/darwin-arm64": "0.0.146-canary",
-        "@d3k/linux-x64": "0.0.146-canary",
+        "@d3k/darwin-arm64": "0.0.147-canary",
+        "@d3k/linux-x64": "0.0.147-canary",
         "@opentui/core-linux-x64": "^0.1.71",
       },
     },

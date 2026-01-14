@@ -11,11 +11,11 @@ bun run test-release
 CURRENT_VERSION=$(node -p "require('./package.json').version")
 echo "📋 Current version: $CURRENT_VERSION"
 
-# Check if we have any uncommitted changes (excluding package.json and dist/ files)
-if git diff --quiet HEAD -- . ':!package.json' ':!dist/' && git diff --staged --quiet; then
+# Check if we have any uncommitted changes (excluding package.json, dist/, and bun.lock)
+if git diff --quiet HEAD -- . ':!package.json' ':!dist/' ':!bun.lock' && git diff --staged --quiet; then
     echo "✅ Working directory is clean"
 else
-    echo "❌ You have uncommitted changes (excluding package.json and dist/). Please commit or stash them first."
+    echo "❌ You have uncommitted changes (excluding package.json, dist/, and bun.lock). Please commit or stash them first."
     exit 1
 fi
 
