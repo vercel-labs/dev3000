@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from "child_process"
-import { existsSync } from "fs"
+import { existsSync, readdirSync } from "fs"
 import path from "path"
 import { fileURLToPath } from "url"
 
@@ -38,11 +38,45 @@ const findNext = () => {
   return null
 }
 
-const nextBin = findNext()
+// pnpm stores packages in .pnpm/package@version/node_modules/package
+// Search for Next.js in pnpm's flat store structure
+const findNextInPnpm = () => {
+  let currentDir = __dirname
+  const maxLevels = 10
+
+  for (let i = 0; i < maxLevels; i++) {
+    const pnpmDir = path.join(currentDir, ".pnpm")
+    if (existsSync(pnpmDir)) {
+      try {
+        // Look for next@* directories in .pnpm
+        const entries = readdirSync(pnpmDir)
+        for (const entry of entries) {
+          if (entry.startsWith("next@")) {
+            const nextBin = path.join(pnpmDir, entry, "node_modules", "next", "dist", "bin", "next")
+            if (existsSync(nextBin)) {
+              return nextBin
+            }
+          }
+        }
+      } catch {
+        // Ignore read errors
+      }
+    }
+
+    const parentDir = path.dirname(currentDir)
+    if (parentDir === currentDir) break
+    currentDir = parentDir
+  }
+
+  return null
+}
+
+// Try standard node_modules first, then fall back to pnpm structure
+const nextBin = findNext() || findNextInPnpm()
 
 if (nextBin) {
   // Use the bundled Next.js
-  console.log("Starting MCP server using bundled Next.js...")
+  console.log(`Starting MCP server using Next.js at: ${nextBin}`)
   const child = spawn(nextBin, ["start"], {
     stdio: "inherit",
     cwd: __dirname,
