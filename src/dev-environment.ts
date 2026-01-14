@@ -2737,10 +2737,23 @@ export class DevEnvironment {
     }
 
     // Kill MCP server only if this is the last d3k instance
+    // Also check if we own the PID file - TUI parent shouldn't do MCP cleanup
+    let weOwnPidFile = false
+    try {
+      if (existsSync(this.pidFile)) {
+        const pidInFile = parseInt(readFileSync(this.pidFile, "utf-8").trim(), 10)
+        weOwnPidFile = pidInFile === process.pid
+      } else {
+        weOwnPidFile = true // PID file already cleaned up - we were the owner
+      }
+    } catch {
+      // Error reading PID file - assume we don't own it
+    }
+
     const otherInstances = countActiveD3kInstances(true) // exclude current process
     this.debugLog(`Other active d3k instances: ${otherInstances}`)
 
-    if (otherInstances === 0 && this.options.mcpPort && !isInSandbox()) {
+    if (otherInstances === 0 && this.options.mcpPort && !isInSandbox() && weOwnPidFile) {
       console.log(chalk.yellow("🔄 Killing MCP server (last d3k instance)..."))
       try {
         const { spawnSync } = await import("child_process")
@@ -3113,10 +3126,28 @@ export class DevEnvironment {
 
     // Kill MCP server only if this is the last d3k instance
     // (other d3k instances in other projects might still need it)
+    // Also check if we own the PID file - TUI parent shouldn't do MCP cleanup
+    // because the subprocess (which owns the PID file) will handle it
+    let weOwnPidFile = false
+    try {
+      if (existsSync(this.pidFile)) {
+        const pidInFile = parseInt(readFileSync(this.pidFile, "utf-8").trim(), 10)
+        weOwnPidFile = pidInFile === process.pid
+        this.debugLog(`PID file check: file has ${pidInFile}, we are ${process.pid}, we own it: ${weOwnPidFile}`)
+      } else {
+        // PID file already cleaned up - we were the owner
+        weOwnPidFile = true
+        this.debugLog("PID file already cleaned up - assuming we owned it")
+      }
+    } catch {
+      // Error reading PID file - assume we don't own it
+      this.debugLog("Could not read PID file - assuming we don't own it")
+    }
+
     const otherInstances = countActiveD3kInstances(true) // exclude current process
     this.debugLog(`Other active d3k instances: ${otherInstances}`)
 
-    if (otherInstances === 0 && this.options.mcpPort) {
+    if (otherInstances === 0 && this.options.mcpPort && weOwnPidFile) {
       if (!this.options.tui) {
         console.log(chalk.yellow("🔄 Killing MCP server (last d3k instance)..."))
       }
@@ -3139,6 +3170,8 @@ export class DevEnvironment {
       }
     } else if (otherInstances > 0) {
       this.debugLog(`Keeping MCP server running for ${otherInstances} other d3k instance(s)`)
+    } else if (!weOwnPidFile) {
+      this.debugLog("Skipping MCP cleanup - we don't own the PID file (subprocess will handle it)")
     }
 
     if (!this.options.tui) {
