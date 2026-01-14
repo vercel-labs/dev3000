@@ -4,6 +4,15 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.146] - 2026-01-14
+
+**Feature Release**
+
+- Kill MCP server only when last d3k instance exits
+- Fix skill installer offering already-installed project skills
+- Fix MCP server startup for pnpm global installs
+- Add agent-browser integration for browser automation
+
 ## [0.0.145] - 2026-01-13
 
 **Feature Release**

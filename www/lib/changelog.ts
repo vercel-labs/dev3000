@@ -10,6 +10,18 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.146",
+    date: "2026-01-14",
+    type: "minor",
+    highlights: [
+      "Kill MCP server only when last d3k instance exits",
+      "Fix skill installer offering already-installed project skills",
+      "Fix MCP server startup for pnpm global installs",
+      "Add agent-browser integration for browser automation"
+    ]
+  },
+
+  {
     version: "0.0.145",
     date: "2026-01-13",
     type: "minor",
