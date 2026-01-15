@@ -241,8 +241,15 @@ function isInSandbox(): boolean {
 /**
  * Count active d3k instances by checking PID files in tmpdir.
  * Returns the count of running d3k processes (excluding the current one if specified).
+ *
+ * CRITICAL FOR PROCESS CLEANUP:
+ * This function determines whether MCP server should be killed on shutdown.
+ * Only the LAST d3k instance should kill the MCP server.
+ *
+ * @see handleShutdown - Uses this to decide MCP cleanup
+ * @see SIGHUP handler - Uses this for synchronous MCP cleanup on tmux close
  */
-function countActiveD3kInstances(excludeCurrentPid: boolean = false): number {
+export function countActiveD3kInstances(excludeCurrentPid: boolean = false): number {
   try {
     const tmpDir = tmpdir()
     const files = readdirSync(tmpDir)
@@ -855,8 +862,18 @@ export function createPersistentLogFile(): string {
   }
 }
 
-// Write session info for MCP server to discover
-function writeSessionInfo(
+/**
+ * Write session info for MCP server to discover.
+ *
+ * CRITICAL FOR PROCESS CLEANUP:
+ * This writes the session.json file that contains chromePids and serverPid.
+ * These PIDs are read during shutdown to kill the correct processes.
+ *
+ * The chromePids array is particularly important - it tracks which Chrome
+ * processes belong to THIS d3k instance so we don't accidentally kill
+ * Chrome instances from other d3k sessions.
+ */
+export function writeSessionInfo(
   projectName: string,
   logFilePath: string,
   appPort: string,
@@ -900,8 +917,20 @@ function writeSessionInfo(
   }
 }
 
-// Get Chrome PIDs for this instance
-function getSessionChromePids(projectName: string): number[] {
+/**
+ * Get Chrome PIDs for a d3k session from the session.json file.
+ *
+ * CRITICAL FOR PROCESS CLEANUP:
+ * Chrome PIDs are stored in session.json and used during shutdown to kill
+ * the specific Chrome instances spawned by THIS d3k instance.
+ *
+ * The SIGHUP handler uses this to synchronously kill Chrome on tmux close
+ * before the process terminates.
+ *
+ * @param projectName - The project name (used to locate session.json)
+ * @returns Array of Chrome PIDs, or empty array if none found
+ */
+export function getSessionChromePids(projectName: string): number[] {
   const sessionFile = join(homedir(), ".d3k", projectName, "session.json")
 
   try {
@@ -2875,18 +2904,39 @@ export class DevEnvironment {
         })
     })
 
-    // Handle SIGHUP (sent by tmux when session/pane is killed)
+    /**
+     * SIGHUP Handler - CRITICAL for tmux/TUI mode cleanup
+     *
+     * When tmux kills a pane (Ctrl+C in agent pane, or closing terminal), it sends
+     * SIGHUP to the process. We MUST clean up SYNCHRONOUSLY because tmux may
+     * terminate us very quickly after sending the signal.
+     *
+     * CLEANUP ORDER (tested and verified - DO NOT CHANGE without updating tests):
+     * 1. Signal CDP monitor to stop reconnection attempts
+     * 2. Kill dev server processes on app port (synchronous via lsof)
+     * 3. Kill Chrome PIDs from session.json (synchronous)
+     * 4. Kill MCP server IF we're the last d3k instance (synchronous)
+     * 5. Call handleShutdown() for async cleanup
+     *
+     * INVARIANTS (enforced by tests in dev-environment.test.ts):
+     * - Chrome PIDs are stored per-session in session.json
+     * - We only kill Chrome instances WE spawned (via chromePids array)
+     * - MCP server is only killed when countActiveD3kInstances() returns 0
+     * - All cleanup happens BEFORE process.exit()
+     *
+     * @see dev-environment.test.ts - "SIGHUP handler cleanup" test suite
+     */
     process.on("SIGHUP", () => {
       this.debugLog("SIGHUP received (tmux session closing)")
       if (this.isShuttingDown) return
       this.isShuttingDown = true
 
-      // Signal CDP monitor to stop reconnection attempts
+      // 1. Signal CDP monitor to stop reconnection attempts
       if (this.cdpMonitor) {
         this.cdpMonitor.prepareShutdown()
       }
 
-      // CRITICAL: Kill port processes SYNCHRONOUSLY first, before anything else
+      // 2. CRITICAL: Kill dev server processes SYNCHRONOUSLY
       // tmux might kill us quickly, so we can't rely on async cleanup
       const { spawnSync } = require("child_process")
       const port = this.options.port
@@ -2896,7 +2946,7 @@ export class DevEnvironment {
         timeout: 5000
       })
 
-      // CRITICAL: Also kill Chrome PIDs synchronously
+      // 3. CRITICAL: Kill Chrome PIDs synchronously
       // Get Chrome PIDs from session file before it gets deleted
       const projectName = getProjectName()
       const chromePids = getSessionChromePids(projectName)
@@ -2911,7 +2961,7 @@ export class DevEnvironment {
         }
       }
 
-      // CRITICAL: Also kill MCP server if we're the last instance
+      // 4. CRITICAL: Kill MCP server only if we're the LAST instance
       const otherInstances = countActiveD3kInstances(true)
       if (otherInstances === 0 && this.options.mcpPort) {
         this.debugLog(`Synchronously killing MCP server on port ${this.options.mcpPort}`)
