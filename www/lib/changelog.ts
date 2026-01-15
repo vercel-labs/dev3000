@@ -10,6 +10,18 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.148",
+    date: "2026-01-15",
+    type: "minor",
+    highlights: [
+      "Add comprehensive tests for process cleanup to prevent regressions",
+      "Auto-cleanup deprecated skills on startup",
+      "Remove bundled react-performance skill (duplicate of remote react-best-practices)",
+      "Update skills to fetch from new repo path and add project/global install option"
+    ]
+  },
+
+  {
     version: "0.0.147",
     date: "2026-01-14",
     type: "minor",

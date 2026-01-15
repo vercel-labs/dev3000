@@ -8,11 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 **Feature Release**
 
-- Update skills to fetch from new agent-skills repo path (`skills/` instead of `dx/skills/`)
-- Add project vs global installation option for skills (`.claude/skills/` or `~/.claude/skills/`)
-- Auto-cleanup deprecated skills on startup (`react-performance`, `vercel-design-guidelines`)
 - Add comprehensive tests for process cleanup to prevent regressions
-- Add extensive documentation to SIGHUP handler for cleanup invariants
+- Auto-cleanup deprecated skills on startup
+- Remove bundled react-performance skill (duplicate of remote react-best-practices)
+- Update skills to fetch from new repo path and add project/global install option
 
 ## [0.0.147] - 2026-01-14
 
