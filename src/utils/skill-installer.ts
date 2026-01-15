@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "fs"
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "fs"
 import { homedir } from "os"
 import path from "path"
 import { getSkillsInfo } from "../skills/index.js"
@@ -308,7 +308,65 @@ export function markSkillsAsSeen(skills: AvailableSkill[]): void {
   saveInstalledSkills(installed)
 }
 
+// Skills that have been deprecated/renamed and should be silently removed
+const DEPRECATED_SKILLS = [
+  "react-performance", // Replaced by react-best-practices from agent-skills repo
+  "vercel-design-guidelines" // Renamed to web-design-guidelines in agent-skills repo
+]
+
+/**
+ * Silently clean up deprecated skills from user's local installations
+ */
+function cleanupDeprecatedSkills(): void {
+  const projectSkillsDir = path.join(process.cwd(), ".claude", "skills")
+  const globalSkillsDir = path.join(homedir(), ".claude", "skills")
+
+  for (const skillName of DEPRECATED_SKILLS) {
+    // Remove from project
+    const projectPath = path.join(projectSkillsDir, skillName)
+    if (existsSync(projectPath)) {
+      try {
+        rmSync(projectPath, { recursive: true, force: true })
+      } catch {
+        // Silently ignore errors
+      }
+    }
+
+    // Remove from global
+    const globalPath = path.join(globalSkillsDir, skillName)
+    if (existsSync(globalPath)) {
+      try {
+        rmSync(globalPath, { recursive: true, force: true })
+      } catch {
+        // Silently ignore errors
+      }
+    }
+  }
+
+  // Also clean up tracking data for deprecated skills
+  const installed = loadInstalledSkills()
+  let changed = false
+  for (const skillName of DEPRECATED_SKILLS) {
+    if (installed.skills[skillName]) {
+      delete installed.skills[skillName]
+      changed = true
+    }
+    // Remove from seenSkills too
+    const oldSeenSkills = installed.seenSkills.length
+    installed.seenSkills = installed.seenSkills.filter((s) => !s.startsWith(`${skillName}:`))
+    if (installed.seenSkills.length !== oldSeenSkills) {
+      changed = true
+    }
+  }
+  if (changed) {
+    saveInstalledSkills(installed)
+  }
+}
+
 export async function checkForNewSkills(): Promise<AvailableSkill[]> {
+  // Clean up any deprecated skills first
+  cleanupDeprecatedSkills()
+
   // Fetch remote skills from GitHub
   const remoteSkills = await fetchAvailableSkills()
 
