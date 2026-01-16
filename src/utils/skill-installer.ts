@@ -1,7 +1,7 @@
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "fs"
+import { spawnSync } from "child_process"
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "fs"
 import { homedir } from "os"
 import path from "path"
-import { getSkillsInfo } from "../skills/index.js"
 import { getProjectDir } from "./project-name.js"
 
 const GITHUB_REPO = "vercel-labs/agent-skills"
@@ -69,36 +69,6 @@ export function detectsReact(): boolean {
   } catch {
     return false
   }
-}
-
-/**
- * Get bundled skills from d3k package that are installable
- * (excludes the main 'd3k' skill which is for internal use)
- * (excludes project-local skills - those are already installed)
- */
-export function getBundledSkills(): AvailableSkill[] {
-  const bundledSkills: AvailableSkill[] = []
-  const skillsInfo = getSkillsInfo()
-  const projectSkillsDir = getProjectSkillsDir()
-
-  for (const info of skillsInfo) {
-    // Skip the main d3k skill - it's for MCP/CLI internal use
-    if (info.name === "d3k") continue
-
-    // Skip project-local skills - they're already installed, not "bundled" with d3k
-    if (info.path.startsWith(projectSkillsDir)) continue
-
-    bundledSkills.push({
-      name: info.name,
-      description: info.description,
-      path: info.path,
-      sha: "bundled", // Special marker for bundled skills
-      isNew: false,
-      isUpdate: false
-    })
-  }
-
-  return bundledSkills
 }
 
 /**
@@ -221,72 +191,28 @@ export function getActionableSkills(available: AvailableSkill[], installed: Inst
   return actionable
 }
 
-function copyDirectory(srcDir: string, destDir: string): void {
-  if (!existsSync(destDir)) {
-    mkdirSync(destDir, { recursive: true })
-  }
-
-  const entries = readdirSync(srcDir, { withFileTypes: true })
-  for (const entry of entries) {
-    const srcPath = path.join(srcDir, entry.name)
-    const destPath = path.join(destDir, entry.name)
-
-    if (entry.isDirectory()) {
-      copyDirectory(srcPath, destPath)
-    } else {
-      copyFileSync(srcPath, destPath)
-    }
-  }
-}
-
-async function downloadDirectory(dirPath: string, targetDir: string): Promise<void> {
-  const response = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${dirPath}`)
-  if (!response.ok) {
-    throw new Error(`Failed to fetch directory: ${dirPath}`)
-  }
-
-  const items = (await response.json()) as GitHubContentItem[]
-
-  for (const item of items) {
-    if (item.type === "file" && item.download_url) {
-      // Download file
-      const fileResponse = await fetch(item.download_url)
-      if (!fileResponse.ok) {
-        continue
-      }
-      const content = await fileResponse.text()
-      const filePath = path.join(targetDir, item.name)
-      writeFileSync(filePath, content)
-    } else if (item.type === "dir") {
-      // Create subdirectory and recurse
-      const subDir = path.join(targetDir, item.name)
-      if (!existsSync(subDir)) {
-        mkdirSync(subDir, { recursive: true })
-      }
-      await downloadDirectory(item.path, subDir)
-    }
-  }
-}
-
+/**
+ * Install a skill using the official add-skill CLI
+ * This delegates to `npx add-skill` for the actual installation
+ */
 export async function installSkill(skill: AvailableSkill, location: InstallLocation = "project"): Promise<void> {
-  const baseDir = getSkillsDir(location)
-  const skillDir = path.join(baseDir, skill.name)
+  const args = ["add-skill", GITHUB_REPO, "--skill", skill.name, "-a", "claude-code", "-y"]
 
-  // Create skill directory
-  if (!existsSync(skillDir)) {
-    mkdirSync(skillDir, { recursive: true })
+  if (location === "global") {
+    args.push("-g")
   }
 
-  if (skill.sha === "bundled") {
-    // Bundled skill: copy from the d3k package
-    const sourceDir = path.dirname(skill.path) // skill.path is the SKILL.md path, get parent dir
-    copyDirectory(sourceDir, skillDir)
-  } else {
-    // Remote skill: download all files recursively
-    await downloadDirectory(skill.path, skillDir)
+  const result = spawnSync("npx", args, {
+    stdio: "pipe",
+    timeout: 60000 // 60 second timeout
+  })
+
+  if (result.status !== 0) {
+    const stderr = result.stderr?.toString() || ""
+    throw new Error(`Failed to install skill ${skill.name}: ${stderr}`)
   }
 
-  // Update installed.json
+  // Update tracking data
   const installed = loadInstalledSkills()
   installed.skills[skill.name] = {
     installedAt: new Date().toISOString(),
@@ -367,14 +293,8 @@ export async function checkForNewSkills(): Promise<AvailableSkill[]> {
   // Clean up any deprecated skills first
   cleanupDeprecatedSkills()
 
-  // Fetch remote skills from GitHub
-  const remoteSkills = await fetchAvailableSkills()
-
-  // Get bundled skills from d3k package
-  const bundledSkills = getBundledSkills()
-
-  // Combine both, with bundled skills first
-  const available = [...bundledSkills, ...remoteSkills]
+  // Fetch available skills from GitHub
+  const available = await fetchAvailableSkills()
 
   const installed = loadInstalledSkills()
   return getActionableSkills(available, installed)
