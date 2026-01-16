@@ -206,8 +206,16 @@ function calculateErrorPriority(
   // Strip ANSI escape codes before constructing regex pattern (fixes #74)
   // biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escape codes require control characters
   const cleanLine = errorLine.replace(/\x1b\[[0-9;]*m/g, "")
-  const errorPattern = cleanLine.replace(/\d+/g, "\\d+").substring(0, 100)
-  const occurrences = allErrors.filter((e) => new RegExp(errorPattern).test(e)).length
+  // Escape regex special characters, then replace digit sequences with \d+
+  const escapedLine = cleanLine.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  const errorPattern = escapedLine.replace(/\d+/g, "\\d+").substring(0, 100)
+  let occurrences = 0
+  try {
+    occurrences = allErrors.filter((e) => new RegExp(errorPattern).test(e)).length
+  } catch {
+    // If regex still fails for some reason, just count exact matches
+    occurrences = allErrors.filter((e) => e.includes(cleanLine.substring(0, 50))).length
+  }
   if (occurrences > 1) {
     score += (occurrences - 1) * 50
   }
