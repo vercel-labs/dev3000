@@ -322,6 +322,12 @@ function LogEntryComponent({ entry, darkMode }: { entry: LogEntry; darkMode: boo
         backgroundColor: LOG_COLORS.CRASH,
         textColor: getTextColor(LOG_COLORS.CRASH)
       }
+    if (message.includes("[EXIT]"))
+      return {
+        type: "EXIT",
+        backgroundColor: LOG_COLORS.EXIT,
+        textColor: getTextColor(LOG_COLORS.EXIT)
+      }
     if (message.includes("[CHROME]"))
       return {
         type: "CHROME",
