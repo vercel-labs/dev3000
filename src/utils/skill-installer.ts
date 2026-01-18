@@ -107,18 +107,26 @@ export function saveInstalledSkills(data: InstalledSkills): void {
   writeFileSync(getInstalledSkillsPath(), JSON.stringify(data, null, 2))
 }
 
-function parseSkillDescription(content: string): string {
-  // Parse YAML frontmatter to extract description
+interface SkillFrontmatter {
+  name: string | null
+  description: string | null
+}
+
+function parseSkillFrontmatter(content: string): SkillFrontmatter {
+  // Parse YAML frontmatter to extract name and description
   const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/)
   if (!frontmatterMatch) {
-    return ""
+    return { name: null, description: null }
   }
   const frontmatter = frontmatterMatch[1]
+
+  const nameMatch = frontmatter.match(/name:\s*(.+)/)
   const descriptionMatch = frontmatter.match(/description:\s*(.+)/)
-  if (descriptionMatch) {
-    return descriptionMatch[1].trim()
+
+  return {
+    name: nameMatch ? nameMatch[1].trim() : null,
+    description: descriptionMatch ? descriptionMatch[1].trim() : null
   }
-  return ""
 }
 
 export async function fetchAvailableSkills(): Promise<AvailableSkill[]> {
@@ -134,21 +142,23 @@ export async function fetchAvailableSkills(): Promise<AvailableSkill[]> {
     // Filter to only directories (actual skills, not .zip files), excluding ignored folders
     const skillDirs = items.filter((item) => item.type === "dir" && !IGNORED_SKILL_FOLDERS.includes(item.name))
 
-    // Fetch description for each skill
+    // Fetch name and description from each skill's SKILL.md frontmatter
     const skills: AvailableSkill[] = []
     for (const dir of skillDirs) {
       try {
         const skillMdUrl = `https://raw.githubusercontent.com/${GITHUB_REPO}/main/${dir.path}/SKILL.md`
         const skillMdResponse = await fetch(skillMdUrl)
-        let description = ""
-        if (skillMdResponse.ok) {
-          const content = await skillMdResponse.text()
-          description = parseSkillDescription(content)
-        }
+        if (!skillMdResponse.ok) continue
+
+        const content = await skillMdResponse.text()
+        const frontmatter = parseSkillFrontmatter(content)
+
+        // Use name from frontmatter (required by skills CLI), fall back to folder name
+        const skillName = frontmatter.name || dir.name
 
         skills.push({
-          name: dir.name,
-          description: description || `${dir.name} skill`,
+          name: skillName,
+          description: frontmatter.description || `${skillName} skill`,
           path: dir.path,
           sha: dir.sha,
           isNew: false, // Will be set by getActionableSkills
