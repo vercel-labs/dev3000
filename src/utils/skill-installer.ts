@@ -192,11 +192,11 @@ export function getActionableSkills(available: AvailableSkill[], installed: Inst
 }
 
 /**
- * Install a skill using the official add-skill CLI
- * This delegates to `npx add-skill` for the actual installation
+ * Install a skill using the official skills CLI (https://skills-ai.dev)
+ * This delegates to `npx skills add` for the actual installation
  */
 export async function installSkill(skill: AvailableSkill, location: InstallLocation = "project"): Promise<void> {
-  const args = ["add-skill", GITHUB_REPO, "--skill", skill.name, "-a", "claude-code", "-y"]
+  const args = ["skills", "add", GITHUB_REPO, "--skill", skill.name, "-a", "claude-code", "-y"]
 
   if (location === "global") {
     args.push("-g")
