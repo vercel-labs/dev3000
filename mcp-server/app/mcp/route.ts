@@ -583,26 +583,6 @@ const handler = createMcpHandler(
       }
     )
 
-    // Alias: fix_my_jank -> fix_my_app with performance focus
-    server.tool(
-      "fix_my_jank",
-      "🎯 **JANK & PERFORMANCE FIXER** - Specialized alias for detecting and fixing layout shifts, CLS issues, and performance problems. Automatically focuses on performance analysis and jank detection from passive screencast captures.\n\n💡 This is an alias for fix_my_app with focusArea='performance', perfect for 'fix my jank' or 'why is my page janky' requests!",
-      {
-        projectName: z
-          .string()
-          .optional()
-          .describe("Project name to debug (if multiple dev3000 instances are running)"),
-        timeRangeMinutes: z.number().optional().describe("Minutes to analyze back from now (default: 10)")
-      },
-      async (params) => {
-        // Call fix_my_app with performance focus
-        return fixMyApp({
-          ...params,
-          focusArea: "performance"
-        })
-      }
-    )
-
     // Browser interaction tool
     server.tool(
       "execute_browser_action",
