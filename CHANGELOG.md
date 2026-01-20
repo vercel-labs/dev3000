@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 **Feature Release**
 
-- Add timestamp delta feature: click any log line to set it as base, all other timestamps show delta from that point (e.g., "+0.011s", "-1.049s"). Press Escape to clear. Thanks @shuding for the idea!
+- Add timestamp delta feature for log debugging
 
 ## [0.0.149] - 2026-01-20
 

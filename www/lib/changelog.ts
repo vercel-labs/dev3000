@@ -10,6 +10,15 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.150",
+    date: "2026-01-20",
+    type: "minor",
+    highlights: [
+      "Add timestamp delta feature for log debugging"
+    ]
+  },
+
+  {
     version: "0.0.149",
     date: "2026-01-20",
     type: "minor",
