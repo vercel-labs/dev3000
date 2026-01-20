@@ -20,6 +20,7 @@ export const LOG_COLORS = {
   CDP: "#F0E68C", // Khaki
   CHROME: "#F0E68C", // Khaki (same as CDP)
   CRASH: "#DC143C", // Crimson
+  EXIT: "#A0A0A0", // Gray (neutral, informational)
   REPLAY: "#9370DB", // Purple
   NAVIGATION: "#DDA0DD", // Plum (same as DOM)
   INTERACTION: "#DDA0DD", // Plum (same as DOM)
@@ -54,6 +55,7 @@ export const TYPE_COLOR_MAP = {
   CDP: "CDP",
   CHROME: "CHROME",
   CRASH: "CRASH",
+  EXIT: "EXIT",
   REPLAY: "REPLAY",
   NAVIGATION: "NAVIGATION",
   INTERACTION: "INTERACTION"

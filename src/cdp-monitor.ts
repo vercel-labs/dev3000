@@ -230,17 +230,26 @@ export class CDPMonitor {
     // Monitor for Chrome crashes during runtime
     this.browser.on("exit", (code, signal) => {
       if (!this.isShuttingDown) {
-        const crashMsg = `[CRASH] Chrome process exited unexpectedly - Code: ${code}, Signal: ${signal}`
-        // this.logger("browser", `${crashMsg} `)  // [PLAYWRIGHT] tag removed
-        this.logger("browser", `${crashMsg}`)
-        this.debugLog(`Chrome crashed: code=${code}, signal=${signal}`)
+        // Distinguish between graceful quit (code 0, no signal) and actual crashes
+        const isGracefulQuit = code === 0 && signal === null
 
-        // Log context for crash correlation
-        this.logger("browser", "[CRASH] Chrome crashed - check recent server/browser logs for correlation")
+        if (isGracefulQuit) {
+          // User quit Chrome normally (e.g., Cmd+Q)
+          this.logger("browser", "[EXIT] Chrome closed by user")
+          this.debugLog("Chrome exited gracefully (user quit)")
+        } else {
+          // Actual crash - non-zero exit code or signal
+          const crashMsg = `[CRASH] Chrome process exited unexpectedly - Code: ${code}, Signal: ${signal}`
+          this.logger("browser", `${crashMsg}`)
+          this.debugLog(`Chrome crashed: code=${code}, signal=${signal}`)
 
-        // Take screenshot if still connected (for crash context)
-        if (this.connection && this.connection.ws.readyState === 1) {
-          this.takeScreenshot("crash")
+          // Log context for crash correlation
+          this.logger("browser", "[CRASH] Chrome crashed - check recent server/browser logs for correlation")
+
+          // Take screenshot if still connected (for crash context)
+          if (this.connection && this.connection.ws.readyState === 1) {
+            this.takeScreenshot("crash")
+          }
         }
       }
     })
