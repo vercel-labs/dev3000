@@ -17,6 +17,7 @@ import {
 } from "@opentui/core"
 import { createReadStream, unwatchFile, watchFile } from "fs"
 import { LOG_COLORS } from "./constants/log-colors.js"
+import { formatTimeDelta, parseTimestampToMs } from "./utils/timestamp.js"
 
 export type UpdateInfo =
   | { type: "available"; latestVersion: string }
@@ -39,6 +40,7 @@ export interface TUIOptions {
 interface LogEntry {
   id: number
   content: string
+  timestamp?: string // Extracted timestamp like "12:34:56.789"
 }
 
 const NEXTJS_MCP_404_REGEX = /(?:\[POST\]|POST)\s+\/_next\/mcp\b[^\n]*\b404\b/i
@@ -77,8 +79,11 @@ const TYPE_COLORS: Record<string, string> = {
   OPTIONS: LOG_COLORS.SERVER
 }
 
+// Color for delta timestamps
+const DELTA_COLOR = "#FFD700" // Gold/yellow for visibility
+
 // Helper to format log line with StyledText
-function formatLogLine(content: string, isCompact: boolean): StyledText {
+function formatLogLine(content: string, isCompact: boolean, baseTimestampMs?: number, isBaseLog?: boolean): StyledText {
   const parts = content.match(/^\[(.*?)\] \[(.*?)\] (?:\[(.*?)\] )?(.*)$/)
 
   if (parts) {
@@ -101,28 +106,52 @@ function formatLogLine(content: string, isCompact: boolean): StyledText {
     const sourceColor = source === "BROWSER" ? LOG_COLORS.BROWSER : LOG_COLORS.SERVER
     const typeColor = TYPE_COLORS[type] || "#A0A0A0"
 
-    // Format timestamp - in compact mode just show HH:MM:SS, otherwise full timestamp without brackets
+    // Format timestamp - show delta if base timestamp is set
     let displayTimestamp = timestamp
-    if (isCompact) {
-      // Extract just the time part (HH:MM:SS) from timestamps like "12:34:56.789"
-      const timeMatch = timestamp.match(/^(\d{1,2}:\d{2}:\d{2})/)
-      displayTimestamp = timeMatch ? timeMatch[1] : timestamp
+    // Track which style to use: 0 = dim (normal), 1 = delta color, 2 = delta bold (base log)
+    let timestampMode = 0
+
+    if (baseTimestampMs !== undefined) {
+      const currentMs = parseTimestampToMs(timestamp)
+      if (currentMs !== null) {
+        if (isBaseLog) {
+          // The base log shows "BASE" indicator
+          displayTimestamp = isCompact ? "BASE" : `BASE ${timestamp}`
+          timestampMode = 2
+        } else {
+          // Other logs show delta from base
+          const delta = formatTimeDelta(currentMs - baseTimestampMs)
+          displayTimestamp = isCompact ? delta : `${delta.padStart(10)} `
+          timestampMode = 1
+        }
+      }
+    } else {
+      // No base timestamp - show normal timestamp
+      if (isCompact) {
+        // Extract just the time part (HH:MM:SS) from timestamps like "12:34:56.789"
+        const timeMatch = timestamp.match(/^(\d{1,2}:\d{2}:\d{2})/)
+        displayTimestamp = timeMatch ? timeMatch[1] : timestamp
+      }
     }
+
+    // Build styled timestamp based on mode
+    const styledTimestamp =
+      timestampMode === 2 ? bold(fg(DELTA_COLOR)(displayTimestamp)) : timestampMode === 1 ? fg(DELTA_COLOR)(displayTimestamp) : dim(displayTimestamp)
 
     if (isCompact) {
       const sourceChar = source.charAt(0)
       if (type) {
         const typeChar = type.charAt(0)
         // No bold, no space between tags in compact mode
-        return t`${dim(displayTimestamp)} ${fg(sourceColor)(`[${sourceChar}]`)}${fg(typeColor)(`[${typeChar}]`)} ${message || ""}`
+        return t`${styledTimestamp} ${fg(sourceColor)(`[${sourceChar}]`)}${fg(typeColor)(`[${typeChar}]`)} ${message || ""}`
       }
-      return t`${dim(displayTimestamp)} ${fg(sourceColor)(`[${sourceChar}]`)} ${message || ""}`
+      return t`${styledTimestamp} ${fg(sourceColor)(`[${sourceChar}]`)} ${message || ""}`
     }
 
     if (type) {
-      return t`${dim(displayTimestamp)} ${bold(fg(sourceColor)(`[${source}]`))} ${fg(typeColor)(`[${type}]`)} ${message || ""}`
+      return t`${styledTimestamp} ${bold(fg(sourceColor)(`[${source}]`))} ${fg(typeColor)(`[${type}]`)} ${message || ""}`
     }
-    return t`${dim(displayTimestamp)} ${bold(fg(sourceColor)(`[${source}]`))} ${message || ""}`
+    return t`${styledTimestamp} ${bold(fg(sourceColor)(`[${source}]`))} ${message || ""}`
   }
 
   return t`${content}`
@@ -150,6 +179,10 @@ class D3kTUI {
   private initStatus: string | null = null
   private ctrlCMessage = ""
   private ctrlCTimeout: NodeJS.Timeout | null = null
+
+  // Base timestamp for delta display (click on timestamp to set)
+  private baseTimestampMs: number | undefined = undefined
+  private baseLogId: number | undefined = undefined
 
   constructor(options: TUIOptions) {
     this.options = options
@@ -509,6 +542,16 @@ class D3kTUI {
         return
       }
 
+      // Handle Escape to clear base timestamp (exit delta mode)
+      if (key.name === "escape") {
+        if (this.baseTimestampMs !== undefined) {
+          this.baseTimestampMs = undefined
+          this.baseLogId = undefined
+          this.refreshLogs()
+        }
+        return
+      }
+
       // Keyboard scrolling (also works alongside mouse scroll)
       if (this.logsScrollBox) {
         if (key.name === "up") {
@@ -555,9 +598,14 @@ class D3kTUI {
         return
       }
 
+      // Extract timestamp from log line format: [timestamp] [source] ...
+      const timestampMatch = line.match(/^\[(.*?)\]/)
+      const timestamp = timestampMatch ? timestampMatch[1] : undefined
+
       const newLog: LogEntry = {
         id: this.logIdCounter++,
-        content: line
+        content: line,
+        timestamp
       }
 
       pendingLogs.push(newLog)
@@ -622,12 +670,35 @@ class D3kTUI {
     for (const log of newLogs) {
       if (log.id <= this.clearFromLogId) continue
 
-      const formatted = formatLogLine(log.content, isCompact)
+      const isBaseLog = this.baseLogId === log.id
+      const formatted = formatLogLine(log.content, isCompact, this.baseTimestampMs, isBaseLog)
       const logLine = new TextRenderable(this.renderer, {
         id: `log-${log.id}`,
         content: formatted,
         wrapMode: "none"
       })
+      // Disable text selection on click - only allow selection when dragging
+      logLine.selectable = false
+
+      // Add click handler to set this log's timestamp as the base
+      if (log.timestamp) {
+        const timestampMs = parseTimestampToMs(log.timestamp)
+        if (timestampMs !== null) {
+          logLine.onMouseDown = () => {
+            if (this.baseLogId === log.id) {
+              // Clicking the same log clears the base
+              this.baseTimestampMs = undefined
+              this.baseLogId = undefined
+            } else {
+              // Set this log as the new base
+              this.baseTimestampMs = timestampMs
+              this.baseLogId = log.id
+            }
+            this.refreshLogs()
+          }
+        }
+      }
+
       this.logsContainer.add(logLine)
     }
   }
