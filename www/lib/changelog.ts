@@ -10,6 +10,18 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.151",
+    date: "2026-01-20",
+    type: "minor",
+    highlights: [
+      "Add Microsoft Edge to chromium-based browser discovery (#86)",
+      "Add EXIT to TYPE_COLORS mappings in TUI and LogsClient",
+      "Distinguish graceful Chrome quit from crash in logs",
+      "Escape regex special characters in log error pattern matching"
+    ]
+  },
+
+  {
     version: "0.0.150",
     date: "2026-01-20",
     type: "minor",
