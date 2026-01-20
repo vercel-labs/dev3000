@@ -6,14 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.0.149] - 2026-01-20
 
-**Patch Release**
+**Feature Release**
 
-- Fix "Waiting for d3k MCP server..." message persisting in agent pane after startup
-- Fix ASCII logo "d" character missing color in TUI
-- Fix escape code sequences appearing in --no-agent mode
-- Fix mouse tracking escape codes flooding terminal after Ctrl+C quit
-- Fix terminal detection message leaking to stdout
-- Suppress OpenTUI diagnostic output for cleaner terminal
+- Fix agent pane showing stale "Waiting for d3k MCP server..." message
+- Add framework to CLI telemetry
+- Add CLI telemetry and fix TUI rendering issues
+- Remove fix_my_jank MCP tool alias to save tokens
+- Fix skill name extraction to use SKILL.md frontmatter name field
 
 ## [0.0.148] - 2026-01-15
 

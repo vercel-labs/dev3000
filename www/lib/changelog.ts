@@ -10,6 +10,19 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.149",
+    date: "2026-01-20",
+    type: "minor",
+    highlights: [
+      "Fix agent pane showing stale \"Waiting for d3k MCP server...\" message",
+      "Add framework to CLI telemetry",
+      "Add CLI telemetry and fix TUI rendering issues",
+      "Remove fix_my_jank MCP tool alias to save tokens",
+      "Fix skill name extraction to use SKILL.md frontmatter name field"
+    ]
+  },
+
+  {
     version: "0.0.148",
     date: "2026-01-15",
     type: "minor",

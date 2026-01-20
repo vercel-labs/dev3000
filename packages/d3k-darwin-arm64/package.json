@@ -1,6 +1,6 @@
 {
   "name": "@d3k/darwin-arm64",
-  "version": "0.0.149-canary",
+  "version": "0.0.149",
   "description": "d3k binary for macOS ARM64 (Apple Silicon)",
   "os": [
     "darwin"
