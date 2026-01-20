@@ -4,6 +4,17 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.149] - 2026-01-20
+
+**Patch Release**
+
+- Fix "Waiting for d3k MCP server..." message persisting in agent pane after startup
+- Fix ASCII logo "d" character missing color in TUI
+- Fix escape code sequences appearing in --no-agent mode
+- Fix mouse tracking escape codes flooding terminal after Ctrl+C quit
+- Fix terminal detection message leaking to stdout
+- Suppress OpenTUI diagnostic output for cleaner terminal
+
 ## [0.0.148] - 2026-01-15
 
 **Feature Release**
