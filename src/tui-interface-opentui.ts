@@ -136,7 +136,11 @@ function formatLogLine(content: string, isCompact: boolean, baseTimestampMs?: nu
 
     // Build styled timestamp based on mode
     const styledTimestamp =
-      timestampMode === 2 ? bold(fg(DELTA_COLOR)(displayTimestamp)) : timestampMode === 1 ? fg(DELTA_COLOR)(displayTimestamp) : dim(displayTimestamp)
+      timestampMode === 2
+        ? bold(fg(DELTA_COLOR)(displayTimestamp))
+        : timestampMode === 1
+          ? fg(DELTA_COLOR)(displayTimestamp)
+          : dim(displayTimestamp)
 
     if (isCompact) {
       const sourceChar = source.charAt(0)
