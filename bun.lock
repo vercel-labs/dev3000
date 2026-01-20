@@ -37,8 +37,8 @@
         "vitest": "^3.2.4",
       },
       "optionalDependencies": {
-        "@d3k/darwin-arm64": "0.0.150-canary",
-        "@d3k/linux-x64": "0.0.150-canary",
+        "@d3k/darwin-arm64": "0.0.151-canary",
+        "@d3k/linux-x64": "0.0.151-canary",
         "@opentui/core-linux-x64": "^0.1.71",
       },
     },
@@ -60,6 +60,7 @@
         "pngjs": "^7.0.0",
         "react": "19.3.0-canary-09f05694-20251201",
         "react-dom": "19.3.0-canary-09f05694-20251201",
+        "styled-jsx": "5.1.6",
         "tailwind-merge": "^2.6.0",
         "ws": "^8.18.3",
         "zod": "^3.22.4",
