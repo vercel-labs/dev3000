@@ -28,14 +28,16 @@ const TELEMETRY_API_URL = "https://dev3000.ai/api/version"
 // Session tracking for telemetry
 let sessionId: string | null = null
 let sessionStartTime: number | null = null
+let sessionFramework: string | null = null
 
 /**
  * Initialize a new telemetry session
  * Call this once at CLI startup
  */
-export function initTelemetrySession(): { sessionId: string; startTime: number } {
+export function initTelemetrySession(framework?: string): { sessionId: string; startTime: number } {
   sessionId = randomUUID()
   sessionStartTime = Date.now()
+  sessionFramework = framework || null
   return { sessionId, startTime: sessionStartTime }
 }
 
@@ -67,7 +69,8 @@ export async function sendSessionEndTelemetry(): Promise<void> {
         sid: sessionId,
         os: platform(),
         v: currentVersion,
-        d: duration
+        d: duration,
+        fw: sessionFramework
       }),
       signal: controller.signal
     })
@@ -165,6 +168,9 @@ export async function fetchLatestVersion(): Promise<string | null> {
       url.searchParams.set("sid", sessionId)
       url.searchParams.set("os", platform())
       url.searchParams.set("v", getCurrentVersion())
+      if (sessionFramework) {
+        url.searchParams.set("fw", sessionFramework)
+      }
     }
 
     const response = await fetch(url.toString(), {

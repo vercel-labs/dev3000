@@ -1371,7 +1371,7 @@ export class DevEnvironment {
     }
 
     // Initialize telemetry session (used by version check)
-    initTelemetrySession()
+    initTelemetrySession(this.options.framework)
 
     // Check if TUI mode is enabled (default) and stdin supports it
     const canUseTUI = this.options.tui && process.stdin.isTTY

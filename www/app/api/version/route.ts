@@ -39,12 +39,14 @@ async function getLatestVersionFromNpm(): Promise<string | null> {
  * - sid: Session ID (UUID)
  * - os: Operating system (darwin, linux, win32)
  * - v: CLI version
+ * - fw: Framework (nextjs, svelte, other)
  */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const sid = searchParams.get("sid")
   const os = searchParams.get("os")
   const v = searchParams.get("v")
+  const fw = searchParams.get("fw")
 
   // Always fetch and return the latest version (core functionality)
   const latestVersion = await getLatestVersionFromNpm()
@@ -52,7 +54,7 @@ export async function GET(request: Request) {
   // Track CLI start event if telemetry params are present
   if (sid && os && v) {
     // Fire-and-forget - don't await, don't let failures affect response
-    track("cli_start", { sid, os, v }).catch(() => {
+    track("cli_start", { sid, os, v, fw: fw || "unknown" }).catch(() => {
       // Silently ignore tracking errors
     })
   }
@@ -72,11 +74,12 @@ export async function GET(request: Request) {
  * - os: Operating system
  * - v: CLI version
  * - d: Duration in seconds
+ * - fw: Framework (optional)
  */
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { sid, os, v, d } = body
+    const { sid, os, v, d, fw } = body
 
     // Validate required fields
     if (!sid || !os || !v || typeof d !== "number") {
@@ -92,7 +95,8 @@ export async function POST(request: Request) {
       sid,
       os,
       v,
-      duration: Math.round(duration)
+      duration: Math.round(duration),
+      fw: fw || "unknown"
     })
 
     return Response.json({ success: true })
