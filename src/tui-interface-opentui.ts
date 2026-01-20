@@ -47,7 +47,7 @@ const NEXTJS_MCP_404_REGEX = /(?:\[POST\]|POST)\s+\/_next\/mcp\b[^\n]*\b404\b/i
 const COMPACT_LOGO = "d3k"
 
 // Full ASCII logo lines
-const FULL_LOGO = ["   ▐▌▄▄▄▄ █  ▄ ", "   ▐▌   █ █▄▀  ", "▗╞▀▜▌▀▀▀█ █ ▀▄ ", "▝▚▄▟▌▄▄▄█ █  █ "]
+const FULL_LOGO = ["   ▐▌▄▄▄▄ █  ▄ ", "   ▐▌   █ █▄▀  ", "▗▞▀▜▌▀▀▀█ █ ▀▄ ", "▝▚▄▟▌▄▄▄█ █  █ "]
 
 // Brand purple color
 const BRAND_PURPLE = "#A18CE5"
@@ -171,28 +171,42 @@ class D3kTUI {
       useAlternateScreen: true
     }
 
-    // Temporarily suppress stdout/stderr during renderer creation to hide OpenTUI's
-    // terminal detection messages (e.g., "info(terminal): Terminal detect...")
-    const originalStdoutWrite = process.stdout.write.bind(process.stdout)
-    const originalStderrWrite = process.stderr.write.bind(process.stderr)
-    process.stdout.write = () => true
-    process.stderr.write = () => true
-    try {
-      this.renderer = await createCliRenderer(config)
-    } finally {
-      process.stdout.write = originalStdoutWrite
-      process.stderr.write = originalStderrWrite
+    // Filter out OpenTUI's terminal detection messages from stdout and stderr
+    // These messages like "info(terminal): Terminal detected..." interfere with TUI rendering
+    const createFilteredWrite = (originalWrite: typeof process.stdout.write) => {
+      return function (
+        this: NodeJS.WriteStream,
+        chunk: string | Uint8Array,
+        encodingOrCallback?: BufferEncoding | ((err?: Error | null) => void),
+        callback?: (err?: Error | null) => void
+      ): boolean {
+        const str = typeof chunk === "string" ? chunk : chunk.toString()
+        if (str.includes("info(terminal)") || str.includes("Terminal detected")) {
+          return true // Silently ignore
+        }
+        if (typeof encodingOrCallback === "function") {
+          return originalWrite(chunk, encodingOrCallback)
+        }
+        return originalWrite(chunk, encodingOrCallback, callback)
+      } as typeof process.stdout.write
     }
 
-    // Setup UI after renderer is created and stdout is restored
+    const originalStdoutWrite = process.stdout.write.bind(process.stdout)
+    const originalStderrWrite = process.stderr.write.bind(process.stderr)
+    process.stdout.write = createFilteredWrite(originalStdoutWrite)
+    process.stderr.write = createFilteredWrite(originalStderrWrite)
+
+    this.renderer = await createCliRenderer(config)
+
+    // Setup UI after renderer is created
     this.setupUI()
     this.setupKeyboardHandlers()
     this.startLogFileWatcher()
     this.renderer.start()
 
-    // Explicitly clear alternate screen to remove any stale content
-    // (e.g., "Waiting for d3k MCP server..." message from tmux setup)
+    // Force a redraw after start to ensure borders render correctly
     process.stdout.write("\x1b[2J\x1b[H")
+    this.rebuildUI()
 
     return {
       app: { unmount: () => this.shutdown() },
@@ -684,8 +698,20 @@ class D3kTUI {
       this.renderer.destroy()
       this.renderer = null
     }
-    // Clear screen
-    process.stdout.write("\x1b[2J\x1b[H\x1b[3J")
+    // Explicitly reset terminal state:
+    // - Disable mouse tracking modes (SGR, all motion, cell motion, basic)
+    // - Exit alternate screen buffer
+    // - Clear screen and scrollback
+    // - Show cursor
+    process.stdout.write(
+      "\x1b[?1006l" + // Disable SGR extended mouse mode
+        "\x1b[?1003l" + // Disable all motion tracking
+        "\x1b[?1002l" + // Disable cell motion tracking
+        "\x1b[?1000l" + // Disable basic mouse tracking
+        "\x1b[?1049l" + // Exit alternate screen buffer
+        "\x1b[2J\x1b[H\x1b[3J" + // Clear screen and scrollback
+        "\x1b[?25h" // Show cursor
+    )
   }
 }
 

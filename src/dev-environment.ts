@@ -26,7 +26,12 @@ import { DevTUI } from "./tui-interface.js"
 import { formatMcpConfigTargets, MCP_CONFIG_TARGETS, type McpConfigTarget } from "./utils/mcp-configs.js"
 import { getProjectDir, getProjectDisplayName, getProjectName } from "./utils/project-name.js"
 import { formatTimestamp } from "./utils/timestamp.js"
-import { checkForUpdates, performUpgradeAsync } from "./utils/version-check.js"
+import {
+  checkForUpdates,
+  initTelemetrySession,
+  performUpgradeAsync,
+  sendSessionEndTelemetry
+} from "./utils/version-check.js"
 
 // Declare the compile-time injected version (set by bun build --define)
 declare const __D3K_VERSION__: string | undefined
@@ -1364,6 +1369,9 @@ export class DevEnvironment {
       console.error(chalk.yellow(`   If you're sure no other instance is running, remove: ${this.lockFile}`))
       process.exit(1)
     }
+
+    // Initialize telemetry session (used by version check)
+    initTelemetrySession()
 
     // Check if TUI mode is enabled (default) and stdin supports it
     const canUseTUI = this.options.tui && process.stdin.isTTY
@@ -2984,6 +2992,9 @@ export class DevEnvironment {
   private async handleShutdown() {
     // Stop health monitoring
     this.stopHealthCheck()
+
+    // Send session end telemetry (fire-and-forget, won't block shutdown)
+    sendSessionEndTelemetry().catch(() => {})
 
     // Release the lock file
     this.releaseLock()

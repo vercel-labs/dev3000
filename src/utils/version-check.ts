@@ -1,6 +1,7 @@
 import { execSync, spawnSync } from "child_process"
+import { randomUUID } from "crypto"
 import { existsSync, readFileSync, writeFileSync } from "fs"
-import { homedir } from "os"
+import { homedir, platform } from "os"
 import { dirname, join } from "path"
 import { fileURLToPath } from "url"
 
@@ -20,6 +21,62 @@ interface CachedVersionInfo {
 }
 
 const CACHE_TTL_MS = 1000 * 60 * 60 // 1 hour cache
+
+// Telemetry API endpoint
+const TELEMETRY_API_URL = "https://dev3000.ai/api/version"
+
+// Session tracking for telemetry
+let sessionId: string | null = null
+let sessionStartTime: number | null = null
+
+/**
+ * Initialize a new telemetry session
+ * Call this once at CLI startup
+ */
+export function initTelemetrySession(): { sessionId: string; startTime: number } {
+  sessionId = randomUUID()
+  sessionStartTime = Date.now()
+  return { sessionId, startTime: sessionStartTime }
+}
+
+/**
+ * Get current session info (returns null if not initialized)
+ */
+export function getTelemetrySession(): { sessionId: string; startTime: number } | null {
+  if (!sessionId || !sessionStartTime) return null
+  return { sessionId, startTime: sessionStartTime }
+}
+
+/**
+ * Send session end telemetry (fire-and-forget with short timeout)
+ */
+export async function sendSessionEndTelemetry(): Promise<void> {
+  if (!sessionId || !sessionStartTime) return
+
+  const duration = Math.round((Date.now() - sessionStartTime) / 1000) // seconds
+  const currentVersion = getCurrentVersion()
+
+  try {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 2000) // 2 second timeout
+
+    await fetch(TELEMETRY_API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sid: sessionId,
+        os: platform(),
+        v: currentVersion,
+        d: duration
+      }),
+      signal: controller.signal
+    })
+
+    clearTimeout(timeout)
+  } catch {
+    // Silently ignore - telemetry should never affect CLI behavior
+  }
+}
 
 /**
  * Get the cache file path for version info
@@ -88,7 +145,7 @@ export function getCurrentVersion(): string {
 }
 
 /**
- * Fetch the latest version from npm registry (non-blocking)
+ * Fetch the latest version from our API (with telemetry) or npm registry as fallback
  */
 export async function fetchLatestVersion(): Promise<string | null> {
   // Check cache first
@@ -97,6 +154,36 @@ export async function fetchLatestVersion(): Promise<string | null> {
     return cached
   }
 
+  // Try our API first (includes telemetry tracking)
+  try {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 3000)
+
+    // Build URL with telemetry params if session is active
+    const url = new URL(TELEMETRY_API_URL)
+    if (sessionId) {
+      url.searchParams.set("sid", sessionId)
+      url.searchParams.set("os", platform())
+      url.searchParams.set("v", getCurrentVersion())
+    }
+
+    const response = await fetch(url.toString(), {
+      signal: controller.signal
+    })
+    clearTimeout(timeout)
+
+    if (response.ok) {
+      const data = await response.json()
+      if (data.version) {
+        writeCachedVersion(data.version)
+        return data.version
+      }
+    }
+  } catch {
+    // Our API failed, fall through to npm fallback
+  }
+
+  // Fallback to npm directly (no telemetry)
   try {
     // Use npm view with a short timeout
     const result = execSync("npm view dev3000 version 2>/dev/null", {
