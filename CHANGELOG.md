@@ -4,6 +4,14 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.151] - 2026-01-20
+
+**Bug Fix Release**
+
+- Fix crash when log lines contain regex metacharacters in error analysis (thanks @kevintraver, #83)
+- Distinguish graceful Chrome quit from crash in logs - shows `[EXIT]` instead of `[CRASH]` when user quits normally (thanks @kevintraver, #84)
+- Add Microsoft Edge to chromium-based browser discovery (#86)
+
 ## [0.0.150] - 2026-01-20
 
 **Feature Release**
