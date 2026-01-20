@@ -95,7 +95,8 @@ describe("tmux-helpers", () => {
       const commands = generateTmuxCommands(baseConfig)
       expect(commands[9]).toContain("echo Waiting for d3k MCP server...")
       expect(commands[9]).toContain("curl -sf http://localhost:3684/")
-      expect(commands[9]).toContain("; claude")
+      // Should clear screen after polling, then start agent
+      expect(commands[9]).toContain("clear; claude")
     })
 
     it("should set pane-focus-in hook with window flag to resize on click", () => {

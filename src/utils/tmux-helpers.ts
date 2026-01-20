@@ -31,7 +31,8 @@ function generateMcpPollingCommand(mcpPort: number, agentCommand: string): strin
   // Use a for loop with explicit counter (more portable and robust than 'until')
   // Wait up to 60 seconds for MCP server to be ready
   // Note: Variables must be escaped with \\ to survive bash -c quoting layers
-  return `echo Waiting for d3k MCP server...; i=0; while [ \\$i -lt 60 ]; do curl -sf http://localhost:${mcpPort}/ >/dev/null 2>&1 && break; sleep 1; i=\\$((i+1)); done; ${agentCommand}`
+  // Clear screen after polling completes to remove "Waiting..." message before agent starts
+  return `echo Waiting for d3k MCP server...; i=0; while [ \\$i -lt 60 ]; do curl -sf http://localhost:${mcpPort}/ >/dev/null 2>&1 && break; sleep 1; i=\\$((i+1)); done; clear; ${agentCommand}`
 }
 
 /**
