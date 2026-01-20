@@ -303,7 +303,8 @@ export class CDPMonitor {
             "chrome",
             "chromium",
             "/Applications/Arc.app/Contents/MacOS/Arc",
-            "/Applications/Comet.app/Contents/MacOS/Comet"
+            "/Applications/Comet.app/Contents/MacOS/Comet",
+            "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"
           ]
 
       const browserType = this.browserPath ? "custom browser" : "Chrome"
