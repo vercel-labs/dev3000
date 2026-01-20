@@ -14,7 +14,7 @@ export const changelog: Release[] = [
     date: "2026-01-20",
     type: "minor",
     highlights: [
-      "Fix agent pane showing stale \"Waiting for d3k MCP server...\" message",
+      'Fix agent pane showing stale "Waiting for d3k MCP server..." message',
       "Add framework to CLI telemetry",
       "Add CLI telemetry and fix TUI rendering issues",
       "Remove fix_my_jank MCP tool alias to save tokens",
