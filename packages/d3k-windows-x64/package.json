@@ -1,0 +1,26 @@
+{
+  "name": "@d3k/windows-x64",
+  "version": "0.0.152",
+  "description": "d3k binary for Windows x64",
+  "os": [
+    "win32"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "bin": {
+    "dev3000": "./bin/dev3000.exe"
+  },
+  "files": [
+    "bin/",
+    "mcp-server/",
+    "skills/",
+    "src/"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vercel-labs/dev3000.git"
+  },
+  "author": "Lindsey Simon <lindsey@vercel.com>",
+  "license": "MIT"
+}

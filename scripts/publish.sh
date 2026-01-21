@@ -47,6 +47,7 @@ fi
 # Verify platform package binaries exist (built by release.sh)
 DARWIN_ARM64_PKG_DIR="$ROOT_DIR/packages/d3k-darwin-arm64"
 LINUX_X64_PKG_DIR="$ROOT_DIR/packages/d3k-linux-x64"
+WINDOWS_X64_PKG_DIR="$ROOT_DIR/packages/d3k-windows-x64"
 
 if [ ! -d "$DARWIN_ARM64_PKG_DIR/bin" ] || [ ! -d "$DARWIN_ARM64_PKG_DIR/mcp-server" ]; then
   echo "❌ darwin-arm64 package binaries not found at $DARWIN_ARM64_PKG_DIR"
@@ -60,14 +61,21 @@ if [ ! -d "$LINUX_X64_PKG_DIR/bin" ] || [ ! -d "$LINUX_X64_PKG_DIR/mcp-server" ]
   exit 1
 fi
 
-echo "✅ Found platform package binaries (darwin-arm64, linux-x64)"
+if [ ! -d "$WINDOWS_X64_PKG_DIR/bin" ] || [ ! -d "$WINDOWS_X64_PKG_DIR/mcp-server" ]; then
+  echo "❌ windows-x64 package binaries not found at $WINDOWS_X64_PKG_DIR"
+  echo "💡 Run ./scripts/release.sh first to build binaries."
+  exit 1
+fi
+
+echo "✅ Found platform package binaries (darwin-arm64, linux-x64, windows-x64)"
 
 # Confirm publication
 echo ""
 echo "🚀 Ready to publish:"
 echo "   1. @d3k/darwin-arm64@$CURRENT_VERSION (platform binary)"
 echo "   2. @d3k/linux-x64@$CURRENT_VERSION (platform binary)"
-echo "   3. dev3000@$CURRENT_VERSION (main package)"
+echo "   3. @d3k/windows-x64@$CURRENT_VERSION (platform binary)"
+echo "   4. dev3000@$CURRENT_VERSION (main package)"
 read -p "Continue? (y/N): " -n 1 -r
 echo
 if [[ ! $REPLY =~ ^[Yy]$ ]]; then
@@ -88,6 +96,12 @@ npm publish --access public
 cd "$ROOT_DIR"
 echo "✅ Published @d3k/linux-x64@$CURRENT_VERSION"
 
+echo "📦 Publishing @d3k/windows-x64@$CURRENT_VERSION..."
+cd "$WINDOWS_X64_PKG_DIR"
+npm publish --access public
+cd "$ROOT_DIR"
+echo "✅ Published @d3k/windows-x64@$CURRENT_VERSION"
+
 # Publish main package
 echo "📦 Publishing dev3000@$CURRENT_VERSION..."
 npm publish --access public
@@ -106,7 +120,7 @@ npm version $NEXT_CANARY_VERSION --no-git-tag-version
 # Update platform package.json files to canary version too
 node -e "
   const fs = require('fs');
-  ['$DARWIN_ARM64_PKG_DIR', '$LINUX_X64_PKG_DIR'].forEach(dir => {
+  ['$DARWIN_ARM64_PKG_DIR', '$LINUX_X64_PKG_DIR', '$WINDOWS_X64_PKG_DIR'].forEach(dir => {
     const pkgPath = dir + '/package.json';
     const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
     pkg.version = '$NEXT_CANARY_VERSION';
@@ -122,6 +136,7 @@ node -e "
   pkg.optionalDependencies = pkg.optionalDependencies || {};
   pkg.optionalDependencies['@d3k/darwin-arm64'] = '$NEXT_CANARY_VERSION';
   pkg.optionalDependencies['@d3k/linux-x64'] = '$NEXT_CANARY_VERSION';
+  pkg.optionalDependencies['@d3k/windows-x64'] = '$NEXT_CANARY_VERSION';
   fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
 "
 
@@ -152,12 +167,22 @@ node -e "
     \"'@d3k/linux-x64@$NEXT_CANARY_VERSION'\"
   );
 
+  // Update windows-x64
+  lockfile = lockfile.replace(
+    /('@d3k\/windows-x64':\n\s+specifier: )[^\n]+(\n\s+version: )[^\n]+/,
+    \"\\\$1$NEXT_CANARY_VERSION\\\$2$NEXT_CANARY_VERSION\"
+  );
+  lockfile = lockfile.replace(
+    /'@d3k\/windows-x64@[^']+'/g,
+    \"'@d3k/windows-x64@$NEXT_CANARY_VERSION'\"
+  );
+
   fs.writeFileSync('bun.lock', lockfile);
   console.log('✅ Updated bun.lock');
 "
 
 # Commit and push canary version
-git add package.json packages/d3k-darwin-arm64/package.json packages/d3k-linux-x64/package.json bun.lock
+git add package.json packages/d3k-darwin-arm64/package.json packages/d3k-linux-x64/package.json packages/d3k-windows-x64/package.json bun.lock
 git commit -m "Bump to v$NEXT_CANARY_VERSION for local development
 
 🤖 Generated with [Claude Code](https://claude.ai/code)
@@ -166,5 +191,5 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 git push origin main
 
 echo "🎉 Publication completed successfully!"
-echo "📦 Published: dev3000@$CURRENT_VERSION + @d3k/darwin-arm64@$CURRENT_VERSION + @d3k/linux-x64@$CURRENT_VERSION"
+echo "📦 Published: dev3000@$CURRENT_VERSION + @d3k/darwin-arm64@$CURRENT_VERSION + @d3k/linux-x64@$CURRENT_VERSION + @d3k/windows-x64@$CURRENT_VERSION"
 echo "🧪 Local development now on: v$NEXT_CANARY_VERSION"

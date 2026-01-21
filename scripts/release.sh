@@ -49,6 +49,7 @@ node -e "
     pkg.optionalDependencies = pkg.optionalDependencies || {};
     pkg.optionalDependencies['@d3k/darwin-arm64'] = '$NEXT_VERSION';
     pkg.optionalDependencies['@d3k/linux-x64'] = '$NEXT_VERSION';
+    pkg.optionalDependencies['@d3k/windows-x64'] = '$NEXT_VERSION';
     fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
 "
 
@@ -56,7 +57,7 @@ node -e "
 echo "⬆️ Updating platform package versions to $NEXT_VERSION..."
 node -e "
     const fs = require('fs');
-    ['packages/d3k-darwin-arm64/package.json', 'packages/d3k-linux-x64/package.json'].forEach(pkgPath => {
+    ['packages/d3k-darwin-arm64/package.json', 'packages/d3k-linux-x64/package.json', 'packages/d3k-windows-x64/package.json'].forEach(pkgPath => {
         const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
         pkg.version = '$NEXT_VERSION';
         fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
@@ -90,6 +91,16 @@ node -e "
         \"'@d3k/linux-x64@$NEXT_VERSION'\"
     );
 
+    // Update windows-x64
+    lockfile = lockfile.replace(
+        /('@d3k\/windows-x64':\n\s+specifier: )[^\n]+(\n\s+version: )[^\n]+/,
+        \"\\\$1$NEXT_VERSION\\\$2$NEXT_VERSION\"
+    );
+    lockfile = lockfile.replace(
+        /'@d3k\/windows-x64@[^']+'/g,
+        \"'@d3k/windows-x64@$NEXT_VERSION'\"
+    );
+
     fs.writeFileSync('bun.lock', lockfile);
     console.log('✅ Updated bun.lock');
 "
@@ -118,6 +129,15 @@ cp -r "$LINUX_X64_DIST_DIR/bin" "$LINUX_X64_PKG_DIR/"
 cp -r "$LINUX_X64_DIST_DIR/mcp-server" "$LINUX_X64_PKG_DIR/"
 cp -r "$LINUX_X64_DIST_DIR/skills" "$LINUX_X64_PKG_DIR/"
 cp -r "$LINUX_X64_DIST_DIR/src" "$LINUX_X64_PKG_DIR/"
+
+# windows-x64
+WINDOWS_X64_PKG_DIR="packages/d3k-windows-x64"
+WINDOWS_X64_DIST_DIR="dist-bin/d3k-windows-x64"
+rm -rf "$WINDOWS_X64_PKG_DIR/bin" "$WINDOWS_X64_PKG_DIR/mcp-server" "$WINDOWS_X64_PKG_DIR/skills" "$WINDOWS_X64_PKG_DIR/src"
+cp -r "$WINDOWS_X64_DIST_DIR/bin" "$WINDOWS_X64_PKG_DIR/"
+cp -r "$WINDOWS_X64_DIST_DIR/mcp-server" "$WINDOWS_X64_PKG_DIR/"
+cp -r "$WINDOWS_X64_DIST_DIR/skills" "$WINDOWS_X64_PKG_DIR/"
+cp -r "$WINDOWS_X64_DIST_DIR/src" "$WINDOWS_X64_PKG_DIR/"
 
 echo "✅ Binaries ready for publishing"
 
@@ -174,7 +194,7 @@ bunx tsx scripts/generate-changelog-md.ts
 
 # Commit version change and changelog
 echo "📝 Committing version change and changelog..."
-git add package.json packages/d3k-darwin-arm64/package.json packages/d3k-linux-x64/package.json mcp-server/package.json www/package.json www/lib/changelog.ts CHANGELOG.md bun.lock
+git add package.json packages/d3k-darwin-arm64/package.json packages/d3k-linux-x64/package.json packages/d3k-windows-x64/package.json mcp-server/package.json www/package.json www/lib/changelog.ts CHANGELOG.md bun.lock
 git commit -m "Release v$NEXT_VERSION
 
 🤖 Generated with [Claude Code](https://claude.ai/code)
