@@ -61,6 +61,18 @@ describe("OutputProcessor with Next.js Log Detection", () => {
     expect(refreshResult[0].isCritical).toBeUndefined()
   })
 
+  it("should not prefix non-critical stderr with ERROR: (issue #80 - turbo banner)", () => {
+    // Turbo outputs its banner to stderr, which should not be labeled as error
+    const turboResult = processor.process("• turbo 2.7.4", true)
+    expect(turboResult[0].isCritical).toBeUndefined()
+    expect(turboResult[0].formatted).toBe("• turbo 2.7.4") // No ERROR: prefix
+
+    // Informational messages on stderr should not get ERROR: prefix
+    const infoResult = processor.process("Running dev in 8 packages", true)
+    expect(infoResult[0].isCritical).toBeUndefined()
+    expect(infoResult[0].formatted).toBe("Running dev in 8 packages") // No ERROR: prefix
+  })
+
   it("should handle multiple lines of output", () => {
     const result = processor.process("Line 1\nLine 2\nLine 3", false)
 

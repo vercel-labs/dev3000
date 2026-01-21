@@ -40,9 +40,9 @@ export class OutputProcessor {
       // For error output, check if it's critical
       const isCritical = isError && this.errorDetector.isCritical(line.message)
 
-      // Build the log entry
+      // Build the log entry - only label truly critical errors, not all stderr
       const entry: LogEntry = {
-        formatted: isError ? `ERROR: ${line.formatted}` : line.formatted
+        formatted: isCritical ? `ERROR: ${line.formatted}` : line.formatted
       }
 
       // Add critical error information if applicable

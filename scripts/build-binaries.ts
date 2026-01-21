@@ -26,7 +26,8 @@ function getPackageVersion(): string {
 // Target platforms
 const TARGETS = [
   { os: "darwin", arch: "arm64", name: "d3k-darwin-arm64" },
-  { os: "linux", arch: "x64", name: "d3k-linux-x64" }
+  { os: "linux", arch: "x64", name: "d3k-linux-x64" },
+  { os: "windows", arch: "x64", name: "d3k-windows-x64" }
 ] as const
 
 async function cleanDistBin() {
@@ -54,6 +55,7 @@ async function compileForTarget(target: (typeof TARGETS)[number]) {
   const binDir = join(targetDir, "bin")
   const bunTarget = `bun-${target.os}-${target.arch}`
   const version = getPackageVersion()
+  const isWindows = target.os === "windows"
 
   console.log(`\n🔨 Compiling for ${bunTarget} (v${version})...`)
 
@@ -63,7 +65,8 @@ async function compileForTarget(target: (typeof TARGETS)[number]) {
   // Use bun build --compile to create standalone binary
   // Note: We compile the TypeScript directly, Bun handles transpilation
   const entrypoint = join(ROOT_DIR, "src", "cli.ts")
-  const outputBinary = join(binDir, "dev3000")
+  // Windows binaries need .exe extension
+  const outputBinary = join(binDir, isWindows ? "dev3000.exe" : "dev3000")
 
   try {
     // Use --define to inject the version at compile time
@@ -98,10 +101,13 @@ async function compileForTarget(target: (typeof TARGETS)[number]) {
     cpSync(nodeModules, join(mcpDest, "node_modules"), { recursive: true, dereference: true })
 
     // Fix executable permissions on .bin directory (lost when dereferencing symlinks)
-    const binDir = join(mcpDest, "node_modules", ".bin")
-    if (existsSync(binDir)) {
-      console.log("🔧 Fixing .bin permissions...")
-      await $`chmod +x ${binDir}/*`
+    // Skip on Windows as chmod doesn't apply
+    if (!isWindows) {
+      const mcpBinDir = join(mcpDest, "node_modules", ".bin")
+      if (existsSync(mcpBinDir)) {
+        console.log("🔧 Fixing .bin permissions...")
+        await $`chmod +x ${mcpBinDir}/*`
+      }
     }
   }
 

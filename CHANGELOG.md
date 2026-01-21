@@ -4,6 +4,12 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+- Add Windows x64 binary support (#20)
+- Fix Turbo banner incorrectly labeled as ERROR in TUI (#80)
+- Add styled-jsx as direct dependency to fix MCP server startup (#87)
+
 ## [0.0.151] - 2026-01-20
 
 **Feature Release**

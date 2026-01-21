@@ -21,6 +21,7 @@ const require = createRequire(import.meta.url)
 const PLATFORMS = {
   "darwin-arm64": "@d3k/darwin-arm64",
   "linux-x64": "@d3k/linux-x64",
+  "win32-x64": "@d3k/windows-x64",
   // "darwin-x64": "@d3k/darwin-x64",  // Add later
   // "linux-arm64": "@d3k/linux-arm64", // Add later
 }
@@ -31,21 +32,25 @@ function findBinary() {
 
   if (!pkgName) {
     console.error(`\n  Unsupported platform: ${key}`)
-    console.error(`  Currently supported platforms: macOS ARM64 (Apple Silicon), Linux x64`)
+    console.error(`  Currently supported platforms: macOS ARM64 (Apple Silicon), Linux x64, Windows x64`)
     console.error(`\n  For other platforms, please open an issue at:`)
     console.error(`  https://github.com/vercel-labs/dev3000/issues\n`)
     process.exit(1)
   }
 
+  // Windows binaries have .exe extension
+  const isWindows = platform() === "win32"
+  const binaryName = isWindows ? "dev3000.exe" : "dev3000"
+
   // Try to find the binary in node_modules
   // It could be in the local node_modules or a parent directory
   const possiblePaths = [
     // Installed as a dependency
-    join(__dirname, "..", "node_modules", pkgName, "bin", "dev3000"),
+    join(__dirname, "..", "node_modules", pkgName, "bin", binaryName),
     // Installed globally (npm)
-    join(__dirname, "..", "..", pkgName, "bin", "dev3000"),
+    join(__dirname, "..", "..", pkgName, "bin", binaryName),
     // Installed globally (pnpm)
-    join(__dirname, "..", "node_modules", ".pnpm", `${pkgName}@*`, "node_modules", pkgName, "bin", "dev3000"),
+    join(__dirname, "..", "node_modules", ".pnpm", `${pkgName}@*`, "node_modules", pkgName, "bin", binaryName),
   ]
 
   for (const binPath of possiblePaths) {
@@ -58,7 +63,7 @@ function findBinary() {
   try {
     const pkgPath = require.resolve(`${pkgName}/package.json`)
     const pkgDir = join(pkgPath, "..")
-    const binPath = join(pkgDir, "bin", "dev3000")
+    const binPath = join(pkgDir, "bin", binaryName)
     if (existsSync(binPath)) {
       return binPath
     }
