@@ -31,10 +31,19 @@ let sessionStartTime: number | null = null
 let sessionFramework: string | null = null
 
 /**
+ * Check if this is a canary version (skip telemetry for local testing)
+ */
+function isCanaryVersion(): boolean {
+  return getCurrentVersion().includes("-canary")
+}
+
+/**
  * Initialize a new telemetry session
  * Call this once at CLI startup
+ * Skips telemetry for canary versions
  */
-export function initTelemetrySession(framework?: string): { sessionId: string; startTime: number } {
+export function initTelemetrySession(framework?: string): { sessionId: string; startTime: number } | null {
+  if (isCanaryVersion()) return null
   sessionId = randomUUID()
   sessionStartTime = Date.now()
   sessionFramework = framework || null
