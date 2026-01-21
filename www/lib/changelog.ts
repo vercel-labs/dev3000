@@ -10,6 +10,17 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.152",
+    date: "2026-01-21",
+    type: "minor",
+    highlights: [
+      "Add Windows x64 support and fix Turbo stderr labeling",
+      "Fix timestamp delta feature display issues",
+      "Add styled-jsx as direct dependency to fix MCP server startup"
+    ]
+  },
+
+  {
     version: "0.0.151",
     date: "2026-01-20",
     type: "minor",
