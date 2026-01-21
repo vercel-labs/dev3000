@@ -4,6 +4,12 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.153] - 2026-01-21
+
+**Feature Release**
+
+- Add Windows x64 to release and publish scripts
+
 ## [0.0.152] - 2026-01-21
 
 **Feature Release**
