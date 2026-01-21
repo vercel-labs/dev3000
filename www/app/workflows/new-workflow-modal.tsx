@@ -665,15 +665,15 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-card rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto border border-border">
         <div className="p-6">
           <div className="flex justify-between items-start mb-6">
-            <h2 className="text-2xl font-bold text-gray-900">New d3k Workflow</h2>
+            <h2 className="text-2xl font-bold text-foreground">New d3k Workflow</h2>
             <button
               type="button"
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600"
+              className="text-muted-foreground hover:text-foreground"
               aria-label="Close modal"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -694,7 +694,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                         : ["type", "team", "project", "options", "running"].indexOf(step) >
                             ["type", "team", "project", "options", "running"].indexOf(s)
                           ? "bg-green-600 text-white"
-                          : "bg-gray-200 text-gray-600"
+                          : "bg-muted text-muted-foreground"
                     }`}
                   >
                     {index + 1}
@@ -713,7 +713,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
             <div className="flex items-center mt-2">
               {["Type", "Team", "Project", "Options", "Run"].map((label, index) => (
                 <div key={label} className="flex items-center flex-1">
-                  <span className="text-xs text-gray-600 w-8 text-center">{label}</span>
+                  <span className="text-xs text-muted-foreground w-8 text-center">{label}</span>
                   {index < 4 && <div className="flex-1 mx-2" />}
                 </div>
               ))}
@@ -723,39 +723,39 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
           {/* Step 1: Select Workflow Type */}
           {step === "type" && (
             <div>
-              <h3 className="text-lg font-semibold mb-4">Select Workflow Type</h3>
+              <h3 className="text-lg font-semibold mb-4 text-foreground">Select Workflow Type</h3>
               <div className="space-y-3">
                 <Link
                   href="/workflows/new?type=cloud-fix"
-                  className="block w-full p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 text-left transition-colors"
+                  className="block w-full p-4 border-2 border-border rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
                 >
-                  <div className="font-semibold">CLS Fix</div>
-                  <div className="text-sm text-gray-600 mt-1">
+                  <div className="font-semibold text-foreground">CLS Fix</div>
+                  <div className="text-sm text-muted-foreground mt-1">
                     Detect and fix Cumulative Layout Shift issues automatically
                   </div>
                 </Link>
                 <Link
                   href="/workflows/new?type=prompt"
-                  className="block w-full p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 text-left transition-colors"
+                  className="block w-full p-4 border-2 border-border rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
                 >
-                  <div className="font-semibold">Prompt</div>
-                  <div className="text-sm text-gray-600 mt-1">Run a custom AI workflow with your own instructions</div>
+                  <div className="font-semibold text-foreground">Prompt</div>
+                  <div className="text-sm text-muted-foreground mt-1">Run a custom AI workflow with your own instructions</div>
                 </Link>
                 <Link
                   href="/workflows/new?type=design-guidelines"
-                  className="block w-full p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 text-left transition-colors"
+                  className="block w-full p-4 border-2 border-border rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
                 >
-                  <div className="font-semibold">Design Guidelines Review</div>
-                  <div className="text-sm text-gray-600 mt-1">
+                  <div className="font-semibold text-foreground">Design Guidelines Review</div>
+                  <div className="text-sm text-muted-foreground mt-1">
                     Evaluate your site against Vercel design guidelines and automatically fix issues
                   </div>
                 </Link>
                 <Link
                   href="/workflows/new?type=react-performance"
-                  className="block w-full p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 text-left transition-colors"
+                  className="block w-full p-4 border-2 border-border rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
                 >
-                  <div className="font-semibold">React Performance Review</div>
-                  <div className="text-sm text-gray-600 mt-1">
+                  <div className="font-semibold text-foreground">React Performance Review</div>
+                  <div className="text-sm text-muted-foreground mt-1">
                     Analyze React/Next.js code for performance issues and apply optimizations
                   </div>
                 </Link>
@@ -768,26 +768,26 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
           {/* Step 2: Select Team */}
           {step === "team" && (
             <div>
-              <h3 className="text-lg font-semibold mb-4">Select Team</h3>
+              <h3 className="text-lg font-semibold mb-4 text-foreground">Select Team</h3>
               {loadingTeams ? (
-                <div className="text-center py-8 text-gray-500">Loading teams...</div>
+                <div className="text-center py-8 text-muted-foreground">Loading teams...</div>
               ) : (
                 <div className="space-y-2 max-h-96 overflow-y-auto">
                   {teams.map((team) => (
                     <Link
                       key={team.id}
                       href={`/workflows/new?type=${_selectedType}&team=${team.id}`}
-                      className="block w-full p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 text-left transition-colors"
+                      className="block w-full p-4 border-2 border-border rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
                     >
-                      <div className="font-semibold">{team.name}</div>
-                      <div className="text-sm text-gray-600">
+                      <div className="font-semibold text-foreground">{team.name}</div>
+                      <div className="text-sm text-muted-foreground">
                         {team.isPersonal ? "Personal Account" : "Team"} • {team.id}
                       </div>
                     </Link>
                   ))}
                 </div>
               )}
-              <Link href="/workflows/new" className="mt-4 inline-block px-4 py-2 text-gray-600 hover:text-gray-800">
+              <Link href="/workflows/new" className="mt-4 inline-block px-4 py-2 text-muted-foreground hover:text-foreground">
                 ← Back
               </Link>
             </div>
@@ -796,9 +796,9 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
           {/* Step 3: Select Project */}
           {step === "project" && (
             <div>
-              <h3 className="text-lg font-semibold mb-4">Select Project</h3>
+              <h3 className="text-lg font-semibold mb-4 text-foreground">Select Project</h3>
               {selectedTeam && (
-                <div className="mb-4 text-sm text-gray-600">
+                <div className="mb-4 text-sm text-muted-foreground">
                   Team: <span className="font-semibold">{selectedTeam.name}</span>
                 </div>
               )}
@@ -810,9 +810,9 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                 </Alert>
               )}
               {loadingProjects ? (
-                <div className="text-center py-8 text-gray-500">Loading projects...</div>
+                <div className="text-center py-8 text-muted-foreground">Loading projects...</div>
               ) : projects.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
+                <div className="text-center py-8 text-muted-foreground">
                   {projectsError ? "Unable to load projects" : "No projects found"}
                 </div>
               ) : (
@@ -821,10 +821,10 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                     <Link
                       key={project.id}
                       href={`/workflows/new?type=${_selectedType}&team=${selectedTeam?.id}&project=${project.id}`}
-                      className="block w-full p-4 border-2 border-gray-300 rounded-lg hover:border-blue-500 hover:bg-blue-50 text-left transition-colors"
+                      className="block w-full p-4 border-2 border-border rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
                     >
-                      <div className="font-semibold">{project.name}</div>
-                      <div className="text-sm text-gray-600 mt-1">
+                      <div className="font-semibold text-foreground">{project.name}</div>
+                      <div className="text-sm text-muted-foreground mt-1">
                         {project.framework && <span className="mr-2">Framework: {project.framework}</span>}
                         {project.latestDeployments[0] && <span>Latest: {project.latestDeployments[0].url}</span>}
                       </div>
@@ -834,7 +834,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
               )}
               <Link
                 href={`/workflows/new?type=${_selectedType}`}
-                className="mt-4 inline-block px-4 py-2 text-gray-600 hover:text-gray-800"
+                className="mt-4 inline-block px-4 py-2 text-muted-foreground hover:text-foreground"
               >
                 ← Back
               </Link>
@@ -844,17 +844,17 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
           {/* Step 4: Configure Options */}
           {step === "options" && (
             <div>
-              <h3 className="text-lg font-semibold mb-4">Configure Options</h3>
+              <h3 className="text-lg font-semibold mb-4 text-foreground">Configure Options</h3>
               {!selectedProject ? (
-                <div className="text-center py-8 text-gray-500">
+                <div className="text-center py-8 text-muted-foreground">
                   <Spinner className="mx-auto mb-2" />
                   Loading project details...
                 </div>
               ) : (
                 <>
-                  <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-                    <div className="text-sm text-gray-600 mb-2">Selected Project:</div>
-                    <div className="font-semibold">{selectedProject.name}</div>
+                  <div className="mb-6 p-4 bg-muted rounded-lg">
+                    <div className="text-sm text-muted-foreground mb-2">Selected Project:</div>
+                    <div className="font-semibold text-foreground">{selectedProject.name}</div>
                   </div>
                   <div className="space-y-4">
                     <div className="flex items-center space-x-2">
@@ -873,7 +873,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                           Base Branch
                         </Label>
                         {loadingBranches ? (
-                          <div className="text-sm text-gray-500 py-2">Loading branches...</div>
+                          <div className="text-sm text-muted-foreground py-2">Loading branches...</div>
                         ) : availableBranches.length > 0 ? (
                           <>
                             <Select value={baseBranch} onValueChange={setBaseBranch}>
@@ -901,7 +901,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                               id={baseBranchId}
                               value={baseBranch}
                               onChange={(e) => setBaseBranch(e.target.value)}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                              className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground"
                               placeholder="main"
                             />
                             {branchesError && (
@@ -919,11 +919,11 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                       </div>
                     )}
                     {isCheckingProtection && (
-                      <div className="text-sm text-gray-500">Checking deployment protection...</div>
+                      <div className="text-sm text-muted-foreground">Checking deployment protection...</div>
                     )}
                     {needsBypassToken && (
                       <div>
-                        <label htmlFor={bypassTokenId} className="block text-sm font-medium text-gray-700 mb-1">
+                        <label htmlFor={bypassTokenId} className="block text-sm font-medium text-foreground mb-1">
                           Deployment Protection Bypass Token
                           <span className="text-red-500 ml-1">*</span>
                         </label>
@@ -941,11 +941,11 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                               console.log("[Bypass Token] Saved token to localStorage for project", selectedProject.id)
                             }
                           }}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md font-mono text-sm"
+                          className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground font-mono text-sm"
                           placeholder="Enter your 32-character bypass token"
                           required
                         />
-                        <p className="mt-1 text-xs text-gray-500">
+                        <p className="mt-1 text-xs text-muted-foreground">
                           This deployment is protected. Get your bypass token from{" "}
                           {selectedTeam && selectedProject ? (
                             <a
@@ -973,13 +973,13 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                       <div>
                         <label
                           htmlFor={githubPatId}
-                          className="flex items-center gap-1 text-sm font-medium text-gray-700 mb-1"
+                          className="flex items-center gap-1 text-sm font-medium text-foreground mb-1"
                         >
                           GitHub Personal Access Token
-                          <span className="text-gray-400">(optional)</span>
+                          <span className="text-muted-foreground">(optional)</span>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <button type="button" className="text-gray-400 hover:text-gray-600">
+                              <button type="button" className="text-muted-foreground hover:text-foreground">
                                 <HelpCircle className="h-4 w-4" />
                               </button>
                             </TooltipTrigger>
@@ -1020,16 +1020,16 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                               console.log("[GitHub PAT] Removed from localStorage")
                             }
                           }}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md font-mono text-sm"
+                          className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground font-mono text-sm"
                           placeholder="github_pat_xxxx or ghp_xxxx"
                         />
-                        <p className="mt-1 text-xs text-gray-500">
+                        <p className="mt-1 text-xs text-muted-foreground">
                           Required to create PRs. Stored locally in your browser.
                         </p>
                       </div>
                     )}
                     <div>
-                      <Label htmlFor={startPathId} className="block text-sm font-medium text-gray-700 mb-1">
+                      <Label htmlFor={startPathId} className="block text-sm font-medium text-foreground mb-1">
                         Start Path
                       </Label>
                       <input
@@ -1037,17 +1037,17 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                         id={startPathId}
                         value={startPath}
                         onChange={(e) => setStartPath(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md font-mono text-sm"
+                        className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground font-mono text-sm"
                         placeholder="/"
                       />
-                      <p className="mt-1 text-xs text-gray-500">
+                      <p className="mt-1 text-xs text-muted-foreground">
                         The page path to analyze for CLS (e.g., &quot;/&quot;, &quot;/about&quot;,
                         &quot;/products&quot;)
                       </p>
                     </div>
                     {_selectedType === "design-guidelines" && (
                       <div>
-                        <Label htmlFor="crawlDepth" className="block text-sm font-medium text-gray-700 mb-1">
+                        <Label htmlFor="crawlDepth" className="block text-sm font-medium text-foreground mb-1">
                           Crawl Depth
                         </Label>
                         <select
@@ -1056,21 +1056,21 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                           onChange={(e) =>
                             setCrawlDepth(e.target.value === "all" ? "all" : Number.parseInt(e.target.value, 10))
                           }
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                          className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground text-sm"
                         >
                           <option value={1}>1 - Start path only</option>
                           <option value={2}>2 - Start path + linked pages</option>
                           <option value={3}>3 - Two levels of links</option>
                           <option value="all">All - Crawl entire site</option>
                         </select>
-                        <p className="mt-1 text-xs text-gray-500">
+                        <p className="mt-1 text-xs text-muted-foreground">
                           How many pages to audit. Higher depth = more thorough but slower.
                         </p>
                       </div>
                     )}
                     {_selectedType === "prompt" && (
                       <div>
-                        <Label htmlFor={customPromptId} className="block text-sm font-medium text-gray-700 mb-1">
+                        <Label htmlFor={customPromptId} className="block text-sm font-medium text-foreground mb-1">
                           Custom Instructions
                           <span className="text-red-500 ml-1">*</span>
                         </Label>
@@ -1078,11 +1078,11 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                           id={customPromptId}
                           value={customPrompt}
                           onChange={(e) => setCustomPrompt(e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm min-h-[120px]"
+                          className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground text-sm min-h-[120px]"
                           placeholder="Describe what you want the AI to do with your codebase..."
                           required
                         />
-                        <p className="mt-1 text-xs text-gray-500">
+                        <p className="mt-1 text-xs text-muted-foreground">
                           Be specific about what changes you want. The AI will analyze your codebase and implement the
                           requested changes.
                         </p>
@@ -1092,7 +1092,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                   <div className="flex gap-3 mt-6">
                     <Link
                       href={`/workflows/new?type=${_selectedType}&team=${selectedTeam?.id}`}
-                      className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                      className="px-4 py-2 text-muted-foreground hover:text-foreground"
                     >
                       ← Back
                     </Link>
@@ -1115,7 +1115,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
           {/* Step 5: Running / Results */}
           {step === "running" && (
             <div>
-              <h3 className="text-lg font-semibold mb-4">Workflow Status</h3>
+              <h3 className="text-lg font-semibold mb-4 text-foreground">Workflow Status</h3>
               <div className="space-y-4">
                 <Alert
                   variant={
@@ -1124,7 +1124,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                   className={
                     workflowStatus.includes("Error") || workflowStatus.includes("failed")
                       ? ""
-                      : "bg-blue-50 border-blue-200"
+                      : "bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-800"
                   }
                 >
                   {workflowStatus.includes("Error") || workflowStatus.includes("failed") ? (
@@ -1134,15 +1134,15 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                   )}
                   <AlertDescription
                     className={
-                      workflowStatus.includes("Error") || workflowStatus.includes("failed") ? "" : "text-blue-900"
+                      workflowStatus.includes("Error") || workflowStatus.includes("failed") ? "" : "text-blue-900 dark:text-blue-100"
                     }
                   >
                     {workflowStatus}
                   </AlertDescription>
                 </Alert>
                 {sandboxUrl && !workflowResult && (
-                  <Alert className="bg-yellow-50 border-yellow-200">
-                    <AlertDescription className="text-yellow-900">
+                  <Alert className="bg-yellow-50 border-yellow-200 dark:bg-yellow-950 dark:border-yellow-800">
+                    <AlertDescription className="text-yellow-900 dark:text-yellow-100">
                       <span className="font-medium">Sandbox:</span>{" "}
                       <a
                         href={sandboxUrl}
@@ -1162,7 +1162,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                       <button
                         type="button"
                         onClick={onClose}
-                        className="flex-1 px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                        className="flex-1 px-4 py-2 border border-border rounded-md text-foreground hover:bg-accent"
                       >
                         Done
                       </button>
