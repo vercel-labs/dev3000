@@ -727,7 +727,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
               <div className="space-y-3">
                 <Link
                   href="/workflows/new?type=cloud-fix"
-                  className="block w-full p-4 border-2 border-border rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
+                  className="block w-full p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
                 >
                   <div className="font-semibold text-foreground">CLS Fix</div>
                   <div className="text-sm text-muted-foreground mt-1">
@@ -736,14 +736,16 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                 </Link>
                 <Link
                   href="/workflows/new?type=prompt"
-                  className="block w-full p-4 border-2 border-border rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
+                  className="block w-full p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
                 >
                   <div className="font-semibold text-foreground">Prompt</div>
-                  <div className="text-sm text-muted-foreground mt-1">Run a custom AI workflow with your own instructions</div>
+                  <div className="text-sm text-muted-foreground mt-1">
+                    Run a custom AI workflow with your own instructions
+                  </div>
                 </Link>
                 <Link
                   href="/workflows/new?type=design-guidelines"
-                  className="block w-full p-4 border-2 border-border rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
+                  className="block w-full p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
                 >
                   <div className="font-semibold text-foreground">Design Guidelines Review</div>
                   <div className="text-sm text-muted-foreground mt-1">
@@ -752,7 +754,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                 </Link>
                 <Link
                   href="/workflows/new?type=react-performance"
-                  className="block w-full p-4 border-2 border-border rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
+                  className="block w-full p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
                 >
                   <div className="font-semibold text-foreground">React Performance Review</div>
                   <div className="text-sm text-muted-foreground mt-1">
@@ -777,7 +779,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                     <Link
                       key={team.id}
                       href={`/workflows/new?type=${_selectedType}&team=${team.id}`}
-                      className="block w-full p-4 border-2 border-border rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
+                      className="block w-full p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
                     >
                       <div className="font-semibold text-foreground">{team.name}</div>
                       <div className="text-sm text-muted-foreground">
@@ -787,7 +789,10 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                   ))}
                 </div>
               )}
-              <Link href="/workflows/new" className="mt-4 inline-block px-4 py-2 text-muted-foreground hover:text-foreground">
+              <Link
+                href="/workflows/new"
+                className="mt-4 inline-block px-4 py-2 text-muted-foreground hover:text-foreground"
+              >
                 ← Back
               </Link>
             </div>
@@ -821,7 +826,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                     <Link
                       key={project.id}
                       href={`/workflows/new?type=${_selectedType}&team=${selectedTeam?.id}&project=${project.id}`}
-                      className="block w-full p-4 border-2 border-border rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
+                      className="block w-full p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
                     >
                       <div className="font-semibold text-foreground">{project.name}</div>
                       <div className="text-sm text-muted-foreground mt-1">
@@ -1134,7 +1139,9 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                   )}
                   <AlertDescription
                     className={
-                      workflowStatus.includes("Error") || workflowStatus.includes("failed") ? "" : "text-blue-900 dark:text-blue-100"
+                      workflowStatus.includes("Error") || workflowStatus.includes("failed")
+                        ? ""
+                        : "text-blue-900 dark:text-blue-100"
                     }
                   >
                     {workflowStatus}
