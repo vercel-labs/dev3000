@@ -116,8 +116,8 @@ function formatLogLine(content: string, isCompact: boolean, baseTimestampMs?: nu
       const currentMs = parseTimestampToMs(timestamp)
       if (currentMs !== null) {
         if (isBaseLog) {
-          // The base log shows "BASE" indicator
-          displayTimestamp = isCompact ? "BASE" : `BASE ${timestamp}`
+          // The base log shows "BASE" indicator (padded to match delta width)
+          displayTimestamp = isCompact ? "BASE" : "      BASE "
           timestampMode = 2
         } else {
           // Other logs show delta from base
@@ -126,14 +126,8 @@ function formatLogLine(content: string, isCompact: boolean, baseTimestampMs?: nu
           timestampMode = 1
         }
       }
-    } else {
-      // No base timestamp - show normal timestamp
-      if (isCompact) {
-        // Extract just the time part (HH:MM:SS) from timestamps like "12:34:56.789"
-        const timeMatch = timestamp.match(/^(\d{1,2}:\d{2}:\d{2})/)
-        displayTimestamp = timeMatch ? timeMatch[1] : timestamp
-      }
     }
+    // Always show full timestamp (HH:MM:SS.mmm) - no truncation
 
     // Build styled timestamp based on mode
     const styledTimestamp =
@@ -143,23 +137,27 @@ function formatLogLine(content: string, isCompact: boolean, baseTimestampMs?: nu
           ? fg(DELTA_COLOR)(displayTimestamp)
           : dim(displayTimestamp)
 
+    // Add leading space to account for scroll indicator overlap
+    const pad = "  "
+
     if (isCompact) {
       const sourceChar = source.charAt(0)
       if (type) {
         const typeChar = type.charAt(0)
-        // No bold, no space between tags in compact mode
-        return t`${styledTimestamp} ${fg(sourceColor)(`[${sourceChar}]`)}${fg(typeColor)(`[${typeChar}]`)} ${message || ""}`
+        // Compact mode: single char tags with space after timestamp
+        return t`${pad}${styledTimestamp}  ${fg(sourceColor)(`[${sourceChar}]`)}${fg(typeColor)(`[${typeChar}]`)} ${message || ""}`
       }
-      return t`${styledTimestamp} ${fg(sourceColor)(`[${sourceChar}]`)} ${message || ""}`
+      return t`${pad}${styledTimestamp}  ${fg(sourceColor)(`[${sourceChar}]`)} ${message || ""}`
     }
 
     if (type) {
-      return t`${styledTimestamp} ${bold(fg(sourceColor)(`[${source}]`))} ${fg(typeColor)(`[${type}]`)} ${message || ""}`
+      return t`${pad}${styledTimestamp} ${bold(fg(sourceColor)(`[${source}]`))} ${fg(typeColor)(`[${type}]`)} ${message || ""}`
     }
-    return t`${styledTimestamp} ${bold(fg(sourceColor)(`[${source}]`))} ${message || ""}`
+    return t`${pad}${styledTimestamp} ${bold(fg(sourceColor)(`[${source}]`))} ${message || ""}`
   }
 
-  return t`${content}`
+  // Fallback for unparseable lines - still add padding
+  return t`  ${content}`
 }
 
 class D3kTUI {
@@ -259,7 +257,7 @@ class D3kTUI {
     if (!this.renderer) return
 
     const { width, height } = this.renderer
-    const isCompact = width < 80 || height < 20
+    const isCompact = width < 100 || height < 20
     const isVeryCompact = width < 60 || height < 15
 
     // Main container
@@ -283,7 +281,6 @@ class D3kTUI {
       border: true,
       borderStyle: "single",
       borderColor: "#808080",
-      paddingLeft: 1,
       paddingRight: 1
     })
     mainContainer.add(logsSection)
@@ -304,8 +301,7 @@ class D3kTUI {
     this.logsContainer = new BoxRenderable(this.renderer, {
       id: "logs-content",
       flexDirection: "column",
-      width: "100%",
-      overflow: "hidden"
+      width: "100%"
     })
     this.logsScrollBox.add(this.logsContainer)
 
@@ -670,7 +666,7 @@ class D3kTUI {
   private addLogLines(newLogs: LogEntry[]) {
     if (!this.renderer || !this.logsContainer) return
 
-    const isCompact = this.renderer.width < 80
+    const isCompact = this.renderer.width < 100
 
     for (const log of newLogs) {
       if (log.id <= this.clearFromLogId) continue
@@ -686,7 +682,9 @@ class D3kTUI {
       logLine.selectable = false
 
       // Add click handler to set this log's timestamp as the base
-      if (log.timestamp) {
+      // Only enable in non-compact mode - in compact mode, clicks are likely
+      // meant to expand the tmux pane, not select a timestamp
+      if (!isCompact && log.timestamp) {
         const timestampMs = parseTimestampToMs(log.timestamp)
         if (timestampMs !== null) {
           logLine.onMouseDown = () => {
@@ -723,7 +721,7 @@ class D3kTUI {
 
   private updateStatusDisplay() {
     if (!this.statusText || !this.renderer) return
-    const isCompact = this.renderer.width < 80
+    const isCompact = this.renderer.width < 100
     this.statusText.content = this.buildStatusContent(isCompact)
   }
 
