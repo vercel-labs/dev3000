@@ -726,24 +726,6 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
               <h3 className="text-lg font-semibold mb-4 text-foreground">Select Workflow Type</h3>
               <div className="space-y-3">
                 <Link
-                  href="/workflows/new?type=cloud-fix"
-                  className="block w-full p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
-                >
-                  <div className="font-semibold text-foreground">CLS Fix</div>
-                  <div className="text-sm text-muted-foreground mt-1">
-                    Detect and fix Cumulative Layout Shift issues automatically
-                  </div>
-                </Link>
-                <Link
-                  href="/workflows/new?type=prompt"
-                  className="block w-full p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
-                >
-                  <div className="font-semibold text-foreground">Prompt</div>
-                  <div className="text-sm text-muted-foreground mt-1">
-                    Run a custom AI workflow with your own instructions
-                  </div>
-                </Link>
-                <Link
                   href="/workflows/new?type=design-guidelines"
                   className="block w-full p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
                 >
@@ -759,6 +741,24 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                   <div className="font-semibold text-foreground">React Performance Review</div>
                   <div className="text-sm text-muted-foreground mt-1">
                     Analyze React/Next.js code for performance issues and apply optimizations
+                  </div>
+                </Link>
+                <Link
+                  href="/workflows/new?type=cloud-fix"
+                  className="block w-full p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
+                >
+                  <div className="font-semibold text-foreground">CLS Fix</div>
+                  <div className="text-sm text-muted-foreground mt-1">
+                    Detect and fix Cumulative Layout Shift issues automatically
+                  </div>
+                </Link>
+                <Link
+                  href="/workflows/new?type=prompt"
+                  className="block w-full p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
+                >
+                  <div className="font-semibold text-foreground">Prompt</div>
+                  <div className="text-sm text-muted-foreground mt-1">
+                    Run a custom AI workflow with your own instructions
                   </div>
                 </Link>
               </div>
