@@ -44,6 +44,9 @@ export function getSkillDirectories(cwd?: string): string[] {
   const projectDir = cwd || process.cwd()
   dirs.push(join(projectDir, ".claude", "skills"))
 
+  // 1b. Also check .agents/skills/ (for tracked skills in www deployment)
+  dirs.push(join(projectDir, ".agents", "skills"))
+
   // 2. Global skills (~/.claude/skills/)
   dirs.push(join(homedir(), ".claude", "skills"))
 
