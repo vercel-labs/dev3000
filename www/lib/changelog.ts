@@ -13,9 +13,7 @@ export const changelog: Release[] = [
     version: "0.0.153",
     date: "2026-01-21",
     type: "minor",
-    highlights: [
-      "Add Windows x64 to release and publish scripts"
-    ]
+    highlights: ["Add Windows x64 to release and publish scripts"]
   },
 
   {
