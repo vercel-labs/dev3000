@@ -182,13 +182,13 @@ export default function WorkflowsClient({ user, initialRuns }: WorkflowsClientPr
   const someSelected = selectedIds.size > 0 && selectedIds.size < runs.length
 
   return (
-    <div className="h-screen flex flex-col bg-gray-50">
+    <div className="h-screen flex flex-col bg-background">
       <div className="flex-shrink-0 px-4 sm:px-6 lg:px-8 pt-8 pb-4 max-w-7xl mx-auto w-full">
         <div className="flex justify-between items-start">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">d3k Workflow Runs</h1>
-            <p className="mt-2 text-gray-600">View all your d3k workflow fix proposals and PRs</p>
-            <p className="mt-1 text-sm text-gray-500">Signed in as {user.email}</p>
+            <h1 className="text-3xl font-bold text-foreground">d3k Workflow Runs</h1>
+            <p className="mt-2 text-muted-foreground">View all your d3k workflow fix proposals and PRs</p>
+            <p className="mt-1 text-sm text-muted-foreground">Signed in as {user.email}</p>
           </div>
           <div className="flex gap-3">
             {selectedIds.size > 0 && (
@@ -277,9 +277,9 @@ export default function WorkflowsClient({ user, initialRuns }: WorkflowsClientPr
                           }
                           className={
                             run.status === "done"
-                              ? "bg-green-100 text-green-800 hover:bg-green-100"
+                              ? "bg-green-100 text-green-800 hover:bg-green-100 dark:bg-green-900 dark:text-green-100 dark:hover:bg-green-900"
                               : run.status === "running"
-                                ? "bg-blue-100 text-blue-800 hover:bg-blue-100"
+                                ? "bg-blue-100 text-blue-800 hover:bg-blue-100 dark:bg-blue-900 dark:text-blue-100 dark:hover:bg-blue-900"
                                 : ""
                           }
                         >
