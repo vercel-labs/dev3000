@@ -912,6 +912,7 @@ cloud
   .command("check-pr [pr-number]")
   .description("Verify a PR's changes work as expected using Vercel preview deployment")
   .option("--repo <url>", "Repository URL (optional, auto-detected from git)")
+  .option("--url <preview-url>", "Preview deployment URL (optional, auto-detected from Vercel)")
   .option("--debug", "Enable debug logging")
   .action(async (prNumber, options) => {
     try {

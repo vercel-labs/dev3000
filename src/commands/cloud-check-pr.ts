@@ -4,16 +4,18 @@ import { execSync } from "child_process"
 interface CheckPROptions {
   prNumber?: string
   repo?: string
+  url?: string
   debug?: boolean
 }
 
 export async function cloudCheckPR(options: CheckPROptions) {
-  const { prNumber, repo, debug = false } = options
+  const { prNumber, repo, url, debug = false } = options
 
   if (debug) {
     console.log(chalk.gray("[DEBUG] Starting cloud check-pr"))
     console.log(chalk.gray(`[DEBUG] PR number: ${prNumber || "auto-detect"}`))
     console.log(chalk.gray(`[DEBUG] Repo: ${repo || "auto-detect"}`))
+    console.log(chalk.gray(`[DEBUG] URL: ${url || "auto-detect"}`))
   }
 
   // Step 1: Get repo info
@@ -51,13 +53,19 @@ export async function cloudCheckPR(options: CheckPROptions) {
   console.log(chalk.gray(`  Branch: ${prDetails.branch}`))
   console.log(chalk.gray(`  Author: ${prDetails.author}`))
 
-  // Step 4: Find Vercel preview URL
-  console.log(chalk.blue("🔗 Finding Vercel preview URL..."))
-  const previewUrl = await findVercelPreview(repoInfo, prDetails.branch, debug)
+  // Step 4: Find Vercel preview URL (use provided URL or auto-detect)
+  let previewUrl: string | null = null
+  if (url) {
+    console.log(chalk.blue("🔗 Using provided preview URL..."))
+    previewUrl = url
+  } else {
+    console.log(chalk.blue("🔗 Finding Vercel preview URL..."))
+    previewUrl = await findVercelPreview(repoInfo, prDetails.branch, debug)
+  }
 
   if (!previewUrl) {
     console.error(chalk.red("❌ No Vercel preview deployment found for this PR"))
-    console.error(chalk.yellow("Make sure the PR has a Vercel deployment"))
+    console.error(chalk.yellow("Make sure the PR has a Vercel deployment, or provide --url"))
     process.exit(1)
   }
 
@@ -200,7 +208,11 @@ async function fetchPRDetails(
 async function findVercelPreview(_repoInfo: RepoInfo, branch: string, debug: boolean): Promise<string | null> {
   try {
     // Use vc CLI to find deployments for this branch
-    const result = execSync(`vc ls --yes | grep "${branch}" | head -1 | awk '{print $2}'`, { encoding: "utf-8" }).trim()
+    // Pass --token if VERCEL_TOKEN is set (for CI environments)
+    const tokenFlag = process.env.VERCEL_TOKEN ? `--token "${process.env.VERCEL_TOKEN}"` : ""
+    const result = execSync(`vc ls --yes ${tokenFlag} | grep "${branch}" | head -1 | awk '{print $2}'`, {
+      encoding: "utf-8"
+    }).trim()
 
     if (debug) {
       console.log(chalk.gray(`[DEBUG] Found preview URL: ${result}`))
