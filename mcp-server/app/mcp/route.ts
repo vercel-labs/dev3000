@@ -705,7 +705,11 @@ const handler = createMcpHandler(
               "- snapshot: {interactive?: boolean, compact?: boolean}"
           ),
         session: z.string().optional().describe("Session name for browser isolation"),
-        headed: z.boolean().optional().describe("Run with visible browser window (default: false)")
+        headed: z.boolean().optional().describe("Run with visible browser window (default: false)"),
+        profile: z
+          .string()
+          .optional()
+          .describe("Path to persistent browser profile directory (stores cookies, localStorage, login sessions)")
       },
       async (params) => {
         return executeAgentBrowserAction(params)

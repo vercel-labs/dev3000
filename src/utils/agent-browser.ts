@@ -34,6 +34,8 @@ export interface AgentBrowserOptions {
   session?: string
   /** Timeout in milliseconds */
   timeout?: number
+  /** Path to persistent browser profile directory (stores cookies, localStorage, etc.) */
+  profile?: string
 }
 
 export interface SnapshotElement {
@@ -76,6 +78,10 @@ function buildArgs(options: AgentBrowserOptions): string[] {
 
   if (options.session) {
     args.push("--session", options.session)
+  }
+
+  if (options.profile) {
+    args.push("--profile", options.profile)
   }
 
   // Always use JSON output for parsing

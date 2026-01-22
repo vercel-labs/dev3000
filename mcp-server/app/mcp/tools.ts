@@ -50,7 +50,7 @@ export const TOOL_DESCRIPTIONS = {
     "Get the content of a d3k/Claude Code skill. Skills are prompt templates that provide specialized instructions for specific tasks.\n\n**Parameters:**\n• name: The skill name (e.g., 'vercel-design-guidelines', 'd3k')\n\n**Returns:**\nThe full SKILL.md content which contains instructions on how to perform the skill's task.\n\n**Available skills:**\n• vercel-design-guidelines - Audit web interfaces against Vercel's design guidelines\n• d3k - Core d3k development assistant skill\n\n**Use cases:**\n• Loading design guidelines audit instructions\n• Getting specialized workflow instructions",
 
   agent_browser_action:
-    "Execute browser actions using agent-browser (Playwright-based CLI). More reliable than raw CDP in sandbox environments.\n\n**Actions:**\n• open: Open URL {url: string}\n• click: Click element {target: '@ref' or 'selector'}\n• type: Type into focused element {text: string}\n• fill: Fill input field {target, value}\n• scroll: Scroll page {direction: up/down/left/right, amount?}\n• screenshot: Capture screenshot {fullPage?: boolean}\n• snapshot: Get accessibility tree with refs for clicking\n• close: Close browser\n• reload: Reload page\n• back: Navigate back\n\n**Options:**\n• session: Session name for isolation\n• headed: Run with visible browser (default: false)\n\n**Ref-based clicking:**\nSnapshot returns elements with refs like @e1, @e2. Use these refs in click action for reliable element targeting."
+    "Execute browser actions using agent-browser (Playwright-based CLI). More reliable than raw CDP in sandbox environments.\n\n**Actions:**\n• open: Open URL {url: string}\n• click: Click element {target: '@ref' or 'selector'}\n• type: Type into focused element {text: string}\n• fill: Fill input field {target, value}\n• scroll: Scroll page {direction: up/down/left/right, amount?}\n• screenshot: Capture screenshot {fullPage?: boolean}\n• snapshot: Get accessibility tree with refs for clicking\n• close: Close browser\n• reload: Reload page\n• back: Navigate back\n\n**Options:**\n• session: Session name for isolation\n• headed: Run with visible browser (default: false)\n• profile: Path to persistent browser profile directory (stores cookies, localStorage, login sessions)\n\n**Persistent profiles:**\nUse profile to maintain login sessions across browser restarts. Each project can have its own profile directory to keep browser state isolated.\n\n**Ref-based clicking:**\nSnapshot returns elements with refs like @e1, @e2. Use these refs in click action for reliable element targeting."
 }
 
 // Types
@@ -4385,6 +4385,7 @@ export interface AgentBrowserActionParams {
   params?: Record<string, unknown>
   session?: string // Session name for isolation
   headed?: boolean // Run with visible browser window
+  profile?: string // Path to persistent browser profile directory (stores cookies, localStorage, etc.)
 }
 
 /**
@@ -4395,7 +4396,8 @@ export async function executeAgentBrowserAction({
   action,
   params = {},
   session,
-  headed = false
+  headed = false,
+  profile
 }: AgentBrowserActionParams): Promise<{ content: Array<{ type: "text"; text: string }> }> {
   try {
     // Dynamic import of agent-browser wrapper
@@ -4416,7 +4418,8 @@ export async function executeAgentBrowserAction({
     // Build common options
     const options = {
       session,
-      headed
+      headed,
+      profile
     }
 
     let result: unknown

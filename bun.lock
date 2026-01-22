@@ -8,7 +8,7 @@
         "@biomejs/biome": "^2.2.4",
         "@opentui/core": "^0.1.71",
         "@vercel/sandbox": "^1.1.8",
-        "agent-browser": "^0.4.4",
+        "agent-browser": "^0.6.0",
         "ai": "^5.0.87",
         "chalk": "^5.3.0",
         "commander": "^14.0.1",
@@ -37,9 +37,9 @@
         "vitest": "^3.2.4",
       },
       "optionalDependencies": {
-        "@d3k/darwin-arm64": "0.0.152",
-        "@d3k/linux-x64": "0.0.152",
-        "@d3k/windows-x64": "0.0.152-canary",
+        "@d3k/darwin-arm64": "0.0.154-canary",
+        "@d3k/linux-x64": "0.0.154-canary",
+        "@d3k/windows-x64": "0.0.154-canary",
         "@opentui/core-linux-x64": "^0.1.71",
       },
     },
@@ -1204,7 +1204,7 @@
 
     "acorn-jsx": ["acorn-jsx@5.3.2", "", { "peerDependencies": { "acorn": "^6.0.0 || ^7.0.0 || ^8.0.0" } }, "sha512-rq9s+JNhf0IChjtDXxllJ7g41oZk5SlXtp0LHwyA5cejwn7vKmKp4pPri6YEePv2PU65sAsegbXtIinmDFDXgQ=="],
 
-    "agent-browser": ["agent-browser@0.4.4", "", { "dependencies": { "playwright-core": "^1.57.0", "zod": "^3.22.4" }, "bin": { "agent-browser": "bin/agent-browser" } }, "sha512-W4XzR4UjAfqbhxtSeCbdlKWQjQ432FXzTIxMhtDk3Rj9y/E97K9yPB5il4BSr63k8EukDp/UGpu4CCassA1RKw=="],
+    "agent-browser": ["agent-browser@0.6.0", "", { "dependencies": { "playwright-core": "^1.57.0", "ws": "^8.19.0", "zod": "^3.22.4" }, "bin": { "agent-browser": "bin/agent-browser" } }, "sha512-C4Mtxfvyi/m04hyD2XdUNKc878RPZqbhXFIPEUJElZW6RhZJ1QG1/L5PSgIAhRSi4TF/EkB8iq4IAWoecMvGdg=="],
 
     "ai": ["ai@5.0.118", "", { "dependencies": { "@ai-sdk/gateway": "2.0.24", "@ai-sdk/provider": "2.0.1", "@ai-sdk/provider-utils": "3.0.20", "@opentelemetry/api": "1.9.0" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-sKJHfhJkvAyq5NC3yJJ4R8Z3tn4pSHF760/jInKAtmLwPLWTHfGo293DSO4un8QUAgJOagHd09VSXOXv+STMNQ=="],
 
