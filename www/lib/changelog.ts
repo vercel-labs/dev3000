@@ -13,9 +13,7 @@ export const changelog: Release[] = [
     version: "0.0.155",
     date: "2026-01-28",
     type: "patch",
-    highlights: [
-      "Fix bundled skills discovery for npm-installed packages"
-    ]
+    highlights: ["Fix bundled skills discovery for npm-installed packages"]
   },
 
   {
