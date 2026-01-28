@@ -8,6 +8,7 @@
 import { existsSync, readdirSync, readFileSync } from "fs"
 import { homedir } from "os"
 import { dirname, join } from "path"
+import { fileURLToPath } from "url"
 
 export interface SkillInfo {
   name: string
@@ -42,6 +43,17 @@ export function getBundledSkillsPath(): string | null {
       if (existsSync(skillsDir)) {
         return skillsDir
       }
+    }
+  }
+
+  // Fallback for npm-installed package: look for dist/skills relative to this module
+  // import.meta.url is like "file:///path/to/node_modules/dev3000/dist/skills/index.js"
+  if (moduleUrl.startsWith("file://")) {
+    const modulePath = fileURLToPath(moduleUrl)
+    // This file is at dist/skills/index.js, so skills are at dist/skills/
+    const skillsDir = dirname(modulePath)
+    if (existsSync(join(skillsDir, "d3k", "SKILL.md"))) {
+      return skillsDir
     }
   }
 
