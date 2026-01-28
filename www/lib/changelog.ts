@@ -10,6 +10,19 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.154",
+    date: "2026-01-28",
+    type: "minor",
+    highlights: [
+      "Replace MCP browser tools with embedded agent-browser, fix TUI text selection",
+      "Add agent-browser profile support for persistent browser sessions",
+      "Reorder workflow types to show skills first",
+      "Increase dark mode border contrast for visibility",
+      "Fix dark mode border visibility in workflow modal cards"
+    ]
+  },
+
+  {
     version: "0.0.153",
     date: "2026-01-21",
     type: "minor",
