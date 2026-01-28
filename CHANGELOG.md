@@ -4,6 +4,12 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.155] - 2026-01-28
+
+**Patch Release**
+
+- Fix bundled skills discovery for npm-installed packages
+
 ## [0.0.154] - 2026-01-28
 
 **Feature Release**
