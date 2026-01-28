@@ -129,16 +129,7 @@ export const changelog: Release[] = [
       "Use dynamic import to avoid bundling OpenTUI for linux",
       "Add @opentui/core-linux-x64 for cross-compilation support",
       "Add Linux x64 platform support",
-      "Add timing instrumentation to cloud workflows + sandbox snapshotting + ESLint fixes"
-    ]
-  },
-
-  {
-    version: "0.0.143",
-    date: "2026-01-12",
-    type: "minor",
-    highlights: [
-      "Add Linux x64 platform support for running d3k in the cloud",
+      "Add timing instrumentation to cloud workflows + sandbox snapshotting + ESLint fixes",
       "Build binaries for both darwin-arm64 and linux-x64 platforms"
     ]
   },

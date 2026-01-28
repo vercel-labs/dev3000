@@ -43,20 +43,21 @@ export async function GET() {
         ]
       },
       {
-        name: "execute_browser_action",
+        name: "agent_browser_action",
         description:
-          "Executes browser actions in the dev3000-managed Chrome instance.\n\n**Actions:**\n• click: Click at coordinates {x, y}\n• navigate: Go to a URL\n• scroll: Scroll by {x, y} pixels\n• type: Type text into focused element\n• evaluate: Execute JavaScript (read-only recommended)\n• screenshot: Capture current page\n\n**Use cases:**\n• Reproducing user interactions that triggered errors\n• Verifying fixes work correctly\n• Testing UI workflows\n\n**Note:** Screenshots are auto-captured on navigation and errors. Use this for interaction reproduction, not manual screenshots.",
+          "Browser automation with persistent sessions using agent-browser CLI.\n\n**Actions:**\n• open: Navigate to URL\n• click: Click element by ref (@e1) or selector\n• type: Type text into focused element\n• fill: Fill input field\n• scroll: Scroll page\n• screenshot: Capture current page\n• snapshot: Get page elements with refs for clicking\n• evaluate: Execute JavaScript\n• reload: Reload page\n\n**Features:**\n• Persistent sessions (cookies, localStorage, logins)\n• Project-specific browser profile\n• Reliable Playwright-based automation",
         category: "Browser Automation",
         parameters: [
           {
             name: "action",
             type: "enum",
-            description: "Action: 'click', 'navigate', 'screenshot', 'evaluate', 'scroll', 'type'"
+            description:
+              "Action: 'open', 'click', 'type', 'fill', 'scroll', 'screenshot', 'snapshot', 'evaluate', 'reload', 'back', 'close'"
           },
           {
             name: "params",
             type: "object",
-            description: "Action parameters (coordinates, URL, text, expression, etc.)"
+            description: "Action parameters (url, target, text, expression, etc.)"
           }
         ]
       }

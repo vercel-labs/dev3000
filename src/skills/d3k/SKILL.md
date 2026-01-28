@@ -1,41 +1,52 @@
 ---
-description: d3k web development assistant. Use when working on web apps with d3k running. Primary tool is fix_my_app for diagnosing and fixing errors.
+description: "d3k assistant for debugging web apps"
 ---
 
-# d3k Development Assistant
+# d3k Commands
 
-## Primary Tool: fix_my_app
+d3k captures browser and server logs in a unified log file. Use these commands:
 
-The main d3k MCP tool for debugging web apps. It analyzes:
-- Server logs and build errors
-- Browser console output
-- Network request failures
-- JavaScript exceptions
+## Viewing Errors and Logs
 
-**Usage loop:**
-```
-while (errors exist) {
-  1. Call fix_my_app → get prioritized errors
-  2. Fix the highest-priority error
-  3. Call fix_my_app again → verify fix worked
-  4. Repeat until healthy
-}
+```bash
+d3k errors              # Show recent errors (browser + server combined)
+d3k errors --context    # Show errors + user actions that preceded them
+d3k errors -n 20        # Show last 20 errors
+
+d3k logs                # Show recent logs (browser + server combined)
+d3k logs --type browser # Browser logs only
+d3k logs --type server  # Server logs only
 ```
 
-**Parameters:**
-- `focusArea`: 'build', 'runtime', 'network', 'ui', 'performance', or 'all'
-- `mode`: 'snapshot' (default), 'bisect', or 'monitor'
-- `timeRangeMinutes`: How far back to analyze (default: 10)
+## Other Commands
 
-## Other Available Tools
+```bash
+d3k fix                 # Deep analysis of application errors
+d3k fix --focus build   # Focus on build errors
 
-- **browser_action** - Click, navigate, scroll, type, screenshot, evaluate JS
-- **get_web_vitals** - Core Web Vitals (LCP, CLS, INP)
-- **get_layout_shifts** - CLS debugging
+d3k crawl               # Discover app URLs
+d3k crawl --depth all   # Exhaustive crawl
 
-## If d3k Tools Aren't Available
+d3k find-component "nav"  # Find React component source
 
-d3k may not be running or connected. Start it in a separate terminal:
+d3k restart             # Restart dev server (rarely needed)
 ```
-d3k
+
+## Browser Interaction
+
+To click elements, navigate, or take screenshots, use `d3k agent-browser --cdp $(d3k cdp-port)`:
+
+```bash
+d3k agent-browser --cdp $(d3k cdp-port) open http://localhost:3000/page
+d3k agent-browser --cdp $(d3k cdp-port) snapshot -i    # Get element refs (@e1, @e2)
+d3k agent-browser --cdp $(d3k cdp-port) click @e2
+d3k agent-browser --cdp $(d3k cdp-port) fill @e3 "text"
+d3k agent-browser --cdp $(d3k cdp-port) screenshot /tmp/shot.png
 ```
+
+## Fix Workflow
+
+1. `d3k errors --context` - See errors and what triggered them
+2. Fix the code
+3. `d3k agent-browser --cdp $(d3k cdp-port) open <url>` then `click @e1` to replay
+4. `d3k errors` - Verify fix worked

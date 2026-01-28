@@ -22,13 +22,21 @@ export interface KnownAgent {
   subOptions?: AgentSubOption[]
 }
 
+// Use '\'' to escape single quotes inside bash -c's single-quoted string
+const D3K_PROMPT = "'\\''load the d3k skill and await further instruction'\\''"
+
 export const KNOWN_AGENTS: KnownAgent[] = [
-  { name: "claude", binary: "claude", displayName: "claude" },
+  {
+    name: "claude",
+    binary: "claude",
+    displayName: "claude",
+    command: `claude ${D3K_PROMPT}`
+  },
   {
     name: "claude-yolo",
     binary: "claude",
     displayName: "claude (let it rip)",
-    command: "claude --dangerously-skip-permissions"
+    command: `claude --dangerously-skip-permissions ${D3K_PROMPT}`
   },
   { name: "codex", binary: "codex", displayName: "codex" },
   { name: "opencode", binary: "opencode", displayName: "opencode" },

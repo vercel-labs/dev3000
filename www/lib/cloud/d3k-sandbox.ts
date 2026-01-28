@@ -300,7 +300,6 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
   // Create sandbox WITHOUT source parameter
   // We'll manually clone the repo after sandbox creation for better control
   // biome-ignore lint/suspicious/noExplicitAny: ms type inference issue
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const timeoutMs = ms(timeout as any) as unknown as number
   const sandbox = await Sandbox.create({
     resources: { vcpus: 8 },
@@ -907,7 +906,6 @@ export async function createD3kSandboxFromSnapshot(config: D3kSandboxFromSnapsho
   }
 
   // biome-ignore lint/suspicious/noExplicitAny: ms type inference issue
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const timeoutMs = ms(timeout as any) as unknown as number
 
   // Create sandbox from snapshot - this is the key speedup!
@@ -1177,6 +1175,24 @@ async function createAndSaveBaseSnapshot(timeoutMs: number, debug = false): Prom
     }
     if (debug) console.log("  ✅ d3k installed globally")
 
+    // Install agent-browser globally for CLI browser automation
+    if (debug) console.log("  📦 Installing agent-browser globally...")
+    const agentBrowserInstall = await runCmd("pnpm", ["i", "-g", "agent-browser@latest"])
+    if (agentBrowserInstall.exitCode !== 0) {
+      // Don't fail - agent-browser is optional, workflow can fall back to MCP tools
+      if (debug) console.log(`  ⚠️ agent-browser install warning: ${agentBrowserInstall.stderr}`)
+    } else {
+      if (debug) console.log("  ✅ agent-browser installed globally")
+      // Run agent-browser install to set up Playwright browsers
+      if (debug) console.log("  🔧 Running agent-browser install (Playwright setup)...")
+      const playwrightInstall = await runCmd("npx", ["agent-browser", "install"])
+      if (playwrightInstall.exitCode !== 0) {
+        if (debug) console.log(`  ⚠️ Playwright browser install warning: ${playwrightInstall.stderr}`)
+      } else {
+        if (debug) console.log("  ✅ Playwright browsers installed")
+      }
+    }
+
     // Create snapshot (this stops the sandbox)
     if (debug) console.log("  📸 Creating snapshot...")
     const snapshot = await baseSandbox.snapshot()
@@ -1220,7 +1236,6 @@ export async function getOrCreateD3kSandbox(config: D3kSandboxConfig): Promise<D
   const timer = new StepTimer()
 
   // biome-ignore lint/suspicious/noExplicitAny: ms type inference issue
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const timeoutMs = ms(timeout as any) as unknown as number
 
   if (debug) {

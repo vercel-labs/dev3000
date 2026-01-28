@@ -5,16 +5,7 @@ import type { Tool } from "@modelcontextprotocol/sdk/types.js"
 import { createMcpHandler } from "mcp-handler"
 import { z } from "zod"
 import { getMCPClientManager } from "./client-manager"
-import {
-  crawlApp,
-  executeAgentBrowserAction,
-  executeBrowserAction,
-  findComponentSource,
-  fixMyApp,
-  getSkill,
-  restartDevServer,
-  TOOL_DESCRIPTIONS
-} from "./tools"
+import { crawlApp, findComponentSource, fixMyApp, getSkill, restartDevServer, TOOL_DESCRIPTIONS } from "./tools"
 
 // Detect available package runner (bunx, npx, pnpm dlx, or fail)
 const getPackageRunner = (): { command: string; args: string[] } | null => {
@@ -407,7 +398,7 @@ const handler = createMcpHandler(
       // nextjs-dev: Include most tools for framework-specific debugging
       // NOTE: browser_eval is intentionally excluded - it spawns a separate headless
       // Playwright browser that doesn't share cookies with the d3k Chrome browser.
-      // Use execute_browser_action instead for browser automation.
+      // Use d3k CLI for browser automation: `d3k agent-browser --cdp 9222 <command>`
       "nextjs-dev": [
         "enable_cache_components",
         "init",
@@ -583,30 +574,9 @@ const handler = createMcpHandler(
       }
     )
 
-    // Browser interaction tool
-    server.tool(
-      "execute_browser_action",
-      TOOL_DESCRIPTIONS.execute_browser_action,
-      {
-        action: z
-          .enum(["click", "navigate", "screenshot", "evaluate", "scroll", "type"])
-          .describe("The browser action to perform"),
-        params: z
-          .record(z.unknown())
-          .optional()
-          .describe(
-            "Parameters for the action:\n" +
-              "- click: {x: number, y: number} OR {selector: string} (CSS selector)\n" +
-              "- navigate: {url: string}\n" +
-              "- evaluate: {expression: string}\n" +
-              "- scroll: {deltaX?: number, deltaY?: number, x?: number, y?: number}\n" +
-              "- type: {text: string}"
-          )
-      },
-      async (params) => {
-        return executeBrowserAction(params)
-      }
-    )
+    // NOTE: execute_browser_action was removed - use agent_browser_action instead
+    // agent_browser_action provides the same functionality with better reliability
+    // and persistent browser sessions via agent-browser CLI
 
     // Visual diff analysis tool
     server.tool(
@@ -683,38 +653,9 @@ const handler = createMcpHandler(
       }
     )
 
-    // Agent Browser action tool (uses agent-browser CLI)
-    server.tool(
-      "agent_browser_action",
-      TOOL_DESCRIPTIONS.agent_browser_action,
-      {
-        action: z
-          .enum(["open", "click", "type", "fill", "scroll", "screenshot", "snapshot", "close", "reload", "back"])
-          .describe("Browser action to perform"),
-        params: z
-          .record(z.unknown())
-          .optional()
-          .describe(
-            "Action parameters:\n" +
-              "- open: {url: string}\n" +
-              "- click: {target: '@ref' or 'selector'}\n" +
-              "- type: {text: string}\n" +
-              "- fill: {target: string, value: string}\n" +
-              "- scroll: {direction: 'up'|'down'|'left'|'right', amount?: number}\n" +
-              "- screenshot: {fullPage?: boolean}\n" +
-              "- snapshot: {interactive?: boolean, compact?: boolean}"
-          ),
-        session: z.string().optional().describe("Session name for browser isolation"),
-        headed: z.boolean().optional().describe("Run with visible browser window (default: false)"),
-        profile: z
-          .string()
-          .optional()
-          .describe("Path to persistent browser profile directory (stores cookies, localStorage, login sessions)")
-      },
-      async (params) => {
-        return executeAgentBrowserAction(params)
-      }
-    )
+    // NOTE: agent_browser_action MCP tool removed to encourage CLI usage
+    // Claude should use `d3k agent-browser --cdp 9222 <command>` instead
+    // This avoids browser installation issues and connects to d3k's existing Chrome
 
     // Tool that returns monitoring code for Claude to execute
     // TODO: Commenting out for now - need to figure out the right approach for proactive monitoring

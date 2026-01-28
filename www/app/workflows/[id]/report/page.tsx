@@ -229,8 +229,8 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
                   <div>
                     <div className="font-medium text-muted-foreground mb-1">Init Steps</div>
                     <ul className="space-y-0.5 font-mono">
-                      {report.timing.init.steps.map((step, i) => (
-                        <li key={`init-${i}`} className="flex justify-between">
+                      {report.timing.init.steps.map((step) => (
+                        <li key={`init-${step.name}`} className="flex justify-between">
                           <span className="truncate mr-2">{step.name}</span>
                           <span className="text-muted-foreground">{(step.durationMs / 1000).toFixed(1)}s</span>
                         </li>
@@ -243,8 +243,8 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
                   <div>
                     <div className="font-medium text-muted-foreground mb-1">Agent Steps</div>
                     <ul className="space-y-0.5 font-mono">
-                      {report.timing.agent.steps.map((step, i) => (
-                        <li key={`agent-${i}`} className="flex justify-between">
+                      {report.timing.agent.steps.map((step) => (
+                        <li key={`agent-${step.name}`} className="flex justify-between">
                           <span className="truncate mr-2">{step.name}</span>
                           <span className="text-muted-foreground">{(step.durationMs / 1000).toFixed(1)}s</span>
                         </li>

@@ -37,7 +37,7 @@ dev3000 is a TypeScript npm package that provides AI assistants with deep visibi
 
 4. **MCP Server (`mcp-server/`)**
    - Next.js 15 application providing AI tools
-   - Tools: `read_consolidated_logs`, `search_logs`, `get_browser_errors`, `execute_browser_action`
+   - Tools: `read_consolidated_logs`, `search_logs`, `get_browser_errors`, `agent_browser_action`
    - Real-time log analysis and browser automation capabilities
    - Built with App Router, React 19, Tailwind CSS v4
 
@@ -110,7 +110,7 @@ dev3000 --port 5173 --profile-dir ./my-profile
 
 ### Browser Automation Tools
 
-- **`execute_browser_action(action, params)`**
+- **`agent_browser_action(action, params)`**
   - Actions: `click`, `navigate`, `screenshot`, `evaluate`, `scroll`, `type`
   - Safe browser automation via Chrome DevTools Protocol
   - Useful for reproducing issues and testing fixes
@@ -122,7 +122,7 @@ dev3000 --port 5173 --profile-dir ./my-profile
 3. Use `get_current_timestamp()` after user returns
 4. Use `get_logs_between_timestamps()` to analyze the session
 5. Use `search_logs()` for specific error patterns
-6. Use `execute_browser_action()` to test fixes
+6. Use `agent_browser_action()` to test fixes
 
 ## Technical Stack
 

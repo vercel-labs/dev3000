@@ -150,9 +150,9 @@ const LogLine = memo(
 
 const TUIApp = ({
   appPort: initialAppPort,
-  mcpPort,
+  mcpPort: _mcpPort,
   logFile,
-  commandName,
+  commandName: _commandName,
   serversOnly,
   version,
   projectName,
@@ -235,7 +235,7 @@ const TUIApp = ({
         setInitStatus(status)
       }
     })
-  }, [onStatusUpdate, ctrlCMessageDefault])
+  }, [onStatusUpdate])
 
   // Provide app port update function to parent
   useEffect(() => {
@@ -461,13 +461,8 @@ const TUIApp = ({
         </Box>
         {!isVeryCompact && (
           <Box flexDirection="column">
-            <Text dimColor>
-              App: localhost:{appPort} | MCP: localhost:{mcpPort}
-            </Text>
-            <Text dimColor>
-              📸 http://localhost:{mcpPort}/logs
-              {projectName ? `?project=${encodeURIComponent(projectName)}` : ""}
-            </Text>
+            <Text dimColor>App: localhost:{appPort}</Text>
+            <Text dimColor>📋 Logs: {logFile}</Text>
           </Box>
         )}
       </Box>
@@ -513,11 +508,7 @@ const TUIApp = ({
                 </Text>
                 {!portConfirmed && <Spinner type="dots" />}
               </Box>
-              <Text color="cyan">🤖 MCP: http://localhost:{mcpPort}</Text>
-              <Text color="cyan">
-                📸 Logs: http://localhost:{mcpPort}/logs
-                {projectName ? `?project=${encodeURIComponent(projectName)}` : ""}
-              </Text>
+              <Text color="cyan">📋 Logs: {logFile}</Text>
               {serversOnly && (
                 <Text color="cyan">🖥️ Servers-only mode - use Chrome extension for browser monitoring</Text>
               )}

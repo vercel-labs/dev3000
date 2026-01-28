@@ -1,8 +1,126 @@
 #!/usr/bin/env bun
 
+// Intercept agent-browser command early, before Commander parses args
+// This allows passing all args directly to agent-browser without Commander interference
+const agentBrowserIndex = process.argv.indexOf("agent-browser")
+if (agentBrowserIndex >= 0 && (process.argv[1]?.includes("d3k") || process.argv[1]?.includes("dev3000"))) {
+  // Use require for synchronous execution before other imports
+  const { spawnSync } = require("child_process")
+  const { existsSync } = require("fs")
+  const { join } = require("path")
+
+  const args = process.argv.slice(agentBrowserIndex + 1)
+
+  // Intercept "errors" and "console" subcommands - redirect to d3k's superior commands
+  // These d3k commands show BOTH browser AND server logs, unlike agent-browser which only shows browser
+  const subcommandIndex = args.findIndex(
+    (arg: string) => !arg.startsWith("-") && !arg.startsWith("@") && arg !== "9222"
+  )
+  const subcommand = subcommandIndex >= 0 ? args[subcommandIndex] : null
+
+  if (subcommand === "errors") {
+    console.log("\x1b[33m💡 Tip: Using `d3k errors` instead (shows browser + server errors)\x1b[0m\n")
+    const d3kBin = process.argv[1]
+    const result = spawnSync(d3kBin, ["errors"], { stdio: "inherit", shell: false })
+    process.exit(result.status ?? 0)
+  }
+
+  if (subcommand === "console") {
+    console.log("\x1b[33m💡 Tip: Using `d3k logs` instead (shows browser + server logs)\x1b[0m\n")
+    const d3kBin = process.argv[1]
+    const result = spawnSync(d3kBin, ["logs", "--type", "browser"], { stdio: "inherit", shell: false })
+    process.exit(result.status ?? 0)
+  }
+
+  // Find agent-browser native binary directly (avoids shell wrapper that needs node)
+  function findAgentBrowser(): string {
+    const os = process.platform === "darwin" ? "darwin" : process.platform === "win32" ? "win32" : "linux"
+    const arch = process.arch === "arm64" ? "arm64" : "x64"
+    const nativeName = `agent-browser-${os}-${arch}`
+    const platformPkg = `${os}-${arch}`
+
+    const cwd = process.cwd()
+    const home = require("os").homedir()
+
+    // Prefer native binary to avoid shell wrapper needing node in PATH
+    const searchPaths = [
+      // Bun global install paths (native binary) - use homedir since compiled binary has virtual path
+      join(
+        home,
+        ".bun",
+        "install",
+        "global",
+        "node_modules",
+        "@d3k",
+        platformPkg,
+        "mcp-server",
+        "node_modules",
+        ".bin",
+        nativeName
+      ),
+      // Local development paths (native binary)
+      join(cwd, "mcp-server", "node_modules", ".bin", nativeName),
+      join(cwd, "node_modules", ".bin", nativeName),
+      // Fallback to wrapper script (needs node in PATH)
+      join(
+        home,
+        ".bun",
+        "install",
+        "global",
+        "node_modules",
+        "@d3k",
+        platformPkg,
+        "mcp-server",
+        "node_modules",
+        ".bin",
+        "agent-browser"
+      ),
+      join(cwd, "mcp-server", "node_modules", ".bin", "agent-browser"),
+      join(cwd, "node_modules", ".bin", "agent-browser")
+    ]
+
+    for (const p of searchPaths) {
+      if (existsSync(p)) return p
+    }
+    return "agent-browser" // fallback to PATH
+  }
+
+  const binaryPath = findAgentBrowser()
+
+  // Ensure PATH is set for child process (Claude Code can have empty PATH)
+  const env = { ...process.env }
+  if (!env.PATH || env.PATH === "") {
+    env.PATH = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+  }
+
+  // Capture output so we can show errors if command fails
+  const result = spawnSync(binaryPath, args, {
+    stdio: "pipe",
+    shell: false,
+    env
+  })
+
+  // Show output
+  if (result.stdout?.length > 0) {
+    process.stdout.write(result.stdout)
+  }
+  if (result.stderr?.length > 0) {
+    process.stderr.write(result.stderr)
+  }
+
+  // If spawn failed (e.g., binary not found), show the error
+  if (result.error) {
+    console.error(`\nError spawning agent-browser: ${result.error.message}`)
+    console.error(`Binary path: ${binaryPath}`)
+    process.exit(1)
+  }
+
+  process.exit(result.status ?? 1)
+}
+
 import chalk from "chalk"
 import { Command } from "commander"
-import { existsSync, readFileSync } from "fs"
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from "fs"
 import { homedir, tmpdir } from "os"
 import { detect } from "package-manager-detector"
 import { dirname, join } from "path"
@@ -16,12 +134,13 @@ import { getAvailableAgents } from "./utils/agent-selection.js"
 import { formatMcpConfigTargets, parseDisabledMcpConfigs } from "./utils/mcp-configs.js"
 import { getProjectDir } from "./utils/project-name.js"
 import {
-  type AvailableSkill,
-  checkForNewSkills,
-  detectsReact,
+  checkForSkillUpdates,
+  getApplicablePackages,
   type InstallLocation,
-  installSelectedSkills,
-  markSkillsAsSeen
+  installSkillPackage,
+  isPackageInstalled,
+  type SkillPackage,
+  updateSkills
 } from "./utils/skill-installer.js"
 import {
   DEFAULT_TMUX_CONFIG,
@@ -32,6 +151,37 @@ import {
 } from "./utils/tmux-helpers.js"
 import { loadUserConfig, saveUserConfig } from "./utils/user-config.js"
 import { checkForUpdates, getUpgradeCommand, performUpgrade } from "./utils/version-check.js"
+
+// Global error handlers to log crashes
+const crashLogPath = join(homedir(), ".d3k", "crash.log")
+
+function logCrash(type: string, error: Error | unknown): void {
+  try {
+    const crashDir = join(homedir(), ".d3k")
+    if (!existsSync(crashDir)) {
+      mkdirSync(crashDir, { recursive: true })
+    }
+    const timestamp = new Date().toISOString()
+    const errorStr = error instanceof Error ? `${error.message}\n${error.stack}` : String(error)
+    const logEntry = `[${timestamp}] ${type}: ${errorStr}\n\n`
+    appendFileSync(crashLogPath, logEntry)
+    console.error(chalk.red(`\n💥 d3k crashed: ${error instanceof Error ? error.message : error}`))
+    console.error(chalk.gray(`   Details logged to: ${crashLogPath}`))
+  } catch {
+    // If we can't log, at least print to stderr
+    console.error(`d3k crashed: ${error}`)
+  }
+}
+
+process.on("uncaughtException", (error) => {
+  logCrash("Uncaught Exception", error)
+  process.exit(1)
+})
+
+process.on("unhandledRejection", (reason) => {
+  logCrash("Unhandled Promise Rejection", reason)
+  process.exit(1)
+})
 
 /**
  * Options that should be forwarded to the d3k process spawned by tmux.
@@ -79,11 +229,7 @@ function buildD3kCommandWithOptions(options: ForwardedOptions): string {
  * Launch d3k with an agent using tmux for proper terminal multiplexing.
  * This creates a split-screen with the agent on the left and d3k logs on the right.
  */
-async function launchWithTmux(
-  agentCommand: string,
-  mcpPort: number = DEFAULT_TMUX_CONFIG.mcpPort,
-  forwardedOptions: ForwardedOptions = {}
-): Promise<void> {
+async function launchWithTmux(agentCommand: string, forwardedOptions: ForwardedOptions = {}): Promise<void> {
   const { execSync } = await import("child_process")
   const { appendFileSync, writeFileSync } = await import("fs")
 
@@ -126,7 +272,6 @@ async function launchWithTmux(
     sessionName,
     d3kCommand,
     agentCommand,
-    mcpPort,
     paneWidthPercent: DEFAULT_TMUX_CONFIG.paneWidthPercent
   })
 
@@ -239,35 +384,35 @@ async function promptAgentSelection(defaultAgentName?: string): Promise<{ name: 
   return selectedResult
 }
 
+interface PackageWithStatus extends SkillPackage {
+  installed: boolean
+}
+
 /**
  * Show interactive skill selection prompt using Ink.
  * Returns the selected skills and install location, or empty array if user skipped.
  */
-async function promptSkillSelection(
-  skills: AvailableSkill[],
-  initiallySelected?: string[]
-): Promise<{ skills: AvailableSkill[]; location: InstallLocation }> {
+async function promptPackageSelection(
+  packages: PackageWithStatus[]
+): Promise<{ packages: SkillPackage[]; location: InstallLocation }> {
   const { render } = await import("ink")
   const React = await import("react")
-  const { SkillSelector } = await import("./components/SkillSelector.js")
+  const { PackageSelector } = await import("./components/PackageSelector.js")
 
-  let selectedSkills: AvailableSkill[] = []
+  let selectedPackages: SkillPackage[] = []
   let installLocation: InstallLocation = "project"
-  let skipped = false
 
   try {
     const { unmount, waitUntilExit, clear } = render(
-      React.createElement(SkillSelector, {
-        skills,
-        initiallySelected,
-        onComplete: (selected: AvailableSkill[], location: InstallLocation) => {
-          selectedSkills = selected
+      React.createElement(PackageSelector, {
+        packages,
+        onComplete: (selected: SkillPackage[], location: InstallLocation) => {
+          selectedPackages = selected
           installLocation = location
           clear()
           unmount()
         },
         onSkip: () => {
-          skipped = true
           clear()
           unmount()
         }
@@ -279,16 +424,11 @@ async function promptSkillSelection(
     // Clear terminal and scrollback to remove any Ink artifacts
     process.stdout.write("\x1b[2J\x1b[H\x1b[3J")
   } catch (error) {
-    console.error(chalk.red("Error in skill selection:"), error)
-    return { skills: [], location: "project" }
+    console.error(chalk.red("Error in package selection:"), error)
+    return { packages: [], location: "project" }
   }
 
-  // If user skipped, mark skills as seen so we don't ask again
-  if (skipped) {
-    markSkillsAsSeen(skills)
-  }
-
-  return { skills: selectedSkills, location: installLocation }
+  return { packages: selectedPackages, location: installLocation }
 }
 
 interface ProjectConfig {
@@ -557,7 +697,6 @@ program
 program
   .description("AI-powered development tools with browser monitoring and MCP server")
   .option("-p, --port <port>", "Development server port (auto-detected by project type)")
-  .option("-m, --port-mcp <port>", "MCP server port", "3684")
   .option("-s, --script <script>", "Script to run (e.g. dev, main.py) - auto-detected by project type")
   .option("-c, --command <command>", "Custom command to run (overrides auto-detection and --script)")
   .option("--profile-dir <dir>", "Chrome profile directory", join(tmpdir(), "dev3000-chrome-profile"))
@@ -581,7 +720,6 @@ program
   )
   .option("--no-chrome-devtools-mcp", "Disable chrome-devtools MCP integration (enabled by default)")
   .option("--headless", "Run Chrome in headless mode (for serverless/CI environments)")
-  .option("--kill-mcp", "Kill the MCP server on port 3684 and exit")
   .option(
     "--with-agent <command>",
     'Run an agent (e.g. claude) in split-screen mode using tmux. Example: --with-agent "claude"'
@@ -596,7 +734,7 @@ program
 
     // Handle --with-agent by spawning tmux with split panes
     if (options.withAgent) {
-      await launchWithTmux(options.withAgent, parseInt(options.portMcp, 10), {
+      await launchWithTmux(options.withAgent, {
         port: options.port,
         portMcp: options.portMcp,
         script: options.script,
@@ -612,22 +750,6 @@ program
       })
       return
     }
-    // Handle --kill-mcp option
-    if (options.killMcp) {
-      console.log(chalk.yellow("🛑 Killing MCP server on port 3684..."))
-      try {
-        const { spawn } = require("child_process")
-        await new Promise<void>((resolve) => {
-          const killProcess = spawn("sh", ["-c", "lsof -ti:3684 | xargs kill -9"], { stdio: "inherit" })
-          killProcess.on("exit", () => resolve())
-        })
-        console.log(chalk.green("✅ MCP server killed"))
-      } catch (_error) {
-        console.log(chalk.gray("⚠️ No MCP server found on port 3684"))
-      }
-      process.exit(0)
-    }
-
     // Handle agent selection for split-screen mode (default behavior in TTY)
     // Skip if --no-agent, --no-tui, --debug flags are used, or if already inside tmux (to avoid nested prompts)
     const insideTmux = !!process.env.TMUX
@@ -635,49 +757,95 @@ program
       // Clear the terminal so d3k UI starts at the top of the screen
       process.stdout.write("\x1B[2J\x1B[0f")
 
-      // Show loading message while checking for skills
-      process.stdout.write(chalk.gray(" Checking for skill updates...\r"))
-
-      // Check for new/updated skills from vercel-labs/agent-skills
+      // Check for skill updates and offer new packages
       try {
-        const newSkills = await checkForNewSkills()
+        // Show loading message
+        process.stdout.write(chalk.gray(" Checking for skills...\r"))
 
-        // Clear the loading message
-        process.stdout.write("\x1B[2J\x1B[0f")
+        // 1. Check for updates to existing skills
+        const { hasUpdates } = await checkForSkillUpdates()
 
-        if (newSkills.length > 0) {
-          // Determine initial selections: all remote skills, plus react-performance for React projects
-          const isReactProject = detectsReact()
-          const initialSelections = newSkills
-            .filter((skill) => {
-              // Always pre-select remote skills (from agent-skills repo)
-              if (skill.sha !== "bundled") return true
-              // For bundled skills, only pre-select react-performance if it's a React project
-              if (skill.name === "react-performance") return isReactProject
-              // Don't pre-select other bundled skills by default
-              return false
-            })
-            .map((s) => s.name)
+        // Clear the loading message line
+        process.stdout.write("\x1B[2K\r")
 
-          const { skills: selected, location } = await promptSkillSelection(newSkills, initialSelections)
-          if (selected.length > 0) {
-            const locationLabel = location === "global" ? "globally" : "to project"
-            console.log(chalk.cyan(`Installing ${selected.length} skill(s) ${locationLabel}...`))
-            const result = await installSelectedSkills(selected, location, (skill, index, total) => {
-              console.log(chalk.gray(`  [${index + 1}/${total}] ${skill.name}...`))
-            })
-            if (result.success.length > 0) {
-              console.log(chalk.green(`✓ Installed: ${result.success.join(", ")}`))
+        if (hasUpdates) {
+          // Show which packages have updates (use applicable packages since lock file may not exist)
+          const applicablePackages = getApplicablePackages()
+
+          console.log(chalk.cyan("📦 Skill updates available"))
+          for (const pkg of applicablePackages) {
+            console.log(chalk.gray(`   • ${pkg.repo}`))
+          }
+          const { default: readline } = await import("readline")
+          const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
+          const answer = await new Promise<string>((resolve) => {
+            rl.question(chalk.white("   Update now? (Y/n) "), resolve)
+          })
+          rl.close()
+
+          if (answer.toLowerCase() !== "n") {
+            console.log(chalk.gray("   Updating skills..."))
+            const updateResult = await updateSkills()
+            if (updateResult.success) {
+              console.log(chalk.green("   ✓ Skills updated"))
+            } else {
+              console.log(chalk.yellow("   ⚠ Some skills failed to update"))
             }
-            if (result.failed.length > 0) {
-              console.log(chalk.yellow(`⚠ Failed: ${result.failed.join(", ")}`))
+          }
+          console.log("")
+        }
+
+        // 2. Show all applicable packages with install status
+        // Skip if we just handled updates
+        if (!hasUpdates) {
+          const applicablePackages = getApplicablePackages()
+          const packagesWithStatus: PackageWithStatus[] = applicablePackages.map((pkg) => ({
+            ...pkg,
+            installed: isPackageInstalled(pkg)
+          }))
+          const hasUninstalled = packagesWithStatus.some((p) => !p.installed)
+
+          // Only show package selector if there are packages to install
+          if (packagesWithStatus.length > 0 && hasUninstalled) {
+            const { packages: selectedPackages, location } = await promptPackageSelection(packagesWithStatus)
+            if (selectedPackages.length > 0) {
+              const locationLabel = location === "global" ? "globally" : "to project"
+              console.log(chalk.cyan(`Installing ${selectedPackages.length} skill package(s) ${locationLabel}...`))
+
+              const results = { success: [] as string[], failed: [] as string[] }
+              for (let i = 0; i < selectedPackages.length; i++) {
+                const pkg = selectedPackages[i]
+                console.log(chalk.gray(`  [${i + 1}/${selectedPackages.length}] ${pkg.displayName}...`))
+                const result = await installSkillPackage(pkg, location)
+                if (result.success) {
+                  results.success.push(pkg.displayName)
+                } else {
+                  results.failed.push(pkg.displayName)
+                }
+              }
+
+              if (results.success.length > 0) {
+                console.log(chalk.green(`✓ Installed: ${results.success.join(", ")}`))
+              }
+              if (results.failed.length > 0) {
+                console.log(chalk.yellow(`⚠ Failed: ${results.failed.join(", ")}`))
+              }
+              console.log("")
+            } else {
+              // User skipped package installation, show skills are up to date
+              console.log(chalk.green("✓ Skills up to date"))
+              console.log("")
             }
+          } else {
+            // No updates and no new packages - show success
+            console.log(chalk.green("✓ Skills up to date"))
             console.log("")
           }
         }
       } catch {
-        // Clear and continue silently on errors (network issues, etc.)
-        process.stdout.write("\x1B[2J\x1B[0f")
+        // Show error briefly, then continue
+        console.log(chalk.yellow("⚠ Could not check for skill updates"))
+        console.log("")
       }
 
       // Check if tmux is available before showing prompt
@@ -700,7 +868,7 @@ program
             }
             // Clear screen and scrollback before launching tmux so when tmux exits, terminal is clean
             process.stdout.write("\x1b[2J\x1b[H\x1b[3J")
-            await launchWithTmux(selectedAgent.command, parseInt(options.portMcp, 10), {
+            await launchWithTmux(selectedAgent.command, {
               port: options.port,
               portMcp: options.portMcp,
               script: options.script,
@@ -969,6 +1137,13 @@ program
     }
   })
 
+// Agent-browser command - registered for --help display only
+// Actual handling happens at the top of the file before Commander runs
+program
+  .command("agent-browser [args...]")
+  .description("Run the bundled agent-browser CLI (e.g., d3k agent-browser screenshot /tmp/foo.png)")
+  .allowUnknownOption(true)
+
 // Skill command - get skill content for use in prompts/workflows
 program
   .command("skill [name]")
@@ -983,7 +1158,7 @@ program
         if (skills.length === 0) {
           console.log(chalk.yellow("No skills found."))
           console.log(chalk.gray("\nSkills are loaded from:"))
-          console.log(chalk.gray("  • .claude/skills/ (project-local)"))
+          console.log(chalk.gray("  • .agents/skills/ (project-local)"))
           console.log(chalk.gray("  • d3k built-in skills"))
           process.exit(0)
         }
@@ -1027,6 +1202,111 @@ program
 
     // Output skill content to stdout (no formatting, for piping/parsing)
     console.log(result.content)
+  })
+
+// Errors command - quick view of recent errors
+program
+  .command("errors")
+  .description("Show recent errors from d3k logs (browser + server)")
+  .option("-n, --count <count>", "Number of errors to show", "10")
+  .option("-a, --all", "Show all errors, not just recent")
+  .option("-c, --context", "Show interactions before each error (for replay)")
+  .option("--json", "Output as JSON for parsing")
+  .action(async (options) => {
+    const { showErrors } = await import("./commands/errors.js")
+    await showErrors(options)
+  })
+
+// Logs command - view recent logs
+program
+  .command("logs")
+  .description("Show recent logs from d3k (browser + server)")
+  .option("-n, --count <count>", "Number of lines to show", "50")
+  .option("-t, --type <type>", "Filter by type: browser, server, network, all", "all")
+  .option("--json", "Output as JSON for parsing")
+  .action(async (options) => {
+    const { showLogs } = await import("./commands/logs.js")
+    await showLogs(options)
+  })
+
+// Fix command - diagnose application errors from logs
+program
+  .command("fix")
+  .description("Diagnose application errors from d3k logs")
+  .option("-f, --focus <area>", "Focus area: build, runtime, network, ui, all", "all")
+  .option("-t, --time <minutes>", "Minutes to analyze back", "10")
+  .option("--json", "Output as JSON for parsing")
+  .action(async (options) => {
+    const { fixMyApp } = await import("./commands/fix.js")
+    await fixMyApp(options)
+  })
+
+// Crawl command - discover app URLs
+program
+  .command("crawl")
+  .description("Discover URLs by crawling the app")
+  .option("-d, --depth <depth>", "Crawl depth (1, 2, 3, or 'all')", "1")
+  .option("-l, --limit <limit>", "Max links per page to follow", "3")
+  .action(async (options) => {
+    const { crawlApp } = await import("./commands/crawl.js")
+    await crawlApp(options)
+  })
+
+// Find-component command - map DOM to React source
+program
+  .command("find-component <selector>")
+  .description("Find React component source for a DOM selector")
+  .action(async (selector) => {
+    const { findComponent } = await import("./commands/find-component.js")
+    await findComponent(selector)
+  })
+
+// Restart command - restart the dev server
+program
+  .command("restart")
+  .description("Restart the development server (rarely needed - HMR handles most changes)")
+  .action(async () => {
+    const { restartServer } = await import("./commands/restart.js")
+    await restartServer()
+  })
+
+// CDP port command - get the CDP port from the session file
+program
+  .command("cdp-port")
+  .description("Output the CDP port for the current d3k session (for use in scripts)")
+  .action(async () => {
+    const sessionDir = join(homedir(), ".d3k")
+    const projectDir = getProjectDir()
+    const projectName = projectDir.split("/").pop() || "unknown"
+
+    // Try to find session.json in ~/.d3k/{project-name}/
+    const entries = existsSync(sessionDir)
+      ? await import("fs").then((fs) => fs.readdirSync(sessionDir, { withFileTypes: true }))
+      : []
+
+    for (const entry of entries) {
+      if (entry.isDirectory() && entry.name.startsWith(projectName.substring(0, 20))) {
+        const sessionFile = join(sessionDir, entry.name, "session.json")
+        if (existsSync(sessionFile)) {
+          try {
+            const content = JSON.parse(readFileSync(sessionFile, "utf-8"))
+            if (content.cdpUrl) {
+              // Extract port from URL like "ws://localhost:9223/devtools/browser/..."
+              const match = content.cdpUrl.match(/:(\d+)/)
+              if (match) {
+                console.log(match[1])
+                process.exit(0)
+              }
+            }
+          } catch {
+            // Continue searching
+          }
+        }
+      }
+    }
+
+    // Default to 9222 if no session found
+    console.log("9222")
   })
 
 program.parse()

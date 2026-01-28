@@ -67,6 +67,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   const customPromptId = useId()
   const githubPatId = useId()
   const startPathId = useId()
+  const crawlDepthId = useId()
 
   // Initialize step from URL params to avoid CLS from cascading useEffects
   const initialStep = (() => {
@@ -91,7 +92,6 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   const [projectsError, setProjectsError] = useState<string | null>(null)
   const [workflowStatus, setWorkflowStatus] = useState<string>("")
   // biome-ignore lint/suspicious/noExplicitAny: API response type is dynamic
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [workflowResult, setWorkflowResult] = useState<any>(null)
   const [activeRunId, setActiveRunId] = useState<string | null>(null)
   const [sandboxUrl, setSandboxUrl] = useState<string | null>(null)
@@ -208,6 +208,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   }, [selectedTeam, loadingProjects])
 
   // Load branches when project and team are selected and on options step
+  // biome-ignore lint/correctness/useExhaustiveDependencies: loadBranches is stable (defined in component scope)
   useEffect(() => {
     if (
       selectedProject &&
@@ -219,7 +220,6 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
     ) {
       loadBranches(selectedProject, selectedTeam)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- loadBranches is stable and doesn't need to be a dependency
   }, [selectedProject, selectedTeam, step, availableBranches.length, loadingBranches, branchesError])
 
   // Poll workflow status when running
@@ -237,16 +237,13 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
 
         // Find the run - either by activeRunId or by matching project + running status
         // biome-ignore lint/suspicious/noExplicitAny: API response type is dynamic
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let run: any = null
         if (activeRunId) {
           // biome-ignore lint/suspicious/noExplicitAny: API response type is dynamic
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           run = data.runs.find((r: any) => r.id === activeRunId)
         } else if (selectedProject) {
           // Find the most recent running workflow for this project
           // biome-ignore lint/suspicious/noExplicitAny: API response type is dynamic
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           run = data.runs.find((r: any) => r.projectName === selectedProject.name && r.status === "running")
           if (run) {
             setActiveRunId(run.id)
@@ -285,8 +282,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
     pollStatus()
 
     return () => clearInterval(interval)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- selectedProject is used for matching but shouldn't re-trigger polling
-  }, [activeRunId, userId, step])
+  }, [activeRunId, userId, step, selectedProject])
 
   // Load GitHub PAT from localStorage when on options step
   useEffect(() => {
@@ -523,7 +519,6 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
               : "prompt"
 
       // biome-ignore lint/suspicious/noExplicitAny: Request body type depends on conditional fields
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const body: any = {
         devUrl,
         projectName: selectedProject.name,
@@ -568,7 +563,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       console.log("[Start Workflow] body.repoOwner:", body.repoOwner)
       console.log(
         "[Start Workflow] body.githubPat:",
-        body.githubPat ? "SET (length: " + body.githubPat.length + ")" : "NOT SET"
+        body.githubPat ? `SET (length: ${body.githubPat.length})` : "NOT SET"
       )
 
       // Create an AbortController for timeout handling
@@ -597,7 +592,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
         const accessToken = tokenData.accessToken
         console.log(
           "[Start Workflow] Got access token:",
-          accessToken ? "yes (length: " + accessToken.length + ")" : "NO TOKEN"
+          accessToken ? `yes (length: ${accessToken.length})` : "NO TOKEN"
         )
 
         if (!accessToken) {
@@ -1052,11 +1047,11 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                     </div>
                     {_selectedType === "design-guidelines" && (
                       <div>
-                        <Label htmlFor="crawlDepth" className="block text-sm font-medium text-foreground mb-1">
+                        <Label htmlFor={crawlDepthId} className="block text-sm font-medium text-foreground mb-1">
                           Crawl Depth
                         </Label>
                         <select
-                          id="crawlDepth"
+                          id={crawlDepthId}
                           value={crawlDepth}
                           onChange={(e) =>
                             setCrawlDepth(e.target.value === "all" ? "all" : Number.parseInt(e.target.value, 10))

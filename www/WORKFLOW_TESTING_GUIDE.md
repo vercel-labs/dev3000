@@ -21,10 +21,10 @@ vercel logs $(vercel ls --scope team_nLlpyC6REAqxydlFKbrMDlud 2>/dev/null | head
 ### Step 3: Navigate and click Start Workflow
 ```typescript
 // Navigate (use the full URL from Step 1)
-execute_browser_action({ action: "navigate", params: { url: "<FULL_URL_FROM_STEP_1>" }})
+agent_browser_action({ action: "navigate", params: { url: "<FULL_URL_FROM_STEP_1>" }})
 
 // Wait 10 seconds, then click Start Workflow
-execute_browser_action({ action: "evaluate", params: { expression: "Array.from(document.querySelectorAll('button')).find(btn => btn.textContent.includes('Start Workflow'))?.click()" }})
+agent_browser_action({ action: "evaluate", params: { expression: "Array.from(document.querySelectorAll('button')).find(btn => btn.textContent.includes('Start Workflow'))?.click()" }})
 ```
 
 ### Step 4: Watch logs for progress
@@ -129,7 +129,7 @@ echo "Monitoring started - NOW you can trigger the workflow"
 
 **Only do this AFTER monitoring is running!**
 
-Use d3k browser automation (via `execute_browser_action` MCP tool):
+Use d3k browser automation (via `agent_browser_action` MCP tool):
 
 **Before navigating**, read the bypass token from the environment:
 ```bash
@@ -142,7 +142,7 @@ Then construct the URL with the token value:
 ```typescript
 // Navigate to workflow form with all required parameters
 // Replace <BYPASS_TOKEN> with the value from WORKFLOW_TEST_BYPASS_TOKEN in .env.local
-execute_browser_action({
+agent_browser_action({
   action: "navigate",
   params: {
     url: "http://localhost:3000/workflows/new?type=cloud-fix&team=team_aMS4jZUlMooxyr9VgMKJf9uT&project=prj_0ITI5UHrH4Kp92G5OLEMrlgVX08p&bypass=<BYPASS_TOKEN>"
@@ -152,7 +152,7 @@ execute_browser_action({
 // IMPORTANT: Wait 15-20 seconds for the project details to load from Vercel API
 // The modal needs to fetch teams, projects, and branches before showing the Start button
 // You can poll for readiness:
-execute_browser_action({
+agent_browser_action({
   action: "evaluate",
   params: {
     expression: "document.body.innerHTML.includes('Start Workflow')"
@@ -160,7 +160,7 @@ execute_browser_action({
 })
 
 // Once the above returns true, click "Start Workflow" button
-execute_browser_action({
+agent_browser_action({
   action: "evaluate",
   params: {
     expression: "Array.from(document.querySelectorAll('button')).find(btn => btn.textContent.includes('Start Workflow'))?.click()"
@@ -452,7 +452,7 @@ Once you have the Dev URL, test it using d3k MCP:
 
 ```typescript
 // Navigate to the Dev URL from logs
-execute_browser_action({
+agent_browser_action({
   action: "navigate",
   params: {
     url: "https://sb-6xydwiqnuv8o.vercel.run"  // Replace with actual URL from logs
@@ -460,12 +460,12 @@ execute_browser_action({
 })
 
 // Wait a few seconds for page to load, then take a screenshot
-execute_browser_action({
+agent_browser_action({
   action: "screenshot"
 })
 
 // Check for any errors in the page
-execute_browser_action({
+agent_browser_action({
   action: "evaluate",
   params: {
     expression: `
@@ -535,7 +535,7 @@ else
 fi
 
 echo "4. Use dev3000 MCP to test in browser:"
-echo "   execute_browser_action({ action: 'navigate', params: { url: '$DEV_URL' } })"
+echo "   agent_browser_action({ action: 'navigate', params: { url: '$DEV_URL' } })"
 ```
 
 ## CLS Test Case Reference: tailwind-plus-transmit

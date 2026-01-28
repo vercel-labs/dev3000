@@ -11,10 +11,130 @@ import { Sandbox } from "@vercel/sandbox"
 import { createGateway, generateText, stepCountIs, tool } from "ai"
 import { z } from "zod"
 import { getOrCreateD3kSandbox, type SandboxTimingData, StepTimer } from "@/lib/cloud/d3k-sandbox"
+import { SandboxAgentBrowser } from "@/lib/cloud/sandbox-agent-browser"
 import { saveWorkflowRun, type WorkflowType } from "@/lib/workflow-storage"
 import type { WorkflowReport } from "@/types"
 
 const workflowLog = console.log
+
+// Cache for agent-browser instance per sandbox
+const agentBrowserCache = new Map<string, SandboxAgentBrowser>()
+
+/**
+ * Get or create an agent-browser instance for the sandbox
+ * Uses agent-browser CLI for browser automation (preferred over CDP in cloud)
+ */
+async function getAgentBrowser(sandbox: Sandbox, debug = false): Promise<SandboxAgentBrowser> {
+  const cacheKey = sandbox.sandboxId
+  let browser = agentBrowserCache.get(cacheKey)
+  if (!browser) {
+    browser = await SandboxAgentBrowser.create(sandbox, {
+      profile: "/tmp/agent-browser-profile",
+      debug
+    })
+    agentBrowserCache.set(cacheKey, browser)
+  }
+  return browser
+}
+
+/**
+ * Navigate browser to URL using agent-browser CLI
+ * Falls back to MCP tool if agent-browser fails
+ */
+async function navigateBrowser(
+  sandbox: Sandbox,
+  url: string,
+  debug = false
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const browser = await getAgentBrowser(sandbox, debug)
+    const result = await browser.open(url)
+    if (result.success) {
+      workflowLog(`[Browser] Navigated to ${url} via agent-browser`)
+      return { success: true }
+    }
+    workflowLog(`[Browser] agent-browser navigation failed: ${result.error}, falling back to MCP`)
+  } catch (error) {
+    workflowLog(
+      `[Browser] agent-browser error: ${error instanceof Error ? error.message : String(error)}, falling back to MCP`
+    )
+  }
+
+  // Fallback to MCP tool
+  const D3K_MCP_PORT = 3684
+  const navCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"agent_browser_action","arguments":{"action":"open","params":{"url":"${url}"}}}}'`
+  const result = await runSandboxCommand(sandbox, "bash", ["-c", navCmd])
+  return { success: result.exitCode === 0, error: result.stderr }
+}
+
+/**
+ * Reload browser page using agent-browser CLI
+ * Falls back to MCP tool if agent-browser fails
+ */
+async function reloadBrowser(sandbox: Sandbox, debug = false): Promise<{ success: boolean; error?: string }> {
+  try {
+    const browser = await getAgentBrowser(sandbox, debug)
+    const result = await browser.reload()
+    if (result.success) {
+      workflowLog("[Browser] Page reloaded via agent-browser")
+      return { success: true }
+    }
+    workflowLog(`[Browser] agent-browser reload failed: ${result.error}, falling back to MCP`)
+  } catch (error) {
+    workflowLog(
+      `[Browser] agent-browser error: ${error instanceof Error ? error.message : String(error)}, falling back to MCP`
+    )
+  }
+
+  // Fallback to MCP tool
+  const D3K_MCP_PORT = 3684
+  const reloadCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"agent_browser_action","arguments":{"action":"reload"}}}'`
+  const result = await runSandboxCommand(sandbox, "bash", ["-c", reloadCmd])
+  return { success: result.exitCode === 0, error: result.stderr }
+}
+
+/**
+ * Evaluate JavaScript in browser using agent-browser CLI
+ */
+async function evaluateInBrowser(
+  sandbox: Sandbox,
+  expression: string,
+  debug = false
+): Promise<{ success: boolean; result?: unknown; error?: string }> {
+  try {
+    const browser = await getAgentBrowser(sandbox, debug)
+    const result = await browser.evaluate(expression)
+    if (result.success) {
+      return { success: true, result: result.data }
+    }
+    return { success: false, error: result.error }
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : String(error) }
+  }
+}
+
+/**
+ * Take a screenshot using agent-browser CLI
+ */
+async function _screenshotBrowser(
+  sandbox: Sandbox,
+  outputPath: string,
+  options: { fullPage?: boolean } = {},
+  debug = false
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const browser = await getAgentBrowser(sandbox, debug)
+    const result = await browser.screenshot(outputPath, options)
+    if (result.success) {
+      workflowLog(`[Browser] Screenshot saved to ${outputPath} via agent-browser`)
+      return { success: true }
+    }
+    workflowLog(`[Browser] agent-browser screenshot failed: ${result.error}`)
+    return { success: false, error: result.error }
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : String(error) }
+  }
+}
 
 // Progress context for updating workflow status
 interface ProgressContext {
@@ -242,24 +362,23 @@ export async function agentFixLoopStep(
   // (because the navigation just started), so it SKIPS capture. Page.reload avoids this.
   timer.start("Reload page for final CLS")
   workflowLog("[Agent] Forcing page reload to capture final CLS...")
-  const D3K_MCP_PORT = 3684
 
   // First navigate to localhost (NOT the public devUrl!) so CLS capture works
   // The screencast-manager only captures for localhost:3000, not the public sb-xxx.vercel.run URL
   const targetUrl = `http://localhost:3000${startPath}`
-  const navCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"navigate","params":{"url":"${targetUrl}"}}}}'`
-  const navResult = await runSandboxCommand(sandbox, "bash", ["-c", navCmd])
+
+  // Use agent-browser CLI for navigation (preferred over CDP in cloud)
+  const navResult = await navigateBrowser(sandbox, targetUrl)
   workflowLog(
-    `[Agent] Navigate to devUrl result: exit=${navResult.exitCode}, stdout=${navResult.stdout.substring(0, 200)}`
+    `[Agent] Navigate to devUrl result: success=${navResult.success}${navResult.error ? `, error=${navResult.error}` : ""}`
   )
   await new Promise((resolve) => setTimeout(resolve, 2000))
 
   // Now reload the page to trigger fresh CLS capture
-  // Use native CDP Page.reload action for reliable page refresh
-  const reloadCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"reload"}}}'`
-  const reloadResult = await runSandboxCommand(sandbox, "bash", ["-c", reloadCmd])
+  // Use agent-browser reload (preferred over CDP in cloud)
+  const reloadResult = await reloadBrowser(sandbox)
   workflowLog(
-    `[Agent] Page.reload result: exit=${reloadResult.exitCode}, stdout=${reloadResult.stdout.substring(0, 200)}`
+    `[Agent] Page reload result: success=${reloadResult.success}${reloadResult.error ? `, error=${reloadResult.error}` : ""}`
   )
   workflowLog("[Agent] Waiting for CLS to be captured...")
   await new Promise((resolve) => setTimeout(resolve, 8000)) // 8 seconds for CLS to be detected
@@ -437,7 +556,7 @@ async function runAgentWithDiagnoseTool(
   crawlDepth?: number | "all"
 ): Promise<{ transcript: string; summary: string; systemPrompt: string }> {
   const SANDBOX_CWD = "/vercel/sandbox"
-  const D3K_MCP_PORT = 3684
+  const _D3K_MCP_PORT = 3684
 
   const gateway = createGateway({
     apiKey: process.env.AI_GATEWAY_API_KEY,
@@ -464,12 +583,13 @@ This navigates the page fresh to get accurate measurements.`,
         // NOTE: Navigate to localhost:3000 + startPath, not the public devUrl!
         // The screencast-manager only captures CLS for localhost:3000, not sb-xxx.vercel.run
         const diagnoseUrl = `http://localhost:3000${startPath}`
-        const navCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"navigate","params":{"url":"${diagnoseUrl}"}}}}'`
-        await runSandboxCommand(sandbox, "bash", ["-c", navCmd])
+
+        // Use agent-browser CLI for navigation (preferred over CDP in cloud)
+        await navigateBrowser(sandbox, diagnoseUrl)
         await new Promise((resolve) => setTimeout(resolve, 1000))
 
-        const reloadCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"reload"}}}'`
-        await runSandboxCommand(sandbox, "bash", ["-c", reloadCmd])
+        // Use agent-browser reload
+        await reloadBrowser(sandbox)
 
         await new Promise((resolve) => setTimeout(resolve, 5000))
 
@@ -544,13 +664,12 @@ Use this to diagnose and verify performance improvements.`,
       execute: async ({ reason }: { reason: string }) => {
         workflowLog(`[getWebVitals] Running: ${reason}`)
 
-        // Navigate to get fresh metrics
+        // Navigate to get fresh metrics using agent-browser
         const diagnoseUrl = `http://localhost:3000${startPath}`
-        const navCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"execute_browser_action","arguments":{"action":"navigate","params":{"url":"${diagnoseUrl}"}}}}'`
-        await runSandboxCommand(sandbox, "bash", ["-c", navCmd])
+        await navigateBrowser(sandbox, diagnoseUrl)
         await new Promise((resolve) => setTimeout(resolve, 3000))
 
-        // Get Web Vitals directly from browser using execute_browser_action with evaluate
+        // Get Web Vitals directly from browser using agent-browser evaluate
         const webVitalsScript = `(function() {
           const lcpEntries = performance.getEntriesByType('largest-contentful-paint');
           const fcpEntries = performance.getEntriesByName('first-contentful-paint');
@@ -566,23 +685,8 @@ Use this to diagnose and verify performance improvements.`,
           });
         })()`
 
-        const evalCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '${JSON.stringify(
-          {
-            jsonrpc: "2.0",
-            id: 1,
-            method: "tools/call",
-            params: {
-              name: "execute_browser_action",
-              arguments: {
-                action: "evaluate",
-                params: { expression: webVitalsScript }
-              }
-            }
-          }
-        ).replace(/'/g, "'\\''")}'`
-
-        const evalResult = await runSandboxCommand(sandbox, "bash", ["-c", evalCmd])
-        workflowLog(`[getWebVitals] Eval result: ${evalResult.stdout.substring(0, 500)}`)
+        const evalResult = await evaluateInBrowser(sandbox, webVitalsScript)
+        workflowLog(`[getWebVitals] Eval result: ${JSON.stringify(evalResult).substring(0, 500)}`)
 
         // Parse the result
         let vitals: { lcp: number | null; fcp: number | null; ttfb: number | null; cls: number; fid: number | null } = {
@@ -594,17 +698,16 @@ Use this to diagnose and verify performance improvements.`,
         }
 
         try {
-          // Parse MCP response to get the evaluate result (may be SSE format)
-          const mcpResponse = parseMcpResponse(evalResult.stdout) as {
-            result?: { content?: Array<{ type: string; text: string }> }
-          }
-          if (mcpResponse.result?.content?.[0]?.text) {
-            const resultText = mcpResponse.result.content[0].text
-            // Extract the JSON object after "Result:" - use a more robust regex that handles nested JSON
-            const resultJsonMatch = resultText.match(/Result:\s*(\{[\s\S]*\})/)
-            if (resultJsonMatch) {
-              const innerResult = JSON.parse(resultJsonMatch[1])
-              // The execute_browser_action tool returns {value: "<json>"}, not {result: {value: ...}}
+          if (evalResult.success && evalResult.result) {
+            // agent-browser evaluate returns the result directly
+            const resultStr =
+              typeof evalResult.result === "string" ? evalResult.result : JSON.stringify(evalResult.result)
+            // Try to parse as JSON - it might be a JSON string or already parsed
+            try {
+              vitals = JSON.parse(resultStr)
+            } catch {
+              // If that fails, try extracting from a nested structure
+              const innerResult = evalResult.result as { value?: string }
               if (innerResult.value) {
                 vitals = JSON.parse(innerResult.value)
               }
@@ -1157,34 +1260,19 @@ async function fetchWebVitalsViaCDP(
       `[fetchWebVitals] After trace: vitals=${JSON.stringify(vitals)}, lcp=${!!vitals.lcp}, cls=${!!vitals.cls}`
     )
     if (!vitals.lcp || !vitals.cls) {
-      diagLog("[fetchWebVitals] Trace incomplete, falling back to Performance API...")
+      diagLog("[fetchWebVitals] Trace incomplete, falling back to agent-browser evaluate...")
 
       // Trigger user interaction to finalize LCP (required for Performance API)
-      const finalizeLcpCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '${JSON.stringify(
-        {
-          jsonrpc: "2.0",
-          id: 1,
-          method: "tools/call",
-          params: {
-            name: "execute_browser_action",
-            arguments: {
-              action: "evaluate",
-              params: {
-                expression: `
-                  document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-                  document.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-                  'lcp-finalized'
-                `
-              }
-            }
-          }
-        }
-      ).replace(/'/g, "'\\''")}'`
-
-      await runSandboxCommand(sandbox, "bash", ["-c", finalizeLcpCmd])
+      // Use agent-browser evaluate instead of curl-to-MCP
+      const finalizeLcpScript = `
+        document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        document.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        'lcp-finalized'
+      `
+      await evaluateInBrowser(sandbox, finalizeLcpScript)
       await new Promise((resolve) => setTimeout(resolve, 500))
 
-      // Get Web Vitals from Performance API
+      // Get Web Vitals from Performance API using agent-browser evaluate
       const webVitalsScript = `(function() {
         const lcpEntries = performance.getEntriesByType('largest-contentful-paint');
         const fcpEntries = performance.getEntriesByName('first-contentful-paint');
@@ -1198,66 +1286,43 @@ async function fetchWebVitalsViaCDP(
         });
       })()`
 
-      const evalCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '${JSON.stringify(
-        {
-          jsonrpc: "2.0",
-          id: 1,
-          method: "tools/call",
-          params: {
-            name: "execute_browser_action",
-            arguments: {
-              action: "evaluate",
-              params: { expression: webVitalsScript }
-            }
-          }
-        }
-      ).replace(/'/g, "'\\''")}'`
-
-      const evalResult = await runSandboxCommand(sandbox, "bash", ["-c", evalCmd])
-      workflowLog(
-        `[fetchWebVitals] Fallback CDP result (${evalResult.stdout.length} chars): ${evalResult.stdout.substring(0, 800)}`
-      )
+      const evalResult = await evaluateInBrowser(sandbox, webVitalsScript)
+      diagLog(`[fetchWebVitals] Fallback agent-browser result: ${JSON.stringify(evalResult).substring(0, 500)}`)
 
       try {
-        const mcpResponse = parseMcpResponse(evalResult.stdout) as {
-          result?: { content?: Array<{ type: string; text: string }> }
-          error?: unknown
-        }
-        diagLog(`[fetchWebVitals] Fallback MCP response keys: ${Object.keys(mcpResponse).join(", ")}`)
-        if (mcpResponse.error) {
-          diagLog(`[fetchWebVitals] Fallback MCP error: ${JSON.stringify(mcpResponse.error)}`)
-        }
-        if (mcpResponse.result?.content?.[0]?.text) {
-          const resultText = mcpResponse.result.content[0].text
-          workflowLog(
-            `[fetchWebVitals] Fallback resultText (${resultText.length} chars): ${resultText.substring(0, 500)}`
-          )
-          const resultJsonMatch = resultText.match(/Result:\s*(\{[\s\S]*\})/)
-          diagLog(`[fetchWebVitals] Fallback regex match: ${resultJsonMatch ? "YES" : "NO"}`)
-          if (resultJsonMatch) {
-            diagLog(`[fetchWebVitals] Fallback matched JSON: ${resultJsonMatch[1].substring(0, 300)}`)
-            const innerResult = JSON.parse(resultJsonMatch[1])
-            diagLog(`[fetchWebVitals] Fallback innerResult keys: ${Object.keys(innerResult).join(", ")}`)
-            // Handle both formats: {value: "<json>"} and {result: {value: "<json>"}}
-            const vitalsString = innerResult.value || innerResult.result?.value
-            if (vitalsString) {
-              diagLog(`[fetchWebVitals] Fallback vitalsString: ${vitalsString.substring(0, 200)}`)
-              const rawVitals = JSON.parse(vitalsString)
-              diagLog(`[fetchWebVitals] Fallback vitals: ${JSON.stringify(rawVitals)}`)
+        if (evalResult.success && evalResult.result) {
+          // agent-browser evaluate returns the result directly
+          const resultStr =
+            typeof evalResult.result === "string" ? evalResult.result : JSON.stringify(evalResult.result)
+          diagLog(`[fetchWebVitals] Fallback resultStr: ${resultStr.substring(0, 300)}`)
 
-              // Only use fallback values if we don't already have them from trace
-              if (!vitals.lcp && rawVitals.lcp !== null) {
-                vitals.lcp = { value: rawVitals.lcp, grade: gradeValue(rawVitals.lcp, 2500, 4000) }
-              }
-              if (!vitals.fcp && rawVitals.fcp !== null) {
-                vitals.fcp = { value: rawVitals.fcp, grade: gradeValue(rawVitals.fcp, 1800, 3000) }
-              }
-              if (!vitals.ttfb && rawVitals.ttfb !== null) {
-                vitals.ttfb = { value: rawVitals.ttfb, grade: gradeValue(rawVitals.ttfb, 800, 1800) }
-              }
-              if (!vitals.cls && rawVitals.cls !== null) {
-                vitals.cls = { value: rawVitals.cls, grade: gradeValue(rawVitals.cls, 0.1, 0.25) }
-              }
+          // Try to parse as JSON - it might be a JSON string or already parsed
+          let rawVitals: { lcp: number | null; fcp: number | null; ttfb: number | null; cls: number } | null = null
+          try {
+            rawVitals = JSON.parse(resultStr)
+          } catch {
+            // If that fails, try extracting from a nested structure
+            const innerResult = evalResult.result as { value?: string }
+            if (innerResult.value) {
+              rawVitals = JSON.parse(innerResult.value)
+            }
+          }
+
+          if (rawVitals) {
+            diagLog(`[fetchWebVitals] Fallback vitals: ${JSON.stringify(rawVitals)}`)
+
+            // Only use fallback values if we don't already have them from trace
+            if (!vitals.lcp && rawVitals.lcp !== null) {
+              vitals.lcp = { value: rawVitals.lcp, grade: gradeValue(rawVitals.lcp, 2500, 4000) }
+            }
+            if (!vitals.fcp && rawVitals.fcp !== null) {
+              vitals.fcp = { value: rawVitals.fcp, grade: gradeValue(rawVitals.fcp, 1800, 3000) }
+            }
+            if (!vitals.ttfb && rawVitals.ttfb !== null) {
+              vitals.ttfb = { value: rawVitals.ttfb, grade: gradeValue(rawVitals.ttfb, 800, 1800) }
+            }
+            if (!vitals.cls && rawVitals.cls !== null) {
+              vitals.cls = { value: rawVitals.cls, grade: gradeValue(rawVitals.cls, 0.1, 0.25) }
             }
           }
         }

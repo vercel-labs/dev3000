@@ -1,333 +1,190 @@
 import { spawnSync } from "child_process"
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "fs"
+import { existsSync, readFileSync } from "fs"
 import { homedir } from "os"
 import path from "path"
-import { getProjectDir } from "./project-name.js"
-
-const GITHUB_REPO = "vercel-labs/agent-skills"
-const SKILLS_PATH = "skills"
-
-// Folders to ignore when fetching skills
-const IGNORED_SKILL_FOLDERS = ["claude.ai"]
 
 export type InstallLocation = "project" | "global"
+export type ProjectType = "nextjs" | "react" | "other"
 
-export interface AvailableSkill {
-  name: string
+export interface SkillPackage {
+  repo: string
+  displayName: string
   description: string
-  path: string
-  sha: string
-  isNew: boolean
-  isUpdate: boolean
+  projectTypes: ProjectType[]
+  /** Skill folder names to check for installation */
+  skillFolders: string[]
 }
 
-interface GitHubContentItem {
-  name: string
-  path: string
-  sha: string
-  type: "file" | "dir"
-  download_url: string | null
+/**
+ * Skill packages offered based on project type.
+ * These are installed via `npx skills add <repo> --all`
+ */
+export const SKILL_PACKAGES: SkillPackage[] = [
+  {
+    repo: "vercel-labs/next-skills",
+    displayName: "Next.js Skills",
+    description: "Best practices, debugging, hydration fixes, metadata, and upgrade guides",
+    projectTypes: ["nextjs"],
+    // Folder names as installed by `npx skills add vercel-labs/next-skills`
+    skillFolders: ["next-best-practices", "next-cache-components", "next-upgrade"]
+  },
+  {
+    repo: "vercel-labs/agent-skills",
+    displayName: "React & Web Skills",
+    description: "React performance, design guidelines, and web development best practices",
+    projectTypes: ["nextjs", "react"],
+    // Folder names as installed by `npx skills add vercel-labs/agent-skills`
+    skillFolders: ["vercel-react-best-practices", "vercel-composition-patterns", "web-design-guidelines"]
+  }
+]
+
+/**
+ * Detect the project type based on config files and package.json dependencies.
+ */
+export function detectProjectType(): ProjectType {
+  // Check for Next.js config files first (most specific indicator)
+  const nextConfigFiles = ["next.config.js", "next.config.ts", "next.config.mjs", "next.config.cjs"]
+  if (nextConfigFiles.some((file) => existsSync(path.join(process.cwd(), file)))) {
+    return "nextjs"
+  }
+
+  // Check package.json dependencies
+  const packageJsonPath = path.join(process.cwd(), "package.json")
+  if (existsSync(packageJsonPath)) {
+    try {
+      const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf-8"))
+      const deps = { ...packageJson.dependencies, ...packageJson.devDependencies }
+
+      // Check for Next.js in dependencies
+      if (deps.next) {
+        return "nextjs"
+      }
+
+      // Check for React in dependencies
+      if (deps.react || deps["react-dom"]) {
+        return "react"
+      }
+    } catch {
+      // Ignore parse errors
+    }
+  }
+
+  return "other"
 }
 
-interface InstalledSkillInfo {
-  installedAt: string
-  sha: string
+/**
+ * Get skill packages applicable to the current project type.
+ */
+export function getApplicablePackages(): SkillPackage[] {
+  const projectType = detectProjectType()
+  return SKILL_PACKAGES.filter((pkg) => pkg.projectTypes.includes(projectType))
 }
 
-export interface InstalledSkills {
-  skills: Record<string, InstalledSkillInfo>
-  seenSkills: string[] // Format: "skillName:sha"
+/**
+ * Check if a skill package is already installed by checking for its skill folders.
+ * A package is considered installed if ANY of its skill folders exist.
+ * Only checks .agents/skills since that's where `npx skills` installs to.
+ */
+export function isPackageInstalled(pkg: SkillPackage): boolean {
+  const searchDirs = [path.join(process.cwd(), ".agents", "skills"), path.join(homedir(), ".agents", "skills")]
+
+  for (const skillsDir of searchDirs) {
+    for (const folder of pkg.skillFolders) {
+      if (existsSync(path.join(skillsDir, folder))) {
+        return true
+      }
+    }
+  }
+
+  return false
 }
 
-// Skills are installed to project's .claude/skills/ (where Claude Code expects them)
-function getProjectSkillsDir(): string {
-  return path.join(process.cwd(), ".claude", "skills")
-}
-
-// Global skills are installed to ~/.claude/skills/
-function getGlobalSkillsDir(): string {
-  return path.join(homedir(), ".claude", "skills")
-}
-
-// Get skills directory based on install location
+/**
+ * Get skills directory based on install location.
+ * Uses .agents/skills since that's where `npx skills` installs to.
+ */
 export function getSkillsDir(location: InstallLocation): string {
-  return location === "global" ? getGlobalSkillsDir() : getProjectSkillsDir()
+  return location === "global"
+    ? path.join(homedir(), ".agents", "skills")
+    : path.join(process.cwd(), ".agents", "skills")
 }
 
 /**
- * Detect if the current project uses React by checking package.json
+ * Install a skill package using the skills CLI.
+ * Installs all skills from the package to the specified location.
  */
-export function detectsReact(): boolean {
-  try {
-    const packageJsonPath = path.join(process.cwd(), "package.json")
-    if (!existsSync(packageJsonPath)) {
-      return false
-    }
-    const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf-8"))
-    const deps = { ...packageJson.dependencies, ...packageJson.devDependencies }
-    return Boolean(deps.react || deps["react-dom"] || deps.next || deps["@remix-run/react"])
-  } catch {
-    return false
-  }
-}
-
-/**
- * Check if a skill is actually installed on disk (not just tracked)
- * Checks both project and global locations
- */
-function isSkillInstalledOnDisk(skillName: string): boolean {
-  const projectSkillDir = path.join(getProjectSkillsDir(), skillName)
-  const globalSkillDir = path.join(getGlobalSkillsDir(), skillName)
-  return existsSync(projectSkillDir) || existsSync(globalSkillDir)
-}
-
-// Tracking data stored in ~/.d3k/{projectName}/skills.json
-function getInstalledSkillsPath(): string {
-  return path.join(getProjectDir(), "skills.json")
-}
-
-export function loadInstalledSkills(): InstalledSkills {
-  const filePath = getInstalledSkillsPath()
-  if (!existsSync(filePath)) {
-    return { skills: {}, seenSkills: [] }
-  }
-  try {
-    const content = readFileSync(filePath, "utf-8")
-    return JSON.parse(content) as InstalledSkills
-  } catch {
-    return { skills: {}, seenSkills: [] }
-  }
-}
-
-export function saveInstalledSkills(data: InstalledSkills): void {
-  const projectDir = getProjectDir()
-  if (!existsSync(projectDir)) {
-    mkdirSync(projectDir, { recursive: true })
-  }
-  writeFileSync(getInstalledSkillsPath(), JSON.stringify(data, null, 2))
-}
-
-interface SkillFrontmatter {
-  name: string | null
-  description: string | null
-}
-
-function parseSkillFrontmatter(content: string): SkillFrontmatter {
-  // Parse YAML frontmatter to extract name and description
-  const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/)
-  if (!frontmatterMatch) {
-    return { name: null, description: null }
-  }
-  const frontmatter = frontmatterMatch[1]
-
-  const nameMatch = frontmatter.match(/name:\s*(.+)/)
-  const descriptionMatch = frontmatter.match(/description:\s*(.+)/)
-
-  return {
-    name: nameMatch ? nameMatch[1].trim() : null,
-    description: descriptionMatch ? descriptionMatch[1].trim() : null
-  }
-}
-
-export async function fetchAvailableSkills(): Promise<AvailableSkill[]> {
-  try {
-    // Fetch list of skills from GitHub
-    const response = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${SKILLS_PATH}`)
-    if (!response.ok) {
-      return []
-    }
-
-    const items = (await response.json()) as GitHubContentItem[]
-
-    // Filter to only directories (actual skills, not .zip files), excluding ignored folders
-    const skillDirs = items.filter((item) => item.type === "dir" && !IGNORED_SKILL_FOLDERS.includes(item.name))
-
-    // Fetch name and description from each skill's SKILL.md frontmatter
-    const skills: AvailableSkill[] = []
-    for (const dir of skillDirs) {
-      try {
-        const skillMdUrl = `https://raw.githubusercontent.com/${GITHUB_REPO}/main/${dir.path}/SKILL.md`
-        const skillMdResponse = await fetch(skillMdUrl)
-        if (!skillMdResponse.ok) continue
-
-        const content = await skillMdResponse.text()
-        const frontmatter = parseSkillFrontmatter(content)
-
-        // Use name from frontmatter (required by skills CLI), fall back to folder name
-        const skillName = frontmatter.name || dir.name
-
-        skills.push({
-          name: skillName,
-          description: frontmatter.description || `${skillName} skill`,
-          path: dir.path,
-          sha: dir.sha,
-          isNew: false, // Will be set by getActionableSkills
-          isUpdate: false // Will be set by getActionableSkills
-        })
-      } catch {
-        // Skip skills we can't fetch
-      }
-    }
-
-    return skills
-  } catch {
-    // Network error or API rate limit - return empty
-    return []
-  }
-}
-
-export function getActionableSkills(available: AvailableSkill[], installed: InstalledSkills): AvailableSkill[] {
-  const actionable: AvailableSkill[] = []
-
-  for (const skill of available) {
-    const installedInfo = installed.skills[skill.name]
-    const seenKey = `${skill.name}:${skill.sha}`
-    const existsOnDisk = isSkillInstalledOnDisk(skill.name)
-
-    if (!installedInfo || !existsOnDisk) {
-      // New skill OR tracked but deleted from disk - check if user already skipped this version
-      if (!installed.seenSkills.includes(seenKey)) {
-        actionable.push({ ...skill, isNew: true, isUpdate: false })
-      }
-    } else if (installedInfo.sha !== skill.sha) {
-      // Update available - check if user already skipped this version
-      if (!installed.seenSkills.includes(seenKey)) {
-        actionable.push({ ...skill, isNew: false, isUpdate: true })
-      }
-    }
-    // If sha matches and exists on disk, skill is up to date - skip
-  }
-
-  return actionable
-}
-
-/**
- * Install a skill using the official skills CLI (https://skills-ai.dev)
- * This delegates to `npx skills add` for the actual installation
- */
-export async function installSkill(skill: AvailableSkill, location: InstallLocation = "project"): Promise<void> {
-  const args = ["skills", "add", GITHUB_REPO, "--skill", skill.name, "-a", "claude-code", "-y"]
+export async function installSkillPackage(
+  pkg: SkillPackage,
+  location: InstallLocation = "project"
+): Promise<{ success: boolean; error?: string }> {
+  // --all installs all skills from the package, -y skips prompts
+  // Bug fixed in vercel-labs/skills#135: --all no longer forces global
+  const args = ["skills", "add", pkg.repo, "-a", "claude-code", "-y", "--all"]
 
   if (location === "global") {
     args.push("-g")
   }
 
   const result = spawnSync("npx", args, {
-    stdio: "pipe",
-    timeout: 60000 // 60 second timeout
+    stdio: "inherit",
+    timeout: 120000, // 2 minute timeout for full package
+    cwd: process.cwd()
   })
 
   if (result.status !== 0) {
-    const stderr = result.stderr?.toString() || ""
-    throw new Error(`Failed to install skill ${skill.name}: ${stderr}`)
+    return { success: false, error: "Installation failed" }
   }
 
-  // Update tracking data
-  const installed = loadInstalledSkills()
-  installed.skills[skill.name] = {
-    installedAt: new Date().toISOString(),
-    sha: skill.sha
-  }
-  // Remove from seenSkills if it was there (user chose to install after skipping)
-  installed.seenSkills = installed.seenSkills.filter((s) => !s.startsWith(`${skill.name}:`))
-  saveInstalledSkills(installed)
+  return { success: true }
 }
-
-export function markSkillsAsSeen(skills: AvailableSkill[]): void {
-  const installed = loadInstalledSkills()
-  for (const skill of skills) {
-    const seenKey = `${skill.name}:${skill.sha}`
-    if (!installed.seenSkills.includes(seenKey)) {
-      installed.seenSkills.push(seenKey)
-    }
-  }
-  saveInstalledSkills(installed)
-}
-
-// Skills that have been deprecated/renamed and should be silently removed
-const DEPRECATED_SKILLS = [
-  "react-performance", // Replaced by react-best-practices from agent-skills repo
-  "vercel-design-guidelines" // Renamed to web-design-guidelines in agent-skills repo
-]
 
 /**
- * Silently clean up deprecated skills from user's local installations
+ * Check for skill updates using the skills CLI.
  */
-function cleanupDeprecatedSkills(): void {
-  const projectSkillsDir = path.join(process.cwd(), ".claude", "skills")
-  const globalSkillsDir = path.join(homedir(), ".claude", "skills")
+export async function checkForSkillUpdates(): Promise<{ hasUpdates: boolean; output: string }> {
+  const result = spawnSync("npx", ["skills", "check"], {
+    stdio: "pipe",
+    timeout: 30000
+  })
 
-  for (const skillName of DEPRECATED_SKILLS) {
-    // Remove from project
-    const projectPath = path.join(projectSkillsDir, skillName)
-    if (existsSync(projectPath)) {
-      try {
-        rmSync(projectPath, { recursive: true, force: true })
-      } catch {
-        // Silently ignore errors
-      }
-    }
+  const output = result.stdout?.toString() || ""
+  const lowerOutput = output.toLowerCase()
 
-    // Remove from global
-    const globalPath = path.join(globalSkillsDir, skillName)
-    if (existsSync(globalPath)) {
-      try {
-        rmSync(globalPath, { recursive: true, force: true })
-      } catch {
-        // Silently ignore errors
-      }
-    }
-  }
+  // Check for specific phrases that indicate updates are available
+  // Avoid false positives from "Checking for skill updates..." message
+  const hasUpdates =
+    (lowerOutput.includes("update available") || lowerOutput.includes("updates available")) &&
+    !lowerOutput.includes("no skills tracked") &&
+    !lowerOutput.includes("no skills to check")
 
-  // Also clean up tracking data for deprecated skills
-  const installed = loadInstalledSkills()
-  let changed = false
-  for (const skillName of DEPRECATED_SKILLS) {
-    if (installed.skills[skillName]) {
-      delete installed.skills[skillName]
-      changed = true
-    }
-    // Remove from seenSkills too
-    const oldSeenSkills = installed.seenSkills.length
-    installed.seenSkills = installed.seenSkills.filter((s) => !s.startsWith(`${skillName}:`))
-    if (installed.seenSkills.length !== oldSeenSkills) {
-      changed = true
-    }
-  }
-  if (changed) {
-    saveInstalledSkills(installed)
+  return { hasUpdates, output }
+}
+
+/**
+ * Update all skills using the skills CLI.
+ */
+export async function updateSkills(): Promise<{ success: boolean; output: string }> {
+  const result = spawnSync("npx", ["skills", "update", "-y"], {
+    stdio: "pipe",
+    timeout: 120000
+  })
+
+  return {
+    success: result.status === 0,
+    output: result.stdout?.toString() || result.stderr?.toString() || ""
   }
 }
 
-export async function checkForNewSkills(): Promise<AvailableSkill[]> {
-  // Clean up any deprecated skills first
-  cleanupDeprecatedSkills()
-
-  // Fetch available skills from GitHub
-  const available = await fetchAvailableSkills()
-
-  const installed = loadInstalledSkills()
-  return getActionableSkills(available, installed)
+/**
+ * Get packages that are applicable but not yet installed.
+ */
+export function getUninstalledPackages(): SkillPackage[] {
+  return getApplicablePackages().filter((pkg) => !isPackageInstalled(pkg))
 }
 
-export async function installSelectedSkills(
-  skills: AvailableSkill[],
-  location: InstallLocation = "project",
-  onProgress?: (skill: AvailableSkill, index: number, total: number) => void
-): Promise<{ success: string[]; failed: string[] }> {
-  const success: string[] = []
-  const failed: string[] = []
-
-  for (let i = 0; i < skills.length; i++) {
-    const skill = skills[i]
-    onProgress?.(skill, i, skills.length)
-    try {
-      await installSkill(skill, location)
-      success.push(skill.name)
-    } catch {
-      failed.push(skill.name)
-    }
-  }
-
-  return { success, failed }
+/**
+ * Get packages that are applicable and installed (for showing update info).
+ */
+export function getInstalledPackages(): SkillPackage[] {
+  return getApplicablePackages().filter((pkg) => isPackageInstalled(pkg))
 }

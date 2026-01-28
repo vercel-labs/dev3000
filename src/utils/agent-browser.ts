@@ -12,16 +12,56 @@ import { fileURLToPath } from "url"
 
 // Find the agent-browser binary in node_modules
 function getAgentBrowserPath(): string {
-  // Try relative to this module first (for development)
-  const currentFile = fileURLToPath(import.meta.url)
-  const projectRoot = dirname(dirname(dirname(currentFile)))
-  const localPath = join(projectRoot, "node_modules", ".bin", "agent-browser")
-
-  if (existsSync(localPath)) {
-    return localPath
+  // 1. Check environment variable first (set by d3k when starting MCP server)
+  if (process.env.AGENT_BROWSER_PATH && existsSync(process.env.AGENT_BROWSER_PATH)) {
+    return process.env.AGENT_BROWSER_PATH
   }
 
-  // Fallback to global command
+  // Build search paths from multiple starting points
+  const searchPaths: string[] = []
+
+  // 2. Try import.meta.url-based paths (works in dev, may not work in Next.js bundle)
+  try {
+    const currentFile = fileURLToPath(import.meta.url)
+    const currentDir = dirname(currentFile)
+
+    // Only use these paths if currentDir looks like a real filesystem path
+    // (Next.js/Turbopack rewrites import.meta.url to virtual paths like "src/utils/...")
+    if (currentDir.startsWith("/") || currentDir.match(/^[A-Z]:\\/i)) {
+      searchPaths.push(
+        // Relative to src/utils/ or dist/utils/
+        join(dirname(dirname(currentDir)), "node_modules", ".bin", "agent-browser"),
+        // MCP server's node_modules
+        join(currentDir, "..", "..", "..", "mcp-server", "node_modules", ".bin", "agent-browser"),
+        join(dirname(dirname(currentDir)), "mcp-server", "node_modules", ".bin", "agent-browser"),
+        // Global installed platform package
+        join(currentDir, "..", "..", "..", "..", "mcp-server", "node_modules", ".bin", "agent-browser"),
+        join(currentDir, "..", "..", "node_modules", ".bin", "agent-browser")
+      )
+    }
+  } catch {
+    // import.meta.url not available or invalid, skip these paths
+  }
+
+  // 3. Use process.cwd() as fallback - essential for Next.js bundled code
+  // When running as MCP server, cwd is typically the mcp-server directory
+  const cwd = process.cwd()
+  searchPaths.push(
+    // Direct node_modules (when cwd is mcp-server/)
+    join(cwd, "node_modules", ".bin", "agent-browser"),
+    // Parent's mcp-server (when cwd is package root)
+    join(cwd, "mcp-server", "node_modules", ".bin", "agent-browser"),
+    // Sibling mcp-server (when cwd is somewhere else in the package)
+    join(cwd, "..", "mcp-server", "node_modules", ".bin", "agent-browser")
+  )
+
+  for (const searchPath of searchPaths) {
+    if (existsSync(searchPath)) {
+      return searchPath
+    }
+  }
+
+  // Fallback to global command (may work if installed globally)
   return "agent-browser"
 }
 
@@ -80,9 +120,11 @@ function buildArgs(options: AgentBrowserOptions): string[] {
     args.push("--session", options.session)
   }
 
-  if (options.profile) {
-    args.push("--profile", options.profile)
-  }
+  // NOTE: --profile flag is not yet supported by agent-browser CLI
+  // Keeping the option in the interface for future compatibility
+  // if (options.profile) {
+  //   args.push("--profile", options.profile)
+  // }
 
   // Always use JSON output for parsing
   args.push("--json")

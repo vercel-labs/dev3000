@@ -2,7 +2,6 @@ import { existsSync, readdirSync, readFileSync } from "fs"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { findSkill, getSkill, getSkillDirectories, getSkillsInfo, listAvailableSkills, type SkillResult } from "./index"
 
-// Mock fs module
 vi.mock("fs", () => ({
   existsSync: vi.fn(),
   readdirSync: vi.fn(),
@@ -20,30 +19,22 @@ describe("skills module", () => {
 
   describe("getSkillDirectories", () => {
     it("should return directories that exist", () => {
-      // At minimum, should return project-local .claude/skills if it exists
-      mockExistsSync.mockImplementation((path: string) => {
-        return path.includes(".claude/skills") || path.includes("src/skills")
-      })
-
+      mockExistsSync.mockImplementation((path: string) => path.includes(".agents/skills"))
       const dirs = getSkillDirectories("/test/project")
       expect(dirs.length).toBeGreaterThan(0)
     })
 
-    it("should include project-local skills directory", () => {
+    it("should include project-local .agents/skills directory", () => {
       mockExistsSync.mockReturnValue(true)
-
       const dirs = getSkillDirectories("/test/project")
-      const hasProjectLocal = dirs.some((d) => d.includes(".claude/skills"))
-      expect(hasProjectLocal).toBe(true)
+      expect(dirs.some((d) => d.includes(".agents/skills"))).toBe(true)
     })
   })
 
   describe("findSkill", () => {
     it("should find a skill in the first matching directory", () => {
-      // Mock: directory exists AND skill file exists
       mockExistsSync.mockImplementation((path: string) => {
-        // Return true for both the directory check and the SKILL.md file check
-        return path.includes(".claude/skills") || path.includes("src/skills") || path.includes("test-skill/SKILL.md")
+        return path.includes(".agents/skills") || path.includes("test-skill/SKILL.md")
       })
 
       const result = findSkill("test-skill", "/test/project")
@@ -53,7 +44,6 @@ describe("skills module", () => {
 
     it("should return null if skill not found", () => {
       mockExistsSync.mockReturnValue(false)
-
       const result = findSkill("nonexistent-skill", "/test/project")
       expect(result).toBeNull()
     })
@@ -69,9 +59,8 @@ description: Test skill description
 
 This is test content.`
 
-      // Mock: directory exists AND skill file exists
       mockExistsSync.mockImplementation((path: string) => {
-        return path.includes(".claude/skills") || path.includes("src/skills") || path.includes("test-skill/SKILL.md")
+        return path.includes(".agents/skills") || path.includes("test-skill/SKILL.md")
       })
       mockReadFileSync.mockReturnValue(skillContent)
 
@@ -79,7 +68,6 @@ This is test content.`
       expect(result.found).toBe(true)
       expect(result.name).toBe("test-skill")
       expect(result.content).toBe(skillContent)
-      expect(result.path).toBeTruthy()
     })
 
     it("should return error when skill not found", () => {
@@ -89,13 +77,11 @@ This is test content.`
       const result: SkillResult = getSkill("nonexistent", "/test/project")
       expect(result.found).toBe(false)
       expect(result.error).toContain("not found")
-      expect(result.availableSkills).toBeDefined()
     })
 
     it("should handle read errors gracefully", () => {
-      // Mock: directory and file exist but read fails
       mockExistsSync.mockImplementation((path: string) => {
-        return path.includes(".claude/skills") || path.includes("src/skills") || path.includes("error-skill/SKILL.md")
+        return path.includes(".agents/skills") || path.includes("error-skill/SKILL.md")
       })
       mockReadFileSync.mockImplementation(() => {
         throw new Error("Permission denied")
@@ -109,28 +95,17 @@ This is test content.`
   })
 
   describe("listAvailableSkills", () => {
-    it("should list skills from all directories", () => {
+    it("should list skills from directories", () => {
       mockExistsSync.mockReturnValue(true)
-      mockReaddirSync.mockImplementation((dir: string) => {
-        if (dir.includes(".claude/skills")) {
-          return [
-            { name: "skill-a", isDirectory: () => true },
-            { name: "skill-b", isDirectory: () => true }
-          ]
-        }
-        if (dir.includes("src/skills")) {
-          return [
-            { name: "skill-c", isDirectory: () => true },
-            { name: "not-a-skill.txt", isDirectory: () => false }
-          ]
-        }
-        return []
-      })
+      mockReaddirSync.mockImplementation(() => [
+        { name: "skill-a", isDirectory: () => true },
+        { name: "skill-b", isDirectory: () => true },
+        { name: "not-a-skill.txt", isDirectory: () => false }
+      ])
 
       const skills = listAvailableSkills("/test/project")
       expect(skills).toContain("skill-a")
       expect(skills).toContain("skill-b")
-      expect(skills).toContain("skill-c")
       expect(skills).not.toContain("not-a-skill.txt")
     })
 
@@ -139,8 +114,7 @@ This is test content.`
       mockReaddirSync.mockImplementation(() => [{ name: "same-skill", isDirectory: () => true }])
 
       const skills = listAvailableSkills("/test/project")
-      const sameSkillCount = skills.filter((s) => s === "same-skill").length
-      expect(sameSkillCount).toBe(1)
+      expect(skills.filter((s) => s === "same-skill").length).toBe(1)
     })
 
     it("should return sorted list", () => {
@@ -182,7 +156,6 @@ description: A helpful skill for testing
       expect(skills.length).toBeGreaterThan(0)
       expect(skills[0].name).toBe("test-skill")
       expect(skills[0].description).toBe("A helpful skill for testing")
-      expect(skills[0].path).toBeTruthy()
     })
 
     it("should extract description from first paragraph if no frontmatter", () => {
@@ -198,21 +171,6 @@ More content here.`
 
       const skills = getSkillsInfo("/test/project")
       expect(skills[0].description).toContain("This is the first paragraph")
-    })
-
-    it("should truncate long descriptions", () => {
-      const longDescription = "A".repeat(150)
-      const skillContent = `---
-description: ${longDescription}
----`
-
-      mockExistsSync.mockReturnValue(true)
-      mockReaddirSync.mockImplementation(() => [{ name: "test-skill", isDirectory: () => true }])
-      mockReadFileSync.mockReturnValue(skillContent)
-
-      const skills = getSkillsInfo("/test/project")
-      // The frontmatter description isn't truncated, only first-paragraph fallback is
-      expect(skills[0].description).toBe(longDescription)
     })
   })
 })

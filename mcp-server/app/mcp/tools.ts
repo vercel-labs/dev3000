@@ -26,13 +26,12 @@ function isInSandbox(): boolean {
 export const TOOL_DESCRIPTIONS = {
   // Meta-description for MCP coordination - Claude should see this when listing tools
   _mcp_coordination:
-    "**dev3000 is an MCP orchestrator for web development.** When both dev3000 and chrome-devtools-mcp are available, prefer dev3000's browser tools (execute_browser_action) as they provide:\n• Unified error context from server logs + browser console + network\n• Automatic screenshots on errors\n• Framework-aware diagnostics (Next.js, Svelte)\n• Coordinated Chrome connection management\n\ndev3000 automatically detects other MCP configurations and avoids conflicts.",
+    "**dev3000 is an MCP orchestrator for web development.** For browser automation, use the d3k CLI:\n```bash\nd3k agent-browser --cdp 9222 <command>\n```\nThis connects to d3k's existing Chrome browser. NEVER install Playwright or Chromium - d3k already has a browser open.\n\ndev3000 provides unified error context from server logs + browser console + network, automatic screenshots on errors, and framework-aware diagnostics (Next.js, Svelte).",
 
   fix_my_app:
     "Diagnoses application errors from dev3000 logs. Returns a prioritized list of issues requiring fixes.\n\n**CRITICAL: You MUST use this tool in a loop until all errors are resolved:**\n\n```\nwhile (errors exist) {\n  1. DIAGNOSE: Call fix_my_app to get current errors\n  2. FIX: Implement a fix for the highest-priority error\n  3. VERIFY: Call fix_my_app again to confirm the error is gone\n  4. REPEAT: Continue until no errors remain\n}\n```\n\n**This tool does NOT fix anything automatically.** It returns diagnostic data. You must:\n- Read the error output\n- Investigate and fix each issue\n- Call this tool again to verify your fix worked\n- Keep looping until the app is healthy\n\n**What it analyzes:**\n• Server logs, browser console, network requests\n• Categorizes: build errors, server crashes, browser errors, network issues, warnings\n• Prioritizes by severity (fix build errors first, then server, then browser, etc.)\n• Shows user interactions that triggered each error\n\n**Parameters:**\n• focusArea: 'build', 'runtime', 'network', 'ui', 'performance', or 'all' (default)\n• mode: 'snapshot' (current state), 'bisect' (before/after comparison), 'monitor' (continuous)\n• timeRangeMinutes: How far back to analyze (default: 10)\n• createPR: If true, creates a PR branch for the highest-priority issue\n\n**Framework support:** Auto-detects Next.js for framework-specific analysis.\n\n**Attribution for commits/PRs:**\n```\nGenerated with Claude Code using d3k (https://d3k.dev)\nCo-Authored-By: Claude <noreply@anthropic.com>\n```",
 
-  execute_browser_action:
-    "Executes browser actions (click, navigate, scroll, type, reload, evaluate JS) in the dev3000-managed Chrome instance.\n\n**PREFER THIS over standalone chrome-devtools-mcp tools.** dev3000 manages the Chrome connection and avoids CDP conflicts.\n\n**Available actions:**\n• screenshot: Capture current page state\n• navigate: Go to a URL\n• reload: Refresh the current page (triggers CLS recapture)\n• click: Click at coordinates {x, y} or selector\n• scroll: Scroll by {x, y} pixels\n• type: Type text into focused element\n• evaluate: Execute JavaScript (read-only operations recommended)\n\n**Use cases:**\n• Reproducing user interactions that triggered errors\n• Verifying fixes by replaying the error scenario\n• Testing specific UI workflows\n• Taking screenshots for visual verification",
+  // execute_browser_action removed - use agent_browser_action instead
 
   analyze_visual_diff:
     "Compares two screenshots and returns analysis instructions for identifying visual differences.\n\n**What it provides:**\n• Instructions to load both images for comparison\n• Context about what visual changes to look for\n• Guidance on identifying layout shift causes\n\n**Use cases:**\n• Analyzing before/after frames from CLS detection\n• Identifying elements that appeared, moved, or resized\n• Debugging visual regressions",
@@ -41,7 +40,7 @@ export const TOOL_DESCRIPTIONS = {
     "Maps a DOM element to its React component source code location.\n\n**How it works:**\n1. Inspects the element via Chrome DevTools Protocol\n2. Extracts the React component function source\n3. Identifies unique code patterns (JSX, classNames, etc.)\n4. Returns grep patterns to locate the source file\n\n**Use cases:**\n• Finding which file contains a specific UI element\n• Locating components responsible for layout shifts\n• Tracing DOM elements back to source code",
 
   restart_dev_server:
-    "Restarts the development server while preserving dev3000's monitoring infrastructure.\n\n**Restart process:**\n1. Tries nextjs-dev MCP restart if available\n2. Falls back to killing and respawning the server process\n3. Preserves: MCP server, browser connection, log capture, screenshots\n\n**When to use:**\n• After modifying config files (next.config.js, middleware, .env)\n• To clear persistent server state\n• For changes that HMR cannot handle\n\n**Important:**\n• Do NOT manually kill the dev server with pkill/kill commands\n• Do NOT manually start the server with npm/pnpm/yarn\n• Server will be offline briefly during restart\n• Most code changes are handled by HMR - only restart when necessary",
+    "⚠️ DANGEROUS: Restarts the development server. This is RARELY needed and often causes d3k to crash.\n\n**BEFORE using this tool, consider:**\n• HMR handles most code changes automatically - just wait a moment\n• Browser reload (Cmd+R) clears most cached state\n• 'use cache' in Next.js auto-invalidates when source files change\n• Restarting often fails and causes d3k to exit, disrupting the user's session\n\n**Only use for:**\n• Changes to next.config.js/ts (rare)\n• Changes to middleware.ts (rare)\n• Changes to .env files (rare)\n\n**DO NOT use for:**\n• Clearing RSC cache (HMR handles this)\n• Testing if a fix worked (just reload the page)\n• Any regular code changes\n\n**Ask the user first** before using this tool. They may prefer to manually restart d3k themselves.",
 
   crawl_app:
     "Discovers URLs in the application by crawling links from the homepage.\n\n**Parameters:**\n• depth: How many link levels to follow (1, 2, 3, or 'all')\n• limit: Max links per page (default: 3)\n\n**Behavior:**\n• Starts at localhost homepage\n• Follows same-origin links only\n• Deduplicates discovered URLs\n• Returns list of all found pages\n\n**Use cases:**\n• Discovering all routes before running diagnostics\n• Site-wide testing coverage\n• Verifying all pages load without errors",
@@ -49,8 +48,10 @@ export const TOOL_DESCRIPTIONS = {
   get_skill:
     "Get the content of a d3k/Claude Code skill. Skills are prompt templates that provide specialized instructions for specific tasks.\n\n**Parameters:**\n• name: The skill name (e.g., 'vercel-design-guidelines', 'd3k')\n\n**Returns:**\nThe full SKILL.md content which contains instructions on how to perform the skill's task.\n\n**Available skills:**\n• vercel-design-guidelines - Audit web interfaces against Vercel's design guidelines\n• d3k - Core d3k development assistant skill\n\n**Use cases:**\n• Loading design guidelines audit instructions\n• Getting specialized workflow instructions",
 
-  agent_browser_action:
-    "Execute browser actions using agent-browser (Playwright-based CLI). More reliable than raw CDP in sandbox environments.\n\n**Actions:**\n• open: Open URL {url: string}\n• click: Click element {target: '@ref' or 'selector'}\n• type: Type into focused element {text: string}\n• fill: Fill input field {target, value}\n• scroll: Scroll page {direction: up/down/left/right, amount?}\n• screenshot: Capture screenshot {fullPage?: boolean}\n• snapshot: Get accessibility tree with refs for clicking\n• close: Close browser\n• reload: Reload page\n• back: Navigate back\n\n**Options:**\n• session: Session name for isolation\n• headed: Run with visible browser (default: false)\n• profile: Path to persistent browser profile directory (stores cookies, localStorage, login sessions)\n\n**Persistent profiles:**\nUse profile to maintain login sessions across browser restarts. Each project can have its own profile directory to keep browser state isolated.\n\n**Ref-based clicking:**\nSnapshot returns elements with refs like @e1, @e2. Use these refs in click action for reliable element targeting."
+  // agent_browser_action: REMOVED - Use d3k CLI instead: `d3k agent-browser --cdp 9222 <command>`
+  // This avoids browser installation issues and connects to d3k's existing Chrome
+  _deprecated_agent_browser_action:
+    "REMOVED - Use d3k CLI: `d3k agent-browser --cdp 9222 <command>` instead. This connects to d3k's existing Chrome browser without needing to install anything."
 }
 
 // Types
@@ -81,10 +82,7 @@ export interface CreateIntegratedWorkflowParams {
   errorContext?: string
 }
 
-export interface ExecuteBrowserActionParams {
-  action: string
-  params?: Record<string, unknown>
-}
+// ExecuteBrowserActionParams removed - use AgentBrowserActionParams instead
 
 export interface GetMcpCapabilitiesParams {
   mcpName?: string // Optional - if not provided, shows all available MCPs
@@ -1759,7 +1757,7 @@ async function canDelegateToNextjs(): Promise<boolean> {
 /**
  * Delegate browser action to chrome-devtools MCP
  */
-async function delegateToChromeDevtools(
+async function _delegateToChromeDevtools(
   action: string,
   params: Record<string, unknown>
 ): Promise<{ content: Array<{ type: "text"; text: string }> }> {
@@ -1833,436 +1831,9 @@ ${availableFunctions}
   }
 }
 
-export async function executeBrowserAction({
-  action,
-  params = {}
-}: ExecuteBrowserActionParams): Promise<{ content: Array<{ type: "text"; text: string }> }> {
-  try {
-    // 🎯 INTELLIGENT DELEGATION: Check if chrome-devtools MCP can handle this action
-    const canDelegate = await canDelegateToChromeDevtools(action)
-    if (canDelegate) {
-      logToDevFile(`Browser Action Delegation: Routing '${action}' to chrome-devtools MCP`)
-      return await delegateToChromeDevtools(action, params)
-    }
-
-    // Log fallback to dev3000's own implementation
-    logToDevFile(`Browser Action Fallback: Using dev3000's execute_browser_action for '${action}'`)
-
-    // First, find active session to get CDP URL
-    const sessions = findActiveSessions()
-    if (sessions.length === 0) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: "❌ No active dev3000 sessions found. Make sure dev3000 is running with a browser!"
-          }
-        ]
-      }
-    }
-
-    // Get the most recent session's CDP URL (stored in session data)
-    const sessionData = JSON.parse(readFileSync(sessions[0].sessionFile, "utf-8"))
-    let cdpUrl = sessionData.cdpUrl
-
-    if (!cdpUrl) {
-      // Try to get CDP URL from Chrome debugging port as fallback
-      try {
-        const response = await fetch("http://localhost:9222/json")
-        const pages = await response.json()
-        const activePage = pages.find(
-          (page: { type: string; url: string }) => page.type === "page" && !page.url.startsWith("chrome://")
-        )
-        if (activePage) {
-          cdpUrl = activePage.webSocketDebuggerUrl
-          logToDevFile(`CDP Discovery: Found fallback CDP URL ${cdpUrl}`, sessions[0].projectName)
-        }
-      } catch (error) {
-        logToDevFile(`CDP Discovery: Failed to find fallback CDP URL - ${error}`, sessions[0].projectName)
-      }
-    }
-
-    if (!cdpUrl) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: `❌ No Chrome DevTools Protocol URL found. Make sure dev3000 is running with browser monitoring enabled (not --servers-only mode). Session CDP URL: ${sessionData.cdpUrl || "null"}`
-          }
-        ]
-      }
-    }
-
-    // Connect to Chrome DevTools Protocol with timeout
-    const result = await new Promise<Record<string, unknown>>((resolve, reject) => {
-      const ws = new WebSocket(cdpUrl)
-
-      // Overall timeout for the entire browser action (60 seconds)
-      const overallTimeout = setTimeout(() => {
-        ws.close()
-        reject(
-          new Error(
-            `Browser action '${action}' timed out after 60 seconds. This may indicate an issue with the browser or invalid parameters.`
-          )
-        )
-      }, 60000)
-
-      ws.on("open", async () => {
-        try {
-          // Get the first page target
-          ws.send(JSON.stringify({ id: 1, method: "Target.getTargets", params: {} }))
-
-          let targetId: string | null = null
-          let _sessionId: string | null = null
-          let messageId = 2
-
-          ws.on("message", async (data) => {
-            try {
-              const message = JSON.parse(data.toString())
-
-              // Handle getting targets
-              if (message.id === 1) {
-                // Check for CDP protocol errors (e.g., "Not allowed" in sandboxed environments)
-                if (message.error) {
-                  clearTimeout(overallTimeout)
-                  ws.close()
-                  reject(
-                    new Error(
-                      `Browser protocol error: ${message.error.message || JSON.stringify(message.error)}. This may occur in sandboxed browser environments where certain CDP commands are restricted.`
-                    )
-                  )
-                  return
-                }
-
-                const pageTarget = message.result?.targetInfos?.find((t: Record<string, unknown>) => t.type === "page")
-                if (!pageTarget) {
-                  clearTimeout(overallTimeout)
-                  ws.close()
-                  reject(new Error("No page targets found"))
-                  return
-                }
-
-                targetId = pageTarget.targetId
-
-                // Attach to the target
-                ws.send(
-                  JSON.stringify({
-                    id: messageId++,
-                    method: "Target.attachToTarget",
-                    params: { targetId, flatten: true }
-                  })
-                )
-                return
-              }
-
-              // Handle session creation
-              if (message.method === "Target.attachedToTarget") {
-                _sessionId = message.params.sessionId
-
-                // Now execute the requested action
-                let cdpResult: Record<string, unknown>
-
-                switch (action) {
-                  case "click": {
-                    let clickX: number
-                    let clickY: number
-
-                    // Support both coordinate-based and selector-based clicks
-                    if (typeof params.selector === "string") {
-                      // Get element coordinates from selector and ensure we click in the center
-                      const selectorResult = (await sendCDPCommand(ws, messageId++, "Runtime.evaluate", {
-                        expression: `(() => {
-                        const el = document.querySelector(${JSON.stringify(params.selector)});
-                        if (!el) return { found: false };
-                        const rect = el.getBoundingClientRect();
-                        // Calculate center point, rounding to avoid fractional pixels
-                        const centerX = Math.round(rect.left + rect.width / 2);
-                        const centerY = Math.round(rect.top + rect.height / 2);
-                        // Verify what element is at this point
-                        const elementAtPoint = document.elementFromPoint(centerX, centerY);
-                        const isCorrectElement = elementAtPoint === el || el.contains(elementAtPoint);
-                        return {
-                          found: true,
-                          x: centerX,
-                          y: centerY,
-                          width: rect.width,
-                          height: rect.height,
-                          elementAtPoint: elementAtPoint?.tagName + (elementAtPoint?.className ? '.' + elementAtPoint.className : ''),
-                          isCorrectElement: isCorrectElement
-                        };
-                      })()`,
-                        returnByValue: true
-                      })) as {
-                        result?: {
-                          value?: {
-                            found: boolean
-                            x?: number
-                            y?: number
-                            width?: number
-                            height?: number
-                            elementAtPoint?: string
-                            isCorrectElement?: boolean
-                          }
-                        }
-                      }
-
-                      if (
-                        selectorResult.result?.value?.found === true &&
-                        typeof selectorResult.result.value.x === "number" &&
-                        typeof selectorResult.result.value.y === "number"
-                      ) {
-                        clickX = selectorResult.result.value.x
-                        clickY = selectorResult.result.value.y
-
-                        // Log diagnostic info if element at point doesn't match
-                        if (selectorResult.result.value.isCorrectElement === false) {
-                          console.warn(
-                            `[execute_browser_action] Warning: Center point (${clickX}, ${clickY}) is over ${selectorResult.result.value.elementAtPoint}, not the target element. ` +
-                              `This may cause unexpected click behavior. Element size: ${selectorResult.result.value.width}x${selectorResult.result.value.height}`
-                          )
-                        }
-                      } else {
-                        throw new Error(`Element not found for selector: ${params.selector}`)
-                      }
-                    } else if (typeof params.x === "number" && typeof params.y === "number") {
-                      clickX = params.x
-                      clickY = params.y
-                    } else {
-                      throw new Error("Click action requires either {x, y} coordinates or a {selector} CSS selector")
-                    }
-
-                    cdpResult = await sendCDPCommand(ws, messageId++, "Input.dispatchMouseEvent", {
-                      type: "mousePressed",
-                      x: clickX,
-                      y: clickY,
-                      button: "left",
-                      clickCount: 1
-                    })
-                    await sendCDPCommand(ws, messageId++, "Input.dispatchMouseEvent", {
-                      type: "mouseReleased",
-                      x: clickX,
-                      y: clickY,
-                      button: "left",
-                      clickCount: 1
-                    })
-                    break
-                  }
-
-                  case "navigate":
-                    if (typeof params.url !== "string") {
-                      throw new Error("Navigate action requires url parameter as string")
-                    }
-                    cdpResult = await sendCDPCommand(ws, messageId++, "Page.navigate", { url: params.url })
-                    break
-
-                  case "reload":
-                    // Use CDP Page.reload for reliable page refresh that triggers CLS capture
-                    cdpResult = await sendCDPCommand(ws, messageId++, "Page.reload", {})
-                    break
-
-                  case "screenshot":
-                    ws.close()
-                    resolve({
-                      warning: "Screenshot action is not recommended!",
-                      advice:
-                        "Dev3000 automatically captures screenshots during interactions. Instead of manual screenshots, use click/navigate/scroll/type actions to reproduce user workflows, and dev3000 will capture screenshots at optimal times.",
-                      suggestion: "Run fix_my_app to see all auto-captured screenshots from your session."
-                    })
-                    return
-
-                  case "evaluate": {
-                    if (typeof params.expression !== "string") {
-                      throw new Error("Evaluate action requires expression parameter as string")
-                    }
-                    const expression = params.expression
-                    // Validate that the expression is safe (read-only DOM queries)
-                    // Block dangerous patterns
-                    const dangerousPatterns = [
-                      /eval\s*\(/,
-                      /Function\s*\(/,
-                      /setTimeout/,
-                      /setInterval/,
-                      /\.innerHTML\s*=/,
-                      /\.outerHTML\s*=/,
-                      /document\.write/,
-                      /document\.cookie\s*=/,
-                      /localStorage\.setItem/,
-                      /sessionStorage\.setItem/,
-                      /\.src\s*=/,
-                      /\.href\s*=/,
-                      /location\s*=/,
-                      /\.addEventListener/,
-                      /\.removeEventListener/,
-                      /new\s+Function/,
-                      /import\s*\(/,
-                      /fetch\s*\(/,
-                      /XMLHttpRequest/
-                    ]
-
-                    if (dangerousPatterns.some((regex) => regex.test(expression))) {
-                      throw new Error(
-                        "Expression contains dangerous patterns. Only safe read-only expressions allowed."
-                      )
-                    }
-
-                    cdpResult = await sendCDPCommand(ws, messageId++, "Runtime.evaluate", {
-                      expression: expression,
-                      returnByValue: true
-                    })
-                    break
-                  }
-
-                  case "scroll": {
-                    const scrollX = typeof params.deltaX === "number" ? params.deltaX : 0
-                    const scrollY = typeof params.deltaY === "number" ? params.deltaY : 0
-                    cdpResult = await sendCDPCommand(ws, messageId++, "Input.dispatchMouseEvent", {
-                      type: "mouseWheel",
-                      x: typeof params.x === "number" ? params.x : 500,
-                      y: typeof params.y === "number" ? params.y : 500,
-                      deltaX: scrollX,
-                      deltaY: scrollY
-                    })
-                    break
-                  }
-
-                  case "type":
-                    if (typeof params.text !== "string") {
-                      throw new Error("Type action requires text parameter as string")
-                    }
-                    // Type each character
-                    for (const char of params.text) {
-                      await sendCDPCommand(ws, messageId++, "Input.dispatchKeyEvent", {
-                        type: "char",
-                        text: char
-                      })
-                    }
-                    cdpResult = { action: "type", text: params.text }
-                    break
-
-                  default:
-                    throw new Error(`Unsupported action: ${action}`)
-                }
-
-                ws.close()
-                clearTimeout(overallTimeout)
-                resolve(cdpResult)
-              }
-            } catch (error) {
-              // Catch any errors that occur during message handling
-              ws.close()
-              clearTimeout(overallTimeout)
-              reject(
-                error instanceof Error
-                  ? error
-                  : new Error(`Browser action failed: ${error instanceof Error ? error.message : String(error)}`)
-              )
-            }
-          })
-
-          ws.on("error", (error) => {
-            clearTimeout(overallTimeout)
-            reject(error)
-          })
-
-          // Helper function to send CDP commands
-          async function sendCDPCommand(
-            ws: WebSocket,
-            id: number,
-            method: string,
-            params: Record<string, unknown>
-          ): Promise<Record<string, unknown>> {
-            return new Promise((cmdResolve, cmdReject) => {
-              const command = { id, method, params }
-
-              const messageHandler = (data: Buffer) => {
-                const message = JSON.parse(data.toString())
-                if (message.id === id) {
-                  ws.removeListener("message", messageHandler)
-                  if (message.error) {
-                    cmdReject(new Error(message.error.message))
-                  } else {
-                    cmdResolve(message.result)
-                  }
-                }
-              }
-
-              ws.on("message", messageHandler)
-              ws.send(JSON.stringify(command))
-
-              // Command timeout (30 seconds for complex evaluate expressions)
-              setTimeout(() => {
-                ws.removeListener("message", messageHandler)
-                cmdReject(new Error(`CDP command timeout after 30s: ${method}`))
-              }, 30000)
-            })
-          }
-        } catch (error) {
-          ws.close()
-          clearTimeout(overallTimeout)
-          reject(error)
-        }
-      })
-
-      ws.on("error", (error) => {
-        clearTimeout(overallTimeout)
-        reject(error)
-      })
-    })
-
-    // Build success message with augmented suggestions
-    let successMessage = `Browser action '${action}' executed successfully. Result: ${JSON.stringify(result, null, 2)}`
-
-    // Add augmented suggestions for enhanced capabilities
-    const canDelegateChrome = await canDelegateToChromeDevtools("inspect_element")
-    if (canDelegateChrome) {
-      successMessage += "\n\n🔗 **ENHANCED BROWSER ANALYSIS AVAILABLE**"
-      successMessage +=
-        "\n\ndev3000 completed the basic browser action above. For deeper browser insights, consider also:"
-
-      // Generate dynamic suggestions based on the action and available capabilities
-      const dynamicSuggestions = await generateChromeDevtoolsSuggestions(action)
-      const actionRelevantSuggestions = dynamicSuggestions.filter((suggestion) => {
-        const funcName = suggestion.function.toLowerCase()
-        const actionName = action.toLowerCase()
-
-        // Match suggestions to specific actions
-        if (actionName === "screenshot" && (funcName.includes("inspect") || funcName.includes("performance")))
-          return true
-        if (actionName === "evaluate" && (funcName.includes("console") || funcName.includes("inspect"))) return true
-        if (actionName === "navigate" && (funcName.includes("network") || funcName.includes("performance"))) return true
-        if (actionName === "click" && (funcName.includes("console") || funcName.includes("inspect"))) return true
-
-        // Include high-priority suggestions regardless
-        return suggestion.priority === "high"
-      })
-
-      actionRelevantSuggestions.slice(0, 2).forEach((suggestion) => {
-        successMessage += `\n• \`dev3000-chrome-devtools:${suggestion.function}()\` - ${suggestion.reason}`
-      })
-
-      successMessage +=
-        "\n\n💡 **Augmented approach:** Use dev3000 for basic automation, chrome-devtools for detailed analysis and debugging."
-    }
-
-    return {
-      content: [
-        {
-          type: "text",
-          text: successMessage
-        }
-      ]
-    }
-  } catch (error) {
-    return {
-      content: [
-        {
-          type: "text",
-          text: `Browser action failed: ${error instanceof Error ? error.message : String(error)}`
-        }
-      ]
-    }
-  }
-}
+// executeBrowserAction removed - use executeAgentBrowserAction directly
+// The legacy execute_browser_action MCP tool has been removed
+// All browser automation now goes through agent_browser_action
 
 // MCP Integration and Workflow Orchestration Functions
 
@@ -4381,7 +3952,18 @@ export async function getSkill(params: GetSkillParams) {
 // ============================================================
 
 export interface AgentBrowserActionParams {
-  action: "open" | "click" | "type" | "fill" | "scroll" | "screenshot" | "snapshot" | "close" | "reload" | "back"
+  action:
+    | "open"
+    | "click"
+    | "type"
+    | "fill"
+    | "scroll"
+    | "screenshot"
+    | "snapshot"
+    | "close"
+    | "reload"
+    | "back"
+    | "evaluate"
   params?: Record<string, unknown>
   session?: string // Session name for isolation
   headed?: boolean // Run with visible browser window
@@ -4415,11 +3997,45 @@ export async function executeAgentBrowserAction({
       }
     }
 
-    // Build common options
+    // Use project-specific profile path if not specified - this enables persistent sessions
+    // (cookies, localStorage, login state) across browser restarts, per-project
+    // Import getProjectDir to get the same profile path that d3k uses for Chrome
+    const { getProjectDir } = await import("../../../src/utils/project-name")
+    const defaultProfile = profile ?? join(getProjectDir(), "chrome-profile")
+
+    // Extract CDP port to connect to existing browser that d3k launched
+    // CDP_URL format: ws://localhost:9222/devtools/browser/...
+    // Try env var first, then fall back to session file (MCP server starts before CDP is ready)
+    let cdpPort: number | undefined
+    let cdpUrl = process.env.CDP_URL
+
+    // If env var is empty, read from session file
+    if (!cdpUrl) {
+      try {
+        const { existsSync, readFileSync } = await import("fs")
+        const sessionFile = join(getProjectDir(), "session.json")
+        if (existsSync(sessionFile)) {
+          const sessionInfo = JSON.parse(readFileSync(sessionFile, "utf8"))
+          cdpUrl = sessionInfo.cdpUrl
+        }
+      } catch {
+        // Ignore errors reading session file
+      }
+    }
+
+    if (cdpUrl) {
+      const match = cdpUrl.match(/:(\d+)\//)
+      if (match) {
+        cdpPort = parseInt(match[1], 10)
+      }
+    }
+
+    // Build common options - include cdpPort to connect to existing browser
     const options = {
       session,
       headed,
-      profile
+      profile: defaultProfile,
+      cdpPort
     }
 
     let result: unknown
@@ -4500,6 +4116,13 @@ export async function executeAgentBrowserAction({
       case "back": {
         const backResult = await agentBrowser.back(options)
         result = backResult
+        break
+      }
+
+      case "evaluate": {
+        const expression = typeof params.expression === "string" ? params.expression : ""
+        const evalResult = await agentBrowser.evaluate(expression, options)
+        result = evalResult
         break
       }
 

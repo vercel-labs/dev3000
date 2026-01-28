@@ -9,13 +9,16 @@ import {
   fg,
   green,
   MacOSScrollAccel,
+  RGBA,
   ScrollBoxRenderable,
   type StyledText,
   TextRenderable,
   t,
   yellow
 } from "@opentui/core"
-import { createReadStream, unwatchFile, watchFile } from "fs"
+import { appendFileSync, createReadStream, mkdirSync, unwatchFile, watchFile, writeFileSync } from "fs"
+import { tmpdir } from "os"
+import { join } from "path"
 import { LOG_COLORS } from "./constants/log-colors.js"
 import { formatTimeDelta, parseTimestampToMs } from "./utils/timestamp.js"
 
@@ -183,9 +186,14 @@ class D3kTUI {
   private ctrlCMessage = ""
   private ctrlCTimeout: NodeJS.Timeout | null = null
 
-  // Base timestamp for delta display (click on timestamp to set)
+  // Base timestamp for delta display (set via keyboard, not mouse click)
   private baseTimestampMs: number | undefined = undefined
   private baseLogId: number | undefined = undefined
+
+  // Debug mode for tracking selection/focus issues
+  private debugMode = false
+  private lastFocusedId: string | null = null
+  private debugLogFile: string = join(process.env.HOME || tmpdir(), ".d3k", "tui-debug.log")
 
   constructor(options: TUIOptions) {
     this.options = options
@@ -237,12 +245,18 @@ class D3kTUI {
     // Setup UI after renderer is created
     this.setupUI()
     this.setupKeyboardHandlers()
-    this.startLogFileWatcher()
+    this.setupFocusTracking()
     this.renderer.start()
+
+    // Delay log file watcher start to allow layout to compute valid positions
+    // Without this delay, initial logs get NaN X positions and selection fails
+    setTimeout(() => {
+      this.startLogFileWatcher()
+    }, 100)
 
     // Force a redraw after start to ensure borders render correctly
     process.stdout.write("\x1b[2J\x1b[H")
-    this.rebuildUI()
+    this.renderer.requestRender()
 
     return {
       app: { unmount: () => this.shutdown() },
@@ -293,11 +307,55 @@ class D3kTUI {
       scrollX: false,
       stickyScroll: true,
       stickyStart: "bottom",
-      scrollAcceleration: new MacOSScrollAccel({ maxMultiplier: 8 })
+      scrollAcceleration: new MacOSScrollAccel({ maxMultiplier: 8 }),
+      viewportCulling: false, // Disable culling to ensure all items are in hit grid
+      paddingLeft: 1, // Force left position calculation for selection hit testing
+      onMouse: (event) => {
+        // Log ALL mouse events to understand the flow
+        if (event.type === "down" || event.type === "up") {
+          const target = event.target
+          const targetId = target?.id || "(none)"
+          const targetX = target?.x ?? "?"
+          const targetY = target?.y ?? "?"
+          const targetW = target?.width ?? "?"
+          const targetH = target?.height ?? "?"
+          this.debugLog(
+            `[MOUSE_${event.type.toUpperCase()}] screen(${event.x},${event.y}) target=${targetId} pos(${targetX},${targetY}) size(${targetW}x${targetH}) selectable=${target?.selectable} hasSelection=${this.renderer?.hasSelection}`
+          )
+        }
+      },
+      onMouseDown: (event) => {
+        const target = event.target
+        const targetId = target?.id || "(none)"
+        const selection = this.renderer?.getSelection()
+        this.debugLog(
+          `[MOUSE_DOWN_CB] x=${event.x}, y=${event.y}, target=${targetId}, hasSelection=${this.renderer?.hasSelection}, isSelecting=${selection?.isSelecting}`
+        )
+      },
+      onMouseUp: (event) => {
+        const selection = this.renderer?.getSelection()
+        const selectedText = selection?.getSelectedText() || "(none)"
+        this.debugLog(
+          `[MOUSE_UP] x=${event.x}, y=${event.y}, hasSelection=${this.renderer?.hasSelection}, text="${selectedText.slice(0, 30)}"`
+        )
+      },
+      onMouseDrag: (event) => {
+        const target = event.target
+        const targetId = target?.id || "(none)"
+        this.debugLog(`[MOUSE_DRAG] x=${event.x}, y=${event.y}, target=${targetId}, isSelecting=${event.isSelecting}`)
+      }
     })
     logsSection.add(this.logsScrollBox)
 
-    // Container for log lines inside scroll box
+    // Track focus changes on scroll box
+    this.logsScrollBox.on("focused", () => {
+      this.debugLog(`[FOCUS] logsScrollBox focused`)
+    })
+    this.logsScrollBox.on("blurred", () => {
+      this.debugLog(`[FOCUS] logsScrollBox blurred`)
+    })
+
+    // Container for log lines inside scroll box - provides valid X positions
     this.logsContainer = new BoxRenderable(this.renderer, {
       id: "logs-content",
       flexDirection: "column",
@@ -305,27 +363,26 @@ class D3kTUI {
     })
     this.logsScrollBox.add(this.logsContainer)
 
-    // Bottom status line (skip in compact mode - logs take all space)
+    // Bottom status line - show "agent has access" hint in both modes
+    const statusLine = new BoxRenderable(this.renderer, {
+      id: "status-line",
+      height: 1,
+      flexDirection: "row",
+      justifyContent: "space-between",
+      paddingLeft: 1,
+      paddingRight: 1
+    })
+    mainContainer.add(statusLine)
+
+    // Help text (left side) - always show agent access hint
+    const helpText = new TextRenderable(this.renderer, {
+      id: "help-text",
+      content: t`${dim("<- agent has access to ↑")}`
+    })
+    statusLine.add(helpText)
+
+    // Status info (right side) - only in non-compact mode
     if (!isCompact) {
-      const statusLine = new BoxRenderable(this.renderer, {
-        id: "status-line",
-        height: 1,
-        flexDirection: "row",
-        justifyContent: "space-between",
-        paddingLeft: 1,
-        paddingRight: 1
-      })
-      mainContainer.add(statusLine)
-
-      // Log file path (left side)
-      const logPath = this.options.logFile.replace(process.env.HOME || "", "~")
-      const logPathText = new TextRenderable(this.renderer, {
-        id: "log-path",
-        content: t`${fg(BRAND_PURPLE)(logPath)}`
-      })
-      statusLine.add(logPathText)
-
-      // Status info (right side)
       this.statusText = new TextRenderable(this.renderer, {
         id: "status-text",
         content: this.buildStatusContent(false),
@@ -333,26 +390,14 @@ class D3kTUI {
       })
       statusLine.add(this.statusText)
     } else {
-      // In compact mode, show a simple footer explaining d3k's purpose
-      const statusLine = new BoxRenderable(this.renderer, {
-        id: "status-line",
-        height: 1,
-        flexDirection: "row",
-        paddingLeft: 1
-      })
-      mainContainer.add(statusLine)
-
-      const helpText = new TextRenderable(this.renderer, {
-        id: "help-text",
-        content: t`${dim("<- agent has access to ↑")}`
-      })
-      statusLine.add(helpText)
       this.statusText = null
     }
 
-    // Handle resize
+    // Handle resize - do NOT rebuild, let flex layout adapt naturally
+    // Rebuilding causes NaN positions that break text selection
     this.renderer.root.onSizeChange = () => {
-      this.rebuildUI()
+      // Just request a render, don't rebuild - flex layout handles resize
+      this.renderer?.requestRender()
     }
   }
 
@@ -424,16 +469,11 @@ class D3kTUI {
     })
     infoCol.add(appLine)
 
-    const mcpLine = new TextRenderable(this.renderer, {
-      id: "mcp-url",
-      content: t`${cyan(`🤖 MCP: http://localhost:${this.options.mcpPort}`)}`
-    })
-    infoCol.add(mcpLine)
-
-    const logsUrl = this.buildLogsUrl()
+    // Show logs path with ~/ instead of full home path
+    const logsPath = this.options.logFile.replace(process.env.HOME || "", "~")
     const logsLine = new TextRenderable(this.renderer, {
-      id: "logs-url-full",
-      content: t`${cyan(`📸 Logs: ${logsUrl}`)}`
+      id: "logs-file",
+      content: t`${cyan(`📋 Logs: ${logsPath}`)}`
     })
     infoCol.add(logsLine)
 
@@ -454,14 +494,6 @@ class D3kTUI {
     }
 
     return headerBox
-  }
-
-  private buildLogsUrl(): string {
-    const base = `http://localhost:${this.options.mcpPort}/logs`
-    if (this.options.projectName) {
-      return `${base}?project=${encodeURIComponent(this.options.projectName)}`
-    }
-    return base
   }
 
   private buildStatusContent(isCompact: boolean): StyledText {
@@ -500,7 +532,12 @@ class D3kTUI {
     }
 
     this.setupUI()
-    this.refreshLogs()
+
+    // Delay log refresh to allow layout to compute valid positions
+    // Without this delay, logs get NaN X positions and selection fails
+    setTimeout(() => {
+      this.refreshLogs()
+    }, 100)
   }
 
   private setupKeyboardHandlers() {
@@ -550,6 +587,50 @@ class D3kTUI {
           this.baseLogId = undefined
           this.refreshLogs()
         }
+        this.renderer?.clearSelection()
+        return
+      }
+
+      // Debug: Shift+D to toggle debug mode (verbose logging to file)
+      if (key.name === "d" && key.shift && !key.ctrl) {
+        this.debugMode = !this.debugMode
+        if (this.debugMode) {
+          // Ensure directory exists and clear the debug log file when enabling
+          try {
+            mkdirSync(join(process.env.HOME || tmpdir(), ".d3k"), { recursive: true })
+            writeFileSync(this.debugLogFile, `Debug mode enabled at ${new Date().toISOString()}\n`)
+          } catch {
+            // Ignore write errors
+          }
+        }
+        const entry: LogEntry = {
+          id: ++this.logIdCounter,
+          content: `[DEBUG] Debug mode ${this.debugMode ? `ENABLED - logging to ${this.debugLogFile}` : "DISABLED"}`
+        }
+        this.logs.push(entry)
+        this.addLogLines([entry])
+        return
+      }
+
+      // Debug: Press 'd' to check selection state and focus info (shows in UI and writes to file)
+      if (key.name === "d" && !key.ctrl && !key.shift) {
+        const selection = this.renderer?.getSelection()
+        const hasSelection = this.renderer?.hasSelection
+        const selectedText = selection?.getSelectedText() || "(none)"
+        const focusedRenderable = this.renderer?.currentFocusedRenderable
+        const focusedId = focusedRenderable?.id || "(none)"
+        const selectionContainer = this.renderer?.getSelectionContainer()
+        const containerId = selectionContainer?.id || "(none)"
+        const message = `hasSelection: ${hasSelection}, isSelecting: ${selection?.isSelecting}, renderables: ${selection?.selectedRenderables?.length ?? 0}, focus: ${focusedId}, container: ${containerId}, text: "${selectedText.slice(0, 30)}"`
+        // Write to file if debug mode is on
+        this.debugLog(`[SELECTION_STATE] ${message}`)
+        // Always show in UI
+        const debugEntry: LogEntry = {
+          id: ++this.logIdCounter,
+          content: `[DEBUG] ${message}`
+        }
+        this.logs.push(debugEntry)
+        this.addLogLines([debugEntry])
         return
       }
 
@@ -570,6 +651,23 @@ class D3kTUI {
           // G - go to bottom
           this.logsScrollBox.scrollTo({ x: 0, y: this.logsScrollBox.scrollHeight })
         }
+      }
+    })
+  }
+
+  private setupFocusTracking() {
+    if (!this.renderer) return
+
+    // Track focus changes via frame callback (since there's no global focus event)
+    this.renderer.setFrameCallback(async () => {
+      if (!this.debugMode || !this.renderer) return
+
+      const focused = this.renderer.currentFocusedRenderable
+      const currentId = focused?.id || null
+
+      if (currentId !== this.lastFocusedId) {
+        this.debugLog(`[FOCUS_CHANGE] ${this.lastFocusedId || "(none)"} -> ${currentId || "(none)"}`)
+        this.lastFocusedId = currentId
       }
     })
   }
@@ -673,37 +771,74 @@ class D3kTUI {
 
       const isBaseLog = this.baseLogId === log.id
       const formatted = formatLogLine(log.content, isCompact, this.baseTimestampMs, isBaseLog)
+      // Wrap TextRenderable in a BoxRenderable to force valid X position
+      const logWrapper = new BoxRenderable(this.renderer, {
+        id: `log-wrapper-${log.id}`,
+        width: "100%",
+        flexShrink: 0,
+        paddingLeft: 0, // Explicit padding to force position calculation
+        marginLeft: 0 // Explicit margin to force position calculation
+      })
+
+      // Track click start position to detect clicks vs drags
+      let clickStartX = -1
+      let clickStartY = -1
+
       const logLine = new TextRenderable(this.renderer, {
         id: `log-${log.id}`,
         content: formatted,
-        wrapMode: "none"
-      })
-      // Disable text selection on click - only allow selection when dragging
-      logLine.selectable = false
+        wrapMode: "none",
+        selectable: true,
+        selectionBg: RGBA.fromInts(70, 130, 180), // Steel blue highlight
+        selectionFg: RGBA.fromInts(255, 255, 255), // White text on selection
+        width: "100%",
+        onMouseDown: (event) => {
+          // Record start position for click detection
+          clickStartX = event.x
+          clickStartY = event.y
+          this.debugLog(
+            `[TEXT_DOWN] id=${logLine.id} screen(${event.x},${event.y}) pos(${logLine.x},${logLine.y}) size(${logLine.width}x${logLine.height})`
+          )
+        },
+        onMouseUp: (event) => {
+          // Check if this was a click (no movement) vs a drag
+          const isClick = clickStartX === event.x && clickStartY === event.y
+          if (isClick && log.timestamp) {
+            // Only trigger baseline on clicks within timestamp column (first ~15 chars)
+            // Calculate position within the text (accounting for renderable's X position)
+            const textLocalX = event.x - (logLine.x || 0)
+            const TIMESTAMP_COLUMN_WIDTH = 15 // "[HH:MM:SS.mmm] " is ~14 chars
 
-      // Add click handler to set this log's timestamp as the base
-      // Only enable in non-compact mode - in compact mode, clicks are likely
-      // meant to expand the tmux pane, not select a timestamp
-      if (!isCompact && log.timestamp) {
-        const timestampMs = parseTimestampToMs(log.timestamp)
-        if (timestampMs !== null) {
-          logLine.onMouseDown = () => {
-            if (this.baseLogId === log.id) {
-              // Clicking the same log clears the base
-              this.baseTimestampMs = undefined
-              this.baseLogId = undefined
-            } else {
-              // Set this log as the new base
-              this.baseTimestampMs = timestampMs
-              this.baseLogId = log.id
+            if (textLocalX <= TIMESTAMP_COLUMN_WIDTH) {
+              // Toggle baseline timestamp on click
+              const timestampMs = parseTimestampToMs(log.timestamp)
+              if (timestampMs !== null) {
+                if (this.baseLogId === log.id) {
+                  // Clicking same log clears the baseline
+                  this.baseTimestampMs = undefined
+                  this.baseLogId = undefined
+                } else {
+                  // Set this log as the new baseline
+                  this.baseTimestampMs = timestampMs
+                  this.baseLogId = log.id
+                }
+                this.refreshLogs()
+              }
             }
-            this.refreshLogs()
           }
+          // Reset click tracking
+          clickStartX = -1
+          clickStartY = -1
         }
-      }
+      })
 
-      this.logsContainer.add(logLine)
+      logWrapper.add(logLine)
+      this.logsContainer.add(logWrapper)
     }
+
+    // Force render to update hit grid after adding new logs
+    // This prevents stale hit grid when new logs trigger scroll/layout changes
+    this.renderer.requestRender()
   }
 
   private refreshLogs() {
@@ -764,6 +899,17 @@ class D3kTUI {
   setUseHttps(useHttps: boolean) {
     this.useHttps = useHttps
     this.rebuildUI()
+  }
+
+  private debugLog(message: string) {
+    if (!this.debugMode) return
+    const timestamp = new Date().toISOString()
+    const logLine = `[${timestamp}] ${message}\n`
+    try {
+      appendFileSync(this.debugLogFile, logLine)
+    } catch {
+      // Ignore write errors
+    }
   }
 
   shutdown() {

@@ -3,13 +3,10 @@ import { type ChildProcess, spawn } from "child_process"
 import {
   appendFileSync,
   copyFileSync,
-  cpSync,
   existsSync,
-  lstatSync,
   mkdirSync,
   readdirSync,
   readFileSync,
-  realpathSync,
   statSync,
   unlinkSync,
   writeFileSync
@@ -22,6 +19,7 @@ import { fileURLToPath } from "url"
 import { CDPMonitor } from "./cdp-monitor.js"
 import { ScreencastManager } from "./screencast-manager.js"
 import { type LogEntry, NextJsErrorDetector, OutputProcessor, StandardLogParser } from "./services/parsers/index.js"
+import { getBundledSkillsPath } from "./skills/index.js"
 import { DevTUI } from "./tui-interface.js"
 import { formatMcpConfigTargets, MCP_CONFIG_TARGETS, type McpConfigTarget } from "./utils/mcp-configs.js"
 import { getProjectDir, getProjectDisplayName, getProjectName } from "./utils/project-name.js"
@@ -44,8 +42,9 @@ const MCP_NAMES = {
   VERCEL: "vercel"
 } as const
 
-// Vercel MCP URL (public OAuth-based MCP)
-const VERCEL_MCP_URL = "https://mcp.vercel.com"
+// Vercel MCP URL (public OAuth-based MCP) - kept for potential future use
+// @ts-expect-error Unused but kept for reference
+const _VERCEL_MCP_URL = "https://mcp.vercel.com"
 
 /**
  * Patterns for identifying orphaned MCP-related processes to clean up on startup.
@@ -63,8 +62,10 @@ export const ORPHANED_PROCESS_CLEANUP_PATTERNS = [
 
 /**
  * Check if the current project has a .vercel directory (indicating a Vercel project)
+ * Kept for potential future use
  */
-function hasVercelProject(): boolean {
+// @ts-expect-error Unused but kept for potential future use
+function _hasVercelProject(): boolean {
   return existsSync(join(process.cwd(), ".vercel"))
 }
 
@@ -222,14 +223,6 @@ class Logger {
   }
 }
 
-function detectPackageManagerForRun(): string {
-  if (existsSync("bun.lockb")) return "bun"
-  if (existsSync("pnpm-lock.yaml")) return "pnpm"
-  if (existsSync("yarn.lock")) return "yarn"
-  if (existsSync("package-lock.json")) return "npm"
-  return "npm" // fallback
-}
-
 /**
  * Detect if we're in a sandbox environment (Vercel Sandbox, Docker, etc.)
  * where lsof and other system utilities may not be available.
@@ -267,7 +260,7 @@ export function countActiveD3kInstances(excludeCurrentPid: boolean = false): num
         const pidStr = readFileSync(pidPath, "utf-8").trim()
         const pid = parseInt(pidStr, 10)
 
-        if (isNaN(pid)) continue
+        if (Number.isNaN(pid)) continue
 
         // Skip current process if requested
         if (excludeCurrentPid && pid === process.pid) continue
@@ -592,55 +585,37 @@ async function isChromeDevtoolsMcpSupported(): Promise<boolean> {
 }
 
 /**
- * Ensure MCP server configurations are added to project's .mcp.json (Claude Code)
+ * Clean up old dev3000 MCP entries from project's .mcp.json (Claude Code)
+ * MCP server has been removed - we now use CLI commands instead
  */
-async function ensureMcpServers(mcpPort: string, _appPort: string, _enableChromeDevtools: boolean): Promise<void> {
+async function ensureMcpServers(_mcpPort: string, _appPort: string, _enableChromeDevtools: boolean): Promise<void> {
   try {
     const settingsPath = join(process.cwd(), ".mcp.json")
 
-    // Read or create settings
-    let settings: {
-      mcpServers?: Record<string, { type?: string; url?: string; command?: string; args?: string[] }>
+    if (!existsSync(settingsPath)) {
+      return // Nothing to clean up
+    }
+
+    const settingsContent = readFileSync(settingsPath, "utf-8")
+    const settings = JSON.parse(settingsContent) as {
+      mcpServers?: Record<string, unknown>
       [key: string]: unknown
     }
-    if (existsSync(settingsPath)) {
-      const settingsContent = readFileSync(settingsPath, "utf-8")
-      settings = JSON.parse(settingsContent)
-    } else {
-      settings = {}
-    }
 
-    // Ensure mcpServers structure exists
     if (!settings.mcpServers) {
-      settings.mcpServers = {}
+      return // Nothing to clean up
     }
 
-    let added = false
+    let removed = false
 
-    // Add dev3000 MCP server (HTTP type)
-    // NOTE: dev3000 now acts as an MCP orchestrator/gateway that internally
-    // spawns and connects to chrome-devtools-mcp and next-devtools-mcp as stdio processes,
-    // so users only need to configure dev3000 once!
-    if (!settings.mcpServers[MCP_NAMES.DEV3000]) {
-      settings.mcpServers[MCP_NAMES.DEV3000] = {
-        type: "http",
-        url: `http://localhost:${mcpPort}/mcp`
-      }
-      added = true
+    // Remove dev3000 MCP entry if it exists (MCP server removed)
+    if (settings.mcpServers[MCP_NAMES.DEV3000]) {
+      delete settings.mcpServers[MCP_NAMES.DEV3000]
+      removed = true
     }
 
-    // Add Vercel MCP if this is a Vercel project (.vercel directory exists)
-    // Vercel MCP uses OAuth authentication handled by the client (Claude Code)
-    if (hasVercelProject() && !settings.mcpServers[MCP_NAMES.VERCEL]) {
-      settings.mcpServers[MCP_NAMES.VERCEL] = {
-        type: "http",
-        url: VERCEL_MCP_URL
-      }
-      added = true
-    }
-
-    // Write if we added anything
-    if (added) {
+    // Write if we removed anything
+    if (removed) {
       writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, "utf-8")
     }
   } catch (_error) {
@@ -649,10 +624,11 @@ async function ensureMcpServers(mcpPort: string, _appPort: string, _enableChrome
 }
 
 /**
- * Ensure MCP server configurations are added to project's .cursor/mcp.json
+ * Clean up old dev3000 MCP entries from project's .cursor/mcp.json
+ * MCP server has been removed - we now use CLI commands instead
  */
 async function ensureCursorMcpServers(
-  mcpPort: string,
+  _mcpPort: string,
   _appPort: string,
   _enableChromeDevtools: boolean
 ): Promise<void> {
@@ -660,53 +636,30 @@ async function ensureCursorMcpServers(
     const cursorDir = join(process.cwd(), ".cursor")
     const settingsPath = join(cursorDir, "mcp.json")
 
-    // Ensure .cursor directory exists
-    if (!existsSync(cursorDir)) {
-      mkdirSync(cursorDir, { recursive: true })
+    if (!existsSync(settingsPath)) {
+      return // Nothing to clean up
     }
 
-    // Read or create settings
-    let settings: {
-      mcpServers?: Record<string, { type?: string; url?: string; command?: string; args?: string[] }>
+    const settingsContent = readFileSync(settingsPath, "utf-8")
+    const settings = JSON.parse(settingsContent) as {
+      mcpServers?: Record<string, unknown>
       [key: string]: unknown
     }
-    if (existsSync(settingsPath)) {
-      const settingsContent = readFileSync(settingsPath, "utf-8")
-      settings = JSON.parse(settingsContent)
-    } else {
-      settings = {}
-    }
 
-    // Ensure mcpServers structure exists
     if (!settings.mcpServers) {
-      settings.mcpServers = {}
+      return // Nothing to clean up
     }
 
-    let added = false
+    let removed = false
 
-    // Add dev3000 MCP server
-    // NOTE: dev3000 now acts as an MCP orchestrator/gateway that internally
-    // spawns and connects to chrome-devtools-mcp and next-devtools-mcp as stdio processes
-    if (!settings.mcpServers[MCP_NAMES.DEV3000]) {
-      settings.mcpServers[MCP_NAMES.DEV3000] = {
-        type: "http",
-        url: `http://localhost:${mcpPort}/mcp`
-      }
-      added = true
+    // Remove dev3000 MCP entry if it exists (MCP server removed)
+    if (settings.mcpServers[MCP_NAMES.DEV3000]) {
+      delete settings.mcpServers[MCP_NAMES.DEV3000]
+      removed = true
     }
 
-    // Add Vercel MCP if this is a Vercel project (.vercel directory exists)
-    // Vercel MCP uses OAuth authentication handled by the client (Cursor)
-    if (hasVercelProject() && !settings.mcpServers[MCP_NAMES.VERCEL]) {
-      settings.mcpServers[MCP_NAMES.VERCEL] = {
-        type: "http",
-        url: VERCEL_MCP_URL
-      }
-      added = true
-    }
-
-    // Write if we added anything
-    if (added) {
+    // Write if we removed anything
+    if (removed) {
       writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, "utf-8")
     }
   } catch (_error) {
@@ -715,91 +668,42 @@ async function ensureCursorMcpServers(
 }
 
 /**
- * Ensure MCP server configurations are added to project's opencode.json
- * OpenCode uses a different structure: "mcp" instead of "mcpServers"
- *
- * IMPORTANT: OpenCode has issues with "type": "remote" for HTTP MCP servers.
- * The workaround is to use "type": "local" with mcp-remote package to proxy requests.
- * See: https://github.com/sst/opencode/issues/1595
+ * Clean up old dev3000 MCP entries from project's opencode.json
+ * OpenCode uses "mcp" instead of "mcpServers"
+ * MCP server has been removed - we now use CLI commands instead
  */
 async function ensureOpenCodeMcpServers(
-  mcpPort: string,
+  _mcpPort: string,
   _appPort: string,
   _enableChromeDevtools: boolean
 ): Promise<void> {
   try {
     const settingsPath = join(process.cwd(), "opencode.json")
 
-    // Read or create settings - OpenCode uses "mcp" not "mcpServers"
-    let settings: {
-      mcp?: Record<
-        string,
-        {
-          type?: "local" | "remote"
-          command?: string[]
-          url?: string
-          oauth?: Record<string, unknown>
-          enabled?: boolean
-        }
-      >
+    if (!existsSync(settingsPath)) {
+      return // Nothing to clean up
+    }
+
+    const settingsContent = readFileSync(settingsPath, "utf-8")
+    const settings = JSON.parse(settingsContent) as {
+      mcp?: Record<string, unknown>
       [key: string]: unknown
     }
-    if (existsSync(settingsPath)) {
-      const settingsContent = readFileSync(settingsPath, "utf-8")
-      settings = JSON.parse(settingsContent)
-    } else {
-      settings = {}
-    }
 
-    // Ensure mcp structure exists
     if (!settings.mcp) {
-      settings.mcp = {}
+      return // Nothing to clean up
     }
 
-    let changed = false
+    let removed = false
 
-    // Always update dev3000 MCP server config to ensure correct format
-    // Try simple remote type first - no OAuth needed for local dev3000
-    const expectedDev3000Config = {
-      type: "remote" as const,
-      url: `http://localhost:${mcpPort}/mcp`,
-      enabled: true
-    }
-    const currentDev3000 = settings.mcp[MCP_NAMES.DEV3000]
-    if (
-      !currentDev3000 ||
-      currentDev3000.type !== expectedDev3000Config.type ||
-      currentDev3000.url !== expectedDev3000Config.url
-    ) {
-      settings.mcp[MCP_NAMES.DEV3000] = expectedDev3000Config
-      changed = true
+    // Remove dev3000 MCP entry if it exists (MCP server removed)
+    if (settings.mcp[MCP_NAMES.DEV3000]) {
+      delete settings.mcp[MCP_NAMES.DEV3000]
+      removed = true
     }
 
-    // Always update Vercel MCP if this is a Vercel project (.vercel directory exists)
-    // Vercel MCP requires OAuth, so use OpenCode's native remote type with oauth: {}
-    // This triggers OpenCode's built-in OAuth flow instead of mcp-remote
-    // See: https://github.com/sst/opencode/issues/5444
-    if (hasVercelProject()) {
-      const expectedVercelConfig = {
-        type: "remote" as const,
-        url: VERCEL_MCP_URL,
-        oauth: {},
-        enabled: true
-      }
-      const currentVercel = settings.mcp[MCP_NAMES.VERCEL]
-      if (
-        !currentVercel ||
-        currentVercel.type !== expectedVercelConfig.type ||
-        currentVercel.url !== expectedVercelConfig.url ||
-        !currentVercel.oauth
-      ) {
-        settings.mcp[MCP_NAMES.VERCEL] = expectedVercelConfig
-        changed = true
-      }
-    }
-
-    // Write if we changed anything
-    if (changed) {
+    // Write if we removed anything
+    if (removed) {
       writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, "utf-8")
     }
   } catch (_error) {
@@ -809,34 +713,33 @@ async function ensureOpenCodeMcpServers(
 
 /**
  * Ensure d3k skill is installed in project's .claude/skills/d3k/
- * This provides Claude with context about how to use d3k's MCP tools
+ * Claude Code reads from .claude/skills/ (must be real files, not symlinks)
  */
 async function ensureD3kSkill(): Promise<void> {
   try {
+    const bundledSkillsDir = getBundledSkillsPath()
+    if (!bundledSkillsDir) return
+
+    const bundledSkillPath = join(bundledSkillsDir, "d3k", "SKILL.md")
+    if (!existsSync(bundledSkillPath)) return
+
+    // Install directly to .claude/skills/d3k/ (where Claude Code looks)
     const skillDir = join(process.cwd(), ".claude", "skills", "d3k")
     const skillPath = join(skillDir, "SKILL.md")
 
-    // Skip if skill already exists
+    // Check if already up to date
+    const bundledContent = readFileSync(bundledSkillPath, "utf-8")
     if (existsSync(skillPath)) {
-      return
+      const existingContent = readFileSync(skillPath, "utf-8")
+      if (existingContent === bundledContent) {
+        return // Already up to date
+      }
     }
 
-    // Find the bundled skill file
-    const __filename = fileURLToPath(import.meta.url)
-    const __dirname = dirname(__filename)
-    const bundledSkillPath = join(__dirname, "skills", "d3k", "SKILL.md")
-
-    // Check if bundled skill exists
-    if (!existsSync(bundledSkillPath)) {
-      return // Skill not bundled, skip silently
-    }
-
-    // Create skill directory
+    // Copy skill to .claude/skills/d3k/
     if (!existsSync(skillDir)) {
       mkdirSync(skillDir, { recursive: true })
     }
-
-    // Copy skill file to project
     copyFileSync(bundledSkillPath, skillPath)
   } catch (_error) {
     // Ignore errors - skill installation is optional
@@ -1019,14 +922,12 @@ function pruneOldLogs(baseDir: string): void {
 
 export class DevEnvironment {
   private serverProcess: ChildProcess | null = null
-  private mcpServerProcess: ChildProcess | null = null
   private cdpMonitor: CDPMonitor | null = null
   private screencastManager: ScreencastManager | null = null
   private logger: Logger
   private outputProcessor: OutputProcessor
   private options: DevEnvironmentOptions
   private screenshotDir: string
-  private mcpPublicDir: string
   private pidFile: string
   private lockFile: string
   private spinner: ReturnType<typeof ora>
@@ -1073,14 +974,12 @@ export class DevEnvironment {
       packageRoot = dirname(dirname(currentFile))
     }
 
-    // Always use MCP server's public directory for screenshots to ensure they're web-accessible
-    // and avoid permission issues with /var/log paths
-    this.screenshotDir = join(packageRoot, "mcp-server", "public", "screenshots")
-    // Use project-specific PID and lock files to allow multiple projects to run simultaneously
+    // Store screenshots in project-specific directory for local access
     const projectName = getProjectName()
+    this.screenshotDir = join(getProjectDir(), "screenshots")
+    // Use project-specific PID and lock files to allow multiple projects to run simultaneously
     this.pidFile = join(tmpdir(), `dev3000-${projectName}.pid`)
     this.lockFile = join(tmpdir(), `dev3000-${projectName}.lock`)
-    this.mcpPublicDir = join(packageRoot, "mcp-server", "public", "screenshots")
 
     // Read version - for compiled binaries, use injected version; otherwise read from package.json
     this.version = "0.0.0"
@@ -1119,12 +1018,17 @@ export class DevEnvironment {
       isEnabled: !options.tui // Disable spinner in TUI mode
     })
 
-    // Ensure directories exist
-    if (!existsSync(this.screenshotDir)) {
-      mkdirSync(this.screenshotDir, { recursive: true })
-    }
-    if (!existsSync(this.mcpPublicDir)) {
-      mkdirSync(this.mcpPublicDir, { recursive: true })
+    // Ensure screenshot directory exists
+    try {
+      if (!existsSync(this.screenshotDir)) {
+        mkdirSync(this.screenshotDir, { recursive: true })
+      }
+    } catch {
+      // Fall back to temp directory if project dir isn't writable
+      this.screenshotDir = join(tmpdir(), "d3k-screenshots")
+      if (!existsSync(this.screenshotDir)) {
+        mkdirSync(this.screenshotDir, { recursive: true })
+      }
     }
 
     // Initialize project-specific D3K log file (clear for new session)
@@ -1136,12 +1040,11 @@ export class DevEnvironment {
     // This prevents "kill EPERM" errors when MCP tries to spawn new browsers
     await cleanupOrphanedPlaywrightProcesses((msg) => this.debugLog(msg))
 
-    // Always kill any existing MCP server to ensure clean state
-    // We ALWAYS try to kill, even if port appears free - there can be race conditions
-    if (this.options.mcpPort) {
-      this.debugLog(`Ensuring port ${this.options.mcpPort} is free (always kill)`)
-      await this.killMcpServer()
-    }
+    // MCP server removed - no longer need to kill
+    // if (this.options.mcpPort) {
+    //   this.debugLog(`Ensuring port ${this.options.mcpPort} is free (always kill)`)
+    //   await this.killMcpServer()
+    // }
 
     // Check if user explicitly set ports via CLI flags
     const userSetAppPort = this.options.userSetPort || false
@@ -1179,91 +1082,7 @@ export class DevEnvironment {
       }
     }
 
-    // Now check MCP port availability (it should be free after killing)
-    if (this.options.mcpPort) {
-      const available = await isPortAvailable(this.options.mcpPort)
-      if (!available) {
-        if (this.spinner?.isSpinning) {
-          this.spinner.fail(`Port ${this.options.mcpPort} is still in use after cleanup`)
-        }
-        if (!silent) {
-          console.log(
-            chalk.yellow(
-              `💡 To force kill port ${this.options.mcpPort}, run: lsof -ti:${this.options.mcpPort} | xargs kill -9`
-            )
-          )
-        }
-        if (this.tui) {
-          await this.tui.shutdown()
-        }
-        throw new Error(`Port ${this.options.mcpPort} is still in use. Please free the port and try again.`)
-      }
-    }
-  }
-
-  private async killMcpServer(): Promise<void> {
-    // In sandbox environments, skip lsof-based process cleanup
-    if (isInSandbox()) {
-      this.debugLog("killMcpServer skipped: Running in sandbox environment")
-      return
-    }
-
-    // Retry loop to ensure port is fully released
-    const maxRetries = 5
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        // First, get the PIDs of processes LISTENING on the port
-        // Use -sTCP:LISTEN to only find servers, not clients connecting to the port
-        // This prevents killing curl when it's polling for MCP server readiness
-        const getPidsProcess = spawn("lsof", ["-ti", `:${this.options.mcpPort}`, "-sTCP:LISTEN"], {
-          stdio: "pipe"
-        })
-
-        const pids = await new Promise<string>((resolve, reject) => {
-          let output = ""
-          getPidsProcess.stdout?.on("data", (data) => {
-            output += data.toString()
-          })
-          getPidsProcess.on("error", (err) => reject(err))
-          getPidsProcess.on("exit", () => resolve(output.trim()))
-        })
-
-        if (!pids) {
-          this.debugLog(`Port ${this.options.mcpPort} is free (attempt ${attempt})`)
-          return // Port is already free
-        }
-
-        this.debugLog(`Found MCP server processes (attempt ${attempt}): ${pids}`)
-
-        // Kill each PID individually with kill -9
-        const pidList = pids.split("\n").filter(Boolean)
-        for (const pid of pidList) {
-          await new Promise<void>((resolve) => {
-            const killCmd = spawn("kill", ["-9", pid.trim()], { stdio: "ignore" })
-            killCmd.on("exit", (code) => {
-              this.debugLog(`Kill command for PID ${pid} exited with code ${code}`)
-              resolve()
-            })
-          })
-        }
-
-        // Give it time to fully release the port (longer waits, macOS can be slow)
-        const waitTime = 1000 * attempt
-        this.debugLog(`Waiting ${waitTime}ms for port ${this.options.mcpPort} to be released...`)
-        await new Promise((resolve) => setTimeout(resolve, waitTime))
-
-        // Check if port is now free
-        const available = await isPortAvailable(this.options.mcpPort?.toString() ?? "")
-        if (available) {
-          this.debugLog(`Port ${this.options.mcpPort} released successfully`)
-          return
-        }
-      } catch (error) {
-        this.debugLog(`Error killing MCP server (attempt ${attempt}): ${error}`)
-      }
-    }
-
-    this.debugLog(`Warning: Port ${this.options.mcpPort} may still be in use after ${maxRetries} attempts`)
+    // MCP server removed - no longer need to check mcpPort availability
   }
 
   private async checkProcessHealth(): Promise<boolean> {
@@ -1277,7 +1096,8 @@ export class DevEnvironment {
     }
 
     try {
-      const ports = [this.options.port, this.options.mcpPort]
+      // Only check app port - MCP server has been removed
+      const ports = [this.options.port]
 
       for (const port of ports) {
         const result = await new Promise<string>((resolve, reject) => {
@@ -1487,9 +1307,8 @@ export class DevEnvironment {
       await this.tui.updateStatus("Starting your dev server...")
       await this.startServer()
 
-      // Start MCP server
-      await this.tui.updateStatus(`Starting ${this.options.commandName} MCP server...`)
-      await this.startMcpServer()
+      // MCP server removed - using CLI commands instead
+      // await this.startMcpServer()
 
       // Wait for servers to be ready
       await this.tui.updateStatus("Waiting for app...")
@@ -1506,8 +1325,8 @@ export class DevEnvironment {
       // Update TUI with confirmed port (may have changed during server startup)
       this.tui.updateAppPort(this.options.port)
 
-      await this.tui.updateStatus("Waiting for MCP...")
-      await this.waitForMcpServer()
+      // MCP server removed - using CLI commands instead
+      // await this.waitForMcpServer()
 
       // Configure AI CLI integrations (both dev3000 and chrome-devtools MCPs)
       if (!this.options.serversOnly) {
@@ -1573,9 +1392,8 @@ export class DevEnvironment {
       this.spinner.text = "Starting your dev server..."
       await this.startServer()
 
-      // Start MCP server
-      this.spinner.text = `Starting ${this.options.commandName} MCP server...`
-      await this.startMcpServer()
+      // MCP server removed - using CLI commands instead
+      // await this.startMcpServer()
 
       // Wait for servers to be ready
       this.spinner.text = "Waiting for app..."
@@ -1589,8 +1407,8 @@ export class DevEnvironment {
         process.exit(1)
       }
 
-      this.spinner.text = "Waiting for MCP..."
-      await this.waitForMcpServer()
+      // MCP server removed - using CLI commands instead
+      // await this.waitForMcpServer()
 
       // Configure AI CLI integrations (both dev3000 and chrome-devtools MCPs)
       if (!this.options.serversOnly) {
@@ -1642,12 +1460,7 @@ export class DevEnvironment {
       console.log(chalk.cyan(`Logs: ${this.options.logFile}`))
       console.log(chalk.cyan("☝️ Give this to an AI to auto debug and fix your app\n"))
       console.log(chalk.cyan(`🌐 Your App: ${this.serverProtocol}://localhost:${this.options.port}`))
-      console.log(chalk.cyan(`🤖 MCP Server: http://localhost:${this.options.mcpPort}`))
-      console.log(
-        chalk.cyan(
-          `📸 Visual Timeline: http://localhost:${this.options.mcpPort}/logs?project=${encodeURIComponent(projectName)}`
-        )
-      )
+      console.log(chalk.cyan(`🔧 CLI Tools: d3k fix, d3k crawl, d3k find-component`))
       if (this.options.serversOnly) {
         console.log(chalk.cyan("🖥️  Servers-only mode - use Chrome extension for browser monitoring"))
       }
@@ -2003,282 +1816,6 @@ export class DevEnvironment {
     }
   }
 
-  private async startMcpServer() {
-    this.debugLog("Starting MCP server setup")
-
-    // Note: MCP server cleanup now happens earlier in checkPortsAvailable()
-    // to ensure the port is free before we check availability
-
-    // Get the path to our bundled MCP server
-    // Handle both normal npm install and compiled binary cases
-    let mcpServerPath: string
-
-    // Check if we're running from a compiled binary
-    // Compiled binaries have process.execPath pointing to the binary itself
-    const execPath = process.execPath
-    const isCompiledBinary =
-      execPath.includes("@d3k/darwin-") || execPath.includes("d3k-darwin-") || execPath.endsWith("/dev3000")
-
-    if (isCompiledBinary) {
-      // For compiled binaries, mcp-server is a sibling to the bin directory
-      // Structure: packages/d3k-darwin-arm64/bin/dev3000 -> packages/d3k-darwin-arm64/mcp-server
-      const binDir = dirname(execPath)
-      const packageDir = dirname(binDir)
-      mcpServerPath = join(packageDir, "mcp-server")
-      this.debugLog(`Compiled binary detected, MCP server path: ${mcpServerPath}`)
-    } else {
-      // Normal npm install - mcp-server is in the package root
-      const currentFile = fileURLToPath(import.meta.url)
-      const packageRoot = dirname(dirname(currentFile)) // Go up from dist/ to package root
-      mcpServerPath = join(packageRoot, "mcp-server")
-      this.debugLog(`Standard install detected, MCP server path: ${mcpServerPath}`)
-    }
-
-    this.debugLog(`Initial MCP server path: ${mcpServerPath}`)
-
-    // For pnpm global installs, resolve symlinks to get the real path
-    if (existsSync(mcpServerPath)) {
-      try {
-        const realPath = realpathSync(mcpServerPath)
-        if (realPath !== mcpServerPath) {
-          this.debugLog(`MCP server path resolved from symlink: ${mcpServerPath} -> ${realPath}`)
-          mcpServerPath = realPath
-        }
-      } catch (e) {
-        // Error resolving path, continue with original
-        this.debugLog(`Error resolving real path: ${e}`)
-      }
-    }
-
-    this.debugLog(`Final MCP server path: ${mcpServerPath}`)
-
-    if (!existsSync(mcpServerPath)) {
-      throw new Error(`MCP server directory not found at ${mcpServerPath}`)
-    }
-    this.debugLog("MCP server directory found")
-
-    // Check if MCP server dependencies are installed, install if missing
-    // Detect global install by checking if the mcp-server path is outside the current working directory
-    // This handles both pnpm (.pnpm) and npm (/lib/node_modules/) global installs
-    const isGlobalInstall =
-      mcpServerPath.includes(".pnpm") ||
-      mcpServerPath.includes("/lib/node_modules/") ||
-      !mcpServerPath.startsWith(process.cwd())
-    this.debugLog(`Is global install: ${isGlobalInstall}`)
-    let nodeModulesPath = join(mcpServerPath, "node_modules")
-    let actualWorkingDir = mcpServerPath
-    this.debugLog(`Node modules path: ${nodeModulesPath}`)
-
-    if (isGlobalInstall) {
-      const tmpDirPath = join(tmpdir(), "dev3000-mcp-deps")
-      nodeModulesPath = join(tmpDirPath, "node_modules")
-      actualWorkingDir = tmpDirPath
-
-      // Update screenshot and MCP public directory to use the temp directory for global installs
-      this.screenshotDir = join(actualWorkingDir, "public", "screenshots")
-      this.mcpPublicDir = join(actualWorkingDir, "public", "screenshots")
-      if (!existsSync(this.mcpPublicDir)) {
-        mkdirSync(this.mcpPublicDir, { recursive: true })
-      }
-    }
-
-    // Check if .next build directory exists - if so, skip dependency installation
-    const nextBuildPath = join(mcpServerPath, ".next")
-    this.debugLog(`Checking for pre-built MCP server at: ${nextBuildPath}`)
-
-    let isPreBuilt = false
-
-    if (existsSync(nextBuildPath)) {
-      this.debugLog("MCP server is pre-built (.next directory exists), skipping dependency installation")
-      isPreBuilt = true
-
-      // For global installs with pre-built servers, we'll run from the original location
-      // No need to copy anything to temp directory
-      if (isGlobalInstall) {
-        this.debugLog("Global install with pre-built server - will run from original location")
-        actualWorkingDir = mcpServerPath
-
-        // Still need to set up screenshot directory in temp
-        const tmpDirPath = join(tmpdir(), "dev3000-mcp-deps")
-        this.screenshotDir = join(tmpDirPath, "public", "screenshots")
-        this.mcpPublicDir = join(tmpDirPath, "public", "screenshots")
-        if (!existsSync(this.mcpPublicDir)) {
-          mkdirSync(this.mcpPublicDir, { recursive: true })
-        }
-      }
-    } else {
-      this.debugLog("No .next directory found, installing/updating MCP server dependencies")
-      this.debugLog(`WARNING: MCP server appears to not be pre-built. This is unexpected for a published package.`)
-      await this.installMcpServerDeps(mcpServerPath)
-    }
-
-    // Use version already read in constructor
-
-    // For global installs, only copy files if NOT pre-built
-    // Pre-built servers run from their original location
-    if (isGlobalInstall && actualWorkingDir !== mcpServerPath && !isPreBuilt) {
-      const requiredFiles = ["app", "public", "next.config.ts", "next-env.d.ts", "tsconfig.json", ".next"]
-      for (const file of requiredFiles) {
-        const srcPath = join(mcpServerPath, file)
-        const destPath = join(actualWorkingDir, file)
-
-        // Check if we need to copy (source exists and destination doesn't exist or source is newer)
-        if (existsSync(srcPath)) {
-          let shouldCopy = !existsSync(destPath)
-
-          // If destination exists, check if source is newer
-          if (!shouldCopy && existsSync(destPath)) {
-            const srcStat = lstatSync(srcPath)
-            const destStat = lstatSync(destPath)
-            shouldCopy = srcStat.mtime > destStat.mtime
-          }
-
-          if (shouldCopy) {
-            // Remove existing destination if it exists
-            if (existsSync(destPath)) {
-              if (lstatSync(destPath).isDirectory()) {
-                cpSync(destPath, `${destPath}.bak`, { recursive: true })
-                cpSync(srcPath, destPath, { recursive: true, force: true })
-              } else {
-                unlinkSync(destPath)
-                copyFileSync(srcPath, destPath)
-              }
-            } else {
-              if (lstatSync(srcPath).isDirectory()) {
-                cpSync(srcPath, destPath, { recursive: true })
-              } else {
-                copyFileSync(srcPath, destPath)
-              }
-            }
-          }
-        }
-      }
-    }
-
-    // Start the MCP server
-    this.debugLog(`MCP server working directory: ${actualWorkingDir}`)
-    this.debugLog(`MCP server port: ${this.options.mcpPort}`)
-    this.debugLog(`Screenshot directory: ${this.screenshotDir}`)
-    this.debugLog(`Is pre-built: ${isPreBuilt}`)
-    this.debugLog(`Is global install: ${isGlobalInstall}`)
-
-    let mcpCommand: string[]
-    let mcpCwd = actualWorkingDir
-
-    if (isGlobalInstall && isPreBuilt) {
-      // For global installs with pre-built servers, use the standalone server directly
-      // This avoids the turbopack runtime issues with npx
-      const serverJsPath = join(mcpServerPath, ".next", "standalone", "mcp-server", "server.js")
-
-      if (existsSync(serverJsPath)) {
-        // Use the standalone server directly
-        this.debugLog(`Global install with standalone server at ${serverJsPath}`)
-        mcpCommand = ["node", serverJsPath]
-        mcpCwd = dirname(serverJsPath)
-      } else {
-        // Check for start-production.mjs script
-        const startProdScript = join(mcpServerPath, "start-production.mjs")
-
-        if (existsSync(startProdScript)) {
-          // Use the production script
-          this.debugLog(`Global install with start-production.mjs script`)
-          mcpCommand = ["node", startProdScript]
-          mcpCwd = mcpServerPath
-        } else {
-          // Fallback to finding Next.js binary
-          const dev3000NodeModules = join(mcpServerPath, "..", "..", "node_modules")
-          const nextBinPath = join(dev3000NodeModules, ".bin", "next")
-
-          this.debugLog(`Looking for Next.js at: ${nextBinPath}`)
-
-          if (existsSync(nextBinPath)) {
-            // Found Next.js in the dev3000 package
-            this.debugLog(`Global install with Next.js found at ${nextBinPath}`)
-            mcpCommand = [nextBinPath, "start"]
-            mcpCwd = mcpServerPath
-          } else {
-            // Fallback to npx with the exact version we built with
-            this.debugLog(`Global install with pre-built server - using npx next start`)
-            mcpCommand = ["npx", "--yes", "next@15.5.1-canary.30", "start"]
-            mcpCwd = mcpServerPath
-          }
-        }
-      }
-    } else {
-      // Non-global or non-pre-built: use package manager
-      const packageManagerForRun = detectPackageManagerForRun()
-      this.debugLog(`Using package manager: ${packageManagerForRun}`)
-      mcpCommand = [packageManagerForRun, "run", "start"]
-      mcpCwd = actualWorkingDir
-    }
-
-    this.debugLog(`MCP server command: ${mcpCommand.join(" ")}`)
-    this.debugLog(`MCP server cwd: ${mcpCwd}`)
-
-    // Get CDP URL for MCP orchestration
-    const cdpUrl = this.cdpMonitor?.getCdpUrl() || null
-
-    // Start MCP server as a true background singleton process
-    this.mcpServerProcess = spawn(mcpCommand[0], mcpCommand.slice(1), {
-      stdio: ["ignore", "pipe", "pipe"],
-      detached: true, // Run independently of parent process
-      cwd: mcpCwd,
-      env: {
-        ...process.env,
-        PORT: this.options.mcpPort,
-        LOG_FILE_PATH: this.options.logFile, // Pass log file path to MCP server
-        DEV3000_VERSION: this.version, // Pass version to MCP server
-        SCREENSHOT_DIR: this.screenshotDir, // Pass screenshot directory for global installs
-        CDP_URL: cdpUrl || "" // Pass CDP URL for chrome-devtools MCP orchestration
-      }
-    })
-
-    // Unref the process so it continues running after parent exits
-    this.mcpServerProcess.unref()
-
-    this.debugLog("MCP server process spawned as singleton background service")
-
-    // Log MCP server output to separate file for debugging
-    const mcpLogFile = join(dirname(this.options.logFile), "mcp.log")
-    writeFileSync(mcpLogFile, "") // Clear the file
-
-    // In debug mode, output the MCP log file path
-    if (this.options.debug) {
-      console.log(chalk.gray(`[DEBUG] MCP server logs: ${mcpLogFile}`))
-    }
-
-    this.mcpServerProcess.stdout?.on("data", (data) => {
-      const message = data.toString().trim()
-      if (message) {
-        const timestamp = new Date().toISOString()
-        appendFileSync(mcpLogFile, `[${timestamp}] [MCP-STDOUT] ${message}\n`)
-      }
-    })
-
-    this.mcpServerProcess.stderr?.on("data", (data) => {
-      const message = data.toString().trim()
-      if (message) {
-        const timestamp = new Date().toISOString()
-        appendFileSync(mcpLogFile, `[${timestamp}] [MCP-STDERR] ${message}\n`)
-        // Only show critical errors in stdout for debugging
-        // Exclude MCP Orchestrator connection errors (they're expected and non-critical)
-        if ((message.includes("FATAL") || message.includes("Error:")) && !message.includes("[MCP Orchestrator]")) {
-          console.error(chalk.red("[ERROR]"), message)
-        }
-      }
-    })
-
-    this.mcpServerProcess.on("exit", (code) => {
-      this.debugLog(`MCP server process exited with code ${code}`)
-      // Only show exit messages for unexpected failures, not restarts
-      if (code !== 0 && code !== null) {
-        this.logger.log("server", `MCP server process exited with code ${code}`)
-      }
-    })
-
-    this.debugLog("MCP server event handlers setup complete")
-  }
-
   private async waitForServer(): Promise<boolean> {
     const maxAttempts = 30
     let attempts = 0
@@ -2341,199 +1878,6 @@ export class DevEnvironment {
     this.debugLog(`Server readiness check timed out after ${totalTime}ms (${maxAttempts} attempts)`)
     return false
   }
-
-  private detectPackageManagerInDir(dir: string): string {
-    if (existsSync(join(dir, "bun.lockb"))) return "bun"
-    if (existsSync(join(dir, "pnpm-lock.yaml"))) return "pnpm"
-    if (existsSync(join(dir, "yarn.lock"))) return "yarn"
-    if (existsSync(join(dir, "package-lock.json"))) return "npm"
-    return "npm" // fallback
-  }
-
-  private async installMcpServerDeps(mcpServerPath: string): Promise<void> {
-    return new Promise<void>((resolve, reject) => {
-      // For global installs, we need to install to a writable location
-      // Detect global install by checking if the path is outside the current working directory
-      const isGlobalInstall =
-        mcpServerPath.includes(".pnpm") ||
-        mcpServerPath.includes("/lib/node_modules/") ||
-        !mcpServerPath.startsWith(process.cwd())
-
-      let workingDir = mcpServerPath
-      if (isGlobalInstall) {
-        // Create a writable copy in temp directory for global installs
-        const tmpDirPath = join(tmpdir(), "dev3000-mcp-deps")
-
-        // Ensure tmp directory exists
-        if (!existsSync(tmpDirPath)) {
-          mkdirSync(tmpDirPath, { recursive: true })
-        }
-
-        // Always copy package.json to temp directory to ensure it's up to date
-        const tmpPackageJson = join(tmpDirPath, "package.json")
-        const sourcePackageJson = join(mcpServerPath, "package.json")
-
-        // Debug: Check if source package.json exists
-        if (!existsSync(sourcePackageJson)) {
-          const errorDetails = [
-            `ERROR: package.json not found at ${sourcePackageJson}`,
-            `MCP server path: ${mcpServerPath}`,
-            `Contents of MCP server directory:`
-          ]
-
-          try {
-            const files = readdirSync(mcpServerPath)
-            files.forEach((file) => {
-              errorDetails.push(`  - ${file}`)
-            })
-          } catch (e) {
-            errorDetails.push(`  Error listing directory: ${e}`)
-          }
-
-          // Additional debug: Check parent directories
-          errorDetails.push(`Parent directory: ${dirname(mcpServerPath)}`)
-          try {
-            const parentFiles = readdirSync(dirname(mcpServerPath))
-            parentFiles.forEach((file) => {
-              errorDetails.push(`  Parent dir file: ${file}`)
-            })
-          } catch (e) {
-            errorDetails.push(`  Error listing parent directory: ${e}`)
-          }
-
-          // Log all error details
-          errorDetails.forEach((detail) => {
-            this.debugLog(detail)
-          })
-
-          reject(new Error(`MCP server package.json not found at ${sourcePackageJson}`))
-          return
-        }
-
-        copyFileSync(sourcePackageJson, tmpPackageJson)
-
-        workingDir = tmpDirPath
-      }
-
-      // Detect package manager from MCP server directory, not current directory
-      const packageManager = this.detectPackageManagerInDir(mcpServerPath)
-
-      // Package manager specific install args to include devDependencies
-      const installArgs =
-        packageManager === "pnpm"
-          ? ["install", "--prod=false"] // Install both prod and dev dependencies
-          : packageManager === "bun"
-            ? ["install", "--dev"] // bun syntax
-            : ["install", "--include=dev"] // npm/yarn syntax
-
-      const fullCommand = `${packageManager} ${installArgs.join(" ")}`
-
-      if (this.options.debug) {
-        console.log(`[DEBUG] Installing MCP server dependencies...`)
-        console.log(`[DEBUG] Working directory: ${workingDir}`)
-        console.log(`[DEBUG] Package manager detected: ${packageManager}`)
-        console.log(`[DEBUG] Command: ${fullCommand}`)
-        console.log(`[DEBUG] Is global install: ${isGlobalInstall}`)
-      }
-
-      const installStartTime = Date.now()
-      const installProcess = spawn(packageManager, installArgs, {
-        stdio: ["ignore", "pipe", "pipe"],
-        cwd: workingDir
-      })
-
-      // Add timeout (3 minutes)
-      const timeout = setTimeout(
-        () => {
-          if (this.options.debug) {
-            console.log(`[DEBUG] Installation timed out after 3 minutes`)
-          }
-          installProcess.kill("SIGKILL")
-          reject(new Error("MCP server dependency installation timed out after 3 minutes"))
-        },
-        3 * 60 * 1000
-      )
-
-      // Capture output for debugging, but suppress for normal operation
-      let debugOutput = ""
-      let debugErrors = ""
-
-      installProcess.stdout?.on("data", (data) => {
-        const text = data.toString()
-        if (this.options.debug) {
-          debugOutput += text
-        }
-      })
-
-      installProcess.stderr?.on("data", (data) => {
-        const text = data.toString()
-        if (this.options.debug) {
-          debugErrors += text
-        }
-      })
-
-      installProcess.on("exit", (code) => {
-        clearTimeout(timeout)
-        const installTime = Date.now() - installStartTime
-
-        if (this.options.debug) {
-          console.log(`[DEBUG] Installation completed in ${installTime}ms with exit code: ${code}`)
-          if (debugOutput) {
-            console.log(`[DEBUG] stdout:`, debugOutput.trim())
-          }
-          if (debugErrors) {
-            console.log(`[DEBUG] stderr:`, debugErrors.trim())
-          }
-        }
-
-        if (code === 0) {
-          resolve()
-        } else {
-          const errorMsg = `MCP server dependency installation failed with exit code ${code}`
-          const fullError = this.options.debug && debugErrors ? `${errorMsg}\nstderr: ${debugErrors.trim()}` : errorMsg
-          reject(new Error(fullError))
-        }
-      })
-
-      installProcess.on("error", (error) => {
-        clearTimeout(timeout)
-        reject(new Error(`Failed to start MCP server dependency installation: ${error.message}`))
-      })
-    })
-  }
-
-  private async waitForMcpServer() {
-    const maxAttempts = 30
-    let attempts = 0
-
-    while (attempts < maxAttempts) {
-      try {
-        // Test the actual MCP endpoint
-        const response = await fetch(`http://localhost:${this.options.mcpPort}`, {
-          method: "HEAD",
-          signal: AbortSignal.timeout(2000)
-        })
-        this.debugLog(`MCP server health check: ${response.status}`)
-        if (response.status === 500) {
-          const errorText = await response.text()
-          this.debugLog(`MCP server 500 error: ${errorText}`)
-        }
-        if (response.ok || response.status === 404) {
-          // 404 is OK - means server is responding
-          return
-        }
-      } catch (error) {
-        this.debugLog(`MCP server not ready (attempt ${attempts}): ${error}`)
-      }
-
-      attempts++
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-    }
-
-    this.debugLog("MCP server health check failed, terminating")
-    throw new Error(`MCP server failed to start after ${maxAttempts} seconds. Check the logs for errors.`)
-  }
-
   private initializeD3KLog() {
     try {
       const projectDir = getProjectDir()
@@ -2596,10 +1940,10 @@ export class DevEnvironment {
       mkdirSync(this.options.profileDir, { recursive: true })
     }
 
-    // Initialize CDP monitor with enhanced logging - use MCP public directory for screenshots
+    // Initialize CDP monitor with enhanced logging
     this.cdpMonitor = new CDPMonitor(
       this.options.profileDir,
-      this.mcpPublicDir,
+      this.screenshotDir,
       (_source: string, message: string) => {
         this.logger.log("browser", message)
       },

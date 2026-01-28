@@ -1491,9 +1491,8 @@ export class CDPMonitor {
       const buffer = Buffer.from(resultWithData.data, "base64")
       writeFileSync(screenshotPath, buffer)
 
-      // Log screenshot with URL path for easy viewing
-      const mcpPort = process.env.MCP_PORT || "3684"
-      this.logger("browser", `[SCREENSHOT] http://localhost:${mcpPort}/api/screenshots/${filename}`)
+      // Log screenshot with file path
+      this.logger("browser", `[SCREENSHOT] ${screenshotPath}`)
 
       return filename
     } catch (error) {

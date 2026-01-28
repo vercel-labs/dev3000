@@ -337,13 +337,12 @@ export class ScreencastManager {
             const shiftFrame = beforeFrames[beforeFrames.length - 1]
 
             if (previousFrame && shiftFrame && shift.sources && shift.sources.length > 0) {
-              const mcpPort = process.env.MCP_PORT || "3684"
               const previousFilename = `${this.currentSessionId}-jank-${previousFrame.timestamp}ms.png`
               const shiftFilename = `${this.currentSessionId}-jank-${shiftFrame.timestamp}ms.png`
 
               // Generate human-readable description of the shift
               const descriptions: string[] = []
-              shift.sources.forEach((source) => {
+              for (const source of shift.sources) {
                 if (source.node && source.previousRect && source.currentRect) {
                   const deltaX = source.currentRect.x - source.previousRect.x
                   const deltaY = source.currentRect.y - source.previousRect.y
@@ -351,17 +350,17 @@ export class ScreencastManager {
                   const distance = Math.abs(deltaY || deltaX)
                   descriptions.push(`<${source.node}> shifted ${direction} by ${distance.toFixed(0)}px`)
                 }
-              })
+              }
 
               this.logFn(
                 `[CDP] CLS #${index + 1} (score: ${shift.score.toFixed(4)}, time: ${shift.timestamp.toFixed(0)}ms):`
               )
-              descriptions.forEach((desc) => {
+              for (const desc of descriptions) {
                 this.logFn(`[CDP]   - ${desc}`)
-              })
+              }
 
-              this.logFn(`[CDP]   Before: http://localhost:${mcpPort}/api/screenshots/${previousFilename}`)
-              this.logFn(`[CDP]   After:  http://localhost:${mcpPort}/api/screenshots/${shiftFilename}`)
+              this.logFn(`[CDP]   Before: ${join(this.screenshotDir, previousFilename)}`)
+              this.logFn(`[CDP]   After:  ${join(this.screenshotDir, shiftFilename)}`)
               this.logFn(`[CDP]   💡 Analyze both images to identify visual differences causing the layout shift`)
             }
           })
@@ -370,9 +369,7 @@ export class ScreencastManager {
         this.logFn(`[CDP] Failed to save metadata - ${error}`)
       }
 
-      this.logFn(
-        `[SCREENCAST] View frame analysis: http://localhost:${process.env.MCP_PORT || "3684"}/video/${this.currentSessionId}`
-      )
+      this.logFn(`[SCREENCAST] Frames saved to: ${this.screenshotDir}`)
 
       await this.stopScreencast()
     }, 2000)

@@ -109,6 +109,44 @@ async function compileForTarget(target: (typeof TARGETS)[number]) {
         await $`chmod +x ${mcpBinDir}/*`
       }
     }
+
+    // Run agent-browser postinstall to download native binary for current platform
+    // This is needed because bun doesn't run postinstall scripts automatically
+    const agentBrowserDir = join(mcpDest, "node_modules", "agent-browser")
+    const postinstallScript = join(agentBrowserDir, "scripts", "postinstall.js")
+    if (existsSync(postinstallScript)) {
+      console.log("🔧 Running agent-browser postinstall to download native binary...")
+      try {
+        await $`cd ${agentBrowserDir} && node scripts/postinstall.js`
+        console.log("✅ agent-browser native binary installed")
+      } catch (error) {
+        console.warn("⚠️ agent-browser postinstall failed:", error)
+        // Continue anyway - the binary might still work
+      }
+    }
+
+    // Copy native binaries to .bin/ directory
+    // This is needed because cpSync with dereference:true breaks the wrapper script's
+    // symlink resolution logic - the wrapper looks for binaries relative to itself
+    const agentBrowserBinDir = join(agentBrowserDir, "bin")
+    const dotBinDir = join(mcpDest, "node_modules", ".bin")
+    if (existsSync(agentBrowserBinDir) && existsSync(dotBinDir)) {
+      console.log("🔧 Copying agent-browser native binaries to .bin/...")
+      const binaries = [
+        "agent-browser-darwin-arm64",
+        "agent-browser-darwin-x64",
+        "agent-browser-linux-arm64",
+        "agent-browser-linux-x64",
+        "agent-browser-win32-x64.exe"
+      ]
+      for (const binary of binaries) {
+        const srcPath = join(agentBrowserBinDir, binary)
+        const destPath = join(dotBinDir, binary)
+        if (existsSync(srcPath) && !existsSync(destPath)) {
+          cpSync(srcPath, destPath)
+        }
+      }
+    }
   }
 
   // Copy start script

@@ -358,7 +358,7 @@ export default function HomePage() {
                 </div>
                 <h3 className="font-semibold mb-3 text-lg">AI Verifies Fixes</h3>
                 <p className="text-muted-foreground leading-relaxed">
-                  execute_browser_action tests the fixes in real-time with screenshots
+                  agent_browser_action tests the fixes in real-time with screenshots
                 </p>
               </div>
             </div>

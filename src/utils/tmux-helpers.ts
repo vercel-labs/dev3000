@@ -7,7 +7,6 @@ export interface TmuxSessionConfig {
   sessionName: string
   d3kCommand: string
   agentCommand: string
-  mcpPort: number // port to poll for MCP server readiness
   paneWidthPercent: number // percentage for agent pane (left side)
 }
 
@@ -23,29 +22,14 @@ function wrapCommandWithErrorHandling(cmd: string, name: string): string {
 }
 
 /**
- * Generate the command to poll for MCP server readiness before starting the agent.
- * Uses curl to check if MCP server is responding.
- * Uses a for loop with counter for more robust behavior.
- */
-function generateMcpPollingCommand(mcpPort: number, agentCommand: string): string {
-  // Use a for loop with explicit counter (more portable and robust than 'until')
-  // Wait up to 60 seconds for MCP server to be ready
-  // Note: Variables must be escaped with \\ to survive bash -c quoting layers
-  // Clear screen after polling completes to remove "Waiting..." message before agent starts
-  return `echo Waiting for d3k MCP server...; i=0; while [ \\$i -lt 60 ]; do curl -sf http://localhost:${mcpPort}/ >/dev/null 2>&1 && break; sleep 1; i=\\$((i+1)); done; clear; ${agentCommand}`
-}
-
-/**
  * Generate tmux commands for setting up split-screen mode.
  */
 export function generateTmuxCommands(config: TmuxSessionConfig): string[] {
-  const { sessionName, d3kCommand, agentCommand, mcpPort, paneWidthPercent } = config
+  const { sessionName, d3kCommand, agentCommand, paneWidthPercent } = config
 
   // Wrap commands with error handling so users can see crash output
   const d3kWithErrorHandling = wrapCommandWithErrorHandling(d3kCommand, "d3k")
-  // Poll for MCP server to be ready before launching agent
-  const agentWithPolling = mcpPort > 0 ? generateMcpPollingCommand(mcpPort, agentCommand) : agentCommand
-  const agentWithErrorHandling = wrapCommandWithErrorHandling(agentWithPolling, "agent")
+  const agentWithErrorHandling = wrapCommandWithErrorHandling(agentCommand, "agent")
 
   return [
     // Create new session with d3k in the first pane (will be right side)
@@ -93,7 +77,6 @@ export function generateTmuxCommands(config: TmuxSessionConfig): string[] {
     `tmux select-pane -t "${sessionName}:0.0"`,
 
     // Trigger a resize after TUI starts to force a redraw and clear stale terminal content
-    // (e.g., "Waiting for d3k MCP server..." message gets cleared when OpenTUI redraws)
     // The d3k pane is pane 1 (right side), resize it slightly then back to force redraw
     // Wait 2 seconds to ensure TUI is fully initialized before triggering resize
     `tmux run-shell -t "${sessionName}" 'sleep 2 && tmux resize-pane -t :.1 -x 24% && sleep 0.1 && tmux resize-pane -t :.1 -x ${100 - paneWidthPercent}%'`
@@ -109,8 +92,26 @@ export function generateSessionName(): string {
 
 /**
  * Check if tmux is installed by looking for the binary.
+ * Uses file existence checks instead of execSync to avoid SIGINT interruption issues.
  */
 export async function isTmuxInstalled(): Promise<boolean> {
+  const { existsSync } = await import("fs")
+
+  // Check common tmux binary paths (avoids execSync which can be interrupted by SIGINT)
+  const commonPaths = [
+    "/opt/homebrew/bin/tmux", // macOS Homebrew (Apple Silicon)
+    "/usr/local/bin/tmux", // macOS Homebrew (Intel) or manual install
+    "/usr/bin/tmux", // Linux (apt, dnf, etc.)
+    "/bin/tmux" // Some Linux distros
+  ]
+
+  for (const path of commonPaths) {
+    if (existsSync(path)) {
+      return true
+    }
+  }
+
+  // Fallback to which command if not found in common paths
   const { execSync } = await import("child_process")
   try {
     execSync("which tmux", { stdio: "ignore" })
@@ -131,6 +132,5 @@ export function getTmuxInstallInstructions(): string[] {
  * Default configuration for tmux split-screen.
  */
 export const DEFAULT_TMUX_CONFIG = {
-  mcpPort: 3684, // default MCP server port for polling
   paneWidthPercent: 75 // Agent gets 75% of width
 }

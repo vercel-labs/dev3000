@@ -1,18 +1,13 @@
 /**
- * Shared skill module for d3k
+ * Skill module for d3k
  *
- * Skills are prompt templates stored as SKILL.md files that provide
- * specialized instructions for specific tasks.
- *
- * This module is used by both:
- * - CLI: `d3k skill <name>`
- * - MCP: `get_skill` tool
+ * Skills are managed by `npx skills` and stored in .agents/skills/
+ * d3k also bundles its own skill which gets copied to .agents/skills/d3k/ on startup.
  */
 
 import { existsSync, readdirSync, readFileSync } from "fs"
 import { homedir } from "os"
 import { dirname, join } from "path"
-import { fileURLToPath } from "url"
 
 export interface SkillInfo {
   name: string
@@ -30,59 +25,47 @@ export interface SkillResult {
 }
 
 /**
- * Get the base directories where skills can be found.
- * Searches in order of priority:
- * 1. Project-local skills (.claude/skills/)
- * 2. Global skills (~/.claude/skills/)
- * 3. Source skills (src/skills/) - for development
- * 4. Dist skills (dist/skills/) - for installed packages
+ * Get the path to d3k's bundled skills directory.
+ * Returns null if not found (e.g., running in development without build).
  */
-export function getSkillDirectories(cwd?: string): string[] {
-  const dirs: string[] = []
-
-  // 1. Project-local skills (highest priority)
-  const projectDir = cwd || process.cwd()
-  dirs.push(join(projectDir, ".claude", "skills"))
-
-  // 1b. Also check .agents/skills/ (for tracked skills in www deployment)
-  dirs.push(join(projectDir, ".agents", "skills"))
-
-  // 2. Global skills (~/.claude/skills/)
-  dirs.push(join(homedir(), ".claude", "skills"))
-
-  // 3. Check if we're running from a compiled binary (bun compile)
-  // In compiled binaries, import.meta.url returns /$bunfs/... virtual path
-  // We detect this by checking if the URL starts with /$bunfs
+export function getBundledSkillsPath(): string | null {
+  // Check if running from compiled binary
   const moduleUrl = import.meta.url
   const isCompiledBinary = moduleUrl.startsWith("file:///$bunfs") || moduleUrl.startsWith("/$bunfs")
 
   if (isCompiledBinary) {
-    // For compiled binaries, process.execPath contains the actual binary path
     const binaryPath = process.execPath
     if (binaryPath && existsSync(binaryPath)) {
-      const binDir = dirname(binaryPath) // bin/
-      const packageDir = dirname(binDir) // platform package root (e.g., @d3k/darwin-arm64)
-      dirs.push(join(packageDir, "skills"))
+      const binDir = dirname(binaryPath)
+      const packageDir = dirname(binDir)
+      const skillsDir = join(packageDir, "skills")
+      if (existsSync(skillsDir)) {
+        return skillsDir
+      }
     }
   }
 
-  // 4. Source and dist skills from the d3k package
-  // Handle both ESM (__dirname equivalent) and different execution contexts
-  try {
-    const currentFile = fileURLToPath(import.meta.url)
-    const srcDir = dirname(currentFile) // src/skills
-    const packageRoot = dirname(dirname(srcDir)) // package root
+  return null
+}
 
-    // Source skills (for development)
-    dirs.push(join(packageRoot, "src", "skills"))
+/**
+ * Get directories where skills can be found.
+ * Skills are managed by `npx skills` in .agents/skills/
+ */
+export function getSkillDirectories(cwd?: string): string[] {
+  const dirs: string[] = []
+  const projectDir = cwd || process.cwd()
 
-    // Dist skills (for installed package)
-    dirs.push(join(packageRoot, "dist", "skills"))
+  // Project-local skills (highest priority)
+  dirs.push(join(projectDir, ".agents", "skills"))
 
-    // Also check if we're in a binary distribution
-    dirs.push(join(packageRoot, "skills"))
-  } catch {
-    // Fallback for CommonJS or other contexts
+  // Global skills
+  dirs.push(join(homedir(), ".agents", "skills"))
+
+  // d3k's bundled skills (fallback for d3k skill before it's copied)
+  const bundled = getBundledSkillsPath()
+  if (bundled) {
+    dirs.push(bundled)
   }
 
   return dirs.filter((dir) => existsSync(dir))
@@ -90,18 +73,14 @@ export function getSkillDirectories(cwd?: string): string[] {
 
 /**
  * Find a skill by name.
- * Returns the path to the SKILL.md file if found.
  */
 export function findSkill(name: string, cwd?: string): string | null {
-  const skillDirs = getSkillDirectories(cwd)
-
-  for (const dir of skillDirs) {
+  for (const dir of getSkillDirectories(cwd)) {
     const skillPath = join(dir, name, "SKILL.md")
     if (existsSync(skillPath)) {
       return skillPath
     }
   }
-
   return null
 }
 
@@ -114,12 +93,7 @@ export function getSkill(name: string, cwd?: string): SkillResult {
   if (skillPath) {
     try {
       const content = readFileSync(skillPath, "utf-8")
-      return {
-        found: true,
-        name,
-        content,
-        path: skillPath
-      }
+      return { found: true, name, content, path: skillPath }
     } catch (error) {
       return {
         found: false,
@@ -143,21 +117,16 @@ export function getSkill(name: string, cwd?: string): SkillResult {
  */
 export function listAvailableSkills(cwd?: string): string[] {
   const skills = new Set<string>()
-  const skillDirs = getSkillDirectories(cwd)
 
-  for (const dir of skillDirs) {
+  for (const dir of getSkillDirectories(cwd)) {
     try {
-      const entries = readdirSync(dir, { withFileTypes: true })
-      for (const entry of entries) {
-        if (entry.isDirectory()) {
-          const skillFile = join(dir, entry.name, "SKILL.md")
-          if (existsSync(skillFile)) {
-            skills.add(entry.name)
-          }
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        if (entry.isDirectory() && existsSync(join(dir, entry.name, "SKILL.md"))) {
+          skills.add(entry.name)
         }
       }
     } catch {
-      // Directory might not exist or be readable
+      // Directory not readable
     }
   }
 
@@ -169,31 +138,28 @@ export function listAvailableSkills(cwd?: string): string[] {
  */
 export function getSkillsInfo(cwd?: string): SkillInfo[] {
   const skillsMap = new Map<string, SkillInfo>()
-  const skillDirs = getSkillDirectories(cwd)
 
-  for (const dir of skillDirs) {
+  for (const dir of getSkillDirectories(cwd)) {
     try {
-      const entries = readdirSync(dir, { withFileTypes: true })
-      for (const entry of entries) {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
         if (entry.isDirectory() && !skillsMap.has(entry.name)) {
           const skillPath = join(dir, entry.name, "SKILL.md")
           if (existsSync(skillPath)) {
             try {
               const content = readFileSync(skillPath, "utf-8")
-              const description = extractDescription(content)
               skillsMap.set(entry.name, {
                 name: entry.name,
-                description,
+                description: extractDescription(content),
                 path: skillPath
               })
             } catch {
-              // Skip unreadable skills
+              // Skip unreadable
             }
           }
         }
       }
     } catch {
-      // Directory might not exist or be readable
+      // Directory not readable
     }
   }
 
@@ -204,22 +170,20 @@ export function getSkillsInfo(cwd?: string): SkillInfo[] {
  * Extract description from SKILL.md frontmatter or first paragraph.
  */
 function extractDescription(content: string): string {
-  // Try to extract from YAML frontmatter
+  // Try YAML frontmatter
   const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/)
   if (frontmatterMatch) {
-    const frontmatter = frontmatterMatch[1]
-    const descMatch = frontmatter.match(/description:\s*(.+)/)
+    const descMatch = frontmatterMatch[1].match(/description:\s*(.+)/)
     if (descMatch) {
       return descMatch[1].trim()
     }
   }
 
-  // Fallback: use first non-heading, non-empty line
-  const lines = content.split("\n")
-  for (const line of lines) {
+  // Fallback: first non-heading, non-empty line
+  for (const line of content.split("\n")) {
     const trimmed = line.trim()
     if (trimmed && !trimmed.startsWith("#") && !trimmed.startsWith("---")) {
-      return trimmed.slice(0, 100) + (trimmed.length > 100 ? "..." : "")
+      return trimmed.length > 100 ? `${trimmed.slice(0, 97)}...` : trimmed
     }
   }
 
