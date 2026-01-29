@@ -35,13 +35,18 @@ export function getBundledSkillsPath(): string | null {
   const isCompiledBinary = moduleUrl.startsWith("file:///$bunfs") || moduleUrl.startsWith("/$bunfs")
 
   if (isCompiledBinary) {
-    const binaryPath = process.execPath
-    if (binaryPath && existsSync(binaryPath)) {
-      const binDir = dirname(binaryPath)
-      const packageDir = dirname(binDir)
-      const skillsDir = join(packageDir, "skills")
-      if (existsSync(skillsDir)) {
-        return skillsDir
+    // Try process.argv[0] first (more reliable for Bun compiled binaries)
+    // Then fall back to process.execPath
+    const possiblePaths = [process.argv[0], process.execPath].filter(Boolean)
+
+    for (const binaryPath of possiblePaths) {
+      if (binaryPath && existsSync(binaryPath)) {
+        const binDir = dirname(binaryPath)
+        const packageDir = dirname(binDir)
+        const skillsDir = join(packageDir, "skills")
+        if (existsSync(skillsDir)) {
+          return skillsDir
+        }
       }
     }
   }
