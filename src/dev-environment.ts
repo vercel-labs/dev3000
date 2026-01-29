@@ -1279,6 +1279,10 @@ export class DevEnvironment {
       // Show initial status message
       await this.tui.updateStatus("d3k is checking for skill updates...")
 
+      // Install d3k skill early so it's available when Claude Code starts
+      // This is important for --with-agent where both start simultaneously
+      await ensureD3kSkill()
+
       // Check ports in background after TUI is visible
       await this.checkPortsAvailable(true) // silent mode for TUI
 
@@ -1374,6 +1378,10 @@ export class DevEnvironment {
     } else {
       // Non-TUI mode - original flow
       console.log(chalk.hex("#A18CE5")(`Starting ${this.options.commandName} (v${this.version})`))
+
+      // Install d3k skill early so it's available when Claude Code starts
+      // This is important for --with-agent where both start simultaneously
+      await ensureD3kSkill()
 
       // Start spinner
       this.spinner.start("Checking ports...")
