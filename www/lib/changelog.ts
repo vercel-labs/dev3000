@@ -13,9 +13,7 @@ export const changelog: Release[] = [
     version: "0.0.157",
     date: "2026-01-29",
     type: "patch",
-    highlights: [
-      "Fix d3k skill installation race condition with --with-agent"
-    ]
+    highlights: ["Fix d3k skill installation race condition with --with-agent"]
   },
 
   {
