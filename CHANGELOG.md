@@ -4,6 +4,12 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.156] - 2026-01-29
+
+**Patch Release**
+
+- Fix skill path detection using process.argv[0] for Bun binaries
+
 ## [0.0.155] - 2026-01-28
 
 **Patch Release**

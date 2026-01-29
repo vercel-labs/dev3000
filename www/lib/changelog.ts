@@ -10,6 +10,15 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.156",
+    date: "2026-01-29",
+    type: "patch",
+    highlights: [
+      "Fix skill path detection using process.argv[0] for Bun binaries"
+    ]
+  },
+
+  {
     version: "0.0.155",
     date: "2026-01-28",
     type: "patch",
