@@ -1,6 +1,6 @@
 {
   "name": "dev3000",
-  "version": "0.0.155",
+  "version": "0.0.156-canary",
   "description": "AI-powered development tools with browser monitoring and MCP server integration",
   "type": "module",
   "main": "dist/index.js",
@@ -95,9 +95,9 @@
     "vitest": "^3.2.4"
   },
   "optionalDependencies": {
-    "@d3k/darwin-arm64": "0.0.155",
-    "@d3k/linux-x64": "0.0.155",
-    "@d3k/windows-x64": "0.0.155",
+    "@d3k/darwin-arm64": "0.0.156-canary",
+    "@d3k/linux-x64": "0.0.156-canary",
+    "@d3k/windows-x64": "0.0.156-canary",
     "@opentui/core-linux-x64": "^0.1.71"
   },
   "engines": {
