@@ -1042,7 +1042,7 @@ program
         serversOnly: options.serversOnly,
         commandName,
         tail: options.tail,
-        tui: options.noTui !== true && !options.debug, // TUI is default unless --no-tui or --debug is specified
+        tui: options.tui && !options.debug, // TUI is default unless --no-tui or --debug is specified
         dateTimeFormat: options.dateTime || "local",
         pluginReactScan: options.pluginReactScan || false,
         chromeDevtoolsMcp: options.chromeDevtoolsMcp !== false, // Default to true unless explicitly disabled

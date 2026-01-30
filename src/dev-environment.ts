@@ -1015,7 +1015,7 @@ export class DevEnvironment {
     this.spinner = ora({
       text: "Initializing...",
       spinner: "dots",
-      isEnabled: !options.tui // Disable spinner in TUI mode
+      isEnabled: !options.tui && !options.tail // Disable spinner in TUI mode
     })
 
     // Ensure screenshot directory exists
