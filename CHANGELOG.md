@@ -4,6 +4,12 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+- Fix --no-tui flag being ignored ([#91](https://github.com/vercel-labs/dev3000/pull/91)) - thanks [@falleco](https://github.com/falleco)!
+- Fix spinner freezing in limited terminals with --tail mode ([#91](https://github.com/vercel-labs/dev3000/pull/91)) - thanks [@falleco](https://github.com/falleco)!
+- Remove restart command that could crash d3k ([#89](https://github.com/vercel-labs/dev3000/issues/89))
+
 ## [0.0.157] - 2026-01-29
 
 **Patch Release**
