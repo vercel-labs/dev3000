@@ -1261,15 +1261,6 @@ program
     await findComponent(selector)
   })
 
-// Restart command - restart the dev server
-program
-  .command("restart")
-  .description("Restart the development server (rarely needed - HMR handles most changes)")
-  .action(async () => {
-    const { restartServer } = await import("./commands/restart.js")
-    await restartServer()
-  })
-
 // CDP port command - get the CDP port from the session file
 program
   .command("cdp-port")

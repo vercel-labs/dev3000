@@ -28,8 +28,6 @@ d3k crawl               # Discover app URLs
 d3k crawl --depth all   # Exhaustive crawl
 
 d3k find-component "nav"  # Find React component source
-
-d3k restart             # Restart dev server (rarely needed)
 ```
 
 ## Browser Interaction
