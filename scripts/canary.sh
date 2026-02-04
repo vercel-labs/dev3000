@@ -6,10 +6,6 @@ ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 
 echo "🧪 Starting canary test process..."
 
-# Use isolated bun global install location to avoid system perms
-CANARY_BUN_INSTALL="/tmp/d3k-canary-bun"
-export BUN_INSTALL="$CANARY_BUN_INSTALL"
-export PATH="$BUN_INSTALL/bin:$PATH"
 export D3K_BUILD_TARGETS="${D3K_BUILD_TARGETS:-darwin-arm64}"
 
 has_target() {
@@ -79,9 +75,18 @@ echo "📦 Packing main package..."
 MAIN_PACKAGE_FILE=$(bun pm pack 2>/dev/null | grep '\.tgz$')
 echo "✅ Created: $MAIN_PACKAGE_FILE"
 
+echo "♻️ Removing previous global installs (if any)..."
+bun remove -g dev3000 @d3k/darwin-arm64 >/dev/null 2>&1 || true
+
+# Install platform package first, then main package
+echo "📥 Installing platform package globally..."
+bun add -g "file:$PLATFORM_PKG_DIR/$PLATFORM_PACKAGE_FILE"
+
+echo "📥 Installing main package globally..."
+bun add -g "file:$ROOT_DIR/$MAIN_PACKAGE_FILE"
+
 echo "✅ Canary package build completed successfully!"
-echo "🚀 To test locally without registry installs:"
-echo "  ./dist-bin/d3k-darwin-arm64/bin/dev3000 --version"
+echo "🚀 Global install updated. Run 'd3k --version' to verify."
 
 echo "🧪 Running canary smoke test..."
 bun run canary:smoke
