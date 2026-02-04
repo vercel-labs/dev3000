@@ -80,10 +80,10 @@ bun remove -g dev3000 @d3k/darwin-arm64 >/dev/null 2>&1 || true
 
 # Install platform package first, then main package
 echo "📥 Installing platform package globally..."
-bun add -g "file:$PLATFORM_PKG_DIR/$PLATFORM_PACKAGE_FILE"
+bun add -g --ignore-scripts "file:$PLATFORM_PKG_DIR/$PLATFORM_PACKAGE_FILE"
 
 echo "📥 Installing main package globally..."
-bun add -g "file:$ROOT_DIR/$MAIN_PACKAGE_FILE"
+bun add -g --ignore-scripts "file:$ROOT_DIR/$MAIN_PACKAGE_FILE"
 
 echo "✅ Canary package build completed successfully!"
 echo "🚀 Global install updated. Run 'd3k --version' to verify."
