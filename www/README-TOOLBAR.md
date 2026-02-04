@@ -11,7 +11,7 @@ The Vercel Toolbar has been integrated to allow real-time toggling of feature fl
 
 ### Local Development
 
-1. Start the dev server: `pnpm dev`
+1. Start the dev server: `bun dev` (or `npm/pnpm/yarn dev`)
 2. Open your browser to `http://localhost:3000`
 3. The Vercel Toolbar should appear at the bottom of the page
 4. Click the toolbar icon to open it

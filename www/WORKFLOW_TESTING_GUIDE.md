@@ -77,7 +77,7 @@ When you push code to main, Vercel auto-deploys. **Don't wait for the user** - p
 
 ```bash
 cd /Users/elsigh/src/vercel-labs/dev3000/www
-pnpm dev
+bun dev (or npm/pnpm/yarn)
 ```
 
 The local dev server must be running to serve the UI, even though workflows execute on production.
@@ -174,7 +174,7 @@ Once you've triggered the workflow, your background log monitor will show progre
 
 1. `[Workflow] Starting cloud fix workflow...` - Workflow started
 2. `Cloning into '/vercel/sandbox'...` - Repo being cloned
-3. `✅ Project dependencies installed` - npm/pnpm install complete
+3. `✅ Project dependencies installed` - bun/npm/pnpm install complete
 4. `✅ d3k started in detached mode` - d3k running in sandbox
 5. `[Agent] Starting AI agent with d3k sandbox tools...` - AI agent running
 6. `[Agent] Completed in X step(s)` - Agent finished
@@ -689,8 +689,8 @@ if (this.headless) {
 
 When updating viewport or other d3k configuration:
 1. Update `src/cdp-monitor.ts` with changes
-2. Run `pnpm build` (MUST build before packing!)
-3. Run `pnpm pack --pack-destination /tmp/package`
+2. Run `bun run build` (MUST build before packing!)
+3. Run `bun pm pack --destination /tmp/package` (or npm/pnpm equivalent)
 4. Create GitHub release with the tarball
 5. Update `d3k-sandbox.ts` with new tarball URL
 6. Commit and push to deploy

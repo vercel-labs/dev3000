@@ -7,9 +7,11 @@ A debugging assistant that captures everything happening in your web app during 
 ## Quick Start
 
 ```bash
-npm install -g dev3000
+bun install -g dev3000
 d3k
 ```
+
+You can also install with npm or pnpm if you prefer — bun is recommended.
 
 Select an AI agent (Claude, Codex, etc.) and start debugging. Tell your agent: "fix my app"
 
