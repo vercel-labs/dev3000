@@ -211,7 +211,7 @@ const TUIApp = ({
   const termHeight = terminalSize.height
 
   // Determine if we should use compact mode
-  const isCompact = termWidth < 80 || termHeight < 20
+  const isCompact = termWidth < 80
   const isVeryCompact = termWidth < 60 || termHeight < 15
 
   // Provide status update function to parent
