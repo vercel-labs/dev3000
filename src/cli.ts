@@ -105,7 +105,7 @@ if (agentBrowserIndex >= 0 && (process.argv[1]?.includes("d3k") || process.argv[
 
 import chalk from "chalk"
 import { Command } from "commander"
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from "fs"
+import { appendFileSync, existsSync, readFileSync } from "fs"
 import { homedir, tmpdir } from "os"
 import { detect } from "package-manager-detector"
 import { dirname, join } from "path"
@@ -116,6 +116,7 @@ import { createPersistentLogFile, findAvailablePort, startDevEnvironment } from 
 import { getSkill, getSkillsInfo, listAvailableSkills } from "./skills/index.js"
 import { detectAIAgent } from "./utils/agent-detection.js"
 import { getAvailableAgents } from "./utils/agent-selection.js"
+import { ensureD3kHomeDir } from "./utils/d3k-dir.js"
 import { getProjectDir } from "./utils/project-name.js"
 import {
   checkForSkillUpdates,
@@ -137,14 +138,11 @@ import { loadUserConfig, saveUserConfig } from "./utils/user-config.js"
 import { checkForUpdates, getUpgradeCommand, performUpgrade } from "./utils/version-check.js"
 
 // Global error handlers to log crashes
-const crashLogPath = join(homedir(), ".d3k", "crash.log")
+const crashLogPath = join(ensureD3kHomeDir(), "crash.log")
 
 function logCrash(type: string, error: Error | unknown): void {
   try {
-    const crashDir = join(homedir(), ".d3k")
-    if (!existsSync(crashDir)) {
-      mkdirSync(crashDir, { recursive: true })
-    }
+    ensureD3kHomeDir()
     const timestamp = new Date().toISOString()
     const errorStr = error instanceof Error ? `${error.message}\n${error.stack}` : String(error)
     const logEntry = `[${timestamp}] ${type}: ${errorStr}\n\n`
@@ -229,7 +227,8 @@ async function launchWithTmux(agentCommand: string, forwardedOptions: ForwardedO
   const { appendFileSync, writeFileSync } = await import("fs")
 
   // Log file for debugging crashes
-  const crashLogPath = join(homedir(), ".d3k", "crash.log")
+  const d3kDir = ensureD3kHomeDir()
+  const crashLogPath = join(d3kDir, "crash.log")
 
   const logCrash = (message: string, error?: unknown) => {
     const timestamp = new Date().toISOString()
@@ -272,7 +271,7 @@ async function launchWithTmux(agentCommand: string, forwardedOptions: ForwardedO
 
   // Create a shell script that sets up tmux and attaches
   // This ensures clean terminal state by exec'ing into tmux
-  const scriptPath = join(homedir(), ".d3k", "launch-tmux.sh")
+  const scriptPath = join(d3kDir, "launch-tmux.sh")
 
   // Get the first command (new-session) and remaining commands
   const [newSessionCmd, ...remainingCommands] = commands
