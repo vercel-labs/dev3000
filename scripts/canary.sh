@@ -82,3 +82,6 @@ echo "✅ Created: $MAIN_PACKAGE_FILE"
 echo "✅ Canary package build completed successfully!"
 echo "🚀 To test locally without registry installs:"
 echo "  ./dist-bin/d3k-darwin-arm64/bin/dev3000 --version"
+
+echo "🧪 Running canary smoke test..."
+bun run canary:smoke
