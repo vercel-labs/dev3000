@@ -6,6 +6,11 @@ ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 
 echo "🧪 Starting canary test process..."
 
+# Use isolated bun global install location to avoid system perms
+CANARY_BUN_INSTALL="/tmp/d3k-canary-bun"
+export BUN_INSTALL="$CANARY_BUN_INSTALL"
+export PATH="$BUN_INSTALL/bin:$PATH"
+
 # Use shared build script for TypeScript compilation
 ./scripts/build.sh
 
@@ -59,8 +64,6 @@ bun remove -g dev3000 @d3k/darwin-arm64 >/dev/null 2>&1 || true
 # Install platform package first, then main package
 echo "📥 Installing platform package globally..."
 bun add -g "file:$PLATFORM_PKG_DIR/$PLATFORM_PACKAGE_FILE"
-
-GLOBAL_BIN_DIR="$(bun pm bin -g)"
 
 echo "📥 Installing main package globally..."
 bun add -g "file:$ROOT_DIR/$MAIN_PACKAGE_FILE"
