@@ -117,9 +117,8 @@ export async function installSkillPackage(
   pkg: SkillPackage,
   location: InstallLocation = "project"
 ): Promise<{ success: boolean; error?: string }> {
-  // --all installs all skills from the package, -y skips prompts
-  // Bug fixed in vercel-labs/skills#135: --all no longer forces global
-  const args = ["add", pkg.repo, "-a", "claude-code", "-y", "--all"]
+  // --skill '*' installs all skills for the specified agent only.
+  const args = ["add", pkg.repo, "-a", "claude-code", "-y", "--skill", "*"]
 
   if (location === "global") {
     args.push("-g")
