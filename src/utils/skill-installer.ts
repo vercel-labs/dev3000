@@ -1,5 +1,5 @@
 import { spawnSync } from "child_process"
-import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync, rmSync } from "fs"
+import { existsSync, readFileSync } from "fs"
 import { homedir } from "os"
 import path from "path"
 
@@ -113,63 +113,6 @@ export function getSkillsDir(location: InstallLocation): string {
  * Install a skill package using the skills CLI.
  * Installs all skills from the package to the specified location.
  */
-export function cleanupAgentSymlinks(skillsDir: string): void {
-  const agentsDir = path.dirname(skillsDir)
-  if (!existsSync(agentsDir)) {
-    return
-  }
-
-  let entries: string[] = []
-  try {
-    entries = readdirSync(agentsDir)
-  } catch {
-    return
-  }
-
-  const skillsRealPath = safeRealpath(skillsDir)
-  if (!skillsRealPath) {
-    return
-  }
-
-  for (const entry of entries) {
-    if (entry === "skills") {
-      continue
-    }
-
-    const entryPath = path.join(agentsDir, entry)
-
-    let stats: ReturnType<typeof lstatSync> | null = null
-    try {
-      stats = lstatSync(entryPath)
-    } catch {
-      continue
-    }
-
-    if (!stats.isSymbolicLink()) {
-      continue
-    }
-
-    const resolved = safeRealpath(entryPath)
-    if (!resolved || !resolved.startsWith(skillsRealPath)) {
-      continue
-    }
-
-    try {
-      rmSync(entryPath, { recursive: true, force: true })
-    } catch {
-      // Ignore cleanup failures to avoid breaking install flow
-    }
-  }
-}
-
-function safeRealpath(targetPath: string): string | null {
-  try {
-    return realpathSync(targetPath)
-  } catch {
-    return null
-  }
-}
-
 export async function installSkillPackage(
   pkg: SkillPackage,
   location: InstallLocation = "project"
@@ -191,8 +134,6 @@ export async function installSkillPackage(
   if (result.status !== 0) {
     return { success: false, error: "Installation failed" }
   }
-
-  cleanupAgentSymlinks(getSkillsDir(location))
 
   return { success: true }
 }
