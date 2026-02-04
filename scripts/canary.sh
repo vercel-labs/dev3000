@@ -44,13 +44,13 @@ rm -f "$PLATFORM_PKG_DIR"/*.tgz
 # Pack platform package first
 echo "📦 Packing platform package..."
 cd "$PLATFORM_PKG_DIR"
-PLATFORM_PACKAGE_FILE=$(npm pack 2>/dev/null | grep '\.tgz$')
+PLATFORM_PACKAGE_FILE=$(bun pm pack 2>/dev/null | grep '\.tgz$')
 echo "✅ Created: $PLATFORM_PACKAGE_FILE"
 cd "$ROOT_DIR"
 
 # Pack main package
 echo "📦 Packing main package..."
-MAIN_PACKAGE_FILE=$(npm pack 2>/dev/null | grep '\.tgz$')
+MAIN_PACKAGE_FILE=$(bun pm pack 2>/dev/null | grep '\.tgz$')
 echo "✅ Created: $MAIN_PACKAGE_FILE"
 
 echo "♻️ Removing previous global installs (if any)..."
