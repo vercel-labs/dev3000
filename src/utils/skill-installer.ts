@@ -15,6 +15,41 @@ export interface SkillPackage {
   skillFolders: string[]
 }
 
+type SkillsAgentId = string
+
+const AGENT_SKILLS_PATHS: Record<
+  SkillsAgentId,
+  {
+    project: string[]
+    global: string[]
+  }
+> = {
+  "claude-code": {
+    project: [".claude", "skills"],
+    global: [".claude", "skills"]
+  },
+  codex: {
+    project: [".codex", "skills"],
+    global: [".codex", "skills"]
+  },
+  cursor: {
+    project: [".cursor", "skills"],
+    global: [".cursor", "skills"]
+  },
+  cline: {
+    project: [".cline", "skills"],
+    global: [".cline", "skills"]
+  },
+  "gemini-cli": {
+    project: [".gemini", "skills"],
+    global: [".gemini", "skills"]
+  },
+  opencode: {
+    project: [".opencode", "skills"],
+    global: [".config", "opencode", "skills"]
+  }
+}
+
 /**
  * Skill packages offered based on project type.
  * These are installed via `npx skills add <repo> --all`
@@ -85,8 +120,11 @@ export function getApplicablePackages(): SkillPackage[] {
  * A package is considered installed if ANY of its skill folders exist.
  * Only checks .agents/skills since that's where `npx skills` installs to.
  */
-export function isPackageInstalled(pkg: SkillPackage): boolean {
-  const searchDirs = [path.join(process.cwd(), ".agents", "skills"), path.join(homedir(), ".agents", "skills")]
+export function isPackageInstalled(pkg: SkillPackage, agentId: SkillsAgentId): boolean {
+  const searchDirs = getSkillsDirs(agentId)
+  if (searchDirs.length === 0) {
+    return false
+  }
 
   for (const skillsDir of searchDirs) {
     for (const folder of pkg.skillFolders) {
@@ -100,13 +138,24 @@ export function isPackageInstalled(pkg: SkillPackage): boolean {
 }
 
 /**
- * Get skills directory based on install location.
- * Uses .agents/skills since that's where `npx skills` installs to.
+ * Get skills directories to check based on agent ID.
  */
-export function getSkillsDir(location: InstallLocation): string {
-  return location === "global"
-    ? path.join(homedir(), ".agents", "skills")
-    : path.join(process.cwd(), ".agents", "skills")
+function getSkillsDirs(agentId: SkillsAgentId): string[] {
+  const paths = AGENT_SKILLS_PATHS[agentId]
+  if (!paths) {
+    return []
+  }
+
+  return [path.join(process.cwd(), ...paths.project), path.join(homedir(), ...paths.global)]
+}
+
+function getProjectSkillsRoot(agentId: SkillsAgentId): string | null {
+  const paths = AGENT_SKILLS_PATHS[agentId]
+  if (!paths || paths.project.length === 0) {
+    return null
+  }
+
+  return path.join(process.cwd(), paths.project[0])
 }
 
 /**
@@ -115,13 +164,18 @@ export function getSkillsDir(location: InstallLocation): string {
  */
 export async function installSkillPackage(
   pkg: SkillPackage,
-  location: InstallLocation = "project"
+  location: InstallLocation = "project",
+  agentId?: SkillsAgentId
 ): Promise<{ success: boolean; error?: string }> {
-  const agentsDir = path.join(process.cwd(), ".agents")
-  const hadAgentsDir = existsSync(agentsDir)
+  if (!agentId) {
+    return { success: false, error: "No agent specified" }
+  }
+
+  const projectSkillsRoot = location === "project" ? getProjectSkillsRoot(agentId) : null
+  const hadProjectSkillsRoot = projectSkillsRoot ? existsSync(projectSkillsRoot) : false
 
   // --skill '*' installs all skills for the specified agent only.
-  const args = ["add", pkg.repo, "-a", "claude-code", "-y", "--skill", "*"]
+  const args = ["add", pkg.repo, "-a", agentId, "-y", "--skill", "*"]
 
   if (location === "global") {
     args.push("-g")
@@ -137,8 +191,8 @@ export async function installSkillPackage(
     return { success: false, error: "Installation failed" }
   }
 
-  if (location === "project" && !hadAgentsDir && existsSync(agentsDir)) {
-    ensureAgentsGitignored()
+  if (location === "project" && projectSkillsRoot && !hadProjectSkillsRoot && existsSync(projectSkillsRoot)) {
+    ensureAgentDirGitignored(projectSkillsRoot)
   }
 
   return { success: true }
@@ -185,19 +239,24 @@ export async function updateSkills(): Promise<{ success: boolean; output: string
  * Get packages that are applicable but not yet installed.
  */
 export function getUninstalledPackages(): SkillPackage[] {
-  return getApplicablePackages().filter((pkg) => !isPackageInstalled(pkg))
+  return getApplicablePackages()
 }
 
 /**
  * Get packages that are applicable and installed (for showing update info).
  */
 export function getInstalledPackages(): SkillPackage[] {
-  return getApplicablePackages().filter((pkg) => isPackageInstalled(pkg))
+  return getApplicablePackages()
 }
 
-function ensureAgentsGitignored(): void {
+function ensureAgentDirGitignored(projectSkillsRoot: string): void {
+  const entryBase = path.basename(projectSkillsRoot)
+  if (!entryBase.startsWith(".")) {
+    return
+  }
+
+  const entry = `${entryBase}/`
   const gitignorePath = path.join(process.cwd(), ".gitignore")
-  const entry = ".agents/"
 
   let contents = ""
   if (existsSync(gitignorePath)) {

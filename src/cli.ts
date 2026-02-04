@@ -128,7 +128,7 @@ import { cloudFix } from "./commands/cloud-fix.js"
 import { createPersistentLogFile, findAvailablePort, startDevEnvironment } from "./dev-environment.js"
 import { getSkill, getSkillsInfo, listAvailableSkills } from "./skills/index.js"
 import { detectAIAgent } from "./utils/agent-detection.js"
-import { getAvailableAgents } from "./utils/agent-selection.js"
+import { getAvailableAgents, getSkillsAgentId } from "./utils/agent-selection.js"
 import { ensureD3kHomeDir } from "./utils/d3k-dir.js"
 import { getProjectDir } from "./utils/project-name.js"
 import {
@@ -752,138 +752,155 @@ program
     // Handle agent selection for split-screen mode (default behavior in TTY)
     // Skip if --no-agent, --no-tui, --debug flags are used, or if already inside tmux (to avoid nested prompts)
     const insideTmux = !!process.env.TMUX
+    let selectedAgent: { name: string; command: string } | null = null
+    let didPromptAgentSelection = false
+
     if (process.stdin.isTTY && options.agent !== false && options.tui !== false && !options.debug && !insideTmux) {
       // Clear the terminal so d3k UI starts at the top of the screen
       process.stdout.write("\x1B[2J\x1B[0f")
 
-      // Check for skill updates and offer new packages
-      try {
-        // Show loading message
-        process.stdout.write(chalk.gray(" Checking for skills...\r"))
-
-        // 1. Check for updates to existing skills
-        const { hasUpdates } = await checkForSkillUpdates()
-
-        // Clear the loading message line
-        process.stdout.write("\x1B[2K\r")
-
-        if (hasUpdates) {
-          // Show which packages have updates (use applicable packages since lock file may not exist)
-          const applicablePackages = getApplicablePackages()
-
-          console.log(chalk.cyan("📦 Skill updates available"))
-          for (const pkg of applicablePackages) {
-            console.log(chalk.gray(`   • ${pkg.repo}`))
-          }
-          const { default: readline } = await import("readline")
-          const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
-          const answer = await new Promise<string>((resolve) => {
-            rl.question(chalk.white("   Update now? (Y/n) "), resolve)
-          })
-          rl.close()
-
-          if (answer.toLowerCase() !== "n") {
-            console.log(chalk.gray("   Updating skills..."))
-            const updateResult = await updateSkills()
-            if (updateResult.success) {
-              console.log(chalk.green("   ✓ Skills updated"))
-            } else {
-              console.log(chalk.yellow("   ⚠ Some skills failed to update"))
-            }
-          }
-          console.log("")
-        }
-
-        // 2. Show all applicable packages with install status
-        // Skip if we just handled updates
-        if (!hasUpdates) {
-          const applicablePackages = getApplicablePackages()
-          const packagesWithStatus: PackageWithStatus[] = applicablePackages.map((pkg) => ({
-            ...pkg,
-            installed: isPackageInstalled(pkg)
-          }))
-          const hasUninstalled = packagesWithStatus.some((p) => !p.installed)
-
-          // Only show package selector if there are packages to install
-          if (packagesWithStatus.length > 0 && hasUninstalled) {
-            const { packages: selectedPackages, location } = await promptPackageSelection(packagesWithStatus)
-            if (selectedPackages.length > 0) {
-              const locationLabel = location === "global" ? "globally" : "to project"
-              console.log(chalk.cyan(`Installing ${selectedPackages.length} skill package(s) ${locationLabel}...`))
-
-              const results = { success: [] as string[], failed: [] as string[] }
-              for (let i = 0; i < selectedPackages.length; i++) {
-                const pkg = selectedPackages[i]
-                console.log(chalk.gray(`  [${i + 1}/${selectedPackages.length}] ${pkg.displayName}...`))
-                const result = await installSkillPackage(pkg, location)
-                if (result.success) {
-                  results.success.push(pkg.displayName)
-                } else {
-                  results.failed.push(pkg.displayName)
-                }
-              }
-
-              if (results.success.length > 0) {
-                console.log(chalk.green(`✓ Installed: ${results.success.join(", ")}`))
-              }
-              if (results.failed.length > 0) {
-                console.log(chalk.yellow(`⚠ Failed: ${results.failed.join(", ")}`))
-              }
-              console.log("")
-            } else {
-              // User skipped package installation, show skills are up to date
-              console.log(chalk.green("✓ Skills up to date"))
-              console.log("")
-            }
-          } else {
-            // No updates and no new packages - show success
-            console.log(chalk.green("✓ Skills up to date"))
-            console.log("")
-          }
-        }
-      } catch {
-        // Show error briefly, then continue
-        console.log(chalk.yellow("⚠ Could not check for skill updates"))
-        console.log("")
-      }
-
       // Check if tmux is available before showing prompt
-      if (!(await isTmuxInstalled())) {
+      const tmuxAvailable = await isTmuxInstalled()
+      if (!tmuxAvailable) {
         console.warn(chalk.yellow("⚠️ tmux not installed - agent split-screen mode unavailable"))
         console.warn(chalk.gray("  Install tmux to enable: brew install tmux (macOS)"))
         // Continue with normal startup
       } else {
         // Always show prompt, pre-selecting the last-used option
-        const selectedAgent = await promptAgentSelection(userConfig.defaultAgent?.name)
+        selectedAgent = await promptAgentSelection(userConfig.defaultAgent?.name)
+        didPromptAgentSelection = true
 
         if (selectedAgent) {
           if (selectedAgent.name === "debug") {
             // User chose debug mode - enable debug and continue with normal startup
             options.debug = true
-          } else {
-            // User selected an agent - launch with tmux
-            if (options.debug) {
-              console.log(`[DEBUG] Launching tmux with agent command: ${selectedAgent.command}`)
-            }
-            // Clear screen and scrollback before launching tmux so when tmux exits, terminal is clean
-            process.stdout.write("\x1b[2J\x1b[H\x1b[3J")
-            await launchWithTmux(selectedAgent.command, {
-              port: options.port,
-              script: options.script,
-              command: options.command,
-              profileDir: options.profileDir,
-              browser: browserOption,
-              serversOnly: options.serversOnly,
-              headless: options.headless,
-              dateTime: options.dateTime,
-              pluginReactScan: options.pluginReactScan
-            })
-            return
           }
         } else if (options.debug) {
           console.log("[DEBUG] No agent selected, continuing with normal startup")
         }
         // User chose "No agent" or "debug" - continue with normal startup
+      }
+
+      const skillsAgentName =
+        selectedAgent?.name && selectedAgent.name !== "debug"
+          ? selectedAgent.name
+          : !didPromptAgentSelection
+            ? userConfig.defaultAgent?.name
+            : undefined
+      const skillsAgentId = getSkillsAgentId(skillsAgentName)
+
+      if (skillsAgentId) {
+        // Check for skill updates and offer new packages
+        try {
+          // Show loading message
+          process.stdout.write(chalk.gray(" Checking for skills...\r"))
+
+          // 1. Check for updates to existing skills
+          const { hasUpdates } = await checkForSkillUpdates()
+
+          // Clear the loading message line
+          process.stdout.write("\x1B[2K\r")
+
+          if (hasUpdates) {
+            // Show which packages have updates (use applicable packages since lock file may not exist)
+            const applicablePackages = getApplicablePackages()
+
+            console.log(chalk.cyan("📦 Skill updates available"))
+            for (const pkg of applicablePackages) {
+              console.log(chalk.gray(`   • ${pkg.repo}`))
+            }
+            const { default: readline } = await import("readline")
+            const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
+            const answer = await new Promise<string>((resolve) => {
+              rl.question(chalk.white("   Update now? (Y/n) "), resolve)
+            })
+            rl.close()
+
+            if (answer.toLowerCase() !== "n") {
+              console.log(chalk.gray("   Updating skills..."))
+              const updateResult = await updateSkills()
+              if (updateResult.success) {
+                console.log(chalk.green("   ✓ Skills updated"))
+              } else {
+                console.log(chalk.yellow("   ⚠ Some skills failed to update"))
+              }
+            }
+            console.log("")
+          }
+
+          // 2. Show all applicable packages with install status
+          // Skip if we just handled updates
+          if (!hasUpdates) {
+            const applicablePackages = getApplicablePackages()
+            const packagesWithStatus: PackageWithStatus[] = applicablePackages.map((pkg) => ({
+              ...pkg,
+              installed: isPackageInstalled(pkg, skillsAgentId)
+            }))
+            const hasUninstalled = packagesWithStatus.some((p) => !p.installed)
+
+            // Only show package selector if there are packages to install
+            if (packagesWithStatus.length > 0 && hasUninstalled) {
+              const { packages: selectedPackages, location } = await promptPackageSelection(packagesWithStatus)
+              if (selectedPackages.length > 0) {
+                const locationLabel = location === "global" ? "globally" : "to project"
+                console.log(chalk.cyan(`Installing ${selectedPackages.length} skill package(s) ${locationLabel}...`))
+
+                const results = { success: [] as string[], failed: [] as string[] }
+                for (let i = 0; i < selectedPackages.length; i++) {
+                  const pkg = selectedPackages[i]
+                  console.log(chalk.gray(`  [${i + 1}/${selectedPackages.length}] ${pkg.displayName}...`))
+                  const result = await installSkillPackage(pkg, location, skillsAgentId)
+                  if (result.success) {
+                    results.success.push(pkg.displayName)
+                  } else {
+                    results.failed.push(pkg.displayName)
+                  }
+                }
+
+                if (results.success.length > 0) {
+                  console.log(chalk.green(`✓ Installed: ${results.success.join(", ")}`))
+                }
+                if (results.failed.length > 0) {
+                  console.log(chalk.yellow(`⚠ Failed: ${results.failed.join(", ")}`))
+                }
+                console.log("")
+              } else {
+                // User skipped package installation, show skills are up to date
+                console.log(chalk.green("✓ Skills up to date"))
+                console.log("")
+              }
+            } else {
+              // No updates and no new packages - show success
+              console.log(chalk.green("✓ Skills up to date"))
+              console.log("")
+            }
+          }
+        } catch {
+          // Show error briefly, then continue
+          console.log(chalk.yellow("⚠ Could not check for skill updates"))
+          console.log("")
+        }
+      }
+
+      if (tmuxAvailable && selectedAgent && selectedAgent.name !== "debug") {
+        // User selected an agent - launch with tmux after skills install
+        if (options.debug) {
+          console.log(`[DEBUG] Launching tmux with agent command: ${selectedAgent.command}`)
+        }
+        // Clear screen and scrollback before launching tmux so when tmux exits, terminal is clean
+        process.stdout.write("\x1b[2J\x1b[H\x1b[3J")
+        await launchWithTmux(selectedAgent.command, {
+          port: options.port,
+          script: options.script,
+          command: options.command,
+          profileDir: options.profileDir,
+          browser: browserOption,
+          serversOnly: options.serversOnly,
+          headless: options.headless,
+          dateTime: options.dateTime,
+          pluginReactScan: options.pluginReactScan
+        })
+        return
       }
     }
 

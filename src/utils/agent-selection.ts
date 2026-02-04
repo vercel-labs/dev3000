@@ -64,3 +64,32 @@ export function getAvailableAgents(): AgentOption[] {
 export function getAgentByName(name: string): KnownAgent | undefined {
   return KNOWN_AGENTS.find((agent) => agent.name === name)
 }
+
+export function getSkillsAgentId(agentName?: string): string | null {
+  if (!agentName) {
+    return null
+  }
+
+  const normalized = agentName.toLowerCase()
+
+  if (normalized === "claude" || normalized === "claude-yolo") {
+    return "claude-code"
+  }
+  if (normalized === "codex") {
+    return "codex"
+  }
+  if (normalized === "opencode") {
+    return "opencode"
+  }
+  if (normalized === "gemini") {
+    return "gemini-cli"
+  }
+  if (normalized === "cline") {
+    return "cline"
+  }
+  if (normalized === "cursor-agent") {
+    return "cursor"
+  }
+
+  return null
+}
