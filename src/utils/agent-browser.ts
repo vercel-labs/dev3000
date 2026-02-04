@@ -7,6 +7,7 @@
 
 import { execSync, spawn } from "child_process"
 import { existsSync, mkdirSync } from "fs"
+import { homedir } from "os"
 import { dirname, join } from "path"
 import { fileURLToPath } from "url"
 
@@ -38,7 +39,12 @@ function getAgentBrowserPath(): string {
     // import.meta.url not available or invalid, skip these paths
   }
 
-  // 3. Use process.cwd() as fallback - essential for Next.js bundled code
+  // 3. Bun global install (dev3000 dependency)
+  searchPaths.push(
+    join(homedir(), ".bun", "install", "global", "node_modules", "dev3000", "node_modules", ".bin", "agent-browser")
+  )
+
+  // 4. Use process.cwd() as fallback - essential for Next.js bundled code
   // When running in a bundled environment, cwd may vary, so include common local paths
   const cwd = process.cwd()
   searchPaths.push(
@@ -47,6 +53,15 @@ function getAgentBrowserPath(): string {
     // Parent node_modules (when cwd is nested)
     join(cwd, "..", "node_modules", ".bin", "agent-browser")
   )
+
+  // 5. npm/pnpm/yarn global install locations (best-effort)
+  const globalNodeModules = [
+    join("/usr", "local", "lib", "node_modules"),
+    join("/opt", "homebrew", "lib", "node_modules")
+  ]
+  for (const root of globalNodeModules) {
+    searchPaths.push(join(root, "dev3000", "node_modules", ".bin", "agent-browser"))
+  }
 
   for (const searchPath of searchPaths) {
     if (existsSync(searchPath)) {

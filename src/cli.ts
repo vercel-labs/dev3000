@@ -46,6 +46,8 @@ if (agentBrowserIndex >= 0 && (process.argv[1]?.includes("d3k") || process.argv[
     const searchPaths = [
       // Bun global install paths (native binary) - use homedir since compiled binary has virtual path
       join(home, ".bun", "install", "global", "node_modules", "@d3k", platformPkg, "node_modules", ".bin", nativeName),
+      // Bun global dev3000 dependency path
+      join(home, ".bun", "install", "global", "node_modules", "dev3000", "node_modules", ".bin", nativeName),
       // Local development paths (native binary)
       join(cwd, "node_modules", ".bin", nativeName),
       // Fallback to wrapper script (needs node in PATH)
@@ -61,8 +63,19 @@ if (agentBrowserIndex >= 0 && (process.argv[1]?.includes("d3k") || process.argv[
         ".bin",
         "agent-browser"
       ),
+      join(home, ".bun", "install", "global", "node_modules", "dev3000", "node_modules", ".bin", "agent-browser"),
       join(cwd, "node_modules", ".bin", "agent-browser")
     ]
+
+    // npm/pnpm/yarn global install locations (best-effort)
+    const globalNodeModules = [
+      join("/usr", "local", "lib", "node_modules"),
+      join("/opt", "homebrew", "lib", "node_modules")
+    ]
+    for (const root of globalNodeModules) {
+      searchPaths.push(join(root, "dev3000", "node_modules", ".bin", nativeName))
+      searchPaths.push(join(root, "dev3000", "node_modules", ".bin", "agent-browser"))
+    }
 
     for (const p of searchPaths) {
       if (existsSync(p)) return p
