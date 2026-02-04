@@ -66,7 +66,8 @@ export async function POST(request: Request) {
     // Trigger the check-pr workflow
     console.log(`[Webhook] Triggering PR check workflow`)
 
-    const workflowUrl = "https://dev3000-mcp.vercel.sh/api/cloud/check-pr"
+    const apiBase = process.env.DEV3000_API_URL || "https://dev3000.ai"
+    const workflowUrl = `${apiBase}/api/cloud/check-pr`
 
     const workflowResponse = await fetch(workflowUrl, {
       method: "POST",

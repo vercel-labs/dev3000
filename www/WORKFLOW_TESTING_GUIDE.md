@@ -88,7 +88,7 @@ Visit `http://localhost:3000/workflows` - you should see your workflows list. If
 
 ## Test Workflow Creation
 
-**IMPORTANT**: Always use d3k MCP tools for testing workflows. Do NOT use curl or manual API calls - use d3k's browser automation instead.
+**IMPORTANT**: Always use d3k tools for testing workflows. Do NOT use curl or manual API calls - use d3k's browser automation instead.
 
 ### Claude Quick Reference: Get Bypass Token
 
@@ -129,7 +129,7 @@ echo "Monitoring started - NOW you can trigger the workflow"
 
 **Only do this AFTER monitoring is running!**
 
-Use d3k browser automation (via `agent_browser_action` MCP tool):
+Use d3k browser automation (via `agent_browser_action` tool):
 
 **Before navigating**, read the bypass token from the environment:
 ```bash
@@ -209,9 +209,9 @@ headers.Authorization = `Bearer ${accessToken}`
 ❌ **DO NOT RELY ON**: UI status, local logs alone, or assumptions
 ✅ **ALWAYS VERIFY WITH**: Vercel CLI production logs
 
-### Production Logs via Vercel MCP Tools (RECOMMENDED)
+### Production Logs via Vercel Tools (RECOMMENDED)
 
-When Claude Code has the Vercel MCP configured, use these tools for easier debugging:
+When Claude Code has the Vercel tools configured, use these tools for easier debugging:
 
 ```typescript
 // List recent deployments to find the correct one
@@ -241,7 +241,7 @@ mcp__vercel__web_fetch_vercel_url({
 
 ### Production Logs via Vercel CLI (Fallback)
 
-**Use CLI when MCP tools are not available:**
+**Use CLI when tools are not available:**
 
 ```bash
 # Step 1: Get latest deployment URL for www production
@@ -262,7 +262,7 @@ vercel logs $DEPLOYMENT --scope team_nLlpyC6REAqxydlFKbrMDlud 2>&1 | tail -100
 - `[Step 0] Creating d3k sandbox...` - Sandbox creation started
 - `[Step 0] Sandbox created successfully` - Sandbox is ready
 - `[Step 0] Dev URL: https://sb-XXXXX.vercel.run` - Sandbox URL available
-- `[Step 0] Executing MCP command inside sandbox...` - Running fix_my_app for CLS data
+- `[Step 0] Executing tools command inside sandbox...` - Running fix_my_app for CLS data
 - `[Step 0] Saving initial report to blob storage...` - First report save (before agent)
 - `[Step 0] Running AI agent with sandbox tools...` - **Agent runs in Step 0 with tool access**
 - `[Agent] Starting AI agent with d3k sandbox tools...` - Agent initialization
@@ -370,7 +370,7 @@ Typical workflow execution:
 
 ### Issue: "Workflow stuck in 'running' state"
 **Cause**: Workflow exceeded 10-minute Vercel Function timeout
-**Fix**: Check production logs for where it failed, may need to optimize MCP execution
+**Fix**: Check production logs for where it failed, may need to optimize tools execution
 
 ### Issue: "UI shows timeout but backend succeeded"
 **Cause**: UI 5-minute timeout < workflow 10-minute execution
@@ -387,12 +387,12 @@ Typical workflow execution:
 2. Verify the workflow completed successfully (check production logs)
 3. Check Vercel Dashboard under **AI → Workflows** (not Observability)
 
-### Issue: "MCP error: Cannot read properties of undefined (reading 'output')"
-**Cause**: The MCP tool response format changed or there's a bug in parsing the response in the workflow code
+### Issue: "tools error: Cannot read properties of undefined (reading 'output')"
+**Cause**: The tool response format changed or there's a bug in parsing the response in the workflow code
 **Symptoms**:
-- Logs show: `[Step 1] Note: MCP error from Step 0: MCP execution error: Cannot read properties of undefined (reading 'output')`
+- Logs show: `[Step 1] Note: tools error from Step 0: tools execution error: Cannot read properties of undefined (reading 'output')`
 - Workflow times out at 300 seconds
-**Fix**: Check `www/app/api/cloud/fix-workflow/workflow.ts` for how MCP responses are parsed
+**Fix**: Check `www/app/api/cloud/fix-workflow/workflow.ts` for how tool responses are parsed
 
 ### Issue: "Sandbox page hangs (HTTP HEAD works but full page doesn't load)"
 **Cause**: SSR/rendering issues in the sandbox, or the sandbox dev server crashed after initial startup
@@ -448,7 +448,7 @@ vercel logs --follow $DEPLOYMENT --scope team_nLlpyC6REAqxydlFKbrMDlud 2>&1 | gr
 
 ### Test Dev URL with Browser Automation
 
-Once you have the Dev URL, test it using d3k MCP:
+Once you have the Dev URL, test it using d3k tools:
 
 ```typescript
 // Navigate to the Dev URL from logs
@@ -534,7 +534,7 @@ else
   echo "   ❌ Dev URL returned error: $HTTP_CODE"
 fi
 
-echo "4. Use dev3000 MCP to test in browser:"
+echo "4. Use dev3000 tools to test in browser:"
 echo "   agent_browser_action({ action: 'navigate', params: { url: '$DEV_URL' } })"
 ```
 

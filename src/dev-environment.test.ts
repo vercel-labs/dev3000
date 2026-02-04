@@ -8,43 +8,11 @@ import {
   getSessionChromePids,
   gracefulKillProcess,
   isServerListening,
-  ORPHANED_PROCESS_CLEANUP_PATTERNS,
   type ServerListeningResult,
   tryHttpConnection,
   tryHttpsConnection,
   writeSessionInfo
 } from "./dev-environment"
-
-describe("ORPHANED_PROCESS_CLEANUP_PATTERNS", () => {
-  it("should not include patterns that would kill other d3k instances' Chrome browsers", () => {
-    // This test prevents regression of the bug where starting a second d3k instance
-    // would kill the first instance's Chrome browser because the cleanup patterns
-    // were too broad and matched all d3k Chrome profiles instead of just orphaned ones.
-    //
-    // The pattern ".d3k/chrome-profiles" must NEVER be in this list because it would
-    // match Chrome instances from ANY running d3k instance, not just orphaned ones.
-    // Each d3k instance handles its own specific profile cleanup separately.
-
-    const dangerousPatterns = [
-      ".d3k/chrome-profiles", // Would kill ALL d3k Chrome instances
-      "chrome-profiles", // Too broad, could match other d3k instances
-      "d3k" // Way too broad
-    ]
-
-    for (const dangerous of dangerousPatterns) {
-      const hasMatch = ORPHANED_PROCESS_CLEANUP_PATTERNS.some((pattern) => pattern.includes(dangerous))
-      expect(hasMatch, `Pattern "${dangerous}" should not be in cleanup patterns`).toBe(false)
-    }
-  })
-
-  it("should only contain MCP-specific patterns for orphan cleanup", () => {
-    // Ensure we only have patterns that are specific to MCP/Playwright processes
-    // which are truly orphaned and not part of running d3k instances
-    expect(ORPHANED_PROCESS_CLEANUP_PATTERNS).toContain("ms-playwright/mcp-chrome")
-    expect(ORPHANED_PROCESS_CLEANUP_PATTERNS).toContain("mcp-server-playwright")
-    expect(ORPHANED_PROCESS_CLEANUP_PATTERNS.length).toBe(2)
-  })
-})
 
 describe("gracefulKillProcess", () => {
   // This test suite ensures that process termination follows the correct sequence:
@@ -452,9 +420,8 @@ describe("ServerListeningResult type", () => {
  *
  * Key invariants tested:
  * 1. Chrome PIDs are stored per-session and only OUR Chrome is killed
- * 2. MCP server is only killed when THIS is the last d3k instance
- * 3. Dev server processes are killed on shutdown
- * 4. Cleanup works both for normal shutdown and SIGHUP (tmux close)
+ * 2. Dev server processes are killed on shutdown
+ * 3. Cleanup works both for normal shutdown and SIGHUP (tmux close)
  *
  * If you're modifying shutdown logic, make sure ALL these tests pass!
  */
@@ -600,7 +567,7 @@ describe("writeSessionInfo", () => {
 
     // Verify the function signature accepts chromePids
     const writeWithChromePids = () => {
-      writeSessionInfo("test", "/tmp/test.log", "3000", "3684", null, [12345, 67890])
+      writeSessionInfo("test", "/tmp/test.log", "3000", null, [12345, 67890])
     }
 
     // Should not throw
@@ -609,7 +576,7 @@ describe("writeSessionInfo", () => {
 
   it("should include serverPid field in session info structure", () => {
     const writeWithServerPid = () => {
-      writeSessionInfo("test", "/tmp/test.log", "3000", undefined, undefined, undefined, undefined, undefined, 44444)
+      writeSessionInfo("test", "/tmp/test.log", "3000", undefined, undefined, undefined, undefined, 44444)
     }
 
     // Should not throw
@@ -662,7 +629,7 @@ describe("Process cleanup invariants", () => {
   })
 
   it("INVARIANT: countActiveD3kInstances correctly identifies running vs dead processes", () => {
-    // This test verifies that the MCP cleanup decision is based on actual running processes,
+    // This test verifies cleanup decisions are based on actual running processes,
     // not just the existence of PID files.
 
     const testPidFile = join(tmpdir(), `dev3000-invariant-test-${Date.now()}.pid`)
@@ -678,36 +645,6 @@ describe("Process cleanup invariants", () => {
       expect(count).toBeGreaterThanOrEqual(0)
     } finally {
       rmSync(testPidFile, { force: true })
-    }
-  })
-
-  it("INVARIANT: ORPHANED_PROCESS_CLEANUP_PATTERNS must be highly specific", () => {
-    // Ensure we NEVER accidentally kill Chrome from other running d3k instances
-    // or the user's regular Chrome browser.
-    //
-    // SAFE patterns (allowed):
-    // - "ms-playwright/mcp-chrome" - very specific to Playwright MCP
-    // - "mcp-server-playwright" - specific to Playwright MCP server
-    //
-    // DANGEROUS patterns (must NEVER be in the list):
-    // - Anything matching ".d3k/chrome-profiles" - our own Chrome profiles
-    // - "Google Chrome" standalone - user's browser
-    // - Just "chrome" or "Chrome" standalone - too broad
-
-    // These patterns must NEVER appear (would kill running d3k Chrome or user's browser)
-    const dangerousPatternsExact = [".d3k/chrome-profiles", "chrome-profiles", ".d3k"]
-
-    for (const dangerous of dangerousPatternsExact) {
-      const hasUnsafePattern = ORPHANED_PROCESS_CLEANUP_PATTERNS.some((pattern) => pattern.includes(dangerous))
-      expect(hasUnsafePattern, `Cleanup patterns must not include "${dangerous}" - would kill running d3k Chrome`).toBe(
-        false
-      )
-    }
-
-    // Verify the patterns are specific enough (should contain path separators or specific identifiers)
-    for (const pattern of ORPHANED_PROCESS_CLEANUP_PATTERNS) {
-      const isSpecific = pattern.includes("/") || pattern.includes("playwright")
-      expect(isSpecific, `Pattern "${pattern}" is too broad - must contain path or specific identifier`).toBe(true)
     }
   })
 })
@@ -732,12 +669,10 @@ describe("Process cleanup documentation", () => {
     // 2. On shutdown (SIGINT or SIGHUP):
     //    a) Kill dev server processes on our port
     //    b) Kill Chrome instances WE spawned (from chromePids)
-    //    c) Kill MCP server ONLY IF we're the last d3k instance
     //
     // 3. Multiple d3k instances can run simultaneously:
     //    - Each has its own session.json in ~/.d3k/{project}/
     //    - Each has its own PID file in tmpdir
-    //    - The MCP server is shared and only killed by the last instance
     //
     // 4. SIGHUP (tmux) requires SYNCHRONOUS cleanup:
     //    - tmux may kill us immediately after sending SIGHUP

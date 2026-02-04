@@ -13,7 +13,6 @@ export type UpdateInfo =
 
 export interface TUIOptions {
   appPort: string
-  mcpPort: string
   logFile: string
   commandName: string
   serversOnly?: boolean
@@ -27,8 +26,6 @@ interface LogEntry {
   id: number
   content: string
 }
-
-const NEXTJS_MCP_404_REGEX = /(?:\[POST\]|POST)\s+\/_next\/mcp\b[^\n]*\b404\b/i
 
 // Compact ASCII logo for very small terminals
 const COMPACT_LOGO = "d3k"
@@ -150,7 +147,6 @@ const LogLine = memo(
 
 const TUIApp = ({
   appPort: initialAppPort,
-  mcpPort: _mcpPort,
   logFile,
   commandName: _commandName,
   serversOnly,
@@ -329,10 +325,6 @@ const TUIApp = ({
     }
 
     const appendLog = (line: string) => {
-      if (NEXTJS_MCP_404_REGEX.test(line)) {
-        return
-      }
-
       const newLog: LogEntry = {
         id: logIdCounter.current++,
         content: line
@@ -509,9 +501,7 @@ const TUIApp = ({
                 {!portConfirmed && <Spinner type="dots" />}
               </Box>
               <Text color="cyan">📋 Logs: {logFile}</Text>
-              {serversOnly && (
-                <Text color="cyan">🖥️ Servers-only mode - use Chrome extension for browser monitoring</Text>
-              )}
+              {serversOnly && <Text color="cyan">🖥️ Servers-only mode - browser monitoring disabled</Text>}
             </Box>
           </Box>
         </Box>

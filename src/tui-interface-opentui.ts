@@ -29,7 +29,6 @@ export type UpdateInfo =
 
 export interface TUIOptions {
   appPort: string
-  mcpPort: string
   logFile: string
   commandName: string
   serversOnly?: boolean
@@ -45,8 +44,6 @@ interface LogEntry {
   content: string
   timestamp?: string // Extracted timestamp like "12:34:56.789"
 }
-
-const NEXTJS_MCP_404_REGEX = /(?:\[POST\]|POST)\s+\/_next\/mcp\b[^\n]*\b404\b/i
 
 // Compact ASCII logo for very small terminals
 const COMPACT_LOGO = "d3k"
@@ -693,10 +690,6 @@ class D3kTUI {
     }
 
     const appendLog = (line: string) => {
-      if (NEXTJS_MCP_404_REGEX.test(line)) {
-        return
-      }
-
       // Extract timestamp from log line format: [timestamp] [source] ...
       const timestampMatch = line.match(/^\[(.*?)\]/)
       const timestamp = timestampMatch ? timestampMatch[1] : undefined
@@ -915,7 +908,11 @@ class D3kTUI {
   shutdown() {
     unwatchFile(this.options.logFile)
     if (this.renderer) {
-      this.renderer.destroy()
+      try {
+        this.renderer.destroy()
+      } catch (error) {
+        this.debugLog(`Renderer destroy failed during shutdown: ${error}`)
+      }
       this.renderer = null
     }
     // Explicitly reset terminal state:

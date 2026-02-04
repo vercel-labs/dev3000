@@ -10,6 +10,7 @@ mcp-server/.next/*
 .gemini/
 .cursor/
 .claude/
+.agents/
 .mcp.json
 next-devtools-mcp/
 .vercel
@@ -27,4 +28,3 @@ mcp-server/next-env.d.ts
 # Large video files
 www/public/d3k-christmas-duet.mp4
 www/public/d3k-christmas-duet2.mp4
-

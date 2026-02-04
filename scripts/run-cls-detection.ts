@@ -107,7 +107,7 @@ async function runCLSDetection(
   repoInfo?: { owner: string; name: string; baseBranch?: string }
 ): Promise<WorkflowResult> {
   // Use the existing start-fix endpoint which will analyze the page
-  const workflowEndpoint = process.env.WORKFLOW_ENDPOINT || "https://dev3000-mcp.vercel.sh/api/cloud/start-fix"
+  const workflowEndpoint = process.env.WORKFLOW_ENDPOINT || "https://dev3000.ai/api/cloud/start-fix"
 
   console.log(`\n🔍 Running analysis on ${projectName}...`)
   console.log(`   URL: ${projectUrl}`)

@@ -124,7 +124,7 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
         </div>
 
         {/* Sandbox Info (at top, always visible) */}
-        {(report.sandboxDevUrl || report.sandboxMcpUrl) && (
+        {report.sandboxDevUrl && (
           <div className="text-sm text-muted-foreground mb-6">
             <ul className="flex flex-wrap gap-x-6 gap-y-1">
               {report.sandboxDevUrl && (
@@ -137,19 +137,6 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
                     className="font-mono text-xs hover:underline"
                   >
                     {report.sandboxDevUrl}
-                  </a>
-                </li>
-              )}
-              {report.sandboxMcpUrl && (
-                <li>
-                  <span className="text-muted-foreground">MCP: </span>
-                  <a
-                    href={report.sandboxMcpUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-mono text-xs hover:underline"
-                  >
-                    {report.sandboxMcpUrl}
                   </a>
                 </li>
               )}

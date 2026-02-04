@@ -1,7 +1,7 @@
 {
   "name": "dev3000",
   "version": "0.0.158-canary",
-  "description": "AI-powered development tools with browser monitoring and MCP server integration",
+  "description": "AI-powered development tools with browser monitoring and skill integration",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
@@ -12,25 +12,6 @@
     "bin/",
     "dist/",
     "src/tui-interface-impl.tsx",
-    "mcp-server/app/",
-    "mcp-server/.next/BUILD_ID",
-    "mcp-server/.next/*.json",
-    "mcp-server/.next/*.js",
-    "mcp-server/.next/*.js.map",
-    "mcp-server/.next/build/",
-    "mcp-server/.next/server/app/",
-    "mcp-server/.next/server/pages/",
-    "mcp-server/.next/server/chunks/",
-    "mcp-server/.next/server/*.js",
-    "mcp-server/.next/server/*.json",
-    "mcp-server/.next/static/",
-    "mcp-server/public/",
-    "mcp-server/package.json",
-    "mcp-server/tsconfig.json",
-    "mcp-server/next.config.mjs",
-    "mcp-server/next-env.d.ts",
-    "mcp-server/postcss.config.mjs",
-    "mcp-server/start-production.mjs",
     "README.md"
   ],
   "scripts": {
@@ -38,8 +19,8 @@
     "typegen": "./scripts/typegen.sh",
     "typecheck": "bun run --filter '*' typecheck",
     "format": "biome format --write .",
-    "lint": "biome check src mcp-server www scripts --vcs-use-ignore-file=true",
-    "lint:fix": "biome check --write src mcp-server www scripts",
+    "lint": "biome check src www scripts --vcs-use-ignore-file=true",
+    "lint:fix": "biome check --write src www scripts",
     "test": "vitest run",
     "test-postinstall": "tsx scripts/test-postinstall.ts",
     "test-global-install": "tsx scripts/test-global-install.ts",
@@ -57,7 +38,6 @@
     "development",
     "chrome-devtools-protocol",
     "cdp",
-    "mcp",
     "browser-monitoring",
     "debugging",
     "claude"
@@ -111,7 +91,6 @@
   "license": "MIT",
   "packageManager": "bun@1.2.5",
   "workspaces": [
-    "www",
-    "mcp-server"
+    "www"
   ]
 }

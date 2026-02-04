@@ -16,7 +16,6 @@ const workflowLog = console.log
 interface InitResult {
   sandboxId: string
   devUrl: string
-  mcpUrl: string
   reportId: string
   beforeCls: number | null
   beforeGrade: "good" | "needs-improvement" | "poor" | null
@@ -65,6 +64,8 @@ export async function cloudFixWorkflow(params: {
   repoOwner?: string
   repoName?: string
   baseBranch?: string
+  // For before/after screenshots in PR
+  productionUrl?: string
 }) {
   "use workflow"
 
@@ -83,7 +84,8 @@ export async function cloudFixWorkflow(params: {
     githubPat,
     repoOwner,
     repoName,
-    baseBranch = "main"
+    baseBranch = "main",
+    productionUrl
   } = params
   // Use runId if provided (from start-fix route), otherwise generate one
   // The reportId is used for blob naming and tracking
@@ -124,7 +126,6 @@ export async function cloudFixWorkflow(params: {
     const fixResult = await agentFixLoop(
       initResult.sandboxId,
       initResult.devUrl,
-      initResult.mcpUrl,
       initResult.beforeCls,
       initResult.beforeGrade,
       initResult.beforeScreenshots,
@@ -142,6 +143,25 @@ export async function cloudFixWorkflow(params: {
     )
 
     workflowLog(`[Workflow] Result: ${fixResult.status}, After CLS: ${fixResult.afterCls}`)
+
+    // ============================================================
+    // STEP 2.5: Capture before/after screenshots (if changes and productionUrl)
+    // ============================================================
+    let prScreenshots: Array<{ route: string; beforeBlobUrl: string | null; afterBlobUrl: string | null }> = []
+
+    if (fixResult.gitDiff && productionUrl) {
+      workflowLog("[Workflow] Step 2.5: Capturing before/after screenshots...")
+      prScreenshots = await captureScreenshotsForPR(
+        initResult.sandboxId,
+        productionUrl,
+        initResult.devUrl,
+        projectName,
+        progressContext
+      )
+      workflowLog(`[Workflow] Captured ${prScreenshots.length} route screenshot(s)`)
+    } else if (!productionUrl) {
+      workflowLog("[Workflow] Skipping screenshots: No production URL provided")
+    }
 
     // ============================================================
     // STEP 3: Create PR (only if we have changes and a GitHub PAT)
@@ -162,7 +182,8 @@ export async function cloudFixWorkflow(params: {
         fixResult.beforeCls,
         fixResult.afterCls,
         reportId,
-        progressContext
+        progressContext,
+        prScreenshots
       )
 
       // Check if result is an error object
@@ -243,7 +264,6 @@ async function initSandbox(
 async function agentFixLoop(
   sandboxId: string,
   devUrl: string,
-  mcpUrl: string,
   beforeCls: number | null,
   beforeGrade: "good" | "needs-improvement" | "poor" | null,
   beforeScreenshots: Array<{ timestamp: number; blobUrl: string; label?: string }>,
@@ -263,7 +283,6 @@ async function agentFixLoop(
   return agentFixLoopStep(
     sandboxId,
     devUrl,
-    mcpUrl,
     beforeCls,
     beforeGrade,
     beforeScreenshots,
@@ -286,6 +305,18 @@ async function cleanupSandbox(sandboxId: string): Promise<void> {
   return steps.cleanupSandbox(sandboxId)
 }
 
+async function captureScreenshotsForPR(
+  sandboxId: string,
+  productionUrl: string,
+  localhostUrl: string,
+  projectName: string,
+  progressContext?: ProgressContext | null
+): Promise<Array<{ route: string; beforeBlobUrl: string | null; afterBlobUrl: string | null }>> {
+  "use step"
+  const { captureScreenshotsForPRStep } = await import("./steps")
+  return captureScreenshotsForPRStep(sandboxId, productionUrl, localhostUrl, projectName, progressContext)
+}
+
 async function createPullRequest(
   sandboxId: string,
   githubPat: string,
@@ -296,7 +327,8 @@ async function createPullRequest(
   beforeCls: number | null,
   afterCls: number | null,
   reportId: string,
-  progressContext?: ProgressContext | null
+  progressContext?: ProgressContext | null,
+  prScreenshots?: Array<{ route: string; beforeBlobUrl: string | null; afterBlobUrl: string | null }>
 ): Promise<{ prUrl: string; prNumber: number; branch: string } | { error: string } | null> {
   "use step"
   const { createPullRequestStep } = await import("./steps")
@@ -310,7 +342,8 @@ async function createPullRequest(
     beforeCls,
     afterCls,
     reportId,
-    progressContext
+    progressContext,
+    prScreenshots
   )
 }
 

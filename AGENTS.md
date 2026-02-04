@@ -25,7 +25,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 2. Wait for deployment to complete (status changes from "Building" to "Ready")
 3. Monitor runtime logs with the deployment URL: `vercel logs <deployment-url>.vercel.sh --scope team_nLlpyC6REAqxydlFKbrMDlud`
    - Example: `vercel logs dev3000-6tynruehj.vercel.sh --scope team_nLlpyC6REAqxydlFKbrMDlud`
-   - NOTE: `d3k-mcp.vercel.app` doesn't work for `vercel logs` - you need the specific deployment URL
+   - NOTE: `d3k.vercel.app` doesn't work for `vercel logs` - you need the specific deployment URL
 4. Once deployed, proceed with testing the changes - don't wait for user confirmation
 
 **PACKAGE MANAGER**: This project uses bun exclusively. Do not use npm, pnpm, or yarn.
@@ -36,7 +36,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **BUILD CANARY AFTER d3k CHANGES**: When making changes to the d3k CLI or TUI (anything in `src/`), you MUST run `bun run canary` after committing so the user can test. This is the only way to test d3k changes locally. However, you do NOT need to rebuild canary for:
 - Changes to `www/` (website) - those are tested via `bun run dev` in www/
-- Changes to `mcp-server/` only - those are tested via the deployed MCP server
 
 For local testing, use:
 ```bash
@@ -44,7 +43,6 @@ bun run canary
 ```
 
 To test the d3k-in-the-cloud workflow:
-- Use d3k MCP browser automation (NOT curl/API calls)
 - Navigate to `http://localhost:3000/workflows/new?type=cloud-fix&team=team_aMS4jZUlMooxyr9VgMKJf9uT&project=prj_0ITI5UHrH4Kp92G5OLEMrlgVX08p`
 - Start monitoring production logs BEFORE triggering: `vercel logs <deployment> --scope team_nLlpyC6REAqxydlFKbrMDlud`
 - The local dev server must be running for the UI to work
@@ -57,7 +55,6 @@ To test the d3k-in-the-cloud workflow:
 - `src/tui-interface.ts` - TUI loader (switches between implementations)
 - `src/tui-interface-opentui.ts` - TUI implementation with OpenTUI (mouse scroll support)
 - `src/tui-interface-impl.tsx` - Legacy TUI implementation with Ink/React
-- `mcp-server/app/mcp/route.ts` - MCP endpoint with debug tools
 
 **Key Features**:
 - Automatic screenshots on errors and navigation
@@ -74,7 +71,7 @@ When writing code that runs in:
 
 **NEVER use `lsof`** - it doesn't exist in these environments and will crash with `spawn lsof ENOENT`.
 
-Instead, use the `isInSandbox()` helper function (defined in `src/dev-environment.ts` and `mcp-server/app/mcp/tools.ts`) to detect sandbox environments and skip lsof-based operations:
+Instead, use the `isInSandbox()` helper function (defined in `src/dev-environment.ts`) to detect sandbox environments and skip lsof-based operations:
 
 ```typescript
 function isInSandbox(): boolean {

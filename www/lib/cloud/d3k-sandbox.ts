@@ -205,7 +205,6 @@ export interface D3kSandboxConfig {
 export interface D3kSandboxResult {
   sandbox: Sandbox
   devUrl: string
-  mcpUrl: string
   projectName: string
   cleanup: () => Promise<void>
   // TODO: Add bypassToken support
@@ -226,13 +225,8 @@ export interface D3kSandboxResult {
  * 1. Creates sandbox from git repo
  * 2. Installs project dependencies
  * 3. Installs d3k globally (pnpm i -g dev3000)
- * 4. Starts d3k (which auto-configures MCPs and starts browser)
- * 5. Returns sandbox with devUrl and mcpUrl
- *
- * The d3k MCP server will have all tools auto-configured:
- * - fix_my_app (with browser automation)
- * - nextjs-dev MCP tools
- * - chrome-devtools MCP tools
+ * 4. Starts d3k (which starts browser + logging)
+ * 5. Returns sandbox with devUrl
  */
 export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSandboxResult> {
   const {
@@ -304,7 +298,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
   const sandbox = await Sandbox.create({
     resources: { vcpus: 8 },
     timeout: timeoutMs,
-    ports: [3000, 3684], // App port + MCP server port
+    ports: [3000], // App port
     runtime: "node22"
   })
 
@@ -471,15 +465,13 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
 
     if (debug) console.log("  ✅ d3k installed globally")
 
-    // Start d3k (which will auto-configure MCPs and start browser)
+    // Start d3k (which starts browser + logging)
     if (debug) console.log("  🚀 Starting d3k...")
     if (debug) console.log(`  📂 Working directory: ${sandboxCwd}`)
 
     // Use chromium path from @sparticuz/chromium (or fallback)
     if (debug)
-      console.log(
-        `  🔧 Command: cd ${sandboxCwd} && MCP_SKIP_PERMISSIONS=true d3k --no-tui --debug --headless --browser ${chromiumPath}`
-      )
+      console.log(`  🔧 Command: cd ${sandboxCwd} && d3k --no-tui --debug --headless --browser ${chromiumPath}`)
 
     // Start d3k in detached mode with --headless flag
     // This tells d3k to launch Chrome in headless mode, which works in serverless environments
@@ -493,7 +485,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
       cmd: "sh",
       args: [
         "-c",
-        `mkdir -p /home/vercel-sandbox/.d3k/logs && cd ${sandboxCwd} && MCP_SKIP_PERMISSIONS=true d3k --no-tui --debug --headless --browser ${chromiumPath} > ${d3kStartupLog} 2>&1`
+        `mkdir -p /home/vercel-sandbox/.d3k/logs && cd ${sandboxCwd} && d3k --no-tui --debug --headless --browser ${chromiumPath} > ${d3kStartupLog} 2>&1`
       ],
       detached: true
     })
@@ -565,14 +557,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     const devUrl = sandbox.domain(3000)
     if (debug) console.log(`  ✅ Dev server ready: ${devUrl}`)
 
-    // Wait for MCP server to be ready (d3k starts it automatically)
-    if (debug) console.log("  ⏳ Waiting for MCP server...")
-    await waitForServer(sandbox, 3684, 60000, debug)
-
-    const mcpUrl = sandbox.domain(3684)
-    if (debug) console.log(`  ✅ MCP server ready: ${mcpUrl}`)
-
-    // Wait for CDP URL to be available (needed for chrome-devtools MCP)
+    // Wait for CDP URL to be available (needed for browser automation)
     // This is more reliable than a fixed timeout because it actually waits for
     // d3k to connect to Chrome and write the CDP URL to the session file
     if (debug) console.log("  ⏳ Waiting for d3k to initialize Chrome and populate CDP URL...")
@@ -586,7 +571,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
       if (debug) console.log("  ⏳ Waiting for d3k to complete page navigation...")
       await waitForPageNavigation(sandbox, 30000, debug)
     } else {
-      console.log("  ⚠️ CDP URL not found - chrome-devtools MCP features may not work")
+      console.log("  ⚠️ CDP URL not found - browser automation features may not work")
       // DIAGNOSTIC: Dump all logs immediately when CDP fails - this is critical for debugging
       console.log("  📋 === d3k LOG DUMP (CDP URL not found) ===")
       try {
@@ -642,7 +627,6 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     return {
       sandbox,
       devUrl,
-      mcpUrl,
       projectName,
       // TODO: Implement bypass token extraction
       // The @vercel/sandbox SDK doesn't expose bypass tokens.
@@ -718,7 +702,7 @@ async function waitForServer(sandbox: Sandbox, port: number, timeoutMs: number, 
 /**
  * Wait for d3k to populate the CDP URL in its session file
  * This is necessary because d3k writes the session file before Chrome is fully connected,
- * and we need the CDP URL to be available before calling MCP tools that use chrome-devtools.
+ * and we need the CDP URL to be available before using browser automation.
  */
 async function waitForCdpUrl(sandbox: Sandbox, timeoutMs: number, debug = false): Promise<string | null> {
   const startTime = Date.now()
@@ -780,7 +764,7 @@ async function waitForCdpUrl(sandbox: Sandbox, timeoutMs: number, debug = false)
   }
 
   if (debug) {
-    console.log(`  ⚠️ CDP URL not available after ${timeoutMs}ms - chrome-devtools MCP may not work`)
+    console.log(`  ⚠️ CDP URL not available after ${timeoutMs}ms - browser automation may not work`)
   }
   return null
 }
@@ -916,7 +900,7 @@ export async function createD3kSandboxFromSnapshot(config: D3kSandboxFromSnapsho
       snapshotId
     },
     timeout: timeoutMs,
-    ports: [3000, 3684] // App port + MCP server port
+    ports: [3000] // App port
   })
 
   if (debug) console.log(`  ✅ Sandbox created from snapshot: ${sandbox.sandboxId}`)
@@ -971,7 +955,7 @@ export async function createD3kSandboxFromSnapshot(config: D3kSandboxFromSnapsho
       cmd: "sh",
       args: [
         "-c",
-        `mkdir -p /home/vercel-sandbox/.d3k/logs && cd ${sandboxCwd} && MCP_SKIP_PERMISSIONS=true d3k --no-tui --debug --headless --browser ${chromiumPath} > ${d3kStartupLog} 2>&1`
+        `mkdir -p /home/vercel-sandbox/.d3k/logs && cd ${sandboxCwd} && d3k --no-tui --debug --headless --browser ${chromiumPath} > ${d3kStartupLog} 2>&1`
       ],
       detached: true
     })
@@ -989,13 +973,6 @@ export async function createD3kSandboxFromSnapshot(config: D3kSandboxFromSnapsho
     const devUrl = sandbox.domain(3000)
     if (debug) console.log(`  ✅ Dev server ready: ${devUrl}`)
 
-    // Wait for MCP server
-    if (debug) console.log("  ⏳ Waiting for MCP server...")
-    await waitForServer(sandbox, 3684, 60000, debug)
-
-    const mcpUrl = sandbox.domain(3684)
-    if (debug) console.log(`  ✅ MCP server ready: ${mcpUrl}`)
-
     // Wait for CDP URL
     if (debug) console.log("  ⏳ Waiting for d3k to initialize Chrome...")
     const cdpUrl = await waitForCdpUrl(sandbox, 30000, debug)
@@ -1003,7 +980,7 @@ export async function createD3kSandboxFromSnapshot(config: D3kSandboxFromSnapsho
       if (debug) console.log(`  ✅ CDP URL ready: ${cdpUrl}`)
       await waitForPageNavigation(sandbox, 30000, debug)
     } else {
-      console.log("  ⚠️ CDP URL not found - chrome-devtools MCP features may not work")
+      console.log("  ⚠️ CDP URL not found - browser automation features may not work")
     }
 
     // Extract project name from the sandbox directory
@@ -1018,7 +995,6 @@ export async function createD3kSandboxFromSnapshot(config: D3kSandboxFromSnapsho
     return {
       sandbox,
       devUrl,
-      mcpUrl,
       projectName,
       bypassToken: undefined,
       cleanup: async () => {
@@ -1133,7 +1109,7 @@ async function createAndSaveBaseSnapshot(timeoutMs: number, debug = false): Prom
   const baseSandbox = await Sandbox.create({
     resources: { vcpus: 8 },
     timeout: timeoutMs,
-    ports: [3000, 3684],
+    ports: [3000],
     runtime: "node22"
   })
 
@@ -1179,7 +1155,7 @@ async function createAndSaveBaseSnapshot(timeoutMs: number, debug = false): Prom
     if (debug) console.log("  📦 Installing agent-browser globally...")
     const agentBrowserInstall = await runCmd("pnpm", ["i", "-g", "agent-browser@latest"])
     if (agentBrowserInstall.exitCode !== 0) {
-      // Don't fail - agent-browser is optional, workflow can fall back to MCP tools
+      // Don't fail - agent-browser is optional, workflow can run without it
       if (debug) console.log(`  ⚠️ agent-browser install warning: ${agentBrowserInstall.stderr}`)
     } else {
       if (debug) console.log("  ✅ agent-browser installed globally")
@@ -1290,7 +1266,7 @@ export async function getOrCreateD3kSandbox(config: D3kSandboxConfig): Promise<D
       snapshotId: baseSnapshotId
     },
     timeout: timeoutMs,
-    ports: [3000, 3684]
+    ports: [3000]
   })
 
   if (debug) console.log(`  ✅ Sandbox created from snapshot: ${sandbox.sandboxId}`)
@@ -1393,7 +1369,7 @@ export async function getOrCreateD3kSandbox(config: D3kSandboxConfig): Promise<D
       cmd: "sh",
       args: [
         "-c",
-        `mkdir -p /home/vercel-sandbox/.d3k/logs && cd ${sandboxCwd} && MCP_SKIP_PERMISSIONS=true d3k --no-tui --debug --headless --browser ${chromiumPath} > ${d3kStartupLog} 2>&1`
+        `mkdir -p /home/vercel-sandbox/.d3k/logs && cd ${sandboxCwd} && d3k --no-tui --debug --headless --browser ${chromiumPath} > ${d3kStartupLog} 2>&1`
       ],
       detached: true
     })
@@ -1410,12 +1386,6 @@ export async function getOrCreateD3kSandbox(config: D3kSandboxConfig): Promise<D
     const devUrl = sandbox.domain(3000)
     if (debug) console.log(`  ✅ Dev server ready: ${devUrl}`)
 
-    timer.start("Wait for MCP server (port 3684)")
-    if (debug) console.log("  ⏳ Waiting for MCP server...")
-    await waitForServer(sandbox, 3684, 60000, debug)
-    const mcpUrl = sandbox.domain(3684)
-    if (debug) console.log(`  ✅ MCP server ready: ${mcpUrl}`)
-
     // Wait for CDP URL
     timer.start("Wait for CDP/Chrome ready")
     if (debug) console.log("  ⏳ Waiting for CDP URL...")
@@ -1424,7 +1394,7 @@ export async function getOrCreateD3kSandbox(config: D3kSandboxConfig): Promise<D
       if (debug) console.log(`  ✅ CDP URL ready: ${cdpUrl}`)
       await waitForPageNavigation(sandbox, 30000, debug)
     } else {
-      console.log("  ⚠️ CDP URL not found - chrome-devtools MCP features may not work")
+      console.log("  ⚠️ CDP URL not found - browser automation features may not work")
     }
 
     timer.end()
@@ -1437,7 +1407,6 @@ export async function getOrCreateD3kSandbox(config: D3kSandboxConfig): Promise<D
     return {
       sandbox,
       devUrl,
-      mcpUrl,
       projectName,
       bypassToken: undefined,
       cleanup: async () => {

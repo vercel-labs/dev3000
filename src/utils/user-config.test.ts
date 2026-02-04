@@ -21,7 +21,7 @@ describe("user config", () => {
     expect(getUserConfigPath()).toBe(expectedPath)
   })
 
-  it("reads disableMcpConfigs from config.json", () => {
+  it("reads user config from config.json", () => {
     // This test uses the real config path, so we need to mock or skip
     // For now, just verify the function exists and returns an object
     const config = loadUserConfig()

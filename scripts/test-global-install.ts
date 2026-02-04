@@ -29,7 +29,6 @@ function createMockGlobalInstall(): string {
   // Create directory structure
   mkdirSync(pnpmDir, { recursive: true })
   mkdirSync(join(pnpmDir, "dist"), { recursive: true })
-  mkdirSync(join(pnpmDir, "mcp-server"), { recursive: true })
 
   // Copy essential files from current build
   const projectRoot = join(__dirname, "..")
@@ -39,86 +38,12 @@ function createMockGlobalInstall(): string {
     cpSync(join(projectRoot, "dist"), join(pnpmDir, "dist"), { recursive: true })
   }
 
-  // Copy mcp-server with .next build
-  if (existsSync(join(projectRoot, "mcp-server"))) {
-    cpSync(join(projectRoot, "mcp-server"), join(pnpmDir, "mcp-server"), { recursive: true })
-  }
-
   // Copy package.json
   if (existsSync(join(projectRoot, "package.json"))) {
     cpSync(join(projectRoot, "package.json"), join(pnpmDir, "package.json"))
   }
 
   return pnpmDir
-}
-
-function testMcpServerStartup(installPath: string): boolean {
-  log("\nTesting MCP server startup...", YELLOW)
-
-  try {
-    // Set up environment to run from mock global install
-    const env = {
-      ...process.env,
-      NODE_PATH: installPath,
-      DEBUG: "true"
-    }
-
-    // Try to start the CLI with --kill-mcp first to clean up
-    try {
-      execSync(`node ${join(installPath, "dist", "cli.js")} --kill-mcp`, {
-        env,
-        stdio: "pipe"
-      })
-    } catch {
-      // Ignore errors from kill command
-    }
-
-    // Now try to start with debug mode to see what happens
-    const output = execSync(`timeout 5s node ${join(installPath, "dist", "cli.js")} --debug --servers-only || true`, {
-      env,
-      stdio: "pipe",
-      encoding: "utf8"
-    })
-
-    // Check for common error patterns
-    if (output.includes("Cannot find module")) {
-      log("❌ Module not found error detected", RED)
-      log(output, RED)
-      return false
-    }
-
-    if (output.includes("package.json not found")) {
-      log("❌ package.json not found error detected", RED)
-      log(output, RED)
-      return false
-    }
-
-    if (output.includes("MCP server is pre-built") && output.includes("will run from original location")) {
-      log("✅ Correctly detected pre-built server and running from original location", GREEN)
-      return true
-    }
-
-    if (output.includes("Starting MCP server") || output.includes("MCP server ready")) {
-      log("✅ MCP server started successfully", GREEN)
-      return true
-    }
-
-    log("⚠️ Unexpected output:", YELLOW)
-    log(output)
-    return false
-  } catch (error) {
-    log("❌ Failed to start MCP server", RED)
-    log(error instanceof Error ? error.message : String(error), RED)
-    if (error && typeof error === "object" && "stdout" in error && error.stdout) {
-      log("stdout:", YELLOW)
-      log(String(error.stdout))
-    }
-    if (error && typeof error === "object" && "stderr" in error && error.stderr) {
-      log("stderr:", YELLOW)
-      log(String(error.stderr))
-    }
-    return false
-  }
 }
 
 function cleanup(path: string) {
@@ -147,15 +72,10 @@ async function main() {
   const mockInstallPath = createMockGlobalInstall()
 
   // Run tests
-  let success = true
+  const success = true
 
   try {
-    // Test 1: MCP server startup
-    if (!testMcpServerStartup(mockInstallPath)) {
-      success = false
-    }
-
-    // Add more tests here as needed
+    // Add tests here as needed
   } finally {
     // Clean up
     cleanup(mockInstallPath)

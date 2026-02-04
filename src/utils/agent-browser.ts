@@ -12,7 +12,7 @@ import { fileURLToPath } from "url"
 
 // Find the agent-browser binary in node_modules
 function getAgentBrowserPath(): string {
-  // 1. Check environment variable first (set by d3k when starting MCP server)
+  // 1. Check environment variable first (set by d3k when starting tools service)
   if (process.env.AGENT_BROWSER_PATH && existsSync(process.env.AGENT_BROWSER_PATH)) {
     return process.env.AGENT_BROWSER_PATH
   }
@@ -31,11 +31,6 @@ function getAgentBrowserPath(): string {
       searchPaths.push(
         // Relative to src/utils/ or dist/utils/
         join(dirname(dirname(currentDir)), "node_modules", ".bin", "agent-browser"),
-        // MCP server's node_modules
-        join(currentDir, "..", "..", "..", "mcp-server", "node_modules", ".bin", "agent-browser"),
-        join(dirname(dirname(currentDir)), "mcp-server", "node_modules", ".bin", "agent-browser"),
-        // Global installed platform package
-        join(currentDir, "..", "..", "..", "..", "mcp-server", "node_modules", ".bin", "agent-browser"),
         join(currentDir, "..", "..", "node_modules", ".bin", "agent-browser")
       )
     }
@@ -44,15 +39,13 @@ function getAgentBrowserPath(): string {
   }
 
   // 3. Use process.cwd() as fallback - essential for Next.js bundled code
-  // When running as MCP server, cwd is typically the mcp-server directory
+  // When running in a bundled environment, cwd may vary, so include common local paths
   const cwd = process.cwd()
   searchPaths.push(
-    // Direct node_modules (when cwd is mcp-server/)
+    // Direct node_modules
     join(cwd, "node_modules", ".bin", "agent-browser"),
-    // Parent's mcp-server (when cwd is package root)
-    join(cwd, "mcp-server", "node_modules", ".bin", "agent-browser"),
-    // Sibling mcp-server (when cwd is somewhere else in the package)
-    join(cwd, "..", "mcp-server", "node_modules", ".bin", "agent-browser")
+    // Parent node_modules (when cwd is nested)
+    join(cwd, "..", "node_modules", ".bin", "agent-browser")
   )
 
   for (const searchPath of searchPaths) {

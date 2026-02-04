@@ -39,7 +39,6 @@ export class CDPMonitor {
   private chromePids: Set<number> = new Set() // Track all Chrome PIDs for this instance
   private onWindowClosedCallback: (() => void) | null = null // Callback for when window is manually closed
   private appServerPort?: string // Port of the user's app server to monitor
-  private mcpServerPort?: string // Port of dev3000's MCP server to ignore
   private headless: boolean = false // Run Chrome in headless mode
 
   constructor(
@@ -50,14 +49,12 @@ export class CDPMonitor {
     browserPath?: string,
     pluginReactScan: boolean = false,
     appServerPort?: string,
-    mcpServerPort?: string,
     debugPort?: number,
     headless: boolean = false
   ) {
     this.profileDir = profileDir
     this.screenshotDir = screenshotDir
     this.appServerPort = appServerPort
-    this.mcpServerPort = mcpServerPort
     this.logger = logger
     this.debug = debug
     this.browserPath = browserPath
@@ -76,7 +73,7 @@ export class CDPMonitor {
   }
 
   /**
-   * Check if a URL should be monitored (i.e., it's from the user's app server, not dev3000's MCP server or external sites)
+   * Check if a URL should be monitored (i.e., it's from the user's app server, not dev3000's tools service or external sites)
    */
   private shouldMonitorUrl(url: string): boolean {
     try {
@@ -87,11 +84,6 @@ export class CDPMonitor {
       // Only monitor localhost/127.0.0.1 (the user's local dev server)
       const isLocalhost = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "0.0.0.0"
       if (!isLocalhost) {
-        return false
-      }
-
-      // Skip dev3000's MCP server port
-      if (this.mcpServerPort && port === this.mcpServerPort) {
         return false
       }
 
@@ -899,7 +891,7 @@ export class CDPMonitor {
       const { url, method, headers, postData } = params.request
       const { type, initiator } = params
 
-      // Skip requests to dev3000's MCP server
+      // Skip requests to dev3000's tools service
       if (!this.shouldMonitorUrl(url)) {
         return
       }
@@ -941,7 +933,7 @@ export class CDPMonitor {
       const { url, status, statusText, mimeType } = params.response
       const { type } = params
 
-      // Skip responses from dev3000's MCP server
+      // Skip responses from dev3000's tools service
       if (!this.shouldMonitorUrl(url)) {
         return
       }
@@ -970,7 +962,7 @@ export class CDPMonitor {
 
       const url = frame?.url || "unknown"
 
-      // Skip navigation to dev3000's MCP server
+      // Skip navigation to dev3000's tools service
       if (!this.shouldMonitorUrl(url)) {
         return
       }

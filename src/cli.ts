@@ -45,21 +45,8 @@ if (agentBrowserIndex >= 0 && (process.argv[1]?.includes("d3k") || process.argv[
     // Prefer native binary to avoid shell wrapper needing node in PATH
     const searchPaths = [
       // Bun global install paths (native binary) - use homedir since compiled binary has virtual path
-      join(
-        home,
-        ".bun",
-        "install",
-        "global",
-        "node_modules",
-        "@d3k",
-        platformPkg,
-        "mcp-server",
-        "node_modules",
-        ".bin",
-        nativeName
-      ),
+      join(home, ".bun", "install", "global", "node_modules", "@d3k", platformPkg, "node_modules", ".bin", nativeName),
       // Local development paths (native binary)
-      join(cwd, "mcp-server", "node_modules", ".bin", nativeName),
       join(cwd, "node_modules", ".bin", nativeName),
       // Fallback to wrapper script (needs node in PATH)
       join(
@@ -70,12 +57,10 @@ if (agentBrowserIndex >= 0 && (process.argv[1]?.includes("d3k") || process.argv[
         "node_modules",
         "@d3k",
         platformPkg,
-        "mcp-server",
         "node_modules",
         ".bin",
         "agent-browser"
       ),
-      join(cwd, "mcp-server", "node_modules", ".bin", "agent-browser"),
       join(cwd, "node_modules", ".bin", "agent-browser")
     ]
 
@@ -131,7 +116,6 @@ import { createPersistentLogFile, findAvailablePort, startDevEnvironment } from 
 import { getSkill, getSkillsInfo, listAvailableSkills } from "./skills/index.js"
 import { detectAIAgent } from "./utils/agent-detection.js"
 import { getAvailableAgents } from "./utils/agent-selection.js"
-import { formatMcpConfigTargets, parseDisabledMcpConfigs } from "./utils/mcp-configs.js"
 import { getProjectDir } from "./utils/project-name.js"
 import {
   checkForSkillUpdates,
@@ -173,14 +157,31 @@ function logCrash(type: string, error: Error | unknown): void {
   }
 }
 
+function triggerEmergencyShutdown(reason: string, error: Error | unknown): boolean {
+  const handler = globalThis.__d3kEmergencyShutdown
+  if (typeof handler === "function") {
+    try {
+      handler(reason, error)
+      return true
+    } catch {
+      return false
+    }
+  }
+  return false
+}
+
 process.on("uncaughtException", (error) => {
   logCrash("Uncaught Exception", error)
-  process.exit(1)
+  if (!triggerEmergencyShutdown("uncaughtException", error)) {
+    process.exit(1)
+  }
 })
 
 process.on("unhandledRejection", (reason) => {
   logCrash("Unhandled Promise Rejection", reason)
-  process.exit(1)
+  if (!triggerEmergencyShutdown("unhandledRejection", reason)) {
+    process.exit(1)
+  }
 })
 
 /**
@@ -188,7 +189,6 @@ process.on("unhandledRejection", (reason) => {
  */
 interface ForwardedOptions {
   port?: string
-  portMcp?: string
   script?: string
   command?: string
   profileDir?: string
@@ -197,8 +197,6 @@ interface ForwardedOptions {
   headless?: boolean
   dateTime?: string
   pluginReactScan?: boolean
-  disableMcpConfigs?: string
-  chromeDevtoolsMcp?: boolean
 }
 
 /**
@@ -210,7 +208,6 @@ function buildD3kCommandWithOptions(options: ForwardedOptions): string {
 
   // Forward options that were explicitly set
   if (options.port) args.push(`--port ${options.port}`)
-  if (options.portMcp) args.push(`--port-mcp ${options.portMcp}`)
   if (options.script) args.push(`--script ${options.script}`)
   if (options.command) args.push(`--command "${options.command.replace(/"/g, '\\"')}"`)
   if (options.profileDir) args.push(`--profile-dir "${options.profileDir}"`)
@@ -219,8 +216,6 @@ function buildD3kCommandWithOptions(options: ForwardedOptions): string {
   if (options.headless) args.push("--headless")
   if (options.dateTime) args.push(`--date-time ${options.dateTime}`)
   if (options.pluginReactScan) args.push("--plugin-react-scan")
-  if (options.disableMcpConfigs) args.push(`--disable-mcp-configs "${options.disableMcpConfigs}"`)
-  if (options.chromeDevtoolsMcp === false) args.push("--no-chrome-devtools-mcp")
 
   return args.join(" ")
 }
@@ -691,11 +686,11 @@ const program = new Command()
 
 program
   .name("dev3000")
-  .description("AI-powered development tools with browser monitoring and MCP server")
+  .description("AI-powered development tools with browser monitoring and tool integrations")
   .version(getVersion())
 
 program
-  .description("AI-powered development tools with browser monitoring and MCP server")
+  .description("AI-powered development tools with browser monitoring and tool integrations")
   .option("-p, --port <port>", "Development server port (auto-detected by project type)")
   .option("-s, --script <script>", "Script to run (e.g. dev, main.py) - auto-detected by project type")
   .option("-c, --command <command>", "Custom command to run (overrides auto-detection and --script)")
@@ -704,7 +699,7 @@ program
     "--browser <path>",
     "Full path to browser executable (e.g. for Arc: '/Applications/Arc.app/Contents/MacOS/Arc')"
   )
-  .option("--servers-only", "Run servers only, skip browser launch (use with Chrome extension)")
+  .option("--servers-only", "Run servers only, skip browser launch")
   .option("--debug", "Enable debug logging to console (automatically disables TUI)")
   .option("-t, --tail", "Output consolidated logfile to terminal (like tail -f)")
   .option("--no-tui", "Disable TUI mode and use standard terminal output")
@@ -714,11 +709,6 @@ program
     "local"
   )
   .option("--plugin-react-scan", "Enable react-scan performance monitoring for React applications")
-  .option(
-    "--disable-mcp-configs <targets>",
-    "Comma or space separated list of MCP config files to skip (.mcp.json, .cursor/mcp.json, opencode.json). Use 'all' to disable all."
-  )
-  .option("--no-chrome-devtools-mcp", "Disable chrome-devtools MCP integration (enabled by default)")
   .option("--headless", "Run Chrome in headless mode (for serverless/CI environments)")
   .option(
     "--with-agent <command>",
@@ -736,7 +726,6 @@ program
     if (options.withAgent) {
       await launchWithTmux(options.withAgent, {
         port: options.port,
-        portMcp: options.portMcp,
         script: options.script,
         command: options.command,
         profileDir: options.profileDir,
@@ -744,9 +733,7 @@ program
         serversOnly: options.serversOnly,
         headless: options.headless,
         dateTime: options.dateTime,
-        pluginReactScan: options.pluginReactScan,
-        disableMcpConfigs: options.disableMcpConfigs,
-        chromeDevtoolsMcp: options.chromeDevtoolsMcp
+        pluginReactScan: options.pluginReactScan
       })
       return
     }
@@ -870,7 +857,6 @@ program
             process.stdout.write("\x1b[2J\x1b[H\x1b[3J")
             await launchWithTmux(selectedAgent.command, {
               port: options.port,
-              portMcp: options.portMcp,
               script: options.script,
               command: options.command,
               profileDir: options.profileDir,
@@ -878,9 +864,7 @@ program
               serversOnly: options.serversOnly,
               headless: options.headless,
               dateTime: options.dateTime,
-              pluginReactScan: options.pluginReactScan,
-              disableMcpConfigs: options.disableMcpConfigs,
-              chromeDevtoolsMcp: options.chromeDevtoolsMcp
+              pluginReactScan: options.pluginReactScan
             })
             return
           }
@@ -925,11 +909,6 @@ program
     const port = options.port || projectConfig.defaultPort
     const script = options.script || projectConfig.defaultScript
     const userSetPort = options.port !== undefined
-    const userSetMcpPort = process.argv.includes("--port-mcp") || process.argv.includes("-p-mcp")
-    const disableMcpConfigsInput =
-      options.disableMcpConfigs ?? process.env.DEV3000_DISABLE_MCP_CONFIGS ?? userConfig.disableMcpConfigs
-    const disabledMcpConfigs = parseDisabledMcpConfigs(disableMcpConfigsInput)
-
     // Generate server command based on custom command or project type
     let serverCommand: string
     if (options.command) {
@@ -1003,11 +982,6 @@ program
       console.log(`[DEBUG] Port: ${port} (${options.port ? "explicit" : "auto-detected"})`)
       console.log(`[DEBUG] Script: ${script} (${options.script ? "explicit" : "auto-detected"})`)
       console.log(`[DEBUG] Server command: ${serverCommand}`)
-      console.log(
-        `[DEBUG] Disabled MCP configs: ${
-          disabledMcpConfigs.length ? formatMcpConfigTargets(disabledMcpConfigs) : "none"
-        }`
-      )
     }
 
     // Detect which command name was used (dev3000 or d3k)
@@ -1029,12 +1003,10 @@ program
         ...options,
         browser: browserOption,
         port,
-        portMcp: options.portMcp,
         debugPort: Number.parseInt(debugPort, 10),
         defaultPort: projectConfig.defaultPort,
         framework: projectConfig.framework,
         userSetPort,
-        userSetMcpPort,
         logFile,
         profileDir,
         serverCommand,
@@ -1044,9 +1016,7 @@ program
         tail: options.tail,
         tui: options.tui && !options.debug, // TUI is default unless --no-tui or --debug is specified
         dateTimeFormat: options.dateTime || "local",
-        pluginReactScan: options.pluginReactScan || false,
-        chromeDevtoolsMcp: options.chromeDevtoolsMcp !== false, // Default to true unless explicitly disabled
-        disabledMcpConfigs
+        pluginReactScan: options.pluginReactScan || false
       })
     } catch (error) {
       console.error(chalk.red("❌ Failed to start development environment:"), error)
@@ -1060,12 +1030,11 @@ const cloud = program.command("cloud").description("Cloud-based tools using Verc
 // Cloud fix command
 cloud
   .command("fix")
-  .description("Analyze and fix issues in current project using Vercel Sandbox + MCP tools")
+  .description("Start a cloud fix workflow for the current project")
   .option("--repo <url>", "Repository URL (e.g. https://github.com/user/repo)")
   .option("--branch <name>", "Git branch to test")
   .option("--project-dir <dir>", "Project directory within repo (e.g. 'www')")
   .option("--debug", "Enable debug logging")
-  .option("--timeout <duration>", "Sandbox timeout (e.g. '30m', '1h')", "30m")
   .action(async (options) => {
     try {
       await cloudFix(options)

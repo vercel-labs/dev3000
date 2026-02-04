@@ -264,7 +264,8 @@ async function runPRCheckWorkflow(params: WorkflowParams): Promise<any> {
   const { previewUrl, prTitle, prBody, changedFiles, repoOwner, repoName, prNumber, debug } = params
 
   // Call the workflow API endpoint (we'll create this next)
-  const workflowUrl = "https://dev3000-mcp.vercel.sh/api/cloud/check-pr"
+  const apiBase = process.env.DEV3000_API_URL || "https://dev3000.ai"
+  const workflowUrl = `${apiBase}/api/cloud/check-pr`
 
   try {
     const response = await fetch(workflowUrl, {

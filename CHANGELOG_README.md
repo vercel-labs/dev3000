@@ -36,7 +36,6 @@ To ensure good changelog generation, write clear commit messages:
 
 ✅ **Good examples:**
 - "Add periodic health checks for process monitoring"
-- "Implement magical MCP tool descriptions" 
 - "Fix error reporting with recent log lines"
 - "Create automated background monitoring tools"
 

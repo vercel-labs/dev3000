@@ -5,7 +5,6 @@ export type UpdateInfo =
 
 export interface TUIOptions {
   appPort: string
-  mcpPort: string
   logFile: string
   commandName: string
   serversOnly?: boolean

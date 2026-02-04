@@ -90,11 +90,11 @@ describe("tmux-helpers", () => {
       expect(commands[9]).toContain("d3k-test-123")
     })
 
-    it("should start agent directly without MCP polling", () => {
+    it("should start agent directly without tools polling", () => {
       const commands = generateTmuxCommands(baseConfig)
       expect(commands[9]).toContain("claude")
       expect(commands[9]).not.toContain("curl")
-      expect(commands[9]).not.toContain("Waiting for d3k MCP server")
+      expect(commands[9]).not.toContain("Waiting for d3k tools service")
     })
 
     it("should set pane-focus-in hook with window flag to resize on click", () => {

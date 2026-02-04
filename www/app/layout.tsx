@@ -33,7 +33,6 @@ export const metadata: Metadata = {
     "server logs",
     "browser automation",
     "Claude AI",
-    "MCP protocol",
     "developer tools",
     "Vercel Labs"
   ],

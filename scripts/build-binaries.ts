@@ -4,9 +4,8 @@
  * Build script for creating standalone d3k binaries using Bun's native compilation.
  *
  * This script:
- * 1. Builds the MCP server (Next.js)
- * 2. Compiles the CLI into a standalone binary for darwin-arm64
- * 3. Embeds necessary assets (MCP server build, skills, etc.)
+ * 1. Compiles the CLI into a standalone binary for darwin-arm64
+ * 2. Embeds necessary assets (skills, etc.)
  */
 
 import { $ } from "bun"
@@ -15,7 +14,6 @@ import { dirname, join } from "path"
 
 const ROOT_DIR = dirname(dirname(import.meta.path))
 const DIST_BIN_DIR = join(ROOT_DIR, "dist-bin")
-const MCP_SERVER_DIR = join(ROOT_DIR, "mcp-server")
 
 // Read version from package.json
 function getPackageVersion(): string {
@@ -36,12 +34,6 @@ async function cleanDistBin() {
     rmSync(DIST_BIN_DIR, { recursive: true })
   }
   mkdirSync(DIST_BIN_DIR, { recursive: true })
-}
-
-async function buildMcpServer() {
-  console.log("📦 Building MCP server...")
-  await $`cd ${MCP_SERVER_DIR} && bun run build`
-  console.log("✅ MCP server built successfully")
 }
 
 async function buildMainPackage() {
@@ -77,84 +69,6 @@ async function compileForTarget(target: (typeof TARGETS)[number]) {
     throw error
   }
 
-  // Copy MCP server build output to be bundled with the package
-  // The binary will need to extract/reference these at runtime
-  const mcpDest = join(targetDir, "mcp-server")
-  console.log("📁 Copying MCP server assets...")
-
-  mkdirSync(mcpDest, { recursive: true })
-
-  // Copy the built .next directory
-  const nextDir = join(MCP_SERVER_DIR, ".next")
-  if (existsSync(nextDir)) {
-    cpSync(nextDir, join(mcpDest, ".next"), { recursive: true })
-  }
-
-  // Copy package.json for the MCP server (needed to run it)
-  cpSync(join(MCP_SERVER_DIR, "package.json"), join(mcpDest, "package.json"))
-
-  // Copy node_modules (production deps only would be better, but for now copy all)
-  // Use dereference: true to resolve pnpm's symlinks to actual files
-  const nodeModules = join(MCP_SERVER_DIR, "node_modules")
-  if (existsSync(nodeModules)) {
-    console.log("📁 Copying MCP server node_modules (this may take a moment)...")
-    cpSync(nodeModules, join(mcpDest, "node_modules"), { recursive: true, dereference: true })
-
-    // Fix executable permissions on .bin directory (lost when dereferencing symlinks)
-    // Skip on Windows as chmod doesn't apply
-    if (!isWindows) {
-      const mcpBinDir = join(mcpDest, "node_modules", ".bin")
-      if (existsSync(mcpBinDir)) {
-        console.log("🔧 Fixing .bin permissions...")
-        await $`chmod +x ${mcpBinDir}/*`
-      }
-    }
-
-    // Run agent-browser postinstall to download native binary for current platform
-    // This is needed because bun doesn't run postinstall scripts automatically
-    const agentBrowserDir = join(mcpDest, "node_modules", "agent-browser")
-    const postinstallScript = join(agentBrowserDir, "scripts", "postinstall.js")
-    if (existsSync(postinstallScript)) {
-      console.log("🔧 Running agent-browser postinstall to download native binary...")
-      try {
-        await $`cd ${agentBrowserDir} && node scripts/postinstall.js`
-        console.log("✅ agent-browser native binary installed")
-      } catch (error) {
-        console.warn("⚠️ agent-browser postinstall failed:", error)
-        // Continue anyway - the binary might still work
-      }
-    }
-
-    // Copy native binaries to .bin/ directory
-    // This is needed because cpSync with dereference:true breaks the wrapper script's
-    // symlink resolution logic - the wrapper looks for binaries relative to itself
-    const agentBrowserBinDir = join(agentBrowserDir, "bin")
-    const dotBinDir = join(mcpDest, "node_modules", ".bin")
-    if (existsSync(agentBrowserBinDir) && existsSync(dotBinDir)) {
-      console.log("🔧 Copying agent-browser native binaries to .bin/...")
-      const binaries = [
-        "agent-browser-darwin-arm64",
-        "agent-browser-darwin-x64",
-        "agent-browser-linux-arm64",
-        "agent-browser-linux-x64",
-        "agent-browser-win32-x64.exe"
-      ]
-      for (const binary of binaries) {
-        const srcPath = join(agentBrowserBinDir, binary)
-        const destPath = join(dotBinDir, binary)
-        if (existsSync(srcPath) && !existsSync(destPath)) {
-          cpSync(srcPath, destPath)
-        }
-      }
-    }
-  }
-
-  // Copy start script
-  const startScript = join(MCP_SERVER_DIR, "start-production.mjs")
-  if (existsSync(startScript)) {
-    cpSync(startScript, join(mcpDest, "start-production.mjs"))
-  }
-
   // Copy skills directory
   const skillsDir = join(ROOT_DIR, "src", "skills")
   if (existsSync(skillsDir)) {
@@ -177,7 +91,6 @@ async function main() {
 
   try {
     await cleanDistBin()
-    await buildMcpServer()
     await buildMainPackage()
 
     for (const target of TARGETS) {

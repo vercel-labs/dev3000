@@ -13,7 +13,7 @@ NC='\033[0m' # No Color
 cleanup_test_processes() {
     echo -e "${YELLOW}Cleaning up any stray test processes...${NC}"
 
-    # Kill any next-server processes running on our test MCP port (4685)
+# Kill any next-server processes running on our test tools port (4685)
     # Use lsof to find processes on the port, then kill them
     if command -v lsof &> /dev/null; then
         local pids=$(lsof -ti:4685 2>/dev/null || true)
@@ -92,100 +92,7 @@ else
     fi
 fi
 
-# Track whether we should skip tests that require platform package
-SKIP_PLATFORM_TESTS=false
-if [ -z "$REQUIRED_VERSION" ] || ! npm view "@d3k/darwin-arm64@$REQUIRED_VERSION" version &> /dev/null 2>&1; then
-    SKIP_PLATFORM_TESTS=true
-fi
-
-# Don't cleanup yet - we need the installed d3k for the next test
-# If npm install was skipped, make sure canary-installed d3k is available
-if ! command -v d3k &> /dev/null; then
-    echo -e "${YELLOW}Using globally installed d3k (from canary build)...${NC}"
-fi
-
-# Test 2: MCP server startup with minimal environment
-if [ "$SKIP_PLATFORM_TESTS" = true ]; then
-    echo -e "${YELLOW}⏭️  Skipping MCP server startup test - platform package not yet published${NC}"
-else
-    echo -e "${YELLOW}Testing MCP server startup...${NC}"
-    TEST_DIR=$(mktemp -d)
-    cd "$TEST_DIR"
-
-    # Use high ports (>4000) to avoid conflicts with user's running d3k on port 3000
-    TEST_APP_PORT=4100
-    TEST_MCP_PORT=4685
-
-    # Create minimal test app
-    cat > package.json << EOF
-{
-  "name": "test-app",
-  "scripts": {
-    "dev": "node -e 'console.log(\"Test server running on port $TEST_APP_PORT\"); setInterval(() => {}, 1000)'"
-  }
-}
-EOF
-
-    # Run d3k in background and capture output
-    OUTPUT_FILE=$(mktemp)
-    # d3k should be available in PATH from the npm install
-    d3k --debug --servers-only --no-tui --port $TEST_APP_PORT --port-mcp $TEST_MCP_PORT > "$OUTPUT_FILE" 2>&1 &
-    D3K_PID=$!
-
-    # Wait for MCP server to start (max 20 seconds)
-    COUNTER=0
-    while [ $COUNTER -lt 20 ]; do
-        if grep -q "MCP server process spawned as singleton background service" "$OUTPUT_FILE" || grep -q "Starting MCP server using bundled Next.js" "$OUTPUT_FILE" || grep -q "MCP server logs:" "$OUTPUT_FILE"; then
-            echo -e "${GREEN}✅ MCP server startup test passed${NC}"
-            # Send two SIGINTs for graceful shutdown (like Ctrl-C twice)
-            kill -INT $D3K_PID 2>/dev/null || true
-            sleep 1
-            kill -INT $D3K_PID 2>/dev/null || true
-            sleep 2
-            # If it's still running after graceful shutdown attempt, force kill
-            kill $D3K_PID 2>/dev/null || true
-            break
-        fi
-        sleep 1
-        COUNTER=$((COUNTER + 1))
-    done
-
-    if [ $COUNTER -eq 20 ]; then
-        echo -e "${RED}❌ MCP server failed to start within 20 seconds${NC}"
-        echo "Debug output:"
-        head -50 "$OUTPUT_FILE"
-        # Send two SIGINTs for graceful shutdown, then force kill if needed
-        kill -INT $D3K_PID 2>/dev/null || true
-        sleep 1
-        kill -INT $D3K_PID 2>/dev/null || true
-        sleep 2
-        kill $D3K_PID 2>/dev/null || true
-        # Force kill any stray next-server processes before exiting
-        cleanup_test_processes
-        exit 1
-    fi
-
-    # Force kill any lingering next-server processes from this test
-    # The d3k process may have exited but the MCP server (next-server) can linger
-    echo -e "${YELLOW}Ensuring all test server processes are stopped...${NC}"
-    cleanup_test_processes
-
-    # Cleanup
-    cd - > /dev/null
-    rm -rf "$TEST_DIR"
-    rm -f "$OUTPUT_FILE"
-fi
-
-# Test 3: Test MCP Server logs API
-echo -e "${YELLOW}Testing MCP Server logs functionality...${NC}"
-if bun exec tsx scripts/test-logs-api.ts; then
-    echo -e "${GREEN}✅ MCP Server logs tests passed${NC}"
-else
-    echo -e "${RED}❌ MCP Server logs tests failed${NC}"
-    exit 1
-fi
-
-# Test 4: Run the TypeScript clean install test
+# Run the TypeScript clean install test
 echo -e "${YELLOW}Running comprehensive clean install tests...${NC}"
 if bun exec tsx scripts/test-clean-install.ts; then
     echo -e "${GREEN}✅ All clean install tests passed${NC}"

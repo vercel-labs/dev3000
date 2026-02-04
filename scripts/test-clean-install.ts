@@ -4,7 +4,7 @@
  * This script creates isolated environments to test global installations
  */
 
-import { execSync, spawn } from "child_process"
+import { execSync } from "child_process"
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "fs"
 import { tmpdir } from "os"
 import { join } from "path"
@@ -350,132 +350,6 @@ RUN d3k --version
   }
 
   /**
-   * Test server startup in clean environment
-   */
-  async testServerStartup(_tarballPath: string): Promise<TestResult> {
-    const startTime = Date.now()
-    const testName = "MCP Server Startup Test"
-
-    try {
-      log(`\n🚀 Testing ${testName}...`, BLUE)
-
-      // Create test directory with minimal app
-      const testDir = mkdtempSync(join(tmpdir(), "d3k-startup-test-"))
-      const packageJson = {
-        name: "test-app",
-        scripts: {
-          dev: "node server.js"
-        }
-      }
-      writeFileSync(join(testDir, "package.json"), JSON.stringify(packageJson, null, 2))
-
-      // Find an available port for testing
-      // Use ports > 4000 to avoid conflicts with user's running d3k instances on 3000-range ports
-      const testPort = await this.findAvailablePort(4500)
-
-      // Create a simple HTTP server that actually listens on the test port
-      const serverCode = `
-const http = require('http');
-const server = http.createServer((req, res) => {
-  res.writeHead(200);
-  res.end('Test server running');
-});
-server.listen(${testPort}, () => {
-  console.log('Test server running on port ${testPort}');
-});
-`
-      writeFileSync(join(testDir, "server.js"), serverCode)
-
-      // Run d3k with clean environment, specifying the port
-      const d3kProcess = spawn("d3k", ["--debug", "--servers-only", "--port", testPort.toString()], {
-        cwd: testDir,
-        env: {
-          ...this.getCleanEnv(),
-          PATH: process.env.PATH // Need current PATH to find d3k
-        }
-      })
-
-      let output = ""
-      let errorOutput = ""
-      let hasError = false
-
-      d3kProcess.stdout.on("data", (data) => {
-        output += data.toString()
-      })
-
-      d3kProcess.stderr.on("data", (data) => {
-        errorOutput += data.toString()
-      })
-
-      // Wait for successful startup or failure
-      const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 35000)) // Slightly longer than MCP timeout
-      const startupPromise = new Promise((resolve) => {
-        const checkInterval = setInterval(() => {
-          // Check for successful MCP server startup
-          if (
-            output.includes("MCP server process spawned") ||
-            output.includes("Waiting for MCP server to be ready") ||
-            output.includes("Starting dev3000 MCP server")
-          ) {
-            // Keep waiting for actual server ready status
-          }
-
-          // Check for errors that indicate startup failure
-          if (
-            output.includes("MCP server failed to start") ||
-            output.includes("dev3000 exited due to") ||
-            output.includes("Failed to start development environment") ||
-            errorOutput.includes("Error:")
-          ) {
-            hasError = true
-            clearInterval(checkInterval)
-            resolve(false)
-          }
-
-          // Check for successful completion
-          if (
-            output.includes("MCP server ready") ||
-            output.includes("MCP server health check: 200") ||
-            output.includes("MCP server health check: 404")
-          ) {
-            clearInterval(checkInterval)
-            resolve(true)
-          }
-        }, 500)
-      })
-
-      const result = await Promise.race([startupPromise, timeoutPromise])
-
-      // Kill the process
-      d3kProcess.kill()
-
-      // Log debug info on failure
-      if (result !== true || hasError) {
-        log(`Test failed. Output captured:`, YELLOW)
-        log(`STDOUT: ${output.slice(-500)}`, YELLOW)
-        log(`STDERR: ${errorOutput.slice(-500)}`, YELLOW)
-      }
-
-      // Cleanup
-      rmSync(testDir, { recursive: true })
-
-      return {
-        name: testName,
-        passed: result === true && !hasError,
-        error: result !== true ? "MCP server failed to start or errored during startup" : undefined,
-        duration: Date.now() - startTime
-      }
-    } catch (error) {
-      return {
-        name: testName,
-        passed: false,
-        error: error instanceof Error ? error.message : String(error),
-        duration: Date.now() - startTime
-      }
-    }
-  }
-
-  /**
    * Test pnpm installation specifically
    */
   async testPnpmInstall(tarballPath: string): Promise<TestResult> {
@@ -594,7 +468,7 @@ server.listen(${testPort}, () => {
         duration: 0
       })
       this.results.push({
-        name: "MCP Server Startup Test",
+        name: "Tools service Startup Test",
         passed: "skipped",
         error: "Platform package not yet published to npm (d3k requires platform binary)",
         duration: 0
@@ -605,7 +479,6 @@ server.listen(${testPort}, () => {
       this.results.push(await this.testCleanEnvInstall(tarballPath))
       this.results.push(await this.testMinimalPath(tarballPath))
       this.results.push(await this.testPnpmInstall(tarballPath))
-      this.results.push(await this.testServerStartup(tarballPath))
     }
 
     // Summary

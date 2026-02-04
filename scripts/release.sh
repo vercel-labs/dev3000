@@ -115,27 +115,24 @@ echo "📁 Copying binaries to platform packages..."
 # darwin-arm64
 DARWIN_ARM64_PKG_DIR="packages/d3k-darwin-arm64"
 DARWIN_ARM64_DIST_DIR="dist-bin/d3k-darwin-arm64"
-rm -rf "$DARWIN_ARM64_PKG_DIR/bin" "$DARWIN_ARM64_PKG_DIR/mcp-server" "$DARWIN_ARM64_PKG_DIR/skills" "$DARWIN_ARM64_PKG_DIR/src"
+rm -rf "$DARWIN_ARM64_PKG_DIR/bin" "$DARWIN_ARM64_PKG_DIR/skills" "$DARWIN_ARM64_PKG_DIR/src"
 cp -r "$DARWIN_ARM64_DIST_DIR/bin" "$DARWIN_ARM64_PKG_DIR/"
-cp -r "$DARWIN_ARM64_DIST_DIR/mcp-server" "$DARWIN_ARM64_PKG_DIR/"
 cp -r "$DARWIN_ARM64_DIST_DIR/skills" "$DARWIN_ARM64_PKG_DIR/"
 cp -r "$DARWIN_ARM64_DIST_DIR/src" "$DARWIN_ARM64_PKG_DIR/"
 
 # linux-x64
 LINUX_X64_PKG_DIR="packages/d3k-linux-x64"
 LINUX_X64_DIST_DIR="dist-bin/d3k-linux-x64"
-rm -rf "$LINUX_X64_PKG_DIR/bin" "$LINUX_X64_PKG_DIR/mcp-server" "$LINUX_X64_PKG_DIR/skills" "$LINUX_X64_PKG_DIR/src"
+rm -rf "$LINUX_X64_PKG_DIR/bin" "$LINUX_X64_PKG_DIR/skills" "$LINUX_X64_PKG_DIR/src"
 cp -r "$LINUX_X64_DIST_DIR/bin" "$LINUX_X64_PKG_DIR/"
-cp -r "$LINUX_X64_DIST_DIR/mcp-server" "$LINUX_X64_PKG_DIR/"
 cp -r "$LINUX_X64_DIST_DIR/skills" "$LINUX_X64_PKG_DIR/"
 cp -r "$LINUX_X64_DIST_DIR/src" "$LINUX_X64_PKG_DIR/"
 
 # windows-x64
 WINDOWS_X64_PKG_DIR="packages/d3k-windows-x64"
 WINDOWS_X64_DIST_DIR="dist-bin/d3k-windows-x64"
-rm -rf "$WINDOWS_X64_PKG_DIR/bin" "$WINDOWS_X64_PKG_DIR/mcp-server" "$WINDOWS_X64_PKG_DIR/skills" "$WINDOWS_X64_PKG_DIR/src"
+rm -rf "$WINDOWS_X64_PKG_DIR/bin" "$WINDOWS_X64_PKG_DIR/skills" "$WINDOWS_X64_PKG_DIR/src"
 cp -r "$WINDOWS_X64_DIST_DIR/bin" "$WINDOWS_X64_PKG_DIR/"
-cp -r "$WINDOWS_X64_DIST_DIR/mcp-server" "$WINDOWS_X64_PKG_DIR/"
 cp -r "$WINDOWS_X64_DIST_DIR/skills" "$WINDOWS_X64_PKG_DIR/"
 cp -r "$WINDOWS_X64_DIST_DIR/src" "$WINDOWS_X64_PKG_DIR/"
 
@@ -194,7 +191,7 @@ bunx tsx scripts/generate-changelog-md.ts
 
 # Commit version change and changelog
 echo "📝 Committing version change and changelog..."
-git add package.json packages/d3k-darwin-arm64/package.json packages/d3k-linux-x64/package.json packages/d3k-windows-x64/package.json mcp-server/package.json www/package.json www/lib/changelog.ts CHANGELOG.md bun.lock
+git add package.json packages/d3k-darwin-arm64/package.json packages/d3k-linux-x64/package.json packages/d3k-windows-x64/package.json www/package.json www/lib/changelog.ts CHANGELOG.md bun.lock
 git commit -m "Release v$NEXT_VERSION
 
 🤖 Generated with [Claude Code](https://claude.ai/code)

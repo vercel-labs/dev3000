@@ -12,7 +12,7 @@
 These require careful testing:
 
 1. **commander**: 11.1.0 → 14.0.1 (Major)
-   - Used in root and mcp-server
+   - Used in root workspace
    - Breaking changes may exist
 
 2. **zod**: 3.25.76 → 4.1.11 (Major)
@@ -68,7 +68,7 @@ pnpm update vitest@^3.2.4 --workspace-root
 3. Run `pnpm run lint`
 4. Test the CLI with `pnpm run canary`
 5. Test browser monitoring functionality
-6. Test MCP server endpoints
+6. Test cloud workflows (if applicable)
 
 ## Notes
 

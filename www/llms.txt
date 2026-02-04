@@ -1,16 +1,16 @@
 # dev3000
 
-> AI-powered development tools with comprehensive browser monitoring and MCP server integration
+> AI-powered development tools with comprehensive browser monitoring and skill-based agent guidance
 
 ## Overview
 
-dev3000 is a TypeScript npm package that provides AI assistants with deep visibility into Next.js development workflows. It captures unified logs from servers, browsers, and user interactions, making debugging and development assistance dramatically more effective.
+dev3000 is a TypeScript package that gives AI assistants deep visibility into local development workflows. It captures unified logs from servers, browsers, and user interactions, making debugging and development assistance dramatically more effective.
 
 ## Key Features
 
 - **Unified Logging**: Consolidates server output, browser console logs, network requests, user interactions, and automatic screenshots into a single timeline
-- **AI Integration**: Built-in MCP (Model Context Protocol) server provides AI tools for log analysis and debugging
-- **Dual Monitoring**: Choose between Playwright automation or Chrome extension for browser monitoring
+- **Skill Integration**: Ships a built-in d3k skill and supports optional skill packs installed via the skills CLI
+- **Dual Monitoring**: Choose between Playwright automation or headless Chrome monitoring
 - **Real-time Analysis**: Live log parsing and search capabilities with timestamp-based debugging workflows
 - **Screenshot Automation**: Captures screenshots on errors, navigation, and interactions for visual context
 
@@ -26,7 +26,7 @@ dev3000 is a TypeScript npm package that provides AI assistants with deep visibi
 2. **Development Environment (`src/dev-environment.ts`)**
    - Orchestrates dev server + browser monitoring
    - Works with any web framework (Next.js, Vite, React, etc.)
-   - Port management (defaults: 3000 for app, 3684 for MCP server)
+   - Port management (defaults: 3000 for app)
    - Chrome profile management and unified logging
 
 3. **Browser Monitoring (`src/cdp-monitor.ts`)**
@@ -35,16 +35,9 @@ dev3000 is a TypeScript npm package that provides AI assistants with deep visibi
    - User interaction tracking (clicks, scrolls, typing)
    - Automatic screenshot capture on events
 
-4. **MCP Server (`mcp-server/`)**
-   - Next.js 15 application providing AI tools
-   - Tools: `read_consolidated_logs`, `search_logs`, `get_browser_errors`, `agent_browser_action`
-   - Real-time log analysis and browser automation capabilities
-   - Built with App Router, React 19, Tailwind CSS v4
-
-5. **Project Setup (`src/setup.ts`)**
-   - Installs MCP API routes in Next.js app directory
-   - Creates simplified MCP endpoint at `/mcp`
-   - Updates package.json with dependencies and scripts
+4. **Skills (`src/skills/`)**
+   - Built-in d3k skill for debugging workflows
+   - Optional skill packs installed via `npx skills`
 
 ### Log Format
 
@@ -61,7 +54,7 @@ All logs use unified timestamps with source prefixes:
 
 ### Global Installation
 ```bash
-pnpm install -g dev3000
+bun install -g dev3000
 ```
 
 ### Project Setup
@@ -74,62 +67,15 @@ dev3000
 # or explicitly:
 dev3000 start
 
-# Start with Chrome extension (no Playwright)
-dev3000 --servers-only
-
 # Custom configuration
 dev3000 --port 5173 --profile-dir ./my-profile
 ```
 
-### Chrome Extension Setup
-1. Navigate to `chrome://extensions/`
-2. Enable "Developer mode"
-3. Click "Load unpacked"
-4. Select the `chrome-extension` folder from installation
-5. Use `dev3000 --servers-only` to skip Playwright
-
-## MCP Tools for AI Assistants
-
-### Core Debugging Tools
-
-- **`read_consolidated_logs(lines?, filter?, logPath?)`**
-  - Read recent consolidated logs with optional filtering
-  - Essential for understanding current application state
-
-- **`search_logs(pattern, context?, logPath?)`**
-  - Regex search through logs with context lines
-  - Critical for tracing error patterns and user interactions
-
-- **`get_browser_errors(hours?, logPath?)`**
-  - Extract recent browser errors, console errors, exceptions
-  - First tool to use when debugging user-reported issues
-
-- **`get_logs_between_timestamps(startTime, endTime, filter?, logPath?)`**
-  - Timestamp-based log analysis for debugging workflows
-  - Use with `get_current_timestamp()` for session-based debugging
-
-### Browser Automation Tools
-
-- **`agent_browser_action(action, params)`**
-  - Actions: `click`, `navigate`, `screenshot`, `evaluate`, `scroll`, `type`
-  - Safe browser automation via Chrome DevTools Protocol
-  - Useful for reproducing issues and testing fixes
-
-### Debugging Workflow
-
-1. Use `get_current_timestamp()` before user testing
-2. Ask user to reproduce issue
-3. Use `get_current_timestamp()` after user returns
-4. Use `get_logs_between_timestamps()` to analyze the session
-5. Use `search_logs()` for specific error patterns
-6. Use `agent_browser_action()` to test fixes
-
 ## Technical Stack
 
 - **Runtime**: Node.js 18+, TypeScript 5+
-- **Package Manager**: pnpm (required)
+- **Package Manager**: Bun (required)
 - **Browser Automation**: Chrome DevTools Protocol, Playwright
-- **MCP Server**: Next.js 15.5+, React 19, Tailwind CSS v4
 - **CLI Framework**: Commander.js
 - **Testing**: Vitest
 - **Linting**: Biome
@@ -143,46 +89,8 @@ dev3000/
 │   ├── dev-environment.ts # Development orchestration
 │   ├── cdp-monitor.ts     # Chrome DevTools Protocol integration
 │   └── setup.ts          # Project setup utilities
-├── mcp-server/            # MCP server (Next.js app)
-│   ├── app/              # Next.js App Router
-│   │   ├── api/mcp/      # MCP API routes
-│   │   ├── logs/         # Log viewer UI
-│   │   └── replay/       # Session replay UI
-│   └── types.ts          # Shared TypeScript types
-├── chrome-extension/      # Chrome extension for monitoring
 ├── scripts/              # Build and release scripts
 └── www/                  # Marketing website (Next.js)
-```
-
-## Configuration Files
-
-- **`tsconfig.json`**: TypeScript configuration
-- **`biome.json`**: Linting and formatting (Biome)
-- **`package.json`**: Dependencies and scripts
-- **`.husky/`**: Git hooks (lint, typecheck, test)
-
-## Development Commands
-
-```bash
-# Build the project
-pnpm run build
-
-# Run tests
-pnpm run test
-
-# Type checking
-pnpm run typecheck
-
-# Linting and formatting
-pnpm run lint
-pnpm run lint:fix
-pnpm run format
-
-# Development
-pnpm run dev
-
-# Release process
-pnpm run release
 ```
 
 ## Integration with AI Assistants

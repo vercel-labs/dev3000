@@ -14,14 +14,13 @@ import {
 import https from "https"
 import ora from "ora"
 import { homedir, tmpdir } from "os"
-import { dirname, join } from "path"
+import { dirname, join, resolve, sep } from "path"
 import { fileURLToPath } from "url"
 import { CDPMonitor } from "./cdp-monitor.js"
 import { ScreencastManager } from "./screencast-manager.js"
 import { type LogEntry, NextJsErrorDetector, OutputProcessor, StandardLogParser } from "./services/parsers/index.js"
 import { getBundledSkillsPath } from "./skills/index.js"
 import { DevTUI } from "./tui-interface.js"
-import { formatMcpConfigTargets, MCP_CONFIG_TARGETS, type McpConfigTarget } from "./utils/mcp-configs.js"
 import { getProjectDir, getProjectDisplayName, getProjectName } from "./utils/project-name.js"
 import { formatTimestamp } from "./utils/timestamp.js"
 import {
@@ -34,31 +33,9 @@ import {
 // Declare the compile-time injected version (set by bun build --define)
 declare const __D3K_VERSION__: string | undefined
 
-// MCP names
-const MCP_NAMES = {
-  DEV3000: "dev3000",
-  CHROME_DEVTOOLS: "dev3000-chrome-devtools",
-  NEXTJS_DEV: "dev3000-nextjs-dev",
-  VERCEL: "vercel"
-} as const
-
-// Vercel MCP URL (public OAuth-based MCP) - kept for potential future use
+// Vercel tools URL (legacy, kept for potential future use)
 // @ts-expect-error Unused but kept for reference
-const _VERCEL_MCP_URL = "https://mcp.vercel.com"
-
-/**
- * Patterns for identifying orphaned MCP-related processes to clean up on startup.
- *
- * IMPORTANT: This list must NOT include ".d3k/chrome-profiles" or any pattern
- * that would match Chrome instances from OTHER running d3k instances.
- * Each d3k instance handles its own profile cleanup via killExistingChromeWithProfile().
- *
- * @see cleanupOrphanedPlaywrightProcesses
- */
-export const ORPHANED_PROCESS_CLEANUP_PATTERNS = [
-  "ms-playwright/mcp-chrome", // Playwright MCP Chrome user data dir
-  "mcp-server-playwright" // Playwright MCP server node process
-] as const
+const _VERCEL_TOOLS_URL = "https://mcp.vercel.com"
 
 /**
  * Check if the current project has a .vercel directory (indicating a Vercel project)
@@ -169,8 +146,6 @@ export async function gracefulKillProcess(options: GracefulKillOptions): Promise
 
 interface DevEnvironmentOptions {
   port: string
-  mcpPort?: string // Make optional since we'll handle portMcp
-  portMcp?: string // New option from CLI
   serverCommand: string
   profileDir: string
   logFile: string
@@ -181,13 +156,10 @@ interface DevEnvironmentOptions {
   defaultPort?: string // Default port from project type detection
   framework?: "nextjs" | "svelte" | "other" // Framework type from project detection
   userSetPort?: boolean // Whether user explicitly set the port
-  userSetMcpPort?: boolean // Whether user explicitly set the MCP port
   tail?: boolean // Whether to tail the log file to terminal
   tui?: boolean // Whether to use TUI mode (default true)
   dateTimeFormat?: "local" | "utc" // Timestamp format option
   pluginReactScan?: boolean // Whether to enable react-scan performance monitoring
-  chromeDevtoolsMcp?: boolean // Whether to enable chrome-devtools MCP integration
-  disabledMcpConfigs?: McpConfigTarget[] // Which MCP config files should be skipped
   debugPort?: number // Chrome debugging port (default 9222, auto-incremented for multiple instances)
   headless?: boolean // Run Chrome in headless mode (for serverless/CI environments)
   withAgent?: string // Command to run an embedded agent (e.g. "claude --dangerously-skip-permissions")
@@ -241,11 +213,7 @@ function isInSandbox(): boolean {
  * Returns the count of running d3k processes (excluding the current one if specified).
  *
  * CRITICAL FOR PROCESS CLEANUP:
- * This function determines whether MCP server should be killed on shutdown.
- * Only the LAST d3k instance should kill the MCP server.
- *
- * @see handleShutdown - Uses this to decide MCP cleanup
- * @see SIGHUP handler - Uses this for synchronous MCP cleanup on tmux close
+ * This function is used to reason about multi-instance shutdown behavior.
  */
 export function countActiveD3kInstances(excludeCurrentPid: boolean = false): number {
   try {
@@ -277,92 +245,6 @@ export function countActiveD3kInstances(excludeCurrentPid: boolean = false): num
   } catch {
     // Can't read tmpdir - assume we're the only one
     return excludeCurrentPid ? 0 : 1
-  }
-}
-
-/**
- * Clean up orphaned Playwright/MCP Chrome processes from previous d3k sessions.
- * These processes can become orphaned when d3k crashes or is force-killed,
- * leaving Chrome instances that prevent new sessions from starting properly.
- *
- * This function identifies and kills:
- * - Chrome processes spawned by ms-playwright for MCP servers
- * - mcp-server-playwright node processes
- * - Chrome using d3k-specific profile directories
- */
-async function cleanupOrphanedPlaywrightProcesses(debugLog: (msg: string) => void): Promise<void> {
-  // Skip in sandbox environments where ps/grep may not work
-  if (isInSandbox()) {
-    debugLog("Skipping orphaned process cleanup in sandbox environment")
-    return
-  }
-
-  try {
-    const { execSync } = await import("child_process")
-
-    for (const pattern of ORPHANED_PROCESS_CLEANUP_PATTERNS) {
-      try {
-        // Find PIDs matching the pattern
-        const result = execSync(`ps aux | grep -i "${pattern}" | grep -v grep | awk '{print $2}'`, {
-          encoding: "utf-8",
-          stdio: ["pipe", "pipe", "pipe"]
-        }).trim()
-
-        if (result) {
-          const pids = result.split("\n").filter(Boolean)
-          debugLog(`Found ${pids.length} orphaned process(es) matching "${pattern}": [${pids.join(", ")}]`)
-
-          for (const pid of pids) {
-            try {
-              const pidNum = parseInt(pid, 10)
-              // First try SIGTERM for graceful shutdown
-              process.kill(pidNum, "SIGTERM")
-              debugLog(`Sent SIGTERM to orphaned process ${pid}`)
-
-              // Give it a moment to terminate
-              await new Promise((resolve) => setTimeout(resolve, 100))
-
-              // Check if still alive and force kill if needed
-              try {
-                process.kill(pidNum, 0) // Check if process exists
-                process.kill(pidNum, "SIGKILL")
-                debugLog(`Sent SIGKILL to stubborn process ${pid}`)
-              } catch {
-                // Process already dead, good
-              }
-            } catch (error) {
-              // Process may have already exited or we don't have permission
-              debugLog(`Could not kill process ${pid}: ${error}`)
-            }
-          }
-        }
-      } catch {
-        // grep returns exit code 1 when no matches found, which is fine
-      }
-    }
-
-    // Also clean up any stale Chrome lock files that might prevent new instances
-    const lockFilePaths = [
-      join(homedir(), "Library/Caches/ms-playwright/mcp-chrome/SingletonLock"),
-      join(homedir(), "Library/Caches/ms-playwright/mcp-chrome/SingletonSocket"),
-      join(homedir(), "Library/Caches/ms-playwright/mcp-chrome/SingletonCookie")
-    ]
-
-    for (const lockFile of lockFilePaths) {
-      try {
-        if (existsSync(lockFile)) {
-          unlinkSync(lockFile)
-          debugLog(`Removed stale lock file: ${lockFile}`)
-        }
-      } catch {
-        // Ignore errors - file might be locked by running process
-      }
-    }
-
-    debugLog("Orphaned process cleanup completed")
-  } catch (error) {
-    debugLog(`Error during orphaned process cleanup: ${error}`)
-    // Non-fatal - continue with startup
   }
 }
 
@@ -512,204 +394,7 @@ export async function findAvailablePort(startPort: number): Promise<string> {
 }
 
 // REMOVED: isNextjsMcpEnabled check - now using framework detection from cli.ts
-// Framework detection happens in cli.ts and is stored in session files for MCP orchestrator
-
-/**
- * Check if Chrome version supports chrome-devtools MCP (>= 140.0.7339.214)
- */
-async function isChromeDevtoolsMcpSupported(): Promise<boolean> {
-  try {
-    // Try different Chrome binary paths
-    const chromePaths = [
-      "/tmp/chromium", // Vercel Sandbox (@sparticuz/chromium)
-      "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", // macOS
-      "/opt/google/chrome/chrome", // Linux
-      "chrome", // PATH
-      "google-chrome", // Linux PATH
-      "google-chrome-stable" // Linux PATH
-    ]
-
-    for (const chromePath of chromePaths) {
-      try {
-        const versionOutput = await new Promise<string>((resolve, reject) => {
-          const chromeProcess = spawn(chromePath, ["--version"], {
-            stdio: ["ignore", "pipe", "ignore"]
-          })
-
-          let output = ""
-          chromeProcess.stdout?.on("data", (data) => {
-            output += data.toString()
-          })
-
-          chromeProcess.on("close", (code) => {
-            if (code === 0) {
-              resolve(output.trim())
-            } else {
-              reject(new Error(`Chrome version check failed with code ${code}`))
-            }
-          })
-
-          chromeProcess.on("error", reject)
-
-          // Timeout after 3 seconds
-          setTimeout(() => {
-            chromeProcess.kill()
-            reject(new Error("Chrome version check timeout"))
-          }, 3000)
-        })
-
-        // Parse version from output like "Google Chrome 140.0.7339.214"
-        const versionMatch = versionOutput.match(/(\d+)\.(\d+)\.(\d+)\.(\d+)/)
-        if (versionMatch) {
-          const [, major, minor, build, patch] = versionMatch.map(Number)
-          const currentVersion = [major, minor, build, patch]
-          const requiredVersion = [140, 0, 7339, 214]
-
-          // Compare version numbers
-          for (let i = 0; i < 4; i++) {
-            if (currentVersion[i] > requiredVersion[i]) return true
-            if (currentVersion[i] < requiredVersion[i]) return false
-          }
-          return true // Versions are equal
-        }
-        break // Found Chrome but couldn't parse version - continue with other paths
-      } catch {
-        // Try next Chrome path
-      }
-    }
-
-    return false // Chrome not found or version not supported
-  } catch {
-    return false // Any error means not supported
-  }
-}
-
-/**
- * Clean up old dev3000 MCP entries from project's .mcp.json (Claude Code)
- * MCP server has been removed - we now use CLI commands instead
- */
-async function ensureMcpServers(_mcpPort: string, _appPort: string, _enableChromeDevtools: boolean): Promise<void> {
-  try {
-    const settingsPath = join(process.cwd(), ".mcp.json")
-
-    if (!existsSync(settingsPath)) {
-      return // Nothing to clean up
-    }
-
-    const settingsContent = readFileSync(settingsPath, "utf-8")
-    const settings = JSON.parse(settingsContent) as {
-      mcpServers?: Record<string, unknown>
-      [key: string]: unknown
-    }
-
-    if (!settings.mcpServers) {
-      return // Nothing to clean up
-    }
-
-    let removed = false
-
-    // Remove dev3000 MCP entry if it exists (MCP server removed)
-    if (settings.mcpServers[MCP_NAMES.DEV3000]) {
-      delete settings.mcpServers[MCP_NAMES.DEV3000]
-      removed = true
-    }
-
-    // Write if we removed anything
-    if (removed) {
-      writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, "utf-8")
-    }
-  } catch (_error) {
-    // Ignore errors - settings file manipulation is optional
-  }
-}
-
-/**
- * Clean up old dev3000 MCP entries from project's .cursor/mcp.json
- * MCP server has been removed - we now use CLI commands instead
- */
-async function ensureCursorMcpServers(
-  _mcpPort: string,
-  _appPort: string,
-  _enableChromeDevtools: boolean
-): Promise<void> {
-  try {
-    const cursorDir = join(process.cwd(), ".cursor")
-    const settingsPath = join(cursorDir, "mcp.json")
-
-    if (!existsSync(settingsPath)) {
-      return // Nothing to clean up
-    }
-
-    const settingsContent = readFileSync(settingsPath, "utf-8")
-    const settings = JSON.parse(settingsContent) as {
-      mcpServers?: Record<string, unknown>
-      [key: string]: unknown
-    }
-
-    if (!settings.mcpServers) {
-      return // Nothing to clean up
-    }
-
-    let removed = false
-
-    // Remove dev3000 MCP entry if it exists (MCP server removed)
-    if (settings.mcpServers[MCP_NAMES.DEV3000]) {
-      delete settings.mcpServers[MCP_NAMES.DEV3000]
-      removed = true
-    }
-
-    // Write if we removed anything
-    if (removed) {
-      writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, "utf-8")
-    }
-  } catch (_error) {
-    // Ignore errors - settings file manipulation is optional
-  }
-}
-
-/**
- * Clean up old dev3000 MCP entries from project's opencode.json
- * OpenCode uses "mcp" instead of "mcpServers"
- * MCP server has been removed - we now use CLI commands instead
- */
-async function ensureOpenCodeMcpServers(
-  _mcpPort: string,
-  _appPort: string,
-  _enableChromeDevtools: boolean
-): Promise<void> {
-  try {
-    const settingsPath = join(process.cwd(), "opencode.json")
-
-    if (!existsSync(settingsPath)) {
-      return // Nothing to clean up
-    }
-
-    const settingsContent = readFileSync(settingsPath, "utf-8")
-    const settings = JSON.parse(settingsContent) as {
-      mcp?: Record<string, unknown>
-      [key: string]: unknown
-    }
-
-    if (!settings.mcp) {
-      return // Nothing to clean up
-    }
-
-    let removed = false
-
-    // Remove dev3000 MCP entry if it exists (MCP server removed)
-    if (settings.mcp[MCP_NAMES.DEV3000]) {
-      delete settings.mcp[MCP_NAMES.DEV3000]
-      removed = true
-    }
-
-    // Write if we removed anything
-    if (removed) {
-      writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, "utf-8")
-    }
-  } catch (_error) {
-    // Ignore errors - settings file manipulation is optional
-  }
-}
+// Framework detection happens in cli.ts and is stored in session files for CLI integration
 
 /**
  * Ensure d3k skill is installed in project's .claude/skills/d3k/
@@ -747,7 +432,7 @@ async function ensureD3kSkill(): Promise<void> {
 }
 
 // REMOVED: cleanup functions are no longer needed
-// MCP config files are now kept persistent across dev3000 restarts
+// CLI integration config files are now kept persistent across dev3000 restarts
 
 export function createPersistentLogFile(): string {
   // Get unique project name
@@ -771,7 +456,7 @@ export function createPersistentLogFile(): string {
 }
 
 /**
- * Write session info for MCP server to discover.
+ * Write session info for external tooling to discover.
  *
  * CRITICAL FOR PROCESS CLEANUP:
  * This writes the session.json file that contains chromePids and serverPid.
@@ -785,7 +470,6 @@ export function writeSessionInfo(
   projectName: string,
   logFilePath: string,
   appPort: string,
-  mcpPort?: string,
   cdpUrl?: string | null,
   chromePids?: number[],
   serverCommand?: string,
@@ -805,7 +489,6 @@ export function writeSessionInfo(
       projectName,
       logFilePath,
       appPort,
-      mcpPort: mcpPort || null,
       cdpUrl: cdpUrl || null,
       startTime: new Date().toISOString(),
       pid: process.pid,
@@ -838,33 +521,36 @@ export function writeSessionInfo(
  * @param projectName - The project name (used to locate session.json)
  * @returns Array of Chrome PIDs, or empty array if none found
  */
-export function getSessionChromePids(projectName: string): number[] {
-  const sessionFile = join(homedir(), ".d3k", projectName, "session.json")
-
-  try {
-    if (existsSync(sessionFile)) {
-      const sessionInfo = JSON.parse(readFileSync(sessionFile, "utf8"))
-      return sessionInfo.chromePids || []
-    }
-  } catch (_error) {
-    // Non-fatal - return empty array
-  }
-  return []
+type SessionInfo = {
+  serverPid: number | null
+  chromePids: number[]
+  cwd: string | null
 }
 
-// Get server PID for this instance
-function getSessionServerPid(projectName: string): number | null {
+function getSessionInfo(projectName: string): SessionInfo | null {
   const sessionFile = join(homedir(), ".d3k", projectName, "session.json")
 
   try {
     if (existsSync(sessionFile)) {
-      const sessionInfo = JSON.parse(readFileSync(sessionFile, "utf8"))
-      return sessionInfo.serverPid || null
+      const sessionInfo = JSON.parse(readFileSync(sessionFile, "utf8")) as {
+        serverPid?: number | null
+        chromePids?: number[]
+        cwd?: string | null
+      }
+      return {
+        serverPid: sessionInfo.serverPid ?? null,
+        chromePids: sessionInfo.chromePids ?? [],
+        cwd: sessionInfo.cwd ?? null
+      }
     }
   } catch (_error) {
     // Non-fatal - return null
   }
   return null
+}
+
+export function getSessionChromePids(projectName: string): number[] {
+  return getSessionInfo(projectName)?.chromePids ?? []
 }
 
 function createLogFileInDir(baseDir: string, _projectName: string): string {
@@ -937,10 +623,8 @@ export class DevEnvironment {
   private healthCheckTimer: NodeJS.Timeout | null = null
   private tui: DevTUI | null = null
   private portChangeMessage: string | null = null
-  private chromeDevtoolsSupported: boolean = false
   private portDetected: boolean = false
   private serverUsesHttps: boolean = false
-  private disabledMcpConfigSet: Set<McpConfigTarget>
 
   /** Returns "https" or "http" based on detected server protocol */
   private get serverProtocol(): "http" | "https" {
@@ -948,13 +632,7 @@ export class DevEnvironment {
   }
 
   constructor(options: DevEnvironmentOptions) {
-    // Handle portMcp vs mcpPort naming
-    this.options = {
-      ...options,
-      mcpPort: options.portMcp || options.mcpPort || "3684",
-      disabledMcpConfigs: options.disabledMcpConfigs || []
-    }
-    this.disabledMcpConfigSet = new Set(this.options.disabledMcpConfigs)
+    this.options = { ...options }
     this.logger = new Logger(options.logFile, options.tail || false, options.dateTimeFormat || "local")
     this.outputProcessor = new OutputProcessor(new StandardLogParser(), new NextJsErrorDetector())
 
@@ -980,6 +658,11 @@ export class DevEnvironment {
     // Use project-specific PID and lock files to allow multiple projects to run simultaneously
     this.pidFile = join(tmpdir(), `dev3000-${projectName}.pid`)
     this.lockFile = join(tmpdir(), `dev3000-${projectName}.lock`)
+
+    // Allow CLI-level crash handlers to trigger emergency cleanup.
+    globalThis.__d3kEmergencyShutdown = (reason: string, error?: unknown) => {
+      this.emergencyShutdown(1, reason, error)
+    }
 
     // Read version - for compiled binaries, use injected version; otherwise read from package.json
     this.version = "0.0.0"
@@ -1036,15 +719,7 @@ export class DevEnvironment {
   }
 
   private async checkPortsAvailable(silent: boolean = false) {
-    // Clean up orphaned Playwright/Chrome processes from previous crashed sessions
-    // This prevents "kill EPERM" errors when MCP tries to spawn new browsers
-    await cleanupOrphanedPlaywrightProcesses((msg) => this.debugLog(msg))
-
-    // MCP server removed - no longer need to kill
-    // if (this.options.mcpPort) {
-    //   this.debugLog(`Ensuring port ${this.options.mcpPort} is free (always kill)`)
-    //   await this.killMcpServer()
-    // }
+    // No legacy server to clean up; continue with port checks.
 
     // Check if user explicitly set ports via CLI flags
     const userSetAppPort = this.options.userSetPort || false
@@ -1082,7 +757,7 @@ export class DevEnvironment {
       }
     }
 
-    // MCP server removed - no longer need to check mcpPort availability
+    // Legacy server removed - only check app port availability
   }
 
   private async checkProcessHealth(): Promise<boolean> {
@@ -1096,7 +771,7 @@ export class DevEnvironment {
     }
 
     try {
-      // Only check app port - MCP server has been removed
+      // Only check app port - legacy server has been removed
       const ports = [this.options.port]
 
       for (const port of ports) {
@@ -1147,39 +822,54 @@ export class DevEnvironment {
     }
   }
 
-  private async configureMcpConfigs(): Promise<void> {
-    const enabledTargets = MCP_CONFIG_TARGETS.filter((target) => !this.disabledMcpConfigSet.has(target))
-
-    if (enabledTargets.length === 0) {
-      this.logD3K(
-        "AI CLI Integration: MCP config generation disabled via --disable-mcp-configs/DEV3000_DISABLE_MCP_CONFIGS"
-      )
-      return
+  private emergencyShutdown(exitCode: number, reason: string, error?: unknown) {
+    if (this.isShuttingDown) return
+    this.isShuttingDown = true
+    this.debugLog(`Emergency shutdown requested (${reason})`)
+    if (error) {
+      const errorText = error instanceof Error ? error.stack || error.message : String(error)
+      this.debugLog(`Emergency shutdown error: ${errorText}`)
     }
 
-    const configuredTargets: McpConfigTarget[] = []
-
-    if (enabledTargets.includes("claude")) {
-      await ensureMcpServers(this.options.mcpPort || "3684", this.options.port, this.chromeDevtoolsSupported)
-      await ensureD3kSkill() // Install d3k skill for Claude Code
-      configuredTargets.push("claude")
+    // Stop CDP reconnection attempts before killing the app server.
+    if (this.cdpMonitor) {
+      this.cdpMonitor.prepareShutdown()
     }
 
-    if (enabledTargets.includes("cursor")) {
-      await ensureCursorMcpServers(this.options.mcpPort || "3684", this.options.port, this.chromeDevtoolsSupported)
-      configuredTargets.push("cursor")
+    // Best-effort synchronous cleanup (mirrors SIGHUP handler).
+    const { spawnSync } = require("child_process")
+    const port = this.options.port
+    this.debugLog(`Synchronous kill for port ${port}`)
+    spawnSync("sh", ["-c", `lsof -ti:${port} | xargs kill -9 2>/dev/null`], {
+      stdio: "pipe",
+      timeout: 5000
+    })
+
+    const projectName = getProjectName()
+    const sessionInfo = getSessionInfo(projectName)
+    const chromePids = sessionInfo?.chromePids ?? []
+    if (chromePids.length > 0) {
+      this.debugLog(`Synchronously killing Chrome PIDs: [${chromePids.join(", ")}]`)
+      for (const pid of chromePids) {
+        try {
+          process.kill(pid, "SIGTERM")
+        } catch {
+          // Ignore - process may already be dead
+        }
+      }
     }
 
-    if (enabledTargets.includes("opencode")) {
-      await ensureOpenCodeMcpServers(this.options.mcpPort || "3684", this.options.port, this.chromeDevtoolsSupported)
-      configuredTargets.push("opencode")
+    if (sessionInfo?.serverPid) {
+      this.killServerPidIfOwned(sessionInfo.serverPid, sessionInfo.cwd, `emergency:${reason}`)
     }
 
-    if (configuredTargets.length > 0) {
-      this.logD3K(`AI CLI Integration: Configured MCP servers in ${formatMcpConfigTargets(configuredTargets)}`)
-    } else {
-      this.logD3K("AI CLI Integration: MCP configs already up to date")
-    }
+    this.handleShutdown()
+      .then(() => {
+        process.exit(exitCode)
+      })
+      .catch(() => {
+        process.exit(exitCode)
+      })
   }
 
   async start() {
@@ -1192,6 +882,9 @@ export class DevEnvironment {
 
     // Initialize telemetry session (used by version check)
     initTelemetrySession(this.options.framework)
+
+    // Kill any orphaned server process from a previous run of this project
+    this.cleanupOrphanedServer()
 
     // Check if TUI mode is enabled (default) and stdin supports it
     const canUseTUI = this.options.tui && process.stdin.isTTY
@@ -1211,7 +904,6 @@ export class DevEnvironment {
       // Start TUI interface with initial status and updated port
       this.tui = new DevTUI({
         appPort: this.options.port, // This may have been updated by checkPortsAvailable
-        mcpPort: this.options.mcpPort || "3684",
         logFile: this.options.logFile,
         commandName: this.options.commandName,
         serversOnly: this.options.serversOnly,
@@ -1238,6 +930,21 @@ export class DevEnvironment {
             stdio: "pipe",
             timeout: 5000
           })
+
+          const projectName = getProjectName()
+          const chromePids = getSessionChromePids(projectName)
+          if (chromePids.length > 0) {
+            this.debugLog(`Synchronous kill for Chrome PIDs: [${chromePids.join(", ")}]`)
+            for (const pid of chromePids) {
+              try {
+                process.kill(pid, "SIGTERM")
+                process.kill(pid, 0)
+                process.kill(pid, "SIGKILL")
+              } catch {
+                // Ignore - process may already be dead
+              }
+            }
+          }
 
           // Now do the rest of cleanup async
           this.tui?.updateStatus("Shutting down...")
@@ -1311,7 +1018,7 @@ export class DevEnvironment {
       await this.tui.updateStatus("Starting your dev server...")
       await this.startServer()
 
-      // MCP server removed - using CLI commands instead
+      // Legacy tools server removed - using CLI commands instead
       // await this.startMcpServer()
 
       // Wait for servers to be ready
@@ -1329,24 +1036,8 @@ export class DevEnvironment {
       // Update TUI with confirmed port (may have changed during server startup)
       this.tui.updateAppPort(this.options.port)
 
-      // MCP server removed - using CLI commands instead
+      // Legacy tools server removed - using CLI commands instead
       // await this.waitForMcpServer()
-
-      // Configure AI CLI integrations (both dev3000 and chrome-devtools MCPs)
-      if (!this.options.serversOnly) {
-        await this.tui.updateStatus("Configuring AI CLI integrations...")
-
-        // Check if Chrome version supports chrome-devtools MCP
-        if (this.options.chromeDevtoolsMcp !== false) {
-          this.chromeDevtoolsSupported = await isChromeDevtoolsMcpSupported()
-          if (!this.chromeDevtoolsSupported) {
-            this.logD3K("Chrome version < 140.0.7339.214 detected - chrome-devtools MCP will be skipped")
-          }
-        }
-
-        // Ensure MCP server configurations in project settings files (instant, local)
-        await this.configureMcpConfigs()
-      }
 
       // Start CDP monitoring only if server started successfully and not in servers-only mode
       if (!this.options.serversOnly && serverStarted) {
@@ -1358,14 +1049,13 @@ export class DevEnvironment {
         this.debugLog("Browser monitoring disabled via --servers-only flag")
       }
 
-      // Write session info for MCP server discovery (include CDP URL if browser monitoring was started)
+      // Write session info for tooling discovery (include CDP URL if browser monitoring was started)
       const cdpUrl = this.cdpMonitor?.getCdpUrl() || null
       const chromePids = this.cdpMonitor?.getChromePids() || []
       writeSessionInfo(
         projectName,
         this.options.logFile,
         this.options.port,
-        this.options.mcpPort,
         cdpUrl,
         chromePids,
         this.options.serverCommand,
@@ -1400,7 +1090,7 @@ export class DevEnvironment {
       this.spinner.text = "Starting your dev server..."
       await this.startServer()
 
-      // MCP server removed - using CLI commands instead
+      // Legacy server removed - using CLI commands instead
       // await this.startMcpServer()
 
       // Wait for servers to be ready
@@ -1415,24 +1105,8 @@ export class DevEnvironment {
         process.exit(1)
       }
 
-      // MCP server removed - using CLI commands instead
+      // Legacy server removed - using CLI commands instead
       // await this.waitForMcpServer()
-
-      // Configure AI CLI integrations (both dev3000 and chrome-devtools MCPs)
-      if (!this.options.serversOnly) {
-        this.spinner.text = "Configuring AI CLI integrations..."
-
-        // Check if Chrome version supports chrome-devtools MCP
-        if (this.options.chromeDevtoolsMcp !== false) {
-          this.chromeDevtoolsSupported = await isChromeDevtoolsMcpSupported()
-          if (!this.chromeDevtoolsSupported) {
-            this.logD3K("Chrome version < 140.0.7339.214 detected - chrome-devtools MCP will be skipped")
-          }
-        }
-
-        // Ensure MCP server configurations in project settings files (instant, local)
-        await this.configureMcpConfigs()
-      }
 
       // Start CDP monitoring only if server started successfully and not in servers-only mode
       if (!this.options.serversOnly && serverStarted) {
@@ -1453,7 +1127,6 @@ export class DevEnvironment {
         projectName,
         this.options.logFile,
         this.options.port,
-        this.options.mcpPort,
         cdpUrl,
         chromePids,
         this.options.serverCommand,
@@ -1470,7 +1143,7 @@ export class DevEnvironment {
       console.log(chalk.cyan(`🌐 Your App: ${this.serverProtocol}://localhost:${this.options.port}`))
       console.log(chalk.cyan(`🔧 CLI Tools: d3k fix, d3k crawl, d3k find-component`))
       if (this.options.serversOnly) {
-        console.log(chalk.cyan("🖥️  Servers-only mode - use Chrome extension for browser monitoring"))
+        console.log(chalk.cyan("🖥️  Servers-only mode - browser monitoring disabled"))
       }
       console.log(chalk.cyan("\nUse Ctrl-C to stop.\n"))
 
@@ -1625,6 +1298,85 @@ export class DevEnvironment {
     })
   }
 
+  private isSessionCwdOwned(sessionCwd: string | null): boolean {
+    if (!sessionCwd) return false
+    try {
+      const current = resolve(process.cwd())
+      const session = resolve(sessionCwd)
+      return session === current || current.startsWith(session + sep) || session.startsWith(current + sep)
+    } catch {
+      return false
+    }
+  }
+
+  private isPidRunning(pid: number): boolean {
+    try {
+      process.kill(pid, 0)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  private killServerPidIfOwned(pid: number, sessionCwd: string | null, reason: string) {
+    if (!this.isSessionCwdOwned(sessionCwd)) {
+      this.debugLog(`Skipping server PID ${pid} kill (${reason}): session cwd mismatch`)
+      return
+    }
+    if (!this.isPidRunning(pid)) {
+      this.debugLog(`Skipping server PID ${pid} kill (${reason}): not running`)
+      return
+    }
+
+    this.debugLog(`Killing server PID ${pid} (${reason})`)
+
+    try {
+      process.kill(pid, "SIGTERM")
+    } catch {
+      // Ignore - process may already be dead
+    }
+
+    if (process.platform !== "win32") {
+      try {
+        process.kill(-pid, "SIGTERM")
+      } catch {
+        // Ignore - process group may not exist
+      }
+    }
+
+    try {
+      process.kill(pid, 0)
+      process.kill(pid, "SIGKILL")
+    } catch {
+      // Ignore - process may already be dead
+    }
+
+    if (process.platform !== "win32") {
+      try {
+        process.kill(-pid, "SIGKILL")
+      } catch {
+        // Ignore - process group may not exist
+      }
+    }
+
+    if (!isInSandbox()) {
+      try {
+        const { spawnSync } = require("child_process")
+        spawnSync("pkill", ["-P", pid.toString()], { stdio: "ignore" })
+      } catch {
+        // Ignore pkill errors
+      }
+    }
+  }
+
+  private cleanupOrphanedServer() {
+    const projectName = getProjectName()
+    const sessionInfo = getSessionInfo(projectName)
+    if (!sessionInfo?.serverPid) return
+
+    this.killServerPidIfOwned(sessionInfo.serverPid, sessionInfo.cwd, "startup orphan cleanup")
+  }
+
   private acquireLock(): boolean {
     try {
       // Check if lock file exists
@@ -1690,7 +1442,6 @@ export class DevEnvironment {
           projectName,
           this.options.logFile,
           this.options.port,
-          this.options.mcpPort,
           cdpUrl || undefined,
           chromePids,
           this.options.serverCommand,
@@ -1901,25 +1652,6 @@ export class DevEnvironment {
     }
   }
 
-  private logD3K(message: string) {
-    // Write [D3K] logs to project-specific dev3000 debug log, NOT to main project log
-    // This prevents Claude from thinking dev3000's orchestration logic needs to be "fixed"
-    const timestamp = formatTimestamp(new Date(), this.options.dateTimeFormat || "local")
-    const logEntry = `[${timestamp}] [D3K] ${message}\n`
-
-    try {
-      const projectDir = getProjectDir()
-      if (!existsSync(projectDir)) {
-        mkdirSync(projectDir, { recursive: true })
-      }
-
-      const d3kLogFile = join(projectDir, "d3k.log")
-      appendFileSync(d3kLogFile, logEntry)
-    } catch {
-      // Ignore D3K log write errors - non-critical
-    }
-  }
-
   private async startCDPMonitoringSync() {
     // Skip if in servers-only mode
     if (this.options.serversOnly) {
@@ -1959,7 +1691,6 @@ export class DevEnvironment {
       this.options.browser,
       this.options.pluginReactScan,
       this.options.port, // App server port to monitor
-      this.options.mcpPort, // MCP server port to ignore
       this.options.debugPort, // Chrome debug port
       this.options.headless // Headless mode for serverless/CI environments
     )
@@ -2003,7 +1734,6 @@ export class DevEnvironment {
         projectName,
         this.options.logFile,
         this.options.port,
-        this.options.mcpPort,
         cdpUrl || undefined,
         chromePids,
         this.options.serverCommand,
@@ -2036,9 +1766,9 @@ export class DevEnvironment {
       this.screencastManager = null
     }
 
-    // Read server PID from session file BEFORE deleting it (needed for cleanup)
+    // Read session info BEFORE deleting it (needed for cleanup)
     const projectName = getProjectName()
-    const savedServerPid = getSessionServerPid(projectName)
+    const sessionInfo = getSessionInfo(projectName)
 
     // Clean up session file
     try {
@@ -2050,7 +1780,7 @@ export class DevEnvironment {
       // Non-fatal - ignore cleanup errors
     }
 
-    // Check PID file ownership BEFORE deleting (needed for MCP cleanup decision)
+    // Check PID file ownership BEFORE deleting (needed for cleanup decisions)
     let weOwnPidFile = false
     try {
       if (existsSync(this.pidFile)) {
@@ -2103,25 +1833,13 @@ export class DevEnvironment {
       }
     }
 
-    // Kill app server only (MCP server remains as singleton)
+    // Kill app server only
     console.log(chalk.cyan("🔄 Killing app server..."))
     await killPortProcess(this.options.port, "your app server")
 
     // Kill server process and its children using the saved PID (from before session file was deleted)
-    if (!isInSandbox() && savedServerPid) {
-      try {
-        const { spawnSync } = await import("child_process")
-        // Kill all child processes of the server
-        spawnSync("pkill", ["-P", savedServerPid.toString()], { stdio: "ignore" })
-        // Kill the server process itself
-        try {
-          process.kill(savedServerPid, "SIGKILL")
-        } catch {
-          // Process may already be dead
-        }
-      } catch {
-        // Ignore pkill errors
-      }
+    if (sessionInfo?.serverPid) {
+      this.killServerPidIfOwned(sessionInfo.serverPid, sessionInfo.cwd, "graceful shutdown")
     }
 
     // Shutdown CDP monitor if it was started
@@ -2133,26 +1851,6 @@ export class DevEnvironment {
       } catch (_error) {
         console.log(chalk.gray("⚠️ CDP monitor shutdown failed"))
       }
-    }
-
-    // Kill MCP server only if this is the last d3k instance AND we own the PID file
-    const otherInstances = countActiveD3kInstances(true) // exclude current process
-    this.debugLog(`Other active d3k instances: ${otherInstances}, weOwnPidFile: ${weOwnPidFile}`)
-
-    if (otherInstances === 0 && this.options.mcpPort && !isInSandbox() && weOwnPidFile) {
-      console.log(chalk.yellow("🔄 Killing MCP server (last d3k instance)..."))
-      try {
-        const { spawnSync } = await import("child_process")
-        spawnSync("sh", ["-c", `lsof -ti:${this.options.mcpPort} -sTCP:LISTEN | xargs kill -9 2>/dev/null`], {
-          stdio: "pipe",
-          timeout: 5000
-        })
-        console.log(chalk.green("✅ MCP server stopped"))
-      } catch {
-        // Ignore errors
-      }
-    } else if (!weOwnPidFile) {
-      this.debugLog("Skipping MCP cleanup - we don't own the PID file (subprocess will handle it)")
     }
 
     console.log(chalk.red(`❌ ${this.options.commandName} exited due to server failure`))
@@ -2209,6 +1907,26 @@ export class DevEnvironment {
         timeout: 5000
       })
 
+      const projectName = getProjectName()
+      const sessionInfo = getSessionInfo(projectName)
+      const chromePids = sessionInfo?.chromePids ?? []
+      if (chromePids.length > 0) {
+        this.debugLog(`Synchronous kill for Chrome PIDs: [${chromePids.join(", ")}]`)
+        for (const pid of chromePids) {
+          try {
+            process.kill(pid, "SIGTERM")
+            process.kill(pid, 0)
+            process.kill(pid, "SIGKILL")
+          } catch {
+            // Ignore - process may already be dead
+          }
+        }
+      }
+
+      if (sessionInfo?.serverPid) {
+        this.killServerPidIfOwned(sessionInfo.serverPid, sessionInfo.cwd, "SIGINT")
+      }
+
       if (this.options.tui && this.tui) {
         // In TUI mode, show shutting down message
         this.debugLog("Updating TUI status with shutdown message")
@@ -2255,6 +1973,26 @@ export class DevEnvironment {
         timeout: 5000
       })
 
+      const projectName = getProjectName()
+      const sessionInfo = getSessionInfo(projectName)
+      const chromePids = sessionInfo?.chromePids ?? []
+      if (chromePids.length > 0) {
+        this.debugLog(`Synchronous kill for Chrome PIDs: [${chromePids.join(", ")}]`)
+        for (const pid of chromePids) {
+          try {
+            process.kill(pid, "SIGTERM")
+            process.kill(pid, 0)
+            process.kill(pid, "SIGKILL")
+          } catch {
+            // Ignore - process may already be dead
+          }
+        }
+      }
+
+      if (sessionInfo?.serverPid) {
+        this.killServerPidIfOwned(sessionInfo.serverPid, sessionInfo.cwd, "SIGTERM")
+      }
+
       this.handleShutdown()
         .then(() => {
           process.exit(0)
@@ -2275,69 +2013,18 @@ export class DevEnvironment {
      * 1. Signal CDP monitor to stop reconnection attempts
      * 2. Kill dev server processes on app port (synchronous via lsof)
      * 3. Kill Chrome PIDs from session.json (synchronous)
-     * 4. Kill MCP server IF we're the last d3k instance (synchronous)
-     * 5. Call handleShutdown() for async cleanup
+     * 4. Call handleShutdown() for async cleanup
      *
      * INVARIANTS (enforced by tests in dev-environment.test.ts):
      * - Chrome PIDs are stored per-session in session.json
      * - We only kill Chrome instances WE spawned (via chromePids array)
-     * - MCP server is only killed when countActiveD3kInstances() returns 0
      * - All cleanup happens BEFORE process.exit()
      *
      * @see dev-environment.test.ts - "SIGHUP handler cleanup" test suite
      */
     process.on("SIGHUP", () => {
       this.debugLog("SIGHUP received (tmux session closing)")
-      if (this.isShuttingDown) return
-      this.isShuttingDown = true
-
-      // 1. Signal CDP monitor to stop reconnection attempts
-      if (this.cdpMonitor) {
-        this.cdpMonitor.prepareShutdown()
-      }
-
-      // 2. CRITICAL: Kill dev server processes SYNCHRONOUSLY
-      // tmux might kill us quickly, so we can't rely on async cleanup
-      const { spawnSync } = require("child_process")
-      const port = this.options.port
-      this.debugLog(`Synchronous kill for port ${port}`)
-      spawnSync("sh", ["-c", `lsof -ti:${port} | xargs kill -9 2>/dev/null`], {
-        stdio: "pipe",
-        timeout: 5000
-      })
-
-      // 3. CRITICAL: Kill Chrome PIDs synchronously
-      // Get Chrome PIDs from session file before it gets deleted
-      const projectName = getProjectName()
-      const chromePids = getSessionChromePids(projectName)
-      if (chromePids.length > 0) {
-        this.debugLog(`Synchronously killing Chrome PIDs: [${chromePids.join(", ")}]`)
-        for (const pid of chromePids) {
-          try {
-            process.kill(pid, "SIGTERM")
-          } catch {
-            // Ignore - process may already be dead
-          }
-        }
-      }
-
-      // 4. CRITICAL: Kill MCP server only if we're the LAST instance
-      const otherInstances = countActiveD3kInstances(true)
-      if (otherInstances === 0 && this.options.mcpPort) {
-        this.debugLog(`Synchronously killing MCP server on port ${this.options.mcpPort}`)
-        spawnSync("sh", ["-c", `lsof -ti:${this.options.mcpPort} -sTCP:LISTEN | xargs kill -9 2>/dev/null`], {
-          stdio: "pipe",
-          timeout: 5000
-        })
-      }
-
-      this.handleShutdown()
-        .then(() => {
-          process.exit(0)
-        })
-        .catch(() => {
-          process.exit(1)
-        })
+      this.emergencyShutdown(0, "SIGHUP")
     })
   }
 
@@ -2351,9 +2038,9 @@ export class DevEnvironment {
     // Release the lock file
     this.releaseLock()
 
-    // Read server PID from session file BEFORE deleting it (needed for cleanup)
+    // Read session info BEFORE deleting it (needed for cleanup)
     const projectName = getProjectName()
-    const savedServerPid = getSessionServerPid(projectName)
+    const sessionInfo = getSessionInfo(projectName)
 
     // Clean up session file
     try {
@@ -2365,8 +2052,7 @@ export class DevEnvironment {
       // Non-fatal - ignore cleanup errors
     }
 
-    // Check PID file ownership BEFORE deleting (needed for MCP cleanup decision)
-    // Only the process that owns the PID file should clean up the MCP server
+    // Check PID file ownership BEFORE deleting (needed for cleanup decisions)
     let weOwnPidFile = false
     try {
       if (existsSync(this.pidFile)) {
@@ -2421,7 +2107,8 @@ export class DevEnvironment {
         // Fallback: force kill any remaining Chrome processes for THIS instance only
         try {
           const projectName = getProjectName()
-          const chromePids = getSessionChromePids(projectName)
+          const sessionInfo = getSessionInfo(projectName)
+          const chromePids = sessionInfo?.chromePids ?? []
 
           if (chromePids.length > 0) {
             this.debugLog(`Fallback cleanup: killing Chrome PIDs for this instance: [${chromePids.join(", ")}]`)
@@ -2437,16 +2124,19 @@ export class DevEnvironment {
           } else {
             this.debugLog("Fallback cleanup: no Chrome PIDs found for this instance")
           }
+
+          if (sessionInfo?.serverPid) {
+            this.killServerPidIfOwned(sessionInfo.serverPid, sessionInfo.cwd, "TUI shutdown")
+          }
         } catch {
           // Ignore errors in fallback cleanup
         }
       }
     }
 
-    // REMOVED: No longer clean up MCP config files on shutdown
+    // REMOVED: No longer clean up CLI config files on shutdown
     // This was causing Claude Code instances to crash when dev3000 was killed
-    // Now we keep .mcp.json, .cursor/mcp.json, and opencode.json configured
-    // for the next dev3000 run, providing a better developer experience
+    // Config file cleanup removed; keep user config files untouched on shutdown
 
     // Kill processes on both ports (skip in sandbox - lsof doesn't exist)
     const killPortProcess = async (port: string, name: string) => {
@@ -2505,7 +2195,7 @@ export class DevEnvironment {
       }
     }
 
-    // Kill app server (MCP server remains as singleton)
+    // Kill app server
     if (!this.options.tui) {
       console.log(chalk.yellow("🔄 Killing app server..."))
     }
@@ -2567,17 +2257,8 @@ export class DevEnvironment {
       this.debugLog(`Sent pkill signal for next processes in ${cwd}`)
 
       // Kill server process and its children using the saved PID (from before session file was deleted)
-      if (savedServerPid) {
-        // Kill all child processes of the server
-        spawnSync("pkill", ["-P", savedServerPid.toString()], { stdio: "ignore" })
-        this.debugLog(`Killed children of server PID ${savedServerPid}`)
-        // Kill the server process itself
-        try {
-          process.kill(savedServerPid, "SIGKILL")
-          this.debugLog(`Killed server PID ${savedServerPid}`)
-        } catch {
-          // Process may already be dead
-        }
+      if (sessionInfo?.serverPid) {
+        this.killServerPidIfOwned(sessionInfo.serverPid, sessionInfo.cwd, "handleShutdown")
       }
 
       // Final synchronous lsof kill - most reliable method
@@ -2587,40 +2268,6 @@ export class DevEnvironment {
       this.debugLog(`Final lsof kill exit code: ${result.status}`)
     } catch {
       // Ignore pkill errors
-    }
-
-    // Kill MCP server only if this is the last d3k instance AND we own the PID file
-    // (other d3k instances in other projects might still need it)
-    // The TUI parent shouldn't do MCP cleanup - the subprocess (which owns the PID file) will handle it
-    // Note: weOwnPidFile was already determined at the top of handleShutdown()
-    const otherInstances = countActiveD3kInstances(true) // exclude current process
-    this.debugLog(`Other active d3k instances: ${otherInstances}, weOwnPidFile: ${weOwnPidFile}`)
-
-    if (otherInstances === 0 && this.options.mcpPort && weOwnPidFile) {
-      if (!this.options.tui) {
-        console.log(chalk.yellow("🔄 Killing MCP server (last d3k instance)..."))
-      }
-      this.debugLog(`Killing MCP server on port ${this.options.mcpPort} (no other d3k instances)`)
-
-      try {
-        const { spawnSync } = await import("child_process")
-        const mcpResult = spawnSync(
-          "sh",
-          ["-c", `lsof -ti:${this.options.mcpPort} -sTCP:LISTEN | xargs kill -9 2>/dev/null`],
-          { stdio: "pipe", timeout: 5000 }
-        )
-        this.debugLog(`MCP server kill exit code: ${mcpResult.status}`)
-
-        if (!this.options.tui) {
-          console.log(chalk.green("✅ MCP server stopped"))
-        }
-      } catch (error) {
-        this.debugLog(`Error killing MCP server: ${error}`)
-      }
-    } else if (otherInstances > 0) {
-      this.debugLog(`Keeping MCP server running for ${otherInstances} other d3k instance(s)`)
-    } else if (!weOwnPidFile) {
-      this.debugLog("Skipping MCP cleanup - we don't own the PID file (subprocess will handle it)")
     }
 
     if (!this.options.tui) {

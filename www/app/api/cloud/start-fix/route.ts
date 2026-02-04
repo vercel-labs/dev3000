@@ -77,7 +77,18 @@ export async function POST(request: Request) {
     workflowLog(`[Start Fix] VERCEL_OIDC_TOKEN available: ${!!vercelOidcToken}`)
 
     const body = await request.json()
-    const { devUrl, repoOwner, repoName, baseBranch, bypassToken, repoUrl, repoBranch, githubPat, startPath } = body
+    const {
+      devUrl,
+      repoOwner,
+      repoName,
+      baseBranch,
+      bypassToken,
+      repoUrl,
+      repoBranch,
+      githubPat,
+      startPath,
+      productionUrl
+    } = body
     // Validate workflowType is a valid WorkflowType
     const validWorkflowTypes: WorkflowType[] = ["cls-fix", "prompt", "design-guidelines", "react-performance"]
     if (body.workflowType && validWorkflowTypes.includes(body.workflowType)) {
@@ -101,6 +112,9 @@ export async function POST(request: Request) {
     }
     if (repoOwner && repoName) {
       workflowLog(`[Start Fix] GitHub: ${repoOwner}/${repoName} (base: ${baseBranch || "main"})`)
+    }
+    if (productionUrl) {
+      workflowLog(`[Start Fix] Production URL: ${productionUrl}`)
     }
 
     // Validate required fields for v2 workflow
@@ -143,7 +157,9 @@ export async function POST(request: Request) {
       githubPat,
       repoOwner,
       repoName,
-      baseBranch: baseBranch || "main"
+      baseBranch: baseBranch || "main",
+      // For before/after screenshots in PR
+      productionUrl
     }
 
     // Start the workflow (fire-and-forget style)

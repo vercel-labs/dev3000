@@ -177,27 +177,11 @@ export default async function HomePage() {
 
       <section className="pb-40">
         <div className="doc-container">
-          <h2 className="text-headline">MCP Integrations</h2>
+          <h2 className="text-headline">Skill Integrations</h2>
 
           <p className="text-base text-muted-foreground leading-relaxed max-w-2xl text-pretty">
-            Works standalone or automatically detects compatible MCPs in your environment. When available,{" "}
-            <a
-              href="https://github.com/ChromeDevTools/chrome-devtools-mcp/#chrome-devtools-mcp"
-              target="_blank"
-              rel="noopener"
-              className="group whitespace-nowrap"
-            >
-              <ChromeSVG />{" "}
-              <span className="underline font-mono underline-offset-2 decoration-gray-300 group-hover:decoration-gray-500">
-                chrome-devtools-mcp
-              </span>
-            </a>{" "}
-            adds DOM inspection & performance profiling, while{" "}
-            <span>
-              <NextJSSVG />
-              &nbsp;<span className="font-mono">nextjs-dev-mcp</span> adds framework-specific build analysis and
-              hydration debugging.
-            </span>
+            Works standalone or with skills installed via the skills CLI. d3k ships with a built‑in debugging skill and
+            supports optional packs for Next.js, React performance, and design guidelines.
           </p>
         </div>
       </section>
@@ -260,83 +244,6 @@ export default async function HomePage() {
   )
 }
 
-const ChromeSVG = () => {
-  return (
-    <svg strokeLinejoin="round" viewBox="0 0 16 16" className="inline-block h-4 -translate-y-px leading-normal">
-      <path
-        fillRule="evenodd"
-        clipRule="evenodd"
-        d="M8.53216 11.3333L6.77086 14.3839C3.76871 13.8094 1.5 11.1696 1.5 8C1.5 6.86643 1.79018 5.80063 2.3003 4.87284L5.006 9.55925C5.56913 10.6383 6.69854 11.375 8 11.375C8.18107 11.375 8.35881 11.3607 8.53216 11.3333ZM10.8505 9.80787L8.14234 14.4985C11.6665 14.4228 14.5 11.5423 14.5 8C14.5 7.2549 14.3746 6.53909 14.1438 5.8725L10.6201 5.8725C11.0921 6.45305 11.375 7.19349 11.375 8C11.375 8.66509 11.1826 9.28525 10.8505 9.80787ZM8.13109 4.6275L13.5577 4.6275C12.4175 2.7524 10.355 1.5 8 1.5C6.0376 1.5 4.27831 2.36964 3.08649 3.74456L4.84694 6.79376C5.33242 5.52553 6.56104 4.625 8 4.625C8.0439 4.625 8.0876 4.62584 8.13109 4.6275ZM8 16C12.4183 16 16 12.4183 16 8C16 3.58172 12.4183 0 8 0C3.58172 0 0 3.58172 0 8C0 12.4183 3.58172 16 8 16ZM5.875 8C5.875 6.8264 6.8264 5.875 8 5.875C9.1736 5.875 10.125 6.8264 10.125 8C10.125 9.1736 9.1736 10.125 8 10.125C6.8264 10.125 5.875 9.1736 5.875 8Z"
-        fill="currentColor"
-      ></path>
-    </svg>
-  )
-}
-
-const NextJSSVG = () => {
-  return (
-    <svg strokeLinejoin="round" viewBox="0 0 16 16" className="inline-block h-4 -translate-y-px leading-normal">
-      <g clipPath="url(#clip0_53_108)">
-        <circle
-          cx="8"
-          cy="8"
-          r="7.375"
-          fill="black"
-          stroke="var(--ds-gray-1000)"
-          strokeWidth="1.25"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        ></circle>
-        <path
-          d="M10.63 11V5"
-          stroke="url(#paint0_linear_53_108_r_gt_)"
-          strokeWidth="1.25"
-          strokeMiterlimit="1.41421"
-        ></path>
-        <path
-          fillRule="evenodd"
-          clipRule="evenodd"
-          d="M5.995 5.00087V5H4.745V11H5.995V6.96798L12.3615 14.7076C12.712 14.4793 13.0434 14.2242 13.353 13.9453L5.99527 5.00065L5.995 5.00087Z"
-          fill="url(#paint1_linear_53_108_r_gt_)"
-        ></path>
-      </g>
-      <defs>
-        {/** biome-ignore lint/correctness/useUniqueElementIds: False positive */}
-        <linearGradient
-          id="paint0_linear_53_108_r_gt_"
-          x1="11.13"
-          y1="5"
-          x2="11.13"
-          y2="11"
-          gradientUnits="userSpaceOnUse"
-        >
-          <stop stopColor="white"></stop>
-          <stop offset="0.609375" stopColor="white" stopOpacity="0.57"></stop>
-          <stop offset="0.796875" stopColor="white" stopOpacity="0"></stop>
-          <stop offset="1" stopColor="white" stopOpacity="0"></stop>
-        </linearGradient>
-        {/** biome-ignore lint/correctness/useUniqueElementIds: False positive */}
-        <linearGradient
-          id="paint1_linear_53_108_r_gt_"
-          x1="9.9375"
-          y1="9.0625"
-          x2="13.5574"
-          y2="13.3992"
-          gradientUnits="userSpaceOnUse"
-        >
-          <stop stopColor="white"></stop>
-          <stop offset="1" stopColor="white" stopOpacity="0"></stop>
-        </linearGradient>
-
-        {/** biome-ignore lint/correctness/useUniqueElementIds: False positive */}
-        <clipPath id="clip0_53_108">
-          <rect width="16" height="16" fill="white"></rect>
-        </clipPath>
-      </defs>
-    </svg>
-  )
-}
-
 const VercelWordmarkSVG = () => {
   return (
     <svg
@@ -361,7 +268,7 @@ const FAQs: {
   {
     question: "Which coding agents work with dev3000?",
     answer:
-      "All of them. dev3000 works with any AI coding assistant that supports MCP (Model Context Protocol)—including Claude Code, Cursor, Windsurf, Codex, and others. It also works standalone in your terminal without any agent."
+      "All of them. dev3000 works with any AI coding assistant that can read a skill file or follow CLI output—including Claude Code, Cursor, Windsurf, Codex, and others. It also works standalone in your terminal without any agent."
   },
   {
     question: "Does dev3000 persist browser state between sessions?",
@@ -394,8 +301,8 @@ const FAQs: {
     question: "How do I stop dev3000?",
     answer: (
       <>
-        <kbd className="bg-muted px-2 py-1 rounded text-sm font-mono">Ctrl+C</kbd> terminates the dev server, browser,
-        and MCP server simultaneously.
+        <kbd className="bg-muted px-2 py-1 rounded text-sm font-mono">Ctrl+C</kbd> terminates the dev server and browser
+        simultaneously.
       </>
     )
   },

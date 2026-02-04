@@ -43,7 +43,7 @@ describe("extractProjectNameFromLogFilename", () => {
   })
 
   it("should extract project name from nested project name with -d3k.log pattern", () => {
-    expect(extractProjectNameFromLogFilename("dev3000-mcp-server-d3k.log")).toBe("dev3000-mcp-server")
+    expect(extractProjectNameFromLogFilename("dev3000-tools-service-d3k.log")).toBe("dev3000-tools-service")
   })
 })
 
@@ -73,7 +73,7 @@ describe("logFilenameMatchesProject", () => {
   })
 
   it("should match partial project name in current log file", () => {
-    expect(logFilenameMatchesProject("dev3000-mcp-server-d3k.log", "mcp-server")).toBe(true)
+    expect(logFilenameMatchesProject("dev3000-tools-service-d3k.log", "tools-service")).toBe(true)
   })
 })
 

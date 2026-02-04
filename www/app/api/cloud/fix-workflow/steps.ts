@@ -39,7 +39,6 @@ async function getAgentBrowser(sandbox: Sandbox, debug = false): Promise<Sandbox
 
 /**
  * Navigate browser to URL using agent-browser CLI
- * Falls back to MCP tool if agent-browser fails
  */
 async function navigateBrowser(
   sandbox: Sandbox,
@@ -53,23 +52,16 @@ async function navigateBrowser(
       workflowLog(`[Browser] Navigated to ${url} via agent-browser`)
       return { success: true }
     }
-    workflowLog(`[Browser] agent-browser navigation failed: ${result.error}, falling back to MCP`)
+    workflowLog(`[Browser] agent-browser navigation failed: ${result.error}`)
   } catch (error) {
-    workflowLog(
-      `[Browser] agent-browser error: ${error instanceof Error ? error.message : String(error)}, falling back to MCP`
-    )
+    workflowLog(`[Browser] agent-browser error: ${error instanceof Error ? error.message : String(error)}`)
   }
 
-  // Fallback to MCP tool
-  const D3K_MCP_PORT = 3684
-  const navCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"agent_browser_action","arguments":{"action":"open","params":{"url":"${url}"}}}}'`
-  const result = await runSandboxCommand(sandbox, "bash", ["-c", navCmd])
-  return { success: result.exitCode === 0, error: result.stderr }
+  return { success: false, error: "agent-browser navigation failed" }
 }
 
 /**
  * Reload browser page using agent-browser CLI
- * Falls back to MCP tool if agent-browser fails
  */
 async function reloadBrowser(sandbox: Sandbox, debug = false): Promise<{ success: boolean; error?: string }> {
   try {
@@ -79,18 +71,12 @@ async function reloadBrowser(sandbox: Sandbox, debug = false): Promise<{ success
       workflowLog("[Browser] Page reloaded via agent-browser")
       return { success: true }
     }
-    workflowLog(`[Browser] agent-browser reload failed: ${result.error}, falling back to MCP`)
+    workflowLog(`[Browser] agent-browser reload failed: ${result.error}`)
   } catch (error) {
-    workflowLog(
-      `[Browser] agent-browser error: ${error instanceof Error ? error.message : String(error)}, falling back to MCP`
-    )
+    workflowLog(`[Browser] agent-browser error: ${error instanceof Error ? error.message : String(error)}`)
   }
 
-  // Fallback to MCP tool
-  const D3K_MCP_PORT = 3684
-  const reloadCmd = `curl -s -m 30 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"agent_browser_action","arguments":{"action":"reload"}}}'`
-  const result = await runSandboxCommand(sandbox, "bash", ["-c", reloadCmd])
-  return { success: result.exitCode === 0, error: result.stderr }
+  return { success: false, error: "agent-browser reload failed" }
 }
 
 /**
@@ -193,7 +179,6 @@ export async function initSandboxStep(
 ): Promise<{
   sandboxId: string
   devUrl: string
-  mcpUrl: string
   reportId: string
   beforeCls: number | null
   beforeGrade: "good" | "needs-improvement" | "poor" | null
@@ -242,7 +227,7 @@ export async function initSandboxStep(
 
   // Get CLS data from d3k
   timer.start("Fetch CLS data from d3k")
-  const clsData = await fetchClsData(sandboxResult.sandbox, sandboxResult.mcpUrl, projectName)
+  const clsData = await fetchClsData(sandboxResult.sandbox)
 
   workflowLog(`[Init] Before CLS: ${clsData.clsScore} (${clsData.clsGrade})`)
   workflowLog(`[Init] Captured ${clsData.d3kLogs.length} chars of d3k logs`)
@@ -267,7 +252,6 @@ export async function initSandboxStep(
   return {
     sandboxId: sandboxResult.sandbox.sandboxId,
     devUrl: sandboxResult.devUrl,
-    mcpUrl: sandboxResult.mcpUrl,
     reportId,
     beforeCls: clsData.clsScore,
     beforeGrade: clsData.clsGrade,
@@ -296,7 +280,6 @@ export interface AgentStepTiming {
 export async function agentFixLoopStep(
   sandboxId: string,
   devUrl: string,
-  mcpUrl: string,
   beforeCls: number | null,
   beforeGrade: "good" | "needs-improvement" | "poor" | null,
   beforeScreenshots: Array<{ timestamp: number; blobUrl: string; label?: string }>,
@@ -343,7 +326,6 @@ export async function agentFixLoopStep(
   const agentResult = await runAgentWithDiagnoseTool(
     sandbox,
     devUrl,
-    mcpUrl,
     beforeCls,
     beforeGrade,
     startPath,
@@ -385,7 +367,7 @@ export async function agentFixLoopStep(
 
   // Get final CLS measurement
   timer.start("Fetch final CLS data")
-  const finalCls = await fetchClsData(sandbox, mcpUrl, `${projectName}-after`)
+  const finalCls = await fetchClsData(sandbox)
 
   // Get git diff (exclude package.json which gets modified by sandbox initialization)
   timer.start("Get git diff")
@@ -482,7 +464,6 @@ export async function agentFixLoopStep(
     customPrompt: customPrompt ?? undefined,
     systemPrompt: agentResult.systemPrompt,
     sandboxDevUrl: devUrl,
-    sandboxMcpUrl: mcpUrl,
     clsScore: beforeCls ?? undefined,
     clsGrade: beforeGrade ?? undefined,
     beforeScreenshots,
@@ -547,7 +528,6 @@ export async function agentFixLoopStep(
 async function runAgentWithDiagnoseTool(
   sandbox: Sandbox,
   devUrl: string,
-  _mcpUrl: string,
   beforeCls: number | null,
   beforeGrade: "good" | "needs-improvement" | "poor" | null,
   startPath: string,
@@ -556,7 +536,6 @@ async function runAgentWithDiagnoseTool(
   crawlDepth?: number | "all"
 ): Promise<{ transcript: string; summary: string; systemPrompt: string }> {
   const SANDBOX_CWD = "/vercel/sandbox"
-  const _D3K_MCP_PORT = 3684
 
   const gateway = createGateway({
     apiKey: process.env.AI_GATEWAY_API_KEY,
@@ -984,11 +963,7 @@ async function runSandboxCommand(
   return { exitCode: result.exitCode, stdout, stderr }
 }
 
-async function fetchClsData(
-  sandbox: Sandbox,
-  mcpUrl: string,
-  projectName: string
-): Promise<{
+async function fetchClsData(sandbox: Sandbox): Promise<{
   clsScore: number | null
   clsGrade: "good" | "needs-improvement" | "poor" | null
   screenshots: Array<{ timestamp: number; blobUrl: string; label?: string }>
@@ -1065,33 +1040,7 @@ async function fetchClsData(
       workflowLog("[fetchClsData] No CLS entries found in logs!")
     }
 
-    // Fetch screenshots
-    const baseUrl = mcpUrl.replace(/\/mcp$/, "")
-    const listResponse = await fetch(`${baseUrl}/api/screenshots/list`)
-    if (listResponse.ok) {
-      const listData = (await listResponse.json()) as { files?: string[] }
-      const files = (listData.files || []).slice(-10) // Last 10 screenshots
-
-      for (const filename of files) {
-        try {
-          const imageResponse = await fetch(`${baseUrl}/api/screenshots/${filename}`)
-          if (imageResponse.ok) {
-            const imageBuffer = Buffer.from(await imageResponse.arrayBuffer())
-            const blob = await put(`cls-${projectName}-${Date.now()}-${filename}`, imageBuffer, {
-              access: "public",
-              contentType: "image/png"
-            })
-            result.screenshots.push({
-              timestamp: Date.now(),
-              blobUrl: blob.url,
-              label: filename.replace(".png", "")
-            })
-          }
-        } catch {
-          // Skip failed uploads
-        }
-      }
-    }
+    // Screenshot capture is handled by d3k locally; no tools server in cloud.
   } catch (err) {
     workflowLog(`[fetchClsData] Error: ${err instanceof Error ? err.message : String(err)}`)
   }
@@ -1100,43 +1049,14 @@ async function fetchClsData(
 }
 
 /**
- * Parse MCP response which may be in SSE format or plain JSON
- * SSE format: "event: message\ndata: {...JSON...}\n\n"
- * Plain JSON: "{...JSON...}"
- */
-function parseMcpResponse(rawResponse: string): unknown {
-  const trimmed = rawResponse.trim()
-
-  // Check if it's SSE format (starts with "event:" or "data:")
-  if (trimmed.startsWith("event:") || trimmed.startsWith("data:")) {
-    // Extract the JSON from the data: line
-    const lines = trimmed.split("\n")
-    for (const line of lines) {
-      if (line.startsWith("data:")) {
-        const jsonStr = line.substring(5).trim() // Remove "data:" prefix
-        if (jsonStr) {
-          return JSON.parse(jsonStr)
-        }
-      }
-    }
-    throw new Error("No data: line found in SSE response")
-  }
-
-  // Plain JSON
-  return JSON.parse(trimmed)
-}
-
-/**
- * Fetch Web Vitals using Chrome DevTools MCP performance trace
- * Uses performance_start_trace/performance_stop_trace for reliable metrics
- * Falls back to Performance API evaluation if trace fails
+ * Fetch Web Vitals using agent-browser evaluation.
+ * This avoids any dependency on external tools services.
  */
 async function fetchWebVitalsViaCDP(
   sandbox: Sandbox
 ): Promise<{ vitals: import("@/types").WebVitals; diagnosticLogs: string[] }> {
   const vitals: import("@/types").WebVitals = {}
   const diagnosticLogs: string[] = []
-  const D3K_MCP_PORT = 3684
 
   // Helper to log and capture diagnostics
   const diagLog = (msg: string) => {
@@ -1156,178 +1076,58 @@ async function fetchWebVitalsViaCDP(
   }
 
   try {
-    // Method 1: Try Chrome DevTools MCP performance trace (most reliable for LCP, CLS, INP)
-    diagLog("[fetchWebVitals] Starting Chrome DevTools performance trace...")
-    const startTraceCmd = `curl -s -m 60 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '${JSON.stringify(
-      {
-        jsonrpc: "2.0",
-        id: 1,
-        method: "tools/call",
-        params: {
-          name: "chrome-devtools_performance_start_trace",
-          arguments: {
-            reload: true, // Reload page to capture fresh metrics
-            autoStop: true // Automatically stop after page load
-          }
-        }
-      }
-    ).replace(/'/g, "'\\''")}'`
+    diagLog("[fetchWebVitals] Capturing Web Vitals via agent-browser evaluate...")
 
-    const startTraceResult = await runSandboxCommand(sandbox, "bash", ["-c", startTraceCmd])
-    diagLog(`[fetchWebVitals] Start trace result: ${startTraceResult.stdout.substring(0, 500)}`)
+    const finalizeLcpScript = `
+      document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      document.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      'lcp-finalized'
+    `
+    await evaluateInBrowser(sandbox, finalizeLcpScript)
+    await new Promise((resolve) => setTimeout(resolve, 500))
 
-    // Wait for the trace to capture page load and auto-stop (up to 15 seconds)
-    diagLog("[fetchWebVitals] Waiting for trace to complete...")
-    await new Promise((resolve) => setTimeout(resolve, 8000))
+    const webVitalsScript = `(function() {
+      const lcpEntries = performance.getEntriesByType('largest-contentful-paint');
+      const fcpEntries = performance.getEntriesByName('first-contentful-paint');
+      const clsEntries = performance.getEntriesByType('layout-shift');
+      const navTiming = performance.getEntriesByType('navigation')[0] || performance.timing;
+      return JSON.stringify({
+        lcp: lcpEntries.length > 0 ? lcpEntries[lcpEntries.length - 1].startTime : null,
+        fcp: fcpEntries.length > 0 ? fcpEntries[0].startTime : null,
+        ttfb: navTiming.responseStart ? (navTiming.responseStart - (navTiming.startTime || navTiming.navigationStart || 0)) : null,
+        cls: clsEntries.reduce((sum, e) => sum + (e.hadRecentInput ? 0 : e.value), 0)
+      });
+    })()`
 
-    // Stop the trace and get results (in case autoStop didn't trigger)
-    diagLog("[fetchWebVitals] Stopping performance trace...")
-    const stopTraceCmd = `curl -s -m 60 -X POST http://localhost:${D3K_MCP_PORT}/mcp -H "Content-Type: application/json" -H "Accept: application/json, text/event-stream" -d '${JSON.stringify(
-      {
-        jsonrpc: "2.0",
-        id: 1,
-        method: "tools/call",
-        params: {
-          name: "chrome-devtools_performance_stop_trace",
-          arguments: {}
-        }
-      }
-    ).replace(/'/g, "'\\''")}'`
+    const evalResult = await evaluateInBrowser(sandbox, webVitalsScript)
+    diagLog(`[fetchWebVitals] Eval result: ${JSON.stringify(evalResult).substring(0, 500)}`)
 
-    const stopTraceResult = await runSandboxCommand(sandbox, "bash", ["-c", stopTraceCmd])
-    workflowLog(
-      `[fetchWebVitals] Stop trace result (${stopTraceResult.stdout.length} chars): ${stopTraceResult.stdout.substring(0, 1000)}`
-    )
+    if (evalResult.success && evalResult.result) {
+      const resultStr = typeof evalResult.result === "string" ? evalResult.result : JSON.stringify(evalResult.result)
 
-    // Parse the trace results for Web Vitals
-    try {
-      const traceResponse = parseMcpResponse(stopTraceResult.stdout) as {
-        result?: { content?: Array<{ type: string; text: string }> }
-        error?: unknown
-      }
-      diagLog(`[fetchWebVitals] Trace response keys: ${Object.keys(traceResponse).join(", ")}`)
-      if (traceResponse.error) {
-        diagLog(`[fetchWebVitals] Trace MCP error: ${JSON.stringify(traceResponse.error)}`)
-      }
-      const resultText = traceResponse.result?.content?.[0]?.text || ""
-      diagLog(`[fetchWebVitals] Trace result text (${resultText.length} chars): ${resultText.substring(0, 500)}`)
-
-      // Parse LCP from trace (format: "LCP: 1234ms" or similar)
-      const lcpMatch = resultText.match(/LCP[:\s]+(\d+(?:\.\d+)?)\s*(?:ms|milliseconds)/i)
-      if (lcpMatch) {
-        const lcpValue = parseFloat(lcpMatch[1])
-        vitals.lcp = { value: lcpValue, grade: gradeValue(lcpValue, 2500, 4000) }
-        diagLog(`[fetchWebVitals] Extracted LCP from trace: ${lcpValue}ms`)
-      }
-
-      // Parse CLS from trace (format: "CLS: 0.123" or similar)
-      const clsMatch = resultText.match(/CLS[:\s]+(\d+(?:\.\d+)?)/i)
-      if (clsMatch) {
-        const clsValue = parseFloat(clsMatch[1])
-        vitals.cls = { value: clsValue, grade: gradeValue(clsValue, 0.1, 0.25) }
-        diagLog(`[fetchWebVitals] Extracted CLS from trace: ${clsValue}`)
-      }
-
-      // Parse FCP from trace
-      const fcpMatch = resultText.match(/FCP[:\s]+(\d+(?:\.\d+)?)\s*(?:ms|milliseconds)/i)
-      if (fcpMatch) {
-        const fcpValue = parseFloat(fcpMatch[1])
-        vitals.fcp = { value: fcpValue, grade: gradeValue(fcpValue, 1800, 3000) }
-        diagLog(`[fetchWebVitals] Extracted FCP from trace: ${fcpValue}ms`)
-      }
-
-      // Parse TTFB from trace
-      const ttfbMatch = resultText.match(/TTFB[:\s]+(\d+(?:\.\d+)?)\s*(?:ms|milliseconds)/i)
-      if (ttfbMatch) {
-        const ttfbValue = parseFloat(ttfbMatch[1])
-        vitals.ttfb = { value: ttfbValue, grade: gradeValue(ttfbValue, 800, 1800) }
-        diagLog(`[fetchWebVitals] Extracted TTFB from trace: ${ttfbValue}ms`)
-      }
-
-      // Parse INP from trace
-      const inpMatch = resultText.match(/INP[:\s]+(\d+(?:\.\d+)?)\s*(?:ms|milliseconds)/i)
-      if (inpMatch) {
-        const inpValue = parseFloat(inpMatch[1])
-        vitals.inp = { value: inpValue, grade: gradeValue(inpValue, 200, 500) }
-        diagLog(`[fetchWebVitals] Extracted INP from trace: ${inpValue}ms`)
-      }
-    } catch (traceParseErr) {
-      diagLog(`[fetchWebVitals] Trace parse error: ${traceParseErr}`)
-    }
-
-    // Method 2: Fallback to Performance API if trace didn't provide metrics
-    workflowLog(
-      `[fetchWebVitals] After trace: vitals=${JSON.stringify(vitals)}, lcp=${!!vitals.lcp}, cls=${!!vitals.cls}`
-    )
-    if (!vitals.lcp || !vitals.cls) {
-      diagLog("[fetchWebVitals] Trace incomplete, falling back to agent-browser evaluate...")
-
-      // Trigger user interaction to finalize LCP (required for Performance API)
-      // Use agent-browser evaluate instead of curl-to-MCP
-      const finalizeLcpScript = `
-        document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-        document.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-        'lcp-finalized'
-      `
-      await evaluateInBrowser(sandbox, finalizeLcpScript)
-      await new Promise((resolve) => setTimeout(resolve, 500))
-
-      // Get Web Vitals from Performance API using agent-browser evaluate
-      const webVitalsScript = `(function() {
-        const lcpEntries = performance.getEntriesByType('largest-contentful-paint');
-        const fcpEntries = performance.getEntriesByName('first-contentful-paint');
-        const clsEntries = performance.getEntriesByType('layout-shift');
-        const navTiming = performance.getEntriesByType('navigation')[0] || performance.timing;
-        return JSON.stringify({
-          lcp: lcpEntries.length > 0 ? lcpEntries[lcpEntries.length - 1].startTime : null,
-          fcp: fcpEntries.length > 0 ? fcpEntries[0].startTime : null,
-          ttfb: navTiming.responseStart ? (navTiming.responseStart - (navTiming.startTime || navTiming.navigationStart || 0)) : null,
-          cls: clsEntries.reduce((sum, e) => sum + (e.hadRecentInput ? 0 : e.value), 0)
-        });
-      })()`
-
-      const evalResult = await evaluateInBrowser(sandbox, webVitalsScript)
-      diagLog(`[fetchWebVitals] Fallback agent-browser result: ${JSON.stringify(evalResult).substring(0, 500)}`)
-
+      let rawVitals: { lcp: number | null; fcp: number | null; ttfb: number | null; cls: number } | null = null
       try {
-        if (evalResult.success && evalResult.result) {
-          // agent-browser evaluate returns the result directly
-          const resultStr =
-            typeof evalResult.result === "string" ? evalResult.result : JSON.stringify(evalResult.result)
-          diagLog(`[fetchWebVitals] Fallback resultStr: ${resultStr.substring(0, 300)}`)
-
-          // Try to parse as JSON - it might be a JSON string or already parsed
-          let rawVitals: { lcp: number | null; fcp: number | null; ttfb: number | null; cls: number } | null = null
-          try {
-            rawVitals = JSON.parse(resultStr)
-          } catch {
-            // If that fails, try extracting from a nested structure
-            const innerResult = evalResult.result as { value?: string }
-            if (innerResult.value) {
-              rawVitals = JSON.parse(innerResult.value)
-            }
-          }
-
-          if (rawVitals) {
-            diagLog(`[fetchWebVitals] Fallback vitals: ${JSON.stringify(rawVitals)}`)
-
-            // Only use fallback values if we don't already have them from trace
-            if (!vitals.lcp && rawVitals.lcp !== null) {
-              vitals.lcp = { value: rawVitals.lcp, grade: gradeValue(rawVitals.lcp, 2500, 4000) }
-            }
-            if (!vitals.fcp && rawVitals.fcp !== null) {
-              vitals.fcp = { value: rawVitals.fcp, grade: gradeValue(rawVitals.fcp, 1800, 3000) }
-            }
-            if (!vitals.ttfb && rawVitals.ttfb !== null) {
-              vitals.ttfb = { value: rawVitals.ttfb, grade: gradeValue(rawVitals.ttfb, 800, 1800) }
-            }
-            if (!vitals.cls && rawVitals.cls !== null) {
-              vitals.cls = { value: rawVitals.cls, grade: gradeValue(rawVitals.cls, 0.1, 0.25) }
-            }
-          }
+        rawVitals = JSON.parse(resultStr)
+      } catch {
+        const innerResult = evalResult.result as { value?: string }
+        if (innerResult.value) {
+          rawVitals = JSON.parse(innerResult.value)
         }
-      } catch (fallbackErr) {
-        diagLog(`[fetchWebVitals] Fallback parse error: ${fallbackErr}`)
+      }
+
+      if (rawVitals) {
+        if (rawVitals.lcp !== null) {
+          vitals.lcp = { value: rawVitals.lcp, grade: gradeValue(rawVitals.lcp, 2500, 4000) }
+        }
+        if (rawVitals.fcp !== null) {
+          vitals.fcp = { value: rawVitals.fcp, grade: gradeValue(rawVitals.fcp, 1800, 3000) }
+        }
+        if (rawVitals.ttfb !== null) {
+          vitals.ttfb = { value: rawVitals.ttfb, grade: gradeValue(rawVitals.ttfb, 800, 1800) }
+        }
+        if (rawVitals.cls !== null) {
+          vitals.cls = { value: rawVitals.cls, grade: gradeValue(rawVitals.cls, 0.1, 0.25) }
+        }
       }
     }
   } catch (err) {
@@ -1373,7 +1173,8 @@ export async function createPullRequestStep(
   beforeCls: number | null,
   afterCls: number | null,
   reportId: string,
-  progressContext?: ProgressContext | null
+  progressContext?: ProgressContext | null,
+  prScreenshots?: Array<{ route: string; beforeBlobUrl: string | null; afterBlobUrl: string | null }>
 ): Promise<{ prUrl: string; prNumber: number; branch: string; timing: PRStepTiming } | { error: string } | null> {
   const timer = new StepTimer()
 
@@ -1466,6 +1267,27 @@ Automated CLS fix by d3k
     timer.start("Create PR via GitHub API")
     workflowLog("[PR] Creating pull request...")
     const prTitle = `fix: Reduce CLS (${beforeCls?.toFixed(3) || "?"} → ${afterCls?.toFixed(3) || "?"})`
+
+    // Build visual comparison section if screenshots available
+    let visualComparisonSection = ""
+    if (prScreenshots && prScreenshots.length > 0) {
+      const screenshotRows = prScreenshots
+        .map((s) => {
+          const beforeImg = s.beforeBlobUrl ? `![Before](${s.beforeBlobUrl})` : "_New page_"
+          const afterImg = s.afterBlobUrl ? `![After](${s.afterBlobUrl})` : "_Failed_"
+          return `| \`${s.route}\` | ${beforeImg} | ${afterImg} |`
+        })
+        .join("\n")
+
+      visualComparisonSection = `
+
+### Visual Comparison
+| Route | Before | After |
+|-------|--------|-------|
+${screenshotRows}
+`
+    }
+
     const prBody = `## 🎯 CLS Fix by d3k
 
 This PR contains automated fixes to reduce Cumulative Layout Shift (CLS).
@@ -1475,7 +1297,7 @@ This PR contains automated fixes to reduce Cumulative Layout Shift (CLS).
 |--------|--------|-------|
 | CLS Score | ${beforeCls?.toFixed(3) || "unknown"} | ${afterCls?.toFixed(3) || "unknown"} |
 | Grade | ${beforeCls !== null ? (beforeCls <= 0.1 ? "Good ✅" : beforeCls <= 0.25 ? "Needs Improvement ⚠️" : "Poor ❌") : "unknown"} | ${afterCls !== null ? (afterCls <= 0.1 ? "Good ✅" : afterCls <= 0.25 ? "Needs Improvement ⚠️" : "Poor ❌") : "unknown"} |
-
+${visualComparisonSection}
 ### What was fixed
 The AI agent analyzed the page for layout shifts and applied fixes to reduce CLS.
 
@@ -1557,6 +1379,81 @@ The AI agent analyzed the page for layout shifts and applied fixes to reduce CLS
     const errorMsg = err instanceof Error ? err.message : String(err)
     workflowLog(`[PR] Error: ${errorMsg}`)
     return { error: `Exception: ${errorMsg}` }
+  }
+}
+
+// ============================================================
+// Screenshot Capture for PR
+// ============================================================
+
+/**
+ * Capture before/after screenshots for routes affected by the PR.
+ * - Gets changed files from git diff
+ * - Maps them to URL routes
+ * - Screenshots production (before) and localhost (after)
+ * - Uploads to blob storage for PR embedding
+ */
+export async function captureScreenshotsForPRStep(
+  sandboxId: string,
+  productionUrl: string,
+  localhostUrl: string,
+  projectName: string,
+  _progressContext?: ProgressContext | null
+): Promise<Array<{ route: string; beforeBlobUrl: string | null; afterBlobUrl: string | null }>> {
+  workflowLog(`[Screenshots] Capturing before/after screenshots...`)
+  workflowLog(`[Screenshots] Production: ${productionUrl}`)
+  workflowLog(`[Screenshots] Localhost: ${localhostUrl}`)
+
+  try {
+    // Get sandbox
+    const sandbox = await Sandbox.get({ sandboxId })
+    if (sandbox.status !== "running") {
+      workflowLog(`[Screenshots] Sandbox not running: ${sandbox.status}`)
+      return []
+    }
+
+    // Get changed files from git
+    const SANDBOX_CWD = "/vercel/sandbox"
+    const diffResult = await runSandboxCommand(sandbox, "sh", ["-c", `cd ${SANDBOX_CWD} && git diff --name-only HEAD`])
+
+    if (diffResult.exitCode !== 0) {
+      workflowLog(`[Screenshots] Failed to get git diff: ${diffResult.stderr}`)
+      return []
+    }
+
+    const changedFiles = diffResult.stdout.trim().split("\n").filter(Boolean)
+    workflowLog(`[Screenshots] Changed files: ${changedFiles.length}`)
+
+    if (changedFiles.length === 0) {
+      return []
+    }
+
+    // Map files to routes
+    const { mapFilesToRoutes, filterPageRoutes } = await import("@/lib/file-to-route")
+    const routeMappings = mapFilesToRoutes(changedFiles)
+    const routes = filterPageRoutes(routeMappings, 3)
+
+    workflowLog(`[Screenshots] Routes to capture: ${routes.join(", ") || "(none)"}`)
+
+    if (routes.length === 0) {
+      return []
+    }
+
+    // Capture screenshots
+    const { captureBeforeAfterScreenshots } = await import("@/lib/cloud/pr-screenshot-service")
+    const screenshots = await captureBeforeAfterScreenshots({
+      sandbox,
+      productionUrl,
+      localhostUrl,
+      routes,
+      projectName
+    })
+
+    workflowLog(`[Screenshots] Captured ${screenshots.length} screenshot set(s)`)
+    return screenshots
+  } catch (err) {
+    workflowLog(`[Screenshots] Error: ${err instanceof Error ? err.message : String(err)}`)
+    return []
   }
 }
 

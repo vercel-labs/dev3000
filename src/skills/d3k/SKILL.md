@@ -48,3 +48,37 @@ d3k agent-browser --cdp $(d3k cdp-port) screenshot /tmp/shot.png
 2. Fix the code
 3. `d3k agent-browser --cdp $(d3k cdp-port) open <url>` then `click @e1` to replay
 4. `d3k errors` - Verify fix worked
+
+## Creating PRs with Before/After Screenshots
+
+When creating a PR for visual changes, **always capture before/after screenshots** to show the impact:
+
+1. **Before making changes**, screenshot the production site:
+   ```bash
+   d3k agent-browser --cdp $(d3k cdp-port) open https://production-url.com/affected-page
+   d3k agent-browser --cdp $(d3k cdp-port) screenshot /tmp/before.png
+   ```
+
+2. **After making changes**, screenshot localhost:
+   ```bash
+   d3k agent-browser --cdp $(d3k cdp-port) open http://localhost:3000/affected-page
+   d3k agent-browser --cdp $(d3k cdp-port) screenshot /tmp/after.png
+   ```
+
+3. **Or use the tooling API** to capture multiple routes at once:
+   ```
+   capture_before_after_screenshots(
+     productionUrl: "https://myapp.vercel.app",
+     routes: ["/", "/about", "/contact"]
+   )
+   ```
+
+4. **Include in PR description** using markdown:
+   ```markdown
+   ### Visual Comparison
+   | Route | Before | After |
+   |-------|--------|-------|
+   | `/` | ![Before](before.png) | ![After](after.png) |
+   ```
+
+   Upload screenshots by dragging them into the GitHub PR description.

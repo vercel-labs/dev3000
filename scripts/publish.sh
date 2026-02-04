@@ -49,19 +49,19 @@ DARWIN_ARM64_PKG_DIR="$ROOT_DIR/packages/d3k-darwin-arm64"
 LINUX_X64_PKG_DIR="$ROOT_DIR/packages/d3k-linux-x64"
 WINDOWS_X64_PKG_DIR="$ROOT_DIR/packages/d3k-windows-x64"
 
-if [ ! -d "$DARWIN_ARM64_PKG_DIR/bin" ] || [ ! -d "$DARWIN_ARM64_PKG_DIR/mcp-server" ]; then
+if [ ! -d "$DARWIN_ARM64_PKG_DIR/bin" ]; then
   echo "❌ darwin-arm64 package binaries not found at $DARWIN_ARM64_PKG_DIR"
   echo "💡 Run ./scripts/release.sh first to build binaries."
   exit 1
 fi
 
-if [ ! -d "$LINUX_X64_PKG_DIR/bin" ] || [ ! -d "$LINUX_X64_PKG_DIR/mcp-server" ]; then
+if [ ! -d "$LINUX_X64_PKG_DIR/bin" ]; then
   echo "❌ linux-x64 package binaries not found at $LINUX_X64_PKG_DIR"
   echo "💡 Run ./scripts/release.sh first to build binaries."
   exit 1
 fi
 
-if [ ! -d "$WINDOWS_X64_PKG_DIR/bin" ] || [ ! -d "$WINDOWS_X64_PKG_DIR/mcp-server" ]; then
+if [ ! -d "$WINDOWS_X64_PKG_DIR/bin" ]; then
   echo "❌ windows-x64 package binaries not found at $WINDOWS_X64_PKG_DIR"
   echo "💡 Run ./scripts/release.sh first to build binaries."
   exit 1

@@ -28,7 +28,6 @@ export interface WorkflowReport {
 
   // Sandbox URLs
   sandboxDevUrl: string
-  sandboxMcpUrl?: string
 
   // CLS data (legacy - kept for backward compat, prefer webVitals)
   clsScore?: number

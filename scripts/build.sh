@@ -9,20 +9,4 @@ echo "🧹 Cleaning old build artifacts..."
 rm -rf dist
 bun run build
 
-# Build MCP server with standalone output
-echo "🏗️ Building MCP server..."
-cd mcp-server
-
-# Clean previous build and node_modules to avoid caching old dependencies
-rm -rf .next node_modules
-
-# Reinstall dependencies fresh
-bun install
-
-# Build with turbopack
-echo "📦 Creating build with turbopack..."
-bun run build
-
-cd ..
-
 echo "✅ Build completed successfully!"

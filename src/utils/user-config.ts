@@ -8,25 +8,12 @@ export interface AgentConfig {
 }
 
 export interface UserConfig {
-  disableMcpConfigs?: string
   defaultAgent?: AgentConfig
   browser?: string
 }
 
 export function getUserConfigPath(): string {
   return join(homedir(), ".d3k.json")
-}
-
-function normalizeDisableList(value: unknown): string | undefined {
-  if (typeof value === "string" && value.trim().length > 0) {
-    return value
-  }
-
-  if (Array.isArray(value) && value.every((item) => typeof item === "string")) {
-    return value.join(" ")
-  }
-
-  return undefined
 }
 
 export function loadUserConfig(): UserConfig {
@@ -39,12 +26,7 @@ export function loadUserConfig(): UserConfig {
   try {
     const content = readFileSync(configPath, "utf-8")
     const parsed = JSON.parse(content) as Record<string, unknown>
-    const disableList = normalizeDisableList(parsed.disableMcpConfigs)
-
     const config: UserConfig = {}
-    if (disableList) {
-      config.disableMcpConfigs = disableList
-    }
     if (parsed.defaultAgent && typeof parsed.defaultAgent === "object") {
       const agent = parsed.defaultAgent as Record<string, unknown>
       if (typeof agent.name === "string" && typeof agent.command === "string") {

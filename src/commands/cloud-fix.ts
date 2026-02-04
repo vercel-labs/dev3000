@@ -1,792 +1,100 @@
-import { execSync } from "node:child_process"
-import { mkdirSync, writeFileSync } from "node:fs"
-import { dirname, join } from "node:path"
-import { Sandbox } from "@vercel/sandbox"
-import ms from "ms"
 import { detectProject } from "../utils/project-detector.js"
 
 export interface CloudFixOptions {
   debug?: boolean
-  timeout?: string
   repo?: string
   branch?: string
   projectDir?: string
 }
 
-/**
- * Parse Server-Sent Events (SSE) response
- */
-async function parseSSEResponse(response: Response): Promise<string> {
-  const text = await response.text()
-  const lines = text.split("\n")
-  let result = ""
-
-  for (const line of lines) {
-    if (line.startsWith("data: ")) {
-      const data = line.slice(6) // Remove "data: " prefix
-      if (data === "[DONE]") break
-      try {
-        const parsed = JSON.parse(data)
-        // Accumulate the result from SSE chunks
-        if (parsed.result?.content) {
-          for (const content of parsed.result.content) {
-            if (content.type === "text" && content.text) {
-              result += content.text
-            }
-          }
-        }
-        // Or just return the full parsed object as JSON
-        if (parsed.result) {
-          return JSON.stringify(parsed.result, null, 2)
-        }
-      } catch {
-        // Not JSON, just text data
-        result += `${data}\n`
-      }
-    }
-  }
-
-  return result || text
-}
-
-/**
- * Create a PR from changes made in the sandbox
- */
-// @ts-expect-error - Temporarily unused for focused testing
-// biome-ignore lint/correctness/noUnusedVariables: Temporarily disabled for focused testing
-async function createPRFromSandbox(
-  sandbox: Sandbox,
-  _project: Awaited<ReturnType<typeof detectProject>>,
-  debug?: boolean
-): Promise<void> {
-  // Check if there are any changes in the sandbox
-  console.log("  🔍 Checking for changes in sandbox...")
-  const statusResult = await sandbox.runCommand({
-    cmd: "git",
-    args: ["status", "--porcelain"],
-    cwd: "/vercel/sandbox"
-  })
-
-  const statusOutput = await statusResult.stdout()
-
-  if (!statusOutput.trim()) {
-    console.log("  ℹ️  No changes detected in sandbox")
-    return
-  }
-
-  if (debug) {
-    console.log(`  Git status output:\n${statusOutput}`)
-  }
-
-  // Get the list of changed files
-  console.log("  📋 Getting list of changed files...")
-  const diffResult = await sandbox.runCommand({
-    cmd: "git",
-    args: ["diff", "--name-only", "HEAD"],
-    cwd: "/vercel/sandbox"
-  })
-
-  const changedFiles = (await diffResult.stdout()).trim().split("\n").filter(Boolean)
-  console.log(`  Found ${changedFiles.length} changed files`)
-
-  if (changedFiles.length === 0) {
-    console.log("  ℹ️  No modified files to create PR from")
-    return
-  }
-
-  // Create a new branch locally
-  const branchName = `d3k-cloud-fix-${Date.now()}`
-  console.log(`  🌿 Creating branch: ${branchName}`)
-
-  try {
-    execSync(`git checkout -b ${branchName}`, { cwd: process.cwd(), stdio: "pipe" })
-  } catch (err) {
-    throw new Error(`Failed to create branch: ${err}`)
-  }
-
-  // Download each changed file from sandbox and apply locally
-  console.log("  📥 Downloading changes from sandbox...")
-  for (const file of changedFiles) {
-    try {
-      const fileStream = await sandbox.readFile({
-        path: file,
-        cwd: "/vercel/sandbox"
-      })
-
-      if (!fileStream) {
-        console.log(`  ⚠️  Could not read file: ${file}`)
-        continue
-      }
-
-      // Read the stream into a buffer
-      const chunks: Buffer[] = []
-      for await (const chunk of fileStream) {
-        chunks.push(Buffer.from(chunk))
-      }
-      const content = Buffer.concat(chunks)
-
-      // Write the file locally
-      const localPath = join(process.cwd(), file)
-      mkdirSync(dirname(localPath), { recursive: true })
-      writeFileSync(localPath, content)
-      console.log(`  ✅ Downloaded: ${file}`)
-    } catch (err) {
-      console.log(`  ⚠️  Error downloading ${file}: ${err}`)
-    }
-  }
-
-  // Stage and commit the changes
-  console.log("  💾 Committing changes...")
-  try {
-    execSync("git add .", { cwd: process.cwd(), stdio: "pipe" })
-
-    const commitMessage = `Fix issues detected by dev3000 cloud analysis
-
-Applied fixes from dev3000 cloud sandbox analysis.
-
-Changed files:
-${changedFiles.map((f) => `- ${f}`).join("\n")}
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code) using [d3k](https://d3k.dev)
-
-Co-Authored-By: Claude <noreply@anthropic.com>`
-
-    execSync(`git commit -m "${commitMessage.replace(/"/g, '\\"')}"`, {
-      cwd: process.cwd(),
-      stdio: "pipe"
-    })
-    console.log("  ✅ Changes committed")
-  } catch (err) {
-    throw new Error(`Failed to commit changes: ${err}`)
-  }
-
-  // Push the branch
-  console.log("  📤 Pushing branch to remote...")
-  try {
-    execSync(`git push -u origin ${branchName}`, { cwd: process.cwd(), stdio: "pipe" })
-    console.log("  ✅ Branch pushed")
-  } catch (err) {
-    throw new Error(`Failed to push branch: ${err}`)
-  }
-
-  // Create PR using gh CLI
-  console.log("  🔀 Creating pull request...")
-  try {
-    const prBody = `## Automated fixes from dev3000 cloud analysis
-
-This PR contains fixes detected and applied by dev3000's cloud analysis system.
-
-### Changed files
-${changedFiles.map((f) => `- \`${f}\``).join("\n")}
-
-### How it works
-1. Code was deployed to Vercel Sandbox
-2. dev3000 MCP tools analyzed the running application
-3. Fixes were applied automatically in the sandbox
-4. Changes were extracted and committed to this PR
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code) using [d3k](https://d3k.dev)`
-
-    const result = execSync(
-      `gh pr create --title "Fix issues detected by dev3000 cloud analysis" --body "${prBody.replace(/"/g, '\\"')}"`,
-      { cwd: process.cwd(), encoding: "utf-8" }
-    )
-
-    const prUrl = result
-      .trim()
-      .split("\n")
-      .find((line) => line.includes("https://"))
-    console.log(`  ✅ Pull request created!`)
-    if (prUrl) {
-      console.log(`  🔗 ${prUrl}`)
-    }
-  } catch (err) {
-    throw new Error(`Failed to create PR: ${err}`)
-  }
-}
+const DEFAULT_API_URL = "https://dev3000.ai"
 
 /**
  * Cloud Fix Command
  *
- * Analyzes and fixes issues in a project using Vercel Sandbox + MCP tools
+ * Starts a cloud workflow run for the current repo.
  */
 export async function cloudFix(options: CloudFixOptions = {}): Promise<void> {
-  const { debug = false, timeout = "30m", repo, branch, projectDir } = options
+  const { debug = false, repo, branch, projectDir } = options
 
-  // Use provided params or detect from filesystem
   const project =
     repo && branch
       ? {
           repoUrl: repo,
           branch,
           relativePath: projectDir || "",
-          name: projectDir || "app",
-          packageManager: "pnpm" as const,
-          devCommand: "dev",
-          framework: "Next.js",
-          path: process.cwd(),
-          gitRoot: process.cwd()
+          name: projectDir || "app"
         }
       : await (async () => {
           console.log("🔍 Detecting project...")
           return await detectProject()
         })()
 
-  console.log(`  Repository: ${project.repoUrl}`)
-  console.log(`  Branch: ${project.branch}`)
-  if (project.relativePath) {
-    console.log(`  Project directory: ${project.relativePath}`)
-  }
-  console.log(`  Framework: ${project.framework || "Unknown"}`)
-  console.log(`  Dev command: ${project.packageManager} run ${project.devCommand}`)
+  const repoUrl = project.repoUrl
+  const repoBranch = branch || project.branch || "main"
+  const projectName = projectDir || project.relativePath || project.name || "app"
+
+  console.log("🚀 Starting cloud fix workflow...")
+  console.log(`  Repository: ${repoUrl}`)
+  console.log(`  Branch: ${repoBranch}`)
+  console.log(`  Project: ${projectName}`)
   console.log()
 
-  console.log("🚀 Creating Vercel Sandbox...")
+  const apiBase = process.env.DEV3000_API_URL || DEFAULT_API_URL
+  const workflowUrl = `${apiBase}/api/cloud/start-fix`
 
-  // Create sandbox
-  // biome-ignore lint/suspicious/noExplicitAny: ms type inference issue
-  const timeoutMs = ms(timeout as any) as unknown as number
-  const sandbox = await Sandbox.create({
-    // Always use dev3000-mcp project on vercel team for sandbox creation
-    teamId: process.env.VERCEL_TEAM_ID || "team_nLlpyC6REAqxydlFKbrMDlud",
-    projectId: process.env.VERCEL_PROJECT_ID || "prj_21F00Vr3bXzc1VSC8D9j2YJUzd0Q",
-    token: process.env.VERCEL_TOKEN || process.env.VERCEL_OIDC_TOKEN,
-    source: {
-      url: `${project.repoUrl}.git`,
-      type: "git",
-      ...(project.branch ? { revision: project.branch } : {})
-    },
-    resources: { vcpus: 4 },
-    timeout: timeoutMs,
-    ports: [3000, 3684], // App port + MCP server port
-    runtime: "node22"
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json"
+  }
+
+  if (process.env.WORKFLOW_TEST_BYPASS_TOKEN) {
+    headers["x-test-bypass-token"] = process.env.WORKFLOW_TEST_BYPASS_TOKEN
+  }
+
+  if (process.env.VERCEL_OIDC_TOKEN) {
+    headers["x-vercel-oidc-token"] = process.env.VERCEL_OIDC_TOKEN
+  }
+
+  if (debug) {
+    console.log(`  API: ${workflowUrl}`)
+    console.log(`  Test bypass token: ${process.env.WORKFLOW_TEST_BYPASS_TOKEN ? "provided" : "not provided"}`)
+  }
+
+  const response = await fetch(workflowUrl, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      repoUrl,
+      repoBranch,
+      projectName
+    })
   })
 
-  console.log("  Sandbox created successfully")
-
-  try {
-    // Calculate working directory in sandbox (use /vercel/sandbox + relativePath)
-    const sandboxCwd = project.relativePath ? `/vercel/sandbox/${project.relativePath}` : "/vercel/sandbox"
-
-    // Install dependencies
-    console.log("  Installing dependencies...")
-    const installCmd = project.packageManager === "pnpm" ? "pnpm" : project.packageManager
-    const installResult = await sandbox.runCommand({
-      cmd: installCmd,
-      args: ["install"],
-      cwd: sandboxCwd,
-      stdout: debug ? process.stdout : undefined,
-      stderr: debug ? process.stderr : undefined
-    })
-
-    if (installResult.exitCode !== 0) {
-      throw new Error(`Dependency installation failed with exit code ${installResult.exitCode}`)
-    }
-
-    // Start dev server with output redirected to log file
-    console.log("  Starting dev server...")
-    const logFilePath = "/tmp/dev3000.log"
-
-    // Create empty log file first
-    await sandbox.runCommand({
-      cmd: "sh",
-      args: ["-c", `touch ${logFilePath}`]
-    })
-
-    // Start dev server with stdout/stderr redirected to log file
-    // Using 'sh -c' with redirection to properly capture all output
-    await sandbox.runCommand({
-      cmd: "sh",
-      args: ["-c", `cd ${sandboxCwd} && ${installCmd} run ${project.devCommand} > ${logFilePath} 2>&1`],
-      detached: true
-    })
-
-    // Wait for server to be ready
-    console.log("  Waiting for dev server...")
-    await waitForServer(sandbox, 3000, 60000)
-
-    const devUrl = sandbox.domain(3000)
-    console.log(`  ✅ Dev server ready: ${devUrl}`)
-    console.log()
-
-    // The dev server is already running - just report success
-    console.log("✅ Development environment ready in sandbox!")
-    console.log(`  Dev server: ${devUrl}`)
-    console.log()
-
-    // Verify site is accessible
-    console.log("🔍 Verifying site accessibility...")
-    try {
-      const response = await fetch(devUrl)
-      console.log(`  Status: ${response.status} ${response.statusText}`)
-      console.log("  ✅ Site is accessible")
-    } catch (err) {
-      console.log(`  ⚠️  Error accessing site: ${err}`)
-    }
-    console.log()
-
-    // Write session info file before starting MCP server
-    console.log("📝 Writing session info...")
-    const sessionScript = `
-mkdir -p ~/.d3k/${project.name}
-cat > ~/.d3k/${project.name}/session.json << 'EOF'
-{
-  "projectName": "${project.name}",
-  "logFilePath": "/tmp/dev3000.log",
-  "appPort": "3000",
-  "mcpPort": "3684",
-  "cdpUrl": null,
-  "startTime": "${new Date().toISOString()}",
-  "pid": $$,
-  "cwd": "$(pwd)",
-  "chromePids": [],
-  "serverCommand": "${installCmd} run ${project.devCommand}",
-  "framework": "nextjs"
-}
-EOF
-`
-
-    await sandbox.runCommand({
-      cmd: "sh",
-      args: ["-c", sessionScript]
-    })
-
-    console.log(`  ✅ Session info written to ~/.d3k/${project.name}/session.json`)
-    console.log()
-
-    // Start MCP server in detached mode on port 3684
-    console.log("🚀 Starting MCP server in sandbox...")
-    await sandbox.runCommand({
-      cmd: "sh",
-      args: ["-c", `cd mcp-server && PORT=3684 ${installCmd} run dev`],
-      detached: true,
-      stdout: debug ? process.stdout : undefined,
-      stderr: debug ? process.stderr : undefined
-    })
-
-    // Wait for MCP server to be ready
-    console.log("  Waiting for MCP server...")
-    await waitForServer(sandbox, 3684, 30000)
-    const mcpUrl = sandbox.domain(3684)
-    console.log(`  ✅ MCP server ready: ${mcpUrl}`)
-    console.log()
-
-    // Install system dependencies for Chromium
-    console.log("📦 Installing system dependencies for Chromium...")
-    // Amazon Linux 2023 package names - comprehensive list for Chromium
-    const sysDepsInstall = await sandbox.runCommand({
-      cmd: "sh",
-      args: [
-        "-c",
-        "sudo dnf install -y nspr nss atk at-spi2-atk cups-libs libdrm libxkbcommon libXcomposite libXdamage libXfixes libXrandr mesa-libgbm alsa-lib cairo pango glib2 gtk3 libX11 libXext libXcursor libXi libXtst > /tmp/sys-deps-install.log 2>&1"
-      ]
-    })
-
-    if (sysDepsInstall.exitCode !== 0) {
-      console.log(`  ⚠️  System dependencies installation failed (exit code: ${sysDepsInstall.exitCode})`)
-      const logResult = await sandbox.runCommand({
-        cmd: "sh",
-        args: ["-c", "cat /tmp/sys-deps-install.log 2>&1 || echo 'No log file'"]
-      })
-      const logContent = await logResult.stdout()
-      console.log(`  ${logContent.split("\n").slice(-20).join("\n  ")}`)
-    } else {
-      console.log("  ✅ System dependencies installed")
-    }
-
-    // Install Chromium package for sandbox
-    console.log("📦 Installing Chromium for sandbox...")
-    console.log("  This may take 2-3 minutes to download Chromium...")
-
-    // Install chromium and puppeteer-core packages
-    // For pnpm workspaces, we need -w flag to install at workspace root
-    const chromiumInstall = await sandbox.runCommand({
-      cmd: "sh",
-      args: [
-        "-c",
-        `${installCmd} ${installCmd === "pnpm" ? "add -w" : "install"} chromium@latest puppeteer-core@latest > /tmp/chromium-install.log 2>&1`
-      ]
-    })
-
-    if (chromiumInstall.exitCode !== 0) {
-      console.log(`  ⚠️  Chromium installation failed (exit code: ${chromiumInstall.exitCode})`)
-
-      // Get the installation logs
-      const logResult = await sandbox.runCommand({
-        cmd: "sh",
-        args: ["-c", "cat /tmp/chromium-install.log 2>&1 || echo 'No log file'"]
-      })
-      const logContent = await logResult.stdout()
-
-      console.log("  Installation error log:")
-      console.log(`  ${logContent.split("\n").slice(-30).join("\n  ")}`)
-      console.log("\n  Browser launch will likely fail, but continuing...")
-    } else {
-      console.log("  ✅ Chromium installed")
-    }
-    console.log()
-
-    // Launch browser and connect to dev server
-    console.log("🌐 Launching headless browser with CDP...")
-    const browserScript = `
-import puppeteer from 'puppeteer-core';
-import chromiumPkg from 'chromium';
-import fs from 'fs';
-import path from 'path';
-import os from 'os';
-
-(async () => {
-  // Check Node.js version - CDP requires Node >=v22.12.0
-  const nodeVersion = process.version;
-  console.log('Node.js version:', nodeVersion);
-  const versionMatch = nodeVersion.match(/^v(\\d+)\\.(\\d+)\\.(\\d+)/);
-  if (versionMatch) {
-    const [, major, minor] = versionMatch.map(Number);
-    if (major < 22 || (major === 22 && minor < 12)) {
-      console.error('❌ ERROR: Node.js version >= v22.12.0 is required for CDP support');
-      console.error('   Current version:', nodeVersion);
-      console.error('   CDP tools will not work correctly with older versions');
-      process.exit(1);
-    }
-    console.log('✅ Node.js version meets CDP requirements (>= v22.12.0)');
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`Workflow request failed: ${response.status} - ${errorText}`)
   }
 
-  console.log('Ensuring Chromium is installed...');
-  // The chromium package may need to download the binary first
-  await chromiumPkg.install();
-
-  console.log('Getting Chromium executable path from chromium package...');
-  const executablePath = chromiumPkg.path;
-  console.log('Chromium path:', executablePath);
-
-  if (!executablePath || typeof executablePath !== 'string') {
-    throw new Error(\`Chromium executable path not found or invalid: \${executablePath}\`);
+  const result = (await response.json()) as {
+    success?: boolean
+    message?: string
+    projectName?: string
+    runId?: string
   }
 
-  console.log('Launching browser with Puppeteer...');
-  const browser = await puppeteer.launch({
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    executablePath: executablePath,
-    headless: true,
-    ignoreHTTPSErrors: true,
-  });
-
-  console.log('Browser launched successfully');
-  const page = await browser.newPage();
-
-  // Get CDP endpoint for the page target (not browser)
-  // Page-level commands like Runtime.enable and Page.enable need page target URL
-  const browserWsUrl = browser.wsEndpoint();
-  const target = page.target();
-  const targetId = target._targetId;
-  const cdpUrl = browserWsUrl.replace('/devtools/browser/', \`/devtools/page/\${targetId}\`);
-  console.log('CDP URL:', cdpUrl);
-
-  // Write session info for MCP server
-  const projectDir = path.join(os.homedir(), '.d3k', '${project.name}');
-  if (!fs.existsSync(projectDir)) {
-    fs.mkdirSync(projectDir, { recursive: true });
+  if (result.success) {
+    console.log("✅ Workflow started successfully")
+    if (result.runId) {
+      console.log(`  Run ID: ${result.runId}`)
+    }
+    if (result.projectName) {
+      console.log(`  Project: ${result.projectName}`)
+    }
+    console.log(`  Track progress at: ${apiBase}/workflows`)
+  } else {
+    console.log("⚠️ Workflow start returned an unexpected response")
+    if (debug) {
+      console.log(JSON.stringify(result, null, 2))
+    }
   }
-
-  const sessionInfo = {
-    projectName: '${project.name}',
-    logFilePath: '/tmp/dev3000.log',
-    appPort: '3000',
-    mcpPort: '3684',
-    cdpUrl: cdpUrl,
-    startTime: new Date().toISOString(),
-    pid: process.pid,
-    cwd: process.cwd(),
-    chromePids: [process.pid],
-    serverCommand: 'pnpm run dev',
-    framework: 'nextjs'
-  };
-
-  const sessionFile = path.join(projectDir, 'session.json');
-  fs.writeFileSync(sessionFile, JSON.stringify(sessionInfo, null, 2));
-  console.log('Session info written to', sessionFile);
-  console.log('Session file contents:', JSON.stringify(sessionInfo, null, 2));
-
-  // Navigate to dev server
-  console.log('Navigating to ${devUrl}');
-  try {
-    await page.goto('${devUrl}', { waitUntil: 'networkidle2', timeout: 30000 });
-    console.log('✅ Successfully navigated to dev server');
-  } catch (err) {
-    console.error('⚠️  Navigation error:', err);
-    // Continue anyway - page might have loaded
-  }
-
-  console.log('Browser ready, keeping connection open...');
-
-  // Keep browser alive for 10 minutes
-  await new Promise(resolve => setTimeout(resolve, 600000));
-
-  await browser.close();
-})().catch(err => {
-  console.error('Browser error:', err);
-  process.exit(1);
-});
-`
-
-    // Write browser script to sandbox
-    await sandbox.runCommand({
-      cmd: "sh",
-      args: ["-c", `cat > browser.js << 'EOF'\n${browserScript}\nEOF`]
-    })
-
-    // Launch browser and redirect output to log file
-    console.log("  Launching browser.js script...")
-    await sandbox.runCommand({
-      cmd: "sh",
-      args: ["-c", "node browser.js > /tmp/browser.log 2>&1 &"]
-    })
-
-    // Give it a moment to start
-    await new Promise((resolve) => setTimeout(resolve, 2000))
-
-    console.log("  ✅ Browser process started")
-    console.log(`  Browser should be navigating to: ${devUrl}`)
-    console.log("  Waiting for MCP server to discover session...")
-    console.log("  (MCP server retries every 2 seconds for up to 20 seconds)")
-
-    // Wait longer for MCP server to discover the session via its retry mechanism
-    // The MCP server checks for new sessions every 2 seconds, up to 10 retries (20s total)
-    await new Promise((resolve) => setTimeout(resolve, 25000))
-
-    // Check browser status (always show for debugging)
-    console.log("  Checking browser status...")
-
-    // Check if browser.js is running
-    const nodeCheckResult = await sandbox.runCommand({
-      cmd: "sh",
-      args: ["-c", "ps aux | grep 'node browser.js' | grep -v grep || echo 'No node browser.js process'"]
-    })
-    const nodeOut = await nodeCheckResult.stdout()
-    console.log("  Node process:", nodeOut.trim() || "none")
-
-    // Check browser logs
-    const browserLogResult = await sandbox.runCommand({
-      cmd: "sh",
-      args: ["-c", "head -50 /tmp/browser.log 2>&1 || echo 'No browser log yet'"]
-    })
-    const browserOut = await browserLogResult.stdout()
-    console.log("  Browser output:")
-    console.log(browserOut || "  (no output)")
-
-    // Check for chrome processes
-    const chromeCheckResult = await sandbox.runCommand({
-      cmd: "sh",
-      args: ["-c", "ps aux | grep -i chrome | head -5 || echo 'No chrome process found'"]
-    })
-    const chromeOut = await chromeCheckResult.stdout()
-    console.log("  Chrome processes:", chromeOut.trim() || "none")
-
-    // Check session file
-    const sessionCheckResult = await sandbox.runCommand({
-      cmd: "sh",
-      args: ["-c", `cat ~/.d3k/${project.name}/session.json 2>&1 || echo 'Session file not found'`]
-    })
-    const sessionOut = await sessionCheckResult.stdout()
-    console.log("  Session file contents:")
-    console.log(sessionOut || "  (not found)")
-
-    console.log()
-
-    // First list available tools to see what we have
-    console.log("🔍 Listing available MCP tools...")
-    try {
-      const listResponse = await fetch(`${mcpUrl}/mcp`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json, text/event-stream"
-        },
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          id: 0,
-          method: "tools/list"
-        })
-      })
-
-      if (listResponse.ok) {
-        const listText = await parseSSEResponse(listResponse)
-        if (debug) {
-          console.log(`  tools/list response:`, listText.substring(0, 1000))
-        }
-
-        try {
-          const listResult = JSON.parse(listText)
-          if (listResult.tools) {
-            console.log(`  ✅ Found ${listResult.tools.length} tools`)
-            if (debug) {
-              for (const tool of listResult.tools) {
-                console.log(`    - ${tool.name}`)
-              }
-            }
-          }
-        } catch (err) {
-          console.log(`  ⚠️  Could not parse tools list: ${err}`)
-        }
-      }
-    } catch (err) {
-      console.log(`  ⚠️  Error listing tools: ${err}`)
-    }
-    console.log()
-
-    // Wait a bit for logs to be generated, then visit homepage to trigger any errors
-    console.log("⏳ Waiting for dev server to generate logs...")
-    await new Promise((resolve) => setTimeout(resolve, 5000))
-
-    // Visit the homepage to trigger any errors and generate logs
-    console.log("🌐 Visiting homepage to trigger errors...")
-    try {
-      await fetch(devUrl)
-      console.log("  ✅ Homepage visited")
-    } catch (err) {
-      console.log(`  ⚠️  Error visiting homepage: ${err}`)
-    }
-
-    // Wait a bit more for logs to be written
-    await new Promise((resolve) => setTimeout(resolve, 2000))
-    console.log()
-
-    // Fetch log analysis from MCP before starting workflow
-    console.log("📊 Fetching log analysis from MCP...")
-    let logAnalysis = ""
-    try {
-      const mcpResponse = await fetch(`${mcpUrl}/mcp`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json, text/event-stream"
-        },
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          id: 1,
-          method: "tools/call",
-          params: {
-            name: "fix_my_app",
-            arguments: {}
-          }
-        })
-      })
-
-      if (!mcpResponse.ok) {
-        const errorText = await mcpResponse.text()
-        throw new Error(`Failed to fetch log analysis: ${mcpResponse.status} - ${errorText}`)
-      }
-
-      // Parse SSE response
-      const text = await mcpResponse.text()
-      const lines = text.split("\n")
-
-      for (const line of lines) {
-        if (line.startsWith("data: ")) {
-          try {
-            const json = JSON.parse(line.substring(6))
-            if (json.result?.content) {
-              for (const content of json.result.content) {
-                if (content.type === "text") {
-                  logAnalysis += content.text
-                }
-              }
-            }
-          } catch (_err) {
-            // Skip invalid JSON
-          }
-        }
-      }
-
-      console.log(`  ✅ Log analysis fetched (${logAnalysis.length} chars)`)
-      if (debug && logAnalysis) {
-        console.log(`  First 500 chars: ${logAnalysis.substring(0, 500)}...`)
-      }
-    } catch (err) {
-      console.log(`  ⚠️  Failed to fetch log analysis: ${err}`)
-      if (debug && err instanceof Error) {
-        console.log(`  Stack trace: ${err.stack}`)
-      }
-    }
-    console.log()
-
-    // Run AI agent workflow (deployed on Vercel) to analyze and fix issues
-    console.log("🤖 Invoking AI agent workflow to analyze and fix issues...")
-    // Use the workflow starter endpoint which uses the Workflow SDK's start() function
-    const workflowUrl = "https://dev3000-mcp.vercel.sh/api/cloud/start-fix"
-    console.log(`  Workflow will run at: ${workflowUrl}`)
-    try {
-      const workflowResponse = await fetch(workflowUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          logAnalysis,
-          devUrl,
-          projectName: project.name
-        })
-      })
-
-      if (!workflowResponse.ok) {
-        const errorText = await workflowResponse.text()
-        throw new Error(`Workflow request failed: ${workflowResponse.status} - ${errorText}`)
-      }
-
-      const workflowResult = await workflowResponse.json()
-
-      console.log("  ✅ Workflow completed successfully")
-      if (debug) {
-        console.log(`  Result:`, JSON.stringify(workflowResult, null, 2))
-      }
-
-      console.log("\n📋 Fix Analysis:")
-      if (workflowResult.blobUrl) {
-        console.log(`  📄 Fix proposal uploaded to blob storage`)
-        console.log(`  🔗 View the fix: ${workflowResult.blobUrl}`)
-      }
-      if (debug && workflowResult.fixProposal) {
-        console.log(`\n  First 500 chars of fix:`)
-        console.log(`  ${workflowResult.fixProposal.substring(0, 500)}...`)
-      }
-      console.log()
-    } catch (err) {
-      console.log(`  ⚠️  Workflow failed: ${err}`)
-      if (debug && err instanceof Error) {
-        console.log(`  Stack trace: ${err.stack}`)
-      }
-    }
-    console.log()
-
-    console.log("✅ Analysis complete!")
-    console.log(`\nYou can view the app at: ${devUrl}`)
-    console.log(`MCP server at: ${mcpUrl}`)
-  } finally {
-    console.log("\n🧹 Cleaning up sandbox...")
-    await sandbox.stop()
-    console.log("✅ Sandbox stopped")
-  }
-}
-
-/**
- * Wait for a port to become available on the sandbox
- */
-async function waitForServer(sandbox: Sandbox, port: number, timeoutMs: number): Promise<void> {
-  const startTime = Date.now()
-  const url = sandbox.domain(port)
-
-  while (Date.now() - startTime < timeoutMs) {
-    try {
-      const response = await fetch(url, { method: "HEAD" })
-      if (response.ok || response.status === 404) {
-        return
-      }
-    } catch {
-      // Not ready yet
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-  }
-
-  throw new Error(`Server on port ${port} did not become ready within ${timeoutMs}ms`)
 }

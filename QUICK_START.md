@@ -23,7 +23,7 @@ AI-powered PR verification that runs automatically on every Vercel preview deplo
 4. Copy the generated webhook URL
 5. Go to **Settings** → **Integrations** → **Webhooks**
 6. Click **Add Webhook**:
-   - **URL**: `https://dev3000-mcp.vercel.sh/api/integration/webhook`
+   - **URL**: `https://dev3000.ai/api/integration/webhook`
    - **Events**: Select **"Deployment Created"**
    - **Secret**: Paste any random string (e.g., copy the deploy hook URL you just created)
    - Click **Save**
@@ -32,7 +32,7 @@ AI-powered PR verification that runs automatically on every Vercel preview deplo
 
 1. Create a test PR in your repo
 2. Wait for Vercel to create preview deployment
-3. Check results in Vercel logs: https://vercel.com/vercel/dev3000-mcp/logs
+3. Check results in Vercel logs for the dev3000 deployment
 4. Look for `[Webhook] Report URL: https://...` in the logs
 
 **That's it!** Every PR will now be automatically verified.
@@ -42,7 +42,6 @@ AI-powered PR verification that runs automatically on every Vercel preview deplo
 Want results posted directly to your PRs as comments?
 
 ```bash
-cd /path/to/dev3000/mcp-server
 vc env add GITHUB_TOKEN
 # Paste your GitHub token (create at https://github.com/settings/tokens)
 # Select scope: repo (full control)
@@ -106,18 +105,18 @@ dev3000 cloud check-pr 123 --repo owner/repo
 
 ### Webhook doesn't trigger
 - Check webhook configuration in Vercel settings
-- Verify URL is correct: `https://dev3000-mcp.vercel.sh/api/integration/webhook`
+- Verify URL is correct: `https://dev3000.ai/api/integration/webhook`
 - Ensure "Deployment Created" event is selected
 
 ### Can't find report
-- Check MCP server logs: https://vercel.com/vercel/dev3000-mcp/logs
+- Check dev3000 deployment logs in Vercel
 - Search for `[Webhook]` messages
 - Report URL will be logged even without GitHub token
 
 ### PR comments not posting
-- Verify `GITHUB_TOKEN` is set in MCP server environment
+- Verify `GITHUB_TOKEN` is set in the dev3000 deployment environment
 - Check token has `repo` scope
-- Ensure MCP server has been redeployed after adding token
+- Ensure dev3000 has been redeployed after adding token
 
 ## Support
 

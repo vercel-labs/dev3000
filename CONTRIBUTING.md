@@ -44,7 +44,6 @@ Thank you for your interest in contributing to dev3000! This document provides g
 dev3000/
 ├── src/              # Main source code
 ├── mcp-server/       # Model Context Protocol server
-├── chrome-extension/ # Browser extension for monitoring
 ├── www/              # Web interface for log viewing
 ├── docs/             # Documentation
 └── .github/          # GitHub workflows and configuration
