@@ -1,5 +1,5 @@
 import { spawnSync } from "child_process"
-import { existsSync, readFileSync } from "fs"
+import { existsSync, readFileSync, writeFileSync } from "fs"
 import { homedir } from "os"
 import path from "path"
 
@@ -117,6 +117,9 @@ export async function installSkillPackage(
   pkg: SkillPackage,
   location: InstallLocation = "project"
 ): Promise<{ success: boolean; error?: string }> {
+  const agentsDir = path.join(process.cwd(), ".agents")
+  const hadAgentsDir = existsSync(agentsDir)
+
   // --skill '*' installs all skills for the specified agent only.
   const args = ["add", pkg.repo, "-a", "claude-code", "-y", "--skill", "*"]
 
@@ -132,6 +135,10 @@ export async function installSkillPackage(
 
   if (result.status !== 0) {
     return { success: false, error: "Installation failed" }
+  }
+
+  if (location === "project" && !hadAgentsDir && existsSync(agentsDir)) {
+    ensureAgentsGitignored()
   }
 
   return { success: true }
@@ -186,4 +193,20 @@ export function getUninstalledPackages(): SkillPackage[] {
  */
 export function getInstalledPackages(): SkillPackage[] {
   return getApplicablePackages().filter((pkg) => isPackageInstalled(pkg))
+}
+
+function ensureAgentsGitignored(): void {
+  const gitignorePath = path.join(process.cwd(), ".gitignore")
+  const entry = ".agents/"
+
+  let contents = ""
+  if (existsSync(gitignorePath)) {
+    contents = readFileSync(gitignorePath, "utf-8")
+    if (contents.split(/\r?\n/).some((line) => line.trim() === entry)) {
+      return
+    }
+  }
+
+  const suffix = contents.endsWith("\n") || contents.length === 0 ? "" : "\n"
+  writeFileSync(gitignorePath, `${contents}${suffix}${entry}\n`, "utf-8")
 }
