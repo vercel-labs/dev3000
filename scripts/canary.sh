@@ -12,6 +12,13 @@ export BUN_INSTALL="$CANARY_BUN_INSTALL"
 export PATH="$BUN_INSTALL/bin:$PATH"
 export D3K_BUILD_TARGETS="${D3K_BUILD_TARGETS:-darwin-arm64}"
 
+has_target() {
+  case ",$D3K_BUILD_TARGETS," in
+    *",$1,"*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 # Use shared build script for TypeScript compilation
 ./scripts/build.sh
 
@@ -22,21 +29,34 @@ bun run scripts/build-binaries.ts
 # Copy built binaries to platform packages
 echo "📁 Copying binaries to platform packages..."
 
-# darwin-arm64
 DARWIN_ARM64_PKG_DIR="$ROOT_DIR/packages/d3k-darwin-arm64"
 DARWIN_ARM64_DIST_DIR="$ROOT_DIR/dist-bin/d3k-darwin-arm64"
-rm -rf "$DARWIN_ARM64_PKG_DIR/bin" "$DARWIN_ARM64_PKG_DIR/skills" "$DARWIN_ARM64_PKG_DIR/src"
-cp -r "$DARWIN_ARM64_DIST_DIR/bin" "$DARWIN_ARM64_PKG_DIR/"
-cp -r "$DARWIN_ARM64_DIST_DIR/skills" "$DARWIN_ARM64_PKG_DIR/"
-cp -r "$DARWIN_ARM64_DIST_DIR/src" "$DARWIN_ARM64_PKG_DIR/"
+if has_target "darwin-arm64"; then
+  rm -rf "$DARWIN_ARM64_PKG_DIR/bin" "$DARWIN_ARM64_PKG_DIR/skills" "$DARWIN_ARM64_PKG_DIR/src"
+  cp -r "$DARWIN_ARM64_DIST_DIR/bin" "$DARWIN_ARM64_PKG_DIR/"
+  cp -r "$DARWIN_ARM64_DIST_DIR/skills" "$DARWIN_ARM64_PKG_DIR/"
+  cp -r "$DARWIN_ARM64_DIST_DIR/src" "$DARWIN_ARM64_PKG_DIR/"
+fi
 
 # linux-x64
 LINUX_X64_PKG_DIR="$ROOT_DIR/packages/d3k-linux-x64"
 LINUX_X64_DIST_DIR="$ROOT_DIR/dist-bin/d3k-linux-x64"
-rm -rf "$LINUX_X64_PKG_DIR/bin" "$LINUX_X64_PKG_DIR/skills" "$LINUX_X64_PKG_DIR/src"
-cp -r "$LINUX_X64_DIST_DIR/bin" "$LINUX_X64_PKG_DIR/"
-cp -r "$LINUX_X64_DIST_DIR/skills" "$LINUX_X64_PKG_DIR/"
-cp -r "$LINUX_X64_DIST_DIR/src" "$LINUX_X64_PKG_DIR/"
+if has_target "linux-x64"; then
+  rm -rf "$LINUX_X64_PKG_DIR/bin" "$LINUX_X64_PKG_DIR/skills" "$LINUX_X64_PKG_DIR/src"
+  cp -r "$LINUX_X64_DIST_DIR/bin" "$LINUX_X64_PKG_DIR/"
+  cp -r "$LINUX_X64_DIST_DIR/skills" "$LINUX_X64_PKG_DIR/"
+  cp -r "$LINUX_X64_DIST_DIR/src" "$LINUX_X64_PKG_DIR/"
+fi
+
+# windows-x64
+WINDOWS_X64_PKG_DIR="$ROOT_DIR/packages/d3k-windows-x64"
+WINDOWS_X64_DIST_DIR="$ROOT_DIR/dist-bin/d3k-windows-x64"
+if has_target "windows-x64"; then
+  rm -rf "$WINDOWS_X64_PKG_DIR/bin" "$WINDOWS_X64_PKG_DIR/skills" "$WINDOWS_X64_PKG_DIR/src"
+  cp -r "$WINDOWS_X64_DIST_DIR/bin" "$WINDOWS_X64_PKG_DIR/"
+  cp -r "$WINDOWS_X64_DIST_DIR/skills" "$WINDOWS_X64_PKG_DIR/"
+  cp -r "$WINDOWS_X64_DIST_DIR/src" "$WINDOWS_X64_PKG_DIR/"
+fi
 
 # For local testing, use the darwin-arm64 package
 PLATFORM_PKG_DIR="$DARWIN_ARM64_PKG_DIR"
