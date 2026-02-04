@@ -79,15 +79,6 @@ echo "📦 Packing main package..."
 MAIN_PACKAGE_FILE=$(bun pm pack 2>/dev/null | grep '\.tgz$')
 echo "✅ Created: $MAIN_PACKAGE_FILE"
 
-echo "♻️ Removing previous global installs (if any)..."
-bun remove -g dev3000 @d3k/darwin-arm64 >/dev/null 2>&1 || true
-
-# Install platform package first, then main package
-echo "📥 Installing platform package globally..."
-bun add -g "file:$PLATFORM_PKG_DIR/$PLATFORM_PACKAGE_FILE"
-
-echo "📥 Installing main package globally..."
-bun add -g "file:$ROOT_DIR/$MAIN_PACKAGE_FILE"
-
-echo "✅ Canary test completed successfully!"
-echo "🚀 You can now use 'd3k' or 'dev3000' commands"
+echo "✅ Canary package build completed successfully!"
+echo "🚀 To test locally without registry installs:"
+echo "  ./dist-bin/d3k-darwin-arm64/bin/dev3000 --version"
