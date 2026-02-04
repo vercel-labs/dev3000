@@ -10,6 +10,7 @@ echo "🧪 Starting canary test process..."
 CANARY_BUN_INSTALL="/tmp/d3k-canary-bun"
 export BUN_INSTALL="$CANARY_BUN_INSTALL"
 export PATH="$BUN_INSTALL/bin:$PATH"
+export D3K_BUILD_TARGETS="${D3K_BUILD_TARGETS:-darwin-arm64}"
 
 # Use shared build script for TypeScript compilation
 ./scripts/build.sh

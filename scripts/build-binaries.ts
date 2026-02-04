@@ -28,6 +28,23 @@ const TARGETS = [
   { os: "windows", arch: "x64", name: "d3k-windows-x64" }
 ] as const
 
+const TARGET_KEYS = TARGETS.map((target) => `${target.os}-${target.arch}` as const)
+
+function getSelectedTargets() {
+  const raw = process.env.D3K_BUILD_TARGETS?.trim()
+  if (!raw) return TARGETS
+  const requested = raw
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+  const selected = TARGETS.filter((target) => requested.includes(`${target.os}-${target.arch}`))
+  if (selected.length === 0) {
+    console.warn(`⚠️ D3K_BUILD_TARGETS set to "${raw}" but no matches found. Valid targets: ${TARGET_KEYS.join(", ")}`)
+    return TARGETS
+  }
+  return selected
+}
+
 async function cleanDistBin() {
   console.log("🧹 Cleaning dist-bin directory...")
   if (existsSync(DIST_BIN_DIR)) {
@@ -93,7 +110,7 @@ async function main() {
     await cleanDistBin()
     await buildMainPackage()
 
-    for (const target of TARGETS) {
+    for (const target of getSelectedTargets()) {
       await compileForTarget(target)
     }
 
