@@ -1,5 +1,5 @@
 import { spawnSync } from "child_process"
-import { existsSync, readFileSync } from "fs"
+import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync, rmSync } from "fs"
 import { homedir } from "os"
 import path from "path"
 
@@ -113,6 +113,63 @@ export function getSkillsDir(location: InstallLocation): string {
  * Install a skill package using the skills CLI.
  * Installs all skills from the package to the specified location.
  */
+export function cleanupAgentSymlinks(skillsDir: string): void {
+  const agentsDir = path.dirname(skillsDir)
+  if (!existsSync(agentsDir)) {
+    return
+  }
+
+  let entries: string[] = []
+  try {
+    entries = readdirSync(agentsDir)
+  } catch {
+    return
+  }
+
+  const skillsRealPath = safeRealpath(skillsDir)
+  if (!skillsRealPath) {
+    return
+  }
+
+  for (const entry of entries) {
+    if (entry === "skills") {
+      continue
+    }
+
+    const entryPath = path.join(agentsDir, entry)
+
+    let stats: ReturnType<typeof lstatSync> | null = null
+    try {
+      stats = lstatSync(entryPath)
+    } catch {
+      continue
+    }
+
+    if (!stats.isSymbolicLink()) {
+      continue
+    }
+
+    const resolved = safeRealpath(entryPath)
+    if (!resolved || !resolved.startsWith(skillsRealPath)) {
+      continue
+    }
+
+    try {
+      rmSync(entryPath, { recursive: true, force: true })
+    } catch {
+      // Ignore cleanup failures to avoid breaking install flow
+    }
+  }
+}
+
+function safeRealpath(targetPath: string): string | null {
+  try {
+    return realpathSync(targetPath)
+  } catch {
+    return null
+  }
+}
+
 export async function installSkillPackage(
   pkg: SkillPackage,
   location: InstallLocation = "project"
@@ -125,7 +182,7 @@ export async function installSkillPackage(
     args.push("-g")
   }
 
-  const result = spawnSync("npx", args, {
+  const result = spawnSync("npx", ["--yes", "skills@latest", ...args], {
     stdio: "inherit",
     timeout: 120000, // 2 minute timeout for full package
     cwd: process.cwd()
@@ -135,6 +192,8 @@ export async function installSkillPackage(
     return { success: false, error: "Installation failed" }
   }
 
+  cleanupAgentSymlinks(getSkillsDir(location))
+
   return { success: true }
 }
 
@@ -142,7 +201,7 @@ export async function installSkillPackage(
  * Check for skill updates using the skills CLI.
  */
 export async function checkForSkillUpdates(): Promise<{ hasUpdates: boolean; output: string }> {
-  const result = spawnSync("npx", ["skills", "check"], {
+  const result = spawnSync("npx", ["--yes", "skills@latest", "check"], {
     stdio: "pipe",
     timeout: 30000
   })
@@ -164,7 +223,7 @@ export async function checkForSkillUpdates(): Promise<{ hasUpdates: boolean; out
  * Update all skills using the skills CLI.
  */
 export async function updateSkills(): Promise<{ success: boolean; output: string }> {
-  const result = spawnSync("npx", ["skills", "update", "-y"], {
+  const result = spawnSync("npx", ["--yes", "skills@latest", "update", "-y"], {
     stdio: "pipe",
     timeout: 120000
   })
