@@ -57,19 +57,21 @@ class CleanEnvironmentTester {
   /**
    * Create a minimal PATH that simulates a fresh system
    */
-  private getCleanPath(): string {
-    // Include system essentials and Node.js location
-    const nodePath = process.execPath
-    const nodeDir = nodePath.substring(0, nodePath.lastIndexOf("/"))
+  private getNodeDir(): string | null {
+    try {
+      const nodePath = execSync("which node", { encoding: "utf-8" }).trim()
+      if (!nodePath) return null
+      return nodePath.substring(0, nodePath.lastIndexOf("/"))
+    } catch {
+      return null
+    }
+  }
 
-    const essentialPaths = [
-      nodeDir, // Include Node.js binary location
-      "/usr/local/bin",
-      "/usr/bin",
-      "/bin",
-      "/usr/sbin",
-      "/sbin"
-    ]
+  private getCleanPath(): string {
+    // Include system essentials and Node.js location (if available)
+    const nodeDir = this.getNodeDir()
+
+    const essentialPaths = [nodeDir || "", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"].filter(Boolean)
     return essentialPaths.join(":")
   }
 
@@ -199,6 +201,16 @@ RUN d3k --version
       }
     }
 
+    if (!this.getNodeDir()) {
+      log(`\n📦 Skipping ${testName} - node runtime required for npm`, YELLOW)
+      return {
+        name: testName,
+        passed: "skipped",
+        error: "node runtime not installed (required for npm)",
+        duration: 0
+      }
+    }
+
     try {
       log(`\n📦 Testing ${testName}...`, BLUE)
 
@@ -290,12 +302,21 @@ RUN d3k --version
       }
     }
 
+    const nodeDir = this.getNodeDir()
+    if (!nodeDir) {
+      log(`\n🛤️ Skipping ${testName} - node runtime required for npm`, YELLOW)
+      return {
+        name: testName,
+        passed: "skipped",
+        error: "node runtime not installed (required for npm)",
+        duration: 0
+      }
+    }
+
     try {
       log(`\n🛤️ Testing ${testName}...`, BLUE)
 
       // Get Node.js and bun binary locations
-      const nodePath = process.execPath
-      const nodeDir = nodePath.substring(0, nodePath.lastIndexOf("/"))
       const bunPath = execSync("which bun", { encoding: "utf-8" }).trim()
       const bunDir = bunPath.substring(0, bunPath.lastIndexOf("/"))
 
@@ -357,6 +378,17 @@ RUN d3k --version
     const testName = "pnpm Global Install Test"
 
     try {
+      const packageJson = JSON.parse(execSync("cat package.json", { encoding: "utf-8" }))
+      if (typeof packageJson.packageManager === "string" && packageJson.packageManager.startsWith("bun@")) {
+        log(`\n🔷 Skipping ${testName} - project configured to use bun`, YELLOW)
+        return {
+          name: testName,
+          passed: "skipped",
+          error: "project configured to use bun",
+          duration: 0
+        }
+      }
+
       log(`\n🔷 Testing ${testName}...`, BLUE)
 
       // Create a test script that installs pnpm first, then dev3000
