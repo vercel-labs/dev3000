@@ -10,6 +10,19 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.159",
+    date: "2026-02-05",
+    type: "patch",
+    highlights: [
+      "Skip clean install tests when platform version missing",
+      "Fix clean install tests for node and bun",
+      "Skip npm install test when platform package missing",
+      "Use bun pm pack in release tests",
+      "Use bun pack in clean install tests"
+    ]
+  },
+
+  {
     version: "0.0.158",
     date: "2026-02-05",
     type: "patch",

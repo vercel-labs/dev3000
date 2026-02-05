@@ -4,6 +4,16 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.159] - 2026-02-05
+
+**Patch Release**
+
+- Skip clean install tests when platform version missing
+- Fix clean install tests for node and bun
+- Skip npm install test when platform package missing
+- Use bun pm pack in release tests
+- Use bun pack in clean install tests
+
 ## [0.0.158] - 2026-02-05
 
 **Patch Release**
