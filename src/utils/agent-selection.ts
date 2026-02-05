@@ -38,7 +38,7 @@ export const KNOWN_AGENTS: KnownAgent[] = [
     displayName: "claude (let it rip)",
     command: `claude --dangerously-skip-permissions ${D3K_PROMPT}`
   },
-  { name: "codex", binary: "codex", displayName: "codex" },
+  { name: "codex", binary: "codex", displayName: "codex", command: `codex ${D3K_PROMPT}` },
   { name: "opencode", binary: "opencode", displayName: "opencode" },
   { name: "gemini", binary: "gemini", displayName: "gemini" },
   { name: "cline", binary: "cline", displayName: "cline" },

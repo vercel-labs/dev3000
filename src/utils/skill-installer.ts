@@ -189,7 +189,7 @@ export async function installSkillPackage(
   const hadProjectSkillsRoot = projectSkillsRoot ? existsSync(projectSkillsRoot) : false
 
   // --skill '*' installs all skills for the specified agent only.
-  const args = ["add", pkg.repo, "-a", agentId, "-y", "--skill", "*"]
+  const args = ["add", pkg.repo, "--agent", agentId, "-y", "--skill", "*"]
 
   if (location === "global") {
     args.push("-g")
