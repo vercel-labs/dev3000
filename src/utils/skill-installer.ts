@@ -15,7 +15,7 @@ export interface SkillPackage {
   skillFolders: string[]
 }
 
-type SkillsAgentId = string
+export type SkillsAgentId = string
 
 const AGENT_SKILLS_PATHS: Record<
   SkillsAgentId,

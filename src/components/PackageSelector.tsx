@@ -1,6 +1,11 @@
 import { Box, Text, useInput } from "ink"
 import { useState } from "react"
-import type { InstallLocation, SkillPackage } from "../utils/skill-installer.js"
+import {
+  getSkillsPathForLocation,
+  type InstallLocation,
+  type SkillPackage,
+  type SkillsAgentId
+} from "../utils/skill-installer.js"
 
 interface PackageWithStatus extends SkillPackage {
   installed: boolean
@@ -10,9 +15,10 @@ interface PackageSelectorProps {
   packages: PackageWithStatus[]
   onComplete: (selectedPackages: SkillPackage[], location: InstallLocation) => void
   onSkip: () => void
+  agentId?: SkillsAgentId | null
 }
 
-export function PackageSelector({ packages, onComplete, onSkip }: PackageSelectorProps) {
+export function PackageSelector({ packages, onComplete, onSkip, agentId }: PackageSelectorProps) {
   // Start with uninstalled packages selected
   const [selectedPackages, setSelectedPackages] = useState<Set<string>>(
     () => new Set(packages.filter((p) => !p.installed).map((p) => p.repo))
@@ -83,10 +89,14 @@ export function PackageSelector({ packages, onComplete, onSkip }: PackageSelecto
 
   // Get install path based on location
   const getInstallPath = () => {
-    if (installLocation === "global") {
-      return "~/.agents/skills"
+    if (!agentId) {
+      return installLocation === "global" ? "~/.agents/skills" : ".agents/skills"
     }
-    return ".agents/skills"
+    const targetPath = getSkillsPathForLocation(agentId, installLocation)
+    if (!targetPath) {
+      return installLocation === "global" ? "~/.agents/skills" : ".agents/skills"
+    }
+    return targetPath.path.replace(process.env.HOME || "", "~")
   }
 
   return (

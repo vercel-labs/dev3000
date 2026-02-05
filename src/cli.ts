@@ -401,7 +401,8 @@ interface PackageWithStatus extends SkillPackage {
  * Returns the selected skills and install location, or empty array if user skipped.
  */
 async function promptPackageSelection(
-  packages: PackageWithStatus[]
+  packages: PackageWithStatus[],
+  agentId?: string | null
 ): Promise<{ packages: SkillPackage[]; location: InstallLocation }> {
   const { render } = await import("ink")
   const React = await import("react")
@@ -414,6 +415,7 @@ async function promptPackageSelection(
     const { unmount, waitUntilExit, clear } = render(
       React.createElement(PackageSelector, {
         packages,
+        agentId,
         onComplete: (selected: SkillPackage[], location: InstallLocation) => {
           selectedPackages = selected
           installLocation = location
@@ -841,7 +843,10 @@ program
 
             // Only show package selector if there are packages to install
             if (packagesWithStatus.length > 0 && hasUninstalled) {
-              const { packages: selectedPackages, location } = await promptPackageSelection(packagesWithStatus)
+              const { packages: selectedPackages, location } = await promptPackageSelection(
+                packagesWithStatus,
+                skillsAgentId
+              )
               if (selectedPackages.length > 0) {
                 const locationLabel = location === "global" ? "globally" : "to project"
                 const targetPath = getSkillsPathForLocation(skillsAgentId, location)
