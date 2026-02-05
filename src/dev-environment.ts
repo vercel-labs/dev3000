@@ -412,8 +412,11 @@ async function ensureD3kSkill(skillsAgentId?: string): Promise<void> {
 
     const targetSkillsDir = skillsAgentId ? getSkillsPathForLocation(skillsAgentId, "project")?.path : null
 
-    // Install directly to the agent-specific skills dir (defaults to Claude)
-    const skillsRoot = targetSkillsDir || join(process.cwd(), ".claude", "skills")
+    // Install directly to the agent-specific skills dir (fallback to .agents)
+    let skillsRoot = join(process.cwd(), ".agents", "skills")
+    if (targetSkillsDir) {
+      skillsRoot = targetSkillsDir
+    }
     const skillDir = join(skillsRoot, "d3k")
     const skillPath = join(skillDir, "SKILL.md")
 
