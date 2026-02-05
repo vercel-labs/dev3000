@@ -29,8 +29,8 @@ const AGENT_SKILLS_PATHS: Record<
     global: [".claude", "skills"]
   },
   codex: {
-    project: [".codex", "skills"],
-    global: [".codex", "skills"]
+    project: [".agents", "skills"],
+    global: [".agents", "skills"]
   },
   cursor: {
     project: [".cursor", "skills"],
