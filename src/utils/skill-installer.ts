@@ -137,6 +137,20 @@ export function isPackageInstalled(pkg: SkillPackage, agentId: SkillsAgentId): b
   return false
 }
 
+export function getSkillsPathForLocation(
+  agentId: SkillsAgentId,
+  location: InstallLocation
+): { path: string; isGlobal: boolean } | null {
+  const paths = AGENT_SKILLS_PATHS[agentId]
+  if (!paths) {
+    return null
+  }
+
+  const pathParts = location === "global" ? paths.global : paths.project
+  const base = location === "global" ? homedir() : process.cwd()
+  return { path: path.join(base, ...pathParts), isGlobal: location === "global" }
+}
+
 /**
  * Get skills directories to check based on agent ID.
  */

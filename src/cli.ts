@@ -134,6 +134,7 @@ import { getProjectDir } from "./utils/project-name.js"
 import {
   checkForSkillUpdates,
   getApplicablePackages,
+  getSkillsPathForLocation,
   type InstallLocation,
   installSkillPackage,
   isPackageInstalled,
@@ -843,7 +844,17 @@ program
               const { packages: selectedPackages, location } = await promptPackageSelection(packagesWithStatus)
               if (selectedPackages.length > 0) {
                 const locationLabel = location === "global" ? "globally" : "to project"
-                console.log(chalk.cyan(`Installing ${selectedPackages.length} skill package(s) ${locationLabel}...`))
+                const targetPath = getSkillsPathForLocation(skillsAgentId, location)
+                if (targetPath) {
+                  const displayPath = targetPath.path.replace(process.env.HOME || "", "~")
+                  console.log(
+                    chalk.cyan(
+                      `Installing ${selectedPackages.length} skill package(s) ${locationLabel} → ${displayPath}...`
+                    )
+                  )
+                } else {
+                  console.log(chalk.cyan(`Installing ${selectedPackages.length} skill package(s) ${locationLabel}...`))
+                }
 
                 const results = { success: [] as string[], failed: [] as string[] }
                 for (let i = 0; i < selectedPackages.length; i++) {
