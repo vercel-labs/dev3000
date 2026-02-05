@@ -13,9 +13,7 @@ export const changelog: Release[] = [
     version: "0.0.161",
     date: "2026-02-05",
     type: "patch",
-    highlights: [
-      "Seed Claude d3k skill before tmux launch"
-    ]
+    highlights: ["Seed Claude d3k skill before tmux launch"]
   },
 
   {
