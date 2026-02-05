@@ -24,6 +24,8 @@ export interface KnownAgent {
 
 // Use '\'' to escape single quotes inside bash -c's single-quoted string
 const D3K_PROMPT = "'\\''load the d3k skill and await further instruction'\\''"
+const D3K_CODEX_PROMPT =
+  "'\\''load the d3k skill by reading the local file from .codex/skills/d3k/SKILL.md (or .agents/skills/d3k/SKILL.md if .codex is a symlink). Do not use MCP to read the file.'\\''"
 
 export const KNOWN_AGENTS: KnownAgent[] = [
   {
