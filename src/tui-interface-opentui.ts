@@ -268,7 +268,7 @@ class D3kTUI {
     if (!this.renderer) return
 
     const { width, height } = this.renderer
-    const isCompact = width < 100
+    const isCompact = width < 80
     const isVeryCompact = width < 60 || height < 15
 
     // Main container
