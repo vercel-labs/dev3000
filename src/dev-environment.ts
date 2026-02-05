@@ -399,8 +399,8 @@ export async function findAvailablePort(startPort: number): Promise<string> {
 // Framework detection happens in cli.ts and is stored in session files for CLI integration
 
 /**
- * Ensure d3k skill is installed in project's .claude/skills/d3k/
- * Claude Code reads from .claude/skills/ (must be real files, not symlinks)
+ * Ensure d3k skill is installed in project's skills directory.
+ * Claude Code reads from .claude/skills/ (must be real files, not symlinks).
  */
 async function ensureD3kSkill(skillsAgentId?: string): Promise<void> {
   try {
@@ -412,28 +412,35 @@ async function ensureD3kSkill(skillsAgentId?: string): Promise<void> {
 
     const targetSkillsDir = skillsAgentId ? getSkillsPathForLocation(skillsAgentId, "project")?.path : null
 
+    const skillRoots = new Set<string>()
+
     // Install directly to the agent-specific skills dir (fallback to .agents)
-    let skillsRoot = join(process.cwd(), ".agents", "skills")
-    if (targetSkillsDir) {
-      skillsRoot = targetSkillsDir
-    }
-    const skillDir = join(skillsRoot, "d3k")
-    const skillPath = join(skillDir, "SKILL.md")
+    const defaultSkillsRoot = join(process.cwd(), ".agents", "skills")
+    skillRoots.add(targetSkillsDir || defaultSkillsRoot)
 
-    // Check if already up to date
+    // Ensure Claude Code can load the skill from .claude/skills when applicable
+    if (skillsAgentId === "claude-code") {
+      skillRoots.add(join(process.cwd(), ".claude", "skills"))
+    }
+
     const bundledContent = readFileSync(bundledSkillPath, "utf-8")
-    if (existsSync(skillPath)) {
-      const existingContent = readFileSync(skillPath, "utf-8")
-      if (existingContent === bundledContent) {
-        return // Already up to date
-      }
-    }
 
-    // Copy skill to .claude/skills/d3k/
-    if (!existsSync(skillDir)) {
-      mkdirSync(skillDir, { recursive: true })
+    for (const skillsRoot of skillRoots) {
+      const skillDir = join(skillsRoot, "d3k")
+      const skillPath = join(skillDir, "SKILL.md")
+
+      if (existsSync(skillPath)) {
+        const existingContent = readFileSync(skillPath, "utf-8")
+        if (existingContent === bundledContent) {
+          continue
+        }
+      }
+
+      if (!existsSync(skillDir)) {
+        mkdirSync(skillDir, { recursive: true })
+      }
+      copyFileSync(bundledSkillPath, skillPath)
     }
-    copyFileSync(bundledSkillPath, skillPath)
   } catch (_error) {
     // Ignore errors - skill installation is optional
   }
