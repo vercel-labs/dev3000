@@ -460,8 +460,12 @@ RUN d3k --version
       }
 
       // Check if the exact version exists on npm
-      execSync(`npm view @d3k/darwin-arm64@${requiredVersion} version`, { stdio: "pipe" })
-      return true
+      const publishedVersion = execSync(`npm view @d3k/darwin-arm64@${requiredVersion} version`, {
+        encoding: "utf-8",
+        stdio: "pipe"
+      }).trim()
+
+      return publishedVersion === requiredVersion
     } catch {
       return false
     }
