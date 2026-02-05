@@ -7,7 +7,7 @@ echo "🧪 Quick local test of d3k installation..."
 echo "📦 Building..."
 ./scripts/build.sh
 rm -f dev3000-*.tgz
-TARBALL=$(bun pack 2>&1 | tail -n 1)
+TARBALL=$(bun pm pack --quiet)
 
 # Test in isolated environment
 echo "🧪 Testing installation..."

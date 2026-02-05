@@ -53,7 +53,7 @@ echo -e "${YELLOW}Building and packing...${NC}"
 rm -f dev3000-*.tgz
 
 # Create fresh tarball
-TARBALL=$(bun pack 2>&1 | tail -n 1)
+TARBALL=$(bun pm pack --quiet)
 
 # Test 1: Clean npm global install (requires bun and platform package on npm)
 echo -e "${YELLOW}Testing clean npm global install...${NC}"
