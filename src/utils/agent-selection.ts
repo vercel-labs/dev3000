@@ -38,6 +38,12 @@ export const KNOWN_AGENTS: KnownAgent[] = [
     command: `claude --dangerously-skip-permissions ${D3K_PROMPT}`
   },
   { name: "codex", binary: "codex", displayName: "codex", command: `codex ${D3K_PROMPT}` },
+  {
+    name: "codex-yolo",
+    binary: "codex",
+    displayName: "codex (yolo)",
+    command: `codex --yolo ${D3K_PROMPT}`
+  },
   { name: "opencode", binary: "opencode", displayName: "opencode" },
   { name: "gemini", binary: "gemini", displayName: "gemini" },
   { name: "cline", binary: "cline", displayName: "cline" },
@@ -74,7 +80,7 @@ export function getSkillsAgentId(agentName?: string): string | null {
   if (normalized === "claude" || normalized === "claude-yolo") {
     return "claude-code"
   }
-  if (normalized === "codex") {
+  if (normalized === "codex" || normalized === "codex-yolo") {
     return "codex"
   }
   if (normalized === "opencode") {
