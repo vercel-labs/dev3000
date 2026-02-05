@@ -22,7 +22,7 @@ import { type LogEntry, NextJsErrorDetector, OutputProcessor, StandardLogParser 
 import { getBundledSkillsPath } from "./skills/index.js"
 import { DevTUI } from "./tui-interface.js"
 import { getProjectDir, getProjectDisplayName, getProjectName } from "./utils/project-name.js"
-import { ensureCodexSkillsSymlink, getSkillsPathForLocation } from "./utils/skill-installer.js"
+import { getSkillsPathForLocation } from "./utils/skill-installer.js"
 import { formatTimestamp } from "./utils/timestamp.js"
 import {
   checkForUpdates,
@@ -409,10 +409,6 @@ async function ensureD3kSkill(skillsAgentId?: string): Promise<void> {
 
     const bundledSkillPath = join(bundledSkillsDir, "d3k", "SKILL.md")
     if (!existsSync(bundledSkillPath)) return
-
-    if (skillsAgentId === "codex") {
-      ensureCodexSkillsSymlink("project")
-    }
 
     const targetSkillsDir = skillsAgentId ? getSkillsPathForLocation(skillsAgentId, "project")?.path : null
 
