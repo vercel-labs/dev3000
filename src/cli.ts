@@ -209,6 +209,7 @@ interface ForwardedOptions {
   headless?: boolean
   dateTime?: string
   pluginReactScan?: boolean
+  agentName?: string
 }
 
 /**
@@ -228,6 +229,7 @@ function buildD3kCommandWithOptions(options: ForwardedOptions): string {
   if (options.headless) args.push("--headless")
   if (options.dateTime) args.push(`--date-time ${options.dateTime}`)
   if (options.pluginReactScan) args.push("--plugin-react-scan")
+  if (options.agentName) args.push(`--agent-name ${options.agentName}`)
 
   return args.join(" ")
 }
@@ -729,6 +731,7 @@ program
     "--with-agent <command>",
     'Run an agent (e.g. claude) in split-screen mode using tmux. Example: --with-agent "claude"'
   )
+  .option("--agent-name <name>", "Selected agent name (internal)")
   .option("--no-agent", "Skip agent selection prompt and run d3k standalone")
   .action(async (options) => {
     // Load user config early so it can be used for --with-agent and agent selection flows
@@ -748,7 +751,8 @@ program
         serversOnly: options.serversOnly,
         headless: options.headless,
         dateTime: options.dateTime,
-        pluginReactScan: options.pluginReactScan
+        pluginReactScan: options.pluginReactScan,
+        agentName: options.agentName
       })
       return
     }
@@ -757,6 +761,7 @@ program
     const insideTmux = !!process.env.TMUX
     let selectedAgent: { name: string; command: string } | null = null
     let didPromptAgentSelection = false
+    let skillsAgentId: string | null = options.agentName ? getSkillsAgentId(options.agentName) : null
 
     if (process.stdin.isTTY && options.agent !== false && options.tui !== false && !options.debug && !insideTmux) {
       // Clear the terminal so d3k UI starts at the top of the screen
@@ -790,7 +795,7 @@ program
           : !didPromptAgentSelection
             ? userConfig.defaultAgent?.name
             : undefined
-      const skillsAgentId = getSkillsAgentId(skillsAgentName)
+      skillsAgentId = getSkillsAgentId(skillsAgentName)
 
       if (skillsAgentId) {
         // Check for skill updates and offer new packages
@@ -1061,7 +1066,8 @@ program
         tail: options.tail,
         tui: options.tui && !options.debug, // TUI is default unless --no-tui or --debug is specified
         dateTimeFormat: options.dateTime || "local",
-        pluginReactScan: options.pluginReactScan || false
+        pluginReactScan: options.pluginReactScan || false,
+        skillsAgentId: skillsAgentId || undefined
       })
     } catch (error) {
       console.error(chalk.red("❌ Failed to start development environment:"), error)

@@ -22,6 +22,7 @@ import { type LogEntry, NextJsErrorDetector, OutputProcessor, StandardLogParser 
 import { getBundledSkillsPath } from "./skills/index.js"
 import { DevTUI } from "./tui-interface.js"
 import { getProjectDir, getProjectDisplayName, getProjectName } from "./utils/project-name.js"
+import { getSkillsPathForLocation } from "./utils/skill-installer.js"
 import { formatTimestamp } from "./utils/timestamp.js"
 import {
   checkForUpdates,
@@ -163,6 +164,7 @@ interface DevEnvironmentOptions {
   debugPort?: number // Chrome debugging port (default 9222, auto-incremented for multiple instances)
   headless?: boolean // Run Chrome in headless mode (for serverless/CI environments)
   withAgent?: string // Command to run an embedded agent (e.g. "claude --dangerously-skip-permissions")
+  skillsAgentId?: string // Selected agent id for skills/d3k skill placement
 }
 
 class Logger {
@@ -400,7 +402,7 @@ export async function findAvailablePort(startPort: number): Promise<string> {
  * Ensure d3k skill is installed in project's .claude/skills/d3k/
  * Claude Code reads from .claude/skills/ (must be real files, not symlinks)
  */
-async function ensureD3kSkill(): Promise<void> {
+async function ensureD3kSkill(skillsAgentId?: string): Promise<void> {
   try {
     const bundledSkillsDir = getBundledSkillsPath()
     if (!bundledSkillsDir) return
@@ -408,8 +410,11 @@ async function ensureD3kSkill(): Promise<void> {
     const bundledSkillPath = join(bundledSkillsDir, "d3k", "SKILL.md")
     if (!existsSync(bundledSkillPath)) return
 
-    // Install directly to .claude/skills/d3k/ (where Claude Code looks)
-    const skillDir = join(process.cwd(), ".claude", "skills", "d3k")
+    const targetSkillsDir = skillsAgentId ? getSkillsPathForLocation(skillsAgentId, "project")?.path : null
+
+    // Install directly to the agent-specific skills dir (defaults to Claude)
+    const skillsRoot = targetSkillsDir || join(process.cwd(), ".claude", "skills")
+    const skillDir = join(skillsRoot, "d3k")
     const skillPath = join(skillDir, "SKILL.md")
 
     // Check if already up to date
@@ -988,7 +993,7 @@ export class DevEnvironment {
 
       // Install d3k skill early so it's available when Claude Code starts
       // This is important for --with-agent where both start simultaneously
-      await ensureD3kSkill()
+      await ensureD3kSkill(this.options.skillsAgentId)
 
       // Check ports in background after TUI is visible
       await this.checkPortsAvailable(true) // silent mode for TUI
@@ -1071,7 +1076,7 @@ export class DevEnvironment {
 
       // Install d3k skill early so it's available when Claude Code starts
       // This is important for --with-agent where both start simultaneously
-      await ensureD3kSkill()
+      await ensureD3kSkill(this.options.skillsAgentId)
 
       // Start spinner
       this.spinner.start("Checking ports...")

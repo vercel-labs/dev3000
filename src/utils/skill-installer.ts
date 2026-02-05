@@ -1,5 +1,5 @@
 import { spawnSync } from "child_process"
-import { existsSync, readFileSync, writeFileSync } from "fs"
+import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "fs"
 import { homedir } from "os"
 import path from "path"
 
@@ -163,6 +163,24 @@ function getSkillsDirs(agentId: SkillsAgentId): string[] {
   return [path.join(process.cwd(), ...paths.project), path.join(homedir(), ...paths.global)]
 }
 
+function copySkillFolders(sourceDir: string, targetDir: string, folders: string[]): boolean {
+  let copied = false
+
+  for (const folder of folders) {
+    const sourcePath = path.join(sourceDir, folder)
+    if (!existsSync(sourcePath)) {
+      continue
+    }
+
+    mkdirSync(targetDir, { recursive: true })
+    const targetPath = path.join(targetDir, folder)
+    cpSync(sourcePath, targetPath, { recursive: true, force: true })
+    copied = true
+  }
+
+  return copied
+}
+
 function getProjectSkillsRoot(agentId: SkillsAgentId): string | null {
   const paths = AGENT_SKILLS_PATHS[agentId]
   if (!paths || paths.project.length === 0) {
@@ -203,6 +221,23 @@ export async function installSkillPackage(
 
   if (result.status !== 0) {
     return { success: false, error: "Installation failed" }
+  }
+
+  const targetPath = getSkillsPathForLocation(agentId, location)
+  if (targetPath && !existsSync(targetPath.path)) {
+    const sourceCandidates =
+      location === "global"
+        ? [path.join(homedir(), ".agents", "skills"), path.join(homedir(), ".claude", "skills")]
+        : [path.join(process.cwd(), ".agents", "skills"), path.join(process.cwd(), ".claude", "skills")]
+
+    for (const sourceDir of sourceCandidates) {
+      if (!existsSync(sourceDir)) {
+        continue
+      }
+      if (copySkillFolders(sourceDir, targetPath.path, pkg.skillFolders)) {
+        break
+      }
+    }
   }
 
   if (location === "project" && projectSkillsRoot && !hadProjectSkillsRoot && existsSync(projectSkillsRoot)) {
