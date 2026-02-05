@@ -191,6 +191,9 @@ class D3kTUI {
   private debugMode = false
   private lastFocusedId: string | null = null
   private debugLogFile: string = join(process.env.HOME || tmpdir(), ".d3k", "tui-debug.log")
+  private isCompact = false
+  private isVeryCompact = false
+  private isRebuilding = false
 
   constructor(options: TUIOptions) {
     this.options = options
@@ -270,6 +273,8 @@ class D3kTUI {
     const { width, height } = this.renderer
     const isCompact = width < 80
     const isVeryCompact = width < 60 || height < 15
+    this.isCompact = isCompact
+    this.isVeryCompact = isVeryCompact
 
     // Main container
     const mainContainer = new BoxRenderable(this.renderer, {
@@ -390,11 +395,16 @@ class D3kTUI {
       this.statusText = null
     }
 
-    // Handle resize - do NOT rebuild, let flex layout adapt naturally
-    // Rebuilding causes NaN positions that break text selection
+    // Handle resize - only rebuild when compact mode changes
     this.renderer.root.onSizeChange = () => {
-      // Just request a render, don't rebuild - flex layout handles resize
-      this.renderer?.requestRender()
+      if (!this.renderer || this.isRebuilding) return
+      const nextCompact = this.renderer.width < 80
+      const nextVeryCompact = this.renderer.width < 60 || this.renderer.height < 15
+      if (nextCompact !== this.isCompact || nextVeryCompact !== this.isVeryCompact) {
+        this.rebuildUI()
+        return
+      }
+      this.renderer.requestRender()
     }
   }
 
@@ -521,6 +531,8 @@ class D3kTUI {
 
   private rebuildUI() {
     if (!this.renderer) return
+    if (this.isRebuilding) return
+    this.isRebuilding = true
 
     // Clear and rebuild - OpenTUI handles resize
     const root = this.renderer.root
@@ -534,6 +546,7 @@ class D3kTUI {
     // Without this delay, logs get NaN X positions and selection fails
     setTimeout(() => {
       this.refreshLogs()
+      this.isRebuilding = false
     }, 100)
   }
 
