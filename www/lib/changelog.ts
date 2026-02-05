@@ -10,6 +10,15 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.161",
+    date: "2026-02-05",
+    type: "patch",
+    highlights: [
+      "Seed Claude d3k skill before tmux launch"
+    ]
+  },
+
+  {
     version: "0.0.160",
     date: "2026-02-05",
     type: "minor",

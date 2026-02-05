@@ -4,6 +4,12 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.161] - 2026-02-05
+
+**Patch Release**
+
+- Seed Claude d3k skill before tmux launch
+
 ## [0.0.160] - 2026-02-05
 
 **Feature Release**
