@@ -1,4 +1,5 @@
 ---
+name: "d3k"
 description: "d3k assistant for debugging web apps"
 ---
 
