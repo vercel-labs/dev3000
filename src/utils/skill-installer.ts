@@ -1,5 +1,5 @@
 import { spawnSync } from "child_process"
-import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "fs"
+import { existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "fs"
 import { homedir } from "os"
 import path from "path"
 
@@ -178,28 +178,6 @@ function getSkillsDirs(agentId: SkillsAgentId): string[] {
   return dirs
 }
 
-function copySkillFolders(sourceDir: string, targetDir: string, folders: string[]): boolean {
-  let copied = false
-
-  for (const folder of folders) {
-    const sourcePath = path.join(sourceDir, folder)
-    if (!existsSync(sourcePath)) {
-      continue
-    }
-
-    mkdirSync(targetDir, { recursive: true })
-    const targetPath = path.join(targetDir, folder)
-    cpSync(sourcePath, targetPath, { recursive: true, force: true })
-    copied = true
-  }
-
-  return copied
-}
-
-function hasAllSkillFolders(targetDir: string, folders: string[]): boolean {
-  return folders.every((folder) => existsSync(path.join(targetDir, folder)))
-}
-
 function getProjectSkillsRoot(agentId: SkillsAgentId): string | null {
   const paths = AGENT_SKILLS_PATHS[agentId]
   if (!paths || paths.project.length === 0) {
@@ -207,6 +185,31 @@ function getProjectSkillsRoot(agentId: SkillsAgentId): string | null {
   }
 
   return path.join(process.cwd(), paths.project[0])
+}
+
+export function ensureCodexSkillsSymlink(location: InstallLocation): void {
+  if (location !== "project") {
+    return
+  }
+
+  const agentsSkills = path.join(process.cwd(), ".agents", "skills")
+  const codexSkills = path.join(process.cwd(), ".codex", "skills")
+
+  try {
+    if (!existsSync(agentsSkills)) {
+      mkdirSync(agentsSkills, { recursive: true })
+    }
+
+    if (existsSync(codexSkills)) {
+      return
+    }
+
+    mkdirSync(path.dirname(codexSkills), { recursive: true })
+    const relativeTarget = path.relative(path.dirname(codexSkills), agentsSkills)
+    symlinkSync(relativeTarget, codexSkills, "dir")
+  } catch {
+    // Ignore symlink failures to avoid breaking install flow
+  }
 }
 
 /**
@@ -242,21 +245,8 @@ export async function installSkillPackage(
     return { success: false, error: "Installation failed" }
   }
 
-  const targetPath = getSkillsPathForLocation(agentId, location)
-  if (targetPath && !hasAllSkillFolders(targetPath.path, pkg.skillFolders)) {
-    const sourceCandidates =
-      location === "global"
-        ? [path.join(homedir(), ".agents", "skills"), path.join(homedir(), ".claude", "skills")]
-        : [path.join(process.cwd(), ".agents", "skills"), path.join(process.cwd(), ".claude", "skills")]
-
-    for (const sourceDir of sourceCandidates) {
-      if (!existsSync(sourceDir)) {
-        continue
-      }
-      if (copySkillFolders(sourceDir, targetPath.path, pkg.skillFolders)) {
-        break
-      }
-    }
+  if (agentId === "codex") {
+    ensureCodexSkillsSymlink(location)
   }
 
   if (location === "project" && projectSkillsRoot && !hadProjectSkillsRoot && existsSync(projectSkillsRoot)) {
