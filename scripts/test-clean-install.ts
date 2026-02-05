@@ -5,7 +5,7 @@
  */
 
 import { execSync } from "child_process"
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "fs"
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from "fs"
 import { tmpdir } from "os"
 import { join } from "path"
 
@@ -542,10 +542,20 @@ async function main() {
   log("Building project...", YELLOW)
   execSync("./scripts/build.sh", { stdio: "inherit" })
 
-  // Create fresh tarball (suppress verbose file listing)
+  // Create fresh tarball
   log("Creating tarball...", YELLOW)
-  const packOutput = execSync("pnpm pack 2>&1 | tail -n 1", { encoding: "utf-8", shell: true })
-  const tarballName = packOutput.trim()
+  execSync("bun pack", { stdio: "inherit" })
+
+  const tarballs = readdirSync(process.cwd())
+    .filter((name) => name.startsWith("dev3000-") && name.endsWith(".tgz"))
+    .map((name) => ({ name, mtime: statSync(join(process.cwd(), name)).mtimeMs }))
+    .sort((a, b) => b.mtime - a.mtime)
+
+  if (tarballs.length === 0) {
+    throw new Error("No dev3000 tarball was created")
+  }
+
+  const tarballName = tarballs[0].name
   const fullPath = join(process.cwd(), tarballName)
 
   log(`Created: ${tarballName}`, GREEN)
