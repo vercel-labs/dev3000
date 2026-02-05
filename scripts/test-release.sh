@@ -94,7 +94,7 @@ fi
 
 # Run the TypeScript clean install test
 echo -e "${YELLOW}Running comprehensive clean install tests...${NC}"
-if bun exec tsx scripts/test-clean-install.ts; then
+if bun scripts/test-clean-install.ts; then
     echo -e "${GREEN}✅ All clean install tests passed${NC}"
 else
     echo -e "${RED}❌ Clean install tests failed${NC}"
