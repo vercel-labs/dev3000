@@ -1,8 +1,28 @@
-import { mkdirSync, rmSync, writeFileSync } from "fs"
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "fs"
 import https from "https"
 import { homedir, tmpdir } from "os"
 import { join } from "path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+
+const originalHome = process.env.HOME
+
+const setupTempHome = () => {
+  const tempHome = mkdtempSync(join(tmpdir(), "d3k-test-home-"))
+  process.env.HOME = tempHome
+  return tempHome
+}
+
+const restoreHome = (tempHome: string) => {
+  if (originalHome !== undefined) {
+    process.env.HOME = originalHome
+  } else {
+    delete process.env.HOME
+  }
+  if (tempHome) {
+    rmSync(tempHome, { recursive: true, force: true })
+  }
+}
+
 import {
   countActiveD3kInstances,
   getSessionChromePids,
@@ -494,10 +514,15 @@ describe("countActiveD3kInstances", () => {
 
 describe("getSessionChromePids", () => {
   const testProjectName = `test-chrome-pids-${Date.now()}`
-  const testSessionDir = join(homedir(), ".d3k", testProjectName)
-  const testSessionFile = join(testSessionDir, "session.json")
+  let tempHome = ""
+  let testSessionDir = ""
+  let testSessionFile = ""
 
   beforeEach(() => {
+    tempHome = setupTempHome()
+    testSessionDir = join(homedir(), ".d3k", testProjectName)
+    testSessionFile = join(testSessionDir, "session.json")
+
     // Ensure clean state
     try {
       rmSync(testSessionDir, { recursive: true, force: true })
@@ -513,6 +538,7 @@ describe("getSessionChromePids", () => {
     } catch {
       // Ignore
     }
+    restoreHome(tempHome)
   })
 
   it("should return empty array when session file does not exist", () => {
@@ -557,6 +583,16 @@ describe("getSessionChromePids", () => {
 })
 
 describe("writeSessionInfo", () => {
+  let tempHome = ""
+
+  beforeEach(() => {
+    tempHome = setupTempHome()
+  })
+
+  afterEach(() => {
+    restoreHome(tempHome)
+  })
+
   // Note: writeSessionInfo uses getProjectDir() which depends on process.cwd()
   // These tests verify the data structure, not the file location
   // The actual file location is ~/.d3k/{project-name-from-cwd}/session.json
@@ -585,6 +621,16 @@ describe("writeSessionInfo", () => {
 })
 
 describe("Process cleanup invariants", () => {
+  let tempHome = ""
+
+  beforeEach(() => {
+    tempHome = setupTempHome()
+  })
+
+  afterEach(() => {
+    restoreHome(tempHome)
+  })
+
   /**
    * These tests verify critical invariants about process cleanup.
    * They are designed to catch regressions that would leave orphaned processes.
