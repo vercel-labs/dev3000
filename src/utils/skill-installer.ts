@@ -160,7 +160,22 @@ function getSkillsDirs(agentId: SkillsAgentId): string[] {
     return []
   }
 
-  return [path.join(process.cwd(), ...paths.project), path.join(homedir(), ...paths.global)]
+  const dirs = [path.join(process.cwd(), ...paths.project), path.join(homedir(), ...paths.global)]
+
+  const legacyDirs = [
+    path.join(process.cwd(), ".agents", "skills"),
+    path.join(homedir(), ".agents", "skills"),
+    path.join(process.cwd(), ".claude", "skills"),
+    path.join(homedir(), ".claude", "skills")
+  ]
+
+  for (const dir of legacyDirs) {
+    if (!dirs.includes(dir)) {
+      dirs.push(dir)
+    }
+  }
+
+  return dirs
 }
 
 function copySkillFolders(sourceDir: string, targetDir: string, folders: string[]): boolean {
@@ -179,6 +194,10 @@ function copySkillFolders(sourceDir: string, targetDir: string, folders: string[
   }
 
   return copied
+}
+
+function hasAllSkillFolders(targetDir: string, folders: string[]): boolean {
+  return folders.every((folder) => existsSync(path.join(targetDir, folder)))
 }
 
 function getProjectSkillsRoot(agentId: SkillsAgentId): string | null {
@@ -224,7 +243,7 @@ export async function installSkillPackage(
   }
 
   const targetPath = getSkillsPathForLocation(agentId, location)
-  if (targetPath && !existsSync(targetPath.path)) {
+  if (targetPath && !hasAllSkillFolders(targetPath.path, pkg.skillFolders)) {
     const sourceCandidates =
       location === "global"
         ? [path.join(homedir(), ".agents", "skills"), path.join(homedir(), ".claude", "skills")]
