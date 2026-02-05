@@ -66,7 +66,12 @@ else
     # Check if platform package with exact version exists on npm (needed for new compiled binary architecture)
     # Get the required version from package.json
     REQUIRED_VERSION=$(node -p "require('./package.json').optionalDependencies?.['@d3k/darwin-arm64'] || ''")
-    if [ -z "$REQUIRED_VERSION" ] || ! npm view "@d3k/darwin-arm64@$REQUIRED_VERSION" version &> /dev/null; then
+    PUBLISHED_VERSION=""
+    if [ -n "$REQUIRED_VERSION" ]; then
+        PUBLISHED_VERSION=$(npm view "@d3k/darwin-arm64@$REQUIRED_VERSION" version 2>/dev/null || true)
+    fi
+
+    if [ -z "$REQUIRED_VERSION" ] || [ -z "$PUBLISHED_VERSION" ] || [ "$PUBLISHED_VERSION" != "$REQUIRED_VERSION" ]; then
         echo -e "${YELLOW}⚠️  Skipping npm install test - platform package not yet published to npm${NC}"
         echo -e "${YELLOW}   This is expected for the first release with compiled binary architecture${NC}"
         echo -e "${YELLOW}   Using canary-installed version for subsequent tests${NC}"
