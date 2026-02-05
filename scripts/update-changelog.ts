@@ -136,6 +136,12 @@ function updateChangelogPage(version: string, highlights: string[], versionType:
 
   const content = fs.readFileSync(changelogPath, "utf8")
 
+  // Skip if this version already exists in the changelog
+  if (content.includes(`version: "${version.replace("v", "")}"`)) {
+    console.log(`ℹ️ Changelog already has ${version}, skipping update`)
+    return
+  }
+
   // Create new changelog entry
   const today = new Date().toISOString().split("T")[0]
   const newEntry: Release = {

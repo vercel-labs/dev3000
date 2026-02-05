@@ -4,11 +4,15 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased]
+## [0.0.158] - 2026-02-05
 
-- Fix --no-tui flag being ignored ([#91](https://github.com/vercel-labs/dev3000/pull/91)) - thanks [@falleco](https://github.com/falleco)!
-- Fix spinner freezing in limited terminals with --tail mode ([#91](https://github.com/vercel-labs/dev3000/pull/91)) - thanks [@falleco](https://github.com/falleco)!
-- Remove restart command that could crash d3k ([#89](https://github.com/vercel-labs/dev3000/issues/89))
+**Patch Release**
+
+- Fix OpenTUI header switching between compact and full layouts on resize
+- Improve skills install flow by selecting the agent first and passing the agent to the skills CLI
+- Install d3k and agent skills under .agents/skills for Codex and copy skills into the agent path when needed
+- Add canary smoke tests, offline-friendly canary builds, and global canary installs
+- Fix d3k skill frontmatter and simplify the Codex prompt
 
 ## [0.0.157] - 2026-01-29
 

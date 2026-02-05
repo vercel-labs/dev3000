@@ -10,6 +10,19 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.158",
+    date: "2026-02-05",
+    type: "patch",
+    highlights: [
+      "Fix OpenTUI header switching between compact and full layouts on resize",
+      "Improve skills install flow by selecting the agent first and passing the agent to the skills CLI",
+      "Install d3k and agent skills under .agents/skills for Codex and copy skills into the agent path when needed",
+      "Add canary smoke tests, offline-friendly canary builds, and global canary installs",
+      "Fix d3k skill frontmatter and simplify the Codex prompt"
+    ]
+  },
+
+  {
     version: "0.0.157",
     date: "2026-01-29",
     type: "patch",

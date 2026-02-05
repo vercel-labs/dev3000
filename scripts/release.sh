@@ -183,11 +183,11 @@ fi
 
 # Update changelog
 echo "📝 Updating changelog..."
-bunx tsx scripts/update-changelog.ts "v$NEXT_VERSION"
+bun scripts/update-changelog.ts "v$NEXT_VERSION"
 
 # Generate CHANGELOG.md from changelog.ts
 echo "📝 Generating CHANGELOG.md..."
-bunx tsx scripts/generate-changelog-md.ts
+bun scripts/generate-changelog-md.ts
 
 # Commit version change and changelog
 echo "📝 Committing version change and changelog..."
