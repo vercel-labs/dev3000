@@ -118,7 +118,7 @@ if (agentBrowserIndex >= 0 && (process.argv[1]?.includes("d3k") || process.argv[
 
 import chalk from "chalk"
 import { Command } from "commander"
-import { appendFileSync, existsSync, readFileSync } from "fs"
+import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync } from "fs"
 import { homedir, tmpdir } from "os"
 import { detect } from "package-manager-detector"
 import { dirname, join } from "path"
@@ -126,7 +126,7 @@ import { fileURLToPath } from "url"
 import { cloudCheckPR } from "./commands/cloud-check-pr.js"
 import { cloudFix } from "./commands/cloud-fix.js"
 import { createPersistentLogFile, findAvailablePort, startDevEnvironment } from "./dev-environment.js"
-import { getSkill, getSkillsInfo, listAvailableSkills } from "./skills/index.js"
+import { getBundledSkillsPath, getSkill, getSkillsInfo, listAvailableSkills } from "./skills/index.js"
 import { detectAIAgent } from "./utils/agent-detection.js"
 import { getAvailableAgents, getSkillsAgentId } from "./utils/agent-selection.js"
 import { ensureD3kHomeDir } from "./utils/d3k-dir.js"
@@ -232,6 +232,35 @@ function buildD3kCommandWithOptions(options: ForwardedOptions): string {
   if (options.agentName) args.push(`--agent-name ${options.agentName}`)
 
   return args.join(" ")
+}
+
+function ensureClaudeD3kSkill(): void {
+  try {
+    const bundledSkillsDir = getBundledSkillsPath()
+    if (!bundledSkillsDir) return
+
+    const bundledSkillPath = join(bundledSkillsDir, "d3k", "SKILL.md")
+    if (!existsSync(bundledSkillPath)) return
+
+    const skillsRoot = join(process.cwd(), ".claude", "skills")
+    const skillDir = join(skillsRoot, "d3k")
+    const skillPath = join(skillDir, "SKILL.md")
+
+    const bundledContent = readFileSync(bundledSkillPath, "utf-8")
+    if (existsSync(skillPath)) {
+      const existingContent = readFileSync(skillPath, "utf-8")
+      if (existingContent === bundledContent) {
+        return
+      }
+    }
+
+    if (!existsSync(skillDir)) {
+      mkdirSync(skillDir, { recursive: true })
+    }
+    copyFileSync(bundledSkillPath, skillPath)
+  } catch {
+    // Ignore errors - skill installation is optional
+  }
 }
 
 /**
@@ -908,6 +937,9 @@ program
         // User selected an agent - launch with tmux after skills install
         if (options.debug) {
           console.log(`[DEBUG] Launching tmux with agent command: ${selectedAgent.command}`)
+        }
+        if (skillsAgentId === "claude-code") {
+          ensureClaudeD3kSkill()
         }
         // Clear screen and scrollback before launching tmux so when tmux exits, terminal is clean
         process.stdout.write("\x1b[2J\x1b[H\x1b[3J")
