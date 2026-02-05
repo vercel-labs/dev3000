@@ -4,6 +4,13 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.160] - 2026-02-05
+
+**Feature Release**
+
+- Ensure d3k skill available for Claude Code
+- Add codex yolo agent option
+
 ## [0.0.159] - 2026-02-05
 
 **Patch Release**

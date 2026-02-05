@@ -10,6 +10,16 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.160",
+    date: "2026-02-05",
+    type: "minor",
+    highlights: [
+      "Ensure d3k skill available for Claude Code",
+      "Add codex yolo agent option"
+    ]
+  },
+
+  {
     version: "0.0.159",
     date: "2026-02-05",
     type: "patch",

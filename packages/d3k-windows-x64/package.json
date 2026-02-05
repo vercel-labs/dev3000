@@ -1,6 +1,6 @@
 {
   "name": "@d3k/windows-x64",
-  "version": "0.0.160-canary",
+  "version": "0.0.160",
   "description": "d3k binary for Windows x64",
   "os": [
     "win32"
