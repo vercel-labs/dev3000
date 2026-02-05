@@ -798,6 +798,7 @@ program
       skillsAgentId = getSkillsAgentId(skillsAgentName)
 
       if (skillsAgentId) {
+        const resolvedSkillsAgentId = skillsAgentId
         // Check for skill updates and offer new packages
         try {
           // Show loading message
@@ -842,7 +843,7 @@ program
             const applicablePackages = getApplicablePackages()
             const packagesWithStatus: PackageWithStatus[] = applicablePackages.map((pkg) => ({
               ...pkg,
-              installed: isPackageInstalled(pkg, skillsAgentId)
+              installed: isPackageInstalled(pkg, resolvedSkillsAgentId)
             }))
             const hasUninstalled = packagesWithStatus.some((p) => !p.installed)
 
@@ -850,11 +851,11 @@ program
             if (packagesWithStatus.length > 0 && hasUninstalled) {
               const { packages: selectedPackages, location } = await promptPackageSelection(
                 packagesWithStatus,
-                skillsAgentId
+                resolvedSkillsAgentId
               )
               if (selectedPackages.length > 0) {
                 const locationLabel = location === "global" ? "globally" : "to project"
-                const targetPath = getSkillsPathForLocation(skillsAgentId, location)
+                const targetPath = getSkillsPathForLocation(resolvedSkillsAgentId, location)
                 if (targetPath) {
                   const displayPath = targetPath.path.replace(process.env.HOME || "", "~")
                   console.log(
@@ -870,7 +871,7 @@ program
                 for (let i = 0; i < selectedPackages.length; i++) {
                   const pkg = selectedPackages[i]
                   console.log(chalk.gray(`  [${i + 1}/${selectedPackages.length}] ${pkg.displayName}...`))
-                  const result = await installSkillPackage(pkg, location, skillsAgentId)
+                  const result = await installSkillPackage(pkg, location, resolvedSkillsAgentId)
                   if (result.success) {
                     results.success.push(pkg.displayName)
                   } else {
