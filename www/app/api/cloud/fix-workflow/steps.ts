@@ -102,48 +102,68 @@ async function evaluateInBrowser(
   }
 }
 
-function buildWebVitalsEvalScript(): string {
+function buildWebVitalsInitScript(): string {
   return `(function() {
-    const result = { lcp: null, fcp: null, ttfb: null, cls: 0, fid: null, inp: null }
     const supported = (PerformanceObserver && PerformanceObserver.supportedEntryTypes) || []
-    let lcpObserver
-    let clsObserver
-    let eventObserver
+    const store = (window.__d3kVitals = window.__d3kVitals || {
+      lcp: [],
+      cls: [],
+      event: [],
+      paint: [],
+      nav: null
+    })
+
+    const addEntries = (target, entries) => {
+      if (!entries) return
+      for (const entry of entries) target.push(entry)
+    }
+
+    try {
+      addEntries(store.lcp, performance.getEntriesByType('largest-contentful-paint'))
+      addEntries(store.cls, performance.getEntriesByType('layout-shift'))
+      addEntries(store.event, performance.getEntriesByType('event'))
+      addEntries(store.paint, performance.getEntriesByType('paint'))
+      store.nav = performance.getEntriesByType('navigation')[0] || performance.timing || null
+    } catch {}
+
     try {
       if (supported.includes('largest-contentful-paint')) {
-        lcpObserver = new PerformanceObserver(() => {})
-        lcpObserver.observe({ type: 'largest-contentful-paint', buffered: true })
+        const observer = new PerformanceObserver((list) => addEntries(store.lcp, list.getEntries()))
+        observer.observe({ type: 'largest-contentful-paint', buffered: true })
       }
       if (supported.includes('layout-shift')) {
-        clsObserver = new PerformanceObserver(() => {})
-        clsObserver.observe({ type: 'layout-shift', buffered: true })
+        const observer = new PerformanceObserver((list) => addEntries(store.cls, list.getEntries()))
+        observer.observe({ type: 'layout-shift', buffered: true })
       }
       if (supported.includes('event')) {
-        eventObserver = new PerformanceObserver(() => {})
-        eventObserver.observe({ type: 'event', buffered: true, durationThreshold: 0 })
+        const observer = new PerformanceObserver((list) => addEntries(store.event, list.getEntries()))
+        observer.observe({ type: 'event', buffered: true, durationThreshold: 0 })
+      }
+      if (supported.includes('paint')) {
+        const observer = new PerformanceObserver((list) => addEntries(store.paint, list.getEntries()))
+        observer.observe({ type: 'paint', buffered: true })
       }
     } catch {}
 
-    const navTiming = performance.getEntriesByType('navigation')[0] || performance.timing
+    return 'ok'
+  })()`
+}
+
+function buildWebVitalsReadScript(): string {
+  return `(function() {
+    const result = { lcp: null, fcp: null, ttfb: null, cls: 0, fid: null, inp: null }
+    const store = window.__d3kVitals || {}
+    const navTiming = store.nav || performance.getEntriesByType('navigation')[0] || performance.timing
     result.ttfb = navTiming?.responseStart
       ? (navTiming.responseStart - (navTiming.startTime || navTiming.navigationStart || 0))
       : null
 
-    const lcpEntries = [
-      ...(performance.getEntriesByType('largest-contentful-paint') || []),
-      ...(lcpObserver ? lcpObserver.takeRecords() : [])
-    ]
-    const paintEntries = performance.getEntriesByType('paint') || []
+    const lcpEntries = (store.lcp || []).concat(performance.getEntriesByType('largest-contentful-paint') || [])
+    const paintEntries = (store.paint || []).concat(performance.getEntriesByType('paint') || [])
     const fcpEntries = paintEntries.filter((entry) => entry.name === 'first-contentful-paint')
-    const clsEntries = [
-      ...(performance.getEntriesByType('layout-shift') || []),
-      ...(clsObserver ? clsObserver.takeRecords() : [])
-    ]
+    const clsEntries = (store.cls || []).concat(performance.getEntriesByType('layout-shift') || [])
     const fidEntries = performance.getEntriesByType('first-input')
-    const eventEntries = [
-      ...(performance.getEntriesByType('event') || []),
-      ...(eventObserver ? eventObserver.takeRecords() : [])
-    ]
+    const eventEntries = (store.event || []).concat(performance.getEntriesByType('event') || [])
 
     if (lcpEntries.length > 0) {
       result.lcp = lcpEntries[lcpEntries.length - 1].startTime
@@ -775,10 +795,11 @@ Use this to diagnose and verify performance improvements.`,
         await navigateBrowser(sandbox, diagnoseUrl)
         await new Promise((resolve) => setTimeout(resolve, 3000))
 
-        // Get Web Vitals directly from browser using agent-browser evaluate
-        const webVitalsScript = buildWebVitalsEvalScript()
+        // Prime vitals observers, then read after a short delay
+        await evaluateInBrowser(sandbox, buildWebVitalsInitScript())
+        await new Promise((resolve) => setTimeout(resolve, 1500))
 
-        const evalResult = await evaluateInBrowser(sandbox, webVitalsScript)
+        const evalResult = await evaluateInBrowser(sandbox, buildWebVitalsReadScript())
         workflowLog(`[getWebVitals] Eval result: ${JSON.stringify(evalResult).substring(0, 500)}`)
 
         // Parse the result
@@ -1213,9 +1234,10 @@ async function fetchWebVitalsViaCDP(
     await evaluateInBrowser(sandbox, finalizeLcpScript)
     await new Promise((resolve) => setTimeout(resolve, 500))
 
-    const webVitalsScript = buildWebVitalsEvalScript()
+    await evaluateInBrowser(sandbox, buildWebVitalsInitScript())
+    await new Promise((resolve) => setTimeout(resolve, 1500))
 
-    const evalResult = await evaluateInBrowser(sandbox, webVitalsScript)
+    const evalResult = await evaluateInBrowser(sandbox, buildWebVitalsReadScript())
     diagLog(`[fetchWebVitals] Eval result: ${JSON.stringify(evalResult).substring(0, 500)}`)
 
     if (evalResult.success && evalResult.result) {
