@@ -33,13 +33,13 @@ interface WorkflowPhase {
 /**
  * Categorize tool calls into workflow phases
  */
-function categorizeToolCall(toolName: string): "research" | "implementation" | "verification" {
+function categorizeToolCall(toolName: string): "analysis" | "fix" | "verification" {
   const researchTools = ["globSearch", "grepSearch", "listDirectory", "readFile", "findComponentSource"]
   const verificationTools = ["verifyChanges", "getGitDiff"]
 
-  if (researchTools.includes(toolName)) return "research"
+  if (researchTools.includes(toolName)) return "analysis"
   if (verificationTools.includes(toolName)) return "verification"
-  return "implementation" // writeFile and others
+  return "fix" // writeFile and others
 }
 
 /**
@@ -48,51 +48,47 @@ function categorizeToolCall(toolName: string): "research" | "implementation" | "
 function groupIntoPhases(steps: ParsedStep[]): WorkflowPhase[] {
   const phases: WorkflowPhase[] = []
 
-  // Phase 1: Research - all steps with read/glob/grep/ls tools
-  const researchSteps = steps.filter((s) => s.toolCalls.some((tc) => categorizeToolCall(tc.name) === "research"))
-  if (researchSteps.length > 0) {
+  const classifyStep = (step: ParsedStep): "analysis" | "fix" | "verification" | "none" => {
+    if (step.toolCalls.some((tc) => categorizeToolCall(tc.name) === "verification")) return "verification"
+    if (step.toolCalls.some((tc) => categorizeToolCall(tc.name) === "fix")) return "fix"
+    if (
+      step.toolCalls.some((tc) => categorizeToolCall(tc.name) === "analysis") ||
+      (step.toolCalls.length === 0 && step.assistantText && step.assistantText.length > 50)
+    ) {
+      return "analysis"
+    }
+    return "none"
+  }
+
+  const analysisSteps = steps.filter((s) => classifyStep(s) === "analysis")
+  if (analysisSteps.length > 0) {
     phases.push({
-      name: "Research",
-      description: "Investigating codebase and understanding the issue",
-      steps: researchSteps,
-      toolCount: researchSteps.reduce((sum, s) => sum + s.toolCalls.length, 0)
+      name: "Analysis Transcript",
+      description: "Investigation, reasoning, and context gathering",
+      steps: analysisSteps,
+      toolCount: analysisSteps.reduce((sum, s) => sum + s.toolCalls.length, 0)
     })
   }
 
-  // Phase 2: Implementation - steps with write tools
-  const implementationSteps = steps.filter((s) =>
-    s.toolCalls.some((tc) => categorizeToolCall(tc.name) === "implementation")
-  )
-  if (implementationSteps.length > 0) {
+  // Phase 2: Fix - steps with non-read tools (edits, commands, actions)
+  const fixSteps = steps.filter((s) => classifyStep(s) === "fix")
+  if (fixSteps.length > 0) {
     phases.push({
-      name: "Implementation",
-      description: "Making code changes to fix the issue",
-      steps: implementationSteps,
-      toolCount: implementationSteps.reduce((sum, s) => sum + s.toolCalls.length, 0)
+      name: "Fix Transcript",
+      description: "Edits and actions taken to resolve the issue",
+      steps: fixSteps,
+      toolCount: fixSteps.reduce((sum, s) => sum + s.toolCalls.length, 0)
     })
   }
 
   // Phase 3: Verification - steps with verify/diff tools
-  const verificationSteps = steps.filter((s) =>
-    s.toolCalls.some((tc) => categorizeToolCall(tc.name) === "verification")
-  )
+  const verificationSteps = steps.filter((s) => classifyStep(s) === "verification")
   if (verificationSteps.length > 0) {
     phases.push({
-      name: "Verification",
+      name: "Verification Transcript",
       description: "Confirming the fix works correctly",
       steps: verificationSteps,
       toolCount: verificationSteps.reduce((sum, s) => sum + s.toolCalls.length, 0)
-    })
-  }
-
-  // Phase 4: Analysis - steps with only assistant text (thinking/planning)
-  const analysisSteps = steps.filter((s) => s.toolCalls.length === 0 && s.assistantText && s.assistantText.length > 50)
-  if (analysisSteps.length > 0) {
-    phases.push({
-      name: "Analysis",
-      description: "Agent reasoning and planning",
-      steps: analysisSteps,
-      toolCount: 0
     })
   }
 
@@ -327,7 +323,7 @@ export function AgentAnalysis({
 
       {/* Collapsible Agent Execution Details - grouped by workflow phase */}
       {phases.length > 0 && (
-        <StepSection title="Agent Execution Transcript" badge={`${phases.length} phases, ${totalToolCalls} tool calls`}>
+        <StepSection title="Agent Transcripts" badge={`${phases.length} transcripts, ${totalToolCalls} tool calls`}>
           <div className="mt-3 space-y-3">
             {/* System Prompt - collapsed */}
             {parsed.systemPrompt && (

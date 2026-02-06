@@ -474,7 +474,7 @@ export async function agentFixLoopStep(
     afterWebVitals: Object.keys(afterWebVitals).length > 0 ? afterWebVitals : undefined,
     verificationStatus: status === "no-changes" ? "unchanged" : status,
     agentAnalysis: agentResult.transcript,
-    agentAnalysisModel: "anthropic/claude-sonnet-4-20250514",
+    agentAnalysisModel: "openai/gpt-5.2",
     gitDiff: gitDiff ?? undefined,
     d3kLogs: combinedD3kLogs,
     initD3kLogs: initD3kLogs,
@@ -542,7 +542,7 @@ async function runAgentWithDiagnoseTool(
     baseURL: "https://ai-gateway.vercel.sh/v1/ai"
   })
 
-  const model = gateway("anthropic/claude-sonnet-4-20250514")
+  const model = gateway("openai/gpt-5.2")
 
   // Create tools - the key new one is `diagnose`
   const tools = {

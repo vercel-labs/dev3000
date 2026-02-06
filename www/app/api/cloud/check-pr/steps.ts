@@ -56,7 +56,7 @@ export async function identifyAffectedPages(changedFiles: string[], prBody: stri
       baseURL: "https://ai-gateway.vercel.sh/v1/ai"
     })
 
-    const model = gateway("anthropic/claude-sonnet-4-20250514")
+    const model = gateway("openai/gpt-5.2")
 
     const aiPrompt = `Analyze this PR description and extract any URL paths or routes that are mentioned or affected.
 
@@ -170,6 +170,7 @@ export async function crawlPreviewPages(previewUrl: string, pagesToCheck: string
  * Step 3: Verify PR claims against actual behavior
  */
 // biome-ignore lint/suspicious/noExplicitAny: AI-generated crawl data has dynamic structure
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function verifyPRClaims(prTitle: string, prBody: string, crawlResults: any[], changedFiles: string[]) {
   "use step"
 
@@ -180,7 +181,7 @@ export async function verifyPRClaims(prTitle: string, prBody: string, crawlResul
     baseURL: "https://ai-gateway.vercel.sh/v1/ai"
   })
 
-  const model = gateway("anthropic/claude-sonnet-4-20250514")
+  const model = gateway("openai/gpt-5.2")
 
   const aiPrompt = `You are verifying a Pull Request for accuracy. Compare the PR's claims with the actual deployment behavior.
 
@@ -324,6 +325,7 @@ export async function checkPerformance(previewUrl: string, pagesToCheck: string[
  * Step 5: Generate comprehensive report
  */
 // biome-ignore lint/suspicious/noExplicitAny: Report data has dynamic structure from previous steps
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function generateReport(data: any) {
   "use step"
 

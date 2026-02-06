@@ -256,9 +256,9 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
             Created sandbox, started d3k monitoring, captured initial CLS measurements
           </p>
 
-          {/* D3k Logs in Init Section - use initD3kLogs if available, fall back to d3kLogs */}
+          {/* D3k Transcript in Init Section - use initD3kLogs if available, fall back to d3kLogs */}
           {(report.initD3kLogs || report.d3kLogs) && (
-            <CollapsibleSection title="d3k Diagnostic Logs" defaultOpen={false}>
+            <CollapsibleSection title="d3k Diagnostic Transcript" defaultOpen={false}>
               <pre className="bg-muted/50 rounded p-4 text-xs font-mono overflow-x-auto whitespace-pre-wrap max-h-96 overflow-y-auto">
                 {report.initD3kLogs || report.d3kLogs}
               </pre>
@@ -297,9 +297,9 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
             </CollapsibleSection>
           )}
 
-          {/* D3k Logs after agent fix */}
+          {/* D3k Transcript after agent fix */}
           {report.afterD3kLogs && (
-            <CollapsibleSection title="d3k Diagnostic Logs (After Fix)" defaultOpen={false}>
+            <CollapsibleSection title="d3k Diagnostic Transcript (After Fix)" defaultOpen={false}>
               <pre className="bg-muted/50 rounded p-4 text-xs font-mono overflow-x-auto whitespace-pre-wrap max-h-96 overflow-y-auto">
                 {report.afterD3kLogs}
               </pre>
