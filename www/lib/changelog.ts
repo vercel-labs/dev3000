@@ -10,6 +10,15 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.162",
+    date: "2026-02-06",
+    type: "patch",
+    highlights: [
+      "Reduce OpenTUI render FPS to cut idle CPU"
+    ]
+  },
+
+  {
     version: "0.0.161",
     date: "2026-02-05",
     type: "patch",

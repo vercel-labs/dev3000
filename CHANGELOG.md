@@ -4,6 +4,12 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.162] - 2026-02-06
+
+**Patch Release**
+
+- Reduce OpenTUI render FPS to cut idle CPU
+
 ## [0.0.161] - 2026-02-05
 
 **Patch Release**
