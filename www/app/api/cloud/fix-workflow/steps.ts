@@ -14,6 +14,7 @@ import { createGateway, generateText, stepCountIs, tool } from "ai"
 import { z } from "zod"
 import { getOrCreateD3kSandbox, type SandboxTimingData, StepTimer } from "@/lib/cloud/d3k-sandbox"
 import { SandboxAgentBrowser } from "@/lib/cloud/sandbox-agent-browser"
+import { skillFallbacks } from "@/lib/skills/fallbacks"
 import { saveWorkflowRun, type WorkflowType } from "@/lib/workflow-storage"
 import type { WorkflowReport } from "@/types"
 
@@ -725,6 +726,9 @@ Use this before audits or performance reviews to get the full guidelines.`,
           const localSkillPath = join(process.cwd(), ".agents", "skills", safeName, "SKILL.md")
           if (existsSync(localSkillPath)) {
             return readFileSync(localSkillPath, "utf8")
+          }
+          if (skillFallbacks[safeName]) {
+            return skillFallbacks[safeName]
           }
 
           const listResult = await runSandboxCommand(sandbox, "sh", [
