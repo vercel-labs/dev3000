@@ -98,6 +98,15 @@ else
                 echo -e "${RED}❌ agent-browser failed to run${NC}"
                 exit 1
             fi
+
+            # Minimal PATH sanity check (simulate constrained environment)
+            MIN_PATH="$npm_config_prefix/bin:/usr/bin:/bin"
+            if PATH="$MIN_PATH" d3k agent-browser --help >/dev/null 2>&1; then
+                echo -e "${GREEN}✅ agent-browser runs with minimal PATH (npm)${NC}"
+            else
+                echo -e "${RED}❌ agent-browser failed with minimal PATH (npm)${NC}"
+                exit 1
+            fi
         else
             echo -e "${RED}❌ Failed to install with npm${NC}"
             exit 1
@@ -131,6 +140,15 @@ else
                 echo -e "${GREEN}✅ agent-browser resolved and runs (pnpm)${NC}"
             else
                 echo -e "${RED}❌ agent-browser failed to run (pnpm)${NC}"
+                exit 1
+            fi
+
+            # Minimal PATH sanity check (simulate constrained environment)
+            MIN_PATH="$PNPM_HOME:/usr/bin:/bin"
+            if PATH="$MIN_PATH" d3k agent-browser --help >/dev/null 2>&1; then
+                echo -e "${GREEN}✅ agent-browser runs with minimal PATH (pnpm)${NC}"
+            else
+                echo -e "${RED}❌ agent-browser failed with minimal PATH (pnpm)${NC}"
                 exit 1
             fi
         else
