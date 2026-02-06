@@ -9,6 +9,8 @@
 import { put } from "@vercel/blob"
 import { Sandbox } from "@vercel/sandbox"
 import { createGateway, generateText, stepCountIs, tool } from "ai"
+import { existsSync, readFileSync } from "node:fs"
+import { join } from "node:path"
 import { z } from "zod"
 import { getOrCreateD3kSandbox, type SandboxTimingData, StepTimer } from "@/lib/cloud/d3k-sandbox"
 import { SandboxAgentBrowser } from "@/lib/cloud/sandbox-agent-browser"
@@ -720,12 +722,17 @@ Use this before audits or performance reviews to get the full guidelines.`,
         ])
 
         if (skillResult.stdout.startsWith("ERROR:")) {
+          const localSkillPath = join(process.cwd(), ".agents", "skills", safeName, "SKILL.md")
+          if (existsSync(localSkillPath)) {
+            return readFileSync(localSkillPath, "utf8")
+          }
+
           const listResult = await runSandboxCommand(sandbox, "sh", [
             "-c",
             `ls -1 "${SANDBOX_CWD}/.agents/skills" 2>/dev/null || true`
           ])
           const available = listResult.stdout.trim()
-          return `${skillResult.stdout}\nAvailable skills:\n${available || "(none found)"}`
+          return `${skillResult.stdout}\nAvailable skills (sandbox):\n${available || "(none found)"}`
         }
 
         return skillResult.stdout
