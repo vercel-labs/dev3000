@@ -331,7 +331,7 @@ export class SandboxAgentBrowser {
    * Evaluate JavaScript in the browser
    */
   async evaluate(expression: string): Promise<AgentBrowserResult> {
-    return this.exec(["evaluate", expression])
+    return this.exec(["eval", expression])
   }
 
   /**
