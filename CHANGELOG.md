@@ -4,6 +4,13 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.163] - 2026-02-06
+
+**Patch Release**
+
+- Fix agent-browser resolution and tighten types
+- Update workflow transcripts and model selection
+
 ## [0.0.162] - 2026-02-06
 
 **Patch Release**

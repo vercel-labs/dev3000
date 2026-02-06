@@ -10,6 +10,16 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.163",
+    date: "2026-02-06",
+    type: "patch",
+    highlights: [
+      "Fix agent-browser resolution and tighten types",
+      "Update workflow transcripts and model selection"
+    ]
+  },
+
+  {
     version: "0.0.162",
     date: "2026-02-06",
     type: "patch",
