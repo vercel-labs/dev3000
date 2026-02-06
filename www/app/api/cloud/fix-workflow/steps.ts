@@ -99,6 +99,66 @@ async function evaluateInBrowser(
   }
 }
 
+function buildWebVitalsEvalScript(): string {
+  return `(function() {
+    const result = { lcp: null, fcp: null, ttfb: null, cls: 0, fid: null, inp: null }
+    const supported = (PerformanceObserver && PerformanceObserver.supportedEntryTypes) || []
+    try {
+      if (supported.includes('largest-contentful-paint')) {
+        new PerformanceObserver(() => {}).observe({ type: 'largest-contentful-paint', buffered: true })
+      }
+      if (supported.includes('layout-shift')) {
+        new PerformanceObserver(() => {}).observe({ type: 'layout-shift', buffered: true })
+      }
+      if (supported.includes('event')) {
+        new PerformanceObserver(() => {}).observe({ type: 'event', buffered: true, durationThreshold: 0 })
+      }
+    } catch {}
+
+    const navTiming = performance.getEntriesByType('navigation')[0] || performance.timing
+    result.ttfb = navTiming?.responseStart
+      ? (navTiming.responseStart - (navTiming.startTime || navTiming.navigationStart || 0))
+      : null
+
+    const lcpEntries = performance.getEntriesByType('largest-contentful-paint')
+    const fcpEntries = performance.getEntriesByName('first-contentful-paint')
+    const clsEntries = performance.getEntriesByType('layout-shift')
+    const fidEntries = performance.getEntriesByType('first-input')
+    const eventEntries = performance.getEntriesByType('event')
+
+    if (lcpEntries.length > 0) {
+      result.lcp = lcpEntries[lcpEntries.length - 1].startTime
+    }
+    if (fcpEntries.length > 0) {
+      result.fcp = fcpEntries[0].startTime
+    }
+    result.cls = clsEntries.reduce((sum, e) => sum + (e.hadRecentInput ? 0 : e.value), 0)
+    if (fidEntries.length > 0) {
+      result.fid = fidEntries[0].processingStart - fidEntries[0].startTime
+    }
+
+    if (eventEntries.length > 0) {
+      const byInteraction = new Map()
+      for (const entry of eventEntries) {
+        if (!('interactionId' in entry) || entry.interactionId === 0) continue
+        const existing = byInteraction.get(entry.interactionId)
+        if (!existing || entry.duration > existing.duration) {
+          byInteraction.set(entry.interactionId, entry)
+        }
+      }
+      let maxDuration = 0
+      for (const entry of byInteraction.values()) {
+        if (entry.duration > maxDuration) maxDuration = entry.duration
+      }
+      if (maxDuration > 0) {
+        result.inp = maxDuration
+      }
+    }
+
+    return JSON.stringify(result)
+  })()`
+}
+
 /**
  * Take a screenshot using agent-browser CLI
  */
@@ -407,7 +467,8 @@ export async function agentFixLoopStep(
   const combinedD3kLogs = `=== Step 1: Init (before agent) ===\n${initD3kLogs}\n\n=== Step 2: After agent fix ===\n${afterD3kLogs}`
 
   // Determine workflow type from progress context
-  const workflowType = (progressContext?.workflowType as "cls-fix" | "prompt" | "design-guidelines") || "cls-fix"
+  const workflowType =
+    (progressContext?.workflowType as "cls-fix" | "prompt" | "design-guidelines" | "react-performance") || "cls-fix"
 
   // Fetch "after" Web Vitals directly from browser via CDP (more reliable than parsing logs)
   timer.start("Fetch after Web Vitals")
@@ -536,6 +597,11 @@ async function runAgentWithDiagnoseTool(
   crawlDepth?: number | "all"
 ): Promise<{ transcript: string; summary: string; systemPrompt: string }> {
   const SANDBOX_CWD = "/vercel/sandbox"
+  const skillAliases: Record<string, string> = {
+    "react-performance": "vercel-react-best-practices",
+    "vercel-design-guidelines": "web-design-guidelines",
+    "design-guidelines": "web-design-guidelines"
+  }
 
   const gateway = createGateway({
     apiKey: process.env.AI_GATEWAY_API_KEY,
@@ -632,6 +698,40 @@ Try running diagnose again.`
       }
     }),
 
+    get_skill: tool({
+      description: `Load a d3k skill by name and return its contents (SKILL.md).
+Use this before audits or performance reviews to get the full guidelines.`,
+      inputSchema: z.object({
+        name: z.string().describe("Skill name (e.g. react-performance, vercel-design-guidelines)")
+      }),
+      execute: async ({ name }: { name: string }) => {
+        const normalized = name.trim().toLowerCase()
+        const resolved = skillAliases[normalized] ?? normalized
+
+        const safeName = resolved.replace(/[^a-z0-9-]/g, "")
+        if (!safeName) {
+          return `ERROR: Invalid skill name "${name}".`
+        }
+
+        const skillPath = `${SANDBOX_CWD}/.agents/skills/${safeName}/SKILL.md`
+        const skillResult = await runSandboxCommand(sandbox, "sh", [
+          "-c",
+          `cat "${skillPath}" 2>/dev/null || echo "ERROR: Skill not found at ${skillPath}"`
+        ])
+
+        if (skillResult.stdout.startsWith("ERROR:")) {
+          const listResult = await runSandboxCommand(sandbox, "sh", [
+            "-c",
+            `ls -1 "${SANDBOX_CWD}/.agents/skills" 2>/dev/null || true`
+          ])
+          const available = listResult.stdout.trim()
+          return `${skillResult.stdout}\nAvailable skills:\n${available || "(none found)"}`
+        }
+
+        return skillResult.stdout
+      }
+    }),
+
     // Get all Core Web Vitals (LCP, FCP, TTFB, CLS, INP)
     getWebVitals: tool({
       description: `Get all Core Web Vitals performance metrics from the page.
@@ -649,32 +749,20 @@ Use this to diagnose and verify performance improvements.`,
         await new Promise((resolve) => setTimeout(resolve, 3000))
 
         // Get Web Vitals directly from browser using agent-browser evaluate
-        const webVitalsScript = `(function() {
-          const lcpEntries = performance.getEntriesByType('largest-contentful-paint');
-          const fcpEntries = performance.getEntriesByName('first-contentful-paint');
-          const clsEntries = performance.getEntriesByType('layout-shift');
-          const fidEntries = performance.getEntriesByType('first-input');
-          const navTiming = performance.getEntriesByType('navigation')[0] || performance.timing;
-          return JSON.stringify({
-            lcp: lcpEntries.length > 0 ? lcpEntries[lcpEntries.length - 1].startTime : null,
-            fcp: fcpEntries.length > 0 ? fcpEntries[0].startTime : null,
-            ttfb: navTiming.responseStart ? (navTiming.responseStart - (navTiming.startTime || navTiming.navigationStart || 0)) : null,
-            cls: clsEntries.reduce((sum, e) => sum + (e.hadRecentInput ? 0 : e.value), 0),
-            fid: fidEntries.length > 0 ? fidEntries[0].processingStart - fidEntries[0].startTime : null
-          });
-        })()`
+        const webVitalsScript = buildWebVitalsEvalScript()
 
         const evalResult = await evaluateInBrowser(sandbox, webVitalsScript)
         workflowLog(`[getWebVitals] Eval result: ${JSON.stringify(evalResult).substring(0, 500)}`)
 
         // Parse the result
-        let vitals: { lcp: number | null; fcp: number | null; ttfb: number | null; cls: number; fid: number | null } = {
-          lcp: null,
-          fcp: null,
-          ttfb: null,
-          cls: 0,
-          fid: null
-        }
+        let vitals: {
+          lcp: number | null
+          fcp: number | null
+          ttfb: number | null
+          cls: number
+          fid: number | null
+          inp: number | null
+        } = { lcp: null, fcp: null, ttfb: null, cls: 0, fid: null, inp: null }
 
         try {
           if (evalResult.success && evalResult.result) {
@@ -726,12 +814,23 @@ Use this to diagnose and verify performance improvements.`,
           const grade = vitals.fid <= 100 ? "GOOD ✅" : vitals.fid <= 300 ? "NEEDS IMPROVEMENT ⚠️" : "POOR ❌"
           metrics.FID = { value: `${vitals.fid.toFixed(0)}ms`, grade }
         }
+        if (vitals.inp !== null) {
+          const grade = vitals.inp <= 200 ? "GOOD ✅" : vitals.inp <= 500 ? "NEEDS IMPROVEMENT ⚠️" : "POOR ❌"
+          metrics.INP = { value: `${vitals.inp.toFixed(0)}ms`, grade }
+        }
 
         // Build report
         let report = "## Web Vitals Report\n\n"
+        if (Object.keys(metrics).length === 0) {
+          report += "No Web Vitals entries found. Try reloading the page or interacting with it.\n"
+        }
         for (const [name, data] of Object.entries(metrics)) {
           report += `**${name}:** ${data.value} (${data.grade})\n`
         }
+        if (!metrics.LCP) report += "**LCP:** not available (no entry captured)\n"
+        if (!metrics.FCP) report += "**FCP:** not available (no entry captured)\n"
+        if (!metrics.TTFB) report += "**TTFB:** not available (no entry captured)\n"
+        if (!metrics.INP && !metrics.FID) report += "**INP:** not available (no interaction captured)\n"
 
         // Add thresholds reference
         report += `
@@ -740,6 +839,7 @@ Use this to diagnose and verify performance improvements.`,
 - **FCP** (First Contentful Paint): Good ≤1.8s, Needs Improvement ≤3s
 - **TTFB** (Time to First Byte): Good ≤800ms, Needs Improvement ≤1.8s
 - **CLS** (Cumulative Layout Shift): Good ≤0.1, Needs Improvement ≤0.25
+- **INP** (Interaction to Next Paint): Good ≤200ms, Needs Improvement ≤500ms
 - **FID** (First Input Delay): Good ≤100ms, Needs Improvement ≤300ms`
 
         return report
@@ -1086,18 +1186,7 @@ async function fetchWebVitalsViaCDP(
     await evaluateInBrowser(sandbox, finalizeLcpScript)
     await new Promise((resolve) => setTimeout(resolve, 500))
 
-    const webVitalsScript = `(function() {
-      const lcpEntries = performance.getEntriesByType('largest-contentful-paint');
-      const fcpEntries = performance.getEntriesByName('first-contentful-paint');
-      const clsEntries = performance.getEntriesByType('layout-shift');
-      const navTiming = performance.getEntriesByType('navigation')[0] || performance.timing;
-      return JSON.stringify({
-        lcp: lcpEntries.length > 0 ? lcpEntries[lcpEntries.length - 1].startTime : null,
-        fcp: fcpEntries.length > 0 ? fcpEntries[0].startTime : null,
-        ttfb: navTiming.responseStart ? (navTiming.responseStart - (navTiming.startTime || navTiming.navigationStart || 0)) : null,
-        cls: clsEntries.reduce((sum, e) => sum + (e.hadRecentInput ? 0 : e.value), 0)
-      });
-    })()`
+    const webVitalsScript = buildWebVitalsEvalScript()
 
     const evalResult = await evaluateInBrowser(sandbox, webVitalsScript)
     diagLog(`[fetchWebVitals] Eval result: ${JSON.stringify(evalResult).substring(0, 500)}`)
@@ -1105,7 +1194,13 @@ async function fetchWebVitalsViaCDP(
     if (evalResult.success && evalResult.result) {
       const resultStr = typeof evalResult.result === "string" ? evalResult.result : JSON.stringify(evalResult.result)
 
-      let rawVitals: { lcp: number | null; fcp: number | null; ttfb: number | null; cls: number } | null = null
+      let rawVitals: {
+        lcp: number | null
+        fcp: number | null
+        ttfb: number | null
+        cls: number
+        inp: number | null
+      } | null = null
       try {
         rawVitals = JSON.parse(resultStr)
       } catch {
@@ -1127,6 +1222,9 @@ async function fetchWebVitalsViaCDP(
         }
         if (rawVitals.cls !== null) {
           vitals.cls = { value: rawVitals.cls, grade: gradeValue(rawVitals.cls, 0.1, 0.25) }
+        }
+        if (rawVitals.inp !== null) {
+          vitals.inp = { value: rawVitals.inp, grade: gradeValue(rawVitals.inp, 200, 500) }
         }
       }
     }

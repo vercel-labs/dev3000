@@ -48,6 +48,15 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
 
   // Use report's workflowType, fallback to run's type (for backward compat with old reports)
   const workflowType = report.workflowType || run.type || "cls-fix"
+  const workflowLabel =
+    workflowType === "prompt"
+      ? "Custom Prompt"
+      : workflowType === "design-guidelines"
+        ? "Design Guidelines"
+        : workflowType === "react-performance"
+          ? "React Performance"
+          : "CLS Fix"
+  const reportCrumbLabel = workflowType === "cls-fix" ? "Fix Report" : "Workflow Report"
 
   // Helper to format CLS grade
   const gradeColor = (grade?: string) => {
@@ -83,7 +92,7 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
                 <span className="font-semibold">d3k</span>
               </a>
               <span className="text-muted-foreground">/</span>
-              <span className="text-muted-foreground">Fix Report</span>
+              <span className="text-muted-foreground">{reportCrumbLabel}</span>
             </>
           )}
         </div>
@@ -99,14 +108,12 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
                     ? "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300"
                     : workflowType === "design-guidelines"
                       ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300"
+                      : workflowType === "react-performance"
+                        ? "bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300"
                       : "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300"
                 }`}
               >
-                {workflowType === "prompt"
-                  ? "Custom Prompt"
-                  : workflowType === "design-guidelines"
-                    ? "Design Guidelines"
-                    : "CLS Fix"}
+                {workflowLabel}
               </span>
             </div>
           </div>
