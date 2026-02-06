@@ -76,6 +76,7 @@ else
         echo -e "${YELLOW}   This is expected for the first release with compiled binary architecture${NC}"
         echo -e "${YELLOW}   Using canary-installed version for subsequent tests${NC}"
     else
+        PLATFORM_PUBLISHED="true"
         TEST_HOME=$(mktemp -d)
         export npm_config_prefix="$TEST_HOME/npm-global"
         mkdir -p "$npm_config_prefix"
@@ -104,6 +105,41 @@ else
     fi
 fi
 
+# Test 2: Clean pnpm global install (requires pnpm and platform package on npm)
+echo -e "${YELLOW}Testing clean pnpm global install...${NC}"
+if [ -z "${PLATFORM_PUBLISHED:-}" ]; then
+    echo -e "${YELLOW}⚠️  Skipping pnpm install test - platform package not yet published to npm${NC}"
+    echo -e "${YELLOW}   This is expected for the first release with compiled binary architecture${NC}"
+else
+    if ! command -v pnpm &> /dev/null; then
+        echo -e "${YELLOW}⚠️  Skipping pnpm install test - pnpm not installed${NC}"
+    else
+        TEST_HOME_PNPM=$(mktemp -d)
+        export PNPM_HOME="$TEST_HOME_PNPM/pnpm-global"
+        mkdir -p "$PNPM_HOME"
+        export PATH="$PNPM_HOME:$PATH"
+
+        if pnpm add -g "./$TARBALL"; then
+            if d3k --version | grep -q -E "^[0-9]+\.[0-9]+\.[0-9]+"; then
+                echo -e "${GREEN}✅ pnpm global install runs d3k${NC}"
+            else
+                echo -e "${RED}❌ d3k command failed to run (pnpm)${NC}"
+                exit 1
+            fi
+
+            if d3k agent-browser --help >/dev/null 2>&1; then
+                echo -e "${GREEN}✅ agent-browser resolved and runs (pnpm)${NC}"
+            else
+                echo -e "${RED}❌ agent-browser failed to run (pnpm)${NC}"
+                exit 1
+            fi
+        else
+            echo -e "${RED}❌ Failed to install with pnpm${NC}"
+            exit 1
+        fi
+    fi
+fi
+
 # Run the TypeScript clean install test
 echo -e "${YELLOW}Running comprehensive clean install tests...${NC}"
 if bun scripts/test-clean-install.ts; then
@@ -118,6 +154,7 @@ rm -f "$TARBALL"
 
 # Cleanup test home
 rm -rf "$TEST_HOME"
+rm -rf "$TEST_HOME_PNPM"
 
 echo -e "${GREEN}✨ All release tests passed!${NC}"
 echo "Package is ready for release."
