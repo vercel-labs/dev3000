@@ -110,7 +110,7 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
                       ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300"
                       : workflowType === "react-performance"
                         ? "bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300"
-                      : "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300"
+                        : "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300"
                 }`}
               >
                 {workflowLabel}
