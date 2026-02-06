@@ -30,7 +30,9 @@ export async function GET() {
       )
     }
 
-    const userData = await userResponse.json()
+    const userData = (await userResponse.json()) as {
+      user?: { id?: string; username?: string; name?: string }
+    }
 
     // Then fetch teams the user belongs to
     const teamsResponse = await fetch("https://api.vercel.com/v2/teams", {
@@ -48,7 +50,9 @@ export async function GET() {
       )
     }
 
-    const teamsData = await teamsResponse.json()
+    const teamsData = (await teamsResponse.json()) as {
+      teams?: Array<{ id?: string; slug?: string; name?: string }>
+    }
 
     // Build teams array with personal account first
     const teams = []
@@ -65,9 +69,7 @@ export async function GET() {
 
     // Add actual teams
     if (teamsData.teams && Array.isArray(teamsData.teams)) {
-      // biome-ignore lint/suspicious/noExplicitAny: Vercel API response shape is external
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      for (const team of teamsData.teams as any[]) {
+      for (const team of teamsData.teams) {
         teams.push({
           id: team.id,
           slug: team.slug,

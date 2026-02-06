@@ -41,7 +41,32 @@ export async function GET(request: Request) {
       )
     }
 
-    const data = await response.json()
+    const data = (await response.json()) as {
+      projects?: Array<{
+        id?: string
+        name?: string
+        framework?: string
+        link?: unknown
+        latestDeployments?: Array<{
+          id?: string
+          url?: string
+          state?: string
+          readyState?: string
+          createdAt?: number
+          gitSource?: {
+            type?: string
+            repoId?: number
+            ref?: string
+            sha?: string
+            message?: string
+          }
+          meta?: {
+            githubOrg?: string
+            githubRepo?: string
+          }
+        }>
+      }>
+    }
     // Verbose logging commented out - was flooding d3k logs
     // console.log("Projects API response:", JSON.stringify(data, null, 2))
     console.log(`[Projects API] Fetched ${data.projects?.length || 0} projects`)
@@ -55,17 +80,13 @@ export async function GET(request: Request) {
     }
 
     // Format projects data
-    // biome-ignore lint/suspicious/noExplicitAny: Vercel API response shape is external
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const projects = data.projects.map((project: any) => ({
+    const projects = (data.projects ?? []).map((project) => ({
       id: project.id,
       name: project.name,
       framework: project.framework,
       link: project.link,
       latestDeployments:
-        // biome-ignore lint/suspicious/noExplicitAny: Vercel API response shape is external
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        project.latestDeployments?.map((deployment: any) => ({
+        project.latestDeployments?.map((deployment) => ({
           id: deployment.id,
           url: deployment.url,
           state: deployment.state,

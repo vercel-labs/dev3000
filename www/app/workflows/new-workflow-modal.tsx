@@ -91,9 +91,12 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   const [loadingProjects, setLoadingProjects] = useState(false)
   const [projectsError, setProjectsError] = useState<string | null>(null)
   const [workflowStatus, setWorkflowStatus] = useState<string>("")
-  // biome-ignore lint/suspicious/noExplicitAny: API response type is dynamic
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [workflowResult, setWorkflowResult] = useState<any>(null)
+  const [workflowResult, setWorkflowResult] = useState<{
+    success: boolean
+    blobUrl?: string
+    runId?: string
+    pr?: { prUrl: string } | null
+  } | null>(null)
   const [activeRunId, setActiveRunId] = useState<string | null>(null)
   const [sandboxUrl, setSandboxUrl] = useState<string | null>(null)
   const [baseBranch, setBaseBranch] = useState("main")
@@ -233,22 +236,39 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
         const response = await fetch(`${DEV3000_API_URL}/api/workflows?userId=${userId}`)
         if (!response.ok) return
 
-        const data = await response.json()
-        if (!data.success || !data.runs) return
+        const data = (await response.json()) as {
+          success?: boolean
+          runs?: Array<{
+            id: string
+            projectName?: string
+            status?: string
+            currentStep?: string
+            sandboxUrl?: string
+            reportBlobUrl?: string
+            prUrl?: string
+            error?: string
+          }>
+        }
+        if (!data.success || !Array.isArray(data.runs)) return
 
         // Find the run - either by activeRunId or by matching project + running status
-        // biome-ignore lint/suspicious/noExplicitAny: API response type is dynamic
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        let run: any = null
+        let run:
+          | {
+              id: string
+              projectName?: string
+              status?: string
+              currentStep?: string
+              sandboxUrl?: string
+              reportBlobUrl?: string
+              prUrl?: string
+              error?: string
+            }
+          | undefined
         if (activeRunId) {
-          // biome-ignore lint/suspicious/noExplicitAny: API response type is dynamic
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          run = data.runs.find((r: any) => r.id === activeRunId)
+          run = data.runs.find((r) => r.id === activeRunId)
         } else if (selectedProject) {
           // Find the most recent running workflow for this project
-          // biome-ignore lint/suspicious/noExplicitAny: API response type is dynamic
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          run = data.runs.find((r: any) => r.projectName === selectedProject.name && r.status === "running")
+          run = data.runs.find((r) => r.projectName === selectedProject.name && r.status === "running")
           if (run) {
             setActiveRunId(run.id)
           }
@@ -522,9 +542,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
               ? "react-performance"
               : "prompt"
 
-      // biome-ignore lint/suspicious/noExplicitAny: Request body type depends on conditional fields
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const body: any = {
+      const body: Record<string, unknown> = {
         devUrl,
         projectName: selectedProject.name,
         userId,
@@ -566,9 +584,12 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       console.log("[Start Workflow] Body keys:", Object.keys(body))
       console.log("[Start Workflow] body.repoUrl:", body.repoUrl)
       console.log("[Start Workflow] body.repoOwner:", body.repoOwner)
+      const githubPatValue = body.githubPat
       console.log(
         "[Start Workflow] body.githubPat:",
-        body.githubPat ? `SET (length: ${body.githubPat.length})` : "NOT SET"
+        typeof githubPatValue === "string" && githubPatValue.length > 0
+          ? `SET (length: ${githubPatValue.length})`
+          : "NOT SET"
       )
 
       // Create an AbortController for timeout handling

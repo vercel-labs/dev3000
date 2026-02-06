@@ -1,6 +1,6 @@
 import { head, put } from "@vercel/blob"
 import { Sandbox, Snapshot } from "@vercel/sandbox"
-import ms from "ms"
+import ms, { type StringValue } from "ms"
 import { SandboxChrome } from "./sandbox-chrome"
 
 // Re-export Snapshot for consumers
@@ -194,7 +194,7 @@ export async function saveSnapshotId(
 export interface D3kSandboxConfig {
   repoUrl: string
   branch?: string
-  timeout?: string
+  timeout?: StringValue
   projectDir?: string
   framework?: string
   packageManager?: "pnpm" | "npm" | "yarn"
@@ -293,9 +293,10 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
 
   // Create sandbox WITHOUT source parameter
   // We'll manually clone the repo after sandbox creation for better control
-  // biome-ignore lint/suspicious/noExplicitAny: ms type inference issue
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const timeoutMs = ms(timeout as any) as unknown as number
+  const timeoutMs = ms(timeout)
+  if (typeof timeoutMs !== "number") {
+    throw new Error(`Invalid timeout value: ${timeout}`)
+  }
   const sandbox = await Sandbox.create({
     resources: { vcpus: 8 },
     timeout: timeoutMs,
@@ -854,7 +855,7 @@ async function waitForPageNavigation(sandbox: Sandbox, timeoutMs: number, debug 
  */
 export interface D3kSandboxFromSnapshotConfig {
   snapshotId: string
-  timeout?: string
+  timeout?: StringValue
   debug?: boolean
 }
 
@@ -890,9 +891,10 @@ export async function createD3kSandboxFromSnapshot(config: D3kSandboxFromSnapsho
     )
   }
 
-  // biome-ignore lint/suspicious/noExplicitAny: ms type inference issue
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const timeoutMs = ms(timeout as any) as unknown as number
+  const timeoutMs = ms(timeout)
+  if (typeof timeoutMs !== "number") {
+    throw new Error(`Invalid timeout value: ${timeout}`)
+  }
 
   // Create sandbox from snapshot - this is the key speedup!
   // The snapshot already has dependencies installed, Chrome ready, etc.
@@ -1213,9 +1215,10 @@ export async function getOrCreateD3kSandbox(config: D3kSandboxConfig): Promise<D
   // Start timing
   const timer = new StepTimer()
 
-  // biome-ignore lint/suspicious/noExplicitAny: ms type inference issue
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const timeoutMs = ms(timeout as any) as unknown as number
+  const timeoutMs = ms(timeout)
+  if (typeof timeoutMs !== "number") {
+    throw new Error(`Invalid timeout value: ${timeout}`)
+  }
 
   if (debug) {
     console.log("🔄 getOrCreateD3kSandbox: Checking for base snapshot...")

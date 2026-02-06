@@ -206,10 +206,8 @@ async function getChangedFiles(owner: string, repo: string, prNumber: string): P
       return []
     }
 
-    const files = await response.json()
-    // biome-ignore lint/suspicious/noExplicitAny: GitHub API file objects have dynamic structure
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return files.map((file: any) => file.filename)
+    const files = (await response.json()) as Array<{ filename?: string }>
+    return files.map((file) => file.filename).filter((name): name is string => typeof name === "string")
   } catch (error) {
     console.error("Error getting changed files:", error)
     return []
@@ -219,21 +217,27 @@ async function getChangedFiles(owner: string, repo: string, prNumber: string): P
 /**
  * Post comment on PR with results
  */
-// biome-ignore lint/suspicious/noExplicitAny: Workflow result object has dynamic structure
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function postPRComment(owner: string, repo: string, prNumber: string, result: any) {
+type WorkflowResult = {
+  success?: boolean
+  verification?: { summary?: string }
+  performance?: { slowPagesCount?: number }
+  reportUrl?: string
+}
+
+async function postPRComment(owner: string, repo: string, prNumber: string, result: WorkflowResult) {
   try {
-    const statusEmoji = result.success ? "✅" : "❌"
+    const success = result.success === true
+    const statusEmoji = success ? "✅" : "❌"
     const comment = `## ${statusEmoji} dev3000 PR Check Results
 
-**Status**: ${result.success ? "All checks passed" : "Some checks failed"}
+**Status**: ${success ? "All checks passed" : "Some checks failed"}
 
 ### Summary
 ${result.verification?.summary || "Check completed"}
 
-${result.performance?.slowPagesCount > 0 ? `\n⚠️ **Performance**: ${result.performance.slowPagesCount} slow page(s) detected` : ""}
+${result.performance?.slowPagesCount && result.performance.slowPagesCount > 0 ? `\n⚠️ **Performance**: ${result.performance.slowPagesCount} slow page(s) detected` : ""}
 
-**Full Report**: [View Details](${result.reportUrl})
+**Full Report**: [View Details](${result.reportUrl || "Unavailable"})
 
 ---
 *Powered by [dev3000](https://github.com/vercel-labs/dev3000)*`
@@ -261,12 +265,11 @@ ${result.performance?.slowPagesCount > 0 ? `\n⚠️ **Performance**: ${result.p
 /**
  * Set GitHub Check status
  */
-// biome-ignore lint/suspicious/noExplicitAny: Workflow result object has dynamic structure
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function setGitHubCheck(owner: string, repo: string, sha: string, result: any) {
+async function setGitHubCheck(owner: string, repo: string, sha: string, result: WorkflowResult) {
   try {
-    const status = result.success ? "success" : "failure"
-    const description = result.success ? "All PR checks passed" : "Some PR checks failed"
+    const success = result.success === true
+    const status = success ? "success" : "failure"
+    const description = success ? "All PR checks passed" : "Some PR checks failed"
 
     const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/statuses/${sha}`, {
       method: "POST",
@@ -277,7 +280,7 @@ async function setGitHubCheck(owner: string, repo: string, sha: string, result: 
       },
       body: JSON.stringify({
         state: status,
-        target_url: result.reportUrl,
+        target_url: result.reportUrl || "",
         description,
         context: "dev3000/pr-check"
       })

@@ -74,6 +74,39 @@ export async function cloudCheckPRWorkflow(
 // Step wrapper functions that dynamically import the actual implementations
 // This avoids bundler issues with Node.js modules
 
+type ReportData = {
+  prTitle: string
+  prBody: string
+  prNumber: string
+  previewUrl: string
+  changedFiles: string[]
+  pagesToCheck: string[]
+  crawlResults: Array<{
+    page: string
+    url: string
+    status: number
+    statusText: string
+    contentType?: string
+    error?: string
+  }>
+  verification: {
+    allChecksPassed: boolean
+    summary: string
+    details: {
+      claimsVerified: string[]
+      issues: string[]
+      warnings: string[]
+    }
+  }
+  performanceResults: {
+    results: Array<{ page: string; loadTime: number; contentLength: number; isSlow: boolean }>
+    slowPagesCount: number
+    summary: { avgLoadTime: number; slowPages: string[] }
+  }
+  repoOwner: string
+  repoName: string
+}
+
 async function identifyAffectedPages(changedFiles: string[], prBody: string) {
   "use step"
   const steps = await import("../app/api/cloud/check-pr/steps")
@@ -86,9 +119,7 @@ async function crawlPreviewPages(previewUrl: string, pagesToCheck: string[]) {
   return steps.crawlPreviewPages(previewUrl, pagesToCheck)
 }
 
-// biome-ignore lint/suspicious/noExplicitAny: AI-generated crawl data has dynamic structure
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function verifyPRClaims(prTitle: string, prBody: string, crawlResults: any[], changedFiles: string[]) {
+async function verifyPRClaims(prTitle: string, prBody: string, crawlResults: unknown[], changedFiles: string[]) {
   "use step"
   const steps = await import("../app/api/cloud/check-pr/steps")
   return steps.verifyPRClaims(prTitle, prBody, crawlResults, changedFiles)
@@ -100,9 +131,7 @@ async function checkPerformance(previewUrl: string, pagesToCheck: string[]) {
   return steps.checkPerformance(previewUrl, pagesToCheck)
 }
 
-// biome-ignore lint/suspicious/noExplicitAny: Report data has dynamic structure from previous steps
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function generateReport(data: any) {
+async function generateReport(data: ReportData) {
   "use step"
   const steps = await import("../app/api/cloud/check-pr/steps")
   return steps.generateReport(data)

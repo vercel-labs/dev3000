@@ -85,9 +85,16 @@ else
         if npm install -g "./$TARBALL"; then
             # Test that it runs
             if d3k --version | grep -q -E "^[0-9]+\.[0-9]+\.[0-9]+"; then
-                echo -e "${GREEN}✅ Clean npm install test passed${NC}"
+                echo -e "${GREEN}✅ d3k command runs${NC}"
             else
                 echo -e "${RED}❌ d3k command failed to run${NC}"
+                exit 1
+            fi
+
+            if d3k agent-browser --help >/dev/null 2>&1; then
+                echo -e "${GREEN}✅ agent-browser resolved and runs${NC}"
+            else
+                echo -e "${RED}❌ agent-browser failed to run${NC}"
                 exit 1
             fi
         else

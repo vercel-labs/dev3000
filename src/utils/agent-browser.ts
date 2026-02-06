@@ -41,7 +41,9 @@ function getAgentBrowserPath(): string {
 
   // 3. Bun global install (dev3000 dependency)
   searchPaths.push(
-    join(homedir(), ".bun", "install", "global", "node_modules", "dev3000", "node_modules", ".bin", "agent-browser")
+    join(homedir(), ".bun", "install", "global", "node_modules", "dev3000", "node_modules", ".bin", "agent-browser"),
+    join(homedir(), ".bun", "install", "global", "node_modules", ".bin", "agent-browser"),
+    join(homedir(), ".bun", "install", "global", "node_modules", "agent-browser", "bin", "agent-browser")
   )
 
   // 4. Use process.cwd() as fallback - essential for Next.js bundled code
@@ -50,8 +52,10 @@ function getAgentBrowserPath(): string {
   searchPaths.push(
     // Direct node_modules
     join(cwd, "node_modules", ".bin", "agent-browser"),
+    join(cwd, "node_modules", "agent-browser", "bin", "agent-browser"),
     // Parent node_modules (when cwd is nested)
-    join(cwd, "..", "node_modules", ".bin", "agent-browser")
+    join(cwd, "..", "node_modules", ".bin", "agent-browser"),
+    join(cwd, "..", "node_modules", "agent-browser", "bin", "agent-browser")
   )
 
   // 5. npm/pnpm/yarn global install locations (best-effort)
@@ -61,6 +65,7 @@ function getAgentBrowserPath(): string {
   ]
   for (const root of globalNodeModules) {
     searchPaths.push(join(root, "dev3000", "node_modules", ".bin", "agent-browser"))
+    searchPaths.push(join(root, "agent-browser", "bin", "agent-browser"))
   }
 
   for (const searchPath of searchPaths) {

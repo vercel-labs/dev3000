@@ -169,9 +169,7 @@ export async function crawlPreviewPages(previewUrl: string, pagesToCheck: string
 /**
  * Step 3: Verify PR claims against actual behavior
  */
-// biome-ignore lint/suspicious/noExplicitAny: AI-generated crawl data has dynamic structure
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function verifyPRClaims(prTitle: string, prBody: string, crawlResults: any[], changedFiles: string[]) {
+export async function verifyPRClaims(prTitle: string, prBody: string, crawlResults: unknown[], changedFiles: string[]) {
   "use step"
 
   console.log("[Step 3] Verifying PR claims against actual behavior...")
@@ -324,9 +322,42 @@ export async function checkPerformance(previewUrl: string, pagesToCheck: string[
 /**
  * Step 5: Generate comprehensive report
  */
-// biome-ignore lint/suspicious/noExplicitAny: Report data has dynamic structure from previous steps
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function generateReport(data: any) {
+type CrawlResult = {
+  page: string
+  url: string
+  status: number
+  statusText: string
+  contentType?: string
+  error?: string
+}
+
+type ReportData = {
+  prTitle: string
+  prBody: string
+  prNumber: string
+  previewUrl: string
+  changedFiles: string[]
+  pagesToCheck: string[]
+  crawlResults: CrawlResult[]
+  verification: {
+    allChecksPassed: boolean
+    summary: string
+    details: {
+      claimsVerified: string[]
+      issues: string[]
+      warnings: string[]
+    }
+  }
+  performanceResults: {
+    results: Array<{ page: string; loadTime: number; contentLength: number; isSlow: boolean }>
+    slowPagesCount: number
+    summary: { avgLoadTime: number; slowPages: string[] }
+  }
+  repoOwner: string
+  repoName: string
+}
+
+export async function generateReport(data: ReportData) {
   "use step"
 
   console.log("[Step 5] Generating comprehensive report...")

@@ -8,6 +8,39 @@
 /**
  * Main workflow function that checks a PR's changes
  */
+type ReportData = {
+  prTitle: string
+  prBody: string
+  prNumber: string
+  previewUrl: string
+  changedFiles: string[]
+  pagesToCheck: string[]
+  crawlResults: Array<{
+    page: string
+    url: string
+    status: number
+    statusText: string
+    contentType?: string
+    error?: string
+  }>
+  verification: {
+    allChecksPassed: boolean
+    summary: string
+    details: {
+      claimsVerified: string[]
+      issues: string[]
+      warnings: string[]
+    }
+  }
+  performanceResults: {
+    results: Array<{ page: string; loadTime: number; contentLength: number; isSlow: boolean }>
+    slowPagesCount: number
+    summary: { avgLoadTime: number; slowPages: string[] }
+  }
+  repoOwner: string
+  repoName: string
+}
+
 export async function cloudCheckPRWorkflow(params: {
   previewUrl: string
   prTitle: string
@@ -82,9 +115,7 @@ async function crawlPreviewPagesStep(previewUrl: string, pagesToCheck: string[])
   return crawlPreviewPages(previewUrl, pagesToCheck)
 }
 
-// biome-ignore lint/suspicious/noExplicitAny: AI-generated crawl data has dynamic structure
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function verifyPRClaimsStep(prTitle: string, prBody: string, crawlResults: any[], changedFiles: string[]) {
+async function verifyPRClaimsStep(prTitle: string, prBody: string, crawlResults: unknown[], changedFiles: string[]) {
   "use step"
   const { verifyPRClaims } = await import("./steps")
   return verifyPRClaims(prTitle, prBody, crawlResults, changedFiles)
@@ -96,9 +127,7 @@ async function checkPerformanceStep(previewUrl: string, pagesToCheck: string[]) 
   return checkPerformance(previewUrl, pagesToCheck)
 }
 
-// biome-ignore lint/suspicious/noExplicitAny: Report data has dynamic structure from previous steps
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function generateReportStep(data: any) {
+async function generateReportStep(data: ReportData) {
   "use step"
   const { generateReport } = await import("./steps")
   return generateReport(data)
