@@ -106,15 +106,21 @@ function buildWebVitalsEvalScript(): string {
   return `(function() {
     const result = { lcp: null, fcp: null, ttfb: null, cls: 0, fid: null, inp: null }
     const supported = (PerformanceObserver && PerformanceObserver.supportedEntryTypes) || []
+    let lcpObserver
+    let clsObserver
+    let eventObserver
     try {
       if (supported.includes('largest-contentful-paint')) {
-        new PerformanceObserver(() => {}).observe({ type: 'largest-contentful-paint', buffered: true })
+        lcpObserver = new PerformanceObserver(() => {})
+        lcpObserver.observe({ type: 'largest-contentful-paint', buffered: true })
       }
       if (supported.includes('layout-shift')) {
-        new PerformanceObserver(() => {}).observe({ type: 'layout-shift', buffered: true })
+        clsObserver = new PerformanceObserver(() => {})
+        clsObserver.observe({ type: 'layout-shift', buffered: true })
       }
       if (supported.includes('event')) {
-        new PerformanceObserver(() => {}).observe({ type: 'event', buffered: true, durationThreshold: 0 })
+        eventObserver = new PerformanceObserver(() => {})
+        eventObserver.observe({ type: 'event', buffered: true, durationThreshold: 0 })
       }
     } catch {}
 
@@ -123,11 +129,21 @@ function buildWebVitalsEvalScript(): string {
       ? (navTiming.responseStart - (navTiming.startTime || navTiming.navigationStart || 0))
       : null
 
-    const lcpEntries = performance.getEntriesByType('largest-contentful-paint')
-    const fcpEntries = performance.getEntriesByName('first-contentful-paint')
-    const clsEntries = performance.getEntriesByType('layout-shift')
+    const lcpEntries = [
+      ...(performance.getEntriesByType('largest-contentful-paint') || []),
+      ...(lcpObserver ? lcpObserver.takeRecords() : [])
+    ]
+    const paintEntries = performance.getEntriesByType('paint') || []
+    const fcpEntries = paintEntries.filter((entry) => entry.name === 'first-contentful-paint')
+    const clsEntries = [
+      ...(performance.getEntriesByType('layout-shift') || []),
+      ...(clsObserver ? clsObserver.takeRecords() : [])
+    ]
     const fidEntries = performance.getEntriesByType('first-input')
-    const eventEntries = performance.getEntriesByType('event')
+    const eventEntries = [
+      ...(performance.getEntriesByType('event') || []),
+      ...(eventObserver ? eventObserver.takeRecords() : [])
+    ]
 
     if (lcpEntries.length > 0) {
       result.lcp = lcpEntries[lcpEntries.length - 1].startTime
