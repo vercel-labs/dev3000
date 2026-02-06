@@ -212,7 +212,9 @@ class D3kTUI {
     const config: CliRendererConfig = {
       useMouse: true,
       exitOnCtrlC: false,
-      useAlternateScreen: true
+      useAlternateScreen: true,
+      targetFps: 20,
+      maxFps: 30
     }
 
     // Filter out OpenTUI's terminal detection messages from stdout and stderr
