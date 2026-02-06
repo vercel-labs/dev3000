@@ -13,9 +13,7 @@ export const changelog: Release[] = [
     version: "0.0.162",
     date: "2026-02-06",
     type: "patch",
-    highlights: [
-      "Reduce OpenTUI render FPS to cut idle CPU"
-    ]
+    highlights: ["Reduce OpenTUI render FPS to cut idle CPU"]
   },
 
   {
