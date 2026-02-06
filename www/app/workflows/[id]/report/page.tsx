@@ -72,6 +72,16 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
     }
   }
 
+  const formatSeconds = (ms?: number) => (typeof ms === "number" ? `${(ms / 1000).toFixed(1)}s` : "—")
+  const formatMs = (ms?: number) => (typeof ms === "number" ? `${ms.toFixed(0)}ms` : "—")
+  const formatClsValue = (value?: number) => (typeof value === "number" ? value.toFixed(4) : "—")
+  const formatClsDeltaPercent = (before?: number, after?: number) => {
+    if (typeof before !== "number" || typeof after !== "number" || before === 0) {
+      return "—"
+    }
+    return `${(((Math.abs(after - before)) / before) * 100).toFixed(0)}%`
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8 max-w-4xl">
@@ -195,18 +205,18 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
                 <span className="text-muted-foreground">
                   Total:{" "}
                   <span className="font-medium text-foreground">
-                    {(report.timing.total.totalMs / 1000).toFixed(1)}s
+                    {formatSeconds(report.timing?.total?.totalMs)}
                   </span>
                 </span>
                 <span className="text-muted-foreground">
-                  Init: <span className="font-mono text-xs">{(report.timing.total.initMs / 1000).toFixed(1)}s</span>
+                  Init: <span className="font-mono text-xs">{formatSeconds(report.timing?.total?.initMs)}</span>
                 </span>
                 <span className="text-muted-foreground">
-                  Agent: <span className="font-mono text-xs">{(report.timing.total.agentMs / 1000).toFixed(1)}s</span>
+                  Agent: <span className="font-mono text-xs">{formatSeconds(report.timing?.total?.agentMs)}</span>
                 </span>
-                {report.timing.total.prMs && (
+                {report.timing?.total?.prMs && (
                   <span className="text-muted-foreground">
-                    PR: <span className="font-mono text-xs">{(report.timing.total.prMs / 1000).toFixed(1)}s</span>
+                    PR: <span className="font-mono text-xs">{formatSeconds(report.timing?.total?.prMs)}</span>
                   </span>
                 )}
               </div>
@@ -226,7 +236,7 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
                       {report.timing.init.steps.map((step) => (
                         <li key={`init-${step.name}`} className="flex justify-between">
                           <span className="truncate mr-2">{step.name}</span>
-                          <span className="text-muted-foreground">{(step.durationMs / 1000).toFixed(1)}s</span>
+                          <span className="text-muted-foreground">{formatSeconds(step.durationMs)}</span>
                         </li>
                       ))}
                     </ul>
@@ -240,7 +250,7 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
                       {report.timing.agent.steps.map((step) => (
                         <li key={`agent-${step.name}`} className="flex justify-between">
                           <span className="truncate mr-2">{step.name}</span>
-                          <span className="text-muted-foreground">{(step.durationMs / 1000).toFixed(1)}s</span>
+                          <span className="text-muted-foreground">{formatSeconds(step.durationMs)}</span>
                         </li>
                       ))}
                     </ul>
@@ -349,9 +359,9 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
                     </div>
                     <p className="text-sm text-muted-foreground">
                       {report.verificationStatus === "improved"
-                        ? `CLS reduced by ${(((report.clsScore - report.afterClsScore) / report.clsScore) * 100).toFixed(0)}%`
+                        ? `CLS reduced by ${formatClsDeltaPercent(report.clsScore, report.afterClsScore)}`
                         : report.verificationStatus === "degraded"
-                          ? `CLS increased by ${(((report.afterClsScore - report.clsScore) / report.clsScore) * 100).toFixed(0)}%`
+                          ? `CLS increased by ${formatClsDeltaPercent(report.clsScore, report.afterClsScore)}`
                           : "The fix did not significantly impact CLS score"}
                     </p>
                   </div>
@@ -360,7 +370,7 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
                   <div className="grid grid-cols-2 gap-4">
                     <div className="text-center p-4 bg-muted/30 rounded-lg">
                       <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Before</div>
-                      <div className="text-3xl font-bold">{report.clsScore.toFixed(4)}</div>
+                      <div className="text-3xl font-bold">{formatClsValue(report.clsScore)}</div>
                       {report.clsGrade && (
                         <span
                           className={`inline-block mt-2 px-2 py-0.5 rounded-full text-xs font-medium ${gradeColor(report.clsGrade)}`}
@@ -371,7 +381,7 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
                     </div>
                     <div className="text-center p-4 bg-muted/30 rounded-lg">
                       <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">After</div>
-                      <div className="text-3xl font-bold">{report.afterClsScore.toFixed(4)}</div>
+                      <div className="text-3xl font-bold">{formatClsValue(report.afterClsScore)}</div>
                       {report.afterClsGrade && (
                         <span
                           className={`inline-block mt-2 px-2 py-0.5 rounded-full text-xs font-medium ${gradeColor(report.afterClsGrade)}`}
@@ -385,7 +395,7 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
               ) : (
                 /* Original display if no verification data */
                 <div className="flex items-center gap-4 mb-4">
-                  <div className="text-4xl font-bold">{report.clsScore.toFixed(4)}</div>
+                  <div className="text-4xl font-bold">{formatClsValue(report.clsScore)}</div>
                   {report.clsGrade && (
                     <span className={`px-3 py-1 rounded-full text-sm font-medium ${gradeColor(report.clsGrade)}`}>
                       {report.clsGrade}
@@ -411,7 +421,7 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
                       <div key={`shift-${shift.timestamp}`} className="bg-muted/50 rounded p-3 text-sm">
                         <div className="flex justify-between mb-1">
                           <span className="font-medium">Shift #{i + 1}</span>
-                          <span className="text-muted-foreground">score: {shift.score.toFixed(4)}</span>
+                          <span className="text-muted-foreground">score: {formatClsValue(shift.score)}</span>
                         </div>
                         {shift.elements.length > 0 && (
                           <div className="text-muted-foreground text-xs">Elements: {shift.elements.join(", ")}</div>
@@ -562,7 +572,7 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
                         <span
                           className={`text-sm font-medium ${report.beforeWebVitals.lcp.grade === "good" ? "text-green-600" : report.beforeWebVitals.lcp.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}
                         >
-                          {report.beforeWebVitals.lcp.value.toFixed(0)}ms
+                          {formatMs(report.beforeWebVitals.lcp.value)}
                         </span>
                       </div>
                     )}
@@ -572,7 +582,7 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
                         <span
                           className={`text-sm font-medium ${report.beforeWebVitals.fcp.grade === "good" ? "text-green-600" : report.beforeWebVitals.fcp.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}
                         >
-                          {report.beforeWebVitals.fcp.value.toFixed(0)}ms
+                          {formatMs(report.beforeWebVitals.fcp.value)}
                         </span>
                       </div>
                     )}
@@ -582,7 +592,7 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
                         <span
                           className={`text-sm font-medium ${report.beforeWebVitals.ttfb.grade === "good" ? "text-green-600" : report.beforeWebVitals.ttfb.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}
                         >
-                          {report.beforeWebVitals.ttfb.value.toFixed(0)}ms
+                          {formatMs(report.beforeWebVitals.ttfb.value)}
                         </span>
                       </div>
                     )}
@@ -599,7 +609,7 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
                                 : "text-red-600"
                           }`}
                         >
-                          {(report.beforeWebVitals?.cls?.value ?? report.clsScore)?.toFixed(4)}
+                          {formatClsValue(report.beforeWebVitals?.cls?.value ?? report.clsScore)}
                         </span>
                       </div>
                     )}
@@ -609,7 +619,7 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
                         <span
                           className={`text-sm font-medium ${report.beforeWebVitals.inp.grade === "good" ? "text-green-600" : report.beforeWebVitals.inp.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}
                         >
-                          {report.beforeWebVitals.inp.value.toFixed(0)}ms
+                          {formatMs(report.beforeWebVitals.inp.value)}
                         </span>
                       </div>
                     )}
@@ -634,7 +644,7 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
                         <span
                           className={`text-sm font-medium ${report.afterWebVitals.lcp.grade === "good" ? "text-green-600" : report.afterWebVitals.lcp.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}
                         >
-                          {report.afterWebVitals.lcp.value.toFixed(0)}ms
+                          {formatMs(report.afterWebVitals.lcp.value)}
                         </span>
                       </div>
                     )}
@@ -644,7 +654,7 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
                         <span
                           className={`text-sm font-medium ${report.afterWebVitals.fcp.grade === "good" ? "text-green-600" : report.afterWebVitals.fcp.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}
                         >
-                          {report.afterWebVitals.fcp.value.toFixed(0)}ms
+                          {formatMs(report.afterWebVitals.fcp.value)}
                         </span>
                       </div>
                     )}
@@ -654,7 +664,7 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
                         <span
                           className={`text-sm font-medium ${report.afterWebVitals.ttfb.grade === "good" ? "text-green-600" : report.afterWebVitals.ttfb.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}
                         >
-                          {report.afterWebVitals.ttfb.value.toFixed(0)}ms
+                          {formatMs(report.afterWebVitals.ttfb.value)}
                         </span>
                       </div>
                     )}
@@ -671,7 +681,7 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
                                 : "text-red-600"
                           }`}
                         >
-                          {(report.afterWebVitals?.cls?.value ?? report.afterClsScore)?.toFixed(4)}
+                          {formatClsValue(report.afterWebVitals?.cls?.value ?? report.afterClsScore)}
                         </span>
                       </div>
                     )}
@@ -681,7 +691,7 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
                         <span
                           className={`text-sm font-medium ${report.afterWebVitals.inp.grade === "good" ? "text-green-600" : report.afterWebVitals.inp.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}
                         >
-                          {report.afterWebVitals.inp.value.toFixed(0)}ms
+                          {formatMs(report.afterWebVitals.inp.value)}
                         </span>
                       </div>
                     )}
