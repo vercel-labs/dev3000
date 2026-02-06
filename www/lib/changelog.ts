@@ -13,10 +13,7 @@ export const changelog: Release[] = [
     version: "0.0.163",
     date: "2026-02-06",
     type: "patch",
-    highlights: [
-      "Fix agent-browser resolution and tighten types",
-      "Update workflow transcripts and model selection"
-    ]
+    highlights: ["Fix agent-browser resolution and tighten types", "Update workflow transcripts and model selection"]
   },
 
   {
