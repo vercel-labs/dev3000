@@ -79,7 +79,7 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
     if (typeof before !== "number" || typeof after !== "number" || before === 0) {
       return "—"
     }
-    return `${(((Math.abs(after - before)) / before) * 100).toFixed(0)}%`
+    return `${((Math.abs(after - before) / before) * 100).toFixed(0)}%`
   }
 
   return (
@@ -204,9 +204,7 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
               <div className="flex items-center gap-4 text-sm">
                 <span className="text-muted-foreground">
                   Total:{" "}
-                  <span className="font-medium text-foreground">
-                    {formatSeconds(report.timing?.total?.totalMs)}
-                  </span>
+                  <span className="font-medium text-foreground">{formatSeconds(report.timing?.total?.totalMs)}</span>
                 </span>
                 <span className="text-muted-foreground">
                   Init: <span className="font-mono text-xs">{formatSeconds(report.timing?.total?.initMs)}</span>

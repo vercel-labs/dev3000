@@ -198,6 +198,26 @@ function buildWebVitalsReadScript(): string {
   })()`
 }
 
+function extractWebVitalsResultString(evalResult: { success: boolean; result?: unknown }): string | null {
+  if (!evalResult.success || !evalResult.result) return null
+
+  if (typeof evalResult.result === "string") return evalResult.result
+
+  if (typeof evalResult.result === "object" && evalResult.result !== null) {
+    const result = evalResult.result as {
+      result?: string
+      value?: string
+      data?: { result?: string; value?: string }
+    }
+    if (typeof result.result === "string") return result.result
+    if (typeof result.value === "string") return result.value
+    if (typeof result.data?.result === "string") return result.data.result
+    if (typeof result.data?.value === "string") return result.data.value
+  }
+
+  return null
+}
+
 /**
  * Take a screenshot using agent-browser CLI
  */
@@ -813,20 +833,9 @@ Use this to diagnose and verify performance improvements.`,
         } = { lcp: null, fcp: null, ttfb: null, cls: 0, fid: null, inp: null }
 
         try {
-          if (evalResult.success && evalResult.result) {
-            // agent-browser evaluate returns the result directly
-            const resultStr =
-              typeof evalResult.result === "string" ? evalResult.result : JSON.stringify(evalResult.result)
-            // Try to parse as JSON - it might be a JSON string or already parsed
-            try {
-              vitals = JSON.parse(resultStr)
-            } catch {
-              // If that fails, try extracting from a nested structure
-              const innerResult = evalResult.result as { value?: string }
-              if (innerResult.value) {
-                vitals = JSON.parse(innerResult.value)
-              }
-            }
+          const resultStr = extractWebVitalsResultString(evalResult)
+          if (resultStr) {
+            vitals = JSON.parse(resultStr)
           }
         } catch (e) {
           workflowLog(`[getWebVitals] Failed to parse result: ${e}`)
@@ -1241,8 +1250,6 @@ async function fetchWebVitalsViaCDP(
     diagLog(`[fetchWebVitals] Eval result: ${JSON.stringify(evalResult).substring(0, 500)}`)
 
     if (evalResult.success && evalResult.result) {
-      const resultStr = typeof evalResult.result === "string" ? evalResult.result : JSON.stringify(evalResult.result)
-
       let rawVitals: {
         lcp: number | null
         fcp: number | null
@@ -1251,12 +1258,12 @@ async function fetchWebVitalsViaCDP(
         inp: number | null
       } | null = null
       try {
-        rawVitals = JSON.parse(resultStr)
-      } catch {
-        const innerResult = evalResult.result as { value?: string }
-        if (innerResult.value) {
-          rawVitals = JSON.parse(innerResult.value)
+        const resultStr = extractWebVitalsResultString(evalResult)
+        if (resultStr) {
+          rawVitals = JSON.parse(resultStr)
         }
+      } catch (err) {
+        diagLog(`[fetchWebVitals] Failed to parse result: ${err instanceof Error ? err.message : String(err)}`)
       }
 
       if (rawVitals) {
