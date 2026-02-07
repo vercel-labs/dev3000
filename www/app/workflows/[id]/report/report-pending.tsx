@@ -12,10 +12,20 @@ interface ReportPendingProps {
   projectName?: string
 }
 
+const STEP_LABELS = [
+  "Creating sandbox",
+  "Capturing baseline",
+  "Agent in progress",
+  "Generating report",
+  "Finishing up"
+]
+
 export function ReportPending({ runId, userId, projectName }: ReportPendingProps) {
   const router = useRouter()
   const [status, setStatus] = useState<string>("Generating report...")
   const [hasError, setHasError] = useState(false)
+  const [sandboxUrl, setSandboxUrl] = useState<string | null>(null)
+  const [stepNumber, setStepNumber] = useState<number | null>(null)
 
   useEffect(() => {
     let isActive = true
@@ -40,6 +50,8 @@ export function ReportPending({ runId, userId, projectName }: ReportPendingProps
             currentStep?: string
             reportBlobUrl?: string
             error?: string
+            stepNumber?: number
+            sandboxUrl?: string
           }>
         }
 
@@ -68,6 +80,8 @@ export function ReportPending({ runId, userId, projectName }: ReportPendingProps
         if (isActive) {
           setHasError(false)
           setStatus(run.currentStep || "Generating report...")
+          setStepNumber(typeof run.stepNumber === "number" ? run.stepNumber : null)
+          setSandboxUrl(run.sandboxUrl || null)
         }
       } catch (error) {
         if (!isActive) return
@@ -104,15 +118,64 @@ export function ReportPending({ runId, userId, projectName }: ReportPendingProps
           <AlertDescription className={hasError ? "" : "text-blue-900 dark:text-blue-100"}>{status}</AlertDescription>
         </Alert>
 
+        {sandboxUrl && !hasError && (
+          <Alert className="bg-yellow-50 border-yellow-200 dark:bg-yellow-950 dark:border-yellow-800">
+            <AlertDescription className="text-yellow-900 dark:text-yellow-100">
+              <span className="font-medium">Sandbox:</span>{" "}
+              <a
+                href={sandboxUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 hover:underline font-mono text-sm"
+              >
+                {sandboxUrl}
+              </a>
+            </AlertDescription>
+          </Alert>
+        )}
+
+        <div className="bg-card border border-border rounded-lg p-4">
+          <div className="text-sm font-medium text-foreground mb-3">Progress</div>
+          <div className="space-y-2">
+            {STEP_LABELS.map((label, index) => {
+              const isDone = stepNumber !== null && index < stepNumber
+              const isActive = stepNumber !== null && index === stepNumber
+              return (
+                <div key={label} className="flex items-center gap-3 text-sm">
+                  <span
+                    className={`h-2.5 w-2.5 rounded-full ${
+                      isDone ? "bg-green-500" : isActive ? "bg-blue-500" : "bg-muted"
+                    }`}
+                  />
+                  <span className={isActive ? "text-foreground font-medium" : "text-muted-foreground"}>{label}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
         <div className="grid gap-4">
-          <Skeleton className="h-10 w-2/3" />
-          <Skeleton className="h-6 w-1/2" />
+          <div>
+            <div className="text-sm font-medium text-foreground mb-2">Sandbox Summary</div>
+            <Skeleton className="h-10 w-2/3" />
+          </div>
+          <div>
+            <div className="text-sm font-medium text-foreground mb-2">Timing Breakdown</div>
+            <Skeleton className="h-6 w-1/2" />
+          </div>
           <Skeleton className="h-40 w-full" />
           <div className="grid grid-cols-2 gap-4">
             <Skeleton className="h-24 w-full" />
             <Skeleton className="h-24 w-full" />
           </div>
-          <Skeleton className="h-32 w-full" />
+          <div>
+            <div className="text-sm font-medium text-foreground mb-2">d3k Diagnostic Transcript</div>
+            <Skeleton className="h-32 w-full" />
+          </div>
+          <div>
+            <div className="text-sm font-medium text-foreground mb-2">Agent Analysis</div>
+            <Skeleton className="h-32 w-full" />
+          </div>
         </div>
       </div>
     </div>
