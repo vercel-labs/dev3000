@@ -334,6 +334,15 @@ class D3kTUI {
         }
       },
       onMouseDown: (event) => {
+        if (this.renderer && !this.renderer.hasSelection && event.button === 0) {
+          const target = event.target
+          if (!target?.selectable) {
+            const logLine = this.findLogLineAt(event.x, event.y)
+            if (logLine) {
+              this.renderer.startSelection(logLine, event.x, event.y)
+            }
+          }
+        }
         const target = event.target
         const targetId = target?.id || "(none)"
         const selection = this.renderer?.getSelection()
@@ -831,15 +840,6 @@ class D3kTUI {
 
       const isBaseLog = this.baseLogId === log.id
       const formatted = formatLogLine(log.content, isCompact, this.baseTimestampMs, isBaseLog)
-      // Wrap TextRenderable in a BoxRenderable to force valid X position
-      const logWrapper = new BoxRenderable(this.renderer, {
-        id: `log-wrapper-${log.id}`,
-        width: "100%",
-        flexShrink: 0,
-        paddingLeft: 0, // Explicit padding to force position calculation
-        marginLeft: 0 // Explicit margin to force position calculation
-      })
-
       // Track click start position to detect clicks vs drags
       let clickStartX = -1
       let clickStartY = -1
@@ -852,6 +852,7 @@ class D3kTUI {
         selectionBg: RGBA.fromInts(70, 130, 180), // Steel blue highlight
         selectionFg: RGBA.fromInts(255, 255, 255), // White text on selection
         width: "100%",
+        flexShrink: 0,
         onMouseDown: (event) => {
           // Record start position for click detection
           clickStartX = event.x
@@ -891,14 +892,23 @@ class D3kTUI {
           clickStartY = -1
         }
       })
-
-      logWrapper.add(logLine)
-      this.logsContainer.add(logWrapper)
+      this.logsContainer.add(logLine)
     }
 
     // Force render to update hit grid after adding new logs
     // This prevents stale hit grid when new logs trigger scroll/layout changes
     this.renderer.requestRender()
+  }
+
+  private findLogLineAt(x: number, y: number): TextRenderable | null {
+    if (!this.logsContainer) return null
+    for (const child of this.logsContainer.getChildren()) {
+      if (!(child instanceof TextRenderable)) continue
+      const withinX = x >= child.x && x < child.x + child.width
+      const withinY = y >= child.y && y < child.y + child.height
+      if (withinX && withinY) return child
+    }
+    return null
   }
 
   private refreshLogs() {

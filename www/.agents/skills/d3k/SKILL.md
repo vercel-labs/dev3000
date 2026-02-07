@@ -33,9 +33,6 @@ d3k find-component "nav"  # Find React component source
 
 ## Browser Interaction
 
-When asked to open a URL or navigate pages, prefer using `d3k agent-browser` first.
-Only claim you cannot interact if `d3k cdp-port` or `d3k agent-browser` fails.
-
 To click elements, navigate, or take screenshots, use `d3k agent-browser --cdp $(d3k cdp-port)`:
 
 ```bash

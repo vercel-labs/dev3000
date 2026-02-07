@@ -23,7 +23,6 @@ async function fetchJsonWithRetry(fetchUrl: string): Promise<Response> {
       lastError = error
       if (attempt < FETCH_RETRIES) {
         await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)))
-        continue
       }
     }
   }
