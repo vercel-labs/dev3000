@@ -93,6 +93,10 @@ export function ReportPending({ runId, userId, projectName }: ReportPendingProps
     }
   }, [runId, userId, router])
 
+  const activeStepLabel = typeof stepNumber === "number" ? STEP_LABELS[stepNumber] : null
+  const showStatus = !activeStepLabel || status.trim() !== activeStepLabel
+  const statusText = showStatus ? status : "In progress..."
+
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8 max-w-4xl space-y-6">
@@ -109,7 +113,9 @@ export function ReportPending({ runId, userId, projectName }: ReportPendingProps
           className={hasError ? "" : "bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-800"}
         >
           {hasError && <AlertCircle className="h-4 w-4" />}
-          <AlertDescription className={hasError ? "" : "text-blue-900 dark:text-blue-100"}>{status}</AlertDescription>
+          <AlertDescription className={hasError ? "" : "text-blue-900 dark:text-blue-100"}>
+            {statusText}
+          </AlertDescription>
         </Alert>
 
         {sandboxUrl && !hasError && (
