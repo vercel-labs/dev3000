@@ -276,6 +276,11 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
         }
         if (!run) return
 
+        if (redirectedRunId !== run.id) {
+          setRedirectedRunId(run.id)
+          router.push(`/workflows/${run.id}/report`)
+        }
+
         // Update status from real backend data
         if (run.currentStep) {
           setWorkflowStatus(run.currentStep)
@@ -293,10 +298,6 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
             runId: run.id,
             pr: run.prUrl ? { prUrl: run.prUrl } : null
           })
-          if (run.reportBlobUrl && redirectedRunId !== run.id) {
-            setRedirectedRunId(run.id)
-            router.push(`/workflows/${run.id}/report`)
-          }
         } else if (run.status === "failure") {
           setWorkflowStatus(`Workflow failed: ${run.error || "Unknown error"}`)
         }
