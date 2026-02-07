@@ -11,11 +11,13 @@ import {
   MacOSScrollAccel,
   RGBA,
   ScrollBoxRenderable,
+  type Selection,
   type StyledText,
   TextRenderable,
   t,
   yellow
 } from "@opentui/core"
+import { spawnSync } from "child_process"
 import { appendFileSync, createReadStream, mkdirSync, unwatchFile, watchFile, writeFileSync } from "fs"
 import { tmpdir } from "os"
 import { join } from "path"
@@ -191,6 +193,8 @@ class D3kTUI {
   private debugMode = false
   private lastFocusedId: string | null = null
   private debugLogFile: string = join(process.env.HOME || tmpdir(), ".d3k", "tui-debug.log")
+  private lastCopiedSelection: string | null = null
+  private selectionCopyHandler: ((selection: Selection | null) => void) | null = null
   private isCompact = false
   private isVeryCompact = false
   private isRebuilding = false
@@ -248,6 +252,7 @@ class D3kTUI {
     this.setupUI()
     this.setupKeyboardHandlers()
     this.setupFocusTracking()
+    this.setupSelectionCopy()
     this.renderer.start()
 
     // Delay log file watcher start to allow layout to compute valid positions
@@ -558,6 +563,12 @@ class D3kTUI {
     let ctrlCPending = false
 
     this.renderer.keyInput.on("keypress", (key) => {
+      // Ctrl+Shift+C or Cmd+C: copy selection to clipboard
+      if ((key.ctrl && key.shift && key.name === "c") || (key.meta && key.name === "c")) {
+        this.copySelectionToClipboard()
+        return
+      }
+
       // Handle Ctrl+C with double-tap protection
       if (key.ctrl && key.name === "c") {
         if (ctrlCPending) {
@@ -682,6 +693,47 @@ class D3kTUI {
         this.lastFocusedId = currentId
       }
     })
+  }
+
+  private setupSelectionCopy() {
+    if (!this.renderer || this.selectionCopyHandler) return
+
+    this.selectionCopyHandler = (selection) => {
+      if (!selection) {
+        this.lastCopiedSelection = null
+        return
+      }
+
+      if (selection.isSelecting || !selection.isActive) return
+
+      const text = selection.getSelectedText()
+      if (!text || text.trim().length === 0) return
+      if (text === this.lastCopiedSelection) return
+
+      this.lastCopiedSelection = text
+      this.copyToClipboard(text)
+    }
+
+    this.renderer.on("selection", this.selectionCopyHandler)
+  }
+
+  private copySelectionToClipboard() {
+    if (!this.renderer) return
+    const selection = this.renderer.getSelection()
+    const text = selection?.getSelectedText()
+    if (!text || text.trim().length === 0) return
+    this.lastCopiedSelection = text
+    this.copyToClipboard(text)
+  }
+
+  private copyToClipboard(text: string) {
+    if (process.platform === "darwin") {
+      try {
+        spawnSync("pbcopy", { input: text })
+      } catch (error) {
+        this.debugLog(`[CLIPBOARD] Failed to copy selection: ${String(error)}`)
+      }
+    }
   }
 
   private startLogFileWatcher() {
@@ -924,6 +976,10 @@ class D3kTUI {
     unwatchFile(this.options.logFile)
     if (this.renderer) {
       try {
+        if (this.selectionCopyHandler) {
+          this.renderer.off("selection", this.selectionCopyHandler)
+          this.selectionCopyHandler = null
+        }
         this.renderer.destroy()
       } catch (error) {
         this.debugLog(`Renderer destroy failed during shutdown: ${error}`)
