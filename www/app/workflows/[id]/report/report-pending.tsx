@@ -95,6 +95,11 @@ export function ReportPending({ runId, userId }: ReportPendingProps) {
   const activeStepLabel = typeof stepNumber === "number" ? STEP_LABELS[stepNumber] : null
   const showStatus = !activeStepLabel || status.trim() !== activeStepLabel
   const statusText = showStatus ? status : "In progress..."
+  const fallbackActiveIndex =
+    stepNumber === null
+      ? STEP_LABELS.findIndex((label) => label.toLowerCase() === status.trim().toLowerCase())
+      : -1
+  const activeIndex = stepNumber ?? (fallbackActiveIndex >= 0 ? fallbackActiveIndex : null)
 
   return (
     <div className="min-h-screen bg-background">
@@ -137,8 +142,8 @@ export function ReportPending({ runId, userId }: ReportPendingProps) {
           <div className="text-sm font-medium text-foreground mb-3">Progress</div>
           <div className="space-y-2">
             {STEP_LABELS.map((label, index) => {
-              const isDone = stepNumber !== null && index < stepNumber
-              const isActive = stepNumber !== null && index === stepNumber
+              const isDone = activeIndex !== null && index < activeIndex
+              const isActive = activeIndex !== null && index === activeIndex
               return (
                 <div key={label} className="flex items-center gap-3 text-sm">
                   <span
@@ -149,7 +154,7 @@ export function ReportPending({ runId, userId }: ReportPendingProps) {
                   <span
                     className={
                       isActive && !hasError
-                        ? "text-shimmer font-medium"
+                        ? "text-shimmer font-medium inline-block"
                         : isDone
                           ? "text-foreground"
                           : "text-muted-foreground"
