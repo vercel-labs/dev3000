@@ -1784,8 +1784,8 @@ ${
 ## IMPORTANT RULES
 
 1. **START by calling get_skill({ name: "d3k" }) then get_skill({ name: "vercel-design-guidelines" })**${
-  shouldCrawl ? ", then crawl_app" : ""
-}
+    shouldCrawl ? ", then crawl_app" : ""
+  }
 2. **YOU MUST WRITE CODE** - Don't just analyze, actually fix issues!
 3. **Prioritize Critical issues first** - Then Warnings, then Suggestions
 4. **Be efficient** - You have limited steps (15 max), focus on high-impact fixes
