@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Spinner } from "@/components/ui/spinner"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { DEV3000_API_URL } from "@/lib/constants"
+import type { WorkflowType } from "@/lib/workflow-storage"
 
 interface Team {
   id: string
@@ -115,6 +116,13 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   const [loadingBranches, setLoadingBranches] = useState(false)
   const [branchesError, setBranchesError] = useState(false)
   const loadedTeamIdRef = useRef<string | null>(null)
+
+  const workflowSkillLabels: Record<WorkflowType, string[]> = {
+    "design-guidelines": ["d3k", "vercel-design-guidelines"],
+    "react-performance": ["d3k", "vercel-react-best-practices"],
+    "cls-fix": ["d3k"],
+    prompt: ["d3k"]
+  }
 
   // Check if GitHub repo info is available from project link or deployment metadata
   const hasGitHubRepoInfo = Boolean(
@@ -764,6 +772,9 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                   <div className="text-sm text-muted-foreground mt-1">
                     Evaluate your site against Vercel design guidelines and automatically fix issues
                   </div>
+                  <div className="text-xs text-muted-foreground mt-2">
+                    Skills: {workflowSkillLabels["design-guidelines"].join(", ")}
+                  </div>
                 </Link>
                 <Link
                   href="/workflows/new?type=react-performance"
@@ -772,6 +783,9 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                   <div className="font-semibold text-foreground">React Performance Review</div>
                   <div className="text-sm text-muted-foreground mt-1">
                     Analyze React/Next.js code for performance issues and apply optimizations
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-2">
+                    Skills: {workflowSkillLabels["react-performance"].join(", ")}
                   </div>
                 </Link>
                 <Link
@@ -782,6 +796,9 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                   <div className="text-sm text-muted-foreground mt-1">
                     Detect and fix Cumulative Layout Shift issues automatically
                   </div>
+                  <div className="text-xs text-muted-foreground mt-2">
+                    Skills: {workflowSkillLabels["cls-fix"].join(", ")}
+                  </div>
                 </Link>
                 <Link
                   href="/workflows/new?type=prompt"
@@ -790,6 +807,9 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                   <div className="font-semibold text-foreground">Prompt</div>
                   <div className="text-sm text-muted-foreground mt-1">
                     Run a custom AI workflow with your own instructions
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-2">
+                    Skills: {workflowSkillLabels.prompt.join(", ")}
                   </div>
                 </Link>
               </div>
