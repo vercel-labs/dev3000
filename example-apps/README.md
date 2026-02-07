@@ -58,3 +58,7 @@ When running workflows against these apps:
 - Design Guidelines Review should suggest concrete improvements to color contrast, spacing, typography, and CTA hierarchy.
 - React Performance Review should parallelize data fetching and reduce expensive client-side renders.
 - CLS Fix should eliminate the banner shift and reserve space for media to prevent layout jump.
+
+## Deployment Note
+
+These projects are connected to Git in the Vercel team. Pushing to `main` triggers auto-deploys.
