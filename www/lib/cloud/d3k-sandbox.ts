@@ -473,7 +473,9 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
 
     // Use chromium path from @sparticuz/chromium (or fallback)
     if (debug)
-      console.log(`  🔧 Command: cd ${sandboxCwd} && d3k --no-tui --debug --headless --browser ${chromiumPath}`)
+      console.log(
+        `  🔧 Command: cd ${sandboxCwd} && d3k --no-tui --debug --headless --auto-skills --agent-name codex --browser ${chromiumPath}`
+      )
 
     // Start d3k in detached mode with --headless flag
     // This tells d3k to launch Chrome in headless mode, which works in serverless environments
@@ -487,7 +489,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
       cmd: "sh",
       args: [
         "-c",
-        `mkdir -p /home/vercel-sandbox/.d3k/logs && cd ${sandboxCwd} && d3k --no-tui --debug --headless --browser ${chromiumPath} > ${d3kStartupLog} 2>&1`
+        `mkdir -p /home/vercel-sandbox/.d3k/logs && cd ${sandboxCwd} && d3k --no-tui --debug --headless --auto-skills --agent-name codex --browser ${chromiumPath} > ${d3kStartupLog} 2>&1`
       ],
       detached: true
     })

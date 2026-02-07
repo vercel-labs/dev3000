@@ -764,6 +764,10 @@ program
   .option("--plugin-react-scan", "Enable react-scan performance monitoring for React applications")
   .option("--headless", "Run Chrome in headless mode (for serverless/CI environments)")
   .option(
+    "--auto-skills",
+    "Automatically install recommended skills without prompts (headless-safe, installs to project skills dir)"
+  )
+  .option(
     "--with-agent <command>",
     'Run an agent (e.g. claude) in split-screen mode using tmux. Example: --with-agent "claude"'
   )
@@ -965,6 +969,10 @@ program
       }
     }
 
+    if (options.autoSkills && !skillsAgentId) {
+      skillsAgentId = "codex"
+    }
+
     // Detect project type and configuration
     const projectConfig = await detectProjectType(options.debug)
 
@@ -1107,7 +1115,8 @@ program
         tui: options.tui && !options.debug, // TUI is default unless --no-tui or --debug is specified
         dateTimeFormat: options.dateTime || "local",
         pluginReactScan: options.pluginReactScan || false,
-        skillsAgentId: skillsAgentId || undefined
+        skillsAgentId: skillsAgentId || undefined,
+        autoSkills: options.autoSkills || false
       })
     } catch (error) {
       console.error(chalk.red("❌ Failed to start development environment:"), error)

@@ -22,7 +22,13 @@ import { type LogEntry, NextJsErrorDetector, OutputProcessor, StandardLogParser 
 import { getBundledSkillsPath } from "./skills/index.js"
 import { DevTUI } from "./tui-interface.js"
 import { getProjectDir, getProjectDisplayName, getProjectName } from "./utils/project-name.js"
-import { getSkillsPathForLocation } from "./utils/skill-installer.js"
+import {
+  getApplicablePackages,
+  getSkillsPathForLocation,
+  installSkillPackage,
+  isPackageInstalled,
+  type SkillsAgentId
+} from "./utils/skill-installer.js"
 import { formatTimestamp } from "./utils/timestamp.js"
 import {
   checkForUpdates,
@@ -165,6 +171,7 @@ interface DevEnvironmentOptions {
   headless?: boolean // Run Chrome in headless mode (for serverless/CI environments)
   withAgent?: string // Command to run an embedded agent (e.g. "claude --dangerously-skip-permissions")
   skillsAgentId?: string // Selected agent id for skills/d3k skill placement
+  autoSkills?: boolean // Auto-install recommended skills (non-interactive)
 }
 
 class Logger {
@@ -443,6 +450,29 @@ async function ensureD3kSkill(skillsAgentId?: string): Promise<void> {
     }
   } catch (_error) {
     // Ignore errors - skill installation is optional
+  }
+}
+
+async function autoInstallSkills(agentId: SkillsAgentId | undefined, debugLog: (msg: string) => void): Promise<void> {
+  if (!agentId) {
+    return
+  }
+
+  const packages = getApplicablePackages()
+  if (packages.length === 0) {
+    return
+  }
+
+  for (const pkg of packages) {
+    if (isPackageInstalled(pkg, agentId)) {
+      continue
+    }
+
+    debugLog(`Auto-installing skill package: ${pkg.repo}`)
+    const result = await installSkillPackage(pkg, "project", agentId)
+    if (!result.success) {
+      debugLog(`Skill install failed for ${pkg.repo}: ${result.error || "unknown error"}`)
+    }
   }
 }
 
@@ -1004,6 +1034,9 @@ export class DevEnvironment {
       // Install d3k skill early so it's available when Claude Code starts
       // This is important for --with-agent where both start simultaneously
       await ensureD3kSkill(this.options.skillsAgentId)
+      if (this.options.autoSkills) {
+        await autoInstallSkills(this.options.skillsAgentId as SkillsAgentId | undefined, this.debugLog)
+      }
 
       // Check ports in background after TUI is visible
       await this.checkPortsAvailable(true) // silent mode for TUI
@@ -1087,6 +1120,9 @@ export class DevEnvironment {
       // Install d3k skill early so it's available when Claude Code starts
       // This is important for --with-agent where both start simultaneously
       await ensureD3kSkill(this.options.skillsAgentId)
+      if (this.options.autoSkills) {
+        await autoInstallSkills(this.options.skillsAgentId as SkillsAgentId | undefined, this.debugLog)
+      }
 
       // Start spinner
       this.spinner.start("Checking ports...")
