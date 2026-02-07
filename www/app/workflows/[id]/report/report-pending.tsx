@@ -106,7 +106,7 @@ export function ReportPending({ runId, userId }: ReportPendingProps) {
     return normalizedStatus.startsWith(normalizedLabel) || normalizedLabel.startsWith(normalizedStatus)
   })
   const fallbackActiveIndex = statusMatchIndex >= 0 ? statusMatchIndex : -1
-  const activeIndex = fallbackActiveIndex >= 0 ? fallbackActiveIndex : stepNumber ?? null
+  const activeIndex = fallbackActiveIndex >= 0 ? fallbackActiveIndex : (stepNumber ?? null)
 
   return (
     <div className="min-h-screen bg-background">

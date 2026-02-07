@@ -38,6 +38,8 @@
   --sidebar-accent-foreground: oklch(0.98 0 0);
   --sidebar-border: oklch(0.15 0 0);
   --sidebar-ring: oklch(0.4 0 0);
+  --shimmer-base: color-mix(in oklch, var(--foreground) 55%, var(--muted-foreground));
+  --shimmer-highlight: color-mix(in oklch, var(--foreground) 85%, white);
 
   .asciinema-player-theme-vercel {
     /* Foreground (default text) color */
@@ -100,6 +102,8 @@
   --sidebar-accent-foreground: oklch(0.98 0 0);
   --sidebar-border: oklch(0.15 0 0);
   --sidebar-ring: oklch(0.4 0 0);
+  --shimmer-base: color-mix(in oklch, var(--foreground) 55%, var(--muted-foreground));
+  --shimmer-highlight: color-mix(in oklch, var(--foreground) 90%, white);
 }
 
 @theme inline {
@@ -267,14 +271,15 @@
   color: transparent;
   background-clip: text;
   -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
   background-image: linear-gradient(
     110deg,
-    color-mix(in oklch, var(--muted-foreground) 85%, var(--foreground)) 0%,
-    color-mix(in oklch, var(--foreground) 85%, white) 45%,
-    color-mix(in oklch, var(--muted-foreground) 85%, var(--foreground)) 80%
+    var(--shimmer-base) 0%,
+    var(--shimmer-highlight) 45%,
+    var(--shimmer-base) 80%
   );
   background-size: 300% 100%;
-  animation: shimmer 1.4s linear infinite;
+  animation: shimmer 2.8s linear infinite;
 }
 
 .skeleton-shimmer {
