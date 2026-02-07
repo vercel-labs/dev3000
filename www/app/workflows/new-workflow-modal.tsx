@@ -1061,6 +1061,14 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                         />
                         <p className="mt-1 text-xs text-muted-foreground">
                           Required to create PRs. Stored locally in your browser.
+                          <a
+                            href="https://github.com/settings/tokens?type=beta"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="ml-2 text-blue-600 hover:underline"
+                          >
+                            Open GitHub token settings
+                          </a>
                         </p>
                       </div>
                     )}
