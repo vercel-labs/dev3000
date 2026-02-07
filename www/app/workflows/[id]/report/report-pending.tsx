@@ -166,24 +166,24 @@ export function ReportPending({ runId, userId }: ReportPendingProps) {
         <div className="grid gap-4">
           <div>
             <div className="text-sm font-medium text-foreground mb-2">Sandbox Summary</div>
-            <Skeleton className="h-10 w-2/3 skeleton-shimmer" />
+            <Skeleton className="h-10 w-2/3" />
           </div>
           <div>
             <div className="text-sm font-medium text-foreground mb-2">Timing Breakdown</div>
-            <Skeleton className="h-6 w-1/2 skeleton-shimmer" />
+            <Skeleton className="h-6 w-1/2" />
           </div>
-          <Skeleton className="h-40 w-full skeleton-shimmer" />
+          <Skeleton className="h-40 w-full" />
           <div className="grid grid-cols-2 gap-4">
-            <Skeleton className="h-24 w-full skeleton-shimmer" />
-            <Skeleton className="h-24 w-full skeleton-shimmer" />
+            <Skeleton className="h-24 w-full" />
+            <Skeleton className="h-24 w-full" />
           </div>
           <div>
             <div className="text-sm font-medium text-foreground mb-2">d3k Diagnostic Transcript</div>
-            <Skeleton className="h-32 w-full skeleton-shimmer" />
+            <Skeleton className="h-32 w-full" />
           </div>
           <div>
             <div className="text-sm font-medium text-foreground mb-2">Agent Analysis</div>
-            <Skeleton className="h-32 w-full skeleton-shimmer" />
+            <Skeleton className="h-32 w-full" />
           </div>
         </div>
       </div>
