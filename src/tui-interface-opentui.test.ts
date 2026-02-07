@@ -64,6 +64,16 @@ describe("OpenTUI TUI Implementation", () => {
     expect(fileContent).toContain("scrollBy")
   })
 
+  it("should support mouse selection inside the logs pane", () => {
+    const tuiFilePath = join(__dirname, "tui-interface-opentui.ts")
+    const fileContent = readFileSync(tuiFilePath, "utf-8")
+
+    // Ensure logs selection fallback exists for scroll box hit testing
+    expect(fileContent).toContain("findLogLineAt")
+    expect(fileContent).toContain("startSelection")
+    expect(fileContent).toContain("logsContainer.add(logLine)")
+  })
+
   it("should return the expected interface from runTUI", () => {
     const tuiFilePath = join(__dirname, "tui-interface-opentui.ts")
     const fileContent = readFileSync(tuiFilePath, "utf-8")
