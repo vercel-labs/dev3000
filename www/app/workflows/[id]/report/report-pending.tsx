@@ -1,8 +1,8 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
 import { AlertCircle } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { useEffect, useState } from "react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Skeleton } from "@/components/ui/skeleton"
 
@@ -91,7 +91,9 @@ export function ReportPending({ runId, userId, projectName }: ReportPendingProps
         <div>
           <div className="text-xs uppercase tracking-wide text-muted-foreground">Workflow Report</div>
           <h1 className="text-3xl font-bold mt-2">{projectName || "Preparing your report"}</h1>
-          <p className="text-muted-foreground mt-1">We&apos;re assembling the results and will show them here shortly.</p>
+          <p className="text-muted-foreground mt-1">
+            We&apos;re assembling the results and will show them here shortly.
+          </p>
         </div>
 
         <Alert
