@@ -67,6 +67,8 @@ export interface WorkflowReport {
   // AI agent analysis
   agentAnalysis: string
   agentAnalysisModel?: string // e.g. "anthropic/claude-sonnet-4-20250514"
+  skillsInstalled?: string[] // Skills available in the sandbox at runtime
+  skillsLoaded?: string[] // Skills explicitly loaded by the agent via get_skill
 
   // d3k logs
   d3kLogs?: string // Combined (backward compat)

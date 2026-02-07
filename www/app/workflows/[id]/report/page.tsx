@@ -329,6 +329,43 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
             </CollapsibleSection>
           )}
 
+          {/* Skills Summary */}
+          {(report.skillsInstalled?.length || report.skillsLoaded?.length) && (
+            <div className="mt-6 pt-6 border-t border-border">
+              <h3 className="text-lg font-medium mb-3">Skills</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                <div className="bg-muted/30 rounded-lg p-4">
+                  <div className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Installed</div>
+                  {report.skillsInstalled && report.skillsInstalled.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {report.skillsInstalled.map((skill) => (
+                        <span key={`installed-${skill}`} className="px-2 py-0.5 rounded bg-muted text-xs">
+                          {skill}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-muted-foreground text-sm">None detected</span>
+                  )}
+                </div>
+                <div className="bg-muted/30 rounded-lg p-4">
+                  <div className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Loaded</div>
+                  {report.skillsLoaded && report.skillsLoaded.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {report.skillsLoaded.map((skill) => (
+                        <span key={`loaded-${skill}`} className="px-2 py-0.5 rounded bg-muted text-xs">
+                          {skill}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="text-muted-foreground text-sm">None recorded</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Agent Analysis - shown for all workflow types */}
           <div className="mt-6 pt-6 border-t border-border">
             <div className="flex items-center justify-between mb-4">
@@ -732,7 +769,6 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
               </p>
             </div>
           )}
-
         </div>
 
         <div className="mt-6 flex gap-4">

@@ -576,6 +576,8 @@ export async function agentFixLoopStep(
     }
   }
 
+  const { skillsInstalled } = await readSandboxSkillsInfo(sandbox)
+
   const report: WorkflowReport = {
     id: reportId,
     projectName,
@@ -595,6 +597,8 @@ export async function agentFixLoopStep(
     verificationStatus: status === "no-changes" ? "unchanged" : status,
     agentAnalysis: agentResult.transcript,
     agentAnalysisModel: "openai/gpt-5.2",
+    skillsInstalled: skillsInstalled.length > 0 ? skillsInstalled : undefined,
+    skillsLoaded: agentResult.skillsLoaded.length > 0 ? agentResult.skillsLoaded : undefined,
     gitDiff: gitDiff ?? undefined,
     d3kLogs: combinedD3kLogs,
     initD3kLogs: initD3kLogs,
@@ -654,13 +658,14 @@ async function runAgentWithDiagnoseTool(
   customPrompt?: string,
   workflowType?: string,
   crawlDepth?: number | "all"
-): Promise<{ transcript: string; summary: string; systemPrompt: string }> {
+): Promise<{ transcript: string; summary: string; systemPrompt: string; skillsLoaded: string[] }> {
   const SANDBOX_CWD = "/vercel/sandbox"
   const skillAliases: Record<string, string> = {
     "react-performance": "vercel-react-best-practices",
     "vercel-design-guidelines": "web-design-guidelines",
     "design-guidelines": "web-design-guidelines"
   }
+  const skillsLoaded = new Set<string>()
 
   const gateway = createGateway({
     apiKey: process.env.AI_GATEWAY_API_KEY,
@@ -766,6 +771,7 @@ Use this before audits or performance reviews to get the full guidelines.`,
       execute: async ({ name }: { name: string }) => {
         const normalized = name.trim().toLowerCase()
         const resolved = skillAliases[normalized] ?? normalized
+        skillsLoaded.add(normalized)
 
         const safeName = resolved.replace(/[^a-z0-9-]/g, "")
         if (!safeName) {
@@ -1014,13 +1020,13 @@ Use this to diagnose and verify performance improvements.`,
       crawlDepth && crawlDepth !== 1
         ? ` Then use crawl_app with depth=${crawlDepth} to discover all pages to audit.`
         : ""
-    userPromptMessage = `Evaluate and fix design guideline violations on the ${startPath} page. Dev URL: ${devUrl}\n\nFirst, call get_skill({ name: "vercel-design-guidelines" }) to load the design guidelines skill.${crawlInfo} Then read and audit the code.`
+    userPromptMessage = `Evaluate and fix design guideline violations on the ${startPath} page. Dev URL: ${devUrl}\n\nFirst, call get_skill({ name: "d3k" }) then get_skill({ name: "vercel-design-guidelines" }) to load the skills.${crawlInfo} Then read and audit the code.`
   } else if (workflowTypeForPrompt === "react-performance") {
-    userPromptMessage = `Analyze and optimize React/Next.js performance on the ${startPath} page. Dev URL: ${devUrl}\n\nFirst, call get_skill({ name: "react-performance" }) to load the React performance guidelines. Then use getWebVitals to capture current metrics, and analyze the codebase for optimization opportunities.`
+    userPromptMessage = `Analyze and optimize React/Next.js performance on the ${startPath} page. Dev URL: ${devUrl}\n\nFirst, call get_skill({ name: "d3k" }) then get_skill({ name: "react-performance" }) to load the skills. Then use getWebVitals to capture current metrics, and analyze the codebase for optimization opportunities.`
   } else if (customPrompt) {
-    userPromptMessage = `Proceed with the task. The dev server is running at ${devUrl}`
+    userPromptMessage = `Proceed with the task. First, call get_skill({ name: "d3k" }) to load the skill. The dev server is running at ${devUrl}`
   } else {
-    userPromptMessage = `Fix the CLS issues on the ${startPath} page of this app. Dev URL: ${devUrl}\n\nStart with diagnose to see what's shifting, then fix it.`
+    userPromptMessage = `Fix the CLS issues on the ${startPath} page of this app. Dev URL: ${devUrl}\n\nFirst, call get_skill({ name: "d3k" }), then start with diagnose to see what's shifting, and fix it.`
   }
 
   const { text, steps } = await generateText({
@@ -1096,13 +1102,42 @@ Use this to diagnose and verify performance improvements.`,
   return {
     transcript: transcript.join("\n"),
     summary: text,
-    systemPrompt
+    systemPrompt,
+    skillsLoaded: Array.from(skillsLoaded)
   }
 }
 
 // ============================================================
 // Helper Functions
 // ============================================================
+
+async function readSandboxSkillsInfo(
+  sandbox: Sandbox
+): Promise<{ skillsInstalled: string[]; skillsAgentId?: string | null }> {
+  try {
+    const sessionPathResult = await runSandboxCommand(sandbox, "sh", [
+      "-c",
+      "ls -t /home/vercel-sandbox/.d3k/*/session.json 2>/dev/null | head -1"
+    ])
+    const sessionPath = sessionPathResult.stdout.trim().split("\n")[0]
+    if (!sessionPath) {
+      return { skillsInstalled: [] }
+    }
+
+    const sessionResult = await runSandboxCommand(sandbox, "sh", ["-c", `cat "${sessionPath}" 2>/dev/null`])
+    const parsed = JSON.parse(sessionResult.stdout) as { skillsInstalled?: string[]; skillsAgentId?: string | null }
+
+    return {
+      skillsInstalled: Array.isArray(parsed.skillsInstalled) ? parsed.skillsInstalled : [],
+      skillsAgentId: parsed.skillsAgentId ?? null
+    }
+  } catch (error) {
+    workflowLog(
+      `[Agent] Failed to read skills from sandbox session: ${error instanceof Error ? error.message : String(error)}`
+    )
+    return { skillsInstalled: [] }
+  }
+}
 
 async function runSandboxCommand(
   sandbox: Sandbox,
@@ -1625,15 +1660,24 @@ function buildClsFixPrompt(
 ): string {
   return `You are a CLS fix specialist. Fix the layout shift issue efficiently.
 
+## FIRST STEP - LOAD THE SKILL
+
+**IMPORTANT:** Before doing anything else, call the \`get_skill\` tool to load the d3k skill:
+
+\`\`\`
+get_skill({ name: "d3k" })
+\`\`\`
+
 ## CRITICAL: You MUST write a fix!
 Your goal is to WRITE CODE that fixes the CLS issue, not just analyze it.
 You have limited steps - be efficient and focused.
 
-## Workflow (4-6 steps max):
-1. **diagnose** - See what's shifting (1 step)
-2. **Find code** - Search for the shifting element in code (1-2 steps)
-3. **writeFile** - FIX THE CODE (1 step) ← THIS IS REQUIRED!
-4. **diagnose** - Verify fix worked (1 step)
+## Workflow (5-7 steps max):
+1. **Load skill** - Call \`get_skill({ name: "d3k" })\`
+2. **diagnose** - See what's shifting (1 step)
+3. **Find code** - Search for the shifting element in code (1-2 steps)
+4. **writeFile** - FIX THE CODE (1 step) ← THIS IS REQUIRED!
+5. **diagnose** - Verify fix worked (1 step)
 
 ## CLS Fix Patterns (use these!):
 - Conditional rendering causing shift → Use \`visibility: hidden\` instead of \`return null\`
@@ -1686,11 +1730,12 @@ You are in **multi-page crawl mode** with depth=${crawlDepth}. This means you sh
 
   return `You are a design guidelines auditor. Your task is to evaluate this web interface against Vercel's design guidelines and implement fixes.
 
-## FIRST STEP - LOAD THE SKILL
+## FIRST STEP - LOAD THE SKILLS
 
-**IMPORTANT:** Before doing anything else, you MUST call the \`get_skill\` tool to load the vercel-design-guidelines skill:
+**IMPORTANT:** Before doing anything else, you MUST call the \`get_skill\` tool to load the d3k skill and the design-guidelines skill:
 
 \`\`\`
+get_skill({ name: "d3k" })
 get_skill({ name: "vercel-design-guidelines" })
 \`\`\`
 
@@ -1704,7 +1749,7 @@ This will give you the complete design guidelines audit instructions, including:
 ${crawlInstructions}
 ## YOUR MISSION
 
-${shouldCrawl ? `1. **Load skill** - Call \`get_skill({ name: "vercel-design-guidelines" })\`` : '1. **Load skill** - Call `get_skill({ name: "vercel-design-guidelines" })`'}
+${shouldCrawl ? `1. **Load skills** - Call \`get_skill({ name: "d3k" })\` then \`get_skill({ name: "vercel-design-guidelines" })\`` : '1. **Load skills** - Call `get_skill({ name: "d3k" })` then `get_skill({ name: "vercel-design-guidelines" })`'}
 ${shouldCrawl ? `2. **Use crawl_app** to discover all pages on the site (depth=${crawlDepth})` : ""}
 ${shouldCrawl ? "3" : "2"}. **Read the code** - Use readFile, globSearch to examine components, styles, HTML
 ${shouldCrawl ? "4" : "3"}. **Audit against guidelines** - Check each category, note violations with file:line references
@@ -1715,7 +1760,7 @@ ${shouldCrawl ? "7" : "6"}. **Document** - Track what you fixed in your summary
 ## AVAILABLE TOOLS
 
 ### Skill Tool (USE THIS FIRST!)
-- **get_skill** - Load a d3k skill to get detailed instructions. Call with \`{ name: "vercel-design-guidelines" }\`
+- **get_skill** - Load a d3k skill to get detailed instructions. Call with \`{ name: "d3k" }\` then \`{ name: "vercel-design-guidelines" }\`
 ${
   shouldCrawl
     ? `
@@ -1738,7 +1783,9 @@ ${
 
 ## IMPORTANT RULES
 
-1. **START by calling get_skill({ name: "vercel-design-guidelines" })**${shouldCrawl ? ", then crawl_app" : ""}
+1. **START by calling get_skill({ name: "d3k" }) then get_skill({ name: "vercel-design-guidelines" })**${
+  shouldCrawl ? ", then crawl_app" : ""
+}
 2. **YOU MUST WRITE CODE** - Don't just analyze, actually fix issues!
 3. **Prioritize Critical issues first** - Then Warnings, then Suggestions
 4. **Be efficient** - You have limited steps (15 max), focus on high-impact fixes
@@ -1750,7 +1797,7 @@ ${
 - **Working Directory**: /vercel/sandbox
 ${shouldCrawl ? `- **Crawl Depth**: ${crawlDepth}` : ""}
 
-${shouldCrawl ? `Start by calling get_skill to load the design guidelines, then use crawl_app to discover all pages.` : `Start by calling get_skill({ name: "vercel-design-guidelines" }) to load the full design guidelines, then read the code and audit it.`}`
+${shouldCrawl ? `Start by calling get_skill to load the d3k skill and design guidelines, then use crawl_app to discover all pages.` : `Start by calling get_skill({ name: "d3k" }) then get_skill({ name: "vercel-design-guidelines" }) to load the full design guidelines, then read the code and audit it.`}`
 }
 
 /**
@@ -1760,11 +1807,12 @@ ${shouldCrawl ? `Start by calling get_skill to load the design guidelines, then 
 function buildReactPerformancePrompt(startPath: string, devUrl: string): string {
   return `You are a React/Next.js performance optimization specialist. Your task is to analyze this codebase for performance issues and implement fixes.
 
-## FIRST STEP - LOAD THE SKILL
+## FIRST STEP - LOAD THE SKILLS
 
-**IMPORTANT:** Before doing anything else, you MUST call the \`get_skill\` tool to load the react-performance skill:
+**IMPORTANT:** Before doing anything else, you MUST call the \`get_skill\` tool to load the d3k skill and the react-performance skill:
 
 \`\`\`
+get_skill({ name: "d3k" })
 get_skill({ name: "react-performance" })
 \`\`\`
 
@@ -1780,7 +1828,7 @@ This will give you the complete React Performance Guidelines, including:
 
 ## YOUR MISSION
 
-1. **Load skill** - Call \`get_skill({ name: "react-performance" })\`
+1. **Load skills** - Call \`get_skill({ name: "d3k" })\` then \`get_skill({ name: "react-performance" })\`
 2. **Capture baseline** - Use \`getWebVitals\` to measure current performance
 3. **Analyze code** - Use readFile, globSearch to examine components, data fetching, imports
 4. **Identify issues** - Check for waterfalls, large bundles, unnecessary re-renders
@@ -1791,7 +1839,7 @@ This will give you the complete React Performance Guidelines, including:
 ## AVAILABLE TOOLS
 
 ### Skill Tool (USE THIS FIRST!)
-- **get_skill** - Load a d3k skill to get detailed instructions. Call with \`{ name: "react-performance" }\`
+- **get_skill** - Load a d3k skill to get detailed instructions. Call with \`{ name: "d3k" }\` then \`{ name: "react-performance" }\`
 
 ### Code Tools
 - **readFile** - Read any file in the codebase
@@ -1815,7 +1863,7 @@ This will give you the complete React Performance Guidelines, including:
 
 ## IMPORTANT RULES
 
-1. **START by calling get_skill({ name: "react-performance" })**
+1. **START by calling get_skill({ name: "d3k" }) then get_skill({ name: "react-performance" })**
 2. **YOU MUST WRITE CODE** - Don't just analyze, actually implement fixes!
 3. **Prioritize by impact** - CRITICAL issues first (waterfalls, bundles), then lower
 4. **Be efficient** - You have limited steps (15 max), focus on high-impact fixes
@@ -1826,7 +1874,7 @@ This will give you the complete React Performance Guidelines, including:
 - **Start Page**: ${startPath}
 - **Working Directory**: /vercel/sandbox
 
-Start by calling get_skill({ name: "react-performance" }) to load the full performance guidelines, then use getWebVitals to capture baseline metrics.`
+Start by calling get_skill({ name: "d3k" }) then get_skill({ name: "react-performance" }) to load the full performance guidelines, then use getWebVitals to capture baseline metrics.`
 }
 
 /**
@@ -1846,6 +1894,9 @@ ${userPrompt}
 - **Working Directory**: /vercel/sandbox (this is a git repository)
 
 ## AVAILABLE TOOLS
+
+### Skill Tool (USE THIS FIRST!)
+- **get_skill** - Load a d3k skill to get detailed instructions. Call with \`{ name: "d3k" }\`
 
 ### Code Tools
 - **readFile** - Read any file in the codebase
@@ -1868,11 +1919,12 @@ ${userPrompt}
 
 ## WORKFLOW GUIDELINES
 
-1. **Start with getWebVitals or diagnose** - Capture the initial performance metrics
-2. **Explore first** - Use readFile, searchFiles, and grep to understand the codebase
-3. **Make targeted changes** - Edit only what's necessary
-4. **Verify with diagnose** - After changes, use diagnose to confirm they work
-5. **Be efficient** - You have limited steps, so be focused
+1. **Start by loading the d3k skill** - Call \`get_skill({ name: "d3k" })\`
+2. **Start with getWebVitals or diagnose** - Capture the initial performance metrics
+3. **Explore first** - Use readFile, searchFiles, and grep to understand the codebase
+4. **Make targeted changes** - Edit only what's necessary
+5. **Verify with diagnose** - After changes, use diagnose to confirm they work
+6. **Be efficient** - You have limited steps, so be focused
 
 ## IMPORTANT NOTES
 - Changes are saved immediately when you use writeFile
@@ -1880,5 +1932,5 @@ ${userPrompt}
 - Always use diagnose after making changes to capture the "after" state
 - The diagnose tool will show you any console errors or layout shifts
 
-Now, complete the task described above. Start by using the diagnose tool to capture the current state of the page.`
+Now, complete the task described above. Start by calling get_skill({ name: "d3k" }) and then use diagnose to capture the current state of the page.`
 }

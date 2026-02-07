@@ -19,7 +19,7 @@ import { fileURLToPath } from "url"
 import { CDPMonitor } from "./cdp-monitor.js"
 import { ScreencastManager } from "./screencast-manager.js"
 import { type LogEntry, NextJsErrorDetector, OutputProcessor, StandardLogParser } from "./services/parsers/index.js"
-import { getBundledSkillsPath } from "./skills/index.js"
+import { getBundledSkillsPath, listAvailableSkills } from "./skills/index.js"
 import { DevTUI } from "./tui-interface.js"
 import { getProjectDir, getProjectDisplayName, getProjectName } from "./utils/project-name.js"
 import {
@@ -519,7 +519,9 @@ export function writeSessionInfo(
   chromePids?: number[],
   serverCommand?: string,
   framework?: "nextjs" | "svelte" | "other",
-  serverPid?: number
+  serverPid?: number,
+  skillsInstalled?: string[],
+  skillsAgentId?: string | null
 ): void {
   const projectDir = getProjectDir()
 
@@ -541,7 +543,9 @@ export function writeSessionInfo(
       chromePids: chromePids || [],
       serverCommand: serverCommand || null,
       framework: framework || null,
-      serverPid: serverPid || null
+      serverPid: serverPid || null,
+      skillsInstalled: skillsInstalled || [],
+      skillsAgentId: skillsAgentId || null
     }
 
     // Write session file in project directory
@@ -1100,6 +1104,7 @@ export class DevEnvironment {
       // Write session info for tooling discovery (include CDP URL if browser monitoring was started)
       const cdpUrl = this.cdpMonitor?.getCdpUrl() || null
       const chromePids = this.cdpMonitor?.getChromePids() || []
+      const skillsInstalled = listAvailableSkills(process.cwd())
       writeSessionInfo(
         projectName,
         this.options.logFile,
@@ -1108,7 +1113,9 @@ export class DevEnvironment {
         chromePids,
         this.options.serverCommand,
         this.options.framework,
-        this.serverProcess?.pid
+        this.serverProcess?.pid,
+        skillsInstalled,
+        this.options.skillsAgentId ?? null
       )
 
       // Clear status - ready!
@@ -1174,6 +1181,7 @@ export class DevEnvironment {
       // Include CDP URL if browser monitoring was started
       const cdpUrl = this.cdpMonitor?.getCdpUrl() || null
       const chromePids = this.cdpMonitor?.getChromePids() || []
+      const skillsInstalled = listAvailableSkills(process.cwd())
       writeSessionInfo(
         projectName,
         this.options.logFile,
@@ -1182,7 +1190,9 @@ export class DevEnvironment {
         chromePids,
         this.options.serverCommand,
         this.options.framework,
-        this.serverProcess?.pid
+        this.serverProcess?.pid,
+        skillsInstalled,
+        this.options.skillsAgentId ?? null
       )
 
       // Complete startup with success message only in non-TUI mode
@@ -1489,6 +1499,7 @@ export class DevEnvironment {
       const chromePids = this.cdpMonitor?.getChromePids() || []
 
       if (cdpUrl || chromePids.length > 0) {
+        const skillsInstalled = listAvailableSkills(process.cwd())
         writeSessionInfo(
           projectName,
           this.options.logFile,
@@ -1497,7 +1508,9 @@ export class DevEnvironment {
           chromePids,
           this.options.serverCommand,
           this.options.framework,
-          this.serverProcess?.pid
+          this.serverProcess?.pid,
+          skillsInstalled,
+          this.options.skillsAgentId ?? null
         )
         this.debugLog(`Updated session info with new port: ${this.options.port}`)
       }
@@ -1789,7 +1802,9 @@ export class DevEnvironment {
         chromePids,
         this.options.serverCommand,
         this.options.framework,
-        this.serverProcess?.pid
+        this.serverProcess?.pid,
+        listAvailableSkills(process.cwd()),
+        this.options.skillsAgentId ?? null
       )
       this.debugLog(`Updated session info with CDP URL: ${cdpUrl}, Chrome PIDs: [${chromePids.join(", ")}]`)
       this.logger.log("browser", `[CDP] Session info written with cdpUrl: ${cdpUrl ? "available" : "null"}`)

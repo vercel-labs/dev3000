@@ -213,9 +213,7 @@ export function AgentAnalysis({
   return (
     <div className="space-y-4">
       {/* Git Diff - shown with download link in title bar */}
-      {gitDiff && (
-        <DiffSection gitDiff={gitDiff} projectName={projectName || "project"} />
-      )}
+      {gitDiff && <DiffSection gitDiff={gitDiff} projectName={projectName || "project"} />}
 
       {/* Final Output - shown prominently at the top (with Git Diff section stripped) */}
       {cleanedFinalOutput && (
