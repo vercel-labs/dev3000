@@ -98,6 +98,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
     pr?: { prUrl: string } | null
   } | null>(null)
   const [activeRunId, setActiveRunId] = useState<string | null>(null)
+  const [redirectedRunId, setRedirectedRunId] = useState<string | null>(null)
   const [sandboxUrl, setSandboxUrl] = useState<string | null>(null)
   const [baseBranch, setBaseBranch] = useState("main")
   const [autoCreatePR, setAutoCreatePR] = useState(true)
@@ -292,6 +293,10 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
             runId: run.id,
             pr: run.prUrl ? { prUrl: run.prUrl } : null
           })
+          if (run.reportBlobUrl && redirectedRunId !== run.id) {
+            setRedirectedRunId(run.id)
+            router.push(`/workflows/${run.id}/report`)
+          }
         } else if (run.status === "failure") {
           setWorkflowStatus(`Workflow failed: ${run.error || "Unknown error"}`)
         }
@@ -306,7 +311,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
     pollStatus()
 
     return () => clearInterval(interval)
-  }, [activeRunId, userId, step, selectedProject])
+  }, [activeRunId, userId, step, selectedProject, redirectedRunId, router])
 
   // Load GitHub PAT from localStorage when on options step
   useEffect(() => {
@@ -651,6 +656,10 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
         // Set activeRunId for polling - let polling handle status updates
         if (result.runId) {
           setActiveRunId(result.runId)
+          if (redirectedRunId !== result.runId) {
+            setRedirectedRunId(result.runId)
+            router.push(`/workflows/${result.runId}/report`)
+          }
         }
 
         // Don't immediately show completion - let polling verify the workflow status

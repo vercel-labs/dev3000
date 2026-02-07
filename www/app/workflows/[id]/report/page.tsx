@@ -8,6 +8,7 @@ import type { WorkflowReport } from "@/types"
 import { AgentAnalysis } from "./agent-analysis"
 import { CollapsibleSection } from "./collapsible-section"
 import { CoordinatedPlayers } from "./coordinated-players"
+import { ReportPending } from "./report-pending"
 import { ScreenshotPlayer } from "./screenshot-player"
 import { ShareButton } from "./share-button"
 
@@ -38,8 +39,15 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
 
   const isPublicView = !isOwner && !!run?.isPublic
 
-  if (!run || !run.reportBlobUrl) {
+  if (!run) {
     redirect("/workflows")
+  }
+
+  if (!run.reportBlobUrl) {
+    if (user && isOwner) {
+      return <ReportPending runId={id} userId={user.id} projectName={run.projectName} />
+    }
+    return <ReportPending runId={id} projectName={run.projectName} />
   }
 
   // Fetch the JSON report from the blob URL
