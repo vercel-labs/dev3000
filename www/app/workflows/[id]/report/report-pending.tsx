@@ -96,9 +96,7 @@ export function ReportPending({ runId, userId }: ReportPendingProps) {
   const showStatus = !activeStepLabel || status.trim() !== activeStepLabel
   const statusText = showStatus ? status : "In progress..."
   const fallbackActiveIndex =
-    stepNumber === null
-      ? STEP_LABELS.findIndex((label) => label.toLowerCase() === status.trim().toLowerCase())
-      : -1
+    stepNumber === null ? STEP_LABELS.findIndex((label) => label.toLowerCase() === status.trim().toLowerCase()) : -1
   const activeIndex = stepNumber ?? (fallbackActiveIndex >= 0 ? fallbackActiveIndex : null)
 
   return (
