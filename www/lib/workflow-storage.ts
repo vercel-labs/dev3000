@@ -1,5 +1,36 @@
 import { del, head, list, put } from "@vercel/blob"
 
+const FETCH_TIMEOUT_MS = 6000
+const FETCH_RETRIES = 2
+
+async function fetchJsonWithRetry(fetchUrl: string): Promise<Response> {
+  let lastError: unknown
+
+  for (let attempt = 0; attempt <= FETCH_RETRIES; attempt++) {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+    try {
+      const response = await fetch(fetchUrl, {
+        headers: {
+          Accept: "application/json"
+        },
+        signal: controller.signal
+      })
+      clearTimeout(timeout)
+      return response
+    } catch (error) {
+      clearTimeout(timeout)
+      lastError = error
+      if (attempt < FETCH_RETRIES) {
+        await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)))
+        continue
+      }
+    }
+  }
+
+  throw lastError
+}
+
 export type WorkflowType = "cls-fix" | "prompt" | "design-guidelines" | "react-performance"
 
 export interface WorkflowRun {
@@ -47,7 +78,13 @@ export async function saveWorkflowRun(run: WorkflowRun): Promise<string> {
 export async function listWorkflowRuns(userId: string): Promise<WorkflowRun[]> {
   const prefix = `workflows/${userId}/`
 
-  const { blobs } = await list({ prefix })
+  let blobs: Awaited<ReturnType<typeof list>>["blobs"] = []
+  try {
+    ;({ blobs } = await list({ prefix }))
+  } catch (error) {
+    console.error(`[Workflow Storage] Failed to list blobs for ${prefix}:`, error)
+    return []
+  }
 
   // Debug: log what blobs were found (helps diagnose ghost/stale blob issues)
   if (blobs.length > 0) {
@@ -77,11 +114,7 @@ export async function listWorkflowRuns(userId: string): Promise<WorkflowRun[]> {
 
         // Use downloadUrl if available (authenticated), otherwise fall back to public url
         const fetchUrl = blobInfo.downloadUrl || blob.url
-        const response = await fetch(fetchUrl, {
-          headers: {
-            Accept: "application/json"
-          }
-        })
+        const response = await fetchJsonWithRetry(fetchUrl)
 
         // Check for non-OK responses (security checkpoint returns 200 but HTML)
         if (!response.ok) {
@@ -129,7 +162,13 @@ export async function getWorkflowRun(userId: string, runId: string): Promise<Wor
  */
 export async function getPublicWorkflowRun(runId: string): Promise<WorkflowRun | null> {
   const prefix = "workflows/"
-  const { blobs } = await list({ prefix })
+  let blobs: Awaited<ReturnType<typeof list>>["blobs"] = []
+  try {
+    ;({ blobs } = await list({ prefix }))
+  } catch (error) {
+    console.error(`[Workflow Storage] Failed to list blobs for ${prefix}:`, error)
+    return null
+  }
 
   // Search through all workflow blobs to find the matching run ID
   for (const blob of blobs) {
@@ -141,9 +180,7 @@ export async function getPublicWorkflowRun(runId: string): Promise<WorkflowRun |
       }
 
       const fetchUrl = blobInfo.downloadUrl || blob.url
-      const response = await fetch(fetchUrl, {
-        headers: { Accept: "application/json" }
-      })
+      const response = await fetchJsonWithRetry(fetchUrl)
 
       // Skip if response is HTML (security checkpoint)
       const contentType = response.headers.get("content-type")

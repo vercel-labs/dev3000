@@ -1412,7 +1412,7 @@ export async function createPullRequestStep(
 
     // Create commit message
     const clsImprovement =
-      beforeCls !== null && afterCls !== null
+      typeof beforeCls === "number" && typeof afterCls === "number"
         ? `CLS: ${beforeCls.toFixed(3)} → ${afterCls.toFixed(3)}`
         : "CLS improvements"
 
