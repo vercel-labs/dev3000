@@ -95,8 +95,15 @@ export function ReportPending({ runId, userId }: ReportPendingProps) {
   const activeStepLabel = typeof stepNumber === "number" ? STEP_LABELS[stepNumber] : null
   const showStatus = !activeStepLabel || status.trim() !== activeStepLabel
   const statusText = showStatus ? status : "In progress..."
+  const normalizeStatus = (value: string) => value.toLowerCase().replace(/[^a-z0-9 ]/g, "").trim()
+  const normalizedStatus = normalizeStatus(status)
   const fallbackActiveIndex =
-    stepNumber === null ? STEP_LABELS.findIndex((label) => label.toLowerCase() === status.trim().toLowerCase()) : -1
+    stepNumber === null
+      ? STEP_LABELS.findIndex((label) => {
+          const normalizedLabel = normalizeStatus(label)
+          return normalizedStatus.startsWith(normalizedLabel) || normalizedLabel.startsWith(normalizedStatus)
+        })
+      : -1
   const activeIndex = stepNumber ?? (fallbackActiveIndex >= 0 ? fallbackActiveIndex : null)
 
   return (
