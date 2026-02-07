@@ -22,95 +22,6 @@ interface ParsedTranscript {
   finalOutput?: string
 }
 
-// Workflow phases that group AI steps by activity type
-interface WorkflowPhase {
-  name: string
-  description: string
-  steps: ParsedStep[]
-  toolCount: number
-}
-
-/**
- * Categorize tool calls into workflow phases
- */
-function categorizeToolCall(toolName: string): "analysis" | "fix" | "verification" {
-  const researchTools = ["globSearch", "grepSearch", "listDirectory", "readFile", "findComponentSource"]
-  const verificationTools = ["verifyChanges", "getGitDiff"]
-
-  if (researchTools.includes(toolName)) return "analysis"
-  if (verificationTools.includes(toolName)) return "verification"
-  return "fix" // writeFile and others
-}
-
-/**
- * Group AI steps into logical workflow phases
- */
-function groupIntoPhases(steps: ParsedStep[]): WorkflowPhase[] {
-  const phases: WorkflowPhase[] = []
-
-  const classifyStep = (step: ParsedStep): "analysis" | "fix" | "verification" | "none" => {
-    if (step.toolCalls.some((tc) => categorizeToolCall(tc.name) === "verification")) return "verification"
-    if (step.toolCalls.some((tc) => categorizeToolCall(tc.name) === "fix")) return "fix"
-    if (
-      step.toolCalls.some((tc) => categorizeToolCall(tc.name) === "analysis") ||
-      (step.toolCalls.length === 0 && step.assistantText && step.assistantText.length > 50)
-    ) {
-      return "analysis"
-    }
-    return "none"
-  }
-
-  const analysisSteps = steps.filter((s) => classifyStep(s) === "analysis")
-  if (analysisSteps.length > 0) {
-    phases.push({
-      name: "Analysis Transcript",
-      description: "Investigation, reasoning, and context gathering",
-      steps: analysisSteps,
-      toolCount: analysisSteps.reduce((sum, s) => sum + s.toolCalls.length, 0)
-    })
-  }
-
-  // Phase 2: Fix - steps with non-read tools (edits, commands, actions)
-  const fixSteps = steps.filter((s) => classifyStep(s) === "fix")
-  if (fixSteps.length > 0) {
-    phases.push({
-      name: "Fix Transcript",
-      description: "Edits and actions taken to resolve the issue",
-      steps: fixSteps,
-      toolCount: fixSteps.reduce((sum, s) => sum + s.toolCalls.length, 0)
-    })
-  }
-
-  // Phase 3: Verification - steps with verify/diff tools
-  const verificationSteps = steps.filter((s) => classifyStep(s) === "verification")
-  if (verificationSteps.length > 0) {
-    phases.push({
-      name: "Verification Transcript",
-      description: "Confirming the fix works correctly",
-      steps: verificationSteps,
-      toolCount: verificationSteps.reduce((sum, s) => sum + s.toolCalls.length, 0)
-    })
-  }
-
-  return phases
-}
-
-/**
- * Simplify tool names for display
- */
-function formatToolName(name: string): string {
-  const toolNameMap: Record<string, string> = {
-    grepSearch: "grep",
-    globSearch: "glob",
-    listDirectory: "ls",
-    readFile: "read",
-    writeFile: "write",
-    findComponentSource: "find-component",
-    getGitDiff: "git-diff"
-  }
-  return toolNameMap[name] || name
-}
-
 /**
  * Parse the agent transcript markdown into structured data
  */
@@ -287,9 +198,6 @@ export function AgentAnalysis({
 }) {
   const parsed = useMemo(() => parseTranscript(content), [content])
 
-  // Group steps into workflow phases
-  const phases = useMemo(() => groupIntoPhases(parsed.steps.filter((s) => s.hasContent)), [parsed.steps])
-
   // Strip "## Git Diff" section from finalOutput if present (we'll show it separately)
   const cleanedFinalOutput = useMemo(() => {
     if (!parsed.finalOutput) return undefined
@@ -302,85 +210,18 @@ export function AgentAnalysis({
     return <Streamdown mode="static">{content}</Streamdown>
   }
 
-  // Calculate total tool calls for badge
-  const totalToolCalls = phases.reduce((sum, p) => sum + p.toolCount, 0)
-
   return (
     <div className="space-y-4">
+      {/* Git Diff - shown with download link in title bar */}
+      {gitDiff && (
+        <DiffSection gitDiff={gitDiff} projectName={projectName || "project"} />
+      )}
+
       {/* Final Output - shown prominently at the top (with Git Diff section stripped) */}
       {cleanedFinalOutput && (
         <div className="prose prose-sm dark:prose-invert max-w-none">
           <Streamdown mode="static">{cleanedFinalOutput}</Streamdown>
         </div>
-      )}
-
-      {/* Git Diff - shown with download link in title bar */}
-      {gitDiff && (
-        <div className="mt-4 pt-4 border-t border-border">
-          <DiffSection gitDiff={gitDiff} projectName={projectName || "project"} />
-        </div>
-      )}
-
-      {/* Collapsible Agent Execution Details - grouped by workflow phase */}
-      {phases.length > 0 && (
-        <StepSection title="Agent Transcripts" badge={`${phases.length} transcripts, ${totalToolCalls} tool calls`}>
-          <div className="mt-3 space-y-3">
-            {/* System Prompt - collapsed */}
-            {parsed.systemPrompt && (
-              <StepSection title="System Prompt">
-                <pre className="mt-2 text-xs bg-muted/50 p-2 rounded overflow-x-auto whitespace-pre-wrap max-h-48 overflow-y-auto">
-                  {parsed.systemPrompt}
-                </pre>
-              </StepSection>
-            )}
-
-            {/* User Prompt - collapsed */}
-            {parsed.userPrompt && (
-              <StepSection title="User Prompt">
-                <pre className="mt-2 text-xs bg-muted/50 p-2 rounded overflow-x-auto whitespace-pre-wrap max-h-48 overflow-y-auto">
-                  {parsed.userPrompt}
-                </pre>
-              </StepSection>
-            )}
-
-            {/* Workflow phases instead of individual steps */}
-            {phases.map((phase) => (
-              <StepSection
-                key={phase.name}
-                title={phase.name}
-                badge={phase.toolCount > 0 ? `${phase.toolCount} tool calls` : `${phase.steps.length} steps`}
-              >
-                <div className="mt-2 space-y-3">
-                  <p className="text-xs text-muted-foreground">{phase.description}</p>
-                  {phase.steps.map((step) => (
-                    <div key={step.stepNumber} className="space-y-2 border-l-2 border-muted pl-3">
-                      {step.assistantText && (
-                        <div className="text-sm prose prose-sm dark:prose-invert max-w-none">
-                          <Streamdown mode="static">{step.assistantText}</Streamdown>
-                        </div>
-                      )}
-                      {step.toolCalls.map((tc, i) => (
-                        <div key={`tc-${step.stepNumber}-${i}`} className="text-xs space-y-1">
-                          <div className="font-medium text-muted-foreground">
-                            Tool: <span className="text-foreground">{formatToolName(tc.name)}</span>
-                          </div>
-                          {tc.args && tc.args !== "{}" && (
-                            <pre className="bg-muted/50 p-2 rounded overflow-x-auto">{tc.args}</pre>
-                          )}
-                          {tc.result && tc.result !== "[undefined]" && (
-                            <pre className="bg-muted/50 p-2 rounded overflow-x-auto whitespace-pre-wrap max-h-32 overflow-y-auto">
-                              {tc.result}
-                            </pre>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  ))}
-                </div>
-              </StepSection>
-            ))}
-          </div>
-        </StepSection>
       )}
     </div>
   )

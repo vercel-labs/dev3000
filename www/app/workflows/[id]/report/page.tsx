@@ -13,7 +13,7 @@ import { ScreenshotPlayer } from "./screenshot-player"
 import { ShareButton } from "./share-button"
 
 export const metadata: Metadata = {
-  title: "dev3000 workflow report"
+  title: "d3k workflow report"
 }
 
 export default async function WorkflowReportPage({ params }: { params: Promise<{ id: string }> }) {
@@ -328,6 +328,19 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
               </pre>
             </CollapsibleSection>
           )}
+
+          {/* Agent Analysis - shown for all workflow types */}
+          <div className="mt-6 pt-6 border-t border-border">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-medium">Agent Analysis</h3>
+              {report.agentAnalysisModel && (
+                <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
+                  {report.agentAnalysisModel}
+                </span>
+              )}
+            </div>
+            <AgentAnalysis content={report.agentAnalysis} gitDiff={report.gitDiff} projectName={report.projectName} />
+          </div>
 
           {/* CLS Results - only show for cls-fix workflow type */}
           {workflowType === "cls-fix" && report.clsScore !== undefined && (
@@ -720,18 +733,6 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
             </div>
           )}
 
-          {/* Agent Analysis - shown for all workflow types */}
-          <div className="mt-6 pt-6 border-t border-border">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-medium">Agent Analysis</h3>
-              {report.agentAnalysisModel && (
-                <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
-                  {report.agentAnalysisModel}
-                </span>
-              )}
-            </div>
-            <AgentAnalysis content={report.agentAnalysis} gitDiff={report.gitDiff} projectName={report.projectName} />
-          </div>
         </div>
 
         <div className="mt-6 flex gap-4">
