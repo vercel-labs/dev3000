@@ -9,12 +9,11 @@ import { Skeleton } from "@/components/ui/skeleton"
 interface ReportPendingProps {
   runId: string
   userId?: string
-  projectName?: string
 }
 
 const STEP_LABELS = ["Creating sandbox", "Capturing baseline", "Agent in progress", "Generating report", "Finishing up"]
 
-export function ReportPending({ runId, userId, projectName }: ReportPendingProps) {
+export function ReportPending({ runId, userId }: ReportPendingProps) {
   const router = useRouter()
   const [status, setStatus] = useState<string>("Generating report...")
   const [hasError, setHasError] = useState(false)
@@ -102,7 +101,7 @@ export function ReportPending({ runId, userId, projectName }: ReportPendingProps
       <div className="container mx-auto px-4 py-8 max-w-4xl space-y-6">
         <div>
           <div className="text-xs uppercase tracking-wide text-muted-foreground">Workflow Report</div>
-          <h1 className="text-3xl font-bold mt-2">{projectName || "Preparing your report"}</h1>
+          <h1 className="text-3xl font-bold mt-2">d3k Workflow Report</h1>
           <p className="text-muted-foreground mt-1">
             We&apos;re assembling the results and will show them here shortly.
           </p>
@@ -147,7 +146,17 @@ export function ReportPending({ runId, userId, projectName }: ReportPendingProps
                       isDone ? "bg-green-500" : isActive ? "bg-blue-500" : "bg-muted"
                     }`}
                   />
-                  <span className={isActive ? "text-foreground font-medium" : "text-muted-foreground"}>{label}</span>
+                  <span
+                    className={
+                      isActive && !hasError
+                        ? "text-shimmer font-medium"
+                        : isDone
+                          ? "text-foreground"
+                          : "text-muted-foreground"
+                    }
+                  >
+                    {label}
+                  </span>
                 </div>
               )
             })}
@@ -157,24 +166,24 @@ export function ReportPending({ runId, userId, projectName }: ReportPendingProps
         <div className="grid gap-4">
           <div>
             <div className="text-sm font-medium text-foreground mb-2">Sandbox Summary</div>
-            <Skeleton className="h-10 w-2/3" />
+            <Skeleton className="h-10 w-2/3 skeleton-shimmer" />
           </div>
           <div>
             <div className="text-sm font-medium text-foreground mb-2">Timing Breakdown</div>
-            <Skeleton className="h-6 w-1/2" />
+            <Skeleton className="h-6 w-1/2 skeleton-shimmer" />
           </div>
-          <Skeleton className="h-40 w-full" />
+          <Skeleton className="h-40 w-full skeleton-shimmer" />
           <div className="grid grid-cols-2 gap-4">
-            <Skeleton className="h-24 w-full" />
-            <Skeleton className="h-24 w-full" />
+            <Skeleton className="h-24 w-full skeleton-shimmer" />
+            <Skeleton className="h-24 w-full skeleton-shimmer" />
           </div>
           <div>
             <div className="text-sm font-medium text-foreground mb-2">d3k Diagnostic Transcript</div>
-            <Skeleton className="h-32 w-full" />
+            <Skeleton className="h-32 w-full skeleton-shimmer" />
           </div>
           <div>
             <div className="text-sm font-medium text-foreground mb-2">Agent Analysis</div>
-            <Skeleton className="h-32 w-full" />
+            <Skeleton className="h-32 w-full skeleton-shimmer" />
           </div>
         </div>
       </div>

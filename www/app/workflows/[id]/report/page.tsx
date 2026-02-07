@@ -45,9 +45,9 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
 
   if (!run.reportBlobUrl) {
     if (user && isOwner) {
-      return <ReportPending runId={id} userId={user.id} projectName={run.projectName} />
+      return <ReportPending runId={id} userId={user.id} />
     }
-    return <ReportPending runId={id} projectName={run.projectName} />
+    return <ReportPending runId={id} />
   }
 
   // Fetch the JSON report from the blob URL
