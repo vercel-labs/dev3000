@@ -12,13 +12,7 @@ interface ReportPendingProps {
   projectName?: string
 }
 
-const STEP_LABELS = [
-  "Creating sandbox",
-  "Capturing baseline",
-  "Agent in progress",
-  "Generating report",
-  "Finishing up"
-]
+const STEP_LABELS = ["Creating sandbox", "Capturing baseline", "Agent in progress", "Generating report", "Finishing up"]
 
 export function ReportPending({ runId, userId, projectName }: ReportPendingProps) {
   const router = useRouter()
