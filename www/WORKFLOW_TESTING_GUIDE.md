@@ -52,6 +52,25 @@ Then:
 2. Click **Start Workflow**.
 3. The workflow runs on production, not locally.
 
+## One-Line Commands (Copy/Paste)
+
+These print a ready-to-open URL for each workflow type.
+
+```bash
+# design-guidelines
+TOKEN=$(grep WORKFLOW_TEST_BYPASS_TOKEN /Users/elsigh/src/vercel-labs/dev3000/www/.env.local | cut -d'\"' -f2) && echo "http://localhost:3000/workflows/new?type=design-guidelines&team=team_nLlpyC6REAqxydlFKbrMDlud&project=prj_1Fu7YXCrKlgt5WUDVSRoKxHD7Y3u&bypass=$TOKEN"
+```
+
+```bash
+# react-performance
+TOKEN=$(grep WORKFLOW_TEST_BYPASS_TOKEN /Users/elsigh/src/vercel-labs/dev3000/www/.env.local | cut -d'\"' -f2) && echo "http://localhost:3000/workflows/new?type=react-performance&team=team_nLlpyC6REAqxydlFKbrMDlud&project=prj_mysQRnCoGuDcQ6JRgXxYxOHxegVV&bypass=$TOKEN"
+```
+
+```bash
+# cls-fix
+TOKEN=$(grep WORKFLOW_TEST_BYPASS_TOKEN /Users/elsigh/src/vercel-labs/dev3000/www/.env.local | cut -d'\"' -f2) && echo "http://localhost:3000/workflows/new?type=cls-fix&team=team_nLlpyC6REAqxydlFKbrMDlud&project=prj_VbZqjqTxeLP0deOdr82ZMGeYOi6c&bypass=$TOKEN"
+```
+
 ## Monitoring (Always Do This First)
 
 Start production log monitoring **before** clicking Start Workflow:
