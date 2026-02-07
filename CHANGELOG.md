@@ -4,6 +4,16 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.165] - 2026-02-07
+
+**Feature Release**
+
+- Add guard for log selection in OpenTUI
+- Fix log selection in TUI logs
+- Fix OpenTUI log selection copy
+- Harden workflow storage fetch and CLS formatting
+- Tune shimmer contrast and speed
+
 ## [0.0.164] - 2026-02-07
 
 **Feature Release**

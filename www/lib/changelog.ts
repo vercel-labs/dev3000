@@ -10,6 +10,19 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.165",
+    date: "2026-02-07",
+    type: "minor",
+    highlights: [
+      "Add guard for log selection in OpenTUI",
+      "Fix log selection in TUI logs",
+      "Fix OpenTUI log selection copy",
+      "Harden workflow storage fetch and CLS formatting",
+      "Tune shimmer contrast and speed"
+    ]
+  },
+
+  {
     version: "0.0.164",
     date: "2026-02-07",
     type: "minor",
