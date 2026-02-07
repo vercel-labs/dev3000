@@ -10,6 +10,19 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.164",
+    date: "2026-02-07",
+    type: "minor",
+    highlights: [
+      "Format design prompt rules",
+      "Add skills installed/loaded to workflow reports",
+      "Clarify d3k browser navigation guidance",
+      "Reorder report analysis and clean transcript helpers",
+      "Format progress fallback"
+    ]
+  },
+
+  {
     version: "0.0.163",
     date: "2026-02-06",
     type: "patch",

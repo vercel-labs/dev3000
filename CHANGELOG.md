@@ -4,6 +4,16 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.164] - 2026-02-07
+
+**Feature Release**
+
+- Format design prompt rules
+- Add skills installed/loaded to workflow reports
+- Clarify d3k browser navigation guidance
+- Reorder report analysis and clean transcript helpers
+- Format progress fallback
+
 ## [0.0.163] - 2026-02-06
 
 **Patch Release**
