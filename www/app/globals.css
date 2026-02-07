@@ -267,13 +267,23 @@
   color: transparent;
   background-clip: text;
   -webkit-background-clip: text;
-  background-image: linear-gradient(110deg, var(--muted-foreground) 0%, var(--foreground) 45%, var(--muted-foreground) 80%);
+  background-image: linear-gradient(
+    110deg,
+    var(--muted-foreground) 0%,
+    var(--foreground) 45%,
+    var(--muted-foreground) 80%
+  );
   background-size: 200% 100%;
   animation: shimmer 1.6s linear infinite;
 }
 
 .skeleton-shimmer {
-  background-image: linear-gradient(110deg, var(--accent) 0%, color-mix(in oklch, var(--accent) 70%, var(--foreground)) 40%, var(--accent) 80%);
+  background-image: linear-gradient(
+    110deg,
+    var(--accent) 0%,
+    color-mix(in oklch, var(--accent) 70%, var(--foreground)) 40%,
+    var(--accent) 80%
+  );
   background-size: 200% 100%;
   animation: shimmer 1.6s linear infinite;
 }
