@@ -8,6 +8,7 @@ This guide is the single source of truth for end-to-end workflow testing against
 - Each app is deployed as its own Vercel project in the **vercel** team.
 - Testing a workflow type means running a workflow against the matching example project.
 - The goal is to verify that the workflow produces a real code diff and a transcript that demonstrates the skill-driven behavior.
+- These tests are **technology validation**: the diff only needs to be well-targeted and plausible, not perfect or necessarily merged.
 
 ## Example App Matrix (Use These)
 
@@ -92,6 +93,18 @@ Key log markers:
 ## What To Validate (Required)
 
 You must validate both **transcript** and **diff** in the workflow report.
+
+### Purpose Of These Tests
+
+The goal is not to perfect the example apps; it is to confirm the cloud workflow:
+
+- Loads a real page in a sandbox and uses browser automation.
+- Uses the specified skill(s) and d3k tooling in the transcript.
+- Produces a **reasonable, targeted diff** that aligns with the skill and the observed issue.
+- Verifies the change and records a readable transcript.
+
+If the workflow reaches a sensible fix path and produces a coherent diff + transcript, it counts as a success.
+If the diff is unrelated, superficial, or the transcript lacks real tool/skill usage, it fails.
 
 ### Transcript Validation
 
