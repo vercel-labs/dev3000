@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic"
 import Link from "next/link"
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 
 const TerminalRecordingClient = dynamic(() => import("./terminal-recording"), {
   ssr: false,
@@ -14,10 +14,27 @@ export function TerminalRecording() {
 }
 
 export function CurrentYear() {
-  return <>{new Date().getFullYear()}</>
+  const year = useMemo(() => new Date().getFullYear(), [])
+  return <>{year}</>
 }
 
 export function ChangelogLink({ enableCLSBug = false }: { enableCLSBug?: boolean }) {
+  if (!enableCLSBug) {
+    return (
+      <Link
+        href="/changelog"
+        prefetch={false}
+        className="text-sm text-muted-foreground hover:text-foreground hover:underline transition-colors inline-block min-w-[88px]"
+      >
+        Changelog
+      </Link>
+    )
+  }
+
+  return <ChangelogLinkWithCLSBug />
+}
+
+function ChangelogLinkWithCLSBug() {
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
@@ -27,13 +44,8 @@ export function ChangelogLink({ enableCLSBug = false }: { enableCLSBug?: boolean
 
   // CLS BUG (demo mode only): Server renders null, client renders link after hydration
   // This causes the link to pop in, shifting the nav layout
-  // When enableCLSBug is false, we render a placeholder to prevent the shift
   if (!mounted) {
-    return enableCLSBug ? null : (
-      <span className="text-sm text-muted-foreground invisible inline-block min-w-[88px]" aria-hidden="true">
-        Changelog
-      </span>
-    )
+    return null
   }
 
   return (
