@@ -323,7 +323,7 @@ export async function initSandboxStep(
     repoUrl,
     branch,
     projectDir: "",
-    packageManager: "pnpm",
+    packageManager: "bun",
     timeout: "30m",
     debug: true
   })

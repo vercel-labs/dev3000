@@ -26,7 +26,7 @@ export interface SandboxChromeOptions {
   /** Working directory for npm commands (default: /vercel/sandbox) */
   cwd?: string
   /** Package manager to use (default: pnpm) */
-  packageManager?: "pnpm" | "npm" | "yarn"
+  packageManager?: "bun" | "pnpm" | "npm" | "yarn"
   /** Enable debug logging (default: false) */
   debug?: boolean
 }
@@ -231,12 +231,12 @@ export class SandboxChrome {
    */
   static async installChromium(
     sandbox: Sandbox,
-    options: { cwd?: string; packageManager?: "pnpm" | "npm" | "yarn"; debug?: boolean } = {}
+    options: { cwd?: string; packageManager?: "bun" | "pnpm" | "npm" | "yarn"; debug?: boolean } = {}
   ): Promise<void> {
     const { cwd = "/vercel/sandbox", packageManager = "pnpm", debug = false } = options
     const log = debug ? console.log.bind(console) : () => {}
 
-    const addCmd = packageManager === "yarn" ? "add" : "add"
+    const addCmd = "add"
     const result = await runCommand(sandbox, packageManager, [addCmd, "@sparticuz/chromium", "puppeteer-core"], { cwd })
 
     if (result.exitCode !== 0) {

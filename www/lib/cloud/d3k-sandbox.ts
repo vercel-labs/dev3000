@@ -197,7 +197,7 @@ export interface D3kSandboxConfig {
   timeout?: StringValue
   projectDir?: string
   framework?: string
-  packageManager?: "pnpm" | "npm" | "yarn"
+  packageManager?: "bun" | "pnpm" | "npm" | "yarn"
   devCommand?: string
   debug?: boolean
 }
@@ -407,7 +407,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     if (debug) console.log("  📦 Installing project dependencies...")
     const installResult = await runCommandWithLogs(sandbox, {
       cmd: packageManager,
-      args: ["install"],
+      args: packageManager === "bun" ? ["install"] : ["install"],
       cwd: sandboxCwd,
       stdout: debug ? process.stdout : undefined,
       stderr: debug ? process.stderr : undefined
@@ -454,9 +454,12 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
 
     // Install d3k globally from npm (always use latest)
     if (debug) console.log("  📦 Installing d3k globally from npm (dev3000@latest)")
+    const d3kInstallCmd = packageManager === "bun" ? "bun" : "pnpm"
+    const d3kInstallArgs =
+      packageManager === "bun" ? ["add", "-g", "dev3000@latest"] : ["i", "-g", "dev3000@latest"]
     const d3kInstallResult = await runCommandWithLogs(sandbox, {
-      cmd: "pnpm",
-      args: ["i", "-g", "dev3000@latest"],
+      cmd: d3kInstallCmd,
+      args: d3kInstallArgs,
       stdout: debug ? process.stdout : undefined,
       stderr: debug ? process.stderr : undefined
     })

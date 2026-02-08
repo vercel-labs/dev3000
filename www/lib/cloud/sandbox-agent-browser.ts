@@ -27,7 +27,7 @@ export interface SandboxAgentBrowserOptions {
   /** Working directory for npm commands (default: /vercel/sandbox) */
   cwd?: string
   /** Package manager to use (default: pnpm) */
-  packageManager?: "pnpm" | "npm" | "yarn"
+  packageManager?: "bun" | "pnpm" | "npm" | "yarn"
   /** Enable debug logging (default: false) */
   debug?: boolean
   /** Timeout for commands in milliseconds (default: 30000) */
@@ -141,7 +141,7 @@ export class SandboxAgentBrowser {
     this.log("Installing agent-browser...")
 
     const { packageManager, cwd } = this.options
-    const addCmd = packageManager === "yarn" ? "add" : "add"
+    const addCmd = "add"
 
     const result = await runCommand(this.sandbox, packageManager, [addCmd, "agent-browser@latest"], { cwd })
 
@@ -152,7 +152,8 @@ export class SandboxAgentBrowser {
 
     // Run agent-browser install to set up Playwright browsers
     this.log("Running agent-browser install...")
-    const installResult = await runCommand(this.sandbox, "npx", ["agent-browser", "install"], { cwd })
+    const runner = packageManager === "bun" ? "bunx" : "npx"
+    const installResult = await runCommand(this.sandbox, runner, ["agent-browser", "install"], { cwd })
 
     if (installResult.exitCode !== 0) {
       this.log(`agent-browser install stderr: ${installResult.stderr}`)
