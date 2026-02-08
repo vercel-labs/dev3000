@@ -12,7 +12,7 @@
  * 1. Environment variable NEXT_PUBLIC_DEMO_CLS_BUGS=true
  * 2. Vercel Dashboard (production overrides)
  */
-export async function demoCLSBugsFlag() {
+export function demoCLSBugsFlag() {
   // Default to false (no bugs) in production
   // Can be overridden via environment variable
   return process.env.NEXT_PUBLIC_DEMO_CLS_BUGS === "true"

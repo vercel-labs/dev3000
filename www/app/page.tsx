@@ -8,8 +8,8 @@ import HeroAppImage from "@/public/hero-app.png"
 import HeroTerminalImage from "@/public/hero-terminal.png"
 import { ChangelogLink, CurrentYear, TerminalRecording } from "./components.client"
 
-export default async function HomePage() {
-  const showDemoCLSBugs = await demoCLSBugsFlag()
+export default function HomePage() {
+  const showDemoCLSBugs = demoCLSBugsFlag()
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
