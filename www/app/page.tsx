@@ -1,13 +1,19 @@
 import { clsx } from "clsx"
 import Image from "next/image"
 import Link from "next/link"
+import dynamic from "next/dynamic"
 import { connection } from "next/server"
 import { GitHubLink } from "@/components/github-link"
 import { Button } from "@/components/ui/button"
 import { demoCLSBugsFlag } from "@/lib/flags"
 import HeroAppImage from "@/public/hero-app.png"
 import HeroTerminalImage from "@/public/hero-terminal.png"
-import { ChangelogLink, TerminalRecording } from "./components.client"
+import { ChangelogLink } from "./components.client"
+
+const TerminalRecording = dynamic(() => import("./terminal-recording"), {
+  ssr: false,
+  loading: () => <div className="h-[420px] w-full rounded-lg bg-muted" />
+})
 
 export default async function HomePage() {
   await connection()
