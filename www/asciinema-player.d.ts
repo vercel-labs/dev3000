@@ -18,3 +18,5 @@ declare module "asciinema-player" {
 
   export function create(src: string, container: HTMLElement, options?: PlayerOptions): void
 }
+
+declare module "asciinema-player/dist/bundle/asciinema-player.css"
