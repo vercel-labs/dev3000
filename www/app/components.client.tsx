@@ -2,11 +2,11 @@
 
 import dynamic from "next/dynamic"
 import Link from "next/link"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useState } from "react"
 
 const TerminalRecordingClient = dynamic(() => import("./terminal-recording"), {
   ssr: false,
-  loading: () => <div className="w-full min-h-[420px] rounded-md bg-muted/30" />
+  loading: () => <div className="w-full h-[420px] rounded-md bg-muted/30" />
 })
 
 export function TerminalRecording() {
@@ -14,8 +14,7 @@ export function TerminalRecording() {
 }
 
 export function CurrentYear() {
-  const year = useMemo(() => new Date().getFullYear(), [])
-  return <>{year}</>
+  return <>{new Date().getFullYear()}</>
 }
 
 export function ChangelogLink({ enableCLSBug = false }: { enableCLSBug?: boolean }) {
