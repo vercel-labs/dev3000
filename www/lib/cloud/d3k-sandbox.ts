@@ -455,8 +455,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     // Install d3k globally from npm (always use latest)
     if (debug) console.log("  📦 Installing d3k globally from npm (dev3000@latest)")
     const d3kInstallCmd = packageManager === "bun" ? "bun" : "pnpm"
-    const d3kInstallArgs =
-      packageManager === "bun" ? ["add", "-g", "dev3000@latest"] : ["i", "-g", "dev3000@latest"]
+    const d3kInstallArgs = packageManager === "bun" ? ["add", "-g", "dev3000@latest"] : ["i", "-g", "dev3000@latest"]
     const d3kInstallResult = await runCommandWithLogs(sandbox, {
       cmd: d3kInstallCmd,
       args: d3kInstallArgs,
