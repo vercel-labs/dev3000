@@ -1,4 +1,4 @@
-import { type ChildProcess, execSync, spawn } from "child_process"
+import { type ChildProcess, execSync, spawn, spawnSync } from "child_process"
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs"
 import { tmpdir } from "os"
 import { dirname, join } from "path"
@@ -263,14 +263,41 @@ export class CDPMonitor {
    */
   private killExistingChromeWithProfile(): void {
     try {
-      // Find Chrome processes using this profile directory
-      const result = execSync(`ps aux | grep -i "user-data-dir=${this.profileDir}" | grep -v grep | awk '{print $2}'`, {
+      // Find Chrome processes using this profile directory without invoking a shell
+      const psResult = spawnSync("ps", ["aux"], {
         encoding: "utf-8",
         stdio: ["pipe", "pipe", "pipe"]
-      }).trim()
+      })
 
-      if (result) {
-        const pids = result.split("\n").filter(Boolean)
+      if (psResult.error || psResult.status !== 0 || !psResult.stdout) {
+        this.debugLog("Unable to list processes with ps")
+        return
+      }
+
+      const searchToken = `user-data-dir=${this.profileDir}`
+      const lines = psResult.stdout.split("\n")
+      const pids: string[] = []
+
+      for (const line of lines) {
+        const trimmed = line.trim()
+        if (!trimmed) continue
+
+        // Skip header line that typically starts with "USER"
+        if (trimmed.toUpperCase().startsWith("USER")) continue
+
+        if (trimmed.includes(searchToken)) {
+          // ps aux format: USER PID %CPU %MEM VSZ RSS TTY STAT START TIME COMMAND
+          const parts = trimmed.split(/\s+/)
+          if (parts.length > 1) {
+            const pid = parts[1]
+            if (pid && /^\d+$/.test(pid)) {
+              pids.push(pid)
+            }
+          }
+        }
+      }
+
+      if (pids.length > 0) {
         for (const pid of pids) {
           this.debugLog(`Killing existing Chrome process ${pid} using profile ${this.profileDir}`)
           try {
@@ -280,9 +307,7 @@ export class CDPMonitor {
           }
         }
         // Give Chrome a moment to clean up
-        if (pids.length > 0) {
-          execSync("sleep 0.5")
-        }
+        execSync("sleep 0.5")
       }
     } catch {
       // No existing Chrome found or ps/grep not available
