@@ -1,8 +1,8 @@
 import type { Metadata } from "next"
-import dynamic from "next/dynamic"
 import { Geist, Geist_Mono } from "next/font/google"
 import type React from "react"
 import { Suspense } from "react"
+import { AnalyticsTools } from "./analytics.client"
 import { ThemeProvider } from "@/components/theme-provider"
 import { DEV3000_URL } from "@/lib/constants"
 import "./globals.css"
@@ -19,13 +19,6 @@ const geistMono = Geist_Mono({
   adjustFontFallback: true
 })
 
-const Analytics = dynamic(() => import("@vercel/analytics/next").then((mod) => mod.Analytics), { ssr: false })
-const SpeedInsights = dynamic(() => import("@vercel/speed-insights/next").then((mod) => mod.SpeedInsights), {
-  ssr: false
-})
-const VercelToolbar = dynamic(() => import("@vercel/toolbar/next").then((mod) => mod.VercelToolbar), {
-  ssr: false
-})
 
 export const metadata: Metadata = {
   metadataBase: new URL(DEV3000_URL),
@@ -96,9 +89,7 @@ export default function RootLayout({
           <Suspense fallback={null}>{children}</Suspense>
         </ThemeProvider>
         <Suspense fallback={null}>
-          <Analytics />
-          <SpeedInsights />
-          {process.env.NODE_ENV === "development" && <VercelToolbar />}
+          <AnalyticsTools />
         </Suspense>
       </body>
     </html>
