@@ -11,12 +11,14 @@ import "./globals.css"
 
 const geistSans = Geist({
   subsets: ["latin"],
-  variable: "--font-geist-sans"
+  variable: "--font-geist-sans",
+  adjustFontFallback: true
 })
 
 const geistMono = Geist_Mono({
   subsets: ["latin"],
-  variable: "--font-geist-mono"
+  variable: "--font-geist-mono",
+  adjustFontFallback: true
 })
 
 export const metadata: Metadata = {
@@ -87,9 +89,11 @@ export default function RootLayout({
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <Suspense fallback={null}>{children}</Suspense>
         </ThemeProvider>
-        <Analytics />
-        <SpeedInsights />
-        {process.env.NODE_ENV === "development" && <VercelToolbar />}
+        <Suspense fallback={null}>
+          <Analytics />
+          <SpeedInsights />
+          {process.env.NODE_ENV === "development" && <VercelToolbar />}
+        </Suspense>
       </body>
     </html>
   )

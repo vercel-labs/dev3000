@@ -6,7 +6,7 @@ import { useEffect, useState } from "react"
 
 const TerminalRecordingClient = dynamic(() => import("./terminal-recording"), {
   ssr: false,
-  loading: () => <div className="w-full min-h-[420px]" />
+  loading: () => <div className="w-full min-h-[420px] rounded-md bg-muted/30" />
 })
 
 export function TerminalRecording() {
@@ -30,7 +30,7 @@ export function ChangelogLink({ enableCLSBug = false }: { enableCLSBug?: boolean
   // When enableCLSBug is false, we render a placeholder to prevent the shift
   if (!mounted) {
     return enableCLSBug ? null : (
-      <span className="text-sm text-muted-foreground invisible" aria-hidden="true">
+      <span className="text-sm text-muted-foreground invisible inline-block min-w-[88px]" aria-hidden="true">
         Changelog
       </span>
     )
@@ -39,7 +39,8 @@ export function ChangelogLink({ enableCLSBug = false }: { enableCLSBug?: boolean
   return (
     <Link
       href="/changelog"
-      className="text-sm text-muted-foreground hover:text-foreground hover:underline transition-colors"
+      prefetch={false}
+      className="text-sm text-muted-foreground hover:text-foreground hover:underline transition-colors inline-block min-w-[88px]"
     >
       Changelog
     </Link>
