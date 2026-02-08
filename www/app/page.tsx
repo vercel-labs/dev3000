@@ -32,8 +32,8 @@ export default async function HomePage() {
               </span>
             </div>
             <nav className="flex items-center gap-4">
-              {/* Show GitHub button when scrolled - CLS BUG: no height reserved! */}
-              <div className={`transition-all duration-300`}>
+              {/* Reserve space so the GitHub link doesn't shift layout when it appears */}
+              <div className="min-w-[92px] flex justify-end transition-all duration-300">
                 <GitHubLink />
               </div>
 
