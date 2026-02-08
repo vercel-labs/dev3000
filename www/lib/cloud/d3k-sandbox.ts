@@ -441,13 +441,22 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
 
     // Install project dependencies
     if (debug) console.log("  📦 Installing project dependencies...")
-    const installResult = await runCommandWithLogs(sandbox, {
-      cmd: packageManager,
-      args: packageManager === "bun" ? ["install"] : ["install"],
-      cwd: sandboxCwd,
-      stdout: debug ? process.stdout : undefined,
-      stderr: debug ? process.stderr : undefined
-    })
+    const installResult =
+      packageManager === "bun"
+        ? await runCommandWithLogs(sandbox, {
+            cmd: "sh",
+            args: ["-c", "export PATH=/usr/local/bin:$PATH; bun install"],
+            cwd: sandboxCwd,
+            stdout: debug ? process.stdout : undefined,
+            stderr: debug ? process.stderr : undefined
+          })
+        : await runCommandWithLogs(sandbox, {
+            cmd: packageManager,
+            args: ["install"],
+            cwd: sandboxCwd,
+            stdout: debug ? process.stdout : undefined,
+            stderr: debug ? process.stderr : undefined
+          })
 
     if (installResult.exitCode !== 0) {
       throw new Error(`Project dependency installation failed with exit code ${installResult.exitCode}`)
@@ -490,14 +499,20 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
 
     // Install d3k globally from npm (always use latest)
     if (debug) console.log("  📦 Installing d3k globally from npm (dev3000@latest)")
-    const d3kInstallCmd = packageManager === "bun" ? "bun" : "pnpm"
-    const d3kInstallArgs = packageManager === "bun" ? ["add", "-g", "dev3000@latest"] : ["i", "-g", "dev3000@latest"]
-    const d3kInstallResult = await runCommandWithLogs(sandbox, {
-      cmd: d3kInstallCmd,
-      args: d3kInstallArgs,
-      stdout: debug ? process.stdout : undefined,
-      stderr: debug ? process.stderr : undefined
-    })
+    const d3kInstallResult =
+      packageManager === "bun"
+        ? await runCommandWithLogs(sandbox, {
+            cmd: "sh",
+            args: ["-c", "export PATH=/usr/local/bin:$PATH; bun add -g dev3000@latest"],
+            stdout: debug ? process.stdout : undefined,
+            stderr: debug ? process.stderr : undefined
+          })
+        : await runCommandWithLogs(sandbox, {
+            cmd: "pnpm",
+            args: ["i", "-g", "dev3000@latest"],
+            stdout: debug ? process.stdout : undefined,
+            stderr: debug ? process.stderr : undefined
+          })
 
     if (d3kInstallResult.exitCode !== 0) {
       throw new Error(`d3k installation failed with exit code ${d3kInstallResult.exitCode}`)
@@ -1337,6 +1352,38 @@ export async function getOrCreateD3kSandbox(config: D3kSandboxConfig): Promise<D
     return { exitCode: result.exitCode, stdout, stderr }
   }
 
+  async function ensureBunInstalled(): Promise<void> {
+    const whichResult = await runCommandWithLogs({
+      cmd: "sh",
+      args: ["-c", "command -v bun || true"]
+    })
+
+    if (whichResult.stdout.trim()) {
+      if (debug) console.log(`  ✅ bun found at ${whichResult.stdout.trim()}`)
+      return
+    }
+
+    if (debug) console.log("  📦 bun not found, installing...")
+    const installResult = await runCommandWithLogs({
+      cmd: "sh",
+      args: ["-c", "curl -fsSL https://bun.sh/install | bash"]
+    })
+
+    if (installResult.exitCode !== 0) {
+      throw new Error(`bun installation failed: ${installResult.stderr}`)
+    }
+
+    await runCommandWithLogs({
+      cmd: "sh",
+      args: [
+        "-c",
+        "mkdir -p /usr/local/bin && ln -sf ~/.bun/bin/bun /usr/local/bin/bun && ln -sf ~/.bun/bin/bunx /usr/local/bin/bunx"
+      ]
+    })
+
+    if (debug) console.log("  ✅ bun installed")
+  }
+
   try {
     const sandboxCwd = projectDir ? `/vercel/sandbox/${projectDir}` : "/vercel/sandbox"
 
@@ -1380,11 +1427,21 @@ export async function getOrCreateD3kSandbox(config: D3kSandboxConfig): Promise<D
     // Step 5: Install project dependencies
     timer.start("Install project dependencies")
     if (debug) console.log("  📦 Installing project dependencies...")
-    const installResult = await runCommandWithLogs({
-      cmd: packageManager,
-      args: ["install"],
-      cwd: sandboxCwd
-    })
+    if (packageManager === "bun") {
+      await ensureBunInstalled()
+    }
+    const installResult =
+      packageManager === "bun"
+        ? await runCommandWithLogs({
+            cmd: "sh",
+            args: ["-c", "export PATH=/usr/local/bin:$PATH; bun install"],
+            cwd: sandboxCwd
+          })
+        : await runCommandWithLogs({
+            cmd: packageManager,
+            args: ["install"],
+            cwd: sandboxCwd
+          })
 
     if (installResult.exitCode !== 0) {
       throw new Error(`Dependency installation failed: ${installResult.stderr}`)

@@ -133,6 +133,31 @@ async function runCommand(
   }
 }
 
+function shellEscape(value: string): string {
+  return `'${value.replace(/'/g, `'\"'\"'`)}'`
+}
+
+async function ensureBunInstalled(sandbox: Sandbox, debug = false): Promise<void> {
+  const whichResult = await runCommand(sandbox, "sh", ["-c", "command -v bun || true"])
+  if (whichResult.stdout.trim()) {
+    if (debug) console.log(`[SandboxChrome] bun found at ${whichResult.stdout.trim()}`)
+    return
+  }
+
+  if (debug) console.log("[SandboxChrome] bun not found, installing...")
+  const installResult = await runCommand(sandbox, "sh", ["-c", "curl -fsSL https://bun.sh/install | bash"])
+  if (installResult.exitCode !== 0) {
+    throw new Error(`bun installation failed: ${installResult.stderr}`)
+  }
+
+  await runCommand(sandbox, "sh", [
+    "-c",
+    "mkdir -p /usr/local/bin && ln -sf ~/.bun/bin/bun /usr/local/bin/bun && ln -sf ~/.bun/bin/bunx /usr/local/bin/bunx"
+  ])
+
+  if (debug) console.log("[SandboxChrome] bun installed")
+}
+
 /**
  * SandboxChrome - Main class for Chrome management in Vercel Sandbox
  */
@@ -237,7 +262,24 @@ export class SandboxChrome {
     const log = debug ? console.log.bind(console) : () => {}
 
     const addCmd = "add"
-    const result = await runCommand(sandbox, packageManager, [addCmd, "@sparticuz/chromium", "puppeteer-core"], { cwd })
+    if (packageManager === "bun") {
+      await ensureBunInstalled(sandbox, debug)
+    }
+
+    const result =
+      packageManager === "bun"
+        ? await runCommand(
+            sandbox,
+            "sh",
+            [
+              "-c",
+              `export PATH=/usr/local/bin:$PATH; bun ${[addCmd, "@sparticuz/chromium", "puppeteer-core"]
+                .map(shellEscape)
+                .join(" ")}`
+            ],
+            { cwd }
+          )
+        : await runCommand(sandbox, packageManager, [addCmd, "@sparticuz/chromium", "puppeteer-core"], { cwd })
 
     if (result.exitCode !== 0) {
       log(`[SandboxChrome] Chromium install stderr: ${result.stderr}`)
