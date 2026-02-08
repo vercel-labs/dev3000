@@ -291,6 +291,35 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     }
   }
 
+  async function ensureBunInstalled(sandbox: Sandbox): Promise<void> {
+    const whichResult = await runCommandWithLogs(sandbox, {
+      cmd: "sh",
+      args: ["-c", "command -v bun || true"]
+    })
+
+    if (whichResult.stdout.trim()) {
+      if (debug) console.log(`  ✅ bun found at ${whichResult.stdout.trim()}`)
+      return
+    }
+
+    if (debug) console.log("  📦 bun not found, installing...")
+    const installResult = await runCommandWithLogs(sandbox, {
+      cmd: "sh",
+      args: ["-c", "curl -fsSL https://bun.sh/install | bash"]
+    })
+
+    if (installResult.exitCode !== 0) {
+      throw new Error(`bun installation failed: ${installResult.stderr}`)
+    }
+
+    await runCommandWithLogs(sandbox, {
+      cmd: "sh",
+      args: ["-c", "mkdir -p /usr/local/bin && ln -sf ~/.bun/bin/bun /usr/local/bin/bun && ln -sf ~/.bun/bin/bunx /usr/local/bin/bunx"]
+    })
+
+    if (debug) console.log("  ✅ bun installed")
+  }
+
   // Create sandbox WITHOUT source parameter
   // We'll manually clone the repo after sandbox creation for better control
   const timeoutMs = ms(timeout)
@@ -401,6 +430,10 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
       }
     } catch (error) {
       console.log(`  ⚠️ Could not check for package.json: ${error instanceof Error ? error.message : String(error)}`)
+    }
+
+    if (packageManager === "bun") {
+      await ensureBunInstalled(sandbox)
     }
 
     // Install project dependencies
