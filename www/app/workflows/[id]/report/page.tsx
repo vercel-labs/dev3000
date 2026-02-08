@@ -2,8 +2,10 @@ import { ArrowLeft, Download } from "lucide-react"
 import type { Metadata } from "next"
 import Image from "next/image"
 import { redirect } from "next/navigation"
+import { Suspense } from "react"
 import { getCurrentUser } from "@/lib/auth"
 import { getPublicWorkflowRun, getWorkflowRun } from "@/lib/workflow-storage"
+import type { WorkflowRun } from "@/lib/workflow-storage"
 import type { WorkflowReport } from "@/types"
 import { AgentAnalysis } from "./agent-analysis"
 import { CollapsibleSection } from "./collapsible-section"
@@ -50,8 +52,26 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
     return <ReportPending runId={id} />
   }
 
+  return (
+    <Suspense fallback={<ReportLoading isPublicView={isPublicView} />}>
+      <ReportContent id={id} run={run} isOwner={isOwner} isPublicView={isPublicView} />
+    </Suspense>
+  )
+}
+
+async function ReportContent({
+  id,
+  run,
+  isOwner,
+  isPublicView
+}: {
+  id: string
+  run: WorkflowRun
+  isOwner: boolean
+  isPublicView: boolean
+}) {
   // Fetch the JSON report from the blob URL
-  const response = await fetch(run.reportBlobUrl)
+  const response = await fetch(run.reportBlobUrl!)
   const report: WorkflowReport = await response.json()
 
   // Use report's workflowType, fallback to run's type (for backward compat with old reports)
@@ -787,6 +807,39 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
               View Pull Request →
             </a>
           )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ReportLoading({ isPublicView }: { isPublicView: boolean }) {
+  return (
+    <div className="min-h-screen bg-background">
+      <div className="container mx-auto px-4 py-8 max-w-4xl">
+        <div className="flex items-center gap-4 mb-6">
+          {isPublicView ? (
+            <span className="inline-flex items-center gap-2 text-muted-foreground">
+              <span className="font-semibold">d3k</span>
+              <span>/</span>
+              <span>Public Report</span>
+            </span>
+          ) : (
+            <>
+              <span className="inline-flex items-center gap-2 text-muted-foreground">
+                <span className="font-semibold">d3k</span>
+              </span>
+              <span className="text-muted-foreground">/</span>
+              <span className="text-muted-foreground">Loading report...</span>
+            </>
+          )}
+        </div>
+        <div className="h-8 w-2/3 bg-muted/40 rounded-md" />
+        <div className="mt-4 h-4 w-1/3 bg-muted/30 rounded-md" />
+        <div className="mt-8 space-y-4">
+          <div className="h-24 bg-muted/20 rounded-md" />
+          <div className="h-24 bg-muted/20 rounded-md" />
+          <div className="h-24 bg-muted/20 rounded-md" />
         </div>
       </div>
     </div>

@@ -3,13 +3,11 @@ import Image from "next/image"
 import Link from "next/link"
 import { GitHubLink } from "@/components/github-link"
 import { Button } from "@/components/ui/button"
-import { demoCLSBugsFlag } from "@/lib/flags"
 import HeroAppImage from "@/public/hero-app.png"
 import HeroTerminalImage from "@/public/hero-terminal.png"
 import { ChangelogLink, CurrentYear, TerminalRecording } from "./components.client"
 
 export default function HomePage() {
-  const showDemoCLSBugs = demoCLSBugsFlag()
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -35,8 +33,7 @@ export default function HomePage() {
                 <GitHubLink />
               </div>
 
-              {/* Changelog link - controlled by demo-cls-bugs flag */}
-              <ChangelogLink enableCLSBug={showDemoCLSBugs} />
+              <ChangelogLink />
             </nav>
           </div>
         </div>

@@ -1,11 +1,11 @@
 # Using Vercel Toolbar for Feature Flags
 
-The Vercel Toolbar has been integrated to allow real-time toggling of feature flags during local development.
+The Vercel Toolbar is integrated to allow real-time toggling of feature flags during local development.
 
 ## Setup
 
 1. The toolbar is already installed and configured in `app/layout.tsx`
-2. Flags are defined in `lib/flags.ts`
+2. Flags are defined in `flags.json`
 
 ## Usage
 
@@ -16,27 +16,14 @@ The Vercel Toolbar has been integrated to allow real-time toggling of feature fl
 3. The Vercel Toolbar should appear at the bottom of the page
 4. Click the toolbar icon to open it
 5. Navigate to the "Flags" tab
-6. Toggle the **"demo-cls-bugs"** flag on/off to see the CLS bug in action
-
-### What the Flag Controls
-
-When `demo-cls-bugs` is **enabled**:
-- ✅ ChangelogLink renders `null` on server → causes hydration shift (demo bug)
-- ✅ CLS detection will catch this shift
-
-When `demo-cls-bugs` is **disabled** (default):
-- ✅ ChangelogLink renders invisible placeholder → no shift
-- ✅ Production-ready behavior (no bugs)
+6. Toggle any available flags
 
 ## Alternative Control Methods
 
-1. **Environment Variable**: Set `NEXT_PUBLIC_DEMO_CLS_BUGS=true` in `.env.local`
+1. **Environment Variables**: Set the relevant `NEXT_PUBLIC_...` values in `.env.local`
 2. **Vercel Dashboard**: Override flags in production via Vercel project settings
-3. **Code**: Modify the `decide()` function in `lib/flags.ts`
+3. **Code**: Update `flags.json`
 
 ## Testing the CLS Detection
 
-1. Enable the `demo-cls-bugs` flag via toolbar
-2. Refresh the page
-3. Run `d3k fix_my_jank` in the terminal
-4. dev3000 should detect the navigation header shift using the hybrid pixel-diff backup detection
+No CLS demo flags are currently configured.

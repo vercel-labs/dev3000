@@ -1,14 +1,3 @@
 {
-  "flags": [
-    {
-      "key": "demo-cls-bugs",
-      "description": "Enable intentional CLS bugs for demonstration purposes",
-      "type": "boolean",
-      "origin": "https://vercel.com/docs/workflow-collaboration/feature-flags",
-      "options": [
-        { "value": false, "label": "Production (no bugs)" },
-        { "value": true, "label": "Demo mode (with CLS bugs)" }
-      ]
-    }
-  ]
+  "flags": []
 }
