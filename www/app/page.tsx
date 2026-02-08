@@ -1,7 +1,7 @@
 import { clsx } from "clsx"
+import dynamic from "next/dynamic"
 import Image from "next/image"
 import Link from "next/link"
-import dynamic from "next/dynamic"
 import { connection } from "next/server"
 import { GitHubLink } from "@/components/github-link"
 import { Button } from "@/components/ui/button"
