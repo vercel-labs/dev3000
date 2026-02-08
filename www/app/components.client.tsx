@@ -1,7 +1,17 @@
 "use client"
 
+import dynamic from "next/dynamic"
 import Link from "next/link"
 import { useEffect, useState } from "react"
+
+const TerminalRecordingClient = dynamic(() => import("./terminal-recording"), {
+  ssr: false,
+  loading: () => <div className="w-full min-h-[420px]" />
+})
+
+export function TerminalRecording() {
+  return <TerminalRecordingClient />
+}
 
 export function ChangelogLink({ enableCLSBug = false }: { enableCLSBug?: boolean }) {
   const [mounted, setMounted] = useState(false)
