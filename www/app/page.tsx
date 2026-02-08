@@ -10,8 +10,10 @@ import HeroTerminalImage from "@/public/hero-terminal.png"
 import { ChangelogLink, TerminalRecording } from "./components.client"
 
 export default async function HomePage() {
-  await connection()
   const showDemoCLSBugs = await demoCLSBugsFlag()
+  if (showDemoCLSBugs) {
+    await connection()
+  }
   const currentYear = new Date().getFullYear()
   return (
     <div className="min-h-screen bg-background">
