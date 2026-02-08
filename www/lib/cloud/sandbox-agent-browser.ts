@@ -97,7 +97,7 @@ async function runCommand(
 }
 
 function shellEscape(value: string): string {
-  return `'${value.replace(/'/g, `'\"'\"'`)}'`
+  return `'${value.replace(/'/g, `'"'"'`)}'`
 }
 
 async function ensureBunInstalled(sandbox: Sandbox, debug = false): Promise<void> {
