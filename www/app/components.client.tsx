@@ -13,6 +13,10 @@ export function TerminalRecording() {
   return <TerminalRecordingClient />
 }
 
+export function CurrentYear() {
+  return <>{new Date().getFullYear()}</>
+}
+
 export function ChangelogLink({ enableCLSBug = false }: { enableCLSBug?: boolean }) {
   const [mounted, setMounted] = useState(false)
 

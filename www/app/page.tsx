@@ -7,14 +7,13 @@ import { Button } from "@/components/ui/button"
 import { demoCLSBugsFlag } from "@/lib/flags"
 import HeroAppImage from "@/public/hero-app.png"
 import HeroTerminalImage from "@/public/hero-terminal.png"
-import { ChangelogLink, TerminalRecording } from "./components.client"
+import { ChangelogLink, CurrentYear, TerminalRecording } from "./components.client"
 
 export default async function HomePage() {
   const showDemoCLSBugs = await demoCLSBugsFlag()
   if (showDemoCLSBugs) {
     await connection()
   }
-  const currentYear = new Date().getFullYear()
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -242,7 +241,9 @@ export default async function HomePage() {
           <a href="https://github.com/elsigh">Made by elsigh</a>
         </section>
 
-        <p>© {currentYear} Vercel</p>
+        <p>
+          © <CurrentYear /> Vercel
+        </p>
       </footer>
     </div>
   )
