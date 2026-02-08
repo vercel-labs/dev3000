@@ -44,5 +44,5 @@ export default function TerminalRecording() {
     }
   }, [])
 
-  return <div ref={containerRef} className="w-full min-h-[420px]" />
+  return <div ref={containerRef} className="w-full" style={{ height: 420 }} />
 }
