@@ -314,7 +314,10 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
 
     await runCommandWithLogs(sandbox, {
       cmd: "sh",
-      args: ["-c", "mkdir -p /usr/local/bin && ln -sf ~/.bun/bin/bun /usr/local/bin/bun && ln -sf ~/.bun/bin/bunx /usr/local/bin/bunx"]
+      args: [
+        "-c",
+        "mkdir -p /usr/local/bin && ln -sf ~/.bun/bin/bun /usr/local/bin/bun && ln -sf ~/.bun/bin/bunx /usr/local/bin/bunx"
+      ]
     })
 
     if (debug) console.log("  ✅ bun installed")
