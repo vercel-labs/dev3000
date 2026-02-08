@@ -11,8 +11,10 @@ export default function TerminalRecording() {
 
     const init = async () => {
       if (!container) return
-      await import("asciinema-player/dist/bundle/asciinema-player.css")
-      const AsciinemaPlayer = await import("asciinema-player")
+      const [, AsciinemaPlayer] = await Promise.all([
+        import("asciinema-player/dist/bundle/asciinema-player.css"),
+        import("asciinema-player")
+      ])
       if (!container || cancelled) return
 
       // biome-ignore lint/style/noNonNullAssertion: asciinema-player requires a non-null container
