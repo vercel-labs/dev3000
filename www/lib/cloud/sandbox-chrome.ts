@@ -138,7 +138,10 @@ function shellEscape(value: string): string {
 }
 
 async function ensureBunInstalled(sandbox: Sandbox, debug = false): Promise<void> {
-  const whichResult = await runCommand(sandbox, "sh", ["-c", "command -v bun || true"])
+  const whichResult = await runCommand(sandbox, "sh", [
+    "-c",
+    "export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; command -v bun || true"
+  ])
   if (whichResult.stdout.trim()) {
     if (debug) console.log(`[SandboxChrome] bun found at ${whichResult.stdout.trim()}`)
     return
@@ -273,7 +276,7 @@ export class SandboxChrome {
             "sh",
             [
               "-c",
-              `export PATH=/usr/local/bin:$PATH; bun ${[addCmd, "@sparticuz/chromium", "puppeteer-core"]
+              `export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; bun ${[addCmd, "@sparticuz/chromium", "puppeteer-core"]
                 .map(shellEscape)
                 .join(" ")}`
             ],

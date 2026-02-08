@@ -101,7 +101,10 @@ function shellEscape(value: string): string {
 }
 
 async function ensureBunInstalled(sandbox: Sandbox, debug = false): Promise<void> {
-  const whichResult = await runCommand(sandbox, "sh", ["-c", "command -v bun || true"])
+  const whichResult = await runCommand(sandbox, "sh", [
+    "-c",
+    "export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; command -v bun || true"
+  ])
   if (whichResult.stdout.trim()) {
     if (debug) console.log(`[SandboxAgentBrowser] bun found at ${whichResult.stdout.trim()}`)
     return
@@ -179,7 +182,9 @@ export class SandboxAgentBrowser {
             "sh",
             [
               "-c",
-              `export PATH=/usr/local/bin:$PATH; bun ${[addCmd, "agent-browser@latest"].map(shellEscape).join(" ")}`
+              `export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; bun ${[addCmd, "agent-browser@latest"]
+                .map(shellEscape)
+                .join(" ")}`
             ],
             { cwd }
           )
@@ -194,9 +199,14 @@ export class SandboxAgentBrowser {
     this.log("Running agent-browser install...")
     const installResult =
       packageManager === "bun"
-        ? await runCommand(this.sandbox, "sh", ["-c", "export PATH=/usr/local/bin:$PATH; bunx agent-browser install"], {
-            cwd
-          })
+        ? await runCommand(
+            this.sandbox,
+            "sh",
+            ["-c", "export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; bunx agent-browser install"],
+            {
+              cwd
+            }
+          )
         : await runCommand(this.sandbox, "npx", ["agent-browser", "install"], { cwd })
 
     if (installResult.exitCode !== 0) {
@@ -246,7 +256,12 @@ export class SandboxAgentBrowser {
         ? await runCommand(
             this.sandbox,
             "sh",
-            ["-c", `export PATH=/usr/local/bin:$PATH; bunx agent-browser ${args.map(shellEscape).join(" ")}`],
+            [
+              "-c",
+              `export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; bunx agent-browser ${args
+                .map(shellEscape)
+                .join(" ")}`
+            ],
             { cwd: this.options.cwd, timeout: this.options.timeout }
           )
         : await runCommand(this.sandbox, "npx", ["agent-browser", ...args], {

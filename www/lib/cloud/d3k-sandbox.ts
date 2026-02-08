@@ -294,7 +294,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
   async function ensureBunInstalled(sandbox: Sandbox): Promise<void> {
     const whichResult = await runCommandWithLogs(sandbox, {
       cmd: "sh",
-      args: ["-c", "command -v bun || true"]
+      args: ["-c", "export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; command -v bun || true"]
     })
 
     if (whichResult.stdout.trim()) {
@@ -445,7 +445,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
       packageManager === "bun"
         ? await runCommandWithLogs(sandbox, {
             cmd: "sh",
-            args: ["-c", "export PATH=/usr/local/bin:$PATH; bun install"],
+            args: ["-c", "export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; bun install"],
             cwd: sandboxCwd,
             stdout: debug ? process.stdout : undefined,
             stderr: debug ? process.stderr : undefined
@@ -503,7 +503,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
       packageManager === "bun"
         ? await runCommandWithLogs(sandbox, {
             cmd: "sh",
-            args: ["-c", "export PATH=/usr/local/bin:$PATH; bun add -g dev3000@latest"],
+            args: ["-c", "export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; bun add -g dev3000@latest"],
             stdout: debug ? process.stdout : undefined,
             stderr: debug ? process.stderr : undefined
           })
@@ -1355,7 +1355,7 @@ export async function getOrCreateD3kSandbox(config: D3kSandboxConfig): Promise<D
   async function ensureBunInstalled(): Promise<void> {
     const whichResult = await runCommandWithLogs({
       cmd: "sh",
-      args: ["-c", "command -v bun || true"]
+      args: ["-c", "export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; command -v bun || true"]
     })
 
     if (whichResult.stdout.trim()) {
@@ -1434,7 +1434,7 @@ export async function getOrCreateD3kSandbox(config: D3kSandboxConfig): Promise<D
       packageManager === "bun"
         ? await runCommandWithLogs({
             cmd: "sh",
-            args: ["-c", "export PATH=/usr/local/bin:$PATH; bun install"],
+            args: ["-c", "export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; bun install"],
             cwd: sandboxCwd
           })
         : await runCommandWithLogs({
