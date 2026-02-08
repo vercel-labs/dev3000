@@ -258,9 +258,7 @@ export class SandboxAgentBrowser {
             "sh",
             [
               "-c",
-              `export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; bunx agent-browser ${args
-                .map(shellEscape)
-                .join(" ")}`
+              `export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; bunx agent-browser ${args.map(shellEscape).join(" ")}`
             ],
             { cwd: this.options.cwd, timeout: this.options.timeout }
           )
