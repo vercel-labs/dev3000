@@ -17,7 +17,7 @@ This guide is the single source of truth for end-to-end workflow testing against
 | `react-performance` | `dev3000-example-react-performance` | `prj_mysQRnCoGuDcQ6JRgXxYxOHxegVV` | https://dev3000-example-react-performance.vercel.sh | `d3k`, `vercel-react-best-practices` |
 | `cls-fix` | `dev3000-example-cls-fix` | `prj_VbZqjqTxeLP0deOdr82ZMGeYOi6c` | https://dev3000-example-cls-fix.vercel.sh | `d3k` |
 
-Team ID (vercel): `team_nLlpyC6REAqxydlFKbrMDlud`
+Team ID (vercel-labs): `team_nO2mCG4W8IxPIeKoSsqwAxxB`
 
 ## Preconditions
 
@@ -39,12 +39,12 @@ Team ID (vercel): `team_nLlpyC6REAqxydlFKbrMDlud`
 Pick a workflow type from the table, then construct the URL using the project ID:
 
 ```
-http://localhost:3000/workflows/new?type=<TYPE>&team=team_nLlpyC6REAqxydlFKbrMDlud&project=<PROJECT_ID>&bypass=<TOKEN>
+http://localhost:3000/workflows/new?type=<TYPE>&team=team_nO2mCG4W8IxPIeKoSsqwAxxB&project=<PROJECT_ID>&bypass=<TOKEN>
 ```
 
 Example (design-guidelines):
 ```
-http://localhost:3000/workflows/new?type=design-guidelines&team=team_nLlpyC6REAqxydlFKbrMDlud&project=prj_1Fu7YXCrKlgt5WUDVSRoKxHD7Y3u&bypass=<TOKEN>
+http://localhost:3000/workflows/new?type=design-guidelines&team=team_nO2mCG4W8IxPIeKoSsqwAxxB&project=prj_1Fu7YXCrKlgt5WUDVSRoKxHD7Y3u&bypass=<TOKEN>
 ```
 
 Then:
@@ -58,17 +58,17 @@ These print a ready-to-open URL for each workflow type.
 
 ```bash
 # design-guidelines
-TOKEN=$(grep WORKFLOW_TEST_BYPASS_TOKEN /Users/elsigh/src/vercel-labs/dev3000/www/.env.local | cut -d'\"' -f2) && echo "http://localhost:3000/workflows/new?type=design-guidelines&team=team_nLlpyC6REAqxydlFKbrMDlud&project=prj_1Fu7YXCrKlgt5WUDVSRoKxHD7Y3u&bypass=$TOKEN"
+TOKEN=$(grep WORKFLOW_TEST_BYPASS_TOKEN /Users/elsigh/src/vercel-labs/dev3000/www/.env.local | cut -d'\"' -f2) && echo "http://localhost:3000/workflows/new?type=design-guidelines&team=team_nO2mCG4W8IxPIeKoSsqwAxxB&project=prj_1Fu7YXCrKlgt5WUDVSRoKxHD7Y3u&bypass=$TOKEN"
 ```
 
 ```bash
 # react-performance
-TOKEN=$(grep WORKFLOW_TEST_BYPASS_TOKEN /Users/elsigh/src/vercel-labs/dev3000/www/.env.local | cut -d'\"' -f2) && echo "http://localhost:3000/workflows/new?type=react-performance&team=team_nLlpyC6REAqxydlFKbrMDlud&project=prj_mysQRnCoGuDcQ6JRgXxYxOHxegVV&bypass=$TOKEN"
+TOKEN=$(grep WORKFLOW_TEST_BYPASS_TOKEN /Users/elsigh/src/vercel-labs/dev3000/www/.env.local | cut -d'\"' -f2) && echo "http://localhost:3000/workflows/new?type=react-performance&team=team_nO2mCG4W8IxPIeKoSsqwAxxB&project=prj_mysQRnCoGuDcQ6JRgXxYxOHxegVV&bypass=$TOKEN"
 ```
 
 ```bash
 # cls-fix
-TOKEN=$(grep WORKFLOW_TEST_BYPASS_TOKEN /Users/elsigh/src/vercel-labs/dev3000/www/.env.local | cut -d'\"' -f2) && echo "http://localhost:3000/workflows/new?type=cls-fix&team=team_nLlpyC6REAqxydlFKbrMDlud&project=prj_VbZqjqTxeLP0deOdr82ZMGeYOi6c&bypass=$TOKEN"
+TOKEN=$(grep WORKFLOW_TEST_BYPASS_TOKEN /Users/elsigh/src/vercel-labs/dev3000/www/.env.local | cut -d'\"' -f2) && echo "http://localhost:3000/workflows/new?type=cls-fix&team=team_nO2mCG4W8IxPIeKoSsqwAxxB&project=prj_VbZqjqTxeLP0deOdr82ZMGeYOi6c&bypass=$TOKEN"
 ```
 
 ## Monitoring (Always Do This First)
