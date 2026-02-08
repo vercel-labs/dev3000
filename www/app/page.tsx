@@ -12,6 +12,7 @@ import { ChangelogLink, TerminalRecording } from "./components.client"
 export default async function HomePage() {
   await connection()
   const showDemoCLSBugs = await demoCLSBugsFlag()
+  const currentYear = new Date().getFullYear()
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -239,7 +240,7 @@ export default async function HomePage() {
           <a href="https://github.com/elsigh">Made by elsigh</a>
         </section>
 
-        <p>© {new Date().getFullYear()} Vercel</p>
+        <p>© {currentYear} Vercel</p>
       </footer>
     </div>
   )
