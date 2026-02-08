@@ -2328,10 +2328,15 @@ export class DevEnvironment {
       }
 
       // Final synchronous lsof kill - most reliable method
-      const result = spawnSync("sh", ["-c", `lsof -ti:${this.options.port} | xargs kill -9 2>/dev/null`], {
-        stdio: "pipe"
-      })
-      this.debugLog(`Final lsof kill exit code: ${result.status}`)
+      const portNum = Number(this.options.port)
+      if (!Number.isInteger(portNum) || portNum <= 0 || portNum > 65535) {
+        this.debugLog(`Skipping final lsof kill due to invalid port: ${this.options.port}`)
+      } else {
+        const result = spawnSync("sh", ["-c", `lsof -ti:${portNum} | xargs kill -9 2>/dev/null`], {
+          stdio: "pipe"
+        })
+        this.debugLog(`Final lsof kill exit code: ${result.status}`)
+      }
     } catch {
       // Ignore pkill errors
     }
