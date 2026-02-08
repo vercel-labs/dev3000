@@ -6,7 +6,7 @@ import { useEffect, useState } from "react"
 
 const TerminalRecordingClient = dynamic(() => import("./terminal-recording"), {
   ssr: false,
-  loading: () => <div className="w-full h-[420px] rounded-md bg-muted/30" />
+  loading: () => <div className="w-full rounded-md bg-muted/30" style={{ height: 420 }} />
 })
 
 export function TerminalRecording() {
@@ -44,16 +44,18 @@ function ChangelogLinkWithCLSBug() {
   // CLS BUG (demo mode only): Server renders null, client renders link after hydration
   // This causes the link to pop in, shifting the nav layout
   if (!mounted) {
-    return null
+    return <span className="inline-block min-w-[88px]" aria-hidden="true" />
   }
 
   return (
-    <Link
-      href="/changelog"
-      prefetch={false}
-      className="text-sm text-muted-foreground hover:text-foreground hover:underline transition-colors inline-block min-w-[88px]"
-    >
-      Changelog
-    </Link>
+    <span className="inline-block min-w-[88px]">
+      <Link
+        href="/changelog"
+        prefetch={false}
+        className="text-sm text-muted-foreground hover:text-foreground hover:underline transition-colors"
+      >
+        Changelog
+      </Link>
+    </span>
   )
 }
