@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 **Feature Release**
 
-- Harden CLI inputs and add repo validation
+- Security: prevent CLI command injection via profile-dir/repo args (commit eed5b492)
 - Fix project search hooks and report fetch
 - Add project search and recent picks
 - Remove CLS demo flag and stream report loading

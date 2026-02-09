@@ -14,7 +14,7 @@ export const changelog: Release[] = [
     date: "2026-02-09",
     type: "minor",
     highlights: [
-      "Harden CLI inputs and add repo validation",
+      "Security: prevent CLI command injection via profile-dir/repo args (commit eed5b492)",
       "Fix project search hooks and report fetch",
       "Add project search and recent picks",
       "Remove CLS demo flag and stream report loading",
