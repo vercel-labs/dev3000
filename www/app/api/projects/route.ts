@@ -5,6 +5,7 @@ import { cookies } from "next/headers"
  *
  * Query params:
  * - teamId: Team ID or username (optional - if omitted, fetches personal projects)
+ * - search: Project name search query (optional)
  */
 export async function GET(request: Request) {
   try {
@@ -17,12 +18,17 @@ export async function GET(request: Request) {
 
     const url = new URL(request.url)
     const teamId = url.searchParams.get("teamId")
+    const search = url.searchParams.get("search")
 
     // Build the API URL with optional teamId parameter
     const apiUrl = new URL("https://api.vercel.com/v9/projects")
     if (teamId) {
       apiUrl.searchParams.set("teamId", teamId)
     }
+    if (search) {
+      apiUrl.searchParams.set("search", search)
+    }
+    apiUrl.searchParams.set("limit", "50")
 
     // Fetch projects from Vercel API
     // console.log("Fetching projects from Vercel API:", apiUrl.toString())

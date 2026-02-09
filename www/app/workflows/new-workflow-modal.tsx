@@ -58,6 +58,43 @@ interface NewWorkflowModalProps {
 }
 
 type WorkflowStep = "type" | "team" | "project" | "options" | "running"
+type RecentProject = { id: string; name: string }
+type RecentProjectsStore = Record<string, RecentProject[]>
+
+const RECENT_PROJECTS_KEY = "d3k_recent_projects"
+
+function readRecentProjects(teamId: string): RecentProject[] {
+  if (!teamId) return []
+  try {
+    const raw = localStorage.getItem(RECENT_PROJECTS_KEY)
+    if (!raw) return []
+    const store = JSON.parse(raw) as RecentProjectsStore
+    return Array.isArray(store[teamId]) ? store[teamId] : []
+  } catch (error) {
+    console.warn("Failed to read recent projects:", error)
+    return []
+  }
+}
+
+function writeRecentProjects(teamId: string, projects: RecentProject[]) {
+  if (!teamId) return
+  try {
+    const raw = localStorage.getItem(RECENT_PROJECTS_KEY)
+    const store = (raw ? (JSON.parse(raw) as RecentProjectsStore) : {}) as RecentProjectsStore
+    store[teamId] = projects
+    localStorage.setItem(RECENT_PROJECTS_KEY, JSON.stringify(store))
+  } catch (error) {
+    console.warn("Failed to write recent projects:", error)
+  }
+}
+
+function addRecentProject(teamId: string, project: RecentProject) {
+  if (!teamId || !project.id) return []
+  const existing = readRecentProjects(teamId)
+  const next = [project, ...existing.filter((item) => item.id !== project.id)].slice(0, 3)
+  writeRecentProjects(teamId, next)
+  return next
+}
 
 export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflowModalProps) {
   const router = useRouter()
@@ -90,7 +127,11 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
   const [loadingTeams, setLoadingTeams] = useState(false)
   const [loadingProjects, setLoadingProjects] = useState(false)
+  const [loadingProjectById, setLoadingProjectById] = useState(false)
   const [projectsError, setProjectsError] = useState<string | null>(null)
+  const [projectSearch, setProjectSearch] = useState("")
+  const [debouncedProjectSearch, setDebouncedProjectSearch] = useState("")
+  const [recentProjects, setRecentProjects] = useState<RecentProject[]>([])
   const [workflowStatus, setWorkflowStatus] = useState<string>("")
   const [workflowResult, setWorkflowResult] = useState<{
     success: boolean
@@ -181,6 +222,9 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       setCustomPrompt("")
       setStartPath("/")
       setProjectsError(null)
+      setProjectSearch("")
+      setDebouncedProjectSearch("")
+      setRecentProjects([])
       setAvailableBranches([])
       setLoadingBranches(false)
       setBranchesError(false)
@@ -214,11 +258,21 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   // Load projects when team selected
   // biome-ignore lint/correctness/useExhaustiveDependencies: loadProjects is stable and doesn't need to be a dependency
   useEffect(() => {
-    if (selectedTeam && !loadingProjects && loadedTeamIdRef.current !== selectedTeam.id) {
-      loadedTeamIdRef.current = selectedTeam.id
-      loadProjects(selectedTeam)
+    if (!selectedTeam) return
+    const searchKey = `${selectedTeam.id}:${debouncedProjectSearch}`
+    if (!loadingProjects && loadedTeamIdRef.current !== searchKey) {
+      loadedTeamIdRef.current = searchKey
+      loadProjects(selectedTeam, debouncedProjectSearch)
     }
-  }, [selectedTeam, loadingProjects])
+  }, [selectedTeam, loadingProjects, debouncedProjectSearch])
+
+  // Debounce project search input
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setDebouncedProjectSearch(projectSearch.trim())
+    }, 300)
+    return () => clearTimeout(timeout)
+  }, [projectSearch])
 
   // Load branches when project and team are selected and on options step
   // biome-ignore lint/correctness/useExhaustiveDependencies: loadBranches is stable (defined in component scope)
@@ -401,16 +455,33 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   // Restore project from URL once projects are loaded
   useEffect(() => {
     const projectParam = searchParams.get("project")
-    if (projectParam && projects.length > 0) {
-      // Update if no project selected OR if the URL project differs from selected
-      if (!selectedProject || selectedProject.id !== projectParam) {
-        const project = projects.find((p) => p.id === projectParam)
-        if (project) {
-          setSelectedProject(project)
-        }
+    if (!projectParam || !selectedTeam) return
+
+    // Update if no project selected OR if the URL project differs from selected
+    if (!selectedProject || selectedProject.id !== projectParam) {
+      const project = projects.find((p) => p.id === projectParam)
+      if (project) {
+        setSelectedProject(project)
+        return
+      }
+      if (!loadingProjectById) {
+        loadProjectById(projectParam, selectedTeam)
       }
     }
-  }, [projects, searchParams, selectedProject])
+  }, [projects, searchParams, selectedProject, selectedTeam, loadingProjectById])
+
+  // Load recent projects for the selected team
+  useEffect(() => {
+    if (!selectedTeam) return
+    setRecentProjects(readRecentProjects(selectedTeam.id))
+  }, [selectedTeam])
+
+  // Persist recent projects when a selection is made
+  useEffect(() => {
+    if (!selectedTeam || !selectedProject) return
+    const next = addRecentProject(selectedTeam.id, { id: selectedProject.id, name: selectedProject.name })
+    setRecentProjects(next)
+  }, [selectedTeam, selectedProject])
 
   async function loadTeams() {
     setLoadingTeams(true)
@@ -467,11 +538,18 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
     }
   }
 
-  async function loadProjects(team: Team) {
+  async function loadProjects(team: Team, search?: string) {
     setLoadingProjects(true)
     setProjectsError(null)
     try {
-      const url = team.isPersonal ? "/api/projects" : `/api/projects?teamId=${team.id}`
+      const params = new URLSearchParams()
+      if (!team.isPersonal) {
+        params.set("teamId", team.id)
+      }
+      if (search) {
+        params.set("search", search)
+      }
+      const url = params.toString() ? `/api/projects?${params.toString()}` : "/api/projects"
       console.log("Fetching projects from:", url)
       const response = await fetch(url)
       const data = await response.json()
@@ -493,6 +571,35 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       setProjectsError(errorMsg)
     } finally {
       setLoadingProjects(false)
+    }
+  }
+
+  async function loadProjectById(projectId: string, team: Team) {
+    setLoadingProjectById(true)
+    try {
+      const params = new URLSearchParams()
+      if (!team.isPersonal) {
+        params.set("teamId", team.id)
+      }
+      const url = params.toString()
+        ? `/api/projects/${projectId}?${params.toString()}`
+        : `/api/projects/${projectId}`
+      console.log("Fetching project by id from:", url)
+      const response = await fetch(url)
+      const data = await response.json()
+      if (data.success && data.project) {
+        setSelectedProject(data.project)
+      } else {
+        const errorMsg = `Failed to fetch project: ${data.error || "Unknown error"}`
+        console.error(errorMsg)
+        setProjectsError(errorMsg)
+      }
+    } catch (error) {
+      const errorMsg = `Failed to load project: ${error instanceof Error ? error.message : String(error)}`
+      console.error(errorMsg, error)
+      setProjectsError(errorMsg)
+    } finally {
+      setLoadingProjectById(false)
     }
   }
 
@@ -858,6 +965,19 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                   Team: <span className="font-semibold">{selectedTeam.name}</span>
                 </div>
               )}
+              <div className="mb-4">
+                <Label htmlFor="project-search" className="text-sm text-muted-foreground">
+                  Search projects by name
+                </Label>
+                <input
+                  id="project-search"
+                  type="text"
+                  value={projectSearch}
+                  onChange={(event) => setProjectSearch(event.target.value)}
+                  placeholder="Search projects..."
+                  className="mt-2 w-full px-3 py-2 border border-border rounded-md bg-background text-foreground"
+                />
+              </div>
               {projectsError && (
                 <Alert variant="destructive" className="mb-4">
                   <AlertCircle className="h-4 w-4" />
@@ -866,26 +986,70 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                 </Alert>
               )}
               {loadingProjects ? (
-                <div className="text-center py-8 text-muted-foreground">Loading projects...</div>
-              ) : projects.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
-                  {projectsError ? "Unable to load projects" : "No projects found"}
+                  {debouncedProjectSearch ? "Searching projects..." : "Loading projects..."}
+                </div>
+              ) : recentProjects.length === 0 && projects.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  {projectsError ? "Unable to load projects" : debouncedProjectSearch ? "No matches found" : "No projects found"}
                 </div>
               ) : (
-                <div className="space-y-2 max-h-96 overflow-y-auto">
-                  {projects.map((project) => (
-                    <Link
-                      key={project.id}
-                      href={`/workflows/new?type=${_selectedType}&team=${selectedTeam?.id}&project=${project.id}`}
-                      className="block w-full p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
-                    >
-                      <div className="font-semibold text-foreground">{project.name}</div>
-                      <div className="text-sm text-muted-foreground mt-1">
-                        {project.framework && <span className="mr-2">Framework: {project.framework}</span>}
-                        {project.latestDeployments[0] && <span>Latest: {project.latestDeployments[0].url}</span>}
-                      </div>
-                    </Link>
-                  ))}
+                <div className="space-y-4 max-h-96 overflow-y-auto">
+                  {recentProjects.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="text-xs uppercase tracking-wide text-muted-foreground">Recent</div>
+                      {recentProjects.map((project) => {
+                        const fullProject = projects.find((item) => item.id === project.id)
+                        return (
+                          <Link
+                            key={project.id}
+                            href={`/workflows/new?type=${_selectedType}&team=${selectedTeam?.id}&project=${project.id}`}
+                            onClick={() => {
+                              if (selectedTeam) {
+                                const next = addRecentProject(selectedTeam.id, project)
+                                setRecentProjects(next)
+                              }
+                            }}
+                            className="block w-full p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
+                          >
+                            <div className="font-semibold text-foreground">{project.name}</div>
+                            {fullProject?.latestDeployments?.[0] && (
+                              <div className="text-sm text-muted-foreground mt-1">
+                                Latest: {fullProject.latestDeployments[0].url}
+                              </div>
+                            )}
+                          </Link>
+                        )
+                      })}
+                    </div>
+                  )}
+                  <div className="space-y-2">
+                    {recentProjects.length > 0 && (
+                      <div className="text-xs uppercase tracking-wide text-muted-foreground">All projects</div>
+                    )}
+                    {projects.length === 0 && debouncedProjectSearch && (
+                      <div className="text-sm text-muted-foreground">No matches found</div>
+                    )}
+                    {projects.map((project) => (
+                      <Link
+                        key={project.id}
+                        href={`/workflows/new?type=${_selectedType}&team=${selectedTeam?.id}&project=${project.id}`}
+                        onClick={() => {
+                          if (selectedTeam) {
+                            const next = addRecentProject(selectedTeam.id, { id: project.id, name: project.name })
+                            setRecentProjects(next)
+                          }
+                        }}
+                        className="block w-full p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
+                      >
+                        <div className="font-semibold text-foreground">{project.name}</div>
+                        <div className="text-sm text-muted-foreground mt-1">
+                          {project.framework && <span className="mr-2">Framework: {project.framework}</span>}
+                          {project.latestDeployments[0] && <span>Latest: {project.latestDeployments[0].url}</span>}
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
                 </div>
               )}
               <Link
