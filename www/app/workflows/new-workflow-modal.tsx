@@ -3,7 +3,7 @@
 import { AlertCircle, HelpCircle } from "lucide-react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
-import { useEffect, useId, useRef, useState } from "react"
+import { useCallback, useEffect, useId, useRef, useState } from "react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
@@ -106,6 +106,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   const githubPatId = useId()
   const startPathId = useId()
   const crawlDepthId = useId()
+  const projectSearchId = useId()
 
   // Initialize step from URL params to avoid CLS from cascading useEffects
   const initialStep = (() => {
@@ -452,24 +453,6 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
     checkDeploymentProtection()
   }, [selectedProject, step, searchParams])
 
-  // Restore project from URL once projects are loaded
-  useEffect(() => {
-    const projectParam = searchParams.get("project")
-    if (!projectParam || !selectedTeam) return
-
-    // Update if no project selected OR if the URL project differs from selected
-    if (!selectedProject || selectedProject.id !== projectParam) {
-      const project = projects.find((p) => p.id === projectParam)
-      if (project) {
-        setSelectedProject(project)
-        return
-      }
-      if (!loadingProjectById) {
-        loadProjectById(projectParam, selectedTeam)
-      }
-    }
-  }, [projects, searchParams, selectedProject, selectedTeam, loadingProjectById])
-
   // Load recent projects for the selected team
   useEffect(() => {
     if (!selectedTeam) return
@@ -574,16 +557,14 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
     }
   }
 
-  async function loadProjectById(projectId: string, team: Team) {
+  const loadProjectById = useCallback(async (projectId: string, team: Team) => {
     setLoadingProjectById(true)
     try {
       const params = new URLSearchParams()
       if (!team.isPersonal) {
         params.set("teamId", team.id)
       }
-      const url = params.toString()
-        ? `/api/projects/${projectId}?${params.toString()}`
-        : `/api/projects/${projectId}`
+      const url = params.toString() ? `/api/projects/${projectId}?${params.toString()}` : `/api/projects/${projectId}`
       console.log("Fetching project by id from:", url)
       const response = await fetch(url)
       const data = await response.json()
@@ -601,7 +582,25 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
     } finally {
       setLoadingProjectById(false)
     }
-  }
+  }, [])
+
+  // Restore project from URL once projects are loaded
+  useEffect(() => {
+    const projectParam = searchParams.get("project")
+    if (!projectParam || !selectedTeam) return
+
+    // Update if no project selected OR if the URL project differs from selected
+    if (!selectedProject || selectedProject.id !== projectParam) {
+      const project = projects.find((p) => p.id === projectParam)
+      if (project) {
+        setSelectedProject(project)
+        return
+      }
+      if (!loadingProjectById) {
+        loadProjectById(projectParam, selectedTeam)
+      }
+    }
+  }, [projects, searchParams, selectedProject, selectedTeam, loadingProjectById, loadProjectById])
 
   async function startWorkflow() {
     console.log("[Start Workflow] Function called")
@@ -966,11 +965,11 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                 </div>
               )}
               <div className="mb-4">
-                <Label htmlFor="project-search" className="text-sm text-muted-foreground">
+                <Label htmlFor={projectSearchId} className="text-sm text-muted-foreground">
                   Search projects by name
                 </Label>
                 <input
-                  id="project-search"
+                  id={projectSearchId}
                   type="text"
                   value={projectSearch}
                   onChange={(event) => setProjectSearch(event.target.value)}
@@ -991,7 +990,11 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                 </div>
               ) : recentProjects.length === 0 && projects.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
-                  {projectsError ? "Unable to load projects" : debouncedProjectSearch ? "No matches found" : "No projects found"}
+                  {projectsError
+                    ? "Unable to load projects"
+                    : debouncedProjectSearch
+                      ? "No matches found"
+                      : "No projects found"}
                 </div>
               ) : (
                 <div className="space-y-4 max-h-96 overflow-y-auto">
