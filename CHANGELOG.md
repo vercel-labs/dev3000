@@ -4,6 +4,16 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.166] - 2026-02-09
+
+**Feature Release**
+
+- Harden CLI inputs and add repo validation
+- Fix project search hooks and report fetch
+- Add project search and recent picks
+- Remove CLS demo flag and stream report loading
+- Clarify workflow testing purpose
+
 ## [0.0.165] - 2026-02-07
 
 **Feature Release**
