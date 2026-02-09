@@ -56,13 +56,7 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
 
   return (
     <Suspense fallback={<ReportLoading isPublicView={isPublicView} />}>
-      <ReportContent
-        id={id}
-        run={run}
-        isOwner={isOwner}
-        isPublicView={isPublicView}
-        reportBlobUrl={reportBlobUrl}
-      />
+      <ReportContent id={id} run={run} isOwner={isOwner} isPublicView={isPublicView} reportBlobUrl={reportBlobUrl} />
     </Suspense>
   )
 }

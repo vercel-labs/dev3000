@@ -1,5 +1,6 @@
 import chalk from "chalk"
-import { execSync } from "child_process"
+import { execFileSync } from "child_process"
+import { isValidRepoArg } from "../utils/repo-validate.js"
 
 interface CheckPROptions {
   prNumber?: string
@@ -10,6 +11,16 @@ interface CheckPROptions {
 
 export async function cloudCheckPR(options: CheckPROptions) {
   const { prNumber, repo, url, debug = false } = options
+
+  if (prNumber && !/^\d+$/.test(prNumber)) {
+    console.error(chalk.red("❌ Invalid PR number (must be digits only)"))
+    process.exit(1)
+  }
+
+  if (repo && !isValidRepoArg(repo)) {
+    console.error(chalk.red("❌ Invalid repo format. Use 'owner/name' or a GitHub URL."))
+    process.exit(1)
+  }
 
   if (debug) {
     console.log(chalk.gray("[DEBUG] Starting cloud check-pr"))
@@ -124,14 +135,14 @@ async function getRepoInfo(repoArg: string | undefined, debug: boolean): Promise
         return {
           owner: match[1],
           name: match[2].replace(/\.git$/, ""),
-          branch: execSync("git branch --show-current", { encoding: "utf-8" }).trim()
+          branch: execFileSync("git", ["branch", "--show-current"], { encoding: "utf-8" }).trim()
         }
       }
     }
 
     // Auto-detect from current directory using our script
     const scriptPath = new URL("../../scripts/get-repo-info.sh", import.meta.url).pathname
-    const result = execSync(`bash "${scriptPath}"`, { encoding: "utf-8" })
+    const result = execFileSync("bash", [scriptPath], { encoding: "utf-8" })
     const info = JSON.parse(result)
 
     if (debug) {
@@ -154,9 +165,11 @@ async function getRepoInfo(repoArg: string | undefined, debug: boolean): Promise
 async function detectPRNumber(repoInfo: RepoInfo, debug: boolean): Promise<string | null> {
   try {
     // Use gh CLI to find PR for current branch
-    const result = execSync(`gh pr list --head "${repoInfo.branch}" --json number --jq '.[0].number'`, {
-      encoding: "utf-8"
-    }).trim()
+    const result = execFileSync(
+      "gh",
+      ["pr", "list", "--head", repoInfo.branch, "--json", "number", "--jq", ".[0].number"],
+      { encoding: "utf-8" }
+    ).trim()
 
     if (debug) {
       console.log(chalk.gray(`[DEBUG] Detected PR number: ${result}`))
@@ -185,8 +198,9 @@ async function fetchPRDetails(
   debug: boolean
 ): Promise<PRDetails | null> {
   try {
-    const result = execSync(
-      `gh api repos/${owner}/${repo}/pulls/${prNumber} --jq '{title,body,branch:.head.ref,author:.user.login}'`,
+    const result = execFileSync(
+      "gh",
+      ["api", `repos/${owner}/${repo}/pulls/${prNumber}`, "--jq", "{title,body,branch:.head.ref,author:.user.login}"],
       { encoding: "utf-8" }
     )
 
@@ -209,16 +223,21 @@ async function findVercelPreview(_repoInfo: RepoInfo, branch: string, debug: boo
   try {
     // Use vc CLI to find deployments for this branch
     // Pass --token if VERCEL_TOKEN is set (for CI environments)
-    const tokenFlag = process.env.VERCEL_TOKEN ? `--token "${process.env.VERCEL_TOKEN}"` : ""
-    const result = execSync(`vc ls --yes ${tokenFlag} | grep "${branch}" | head -1 | awk '{print $2}'`, {
-      encoding: "utf-8"
-    }).trim()
+    const tokenArgs = process.env.VERCEL_TOKEN ? ["--token", process.env.VERCEL_TOKEN] : []
+    const result = execFileSync("vc", ["ls", "--yes", ...tokenArgs], { encoding: "utf-8" })
+    const lines = result
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+
+    const match = lines.find((line) => line.includes(branch))
+    const previewUrl = match ? match.split(/\s+/)[1] : ""
 
     if (debug) {
-      console.log(chalk.gray(`[DEBUG] Found preview URL: ${result}`))
+      console.log(chalk.gray(`[DEBUG] Found preview URL: ${previewUrl}`))
     }
 
-    return result || null
+    return previewUrl || null
   } catch (error) {
     if (debug) {
       console.error(chalk.gray(`[DEBUG] Error finding Vercel preview: ${error}`))
@@ -229,9 +248,11 @@ async function findVercelPreview(_repoInfo: RepoInfo, branch: string, debug: boo
 
 async function getChangedFiles(owner: string, repo: string, prNumber: string, debug: boolean): Promise<string[]> {
   try {
-    const result = execSync(`gh api repos/${owner}/${repo}/pulls/${prNumber}/files --jq '.[].filename'`, {
-      encoding: "utf-8"
-    })
+    const result = execFileSync(
+      "gh",
+      ["api", `repos/${owner}/${repo}/pulls/${prNumber}/files`, "--jq", ".[].filename"],
+      { encoding: "utf-8" }
+    )
 
     const files = result.trim().split("\n").filter(Boolean)
 

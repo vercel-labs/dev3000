@@ -1883,13 +1883,36 @@ export class DevEnvironment {
         console.log(chalk.gray(`ℹ️ Skipping ${name} port kill in sandbox environment`))
         return
       }
+      if (!/^\d+$/.test(port)) {
+        this.debugLog(`Skipping ${name} port kill for invalid port: ${port}`)
+        return
+      }
       try {
         const { spawn } = await import("child_process")
-        const killProcess = spawn("sh", ["-c", `lsof -ti:${port} | xargs kill -9`], { stdio: "inherit" })
+        const findPids = spawn("lsof", ["-ti", `:${port}`], { stdio: "pipe" })
+        let pidsOutput = ""
+
+        findPids.stdout?.on("data", (data) => {
+          pidsOutput += data.toString()
+        })
+
         return new Promise<void>((resolve) => {
-          killProcess.on("exit", (code) => {
-            if (code === 0) {
-              console.log(chalk.green(`✅ Killed ${name} on port ${port}`))
+          findPids.on("exit", (code) => {
+            if (code === 0 && pidsOutput.trim()) {
+              const pids = pidsOutput.trim().split("\n").filter(Boolean)
+              let killedCount = 0
+              for (const pid of pids) {
+                try {
+                  process.kill(parseInt(pid.trim(), 10), "SIGKILL")
+                  killedCount++
+                } catch {
+                  // Ignore individual kill errors
+                }
+              }
+
+              if (killedCount > 0) {
+                console.log(chalk.green(`✅ Killed ${killedCount} ${name} process(es) on port ${port}`))
+              }
             }
             resolve()
           })
@@ -2209,6 +2232,10 @@ export class DevEnvironment {
       // Skip lsof-based kill in sandbox environments
       if (isInSandbox()) {
         this.debugLog(`Skipping ${name} port kill in sandbox environment`)
+        return
+      }
+      if (!/^\d+$/.test(port)) {
+        this.debugLog(`Skipping ${name} port kill for invalid port: ${port}`)
         return
       }
       try {
