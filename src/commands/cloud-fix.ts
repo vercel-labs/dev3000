@@ -1,4 +1,5 @@
 import { detectProject } from "../utils/project-detector.js"
+import { isValidRepoArg } from "../utils/repo-validate.js"
 
 export interface CloudFixOptions {
   debug?: boolean
@@ -16,6 +17,10 @@ const DEFAULT_API_URL = "https://dev3000.ai"
  */
 export async function cloudFix(options: CloudFixOptions = {}): Promise<void> {
   const { debug = false, repo, branch, projectDir } = options
+
+  if (repo && !isValidRepoArg(repo)) {
+    throw new Error("Invalid repo format. Use 'owner/name' or a GitHub URL.")
+  }
 
   const project =
     repo && branch

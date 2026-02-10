@@ -4,8 +4,8 @@ import Image from "next/image"
 import { redirect } from "next/navigation"
 import { Suspense } from "react"
 import { getCurrentUser } from "@/lib/auth"
-import { getPublicWorkflowRun, getWorkflowRun } from "@/lib/workflow-storage"
 import type { WorkflowRun } from "@/lib/workflow-storage"
+import { getPublicWorkflowRun, getWorkflowRun } from "@/lib/workflow-storage"
 import type { WorkflowReport } from "@/types"
 import { AgentAnalysis } from "./agent-analysis"
 import { CollapsibleSection } from "./collapsible-section"
@@ -52,9 +52,11 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
     return <ReportPending runId={id} />
   }
 
+  const reportBlobUrl = run.reportBlobUrl
+
   return (
     <Suspense fallback={<ReportLoading isPublicView={isPublicView} />}>
-      <ReportContent id={id} run={run} isOwner={isOwner} isPublicView={isPublicView} />
+      <ReportContent id={id} run={run} isOwner={isOwner} isPublicView={isPublicView} reportBlobUrl={reportBlobUrl} />
     </Suspense>
   )
 }
@@ -63,15 +65,17 @@ async function ReportContent({
   id,
   run,
   isOwner,
-  isPublicView
+  isPublicView,
+  reportBlobUrl
 }: {
   id: string
   run: WorkflowRun
   isOwner: boolean
   isPublicView: boolean
+  reportBlobUrl: string
 }) {
   // Fetch the JSON report from the blob URL
-  const response = await fetch(run.reportBlobUrl!)
+  const response = await fetch(reportBlobUrl)
   const report: WorkflowReport = await response.json()
 
   // Use report's workflowType, fallback to run's type (for backward compat with old reports)
@@ -158,7 +162,7 @@ async function ReportContent({
           <div className="flex items-center gap-3">
             {isOwner && <ShareButton runId={id} initialIsPublic={run.isPublic ?? false} />}
             <a
-              href={run.reportBlobUrl}
+              href={reportBlobUrl}
               download
               className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
             >
