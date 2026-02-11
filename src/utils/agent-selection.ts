@@ -42,7 +42,7 @@ export const KNOWN_AGENTS: KnownAgent[] = [
     name: "codex-yolo",
     binary: "codex",
     displayName: "codex (yolo)",
-    command: `codex --yolo ${D3K_PROMPT}`
+    command: `codex --dangerously-bypass-approvals-and-sandbox ${D3K_PROMPT}`
   },
   { name: "opencode", binary: "opencode", displayName: "opencode" },
   { name: "gemini", binary: "gemini", displayName: "gemini" },

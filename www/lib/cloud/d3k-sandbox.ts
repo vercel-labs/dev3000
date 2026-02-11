@@ -85,6 +85,7 @@ export class StepTimer {
 // After restoring from base snapshot, we clone the repo and install deps.
 
 const BASE_SNAPSHOT_KEY = "d3k-snapshots/base-snapshot.json"
+const BASE_SNAPSHOT_VERSION = "2026-02-11-bun"
 
 /**
  * Metadata stored for the base snapshot
@@ -92,6 +93,7 @@ const BASE_SNAPSHOT_KEY = "d3k-snapshots/base-snapshot.json"
 export interface BaseSnapshotMetadata {
   snapshotId: string
   createdAt: string
+  version: string
   d3kVersion?: string
   description: string
 }
@@ -103,7 +105,8 @@ export async function saveBaseSnapshotId(snapshotId: string, debug = false): Pro
   const metadata: BaseSnapshotMetadata = {
     snapshotId,
     createdAt: new Date().toISOString(),
-    description: "Base d3k snapshot with Chrome system deps and d3k globally installed"
+    version: BASE_SNAPSHOT_VERSION,
+    description: "Base d3k snapshot with Chrome system deps, bun, and d3k globally installed"
   }
 
   if (debug) {
@@ -164,17 +167,32 @@ export async function loadBaseSnapshotId(debug = false): Promise<BaseSnapshotMet
 /**
  * Check if a snapshot is still valid (exists and can be used)
  */
-export async function isSnapshotValid(snapshotId: string, debug = false): Promise<boolean> {
+export async function isSnapshotValid(
+  metadata: BaseSnapshotMetadata,
+  expectedVersion: string,
+  debug = false
+): Promise<boolean> {
   try {
-    if (debug) console.log(`  🔍 Checking if snapshot ${snapshotId} is valid...`)
-    const snapshot = await Snapshot.get({ snapshotId })
+    if (metadata.version !== expectedVersion) {
+      if (debug) {
+        console.log(
+          `  ❌ Snapshot version mismatch: found ${metadata.version || "unknown"}, expected ${expectedVersion}`
+        )
+      }
+      return false
+    }
+
+    if (debug) console.log(`  🔍 Checking if snapshot ${metadata.snapshotId} is valid...`)
+    const snapshot = await Snapshot.get({ snapshotId: metadata.snapshotId })
     // Snapshot statuses: "created" (valid), "deleted", "failed"
     const isValid = snapshot.status === "created"
     if (debug) console.log(`  ${isValid ? "✅" : "❌"} Snapshot status: ${snapshot.status}`)
     return isValid
   } catch (error) {
     if (debug) {
-      console.log(`  ❌ Snapshot not found or invalid: ${error instanceof Error ? error.message : String(error)}`)
+      console.log(
+        `  ❌ Snapshot not found or invalid: ${error instanceof Error ? error.message : String(error)}`
+      )
     }
     return false
   }
@@ -527,7 +545,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     // Use chromium path from @sparticuz/chromium (or fallback)
     if (debug)
       console.log(
-        `  🔧 Command: cd ${sandboxCwd} && d3k --no-tui --debug --headless --auto-skills --agent-name codex --browser ${chromiumPath}`
+        `  🔧 Command: export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; cd ${sandboxCwd} && d3k --no-tui --debug --headless --auto-skills --agent-name codex --browser ${chromiumPath}`
       )
 
     // Start d3k in detached mode with --headless flag
@@ -542,7 +560,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
       cmd: "sh",
       args: [
         "-c",
-        `mkdir -p /home/vercel-sandbox/.d3k/logs && cd ${sandboxCwd} && d3k --no-tui --debug --headless --auto-skills --agent-name codex --browser ${chromiumPath} > ${d3kStartupLog} 2>&1`
+        `mkdir -p /home/vercel-sandbox/.d3k/logs && export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; cd ${sandboxCwd} && d3k --no-tui --debug --headless --auto-skills --agent-name codex --browser ${chromiumPath} > ${d3kStartupLog} 2>&1`
       ],
       detached: true
     })
@@ -1014,7 +1032,7 @@ export async function createD3kSandboxFromSnapshot(config: D3kSandboxFromSnapsho
       cmd: "sh",
       args: [
         "-c",
-        `mkdir -p /home/vercel-sandbox/.d3k/logs && cd ${sandboxCwd} && d3k --no-tui --debug --headless --browser ${chromiumPath} > ${d3kStartupLog} 2>&1`
+        `mkdir -p /home/vercel-sandbox/.d3k/logs && export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; cd ${sandboxCwd} && d3k --no-tui --debug --headless --browser ${chromiumPath} > ${d3kStartupLog} 2>&1`
       ],
       detached: true
     })
@@ -1202,6 +1220,23 @@ async function createAndSaveBaseSnapshot(timeoutMs: number, debug = false): Prom
     await SandboxChrome.installSystemDependencies(baseSandbox, { debug })
     if (debug) console.log("  ✅ Chrome system dependencies installed")
 
+    // Ensure bun is available in the base snapshot (projects may use bun run dev)
+    if (debug) console.log("  📦 Ensuring bun is available...")
+    const bunWhich = await runCmd("sh", ["-c", "export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; command -v bun || true"])
+    if (!bunWhich.stdout.trim()) {
+      const bunInstall = await runCmd("sh", ["-c", "curl -fsSL https://bun.sh/install | bash"])
+      if (bunInstall.exitCode !== 0) {
+        throw new Error(`bun installation failed: ${bunInstall.stderr}`)
+      }
+      await runCmd("sh", [
+        "-c",
+        "mkdir -p /usr/local/bin && ln -sf ~/.bun/bin/bun /usr/local/bin/bun && ln -sf ~/.bun/bin/bunx /usr/local/bin/bunx"
+      ])
+      if (debug) console.log("  ✅ bun installed")
+    } else if (debug) {
+      console.log(`  ✅ bun found at ${bunWhich.stdout.trim()}`)
+    }
+
     // Install d3k globally
     if (debug) console.log("  📦 Installing d3k globally...")
     const d3kInstall = await runCmd("pnpm", ["i", "-g", "dev3000@latest"])
@@ -1285,7 +1320,7 @@ export async function getOrCreateD3kSandbox(config: D3kSandboxConfig): Promise<D
   const storedSnapshot = await loadBaseSnapshotId(debug)
 
   if (storedSnapshot) {
-    const isValid = await isSnapshotValid(storedSnapshot.snapshotId, debug)
+    const isValid = await isSnapshotValid(storedSnapshot, BASE_SNAPSHOT_VERSION, debug)
     if (isValid) {
       baseSnapshotId = storedSnapshot.snapshotId
       if (debug) console.log(`  ✅ Found valid base snapshot: ${baseSnapshotId}`)
@@ -1472,7 +1507,7 @@ export async function getOrCreateD3kSandbox(config: D3kSandboxConfig): Promise<D
       cmd: "sh",
       args: [
         "-c",
-        `mkdir -p /home/vercel-sandbox/.d3k/logs && cd ${sandboxCwd} && d3k --no-tui --debug --headless --browser ${chromiumPath} > ${d3kStartupLog} 2>&1`
+        `mkdir -p /home/vercel-sandbox/.d3k/logs && export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; cd ${sandboxCwd} && d3k --no-tui --debug --headless --browser ${chromiumPath} > ${d3kStartupLog} 2>&1`
       ],
       detached: true
     })
