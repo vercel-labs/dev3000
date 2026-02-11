@@ -190,9 +190,7 @@ export async function isSnapshotValid(
     return isValid
   } catch (error) {
     if (debug) {
-      console.log(
-        `  ❌ Snapshot not found or invalid: ${error instanceof Error ? error.message : String(error)}`
-      )
+      console.log(`  ❌ Snapshot not found or invalid: ${error instanceof Error ? error.message : String(error)}`)
     }
     return false
   }
@@ -1222,7 +1220,10 @@ async function createAndSaveBaseSnapshot(timeoutMs: number, debug = false): Prom
 
     // Ensure bun is available in the base snapshot (projects may use bun run dev)
     if (debug) console.log("  📦 Ensuring bun is available...")
-    const bunWhich = await runCmd("sh", ["-c", "export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; command -v bun || true"])
+    const bunWhich = await runCmd("sh", [
+      "-c",
+      "export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; command -v bun || true"
+    ])
     if (!bunWhich.stdout.trim()) {
       const bunInstall = await runCmd("sh", ["-c", "curl -fsSL https://bun.sh/install | bash"])
       if (bunInstall.exitCode !== 0) {
