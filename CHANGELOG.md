@@ -4,6 +4,15 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.167] - 2026-02-11
+
+**Feature Release**
+
+- Add flag to disable skill installation (fixes #93)
+- Format snapshot validation
+- Version base snapshot and fix yolo command
+- Document security fix in changelog
+
 ## [0.0.166] - 2026-02-09
 
 **Feature Release**

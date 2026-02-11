@@ -10,6 +10,18 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.167",
+    date: "2026-02-11",
+    type: "minor",
+    highlights: [
+      "Add flag to disable skill installation (fixes #93)",
+      "Format snapshot validation",
+      "Version base snapshot and fix yolo command",
+      "Document security fix in changelog"
+    ]
+  },
+
+  {
     version: "0.0.166",
     date: "2026-02-09",
     type: "minor",
