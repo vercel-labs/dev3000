@@ -172,6 +172,7 @@ interface DevEnvironmentOptions {
   withAgent?: string // Command to run an embedded agent (e.g. "claude --dangerously-skip-permissions")
   skillsAgentId?: string // Selected agent id for skills/d3k skill placement
   autoSkills?: boolean // Auto-install recommended skills (non-interactive)
+  installSkills?: boolean // Disable skill installation/update checks when false
 }
 
 class Logger {
@@ -1032,14 +1033,18 @@ export class DevEnvironment {
         }
       })
 
+      const installSkills = this.options.installSkills !== false
       // Show initial status message
-      await this.tui.updateStatus("d3k is checking for skill updates...")
-
+      if (installSkills) {
+        await this.tui.updateStatus("d3k is checking for skill updates...")
+      }
       // Install d3k skill early so it's available when Claude Code starts
       // This is important for --with-agent where both start simultaneously
-      await ensureD3kSkill(this.options.skillsAgentId)
-      if (this.options.autoSkills) {
-        await autoInstallSkills(this.options.skillsAgentId as SkillsAgentId | undefined, this.debugLog)
+      if (installSkills) {
+        await ensureD3kSkill(this.options.skillsAgentId)
+        if (this.options.autoSkills) {
+          await autoInstallSkills(this.options.skillsAgentId as SkillsAgentId | undefined, this.debugLog)
+        }
       }
 
       // Check ports in background after TUI is visible
@@ -1124,11 +1129,14 @@ export class DevEnvironment {
       // Non-TUI mode - original flow
       console.log(chalk.hex("#A18CE5")(`Starting ${this.options.commandName} (v${this.version})`))
 
+      const installSkills = this.options.installSkills !== false
       // Install d3k skill early so it's available when Claude Code starts
       // This is important for --with-agent where both start simultaneously
-      await ensureD3kSkill(this.options.skillsAgentId)
-      if (this.options.autoSkills) {
-        await autoInstallSkills(this.options.skillsAgentId as SkillsAgentId | undefined, this.debugLog)
+      if (installSkills) {
+        await ensureD3kSkill(this.options.skillsAgentId)
+        if (this.options.autoSkills) {
+          await autoInstallSkills(this.options.skillsAgentId as SkillsAgentId | undefined, this.debugLog)
+        }
       }
 
       // Start spinner

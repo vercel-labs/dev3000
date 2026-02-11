@@ -767,6 +767,7 @@ program
     "--auto-skills",
     "Automatically install recommended skills without prompts (headless-safe, installs to project skills dir)"
   )
+  .option("--no-skills", "Disable skill installation and update checks")
   .option(
     "--with-agent <command>",
     'Run an agent (e.g. claude) in split-screen mode using tmux. Example: --with-agent "claude"'
@@ -837,7 +838,7 @@ program
             : undefined
       skillsAgentId = getSkillsAgentId(skillsAgentName)
 
-      if (skillsAgentId) {
+      if (skillsAgentId && options.skills !== false) {
         const resolvedSkillsAgentId = skillsAgentId
         // Check for skill updates and offer new packages
         try {
@@ -949,7 +950,7 @@ program
         if (options.debug) {
           console.log(`[DEBUG] Launching tmux with agent command: ${selectedAgent.command}`)
         }
-        if (skillsAgentId === "claude-code") {
+        if (skillsAgentId === "claude-code" && options.skills !== false) {
           ensureClaudeD3kSkill()
         }
         // Clear screen and scrollback before launching tmux so when tmux exits, terminal is clean
@@ -969,7 +970,7 @@ program
       }
     }
 
-    if (options.autoSkills && !skillsAgentId) {
+    if (options.autoSkills && options.skills !== false && !skillsAgentId) {
       skillsAgentId = "codex"
     }
 
@@ -1116,7 +1117,8 @@ program
         dateTimeFormat: options.dateTime || "local",
         pluginReactScan: options.pluginReactScan || false,
         skillsAgentId: skillsAgentId || undefined,
-        autoSkills: options.autoSkills || false
+        autoSkills: options.skills !== false ? options.autoSkills || false : false,
+        installSkills: options.skills !== false
       })
     } catch (error) {
       console.error(chalk.red("❌ Failed to start development environment:"), error)
