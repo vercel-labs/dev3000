@@ -159,6 +159,14 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   const [branchesError, setBranchesError] = useState(false)
   const loadedTeamIdRef = useRef<string | null>(null)
 
+  const getBypassTokenStorageKey = useCallback(
+    (projectId: string) => {
+      const teamId = selectedTeam?.id || "personal"
+      return `d3k_bypass_token_${teamId}_${projectId}`
+    },
+    [selectedTeam]
+  )
+
   const workflowSkillLabels: Record<WorkflowType, string[]> = {
     "design-guidelines": ["d3k", "vercel-design-guidelines"],
     "react-performance": ["d3k", "vercel-react-best-practices"],
@@ -403,14 +411,19 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
         return
       }
 
+      // Reset token when project changes to avoid stale values
+      setBypassToken("")
+
       // First priority: URL param (bypass or bypassToken)
       const urlBypassToken = searchParams.get("bypass") || searchParams.get("bypassToken")
       if (urlBypassToken) {
         console.log("[Bypass Token] Found token in URL param")
         setBypassToken(urlBypassToken)
+        const storageKey = getBypassTokenStorageKey(selectedProject.id)
+        localStorage.setItem(storageKey, urlBypassToken)
       } else {
         // Second priority: Load stored token for this project from localStorage
-        const storageKey = `d3k_bypass_token_${selectedProject.id}`
+        const storageKey = getBypassTokenStorageKey(selectedProject.id)
         const storedToken = localStorage.getItem(storageKey)
         if (storedToken) {
           console.log("[Bypass Token] Found stored token for project", selectedProject.id)
@@ -451,7 +464,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
     }
 
     checkDeploymentProtection()
-  }, [selectedProject, step, searchParams])
+  }, [selectedProject, step, searchParams, getBypassTokenStorageKey])
 
   // Load recent projects for the selected team
   useEffect(() => {
@@ -1158,10 +1171,14 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                             const newToken = e.target.value
                             setBypassToken(newToken)
                             // Save to localStorage for this project
-                            if (selectedProject && newToken) {
-                              const storageKey = `d3k_bypass_token_${selectedProject.id}`
-                              localStorage.setItem(storageKey, newToken)
-                              console.log("[Bypass Token] Saved token to localStorage for project", selectedProject.id)
+                            if (selectedProject) {
+                              const storageKey = getBypassTokenStorageKey(selectedProject.id)
+                              if (newToken) {
+                                localStorage.setItem(storageKey, newToken)
+                                console.log("[Bypass Token] Saved token to localStorage for project", selectedProject.id)
+                              } else {
+                                localStorage.removeItem(storageKey)
+                              }
                             }
                           }}
                           className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground font-mono text-sm"
