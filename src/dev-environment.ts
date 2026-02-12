@@ -16,6 +16,7 @@ import ora from "ora"
 import { homedir, tmpdir } from "os"
 import { dirname, join, resolve, sep } from "path"
 import { fileURLToPath } from "url"
+import { stripVTControlCharacters } from "util"
 import { CDPMonitor } from "./cdp-monitor.js"
 import { ScreencastManager } from "./screencast-manager.js"
 import { type LogEntry, NextJsErrorDetector, OutputProcessor, StandardLogParser } from "./services/parsers/index.js"
@@ -154,6 +155,7 @@ export async function gracefulKillProcess(options: GracefulKillOptions): Promise
 interface DevEnvironmentOptions {
   port: string
   serverCommand: string
+  startupTimeoutSeconds: number
   profileDir: string
   logFile: string
   debug?: boolean
@@ -1083,11 +1085,18 @@ export class DevEnvironment {
       const serverStarted = await this.waitForServer()
 
       if (!serverStarted) {
+        this.writeStartupFailureContext(
+          `App did not become reachable within ${this.options.startupTimeoutSeconds} seconds.`,
+          30
+        )
         await this.tui.updateStatus("❌ Server failed to start")
-        console.error(chalk.red("\n❌ Your app server failed to start after 30 seconds."))
+        console.error(
+          chalk.red(`\n❌ Your app server failed to start after ${this.options.startupTimeoutSeconds} seconds.`)
+        )
         console.error(chalk.yellow(`Check the logs at ~/.d3k/${getProjectName()}/logs/ for errors.`))
         console.error(chalk.yellow("Exiting without launching browser."))
-        process.exit(1)
+        await this.gracefulShutdown()
+        return
       }
 
       // Update TUI with confirmed port (may have changed during server startup)
@@ -1164,11 +1173,18 @@ export class DevEnvironment {
       const serverStarted = await this.waitForServer()
 
       if (!serverStarted) {
+        this.writeStartupFailureContext(
+          `App did not become reachable within ${this.options.startupTimeoutSeconds} seconds.`,
+          30
+        )
         this.spinner.fail("Server failed to start")
-        console.error(chalk.red("\n❌ Your app server failed to start after 30 seconds."))
+        console.error(
+          chalk.red(`\n❌ Your app server failed to start after ${this.options.startupTimeoutSeconds} seconds.`)
+        )
         console.error(chalk.yellow(`Check the logs at ~/.d3k/${getProjectName()}/logs/ for errors.`))
         console.error(chalk.yellow("Exiting without launching browser."))
-        process.exit(1)
+        await this.gracefulShutdown()
+        return
       }
 
       // Legacy server removed - using CLI commands instead
@@ -1313,6 +1329,7 @@ export class DevEnvironment {
 
         // If it's an early exit and node_modules doesn't exist, show helpful message
         if (isEarlyExit && !nodeModulesExists) {
+          this.writeStartupFailureContext(`Server exited early with code ${code}.`, 30)
           if (this.spinner?.isSpinning) {
             this.spinner.fail("Server script failed to start - missing dependencies")
           } else {
@@ -1327,6 +1344,7 @@ export class DevEnvironment {
 
         // If it's an early exit but node_modules exists, it's still likely a configuration issue
         if (isEarlyExit) {
+          this.writeStartupFailureContext(`Server exited early with code ${code}.`, 30)
           if (this.spinner?.isSpinning) {
             this.spinner.fail(`Server script failed to start (exited with code ${code})`)
           } else {
@@ -1347,6 +1365,7 @@ export class DevEnvironment {
         const isFatalExit = code !== 0 && code !== 130 && code !== 143
 
         if (isFatalExit) {
+          this.writeStartupFailureContext(`Server process exited with code ${code}.`, 30)
           // Stop spinner and show error for fatal exits
           if (this.spinner?.isSpinning) {
             this.spinner.fail(`Server process exited with code ${code}`)
@@ -1434,6 +1453,26 @@ export class DevEnvironment {
         spawnSync("pkill", ["-P", pid.toString()], { stdio: "ignore" })
       } catch {
         // Ignore pkill errors
+      }
+    }
+  }
+
+  private killTrackedChromePids(chromePids: number[], reason: string) {
+    if (chromePids.length === 0) return
+
+    this.debugLog(`Killing tracked Chrome PIDs (${reason}): [${chromePids.join(", ")}]`)
+    for (const pid of chromePids) {
+      try {
+        process.kill(pid, "SIGTERM")
+      } catch {
+        // Ignore - process may already be dead
+      }
+
+      try {
+        process.kill(pid, 0)
+        process.kill(pid, "SIGKILL")
+      } catch {
+        // Ignore - process may already be dead
       }
     }
   }
@@ -1619,6 +1658,90 @@ export class DevEnvironment {
     }
   }
 
+  private getRecentLogLines(limit: number = 30): string[] {
+    try {
+      if (!existsSync(this.options.logFile)) return []
+      const logContent = readFileSync(this.options.logFile, "utf8")
+      return logContent
+        .split("\n")
+        .map((line) => line.trimEnd())
+        .filter((line) => line.trim() && !line.includes("[STARTUP_FAILURE]") && !line.includes("[STARTUP_CONTEXT]"))
+        .slice(-limit)
+    } catch {
+      return []
+    }
+  }
+
+  private simplifyLogLine(line: string): string {
+    // Strip ANSI escapes + non-printables, then remove "[time] [source]" prefix.
+    const noAnsi = stripVTControlCharacters(line).replace(/[^\t\r\n -~]/g, "")
+    return noAnsi.replace(/^\[[^\]]+\]\s+\[[^\]]+\]\s+/, "")
+  }
+
+  private inferStartupFailureHint(logLines: string[]): string | null {
+    const joined = logLines.join("\n")
+
+    if (/ERR_PNPM_NO_SCRIPT/i.test(joined) || /Missing script:\s*dev/i.test(joined)) {
+      return "Missing package script. Pass --script or --command for this project."
+    }
+    if (/EADDRINUSE|port .* in use/i.test(joined)) {
+      return "Port conflict detected. Try another --port or stop the process using that port."
+    }
+    if (/Cannot find module|MODULE_NOT_FOUND|ENOENT/i.test(joined)) {
+      return "Dependency or path issue detected. Verify installs and command paths."
+    }
+    if (/permission denied|EACCES/i.test(joined)) {
+      return "Permission issue detected. Check executable permissions and environment access."
+    }
+    if (/\/\/:dev:ts:/i.test(joined) && !/vercel-site:dev:|Local:\s+http|Ready in/i.test(joined)) {
+      return "Background typegen/typecheck is running, but app server has not started yet. Use a longer timeout or run the app-specific dev command."
+    }
+    if (/Starting compilation in watch mode/i.test(joined) && !/Local:\s+http|Ready in|listening on/i.test(joined)) {
+      return "Compiler watch mode started, but no app port was detected yet. This may need a longer startup timeout."
+    }
+
+    return null
+  }
+
+  private getStartupContextLines(limit: number = 30): string[] {
+    const recentLines = this.getRecentLogLines(200)
+    if (recentLines.length === 0) return []
+
+    const errorPattern =
+      /(^|[\s:])(error|failed|fatal|exception|unhandled rejection|err_|eaddrinuse|module_not_found|missing script|not found|timeout)([\s:.,]|$)/i
+    const ignorePattern = /Found 0 errors/i
+    const errorLines = recentLines.filter((line) => errorPattern.test(line) && !ignorePattern.test(line))
+
+    // Prefer error-focused context when available; otherwise fall back to the latest lines.
+    if (errorLines.length > 0) {
+      const focused = errorLines.slice(-20)
+      const tail = recentLines.slice(-10)
+      return [...focused, ...tail].slice(-limit)
+    }
+
+    return recentLines.slice(-limit)
+  }
+
+  private writeStartupFailureContext(reason: string, contextLines: number = 30): void {
+    const context = this.getStartupContextLines(contextLines)
+    const hint = this.inferStartupFailureHint(context)
+
+    this.logger.log("server", `[STARTUP_FAILURE] ${reason}`)
+    this.logger.log("server", `[STARTUP_FAILURE] Command: ${this.options.serverCommand}`)
+    this.logger.log("server", `[STARTUP_FAILURE] Full logs: ${this.options.logFile}`)
+
+    if (hint) {
+      this.logger.log("server", `[STARTUP_HINT] ${hint}`)
+    }
+
+    if (context.length > 0) {
+      this.logger.log("server", `[STARTUP_CONTEXT] Selected ${context.length} relevant log lines:`)
+      for (const line of context) {
+        this.logger.log("server", `[STARTUP_CONTEXT] ${this.simplifyLogLine(line)}`)
+      }
+    }
+  }
+
   private checkForCommonIssues() {
     try {
       if (!existsSync(this.options.logFile)) return
@@ -1648,7 +1771,7 @@ export class DevEnvironment {
   }
 
   private async waitForServer(): Promise<boolean> {
-    const maxAttempts = 30
+    const maxAttempts = this.options.startupTimeoutSeconds
     let attempts = 0
     const startTime = Date.now()
 
@@ -1734,9 +1857,25 @@ export class DevEnvironment {
       await this.startCDPMonitoring()
     } catch (error) {
       console.error(chalk.red("⚠️ CDP monitoring setup failed:"), error)
-      // CDP monitoring is critical - shutdown if it fails
-      this.gracefulShutdown()
-      throw error
+      this.logger.log("browser", `[CDP] Monitoring startup failed: ${error}`)
+      this.logger.log("browser", "[CDP] Browser monitoring disabled; app server will continue running.")
+
+      if (this.tui) {
+        this.tui.updateStatus("⚠ Browser monitoring failed; continuing with server logs only")
+      }
+
+      // Best-effort cleanup of partially initialized monitor, but keep d3k running.
+      if (this.cdpMonitor) {
+        try {
+          this.cdpMonitor.prepareShutdown()
+          await this.cdpMonitor.shutdown()
+        } catch {
+          // Ignore cleanup errors; monitoring is already disabled
+        }
+        this.cdpMonitor = null
+      }
+
+      this.debugLog(`CDP monitoring disabled due to startup failure: ${error instanceof Error ? error.message : error}`)
     }
   }
 
@@ -1938,6 +2077,9 @@ export class DevEnvironment {
     if (sessionInfo?.serverPid) {
       this.killServerPidIfOwned(sessionInfo.serverPid, sessionInfo.cwd, "graceful shutdown")
     }
+
+    // Always kill tracked Chrome processes, even if cdpMonitor is unavailable.
+    this.killTrackedChromePids(sessionInfo?.chromePids ?? [], "graceful shutdown")
 
     // Shutdown CDP monitor if it was started
     if (this.cdpMonitor) {
@@ -2203,8 +2345,6 @@ export class DevEnvironment {
 
         // Fallback: force kill any remaining Chrome processes for THIS instance only
         try {
-          const projectName = getProjectName()
-          const sessionInfo = getSessionInfo(projectName)
           const chromePids = sessionInfo?.chromePids ?? []
 
           if (chromePids.length > 0) {
@@ -2230,6 +2370,9 @@ export class DevEnvironment {
         }
       }
     }
+
+    // Safety net: ensure tracked Chrome processes are always terminated on shutdown.
+    this.killTrackedChromePids(sessionInfo?.chromePids ?? [], "handleShutdown")
 
     // REMOVED: No longer clean up CLI config files on shutdown
     // This was causing Claude Code instances to crash when dev3000 was killed

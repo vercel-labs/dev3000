@@ -116,6 +116,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
     const projectParam = searchParams.get("project")
 
     if (!typeParam) return "type"
+    if (typeParam === "url-audit") return "options"
     if (projectParam) return "options"
     if (teamParam) return "project"
     return "team"
@@ -150,6 +151,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   const [isCheckingProtection, setIsCheckingProtection] = useState(false)
   const [needsBypassToken, setNeedsBypassToken] = useState(false)
   const [customPrompt, setCustomPrompt] = useState("")
+  const [publicUrl, setPublicUrl] = useState("")
   const [githubPat, setGithubPat] = useState("")
   const [startPath, setStartPath] = useState("/")
   const [crawlDepth, setCrawlDepth] = useState<number | "all">(1)
@@ -172,8 +174,21 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
     "design-guidelines": ["d3k", "vercel-design-guidelines"],
     "react-performance": ["d3k", "vercel-react-best-practices"],
     "cls-fix": ["d3k"],
-    prompt: ["d3k"]
+    prompt: ["d3k"],
+    "url-audit": ["d3k", "vercel-design-guidelines"]
   }
+
+  const isUrlAuditType = _selectedType === "url-audit"
+  const isValidPublicUrl = (() => {
+    if (!publicUrl.trim()) return false
+    try {
+      const parsed = new URL(publicUrl)
+      if (parsed.protocol !== "https:") return false
+      return true
+    } catch {
+      return false
+    }
+  })()
 
   // Check if GitHub repo info is available from project link or deployment metadata
   const hasGitHubRepoInfo = Boolean(
@@ -198,7 +213,15 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
     }
 
     // Determine the correct step based on URL params
-    const targetStep: WorkflowStep = !typeParam ? "type" : projectParam ? "options" : teamParam ? "project" : "team"
+    const targetStep: WorkflowStep = !typeParam
+      ? "type"
+      : typeParam === "url-audit"
+        ? "options"
+        : projectParam
+          ? "options"
+          : teamParam
+            ? "project"
+            : "team"
 
     if (targetStep !== step) {
       setStep(targetStep)
@@ -230,6 +253,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       setBypassToken("")
       setNeedsBypassToken(false)
       setCustomPrompt("")
+      setPublicUrl("")
       setStartPath("/")
       setProjectsError(null)
       setProjectSearch("")
@@ -246,13 +270,14 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   // Load teams when needed
   // biome-ignore lint/correctness/useExhaustiveDependencies: loadTeams is stable and doesn't need to be a dependency
   useEffect(() => {
-    if (["team", "project", "options"].includes(step) && teams.length === 0 && !loadingTeams) {
+    if (!isUrlAuditType && ["team", "project", "options"].includes(step) && teams.length === 0 && !loadingTeams) {
       loadTeams()
     }
-  }, [step, teams.length, loadingTeams])
+  }, [step, teams.length, loadingTeams, isUrlAuditType])
 
   // Restore team from URL once teams are loaded
   useEffect(() => {
+    if (isUrlAuditType) return
     const teamParam = searchParams.get("team")
     if (teamParam && teams.length > 0) {
       // Update team if URL param differs from currently selected team
@@ -263,18 +288,19 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
         }
       }
     }
-  }, [teams, searchParams, selectedTeam])
+  }, [teams, searchParams, selectedTeam, isUrlAuditType])
 
   // Load projects when team selected
   // biome-ignore lint/correctness/useExhaustiveDependencies: loadProjects is stable and doesn't need to be a dependency
   useEffect(() => {
+    if (isUrlAuditType) return
     if (!selectedTeam) return
     const searchKey = `${selectedTeam.id}:${debouncedProjectSearch}`
     if (!loadingProjects && loadedTeamIdRef.current !== searchKey) {
       loadedTeamIdRef.current = searchKey
       loadProjects(selectedTeam, debouncedProjectSearch)
     }
-  }, [selectedTeam, loadingProjects, debouncedProjectSearch])
+  }, [selectedTeam, loadingProjects, debouncedProjectSearch, isUrlAuditType])
 
   // Debounce project search input
   useEffect(() => {
@@ -287,6 +313,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   // Load branches when project and team are selected and on options step
   // biome-ignore lint/correctness/useExhaustiveDependencies: loadBranches is stable (defined in component scope)
   useEffect(() => {
+    if (isUrlAuditType) return
     if (
       selectedProject &&
       selectedTeam &&
@@ -297,7 +324,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
     ) {
       loadBranches(selectedProject, selectedTeam)
     }
-  }, [selectedProject, selectedTeam, step, availableBranches.length, loadingBranches, branchesError])
+  }, [selectedProject, selectedTeam, step, availableBranches.length, loadingBranches, branchesError, isUrlAuditType])
 
   // Poll workflow status when running
   useEffect(() => {
@@ -469,16 +496,18 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
 
   // Load recent projects for the selected team
   useEffect(() => {
+    if (isUrlAuditType) return
     if (!selectedTeam) return
     setRecentProjects(readRecentProjects(selectedTeam.id))
-  }, [selectedTeam])
+  }, [selectedTeam, isUrlAuditType])
 
   // Persist recent projects when a selection is made
   useEffect(() => {
+    if (isUrlAuditType) return
     if (!selectedTeam || !selectedProject) return
     const next = addRecentProject(selectedTeam.id, { id: selectedProject.id, name: selectedProject.name })
     setRecentProjects(next)
-  }, [selectedTeam, selectedProject])
+  }, [selectedTeam, selectedProject, isUrlAuditType])
 
   async function loadTeams() {
     setLoadingTeams(true)
@@ -600,6 +629,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
 
   // Restore project from URL once projects are loaded
   useEffect(() => {
+    if (isUrlAuditType) return
     const projectParam = searchParams.get("project")
     if (!projectParam || !selectedTeam) return
 
@@ -614,17 +644,22 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
         loadProjectById(projectParam, selectedTeam)
       }
     }
-  }, [projects, searchParams, selectedProject, selectedTeam, loadingProjectById, loadProjectById])
+  }, [projects, searchParams, selectedProject, selectedTeam, loadingProjectById, loadProjectById, isUrlAuditType])
 
   async function startWorkflow() {
     console.log("[Start Workflow] Function called")
     console.log("[Start Workflow] selectedProject:", selectedProject)
     console.log("[Start Workflow] selectedTeam:", selectedTeam)
 
-    if (!selectedProject || !selectedTeam) {
+    if (!isUrlAuditType && (!selectedProject || !selectedTeam)) {
       console.log("[Start Workflow] Missing project or team, returning")
       return
     }
+    if (isUrlAuditType && !isValidPublicUrl) {
+      setWorkflowStatus("Error: Enter a valid public https:// URL")
+      return
+    }
+    const project = selectedProject
 
     // Reset any previous workflow result to prevent showing stale data
     setWorkflowResult(null)
@@ -636,28 +671,31 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
 
     try {
       // Get the latest deployment URL
-      console.log("[Start Workflow] latestDeployments:", selectedProject.latestDeployments)
-      const latestDeployment = selectedProject.latestDeployments[0]
-      if (!latestDeployment) {
-        throw new Error("No deployments found for this project")
+      console.log("[Start Workflow] latestDeployments:", project?.latestDeployments)
+      let devUrl: string | undefined
+      let latestDeployment: Project["latestDeployments"][number] | undefined
+      if (!isUrlAuditType) {
+        latestDeployment = project?.latestDeployments[0]
+        if (!latestDeployment) {
+          throw new Error("No deployments found for this project")
+        }
+        devUrl = `https://${latestDeployment.url}`
+        console.log("[Start Workflow] devUrl:", devUrl)
       }
-
-      const devUrl = `https://${latestDeployment.url}`
-      console.log("[Start Workflow] devUrl:", devUrl)
 
       // Extract repo info from project link or deployment metadata
       let repoOwner: string | undefined
       let repoName: string | undefined
 
       // Debug: log what we have
-      console.log("[Start Workflow] project.link:", selectedProject.link)
-      console.log("[Start Workflow] latestDeployment.meta:", latestDeployment.meta)
+      console.log("[Start Workflow] project.link:", selectedProject?.link)
+      console.log("[Start Workflow] latestDeployment.meta:", latestDeployment?.meta)
 
-      if (selectedProject.link?.org && selectedProject.link?.repo) {
-        repoOwner = selectedProject.link.org
-        repoName = selectedProject.link.repo
+      if (project?.link?.org && project.link.repo) {
+        repoOwner = project.link.org
+        repoName = project.link.repo
         console.log(`[Start Workflow] Using repo info from project.link: ${repoOwner}/${repoName}`)
-      } else if (latestDeployment.meta?.githubOrg && latestDeployment.meta?.githubRepo) {
+      } else if (latestDeployment?.meta?.githubOrg && latestDeployment.meta.githubRepo) {
         // Fallback: use deployment metadata when project.link is missing
         repoOwner = latestDeployment.meta.githubOrg
         repoName = latestDeployment.meta.githubRepo
@@ -668,41 +706,46 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
 
       // Map URL param type to workflow type
       const workflowType =
-        _selectedType === "cloud-fix"
-          ? "cls-fix"
-          : _selectedType === "design-guidelines"
-            ? "design-guidelines"
-            : _selectedType === "react-performance"
-              ? "react-performance"
-              : "prompt"
+        _selectedType === "url-audit"
+          ? "url-audit"
+          : _selectedType === "cloud-fix"
+            ? "cls-fix"
+            : _selectedType === "design-guidelines"
+              ? "design-guidelines"
+              : _selectedType === "react-performance"
+                ? "react-performance"
+                : "prompt"
 
       const body: Record<string, unknown> = {
         devUrl,
-        projectName: selectedProject.name,
+        projectName: isUrlAuditType ? new URL(publicUrl).hostname : project?.name,
         userId,
         bypassToken,
         workflowType,
+        analysisTargetType: isUrlAuditType ? "url" : "vercel-project",
+        publicUrl: isUrlAuditType ? publicUrl : undefined,
         customPrompt: workflowType === "prompt" ? customPrompt : undefined,
         crawlDepth: workflowType === "design-guidelines" ? crawlDepth : undefined,
         githubPat: autoCreatePR && githubPat ? githubPat : undefined,
         startPath: startPath !== "/" ? startPath : undefined // Only send if not default
       }
 
-      if (selectedProject.rootDirectory) {
-        body.projectDir = selectedProject.rootDirectory
+      if (project?.rootDirectory) {
+        body.projectDir = project.rootDirectory
       }
 
       // If we have repo info, pass it for sandbox creation
       // Use the deployment's git SHA if available, otherwise fall back to baseBranch
-      if (repoOwner && repoName) {
+      if (!isUrlAuditType && repoOwner && repoName) {
         body.repoUrl = `https://github.com/${repoOwner}/${repoName}`
-        body.repoBranch = latestDeployment.gitSource?.sha || baseBranch || "main"
+        const gitRef = latestDeployment?.gitSource?.sha || baseBranch || "main"
+        body.repoBranch = gitRef
         console.log(
-          `[Start Workflow] Using git reference: ${body.repoBranch} (${latestDeployment.gitSource?.sha ? "SHA from deployment" : "branch name"})`
+          `[Start Workflow] Using git reference: ${gitRef} (${latestDeployment?.gitSource?.sha ? "SHA from deployment" : "branch name"})`
         )
       }
 
-      if (autoCreatePR && repoOwner && repoName) {
+      if (!isUrlAuditType && autoCreatePR && repoOwner && repoName) {
         body.repoOwner = repoOwner
         body.repoName = repoName
         body.baseBranch = baseBranch
@@ -827,6 +870,12 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
 
   if (!isOpen) return null
 
+  const progressSteps = isUrlAuditType
+    ? (["type", "options", "running"] as WorkflowStep[])
+    : (["type", "team", "project", "options", "running"] as WorkflowStep[])
+  const progressLabels = isUrlAuditType ? ["Mode", "Options", "Run"] : ["Type", "Team", "Project", "Options", "Run"]
+  const currentProgressIndex = progressSteps.indexOf(step)
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-card rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto border border-border">
@@ -848,36 +897,32 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
           {/* Progress indicator */}
           <div className="mb-8">
             <div className="flex items-center">
-              {["type", "team", "project", "options", "running"].map((s, index) => (
+              {progressSteps.map((s, index) => (
                 <div key={s} className="flex items-center flex-1">
                   <div
                     className={`w-8 h-8 rounded-full flex items-center justify-center ${
                       step === s
                         ? "bg-blue-600 text-white"
-                        : ["type", "team", "project", "options", "running"].indexOf(step) >
-                            ["type", "team", "project", "options", "running"].indexOf(s)
+                        : currentProgressIndex > index
                           ? "bg-green-600 text-white"
                           : "bg-muted text-muted-foreground"
                     }`}
                   >
                     {index + 1}
                   </div>
-                  {index < 4 && (
+                  {index < progressSteps.length - 1 && (
                     <div className="flex-1 mx-2">
-                      <Progress
-                        value={["type", "team", "project", "options", "running"].indexOf(step) > index ? 100 : 0}
-                        className="h-1"
-                      />
+                      <Progress value={currentProgressIndex > index ? 100 : 0} className="h-1" />
                     </div>
                   )}
                 </div>
               ))}
             </div>
             <div className="flex items-center mt-2">
-              {["Type", "Team", "Project", "Options", "Run"].map((label, index) => (
+              {progressLabels.map((label, index) => (
                 <div key={label} className="flex items-center flex-1">
                   <span className="text-xs text-muted-foreground w-8 text-center">{label}</span>
-                  {index < 4 && <div className="flex-1 mx-2" />}
+                  {index < progressLabels.length - 1 && <div className="flex-1 mx-2" />}
                 </div>
               ))}
             </div>
@@ -886,8 +931,12 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
           {/* Step 1: Select Workflow Type */}
           {step === "type" && (
             <div>
-              <h3 className="text-lg font-semibold mb-4 text-foreground">Select Workflow Type</h3>
+              <h3 className="text-lg font-semibold mb-4 text-foreground">Choose What To Analyze</h3>
+              <div className="mb-3 text-sm text-muted-foreground">
+                Analyze a Vercel project or run a read-only audit on a public URL.
+              </div>
               <div className="space-y-3">
+                <div className="text-xs uppercase tracking-wide text-muted-foreground">Analyze a Vercel Project</div>
                 <Link
                   href="/workflows/new?type=design-guidelines"
                   className="block w-full p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
@@ -934,6 +983,19 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                   </div>
                   <div className="text-xs text-muted-foreground mt-2">
                     Skills: {workflowSkillLabels.prompt.join(", ")}
+                  </div>
+                </Link>
+                <div className="pt-2 text-xs uppercase tracking-wide text-muted-foreground">Analyze a URL</div>
+                <Link
+                  href="/workflows/new?type=url-audit"
+                  className="block w-full p-4 border-2 border-orange-300/60 dark:border-orange-600/60 rounded-lg hover:border-orange-500 hover:bg-accent text-left transition-colors"
+                >
+                  <div className="font-semibold text-foreground">Public URL Audit</div>
+                  <div className="text-sm text-muted-foreground mt-1">
+                    Run a read-only external UX/performance audit against a public site with recommendations.
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-2">
+                    Skills: {workflowSkillLabels["url-audit"].join(", ")}
                   </div>
                 </Link>
               </div>
@@ -1086,7 +1148,64 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
           {step === "options" && (
             <div>
               <h3 className="text-lg font-semibold mb-4 text-foreground">Configure Options</h3>
-              {!selectedProject ? (
+              {isUrlAuditType ? (
+                <>
+                  <div className="mb-6 p-4 bg-muted rounded-lg">
+                    <div className="text-sm text-muted-foreground mb-1">Mode</div>
+                    <div className="font-semibold text-foreground">Analyze a URL (read-only audit)</div>
+                  </div>
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor={startPathId} className="block text-sm font-medium text-foreground mb-1">
+                        Public URL
+                        <span className="text-red-500 ml-1">*</span>
+                      </Label>
+                      <input
+                        type="url"
+                        id={startPathId}
+                        value={publicUrl}
+                        onChange={(e) => setPublicUrl(e.target.value)}
+                        className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground font-mono text-sm"
+                        placeholder="https://example.com"
+                        required
+                      />
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Must be a publicly reachable https URL. Private/localhost addresses are blocked.
+                      </p>
+                    </div>
+
+                    <div>
+                      <Label htmlFor={crawlDepthId} className="block text-sm font-medium text-foreground mb-1">
+                        Start Path
+                      </Label>
+                      <input
+                        type="text"
+                        id={crawlDepthId}
+                        value={startPath}
+                        onChange={(e) => setStartPath(e.target.value)}
+                        className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground font-mono text-sm"
+                        placeholder="/"
+                      />
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Optional path to prioritize during analysis (e.g. /pricing). Defaults to /.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-3 mt-6">
+                    <Link href="/workflows/new" className="px-4 py-2 text-muted-foreground hover:text-foreground">
+                      ← Back
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={startWorkflow}
+                      disabled={!isValidPublicUrl}
+                      className="flex-1 px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Start URL Audit
+                    </button>
+                  </div>
+                </>
+              ) : !selectedProject ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <Spinner className="mx-auto mb-2" />
                   Loading project details...

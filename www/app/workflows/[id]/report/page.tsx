@@ -87,7 +87,9 @@ async function ReportContent({
         ? "Design Guidelines"
         : workflowType === "react-performance"
           ? "React Performance"
-          : "CLS Fix"
+          : workflowType === "url-audit"
+            ? "URL Audit"
+            : "CLS Fix"
   const reportCrumbLabel = workflowType === "cls-fix" ? "Fix Report" : "Workflow Report"
 
   // Helper to format CLS grade
@@ -152,7 +154,9 @@ async function ReportContent({
                       ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300"
                       : workflowType === "react-performance"
                         ? "bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300"
-                        : "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300"
+                        : workflowType === "url-audit"
+                          ? "bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300"
+                          : "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300"
                 }`}
               >
                 {workflowLabel}
@@ -178,7 +182,9 @@ async function ReportContent({
             <ul className="flex flex-wrap gap-x-6 gap-y-1">
               {report.sandboxDevUrl && (
                 <li>
-                  <span className="text-muted-foreground">Dev: </span>
+                  <span className="text-muted-foreground">
+                    {report.analysisTargetType === "url" ? "Sandbox: " : "Dev: "}
+                  </span>
                   <a
                     href={report.sandboxDevUrl}
                     target="_blank"
@@ -186,6 +192,19 @@ async function ReportContent({
                     className="font-mono text-xs hover:underline"
                   >
                     {report.sandboxDevUrl}
+                  </a>
+                </li>
+              )}
+              {report.targetUrl && (
+                <li>
+                  <span className="text-muted-foreground">Target: </span>
+                  <a
+                    href={report.targetUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-mono text-xs hover:underline"
+                  >
+                    {report.targetUrl}
                   </a>
                 </li>
               )}
@@ -349,7 +368,9 @@ async function ReportContent({
           <p className="text-sm text-muted-foreground mb-4">
             {workflowType === "prompt"
               ? "AI agent executed custom task"
-              : "AI agent attempted to fix CLS issues (up to 3 retries)"}
+              : workflowType === "url-audit"
+                ? "AI agent performed an external read-only UX and performance audit"
+                : "AI agent attempted to fix CLS issues (up to 3 retries)"}
           </p>
 
           {/* Custom Prompt Section (for prompt workflow type) */}

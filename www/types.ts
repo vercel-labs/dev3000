@@ -22,12 +22,14 @@ export interface WorkflowReport {
   timestamp: string
 
   // Workflow type and prompts
-  workflowType?: "cls-fix" | "prompt" | "design-guidelines" | "react-performance"
+  workflowType?: "cls-fix" | "prompt" | "design-guidelines" | "react-performance" | "url-audit"
   customPrompt?: string // User's original prompt (for prompt workflows)
   systemPrompt?: string // The full system prompt used by the agent
 
   // Sandbox URLs
   sandboxDevUrl: string
+  targetUrl?: string
+  analysisTargetType?: "vercel-project" | "url"
   repoUrl?: string
   repoBranch?: string
   projectDir?: string

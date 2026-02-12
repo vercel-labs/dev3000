@@ -22,6 +22,62 @@ const corsHeaders = {
   "Access-Control-Allow-Credentials": "true"
 }
 
+function isPrivateOrLocalHost(hostname: string): boolean {
+  const normalized = hostname.toLowerCase()
+  if (normalized === "localhost" || normalized === "127.0.0.1" || normalized === "::1") return true
+  if (normalized.endsWith(".local")) return true
+
+  const parts = normalized.split(".")
+  if (parts.length === 4 && parts.every((part) => /^\d+$/.test(part))) {
+    const [a, b] = parts.map((part) => Number.parseInt(part, 10))
+    if (a === 10) return true
+    if (a === 127) return true
+    if (a === 169 && b === 254) return true
+    if (a === 172 && b >= 16 && b <= 31) return true
+    if (a === 192 && b === 168) return true
+  }
+
+  return false
+}
+
+async function validatePublicUrl(
+  input: string
+): Promise<{ ok: true; normalizedUrl: string } | { ok: false; error: string }> {
+  let url: URL
+  try {
+    url = new URL(input)
+  } catch {
+    return { ok: false, error: "Invalid URL format" }
+  }
+
+  if (url.protocol !== "https:") {
+    return { ok: false, error: "URL must use https://" }
+  }
+
+  if (isPrivateOrLocalHost(url.hostname)) {
+    return { ok: false, error: "URL must be publicly reachable (not localhost/private network)" }
+  }
+
+  try {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 8000)
+    const response = await fetch(url.toString(), {
+      method: "GET",
+      redirect: "follow",
+      signal: controller.signal
+    })
+    clearTimeout(timeout)
+
+    if (!response.ok) {
+      return { ok: false, error: `URL responded with HTTP ${response.status}` }
+    }
+
+    return { ok: true, normalizedUrl: response.url }
+  } catch (error) {
+    return { ok: false, error: `Could not reach URL: ${error instanceof Error ? error.message : String(error)}` }
+  }
+}
+
 // Handle OPTIONS preflight request
 export async function OPTIONS() {
   return new Response(null, {
@@ -38,6 +94,8 @@ export async function POST(request: Request) {
   let workflowType: WorkflowType = "cls-fix"
   let customPrompt: string | undefined
   let crawlDepth: number | "all" | undefined
+  let analysisTargetType: "vercel-project" | "url" = "vercel-project"
+  let publicUrl: string | undefined
 
   try {
     // Check for test bypass token (allows testing without browser auth via CLI)
@@ -91,14 +149,39 @@ export async function POST(request: Request) {
       projectDir
     } = body
     // Validate workflowType is a valid WorkflowType
-    const validWorkflowTypes: WorkflowType[] = ["cls-fix", "prompt", "design-guidelines", "react-performance"]
+    const validWorkflowTypes: WorkflowType[] = [
+      "cls-fix",
+      "prompt",
+      "design-guidelines",
+      "react-performance",
+      "url-audit"
+    ]
     if (body.workflowType && validWorkflowTypes.includes(body.workflowType)) {
       workflowType = body.workflowType
     }
+    analysisTargetType = body.analysisTargetType === "url" || workflowType === "url-audit" ? "url" : "vercel-project"
+    publicUrl = typeof body.publicUrl === "string" ? body.publicUrl : undefined
     customPrompt = body.customPrompt
     crawlDepth = body.crawlDepth
     userId = body.userId || (isTestMode ? "test-user" : undefined)
     projectName = body.projectName
+
+    if (analysisTargetType === "url") {
+      if (!publicUrl) {
+        return Response.json(
+          { success: false, error: "publicUrl is required for URL analysis" },
+          { status: 400, headers: corsHeaders }
+        )
+      }
+      const validation = await validatePublicUrl(publicUrl)
+      if (!validation.ok) {
+        return Response.json({ success: false, error: validation.error }, { status: 400, headers: corsHeaders })
+      }
+      publicUrl = validation.normalizedUrl
+      const hostname = new URL(publicUrl).hostname
+      projectName = projectName || `url-audit-${hostname}`
+      workflowType = "url-audit"
+    }
 
     workflowLog("[Start Fix] Starting cloud fix workflow...")
     workflowLog(`[Start Fix] Dev URL: ${devUrl}`)
@@ -111,6 +194,9 @@ export async function POST(request: Request) {
       workflowLog(`[Start Fix] Will create sandbox from: ${repoUrl}`)
       workflowLog(`[Start Fix] Branch: ${repoBranch || "main"}`)
     }
+    if (publicUrl) {
+      workflowLog(`[Start Fix] Public URL: ${publicUrl}`)
+    }
     if (repoOwner && repoName) {
       workflowLog(`[Start Fix] GitHub: ${repoOwner}/${repoName} (base: ${baseBranch || "main"})`)
     }
@@ -119,7 +205,7 @@ export async function POST(request: Request) {
     }
 
     // Validate required fields for v2 workflow
-    if (!repoUrl) {
+    if (analysisTargetType !== "url" && !repoUrl) {
       return Response.json(
         { success: false, error: "repoUrl is required for the workflow" },
         { status: 400, headers: corsHeaders }
@@ -143,15 +229,23 @@ export async function POST(request: Request) {
 
     // V2 workflow params - simplified "local-style" architecture
     const workflowParams = {
-      repoUrl,
+      repoUrl:
+        analysisTargetType === "url"
+          ? (repoUrl as string | undefined) || "https://github.com/vercel-labs/dev3000"
+          : repoUrl,
       repoBranch: repoBranch || baseBranch || "main",
-      projectDir,
+      projectDir:
+        analysisTargetType === "url"
+          ? (projectDir as string | undefined) || "example-apps/nextjs-test-app"
+          : projectDir,
       projectName,
       vercelOidcToken,
       runId, // Pass runId to workflow for tracking
       userId, // For progress updates
       timestamp: runTimestamp, // For progress updates
       workflowType, // For progress updates
+      analysisTargetType,
+      publicUrl,
       startPath: startPath || "/", // Page path to analyze (e.g., "/about")
       customPrompt: workflowType === "prompt" ? customPrompt : undefined, // User's custom instructions
       crawlDepth: workflowType === "design-guidelines" ? crawlDepth : undefined, // Crawl depth for design-guidelines

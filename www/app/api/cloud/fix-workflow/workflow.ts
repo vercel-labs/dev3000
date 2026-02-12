@@ -44,11 +44,21 @@ interface FixResult {
   gitDiff: string | null
 }
 
+interface UrlAuditResult {
+  reportBlobUrl: string
+  reportId: string
+  beforeCls: number | null
+  afterCls: number | null
+  status: "improved" | "unchanged" | "degraded" | "no-changes"
+  agentSummary: string
+  gitDiff: string | null
+}
+
 /**
  * Main workflow - simplified to 2 steps
  */
 export async function cloudFixWorkflow(params: {
-  repoUrl: string
+  repoUrl?: string
   repoBranch?: string
   projectDir?: string
   projectName: string
@@ -57,6 +67,8 @@ export async function cloudFixWorkflow(params: {
   userId?: string // For progress updates
   timestamp?: string // For progress updates
   workflowType?: string // For progress updates
+  analysisTargetType?: "vercel-project" | "url"
+  publicUrl?: string
   startPath?: string // Page path to analyze (e.g., "/about")
   customPrompt?: string // User's custom instructions (for "prompt" workflow type)
   crawlDepth?: number | "all" // How many pages to crawl for design-guidelines workflow
@@ -80,6 +92,8 @@ export async function cloudFixWorkflow(params: {
     userId,
     timestamp,
     workflowType,
+    analysisTargetType = "vercel-project",
+    publicUrl,
     startPath = "/",
     customPrompt,
     crawlDepth,
@@ -97,7 +111,9 @@ export async function cloudFixWorkflow(params: {
   const progressContext = userId && timestamp && runId ? { userId, timestamp, runId, projectName, workflowType } : null
 
   workflowLog("[Workflow] Starting cloud fix workflow...")
-  workflowLog(`[Workflow] Project: ${projectName}, Repo: ${repoUrl}`)
+  workflowLog(`[Workflow] Project: ${projectName}, Repo: ${repoUrl || "(none)"}`)
+  workflowLog(`[Workflow] Analysis target type: ${analysisTargetType}`)
+  if (publicUrl) workflowLog(`[Workflow] Public URL: ${publicUrl}`)
 
   // Note: Progress updates are now handled by the parent route via Vercel's workflow status
   // The workflow's wrun_xxx ID is not available inside the workflow itself
@@ -109,7 +125,7 @@ export async function cloudFixWorkflow(params: {
     workflowLog("[Workflow] Step 1: Initializing sandbox...")
 
     const initResult = await initSandbox(
-      repoUrl,
+      repoUrl || "https://github.com/vercel-labs/dev3000",
       repoBranch,
       projectDir,
       projectName,
@@ -121,34 +137,53 @@ export async function cloudFixWorkflow(params: {
 
     workflowLog(`[Workflow] Sandbox: ${initResult.sandboxId}, CLS: ${initResult.beforeCls}`)
 
-    // ============================================================
-    // STEP 2: Agent Fix Loop - Single step with internal iteration
-    // ============================================================
-    workflowLog("[Workflow] Step 2: Agent fixing CLS issues...")
+    let fixResult: FixResult | UrlAuditResult
+    if (analysisTargetType === "url") {
+      if (!publicUrl) {
+        throw new Error("Missing publicUrl for url analysis")
+      }
+      workflowLog("[Workflow] Step 2: URL audit analysis...")
+      fixResult = await urlAuditLoop(
+        initResult.sandboxId,
+        initResult.devUrl,
+        publicUrl,
+        projectName,
+        reportId,
+        progressContext,
+        initResult.timing,
+        initResult.fromSnapshot,
+        initResult.snapshotId
+      )
+    } else {
+      // ============================================================
+      // STEP 2: Agent Fix Loop - Single step with internal iteration
+      // ============================================================
+      workflowLog("[Workflow] Step 2: Agent fixing CLS issues...")
 
-    const fixResult = await agentFixLoop(
-      initResult.sandboxId,
-      initResult.devUrl,
-      initResult.beforeCls,
-      initResult.beforeGrade,
-      initResult.beforeScreenshots,
-      initResult.initD3kLogs,
-      projectName,
-      reportId,
-      startPath,
-      repoUrl,
-      repoBranch,
-      projectDir,
-      repoOwner,
-      repoName,
-      customPrompt,
-      crawlDepth,
-      progressContext,
-      // Pass timing and snapshot info from init step
-      initResult.timing,
-      initResult.fromSnapshot,
-      initResult.snapshotId
-    )
+      fixResult = await agentFixLoop(
+        initResult.sandboxId,
+        initResult.devUrl,
+        initResult.beforeCls,
+        initResult.beforeGrade,
+        initResult.beforeScreenshots,
+        initResult.initD3kLogs,
+        projectName,
+        reportId,
+        startPath,
+        repoUrl || "https://github.com/vercel-labs/dev3000",
+        repoBranch,
+        projectDir,
+        repoOwner,
+        repoName,
+        customPrompt,
+        crawlDepth,
+        progressContext,
+        // Pass timing and snapshot info from init step
+        initResult.timing,
+        initResult.fromSnapshot,
+        initResult.snapshotId
+      )
+    }
 
     workflowLog(`[Workflow] Result: ${fixResult.status}, After CLS: ${fixResult.afterCls}`)
 
@@ -157,7 +192,7 @@ export async function cloudFixWorkflow(params: {
     // ============================================================
     let prScreenshots: Array<{ route: string; beforeBlobUrl: string | null; afterBlobUrl: string | null }> = []
 
-    if (fixResult.gitDiff && productionUrl) {
+    if (analysisTargetType !== "url" && fixResult.gitDiff && productionUrl) {
       workflowLog("[Workflow] Step 2.5: Capturing before/after screenshots...")
       prScreenshots = await captureScreenshotsForPR(
         initResult.sandboxId,
@@ -177,7 +212,7 @@ export async function cloudFixWorkflow(params: {
     let prResult: { prUrl: string; prNumber: number; branch: string } | null = null
     let prError: string | null = null
 
-    if (fixResult.gitDiff && githubPat && repoOwner && repoName) {
+    if (analysisTargetType !== "url" && fixResult.gitDiff && githubPat && repoOwner && repoName) {
       workflowLog("[Workflow] Step 3: Creating GitHub PR...")
 
       const prStepResult = await createPullRequest(
@@ -327,6 +362,32 @@ async function agentFixLoop(
   )
 }
 
+async function urlAuditLoop(
+  sandboxId: string,
+  sandboxDevUrl: string,
+  targetUrl: string,
+  projectName: string,
+  reportId: string,
+  progressContext?: ProgressContext | null,
+  initTiming?: InitResult["timing"],
+  fromSnapshot?: boolean,
+  snapshotId?: string
+): Promise<UrlAuditResult> {
+  "use step"
+  const { urlAuditStep } = await import("./steps")
+  return urlAuditStep(
+    sandboxId,
+    sandboxDevUrl,
+    targetUrl,
+    projectName,
+    reportId,
+    progressContext,
+    initTiming,
+    fromSnapshot,
+    snapshotId
+  )
+}
+
 async function cleanupSandbox(sandboxId: string): Promise<void> {
   "use step"
   const steps = await import("./steps")
@@ -390,7 +451,12 @@ async function saveDoneStatus(
     timestamp: progressContext.timestamp,
     status: "done",
     type:
-      (progressContext.workflowType as "cls-fix" | "prompt" | "design-guidelines" | "react-performance") || "cls-fix",
+      (progressContext.workflowType as
+        | "cls-fix"
+        | "prompt"
+        | "design-guidelines"
+        | "react-performance"
+        | "url-audit") || "cls-fix",
     completedAt: new Date().toISOString(),
     reportBlobUrl,
     prUrl: prUrl || undefined,
@@ -409,7 +475,12 @@ async function saveFailureStatus(progressContext: ProgressContext, errorMessage:
       timestamp: progressContext.timestamp,
       status: "failure",
       type:
-        (progressContext.workflowType as "cls-fix" | "prompt" | "design-guidelines" | "react-performance") || "cls-fix",
+        (progressContext.workflowType as
+          | "cls-fix"
+          | "prompt"
+          | "design-guidelines"
+          | "react-performance"
+          | "url-audit") || "cls-fix",
       completedAt: new Date().toISOString(),
       error: errorMessage
     })

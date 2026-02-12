@@ -533,7 +533,8 @@ export async function agentFixLoopStep(
 
   // Determine workflow type from progress context
   const workflowType =
-    (progressContext?.workflowType as "cls-fix" | "prompt" | "design-guidelines" | "react-performance") || "cls-fix"
+    (progressContext?.workflowType as "cls-fix" | "prompt" | "design-guidelines" | "react-performance" | "url-audit") ||
+    "cls-fix"
 
   // Fetch "after" Web Vitals directly from browser via CDP (more reliable than parsing logs)
   timer.start("Fetch after Web Vitals")
@@ -589,6 +590,7 @@ export async function agentFixLoopStep(
     projectName,
     timestamp: new Date().toISOString(),
     workflowType,
+    analysisTargetType: "vercel-project",
     customPrompt: customPrompt ?? undefined,
     systemPrompt: agentResult.systemPrompt,
     sandboxDevUrl: devUrl,
@@ -653,6 +655,189 @@ export async function agentFixLoopStep(
     agentSummary: agentResult.summary,
     gitDiff,
     timing: timingData
+  }
+}
+
+export async function urlAuditStep(
+  sandboxId: string,
+  sandboxDevUrl: string,
+  targetUrl: string,
+  projectName: string,
+  reportId: string,
+  progressContext?: ProgressContext | null,
+  initTiming?: InitStepTiming,
+  fromSnapshot?: boolean,
+  snapshotId?: string
+): Promise<{
+  reportBlobUrl: string
+  reportId: string
+  beforeCls: number | null
+  afterCls: number | null
+  status: "improved" | "unchanged" | "degraded" | "no-changes"
+  agentSummary: string
+  gitDiff: string | null
+}> {
+  const timer = new StepTimer()
+  timer.start("Reconnect to sandbox")
+  await updateProgress(progressContext, 2, "Launching external URL audit...", targetUrl)
+
+  const sandbox = await Sandbox.get({ sandboxId })
+  if (sandbox.status !== "running") {
+    throw new Error(`Sandbox not running: ${sandbox.status}`)
+  }
+
+  timer.start("Navigate to target URL")
+  const navResult = await navigateBrowser(sandbox, targetUrl)
+  if (!navResult.success) {
+    throw new Error(`Failed to open target URL: ${navResult.error || "unknown error"}`)
+  }
+  await new Promise((resolve) => setTimeout(resolve, 3000))
+
+  timer.start("Capture Web Vitals")
+  const { vitals, diagnosticLogs } = await fetchWebVitalsViaCDP(sandbox)
+
+  timer.start("Collect page diagnostics")
+  const diagnosticsResult = await evaluateInBrowser(
+    sandbox,
+    `(() => {
+      const scripts = Array.from(document.querySelectorAll("script[src]")).map((el) => el.getAttribute("src") || "")
+      const stylesheets = Array.from(document.querySelectorAll('link[rel="stylesheet"]')).map((el) => el.getAttribute("href") || "")
+      const images = Array.from(document.images || [])
+      const imagesWithoutAlt = images.filter((img) => !img.getAttribute("alt")).length
+      const imagesWithoutSize = images.filter((img) => !img.getAttribute("width") && !img.getAttribute("height")).length
+      const sourceMapCandidates = scripts
+        .filter(Boolean)
+        .map((src) => src.startsWith("http") ? src : new URL(src, window.location.href).href)
+        .map((src) => src + ".map")
+        .slice(0, 20)
+      const resources = performance
+        .getEntriesByType("resource")
+        .filter((entry) => typeof entry.transferSize === "number")
+        .sort((a, b) => (b.transferSize || 0) - (a.transferSize || 0))
+        .slice(0, 10)
+        .map((entry) => ({
+          name: entry.name,
+          initiatorType: entry.initiatorType,
+          transferSize: entry.transferSize || 0,
+          duration: entry.duration || 0
+        }))
+
+      return JSON.stringify({
+        url: window.location.href,
+        title: document.title || null,
+        htmlLang: document.documentElement.lang || null,
+        scriptsCount: scripts.length,
+        stylesheetsCount: stylesheets.length,
+        imagesCount: images.length,
+        imagesWithoutAlt,
+        imagesWithoutSize,
+        sourceMapCandidates,
+        topResources: resources
+      })
+    })()`
+  )
+
+  const diagnosticsRaw = extractWebVitalsResultString(diagnosticsResult)
+  let pageDiagnostics: Record<string, unknown> = {}
+  if (diagnosticsRaw) {
+    try {
+      pageDiagnostics = JSON.parse(diagnosticsRaw) as Record<string, unknown>
+    } catch {
+      pageDiagnostics = {}
+    }
+  }
+
+  timer.start("Generate audit analysis")
+  const gateway = createGateway({
+    apiKey: process.env.AI_GATEWAY_API_KEY,
+    baseURL: "https://ai-gateway.vercel.sh/v1/ai"
+  })
+
+  const analysisResponse = await generateText({
+    model: gateway("openai/gpt-5.2"),
+    prompt: `You are a senior web performance and UX auditor.
+Generate a concise, actionable report for an external URL audit.
+
+Context:
+- Target URL: ${targetUrl}
+- Web Vitals: ${JSON.stringify(vitals)}
+- Page diagnostics: ${JSON.stringify(pageDiagnostics)}
+- Diagnostic logs: ${JSON.stringify(diagnosticLogs.slice(-20))}
+
+Output format:
+1) Executive Summary (2-4 bullets)
+2) Highest-Impact Issues (ordered by impact, include confidence High/Med/Low)
+3) Suggested Fixes (prioritized, implementation-ready guidance)
+4) Sourcemap Guidance (what was inferred externally, limitations)
+5) What Cannot Be Confirmed Without Repo Access
+
+Constraints:
+- This is read-only external analysis (no code access).
+- Do not claim certainty where evidence is weak.
+- Keep recommendations practical and specific.
+`
+  })
+
+  const initMs = initTiming?.totalMs ?? 0
+  const agentMs = timer.getData().totalMs
+  const reportTiming: WorkflowReport["timing"] = {
+    total: {
+      initMs,
+      agentMs,
+      totalMs: initMs + agentMs
+    },
+    init: initTiming
+      ? {
+          sandboxCreationMs: initTiming.sandboxCreation.totalMs,
+          fromSnapshot: fromSnapshot ?? false,
+          steps: initTiming.steps.map((s) => ({ name: s.name, durationMs: s.durationMs }))
+        }
+      : undefined,
+    agent: {
+      steps: timer.getData().steps.map((s) => ({ name: s.name, durationMs: s.durationMs }))
+    }
+  }
+
+  const report: WorkflowReport = {
+    id: reportId,
+    projectName,
+    timestamp: new Date().toISOString(),
+    workflowType: "url-audit",
+    analysisTargetType: "url",
+    targetUrl,
+    sandboxDevUrl,
+    beforeWebVitals: Object.keys(vitals).length > 0 ? vitals : undefined,
+    afterWebVitals: Object.keys(vitals).length > 0 ? vitals : undefined,
+    agentAnalysis: analysisResponse.text,
+    agentAnalysisModel: "openai/gpt-5.2",
+    d3kLogs: diagnosticLogs.join("\n"),
+    initD3kLogs: diagnosticLogs.join("\n"),
+    webVitalsDiagnostics: {
+      before: diagnosticLogs,
+      after: diagnosticLogs
+    },
+    timing: reportTiming,
+    fromSnapshot: fromSnapshot ?? false,
+    snapshotId
+  }
+
+  const blob = await put(`report-${reportId}.json`, JSON.stringify(report, null, 2), {
+    access: "public",
+    contentType: "application/json",
+    addRandomSuffix: false,
+    allowOverwrite: true
+  })
+
+  await updateProgress(progressContext, 4, "URL audit complete. Preparing report...", targetUrl)
+
+  return {
+    reportBlobUrl: blob.url,
+    reportId,
+    beforeCls: null,
+    afterCls: null,
+    status: "unchanged",
+    agentSummary: "URL audit completed",
+    gitDiff: null
   }
 }
 

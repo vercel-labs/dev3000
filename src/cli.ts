@@ -210,6 +210,7 @@ interface ForwardedOptions {
   port?: string
   script?: string
   command?: string
+  startupTimeout?: string
   profileDir?: string
   browser?: string
   serversOnly?: boolean
@@ -230,6 +231,7 @@ function buildD3kCommandWithOptions(options: ForwardedOptions): string {
   if (options.port) args.push(`--port ${options.port}`)
   if (options.script) args.push(`--script ${options.script}`)
   if (options.command) args.push(`--command "${options.command.replace(/"/g, '\\"')}"`)
+  if (options.startupTimeout) args.push(`--startup-timeout ${options.startupTimeout}`)
   if (options.profileDir) args.push(`--profile-dir "${options.profileDir}"`)
   if (options.browser) args.push(`--browser "${options.browser}"`)
   if (options.serversOnly) args.push("--servers-only")
@@ -747,6 +749,7 @@ program
   .option("-p, --port <port>", "Development server port (auto-detected by project type)")
   .option("-s, --script <script>", "Script to run (e.g. dev, main.py) - auto-detected by project type")
   .option("-c, --command <command>", "Custom command to run (overrides auto-detection and --script)")
+  .option("--startup-timeout <seconds>", "Seconds to wait for your app server to become reachable", "30")
   .option("--profile-dir <dir>", "Chrome profile directory", join(tmpdir(), "dev3000-chrome-profile"))
   .option(
     "--browser <path>",
@@ -787,6 +790,7 @@ program
         port: options.port,
         script: options.script,
         command: options.command,
+        startupTimeout: options.startupTimeout,
         profileDir: options.profileDir,
         browser: browserOption,
         serversOnly: options.serversOnly,
@@ -959,6 +963,7 @@ program
           port: options.port,
           script: options.script,
           command: options.command,
+          startupTimeout: options.startupTimeout,
           profileDir: options.profileDir,
           browser: browserOption,
           serversOnly: options.serversOnly,
@@ -1008,6 +1013,11 @@ program
     const port = options.port || projectConfig.defaultPort
     const script = options.script || projectConfig.defaultScript
     const userSetPort = options.port !== undefined
+    const startupTimeoutSeconds = Number.parseInt(options.startupTimeout, 10)
+    if (Number.isNaN(startupTimeoutSeconds) || startupTimeoutSeconds <= 0) {
+      console.error(chalk.red("\n❌ --startup-timeout must be a positive integer (seconds).\n"))
+      process.exit(1)
+    }
     // Generate server command based on custom command or project type
     let serverCommand: string
     if (options.command) {
@@ -1112,6 +1122,7 @@ program
         debug: options.debug,
         serversOnly: options.serversOnly,
         commandName,
+        startupTimeoutSeconds,
         tail: options.tail,
         tui: options.tui && !options.debug, // TUI is default unless --no-tui or --debug is specified
         dateTimeFormat: options.dateTime || "local",
