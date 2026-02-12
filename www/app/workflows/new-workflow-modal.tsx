@@ -188,12 +188,10 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
     "react-performance": ["d3k", "vercel-react-best-practices"],
     "cls-fix": ["d3k"],
     prompt: ["d3k"],
-    "url-audit": ["d3k", "vercel-design-guidelines"],
-    "url-react-performance": ["d3k", "vercel-react-best-practices"]
+    "url-audit": ["d3k", "vercel-design-guidelines"]
   }
 
   const isUrlAuditType = selectedTarget === "url"
-  const urlAuditFocus = _selectedType === "url-react-performance" ? "react-performance" : "general"
   const isValidPublicUrl = (() => {
     if (!publicUrl.trim()) return false
     try {
@@ -727,9 +725,8 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       }
 
       // Map URL param type to workflow type
-      const workflowType = isUrlAuditType
-        ? "url-audit"
-        : _selectedType === "cloud-fix"
+      const workflowType =
+        _selectedType === "cloud-fix"
           ? "cls-fix"
           : _selectedType === "design-guidelines"
             ? "design-guidelines"
@@ -745,7 +742,6 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
         workflowType,
         analysisTargetType: isUrlAuditType ? "url" : "vercel-project",
         publicUrl: isUrlAuditType ? publicUrl : undefined,
-        urlAuditFocus: isUrlAuditType ? urlAuditFocus : undefined,
         customPrompt: workflowType === "prompt" ? customPrompt : undefined,
         crawlDepth: workflowType === "design-guidelines" ? crawlDepth : undefined,
         githubPat: autoCreatePR && githubPat ? githubPat : undefined,
@@ -1042,19 +1038,19 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                   <h3 className="text-lg font-semibold mb-4 text-foreground">Choose URL Analysis Type</h3>
                   <div className="space-y-3">
                     <Link
-                      href="/workflows/new?target=url&type=url-audit"
+                      href="/workflows/new?target=url&type=design-guidelines"
                       className="block w-full p-4 border-2 border-orange-300/60 dark:border-orange-600/60 rounded-lg hover:border-orange-500 hover:bg-accent text-left transition-colors"
                     >
-                      <div className="font-semibold text-foreground">External UX + Performance Audit</div>
+                      <div className="font-semibold text-foreground">Design Guidelines Review</div>
                       <div className="text-sm text-muted-foreground mt-1">
-                        Read-only audit of UX/performance gaps with practical implementation guidance.
+                        Evaluate a public URL against Vercel design guidelines with prioritized recommendations.
                       </div>
                       <div className="text-xs text-muted-foreground mt-2">
-                        Skills: {workflowSkillLabels["url-audit"].join(", ")}
+                        Skills: {workflowSkillLabels["design-guidelines"].join(", ")}
                       </div>
                     </Link>
                     <Link
-                      href="/workflows/new?target=url&type=url-react-performance"
+                      href="/workflows/new?target=url&type=react-performance"
                       className="block w-full p-4 border-2 border-orange-300/60 dark:border-orange-600/60 rounded-lg hover:border-orange-500 hover:bg-accent text-left transition-colors"
                     >
                       <div className="font-semibold text-foreground">React Performance Review</div>
@@ -1062,7 +1058,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                         External React-focused performance review from runtime signals (read-only).
                       </div>
                       <div className="text-xs text-muted-foreground mt-2">
-                        Skills: {workflowSkillLabels["url-react-performance"].join(", ")}
+                        Skills: {workflowSkillLabels["react-performance"].join(", ")}
                       </div>
                     </Link>
                   </div>
@@ -1230,9 +1226,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                     <div className="font-semibold text-foreground">Analyze a URL (read-only audit)</div>
                     <div className="text-xs text-muted-foreground mt-1">
                       Template:{" "}
-                      {urlAuditFocus === "react-performance"
-                        ? "React Performance Review"
-                        : "External UX + Performance Audit"}
+                      {_selectedType === "react-performance" ? "React Performance Review" : "Design Guidelines Review"}
                     </div>
                   </div>
                   <div className="space-y-4">

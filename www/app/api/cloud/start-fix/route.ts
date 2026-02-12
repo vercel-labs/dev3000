@@ -96,7 +96,6 @@ export async function POST(request: Request) {
   let crawlDepth: number | "all" | undefined
   let analysisTargetType: "vercel-project" | "url" = "vercel-project"
   let publicUrl: string | undefined
-  let urlAuditFocus: "general" | "react-performance" = "general"
 
   try {
     // Check for test bypass token (allows testing without browser auth via CLI)
@@ -162,9 +161,6 @@ export async function POST(request: Request) {
     }
     analysisTargetType = body.analysisTargetType === "url" || workflowType === "url-audit" ? "url" : "vercel-project"
     publicUrl = typeof body.publicUrl === "string" ? body.publicUrl : undefined
-    if (body.urlAuditFocus === "react-performance") {
-      urlAuditFocus = "react-performance"
-    }
     customPrompt = body.customPrompt
     crawlDepth = body.crawlDepth
     userId = body.userId || (isTestMode ? "test-user" : undefined)
@@ -184,7 +180,6 @@ export async function POST(request: Request) {
       publicUrl = validation.normalizedUrl
       const hostname = new URL(publicUrl).hostname
       projectName = projectName || `url-audit-${hostname}`
-      workflowType = "url-audit"
     }
 
     workflowLog("[Start Fix] Starting cloud fix workflow...")
@@ -200,9 +195,6 @@ export async function POST(request: Request) {
     }
     if (publicUrl) {
       workflowLog(`[Start Fix] Public URL: ${publicUrl}`)
-    }
-    if (analysisTargetType === "url") {
-      workflowLog(`[Start Fix] URL Audit Focus: ${urlAuditFocus}`)
     }
     if (repoOwner && repoName) {
       workflowLog(`[Start Fix] GitHub: ${repoOwner}/${repoName} (base: ${baseBranch || "main"})`)
@@ -253,7 +245,6 @@ export async function POST(request: Request) {
       workflowType, // For progress updates
       analysisTargetType,
       publicUrl,
-      urlAuditFocus,
       startPath: startPath || "/", // Page path to analyze (e.g., "/about")
       customPrompt: workflowType === "prompt" ? customPrompt : undefined, // User's custom instructions
       crawlDepth: workflowType === "design-guidelines" ? crawlDepth : undefined, // Crawl depth for design-guidelines

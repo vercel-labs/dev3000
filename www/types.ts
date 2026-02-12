@@ -30,7 +30,6 @@ export interface WorkflowReport {
   sandboxDevUrl: string
   targetUrl?: string
   analysisTargetType?: "vercel-project" | "url"
-  urlAuditFocus?: "general" | "react-performance"
   repoUrl?: string
   repoBranch?: string
   projectDir?: string

@@ -662,7 +662,7 @@ export async function urlAuditStep(
   sandboxId: string,
   sandboxDevUrl: string,
   targetUrl: string,
-  urlAuditFocus: "general" | "react-performance",
+  workflowType: string | undefined,
   projectName: string,
   reportId: string,
   progressContext?: ProgressContext | null,
@@ -761,7 +761,7 @@ Generate a concise, actionable report for an external URL audit.
 
 Context:
 - Target URL: ${targetUrl}
-- Focus: ${urlAuditFocus}
+- Workflow Type: ${workflowType || "design-guidelines"}
 - Web Vitals: ${JSON.stringify(vitals)}
 - Page diagnostics: ${JSON.stringify(pageDiagnostics)}
 - Diagnostic logs: ${JSON.stringify(diagnosticLogs.slice(-20))}
@@ -769,12 +769,18 @@ Context:
 Output format:
 1) Executive Summary (2-4 bullets)
 2) Highest-Impact Issues (ordered by impact, include confidence High/Med/Low)${
-      urlAuditFocus === "react-performance"
+      workflowType === "react-performance"
         ? " with emphasis on React render patterns, hydration, bundle loading, and runtime interactivity."
-        : ""
+        : workflowType === "design-guidelines"
+          ? " with emphasis on usability, information hierarchy, accessibility, and visual consistency."
+          : ""
     }
 3) Suggested Fixes (prioritized, implementation-ready guidance)${
-      urlAuditFocus === "react-performance" ? " with likely React/Next.js implementation patterns where inferable." : ""
+      workflowType === "react-performance"
+        ? " with likely React/Next.js implementation patterns where inferable."
+        : workflowType === "design-guidelines"
+          ? " tied to concrete UX and design guideline outcomes."
+          : ""
     }
 4) Sourcemap Guidance (what was inferred externally, limitations)
 5) What Cannot Be Confirmed Without Repo Access
@@ -810,9 +816,8 @@ Constraints:
     id: reportId,
     projectName,
     timestamp: new Date().toISOString(),
-    workflowType: "url-audit",
+    workflowType: (workflowType as WorkflowType) || "design-guidelines",
     analysisTargetType: "url",
-    urlAuditFocus,
     targetUrl,
     sandboxDevUrl,
     beforeWebVitals: Object.keys(vitals).length > 0 ? vitals : undefined,
@@ -846,7 +851,7 @@ Constraints:
     afterCls: null,
     status: "unchanged",
     agentSummary:
-      urlAuditFocus === "react-performance" ? "URL React performance audit completed" : "URL audit completed",
+      workflowType === "react-performance" ? "URL React performance audit completed" : "URL design audit completed",
     gitDiff: null
   }
 }
