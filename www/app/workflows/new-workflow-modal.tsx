@@ -12,7 +12,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Spinner } from "@/components/ui/spinner"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { DEV3000_API_URL } from "@/lib/constants"
-import type { WorkflowType } from "@/lib/workflow-storage"
 
 interface Team {
   id: string
@@ -61,6 +60,14 @@ interface NewWorkflowModalProps {
 type WorkflowStep = "type" | "team" | "project" | "options" | "running"
 type RecentProject = { id: string; name: string }
 type RecentProjectsStore = Record<string, RecentProject[]>
+type AnalysisTarget = "project" | "url" | ""
+
+function getAnalysisTarget(typeParam: string | null, targetParam: string | null): AnalysisTarget {
+  if (targetParam === "project" || targetParam === "url") return targetParam
+  if (typeParam === "url-audit" || typeParam === "url-react-performance") return "url"
+  if (typeParam) return "project"
+  return ""
+}
 
 const RECENT_PROJECTS_KEY = "d3k_recent_projects"
 
@@ -108,21 +115,27 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   const startPathId = useId()
   const crawlDepthId = useId()
   const projectSearchId = useId()
+  const publicUrlId = useId()
 
   // Initialize step from URL params to avoid CLS from cascading useEffects
   const initialStep = (() => {
     const typeParam = searchParams.get("type")
+    const targetParam = searchParams.get("target")
     const teamParam = searchParams.get("team")
     const projectParam = searchParams.get("project")
+    const target = getAnalysisTarget(typeParam, targetParam)
 
     if (!typeParam) return "type"
-    if (typeParam === "url-audit") return "options"
+    if (target === "url") return "options"
     if (projectParam) return "options"
     if (teamParam) return "project"
     return "team"
   })()
 
   const [step, setStep] = useState<WorkflowStep>(initialStep)
+  const [selectedTarget, setSelectedTarget] = useState<AnalysisTarget>(
+    getAnalysisTarget(searchParams.get("type"), searchParams.get("target"))
+  )
   const [_selectedType, setSelectedType] = useState<string>(searchParams.get("type") || "")
   const [teams, setTeams] = useState<Team[]>([])
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null)
@@ -170,15 +183,17 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
     [selectedTeam]
   )
 
-  const workflowSkillLabels: Record<WorkflowType, string[]> = {
+  const workflowSkillLabels: Record<string, string[]> = {
     "design-guidelines": ["d3k", "vercel-design-guidelines"],
     "react-performance": ["d3k", "vercel-react-best-practices"],
     "cls-fix": ["d3k"],
     prompt: ["d3k"],
-    "url-audit": ["d3k", "vercel-design-guidelines"]
+    "url-audit": ["d3k", "vercel-design-guidelines"],
+    "url-react-performance": ["d3k", "vercel-react-best-practices"]
   }
 
-  const isUrlAuditType = _selectedType === "url-audit"
+  const isUrlAuditType = selectedTarget === "url"
+  const urlAuditFocus = _selectedType === "url-react-performance" ? "react-performance" : "general"
   const isValidPublicUrl = (() => {
     if (!publicUrl.trim()) return false
     try {
@@ -204,18 +219,23 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
     if (step === "running") return
 
     const typeParam = searchParams.get("type")
+    const targetParam = searchParams.get("target")
     const teamParam = searchParams.get("team")
     const projectParam = searchParams.get("project")
+    const target = getAnalysisTarget(typeParam, targetParam)
 
     // Only update if there's a meaningful change from current state
     if (typeParam && typeParam !== _selectedType) {
       setSelectedType(typeParam)
     }
+    if (target !== selectedTarget) {
+      setSelectedTarget(target)
+    }
 
     // Determine the correct step based on URL params
     const targetStep: WorkflowStep = !typeParam
       ? "type"
-      : typeParam === "url-audit"
+      : target === "url"
         ? "options"
         : projectParam
           ? "options"
@@ -230,16 +250,18 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
     // Reset selections if params are removed
     if (!typeParam) {
       setSelectedType("")
+      if (!targetParam) setSelectedTarget("")
       setSelectedTeam(null)
       setSelectedProject(null)
     }
-  }, [isOpen, searchParams, step, _selectedType])
+  }, [isOpen, searchParams, step, _selectedType, selectedTarget])
 
   // Reset modal state when closed
   useEffect(() => {
     if (!isOpen) {
       setStep("type")
       setSelectedType("")
+      setSelectedTarget("")
       setSelectedTeam(null)
       setSelectedProject(null)
       setProjects([])
@@ -705,16 +727,15 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       }
 
       // Map URL param type to workflow type
-      const workflowType =
-        _selectedType === "url-audit"
-          ? "url-audit"
-          : _selectedType === "cloud-fix"
-            ? "cls-fix"
-            : _selectedType === "design-guidelines"
-              ? "design-guidelines"
-              : _selectedType === "react-performance"
-                ? "react-performance"
-                : "prompt"
+      const workflowType = isUrlAuditType
+        ? "url-audit"
+        : _selectedType === "cloud-fix"
+          ? "cls-fix"
+          : _selectedType === "design-guidelines"
+            ? "design-guidelines"
+            : _selectedType === "react-performance"
+              ? "react-performance"
+              : "prompt"
 
       const body: Record<string, unknown> = {
         devUrl,
@@ -724,6 +745,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
         workflowType,
         analysisTargetType: isUrlAuditType ? "url" : "vercel-project",
         publicUrl: isUrlAuditType ? publicUrl : undefined,
+        urlAuditFocus: isUrlAuditType ? urlAuditFocus : undefined,
         customPrompt: workflowType === "prompt" ? customPrompt : undefined,
         crawlDepth: workflowType === "design-guidelines" ? crawlDepth : undefined,
         githubPat: autoCreatePR && githubPat ? githubPat : undefined,
@@ -931,74 +953,127 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
           {/* Step 1: Select Workflow Type */}
           {step === "type" && (
             <div>
-              <h3 className="text-lg font-semibold mb-4 text-foreground">Choose What To Analyze</h3>
-              <div className="mb-3 text-sm text-muted-foreground">
-                Analyze a Vercel project or run a read-only audit on a public URL.
-              </div>
-              <div className="space-y-3">
-                <div className="text-xs uppercase tracking-wide text-muted-foreground">Analyze a Vercel Project</div>
-                <Link
-                  href="/workflows/new?type=design-guidelines"
-                  className="block w-full p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
-                >
-                  <div className="font-semibold text-foreground">Design Guidelines Review</div>
-                  <div className="text-sm text-muted-foreground mt-1">
-                    Evaluate your site against Vercel design guidelines and automatically fix issues
+              {!selectedTarget ? (
+                <>
+                  <h3 className="text-lg font-semibold mb-4 text-foreground">Choose Analysis Target</h3>
+                  <div className="space-y-3">
+                    <Link
+                      href="/workflows/new?target=project"
+                      className="block w-full p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
+                    >
+                      <div className="font-semibold text-foreground">Analyze a Vercel Project</div>
+                      <div className="text-sm text-muted-foreground mt-1">
+                        Run code-aware workflows with sandbox edits, validation, and optional PR creation.
+                      </div>
+                    </Link>
+                    <Link
+                      href="/workflows/new?target=url"
+                      className="block w-full p-4 border-2 border-orange-300/60 dark:border-orange-600/60 rounded-lg hover:border-orange-500 hover:bg-accent text-left transition-colors"
+                    >
+                      <div className="font-semibold text-foreground">Analyze a URL</div>
+                      <div className="text-sm text-muted-foreground mt-1">
+                        Run a read-only external audit on a public `https://` URL with prioritized guidance.
+                      </div>
+                    </Link>
                   </div>
-                  <div className="text-xs text-muted-foreground mt-2">
-                    Skills: {workflowSkillLabels["design-guidelines"].join(", ")}
+                </>
+              ) : selectedTarget === "project" ? (
+                <>
+                  <h3 className="text-lg font-semibold mb-4 text-foreground">Choose Project Workflow</h3>
+                  <div className="space-y-3">
+                    <Link
+                      href="/workflows/new?target=project&type=design-guidelines"
+                      className="block w-full p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
+                    >
+                      <div className="font-semibold text-foreground">Design Guidelines Review</div>
+                      <div className="text-sm text-muted-foreground mt-1">
+                        Evaluate your site against Vercel design guidelines and automatically fix issues
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-2">
+                        Skills: {workflowSkillLabels["design-guidelines"].join(", ")}
+                      </div>
+                    </Link>
+                    <Link
+                      href="/workflows/new?target=project&type=react-performance"
+                      className="block w-full p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
+                    >
+                      <div className="font-semibold text-foreground">React Performance Review</div>
+                      <div className="text-sm text-muted-foreground mt-1">
+                        Analyze React/Next.js code for performance issues and apply optimizations
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-2">
+                        Skills: {workflowSkillLabels["react-performance"].join(", ")}
+                      </div>
+                    </Link>
+                    <Link
+                      href="/workflows/new?target=project&type=cloud-fix"
+                      className="block w-full p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
+                    >
+                      <div className="font-semibold text-foreground">CLS Fix</div>
+                      <div className="text-sm text-muted-foreground mt-1">
+                        Detect and fix Cumulative Layout Shift issues automatically
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-2">
+                        Skills: {workflowSkillLabels["cls-fix"].join(", ")}
+                      </div>
+                    </Link>
+                    <Link
+                      href="/workflows/new?target=project&type=prompt"
+                      className="block w-full p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
+                    >
+                      <div className="font-semibold text-foreground">Prompt</div>
+                      <div className="text-sm text-muted-foreground mt-1">
+                        Run a custom AI workflow with your own instructions
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-2">
+                        Skills: {workflowSkillLabels.prompt.join(", ")}
+                      </div>
+                    </Link>
                   </div>
-                </Link>
-                <Link
-                  href="/workflows/new?type=react-performance"
-                  className="block w-full p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
-                >
-                  <div className="font-semibold text-foreground">React Performance Review</div>
-                  <div className="text-sm text-muted-foreground mt-1">
-                    Analyze React/Next.js code for performance issues and apply optimizations
+                  <Link
+                    href="/workflows/new"
+                    className="mt-4 inline-block px-4 py-2 text-muted-foreground hover:text-foreground"
+                  >
+                    ← Back
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <h3 className="text-lg font-semibold mb-4 text-foreground">Choose URL Analysis Type</h3>
+                  <div className="space-y-3">
+                    <Link
+                      href="/workflows/new?target=url&type=url-audit"
+                      className="block w-full p-4 border-2 border-orange-300/60 dark:border-orange-600/60 rounded-lg hover:border-orange-500 hover:bg-accent text-left transition-colors"
+                    >
+                      <div className="font-semibold text-foreground">External UX + Performance Audit</div>
+                      <div className="text-sm text-muted-foreground mt-1">
+                        Read-only audit of UX/performance gaps with practical implementation guidance.
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-2">
+                        Skills: {workflowSkillLabels["url-audit"].join(", ")}
+                      </div>
+                    </Link>
+                    <Link
+                      href="/workflows/new?target=url&type=url-react-performance"
+                      className="block w-full p-4 border-2 border-orange-300/60 dark:border-orange-600/60 rounded-lg hover:border-orange-500 hover:bg-accent text-left transition-colors"
+                    >
+                      <div className="font-semibold text-foreground">React Performance Review</div>
+                      <div className="text-sm text-muted-foreground mt-1">
+                        External React-focused performance review from runtime signals (read-only).
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-2">
+                        Skills: {workflowSkillLabels["url-react-performance"].join(", ")}
+                      </div>
+                    </Link>
                   </div>
-                  <div className="text-xs text-muted-foreground mt-2">
-                    Skills: {workflowSkillLabels["react-performance"].join(", ")}
-                  </div>
-                </Link>
-                <Link
-                  href="/workflows/new?type=cloud-fix"
-                  className="block w-full p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
-                >
-                  <div className="font-semibold text-foreground">CLS Fix</div>
-                  <div className="text-sm text-muted-foreground mt-1">
-                    Detect and fix Cumulative Layout Shift issues automatically
-                  </div>
-                  <div className="text-xs text-muted-foreground mt-2">
-                    Skills: {workflowSkillLabels["cls-fix"].join(", ")}
-                  </div>
-                </Link>
-                <Link
-                  href="/workflows/new?type=prompt"
-                  className="block w-full p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
-                >
-                  <div className="font-semibold text-foreground">Prompt</div>
-                  <div className="text-sm text-muted-foreground mt-1">
-                    Run a custom AI workflow with your own instructions
-                  </div>
-                  <div className="text-xs text-muted-foreground mt-2">
-                    Skills: {workflowSkillLabels.prompt.join(", ")}
-                  </div>
-                </Link>
-                <div className="pt-2 text-xs uppercase tracking-wide text-muted-foreground">Analyze a URL</div>
-                <Link
-                  href="/workflows/new?type=url-audit"
-                  className="block w-full p-4 border-2 border-orange-300/60 dark:border-orange-600/60 rounded-lg hover:border-orange-500 hover:bg-accent text-left transition-colors"
-                >
-                  <div className="font-semibold text-foreground">Public URL Audit</div>
-                  <div className="text-sm text-muted-foreground mt-1">
-                    Run a read-only external UX/performance audit against a public site with recommendations.
-                  </div>
-                  <div className="text-xs text-muted-foreground mt-2">
-                    Skills: {workflowSkillLabels["url-audit"].join(", ")}
-                  </div>
-                </Link>
-              </div>
+                  <Link
+                    href="/workflows/new"
+                    className="mt-4 inline-block px-4 py-2 text-muted-foreground hover:text-foreground"
+                  >
+                    ← Back
+                  </Link>
+                </>
+              )}
               {/* Reserve space for Back link to prevent CLS */}
               <div className="mt-4 h-10" aria-hidden="true" />
             </div>
@@ -1027,7 +1102,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                 </div>
               )}
               <Link
-                href="/workflows/new"
+                href="/workflows/new?target=project"
                 className="mt-4 inline-block px-4 py-2 text-muted-foreground hover:text-foreground"
               >
                 ← Back
@@ -1136,7 +1211,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                 </div>
               )}
               <Link
-                href={`/workflows/new?type=${_selectedType}`}
+                href={`/workflows/new?target=project&type=${_selectedType}`}
                 className="mt-4 inline-block px-4 py-2 text-muted-foreground hover:text-foreground"
               >
                 ← Back
@@ -1153,16 +1228,22 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                   <div className="mb-6 p-4 bg-muted rounded-lg">
                     <div className="text-sm text-muted-foreground mb-1">Mode</div>
                     <div className="font-semibold text-foreground">Analyze a URL (read-only audit)</div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      Template:{" "}
+                      {urlAuditFocus === "react-performance"
+                        ? "React Performance Review"
+                        : "External UX + Performance Audit"}
+                    </div>
                   </div>
                   <div className="space-y-4">
                     <div>
-                      <Label htmlFor={startPathId} className="block text-sm font-medium text-foreground mb-1">
+                      <Label htmlFor={publicUrlId} className="block text-sm font-medium text-foreground mb-1">
                         Public URL
                         <span className="text-red-500 ml-1">*</span>
                       </Label>
                       <input
                         type="url"
-                        id={startPathId}
+                        id={publicUrlId}
                         value={publicUrl}
                         onChange={(e) => setPublicUrl(e.target.value)}
                         className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground font-mono text-sm"
@@ -1192,7 +1273,10 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                     </div>
                   </div>
                   <div className="flex gap-3 mt-6">
-                    <Link href="/workflows/new" className="px-4 py-2 text-muted-foreground hover:text-foreground">
+                    <Link
+                      href="/workflows/new?target=url"
+                      className="px-4 py-2 text-muted-foreground hover:text-foreground"
+                    >
                       ← Back
                     </Link>
                     <button
@@ -1201,7 +1285,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                       disabled={!isValidPublicUrl}
                       className="flex-1 px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      Start URL Audit
+                      Start URL Analysis
                     </button>
                   </div>
                 </>

@@ -662,6 +662,7 @@ export async function urlAuditStep(
   sandboxId: string,
   sandboxDevUrl: string,
   targetUrl: string,
+  urlAuditFocus: "general" | "react-performance",
   projectName: string,
   reportId: string,
   progressContext?: ProgressContext | null,
@@ -760,14 +761,21 @@ Generate a concise, actionable report for an external URL audit.
 
 Context:
 - Target URL: ${targetUrl}
+- Focus: ${urlAuditFocus}
 - Web Vitals: ${JSON.stringify(vitals)}
 - Page diagnostics: ${JSON.stringify(pageDiagnostics)}
 - Diagnostic logs: ${JSON.stringify(diagnosticLogs.slice(-20))}
 
 Output format:
 1) Executive Summary (2-4 bullets)
-2) Highest-Impact Issues (ordered by impact, include confidence High/Med/Low)
-3) Suggested Fixes (prioritized, implementation-ready guidance)
+2) Highest-Impact Issues (ordered by impact, include confidence High/Med/Low)${
+      urlAuditFocus === "react-performance"
+        ? " with emphasis on React render patterns, hydration, bundle loading, and runtime interactivity."
+        : ""
+    }
+3) Suggested Fixes (prioritized, implementation-ready guidance)${
+      urlAuditFocus === "react-performance" ? " with likely React/Next.js implementation patterns where inferable." : ""
+    }
 4) Sourcemap Guidance (what was inferred externally, limitations)
 5) What Cannot Be Confirmed Without Repo Access
 
@@ -804,6 +812,7 @@ Constraints:
     timestamp: new Date().toISOString(),
     workflowType: "url-audit",
     analysisTargetType: "url",
+    urlAuditFocus,
     targetUrl,
     sandboxDevUrl,
     beforeWebVitals: Object.keys(vitals).length > 0 ? vitals : undefined,
@@ -836,7 +845,8 @@ Constraints:
     beforeCls: null,
     afterCls: null,
     status: "unchanged",
-    agentSummary: "URL audit completed",
+    agentSummary:
+      urlAuditFocus === "react-performance" ? "URL React performance audit completed" : "URL audit completed",
     gitDiff: null
   }
 }

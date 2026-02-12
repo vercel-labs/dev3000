@@ -208,6 +208,14 @@ async function ReportContent({
                   </a>
                 </li>
               )}
+              {report.analysisTargetType === "url" && report.urlAuditFocus && (
+                <li>
+                  <span className="text-muted-foreground">Focus: </span>
+                  <span className="font-mono text-xs">
+                    {report.urlAuditFocus === "react-performance" ? "React Performance" : "External UX + Performance"}
+                  </span>
+                </li>
+              )}
               {report.repoUrl && (
                 <li>
                   <span className="text-muted-foreground">Repo: </span>

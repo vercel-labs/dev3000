@@ -69,6 +69,7 @@ export async function cloudFixWorkflow(params: {
   workflowType?: string // For progress updates
   analysisTargetType?: "vercel-project" | "url"
   publicUrl?: string
+  urlAuditFocus?: "general" | "react-performance"
   startPath?: string // Page path to analyze (e.g., "/about")
   customPrompt?: string // User's custom instructions (for "prompt" workflow type)
   crawlDepth?: number | "all" // How many pages to crawl for design-guidelines workflow
@@ -94,6 +95,7 @@ export async function cloudFixWorkflow(params: {
     workflowType,
     analysisTargetType = "vercel-project",
     publicUrl,
+    urlAuditFocus = "general",
     startPath = "/",
     customPrompt,
     crawlDepth,
@@ -114,6 +116,7 @@ export async function cloudFixWorkflow(params: {
   workflowLog(`[Workflow] Project: ${projectName}, Repo: ${repoUrl || "(none)"}`)
   workflowLog(`[Workflow] Analysis target type: ${analysisTargetType}`)
   if (publicUrl) workflowLog(`[Workflow] Public URL: ${publicUrl}`)
+  if (analysisTargetType === "url") workflowLog(`[Workflow] URL Audit Focus: ${urlAuditFocus}`)
 
   // Note: Progress updates are now handled by the parent route via Vercel's workflow status
   // The workflow's wrun_xxx ID is not available inside the workflow itself
@@ -147,6 +150,7 @@ export async function cloudFixWorkflow(params: {
         initResult.sandboxId,
         initResult.devUrl,
         publicUrl,
+        urlAuditFocus,
         projectName,
         reportId,
         progressContext,
@@ -366,6 +370,7 @@ async function urlAuditLoop(
   sandboxId: string,
   sandboxDevUrl: string,
   targetUrl: string,
+  urlAuditFocus: "general" | "react-performance",
   projectName: string,
   reportId: string,
   progressContext?: ProgressContext | null,
@@ -379,6 +384,7 @@ async function urlAuditLoop(
     sandboxId,
     sandboxDevUrl,
     targetUrl,
+    urlAuditFocus,
     projectName,
     reportId,
     progressContext,
