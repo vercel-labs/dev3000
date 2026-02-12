@@ -159,7 +159,12 @@ export async function POST(request: Request) {
     if (body.workflowType && validWorkflowTypes.includes(body.workflowType)) {
       workflowType = body.workflowType
     }
-    analysisTargetType = body.analysisTargetType === "url" || workflowType === "url-audit" ? "url" : "vercel-project"
+    analysisTargetType =
+      body.analysisTargetType === "url" ||
+      workflowType === "url-audit" ||
+      (typeof body.publicUrl === "string" && body.publicUrl.trim().length > 0)
+        ? "url"
+        : "vercel-project"
     publicUrl = typeof body.publicUrl === "string" ? body.publicUrl : undefined
     customPrompt = body.customPrompt
     crawlDepth = body.crawlDepth

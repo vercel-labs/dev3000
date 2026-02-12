@@ -966,7 +966,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                       href="/workflows/new?target=url"
                       className="block w-full p-4 border-2 border-orange-300/60 dark:border-orange-600/60 rounded-lg hover:border-orange-500 hover:bg-accent text-left transition-colors"
                     >
-                      <div className="font-semibold text-foreground">Analyze a URL</div>
+                      <div className="font-semibold text-foreground">Analyze an URL</div>
                       <div className="text-sm text-muted-foreground mt-1">
                         Run a read-only external audit on a public `https://` URL with prioritized guidance.
                       </div>
@@ -1223,7 +1223,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                 <>
                   <div className="mb-6 p-4 bg-muted rounded-lg">
                     <div className="text-sm text-muted-foreground mb-1">Mode</div>
-                    <div className="font-semibold text-foreground">Analyze a URL (read-only audit)</div>
+                    <div className="font-semibold text-foreground">Analyze an URL (read-only audit)</div>
                     <div className="text-xs text-muted-foreground mt-1">
                       Template:{" "}
                       {_selectedType === "react-performance" ? "React Performance Review" : "Design Guidelines Review"}
