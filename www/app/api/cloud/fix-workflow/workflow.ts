@@ -267,7 +267,16 @@ async function initSandbox(
 ): Promise<InitResult> {
   "use step"
   const { initSandboxStep } = await import("./steps")
-  return initSandboxStep(repoUrl, branch, projectDir, projectName, reportId, startPath, vercelOidcToken, progressContext)
+  return initSandboxStep(
+    repoUrl,
+    branch,
+    projectDir,
+    projectName,
+    reportId,
+    startPath,
+    vercelOidcToken,
+    progressContext
+  )
 }
 
 async function agentFixLoop(
