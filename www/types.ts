@@ -28,6 +28,11 @@ export interface WorkflowReport {
 
   // Sandbox URLs
   sandboxDevUrl: string
+  repoUrl?: string
+  repoBranch?: string
+  projectDir?: string
+  repoOwner?: string
+  repoName?: string
 
   // CLS data (legacy - kept for backward compat, prefer webVitals)
   clsScore?: number

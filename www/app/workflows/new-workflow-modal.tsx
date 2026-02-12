@@ -25,6 +25,7 @@ interface Project {
   id: string
   name: string
   framework: string | null
+  rootDirectory?: string | null
   link: {
     type: string
     repo: string
@@ -687,6 +688,10 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
         startPath: startPath !== "/" ? startPath : undefined // Only send if not default
       }
 
+      if (selectedProject.rootDirectory) {
+        body.projectDir = selectedProject.rootDirectory
+      }
+
       // If we have repo info, pass it for sandbox creation
       // Use the deployment's git SHA if available, otherwise fall back to baseBranch
       if (repoOwner && repoName) {
@@ -1175,7 +1180,10 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                               const storageKey = getBypassTokenStorageKey(selectedProject.id)
                               if (newToken) {
                                 localStorage.setItem(storageKey, newToken)
-                                console.log("[Bypass Token] Saved token to localStorage for project", selectedProject.id)
+                                console.log(
+                                  "[Bypass Token] Saved token to localStorage for project",
+                                  selectedProject.id
+                                )
                               } else {
                                 localStorage.removeItem(storageKey)
                               }

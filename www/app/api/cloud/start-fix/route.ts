@@ -87,7 +87,8 @@ export async function POST(request: Request) {
       repoBranch,
       githubPat,
       startPath,
-      productionUrl
+      productionUrl,
+      projectDir
     } = body
     // Validate workflowType is a valid WorkflowType
     const validWorkflowTypes: WorkflowType[] = ["cls-fix", "prompt", "design-guidelines", "react-performance"]
@@ -144,6 +145,7 @@ export async function POST(request: Request) {
     const workflowParams = {
       repoUrl,
       repoBranch: repoBranch || baseBranch || "main",
+      projectDir,
       projectName,
       vercelOidcToken,
       runId, // Pass runId to workflow for tracking

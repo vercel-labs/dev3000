@@ -52,6 +52,7 @@ export async function GET(request: Request) {
         id?: string
         name?: string
         framework?: string
+        rootDirectory?: string
         link?: unknown
         latestDeployments?: Array<{
           id?: string
@@ -90,6 +91,7 @@ export async function GET(request: Request) {
       id: project.id,
       name: project.name,
       framework: project.framework,
+      rootDirectory: project.rootDirectory,
       link: project.link,
       latestDeployments:
         project.latestDeployments?.map((deployment) => ({

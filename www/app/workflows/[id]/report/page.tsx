@@ -189,6 +189,31 @@ async function ReportContent({
                   </a>
                 </li>
               )}
+              {report.repoUrl && (
+                <li>
+                  <span className="text-muted-foreground">Repo: </span>
+                  <a
+                    href={report.repoUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-mono text-xs hover:underline"
+                  >
+                    {report.repoUrl}
+                  </a>
+                </li>
+              )}
+              {report.repoBranch && (
+                <li>
+                  <span className="text-muted-foreground">Ref: </span>
+                  <span className="font-mono text-xs">{report.repoBranch}</span>
+                </li>
+              )}
+              {report.projectDir && (
+                <li>
+                  <span className="text-muted-foreground">Dir: </span>
+                  <span className="font-mono text-xs">{report.projectDir}</span>
+                </li>
+              )}
             </ul>
           </div>
         )}
