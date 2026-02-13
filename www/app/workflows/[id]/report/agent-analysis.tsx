@@ -22,6 +22,10 @@ interface ParsedTranscript {
   finalOutput?: string
 }
 
+function normalizeReportMarkdown(text: string): string {
+  return text.replace(/(^|\n)(\d+)\.\s*\n+\s*(?![-*]\s)(?!\d+\.\s)([^\n]+?)(?=\n|$)/g, "$1$2. $3")
+}
+
 /**
  * Parse the agent transcript markdown into structured data
  */
@@ -205,8 +209,10 @@ export function AgentAnalysis({
     const withoutDiff = parsed.finalOutput.replace(/## Git Diff[\s\S]*$/, "").trim()
     // Normalize list formatting from model output like:
     // "1.\n\nTitle" or "1.\n\n**Title**" -> "1. Title"
-    return withoutDiff.replace(/(^|\n)(\d+)\.\s*\n+\s*(?![-*]\s)(?!\d+\.\s)([^\n]+?)(?=\n|$)/g, "$1$2. $3")
+    return normalizeReportMarkdown(withoutDiff)
   }, [parsed.finalOutput])
+
+  const normalizedRawContent = useMemo(() => normalizeReportMarkdown(content), [content])
 
   const analysisClassName =
     "prose prose-sm dark:prose-invert max-w-none prose-p:my-2 prose-ol:my-3 prose-ul:my-2 prose-ol:pl-6 prose-ul:pl-5 prose-li:my-1 [&_ol>li]:pl-1 [&_ul>li]:pl-1 [&_li>p]:my-1"
@@ -215,7 +221,7 @@ export function AgentAnalysis({
   if (!parsed.finalOutput && parsed.steps.length === 0) {
     return (
       <div className={analysisClassName}>
-        <Streamdown mode="static">{content}</Streamdown>
+        <Streamdown mode="static">{normalizedRawContent}</Streamdown>
       </div>
     )
   }
