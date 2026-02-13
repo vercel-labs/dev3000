@@ -218,6 +218,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
 
     const typeParam = searchParams.get("type")
     const targetParam = searchParams.get("target")
+    const urlParam = searchParams.get("url")
     const teamParam = searchParams.get("team")
     const projectParam = searchParams.get("project")
     const target = getAnalysisTarget(typeParam, targetParam)
@@ -228,6 +229,9 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
     }
     if (target !== selectedTarget) {
       setSelectedTarget(target)
+    }
+    if (target === "url" && urlParam && urlParam !== publicUrl) {
+      setPublicUrl(urlParam)
     }
 
     // Determine the correct step based on URL params
@@ -252,7 +256,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       setSelectedTeam(null)
       setSelectedProject(null)
     }
-  }, [isOpen, searchParams, step, _selectedType, selectedTarget])
+  }, [isOpen, searchParams, step, _selectedType, selectedTarget, publicUrl])
 
   // Reset modal state when closed
   useEffect(() => {
