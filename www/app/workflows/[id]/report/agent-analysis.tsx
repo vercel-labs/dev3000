@@ -204,8 +204,8 @@ export function AgentAnalysis({
     // Remove ## Git Diff section and everything after it (the diff block)
     const withoutDiff = parsed.finalOutput.replace(/## Git Diff[\s\S]*$/, "").trim()
     // Normalize list formatting from model output like:
-    // "1.\n\n**Title**" -> "1. **Title**"
-    return withoutDiff.replace(/(^|\n)(\d+)\.\s*\n+\s*(\*\*[^*\n]+?\*\*)/g, "$1$2. $3")
+    // "1.\n\nTitle" or "1.\n\n**Title**" -> "1. Title"
+    return withoutDiff.replace(/(^|\n)(\d+)\.\s*\n+\s*(?![-*]\s)(?!\d+\.\s)([^\n]+?)(?=\n|$)/g, "$1$2. $3")
   }, [parsed.finalOutput])
 
   const analysisClassName =
