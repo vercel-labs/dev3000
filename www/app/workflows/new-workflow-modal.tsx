@@ -1227,7 +1227,11 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                 <>
                   <div className="mb-6 p-4 bg-muted rounded-lg">
                     <div className="text-sm text-muted-foreground mb-1">Mode</div>
-                    <div className="font-semibold text-foreground">Analyze an URL (read-only audit)</div>
+                    <div className="font-semibold text-foreground">
+                      {_selectedType === "react-performance"
+                        ? "React Performance URL Review"
+                        : "Vercel Design Guidelines URL Review"}
+                    </div>
                     <div className="text-xs text-muted-foreground mt-1">
                       Template:{" "}
                       {_selectedType === "react-performance" ? "React Performance Review" : "Design Guidelines Review"}
