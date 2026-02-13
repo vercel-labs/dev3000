@@ -22,21 +22,20 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
   const user = await getCurrentUser()
   const { id } = await params
 
-  // First, try to get the run as a public report (no auth required)
-  let run = await getPublicWorkflowRun(id)
+  // Prefer owner lookup first when authenticated (much faster than global public scan).
+  let run = user ? await getWorkflowRun(user.id, id) : null
   let isOwner = false
 
-  // If not public, require authentication and check ownership
+  // Fall back to public report lookup when owner lookup misses (or user is signed out).
   if (!run) {
-    if (!user) {
+    run = await getPublicWorkflowRun(id)
+    if (!run && !user) {
       redirect("/signin")
     }
-    run = await getWorkflowRun(user.id, id)
-    isOwner = !!run
-  } else if (user) {
-    // Check if the logged-in user is the owner of this public report
-    const ownedRun = await getWorkflowRun(user.id, id)
-    isOwner = !!ownedRun
+  }
+
+  if (user && run) {
+    isOwner = run.userId === user.id
   }
 
   const isPublicView = !isOwner && !!run?.isPublic
