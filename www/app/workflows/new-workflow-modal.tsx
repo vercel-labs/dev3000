@@ -1225,7 +1225,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
               <h3 className="text-lg font-semibold mb-4 text-foreground">Configure Options</h3>
               {isUrlAuditType ? (
                 <>
-                  <div className="mb-6 p-4 bg-muted rounded-lg text-left">
+                  <div className="mb-6 text-left">
                     <div className="text-sm text-muted-foreground mb-1">Mode</div>
                     <div className="font-semibold text-foreground">
                       {_selectedType === "react-performance"
