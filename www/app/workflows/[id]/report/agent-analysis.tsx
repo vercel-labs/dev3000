@@ -202,12 +202,22 @@ export function AgentAnalysis({
   const cleanedFinalOutput = useMemo(() => {
     if (!parsed.finalOutput) return undefined
     // Remove ## Git Diff section and everything after it (the diff block)
-    return parsed.finalOutput.replace(/## Git Diff[\s\S]*$/, "").trim()
+    const withoutDiff = parsed.finalOutput.replace(/## Git Diff[\s\S]*$/, "").trim()
+    // Normalize list formatting from model output like:
+    // "1.\n\n**Title**" -> "1. **Title**"
+    return withoutDiff.replace(/(^|\n)(\d+)\.\s*\n+\s*(\*\*[^*\n]+?\*\*)/g, "$1$2. $3")
   }, [parsed.finalOutput])
+
+  const analysisClassName =
+    "prose prose-sm dark:prose-invert max-w-none prose-p:my-2 prose-ol:my-3 prose-ul:my-2 prose-ol:pl-6 prose-ul:pl-5 prose-li:my-1 [&_ol>li]:pl-1 [&_ul>li]:pl-1 [&_li>p]:my-1"
 
   // If we couldn't parse the transcript structure, fall back to raw rendering
   if (!parsed.finalOutput && parsed.steps.length === 0) {
-    return <Streamdown mode="static">{content}</Streamdown>
+    return (
+      <div className={analysisClassName}>
+        <Streamdown mode="static">{content}</Streamdown>
+      </div>
+    )
   }
 
   return (
@@ -217,7 +227,7 @@ export function AgentAnalysis({
 
       {/* Final Output - shown prominently at the top (with Git Diff section stripped) */}
       {cleanedFinalOutput && (
-        <div className="prose prose-sm dark:prose-invert max-w-none">
+        <div className={analysisClassName}>
           <Streamdown mode="static">{cleanedFinalOutput}</Streamdown>
         </div>
       )}
