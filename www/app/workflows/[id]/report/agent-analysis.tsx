@@ -215,7 +215,7 @@ export function AgentAnalysis({
   const normalizedRawContent = useMemo(() => normalizeReportMarkdown(content), [content])
 
   const analysisClassName =
-    "prose prose-sm dark:prose-invert max-w-none prose-p:my-2 prose-ol:my-3 prose-ul:my-2 prose-ol:pl-6 prose-ul:pl-5 prose-li:my-1 [&_ol>li]:pl-1 [&_ul>li]:pl-1 [&_li>p]:my-1"
+    "prose prose-sm dark:prose-invert max-w-none prose-p:my-2 prose-ol:my-3 prose-ul:my-2 prose-li:my-1 [&_ol]:!list-outside [&_ul]:!list-outside [&_ol]:!pl-7 [&_ul]:!pl-7 [&_ol>li]:pl-0 [&_ul>li]:pl-0 [&_li>p]:inline [&_li>p]:my-0"
 
   // If we couldn't parse the transcript structure, fall back to raw rendering
   if (!parsed.finalOutput && parsed.steps.length === 0) {

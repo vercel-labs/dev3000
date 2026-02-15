@@ -90,6 +90,20 @@ async function ReportContent({
             ? "URL Audit"
             : "CLS Fix"
   const reportCrumbLabel = workflowType === "cls-fix" ? "Fix Report" : "Workflow Report"
+  const step2Description =
+    workflowType === "prompt"
+      ? "AI agent executed your custom task and generated this report."
+      : workflowType === "design-guidelines"
+        ? "Read-only design and UX analysis of the target URL."
+        : workflowType === "react-performance"
+          ? "Read-only React performance analysis of the target URL."
+          : workflowType === "url-audit"
+            ? "Read-only UX and performance analysis of the target URL."
+            : "AI agent attempted to fix CLS issues (up to 3 retries)."
+  const reportHeading =
+    workflowType === "design-guidelines"
+      ? "Report: Vercel Web Design Guidelines Audit"
+      : `Report Results: ${workflowLabel}`
 
   // Helper to format CLS grade
   const gradeColor = (grade?: string) => {
@@ -114,10 +128,46 @@ async function ReportContent({
     }
     return `${((Math.abs(after - before) / before) * 100).toFixed(0)}%`
   }
+  const hasWebVitalsData =
+    !!report.beforeWebVitals ||
+    !!report.afterWebVitals ||
+    report.clsScore !== undefined ||
+    report.afterClsScore !== undefined
+  const isReadOnlyUrlWorkflow = workflowType === "url-audit" || report.analysisTargetType === "url"
+  const showBeforeAfterVitals =
+    !isReadOnlyUrlWorkflow &&
+    workflowType === "cls-fix" &&
+    (!!report.afterWebVitals || report.afterClsScore !== undefined)
+  const skillLink = (skill: string) => {
+    const normalized = skill.trim().toLowerCase()
+    if (normalized === "d3k" || normalized.includes("d3k")) return "https://dev3000.ai"
+    if (normalized.includes("web-design-guidelines") || normalized.includes("vercel web design guidelines")) {
+      return "https://skills.sh/vercel-labs/agent-skills/web-design-guidelines"
+    }
+    return `https://skills.sh/vercel-labs/agent-skills/${normalized.replace(/\s+/g, "-")}`
+  }
+  const normalizeSkillLabel = (skill: string) => {
+    const normalized = skill.trim().toLowerCase()
+    if (normalized.includes("web-design-guidelines")) return "Vercel Web Design Guidelines"
+    if (normalized === "d3k" || normalized.includes("d3k")) return "d3k"
+    return skill
+  }
+  const explicitSkills = [...(report.skillsLoaded || []), ...(report.skillsInstalled || [])]
+  const inferredSkills: string[] = ["d3k"]
+  if (workflowType === "design-guidelines") inferredSkills.unshift("Vercel Web Design Guidelines")
+  const skillsUsed = Array.from(
+    new Map(
+      [...explicitSkills, ...inferredSkills].map((skill) => {
+        const label = normalizeSkillLabel(skill)
+        return [label.toLowerCase(), { label, url: skillLink(skill) }]
+      })
+    ).values()
+  )
+  const reportTitle = report.targetUrl || report.projectName
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-8 max-w-4xl">
+      <div className="container mx-auto px-4 pt-8 pb-24 max-w-4xl">
         <div className="flex items-center gap-4 mb-6">
           {isPublicView ? (
             <span className="inline-flex items-center gap-2 text-muted-foreground">
@@ -142,25 +192,8 @@ async function ReportContent({
 
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h1 className="text-3xl font-bold">{report.projectName}</h1>
-            <div className="flex items-center gap-3 mt-1">
-              <p className="text-muted-foreground">{new Date(report.timestamp).toLocaleString()}</p>
-              <span
-                className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                  workflowType === "prompt"
-                    ? "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300"
-                    : workflowType === "design-guidelines"
-                      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300"
-                      : workflowType === "react-performance"
-                        ? "bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300"
-                        : workflowType === "url-audit"
-                          ? "bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300"
-                          : "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300"
-                }`}
-              >
-                {workflowLabel}
-              </span>
-            </div>
+            <h1 className="text-3xl font-bold">{reportTitle}</h1>
+            <p className="text-muted-foreground mt-1">{new Date(report.timestamp).toLocaleString()}</p>
           </div>
           <div className="flex items-center gap-3">
             {isOwner && <ShareButton runId={id} initialIsPublic={run.isPublic ?? false} />}
@@ -175,158 +208,181 @@ async function ReportContent({
           </div>
         </div>
 
-        {/* Sandbox Info (at top, always visible) */}
-        {report.sandboxDevUrl && (
-          <div className="text-sm text-muted-foreground mb-6">
-            <ul className="flex flex-wrap gap-x-6 gap-y-1">
-              {report.sandboxDevUrl && (
-                <li>
-                  <span className="text-muted-foreground">
-                    {report.analysisTargetType === "url" ? "Sandbox: " : "Dev: "}
-                  </span>
-                  <a
-                    href={report.sandboxDevUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-mono text-xs hover:underline"
-                  >
-                    {report.sandboxDevUrl}
+        <div className="text-sm text-muted-foreground mb-4">
+          <span>Skills Used: </span>
+          {skillsUsed.length > 0 ? (
+            <span>
+              {skillsUsed.map((skill, index) => (
+                <span key={`skills-used-${skill.label}`}>
+                  <a href={skill.url} target="_blank" rel="noopener noreferrer" className="hover:underline font-medium">
+                    {skill.label}
                   </a>
-                </li>
-              )}
-              {report.targetUrl && (
-                <li>
-                  <span className="text-muted-foreground">Target: </span>
-                  <a
-                    href={report.targetUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-mono text-xs hover:underline"
-                  >
-                    {report.targetUrl}
-                  </a>
-                </li>
-              )}
-              {report.repoUrl && (
-                <li>
-                  <span className="text-muted-foreground">Repo: </span>
-                  <a
-                    href={report.repoUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-mono text-xs hover:underline"
-                  >
-                    {report.repoUrl}
-                  </a>
-                </li>
-              )}
-              {report.repoBranch && (
-                <li>
-                  <span className="text-muted-foreground">Ref: </span>
-                  <span className="font-mono text-xs">{report.repoBranch}</span>
-                </li>
-              )}
-              {report.projectDir && (
-                <li>
-                  <span className="text-muted-foreground">Dir: </span>
-                  <span className="font-mono text-xs">{report.projectDir}</span>
-                </li>
-              )}
-            </ul>
-          </div>
-        )}
+                  {index < skillsUsed.length - 1 ? ", " : ""}
+                </span>
+              ))}
+            </span>
+          ) : (
+            <span>None recorded</span>
+          )}
+        </div>
 
-        {/* Timing and Snapshot Info */}
-        {report.timing && (
-          <div className="bg-card border border-border rounded-lg p-4 mb-6">
-            <div className="flex flex-wrap items-center gap-4">
-              {/* Snapshot Status */}
-              <div className="flex items-center gap-2">
-                <span
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
-                    report.fromSnapshot
-                      ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-                      : "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200"
-                  }`}
-                >
-                  {report.fromSnapshot ? (
-                    <>
-                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                        <path
-                          fillRule="evenodd"
-                          d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                      Snapshot Reused
-                    </>
-                  ) : (
-                    <>
-                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                        <path
-                          fillRule="evenodd"
-                          d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                      Fresh Sandbox
-                    </>
-                  )}
-                </span>
-              </div>
-
-              {/* Total Time */}
-              <div className="flex items-center gap-4 text-sm">
-                <span className="text-muted-foreground">
-                  Total:{" "}
-                  <span className="font-medium text-foreground">{formatSeconds(report.timing?.total?.totalMs)}</span>
-                </span>
-                <span className="text-muted-foreground">
-                  Init: <span className="font-mono text-xs">{formatSeconds(report.timing?.total?.initMs)}</span>
-                </span>
-                <span className="text-muted-foreground">
-                  Agent: <span className="font-mono text-xs">{formatSeconds(report.timing?.total?.agentMs)}</span>
-                </span>
-                {report.timing?.total?.prMs && (
-                  <span className="text-muted-foreground">
-                    PR: <span className="font-mono text-xs">{formatSeconds(report.timing?.total?.prMs)}</span>
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {/* Detailed Step Timing (collapsible) */}
-            <details className="mt-3">
-              <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
-                View step-by-step timing breakdown
+        {/* d3k agent transcript */}
+        {(report.timing || report.initD3kLogs || report.d3kLogs || report.afterD3kLogs) && (
+          <div className="mb-5">
+            <details>
+              <summary className="text-sm text-muted-foreground cursor-pointer hover:text-foreground select-none">
+                d3k agent transcript
               </summary>
-              <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                {/* Init Steps */}
-                {report.timing.init?.steps && report.timing.init.steps.length > 0 && (
-                  <div>
-                    <div className="font-medium text-muted-foreground mb-1">Init Steps</div>
-                    <ul className="space-y-0.5 font-mono">
-                      {report.timing.init.steps.map((step) => (
-                        <li key={`init-${step.name}`} className="flex justify-between">
-                          <span className="truncate mr-2">{step.name}</span>
-                          <span className="text-muted-foreground">{formatSeconds(step.durationMs)}</span>
+              <div className="mt-3 space-y-4">
+                {(report.sandboxDevUrl ||
+                  report.targetUrl ||
+                  report.repoUrl ||
+                  report.repoBranch ||
+                  report.projectDir) && (
+                  <div className="text-xs text-muted-foreground">
+                    <ul className="flex flex-wrap gap-x-6 gap-y-1">
+                      {report.sandboxDevUrl && (
+                        <li>
+                          <span>{report.analysisTargetType === "url" ? "Sandbox: " : "Dev: "}</span>
+                          <a
+                            href={report.sandboxDevUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-mono hover:underline"
+                          >
+                            {report.sandboxDevUrl}
+                          </a>
                         </li>
-                      ))}
+                      )}
+                      {report.targetUrl && (
+                        <li>
+                          <span>Target: </span>
+                          <a
+                            href={report.targetUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-mono hover:underline"
+                          >
+                            {report.targetUrl}
+                          </a>
+                        </li>
+                      )}
+                      {report.repoUrl && (
+                        <li>
+                          <span>Repo: </span>
+                          <a
+                            href={report.repoUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-mono hover:underline"
+                          >
+                            {report.repoUrl}
+                          </a>
+                        </li>
+                      )}
+                      {report.repoBranch && (
+                        <li>
+                          <span>Ref: </span>
+                          <span className="font-mono">{report.repoBranch}</span>
+                        </li>
+                      )}
+                      {report.projectDir && (
+                        <li>
+                          <span>Dir: </span>
+                          <span className="font-mono">{report.projectDir}</span>
+                        </li>
+                      )}
                     </ul>
                   </div>
                 )}
-                {/* Agent Steps */}
-                {report.timing.agent?.steps && report.timing.agent.steps.length > 0 && (
+
+                {report.timing && (
+                  <>
+                    <div className="flex flex-wrap items-center gap-4">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+                            report.fromSnapshot
+                              ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                              : "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200"
+                          }`}
+                        >
+                          {report.fromSnapshot ? "Snapshot Reused" : "Fresh Sandbox"}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-4 text-sm">
+                        <span className="text-muted-foreground">
+                          Total:{" "}
+                          <span className="font-medium text-foreground">
+                            {formatSeconds(report.timing?.total?.totalMs)}
+                          </span>
+                        </span>
+                        <span className="text-muted-foreground">
+                          Init: <span className="font-mono text-xs">{formatSeconds(report.timing?.total?.initMs)}</span>
+                        </span>
+                        <span className="text-muted-foreground">
+                          Agent:{" "}
+                          <span className="font-mono text-xs">{formatSeconds(report.timing?.total?.agentMs)}</span>
+                        </span>
+                        {report.timing?.total?.prMs && (
+                          <span className="text-muted-foreground">
+                            PR: <span className="font-mono text-xs">{formatSeconds(report.timing?.total?.prMs)}</span>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <details className="pt-1">
+                      <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
+                        View step-by-step timing breakdown
+                      </summary>
+                      <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                        {report.timing.init?.steps && report.timing.init.steps.length > 0 && (
+                          <div>
+                            <div className="font-medium text-muted-foreground mb-1">Init Steps</div>
+                            <ul className="space-y-0.5 font-mono">
+                              {report.timing.init.steps.map((step) => (
+                                <li key={`init-${step.name}`} className="flex justify-between">
+                                  <span className="truncate mr-2">{step.name}</span>
+                                  <span className="text-muted-foreground">{formatSeconds(step.durationMs)}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {report.timing.agent?.steps && report.timing.agent.steps.length > 0 && (
+                          <div>
+                            <div className="font-medium text-muted-foreground mb-1">Agent Steps</div>
+                            <ul className="space-y-0.5 font-mono">
+                              {report.timing.agent.steps.map((step) => (
+                                <li key={`agent-${step.name}`} className="flex justify-between">
+                                  <span className="truncate mr-2">{step.name}</span>
+                                  <span className="text-muted-foreground">{formatSeconds(step.durationMs)}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    </details>
+                  </>
+                )}
+
+                {(report.initD3kLogs || report.d3kLogs) && (
                   <div>
-                    <div className="font-medium text-muted-foreground mb-1">Agent Steps</div>
-                    <ul className="space-y-0.5 font-mono">
-                      {report.timing.agent.steps.map((step) => (
-                        <li key={`agent-${step.name}`} className="flex justify-between">
-                          <span className="truncate mr-2">{step.name}</span>
-                          <span className="text-muted-foreground">{formatSeconds(step.durationMs)}</span>
-                        </li>
-                      ))}
-                    </ul>
+                    <div className="text-xs font-medium text-muted-foreground mb-1">Init</div>
+                    <pre className="bg-muted/50 rounded p-4 text-xs font-mono overflow-x-auto whitespace-pre-wrap max-h-96 overflow-y-auto">
+                      {report.initD3kLogs || report.d3kLogs}
+                    </pre>
+                  </div>
+                )}
+
+                {report.afterD3kLogs && (
+                  <div>
+                    <div className="text-xs font-medium text-muted-foreground mb-1">After</div>
+                    <pre className="bg-muted/50 rounded p-4 text-xs font-mono overflow-x-auto whitespace-pre-wrap max-h-96 overflow-y-auto">
+                      {report.afterD3kLogs}
+                    </pre>
                   </div>
                 )}
               </div>
@@ -334,43 +390,10 @@ async function ReportContent({
           </div>
         )}
 
-        {/* ================================================================ */}
-        {/* STEP 1: Init - d3k Logs and Initial CLS Capture */}
-        {/* ================================================================ */}
+        {/* Report */}
         <div className="bg-card border border-border rounded-lg p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4">
-            <span className="text-muted-foreground text-sm font-normal mr-2">Step 1</span>
-            Init
-          </h2>
-          <p className="text-sm text-muted-foreground mb-4">
-            Created sandbox, started d3k monitoring, captured initial CLS measurements
-          </p>
-
-          {/* D3k Transcript in Init Section - use initD3kLogs if available, fall back to d3kLogs */}
-          {(report.initD3kLogs || report.d3kLogs) && (
-            <CollapsibleSection title="d3k Diagnostic Transcript" defaultOpen={false}>
-              <pre className="bg-muted/50 rounded p-4 text-xs font-mono overflow-x-auto whitespace-pre-wrap max-h-96 overflow-y-auto">
-                {report.initD3kLogs || report.d3kLogs}
-              </pre>
-            </CollapsibleSection>
-          )}
-        </div>
-
-        {/* ================================================================ */}
-        {/* STEP 2: Agentic Loop - CLS Before/After and Agent Analysis */}
-        {/* ================================================================ */}
-        <div className="bg-card border border-border rounded-lg p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4">
-            <span className="text-muted-foreground text-sm font-normal mr-2">Step 2</span>
-            Agentic Loop
-          </h2>
-          <p className="text-sm text-muted-foreground mb-4">
-            {workflowType === "prompt"
-              ? "AI agent executed custom task"
-              : workflowType === "url-audit"
-                ? "AI agent performed an external read-only UX and performance audit"
-                : "AI agent attempted to fix CLS issues (up to 3 retries)"}
-          </p>
+          <h2 className="text-xl font-semibold mb-4">{reportHeading}</h2>
+          <p className="text-sm text-muted-foreground mb-4">{step2Description}</p>
 
           {/* Custom Prompt Section (for prompt workflow type) */}
           {workflowType === "prompt" && report.customPrompt && (
@@ -388,65 +411,6 @@ async function ReportContent({
               </pre>
             </CollapsibleSection>
           )}
-
-          {/* D3k Transcript after agent fix */}
-          {report.afterD3kLogs && (
-            <CollapsibleSection title="d3k Diagnostic Transcript (After Fix)" defaultOpen={false}>
-              <pre className="bg-muted/50 rounded p-4 text-xs font-mono overflow-x-auto whitespace-pre-wrap max-h-96 overflow-y-auto">
-                {report.afterD3kLogs}
-              </pre>
-            </CollapsibleSection>
-          )}
-
-          {/* Skills Summary */}
-          {(report.skillsInstalled?.length || report.skillsLoaded?.length) && (
-            <div className="mt-6 pt-6 border-t border-border">
-              <h3 className="text-lg font-medium mb-3">Skills</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                <div className="bg-muted/30 rounded-lg p-4">
-                  <div className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Installed</div>
-                  {report.skillsInstalled && report.skillsInstalled.length > 0 ? (
-                    <div className="flex flex-wrap gap-2">
-                      {report.skillsInstalled.map((skill) => (
-                        <span key={`installed-${skill}`} className="px-2 py-0.5 rounded bg-muted text-xs">
-                          {skill}
-                        </span>
-                      ))}
-                    </div>
-                  ) : (
-                    <span className="text-muted-foreground text-sm">None detected</span>
-                  )}
-                </div>
-                <div className="bg-muted/30 rounded-lg p-4">
-                  <div className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Loaded</div>
-                  {report.skillsLoaded && report.skillsLoaded.length > 0 ? (
-                    <div className="flex flex-wrap gap-2">
-                      {report.skillsLoaded.map((skill) => (
-                        <span key={`loaded-${skill}`} className="px-2 py-0.5 rounded bg-muted text-xs">
-                          {skill}
-                        </span>
-                      ))}
-                    </div>
-                  ) : (
-                    <span className="text-muted-foreground text-sm">None recorded</span>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Agent Analysis - shown for all workflow types */}
-          <div className="mt-6 pt-6 border-t border-border">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-medium">Agent Analysis</h3>
-              {report.agentAnalysisModel && (
-                <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
-                  {report.agentAnalysisModel}
-                </span>
-              )}
-            </div>
-            <AgentAnalysis content={report.agentAnalysis} gitDiff={report.gitDiff} projectName={report.projectName} />
-          </div>
 
           {/* CLS Results - only show for cls-fix workflow type */}
           {workflowType === "cls-fix" && report.clsScore !== undefined && (
@@ -680,167 +644,281 @@ async function ReportContent({
           )}
 
           {/* Web Vitals - shown for all workflow types when we have metrics or CLS scores */}
-          {(report.beforeWebVitals ||
-            report.afterWebVitals ||
-            report.clsScore !== undefined ||
-            report.afterClsScore !== undefined) && (
+          {hasWebVitalsData && (
             <div className="mt-6 pt-6 border-t border-border">
               <h3 className="text-lg font-medium mb-4">Core Web Vitals</h3>
-              <div className="grid grid-cols-2 gap-4">
-                {/* Before */}
+              {showBeforeAfterVitals ? (
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Before */}
+                  <div className="bg-muted/30 rounded-lg p-4">
+                    <div className="text-xs text-muted-foreground uppercase tracking-wide mb-3">Before</div>
+                    <div className="space-y-2">
+                      {report.beforeWebVitals?.lcp && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm" title="Largest Contentful Paint">
+                            LCP
+                          </span>
+                          <span
+                            className={`text-sm font-medium ${report.beforeWebVitals.lcp.grade === "good" ? "text-green-600" : report.beforeWebVitals.lcp.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}
+                          >
+                            {formatMs(report.beforeWebVitals.lcp.value)}
+                          </span>
+                        </div>
+                      )}
+                      {report.beforeWebVitals?.fcp && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm" title="First Contentful Paint">
+                            FCP
+                          </span>
+                          <span
+                            className={`text-sm font-medium ${report.beforeWebVitals.fcp.grade === "good" ? "text-green-600" : report.beforeWebVitals.fcp.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}
+                          >
+                            {formatMs(report.beforeWebVitals.fcp.value)}
+                          </span>
+                        </div>
+                      )}
+                      {report.beforeWebVitals?.ttfb && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm" title="Time to First Byte">
+                            TTFB
+                          </span>
+                          <span
+                            className={`text-sm font-medium ${report.beforeWebVitals.ttfb.grade === "good" ? "text-green-600" : report.beforeWebVitals.ttfb.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}
+                          >
+                            {formatMs(report.beforeWebVitals.ttfb.value)}
+                          </span>
+                        </div>
+                      )}
+                      {(report.beforeWebVitals?.cls || report.clsScore !== undefined) && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm" title="Cumulative Layout Shift">
+                            CLS
+                          </span>
+                          <span
+                            className={`text-sm font-medium ${
+                              (report.beforeWebVitals?.cls?.grade || report.clsGrade) === "good"
+                                ? "text-green-600"
+                                : (report.beforeWebVitals?.cls?.grade || report.clsGrade) === "needs-improvement"
+                                  ? "text-yellow-600"
+                                  : "text-red-600"
+                            }`}
+                          >
+                            {formatClsValue(report.beforeWebVitals?.cls?.value ?? report.clsScore)}
+                          </span>
+                        </div>
+                      )}
+                      {report.beforeWebVitals?.inp && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm" title="Interaction to Next Paint">
+                            INP
+                          </span>
+                          <span
+                            className={`text-sm font-medium ${report.beforeWebVitals.inp.grade === "good" ? "text-green-600" : report.beforeWebVitals.inp.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}
+                          >
+                            {formatMs(report.beforeWebVitals.inp.value)}
+                          </span>
+                        </div>
+                      )}
+                      {!report.beforeWebVitals?.lcp &&
+                        !report.beforeWebVitals?.fcp &&
+                        !report.beforeWebVitals?.ttfb &&
+                        !report.beforeWebVitals?.cls &&
+                        !report.beforeWebVitals?.inp &&
+                        report.clsScore === undefined && (
+                          <span className="text-sm text-muted-foreground">No metrics captured</span>
+                        )}
+                    </div>
+                  </div>
+                  {/* After */}
+                  <div className="bg-muted/30 rounded-lg p-4">
+                    <div className="text-xs text-muted-foreground uppercase tracking-wide mb-3">After</div>
+                    <div className="space-y-2">
+                      {report.afterWebVitals?.lcp && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm" title="Largest Contentful Paint">
+                            LCP
+                          </span>
+                          <span
+                            className={`text-sm font-medium ${report.afterWebVitals.lcp.grade === "good" ? "text-green-600" : report.afterWebVitals.lcp.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}
+                          >
+                            {formatMs(report.afterWebVitals.lcp.value)}
+                          </span>
+                        </div>
+                      )}
+                      {report.afterWebVitals?.fcp && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm" title="First Contentful Paint">
+                            FCP
+                          </span>
+                          <span
+                            className={`text-sm font-medium ${report.afterWebVitals.fcp.grade === "good" ? "text-green-600" : report.afterWebVitals.fcp.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}
+                          >
+                            {formatMs(report.afterWebVitals.fcp.value)}
+                          </span>
+                        </div>
+                      )}
+                      {report.afterWebVitals?.ttfb && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm" title="Time to First Byte">
+                            TTFB
+                          </span>
+                          <span
+                            className={`text-sm font-medium ${report.afterWebVitals.ttfb.grade === "good" ? "text-green-600" : report.afterWebVitals.ttfb.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}
+                          >
+                            {formatMs(report.afterWebVitals.ttfb.value)}
+                          </span>
+                        </div>
+                      )}
+                      {(report.afterWebVitals?.cls || report.afterClsScore !== undefined) && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm" title="Cumulative Layout Shift">
+                            CLS
+                          </span>
+                          <span
+                            className={`text-sm font-medium ${
+                              (report.afterWebVitals?.cls?.grade || report.afterClsGrade) === "good"
+                                ? "text-green-600"
+                                : (report.afterWebVitals?.cls?.grade || report.afterClsGrade) === "needs-improvement"
+                                  ? "text-yellow-600"
+                                  : "text-red-600"
+                            }`}
+                          >
+                            {formatClsValue(report.afterWebVitals?.cls?.value ?? report.afterClsScore)}
+                          </span>
+                        </div>
+                      )}
+                      {report.afterWebVitals?.inp && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm" title="Interaction to Next Paint">
+                            INP
+                          </span>
+                          <span
+                            className={`text-sm font-medium ${report.afterWebVitals.inp.grade === "good" ? "text-green-600" : report.afterWebVitals.inp.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}
+                          >
+                            {formatMs(report.afterWebVitals.inp.value)}
+                          </span>
+                        </div>
+                      )}
+                      {!report.afterWebVitals?.lcp &&
+                        !report.afterWebVitals?.fcp &&
+                        !report.afterWebVitals?.ttfb &&
+                        !report.afterWebVitals?.cls &&
+                        !report.afterWebVitals?.inp &&
+                        report.afterClsScore === undefined && (
+                          <span className="text-sm text-muted-foreground">No metrics captured</span>
+                        )}
+                    </div>
+                  </div>
+                </div>
+              ) : (
                 <div className="bg-muted/30 rounded-lg p-4">
-                  <div className="text-xs text-muted-foreground uppercase tracking-wide mb-3">Before</div>
-                  <div className="space-y-2">
-                    {report.beforeWebVitals?.lcp && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm">LCP</span>
+                  <div className="text-xs text-muted-foreground uppercase tracking-wide mb-3">
+                    {isReadOnlyUrlWorkflow ? "Captured" : "Current"}
+                  </div>
+                  <div className="space-y-2 md:space-y-0 md:flex md:flex-wrap md:items-center md:gap-x-8 md:gap-y-2">
+                    {(report.beforeWebVitals?.lcp || report.afterWebVitals?.lcp) && (
+                      <div className="flex justify-between items-center md:justify-start md:gap-2">
+                        <span className="text-sm" title="Largest Contentful Paint">
+                          LCP
+                        </span>
                         <span
-                          className={`text-sm font-medium ${report.beforeWebVitals.lcp.grade === "good" ? "text-green-600" : report.beforeWebVitals.lcp.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}
+                          className={`text-sm font-medium ${(report.beforeWebVitals?.lcp?.grade || report.afterWebVitals?.lcp?.grade) === "good" ? "text-green-600" : (report.beforeWebVitals?.lcp?.grade || report.afterWebVitals?.lcp?.grade) === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}
                         >
-                          {formatMs(report.beforeWebVitals.lcp.value)}
+                          {formatMs(report.beforeWebVitals?.lcp?.value ?? report.afterWebVitals?.lcp?.value)}
                         </span>
                       </div>
                     )}
-                    {report.beforeWebVitals?.fcp && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm">FCP</span>
+                    {(report.beforeWebVitals?.fcp || report.afterWebVitals?.fcp) && (
+                      <div className="flex justify-between items-center md:justify-start md:gap-2">
+                        <span className="text-sm" title="First Contentful Paint">
+                          FCP
+                        </span>
                         <span
-                          className={`text-sm font-medium ${report.beforeWebVitals.fcp.grade === "good" ? "text-green-600" : report.beforeWebVitals.fcp.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}
+                          className={`text-sm font-medium ${(report.beforeWebVitals?.fcp?.grade || report.afterWebVitals?.fcp?.grade) === "good" ? "text-green-600" : (report.beforeWebVitals?.fcp?.grade || report.afterWebVitals?.fcp?.grade) === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}
                         >
-                          {formatMs(report.beforeWebVitals.fcp.value)}
+                          {formatMs(report.beforeWebVitals?.fcp?.value ?? report.afterWebVitals?.fcp?.value)}
                         </span>
                       </div>
                     )}
-                    {report.beforeWebVitals?.ttfb && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm">TTFB</span>
+                    {(report.beforeWebVitals?.ttfb || report.afterWebVitals?.ttfb) && (
+                      <div className="flex justify-between items-center md:justify-start md:gap-2">
+                        <span className="text-sm" title="Time to First Byte">
+                          TTFB
+                        </span>
                         <span
-                          className={`text-sm font-medium ${report.beforeWebVitals.ttfb.grade === "good" ? "text-green-600" : report.beforeWebVitals.ttfb.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}
+                          className={`text-sm font-medium ${(report.beforeWebVitals?.ttfb?.grade || report.afterWebVitals?.ttfb?.grade) === "good" ? "text-green-600" : (report.beforeWebVitals?.ttfb?.grade || report.afterWebVitals?.ttfb?.grade) === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}
                         >
-                          {formatMs(report.beforeWebVitals.ttfb.value)}
+                          {formatMs(report.beforeWebVitals?.ttfb?.value ?? report.afterWebVitals?.ttfb?.value)}
                         </span>
                       </div>
                     )}
-                    {/* CLS - use beforeWebVitals.cls if available, else fall back to clsScore */}
-                    {(report.beforeWebVitals?.cls || report.clsScore !== undefined) && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm">CLS</span>
+                    {(report.beforeWebVitals?.cls ||
+                      report.afterWebVitals?.cls ||
+                      report.clsScore !== undefined ||
+                      report.afterClsScore !== undefined) && (
+                      <div className="flex justify-between items-center md:justify-start md:gap-2">
+                        <span className="text-sm" title="Cumulative Layout Shift">
+                          CLS
+                        </span>
                         <span
                           className={`text-sm font-medium ${
-                            (report.beforeWebVitals?.cls?.grade || report.clsGrade) === "good"
+                            (
+                              report.beforeWebVitals?.cls?.grade ||
+                                report.afterWebVitals?.cls?.grade ||
+                                report.clsGrade ||
+                                report.afterClsGrade
+                            ) === "good"
                               ? "text-green-600"
-                              : (report.beforeWebVitals?.cls?.grade || report.clsGrade) === "needs-improvement"
+                              : (report.beforeWebVitals?.cls?.grade ||
+                                    report.afterWebVitals?.cls?.grade ||
+                                    report.clsGrade ||
+                                    report.afterClsGrade) === "needs-improvement"
                                 ? "text-yellow-600"
                                 : "text-red-600"
                           }`}
                         >
-                          {formatClsValue(report.beforeWebVitals?.cls?.value ?? report.clsScore)}
+                          {formatClsValue(
+                            report.beforeWebVitals?.cls?.value ??
+                              report.afterWebVitals?.cls?.value ??
+                              report.clsScore ??
+                              report.afterClsScore
+                          )}
                         </span>
                       </div>
                     )}
-                    {report.beforeWebVitals?.inp && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm">INP</span>
+                    {(report.beforeWebVitals?.inp || report.afterWebVitals?.inp) && (
+                      <div className="flex justify-between items-center md:justify-start md:gap-2">
+                        <span className="text-sm" title="Interaction to Next Paint">
+                          INP
+                        </span>
                         <span
-                          className={`text-sm font-medium ${report.beforeWebVitals.inp.grade === "good" ? "text-green-600" : report.beforeWebVitals.inp.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}
+                          className={`text-sm font-medium ${(report.beforeWebVitals?.inp?.grade || report.afterWebVitals?.inp?.grade) === "good" ? "text-green-600" : (report.beforeWebVitals?.inp?.grade || report.afterWebVitals?.inp?.grade) === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}
                         >
-                          {formatMs(report.beforeWebVitals.inp.value)}
+                          {formatMs(report.beforeWebVitals?.inp?.value ?? report.afterWebVitals?.inp?.value)}
                         </span>
                       </div>
                     )}
-                    {/* Show message if no metrics at all */}
-                    {!report.beforeWebVitals?.lcp &&
-                      !report.beforeWebVitals?.fcp &&
-                      !report.beforeWebVitals?.ttfb &&
-                      !report.beforeWebVitals?.cls &&
-                      !report.beforeWebVitals?.inp &&
-                      report.clsScore === undefined && (
-                        <span className="text-sm text-muted-foreground">No metrics captured</span>
-                      )}
                   </div>
                 </div>
-                {/* After */}
-                <div className="bg-muted/30 rounded-lg p-4">
-                  <div className="text-xs text-muted-foreground uppercase tracking-wide mb-3">After</div>
-                  <div className="space-y-2">
-                    {report.afterWebVitals?.lcp && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm">LCP</span>
-                        <span
-                          className={`text-sm font-medium ${report.afterWebVitals.lcp.grade === "good" ? "text-green-600" : report.afterWebVitals.lcp.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}
-                        >
-                          {formatMs(report.afterWebVitals.lcp.value)}
-                        </span>
-                      </div>
-                    )}
-                    {report.afterWebVitals?.fcp && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm">FCP</span>
-                        <span
-                          className={`text-sm font-medium ${report.afterWebVitals.fcp.grade === "good" ? "text-green-600" : report.afterWebVitals.fcp.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}
-                        >
-                          {formatMs(report.afterWebVitals.fcp.value)}
-                        </span>
-                      </div>
-                    )}
-                    {report.afterWebVitals?.ttfb && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm">TTFB</span>
-                        <span
-                          className={`text-sm font-medium ${report.afterWebVitals.ttfb.grade === "good" ? "text-green-600" : report.afterWebVitals.ttfb.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}
-                        >
-                          {formatMs(report.afterWebVitals.ttfb.value)}
-                        </span>
-                      </div>
-                    )}
-                    {/* CLS - use afterWebVitals.cls if available, else fall back to afterClsScore */}
-                    {(report.afterWebVitals?.cls || report.afterClsScore !== undefined) && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm">CLS</span>
-                        <span
-                          className={`text-sm font-medium ${
-                            (report.afterWebVitals?.cls?.grade || report.afterClsGrade) === "good"
-                              ? "text-green-600"
-                              : (report.afterWebVitals?.cls?.grade || report.afterClsGrade) === "needs-improvement"
-                                ? "text-yellow-600"
-                                : "text-red-600"
-                          }`}
-                        >
-                          {formatClsValue(report.afterWebVitals?.cls?.value ?? report.afterClsScore)}
-                        </span>
-                      </div>
-                    )}
-                    {report.afterWebVitals?.inp && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm">INP</span>
-                        <span
-                          className={`text-sm font-medium ${report.afterWebVitals.inp.grade === "good" ? "text-green-600" : report.afterWebVitals.inp.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}
-                        >
-                          {formatMs(report.afterWebVitals.inp.value)}
-                        </span>
-                      </div>
-                    )}
-                    {/* Show message if no metrics at all */}
-                    {!report.afterWebVitals?.lcp &&
-                      !report.afterWebVitals?.fcp &&
-                      !report.afterWebVitals?.ttfb &&
-                      !report.afterWebVitals?.cls &&
-                      !report.afterWebVitals?.inp &&
-                      report.afterClsScore === undefined && (
-                        <span className="text-sm text-muted-foreground">No metrics captured</span>
-                      )}
-                  </div>
-                </div>
-              </div>
-              <p className="text-xs text-muted-foreground mt-3">
-                LCP: Largest Contentful Paint • FCP: First Contentful Paint • TTFB: Time to First Byte • CLS: Cumulative
-                Layout Shift • INP: Interaction to Next Paint
-              </p>
+              )}
             </div>
           )}
+
+          {/* Agent Analysis - shown for all workflow types */}
+          <div className="mt-6 pt-6 border-t border-border">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-medium">Agent Analysis</h3>
+              {report.agentAnalysisModel && (
+                <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
+                  {report.agentAnalysisModel}
+                </span>
+              )}
+            </div>
+            <AgentAnalysis content={report.agentAnalysis} gitDiff={report.gitDiff} projectName={report.projectName} />
+          </div>
         </div>
 
-        <div className="mt-6 flex gap-4">
+        <div className="mt-6 mb-4 flex gap-4">
           {!isPublicView && (
             <a href="/workflows" className="px-4 py-2 border border-border rounded-md hover:bg-muted transition-colors">
               ← Back to Workflows

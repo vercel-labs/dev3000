@@ -2,6 +2,7 @@ import type { Metadata } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
 import type React from "react"
 import { Suspense } from "react"
+import { NextDevIndicatorFix } from "@/components/next-dev-indicator-fix"
 import { ThemeProvider } from "@/components/theme-provider"
 import { DEV3000_URL } from "@/lib/constants"
 import { AnalyticsTools } from "./analytics.client"
@@ -87,6 +88,7 @@ export default function RootLayout({
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <Suspense fallback={null}>{children}</Suspense>
         </ThemeProvider>
+        <NextDevIndicatorFix />
         <Suspense fallback={null}>
           <AnalyticsTools />
         </Suspense>

@@ -749,7 +749,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
         customPrompt: workflowType === "prompt" ? customPrompt : undefined,
         crawlDepth: workflowType === "design-guidelines" ? crawlDepth : undefined,
         githubPat: autoCreatePR && githubPat ? githubPat : undefined,
-        startPath: startPath !== "/" ? startPath : undefined // Only send if not default
+        startPath: !isUrlAuditType && startPath !== "/" ? startPath : undefined // URL mode is single-URL today
       }
 
       if (project?.rootDirectory) {
@@ -1250,23 +1250,6 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                       />
                       <p className="mt-1 text-xs text-muted-foreground">
                         Must be a publicly reachable https URL. Private/localhost addresses are blocked.
-                      </p>
-                    </div>
-
-                    <div>
-                      <Label htmlFor={crawlDepthId} className="block text-sm font-medium text-foreground mb-1">
-                        Start Path
-                      </Label>
-                      <input
-                        type="text"
-                        id={crawlDepthId}
-                        value={startPath}
-                        onChange={(e) => setStartPath(e.target.value)}
-                        className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground font-mono text-sm"
-                        placeholder="/"
-                      />
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Optional path to prioritize during analysis (e.g. /pricing). Defaults to /.
                       </p>
                     </div>
                   </div>
