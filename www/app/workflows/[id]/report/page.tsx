@@ -812,9 +812,9 @@ async function ReportContent({
                 </div>
               ) : (
                 <div className="bg-muted/30 rounded-lg p-4">
-                  <div className="text-xs text-muted-foreground uppercase tracking-wide mb-3">
-                    {isReadOnlyUrlWorkflow ? "Captured" : "Current"}
-                  </div>
+                  {!isReadOnlyUrlWorkflow && (
+                    <div className="text-xs text-muted-foreground uppercase tracking-wide mb-3">Current</div>
+                  )}
                   <div className="space-y-2 md:space-y-0 md:flex md:flex-wrap md:items-center md:gap-x-8 md:gap-y-2">
                     {(report.beforeWebVitals?.lcp || report.afterWebVitals?.lcp) && (
                       <div className="flex justify-between items-center md:justify-start md:gap-2">

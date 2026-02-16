@@ -1,5 +1,5 @@
 import { type ChildProcess, spawn } from "child_process"
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs"
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "fs"
 import { tmpdir } from "os"
 import { dirname, join } from "path"
 import { fileURLToPath } from "url"
@@ -17,6 +17,46 @@ export interface CDPConnection {
   sessionId: string | null
   nextId: number
 }
+
+const EMBEDDED_LOADING_HTML = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>dev3000 - Starting...</title>
+  <style>
+    html, body { height: 100%; margin: 0; }
+    body {
+      display: grid;
+      place-items: center;
+      background: #141414;
+      color: #f5f5f5;
+      font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+    }
+    .wrap { text-align: center; }
+    .spinner {
+      width: 28px;
+      height: 28px;
+      border: 2px solid #353535;
+      border-top-color: #f5f5f5;
+      border-radius: 50%;
+      margin: 0 auto 14px;
+      animation: spin 700ms linear infinite;
+    }
+    h1 { margin: 0 0 8px; font-size: 40px; line-height: 1; }
+    p { margin: 0; font-size: 18px; color: #b5b5b5; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="spinner"></div>
+    <h1>dev3000</h1>
+    <p>Connecting to servers...</p>
+  </div>
+</body>
+</html>`
 
 export class CDPMonitor {
   private browser: ChildProcess | null = null
@@ -237,33 +277,29 @@ export class CDPMonitor {
   }
 
   private createLoadingPage(): string {
-    const loadingDir = join(tmpdir(), "dev3000-loading")
-    if (!existsSync(loadingDir)) {
-      mkdirSync(loadingDir, { recursive: true })
-    }
-
+    // Use a unique temp directory per launch to avoid stale file:// cache artifacts.
+    const loadingDir = mkdtempSync(join(tmpdir(), "dev3000-loading-"))
     const loadingPath = join(loadingDir, "loading.html")
 
-    // Read the loading HTML from the source file
+    // Read the loading HTML from a runtime-valid location.
     const currentFile = fileURLToPath(import.meta.url)
     const currentDir = dirname(currentFile)
-    const loadingHtmlPath = join(currentDir, "src/loading.html")
     let loadingHtml: string
 
     try {
+      const loadingHtmlCandidates = [
+        join(currentDir, "src/loading.html"),
+        join(currentDir, "loading.html"),
+        join(process.cwd(), "src/loading.html")
+      ]
+      const loadingHtmlPath = loadingHtmlCandidates.find((path) => existsSync(path))
+      if (!loadingHtmlPath) {
+        throw new Error("No loading.html found in expected locations")
+      }
       loadingHtml = readFileSync(loadingHtmlPath, "utf-8")
     } catch (_error) {
-      // Fallback to a simple loading page if file not found
-      loadingHtml = `<!DOCTYPE html>
-<html>
-<head><title>dev3000 - Starting...</title></head>
-<body style="font-family: system-ui; background: #1e1e1e; color: #fff; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0;">
-  <div style="text-align: center;">
-    <h1>dev3000</h1>
-    <p>Starting development environment...</p>
-  </div>
-</body>
-</html>`
+      // Fall back to embedded HTML so compiled binaries always render the full loading page.
+      loadingHtml = EMBEDDED_LOADING_HTML
     }
 
     writeFileSync(loadingPath, loadingHtml)

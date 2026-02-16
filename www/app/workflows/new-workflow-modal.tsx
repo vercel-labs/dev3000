@@ -1,6 +1,6 @@
 "use client"
 
-import { AlertCircle, HelpCircle } from "lucide-react"
+import { AlertCircle, ArrowRight, HelpCircle } from "lucide-react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useCallback, useEffect, useId, useRef, useState } from "react"
@@ -137,6 +137,10 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
     getAnalysisTarget(searchParams.get("type"), searchParams.get("target"))
   )
   const [_selectedType, setSelectedType] = useState<string>(searchParams.get("type") || "")
+  const [progressTarget, setProgressTarget] = useState<AnalysisTarget>(
+    getAnalysisTarget(searchParams.get("type"), searchParams.get("target"))
+  )
+  const [progressHasType, setProgressHasType] = useState<boolean>(Boolean(searchParams.get("type")))
   const [teams, setTeams] = useState<Team[]>([])
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null)
   const [projects, setProjects] = useState<Project[]>([])
@@ -227,8 +231,14 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
     if (typeParam && typeParam !== _selectedType) {
       setSelectedType(typeParam)
     }
+    if (typeParam) {
+      setProgressHasType(true)
+    }
     if (target !== selectedTarget) {
       setSelectedTarget(target)
+    }
+    if (target) {
+      setProgressTarget(target)
     }
     if (target === "url" && urlParam && urlParam !== publicUrl) {
       setPublicUrl(urlParam)
@@ -253,6 +263,8 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
     if (!typeParam) {
       setSelectedType("")
       if (!targetParam) setSelectedTarget("")
+      setProgressHasType(false)
+      if (!targetParam) setProgressTarget("")
       setSelectedTeam(null)
       setSelectedProject(null)
     }
@@ -264,6 +276,8 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       setStep("type")
       setSelectedType("")
       setSelectedTarget("")
+      setProgressTarget("")
+      setProgressHasType(false)
       setSelectedTeam(null)
       setSelectedProject(null)
       setProjects([])
@@ -689,6 +703,12 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
     setWorkflowResult(null)
     setActiveRunId(null)
     setSandboxUrl(null)
+    if (selectedTarget) {
+      setProgressTarget(selectedTarget)
+    }
+    if (_selectedType) {
+      setProgressHasType(true)
+    }
 
     setStep("running")
     setWorkflowStatus("Starting workflow...")
@@ -892,11 +912,42 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
 
   if (!isOpen) return null
 
-  const progressSteps = isUrlAuditType
-    ? (["type", "options", "running"] as WorkflowStep[])
-    : (["type", "team", "project", "options", "running"] as WorkflowStep[])
-  const progressLabels = isUrlAuditType ? ["Mode", "Options", "Run"] : ["Type", "Team", "Project", "Options", "Run"]
-  const currentProgressIndex = progressSteps.indexOf(step)
+  const effectiveTarget = selectedTarget || progressTarget
+  const isUrlProgressFlow = effectiveTarget === "url"
+  const hasChosenTarget = Boolean(effectiveTarget)
+  const hasChosenWorkflowType = Boolean(_selectedType) || progressHasType
+
+  let progressLabels: string[] = []
+  let currentProgressIndex = 0
+
+  if (!hasChosenTarget) {
+    progressLabels = ["Target"]
+    currentProgressIndex = 0
+  } else if (isUrlProgressFlow) {
+    progressLabels = ["Target", "Skills", "Options", "Run"]
+    if (!hasChosenWorkflowType) {
+      currentProgressIndex = 1
+    } else if (step === "running") {
+      currentProgressIndex = 3
+    } else {
+      currentProgressIndex = 2
+    }
+  } else {
+    progressLabels = ["Target", "Type", "Team", "Project", "Options", "Run"]
+    if (!hasChosenWorkflowType) {
+      currentProgressIndex = 1
+    } else if (step === "team") {
+      currentProgressIndex = 2
+    } else if (step === "project") {
+      currentProgressIndex = 3
+    } else if (step === "options") {
+      currentProgressIndex = 4
+    } else if (step === "running") {
+      currentProgressIndex = 5
+    } else {
+      currentProgressIndex = 1
+    }
+  }
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -919,11 +970,11 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
           {/* Progress indicator */}
           <div className="mb-8">
             <div className="flex items-center">
-              {progressSteps.map((s, index) => (
-                <div key={s} className="flex items-center flex-1">
+              {progressLabels.map((label, index) => (
+                <div key={label} className="flex items-center flex-1">
                   <div
                     className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                      step === s
+                      currentProgressIndex === index
                         ? "bg-blue-600 text-white"
                         : currentProgressIndex > index
                           ? "bg-green-600 text-white"
@@ -932,7 +983,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                   >
                     {index + 1}
                   </div>
-                  {index < progressSteps.length - 1 && (
+                  {index < progressLabels.length - 1 && (
                     <div className="flex-1 mx-2">
                       <Progress value={currentProgressIndex > index ? 100 : 0} className="h-1" />
                     </div>
@@ -955,24 +1006,40 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
             <div>
               {!selectedTarget ? (
                 <>
-                  <h3 className="text-lg font-semibold mb-4 text-foreground">Choose Analysis Target</h3>
+                  <h3 className="text-lg font-semibold mb-4 text-foreground">Choose an Analysis Target:</h3>
                   <div className="space-y-3">
                     <Link
-                      href="/workflows/new?target=project"
-                      className="block w-full p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
+                      href="/workflows/new?target=url"
+                      className="group block w-full p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
                     >
-                      <div className="font-semibold text-foreground">Analyze a Vercel Project</div>
-                      <div className="text-sm text-muted-foreground mt-1">
-                        Run code-aware workflows with sandbox edits, validation, and optional PR creation.
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="min-w-0">
+                          <div className="font-semibold text-foreground">Analyze an URL</div>
+                          <div className="text-sm text-muted-foreground mt-1">
+                            Run a read-only external audit on a publicly available URL with prioritized guidance.
+                          </div>
+                        </div>
+                        <ArrowRight
+                          aria-hidden="true"
+                          className="size-5 shrink-0 text-muted-foreground transition-all duration-200 group-hover:translate-x-1 group-hover:text-foreground group-focus-visible:translate-x-1 group-focus-visible:text-foreground"
+                        />
                       </div>
                     </Link>
                     <Link
-                      href="/workflows/new?target=url"
-                      className="block w-full p-4 border-2 border-orange-300/60 dark:border-orange-600/60 rounded-lg hover:border-orange-500 hover:bg-accent text-left transition-colors"
+                      href="/workflows/new?target=project"
+                      className="group block w-full p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
                     >
-                      <div className="font-semibold text-foreground">Analyze an URL</div>
-                      <div className="text-sm text-muted-foreground mt-1">
-                        Run a read-only external audit on a public `https://` URL with prioritized guidance.
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="min-w-0">
+                          <div className="font-semibold text-foreground">Analyze a Vercel Project</div>
+                          <div className="text-sm text-muted-foreground mt-1">
+                            Run code-aware workflows with sandbox edits, validation, and optional PR creation.
+                          </div>
+                        </div>
+                        <ArrowRight
+                          aria-hidden="true"
+                          className="size-5 shrink-0 text-muted-foreground transition-all duration-200 group-hover:translate-x-1 group-hover:text-foreground group-focus-visible:translate-x-1 group-focus-visible:text-foreground"
+                        />
                       </div>
                     </Link>
                   </div>
@@ -983,50 +1050,82 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                   <div className="space-y-3">
                     <Link
                       href="/workflows/new?target=project&type=design-guidelines"
-                      className="block w-full p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
+                      className="group block w-full p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
                     >
-                      <div className="font-semibold text-foreground">Design Guidelines Review</div>
-                      <div className="text-sm text-muted-foreground mt-1">
-                        Evaluate your site against Vercel design guidelines and automatically fix issues
-                      </div>
-                      <div className="text-xs text-muted-foreground mt-2">
-                        Skills: {workflowSkillLabels["design-guidelines"].join(", ")}
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="min-w-0">
+                          <div className="font-semibold text-foreground">Design Guidelines Review</div>
+                          <div className="text-sm text-muted-foreground mt-1">
+                            Evaluate your site against Vercel design guidelines and automatically fix issues
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-2">
+                            Skills: {workflowSkillLabels["design-guidelines"].join(", ")}
+                          </div>
+                        </div>
+                        <ArrowRight
+                          aria-hidden="true"
+                          className="size-5 shrink-0 text-muted-foreground transition-all duration-200 group-hover:translate-x-1 group-hover:text-foreground group-focus-visible:translate-x-1 group-focus-visible:text-foreground"
+                        />
                       </div>
                     </Link>
                     <Link
                       href="/workflows/new?target=project&type=react-performance"
-                      className="block w-full p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
+                      className="group block w-full p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
                     >
-                      <div className="font-semibold text-foreground">React Performance Review</div>
-                      <div className="text-sm text-muted-foreground mt-1">
-                        Analyze React/Next.js code for performance issues and apply optimizations
-                      </div>
-                      <div className="text-xs text-muted-foreground mt-2">
-                        Skills: {workflowSkillLabels["react-performance"].join(", ")}
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="min-w-0">
+                          <div className="font-semibold text-foreground">React Performance Review</div>
+                          <div className="text-sm text-muted-foreground mt-1">
+                            Analyze React/Next.js code for performance issues and apply optimizations
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-2">
+                            Skills: {workflowSkillLabels["react-performance"].join(", ")}
+                          </div>
+                        </div>
+                        <ArrowRight
+                          aria-hidden="true"
+                          className="size-5 shrink-0 text-muted-foreground transition-all duration-200 group-hover:translate-x-1 group-hover:text-foreground group-focus-visible:translate-x-1 group-focus-visible:text-foreground"
+                        />
                       </div>
                     </Link>
                     <Link
                       href="/workflows/new?target=project&type=cloud-fix"
-                      className="block w-full p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
+                      className="group block w-full p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
                     >
-                      <div className="font-semibold text-foreground">CLS Fix</div>
-                      <div className="text-sm text-muted-foreground mt-1">
-                        Detect and fix Cumulative Layout Shift issues automatically
-                      </div>
-                      <div className="text-xs text-muted-foreground mt-2">
-                        Skills: {workflowSkillLabels["cls-fix"].join(", ")}
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="min-w-0">
+                          <div className="font-semibold text-foreground">CLS Fix</div>
+                          <div className="text-sm text-muted-foreground mt-1">
+                            Detect and fix Cumulative Layout Shift issues automatically
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-2">
+                            Skills: {workflowSkillLabels["cls-fix"].join(", ")}
+                          </div>
+                        </div>
+                        <ArrowRight
+                          aria-hidden="true"
+                          className="size-5 shrink-0 text-muted-foreground transition-all duration-200 group-hover:translate-x-1 group-hover:text-foreground group-focus-visible:translate-x-1 group-focus-visible:text-foreground"
+                        />
                       </div>
                     </Link>
                     <Link
                       href="/workflows/new?target=project&type=prompt"
-                      className="block w-full p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
+                      className="group block w-full p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
                     >
-                      <div className="font-semibold text-foreground">Prompt</div>
-                      <div className="text-sm text-muted-foreground mt-1">
-                        Run a custom AI workflow with your own instructions
-                      </div>
-                      <div className="text-xs text-muted-foreground mt-2">
-                        Skills: {workflowSkillLabels.prompt.join(", ")}
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="min-w-0">
+                          <div className="font-semibold text-foreground">Prompt</div>
+                          <div className="text-sm text-muted-foreground mt-1">
+                            Run a custom AI workflow with your own instructions
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-2">
+                            Skills: {workflowSkillLabels.prompt.join(", ")}
+                          </div>
+                        </div>
+                        <ArrowRight
+                          aria-hidden="true"
+                          className="size-5 shrink-0 text-muted-foreground transition-all duration-200 group-hover:translate-x-1 group-hover:text-foreground group-focus-visible:translate-x-1 group-focus-visible:text-foreground"
+                        />
                       </div>
                     </Link>
                   </div>
@@ -1043,26 +1142,42 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                   <div className="space-y-3">
                     <Link
                       href="/workflows/new?target=url&type=design-guidelines"
-                      className="block w-full p-4 border-2 border-orange-300/60 dark:border-orange-600/60 rounded-lg hover:border-orange-500 hover:bg-accent text-left transition-colors"
+                      className="group block w-full p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
                     >
-                      <div className="font-semibold text-foreground">Design Guidelines Review</div>
-                      <div className="text-sm text-muted-foreground mt-1">
-                        Evaluate a public URL against Vercel design guidelines with prioritized recommendations.
-                      </div>
-                      <div className="text-xs text-muted-foreground mt-2">
-                        Skills: {workflowSkillLabels["design-guidelines"].join(", ")}
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="min-w-0">
+                          <div className="font-semibold text-foreground">Design Guidelines Review</div>
+                          <div className="text-sm text-muted-foreground mt-1">
+                            Evaluate a public URL against Vercel design guidelines with prioritized recommendations.
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-2">
+                            Skills: {workflowSkillLabels["design-guidelines"].join(", ")}
+                          </div>
+                        </div>
+                        <ArrowRight
+                          aria-hidden="true"
+                          className="size-5 shrink-0 text-muted-foreground transition-all duration-200 group-hover:translate-x-1 group-hover:text-foreground group-focus-visible:translate-x-1 group-focus-visible:text-foreground"
+                        />
                       </div>
                     </Link>
                     <Link
                       href="/workflows/new?target=url&type=react-performance"
-                      className="block w-full p-4 border-2 border-orange-300/60 dark:border-orange-600/60 rounded-lg hover:border-orange-500 hover:bg-accent text-left transition-colors"
+                      className="group block w-full p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
                     >
-                      <div className="font-semibold text-foreground">React Performance Review</div>
-                      <div className="text-sm text-muted-foreground mt-1">
-                        External React-focused performance review from runtime signals (read-only).
-                      </div>
-                      <div className="text-xs text-muted-foreground mt-2">
-                        Skills: {workflowSkillLabels["react-performance"].join(", ")}
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="min-w-0">
+                          <div className="font-semibold text-foreground">React Performance Review</div>
+                          <div className="text-sm text-muted-foreground mt-1">
+                            External React-focused performance review from runtime signals (read-only).
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-2">
+                            Skills: {workflowSkillLabels["react-performance"].join(", ")}
+                          </div>
+                        </div>
+                        <ArrowRight
+                          aria-hidden="true"
+                          className="size-5 shrink-0 text-muted-foreground transition-all duration-200 group-hover:translate-x-1 group-hover:text-foreground group-focus-visible:translate-x-1 group-focus-visible:text-foreground"
+                        />
                       </div>
                     </Link>
                   </div>
@@ -1091,11 +1206,19 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                     <Link
                       key={team.id}
                       href={`/workflows/new?type=${_selectedType}&team=${team.id}`}
-                      className="block w-full p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
+                      className="group block w-full p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
                     >
-                      <div className="font-semibold text-foreground">{team.name}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {team.isPersonal ? "Personal Account" : "Team"} • {team.id}
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="min-w-0">
+                          <div className="font-semibold text-foreground">{team.name}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {team.isPersonal ? "Personal Account" : "Team"} • {team.id}
+                          </div>
+                        </div>
+                        <ArrowRight
+                          aria-hidden="true"
+                          className="size-5 shrink-0 text-muted-foreground transition-all duration-200 group-hover:translate-x-1 group-hover:text-foreground group-focus-visible:translate-x-1 group-focus-visible:text-foreground"
+                        />
                       </div>
                     </Link>
                   ))}
@@ -1168,14 +1291,22 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                                 setRecentProjects(next)
                               }
                             }}
-                            className="block w-full p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
+                            className="group block w-full p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
                           >
-                            <div className="font-semibold text-foreground">{project.name}</div>
-                            {fullProject?.latestDeployments?.[0] && (
-                              <div className="text-sm text-muted-foreground mt-1">
-                                Latest: {fullProject.latestDeployments[0].url}
+                            <div className="flex items-center justify-between gap-4">
+                              <div className="min-w-0">
+                                <div className="font-semibold text-foreground">{project.name}</div>
+                                {fullProject?.latestDeployments?.[0] && (
+                                  <div className="text-sm text-muted-foreground mt-1">
+                                    Latest: {fullProject.latestDeployments[0].url}
+                                  </div>
+                                )}
                               </div>
-                            )}
+                              <ArrowRight
+                                aria-hidden="true"
+                                className="size-5 shrink-0 text-muted-foreground transition-all duration-200 group-hover:translate-x-1 group-hover:text-foreground group-focus-visible:translate-x-1 group-focus-visible:text-foreground"
+                              />
+                            </div>
                           </Link>
                         )
                       })}
@@ -1198,12 +1329,20 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                             setRecentProjects(next)
                           }
                         }}
-                        className="block w-full p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
+                        className="group block w-full p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
                       >
-                        <div className="font-semibold text-foreground">{project.name}</div>
-                        <div className="text-sm text-muted-foreground mt-1">
-                          {project.framework && <span className="mr-2">Framework: {project.framework}</span>}
-                          {project.latestDeployments[0] && <span>Latest: {project.latestDeployments[0].url}</span>}
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="min-w-0">
+                            <div className="font-semibold text-foreground">{project.name}</div>
+                            <div className="text-sm text-muted-foreground mt-1">
+                              {project.framework && <span className="mr-2">Framework: {project.framework}</span>}
+                              {project.latestDeployments[0] && <span>Latest: {project.latestDeployments[0].url}</span>}
+                            </div>
+                          </div>
+                          <ArrowRight
+                            aria-hidden="true"
+                            className="size-5 shrink-0 text-muted-foreground transition-all duration-200 group-hover:translate-x-1 group-hover:text-foreground group-focus-visible:translate-x-1 group-focus-visible:text-foreground"
+                          />
                         </div>
                       </Link>
                     ))}
