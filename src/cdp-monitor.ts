@@ -1,4 +1,4 @@
-import { type ChildProcess, spawn } from "child_process"
+import { type ChildProcess, execSync, spawn, spawnSync } from "child_process"
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs"
 import { tmpdir } from "os"
 import { dirname, join } from "path"
@@ -72,82 +72,6 @@ export class CDPMonitor {
     }
   }
 
-  private async runCommand(
-    command: string,
-    args: string[]
-  ): Promise<{ stdout: string; stderr: string; code: number | null }> {
-    return await new Promise((resolve) => {
-      const proc = spawn(command, args, { stdio: ["ignore", "pipe", "pipe"] })
-      let stdout = ""
-      let stderr = ""
-      proc.stdout?.on("data", (data) => {
-        stdout += data.toString()
-      })
-      proc.stderr?.on("data", (data) => {
-        stderr += data.toString()
-      })
-      proc.on("error", (error) => {
-        resolve({ stdout, stderr: `${stderr}${error.message}`, code: 1 })
-      })
-      proc.on("close", (code) => {
-        resolve({ stdout, stderr, code })
-      })
-    })
-  }
-
-  private async listProcesses(): Promise<Array<{ pid: number; command: string }>> {
-    if (process.platform === "win32") {
-      const result = await this.runCommand("powershell", [
-        "-NoProfile",
-        "-Command",
-        "Get-CimInstance Win32_Process | Select-Object ProcessId,CommandLine | ConvertTo-Json -Compress"
-      ])
-      if (result.code !== 0) {
-        this.debugLog(`Failed to list processes via PowerShell: ${result.stderr.trim()}`)
-        return []
-      }
-      const raw = result.stdout.trim()
-      if (!raw) return []
-      try {
-        const parsed = JSON.parse(raw) as
-          | Array<{ ProcessId?: number; CommandLine?: string }>
-          | { ProcessId?: number; CommandLine?: string }
-        const items = Array.isArray(parsed) ? parsed : [parsed]
-        return items
-          .map((item) => ({
-            pid: Number(item.ProcessId),
-            command: item.CommandLine ?? ""
-          }))
-          .filter((item) => Number.isFinite(item.pid))
-      } catch (error) {
-        this.debugLog(`Failed to parse PowerShell process list: ${String(error)}`)
-        return []
-      }
-    }
-
-    let result = await this.runCommand("ps", ["-ax", "-o", "pid=", "-o", "command="])
-    if (result.code !== 0) {
-      result = await this.runCommand("ps", ["-eo", "pid=,command="])
-    }
-    if (result.code !== 0) {
-      this.debugLog(`Failed to list processes via ps: ${result.stderr.trim()}`)
-      return []
-    }
-
-    const lines = result.stdout.split("\n")
-    const processes: Array<{ pid: number; command: string }> = []
-    for (const line of lines) {
-      const trimmed = line.trim()
-      if (!trimmed) continue
-      const match = trimmed.match(/^(\d+)\s+(.*)$/)
-      if (!match) continue
-      const pid = Number(match[1])
-      if (!Number.isFinite(pid)) continue
-      processes.push({ pid, command: match[2] })
-    }
-    return processes
-  }
-
   /**
    * Check if a URL should be monitored (i.e., it's from the user's app server, not dev3000's tools service or external sites)
    */
@@ -211,8 +135,26 @@ export class CDPMonitor {
 
   private async discoverChromePids(): Promise<void> {
     try {
-      const processes = await this.listProcesses()
-      const pids = processes.filter((proc) => proc.command.includes(this.profileDir)).map((proc) => proc.pid)
+      const { spawn } = await import("child_process")
+
+      // Find all Chrome processes with our profile directory
+      const profileDirEscaped = this.profileDir.replace(/'/g, "'\\''")
+      const pidsOutput = await new Promise<string>((resolve) => {
+        const proc = spawn("sh", ["-c", `pgrep -f '${profileDirEscaped}'`], {
+          stdio: "pipe"
+        })
+        let output = ""
+        proc.stdout?.on("data", (data) => {
+          output += data.toString()
+        })
+        proc.on("exit", () => resolve(output.trim()))
+      })
+
+      const pids = pidsOutput
+        .split("\n")
+        .filter(Boolean)
+        .map((pid) => parseInt(pid.trim(), 10))
+        .filter((pid) => !Number.isNaN(pid))
 
       // Add main browser PID if we have it
       if (this.browser?.pid) {
@@ -319,28 +261,53 @@ export class CDPMonitor {
    * This prevents issues where Chrome defers to an existing instance
    * instead of starting a new one with CDP enabled.
    */
-  private async killExistingChromeWithProfile(): Promise<void> {
+  private killExistingChromeWithProfile(): void {
     try {
-      // Find Chrome processes using this profile directory
-      const processes = await this.listProcesses()
-      const pids = processes
-        .filter(
-          (proc) =>
-            proc.command.includes(`--user-data-dir=${this.profileDir}`) || proc.command.includes(this.profileDir)
-        )
-        .map((proc) => proc.pid)
-        .filter((pid) => pid !== this.browser?.pid)
+      // Find Chrome processes using this profile directory without invoking a shell
+      const psResult = spawnSync("ps", ["aux"], {
+        encoding: "utf-8",
+        stdio: ["pipe", "pipe", "pipe"]
+      })
 
-      for (const pid of pids) {
-        this.debugLog(`Killing existing Chrome process ${pid} using profile ${this.profileDir}`)
-        try {
-          process.kill(pid, "SIGTERM")
-        } catch {
-          // Process may have already exited
+      if (psResult.error || psResult.status !== 0 || !psResult.stdout) {
+        this.debugLog("Unable to list processes with ps")
+        return
+      }
+
+      const searchToken = `user-data-dir=${this.profileDir}`
+      const lines = psResult.stdout.split("\n")
+      const pids: string[] = []
+
+      for (const line of lines) {
+        const trimmed = line.trim()
+        if (!trimmed) continue
+
+        // Skip header line that typically starts with "USER"
+        if (trimmed.toUpperCase().startsWith("USER")) continue
+
+        if (trimmed.includes(searchToken)) {
+          // ps aux format: USER PID %CPU %MEM VSZ RSS TTY STAT START TIME COMMAND
+          const parts = trimmed.split(/\s+/)
+          if (parts.length > 1) {
+            const pid = parts[1]
+            if (pid && /^\d+$/.test(pid)) {
+              pids.push(pid)
+            }
+          }
         }
       }
+
       if (pids.length > 0) {
-        await new Promise((resolve) => setTimeout(resolve, 500))
+        for (const pid of pids) {
+          this.debugLog(`Killing existing Chrome process ${pid} using profile ${this.profileDir}`)
+          try {
+            process.kill(Number.parseInt(pid, 10), "SIGTERM")
+          } catch {
+            // Process may have already exited
+          }
+        }
+        // Give Chrome a moment to clean up
+        execSync("sleep 0.5")
       }
     } catch {
       // No existing Chrome found or ps/grep not available
@@ -350,7 +317,7 @@ export class CDPMonitor {
 
   private async launchChrome(): Promise<void> {
     // Kill any existing Chrome using this profile to prevent CDP conflicts
-    await this.killExistingChromeWithProfile()
+    this.killExistingChromeWithProfile()
 
     return new Promise((resolve, reject) => {
       // Use custom browser path if provided, otherwise try different Chrome executables based on platform

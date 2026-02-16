@@ -81,7 +81,7 @@ export async function listWorkflowRuns(userId: string): Promise<WorkflowRun[]> {
   try {
     ;({ blobs } = await list({ prefix }))
   } catch (error) {
-    console.error(`[Workflow Storage] Failed to list blobs for ${prefix}:`, error)
+    console.error("[Workflow Storage] Failed to list blobs for prefix %s:", prefix, error)
     return []
   }
 
@@ -101,13 +101,17 @@ export async function listWorkflowRuns(userId: string): Promise<WorkflowRun[]> {
         // First verify blob exists using authenticated head() call
         const blobInfo = await head(blob.url)
         if (!blobInfo) {
-          console.error(`[Workflow Storage] Blob not found: ${blob.url}`)
+          console.error("[Workflow Storage] Blob not found for URL %s", blob.url)
           return null
         }
 
         // Check content type from head - if not JSON, skip it
         if (!blobInfo.contentType?.includes("application/json")) {
-          console.error(`[Workflow Storage] Unexpected content type ${blobInfo.contentType} for ${blob.url}`)
+          console.error(
+            "[Workflow Storage] Unexpected content type %s for URL %s",
+            blobInfo.contentType,
+            blob.url
+          )
           return null
         }
 
@@ -118,7 +122,10 @@ export async function listWorkflowRuns(userId: string): Promise<WorkflowRun[]> {
         // Check for non-OK responses (security checkpoint returns 200 but HTML)
         if (!response.ok) {
           console.error(
-            `[Workflow Storage] HTTP ${response.status} fetching ${fetchUrl} (content-type: ${response.headers.get("content-type")})`
+            "[Workflow Storage] HTTP %d fetching %s (content-type: %s)",
+            response.status,
+            fetchUrl,
+            response.headers.get("content-type")
           )
           return null
         }
@@ -127,7 +134,9 @@ export async function listWorkflowRuns(userId: string): Promise<WorkflowRun[]> {
         const contentType = response.headers.get("content-type")
         if (contentType && !contentType.includes("application/json")) {
           console.error(
-            `[Workflow Storage] Response is not JSON: ${contentType} for ${fetchUrl} (likely Vercel Security Checkpoint)`
+            "[Workflow Storage] Response is not JSON: %s for %s (likely Vercel Security Checkpoint)",
+            contentType,
+            fetchUrl
           )
           return null
         }
@@ -135,7 +144,7 @@ export async function listWorkflowRuns(userId: string): Promise<WorkflowRun[]> {
         const run: WorkflowRun = await response.json()
         return run
       } catch (error) {
-        console.error(`[Workflow Storage] Failed to fetch ${blob.url}:`, error)
+        console.error("[Workflow Storage] Failed to fetch blob URL %s:", blob.url, error)
         return null
       }
     })
