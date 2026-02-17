@@ -1,11 +1,17 @@
+import { ArrowLeft } from "lucide-react"
+
 export default function LoadingReport() {
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8 max-w-4xl">
         <div className="flex flex-wrap items-center gap-3 mb-6">
-          <span className="inline-flex items-center gap-2 text-muted-foreground">
+          <a
+            href="/workflows"
+            className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4" />
             <span className="font-semibold">d3k</span>
-          </span>
+          </a>
           <span className="text-muted-foreground">/</span>
           <span className="text-muted-foreground">Workflow Report</span>
           <span className="inline-flex items-center gap-2 rounded-full border border-border px-2 py-0.5 text-xs font-medium text-muted-foreground">

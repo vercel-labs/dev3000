@@ -776,13 +776,14 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       }
 
       // If we have repo info, pass it for sandbox creation
-      // Use the deployment's git SHA if available, otherwise fall back to baseBranch
+      // Prefer branch/ref for sandbox source git, then fall back to SHA/base branch.
       if (!isUrlAuditType && repoOwner && repoName) {
         body.repoUrl = `https://github.com/${repoOwner}/${repoName}`
-        const gitRef = latestDeployment?.gitSource?.sha || baseBranch || "main"
+        const gitRef =
+          latestDeployment?.gitSource?.ref || baseBranch || latestDeployment?.gitSource?.sha || "main"
         body.repoBranch = gitRef
         console.log(
-          `[Start Workflow] Using git reference: ${gitRef} (${latestDeployment?.gitSource?.sha ? "SHA from deployment" : "branch name"})`
+          `[Start Workflow] Using git reference: ${gitRef} (${latestDeployment?.gitSource?.ref ? "branch from deployment" : latestDeployment?.gitSource?.sha ? "SHA from deployment" : "fallback branch"})`
         )
       }
 

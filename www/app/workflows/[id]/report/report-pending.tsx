@@ -1,6 +1,6 @@
 "use client"
 
-import { AlertCircle } from "lucide-react"
+import { AlertCircle, ArrowLeft } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -119,6 +119,18 @@ export function ReportPending({ runId, userId }: ReportPendingProps) {
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8 max-w-4xl space-y-6">
+        <div className="flex items-center gap-4">
+          <a
+            href="/workflows"
+            className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            <span className="font-semibold">d3k</span>
+          </a>
+          <span className="text-muted-foreground">/</span>
+          <span className="text-muted-foreground">Workflow Report</span>
+        </div>
+
         <div>
           <div className="text-xs uppercase tracking-wide text-muted-foreground">Workflow Report</div>
           <h1 className="text-3xl font-bold mt-2">d3k Workflow Report</h1>
