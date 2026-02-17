@@ -19,6 +19,303 @@ import { saveWorkflowRun, type WorkflowType } from "@/lib/workflow-storage"
 import type { WorkflowReport } from "@/types"
 
 const workflowLog = console.log
+const ANALYZE_TO_NDJSON_SCRIPT = `#!/usr/bin/env node
+// Converts Next.js bundle analyzer .data files to NDJSON for offline analysis.
+// Usage: node analyze-to-ndjson.mjs [--input <dir>] [--output <dir>]
+
+import { readFileSync, writeFileSync, mkdirSync, readdirSync, statSync, existsSync } from "fs";
+import { join } from "path";
+
+const args = process.argv.slice(2);
+function arg(name, fallback) {
+  const i = args.indexOf(name);
+  return i !== -1 && i + 1 < args.length ? args[i + 1] : fallback;
+}
+
+const inputDir = arg("--input", ".next/diagnostics/analyze/data");
+const outputDir = arg("--output", "./analyze-ndjson");
+
+function parseDataFile(filePath) {
+  const buf = readFileSync(filePath);
+  const view = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+  const jsonLength = view.getUint32(0, false);
+  const jsonStr = new TextDecoder("utf-8").decode(buf.subarray(4, 4 + jsonLength));
+  const header = JSON.parse(jsonStr);
+  const binaryOffset = 4 + jsonLength;
+  const binaryView = new DataView(buf.buffer, buf.byteOffset + binaryOffset, buf.byteLength - binaryOffset);
+  return { header, binaryView };
+}
+
+function readEdgesAtIndex(binaryView, ref, index) {
+  if (!ref || ref.length === 0) return [];
+  const { offset } = ref;
+  const numOffsets = binaryView.getUint32(offset, false);
+  if (index < 0 || index >= numOffsets) return [];
+
+  const offsetsStart = offset + 4;
+  const prevOffset = index === 0 ? 0 : binaryView.getUint32(offsetsStart + (index - 1) * 4, false);
+  const edgeCount = binaryView.getUint32(offsetsStart + index * 4, false) - prevOffset;
+  if (edgeCount === 0) return [];
+
+  const dataStart = offset + 4 + 4 * numOffsets;
+  const edges = [];
+  for (let j = 0; j < edgeCount; j++) {
+    edges.push(binaryView.getUint32(dataStart + (prevOffset + j) * 4, false));
+  }
+  return edges;
+}
+
+function discoverRoutes(dataDir) {
+  const routes = [];
+  function walk(dir, routePrefix) {
+    const analyzeFile = join(dir, "analyze.data");
+    if (existsSync(analyzeFile)) {
+      routes.push({ route: routePrefix || "/", filePath: analyzeFile });
+    }
+    for (const entry of readdirSync(dir)) {
+      if (entry === "analyze.data" || entry === "modules.data" || entry === "routes.json") continue;
+      const full = join(dir, entry);
+      if (statSync(full).isDirectory()) {
+        walk(full, (routePrefix || "") + "/" + entry);
+      }
+    }
+  }
+  walk(dataDir, "");
+  return routes;
+}
+
+function buildFullPaths(sources) {
+  const cache = new Map();
+  function getFullPath(index) {
+    if (cache.has(index)) return cache.get(index);
+    const s = sources[index];
+    if (!s) {
+      cache.set(index, "");
+      return "";
+    }
+    const p = s.parent_source_index == null ? s.path : getFullPath(s.parent_source_index) + s.path;
+    cache.set(index, p);
+    return p;
+  }
+  return sources.map((_, i) => getFullPath(i));
+}
+
+function getSourceFlags(sourceIndex, sourceChunkPartsMap, chunkParts, outputFiles) {
+  let client = false,
+    server = false,
+    traced = false;
+  let js = false,
+    css = false,
+    json = false,
+    asset = false;
+
+  const partIndices = sourceChunkPartsMap.get(sourceIndex) || [];
+  for (const cpIdx of partIndices) {
+    const cp = chunkParts[cpIdx];
+    if (!cp) continue;
+    const of = outputFiles[cp.output_file_index];
+    if (!of) continue;
+    const fn = of.filename;
+
+    if (fn.startsWith("[client-fs]/")) client = true;
+    else if (fn.startsWith("[project]/")) traced = true;
+    else server = true;
+
+    if (fn.endsWith(".js")) js = true;
+    else if (fn.endsWith(".css")) css = true;
+    else if (fn.endsWith(".json")) json = true;
+    else asset = true;
+  }
+
+  return { client, server, traced, js, css, json, asset };
+}
+
+function ndjsonWriter(filePath) {
+  let buf = "";
+  let count = 0;
+  return {
+    write(obj) {
+      buf += JSON.stringify(obj) + "\\n";
+      count++;
+    },
+    flush() {
+      writeFileSync(filePath, buf);
+      return count;
+    }
+  };
+}
+
+function main() {
+  if (!existsSync(inputDir)) {
+    console.error("Input directory not found: " + inputDir);
+    process.exit(1);
+  }
+
+  mkdirSync(outputDir, { recursive: true });
+
+  const modulesFile = join(inputDir, "modules.data");
+  if (!existsSync(modulesFile)) {
+    console.error("modules.data not found in " + inputDir);
+    process.exit(1);
+  }
+
+  const { header: modHeader, binaryView: modBinary } = parseDataFile(modulesFile);
+  const modules = modHeader.modules;
+
+  const modulesWriter = ndjsonWriter(join(outputDir, "modules.ndjson"));
+  for (let i = 0; i < modules.length; i++) {
+    modulesWriter.write({ id: i, ident: modules[i].ident, path: modules[i].path });
+  }
+  modulesWriter.flush();
+
+  const edgesWriter = ndjsonWriter(join(outputDir, "module_edges.ndjson"));
+  for (const [refName, kind] of [
+    ["module_dependencies", "sync"],
+    ["async_module_dependencies", "async"]
+  ]) {
+    const ref = modHeader[refName];
+    if (!ref) continue;
+    for (let i = 0; i < modules.length; i++) {
+      for (const target of readEdgesAtIndex(modBinary, ref, i)) {
+        edgesWriter.write({ from: i, to: target, kind });
+      }
+    }
+  }
+  edgesWriter.flush();
+
+  const routes = discoverRoutes(inputDir);
+  const sourcesWriter = ndjsonWriter(join(outputDir, "sources.ndjson"));
+  const chunkPartsWriter = ndjsonWriter(join(outputDir, "chunk_parts.ndjson"));
+  const outputFilesWriter = ndjsonWriter(join(outputDir, "output_files.ndjson"));
+  const routesWriter = ndjsonWriter(join(outputDir, "routes.ndjson"));
+
+  for (const { route, filePath } of routes) {
+    const { header, binaryView } = parseDataFile(filePath);
+    const { sources, chunk_parts, output_files, source_chunk_parts, source_children, source_roots } = header;
+
+    const fullPaths = buildFullPaths(sources);
+    const sourceChunkPartsMap = new Map();
+
+    if (source_chunk_parts && source_chunk_parts.length > 0) {
+      for (let i = 0; i < sources.length; i++) {
+        const parts = readEdgesAtIndex(binaryView, source_chunk_parts, i);
+        if (parts.length > 0) sourceChunkPartsMap.set(i, parts);
+      }
+    }
+
+    const sourceSizes = new Map();
+    for (const [srcIdx, partIndices] of sourceChunkPartsMap) {
+      let size = 0;
+      let compressedSize = 0;
+      for (const cpIdx of partIndices) {
+        const cp = chunk_parts[cpIdx];
+        if (cp) {
+          size += cp.size;
+          compressedSize += cp.compressed_size;
+        }
+      }
+      sourceSizes.set(srcIdx, { size, compressed_size: compressedSize });
+    }
+
+    const isDirSet = new Set();
+    if (source_children && source_children.length > 0) {
+      for (let i = 0; i < sources.length; i++) {
+        const children = readEdgesAtIndex(binaryView, source_children, i);
+        if (children.length > 0) isDirSet.add(i);
+      }
+    }
+    if (source_roots) {
+      for (const rootIdx of source_roots) {
+        if (isDirSet.has(rootIdx)) continue;
+        const children =
+          source_children && source_children.length > 0 ? readEdgesAtIndex(binaryView, source_children, rootIdx) : [];
+        if (children.length > 0) isDirSet.add(rootIdx);
+      }
+    }
+
+    let routeTotalSize = 0;
+    let routeTotalCompressed = 0;
+    for (let i = 0; i < sources.length; i++) {
+      const s = sources[i];
+      const isDir = isDirSet.has(i);
+      const sizes = sourceSizes.get(i);
+      const flags = getSourceFlags(i, sourceChunkPartsMap, chunk_parts, output_files);
+
+      const obj = {
+        route,
+        id: i,
+        path: s.path,
+        full_path: fullPaths[i],
+        parent_id: s.parent_source_index ?? null,
+        is_dir: isDir
+      };
+      if (sizes) {
+        obj.size = sizes.size;
+        obj.compressed_size = sizes.compressed_size;
+        routeTotalSize += sizes.size;
+        routeTotalCompressed += sizes.compressed_size;
+      }
+      if (sourceChunkPartsMap.has(i)) {
+        Object.assign(obj, flags);
+      }
+      sourcesWriter.write(obj);
+    }
+
+    for (const cp of chunk_parts) {
+      chunkPartsWriter.write({
+        route,
+        source_id: cp.source_index,
+        output_file: output_files[cp.output_file_index]?.filename ?? "<unknown>",
+        size: cp.size,
+        compressed_size: cp.compressed_size
+      });
+    }
+
+    const { output_file_chunk_parts } = header;
+    for (let i = 0; i < output_files.length; i++) {
+      let totalSize = 0;
+      let totalCompressed = 0;
+      let numParts = 0;
+      if (output_file_chunk_parts && output_file_chunk_parts.length > 0) {
+        const parts = readEdgesAtIndex(binaryView, output_file_chunk_parts, i);
+        for (const cpIdx of parts) {
+          const cp = chunk_parts[cpIdx];
+          if (cp) {
+            totalSize += cp.size;
+            totalCompressed += cp.compressed_size;
+            numParts++;
+          }
+        }
+      }
+      outputFilesWriter.write({
+        route,
+        id: i,
+        filename: output_files[i].filename,
+        total_size: totalSize,
+        total_compressed_size: totalCompressed,
+        num_parts: numParts
+      });
+    }
+
+    routesWriter.write({
+      route,
+      total_size: routeTotalSize,
+      total_compressed_size: routeTotalCompressed,
+      num_sources: sources.length,
+      num_output_files: output_files.length
+    });
+  }
+
+  sourcesWriter.flush();
+  chunkPartsWriter.flush();
+  outputFilesWriter.flush();
+  routesWriter.flush();
+
+  console.log("Output written to " + outputDir + "/");
+}
+
+main();
+`
 
 // Cache for agent-browser instance per sandbox
 const agentBrowserCache = new Map<string, SandboxAgentBrowser>()
@@ -287,6 +584,60 @@ export interface InitStepTiming {
   steps: { name: string; durationMs: number; startedAt: string }[]
 }
 
+async function prepareTurbopackNdjsonArtifacts(
+  sandbox: Sandbox,
+  projectDir?: string
+): Promise<{ outputDir: string; summary: string }> {
+  const projectCwd = projectDir ? `/vercel/sandbox/${projectDir.replace(/^\/+|\/+$/g, "")}` : "/vercel/sandbox"
+  const outputDir = ".next/diagnostics/analyze/ndjson"
+  const scriptPath = "/tmp/analyze-to-ndjson.mjs"
+
+  const analyzeResult = await runSandboxCommand(sandbox, "sh", [
+    "-c",
+    `export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; cd ${projectCwd} && \
+if [ -f bun.lockb ] || [ -f bun.lock ]; then bun run next experimental-analyze --output; \
+elif [ -f pnpm-lock.yaml ]; then pnpm next experimental-analyze --output; \
+elif [ -f yarn.lock ]; then yarn next experimental-analyze --output; \
+elif [ -f package-lock.json ]; then npx next experimental-analyze --output; \
+else npx next experimental-analyze --output; fi`
+  ])
+  if (analyzeResult.exitCode !== 0) {
+    throw new Error(`next experimental-analyze failed: ${analyzeResult.stderr || analyzeResult.stdout}`)
+  }
+
+  const writeScriptResult = await runSandboxCommand(sandbox, "sh", [
+    "-c",
+    `cat > ${scriptPath} << 'NDJSONEOF'
+${ANALYZE_TO_NDJSON_SCRIPT}
+NDJSONEOF`
+  ])
+  if (writeScriptResult.exitCode !== 0) {
+    throw new Error(`Failed to write NDJSON converter script: ${writeScriptResult.stderr || writeScriptResult.stdout}`)
+  }
+
+  const convertResult = await runSandboxCommand(sandbox, "sh", [
+    "-c",
+    `cd ${projectCwd} && node ${scriptPath} --input ".next/diagnostics/analyze/data" --output "${outputDir}"`
+  ])
+  if (convertResult.exitCode !== 0) {
+    throw new Error(`NDJSON conversion failed: ${convertResult.stderr || convertResult.stdout}`)
+  }
+
+  const summaryResult = await runSandboxCommand(sandbox, "sh", [
+    "-c",
+    `cd ${projectCwd} && \
+echo "files:" && ls -1 ${outputDir}/*.ndjson 2>/dev/null | sed "s#^#- #" && \
+echo "" && \
+echo "top routes by compressed size:" && \
+head -n 300 ${outputDir}/routes.ndjson 2>/dev/null | sort -t: -k2,2nr | head -10`
+  ])
+
+  return {
+    outputDir,
+    summary: (summaryResult.stdout || convertResult.stdout || "").trim()
+  }
+}
+
 export async function initSandboxStep(
   repoUrl: string,
   branch: string,
@@ -310,15 +661,11 @@ export async function initSandboxStep(
 }> {
   const timer = new StepTimer()
   const isTurbopackBundleAnalyzer = progressContext?.workflowType === "turbopack-bundle-analyzer"
-  const preStartBackgroundCommand = isTurbopackBundleAnalyzer
-    ? "${packageManager} run next experimental-analyze"
-    : undefined
-  const preStartWaitPort = isTurbopackBundleAnalyzer ? 4000 : undefined
 
   workflowLog(`[Init] Creating sandbox for ${projectName}...`)
   await updateProgress(progressContext, 1, "Creating sandbox environment...")
   if (isTurbopackBundleAnalyzer) {
-    await updateProgress(progressContext, 1, "Starting Turbopack bundle analyzer server (localhost:4000)...")
+    await updateProgress(progressContext, 1, "Preparing Turbopack analyzer data...")
   }
 
   if (vercelOidcToken && !process.env.VERCEL_OIDC_TOKEN) {
@@ -332,8 +679,6 @@ export async function initSandboxStep(
     repoUrl,
     branch,
     projectDir: projectDir || "",
-    preStartBackgroundCommand,
-    preStartWaitPort,
     timeout: "30m",
     debug: true
   })
@@ -347,6 +692,22 @@ export async function initSandboxStep(
     sandboxResult.fromSnapshot ? "Sandbox restored from base snapshot!" : "Sandbox created from scratch",
     sandboxResult.devUrl
   )
+
+  if (isTurbopackBundleAnalyzer) {
+    timer.start("Generate Turbopack NDJSON artifacts")
+    await updateProgress(progressContext, 1, "Running next experimental-analyze --output...")
+    const ndjsonResult = await prepareTurbopackNdjsonArtifacts(sandboxResult.sandbox, projectDir)
+    workflowLog(`[Init] Turbopack NDJSON artifacts ready at ${ndjsonResult.outputDir}`)
+    if (ndjsonResult.summary) {
+      workflowLog(`[Init] Turbopack NDJSON summary:\n${ndjsonResult.summary}`)
+    }
+    await updateProgress(
+      progressContext,
+      1,
+      `Analyzer NDJSON ready at ${ndjsonResult.outputDir} (use readFile/runProjectCommand instead of localhost:4000)`,
+      sandboxResult.devUrl
+    )
+  }
 
   // Wait for d3k to capture initial CLS
   timer.start("Wait for CLS capture (5s)")
@@ -1351,11 +1712,13 @@ Use this to diagnose and verify performance improvements.`,
 
 Workflow:
 1) Call get_skill({ name: "d3k" }) first.
-2) Open the live analyzer at http://localhost:4000 with openUrl and inspect it using browserSnapshot/browserClick/browserScroll.
-3) Open the app at ${devUrl}${startPath} and inspect the runtime behavior there as well.
+2) Read the generated NDJSON artifacts at .next/diagnostics/analyze/ndjson/ (routes.ndjson, sources.ndjson, output_files.ndjson, module_edges.ndjson, modules.ndjson).
+3) Open the app at ${devUrl}${startPath} and inspect runtime behavior there as needed.
 4) Implement high-impact fixes in code (do not stop at recommendations).
 5) Validate changes did not break the app (diagnose and/or getWebVitals).
-6) Re-run bundle analysis at the end using runProjectCommand and verify production bundle improvements.
+6) Re-run bundle analysis at the end using runProjectCommand:
+   - \`next experimental-analyze --output\`
+   - \`node /tmp/analyze-to-ndjson.mjs --input .next/diagnostics/analyze/data --output .next/diagnostics/analyze/ndjson\`
 7) Summarize what changed, what improved, and any remaining tradeoffs.
 
 Constraints:
@@ -2223,7 +2586,7 @@ Start by calling get_skill({ name: "d3k" }) then get_skill({ name: "react-perfor
 function buildTurbopackBundleAnalyzerPrompt(startPath: string, devUrl: string): string {
   return `You are a Turbopack bundle optimization specialist.
 
-Your mission is to inspect Turbopack bundle analyzer output, implement concrete optimizations, and verify bundle improvements without breaking the app.
+Your mission is to inspect Turbopack analyzer NDJSON output, implement concrete optimizations, and verify bundle improvements without breaking the app.
 
 ## FIRST STEP - LOAD THE SKILL
 
@@ -2233,18 +2596,23 @@ get_skill({ name: "d3k" })
 \`\`\`
 
 ## ANALYSIS WORKFLOW
-1. Open \`http://localhost:4000\` and inspect bundle analyzer findings.
+1. Inspect NDJSON files at \`.next/diagnostics/analyze/ndjson/\`:
+   - \`routes.ndjson\`
+   - \`sources.ndjson\`
+   - \`output_files.ndjson\`
+   - \`module_edges.ndjson\`
+   - \`modules.ndjson\`
 2. Open \`${devUrl}${startPath}\` and inspect app/runtime behavior.
 3. Identify highest-impact bundle issues.
 4. Implement fixes with code changes.
 5. Validate app health after changes.
-6. Re-run bundle analysis and verify improvements before final summary.
+6. Re-run analyze + NDJSON conversion and verify improvements before final summary.
 
 ## RULES
 - You are expected to make code changes when clear optimization opportunities exist.
 - Be explicit about confidence and uncertainty.
 - Prefer optimizations that reduce JavaScript shipped, duplicate modules, and initial route payload.
-- Use \`runProjectCommand\` for verification commands (including re-running bundle analysis).
+- Use \`runProjectCommand\` for verification commands (including re-running analyze and NDJSON conversion).
 
 ## ENVIRONMENT
 - App URL: ${devUrl}

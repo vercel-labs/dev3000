@@ -137,7 +137,7 @@ import { getBundledSkillsPath, getSkill, getSkillsInfo, listAvailableSkills } fr
 import { detectAIAgent } from "./utils/agent-detection.js"
 import { getAvailableAgents, getSkillsAgentId } from "./utils/agent-selection.js"
 import { ensureD3kHomeDir } from "./utils/d3k-dir.js"
-import { getProjectDir } from "./utils/project-name.js"
+import { getProjectDir, getProjectName } from "./utils/project-name.js"
 import {
   checkForSkillUpdates,
   getApplicablePackages,
@@ -187,6 +187,18 @@ function triggerEmergencyShutdown(reason: string, error: Error | unknown): boole
     }
   }
   return false
+}
+
+function setTerminalTitle(rootDir: string): void {
+  if (!process.stdout.isTTY) return
+  const safeRootDir = rootDir
+    .split("\u001b")
+    .join("")
+    .split("\u0007")
+    .join("")
+    .replace(/[\r\n]+/g, " ")
+    .trim()
+  process.stdout.write(`\u001b]0;d3k - ${safeRootDir}\u0007`)
 }
 
 process.on("uncaughtException", (error) => {
@@ -778,6 +790,9 @@ program
   .option("--agent-name <name>", "Selected agent name (internal)")
   .option("--no-agent", "Skip agent selection prompt and run d3k standalone")
   .action(async (options) => {
+    const projectName = getProjectName()
+    setTerminalTitle(projectName)
+
     // Load user config early so it can be used for --with-agent and agent selection flows
     const userConfig = loadUserConfig()
 
@@ -1096,7 +1111,6 @@ program
     // Detect which command name was used (dev3000 or d3k)
     const executablePath = process.argv[1]
     const commandName = executablePath.endsWith("/d3k") || executablePath.includes("/d3k") ? "d3k" : "dev3000"
-
     try {
       // Create persistent log file
       const logFile = createPersistentLogFile()
