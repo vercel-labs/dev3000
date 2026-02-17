@@ -786,9 +786,12 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
         )
       }
 
-      if (!isUrlAuditType && githubPat.trim() && repoOwner && repoName) {
+      if (!isUrlAuditType && repoOwner && repoName) {
         body.repoOwner = repoOwner
         body.repoName = repoName
+      }
+
+      if (!isUrlAuditType && githubPat.trim() && repoOwner && repoName) {
         body.baseBranch = baseBranch
       }
 

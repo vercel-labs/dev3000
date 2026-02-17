@@ -78,6 +78,22 @@ async function validatePublicUrl(
   }
 }
 
+async function isGitHubRepoPublic(repoOwner: string, repoName: string): Promise<boolean | null> {
+  try {
+    const response = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}`, {
+      headers: {
+        Accept: "application/vnd.github+json",
+        "User-Agent": "dev3000-workflows"
+      }
+    })
+    if (response.status === 200) return true
+    if (response.status === 404) return false
+    return null
+  } catch {
+    return null
+  }
+}
+
 // Handle OPTIONS preflight request
 export async function OPTIONS() {
   return new Response(null, {
@@ -215,6 +231,20 @@ export async function POST(request: Request) {
         { success: false, error: "repoUrl is required for the workflow" },
         { status: 400, headers: corsHeaders }
       )
+    }
+
+    if (analysisTargetType !== "url" && repoOwner && repoName && !githubPat) {
+      const isPublicRepo = await isGitHubRepoPublic(repoOwner, repoName)
+      if (isPublicRepo === false) {
+        return Response.json(
+          {
+            success: false,
+            error:
+              "This GitHub repository appears private. Add a GitHub Personal Access Token in Workflow options to allow sandbox clone access."
+          },
+          { status: 400, headers: corsHeaders }
+        )
+      }
     }
 
     if (!projectName) {
