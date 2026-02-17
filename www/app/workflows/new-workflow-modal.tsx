@@ -5,7 +5,6 @@ import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useCallback, useEffect, useId, useRef, useState } from "react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Progress } from "@/components/ui/progress"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -108,7 +107,6 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   const router = useRouter()
   const searchParams = useSearchParams()
   const baseBranchId = useId()
-  const autoCreatePRId = useId()
   const bypassTokenId = useId()
   const customPromptId = useId()
   const githubPatId = useId()
@@ -163,7 +161,6 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   const [redirectedRunId, setRedirectedRunId] = useState<string | null>(null)
   const [sandboxUrl, setSandboxUrl] = useState<string | null>(null)
   const [baseBranch, setBaseBranch] = useState("main")
-  const [autoCreatePR, setAutoCreatePR] = useState(true)
   const [bypassToken, setBypassToken] = useState("")
   const [isCheckingProtection, setIsCheckingProtection] = useState(false)
   const [needsBypassToken, setNeedsBypassToken] = useState(false)
@@ -288,7 +285,6 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       setActiveRunId(null)
       setSandboxUrl(null)
       setBaseBranch("main")
-      setAutoCreatePR(true)
       setBypassToken("")
       setNeedsBypassToken(false)
       setCustomPrompt("")
@@ -771,7 +767,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
         publicUrl: isUrlAuditType ? publicUrl : undefined,
         customPrompt: workflowType === "prompt" ? customPrompt : undefined,
         crawlDepth: workflowType === "design-guidelines" ? crawlDepth : undefined,
-        githubPat: autoCreatePR && githubPat ? githubPat : undefined,
+        githubPat: !isUrlAuditType && hasGitHubRepoInfo && githubPat.trim() ? githubPat.trim() : undefined,
         startPath: !isUrlAuditType && startPath !== "/" ? startPath : undefined // URL mode is single-URL today
       }
 
@@ -790,7 +786,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
         )
       }
 
-      if (!isUrlAuditType && autoCreatePR && repoOwner && repoName) {
+      if (!isUrlAuditType && githubPat.trim() && repoOwner && repoName) {
         body.repoOwner = repoOwner
         body.repoName = repoName
         body.baseBranch = baseBranch
@@ -1483,17 +1479,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                     <div className="font-semibold text-foreground">{selectedProject.name}</div>
                   </div>
                   <div className="space-y-4">
-                    <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id={autoCreatePRId}
-                        checked={autoCreatePR}
-                        onCheckedChange={(checked) => setAutoCreatePR(checked === true)}
-                      />
-                      <Label htmlFor={autoCreatePRId} className="text-sm font-normal cursor-pointer">
-                        Automatically create GitHub PR with fixes
-                      </Label>
-                    </div>
-                    {autoCreatePR && hasGitHubRepoInfo && (
+                    {hasGitHubRepoInfo && (
                       <div>
                         <Label htmlFor={baseBranchId} className="mb-2">
                           Base Branch
@@ -1539,7 +1525,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                         )}
                       </div>
                     )}
-                    {autoCreatePR && !hasGitHubRepoInfo && (
+                    {!hasGitHubRepoInfo && (
                       <div className="text-sm text-amber-600">
                         This project is not connected to a GitHub repository. PRs cannot be created automatically.
                       </div>
@@ -1602,7 +1588,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                         </p>
                       </div>
                     )}
-                    {autoCreatePR && hasGitHubRepoInfo && (
+                    {hasGitHubRepoInfo && (
                       <div>
                         <label
                           htmlFor={githubPatId}

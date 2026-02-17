@@ -137,7 +137,7 @@ import { getBundledSkillsPath, getSkill, getSkillsInfo, listAvailableSkills } fr
 import { detectAIAgent } from "./utils/agent-detection.js"
 import { getAvailableAgents, getSkillsAgentId } from "./utils/agent-selection.js"
 import { ensureD3kHomeDir } from "./utils/d3k-dir.js"
-import { getProjectDir, getProjectName } from "./utils/project-name.js"
+import { getProjectDir, getProjectDisplayName } from "./utils/project-name.js"
 import {
   checkForSkillUpdates,
   getApplicablePackages,
@@ -190,7 +190,6 @@ function triggerEmergencyShutdown(reason: string, error: Error | unknown): boole
 }
 
 function setTerminalTitle(rootDir: string): void {
-  if (!process.stdout.isTTY) return
   const safeRootDir = rootDir
     .split("\u001b")
     .join("")
@@ -198,7 +197,13 @@ function setTerminalTitle(rootDir: string): void {
     .join("")
     .replace(/[\r\n]+/g, " ")
     .trim()
-  process.stdout.write(`\u001b]0;d3k - ${safeRootDir}\u0007`)
+  const title = `d3k ${safeRootDir}`
+
+  // Some terminals prefer process.title over OSC escape sequences.
+  process.title = title
+
+  if (!process.stdout.isTTY) return
+  process.stdout.write(`\u001b]0;${title}\u0007\u001b]2;${title}\u0007`)
 }
 
 process.on("uncaughtException", (error) => {
@@ -790,7 +795,7 @@ program
   .option("--agent-name <name>", "Selected agent name (internal)")
   .option("--no-agent", "Skip agent selection prompt and run d3k standalone")
   .action(async (options) => {
-    const projectName = getProjectName()
+    const projectName = getProjectDisplayName()
     setTerminalTitle(projectName)
 
     // Load user config early so it can be used for --with-agent and agent selection flows

@@ -382,13 +382,20 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     if (debug) console.log("  ✅ bun installed")
   }
 
-  // Create sandbox WITHOUT source parameter
-  // We'll manually clone the repo after sandbox creation for better control
+  // Create sandbox from git source so Vercel handles repo auth consistently.
   const timeoutMs = ms(timeout)
   if (typeof timeoutMs !== "number") {
     throw new Error(`Invalid timeout value: ${timeout}`)
   }
+  const repoUrlWithGit = repoUrl.endsWith(".git") ? repoUrl : `${repoUrl}.git`
+  const isCommitSha = /^[0-9a-f]{40}$/i.test(branch)
   const sandbox = await Sandbox.create({
+    source: {
+      type: "git",
+      url: repoUrlWithGit,
+      revision: branch,
+      ...(isCommitSha ? {} : { depth: 1 })
+    },
     resources: { vcpus: 8 },
     timeout: timeoutMs,
     ports: [3000], // App port
@@ -399,67 +406,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
 
   try {
     const sandboxCwd = projectDir ? `/vercel/sandbox/${projectDir}` : "/vercel/sandbox"
-
-    // Manually clone the repository
-    if (debug) console.log(`  📦 Cloning repository: ${repoUrl}`)
-
-    // Create the target directory
-    const mkdirResult = await runCommandWithLogs(sandbox, {
-      cmd: "mkdir",
-      args: ["-p", sandboxCwd]
-    })
-
-    if (mkdirResult.exitCode !== 0) {
-      throw new Error(`Failed to create directory ${sandboxCwd}: ${mkdirResult.stderr}`)
-    }
-
-    // Clone the repository
-    const gitArgs = ["clone"]
-    const repoUrlWithGit = repoUrl.endsWith(".git") ? repoUrl : `${repoUrl}.git`
-    const isCommitSha = /^[0-9a-f]{40}$/i.test(branch)
-
-    if (!isCommitSha) {
-      // Shallow clone and target the requested branch when we're not pinning a commit
-      gitArgs.push("--depth", "1")
-      if (branch) {
-        gitArgs.push("--branch", branch)
-      }
-    } else if (debug) {
-      console.log("  ⚠️ Provided branch is a commit SHA - performing full clone to allow checkout")
-    }
-
-    gitArgs.push(repoUrlWithGit, sandboxCwd)
-
-    const gitClone = await runCommandWithLogs(sandbox, {
-      cmd: "git",
-      args: gitArgs,
-      env: {
-        GIT_TERMINAL_PROMPT: "0"
-      }
-    })
-
-    if (gitClone.exitCode !== 0) {
-      throw new Error(`Git clone failed with exit code: ${gitClone.exitCode}. Error: ${gitClone.stderr}`)
-    }
-
-    // Ensure we are on the requested branch or commit (commit SHA requires checkout after full clone)
-    if (branch) {
-      if (debug) console.log(`  🔀 Checking out ref: ${branch}`)
-      const gitCheckout = await runCommandWithLogs(sandbox, {
-        cmd: "git",
-        args: ["checkout", branch],
-        cwd: sandboxCwd,
-        env: {
-          GIT_TERMINAL_PROMPT: "0"
-        }
-      })
-
-      if (gitCheckout.exitCode !== 0) {
-        throw new Error(`Git checkout failed with exit code: ${gitCheckout.exitCode}. Error: ${gitCheckout.stderr}`)
-      }
-    }
-
-    if (debug) console.log("  ✅ Repository cloned")
+    if (debug) console.log(`  ✅ Repository initialized from source: ${repoUrlWithGit}@${branch}`)
 
     // Verify sandbox directory contents
     if (debug) console.log("  📂 Checking sandbox directory contents...")
@@ -1393,329 +1340,14 @@ async function createAndSaveBaseSnapshot(timeoutMs: number, debug = false): Prom
  * @returns D3kSandboxResultWithSnapshot with sandbox, URLs, and snapshot info
  */
 export async function getOrCreateD3kSandbox(config: D3kSandboxConfig): Promise<D3kSandboxResultWithSnapshot> {
-  const {
-    repoUrl,
-    branch = "main",
-    timeout = "30m",
-    projectDir = "",
-    packageManager,
-    preStartCommands = [],
-    preStartBackgroundCommand,
-    preStartWaitPort,
-    debug = false
-  } = config
-
-  // Start timing
   const timer = new StepTimer()
-
-  const timeoutMs = ms(timeout)
-  if (typeof timeoutMs !== "number") {
-    throw new Error(`Invalid timeout value: ${timeout}`)
-  }
-
-  if (debug) {
-    console.log("🔄 getOrCreateD3kSandbox: Checking for base snapshot...")
-  }
-
-  // Step 1: Check for base snapshot
-  timer.start("Check for base snapshot")
-  let baseSnapshotId: string | null = null
-  const storedSnapshot = await loadBaseSnapshotId(debug)
-
-  if (storedSnapshot) {
-    const isValid = await isSnapshotValid(storedSnapshot, BASE_SNAPSHOT_VERSION, debug)
-    if (isValid) {
-      baseSnapshotId = storedSnapshot.snapshotId
-      if (debug) console.log(`  ✅ Found valid base snapshot: ${baseSnapshotId}`)
-    } else if (debug) {
-      console.log("  ⚠️ Stored base snapshot is no longer valid")
-    }
-  }
-
-  // Step 2: Create base snapshot if needed
-  if (!baseSnapshotId) {
-    timer.start("Create base snapshot (one-time)")
-    if (debug) console.log("  ℹ️ No base snapshot found, creating one...")
-    try {
-      baseSnapshotId = await createAndSaveBaseSnapshot(timeoutMs, debug)
-    } catch (error) {
-      if (debug) {
-        console.log(`  ⚠️ Failed to create base snapshot: ${error instanceof Error ? error.message : String(error)}`)
-        console.log("  🔄 Falling back to creating sandbox from scratch...")
-      }
-      // Fall back to full createD3kSandbox
-      const result = await createD3kSandbox(config)
-      timer.end()
-      return {
-        ...result,
-        fromSnapshot: false,
-        snapshotId: undefined,
-        timing: timer.getData()
-      }
-    }
-  }
-
-  // Step 3: Create sandbox from base snapshot
-  timer.start("Create sandbox from snapshot")
-  if (debug) console.log(`  🚀 Creating sandbox from base snapshot: ${baseSnapshotId}`)
-
-  const sandbox = await Sandbox.create({
-    source: {
-      type: "snapshot",
-      snapshotId: baseSnapshotId
-    },
-    timeout: timeoutMs,
-    ports: [3000]
-  })
-
-  if (debug) console.log(`  ✅ Sandbox created from snapshot: ${sandbox.sandboxId}`)
-
-  // Helper to run commands
-  async function runCommandWithLogs(
-    options: Parameters<Sandbox["runCommand"]>[0]
-  ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-    const result = await sandbox.runCommand(options)
-    let stdout = ""
-    let stderr = ""
-    for await (const log of result.logs()) {
-      if (log.stream === "stdout") {
-        stdout += log.data
-        if (debug) console.log(log.data)
-      } else {
-        stderr += log.data
-        if (debug) console.debug(log.data)
-      }
-    }
-    await result.wait()
-    return { exitCode: result.exitCode, stdout, stderr }
-  }
-
-  async function ensureBunInstalled(): Promise<void> {
-    const whichResult = await runCommandWithLogs({
-      cmd: "sh",
-      args: ["-c", "export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; command -v bun || true"]
-    })
-
-    if (whichResult.stdout.trim()) {
-      if (debug) console.log(`  ✅ bun found at ${whichResult.stdout.trim()}`)
-      return
-    }
-
-    if (debug) console.log("  📦 bun not found, installing...")
-    const installResult = await runCommandWithLogs({
-      cmd: "sh",
-      args: ["-c", "curl -fsSL https://bun.sh/install | bash"]
-    })
-
-    if (installResult.exitCode !== 0) {
-      throw new Error(`bun installation failed: ${installResult.stderr}`)
-    }
-
-    await runCommandWithLogs({
-      cmd: "sh",
-      args: [
-        "-c",
-        "mkdir -p /usr/local/bin && ln -sf ~/.bun/bin/bun /usr/local/bin/bun && ln -sf ~/.bun/bin/bunx /usr/local/bin/bunx"
-      ]
-    })
-
-    if (debug) console.log("  ✅ bun installed")
-  }
-
-  try {
-    const sandboxCwd = projectDir ? `/vercel/sandbox/${projectDir}` : "/vercel/sandbox"
-
-    // Step 4: Clone repository
-    timer.start("Git clone repository")
-    if (debug) console.log(`  📦 Cloning repository: ${repoUrl}`)
-
-    await runCommandWithLogs({ cmd: "mkdir", args: ["-p", sandboxCwd] })
-
-    const gitArgs = ["clone"]
-    const repoUrlWithGit = repoUrl.endsWith(".git") ? repoUrl : `${repoUrl}.git`
-    const isCommitSha = /^[0-9a-f]{40}$/i.test(branch)
-
-    if (!isCommitSha) {
-      gitArgs.push("--depth", "1")
-      if (branch) gitArgs.push("--branch", branch)
-    }
-    gitArgs.push(repoUrlWithGit, sandboxCwd)
-
-    const gitClone = await runCommandWithLogs({
-      cmd: "git",
-      args: gitArgs,
-      env: { GIT_TERMINAL_PROMPT: "0" }
-    })
-
-    if (gitClone.exitCode !== 0) {
-      throw new Error(`Git clone failed: ${gitClone.stderr}`)
-    }
-
-    if (branch) {
-      await runCommandWithLogs({
-        cmd: "git",
-        args: ["checkout", branch],
-        cwd: sandboxCwd,
-        env: { GIT_TERMINAL_PROMPT: "0" }
-      })
-    }
-
-    if (debug) console.log("  ✅ Repository cloned")
-
-    // Step 5: Install project dependencies
-    timer.start("Install project dependencies")
-    if (debug) console.log("  📦 Installing project dependencies...")
-    const resolvedPackageManager =
-      packageManager ||
-      (await detectProjectPackageManager(
-        async (cmd, args, cwd) => runCommandWithLogs({ cmd, args, cwd }),
-        sandboxCwd,
-        debug
-      ))
-
-    if (resolvedPackageManager === "bun") {
-      await ensureBunInstalled()
-    }
-    const installResult =
-      resolvedPackageManager === "bun"
-        ? await runCommandWithLogs({
-            cmd: "sh",
-            args: ["-c", "export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; bun install"],
-            cwd: sandboxCwd
-          })
-        : await runCommandWithLogs({
-            cmd: resolvedPackageManager,
-            args: ["install"],
-            cwd: sandboxCwd
-          })
-
-    if (installResult.exitCode !== 0) {
-      throw new Error(`Dependency installation failed: ${installResult.stderr}`)
-    }
-    if (debug) console.log("  ✅ Project dependencies installed")
-
-    // Step 6: Install @sparticuz/chromium for this project
-    timer.start("Install @sparticuz/chromium")
-    if (debug) console.log("  🔧 Installing @sparticuz/chromium...")
-    await SandboxChrome.installChromium(sandbox, { cwd: sandboxCwd, packageManager: resolvedPackageManager, debug })
-    if (debug) console.log("  ✅ @sparticuz/chromium installed")
-
-    // Get chromium path
-    let chromiumPath: string
-    try {
-      chromiumPath = await SandboxChrome.getExecutablePath(sandbox, { cwd: sandboxCwd, debug })
-      if (debug) console.log(`  ✅ Chromium path: ${chromiumPath}`)
-    } catch {
-      chromiumPath = "/usr/bin/chromium"
-      if (debug) console.log(`  ⚠️ Using fallback chromium path: ${chromiumPath}`)
-    }
-
-    // Step 7: Start d3k
-    if (preStartCommands.length > 0) {
-      for (const preStartCommand of preStartCommands) {
-        const resolvedPreStartCommand = preStartCommand.replace(/\$\{packageManager\}/g, resolvedPackageManager)
-        timer.start(`Pre-start: ${resolvedPreStartCommand}`)
-        if (debug) console.log(`  🧪 Running pre-start command: ${resolvedPreStartCommand}`)
-        const preStartResult = await runCommandWithLogs({
-          cmd: "sh",
-          args: [
-            "-c",
-            `export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; cd ${sandboxCwd} && ${resolvedPreStartCommand}`
-          ]
-        })
-        if (preStartResult.exitCode !== 0) {
-          throw new Error(`Pre-start command failed (${resolvedPreStartCommand}): ${preStartResult.stderr}`)
-        }
-      }
-      if (debug) console.log("  ✅ Pre-start commands completed")
-    }
-
-    if (preStartBackgroundCommand) {
-      const resolvedPreStartBackgroundCommand = preStartBackgroundCommand.replace(
-        /\$\{packageManager\}/g,
-        resolvedPackageManager
-      )
-      timer.start(`Pre-start background: ${resolvedPreStartBackgroundCommand}`)
-      if (debug) console.log(`  🧪 Starting pre-start background command: ${resolvedPreStartBackgroundCommand}`)
-      await sandbox.runCommand({
-        cmd: "sh",
-        args: [
-          "-c",
-          `mkdir -p /home/vercel-sandbox/.d3k/logs && export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; cd ${sandboxCwd} && ${resolvedPreStartBackgroundCommand} > /home/vercel-sandbox/.d3k/logs/pre-start-background.log 2>&1`
-        ],
-        detached: true
-      })
-      if (preStartWaitPort) {
-        timer.start(`Wait for pre-start port ${preStartWaitPort}`)
-        if (debug) console.log(`  ⏳ Waiting for pre-start server on port ${preStartWaitPort}...`)
-        await waitForServer(sandbox, preStartWaitPort, 120000, debug)
-      }
-      if (debug) console.log("  ✅ Pre-start background command ready")
-    }
-
-    // Step 7: Start d3k
-    timer.start("Start d3k process")
-    if (debug) console.log("  🚀 Starting d3k...")
-    const d3kStartupLog = "/home/vercel-sandbox/.d3k/logs/d3k-startup.log"
-    await sandbox.runCommand({
-      cmd: "sh",
-      args: [
-        "-c",
-        `mkdir -p /home/vercel-sandbox/.d3k/logs && export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; cd ${sandboxCwd} && d3k --no-tui --debug --headless --browser ${chromiumPath} > ${d3kStartupLog} 2>&1`
-      ],
-      detached: true
-    })
-
-    if (debug) console.log("  ✅ d3k started in detached mode")
-
-    // Wait for services
-    timer.start("Wait for dev server (port 3000)")
-    if (debug) console.log("  ⏳ Waiting for d3k to start...")
-    await new Promise((resolve) => setTimeout(resolve, 5000))
-
-    if (debug) console.log("  ⏳ Waiting for dev server on port 3000...")
-    await waitForServer(sandbox, 3000, 120000, debug)
-    const devUrl = sandbox.domain(3000)
-    if (debug) console.log(`  ✅ Dev server ready: ${devUrl}`)
-
-    // Wait for CDP URL
-    timer.start("Wait for CDP/Chrome ready")
-    if (debug) console.log("  ⏳ Waiting for CDP URL...")
-    const cdpUrl = await waitForCdpUrl(sandbox, 30000, debug)
-    if (cdpUrl) {
-      if (debug) console.log(`  ✅ CDP URL ready: ${cdpUrl}`)
-      await waitForPageNavigation(sandbox, 30000, debug)
-    } else {
-      console.log("  ⚠️ CDP URL not found - browser automation features may not work")
-    }
-
-    timer.end()
-    const projectName = projectDir || repoUrl.split("/").pop()?.replace(".git", "") || "app"
-
-    // Log timing breakdown
-    timer.log("  ")
-    if (debug) console.log(`  ✅ d3k sandbox ready! (from base snapshot)`)
-
-    return {
-      sandbox,
-      devUrl,
-      projectName,
-      bypassToken: undefined,
-      cleanup: async () => {
-        if (debug) console.log("  🧹 Stopping sandbox...")
-        await sandbox.stop()
-        if (debug) console.log("  ✅ Sandbox stopped")
-      },
-      fromSnapshot: true,
-      snapshotId: baseSnapshotId,
-      timing: timer.getData()
-    }
-  } catch (error) {
-    try {
-      await sandbox.stop()
-    } catch {
-      // Ignore cleanup errors
-    }
-    throw error
+  timer.start("Create sandbox from git source")
+  const result = await createD3kSandbox(config)
+  timer.end()
+  return {
+    ...result,
+    fromSnapshot: false,
+    snapshotId: undefined,
+    timing: timer.getData()
   }
 }

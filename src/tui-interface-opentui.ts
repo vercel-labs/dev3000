@@ -439,7 +439,7 @@ class D3kTUI {
       // Only: logo and version
       const logoText = new TextRenderable(this.renderer, {
         id: "logo-compact",
-        content: t`${bold(fg(BRAND_PURPLE)(COMPACT_LOGO))}${dim(`-v${this.options.version}`)}`
+        content: t`${bold(fg(BRAND_PURPLE)(COMPACT_LOGO))}${dim(` v${this.options.version}`)}`
       })
       headerBox.add(logoText)
 
