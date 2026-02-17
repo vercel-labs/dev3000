@@ -589,10 +589,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
 
     if (preStartCommands.length > 0) {
       for (const preStartCommand of preStartCommands) {
-        const resolvedPreStartCommand = preStartCommand.replace(
-          /\$\{packageManager\}/g,
-          resolvedPackageManager
-        )
+        const resolvedPreStartCommand = preStartCommand.replace(/\$\{packageManager\}/g, resolvedPackageManager)
         if (debug) console.log(`  🧪 Running pre-start command: ${preStartCommand}`)
         const preStartResult = await runCommandWithLogs(sandbox, {
           cmd: "sh",
@@ -1616,10 +1613,7 @@ export async function getOrCreateD3kSandbox(config: D3kSandboxConfig): Promise<D
     // Step 7: Start d3k
     if (preStartCommands.length > 0) {
       for (const preStartCommand of preStartCommands) {
-        const resolvedPreStartCommand = preStartCommand.replace(
-          /\$\{packageManager\}/g,
-          resolvedPackageManager
-        )
+        const resolvedPreStartCommand = preStartCommand.replace(/\$\{packageManager\}/g, resolvedPackageManager)
         timer.start(`Pre-start: ${resolvedPreStartCommand}`)
         if (debug) console.log(`  🧪 Running pre-start command: ${resolvedPreStartCommand}`)
         const preStartResult = await runCommandWithLogs({

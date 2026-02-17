@@ -759,7 +759,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
               ? "react-performance"
               : _selectedType === "turbopack-bundle-analyzer"
                 ? "turbopack-bundle-analyzer"
-              : "prompt"
+                : "prompt"
 
       const body: Record<string, unknown> = {
         devUrl,
@@ -1415,7 +1415,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                         ? "React Performance Review"
                         : _selectedType === "prompt"
                           ? "Prompt"
-                        : "Vercel Design Guidelines Review"}
+                          : "Vercel Design Guidelines Review"}
                     </div>
                   </div>
                   <div className="space-y-4">

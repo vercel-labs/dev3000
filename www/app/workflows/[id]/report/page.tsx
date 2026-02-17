@@ -88,28 +88,28 @@ async function ReportContent({
           ? "React Performance"
           : workflowType === "turbopack-bundle-analyzer"
             ? "Turbopack Bundle Analyzer"
-          : workflowType === "url-audit"
-            ? "URL Audit"
-            : "CLS Fix"
+            : workflowType === "url-audit"
+              ? "URL Audit"
+              : "CLS Fix"
   const reportCrumbLabel = workflowType === "cls-fix" ? "Fix Report" : "Workflow Report"
   const step2Description =
     workflowType === "prompt"
       ? "AI agent executed your custom task and generated this report."
       : workflowType === "design-guidelines"
         ? "Read-only design and UX analysis of the target URL."
-      : workflowType === "react-performance"
-        ? "Read-only React performance analysis of the target URL."
-      : workflowType === "turbopack-bundle-analyzer"
-        ? "AI explored Turbopack bundle analyzer output and generated optimization guidance."
-      : workflowType === "url-audit"
-        ? "Read-only UX and performance analysis of the target URL."
-        : "AI agent attempted to fix CLS issues (up to 3 retries)."
+        : workflowType === "react-performance"
+          ? "Read-only React performance analysis of the target URL."
+          : workflowType === "turbopack-bundle-analyzer"
+            ? "AI explored Turbopack bundle analyzer output and generated optimization guidance."
+            : workflowType === "url-audit"
+              ? "Read-only UX and performance analysis of the target URL."
+              : "AI agent attempted to fix CLS issues (up to 3 retries)."
   const reportHeading =
     workflowType === "design-guidelines"
       ? "Report: Vercel Web Design Guidelines Audit"
       : workflowType === "turbopack-bundle-analyzer"
         ? "Report: Turbopack Bundle Analyzer"
-      : `Report Results: ${workflowLabel}`
+        : `Report Results: ${workflowLabel}`
 
   // Helper to format CLS grade
   const gradeColor = (grade?: string) => {

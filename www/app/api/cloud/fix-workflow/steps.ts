@@ -548,8 +548,7 @@ export async function agentFixLoopStep(
       | "design-guidelines"
       | "react-performance"
       | "url-audit"
-      | "turbopack-bundle-analyzer") ||
-    "cls-fix"
+      | "turbopack-bundle-analyzer") || "cls-fix"
 
   // Fetch "after" Web Vitals directly from browser via CDP (more reliable than parsing logs)
   timer.start("Fetch after Web Vitals")
@@ -808,19 +807,19 @@ Context:
 Output format:
 1) Executive Summary (2-4 bullets)
 2) Highest-Impact Issues (ordered by impact, include confidence High/Med/Low)${
-      workflowType === "react-performance"
-        ? " with emphasis on React render patterns, hydration, bundle loading, and runtime interactivity."
-        : workflowType === "design-guidelines"
-          ? " with emphasis on usability, information hierarchy, accessibility, and visual consistency."
-          : ""
-    }
+            workflowType === "react-performance"
+              ? " with emphasis on React render patterns, hydration, bundle loading, and runtime interactivity."
+              : workflowType === "design-guidelines"
+                ? " with emphasis on usability, information hierarchy, accessibility, and visual consistency."
+                : ""
+          }
 3) Suggested Fixes (prioritized, implementation-ready guidance)${
-      workflowType === "react-performance"
-        ? " with likely React/Next.js implementation patterns where inferable."
-        : workflowType === "design-guidelines"
-          ? " tied to concrete UX and design guideline outcomes."
-          : ""
-    }
+            workflowType === "react-performance"
+              ? " with likely React/Next.js implementation patterns where inferable."
+              : workflowType === "design-guidelines"
+                ? " tied to concrete UX and design guideline outcomes."
+                : ""
+          }
 4) Sourcemap Guidance (what was inferred externally, limitations)
 5) What Cannot Be Confirmed Without Repo Access
 
