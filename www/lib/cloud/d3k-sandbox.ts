@@ -210,6 +210,7 @@ export async function saveSnapshotId(
 export interface D3kSandboxConfig {
   repoUrl: string
   branch?: string
+  githubPat?: string
   timeout?: StringValue
   projectDir?: string
   framework?: string
@@ -288,6 +289,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
   const {
     repoUrl,
     branch = "main",
+    githubPat,
     timeout = "30m",
     projectDir = "",
     framework = "Next.js",
@@ -389,13 +391,23 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
   }
   const repoUrlWithGit = repoUrl.endsWith(".git") ? repoUrl : `${repoUrl}.git`
   const isCommitSha = /^[0-9a-f]{40}$/i.test(branch)
+  const source = githubPat
+    ? {
+        type: "git" as const,
+        url: repoUrlWithGit,
+        revision: branch,
+        ...(isCommitSha ? {} : { depth: 1 }),
+        username: "x-access-token",
+        password: githubPat
+      }
+    : {
+        type: "git" as const,
+        url: repoUrlWithGit,
+        revision: branch,
+        ...(isCommitSha ? {} : { depth: 1 })
+      }
   const sandbox = await Sandbox.create({
-    source: {
-      type: "git",
-      url: repoUrlWithGit,
-      revision: branch,
-      ...(isCommitSha ? {} : { depth: 1 })
-    },
+    source,
     resources: { vcpus: 8 },
     timeout: timeoutMs,
     ports: [3000], // App port

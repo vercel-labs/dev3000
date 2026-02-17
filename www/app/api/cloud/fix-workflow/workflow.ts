@@ -131,6 +131,7 @@ export async function cloudFixWorkflow(params: {
       projectName,
       reportId,
       startPath,
+      githubPat,
       vercelOidcToken,
       progressContext
     )
@@ -299,6 +300,7 @@ async function initSandbox(
   projectName: string,
   reportId: string,
   startPath: string,
+  githubPat?: string,
   vercelOidcToken?: string,
   progressContext?: ProgressContext | null
 ): Promise<InitResult> {
@@ -311,6 +313,7 @@ async function initSandbox(
     projectName,
     reportId,
     startPath,
+    githubPat,
     vercelOidcToken,
     progressContext
   )

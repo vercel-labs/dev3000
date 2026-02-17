@@ -779,8 +779,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       // Prefer branch/ref for sandbox source git, then fall back to SHA/base branch.
       if (!isUrlAuditType && repoOwner && repoName) {
         body.repoUrl = `https://github.com/${repoOwner}/${repoName}`
-        const gitRef =
-          latestDeployment?.gitSource?.ref || baseBranch || latestDeployment?.gitSource?.sha || "main"
+        const gitRef = latestDeployment?.gitSource?.ref || baseBranch || latestDeployment?.gitSource?.sha || "main"
         body.repoBranch = gitRef
         console.log(
           `[Start Workflow] Using git reference: ${gitRef} (${latestDeployment?.gitSource?.ref ? "branch from deployment" : latestDeployment?.gitSource?.sha ? "SHA from deployment" : "fallback branch"})`
@@ -824,7 +823,6 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
         console.log("[Start Workflow] About to stringify body...")
         const bodyString = JSON.stringify(body)
         console.log("[Start Workflow] Body stringified successfully, length:", bodyString.length)
-        console.log("[Start Workflow] FULL BODY STRING:", bodyString)
         console.log("[Start Workflow] Calling fetch with URL:", apiUrl)
 
         // Get access token for Authorization header (needed for cross-origin requests)

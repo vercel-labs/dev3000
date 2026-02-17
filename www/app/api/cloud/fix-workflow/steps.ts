@@ -645,6 +645,7 @@ export async function initSandboxStep(
   projectName: string,
   reportId: string,
   _startPath: string,
+  githubPat?: string,
   vercelOidcToken?: string,
   progressContext?: ProgressContext | null
 ): Promise<{
@@ -675,13 +676,25 @@ export async function initSandboxStep(
   // Create sandbox using base snapshot (Chrome + d3k pre-installed)
   // The base snapshot is shared across ALL projects for fast startup
   timer.start("Create sandbox (getOrCreateD3kSandbox)")
-  const sandboxResult = await getOrCreateD3kSandbox({
-    repoUrl,
-    branch,
-    projectDir: projectDir || "",
-    timeout: "30m",
-    debug: true
-  })
+  let sandboxResult: Awaited<ReturnType<typeof getOrCreateD3kSandbox>>
+  try {
+    sandboxResult = await getOrCreateD3kSandbox({
+      repoUrl,
+      branch,
+      githubPat,
+      projectDir: projectDir || "",
+      timeout: "30m",
+      debug: true
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (message.includes("Status code 400 is not ok") && repoUrl.includes("github.com") && !githubPat) {
+      throw new Error(
+        "Sandbox initialization failed while accessing a GitHub repo. This repository appears private; provide a GitHub PAT in Workflow options."
+      )
+    }
+    throw error
+  }
 
   workflowLog(`[Init] Sandbox: ${sandboxResult.sandbox.sandboxId}`)
   workflowLog(`[Init] Dev URL: ${sandboxResult.devUrl}`)
