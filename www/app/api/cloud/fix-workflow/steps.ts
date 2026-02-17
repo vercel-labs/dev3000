@@ -309,9 +309,17 @@ export async function initSandboxStep(
   snapshotId?: string
 }> {
   const timer = new StepTimer()
+  const isTurbopackBundleAnalyzer = progressContext?.workflowType === "turbopack-bundle-analyzer"
+  const preStartBackgroundCommand = isTurbopackBundleAnalyzer
+    ? "${packageManager} run next experimental-analyze"
+    : undefined
+  const preStartWaitPort = isTurbopackBundleAnalyzer ? 4000 : undefined
 
   workflowLog(`[Init] Creating sandbox for ${projectName}...`)
   await updateProgress(progressContext, 1, "Creating sandbox environment...")
+  if (isTurbopackBundleAnalyzer) {
+    await updateProgress(progressContext, 1, "Starting Turbopack bundle analyzer server (localhost:4000)...")
+  }
 
   if (vercelOidcToken && !process.env.VERCEL_OIDC_TOKEN) {
     process.env.VERCEL_OIDC_TOKEN = vercelOidcToken
@@ -324,7 +332,8 @@ export async function initSandboxStep(
     repoUrl,
     branch,
     projectDir: projectDir || "",
-    packageManager: "bun",
+    preStartBackgroundCommand,
+    preStartWaitPort,
     timeout: "30m",
     debug: true
   })
@@ -533,7 +542,13 @@ export async function agentFixLoopStep(
 
   // Determine workflow type from progress context
   const workflowType =
-    (progressContext?.workflowType as "cls-fix" | "prompt" | "design-guidelines" | "react-performance" | "url-audit") ||
+    (progressContext?.workflowType as
+      | "cls-fix"
+      | "prompt"
+      | "design-guidelines"
+      | "react-performance"
+      | "url-audit"
+      | "turbopack-bundle-analyzer") ||
     "cls-fix"
 
   // Fetch "after" Web Vitals directly from browser via CDP (more reliable than parsing logs)
@@ -663,6 +678,7 @@ export async function urlAuditStep(
   sandboxDevUrl: string,
   targetUrl: string,
   workflowType: string | undefined,
+  customPrompt: string | undefined,
   projectName: string,
   reportId: string,
   progressContext?: ProgressContext | null,
@@ -756,7 +772,30 @@ export async function urlAuditStep(
 
   const analysisResponse = await generateText({
     model: gateway("openai/gpt-5.2"),
-    prompt: `You are a senior web performance and UX auditor.
+    prompt:
+      workflowType === "prompt" && customPrompt
+        ? `You are a senior web analyst operating in read-only mode on a public URL.
+Follow the user's instructions exactly while being explicit about uncertainty.
+
+Context:
+- Target URL: ${targetUrl}
+- Custom Instructions: ${customPrompt}
+- Web Vitals: ${JSON.stringify(vitals)}
+- Page diagnostics: ${JSON.stringify(pageDiagnostics)}
+- Diagnostic logs: ${JSON.stringify(diagnosticLogs.slice(-20))}
+
+Output format:
+1) Executive Summary (2-4 bullets)
+2) Findings (ordered by impact, each with confidence High/Med/Low)
+3) Recommendations (specific, prioritized, practical)
+4) Limitations (what could not be verified from external-only access)
+
+Constraints:
+- This is read-only external analysis (no code access).
+- Do not claim certainty where evidence is weak.
+- Keep recommendations practical and specific.
+`
+        : `You are a senior web performance and UX auditor.
 Generate a concise, actionable report for an external URL audit.
 
 Context:
@@ -817,6 +856,7 @@ Constraints:
     projectName,
     timestamp: new Date().toISOString(),
     workflowType: (workflowType as WorkflowType) || "design-guidelines",
+    customPrompt: workflowType === "prompt" ? customPrompt : undefined,
     analysisTargetType: "url",
     targetUrl,
     sandboxDevUrl,
@@ -851,7 +891,11 @@ Constraints:
     afterCls: null,
     status: "unchanged",
     agentSummary:
-      workflowType === "react-performance" ? "URL React performance audit completed" : "URL design audit completed",
+      workflowType === "react-performance"
+        ? "URL React performance audit completed"
+        : workflowType === "prompt"
+          ? "URL custom prompt analysis completed"
+          : "URL design audit completed",
     gitDiff: null
   }
 }
@@ -1013,6 +1057,73 @@ Use this before audits or performance reviews to get the full guidelines.`,
         }
 
         return skillResult.stdout
+      }
+    }),
+
+    openUrl: tool({
+      description: "Open a URL in the browser. Supports https:// and file:// URLs.",
+      inputSchema: z.object({
+        url: z.string().describe("URL to open")
+      }),
+      execute: async ({ url }: { url: string }) => {
+        const result = await navigateBrowser(sandbox, url)
+        if (!result.success) return `Failed to open URL: ${result.error || "unknown error"}`
+        return `Opened ${url}`
+      }
+    }),
+
+    browserSnapshot: tool({
+      description: "Capture interactive page snapshot and element refs for clicking.",
+      inputSchema: z.object({}),
+      execute: async () => {
+        const browser = await getAgentBrowser(sandbox)
+        const snapshot = await browser.snapshot({ interactive: true })
+        return snapshot.raw.substring(0, 6000)
+      }
+    }),
+
+    browserClick: tool({
+      description: "Click a page element using a snapshot ref (for example, @e12).",
+      inputSchema: z.object({
+        ref: z.string().describe("Snapshot element ref, such as @e12")
+      }),
+      execute: async ({ ref }: { ref: string }) => {
+        const browser = await getAgentBrowser(sandbox)
+        const result = await browser.click(ref)
+        return result.success ? `Clicked ${ref}` : `Failed to click ${ref}: ${result.error || "unknown error"}`
+      }
+    }),
+
+    browserScroll: tool({
+      description: "Scroll the page to inspect additional content.",
+      inputSchema: z.object({
+        direction: z.enum(["up", "down", "left", "right"]),
+        amount: z.number().optional()
+      }),
+      execute: async ({ direction, amount }: { direction: "up" | "down" | "left" | "right"; amount?: number }) => {
+        const browser = await getAgentBrowser(sandbox)
+        const result = await browser.scroll(direction, amount)
+        return result.success
+          ? `Scrolled ${direction}${amount ? ` by ${amount}` : ""}`
+          : `Failed to scroll: ${result.error || "unknown error"}`
+      }
+    }),
+
+    runProjectCommand: tool({
+      description: "Run a shell command in the project root (/vercel/sandbox) for verification tasks.",
+      inputSchema: z.object({
+        command: z.string().describe("Shell command to run from project root")
+      }),
+      execute: async ({ command }: { command: string }) => {
+        const result = await runSandboxCommand(sandbox, "sh", [
+          "-c",
+          `export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; cd ${SANDBOX_CWD} && ${command}`
+        ])
+        const stdout = result.stdout.trim()
+        const stderr = result.stderr.trim()
+        const output = [stdout, stderr].filter(Boolean).join("\n")
+        const capped = output.length > 6000 ? `${output.substring(0, 6000)}\n...[truncated]` : output
+        return `Exit code: ${result.exitCode}\n${capped || "(no output)"}`
       }
     }),
 
@@ -1218,6 +1329,8 @@ Use this to diagnose and verify performance improvements.`,
     systemPrompt = buildDesignGuidelinesPrompt(startPath, devUrl, crawlDepth)
   } else if (workflowTypeForPrompt === "react-performance") {
     systemPrompt = buildReactPerformancePrompt(startPath, devUrl)
+  } else if (workflowTypeForPrompt === "turbopack-bundle-analyzer") {
+    systemPrompt = buildTurbopackBundleAnalyzerPrompt(startPath, devUrl)
   } else if (customPrompt) {
     systemPrompt = buildEnhancedPrompt(customPrompt, startPath, devUrl)
   } else {
@@ -1234,18 +1347,35 @@ Use this to diagnose and verify performance improvements.`,
     userPromptMessage = `Evaluate and fix design guideline violations on the ${startPath} page. Dev URL: ${devUrl}\n\nFirst, call get_skill({ name: "d3k" }) then get_skill({ name: "vercel-design-guidelines" }) to load the skills.${crawlInfo} Then read and audit the code.`
   } else if (workflowTypeForPrompt === "react-performance") {
     userPromptMessage = `Analyze and optimize React/Next.js performance on the ${startPath} page. Dev URL: ${devUrl}\n\nFirst, call get_skill({ name: "d3k" }) then get_skill({ name: "react-performance" }) to load the skills. Then use getWebVitals to capture current metrics, and analyze the codebase for optimization opportunities.`
+  } else if (workflowTypeForPrompt === "turbopack-bundle-analyzer") {
+    userPromptMessage = `Analyze Turbopack bundle analyzer output for this project and produce prioritized optimization opportunities.
+
+Workflow:
+1) Call get_skill({ name: "d3k" }) first.
+2) Open the live analyzer at http://localhost:4000 with openUrl and inspect it using browserSnapshot/browserClick/browserScroll.
+3) Open the app at ${devUrl}${startPath} and inspect the runtime behavior there as well.
+4) Implement high-impact fixes in code (do not stop at recommendations).
+5) Validate changes did not break the app (diagnose and/or getWebVitals).
+6) Re-run bundle analysis at the end using runProjectCommand and verify production bundle improvements.
+7) Summarize what changed, what improved, and any remaining tradeoffs.
+
+Constraints:
+- Prioritize concrete fixes over generic advice.
+- Prefer improvements that reduce shipped JS, duplicate modules, and initial route payload.
+`
   } else if (customPrompt) {
     userPromptMessage = `Proceed with the task. First, call get_skill({ name: "d3k" }) to load the skill. The dev server is running at ${devUrl}`
   } else {
     userPromptMessage = `Fix the CLS issues on the ${startPath} page of this app. Dev URL: ${devUrl}\n\nFirst, call get_skill({ name: "d3k" }), then start with diagnose to see what's shifting, and fix it.`
   }
 
+  const maxSteps = workflowTypeForPrompt === "turbopack-bundle-analyzer" ? 25 : 15
   const { text, steps } = await generateText({
     model,
     system: systemPrompt,
     prompt: userPromptMessage,
     tools,
-    stopWhen: stepCountIs(15) // Enough for: diagnose + find(2) + read + write + diagnose + buffer
+    stopWhen: stepCountIs(maxSteps)
   })
 
   workflowLog(`[Agent] Completed in ${steps.length} steps`)
@@ -2086,6 +2216,42 @@ This will give you the complete React Performance Guidelines, including:
 - **Working Directory**: /vercel/sandbox
 
 Start by calling get_skill({ name: "d3k" }) then get_skill({ name: "react-performance" }) to load the full performance guidelines, then use getWebVitals to capture baseline metrics.`
+}
+
+/**
+ * Build system prompt for the turbopack-bundle-analyzer workflow type.
+ */
+function buildTurbopackBundleAnalyzerPrompt(startPath: string, devUrl: string): string {
+  return `You are a Turbopack bundle optimization specialist.
+
+Your mission is to inspect Turbopack bundle analyzer output, implement concrete optimizations, and verify bundle improvements without breaking the app.
+
+## FIRST STEP - LOAD THE SKILL
+
+Before doing anything else, call:
+\`\`\`
+get_skill({ name: "d3k" })
+\`\`\`
+
+## ANALYSIS WORKFLOW
+1. Open \`http://localhost:4000\` and inspect bundle analyzer findings.
+2. Open \`${devUrl}${startPath}\` and inspect app/runtime behavior.
+3. Identify highest-impact bundle issues.
+4. Implement fixes with code changes.
+5. Validate app health after changes.
+6. Re-run bundle analysis and verify improvements before final summary.
+
+## RULES
+- You are expected to make code changes when clear optimization opportunities exist.
+- Be explicit about confidence and uncertainty.
+- Prefer optimizations that reduce JavaScript shipped, duplicate modules, and initial route payload.
+- Use \`runProjectCommand\` for verification commands (including re-running bundle analysis).
+
+## ENVIRONMENT
+- App URL: ${devUrl}
+- Start Path: ${startPath}
+- Working Directory: /vercel/sandbox
+`
 }
 
 /**

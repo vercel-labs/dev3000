@@ -30,7 +30,13 @@ async function fetchJsonWithRetry(fetchUrl: string): Promise<Response> {
   throw lastError
 }
 
-export type WorkflowType = "cls-fix" | "prompt" | "design-guidelines" | "react-performance" | "url-audit"
+export type WorkflowType =
+  | "cls-fix"
+  | "prompt"
+  | "design-guidelines"
+  | "react-performance"
+  | "url-audit"
+  | "turbopack-bundle-analyzer"
 
 export interface WorkflowRun {
   id: string

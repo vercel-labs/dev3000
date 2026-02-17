@@ -13,9 +13,16 @@ interface ReportPendingProps {
 
 const STEP_LABELS = ["Creating sandbox", "Capturing baseline", "Agent in progress", "Generating report", "Finishing up"]
 
+function normalizeStepNumber(stepNumber: number | null): number | null {
+  if (stepNumber === null) return null
+  if (stepNumber >= 1 && stepNumber <= STEP_LABELS.length) return stepNumber - 1
+  if (stepNumber >= 0 && stepNumber < STEP_LABELS.length) return stepNumber
+  return null
+}
+
 export function ReportPending({ runId, userId }: ReportPendingProps) {
   const router = useRouter()
-  const [status, setStatus] = useState<string>("Generating report...")
+  const [status, setStatus] = useState<string>("Creating sandbox...")
   const [hasError, setHasError] = useState(false)
   const [sandboxUrl, setSandboxUrl] = useState<string | null>(null)
   const [stepNumber, setStepNumber] = useState<number | null>(null)
@@ -92,7 +99,8 @@ export function ReportPending({ runId, userId }: ReportPendingProps) {
     }
   }, [runId, userId, router])
 
-  const activeStepLabel = typeof stepNumber === "number" ? STEP_LABELS[stepNumber] : null
+  const normalizedStepNumber = normalizeStepNumber(stepNumber)
+  const activeStepLabel = typeof normalizedStepNumber === "number" ? STEP_LABELS[normalizedStepNumber] : null
   const showStatus = !activeStepLabel || status.trim() !== activeStepLabel
   const statusText = showStatus ? status : "In progress..."
   const normalizeStatus = (value: string) =>
@@ -106,7 +114,7 @@ export function ReportPending({ runId, userId }: ReportPendingProps) {
     return normalizedStatus.startsWith(normalizedLabel) || normalizedLabel.startsWith(normalizedStatus)
   })
   const fallbackActiveIndex = statusMatchIndex >= 0 ? statusMatchIndex : -1
-  const activeIndex = fallbackActiveIndex >= 0 ? fallbackActiveIndex : (stepNumber ?? null)
+  const activeIndex = fallbackActiveIndex >= 0 ? fallbackActiveIndex : normalizedStepNumber
 
   return (
     <div className="min-h-screen bg-background">

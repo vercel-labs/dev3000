@@ -62,6 +62,8 @@ function formatWorkflowType(type?: string): string {
       return "React Performance"
     case "url-audit":
       return "URL Audit"
+    case "turbopack-bundle-analyzer":
+      return "Turbopack Bundle Analyzer"
     default:
       return "CLS Fix" // Default for existing workflows without type
   }

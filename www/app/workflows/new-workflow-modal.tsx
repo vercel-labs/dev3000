@@ -190,6 +190,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   const workflowSkillLabels: Record<string, string[]> = {
     "design-guidelines": ["d3k", "vercel-design-guidelines"],
     "react-performance": ["d3k", "vercel-react-best-practices"],
+    "turbopack-bundle-analyzer": ["d3k"],
     "cls-fix": ["d3k"],
     prompt: ["d3k"],
     "url-audit": ["d3k", "vercel-design-guidelines"]
@@ -756,6 +757,8 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
             ? "design-guidelines"
             : _selectedType === "react-performance"
               ? "react-performance"
+              : _selectedType === "turbopack-bundle-analyzer"
+                ? "turbopack-bundle-analyzer"
               : "prompt"
 
       const body: Record<string, unknown> = {
@@ -1089,6 +1092,27 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                       </div>
                     </Link>
                     <Link
+                      href="/workflows/new?target=project&type=turbopack-bundle-analyzer"
+                      className="group block w-full p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
+                    >
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="min-w-0">
+                          <div className="font-semibold text-foreground">Turbopack Bundle Analyzer</div>
+                          <div className="text-sm text-muted-foreground mt-1">
+                            Run experimental Turbopack bundle analysis, then have d3k inspect the report and surface
+                            optimization opportunities.
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-2">
+                            Skills: {workflowSkillLabels["turbopack-bundle-analyzer"].join(", ")}
+                          </div>
+                        </div>
+                        <ArrowRight
+                          aria-hidden="true"
+                          className="size-5 shrink-0 text-muted-foreground transition-all duration-200 group-hover:translate-x-1 group-hover:text-foreground group-focus-visible:translate-x-1 group-focus-visible:text-foreground"
+                        />
+                      </div>
+                    </Link>
+                    <Link
                       href="/workflows/new?target=project&type=cloud-fix"
                       className="group block w-full p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
                     >
@@ -1172,6 +1196,26 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                           </div>
                           <div className="text-xs text-muted-foreground mt-2">
                             Skills: {workflowSkillLabels["react-performance"].join(", ")}
+                          </div>
+                        </div>
+                        <ArrowRight
+                          aria-hidden="true"
+                          className="size-5 shrink-0 text-muted-foreground transition-all duration-200 group-hover:translate-x-1 group-hover:text-foreground group-focus-visible:translate-x-1 group-focus-visible:text-foreground"
+                        />
+                      </div>
+                    </Link>
+                    <Link
+                      href="/workflows/new?target=url&type=prompt"
+                      className="group block w-full p-4 border-2 border-gray-300 dark:border-gray-600 rounded-lg hover:border-blue-500 hover:bg-accent text-left transition-colors"
+                    >
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="min-w-0">
+                          <div className="font-semibold text-foreground">Prompt</div>
+                          <div className="text-sm text-muted-foreground mt-1">
+                            Run a custom prompt-driven cloud analysis against a public URL.
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-2">
+                            Skills: {workflowSkillLabels.prompt.join(", ")}
                           </div>
                         </div>
                         <ArrowRight
@@ -1369,6 +1413,8 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                     <div className="font-semibold text-foreground">
                       {_selectedType === "react-performance"
                         ? "React Performance Review"
+                        : _selectedType === "prompt"
+                          ? "Prompt"
                         : "Vercel Design Guidelines Review"}
                     </div>
                   </div>
@@ -1391,6 +1437,22 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                         Must be a publicly reachable https URL. Private/localhost addresses are blocked.
                       </p>
                     </div>
+                    {_selectedType === "prompt" && (
+                      <div>
+                        <Label htmlFor={customPromptId} className="block text-sm font-medium text-foreground mb-1">
+                          Custom Instructions
+                          <span className="text-red-500 ml-1">*</span>
+                        </Label>
+                        <textarea
+                          id={customPromptId}
+                          value={customPrompt}
+                          onChange={(e) => setCustomPrompt(e.target.value)}
+                          className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground text-sm min-h-[120px]"
+                          placeholder="Describe exactly what you want d3k to analyze on this public URL..."
+                          required
+                        />
+                      </div>
+                    )}
                   </div>
                   <div className="flex gap-3 mt-6">
                     <Link
@@ -1402,7 +1464,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                     <button
                       type="button"
                       onClick={startWorkflow}
-                      disabled={!isValidPublicUrl}
+                      disabled={!isValidPublicUrl || (_selectedType === "prompt" && !customPrompt.trim())}
                       className="flex-1 px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       Start URL Analysis

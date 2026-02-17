@@ -148,6 +148,7 @@ export async function cloudFixWorkflow(params: {
         initResult.devUrl,
         publicUrl,
         workflowType,
+        customPrompt,
         projectName,
         reportId,
         progressContext,
@@ -368,6 +369,7 @@ async function urlAuditLoop(
   sandboxDevUrl: string,
   targetUrl: string,
   workflowType: string | undefined,
+  customPrompt: string | undefined,
   projectName: string,
   reportId: string,
   progressContext?: ProgressContext | null,
@@ -382,6 +384,7 @@ async function urlAuditLoop(
     sandboxDevUrl,
     targetUrl,
     workflowType,
+    customPrompt,
     projectName,
     reportId,
     progressContext,
@@ -459,7 +462,8 @@ async function saveDoneStatus(
         | "prompt"
         | "design-guidelines"
         | "react-performance"
-        | "url-audit") || "cls-fix",
+        | "url-audit"
+        | "turbopack-bundle-analyzer") || "cls-fix",
     completedAt: new Date().toISOString(),
     reportBlobUrl,
     prUrl: prUrl || undefined,
@@ -483,7 +487,8 @@ async function saveFailureStatus(progressContext: ProgressContext, errorMessage:
           | "prompt"
           | "design-guidelines"
           | "react-performance"
-          | "url-audit") || "cls-fix",
+          | "url-audit"
+          | "turbopack-bundle-analyzer") || "cls-fix",
       completedAt: new Date().toISOString(),
       error: errorMessage
     })

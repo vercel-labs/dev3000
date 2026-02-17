@@ -215,8 +215,13 @@ export interface D3kSandboxConfig {
   framework?: string
   packageManager?: "bun" | "pnpm" | "npm" | "yarn"
   devCommand?: string
+  preStartCommands?: string[]
+  preStartBackgroundCommand?: string
+  preStartWaitPort?: number
   debug?: boolean
 }
+
+type PackageManager = "bun" | "pnpm" | "npm" | "yarn"
 
 export interface D3kSandboxResult {
   sandbox: Sandbox
@@ -232,6 +237,41 @@ export interface D3kSandboxResult {
   // 3. Pass as environment variable if available
   // For now, workflows without bypass tokens will fail when accessing protected sandboxes.
   bypassToken?: string
+}
+
+async function detectProjectPackageManager(
+  run: (cmd: string, args: string[], cwd?: string) => Promise<{ exitCode: number; stdout: string; stderr: string }>,
+  sandboxCwd: string,
+  debug = false
+): Promise<PackageManager> {
+  const detectScript = `
+if [ -f bun.lockb ] || [ -f bun.lock ]; then
+  echo bun
+elif [ -f pnpm-lock.yaml ]; then
+  echo pnpm
+elif [ -f yarn.lock ]; then
+  echo yarn
+elif [ -f package-lock.json ]; then
+  echo npm
+else
+  PM=$(node -e "try{const pkg=require('./package.json');const pm=(pkg.packageManager||'').split('@')[0];process.stdout.write(pm)}catch{}" 2>/dev/null)
+  if [ -n "$PM" ]; then
+    echo "$PM"
+  else
+    echo pnpm
+  fi
+fi
+`.trim()
+
+  const result = await run("sh", ["-c", detectScript], sandboxCwd)
+  const detected = result.stdout.trim() as PackageManager
+  const validManagers: PackageManager[] = ["bun", "pnpm", "npm", "yarn"]
+  if (validManagers.includes(detected)) {
+    if (debug) console.log(`  ✅ Detected package manager: ${detected}`)
+    return detected
+  }
+  if (debug) console.log(`  ⚠️ Failed to detect package manager, defaulting to pnpm`)
+  return "pnpm"
 }
 
 /**
@@ -251,7 +291,10 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     timeout = "30m",
     projectDir = "",
     framework = "Next.js",
-    packageManager = "pnpm",
+    packageManager,
+    preStartCommands = [],
+    preStartBackgroundCommand,
+    preStartWaitPort,
     debug = false
   } = config
 
@@ -451,14 +494,22 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
       console.log(`  ⚠️ Could not check for package.json: ${error instanceof Error ? error.message : String(error)}`)
     }
 
-    if (packageManager === "bun") {
+    const resolvedPackageManager =
+      packageManager ||
+      (await detectProjectPackageManager(
+        async (cmd, args, cwd) => runCommandWithLogs(sandbox, { cmd, args, cwd }),
+        sandboxCwd,
+        debug
+      ))
+
+    if (resolvedPackageManager === "bun") {
       await ensureBunInstalled(sandbox)
     }
 
     // Install project dependencies
     if (debug) console.log("  📦 Installing project dependencies...")
     const installResult =
-      packageManager === "bun"
+      resolvedPackageManager === "bun"
         ? await runCommandWithLogs(sandbox, {
             cmd: "sh",
             args: ["-c", "export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; bun install"],
@@ -467,7 +518,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
             stderr: debug ? process.stderr : undefined
           })
         : await runCommandWithLogs(sandbox, {
-            cmd: packageManager,
+            cmd: resolvedPackageManager,
             args: ["install"],
             cwd: sandboxCwd,
             stdout: debug ? process.stdout : undefined,
@@ -487,7 +538,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     await SandboxChrome.installSystemDependencies(sandbox, { debug })
     if (debug) console.log("  ✅ System dependencies installed")
 
-    await SandboxChrome.installChromium(sandbox, { cwd: sandboxCwd, packageManager, debug })
+    await SandboxChrome.installChromium(sandbox, { cwd: sandboxCwd, packageManager: resolvedPackageManager, debug })
     if (debug) console.log("  ✅ @sparticuz/chromium installed")
 
     let chromiumPath: string
@@ -516,7 +567,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     // Install d3k globally from npm (always use latest)
     if (debug) console.log("  📦 Installing d3k globally from npm (dev3000@latest)")
     const d3kInstallResult =
-      packageManager === "bun"
+      resolvedPackageManager === "bun"
         ? await runCommandWithLogs(sandbox, {
             cmd: "sh",
             args: ["-c", "export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; bun add -g dev3000@latest"],
@@ -535,6 +586,50 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     }
 
     if (debug) console.log("  ✅ d3k installed globally")
+
+    if (preStartCommands.length > 0) {
+      for (const preStartCommand of preStartCommands) {
+        const resolvedPreStartCommand = preStartCommand.replace(
+          /\$\{packageManager\}/g,
+          resolvedPackageManager
+        )
+        if (debug) console.log(`  🧪 Running pre-start command: ${preStartCommand}`)
+        const preStartResult = await runCommandWithLogs(sandbox, {
+          cmd: "sh",
+          args: [
+            "-c",
+            `export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; cd ${sandboxCwd} && ${resolvedPreStartCommand}`
+          ],
+          stdout: debug ? process.stdout : undefined,
+          stderr: debug ? process.stderr : undefined
+        })
+        if (preStartResult.exitCode !== 0) {
+          throw new Error(`Pre-start command failed (${resolvedPreStartCommand}): ${preStartResult.stderr}`)
+        }
+      }
+      if (debug) console.log("  ✅ Pre-start commands completed")
+    }
+
+    if (preStartBackgroundCommand) {
+      const resolvedPreStartBackgroundCommand = preStartBackgroundCommand.replace(
+        /\$\{packageManager\}/g,
+        resolvedPackageManager
+      )
+      if (debug) console.log(`  🧪 Starting pre-start background command: ${resolvedPreStartBackgroundCommand}`)
+      await sandbox.runCommand({
+        cmd: "sh",
+        args: [
+          "-c",
+          `mkdir -p /home/vercel-sandbox/.d3k/logs && export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; cd ${sandboxCwd} && ${resolvedPreStartBackgroundCommand} > /home/vercel-sandbox/.d3k/logs/pre-start-background.log 2>&1`
+        ],
+        detached: true
+      })
+      if (preStartWaitPort) {
+        if (debug) console.log(`  ⏳ Waiting for pre-start server on port ${preStartWaitPort}...`)
+        await waitForServer(sandbox, preStartWaitPort, 120000, debug)
+      }
+      if (debug) console.log("  ✅ Pre-start background command ready")
+    }
 
     // Start d3k (which starts browser + logging)
     if (debug) console.log("  🚀 Starting d3k...")
@@ -1301,7 +1396,17 @@ async function createAndSaveBaseSnapshot(timeoutMs: number, debug = false): Prom
  * @returns D3kSandboxResultWithSnapshot with sandbox, URLs, and snapshot info
  */
 export async function getOrCreateD3kSandbox(config: D3kSandboxConfig): Promise<D3kSandboxResultWithSnapshot> {
-  const { repoUrl, branch = "main", timeout = "30m", projectDir = "", packageManager = "pnpm", debug = false } = config
+  const {
+    repoUrl,
+    branch = "main",
+    timeout = "30m",
+    projectDir = "",
+    packageManager,
+    preStartCommands = [],
+    preStartBackgroundCommand,
+    preStartWaitPort,
+    debug = false
+  } = config
 
   // Start timing
   const timer = new StepTimer()
@@ -1463,18 +1568,26 @@ export async function getOrCreateD3kSandbox(config: D3kSandboxConfig): Promise<D
     // Step 5: Install project dependencies
     timer.start("Install project dependencies")
     if (debug) console.log("  📦 Installing project dependencies...")
-    if (packageManager === "bun") {
+    const resolvedPackageManager =
+      packageManager ||
+      (await detectProjectPackageManager(
+        async (cmd, args, cwd) => runCommandWithLogs({ cmd, args, cwd }),
+        sandboxCwd,
+        debug
+      ))
+
+    if (resolvedPackageManager === "bun") {
       await ensureBunInstalled()
     }
     const installResult =
-      packageManager === "bun"
+      resolvedPackageManager === "bun"
         ? await runCommandWithLogs({
             cmd: "sh",
             args: ["-c", "export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; bun install"],
             cwd: sandboxCwd
           })
         : await runCommandWithLogs({
-            cmd: packageManager,
+            cmd: resolvedPackageManager,
             args: ["install"],
             cwd: sandboxCwd
           })
@@ -1487,7 +1600,7 @@ export async function getOrCreateD3kSandbox(config: D3kSandboxConfig): Promise<D
     // Step 6: Install @sparticuz/chromium for this project
     timer.start("Install @sparticuz/chromium")
     if (debug) console.log("  🔧 Installing @sparticuz/chromium...")
-    await SandboxChrome.installChromium(sandbox, { cwd: sandboxCwd, packageManager, debug })
+    await SandboxChrome.installChromium(sandbox, { cwd: sandboxCwd, packageManager: resolvedPackageManager, debug })
     if (debug) console.log("  ✅ @sparticuz/chromium installed")
 
     // Get chromium path
@@ -1498,6 +1611,52 @@ export async function getOrCreateD3kSandbox(config: D3kSandboxConfig): Promise<D
     } catch {
       chromiumPath = "/usr/bin/chromium"
       if (debug) console.log(`  ⚠️ Using fallback chromium path: ${chromiumPath}`)
+    }
+
+    // Step 7: Start d3k
+    if (preStartCommands.length > 0) {
+      for (const preStartCommand of preStartCommands) {
+        const resolvedPreStartCommand = preStartCommand.replace(
+          /\$\{packageManager\}/g,
+          resolvedPackageManager
+        )
+        timer.start(`Pre-start: ${resolvedPreStartCommand}`)
+        if (debug) console.log(`  🧪 Running pre-start command: ${resolvedPreStartCommand}`)
+        const preStartResult = await runCommandWithLogs({
+          cmd: "sh",
+          args: [
+            "-c",
+            `export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; cd ${sandboxCwd} && ${resolvedPreStartCommand}`
+          ]
+        })
+        if (preStartResult.exitCode !== 0) {
+          throw new Error(`Pre-start command failed (${resolvedPreStartCommand}): ${preStartResult.stderr}`)
+        }
+      }
+      if (debug) console.log("  ✅ Pre-start commands completed")
+    }
+
+    if (preStartBackgroundCommand) {
+      const resolvedPreStartBackgroundCommand = preStartBackgroundCommand.replace(
+        /\$\{packageManager\}/g,
+        resolvedPackageManager
+      )
+      timer.start(`Pre-start background: ${resolvedPreStartBackgroundCommand}`)
+      if (debug) console.log(`  🧪 Starting pre-start background command: ${resolvedPreStartBackgroundCommand}`)
+      await sandbox.runCommand({
+        cmd: "sh",
+        args: [
+          "-c",
+          `mkdir -p /home/vercel-sandbox/.d3k/logs && export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; cd ${sandboxCwd} && ${resolvedPreStartBackgroundCommand} > /home/vercel-sandbox/.d3k/logs/pre-start-background.log 2>&1`
+        ],
+        detached: true
+      })
+      if (preStartWaitPort) {
+        timer.start(`Wait for pre-start port ${preStartWaitPort}`)
+        if (debug) console.log(`  ⏳ Waiting for pre-start server on port ${preStartWaitPort}...`)
+        await waitForServer(sandbox, preStartWaitPort, 120000, debug)
+      }
+      if (debug) console.log("  ✅ Pre-start background command ready")
     }
 
     // Step 7: Start d3k

@@ -86,6 +86,8 @@ async function ReportContent({
         ? "Design Guidelines"
         : workflowType === "react-performance"
           ? "React Performance"
+          : workflowType === "turbopack-bundle-analyzer"
+            ? "Turbopack Bundle Analyzer"
           : workflowType === "url-audit"
             ? "URL Audit"
             : "CLS Fix"
@@ -95,14 +97,18 @@ async function ReportContent({
       ? "AI agent executed your custom task and generated this report."
       : workflowType === "design-guidelines"
         ? "Read-only design and UX analysis of the target URL."
-        : workflowType === "react-performance"
-          ? "Read-only React performance analysis of the target URL."
-          : workflowType === "url-audit"
-            ? "Read-only UX and performance analysis of the target URL."
-            : "AI agent attempted to fix CLS issues (up to 3 retries)."
+      : workflowType === "react-performance"
+        ? "Read-only React performance analysis of the target URL."
+      : workflowType === "turbopack-bundle-analyzer"
+        ? "AI explored Turbopack bundle analyzer output and generated optimization guidance."
+      : workflowType === "url-audit"
+        ? "Read-only UX and performance analysis of the target URL."
+        : "AI agent attempted to fix CLS issues (up to 3 retries)."
   const reportHeading =
     workflowType === "design-guidelines"
       ? "Report: Vercel Web Design Guidelines Audit"
+      : workflowType === "turbopack-bundle-analyzer"
+        ? "Report: Turbopack Bundle Analyzer"
       : `Report Results: ${workflowLabel}`
 
   // Helper to format CLS grade
@@ -203,7 +209,7 @@ async function ReportContent({
               className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
             >
               <Download className="h-4 w-4" />
-              Download JSON
+              JSON
             </a>
           </div>
         </div>
