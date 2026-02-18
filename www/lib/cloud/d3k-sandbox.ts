@@ -532,6 +532,23 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     if (debug) console.log("  ✅ Project dependencies installed")
     await reportProgress("Project dependencies installed")
 
+    if (skipD3kSetup) {
+      if (debug) console.log("  ⏩ Analyzer-only mode: skipping d3k/chrome installation and startup")
+      await reportProgress("Skipping d3k/chrome setup (analyzer-only mode)")
+      const devUrl = sandbox.domain(3000)
+      return {
+        sandbox,
+        devUrl,
+        projectName,
+        bypassToken: undefined,
+        cleanup: async () => {
+          if (debug) console.log("  🧹 Cleaning up sandbox...")
+          await sandbox.stop()
+          if (debug) console.log("  ✅ Sandbox stopped")
+        }
+      }
+    }
+
     // Install Chrome/Chromium using the SandboxChrome module
     // This handles system dependencies, @sparticuz/chromium installation, and path extraction
     if (debug) console.log("  🔧 Setting up Chrome using SandboxChrome module...")
@@ -627,23 +644,6 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
         await waitForServer(sandbox, preStartWaitPort, 120000, debug)
       }
       if (debug) console.log("  ✅ Pre-start background command ready")
-    }
-
-    if (skipD3kSetup) {
-      if (debug) console.log("  ⏩ Skipping d3k/chrome startup for analyzer-only workflow")
-      await reportProgress("Skipping d3k/chrome startup (analyzer-only mode)")
-      const devUrl = sandbox.domain(3000)
-      return {
-        sandbox,
-        devUrl,
-        projectName,
-        bypassToken: undefined,
-        cleanup: async () => {
-          if (debug) console.log("  🧹 Cleaning up sandbox...")
-          await sandbox.stop()
-          if (debug) console.log("  ✅ Sandbox stopped")
-        }
-      }
     }
 
     // Start d3k (which starts browser + logging)
