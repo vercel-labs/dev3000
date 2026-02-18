@@ -655,8 +655,25 @@ eval "$NEXT_BIN ${command}"`
     ])
 
   // Next.js can expose analyzer either as build flags or legacy subcommand depending on version.
-  await appendProgressLog(progressContext, "[Turbopack] Running next build --experimental-analyze --turbopack")
-  let analyzeResult = await runNextCli("build --experimental-analyze --turbopack")
+  await appendProgressLog(
+    progressContext,
+    "[Turbopack] Running next build --experimental-analyze --experimental-build-mode compile --turbopack"
+  )
+  let analyzeResult = await runNextCli("build --experimental-analyze --experimental-build-mode compile --turbopack")
+  if (analyzeResult.exitCode !== 0) {
+    const combined = `${analyzeResult.stderr}\n${analyzeResult.stdout}`
+    const buildModeUnsupported =
+      /unknown option.*experimental-build-mode|unrecognized option.*experimental-build-mode|did you mean.*experimental-build-mode/i.test(
+        combined
+      )
+    if (buildModeUnsupported) {
+      await appendProgressLog(
+        progressContext,
+        "[Turbopack] Compile build mode unsupported; retrying build analyze without build-mode flag"
+      )
+      analyzeResult = await runNextCli("build --experimental-analyze --turbopack")
+    }
+  }
   if (analyzeResult.exitCode !== 0) {
     const combined = `${analyzeResult.stderr}\n${analyzeResult.stdout}`
     const buildFlagUnsupported =
@@ -1856,7 +1873,7 @@ Workflow:
 4) Implement high-impact fixes in code (do not stop at recommendations).
 5) Validate changes did not break the app (diagnose and/or getWebVitals).
 6) Re-run bundle analysis at the end using runProjectCommand:
-   - \`next build --experimental-analyze --turbopack\` (fallback to \`next experimental-analyze\` + optional \`--output\` for older Next versions)
+   - \`next build --experimental-analyze --experimental-build-mode compile --turbopack\` (fallback to \`next build --experimental-analyze --turbopack\`, then legacy \`next experimental-analyze\` + optional \`--output\`)
    - \`node /tmp/analyze-to-ndjson.mjs --input .next/diagnostics/analyze/data --output .next/diagnostics/analyze/ndjson\`
 7) Summarize what changed, what improved, and any remaining tradeoffs.
 
