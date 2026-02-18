@@ -606,16 +606,28 @@ async function prepareTurbopackNdjsonArtifacts(
 
   workflowLog(`[Turbopack] Preparing analyzer artifacts in ${projectCwd}`)
 
-  const analyzeResult = await runSandboxCommand(sandbox, "sh", [
-    "-c",
-    `export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; cd ${projectCwd} && \
-echo "[Turbopack] Running next experimental-analyze --output..." && \
-if [ -f bun.lockb ] || [ -f bun.lock ]; then bun run next experimental-analyze --output; \
-elif [ -f pnpm-lock.yaml ]; then pnpm next experimental-analyze --output; \
-elif [ -f yarn.lock ]; then yarn next experimental-analyze --output; \
-elif [ -f package-lock.json ]; then npx next experimental-analyze --output; \
-else npx next experimental-analyze --output; fi`
-  ])
+  const runAnalyze = async (withOutputFlag: boolean) =>
+    runSandboxCommand(sandbox, "sh", [
+      "-c",
+      `export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; cd ${projectCwd} && \
+echo "[Turbopack] Running next experimental-analyze${withOutputFlag ? " --output" : ""}..." && \
+if [ -f bun.lockb ] || [ -f bun.lock ]; then bun run next experimental-analyze${withOutputFlag ? " --output" : ""}; \
+elif [ -f pnpm-lock.yaml ]; then pnpm next experimental-analyze${withOutputFlag ? " --output" : ""}; \
+elif [ -f yarn.lock ]; then yarn next experimental-analyze${withOutputFlag ? " --output" : ""}; \
+elif [ -f package-lock.json ]; then npx next experimental-analyze${withOutputFlag ? " --output" : ""}; \
+else npx next experimental-analyze${withOutputFlag ? " --output" : ""}; fi`
+    ])
+
+  // Newer Next versions support no-flag invocation; older variants may require --output.
+  let analyzeResult = await runAnalyze(false)
+  if (analyzeResult.exitCode !== 0) {
+    const combined = `${analyzeResult.stderr}\n${analyzeResult.stdout}`
+    const maybeNeedsOutputFlag =
+      /missing required.*--output|requires.*--output|expected.*--output/i.test(combined)
+    if (maybeNeedsOutputFlag) {
+      analyzeResult = await runAnalyze(true)
+    }
+  }
   if (analyzeResult.exitCode !== 0) {
     const errTail = (analyzeResult.stderr || analyzeResult.stdout || "").slice(-2000)
     throw new Error(`next experimental-analyze failed: ${errTail || "(no output)"}`)
@@ -734,7 +746,7 @@ export async function initSandboxStep(
 
   if (isTurbopackBundleAnalyzer) {
     timer.start("Generate Turbopack NDJSON artifacts")
-    await updateProgress(progressContext, 1, "Running next experimental-analyze --output...")
+    await updateProgress(progressContext, 1, "Running next experimental-analyze...")
     const ndjsonResult = await prepareTurbopackNdjsonArtifacts(sandboxResult.sandbox, projectDir)
     workflowLog(`[Init] Turbopack NDJSON artifacts ready at ${ndjsonResult.outputDir}`)
     if (ndjsonResult.summary) {
@@ -1783,7 +1795,7 @@ Workflow:
 4) Implement high-impact fixes in code (do not stop at recommendations).
 5) Validate changes did not break the app (diagnose and/or getWebVitals).
 6) Re-run bundle analysis at the end using runProjectCommand:
-   - \`next experimental-analyze --output\`
+   - \`next experimental-analyze\` (fallback to \`--output\` for older Next versions)
    - \`node /tmp/analyze-to-ndjson.mjs --input .next/diagnostics/analyze/data --output .next/diagnostics/analyze/ndjson\`
 7) Summarize what changed, what improved, and any remaining tradeoffs.
 
