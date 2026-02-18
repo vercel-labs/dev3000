@@ -10,7 +10,19 @@
 
 export async function POST(request: Request) {
   try {
-    const payload = await request.json()
+    const payload = (await request.json()) as {
+      type?: string
+      deployment?: {
+        url?: string
+        target?: string
+        meta?: {
+          githubCommitRef?: string
+          githubOrg?: string
+          githubRepo?: string
+          githubCommitSha?: string
+        }
+      }
+    }
 
     console.log("[Webhook] Received deployment event")
     console.log(`[Webhook] Type: ${payload.type}`)
@@ -22,6 +34,10 @@ export async function POST(request: Request) {
     }
 
     const deployment = payload.deployment
+    if (!deployment || typeof deployment !== "object") {
+      console.log("[Webhook] Missing deployment payload, skipping")
+      return Response.json({ message: "Missing deployment payload" })
+    }
 
     // Only process preview deployments (not production)
     if (deployment.target === "production") {
@@ -98,7 +114,11 @@ export async function POST(request: Request) {
     // Optional: Post comment on PR if GITHUB_TOKEN is set
     if (process.env.GITHUB_TOKEN) {
       await postPRComment(owner, repo, prNumber, result)
-      await setGitHubCheck(owner, repo, deployment.meta.githubCommitSha, result)
+      if (deployment.meta?.githubCommitSha) {
+        await setGitHubCheck(owner, repo, deployment.meta.githubCommitSha, result)
+      } else {
+        console.log("[Webhook] Skipping GitHub status check (missing githubCommitSha)")
+      }
       console.log(`[Webhook] Posted results to PR`)
     } else {
       console.log(`[Webhook] Skipping GitHub comment (no GITHUB_TOKEN set)`)
