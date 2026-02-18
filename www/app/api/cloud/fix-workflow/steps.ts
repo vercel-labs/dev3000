@@ -2117,10 +2117,8 @@ Workflow:
 3) Identify concrete highest-impact sources of shipped JS.
 4) Implement high-impact fixes in code that reduce shipped JS.
 5) Validate changes did not break the app with minimal smoke checks.
-6) Re-run bundle analysis at the end using runProjectCommand:
-   - \`next build --experimental-analyze --experimental-build-mode compile --turbopack\` (fallbacks: \`next build --experimental-analyze --turbopack\`, then \`next build --experimental-build-mode compile --turbopack\`, then \`next build --turbopack\`)
-   - \`node /tmp/analyze-to-ndjson.mjs --input .next/diagnostics/analyze/data --output .next/diagnostics/analyze/ndjson\`
-7) Summarize bundle-size deltas from NDJSON before/after and list tradeoffs.
+6) Summarize the expected bundle-size impact from your changes and list tradeoffs.
+7) Do not manually rerun analyzer build commands; the workflow runtime re-runs analyzer and computes before/after deltas after your changes.
 
 Constraints:
 - Do not work on CLS, styling, UX, accessibility, SEO, or general refactors unless directly required for bundle-size reduction.
@@ -2134,7 +2132,7 @@ Constraints:
     userPromptMessage = `Fix the CLS issues on the ${startPath} page of this app. Dev URL: ${devUrl}\n\nFirst, call get_skill({ name: "d3k" }), then start with diagnose to see what's shifting, and fix it.`
   }
 
-  const maxSteps = workflowTypeForPrompt === "turbopack-bundle-analyzer" ? 25 : 15
+  const maxSteps = workflowTypeForPrompt === "turbopack-bundle-analyzer" ? 35 : 15
   const { text, steps } = await generateText({
     model,
     system: systemPrompt,
@@ -2277,9 +2275,8 @@ function synthesizeFinalOutputFromSteps(steps: unknown[], workflowType: string):
 
   const noteSnippet = assistantNotes.slice(-2).join("\n\n").trim()
   const lines: string[] = []
-  lines.push(
-    "No explicit final narrative was emitted by the model, so this summary was reconstructed from tool activity."
-  )
+  lines.push("Auto-generated execution summary from tool activity.")
+  lines.push("The model did not emit a dedicated final narrative before the step budget was reached.")
   lines.push("")
   lines.push(`Workflow focus: ${workflowType}`)
   lines.push(
@@ -3094,15 +3091,15 @@ get_skill({ name: "d3k" })
 2. Identify highest-impact shipped-JS problems from analyzer evidence.
 3. Implement code changes that reduce bundle size.
 4. Do minimal smoke checks only to ensure no regressions.
-5. Re-run analyze + NDJSON conversion and verify measurable improvement before final summary.
-6. Report before/after numbers from NDJSON (at minimum target route compressed size and notable output file changes).
+5. Explain expected bundle impact and tradeoffs from your code changes with analyzer evidence.
+6. Do not manually run analyzer build commands; workflow runtime performs post-change analyzer rerun and computes before/after deltas.
 
 ## RULES
 - You are expected to make code changes when clear optimization opportunities exist.
 - If no safe bundle improvement is found, make no code changes and explain why with analyzer evidence.
 - Be explicit about confidence and uncertainty.
 - Prefer optimizations that reduce JavaScript shipped, duplicate modules, and initial route payload.
-- Use \`runProjectCommand\` for verification commands (including re-running analyze and NDJSON conversion).
+- Use \`runProjectCommand\` only for minimal smoke checks (for example lint/typecheck/sanity checks), not analyzer reruns.
 - Forbidden unless directly tied to bundle-size reduction: styling/UX fixes, CLS-only fixes, accessibility audits, copy/content edits, and general cleanup refactors.
 
 ## ENVIRONMENT
