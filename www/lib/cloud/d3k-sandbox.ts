@@ -212,6 +212,7 @@ export interface D3kSandboxConfig {
   branch?: string
   githubPat?: string
   timeout?: StringValue
+  skipD3kSetup?: boolean
   projectDir?: string
   framework?: string
   packageManager?: "bun" | "pnpm" | "npm" | "yarn"
@@ -291,6 +292,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     branch = "main",
     githubPat,
     timeout = "30m",
+    skipD3kSetup = false,
     projectDir = "",
     framework = "Next.js",
     packageManager,
@@ -610,6 +612,22 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
         await waitForServer(sandbox, preStartWaitPort, 120000, debug)
       }
       if (debug) console.log("  ✅ Pre-start background command ready")
+    }
+
+    if (skipD3kSetup) {
+      if (debug) console.log("  ⏩ Skipping d3k/chrome startup for analyzer-only workflow")
+      const devUrl = sandbox.domain(3000)
+      return {
+        sandbox,
+        devUrl,
+        projectName,
+        bypassToken: undefined,
+        cleanup: async () => {
+          if (debug) console.log("  🧹 Cleaning up sandbox...")
+          await sandbox.stop()
+          if (debug) console.log("  ✅ Sandbox stopped")
+        }
+      }
     }
 
     // Start d3k (which starts browser + logging)

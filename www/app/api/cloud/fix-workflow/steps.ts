@@ -696,6 +696,7 @@ export async function initSandboxStep(
       repoUrl,
       branch,
       githubPat,
+      skipD3kSetup: isTurbopackBundleAnalyzer,
       projectDir: projectDir || "",
       timeout: "30m",
       debug: true
@@ -734,6 +735,33 @@ export async function initSandboxStep(
       `Analyzer NDJSON ready at ${ndjsonResult.outputDir} (use readFile/runProjectCommand instead of localhost:4000)`,
       sandboxResult.devUrl
     )
+
+    // Turbopack workflow is analyzer-only; no d3k browser/CLS bootstrap required.
+    timer.end()
+    const timingData = timer.getData()
+    workflowLog(`[Init] ⏱️ TIMING BREAKDOWN (total: ${(timingData.totalMs / 1000).toFixed(1)}s)`)
+    for (const step of timingData.steps) {
+      const secs = (step.durationMs / 1000).toFixed(1)
+      const pct = ((step.durationMs / timingData.totalMs) * 100).toFixed(0)
+      workflowLog(`[Init]   ${step.name}: ${secs}s (${pct}%)`)
+    }
+
+    return {
+      sandboxId: sandboxResult.sandbox.sandboxId,
+      devUrl: sandboxResult.devUrl,
+      reportId,
+      beforeCls: null,
+      beforeGrade: null,
+      beforeScreenshots: [],
+      initD3kLogs: "",
+      timing: {
+        totalMs: timingData.totalMs,
+        sandboxCreation: sandboxResult.timing,
+        steps: timingData.steps
+      },
+      fromSnapshot: sandboxResult.fromSnapshot,
+      snapshotId: sandboxResult.snapshotId
+    }
   }
 
   // Wait for d3k to capture initial CLS
