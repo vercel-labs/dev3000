@@ -584,6 +584,36 @@ async function updateProgress(
   }
 }
 
+async function appendProgressLog(ctx: ProgressContext | null | undefined, message: string) {
+  if (!ctx) return
+  try {
+    const existingRun = (await listWorkflowRuns(ctx.userId)).find((run) => run.id === ctx.runId)
+    const timestampPrefix = new Date().toISOString().slice(11, 19)
+    const nextLogLine = `[${timestampPrefix}] ${message}`
+    const existingLogs = Array.isArray(existingRun?.progressLogs) ? existingRun.progressLogs : []
+    const progressLogs =
+      existingLogs[existingLogs.length - 1] === nextLogLine
+        ? existingLogs.slice(-80)
+        : [...existingLogs, nextLogLine].slice(-80)
+
+    await saveWorkflowRun({
+      ...existingRun,
+      id: ctx.runId,
+      userId: ctx.userId,
+      projectName: ctx.projectName,
+      timestamp: ctx.timestamp,
+      status: "running",
+      type: (ctx.workflowType as WorkflowType) || "cls-fix",
+      stepNumber: existingRun?.stepNumber ?? 1,
+      currentStep: existingRun?.currentStep ?? "Running workflow...",
+      sandboxUrl: existingRun?.sandboxUrl,
+      progressLogs
+    })
+  } catch (err) {
+    workflowLog(`[Progress] Failed to append log: ${err instanceof Error ? err.message : String(err)}`)
+  }
+}
+
 // ============================================================
 // STEP 1: Init Sandbox
 // ============================================================
@@ -597,7 +627,8 @@ export interface InitStepTiming {
 
 async function prepareTurbopackNdjsonArtifacts(
   sandbox: Sandbox,
-  projectDir?: string
+  projectDir?: string,
+  progressContext?: ProgressContext | null
 ): Promise<{ outputDir: string; summary: string }> {
   const projectCwd = projectDir ? `/vercel/sandbox/${projectDir.replace(/^\/+|\/+$/g, "")}` : "/vercel/sandbox"
   const outputDir = ".next/diagnostics/analyze/ndjson"
@@ -605,6 +636,7 @@ async function prepareTurbopackNdjsonArtifacts(
   const startedAt = Date.now()
 
   workflowLog(`[Turbopack] Preparing analyzer artifacts in ${projectCwd}`)
+  await appendProgressLog(progressContext, `[Turbopack] Preparing analyzer artifacts in ${projectCwd}`)
 
   const runAnalyze = async (withOutputFlag: boolean) =>
     runSandboxCommand(sandbox, "sh", [
@@ -619,28 +651,33 @@ else npx next experimental-analyze${withOutputFlag ? " --output" : ""}; fi`
     ])
 
   // Newer Next versions support no-flag invocation; older variants may require --output.
+  await appendProgressLog(progressContext, "[Turbopack] Running next experimental-analyze")
   let analyzeResult = await runAnalyze(false)
   if (analyzeResult.exitCode !== 0) {
     const combined = `${analyzeResult.stderr}\n${analyzeResult.stdout}`
-    const maybeNeedsOutputFlag =
-      /missing required.*--output|requires.*--output|expected.*--output/i.test(combined)
+    const maybeNeedsOutputFlag = /missing required.*--output|requires.*--output|expected.*--output/i.test(combined)
     if (maybeNeedsOutputFlag) {
+      await appendProgressLog(progressContext, "[Turbopack] Retrying analyze with --output compatibility flag")
       analyzeResult = await runAnalyze(true)
     }
   }
   if (analyzeResult.exitCode !== 0) {
     const errTail = (analyzeResult.stderr || analyzeResult.stdout || "").slice(-2000)
+    await appendProgressLog(progressContext, `[Turbopack] Analyze failed: ${errTail.substring(0, 300)}`)
     throw new Error(`next experimental-analyze failed: ${errTail || "(no output)"}`)
   }
   workflowLog(`[Turbopack] Analyzer completed in ${Math.round((Date.now() - startedAt) / 1000)}s`)
+  await appendProgressLog(progressContext, "[Turbopack] Analyze command completed")
 
   const analyzeDataCheck = await runSandboxCommand(sandbox, "sh", [
     "-c",
     `cd ${projectCwd} && if [ -d .next/diagnostics/analyze/data ]; then echo ok; else echo missing; fi`
   ])
   if (!analyzeDataCheck.stdout.includes("ok")) {
+    await appendProgressLog(progressContext, "[Turbopack] Analyze data folder missing after command")
     throw new Error("next experimental-analyze completed but .next/diagnostics/analyze/data is missing")
   }
+  await appendProgressLog(progressContext, "[Turbopack] Analyze data folder detected")
 
   const writeScriptResult = await runSandboxCommand(sandbox, "sh", [
     "-c",
@@ -651,6 +688,7 @@ NDJSONEOF`
   if (writeScriptResult.exitCode !== 0) {
     throw new Error(`Failed to write NDJSON converter script: ${writeScriptResult.stderr || writeScriptResult.stdout}`)
   }
+  await appendProgressLog(progressContext, "[Turbopack] NDJSON converter script written")
 
   const convertResult = await runSandboxCommand(sandbox, "sh", [
     "-c",
@@ -659,6 +697,7 @@ NDJSONEOF`
   if (convertResult.exitCode !== 0) {
     throw new Error(`NDJSON conversion failed: ${convertResult.stderr || convertResult.stdout}`)
   }
+  await appendProgressLog(progressContext, "[Turbopack] NDJSON conversion completed")
 
   const summaryResult = await runSandboxCommand(sandbox, "sh", [
     "-c",
@@ -720,6 +759,7 @@ export async function initSandboxStep(
       branch,
       githubPat,
       skipD3kSetup: isTurbopackBundleAnalyzer,
+      onProgress: (message) => appendProgressLog(progressContext, `[Sandbox] ${message}`),
       projectDir: projectDir || "",
       timeout: "30m",
       debug: true
@@ -747,7 +787,7 @@ export async function initSandboxStep(
   if (isTurbopackBundleAnalyzer) {
     timer.start("Generate Turbopack NDJSON artifacts")
     await updateProgress(progressContext, 1, "Running next experimental-analyze...")
-    const ndjsonResult = await prepareTurbopackNdjsonArtifacts(sandboxResult.sandbox, projectDir)
+    const ndjsonResult = await prepareTurbopackNdjsonArtifacts(sandboxResult.sandbox, projectDir, progressContext)
     workflowLog(`[Init] Turbopack NDJSON artifacts ready at ${ndjsonResult.outputDir}`)
     if (ndjsonResult.summary) {
       workflowLog(`[Init] Turbopack NDJSON summary:\n${ndjsonResult.summary}`)

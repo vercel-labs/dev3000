@@ -213,6 +213,7 @@ export interface D3kSandboxConfig {
   githubPat?: string
   timeout?: StringValue
   skipD3kSetup?: boolean
+  onProgress?: (message: string) => void | Promise<void>
   projectDir?: string
   framework?: string
   packageManager?: "bun" | "pnpm" | "npm" | "yarn"
@@ -293,6 +294,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     githubPat,
     timeout = "30m",
     skipD3kSetup = false,
+    onProgress,
     projectDir = "",
     framework = "Next.js",
     packageManager,
@@ -310,6 +312,14 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     console.log(`  Branch/SHA: ${branch}${branch.length === 40 ? " (git commit SHA)" : " (branch name)"}`)
     console.log(`  Project: ${projectName}`)
     console.log(`  Framework: ${framework}`)
+  }
+  const reportProgress = async (message: string) => {
+    if (!onProgress) return
+    try {
+      await onProgress(message)
+    } catch {
+      // Don't fail workflow progress updates.
+    }
   }
 
   // Check for required credentials
@@ -410,6 +420,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
       }
   let sandbox: Sandbox
   try {
+    await reportProgress("Creating sandbox instance...")
     sandbox = await Sandbox.create({
       source,
       resources: { vcpus: 8 },
@@ -442,6 +453,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
   }
 
   if (debug) console.log("  ✅ Sandbox created")
+  await reportProgress("Sandbox instance created")
 
   try {
     const sandboxCwd = projectDir ? `/vercel/sandbox/${projectDir}` : "/vercel/sandbox"
@@ -487,6 +499,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
         sandboxCwd,
         debug
       ))
+    await reportProgress(`Detected package manager: ${resolvedPackageManager}`)
 
     if (resolvedPackageManager === "bun") {
       await ensureBunInstalled(sandbox)
@@ -494,6 +507,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
 
     // Install project dependencies
     if (debug) console.log("  📦 Installing project dependencies...")
+    await reportProgress("Installing project dependencies...")
     const installResult =
       resolvedPackageManager === "bun"
         ? await runCommandWithLogs(sandbox, {
@@ -516,6 +530,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     }
 
     if (debug) console.log("  ✅ Project dependencies installed")
+    await reportProgress("Project dependencies installed")
 
     // Install Chrome/Chromium using the SandboxChrome module
     // This handles system dependencies, @sparticuz/chromium installation, and path extraction
@@ -616,6 +631,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
 
     if (skipD3kSetup) {
       if (debug) console.log("  ⏩ Skipping d3k/chrome startup for analyzer-only workflow")
+      await reportProgress("Skipping d3k/chrome startup (analyzer-only mode)")
       const devUrl = sandbox.domain(3000)
       return {
         sandbox,
