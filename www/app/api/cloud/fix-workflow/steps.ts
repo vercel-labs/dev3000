@@ -764,7 +764,9 @@ ${ANALYZE_TO_NDJSON_SCRIPT}
 NDJSONEOF`
     ])
     if (writeScriptResult.exitCode !== 0) {
-      throw new Error(`Failed to write NDJSON converter script: ${writeScriptResult.stderr || writeScriptResult.stdout}`)
+      throw new Error(
+        `Failed to write NDJSON converter script: ${writeScriptResult.stderr || writeScriptResult.stdout}`
+      )
     }
     await appendProgressLog(progressContext, "[Turbopack] NDJSON converter script written")
 
