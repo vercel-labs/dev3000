@@ -640,9 +640,7 @@ async function prepareTurbopackNdjsonArtifacts(
 
   const appendAnalyzerTrace = async (label: string, result: { stdout: string; stderr: string }) => {
     const combined = `${result.stdout || ""}\n${result.stderr || ""}`
-    const nextCommandLine = combined
-      .split("\n")
-      .find((line) => line.includes("[Turbopack] Next command:"))
+    const nextCommandLine = combined.split("\n").find((line) => line.includes("[Turbopack] Next command:"))
     if (nextCommandLine) {
       await appendProgressLog(progressContext, `${label} ${nextCommandLine.trim()}`)
     }
