@@ -406,13 +406,38 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
         revision: branch,
         ...(isCommitSha ? {} : { depth: 1 })
       }
-  const sandbox = await Sandbox.create({
-    source,
-    resources: { vcpus: 8 },
-    timeout: timeoutMs,
-    ports: [3000], // App port
-    runtime: "node22"
-  })
+  let sandbox: Sandbox
+  try {
+    sandbox = await Sandbox.create({
+      source,
+      resources: { vcpus: 8 },
+      timeout: timeoutMs,
+      ports: [3000], // App port
+      runtime: "node22"
+    })
+  } catch (error) {
+    const apiError = error as {
+      message?: string
+      response?: { status?: number; statusText?: string; url?: string }
+      text?: string
+      json?: unknown
+      sandboxId?: string
+    }
+    console.error("[Sandbox Create] Failed", {
+      repoUrl: repoUrlWithGit,
+      branch,
+      isCommitSha,
+      hasGithubPat: Boolean(githubPat),
+      message: apiError?.message || String(error),
+      status: apiError?.response?.status,
+      statusText: apiError?.response?.statusText,
+      responseUrl: apiError?.response?.url,
+      sandboxId: apiError?.sandboxId,
+      responseText: apiError?.text,
+      responseJson: apiError?.json
+    })
+    throw error
+  }
 
   if (debug) console.log("  ✅ Sandbox created")
 

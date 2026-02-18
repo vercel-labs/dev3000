@@ -78,7 +78,6 @@ async function validatePublicUrl(
   }
 }
 
-
 // Handle OPTIONS preflight request
 export async function OPTIONS() {
   return new Response(null, {
