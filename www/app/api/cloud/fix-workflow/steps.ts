@@ -747,38 +747,91 @@ else \
 fi`
   ])
   const analyzeInputDir = (analyzeDataDirResult.stdout || "").trim().split("\n").find(Boolean)
-  if (!analyzeInputDir) {
-    const dataFilesResult = await runSandboxCommand(sandbox, "sh", [
-      "-c",
-      `cd ${projectCwd} && find .next -maxdepth 6 -type f -name '*.data' 2>/dev/null | head -20`
-    ])
-    const dataFiles = (dataFilesResult.stdout || "").trim()
-    await appendProgressLog(progressContext, "[Turbopack] Analyze data folder missing after command")
-    throw new Error(
-      `next analyzer command completed but no analyzer data directory was found under .next (sample data files: ${dataFiles || "none"})`
+  if (analyzeInputDir) {
+    await appendProgressLog(progressContext, `[Turbopack] Analyze data folder detected at ${analyzeInputDir}`)
+  } else {
+    await appendProgressLog(
+      progressContext,
+      "[Turbopack] No analyzer .data files detected; generating manifest-based NDJSON fallback"
     )
   }
-  await appendProgressLog(progressContext, `[Turbopack] Analyze data folder detected at ${analyzeInputDir}`)
 
-  const writeScriptResult = await runSandboxCommand(sandbox, "sh", [
-    "-c",
-    `cat > ${scriptPath} << 'NDJSONEOF'
+  if (analyzeInputDir) {
+    const writeScriptResult = await runSandboxCommand(sandbox, "sh", [
+      "-c",
+      `cat > ${scriptPath} << 'NDJSONEOF'
 ${ANALYZE_TO_NDJSON_SCRIPT}
 NDJSONEOF`
-  ])
-  if (writeScriptResult.exitCode !== 0) {
-    throw new Error(`Failed to write NDJSON converter script: ${writeScriptResult.stderr || writeScriptResult.stdout}`)
-  }
-  await appendProgressLog(progressContext, "[Turbopack] NDJSON converter script written")
+    ])
+    if (writeScriptResult.exitCode !== 0) {
+      throw new Error(`Failed to write NDJSON converter script: ${writeScriptResult.stderr || writeScriptResult.stdout}`)
+    }
+    await appendProgressLog(progressContext, "[Turbopack] NDJSON converter script written")
 
-  const convertResult = await runSandboxCommand(sandbox, "sh", [
-    "-c",
-    `cd ${projectCwd} && node ${scriptPath} --input "${analyzeInputDir}" --output "${outputDir}"`
-  ])
-  if (convertResult.exitCode !== 0) {
-    throw new Error(`NDJSON conversion failed: ${convertResult.stderr || convertResult.stdout}`)
+    const convertResult = await runSandboxCommand(sandbox, "sh", [
+      "-c",
+      `cd ${projectCwd} && node ${scriptPath} --input "${analyzeInputDir}" --output "${outputDir}"`
+    ])
+    if (convertResult.exitCode !== 0) {
+      throw new Error(`NDJSON conversion failed: ${convertResult.stderr || convertResult.stdout}`)
+    }
+    await appendProgressLog(progressContext, "[Turbopack] NDJSON conversion completed")
+  } else {
+    const manifestFallbackResult = await runSandboxCommand(sandbox, "sh", [
+      "-c",
+      `cd ${projectCwd} && node -e '
+const fs = require("fs");
+const path = require("path");
+const outDir = path.resolve("${outputDir}");
+fs.mkdirSync(outDir, { recursive: true });
+const writeNdjson = (name, rows) => fs.writeFileSync(path.join(outDir, name), rows.map((r) => JSON.stringify(r)).join("\\n") + (rows.length ? "\\n" : ""));
+let manifest = {};
+try { manifest = JSON.parse(fs.readFileSync(".next/build-manifest.json", "utf8")); } catch {}
+const pages = manifest.pages || {};
+const files = new Set();
+for (const arr of Object.values(pages)) {
+  if (Array.isArray(arr)) for (const f of arr) files.add(f);
+}
+const outputFiles = [];
+let total = 0;
+for (const file of files) {
+  const rel = String(file).replace(/^\\//, "");
+  const abs = path.join(".next", rel);
+  let size = 0;
+  try { size = fs.statSync(abs).size; } catch {}
+  total += size;
+  outputFiles.push({
+    route: "*",
+    id: outputFiles.length,
+    filename: file,
+    total_size: size,
+    total_compressed_size: size,
+    num_parts: size > 0 ? 1 : 0
+  });
+}
+const routes = [{
+  route: "*",
+  total_size: total,
+  total_compressed_size: total,
+  num_sources: 0,
+  num_output_files: outputFiles.length
+}];
+writeNdjson("routes.ndjson", routes);
+writeNdjson("output_files.ndjson", outputFiles);
+writeNdjson("sources.ndjson", []);
+writeNdjson("chunk_parts.ndjson", []);
+writeNdjson("module_edges.ndjson", []);
+writeNdjson("modules.ndjson", []);
+console.log("fallback_ndjson_routes=" + routes.length + " output_files=" + outputFiles.length);
+'`
+    ])
+    if (manifestFallbackResult.exitCode !== 0) {
+      throw new Error(
+        `NDJSON fallback generation failed: ${manifestFallbackResult.stderr || manifestFallbackResult.stdout}`
+      )
+    }
+    await appendProgressLog(progressContext, "[Turbopack] Manifest-based NDJSON fallback generated")
   }
-  await appendProgressLog(progressContext, "[Turbopack] NDJSON conversion completed")
 
   const summaryResult = await runSandboxCommand(sandbox, "sh", [
     "-c",
@@ -791,7 +844,7 @@ head -n 300 ${outputDir}/routes.ndjson 2>/dev/null | sort -t: -k2,2nr | head -10
 
   return {
     outputDir,
-    summary: (summaryResult.stdout || convertResult.stdout || "").trim()
+    summary: (summaryResult.stdout || "").trim()
   }
 }
 
