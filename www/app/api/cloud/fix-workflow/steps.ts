@@ -2719,7 +2719,12 @@ ${screenshotRows}
       if (!raw) return []
       return raw
         .split("\n")
-        .map((line) => line.trim().replace(/^[-*]\s+/, "").replace(/^\d+\.\s+/, ""))
+        .map((line) =>
+          line
+            .trim()
+            .replace(/^[-*]\s+/, "")
+            .replace(/^\d+\.\s+/, "")
+        )
         .filter(Boolean)
         .filter((line) => !line.startsWith("#"))
         .slice(0, 4)

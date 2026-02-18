@@ -229,7 +229,14 @@ export async function cloudFixWorkflow(params: {
     let prResult: { prUrl: string; prNumber: number; branch: string } | null = null
     let prError: string | null = null
 
-    if (analysisTargetType !== "url" && fixResult.gitDiff && githubPat && repoOwner && repoName && turbopackPrGate.allowPr) {
+    if (
+      analysisTargetType !== "url" &&
+      fixResult.gitDiff &&
+      githubPat &&
+      repoOwner &&
+      repoName &&
+      turbopackPrGate.allowPr
+    ) {
       workflowLog("[Workflow] Step 3: Creating GitHub PR...")
 
       const prStepResult = await createPullRequest(

@@ -70,6 +70,7 @@ function getAnalysisTarget(typeParam: string | null, targetParam: string | null)
 }
 
 const RECENT_PROJECTS_KEY = "d3k_recent_projects"
+const LEGACY_GITHUB_PAT_STORAGE_KEY = "d3k_github_pat"
 
 function readRecentProjects(teamId: string): RecentProject[] {
   if (!teamId) return []
@@ -186,6 +187,8 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
     },
     [selectedTeam]
   )
+
+  const getGithubPatStorageKey = useCallback((projectId: string) => `d3k_github_pat_${projectId}`, [])
 
   const workflowSkillLabels: Record<string, string[]> = {
     "design-guidelines": ["d3k", "vercel-design-guidelines"],
@@ -455,16 +458,34 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
     return () => clearInterval(interval)
   }, [activeRunId, userId, step, selectedProject, redirectedRunId, router])
 
-  // Load GitHub PAT from localStorage when on options step
+  // Load GitHub PAT from localStorage when on options step.
+  // PATs are now scoped per project to avoid cross-project leakage.
   useEffect(() => {
-    if (step === "options" && !githubPat) {
-      const storedPat = localStorage.getItem("d3k_github_pat")
-      if (storedPat) {
-        console.log("[GitHub PAT] Loaded from localStorage")
-        setGithubPat(storedPat)
-      }
+    if (step !== "options" || isUrlAuditType) return
+
+    const projectIdForPat = selectedProject?.id || searchParams.get("project")
+    if (!projectIdForPat) return
+
+    const projectStorageKey = getGithubPatStorageKey(projectIdForPat)
+    const storedProjectPat = localStorage.getItem(projectStorageKey)
+    if (storedProjectPat !== null) {
+      console.log("[GitHub PAT] Loaded from localStorage for project", projectIdForPat)
+      setGithubPat(storedProjectPat)
+      return
     }
-  }, [step, githubPat])
+
+    const legacyPat = localStorage.getItem(LEGACY_GITHUB_PAT_STORAGE_KEY)
+    if (legacyPat) {
+      // One-time migration from global key to project-scoped key.
+      localStorage.setItem(projectStorageKey, legacyPat)
+      localStorage.removeItem(LEGACY_GITHUB_PAT_STORAGE_KEY)
+      console.log("[GitHub PAT] Migrated legacy localStorage token to project", projectIdForPat)
+      setGithubPat(legacyPat)
+      return
+    }
+
+    setGithubPat("")
+  }, [getGithubPatStorageKey, isUrlAuditType, searchParams, selectedProject, step])
 
   // Determine repository visibility so we can require PAT only when needed.
   useEffect(() => {
@@ -1689,13 +1710,16 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                           onChange={(e) => {
                             const newPat = e.target.value
                             setGithubPat(newPat)
-                            // Save to localStorage
+                            // Save to localStorage for this project only
+                            const projectIdForPat = selectedProject?.id || searchParams.get("project")
+                            if (!projectIdForPat) return
+                            const storageKey = getGithubPatStorageKey(projectIdForPat)
                             if (newPat) {
-                              localStorage.setItem("d3k_github_pat", newPat)
-                              console.log("[GitHub PAT] Saved to localStorage")
+                              localStorage.setItem(storageKey, newPat)
+                              console.log("[GitHub PAT] Saved to localStorage for project", projectIdForPat)
                             } else {
-                              localStorage.removeItem("d3k_github_pat")
-                              console.log("[GitHub PAT] Removed from localStorage")
+                              localStorage.removeItem(storageKey)
+                              console.log("[GitHub PAT] Removed from localStorage for project", projectIdForPat)
                             }
                           }}
                           className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground font-mono text-sm"
