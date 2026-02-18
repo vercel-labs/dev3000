@@ -22,6 +22,8 @@ interface ParsedTranscript {
   finalOutput?: string
 }
 
+type TranscriptPhase = "analysis" | "changes" | "verification"
+
 function normalizeReportMarkdown(text: string): string {
   return text.replace(/(^|\n)(\d+)\.\s*\n+\s*(?![-*]\s)(?!\d+\.\s)([^\n]+?)(?=\n|$)/g, "$1$2. $3")
 }
@@ -151,6 +153,20 @@ function StepSection({
   )
 }
 
+function getStepPhase(step: ParsedStep): TranscriptPhase {
+  const toolNames = step.toolCalls.map((tool) => tool.name.toLowerCase())
+
+  if (toolNames.some((name) => name === "writefile")) {
+    return "changes"
+  }
+
+  if (toolNames.some((name) => name === "runprojectcommand" || name === "gitdiff" || name === "diagnose")) {
+    return "verification"
+  }
+
+  return "analysis"
+}
+
 /**
  * Git Diff section with collapsible diff and download link in title bar
  */
@@ -217,6 +233,26 @@ export function AgentAnalysis({
   const analysisClassName =
     "prose prose-sm dark:prose-invert max-w-none prose-p:my-2 prose-ol:my-3 prose-ul:my-2 prose-li:my-1 [&_ol]:!list-outside [&_ul]:!list-outside [&_ol]:!pl-7 [&_ul]:!pl-7 [&_ol>li]:pl-0 [&_ul>li]:pl-0 [&_li>p]:inline [&_li>p]:my-0"
 
+  const groupedSteps = useMemo(() => {
+    const groups: Record<TranscriptPhase, ParsedStep[]> = {
+      analysis: [],
+      changes: [],
+      verification: []
+    }
+
+    for (const step of parsed.steps) {
+      groups[getStepPhase(step)].push(step)
+    }
+
+    return groups
+  }, [parsed.steps])
+
+  const phaseMeta: Array<{ key: TranscriptPhase; title: string }> = [
+    { key: "analysis", title: "Analysis" },
+    { key: "changes", title: "Code Changes" },
+    { key: "verification", title: "Verification" }
+  ]
+
   // If we couldn't parse the transcript structure, fall back to raw rendering
   if (!parsed.finalOutput && parsed.steps.length === 0) {
     return (
@@ -238,48 +274,58 @@ export function AgentAnalysis({
         </div>
       )}
 
-      {/* Parsed execution trace */}
+      {/* Parsed execution trace (max 3 collapsible groups) */}
       {parsed.steps.length > 0 && (
-        <StepSection title="Agent Transcript" badge={`${parsed.steps.length} steps`}>
-          <div className="space-y-4 mt-2">
-            {parsed.steps.map((step) => (
-              <div key={`step-${step.stepNumber}`} className="border-b border-border pb-4 last:border-b-0 last:pb-0">
-                <div className="text-sm font-medium mb-2">
-                  Step {step.stepNumber}
-                  <span className="text-xs text-muted-foreground ml-2">({step.toolCalls.length} tools)</span>
-                </div>
+        <div className="space-y-2">
+          <div className="text-sm font-medium">Agent Transcript</div>
+          {phaseMeta.map(({ key, title }) => {
+            const steps = groupedSteps[key]
+            if (steps.length === 0) return null
 
-                <div className="space-y-3">
-                  {step.assistantText && (
-                    <div>
-                      <div className="text-xs font-medium text-muted-foreground mb-1">Assistant</div>
-                      <div className={analysisClassName}>
-                        <Streamdown mode="static">{normalizeReportMarkdown(step.assistantText)}</Streamdown>
+            return (
+              <StepSection key={key} title={title} badge={`${steps.length} steps`}>
+                <div className="space-y-4 mt-2">
+                  {steps.map((step) => (
+                    <div key={`step-${step.stepNumber}`} className="border-b border-border pb-4 last:border-b-0 last:pb-0">
+                      <div className="text-sm font-medium mb-2">
+                        Step {step.stepNumber}
+                        <span className="text-xs text-muted-foreground ml-2">({step.toolCalls.length} tools)</span>
                       </div>
-                    </div>
-                  )}
 
-                  {step.toolCalls.map((toolCall, idx) => (
-                    <div key={`step-${step.stepNumber}-tool-${idx}`} className="border border-border rounded p-2">
-                      <div className="text-xs font-medium text-muted-foreground mb-1">Tool: {toolCall.name}</div>
-                      <pre className="text-xs bg-muted/50 p-2 rounded overflow-x-auto whitespace-pre-wrap max-h-40 overflow-y-auto">
-                        {toolCall.args || "{}"}
-                      </pre>
-                      {toolCall.result && (
-                        <>
-                          <div className="text-xs font-medium text-muted-foreground mt-2 mb-1">Result</div>
-                          <pre className="text-xs bg-muted/50 p-2 rounded overflow-x-auto whitespace-pre-wrap max-h-64 overflow-y-auto">
-                            {toolCall.result}
-                          </pre>
-                        </>
-                      )}
+                      <div className="space-y-3">
+                        {step.assistantText && (
+                          <div>
+                            <div className="text-xs font-medium text-muted-foreground mb-1">Assistant</div>
+                            <div className={analysisClassName}>
+                              <Streamdown mode="static">{normalizeReportMarkdown(step.assistantText)}</Streamdown>
+                            </div>
+                          </div>
+                        )}
+
+                        {step.toolCalls.map((toolCall, idx) => (
+                          <div key={`step-${step.stepNumber}-tool-${idx}`} className="border border-border rounded p-2">
+                            <div className="text-xs font-medium text-muted-foreground mb-1">Tool: {toolCall.name}</div>
+                            <pre className="text-xs bg-muted/50 p-2 rounded overflow-x-auto whitespace-pre-wrap max-h-40 overflow-y-auto">
+                              {toolCall.args || "{}"}
+                            </pre>
+                            {toolCall.result && (
+                              <>
+                                <div className="text-xs font-medium text-muted-foreground mt-2 mb-1">Result</div>
+                                <pre className="text-xs bg-muted/50 p-2 rounded overflow-x-auto whitespace-pre-wrap max-h-64 overflow-y-auto">
+                                  {toolCall.result}
+                                </pre>
+                              </>
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   ))}
                 </div>
-              </div>
-            ))}
-          </div>
-        </StepSection>
+              </StepSection>
+            )
+          })}
+        </div>
       )}
     </div>
   )
