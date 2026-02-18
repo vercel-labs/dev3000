@@ -902,6 +902,9 @@ export async function initSandboxStep(
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
+    if (message.includes("Sandbox git source clone failed")) {
+      throw error
+    }
     if (message.includes("Status code 400 is not ok") && repoUrl.includes("github.com") && !githubPat) {
       throw new Error(
         "Sandbox initialization failed while accessing the repository through Vercel Sandbox source. Verify repository access/integration for the workflow environment."

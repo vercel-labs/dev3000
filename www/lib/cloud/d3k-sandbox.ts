@@ -406,12 +406,50 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     if (debug) console.log("  ✅ bun installed")
   }
 
+  const parseGitHubRepo = (url: string): { owner: string; repo: string } | null => {
+    const normalized = url.replace(/\.git$/i, "")
+    const match = normalized.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)$/i)
+    if (!match) return null
+    return { owner: match[1], repo: match[2] }
+  }
+
+  const validateGithubPatAccess = async (url: string, pat: string): Promise<void> => {
+    const repo = parseGitHubRepo(url)
+    if (!repo) return
+
+    const response = await fetch(`https://api.github.com/repos/${repo.owner}/${repo.repo}`, {
+      headers: {
+        Authorization: `Bearer ${pat}`,
+        Accept: "application/vnd.github+json",
+        "User-Agent": "dev3000-workflow"
+      }
+    })
+
+    if (response.status === 200) return
+
+    if (response.status === 401) {
+      throw new Error(
+        `GitHub PAT authentication failed for ${repo.owner}/${repo.repo}. Verify the token is valid and not expired/revoked.`
+      )
+    }
+
+    if (response.status === 403 || response.status === 404) {
+      throw new Error(
+        `GitHub PAT does not have access to ${repo.owner}/${repo.repo} (HTTP ${response.status}). Grant repository read access to this token.`
+      )
+    }
+  }
+
   // Create sandbox from git source so Vercel handles repo auth consistently.
   const timeoutMs = ms(timeout)
   if (typeof timeoutMs !== "number") {
     throw new Error(`Invalid timeout value: ${timeout}`)
   }
   const repoUrlWithGit = repoUrl.endsWith(".git") ? repoUrl : `${repoUrl}.git`
+  if (githubPat && repoUrlWithGit.includes("github.com/")) {
+    await reportProgress("Validating GitHub PAT access...")
+    await validateGithubPatAccess(repoUrlWithGit, githubPat)
+  }
   const isCommitSha = /^[0-9a-f]{40}$/i.test(branch)
   const source = githubPat
     ? {
@@ -446,20 +484,46 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
       json?: unknown
       sandboxId?: string
     }
+    const responsePayload =
+      apiError?.json && typeof apiError.json === "object" && "error" in apiError.json
+        ? (apiError.json as {
+            error?: { code?: string; message?: string; exitCode?: number; sandboxId?: string }
+          }).error
+        : undefined
+    const status = apiError?.response?.status
+    const code = responsePayload?.code
+    const message = responsePayload?.message || apiError?.message || String(error)
+    const sandboxId = responsePayload?.sandboxId || apiError?.sandboxId
+    const exitCode = responsePayload?.exitCode
+
     console.error("[Sandbox Create] Failed", {
       repoUrl: repoUrlWithGit,
       branch,
       isCommitSha,
       hasGithubPat: Boolean(githubPat),
-      message: apiError?.message || String(error),
-      status: apiError?.response?.status,
+      message,
+      status,
       statusText: apiError?.response?.statusText,
       responseUrl: apiError?.response?.url,
-      sandboxId: apiError?.sandboxId,
+      sandboxId,
+      code,
+      exitCode,
       responseText: apiError?.text,
       responseJson: apiError?.json
     })
-    throw error
+
+    if (status === 400 && code === "bad_request" && message.toLowerCase().includes("git clone failed")) {
+      const authHint = githubPat
+        ? "The provided GitHub PAT could not clone the repository. Verify token validity and repo access."
+        : "No GitHub PAT was provided. For private repos, provide a PAT with read access."
+      const enriched = `Sandbox git source clone failed (${repoUrlWithGit}@${branch}). ${authHint} API code=${code} status=${status} exitCode=${exitCode ?? "unknown"} sandboxId=${sandboxId ?? "unknown"}`
+      await reportProgress(enriched)
+      throw new Error(enriched)
+    }
+
+    const generic = `Sandbox creation failed: ${message} (status=${status ?? "unknown"}, code=${code ?? "unknown"}, sandboxId=${sandboxId ?? "unknown"})`
+    await reportProgress(generic)
+    throw new Error(generic)
   }
 
   if (debug) console.log("  ✅ Sandbox created")
