@@ -638,6 +638,16 @@ async function prepareTurbopackNdjsonArtifacts(
   workflowLog(`[Turbopack] Preparing analyzer artifacts in ${projectCwd}`)
   await appendProgressLog(progressContext, `[Turbopack] Preparing analyzer artifacts in ${projectCwd}`)
 
+  const appendAnalyzerTrace = async (label: string, result: { stdout: string; stderr: string }) => {
+    const combined = `${result.stdout || ""}\n${result.stderr || ""}`
+    const nextCommandLine = combined
+      .split("\n")
+      .find((line) => line.includes("[Turbopack] Next command:"))
+    if (nextCommandLine) {
+      await appendProgressLog(progressContext, `${label} ${nextCommandLine.trim()}`)
+    }
+  }
+
   const runNextCli = async (command: string) =>
     runSandboxCommand(sandbox, "sh", [
       "-c",
@@ -661,6 +671,7 @@ eval "$NEXT_BIN ${command}"`
     "[Turbopack] Running next build --experimental-analyze --experimental-build-mode compile --turbopack"
   )
   let analyzeResult = await runNextCli("build --experimental-analyze --experimental-build-mode compile --turbopack")
+  await appendAnalyzerTrace("[Turbopack]", analyzeResult)
   if (analyzeResult.exitCode !== 0) {
     const combined = `${analyzeResult.stderr}\n${analyzeResult.stdout}`
     const buildModeUnsupported =
@@ -673,6 +684,7 @@ eval "$NEXT_BIN ${command}"`
         "[Turbopack] Compile build mode unsupported; retrying build analyze without build-mode flag"
       )
       analyzeResult = await runNextCli("build --experimental-analyze --turbopack")
+      await appendAnalyzerTrace("[Turbopack]", analyzeResult)
     }
   }
   if (analyzeResult.exitCode !== 0) {
@@ -682,11 +694,14 @@ eval "$NEXT_BIN ${command}"`
         combined
       )
     if (buildFlagUnsupported) {
+      const unsupportedTail = combined.slice(-220).replace(/\s+/g, " ").trim()
+      await appendProgressLog(progressContext, `[Turbopack] Build flag unsupported detail: ${unsupportedTail}`)
       await appendProgressLog(
         progressContext,
         "[Turbopack] Build flag unsupported; retrying legacy experimental-analyze"
       )
       analyzeResult = await runNextCli("experimental-analyze")
+      await appendAnalyzerTrace("[Turbopack]", analyzeResult)
 
       if (analyzeResult.exitCode !== 0) {
         const legacyCombined = `${analyzeResult.stderr}\n${analyzeResult.stdout}`
