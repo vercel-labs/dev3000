@@ -60,6 +60,7 @@ type WorkflowStep = "type" | "team" | "project" | "options" | "running"
 type RecentProject = { id: string; name: string }
 type RecentProjectsStore = Record<string, RecentProject[]>
 type AnalysisTarget = "project" | "url" | ""
+type RepoVisibility = "unknown" | "checking" | "public" | "private_or_unknown"
 
 function getAnalysisTarget(typeParam: string | null, targetParam: string | null): AnalysisTarget {
   if (targetParam === "project" || targetParam === "url") return targetParam
@@ -167,6 +168,8 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   const [customPrompt, setCustomPrompt] = useState("")
   const [publicUrl, setPublicUrl] = useState("")
   const [githubPat, setGithubPat] = useState("")
+  const [repoVisibility, setRepoVisibility] = useState<RepoVisibility>("unknown")
+  const [repoVisibilityReason, setRepoVisibilityReason] = useState<string | null>(null)
   const [startPath, setStartPath] = useState("/")
   const [crawlDepth, setCrawlDepth] = useState<number | "all">(1)
   const [availableBranches, setAvailableBranches] = useState<
@@ -205,10 +208,12 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
     }
   })()
 
+  const selectedRepoOwner = selectedProject?.link?.org || selectedProject?.latestDeployments?.[0]?.meta?.githubOrg
+  const selectedRepoName = selectedProject?.link?.repo || selectedProject?.latestDeployments?.[0]?.meta?.githubRepo
+
   // Check if GitHub repo info is available from project link or deployment metadata
-  const hasGitHubRepoInfo = Boolean(
-    selectedProject?.link?.repo || selectedProject?.latestDeployments?.[0]?.meta?.githubRepo
-  )
+  const hasGitHubRepoInfo = Boolean(selectedRepoOwner && selectedRepoName)
+  const isGithubPatRequired = hasGitHubRepoInfo && repoVisibility !== "public"
 
   // Restore state from URL whenever searchParams change (after initial load)
   // This handles the case where user navigates via browser back/forward
@@ -289,6 +294,8 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       setNeedsBypassToken(false)
       setCustomPrompt("")
       setPublicUrl("")
+      setRepoVisibility("unknown")
+      setRepoVisibilityReason(null)
       setStartPath("/")
       setProjectsError(null)
       setProjectSearch("")
@@ -458,6 +465,44 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       }
     }
   }, [step, githubPat])
+
+  // Determine repository visibility so we can require PAT only when needed.
+  useEffect(() => {
+    async function checkRepoVisibility() {
+      if (isUrlAuditType || step !== "options" || !selectedRepoOwner || !selectedRepoName) {
+        setRepoVisibility("unknown")
+        setRepoVisibilityReason(null)
+        return
+      }
+
+      setRepoVisibility("checking")
+      setRepoVisibilityReason(null)
+
+      try {
+        const params = new URLSearchParams({ owner: selectedRepoOwner, repo: selectedRepoName })
+        const response = await fetch(`/api/github/repo-visibility?${params.toString()}`)
+        const data = (await response.json()) as {
+          success?: boolean
+          visibility?: RepoVisibility
+          reason?: string
+        }
+
+        if (data.success && data.visibility) {
+          setRepoVisibility(data.visibility)
+          setRepoVisibilityReason(data.reason || null)
+          return
+        }
+
+        setRepoVisibility("private_or_unknown")
+        setRepoVisibilityReason("probe_failed")
+      } catch (error) {
+        setRepoVisibility("private_or_unknown")
+        setRepoVisibilityReason(error instanceof Error ? error.message : String(error))
+      }
+    }
+
+    checkRepoVisibility()
+  }, [isUrlAuditType, step, selectedRepoOwner, selectedRepoName])
 
   // Check if deployment is protected when project is selected and on options step
   useEffect(() => {
@@ -692,6 +737,14 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
     }
     if (isUrlAuditType && !isValidPublicUrl) {
       setWorkflowStatus("Error: Enter a valid public https:// URL")
+      return
+    }
+    if (!isUrlAuditType && isGithubPatRequired && !githubPat.trim()) {
+      setWorkflowStatus(
+        repoVisibility === "checking"
+          ? "Error: Checking repository visibility. Please wait a moment and retry."
+          : "Error: This repository appears private. Add a GitHub PAT in Workflow options."
+      )
       return
     }
     const project = selectedProject
@@ -1597,7 +1650,11 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                           className="flex items-center gap-1 text-sm font-medium text-foreground mb-1"
                         >
                           GitHub Personal Access Token
-                          <span className="text-muted-foreground">(optional)</span>
+                          {isGithubPatRequired ? (
+                            <span className="text-red-500 ml-1">*</span>
+                          ) : (
+                            <span className="text-muted-foreground">(optional)</span>
+                          )}
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <button type="button" className="text-muted-foreground hover:text-foreground">
@@ -1645,7 +1702,12 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                           placeholder="github_pat_xxxx or ghp_xxxx"
                         />
                         <p className="mt-1 text-xs text-muted-foreground">
-                          Required to create PRs. Stored locally in your browser.
+                          {repoVisibility === "checking" && "Checking repository visibility... "}
+                          {repoVisibility === "public" && "Optional for public repositories. "}
+                          {repoVisibility === "private_or_unknown" &&
+                            "Required for private repositories (or when visibility cannot be verified). "}
+                          {repoVisibilityReason ? `(${repoVisibilityReason}) ` : ""}
+                          Stored locally in your browser.
                           <a
                             href="https://github.com/settings/tokens?type=beta"
                             target="_blank"
@@ -1729,7 +1791,10 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                       type="button"
                       onClick={startWorkflow}
                       disabled={
-                        (needsBypassToken && !bypassToken) || (_selectedType === "prompt" && !customPrompt.trim())
+                        (needsBypassToken && !bypassToken) ||
+                        (_selectedType === "prompt" && !customPrompt.trim()) ||
+                        (isGithubPatRequired && !githubPat.trim()) ||
+                        repoVisibility === "checking"
                       }
                       className="flex-1 px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
