@@ -1,6 +1,6 @@
 "use client"
 
-import { ChevronDown, ChevronRight, Download } from "lucide-react"
+import { ChevronDown, ChevronRight, ExternalLink } from "lucide-react"
 import { type ReactNode, useMemo, useState } from "react"
 import { Streamdown } from "streamdown"
 
@@ -168,36 +168,26 @@ function getStepPhase(step: ParsedStep): TranscriptPhase {
 }
 
 /**
- * Git Diff section with collapsible diff and download link in title bar
+ * Git Diff section with collapsible diff and GitHub link in title bar
  */
-function DiffSection({ gitDiff, projectName }: { gitDiff: string; projectName: string }) {
-  const handleDownload = (e: React.MouseEvent) => {
-    e.stopPropagation() // Prevent collapsible toggle
-    const cleanName = projectName.replace(/[^a-zA-Z0-9-_]/g, "-").toLowerCase()
-    const filename = `d3k-fix-${cleanName}.diff`
-    const blob = new Blob([gitDiff], { type: "text/plain" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = filename
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-  }
-
+function DiffSection({ gitDiff, prUrl }: { gitDiff: string; prUrl?: string }) {
+  const prDiffUrl = prUrl ? `${prUrl}.diff` : undefined
   return (
     <StepSection
       title="View Diff"
       headerAction={
-        <button
-          type="button"
-          onClick={handleDownload}
-          className="inline-flex items-center justify-center p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded transition-colors"
-          title="Download .diff file"
-        >
-          <Download className="h-4 w-4" />
-        </button>
+        prDiffUrl ? (
+          <a
+            href={prDiffUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded transition-colors"
+            title="Open GitHub diff"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <ExternalLink className="h-4 w-4" />
+          </a>
+        ) : undefined
       }
     >
       <pre className="mt-2 text-xs bg-muted/50 p-2 rounded overflow-x-auto whitespace-pre-wrap max-h-96 overflow-y-auto">
@@ -210,11 +200,11 @@ function DiffSection({ gitDiff, projectName }: { gitDiff: string; projectName: s
 export function AgentAnalysis({
   content,
   gitDiff,
-  projectName
+  prUrl
 }: {
   content: string
   gitDiff?: string
-  projectName?: string
+  prUrl?: string
 }) {
   const parsed = useMemo(() => parseTranscript(content), [content])
 
@@ -264,9 +254,6 @@ export function AgentAnalysis({
 
   return (
     <div className="space-y-4">
-      {/* Git Diff - shown with download link in title bar */}
-      {gitDiff && <DiffSection gitDiff={gitDiff} projectName={projectName || "project"} />}
-
       {/* Final Output - shown prominently at the top (with Git Diff section stripped) */}
       {cleanedFinalOutput && (
         <div className={analysisClassName}>
@@ -277,7 +264,6 @@ export function AgentAnalysis({
       {/* Parsed execution trace (max 3 collapsible groups) */}
       {parsed.steps.length > 0 && (
         <div className="space-y-2">
-          <div className="text-sm font-medium">Agent Transcript</div>
           {phaseMeta.map(({ key, title }) => {
             const steps = groupedSteps[key]
             if (steps.length === 0) return null
@@ -286,7 +272,10 @@ export function AgentAnalysis({
               <StepSection key={key} title={title} badge={`${steps.length} steps`}>
                 <div className="space-y-4 mt-2">
                   {steps.map((step) => (
-                    <div key={`step-${step.stepNumber}`} className="border-b border-border pb-4 last:border-b-0 last:pb-0">
+                    <div
+                      key={`step-${step.stepNumber}`}
+                      className="border-b border-border pb-4 last:border-b-0 last:pb-0"
+                    >
                       <div className="text-sm font-medium mb-2">
                         Step {step.stepNumber}
                         <span className="text-xs text-muted-foreground ml-2">({step.toolCalls.length} tools)</span>
@@ -327,6 +316,9 @@ export function AgentAnalysis({
           })}
         </div>
       )}
+
+      {/* Git Diff - shown last */}
+      {gitDiff && <DiffSection gitDiff={gitDiff} prUrl={prUrl} />}
     </div>
   )
 }

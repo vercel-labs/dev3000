@@ -910,17 +910,17 @@ async function ReportContent({
             </div>
           )}
 
-          {/* Agent Analysis - shown for all workflow types */}
+          {/* Agent Transcript - shown for all workflow types */}
           <div className="mt-6 pt-6 border-t border-border">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-medium">Agent Analysis</h3>
+              <h3 className="text-lg font-medium">Agent Transcript</h3>
               {report.agentAnalysisModel && (
                 <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
                   {report.agentAnalysisModel}
                 </span>
               )}
             </div>
-            <AgentAnalysis content={report.agentAnalysis} gitDiff={report.gitDiff} projectName={report.projectName} />
+            <AgentAnalysis content={report.agentAnalysis} gitDiff={report.gitDiff} prUrl={run.prUrl} />
           </div>
         </div>
 
