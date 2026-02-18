@@ -643,11 +643,11 @@ async function prepareTurbopackNdjsonArtifacts(
       "-c",
       `export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; cd ${projectCwd} && \
 echo "[Turbopack] Running next experimental-analyze${withOutputFlag ? " --output" : ""}..." && \
-if [ -f bun.lockb ] || [ -f bun.lock ]; then bun run next experimental-analyze${withOutputFlag ? " --output" : ""}; \
-elif [ -f pnpm-lock.yaml ]; then pnpm next experimental-analyze${withOutputFlag ? " --output" : ""}; \
+if [ -x ./node_modules/.bin/next ]; then ./node_modules/.bin/next experimental-analyze${withOutputFlag ? " --output" : ""}; \
+elif [ -f pnpm-lock.yaml ]; then pnpm exec next experimental-analyze${withOutputFlag ? " --output" : ""}; \
 elif [ -f yarn.lock ]; then yarn next experimental-analyze${withOutputFlag ? " --output" : ""}; \
-elif [ -f package-lock.json ]; then npx next experimental-analyze${withOutputFlag ? " --output" : ""}; \
-else npx next experimental-analyze${withOutputFlag ? " --output" : ""}; fi`
+elif [ -f bun.lockb ] || [ -f bun.lock ]; then bunx --bun next experimental-analyze${withOutputFlag ? " --output" : ""}; \
+else npx --yes next experimental-analyze${withOutputFlag ? " --output" : ""}; fi`
     ])
 
   // Newer Next versions support no-flag invocation; older variants may require --output.
