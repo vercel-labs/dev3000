@@ -486,9 +486,11 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     }
     const responsePayload =
       apiError?.json && typeof apiError.json === "object" && "error" in apiError.json
-        ? (apiError.json as {
-            error?: { code?: string; message?: string; exitCode?: number; sandboxId?: string }
-          }).error
+        ? (
+            apiError.json as {
+              error?: { code?: string; message?: string; exitCode?: number; sandboxId?: string }
+            }
+          ).error
         : undefined
     const status = apiError?.response?.status
     const code = responsePayload?.code

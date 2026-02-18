@@ -1998,6 +1998,7 @@ Constraints:
     tools,
     stopWhen: stepCountIs(maxSteps)
   })
+  const finalSummary = text.trim() || synthesizeFinalOutputFromSteps(steps, workflowTypeForPrompt)
 
   workflowLog(`[Agent] Completed in ${steps.length} steps`)
 
@@ -2059,14 +2060,98 @@ Constraints:
 
   transcript.push("## Final Output")
   transcript.push("")
-  transcript.push(text)
+  transcript.push(finalSummary)
 
   return {
     transcript: transcript.join("\n"),
-    summary: text,
+    summary: finalSummary,
     systemPrompt,
     skillsLoaded: Array.from(skillsLoaded)
   }
+}
+
+function synthesizeFinalOutputFromSteps(steps: unknown[], workflowType: string): string {
+  const inspectedPaths = new Set<string>()
+  const writtenFiles = new Set<string>()
+  const verificationRuns: string[] = []
+  const assistantNotes: string[] = []
+
+  for (const rawStep of steps) {
+    const step = rawStep as {
+      text?: string
+      toolCalls?: Array<{ toolName?: string; input?: unknown }>
+      toolResults?: Array<{ output?: unknown }>
+    }
+    if (step.text?.trim()) {
+      assistantNotes.push(step.text.trim())
+    }
+
+    const calls = Array.isArray(step.toolCalls) ? step.toolCalls : []
+    const results = Array.isArray(step.toolResults) ? step.toolResults : []
+
+    for (let i = 0; i < calls.length; i++) {
+      const call = calls[i]
+      const toolName = call?.toolName || "unknown"
+      const input = (call?.input || {}) as Record<string, unknown>
+      const outputRaw = results[i]?.output
+      const outputText =
+        typeof outputRaw === "string"
+          ? outputRaw
+          : outputRaw !== undefined
+            ? JSON.stringify(outputRaw)
+            : "[no result]"
+
+      if (toolName === "readFile") {
+        const path = typeof input.path === "string" ? input.path : ""
+        if (path.includes(".next/diagnostics/analyze/ndjson")) {
+          inspectedPaths.add(path)
+        }
+      }
+
+      if (toolName === "listDir") {
+        const path = typeof input.path === "string" ? input.path : ""
+        if (path.includes(".next/diagnostics/analyze/ndjson")) {
+          inspectedPaths.add(path)
+        }
+      }
+
+      if (toolName === "runProjectCommand") {
+        const command = typeof input.command === "string" ? input.command : ""
+        if (
+          command.includes("next build") ||
+          command.includes("analyze-to-ndjson") ||
+          command.includes("experimental-analyze")
+        ) {
+          const exitMatch = outputText.match(/Exit code:\s*(-?\d+)/i)
+          const exitCode = exitMatch ? exitMatch[1] : "unknown"
+          verificationRuns.push(`${command} (exit ${exitCode})`)
+        }
+      }
+
+      if (toolName === "writeFile") {
+        const path = typeof input.path === "string" ? input.path : ""
+        if (path) writtenFiles.add(path)
+      }
+    }
+  }
+
+  const noteSnippet = assistantNotes.slice(-2).join("\n\n").trim()
+  const lines: string[] = []
+  lines.push("No explicit final narrative was emitted by the model, so this summary was reconstructed from tool activity.")
+  lines.push("")
+  lines.push(`Workflow focus: ${workflowType}`)
+  lines.push(`Analyzer artifacts inspected: ${inspectedPaths.size > 0 ? Array.from(inspectedPaths).join(", ") : "not detected"}`)
+  lines.push(`Files modified: ${writtenFiles.size > 0 ? Array.from(writtenFiles).join(", ") : "none detected"}`)
+  lines.push(
+    `Verification commands: ${verificationRuns.length > 0 ? verificationRuns.slice(0, 6).join(" | ") : "not detected"}`
+  )
+  if (noteSnippet) {
+    lines.push("")
+    lines.push("Recent assistant notes:")
+    lines.push(noteSnippet)
+  }
+
+  return lines.join("\n")
 }
 
 // ============================================================
