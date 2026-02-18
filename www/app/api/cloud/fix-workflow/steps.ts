@@ -2552,6 +2552,8 @@ export async function createPullRequestStep(
   beforeCls: number | null,
   afterCls: number | null,
   reportId: string,
+  reportBlobUrl: string,
+  workflowType: string | undefined,
   progressContext?: ProgressContext | null,
   prScreenshots?: Array<{ route: string; beforeBlobUrl: string | null; afterBlobUrl: string | null }>
 ): Promise<{ prUrl: string; prNumber: number; branch: string; timing: PRStepTiming } | { error: string } | null> {
@@ -2570,7 +2572,16 @@ export async function createPullRequestStep(
     }
 
     const SANDBOX_CWD = "/vercel/sandbox"
-    const branchName = `d3k/fix-cls-${Date.now()}`
+    const workflowKind = workflowType || "cls-fix"
+    const branchPrefix =
+      workflowKind === "turbopack-bundle-analyzer"
+        ? "turbopack-bundle"
+        : workflowKind === "react-performance"
+          ? "react-performance"
+          : workflowKind === "design-guidelines"
+            ? "design-guidelines"
+            : "cls-fix"
+    const branchName = `d3k/${branchPrefix}-${Date.now()}`
 
     // Configure git user (required for commits)
     timer.start("Configure git")
@@ -2600,18 +2611,41 @@ export async function createPullRequestStep(
       `cd ${SANDBOX_CWD} && git add -A && git reset -- package-lock.json pnpm-lock.yaml yarn.lock 2>/dev/null || true`
     ])
 
+    type ReportPrContext = {
+      agentAnalysis?: string
+      workflowType?: string
+      turbopackBundleComparison?: {
+        delta?: { compressedBytes?: number; compressedPercent?: number | null; rawBytes?: number; rawPercent?: number | null }
+      }
+    }
+    let reportContext: ReportPrContext | null = null
+    try {
+      const reportResponse = await fetch(reportBlobUrl)
+      if (reportResponse.ok) {
+        reportContext = (await reportResponse.json()) as ReportPrContext
+      }
+    } catch {
+      reportContext = null
+    }
+
+    const effectiveWorkflowType = reportContext?.workflowType || workflowKind
+    const turbos = reportContext?.turbopackBundleComparison?.delta
+
     // Create commit message
-    const clsImprovement =
-      typeof beforeCls === "number" && typeof afterCls === "number"
-        ? `CLS: ${beforeCls.toFixed(3)} → ${afterCls.toFixed(3)}`
-        : "CLS improvements"
+    const commitMessage =
+      effectiveWorkflowType === "turbopack-bundle-analyzer"
+        ? `perf: optimize turbopack bundle size
 
-    const commitMessage = `fix: ${clsImprovement}
+Automated Turbopack bundle optimization by d3k
 
-Automated CLS fix by d3k
+🤖 Generated with d3k (https://d3k.dev)`
+        : `fix: ${
+            typeof beforeCls === "number" && typeof afterCls === "number"
+              ? `CLS ${beforeCls.toFixed(3)} → ${afterCls.toFixed(3)}`
+              : "CLS improvements"
+          }
 
-- Before CLS: ${beforeCls?.toFixed(3) || "unknown"}
-- After CLS: ${afterCls?.toFixed(3) || "unknown"}
+Automated fix by d3k
 
 🤖 Generated with d3k (https://d3k.dev)`
 
@@ -2645,7 +2679,10 @@ Automated CLS fix by d3k
     // Create PR via GitHub API
     timer.start("Create PR via GitHub API")
     workflowLog("[PR] Creating pull request...")
-    const prTitle = `fix: Reduce CLS (${beforeCls?.toFixed(3) || "?"} → ${afterCls?.toFixed(3) || "?"})`
+    const prTitle =
+      effectiveWorkflowType === "turbopack-bundle-analyzer"
+        ? `perf(turbopack): optimize bundle size`
+        : `fix(cls): reduce layout shift (${beforeCls?.toFixed(3) || "?"} → ${afterCls?.toFixed(3) || "?"})`
 
     // Build visual comparison section if screenshots available
     let visualComparisonSection = ""
@@ -2667,21 +2704,51 @@ ${screenshotRows}
 `
     }
 
-    const prBody = `## 🎯 CLS Fix by d3k
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://dev3000.ai"
+    const reportPageUrl = `${siteUrl}/workflows/${reportId}/report`
 
-This PR contains automated fixes to reduce Cumulative Layout Shift (CLS).
+    const extractFinalOutputSummary = (analysis?: string): string[] => {
+      if (!analysis) return []
+      const match = analysis.match(/## Final Output\s+([\s\S]*)$/)
+      const raw = (match?.[1] || "").replace(/```[\s\S]*?```/g, "").trim()
+      if (!raw) return []
+      return raw
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .filter((line) => !line.startsWith("#"))
+        .slice(0, 4)
+    }
+    const summaryLines = extractFinalOutputSummary(reportContext?.agentAnalysis)
+    const shortSummary = summaryLines.length > 0 ? summaryLines.map((line) => `- ${line}`).join("\n") : "- See workflow report for full transcript and evidence."
 
-### Results
+    const workflowHeading =
+      effectiveWorkflowType === "turbopack-bundle-analyzer" ? "Turbopack Bundle Analyzer Improvements" : "CLS Improvements"
+    const resultsSection =
+      effectiveWorkflowType === "turbopack-bundle-analyzer"
+        ? `### Results
+| Metric | Delta |
+|--------|-------|
+| Compressed JS | ${typeof turbos?.compressedBytes === "number" ? `${(turbos.compressedBytes / 1024).toFixed(1)} KB` : "unknown"} (${typeof turbos?.compressedPercent === "number" ? `${turbos.compressedPercent.toFixed(2)}%` : "unknown"}) |
+| Raw JS | ${typeof turbos?.rawBytes === "number" ? `${(turbos.rawBytes / 1024).toFixed(1)} KB` : "unknown"} (${typeof turbos?.rawPercent === "number" ? `${turbos.rawPercent.toFixed(2)}%` : "unknown"}) |`
+        : `### Results
 | Metric | Before | After |
 |--------|--------|-------|
-| CLS Score | ${beforeCls?.toFixed(3) || "unknown"} | ${afterCls?.toFixed(3) || "unknown"} |
-| Grade | ${beforeCls !== null ? (beforeCls <= 0.1 ? "Good ✅" : beforeCls <= 0.25 ? "Needs Improvement ⚠️" : "Poor ❌") : "unknown"} | ${afterCls !== null ? (afterCls <= 0.1 ? "Good ✅" : afterCls <= 0.25 ? "Needs Improvement ⚠️" : "Poor ❌") : "unknown"} |
+| CLS Score | ${beforeCls?.toFixed(3) || "unknown"} | ${afterCls?.toFixed(3) || "unknown"} |`
+
+    const prBody = `## ${workflowHeading}
+
+${resultsSection}
 ${visualComparisonSection}
-### What was fixed
-The AI agent analyzed the page for layout shifts and applied fixes to reduce CLS.
+### Summary
+${shortSummary}
+
+### Workflow Report
+- Report page: ${reportPageUrl}
+- Report JSON: ${reportBlobUrl}
 
 ---
-🤖 Generated with [d3k](https://d3k.dev)`
+Generated by [d3k](https://d3k.dev)`
 
     const prResponse = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/pulls`, {
       method: "POST",
@@ -2713,7 +2780,6 @@ The AI agent analyzed the page for layout shifts and applied fixes to reduce CLS
     timer.start("Update report with PR URL")
     try {
       workflowLog(`[PR] Updating report ${reportId} with PR URL...`)
-      const reportBlobUrl = `https://qkkfhcqmsjpmk4fp.public.blob.vercel-storage.com/report-${reportId}.json`
       const reportResponse = await fetch(reportBlobUrl)
       if (reportResponse.ok) {
         const report = (await reportResponse.json()) as Record<string, unknown>

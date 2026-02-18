@@ -12,6 +12,8 @@
  */
 
 const workflowLog = console.log
+const TURBOPACK_MIN_COMPRESSED_IMPROVEMENT_BYTES = 50 * 1024
+const TURBOPACK_MIN_COMPRESSED_IMPROVEMENT_PERCENT = 0.2
 
 interface InitResult {
   sandboxId: string
@@ -52,6 +54,11 @@ interface UrlAuditResult {
   status: "improved" | "unchanged" | "degraded" | "no-changes"
   agentSummary: string
   gitDiff: string | null
+}
+
+interface TurbopackPrGateResult {
+  allowPr: boolean
+  reason?: string
 }
 
 /**
@@ -190,12 +197,19 @@ export async function cloudFixWorkflow(params: {
 
     workflowLog(`[Workflow] Result: ${fixResult.status}, After CLS: ${fixResult.afterCls}`)
 
+    const turbopackPrGate = await evaluateTurbopackPrGate(
+      workflowType,
+      analysisTargetType,
+      fixResult.reportBlobUrl,
+      fixResult.gitDiff
+    )
+
     // ============================================================
     // STEP 2.5: Capture before/after screenshots (if changes and productionUrl)
     // ============================================================
     let prScreenshots: Array<{ route: string; beforeBlobUrl: string | null; afterBlobUrl: string | null }> = []
 
-    if (analysisTargetType !== "url" && fixResult.gitDiff && productionUrl) {
+    if (analysisTargetType !== "url" && fixResult.gitDiff && productionUrl && turbopackPrGate.allowPr) {
       workflowLog("[Workflow] Step 2.5: Capturing before/after screenshots...")
       prScreenshots = await captureScreenshotsForPR(
         initResult.sandboxId,
@@ -215,7 +229,7 @@ export async function cloudFixWorkflow(params: {
     let prResult: { prUrl: string; prNumber: number; branch: string } | null = null
     let prError: string | null = null
 
-    if (analysisTargetType !== "url" && fixResult.gitDiff && githubPat && repoOwner && repoName) {
+    if (analysisTargetType !== "url" && fixResult.gitDiff && githubPat && repoOwner && repoName && turbopackPrGate.allowPr) {
       workflowLog("[Workflow] Step 3: Creating GitHub PR...")
 
       const prStepResult = await createPullRequest(
@@ -228,6 +242,8 @@ export async function cloudFixWorkflow(params: {
         fixResult.beforeCls,
         fixResult.afterCls,
         reportId,
+        fixResult.reportBlobUrl,
+        workflowType,
         progressContext,
         prScreenshots
       )
@@ -246,6 +262,9 @@ export async function cloudFixWorkflow(params: {
     } else {
       if (!fixResult.gitDiff) {
         workflowLog("[Workflow] Skipping PR: No changes to commit")
+      } else if (!turbopackPrGate.allowPr) {
+        prError = turbopackPrGate.reason || "Skipped PR: No meaningful Turbopack bundle improvement"
+        workflowLog(`[Workflow] ${prError}`)
       } else if (!githubPat) {
         workflowLog("[Workflow] Skipping PR: No GitHub PAT provided")
       } else {
@@ -425,6 +444,8 @@ async function createPullRequest(
   beforeCls: number | null,
   afterCls: number | null,
   reportId: string,
+  reportBlobUrl: string,
+  workflowType: string | undefined,
   progressContext?: ProgressContext | null,
   prScreenshots?: Array<{ route: string; beforeBlobUrl: string | null; afterBlobUrl: string | null }>
 ): Promise<{ prUrl: string; prNumber: number; branch: string } | { error: string } | null> {
@@ -440,9 +461,56 @@ async function createPullRequest(
     beforeCls,
     afterCls,
     reportId,
+    reportBlobUrl,
+    workflowType,
     progressContext,
     prScreenshots
   )
+}
+
+async function evaluateTurbopackPrGate(
+  workflowType: string | undefined,
+  analysisTargetType: "vercel-project" | "url",
+  reportBlobUrl: string,
+  gitDiff: string | null
+): Promise<TurbopackPrGateResult> {
+  if (analysisTargetType === "url" || workflowType !== "turbopack-bundle-analyzer" || !gitDiff) {
+    return { allowPr: true }
+  }
+
+  try {
+    const response = await fetch(reportBlobUrl)
+    if (!response.ok) {
+      return { allowPr: true }
+    }
+    const report = (await response.json()) as {
+      turbopackBundleComparison?: { delta?: { compressedBytes?: number; compressedPercent?: number | null } }
+    }
+    const delta = report.turbopackBundleComparison?.delta
+    const compressedBytes = typeof delta?.compressedBytes === "number" ? delta.compressedBytes : null
+    const compressedPercent = typeof delta?.compressedPercent === "number" ? delta.compressedPercent : null
+
+    if (compressedBytes === null) {
+      return { allowPr: false, reason: "Skipped PR: Missing Turbopack bundle delta metrics" }
+    }
+    if (compressedBytes >= 0) {
+      return { allowPr: false, reason: "Skipped PR: Turbopack compressed bundle did not improve" }
+    }
+
+    const meaningfulByBytes = Math.abs(compressedBytes) >= TURBOPACK_MIN_COMPRESSED_IMPROVEMENT_BYTES
+    const meaningfulByPercent =
+      compressedPercent !== null && Math.abs(compressedPercent) >= TURBOPACK_MIN_COMPRESSED_IMPROVEMENT_PERCENT
+    if (!meaningfulByBytes && !meaningfulByPercent) {
+      return { allowPr: false, reason: "Skipped PR: Turbopack bundle improvement was not meaningful" }
+    }
+
+    return { allowPr: true }
+  } catch (error) {
+    workflowLog(
+      `[Workflow] Failed to evaluate Turbopack PR gate: ${error instanceof Error ? error.message : String(error)}`
+    )
+    return { allowPr: true }
+  }
 }
 
 async function saveDoneStatus(
