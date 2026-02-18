@@ -694,23 +694,7 @@ eval "$NEXT_BIN ${command}"`
     if (buildFlagUnsupported) {
       const unsupportedTail = combined.slice(-220).replace(/\s+/g, " ").trim()
       await appendProgressLog(progressContext, `[Turbopack] Build flag unsupported detail: ${unsupportedTail}`)
-      await appendProgressLog(
-        progressContext,
-        "[Turbopack] Build flag unsupported; retrying legacy experimental-analyze"
-      )
-      analyzeResult = await runNextCli("experimental-analyze")
-      await appendAnalyzerTrace("[Turbopack]", analyzeResult)
-
-      if (analyzeResult.exitCode !== 0) {
-        const legacyCombined = `${analyzeResult.stderr}\n${analyzeResult.stdout}`
-        const maybeNeedsOutputFlag = /missing required.*--output|requires.*--output|expected.*--output/i.test(
-          legacyCombined
-        )
-        if (maybeNeedsOutputFlag) {
-          await appendProgressLog(progressContext, "[Turbopack] Retrying legacy analyze with --output")
-          analyzeResult = await runNextCli("experimental-analyze --output")
-        }
-      }
+      throw new Error(`next build analyzer flags unsupported: ${unsupportedTail || "(no output)"}`)
     }
   }
   if (analyzeResult.exitCode !== 0) {
@@ -1887,7 +1871,7 @@ Workflow:
 4) Implement high-impact fixes in code (do not stop at recommendations).
 5) Validate changes did not break the app (diagnose and/or getWebVitals).
 6) Re-run bundle analysis at the end using runProjectCommand:
-   - \`next build --experimental-analyze --experimental-build-mode compile --turbopack\` (fallback to \`next build --experimental-analyze --turbopack\`, then legacy \`next experimental-analyze\` + optional \`--output\`)
+   - \`next build --experimental-analyze --experimental-build-mode compile --turbopack\` (fallback to \`next build --experimental-analyze --turbopack\`)
    - \`node /tmp/analyze-to-ndjson.mjs --input .next/diagnostics/analyze/data --output .next/diagnostics/analyze/ndjson\`
 7) Summarize what changed, what improved, and any remaining tradeoffs.
 
