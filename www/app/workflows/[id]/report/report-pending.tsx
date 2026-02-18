@@ -26,6 +26,7 @@ export function ReportPending({ runId, userId }: ReportPendingProps) {
   const [hasError, setHasError] = useState(false)
   const [sandboxUrl, setSandboxUrl] = useState<string | null>(null)
   const [stepNumber, setStepNumber] = useState<number | null>(null)
+  const [progressLogs, setProgressLogs] = useState<string[]>([])
 
   useEffect(() => {
     let isActive = true
@@ -52,6 +53,7 @@ export function ReportPending({ runId, userId }: ReportPendingProps) {
             error?: string
             stepNumber?: number
             sandboxUrl?: string
+            progressLogs?: string[]
           }>
         }
 
@@ -82,6 +84,7 @@ export function ReportPending({ runId, userId }: ReportPendingProps) {
           setStatus(run.currentStep || "Generating report...")
           setStepNumber(typeof run.stepNumber === "number" ? run.stepNumber : null)
           setSandboxUrl(run.sandboxUrl || null)
+          setProgressLogs(Array.isArray(run.progressLogs) ? run.progressLogs : [])
         }
       } catch (error) {
         if (!isActive) return
@@ -193,6 +196,16 @@ export function ReportPending({ runId, userId }: ReportPendingProps) {
               )
             })}
           </div>
+          {progressLogs.length > 0 && (
+            <div className="mt-4">
+              <div className="text-xs font-medium text-muted-foreground mb-2">Live Logs</div>
+              <textarea
+                readOnly
+                value={progressLogs.join("\n")}
+                className="w-full h-28 rounded-md border border-border bg-muted/30 px-3 py-2 text-xs font-mono leading-relaxed resize-none"
+              />
+            </div>
+          )}
         </div>
 
         <div className="grid gap-4">

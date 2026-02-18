@@ -15,7 +15,7 @@ import { z } from "zod"
 import { getOrCreateD3kSandbox, type SandboxTimingData, StepTimer } from "@/lib/cloud/d3k-sandbox"
 import { SandboxAgentBrowser } from "@/lib/cloud/sandbox-agent-browser"
 import { skillFallbacks } from "@/lib/skills/fallbacks"
-import { saveWorkflowRun, type WorkflowType } from "@/lib/workflow-storage"
+import { listWorkflowRuns, saveWorkflowRun, type WorkflowType } from "@/lib/workflow-storage"
 import type { WorkflowReport } from "@/types"
 
 const workflowLog = console.log
@@ -556,7 +556,17 @@ async function updateProgress(
 ) {
   if (!ctx) return
   try {
+    const existingRun = (await listWorkflowRuns(ctx.userId)).find((run) => run.id === ctx.runId)
+    const timestampPrefix = new Date().toISOString().slice(11, 19)
+    const nextLogLine = `[${timestampPrefix}] ${currentStep}`
+    const existingLogs = Array.isArray(existingRun?.progressLogs) ? existingRun.progressLogs : []
+    const progressLogs =
+      existingLogs[existingLogs.length - 1] === nextLogLine
+        ? existingLogs.slice(-40)
+        : [...existingLogs, nextLogLine].slice(-40)
+
     await saveWorkflowRun({
+      ...existingRun,
       id: ctx.runId,
       userId: ctx.userId,
       projectName: ctx.projectName,
@@ -565,7 +575,8 @@ async function updateProgress(
       type: (ctx.workflowType as WorkflowType) || "cls-fix",
       stepNumber,
       currentStep,
-      sandboxUrl
+      sandboxUrl,
+      progressLogs
     })
     workflowLog(`[Progress] Updated: Step ${stepNumber} - ${currentStep}`)
   } catch (err) {

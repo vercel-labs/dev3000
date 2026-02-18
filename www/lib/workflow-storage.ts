@@ -57,6 +57,7 @@ export interface WorkflowRun {
   sandboxUrl?: string // Dev URL from sandbox for live viewing
   isPublic?: boolean // If true, the report can be viewed without authentication
   customPrompt?: string // For prompt type: the user's custom instruction
+  progressLogs?: string[] // Rolling log lines for live pending UI
 }
 
 /**
