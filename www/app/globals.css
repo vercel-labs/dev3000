@@ -38,8 +38,8 @@
   --sidebar-accent-foreground: oklch(0.98 0 0);
   --sidebar-border: oklch(0.15 0 0);
   --sidebar-ring: oklch(0.4 0 0);
-  --shimmer-base: color-mix(in oklch, var(--foreground) 55%, var(--muted-foreground));
-  --shimmer-highlight: color-mix(in oklch, var(--foreground) 85%, white);
+  --shimmer-base: oklch(0.42 0.06 255);
+  --shimmer-highlight: oklch(0.72 0.16 255);
 
   .asciinema-player-theme-vercel {
     /* Foreground (default text) color */
