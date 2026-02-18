@@ -730,15 +730,35 @@ eval "$NEXT_BIN ${command}"`
   workflowLog(`[Turbopack] Analyzer completed in ${Math.round((Date.now() - startedAt) / 1000)}s`)
   await appendProgressLog(progressContext, "[Turbopack] Analyze command completed")
 
-  const analyzeDataCheck = await runSandboxCommand(sandbox, "sh", [
+  const analyzeDataDirResult = await runSandboxCommand(sandbox, "sh", [
     "-c",
-    `cd ${projectCwd} && if [ -d .next/diagnostics/analyze/data ]; then echo ok; else echo missing; fi`
+    `cd ${projectCwd} && \
+if [ -d .next/diagnostics/analyze/data ]; then \
+  echo ".next/diagnostics/analyze/data"; \
+elif [ -d .next/analyze/data ]; then \
+  echo ".next/analyze/data"; \
+elif [ -d .next/analyze ]; then \
+  echo ".next/analyze"; \
+else \
+  MOD_DIR="$(find .next -type f -name modules.data 2>/dev/null | head -n1 | xargs -I{} dirname {} 2>/dev/null)"; \
+  if [ -n "$MOD_DIR" ] && [ -d "$MOD_DIR" ]; then \
+    echo "$MOD_DIR"; \
+  fi; \
+fi`
   ])
-  if (!analyzeDataCheck.stdout.includes("ok")) {
+  const analyzeInputDir = (analyzeDataDirResult.stdout || "").trim().split("\n").find(Boolean)
+  if (!analyzeInputDir) {
+    const dataFilesResult = await runSandboxCommand(sandbox, "sh", [
+      "-c",
+      `cd ${projectCwd} && find .next -maxdepth 6 -type f -name '*.data' 2>/dev/null | head -20`
+    ])
+    const dataFiles = (dataFilesResult.stdout || "").trim()
     await appendProgressLog(progressContext, "[Turbopack] Analyze data folder missing after command")
-    throw new Error("next analyzer command completed but .next/diagnostics/analyze/data is missing")
+    throw new Error(
+      `next analyzer command completed but no analyzer data directory was found under .next (sample data files: ${dataFiles || "none"})`
+    )
   }
-  await appendProgressLog(progressContext, "[Turbopack] Analyze data folder detected")
+  await appendProgressLog(progressContext, `[Turbopack] Analyze data folder detected at ${analyzeInputDir}`)
 
   const writeScriptResult = await runSandboxCommand(sandbox, "sh", [
     "-c",
@@ -753,7 +773,7 @@ NDJSONEOF`
 
   const convertResult = await runSandboxCommand(sandbox, "sh", [
     "-c",
-    `cd ${projectCwd} && node ${scriptPath} --input ".next/diagnostics/analyze/data" --output "${outputDir}"`
+    `cd ${projectCwd} && node ${scriptPath} --input "${analyzeInputDir}" --output "${outputDir}"`
   ])
   if (convertResult.exitCode !== 0) {
     throw new Error(`NDJSON conversion failed: ${convertResult.stderr || convertResult.stdout}`)
