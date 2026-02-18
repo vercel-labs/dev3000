@@ -197,15 +197,7 @@ function DiffSection({ gitDiff, prUrl }: { gitDiff: string; prUrl?: string }) {
   )
 }
 
-export function AgentAnalysis({
-  content,
-  gitDiff,
-  prUrl
-}: {
-  content: string
-  gitDiff?: string
-  prUrl?: string
-}) {
+export function AgentAnalysis({ content, gitDiff, prUrl }: { content: string; gitDiff?: string; prUrl?: string }) {
   const parsed = useMemo(() => parseTranscript(content), [content])
 
   // Strip "## Git Diff" section from finalOutput if present (we'll show it separately)

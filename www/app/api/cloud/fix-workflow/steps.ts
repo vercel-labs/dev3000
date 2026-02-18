@@ -16,7 +16,7 @@ import { getOrCreateD3kSandbox, type SandboxTimingData, StepTimer } from "@/lib/
 import { SandboxAgentBrowser } from "@/lib/cloud/sandbox-agent-browser"
 import { skillFallbacks } from "@/lib/skills/fallbacks"
 import { listWorkflowRuns, saveWorkflowRun, type WorkflowType } from "@/lib/workflow-storage"
-import type { WorkflowReport } from "@/types"
+import type { TurbopackBundleComparison, TurbopackBundleMetricsSnapshot, WorkflowReport } from "@/types"
 
 const workflowLog = console.log
 const ANALYZE_TO_NDJSON_SCRIPT = `#!/usr/bin/env node
@@ -625,6 +625,123 @@ export interface InitStepTiming {
   steps: { name: string; durationMs: number; startedAt: string }[]
 }
 
+function buildTurbopackBundleComparison(
+  before: TurbopackBundleMetricsSnapshot,
+  after: TurbopackBundleMetricsSnapshot
+): TurbopackBundleComparison {
+  const compressedBytes = after.totalCompressedBytes - before.totalCompressedBytes
+  const rawBytes = after.totalRawBytes - before.totalRawBytes
+  return {
+    before,
+    after,
+    delta: {
+      compressedBytes,
+      rawBytes,
+      compressedPercent: before.totalCompressedBytes > 0 ? (compressedBytes / before.totalCompressedBytes) * 100 : null,
+      rawPercent: before.totalRawBytes > 0 ? (rawBytes / before.totalRawBytes) * 100 : null
+    }
+  }
+}
+
+async function collectTurbopackBundleMetrics(
+  sandbox: Sandbox,
+  projectDir?: string,
+  progressContext?: ProgressContext | null,
+  label?: string
+): Promise<TurbopackBundleMetricsSnapshot | null> {
+  const projectCwd = projectDir ? `/vercel/sandbox/${projectDir.replace(/^\/+|\/+$/g, "")}` : "/vercel/sandbox"
+  const metricsResult = await runSandboxCommand(sandbox, "sh", [
+    "-c",
+    `cd ${projectCwd} && node <<'NODE'
+const fs = require("fs")
+const path = require("path")
+
+function readNdjsonRows(filePath) {
+  if (!fs.existsSync(filePath)) return []
+  const text = fs.readFileSync(filePath, "utf8")
+  if (!text.trim()) return []
+  const rows = []
+  for (const line of text.split("\\n")) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+    try {
+      rows.push(JSON.parse(trimmed))
+    } catch {}
+  }
+  return rows
+}
+
+const ndjsonDir = path.resolve(".next/diagnostics/analyze/ndjson")
+const routes = readNdjsonRows(path.join(ndjsonDir, "routes.ndjson"))
+const outputFiles = readNdjsonRows(path.join(ndjsonDir, "output_files.ndjson"))
+
+if (routes.length === 0 && outputFiles.length === 0) {
+  console.log("null")
+  process.exit(0)
+}
+
+const routeMetrics = routes
+  .map((row) => ({
+    route: typeof row.route === "string" ? row.route : "*",
+    compressedBytes: Number(row.total_compressed_size || 0),
+    rawBytes: Number(row.total_size || 0)
+  }))
+  .filter((route) => Number.isFinite(route.compressedBytes) && Number.isFinite(route.rawBytes))
+
+const totalCompressedFromRoutes = routeMetrics.reduce((sum, route) => sum + route.compressedBytes, 0)
+const totalRawFromRoutes = routeMetrics.reduce((sum, route) => sum + route.rawBytes, 0)
+
+const totalCompressedFromOutput = outputFiles.reduce((sum, row) => sum + Number(row.total_compressed_size || 0), 0)
+const totalRawFromOutput = outputFiles.reduce((sum, row) => sum + Number(row.total_size || 0), 0)
+
+const topRoutes = routeMetrics
+  .slice()
+  .sort((a, b) => b.compressedBytes - a.compressedBytes)
+  .slice(0, 10)
+
+console.log(
+  JSON.stringify({
+    generatedAt: new Date().toISOString(),
+    totalCompressedBytes: totalCompressedFromRoutes > 0 ? totalCompressedFromRoutes : totalCompressedFromOutput,
+    totalRawBytes: totalRawFromRoutes > 0 ? totalRawFromRoutes : totalRawFromOutput,
+    routeCount: routeMetrics.length,
+    outputFileCount: outputFiles.length,
+    topRoutes
+  })
+)
+NODE`
+  ])
+
+  if (metricsResult.exitCode !== 0) {
+    const detail = (metricsResult.stderr || metricsResult.stdout || "unknown error").trim()
+    await appendProgressLog(progressContext, `[Turbopack] Failed to collect ${label || "bundle"} metrics: ${detail}`)
+    return null
+  }
+
+  const lastLine = (metricsResult.stdout || "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .at(-1)
+
+  if (!lastLine || lastLine === "null") {
+    await appendProgressLog(progressContext, `[Turbopack] No ${label || "bundle"} NDJSON metrics available`)
+    return null
+  }
+
+  try {
+    const parsed = JSON.parse(lastLine) as TurbopackBundleMetricsSnapshot
+    await appendProgressLog(
+      progressContext,
+      `[Turbopack] ${label || "bundle"} metrics: ${Math.round(parsed.totalCompressedBytes / 1024)}KB compressed, ${parsed.routeCount} routes`
+    )
+    return parsed
+  } catch {
+    await appendProgressLog(progressContext, `[Turbopack] Failed to parse ${label || "bundle"} metrics output`)
+    return null
+  }
+}
+
 async function prepareTurbopackNdjsonArtifacts(
   sandbox: Sandbox,
   projectDir?: string,
@@ -1056,6 +1173,7 @@ export async function agentFixLoopStep(
   timing: AgentStepTiming
 }> {
   const timer = new StepTimer()
+  const isTurbopackBundleAnalyzer = progressContext?.workflowType === "turbopack-bundle-analyzer"
 
   timer.start("Reconnect to sandbox")
   workflowLog(`[Agent] Reconnecting to sandbox: ${sandboxId}`)
@@ -1064,6 +1182,13 @@ export async function agentFixLoopStep(
   const sandbox = await Sandbox.get({ sandboxId })
   if (sandbox.status !== "running") {
     throw new Error(`Sandbox not running: ${sandbox.status}`)
+  }
+
+  let turbopackBundleComparison: TurbopackBundleComparison | undefined
+  let beforeBundleMetrics: TurbopackBundleMetricsSnapshot | null = null
+  if (isTurbopackBundleAnalyzer) {
+    await appendProgressLog(progressContext, "[Turbopack] Capturing baseline NDJSON bundle metrics")
+    beforeBundleMetrics = await collectTurbopackBundleMetrics(sandbox, projectDir, progressContext, "baseline")
   }
 
   // Capture "before" Web Vitals via CDP before the agent makes any changes
@@ -1129,6 +1254,24 @@ export async function agentFixLoopStep(
   ])
   const gitDiff = diffResult.stdout.trim() || null
   const hasChanges = !!gitDiff && gitDiff.length > 0
+
+  if (isTurbopackBundleAnalyzer) {
+    await appendProgressLog(progressContext, "[Turbopack] Re-running analyzer for after-fix bundle metrics")
+    try {
+      await prepareTurbopackNdjsonArtifacts(sandbox, projectDir, progressContext)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      await appendProgressLog(progressContext, `[Turbopack] Failed to regenerate NDJSON after changes: ${message}`)
+    }
+    const afterBundleMetrics = await collectTurbopackBundleMetrics(sandbox, projectDir, progressContext, "after-fix")
+    if (beforeBundleMetrics && afterBundleMetrics) {
+      turbopackBundleComparison = buildTurbopackBundleComparison(beforeBundleMetrics, afterBundleMetrics)
+      await appendProgressLog(
+        progressContext,
+        `[Turbopack] Bundle delta: ${Math.round(turbopackBundleComparison.delta.compressedBytes / 1024)}KB compressed`
+      )
+    }
+  }
 
   // Determine status
   let status: "improved" | "unchanged" | "degraded" | "no-changes"
@@ -1244,6 +1387,7 @@ export async function agentFixLoopStep(
     agentAnalysisModel: "openai/gpt-5.2",
     skillsInstalled: skillsInstalled.length > 0 ? skillsInstalled : undefined,
     skillsLoaded: agentResult.skillsLoaded.length > 0 ? agentResult.skillsLoaded : undefined,
+    turbopackBundleComparison,
     gitDiff: gitDiff ?? undefined,
     d3kLogs: combinedD3kLogs,
     initD3kLogs: initD3kLogs,
@@ -2095,11 +2239,7 @@ function synthesizeFinalOutputFromSteps(steps: unknown[], workflowType: string):
       const input = (call?.input || {}) as Record<string, unknown>
       const outputRaw = results[i]?.output
       const outputText =
-        typeof outputRaw === "string"
-          ? outputRaw
-          : outputRaw !== undefined
-            ? JSON.stringify(outputRaw)
-            : "[no result]"
+        typeof outputRaw === "string" ? outputRaw : outputRaw !== undefined ? JSON.stringify(outputRaw) : "[no result]"
 
       if (toolName === "readFile") {
         const path = typeof input.path === "string" ? input.path : ""
@@ -2137,10 +2277,14 @@ function synthesizeFinalOutputFromSteps(steps: unknown[], workflowType: string):
 
   const noteSnippet = assistantNotes.slice(-2).join("\n\n").trim()
   const lines: string[] = []
-  lines.push("No explicit final narrative was emitted by the model, so this summary was reconstructed from tool activity.")
+  lines.push(
+    "No explicit final narrative was emitted by the model, so this summary was reconstructed from tool activity."
+  )
   lines.push("")
   lines.push(`Workflow focus: ${workflowType}`)
-  lines.push(`Analyzer artifacts inspected: ${inspectedPaths.size > 0 ? Array.from(inspectedPaths).join(", ") : "not detected"}`)
+  lines.push(
+    `Analyzer artifacts inspected: ${inspectedPaths.size > 0 ? Array.from(inspectedPaths).join(", ") : "not detected"}`
+  )
   lines.push(`Files modified: ${writtenFiles.size > 0 ? Array.from(writtenFiles).join(", ") : "none detected"}`)
   lines.push(
     `Verification commands: ${verificationRuns.length > 0 ? verificationRuns.slice(0, 6).join(" | ") : "not detected"}`

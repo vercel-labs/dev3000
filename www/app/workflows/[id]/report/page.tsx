@@ -128,6 +128,23 @@ async function ReportContent({
   const formatSeconds = (ms?: number) => (typeof ms === "number" ? `${(ms / 1000).toFixed(1)}s` : "—")
   const formatMs = (ms?: number) => (typeof ms === "number" ? `${ms.toFixed(0)}ms` : "—")
   const formatClsValue = (value?: number) => (typeof value === "number" ? value.toFixed(4) : "—")
+  const formatBytes = (bytes?: number) => {
+    if (typeof bytes !== "number") return "—"
+    const abs = Math.abs(bytes)
+    if (abs >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
+    if (abs >= 1024) return `${(bytes / 1024).toFixed(1)} KB`
+    return `${bytes.toFixed(0)} B`
+  }
+  const formatSignedBytes = (bytes?: number) => {
+    if (typeof bytes !== "number") return "—"
+    const sign = bytes > 0 ? "+" : ""
+    return `${sign}${formatBytes(bytes)}`
+  }
+  const formatSignedPercent = (value?: number | null) => {
+    if (typeof value !== "number") return "—"
+    const sign = value > 0 ? "+" : ""
+    return `${sign}${value.toFixed(1)}%`
+  }
   const formatClsDeltaPercent = (before?: number, after?: number) => {
     if (typeof before !== "number" || typeof after !== "number" || before === 0) {
       return "—"
@@ -144,6 +161,7 @@ async function ReportContent({
     !isReadOnlyUrlWorkflow &&
     workflowType === "cls-fix" &&
     (!!report.afterWebVitals || report.afterClsScore !== undefined)
+  const bundleComparison = report.turbopackBundleComparison
   const skillLink = (skill: string) => {
     const normalized = skill.trim().toLowerCase()
     if (normalized === "d3k" || normalized.includes("d3k")) return "https://dev3000.ai"
@@ -907,6 +925,47 @@ async function ReportContent({
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {workflowType === "turbopack-bundle-analyzer" && bundleComparison && (
+            <div className="mb-6">
+              <h3 className="text-lg font-medium mb-4">Bundle Delta (Before vs After)</h3>
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="rounded-lg border border-border bg-muted/20 p-3">
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Compressed JS</div>
+                  <div className="text-sm">
+                    {formatBytes(bundleComparison.before.totalCompressedBytes)} →{" "}
+                    {formatBytes(bundleComparison.after.totalCompressedBytes)}
+                  </div>
+                  <div
+                    className={`text-sm font-medium ${bundleComparison.delta.compressedBytes <= 0 ? "text-green-600" : "text-red-600"}`}
+                  >
+                    {formatSignedBytes(bundleComparison.delta.compressedBytes)} (
+                    {formatSignedPercent(bundleComparison.delta.compressedPercent)})
+                  </div>
+                </div>
+                <div className="rounded-lg border border-border bg-muted/20 p-3">
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Raw JS</div>
+                  <div className="text-sm">
+                    {formatBytes(bundleComparison.before.totalRawBytes)} → {formatBytes(bundleComparison.after.totalRawBytes)}
+                  </div>
+                  <div
+                    className={`text-sm font-medium ${bundleComparison.delta.rawBytes <= 0 ? "text-green-600" : "text-red-600"}`}
+                  >
+                    {formatSignedBytes(bundleComparison.delta.rawBytes)} ({formatSignedPercent(bundleComparison.delta.rawPercent)})
+                  </div>
+                </div>
+                <div className="rounded-lg border border-border bg-muted/20 p-3">
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Coverage</div>
+                  <div className="text-sm">Routes: {bundleComparison.before.routeCount}</div>
+                  <div className="text-sm">Output files: {bundleComparison.before.outputFileCount}</div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    {new Date(bundleComparison.before.generatedAt).toLocaleTimeString()} →{" "}
+                    {new Date(bundleComparison.after.generatedAt).toLocaleTimeString()}
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 

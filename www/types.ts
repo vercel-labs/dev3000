@@ -11,6 +11,34 @@ export interface WebVitals {
   inp?: { value: number; grade: "good" | "needs-improvement" | "poor" } // Interaction to Next Paint (ms)
 }
 
+export interface TurbopackBundleRouteMetric {
+  route: string
+  compressedBytes: number
+  rawBytes: number
+}
+
+export interface TurbopackBundleMetricsSnapshot {
+  generatedAt: string
+  totalCompressedBytes: number
+  totalRawBytes: number
+  routeCount: number
+  outputFileCount: number
+  topRoutes: TurbopackBundleRouteMetric[]
+}
+
+export interface TurbopackBundleDelta {
+  compressedBytes: number
+  rawBytes: number
+  compressedPercent: number | null
+  rawPercent: number | null
+}
+
+export interface TurbopackBundleComparison {
+  before: TurbopackBundleMetricsSnapshot
+  after: TurbopackBundleMetricsSnapshot
+  delta: TurbopackBundleDelta
+}
+
 /**
  * Workflow report data stored as JSON in blob storage
  * This is the full report data, separate from WorkflowRun metadata
@@ -82,6 +110,7 @@ export interface WorkflowReport {
   agentAnalysisModel?: string // e.g. "anthropic/claude-sonnet-4-20250514"
   skillsInstalled?: string[] // Skills available in the sandbox at runtime
   skillsLoaded?: string[] // Skills explicitly loaded by the agent via get_skill
+  turbopackBundleComparison?: TurbopackBundleComparison // Before/after NDJSON bundle metrics (turbopack workflow)
 
   // d3k logs
   d3kLogs?: string // Combined (backward compat)
