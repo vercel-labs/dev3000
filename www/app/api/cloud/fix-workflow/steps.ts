@@ -2615,7 +2615,12 @@ export async function createPullRequestStep(
       agentAnalysis?: string
       workflowType?: string
       turbopackBundleComparison?: {
-        delta?: { compressedBytes?: number; compressedPercent?: number | null; rawBytes?: number; rawPercent?: number | null }
+        delta?: {
+          compressedBytes?: number
+          compressedPercent?: number | null
+          rawBytes?: number
+          rawPercent?: number | null
+        }
       }
     }
     let reportContext: ReportPrContext | null = null
@@ -2714,16 +2719,21 @@ ${screenshotRows}
       if (!raw) return []
       return raw
         .split("\n")
-        .map((line) => line.trim())
+        .map((line) => line.trim().replace(/^[-*]\s+/, "").replace(/^\d+\.\s+/, ""))
         .filter(Boolean)
         .filter((line) => !line.startsWith("#"))
         .slice(0, 4)
     }
     const summaryLines = extractFinalOutputSummary(reportContext?.agentAnalysis)
-    const shortSummary = summaryLines.length > 0 ? summaryLines.map((line) => `- ${line}`).join("\n") : "- See workflow report for full transcript and evidence."
+    const shortSummary =
+      summaryLines.length > 0
+        ? summaryLines.map((line) => `- ${line}`).join("\n")
+        : "- See workflow report for full transcript and evidence."
 
     const workflowHeading =
-      effectiveWorkflowType === "turbopack-bundle-analyzer" ? "Turbopack Bundle Analyzer Improvements" : "CLS Improvements"
+      effectiveWorkflowType === "turbopack-bundle-analyzer"
+        ? "Turbopack Bundle Analyzer Improvements"
+        : "CLS Improvements"
     const resultsSection =
       effectiveWorkflowType === "turbopack-bundle-analyzer"
         ? `### Results
