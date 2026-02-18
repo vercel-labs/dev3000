@@ -638,18 +638,19 @@ async function prepareTurbopackNdjsonArtifacts(
   workflowLog(`[Turbopack] Preparing analyzer artifacts in ${projectCwd}`)
   await appendProgressLog(progressContext, `[Turbopack] Preparing analyzer artifacts in ${projectCwd}`)
 
-  const runNextCli = async (command: string) =>
+const runNextCli = async (command: string) =>
     runSandboxCommand(sandbox, "sh", [
       "-c",
       `export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; cd ${projectCwd} && \
 echo "[Turbopack] Running: ${command}" && \
 NEXT_BIN="" && \
-if [ -x ./node_modules/.bin/next ]; then NEXT_BIN="./node_modules/.bin/next"; \
-elif [ -f ./node_modules/next/dist/bin/next ]; then NEXT_BIN="node ./node_modules/next/dist/bin/next"; \
-elif [ -x ../node_modules/.bin/next ]; then NEXT_BIN="../node_modules/.bin/next"; \
-elif [ -f ../node_modules/next/dist/bin/next ]; then NEXT_BIN="node ../node_modules/next/dist/bin/next"; \
-elif command -v next >/dev/null 2>&1; then NEXT_BIN="next"; \
-else NEXT_BIN="npx --yes next"; fi && \
+SEARCH_DIR="$PWD" && \
+while [ "$SEARCH_DIR" != "/" ]; do \
+  if [ -x "$SEARCH_DIR/node_modules/.bin/next" ]; then NEXT_BIN="$SEARCH_DIR/node_modules/.bin/next"; break; fi; \
+  if [ -f "$SEARCH_DIR/node_modules/next/dist/bin/next" ]; then NEXT_BIN="node $SEARCH_DIR/node_modules/next/dist/bin/next"; break; fi; \
+  SEARCH_DIR="$(dirname "$SEARCH_DIR")"; \
+done && \
+if [ -z "$NEXT_BIN" ]; then NEXT_BIN="bun x next"; fi && \
 echo "[Turbopack] Next command: $NEXT_BIN ${command}" && \
 eval "$NEXT_BIN ${command}"`
     ])
