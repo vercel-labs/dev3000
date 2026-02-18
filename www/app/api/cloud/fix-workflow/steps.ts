@@ -1206,6 +1206,7 @@ export async function agentFixLoopStep(
     beforeCls,
     beforeGrade,
     startPath,
+    projectDir,
     customPrompt,
     progressContext?.workflowType,
     crawlDepth
@@ -1671,11 +1672,12 @@ async function runAgentWithDiagnoseTool(
   beforeCls: number | null,
   beforeGrade: "good" | "needs-improvement" | "poor" | null,
   startPath: string,
+  projectDir?: string,
   customPrompt?: string,
   workflowType?: string,
   crawlDepth?: number | "all"
 ): Promise<{ transcript: string; summary: string; systemPrompt: string; skillsLoaded: string[] }> {
-  const SANDBOX_CWD = "/vercel/sandbox"
+  const SANDBOX_CWD = projectDir ? `/vercel/sandbox/${projectDir.replace(/^\/+|\/+$/g, "")}` : "/vercel/sandbox"
   const skillAliases: Record<string, string> = {
     "react-performance": "vercel-react-best-practices",
     "vercel-design-guidelines": "web-design-guidelines",
