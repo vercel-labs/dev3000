@@ -43,8 +43,8 @@
     "@radix-ui/react-tooltip": "^1.2.8",
     "@vercel/analytics": "latest",
     "@vercel/blob": "^2.0.0",
-    "@vercel/sandbox": "^1.1.8",
-    "@vercel/sdk": "^1.16.1",
+    "@vercel/sandbox": "^1.6.0",
+    "@vercel/sdk": "^1.19.1",
     "@vercel/speed-insights": "^1.2.0",
     "@vercel/toolbar": "^0.1.41",
     "ai": "^5.0.89",
@@ -78,7 +78,7 @@
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^1.1.2",
-    "workflow": "4.0.1-beta.26",
+    "workflow": "^4.1.0-beta.57",
     "zod": "^3.25.76"
   },
   "devDependencies": {
