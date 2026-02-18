@@ -638,11 +638,11 @@ async function prepareTurbopackNdjsonArtifacts(
   workflowLog(`[Turbopack] Preparing analyzer artifacts in ${projectCwd}`)
   await appendProgressLog(progressContext, `[Turbopack] Preparing analyzer artifacts in ${projectCwd}`)
 
-  const runAnalyze = async (withOutputFlag: boolean) =>
+  const runNextCli = async (command: string) =>
     runSandboxCommand(sandbox, "sh", [
       "-c",
       `export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; cd ${projectCwd} && \
-echo "[Turbopack] Running next experimental-analyze${withOutputFlag ? " --output" : ""}..." && \
+echo "[Turbopack] Running: ${command}" && \
 NEXT_BIN="" && \
 if [ -x ./node_modules/.bin/next ]; then NEXT_BIN="./node_modules/.bin/next"; \
 elif [ -f ./node_modules/next/dist/bin/next ]; then NEXT_BIN="node ./node_modules/next/dist/bin/next"; \
@@ -650,19 +650,31 @@ elif [ -x ../node_modules/.bin/next ]; then NEXT_BIN="../node_modules/.bin/next"
 elif [ -f ../node_modules/next/dist/bin/next ]; then NEXT_BIN="node ../node_modules/next/dist/bin/next"; \
 elif command -v next >/dev/null 2>&1; then NEXT_BIN="next"; \
 else NEXT_BIN="npx --yes next"; fi && \
-echo "[Turbopack] Analyze command: $NEXT_BIN experimental-analyze${withOutputFlag ? " --output" : ""}" && \
-eval "$NEXT_BIN experimental-analyze${withOutputFlag ? " --output" : ""}"`
+echo "[Turbopack] Next command: $NEXT_BIN ${command}" && \
+eval "$NEXT_BIN ${command}"`
     ])
 
   // Newer Next versions support no-flag invocation; older variants may require --output.
   await appendProgressLog(progressContext, "[Turbopack] Running next experimental-analyze")
-  let analyzeResult = await runAnalyze(false)
+  let analyzeResult = await runNextCli("experimental-analyze")
   if (analyzeResult.exitCode !== 0) {
     const combined = `${analyzeResult.stderr}\n${analyzeResult.stdout}`
     const maybeNeedsOutputFlag = /missing required.*--output|requires.*--output|expected.*--output/i.test(combined)
     if (maybeNeedsOutputFlag) {
       await appendProgressLog(progressContext, "[Turbopack] Retrying analyze with --output compatibility flag")
-      analyzeResult = await runAnalyze(true)
+      analyzeResult = await runNextCli("experimental-analyze --output")
+    } else {
+      const experimentalAnalyzeUnsupported =
+        /invalid project directory.*experimental-analyze|unknown command|unrecognized option|did you mean/i.test(
+          combined
+        )
+      if (experimentalAnalyzeUnsupported) {
+        await appendProgressLog(
+          progressContext,
+          "[Turbopack] experimental-analyze unsupported; retrying via `next build --turbopack`"
+        )
+        analyzeResult = await runNextCli("build --turbopack")
+      }
     }
   }
   if (analyzeResult.exitCode !== 0) {
