@@ -237,6 +237,49 @@ export function AgentAnalysis({
           <Streamdown mode="static">{cleanedFinalOutput}</Streamdown>
         </div>
       )}
+
+      {/* Parsed execution trace */}
+      {parsed.steps.length > 0 && (
+        <StepSection title="Execution Trace" badge={`${parsed.steps.length} steps`}>
+          <div className="space-y-2 mt-2">
+            {parsed.steps.map((step) => (
+              <StepSection
+                key={`step-${step.stepNumber}`}
+                title={`Step ${step.stepNumber}`}
+                badge={`${step.toolCalls.length} tools`}
+              >
+                <div className="space-y-3 mt-2">
+                  {step.assistantText && (
+                    <div>
+                      <div className="text-xs font-medium text-muted-foreground mb-1">Assistant</div>
+                      <div className={analysisClassName}>
+                        <Streamdown mode="static">{normalizeReportMarkdown(step.assistantText)}</Streamdown>
+                      </div>
+                    </div>
+                  )}
+
+                  {step.toolCalls.map((toolCall, idx) => (
+                    <div key={`step-${step.stepNumber}-tool-${idx}`} className="border border-border rounded p-2">
+                      <div className="text-xs font-medium text-muted-foreground mb-1">Tool: {toolCall.name}</div>
+                      <pre className="text-xs bg-muted/50 p-2 rounded overflow-x-auto whitespace-pre-wrap max-h-40 overflow-y-auto">
+                        {toolCall.args || "{}"}
+                      </pre>
+                      {toolCall.result && (
+                        <>
+                          <div className="text-xs font-medium text-muted-foreground mt-2 mb-1">Result</div>
+                          <pre className="text-xs bg-muted/50 p-2 rounded overflow-x-auto whitespace-pre-wrap max-h-64 overflow-y-auto">
+                            {toolCall.result}
+                          </pre>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </StepSection>
+            ))}
+          </div>
+        </StepSection>
+      )}
     </div>
   )
 }
