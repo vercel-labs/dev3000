@@ -240,15 +240,16 @@ export function AgentAnalysis({
 
       {/* Parsed execution trace */}
       {parsed.steps.length > 0 && (
-        <StepSection title="Execution Trace" badge={`${parsed.steps.length} steps`}>
-          <div className="space-y-2 mt-2">
+        <StepSection title="Agent Transcript" badge={`${parsed.steps.length} steps`}>
+          <div className="space-y-4 mt-2">
             {parsed.steps.map((step) => (
-              <StepSection
-                key={`step-${step.stepNumber}`}
-                title={`Step ${step.stepNumber}`}
-                badge={`${step.toolCalls.length} tools`}
-              >
-                <div className="space-y-3 mt-2">
+              <div key={`step-${step.stepNumber}`} className="border-b border-border pb-4 last:border-b-0 last:pb-0">
+                <div className="text-sm font-medium mb-2">
+                  Step {step.stepNumber}
+                  <span className="text-xs text-muted-foreground ml-2">({step.toolCalls.length} tools)</span>
+                </div>
+
+                <div className="space-y-3">
                   {step.assistantText && (
                     <div>
                       <div className="text-xs font-medium text-muted-foreground mb-1">Assistant</div>
@@ -275,7 +276,7 @@ export function AgentAnalysis({
                     </div>
                   ))}
                 </div>
-              </StepSection>
+              </div>
             ))}
           </div>
         </StepSection>
