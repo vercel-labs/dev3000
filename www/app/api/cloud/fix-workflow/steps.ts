@@ -692,9 +692,34 @@ eval "$NEXT_BIN ${command}"`
         combined
       )
     if (buildFlagUnsupported) {
-      const unsupportedTail = combined.slice(-220).replace(/\s+/g, " ").trim()
-      await appendProgressLog(progressContext, `[Turbopack] Build flag unsupported detail: ${unsupportedTail}`)
-      throw new Error(`next build analyzer flags unsupported: ${unsupportedTail || "(no output)"}`)
+      const unsupportedLine =
+        combined
+          .split("\n")
+          .find((line) => /unknown option|unrecognized option|did you mean/i.test(line))
+          ?.trim() || combined.slice(-220).replace(/\s+/g, " ").trim()
+      await appendProgressLog(progressContext, `[Turbopack] Build flag unsupported detail: ${unsupportedLine}`)
+      await appendProgressLog(
+        progressContext,
+        "[Turbopack] Retrying without --experimental-analyze (compile-only turbopack build)"
+      )
+      analyzeResult = await runNextCli("build --experimental-build-mode compile --turbopack")
+      await appendAnalyzerTrace("[Turbopack]", analyzeResult)
+
+      if (analyzeResult.exitCode !== 0) {
+        const compileCombined = `${analyzeResult.stderr}\n${analyzeResult.stdout}`
+        const compileBuildModeUnsupported =
+          /unknown option.*experimental-build-mode|unrecognized option.*experimental-build-mode|did you mean.*experimental-build-mode/i.test(
+            compileCombined
+          )
+        if (compileBuildModeUnsupported) {
+          await appendProgressLog(
+            progressContext,
+            "[Turbopack] Compile build mode unsupported on fallback; retrying plain `next build --turbopack`"
+          )
+          analyzeResult = await runNextCli("build --turbopack")
+          await appendAnalyzerTrace("[Turbopack]", analyzeResult)
+        }
+      }
     }
   }
   if (analyzeResult.exitCode !== 0) {
@@ -1871,7 +1896,7 @@ Workflow:
 4) Implement high-impact fixes in code (do not stop at recommendations).
 5) Validate changes did not break the app (diagnose and/or getWebVitals).
 6) Re-run bundle analysis at the end using runProjectCommand:
-   - \`next build --experimental-analyze --experimental-build-mode compile --turbopack\` (fallback to \`next build --experimental-analyze --turbopack\`)
+   - \`next build --experimental-analyze --experimental-build-mode compile --turbopack\` (fallbacks: \`next build --experimental-analyze --turbopack\`, then \`next build --experimental-build-mode compile --turbopack\`, then \`next build --turbopack\`)
    - \`node /tmp/analyze-to-ndjson.mjs --input .next/diagnostics/analyze/data --output .next/diagnostics/analyze/ndjson\`
 7) Summarize what changed, what improved, and any remaining tradeoffs.
 
