@@ -948,12 +948,14 @@ async function ReportContent({
                 <div className="rounded-lg border border-border bg-muted/20 p-3">
                   <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Raw JS</div>
                   <div className="text-sm">
-                    {formatBytes(bundleComparison.before.totalRawBytes)} → {formatBytes(bundleComparison.after.totalRawBytes)}
+                    {formatBytes(bundleComparison.before.totalRawBytes)} →{" "}
+                    {formatBytes(bundleComparison.after.totalRawBytes)}
                   </div>
                   <div
                     className={`text-sm font-medium ${bundleComparison.delta.rawBytes <= 0 ? "text-green-600" : "text-red-600"}`}
                   >
-                    {formatSignedBytes(bundleComparison.delta.rawBytes)} ({formatSignedPercent(bundleComparison.delta.rawPercent)})
+                    {formatSignedBytes(bundleComparison.delta.rawBytes)} (
+                    {formatSignedPercent(bundleComparison.delta.rawPercent)})
                   </div>
                 </div>
                 <div className="rounded-lg border border-border bg-muted/20 p-3">
