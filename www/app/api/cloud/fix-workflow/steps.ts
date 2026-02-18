@@ -690,7 +690,7 @@ export async function initSandboxStep(
     const message = error instanceof Error ? error.message : String(error)
     if (message.includes("Status code 400 is not ok") && repoUrl.includes("github.com") && !githubPat) {
       throw new Error(
-        "Sandbox initialization failed while accessing a GitHub repo. This repository appears private; provide a GitHub PAT in Workflow options."
+        "Sandbox initialization failed while accessing the repository through Vercel Sandbox source. Verify repository access/integration for the workflow environment."
       )
     }
     throw error
