@@ -1962,20 +1962,22 @@ Use this to diagnose and verify performance improvements.`,
   } else if (workflowTypeForPrompt === "react-performance") {
     userPromptMessage = `Analyze and optimize React/Next.js performance on the ${startPath} page. Dev URL: ${devUrl}\n\nFirst, call get_skill({ name: "d3k" }) then get_skill({ name: "react-performance" }) to load the skills. Then use getWebVitals to capture current metrics, and analyze the codebase for optimization opportunities.`
   } else if (workflowTypeForPrompt === "turbopack-bundle-analyzer") {
-    userPromptMessage = `Analyze Turbopack bundle analyzer output for this project and produce prioritized optimization opportunities.
+    userPromptMessage = `Analyze Turbopack bundle analyzer output for this project and make only bundle-size/performance improvements.
 
 Workflow:
 1) Call get_skill({ name: "d3k" }) first.
 2) Read the generated NDJSON artifacts at .next/diagnostics/analyze/ndjson/ (routes.ndjson, sources.ndjson, output_files.ndjson, module_edges.ndjson, modules.ndjson).
-3) Open the app at ${devUrl}${startPath} and inspect runtime behavior there as needed.
-4) Implement high-impact fixes in code (do not stop at recommendations).
-5) Validate changes did not break the app (diagnose and/or getWebVitals).
+3) Identify concrete highest-impact sources of shipped JS.
+4) Implement high-impact fixes in code that reduce shipped JS.
+5) Validate changes did not break the app with minimal smoke checks.
 6) Re-run bundle analysis at the end using runProjectCommand:
    - \`next build --experimental-analyze --experimental-build-mode compile --turbopack\` (fallbacks: \`next build --experimental-analyze --turbopack\`, then \`next build --experimental-build-mode compile --turbopack\`, then \`next build --turbopack\`)
    - \`node /tmp/analyze-to-ndjson.mjs --input .next/diagnostics/analyze/data --output .next/diagnostics/analyze/ndjson\`
-7) Summarize what changed, what improved, and any remaining tradeoffs.
+7) Summarize bundle-size deltas from NDJSON before/after and list tradeoffs.
 
 Constraints:
+- Do not work on CLS, styling, UX, accessibility, SEO, or general refactors unless directly required for bundle-size reduction.
+- Do not make unrelated dependency upgrades or feature changes.
 - Prioritize concrete fixes over generic advice.
 - Prefer improvements that reduce shipped JS, duplicate modules, and initial route payload.
 `
@@ -2840,7 +2842,8 @@ Start by calling get_skill({ name: "d3k" }) then get_skill({ name: "react-perfor
 function buildTurbopackBundleAnalyzerPrompt(startPath: string, devUrl: string): string {
   return `You are a Turbopack bundle optimization specialist.
 
-Your mission is to inspect Turbopack analyzer NDJSON output, implement concrete optimizations, and verify bundle improvements without breaking the app.
+Your only mission is to reduce bundle size and improve load performance by reducing shipped JavaScript.
+Do not pursue unrelated goals.
 
 ## FIRST STEP - LOAD THE SKILL
 
@@ -2856,17 +2859,19 @@ get_skill({ name: "d3k" })
    - \`output_files.ndjson\`
    - \`module_edges.ndjson\`
    - \`modules.ndjson\`
-2. Open \`${devUrl}${startPath}\` and inspect app/runtime behavior.
-3. Identify highest-impact bundle issues.
-4. Implement fixes with code changes.
-5. Validate app health after changes.
-6. Re-run analyze + NDJSON conversion and verify improvements before final summary.
+2. Identify highest-impact shipped-JS problems from analyzer evidence.
+3. Implement code changes that reduce bundle size.
+4. Do minimal smoke checks only to ensure no regressions.
+5. Re-run analyze + NDJSON conversion and verify measurable improvement before final summary.
+6. Report before/after numbers from NDJSON (at minimum target route compressed size and notable output file changes).
 
 ## RULES
 - You are expected to make code changes when clear optimization opportunities exist.
+- If no safe bundle improvement is found, make no code changes and explain why with analyzer evidence.
 - Be explicit about confidence and uncertainty.
 - Prefer optimizations that reduce JavaScript shipped, duplicate modules, and initial route payload.
 - Use \`runProjectCommand\` for verification commands (including re-running analyze and NDJSON conversion).
+- Forbidden unless directly tied to bundle-size reduction: styling/UX fixes, CLS-only fixes, accessibility audits, copy/content edits, and general cleanup refactors.
 
 ## ENVIRONMENT
 - App URL: ${devUrl}
