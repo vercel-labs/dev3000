@@ -355,7 +355,17 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
       }
     }
 
-    await result.wait()
+    try {
+      await result.wait()
+    } catch (error) {
+      const cmd = `${options.cmd} ${options.args?.join(" ") || ""}`.trim()
+      const errMessage = error instanceof Error ? error.message : String(error)
+      const stderrTail = stderr.slice(-500)
+      const stdoutTail = stdout.slice(-500)
+      throw new Error(
+        `Command wait failed: ${cmd}\nError: ${errMessage}\nStderr: ${stderrTail || "(empty)"}\nStdout: ${stdoutTail || "(empty)"}`
+      )
+    }
 
     return {
       exitCode: result.exitCode,
@@ -508,25 +518,37 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     // Install project dependencies
     if (debug) console.log("  📦 Installing project dependencies...")
     await reportProgress("Installing project dependencies...")
-    const installResult =
-      resolvedPackageManager === "bun"
-        ? await runCommandWithLogs(sandbox, {
-            cmd: "sh",
-            args: ["-c", "export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; bun install"],
-            cwd: sandboxCwd,
-            stdout: debug ? process.stdout : undefined,
-            stderr: debug ? process.stderr : undefined
-          })
-        : await runCommandWithLogs(sandbox, {
-            cmd: resolvedPackageManager,
-            args: ["install"],
-            cwd: sandboxCwd,
-            stdout: debug ? process.stdout : undefined,
-            stderr: debug ? process.stderr : undefined
-          })
+    let installResult: { exitCode: number; stdout: string; stderr: string }
+    try {
+      installResult =
+        resolvedPackageManager === "bun"
+          ? await runCommandWithLogs(sandbox, {
+              cmd: "sh",
+              args: ["-c", "export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; bun install"],
+              cwd: sandboxCwd,
+              stdout: debug ? process.stdout : undefined,
+              stderr: debug ? process.stderr : undefined
+            })
+          : await runCommandWithLogs(sandbox, {
+              cmd: resolvedPackageManager,
+              args: ["install"],
+              cwd: sandboxCwd,
+              stdout: debug ? process.stdout : undefined,
+              stderr: debug ? process.stderr : undefined
+            })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      await reportProgress(`Dependency install command error: ${message.slice(0, 240)}`)
+      throw error
+    }
 
     if (installResult.exitCode !== 0) {
-      throw new Error(`Project dependency installation failed with exit code ${installResult.exitCode}`)
+      const stderrTail = installResult.stderr.slice(-1000)
+      const stdoutTail = installResult.stdout.slice(-500)
+      await reportProgress(`Dependency install failed (exit ${installResult.exitCode})`)
+      throw new Error(
+        `Project dependency installation failed with exit code ${installResult.exitCode}\nStderr: ${stderrTail || "(empty)"}\nStdout: ${stdoutTail || "(empty)"}`
+      )
     }
 
     if (debug) console.log("  ✅ Project dependencies installed")
@@ -822,6 +844,9 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
       }
     }
   } catch (error) {
+    await reportProgress(
+      `Sandbox setup failed: ${error instanceof Error ? error.message.slice(0, 280) : String(error).slice(0, 280)}`
+    )
     // Clean up on error
     try {
       await sandbox.stop()
