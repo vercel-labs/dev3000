@@ -664,7 +664,10 @@ eval "$NEXT_BIN ${command}"`
         combined
       )
     if (buildFlagUnsupported) {
-      await appendProgressLog(progressContext, "[Turbopack] Build flag unsupported; retrying legacy experimental-analyze")
+      await appendProgressLog(
+        progressContext,
+        "[Turbopack] Build flag unsupported; retrying legacy experimental-analyze"
+      )
       analyzeResult = await runNextCli("experimental-analyze")
 
       if (analyzeResult.exitCode !== 0) {
