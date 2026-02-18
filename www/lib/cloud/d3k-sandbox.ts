@@ -854,17 +854,48 @@ async function waitForServer(sandbox: Sandbox, port: number, timeoutMs: number, 
  * and we need the CDP URL to be available before using browser automation.
  */
 async function waitForCdpUrl(sandbox: Sandbox, timeoutMs: number, debug = false): Promise<string | null> {
+  const isCdpUrl = (value: unknown): value is string =>
+    typeof value === "string" && /^wss?:\/\/.+\/devtools\/browser\//.test(value)
+
+  const extractCdpUrl = (value: unknown): string | null => {
+    if (isCdpUrl(value)) {
+      return value
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const found = extractCdpUrl(item)
+        if (found) return found
+      }
+      return null
+    }
+    if (value && typeof value === "object") {
+      for (const nested of Object.values(value)) {
+        const found = extractCdpUrl(nested)
+        if (found) return found
+      }
+    }
+    return null
+  }
+
   const startTime = Date.now()
   let cdpUrl: string | null = null
 
   while (Date.now() - startTime < timeoutMs) {
     try {
-      // Read the session files from ~/.d3k/ in the sandbox
+      // Read both legacy and current session file locations from ~/.d3k/
       const cmdResult = await sandbox.runCommand({
         cmd: "sh",
         args: [
           "-c",
-          'for f in /home/vercel-sandbox/.d3k/*.json; do [ -f "$f" ] && cat "$f" 2>/dev/null && echo ""; done'
+          `
+files="$(ls -1 /home/vercel-sandbox/.d3k/*.json /home/vercel-sandbox/.d3k/*/session.json 2>/dev/null || true)"
+for f in $files; do
+  [ -f "$f" ] || continue
+  echo "__SESSION_FILE__:$f"
+  cat "$f" 2>/dev/null || true
+  echo
+done
+          `.trim()
         ]
       })
 
@@ -880,22 +911,29 @@ async function waitForCdpUrl(sandbox: Sandbox, timeoutMs: number, debug = false)
       const result = { exitCode: cmdResult.exitCode, stdout }
 
       if (result.exitCode === 0 && result.stdout.trim()) {
-        // Parse each JSON object (one per line)
-        const lines = result.stdout.trim().split("\n")
-        for (const line of lines) {
-          if (line.trim().startsWith("{")) {
-            try {
-              const sessionData = JSON.parse(line)
-              if (sessionData.cdpUrl?.startsWith("ws://")) {
-                cdpUrl = sessionData.cdpUrl
-                if (debug) {
-                  console.log(`  ✅ CDP URL found: ${cdpUrl}`)
-                }
-                return cdpUrl
+        const chunks = result.stdout
+          .split("__SESSION_FILE__:")
+          .map((chunk) => chunk.trim())
+          .filter(Boolean)
+
+        for (const chunk of chunks) {
+          const newlineIndex = chunk.indexOf("\n")
+          const filePath = newlineIndex === -1 ? chunk : chunk.slice(0, newlineIndex).trim()
+          const payload = newlineIndex === -1 ? "" : chunk.slice(newlineIndex + 1).trim()
+          if (!payload) continue
+
+          try {
+            const sessionData = JSON.parse(payload)
+            const found = extractCdpUrl(sessionData)
+            if (found) {
+              cdpUrl = found
+              if (debug) {
+                console.log(`  ✅ CDP URL found in ${filePath}: ${cdpUrl}`)
               }
-            } catch {
-              // Skip invalid JSON lines
+              return cdpUrl
             }
+          } catch {
+            // Ignore malformed file content and continue polling.
           }
         }
       }

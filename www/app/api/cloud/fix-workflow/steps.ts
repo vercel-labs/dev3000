@@ -591,10 +591,14 @@ async function prepareTurbopackNdjsonArtifacts(
   const projectCwd = projectDir ? `/vercel/sandbox/${projectDir.replace(/^\/+|\/+$/g, "")}` : "/vercel/sandbox"
   const outputDir = ".next/diagnostics/analyze/ndjson"
   const scriptPath = "/tmp/analyze-to-ndjson.mjs"
+  const startedAt = Date.now()
+
+  workflowLog(`[Turbopack] Preparing analyzer artifacts in ${projectCwd}`)
 
   const analyzeResult = await runSandboxCommand(sandbox, "sh", [
     "-c",
     `export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; cd ${projectCwd} && \
+echo "[Turbopack] Running next experimental-analyze --output..." && \
 if [ -f bun.lockb ] || [ -f bun.lock ]; then bun run next experimental-analyze --output; \
 elif [ -f pnpm-lock.yaml ]; then pnpm next experimental-analyze --output; \
 elif [ -f yarn.lock ]; then yarn next experimental-analyze --output; \
@@ -602,7 +606,17 @@ elif [ -f package-lock.json ]; then npx next experimental-analyze --output; \
 else npx next experimental-analyze --output; fi`
   ])
   if (analyzeResult.exitCode !== 0) {
-    throw new Error(`next experimental-analyze failed: ${analyzeResult.stderr || analyzeResult.stdout}`)
+    const errTail = (analyzeResult.stderr || analyzeResult.stdout || "").slice(-2000)
+    throw new Error(`next experimental-analyze failed: ${errTail || "(no output)"}`)
+  }
+  workflowLog(`[Turbopack] Analyzer completed in ${Math.round((Date.now() - startedAt) / 1000)}s`)
+
+  const analyzeDataCheck = await runSandboxCommand(sandbox, "sh", [
+    "-c",
+    `cd ${projectCwd} && if [ -d .next/diagnostics/analyze/data ]; then echo ok; else echo missing; fi`
+  ])
+  if (!analyzeDataCheck.stdout.includes("ok")) {
+    throw new Error("next experimental-analyze completed but .next/diagnostics/analyze/data is missing")
   }
 
   const writeScriptResult = await runSandboxCommand(sandbox, "sh", [
