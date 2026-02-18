@@ -638,7 +638,7 @@ async function prepareTurbopackNdjsonArtifacts(
   workflowLog(`[Turbopack] Preparing analyzer artifacts in ${projectCwd}`)
   await appendProgressLog(progressContext, `[Turbopack] Preparing analyzer artifacts in ${projectCwd}`)
 
-const runNextCli = async (command: string) =>
+  const runNextCli = async (command: string) =>
     runSandboxCommand(sandbox, "sh", [
       "-c",
       `export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; cd ${projectCwd} && \
