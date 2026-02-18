@@ -654,33 +654,35 @@ echo "[Turbopack] Next command: $NEXT_BIN ${command}" && \
 eval "$NEXT_BIN ${command}"`
     ])
 
-  // Newer Next versions support no-flag invocation; older variants may require --output.
-  await appendProgressLog(progressContext, "[Turbopack] Running next experimental-analyze")
-  let analyzeResult = await runNextCli("experimental-analyze")
+  // Next.js can expose analyzer either as build flags or legacy subcommand depending on version.
+  await appendProgressLog(progressContext, "[Turbopack] Running next build --experimental-analyze --turbopack")
+  let analyzeResult = await runNextCli("build --experimental-analyze --turbopack")
   if (analyzeResult.exitCode !== 0) {
     const combined = `${analyzeResult.stderr}\n${analyzeResult.stdout}`
-    const maybeNeedsOutputFlag = /missing required.*--output|requires.*--output|expected.*--output/i.test(combined)
-    if (maybeNeedsOutputFlag) {
-      await appendProgressLog(progressContext, "[Turbopack] Retrying analyze with --output compatibility flag")
-      analyzeResult = await runNextCli("experimental-analyze --output")
-    } else {
-      const experimentalAnalyzeUnsupported =
-        /invalid project directory.*experimental-analyze|unknown command|unrecognized option|did you mean/i.test(
-          combined
+    const buildFlagUnsupported =
+      /unknown option.*experimental-analyze|unrecognized option.*experimental-analyze|did you mean.*experimental-analyze/i.test(
+        combined
+      )
+    if (buildFlagUnsupported) {
+      await appendProgressLog(progressContext, "[Turbopack] Build flag unsupported; retrying legacy experimental-analyze")
+      analyzeResult = await runNextCli("experimental-analyze")
+
+      if (analyzeResult.exitCode !== 0) {
+        const legacyCombined = `${analyzeResult.stderr}\n${analyzeResult.stdout}`
+        const maybeNeedsOutputFlag = /missing required.*--output|requires.*--output|expected.*--output/i.test(
+          legacyCombined
         )
-      if (experimentalAnalyzeUnsupported) {
-        await appendProgressLog(
-          progressContext,
-          "[Turbopack] experimental-analyze unsupported; retrying via `next build --turbopack`"
-        )
-        analyzeResult = await runNextCli("build --turbopack")
+        if (maybeNeedsOutputFlag) {
+          await appendProgressLog(progressContext, "[Turbopack] Retrying legacy analyze with --output")
+          analyzeResult = await runNextCli("experimental-analyze --output")
+        }
       }
     }
   }
   if (analyzeResult.exitCode !== 0) {
     const errTail = (analyzeResult.stderr || analyzeResult.stdout || "").slice(-2000)
     await appendProgressLog(progressContext, `[Turbopack] Analyze failed: ${errTail.substring(0, 300)}`)
-    throw new Error(`next experimental-analyze failed: ${errTail || "(no output)"}`)
+    throw new Error(`next analyzer command failed: ${errTail || "(no output)"}`)
   }
   workflowLog(`[Turbopack] Analyzer completed in ${Math.round((Date.now() - startedAt) / 1000)}s`)
   await appendProgressLog(progressContext, "[Turbopack] Analyze command completed")
@@ -691,7 +693,7 @@ eval "$NEXT_BIN ${command}"`
   ])
   if (!analyzeDataCheck.stdout.includes("ok")) {
     await appendProgressLog(progressContext, "[Turbopack] Analyze data folder missing after command")
-    throw new Error("next experimental-analyze completed but .next/diagnostics/analyze/data is missing")
+    throw new Error("next analyzer command completed but .next/diagnostics/analyze/data is missing")
   }
   await appendProgressLog(progressContext, "[Turbopack] Analyze data folder detected")
 
@@ -802,7 +804,7 @@ export async function initSandboxStep(
 
   if (isTurbopackBundleAnalyzer) {
     timer.start("Generate Turbopack NDJSON artifacts")
-    await updateProgress(progressContext, 1, "Running next experimental-analyze...")
+    await updateProgress(progressContext, 1, "Running Next.js analyzer build...")
     const ndjsonResult = await prepareTurbopackNdjsonArtifacts(sandboxResult.sandbox, projectDir, progressContext)
     workflowLog(`[Init] Turbopack NDJSON artifacts ready at ${ndjsonResult.outputDir}`)
     if (ndjsonResult.summary) {
@@ -1851,7 +1853,7 @@ Workflow:
 4) Implement high-impact fixes in code (do not stop at recommendations).
 5) Validate changes did not break the app (diagnose and/or getWebVitals).
 6) Re-run bundle analysis at the end using runProjectCommand:
-   - \`next experimental-analyze\` (fallback to \`--output\` for older Next versions)
+   - \`next build --experimental-analyze --turbopack\` (fallback to \`next experimental-analyze\` + optional \`--output\` for older Next versions)
    - \`node /tmp/analyze-to-ndjson.mjs --input .next/diagnostics/analyze/data --output .next/diagnostics/analyze/ndjson\`
 7) Summarize what changed, what improved, and any remaining tradeoffs.
 
