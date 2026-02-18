@@ -643,11 +643,15 @@ async function prepareTurbopackNdjsonArtifacts(
       "-c",
       `export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; cd ${projectCwd} && \
 echo "[Turbopack] Running next experimental-analyze${withOutputFlag ? " --output" : ""}..." && \
-if [ -x ./node_modules/.bin/next ]; then ./node_modules/.bin/next experimental-analyze${withOutputFlag ? " --output" : ""}; \
-elif [ -f pnpm-lock.yaml ]; then pnpm exec next experimental-analyze${withOutputFlag ? " --output" : ""}; \
-elif [ -f yarn.lock ]; then yarn next experimental-analyze${withOutputFlag ? " --output" : ""}; \
-elif [ -f bun.lockb ] || [ -f bun.lock ]; then bunx --bun next experimental-analyze${withOutputFlag ? " --output" : ""}; \
-else npx --yes next experimental-analyze${withOutputFlag ? " --output" : ""}; fi`
+NEXT_BIN="" && \
+if [ -x ./node_modules/.bin/next ]; then NEXT_BIN="./node_modules/.bin/next"; \
+elif [ -f ./node_modules/next/dist/bin/next ]; then NEXT_BIN="node ./node_modules/next/dist/bin/next"; \
+elif [ -x ../node_modules/.bin/next ]; then NEXT_BIN="../node_modules/.bin/next"; \
+elif [ -f ../node_modules/next/dist/bin/next ]; then NEXT_BIN="node ../node_modules/next/dist/bin/next"; \
+elif command -v next >/dev/null 2>&1; then NEXT_BIN="next"; \
+else NEXT_BIN="npx --yes next"; fi && \
+echo "[Turbopack] Analyze command: $NEXT_BIN experimental-analyze${withOutputFlag ? " --output" : ""}" && \
+eval "$NEXT_BIN experimental-analyze${withOutputFlag ? " --output" : ""}"`
     ])
 
   // Newer Next versions support no-flag invocation; older variants may require --output.
