@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react"
 import megaCatalog from "./mega-catalog.json"
+import promoFeed from "./promo-feed.json"
 
 function formatBytes(bytes: number) {
   const kb = bytes / 1024
@@ -22,6 +23,7 @@ export default function Home() {
   }, [query])
 
   const payloadBytes = JSON.stringify(megaCatalog).length
+  const promoBytes = JSON.stringify(promoFeed).length
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
@@ -29,7 +31,8 @@ export default function Home() {
         <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Turbopack Demo</p>
         <h1 className="mt-3 text-3xl font-semibold">Large bundle anti-pattern homepage</h1>
         <p className="mt-2 text-slate-500">
-          This page intentionally ships a huge static catalog to the browser. Approx payload: {formatBytes(payloadBytes)}.
+          This page intentionally ships huge static payloads to the browser. Catalog: {formatBytes(payloadBytes)}.
+          Promo feed: {formatBytes(promoBytes)}.
         </p>
 
         <section className="mt-8 rounded-3xl border border-slate-200 bg-white p-8">
@@ -49,6 +52,21 @@ export default function Home() {
               <li key={item.id} className="rounded-xl border border-slate-100 bg-slate-50 p-4">
                 <p className="font-medium text-slate-800">{item.title}</p>
                 <p className="mt-1 text-xs text-slate-500">{item.description}</p>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <section className="mt-8 rounded-3xl border border-slate-200 bg-white p-8">
+          <h2 className="text-lg font-semibold">Promo feed snapshot (second intentional bundle mistake)</h2>
+          <p className="mt-2 text-sm text-slate-500">
+            We import the full promo feed in the client just to render a tiny sample.
+          </p>
+          <ul className="mt-4 space-y-2 text-sm text-slate-600">
+            {promoFeed.slice(0, 8).map((promo) => (
+              <li key={promo.id} className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
+                <span className="font-medium text-slate-800">{promo.headline}</span>
+                <span className="ml-2 text-xs uppercase tracking-wide text-slate-500">{promo.segment}</span>
               </li>
             ))}
           </ul>

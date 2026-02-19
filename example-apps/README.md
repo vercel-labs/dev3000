@@ -34,6 +34,7 @@ These apps are intentionally small and intentionally imperfect. Each app targets
   - Intentional issues:
     - Home page marked as a client component unnecessarily
     - Large static JSON payload imported directly into `/` bundle
+    - Second large static payload imported for low-value UI sample content
     - Expensive client-side filtering/sorting of the full payload
 
 ## Deployment

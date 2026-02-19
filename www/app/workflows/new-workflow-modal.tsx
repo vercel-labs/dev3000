@@ -200,6 +200,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   }
 
   const isUrlAuditType = selectedTarget === "url"
+  const isTurbopackBundleAnalyzer = _selectedType === "turbopack-bundle-analyzer"
   const isValidPublicUrl = (() => {
     if (!publicUrl.trim()) return false
     try {
@@ -530,6 +531,13 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
     async function checkDeploymentProtection() {
       console.log("[Bypass Token] useEffect triggered - step:", step, "selectedProject:", selectedProject?.name)
 
+      if (isTurbopackBundleAnalyzer) {
+        console.log("[Bypass Token] Skipping protection check for Turbopack Bundle Analyzer workflow")
+        setNeedsBypassToken(false)
+        setIsCheckingProtection(false)
+        return
+      }
+
       if (!selectedProject) {
         console.log("[Bypass Token] No selected project, skipping check")
         return
@@ -593,7 +601,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
     }
 
     checkDeploymentProtection()
-  }, [selectedProject, step, searchParams, getBypassTokenStorageKey])
+  }, [selectedProject, step, searchParams, getBypassTokenStorageKey, isTurbopackBundleAnalyzer])
 
   // Load recent projects for the selected team
   useEffect(() => {
@@ -835,7 +843,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
         devUrl,
         projectName: isUrlAuditType ? new URL(publicUrl).hostname : project?.name,
         userId,
-        bypassToken,
+        bypassToken: isTurbopackBundleAnalyzer ? undefined : bypassToken,
         workflowType,
         analysisTargetType: isUrlAuditType ? "url" : "vercel-project",
         publicUrl: isUrlAuditType ? publicUrl : undefined,
@@ -1609,7 +1617,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                     {isCheckingProtection && (
                       <div className="text-sm text-muted-foreground">Checking deployment protection...</div>
                     )}
-                    {needsBypassToken && (
+                    {needsBypassToken && !isTurbopackBundleAnalyzer && (
                       <div>
                         <label htmlFor={bypassTokenId} className="block text-sm font-medium text-foreground mb-1">
                           Deployment Protection Bypass Token
@@ -1815,7 +1823,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                       type="button"
                       onClick={startWorkflow}
                       disabled={
-                        (needsBypassToken && !bypassToken) ||
+                        (needsBypassToken && !isTurbopackBundleAnalyzer && !bypassToken) ||
                         (_selectedType === "prompt" && !customPrompt.trim()) ||
                         (isGithubPatRequired && !githubPat.trim()) ||
                         repoVisibility === "checking"
