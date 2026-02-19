@@ -168,39 +168,51 @@ export async function getWorkflowRun(userId: string, runId: string): Promise<Wor
  */
 export async function getPublicWorkflowRun(runId: string): Promise<WorkflowRun | null> {
   const prefix = "workflows/"
-  let blobs: Awaited<ReturnType<typeof list>>["blobs"] = []
-  try {
-    ;({ blobs } = await list({ prefix }))
-  } catch (error) {
-    console.error(`[Workflow Storage] Failed to list blobs for ${prefix}:`, error)
-    return null
-  }
+  let cursor: string | undefined
+  let page = 0
 
-  // Search through all workflow blobs to find the matching run ID
-  for (const blob of blobs) {
+  while (true) {
+    let pageResult: Awaited<ReturnType<typeof list>>
     try {
-      // Use authenticated head() call to verify blob and get downloadUrl
-      const blobInfo = await head(blob.url)
-      if (!blobInfo || !blobInfo.contentType?.includes("application/json")) {
-        continue
-      }
-
-      const fetchUrl = blobInfo.downloadUrl || blob.url
-      const response = await fetchJsonWithRetry(fetchUrl)
-
-      // Skip if response is HTML (security checkpoint)
-      const contentType = response.headers.get("content-type")
-      if (contentType && !contentType.includes("application/json")) {
-        continue
-      }
-
-      const run: WorkflowRun = await response.json()
-      if (run.id === runId && run.isPublic) {
-        return run
-      }
-    } catch {
-      // Skip invalid blobs
+      pageResult = await list({ prefix, cursor, limit: 1000 })
+    } catch (error) {
+      console.error(`[Workflow Storage] Failed to list blobs for ${prefix} (page ${page}):`, error)
+      return null
     }
+
+    // Search through current page of blobs to find the matching run ID
+    for (const blob of pageResult.blobs) {
+      try {
+        // Use authenticated head() call to verify blob and get downloadUrl
+        const blobInfo = await head(blob.url)
+        if (!blobInfo || !blobInfo.contentType?.includes("application/json")) {
+          continue
+        }
+
+        const fetchUrl = blobInfo.downloadUrl || blob.url
+        const response = await fetchJsonWithRetry(fetchUrl)
+
+        // Skip if response is HTML (security checkpoint)
+        const contentType = response.headers.get("content-type")
+        if (contentType && !contentType.includes("application/json")) {
+          continue
+        }
+
+        const run: WorkflowRun = await response.json()
+        if (run.id === runId && run.isPublic) {
+          return run
+        }
+      } catch {
+        // Skip invalid blobs
+      }
+    }
+
+    if (!pageResult.hasMore || !pageResult.cursor) {
+      break
+    }
+
+    cursor = pageResult.cursor
+    page += 1
   }
 
   return null
