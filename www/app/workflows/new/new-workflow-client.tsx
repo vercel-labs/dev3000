@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { Suspense } from "react"
+import { Suspense, useEffect, useState, useTransition } from "react"
 import NewWorkflowModal from "../new-workflow-modal"
 
 interface UserInfo {
@@ -17,10 +17,21 @@ interface NewWorkflowClientProps {
 
 export default function NewWorkflowClient({ user }: NewWorkflowClientProps) {
   const router = useRouter()
+  const [, startTransition] = useTransition()
+  const [isClosing, setIsClosing] = useState(false)
+
+  useEffect(() => {
+    router.prefetch("/workflows")
+  }, [router])
 
   const handleClose = () => {
-    router.push("/workflows")
+    setIsClosing(true)
+    startTransition(() => {
+      router.push("/workflows")
+    })
   }
+
+  if (isClosing) return null
 
   return (
     <div>
