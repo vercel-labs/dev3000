@@ -3,5 +3,89 @@ export const skillFallbacks: Record<string, string> = {
   "vercel-react-best-practices":
     '---\nname: vercel-react-best-practices\ndescription: React and Next.js performance optimization guidelines from Vercel Engineering. This skill should be used when writing, reviewing, or refactoring React/Next.js code to ensure optimal performance patterns. Triggers on tasks involving React components, Next.js pages, data fetching, bundle optimization, or performance improvements.\nlicense: MIT\nmetadata:\n  author: vercel\n  version: "1.0.0"\n---\n\n# Vercel React Best Practices\n\nComprehensive performance optimization guide for React and Next.js applications, maintained by Vercel. Contains 57 rules across 8 categories, prioritized by impact to guide automated refactoring and code generation.\n\n## When to Apply\n\nReference these guidelines when:\n- Writing new React components or Next.js pages\n- Implementing data fetching (client or server-side)\n- Reviewing code for performance issues\n- Refactoring existing React/Next.js code\n- Optimizing bundle size or load times\n\n## Rule Categories by Priority\n\n| Priority | Category | Impact | Prefix |\n|----------|----------|--------|--------|\n| 1 | Eliminating Waterfalls | CRITICAL | `async-` |\n| 2 | Bundle Size Optimization | CRITICAL | `bundle-` |\n| 3 | Server-Side Performance | HIGH | `server-` |\n| 4 | Client-Side Data Fetching | MEDIUM-HIGH | `client-` |\n| 5 | Re-render Optimization | MEDIUM | `rerender-` |\n| 6 | Rendering Performance | MEDIUM | `rendering-` |\n| 7 | JavaScript Performance | LOW-MEDIUM | `js-` |\n| 8 | Advanced Patterns | LOW | `advanced-` |\n\n## Quick Reference\n\n### 1. Eliminating Waterfalls (CRITICAL)\n\n- `async-defer-await` - Move await into branches where actually used\n- `async-parallel` - Use Promise.all() for independent operations\n- `async-dependencies` - Use better-all for partial dependencies\n- `async-api-routes` - Start promises early, await late in API routes\n- `async-suspense-boundaries` - Use Suspense to stream content\n\n### 2. Bundle Size Optimization (CRITICAL)\n\n- `bundle-barrel-imports` - Import directly, avoid barrel files\n- `bundle-dynamic-imports` - Use next/dynamic for heavy components\n- `bundle-defer-third-party` - Load analytics/logging after hydration\n- `bundle-conditional` - Load modules only when feature is activated\n- `bundle-preload` - Preload on hover/focus for perceived speed\n\n### 3. Server-Side Performance (HIGH)\n\n- `server-auth-actions` - Authenticate server actions like API routes\n- `server-cache-react` - Use React.cache() for per-request deduplication\n- `server-cache-lru` - Use LRU cache for cross-request caching\n- `server-dedup-props` - Avoid duplicate serialization in RSC props\n- `server-serialization` - Minimize data passed to client components\n- `server-parallel-fetching` - Restructure components to parallelize fetches\n- `server-after-nonblocking` - Use after() for non-blocking operations\n\n### 4. Client-Side Data Fetching (MEDIUM-HIGH)\n\n- `client-swr-dedup` - Use SWR for automatic request deduplication\n- `client-event-listeners` - Deduplicate global event listeners\n- `client-passive-event-listeners` - Use passive listeners for scroll\n- `client-localstorage-schema` - Version and minimize localStorage data\n\n### 5. Re-render Optimization (MEDIUM)\n\n- `rerender-defer-reads` - Don\'t subscribe to state only used in callbacks\n- `rerender-memo` - Extract expensive work into memoized components\n- `rerender-memo-with-default-value` - Hoist default non-primitive props\n- `rerender-dependencies` - Use primitive dependencies in effects\n- `rerender-derived-state` - Subscribe to derived booleans, not raw values\n- `rerender-derived-state-no-effect` - Derive state during render, not effects\n- `rerender-functional-setstate` - Use functional setState for stable callbacks\n- `rerender-lazy-state-init` - Pass function to useState for expensive values\n- `rerender-simple-expression-in-memo` - Avoid memo for simple primitives\n- `rerender-move-effect-to-event` - Put interaction logic in event handlers\n- `rerender-transitions` - Use startTransition for non-urgent updates\n- `rerender-use-ref-transient-values` - Use refs for transient frequent values\n\n### 6. Rendering Performance (MEDIUM)\n\n- `rendering-animate-svg-wrapper` - Animate div wrapper, not SVG element\n- `rendering-content-visibility` - Use content-visibility for long lists\n- `rendering-hoist-jsx` - Extract static JSX outside components\n- `rendering-svg-precision` - Reduce SVG coordinate precision\n- `rendering-hydration-no-flicker` - Use inline script for client-only data\n- `rendering-hydration-suppress-warning` - Suppress expected mismatches\n- `rendering-activity` - Use Activity component for show/hide\n- `rendering-conditional-render` - Use ternary, not && for conditionals\n- `rendering-usetransition-loading` - Prefer useTransition for loading state\n\n### 7. JavaScript Performance (LOW-MEDIUM)\n\n- `js-batch-dom-css` - Group CSS changes via classes or cssText\n- `js-index-maps` - Build Map for repeated lookups\n- `js-cache-property-access` - Cache object properties in loops\n- `js-cache-function-results` - Cache function results in module-level Map\n- `js-cache-storage` - Cache localStorage/sessionStorage reads\n- `js-combine-iterations` - Combine multiple filter/map into one loop\n- `js-length-check-first` - Check array length before expensive comparison\n- `js-early-exit` - Return early from functions\n- `js-hoist-regexp` - Hoist RegExp creation outside loops\n- `js-min-max-loop` - Use loop for min/max instead of sort\n- `js-set-map-lookups` - Use Set/Map for O(1) lookups\n- `js-tosorted-immutable` - Use toSorted() for immutability\n\n### 8. Advanced Patterns (LOW)\n\n- `advanced-event-handler-refs` - Store event handlers in refs\n- `advanced-init-once` - Initialize app once per app load\n- `advanced-use-latest` - useLatest for stable callback refs\n\n## How to Use\n\nRead individual rule files for detailed explanations and code examples:\n\n```\nrules/async-parallel.md\nrules/bundle-barrel-imports.md\n```\n\nEach rule file contains:\n- Brief explanation of why it matters\n- Incorrect code example with explanation\n- Correct code example with explanation\n- Additional context and references\n\n## Full Compiled Document\n\nFor the complete guide with all rules expanded: `AGENTS.md`\n',
   "web-design-guidelines":
-    '---\nname: web-design-guidelines\ndescription: Review UI code for Web Interface Guidelines compliance. Use when asked to "review my UI", "check accessibility", "audit design", "review UX", or "check my site against best practices".\nmetadata:\n  author: vercel\n  version: "1.0.0"\n  argument-hint: <file-or-pattern>\n---\n\n# Web Interface Guidelines\n\nReview files for compliance with Web Interface Guidelines.\n\n## How It Works\n\n1. Fetch the latest guidelines from the source URL below\n2. Read the specified files (or prompt user for files/pattern)\n3. Check against all rules in the fetched guidelines\n4. Output findings in the terse `file:line` format\n\n## Guidelines Source\n\nFetch fresh guidelines before each review:\n\n```\nhttps://raw.githubusercontent.com/vercel-labs/web-interface-guidelines/main/command.md\n```\n\nUse WebFetch to retrieve the latest rules. The fetched content contains all the rules and output format instructions.\n\n## Usage\n\nWhen a user provides a file or pattern argument:\n1. Fetch guidelines from the source URL above\n2. Read the specified files\n3. Apply all rules from the fetched guidelines\n4. Output findings using the format specified in the guidelines\n\nIf no files specified, ask the user which files to review.\n'
+    '---\nname: web-design-guidelines\ndescription: Review UI code for Web Interface Guidelines compliance. Use when asked to "review my UI", "check accessibility", "audit design", "review UX", or "check my site against best practices".\nmetadata:\n  author: vercel\n  version: "1.0.0"\n  argument-hint: <file-or-pattern>\n---\n\n# Web Interface Guidelines\n\nReview files for compliance with Web Interface Guidelines.\n\n## How It Works\n\n1. Fetch the latest guidelines from the source URL below\n2. Read the specified files (or prompt user for files/pattern)\n3. Check against all rules in the fetched guidelines\n4. Output findings in the terse `file:line` format\n\n## Guidelines Source\n\nFetch fresh guidelines before each review:\n\n```\nhttps://raw.githubusercontent.com/vercel-labs/web-interface-guidelines/main/command.md\n```\n\nUse WebFetch to retrieve the latest rules. The fetched content contains all the rules and output format instructions.\n\n## Usage\n\nWhen a user provides a file or pattern argument:\n1. Fetch guidelines from the source URL above\n2. Read the specified files\n3. Apply all rules from the fetched guidelines\n4. Output findings using the format specified in the guidelines\n\nIf no files specified, ask the user which files to review.\n',
+  "analyze-bundle":
+    `---
+name: analyze-bundle
+description: Convert Next.js bundle analyzer data to NDJSON and explore it
+allowed-tools: Bash(node *) Bash(head:*) Bash(tail:*) Bash(grep:*) Bash(jq:*) Read
+---
+
+# analyze-to-ndjson
+
+Converts Next.js bundle analyzer binary .data files into grep/jq-friendly NDJSON.
+
+## Analyze artifacts
+
+This workflow pre-generates analyzer artifacts in:
+
+- .next/diagnostics/analyze/ndjson/routes.ndjson
+- .next/diagnostics/analyze/ndjson/sources.ndjson
+- .next/diagnostics/analyze/ndjson/output_files.ndjson
+- .next/diagnostics/analyze/ndjson/module_edges.ndjson
+- .next/diagnostics/analyze/ndjson/modules.ndjson
+
+Focus on reading these files and using their evidence to prioritize changes.
+
+## Output files
+
+| File | What's in it |
+|---|---|
+| modules.ndjson | Global module registry (id, ident, path) |
+| module_edges.ndjson | Module dependency graph (from, to, kind: sync/async) |
+| sources.ndjson | Per-route source tree with sizes and environment flags |
+| chunk_parts.ndjson | Granular size data: one line per (source, output_file) pair |
+| output_files.ndjson | Per-route output files with aggregated sizes |
+| routes.ndjson | Route-level summaries |
+
+## Browsing the output
+
+### Route overview
+
+\`\`\`bash
+jq -s 'sort_by(-.total_compressed_size)' .next/diagnostics/analyze/ndjson/routes.ndjson
+\`\`\`
+
+### Find large sources
+
+\`\`\`bash
+jq -s '
+  group_by(.full_path)
+  | map(max_by(.compressed_size))
+  | sort_by(-.compressed_size)
+  | .[0:10]
+  | .[] | {full_path, compressed_size, size, route}
+' .next/diagnostics/analyze/ndjson/sources.ndjson
+\`\`\`
+
+### Client-side JS
+
+\`\`\`bash
+grep '"client":true' .next/diagnostics/analyze/ndjson/sources.ndjson \\
+  | grep '"js":true' \\
+  | jq -s 'sort_by(-.compressed_size) | .[0:10] | .[] | {full_path, compressed_size}'
+\`\`\`
+
+### Module dependencies
+
+\`\`\`bash
+grep '"from":42,' .next/diagnostics/analyze/ndjson/module_edges.ndjson | jq .to
+grep '"to":42,' .next/diagnostics/analyze/ndjson/module_edges.ndjson | jq .from
+grep 'react-dom' .next/diagnostics/analyze/ndjson/modules.ndjson | jq '{id, path}'
+\`\`\`
+
+### Output files for a route
+
+\`\`\`bash
+grep '"route":"/"' .next/diagnostics/analyze/ndjson/output_files.ndjson \\
+  | jq -s 'sort_by(-.total_compressed_size) | .[0:10] | .[] | {filename, total_compressed_size, num_parts}'
+\`\`\`
+
+### Directory tree for a route
+
+\`\`\`bash
+grep '"route":"/"' .next/diagnostics/analyze/ndjson/sources.ndjson \\
+  | jq 'select(.parent_id == null)'
+\`\`\`
+`
 }

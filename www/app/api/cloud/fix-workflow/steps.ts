@@ -19,6 +19,7 @@ import { listWorkflowRuns, saveWorkflowRun, type WorkflowType } from "@/lib/work
 import type { TurbopackBundleComparison, TurbopackBundleMetricsSnapshot, WorkflowReport } from "@/types"
 
 const workflowLog = console.log
+const TURBOPACK_MIN_NEXT_VERSION = "16.1.0"
 const ANALYZE_TO_NDJSON_SCRIPT = `#!/usr/bin/env node
 // Converts Next.js bundle analyzer .data files to NDJSON for offline analysis.
 // Usage: node analyze-to-ndjson.mjs [--input <dir>] [--output <dir>]
@@ -316,6 +317,24 @@ function main() {
 
 main();
 `
+
+type ParsedSemver = { major: number; minor: number; patch: number }
+
+function parseSemverLoose(input: string): ParsedSemver | null {
+  const match = input.match(/(\d+)\.(\d+)\.(\d+)/)
+  if (!match) return null
+  return {
+    major: Number.parseInt(match[1] || "0", 10),
+    minor: Number.parseInt(match[2] || "0", 10),
+    patch: Number.parseInt(match[3] || "0", 10)
+  }
+}
+
+function isSemverAtLeast(found: ParsedSemver, minimum: ParsedSemver): boolean {
+  if (found.major !== minimum.major) return found.major > minimum.major
+  if (found.minor !== minimum.minor) return found.minor > minimum.minor
+  return found.patch >= minimum.patch
+}
 
 // Cache for agent-browser instance per sandbox
 const agentBrowserCache = new Map<string, SandboxAgentBrowser>()
@@ -751,6 +770,15 @@ async function prepareTurbopackNdjsonArtifacts(
   const outputDir = ".next/diagnostics/analyze/ndjson"
   const scriptPath = "/tmp/analyze-to-ndjson.mjs"
   const startedAt = Date.now()
+  const nextCliBootstrap = `export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; cd ${projectCwd} && \
+NEXT_BIN="" && \
+SEARCH_DIR="$PWD" && \
+while [ "$SEARCH_DIR" != "/" ]; do \
+  if [ -x "$SEARCH_DIR/node_modules/.bin/next" ]; then NEXT_BIN="$SEARCH_DIR/node_modules/.bin/next"; break; fi; \
+  if [ -f "$SEARCH_DIR/node_modules/next/dist/bin/next" ]; then NEXT_BIN="node $SEARCH_DIR/node_modules/next/dist/bin/next"; break; fi; \
+  SEARCH_DIR="$(dirname "$SEARCH_DIR")"; \
+done && \
+if [ -z "$NEXT_BIN" ]; then NEXT_BIN="bun x next"; fi`
 
   workflowLog(`[Turbopack] Preparing analyzer artifacts in ${projectCwd}`)
   await appendProgressLog(progressContext, `[Turbopack] Preparing analyzer artifacts in ${projectCwd}`)
@@ -766,19 +794,40 @@ async function prepareTurbopackNdjsonArtifacts(
   const runNextCli = async (command: string) =>
     runSandboxCommand(sandbox, "sh", [
       "-c",
-      `export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; cd ${projectCwd} && \
+      `${nextCliBootstrap} && \
 echo "[Turbopack] Running: ${command}" && \
-NEXT_BIN="" && \
-SEARCH_DIR="$PWD" && \
-while [ "$SEARCH_DIR" != "/" ]; do \
-  if [ -x "$SEARCH_DIR/node_modules/.bin/next" ]; then NEXT_BIN="$SEARCH_DIR/node_modules/.bin/next"; break; fi; \
-  if [ -f "$SEARCH_DIR/node_modules/next/dist/bin/next" ]; then NEXT_BIN="node $SEARCH_DIR/node_modules/next/dist/bin/next"; break; fi; \
-  SEARCH_DIR="$(dirname "$SEARCH_DIR")"; \
-done && \
-if [ -z "$NEXT_BIN" ]; then NEXT_BIN="bun x next"; fi && \
 echo "[Turbopack] Next command: $NEXT_BIN ${command}" && \
 eval "$NEXT_BIN ${command}"`
     ])
+
+  const nextVersionResult = await runSandboxCommand(sandbox, "sh", [
+    "-c",
+    `${nextCliBootstrap} && echo "[Turbopack] Next command: $NEXT_BIN --version" && eval "$NEXT_BIN --version"`
+  ])
+  await appendAnalyzerTrace("[Turbopack]", nextVersionResult)
+  if (nextVersionResult.exitCode !== 0) {
+    throw new Error(
+      `Unable to determine Next.js version for Turbopack workflow: ${nextVersionResult.stderr || nextVersionResult.stdout}`
+    )
+  }
+
+  const nextVersionOutput = `${nextVersionResult.stdout}\n${nextVersionResult.stderr}`.trim()
+  const detectedVersion = parseSemverLoose(nextVersionOutput)
+  const minimumVersion = parseSemverLoose(TURBOPACK_MIN_NEXT_VERSION)
+  if (!detectedVersion || !minimumVersion) {
+    throw new Error(
+      `Unable to parse Next.js version for Turbopack workflow. Output: ${nextVersionOutput || "(empty output)"}`
+    )
+  }
+  await appendProgressLog(
+    progressContext,
+    `[Turbopack] Detected Next.js ${detectedVersion.major}.${detectedVersion.minor}.${detectedVersion.patch}`
+  )
+  if (!isSemverAtLeast(detectedVersion, minimumVersion)) {
+    throw new Error(
+      `Turbopack Bundle Analyzer workflow requires Next.js ${TURBOPACK_MIN_NEXT_VERSION} or newer. Detected ${detectedVersion.major}.${detectedVersion.minor}.${detectedVersion.patch}.`
+    )
+  }
 
   // Next.js can expose analyzer either as build flags or legacy subcommand depending on version.
   await appendProgressLog(
@@ -1681,7 +1730,9 @@ async function runAgentWithDiagnoseTool(
   const skillAliases: Record<string, string> = {
     "react-performance": "vercel-react-best-practices",
     "vercel-design-guidelines": "web-design-guidelines",
-    "design-guidelines": "web-design-guidelines"
+    "design-guidelines": "web-design-guidelines",
+    "bundle-analyzer-agentic": "analyze-bundle",
+    "turbopack-bundle-analyzer": "analyze-bundle"
   }
   const skillsLoaded = new Set<string>()
 
@@ -2114,7 +2165,7 @@ Use this to diagnose and verify performance improvements.`,
     userPromptMessage = `Analyze Turbopack bundle analyzer output for this project and make only bundle-size/performance improvements.
 
 Workflow:
-1) Call get_skill({ name: "d3k" }) first.
+1) Call get_skill({ name: "d3k" }) then get_skill({ name: "analyze-bundle" }) first.
 2) Read the generated NDJSON artifacts at .next/diagnostics/analyze/ndjson/ (routes.ndjson, sources.ndjson, output_files.ndjson, module_edges.ndjson, modules.ndjson).
 3) Identify concrete highest-impact sources of shipped JS.
 4) Implement high-impact fixes in code that reduce shipped JS.
@@ -3162,6 +3213,7 @@ Do not pursue unrelated goals.
 Before doing anything else, call:
 \`\`\`
 get_skill({ name: "d3k" })
+get_skill({ name: "analyze-bundle" })
 \`\`\`
 
 ## ANALYSIS WORKFLOW

@@ -193,7 +193,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   const workflowSkillLabels: Record<string, string[]> = {
     "design-guidelines": ["d3k", "vercel-design-guidelines"],
     "react-performance": ["d3k", "vercel-react-best-practices"],
-    "turbopack-bundle-analyzer": ["d3k"],
+    "turbopack-bundle-analyzer": ["d3k", "analyze-bundle"],
     "cls-fix": ["d3k"],
     prompt: ["d3k"],
     "url-audit": ["d3k", "vercel-design-guidelines"]

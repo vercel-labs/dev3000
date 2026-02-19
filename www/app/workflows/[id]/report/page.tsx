@@ -165,6 +165,13 @@ async function ReportContent({
   const skillLink = (skill: string) => {
     const normalized = skill.trim().toLowerCase()
     if (normalized === "d3k" || normalized.includes("d3k")) return "https://dev3000.ai"
+    if (
+      normalized === "analyze-bundle" ||
+      normalized.includes("bundle-analyzer-agentic") ||
+      normalized.includes("bundle-analyzer")
+    ) {
+      return "https://github.com/andrewimm/bundle-analyzer-agentic/blob/main/SKILL.md"
+    }
     if (normalized.includes("web-design-guidelines") || normalized.includes("vercel web design guidelines")) {
       return "https://skills.sh/vercel-labs/agent-skills/web-design-guidelines"
     }
@@ -173,12 +180,20 @@ async function ReportContent({
   const normalizeSkillLabel = (skill: string) => {
     const normalized = skill.trim().toLowerCase()
     if (normalized.includes("web-design-guidelines")) return "Vercel Web Design Guidelines"
+    if (
+      normalized === "analyze-bundle" ||
+      normalized.includes("bundle-analyzer-agentic") ||
+      normalized.includes("bundle-analyzer")
+    ) {
+      return "analyze-bundle"
+    }
     if (normalized === "d3k" || normalized.includes("d3k")) return "d3k"
     return skill
   }
   const explicitSkills = [...(report.skillsLoaded || []), ...(report.skillsInstalled || [])]
   const inferredSkills: string[] = ["d3k"]
   if (workflowType === "design-guidelines") inferredSkills.unshift("Vercel Web Design Guidelines")
+  if (workflowType === "turbopack-bundle-analyzer") inferredSkills.unshift("analyze-bundle")
   const skillsUsed = Array.from(
     new Map(
       [...explicitSkills, ...inferredSkills].map((skill) => {
