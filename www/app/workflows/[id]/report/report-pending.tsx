@@ -10,6 +10,7 @@ interface ReportPendingProps {
   runId: string
   userId?: string
   workflowType?: string
+  projectName?: string
 }
 
 const STEP_LABELS = ["Creating sandbox", "Capturing baseline", "Agent in progress", "Generating report", "Finishing up"]
@@ -30,7 +31,7 @@ function getPendingReportLabel(workflowType?: string) {
   return "Workflow Report"
 }
 
-export function ReportPending({ runId, userId, workflowType }: ReportPendingProps) {
+export function ReportPending({ runId, userId, workflowType, projectName }: ReportPendingProps) {
   const router = useRouter()
   const [status, setStatus] = useState<string>("Creating sandbox...")
   const [hasError, setHasError] = useState(false)
@@ -129,7 +130,9 @@ export function ReportPending({ runId, userId, workflowType }: ReportPendingProp
   const fallbackActiveIndex = statusMatchIndex >= 0 ? statusMatchIndex : -1
   const activeIndex = fallbackActiveIndex >= 0 ? fallbackActiveIndex : normalizedStepNumber
   const pendingLabel = getPendingReportLabel(workflowType)
-  const pendingTitle = workflowType === "turbopack-bundle-analyzer" ? "d3k Turbopack Bundle Analyzer Report" : "d3k Workflow Report"
+  const pendingTitle =
+    workflowType === "turbopack-bundle-analyzer" ? "d3k Turbopack Bundle Analyzer Report" : "d3k Workflow Report"
+  const pendingReportTitle = projectName || pendingTitle
 
   return (
     <div className="min-h-screen bg-background">
@@ -148,7 +151,7 @@ export function ReportPending({ runId, userId, workflowType }: ReportPendingProp
 
         <div>
           <div className="text-xs uppercase tracking-wide text-muted-foreground">{pendingLabel}</div>
-          <h1 className="text-3xl font-bold mt-2">{pendingTitle}</h1>
+          <h1 className="text-3xl font-bold mt-2">{pendingReportTitle}</h1>
           <p className="text-muted-foreground mt-1">
             We&apos;re assembling the results and will show them here shortly.
           </p>
