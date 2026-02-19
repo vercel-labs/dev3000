@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 interface ReportPendingProps {
   runId: string
   userId?: string
+  workflowType?: string
 }
 
 const STEP_LABELS = ["Creating sandbox", "Capturing baseline", "Agent in progress", "Generating report", "Finishing up"]
@@ -20,7 +21,16 @@ function normalizeStepNumber(stepNumber: number | null): number | null {
   return null
 }
 
-export function ReportPending({ runId, userId }: ReportPendingProps) {
+function getPendingReportLabel(workflowType?: string) {
+  if (workflowType === "turbopack-bundle-analyzer") return "Turbopack Bundle Analyzer Report"
+  if (workflowType === "design-guidelines") return "Design Guidelines Report"
+  if (workflowType === "react-performance") return "React Performance Report"
+  if (workflowType === "url-audit") return "URL Audit Report"
+  if (workflowType === "prompt") return "Custom Prompt Report"
+  return "Workflow Report"
+}
+
+export function ReportPending({ runId, userId, workflowType }: ReportPendingProps) {
   const router = useRouter()
   const [status, setStatus] = useState<string>("Creating sandbox...")
   const [hasError, setHasError] = useState(false)
@@ -118,6 +128,8 @@ export function ReportPending({ runId, userId }: ReportPendingProps) {
   })
   const fallbackActiveIndex = statusMatchIndex >= 0 ? statusMatchIndex : -1
   const activeIndex = fallbackActiveIndex >= 0 ? fallbackActiveIndex : normalizedStepNumber
+  const pendingLabel = getPendingReportLabel(workflowType)
+  const pendingTitle = workflowType === "turbopack-bundle-analyzer" ? "d3k Turbopack Bundle Analyzer Report" : "d3k Workflow Report"
 
   return (
     <div className="min-h-screen bg-background">
@@ -131,12 +143,12 @@ export function ReportPending({ runId, userId }: ReportPendingProps) {
             <span className="font-semibold">d3k</span>
           </a>
           <span className="text-muted-foreground">/</span>
-          <span className="text-muted-foreground">Workflow Report</span>
+          <span className="text-muted-foreground">{pendingLabel}</span>
         </div>
 
         <div>
-          <div className="text-xs uppercase tracking-wide text-muted-foreground">Workflow Report</div>
-          <h1 className="text-3xl font-bold mt-2">d3k Workflow Report</h1>
+          <div className="text-xs uppercase tracking-wide text-muted-foreground">{pendingLabel}</div>
+          <h1 className="text-3xl font-bold mt-2">{pendingTitle}</h1>
           <p className="text-muted-foreground mt-1">
             We&apos;re assembling the results and will show them here shortly.
           </p>
