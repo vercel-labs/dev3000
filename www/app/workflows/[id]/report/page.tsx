@@ -1,4 +1,4 @@
-import { ArrowLeft, Download } from "lucide-react"
+import { ArrowLeft, ChevronRight, ExternalLink } from "lucide-react"
 import type { Metadata } from "next"
 import Image from "next/image"
 import { redirect } from "next/navigation"
@@ -8,7 +8,6 @@ import type { WorkflowRun } from "@/lib/workflow-storage"
 import { getPublicWorkflowRun, getWorkflowRun } from "@/lib/workflow-storage"
 import type { WorkflowReport } from "@/types"
 import { AgentAnalysis } from "./agent-analysis"
-import { CollapsibleSection } from "./collapsible-section"
 import { CoordinatedPlayers } from "./coordinated-players"
 import { ReportPending } from "./report-pending"
 import { ScreenshotPlayer } from "./screenshot-player"
@@ -17,6 +16,8 @@ import { ShareButton } from "./share-button"
 export const metadata: Metadata = {
   title: "d3k workflow report"
 }
+
+const MIN_ROUTE_DELTA_BYTES = 10 * 1024
 
 export default async function WorkflowReportPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser()
@@ -132,8 +133,7 @@ async function ReportContent({
     if (typeof bytes !== "number") return "—"
     const abs = Math.abs(bytes)
     if (abs >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
-    if (abs >= 1024) return `${(bytes / 1024).toFixed(1)} KB`
-    return `${bytes.toFixed(0)} B`
+    return `${(bytes / 1024).toFixed(1)} KB`
   }
   const formatSignedBytes = (bytes?: number) => {
     if (typeof bytes !== "number") return "—"
@@ -162,15 +162,41 @@ async function ReportContent({
     workflowType === "cls-fix" &&
     (!!report.afterWebVitals || report.afterClsScore !== undefined)
   const bundleComparison = report.turbopackBundleComparison
+  const bundleRouteDeltas = bundleComparison
+    ? Array.from(
+        new Set([
+          ...bundleComparison.before.topRoutes.map((route) => route.route),
+          ...bundleComparison.after.topRoutes.map((route) => route.route)
+        ])
+      )
+        .map((route) => {
+          const beforeRoute = bundleComparison.before.topRoutes.find((item) => item.route === route)
+          const afterRoute = bundleComparison.after.topRoutes.find((item) => item.route === route)
+          const beforeCompressedBytes = beforeRoute?.compressedBytes ?? 0
+          const afterCompressedBytes = afterRoute?.compressedBytes ?? 0
+          const compressedDelta = afterCompressedBytes - beforeCompressedBytes
+          return {
+            route,
+            beforeCompressedBytes,
+            afterCompressedBytes,
+            compressedDelta
+          }
+        })
+        .filter((route) => Math.abs(route.compressedDelta) >= MIN_ROUTE_DELTA_BYTES)
+        .sort((a, b) => a.compressedDelta - b.compressedDelta)
+        .slice(0, 5)
+    : []
   const skillLink = (skill: string) => {
     const normalized = skill.trim().toLowerCase()
-    if (normalized === "d3k" || normalized.includes("d3k")) return "https://dev3000.ai"
+    if (normalized === "d3k" || normalized.includes("d3k")) {
+      return "https://github.com/vercel-labs/dev3000/blob/main/www/.agents/skills/d3k/SKILL.md"
+    }
     if (
       normalized === "analyze-bundle" ||
       normalized.includes("bundle-analyzer-agentic") ||
       normalized.includes("bundle-analyzer")
     ) {
-      return "https://github.com/andrewimm/bundle-analyzer-agentic/blob/main/SKILL.md"
+      return "https://github.com/vercel-labs/dev3000/blob/main/www/.agents/skills/analyze-bundle/SKILL.md"
     }
     if (normalized.includes("web-design-guidelines") || normalized.includes("vercel web design guidelines")) {
       return "https://skills.sh/vercel-labs/agent-skills/web-design-guidelines"
@@ -203,6 +229,10 @@ async function ReportContent({
     ).values()
   )
   const reportTitle = report.targetUrl || report.projectName
+  const prDiffUrl = run.prUrl ? `${run.prUrl}.diff` : undefined
+  const inlineDiffUrl = report.gitDiff
+    ? `data:text/plain;charset=utf-8,${encodeURIComponent(report.gitDiff)}`
+    : undefined
 
   return (
     <div className="min-h-screen bg-background">
@@ -236,15 +266,12 @@ async function ReportContent({
           </div>
           <div className="flex items-center gap-3">
             {isOwner && <ShareButton runId={id} initialIsPublic={run.isPublic ?? false} />}
-            <a
-              href={reportBlobUrl}
-              download
-              className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
-            >
-              <Download className="h-4 w-4" />
-              JSON
-            </a>
           </div>
+        </div>
+
+        <div className="text-sm text-muted-foreground mb-1">
+          <span>Model: </span>
+          <span className="font-medium text-foreground">{report.agentAnalysisModel || "unknown"}</span>
         </div>
 
         <div className="text-sm text-muted-foreground mb-4">
@@ -253,7 +280,12 @@ async function ReportContent({
             <span>
               {skillsUsed.map((skill, index) => (
                 <span key={`skills-used-${skill.label}`}>
-                  <a href={skill.url} target="_blank" rel="noopener noreferrer" className="hover:underline font-medium">
+                  <a
+                    href={skill.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:underline font-medium text-foreground"
+                  >
                     {skill.label}
                   </a>
                   {index < skillsUsed.length - 1 ? ", " : ""}
@@ -264,170 +296,6 @@ async function ReportContent({
             <span>None recorded</span>
           )}
         </div>
-
-        {/* d3k agent transcript */}
-        {(report.timing || report.initD3kLogs || report.d3kLogs || report.afterD3kLogs) && (
-          <div className="mb-5">
-            <details>
-              <summary className="text-sm text-muted-foreground cursor-pointer hover:text-foreground select-none">
-                d3k agent transcript
-              </summary>
-              <div className="mt-3 space-y-4">
-                {(report.sandboxDevUrl ||
-                  report.targetUrl ||
-                  report.repoUrl ||
-                  report.repoBranch ||
-                  report.projectDir) && (
-                  <div className="text-xs text-muted-foreground">
-                    <ul className="flex flex-wrap gap-x-6 gap-y-1">
-                      {report.sandboxDevUrl && (
-                        <li>
-                          <span>{report.analysisTargetType === "url" ? "Sandbox: " : "Dev: "}</span>
-                          <a
-                            href={report.sandboxDevUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="font-mono hover:underline"
-                          >
-                            {report.sandboxDevUrl}
-                          </a>
-                        </li>
-                      )}
-                      {report.targetUrl && (
-                        <li>
-                          <span>Target: </span>
-                          <a
-                            href={report.targetUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="font-mono hover:underline"
-                          >
-                            {report.targetUrl}
-                          </a>
-                        </li>
-                      )}
-                      {report.repoUrl && (
-                        <li>
-                          <span>Repo: </span>
-                          <a
-                            href={report.repoUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="font-mono hover:underline"
-                          >
-                            {report.repoUrl}
-                          </a>
-                        </li>
-                      )}
-                      {report.repoBranch && (
-                        <li>
-                          <span>Ref: </span>
-                          <span className="font-mono">{report.repoBranch}</span>
-                        </li>
-                      )}
-                      {report.projectDir && (
-                        <li>
-                          <span>Dir: </span>
-                          <span className="font-mono">{report.projectDir}</span>
-                        </li>
-                      )}
-                    </ul>
-                  </div>
-                )}
-
-                {report.timing && (
-                  <>
-                    <div className="flex flex-wrap items-center gap-4">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
-                            report.fromSnapshot
-                              ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-                              : "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200"
-                          }`}
-                        >
-                          {report.fromSnapshot ? "Snapshot Reused" : "Fresh Sandbox"}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-4 text-sm">
-                        <span className="text-muted-foreground">
-                          Total:{" "}
-                          <span className="font-medium text-foreground">
-                            {formatSeconds(report.timing?.total?.totalMs)}
-                          </span>
-                        </span>
-                        <span className="text-muted-foreground">
-                          Init: <span className="font-mono text-xs">{formatSeconds(report.timing?.total?.initMs)}</span>
-                        </span>
-                        <span className="text-muted-foreground">
-                          Agent:{" "}
-                          <span className="font-mono text-xs">{formatSeconds(report.timing?.total?.agentMs)}</span>
-                        </span>
-                        {report.timing?.total?.prMs && (
-                          <span className="text-muted-foreground">
-                            PR: <span className="font-mono text-xs">{formatSeconds(report.timing?.total?.prMs)}</span>
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <details className="pt-1">
-                      <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
-                        View step-by-step timing breakdown
-                      </summary>
-                      <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                        {report.timing.init?.steps && report.timing.init.steps.length > 0 && (
-                          <div>
-                            <div className="font-medium text-muted-foreground mb-1">Init Steps</div>
-                            <ul className="space-y-0.5 font-mono">
-                              {report.timing.init.steps.map((step) => (
-                                <li key={`init-${step.name}`} className="flex justify-between">
-                                  <span className="truncate mr-2">{step.name}</span>
-                                  <span className="text-muted-foreground">{formatSeconds(step.durationMs)}</span>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                        {report.timing.agent?.steps && report.timing.agent.steps.length > 0 && (
-                          <div>
-                            <div className="font-medium text-muted-foreground mb-1">Agent Steps</div>
-                            <ul className="space-y-0.5 font-mono">
-                              {report.timing.agent.steps.map((step) => (
-                                <li key={`agent-${step.name}`} className="flex justify-between">
-                                  <span className="truncate mr-2">{step.name}</span>
-                                  <span className="text-muted-foreground">{formatSeconds(step.durationMs)}</span>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                      </div>
-                    </details>
-                  </>
-                )}
-
-                {(report.initD3kLogs || report.d3kLogs) && (
-                  <div>
-                    <div className="text-xs font-medium text-muted-foreground mb-1">Init</div>
-                    <pre className="bg-muted/50 rounded p-4 text-xs font-mono overflow-x-auto whitespace-pre-wrap max-h-96 overflow-y-auto">
-                      {report.initD3kLogs || report.d3kLogs}
-                    </pre>
-                  </div>
-                )}
-
-                {report.afterD3kLogs && (
-                  <div>
-                    <div className="text-xs font-medium text-muted-foreground mb-1">After</div>
-                    <pre className="bg-muted/50 rounded p-4 text-xs font-mono overflow-x-auto whitespace-pre-wrap max-h-96 overflow-y-auto">
-                      {report.afterD3kLogs}
-                    </pre>
-                  </div>
-                )}
-              </div>
-            </details>
-          </div>
-        )}
 
         {/* Report */}
         <div className="bg-card border border-border rounded-lg p-6 mb-6">
@@ -440,15 +308,6 @@ async function ReportContent({
               <h3 className="text-sm font-medium text-muted-foreground mb-2">Your Task</h3>
               <div className="bg-muted/50 rounded p-4 text-sm whitespace-pre-wrap">{report.customPrompt}</div>
             </div>
-          )}
-
-          {/* System Prompt (always shown in collapsible) */}
-          {report.systemPrompt && (
-            <CollapsibleSection title="System Prompt" defaultOpen={false}>
-              <pre className="bg-muted/50 rounded p-4 text-xs font-mono overflow-x-auto whitespace-pre-wrap max-h-96 overflow-y-auto">
-                {report.systemPrompt}
-              </pre>
-            </CollapsibleSection>
           )}
 
           {/* CLS Results - only show for cls-fix workflow type */}
@@ -946,6 +805,24 @@ async function ReportContent({
           {workflowType === "turbopack-bundle-analyzer" && bundleComparison && (
             <div className="mb-6">
               <h3 className="text-lg font-medium mb-4">Bundle Delta (Before vs After)</h3>
+              <div
+                className={`mb-3 rounded-lg border px-3 py-2 text-sm ${
+                  bundleComparison.delta.compressedBytes <= 0
+                    ? "border-green-700/40 bg-green-900/20 text-green-200"
+                    : "border-red-700/40 bg-red-900/20 text-red-200"
+                }`}
+              >
+                {bundleComparison.delta.compressedBytes <= 0 ? "Reduced shipped JS by " : "Increased shipped JS by "}
+                <span className="font-semibold">{formatBytes(Math.abs(bundleComparison.delta.compressedBytes))}</span>
+                {" ("}
+                <span className="font-semibold">
+                  {formatSignedPercent(bundleComparison.delta.compressedPercent)?.replace("+", "")}
+                </span>
+                {") across "}
+                <span className="font-semibold">{bundleComparison.before.routeCount}</span>
+                {" analyzed route"}
+                {bundleComparison.before.routeCount === 1 ? "" : "s"}.
+              </div>
               <div className="grid gap-3 md:grid-cols-3">
                 <div className="rounded-lg border border-border bg-muted/20 p-3">
                   <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Compressed JS</div>
@@ -983,20 +860,243 @@ async function ReportContent({
                   </div>
                 </div>
               </div>
+              {bundleRouteDeltas.length > 0 && (
+                <div className="mt-4 rounded-lg border border-border bg-muted/20 p-3">
+                  <div className="text-xs uppercase tracking-wide text-muted-foreground mb-2">
+                    Top Route-Level Compressed JS Changes
+                  </div>
+                  <div className="space-y-2">
+                    {bundleRouteDeltas.map((routeDelta) => (
+                      <div
+                        key={routeDelta.route}
+                        className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] gap-3 text-sm items-center"
+                      >
+                        <span className="font-mono truncate">{routeDelta.route}</span>
+                        <span className="text-muted-foreground">{formatBytes(routeDelta.beforeCompressedBytes)}</span>
+                        <span className="text-muted-foreground">→ {formatBytes(routeDelta.afterCompressedBytes)}</span>
+                        <span className={routeDelta.compressedDelta <= 0 ? "text-green-600" : "text-red-600"}>
+                          {formatSignedBytes(routeDelta.compressedDelta)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {report.gitDiff && (
+                <div className="mt-4 rounded-lg border border-border bg-muted/20 p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm font-medium">Code Diff Artifact</span>
+                    {prDiffUrl ? (
+                      <a
+                        href={prDiffUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs border border-border rounded hover:bg-muted/60 transition-colors"
+                        title="Download PR diff"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" />
+                        Download
+                      </a>
+                    ) : (
+                      <a
+                        href={inlineDiffUrl}
+                        download="changes.diff"
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs border border-border rounded hover:bg-muted/60 transition-colors"
+                        title="Download generated diff"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" />
+                        Download
+                      </a>
+                    )}
+                  </div>
+                  <div className="mt-2 text-xs text-muted-foreground">
+                    {report.gitDiff.split("\n").length.toLocaleString()} lines
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
           {/* Agent Transcript - shown for all workflow types */}
           <div className="mt-6 pt-6 border-t border-border">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-medium">Agent Transcript</h3>
-              {report.agentAnalysisModel && (
-                <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
-                  {report.agentAnalysisModel}
+            <details className="group">
+              <summary className="inline-flex items-center gap-2 cursor-pointer text-sm hover:text-foreground text-muted-foreground">
+                <span className="font-medium inline-flex items-center gap-2">
+                  <ChevronRight className="h-4 w-4 transition-transform group-open:rotate-90" />
+                  Show analysis details
                 </span>
-              )}
-            </div>
-            <AgentAnalysis content={report.agentAnalysis} gitDiff={report.gitDiff} prUrl={run.prUrl} />
+              </summary>
+              <div className="mt-4 space-y-5">
+                {(report.timing || report.initD3kLogs || report.d3kLogs || report.afterD3kLogs) && (
+                  <div className="rounded-lg border border-border bg-muted/20 p-4 space-y-4">
+                    <div className="text-sm font-medium">d3k agent transcript</div>
+                    {(report.sandboxDevUrl ||
+                      report.targetUrl ||
+                      report.repoUrl ||
+                      report.repoBranch ||
+                      report.projectDir) && (
+                      <div className="text-xs text-muted-foreground">
+                        <ul className="flex flex-wrap gap-x-6 gap-y-1">
+                          {report.sandboxDevUrl && (
+                            <li>
+                              <span>{report.analysisTargetType === "url" ? "Sandbox: " : "Dev: "}</span>
+                              <a
+                                href={report.sandboxDevUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="font-mono hover:underline"
+                              >
+                                {report.sandboxDevUrl}
+                              </a>
+                            </li>
+                          )}
+                          {report.targetUrl && (
+                            <li>
+                              <span>Target: </span>
+                              <a
+                                href={report.targetUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="font-mono hover:underline"
+                              >
+                                {report.targetUrl}
+                              </a>
+                            </li>
+                          )}
+                          {report.repoUrl && (
+                            <li>
+                              <span>Repo: </span>
+                              <a
+                                href={report.repoUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="font-mono hover:underline"
+                              >
+                                {report.repoUrl}
+                              </a>
+                            </li>
+                          )}
+                          {report.repoBranch && (
+                            <li>
+                              <span>Ref: </span>
+                              <span className="font-mono">{report.repoBranch}</span>
+                            </li>
+                          )}
+                          {report.projectDir && (
+                            <li>
+                              <span>Dir: </span>
+                              <span className="font-mono">{report.projectDir}</span>
+                            </li>
+                          )}
+                        </ul>
+                      </div>
+                    )}
+
+                    {report.timing && (
+                      <>
+                        <div className="flex flex-wrap items-center gap-4">
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+                                report.fromSnapshot
+                                  ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                                  : "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200"
+                              }`}
+                            >
+                              {report.fromSnapshot ? "Snapshot Reused" : "Fresh Sandbox"}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-4 text-sm">
+                            <span className="text-muted-foreground">
+                              Total:{" "}
+                              <span className="font-medium text-foreground">
+                                {formatSeconds(report.timing?.total?.totalMs)}
+                              </span>
+                            </span>
+                            <span className="text-muted-foreground">
+                              Init:{" "}
+                              <span className="font-mono text-xs">{formatSeconds(report.timing?.total?.initMs)}</span>
+                            </span>
+                            <span className="text-muted-foreground">
+                              Agent:{" "}
+                              <span className="font-mono text-xs">
+                                {formatSeconds(report.timing?.total?.agentMs)}
+                              </span>
+                            </span>
+                            {report.timing?.total?.prMs && (
+                              <span className="text-muted-foreground">
+                                PR:{" "}
+                                <span className="font-mono text-xs">
+                                  {formatSeconds(report.timing?.total?.prMs)}
+                                </span>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <details className="pt-1">
+                          <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
+                            View step-by-step timing breakdown
+                          </summary>
+                          <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                            {report.timing.init?.steps && report.timing.init.steps.length > 0 && (
+                              <div>
+                                <div className="font-medium text-muted-foreground mb-1">Init Steps</div>
+                                <ul className="space-y-0.5 font-mono">
+                                  {report.timing.init.steps.map((step) => (
+                                    <li key={`init-${step.name}`} className="flex justify-between">
+                                      <span className="truncate mr-2">{step.name}</span>
+                                      <span className="text-muted-foreground">{formatSeconds(step.durationMs)}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                            {report.timing.agent?.steps && report.timing.agent.steps.length > 0 && (
+                              <div>
+                                <div className="font-medium text-muted-foreground mb-1">Agent Steps</div>
+                                <ul className="space-y-0.5 font-mono">
+                                  {report.timing.agent.steps.map((step) => (
+                                    <li key={`agent-${step.name}`} className="flex justify-between">
+                                      <span className="truncate mr-2">{step.name}</span>
+                                      <span className="text-muted-foreground">{formatSeconds(step.durationMs)}</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                          </div>
+                        </details>
+                      </>
+                    )}
+
+                    {(report.initD3kLogs || report.d3kLogs) && (
+                      <details>
+                        <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
+                          Init logs
+                        </summary>
+                        <pre className="mt-2 bg-muted/50 rounded p-4 text-xs font-mono overflow-x-auto whitespace-pre-wrap max-h-96 overflow-y-auto">
+                          {report.initD3kLogs || report.d3kLogs}
+                        </pre>
+                      </details>
+                    )}
+
+                    {report.afterD3kLogs && (
+                      <details>
+                        <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
+                          After logs
+                        </summary>
+                        <pre className="mt-2 bg-muted/50 rounded p-4 text-xs font-mono overflow-x-auto whitespace-pre-wrap max-h-96 overflow-y-auto">
+                          {report.afterD3kLogs}
+                        </pre>
+                      </details>
+                    )}
+                  </div>
+                )}
+
+                <AgentAnalysis content={report.agentAnalysis} />
+              </div>
+            </details>
           </div>
         </div>
 
@@ -1035,11 +1135,15 @@ function ReportLoading({ isPublicView }: { isPublicView: boolean }) {
             </span>
           ) : (
             <>
-              <span className="inline-flex items-center gap-2 text-muted-foreground">
+              <a
+                href="/workflows"
+                className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <ArrowLeft className="h-4 w-4" />
                 <span className="font-semibold">d3k</span>
-              </span>
+              </a>
               <span className="text-muted-foreground">/</span>
-              <span className="text-muted-foreground">Loading report...</span>
+              <span className="text-muted-foreground">Workflow Report</span>
             </>
           )}
         </div>

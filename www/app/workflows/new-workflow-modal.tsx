@@ -71,6 +71,14 @@ function getAnalysisTarget(typeParam: string | null, targetParam: string | null)
 
 const RECENT_PROJECTS_KEY = "d3k_recent_projects"
 const LEGACY_GITHUB_PAT_STORAGE_KEY = "d3k_github_pat"
+const WORKFLOW_DISPLAY_NAMES: Record<string, string> = {
+  "cloud-fix": "CLS Fix",
+  "design-guidelines": "Design Guidelines Review",
+  "react-performance": "React Performance Review",
+  "turbopack-bundle-analyzer": "Turbopack Bundle Analyzer",
+  prompt: "Prompt",
+  "url-audit": "URL Audit"
+}
 
 function readRecentProjects(teamId: string): RecentProject[] {
   if (!teamId) return []
@@ -201,6 +209,8 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
 
   const selectedRepoOwner = selectedProject?.link?.org || selectedProject?.latestDeployments?.[0]?.meta?.githubOrg
   const selectedRepoName = selectedProject?.link?.repo || selectedProject?.latestDeployments?.[0]?.meta?.githubRepo
+  const recentProjectIds = new Set(recentProjects.map((project) => project.id))
+  const allProjects = projects.filter((project) => !recentProjectIds.has(project.id))
 
   // Check if GitHub repo info is available from project link or deployment metadata
   const hasGitHubRepoInfo = Boolean(selectedRepoOwner && selectedRepoName)
@@ -263,6 +273,48 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       setSelectedProject(null)
     }
   }, [isOpen, searchParams, step, _selectedType, selectedTarget, publicUrl])
+
+  // Make browser history entries distinguishable when navigating workflow steps.
+  useEffect(() => {
+    if (!isOpen) return
+
+    const workflowLabel = _selectedType ? WORKFLOW_DISPLAY_NAMES[_selectedType] || _selectedType : ""
+    const projectLabel = selectedProject?.name || searchParams.get("project") || ""
+    let urlLabel = ""
+    if (publicUrl) {
+      try {
+        urlLabel = new URL(publicUrl).hostname
+      } catch {
+        urlLabel = publicUrl
+      }
+    }
+
+    let title = "d3k Workflow"
+    if (step === "running") {
+      title = workflowLabel ? `${workflowLabel} Running` : "Workflow Running"
+    } else if (step === "options") {
+      const targetLabel = projectLabel || urlLabel
+      title =
+        workflowLabel && targetLabel
+          ? `${workflowLabel} Options - ${targetLabel}`
+          : workflowLabel
+            ? `${workflowLabel} Options`
+            : "Workflow Options"
+    } else if (step === "project") {
+      title = selectedTeam?.name ? `Select Project - ${selectedTeam.name}` : "Select Project"
+    } else if (step === "team") {
+      title = "Select Team"
+    } else if (step === "type") {
+      title =
+        selectedTarget === "url"
+          ? "Choose URL Workflow"
+          : selectedTarget === "project"
+            ? "Choose Project Workflow"
+            : "Choose Workflow Target"
+    }
+
+    document.title = `${title} | d3k`
+  }, [isOpen, step, _selectedType, selectedProject?.name, selectedTeam?.name, selectedTarget, publicUrl, searchParams])
 
   // Reset modal state when closed
   useEffect(() => {
@@ -1344,13 +1396,13 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                     </div>
                   )}
                   <div className="space-y-2">
-                    {recentProjects.length > 0 && (
+                    {recentProjects.length > 0 && allProjects.length > 0 && (
                       <div className="text-xs uppercase tracking-wide text-muted-foreground">All projects</div>
                     )}
-                    {projects.length === 0 && debouncedProjectSearch && (
+                    {allProjects.length === 0 && debouncedProjectSearch && (
                       <div className="text-sm text-muted-foreground">No matches found</div>
                     )}
-                    {projects.map((project) => (
+                    {allProjects.map((project) => (
                       <Link
                         key={project.id}
                         href={`/workflows/new?type=${_selectedType}&team=${selectedTeam?.id}&project=${project.id}`}

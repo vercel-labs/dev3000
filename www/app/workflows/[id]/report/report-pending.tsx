@@ -157,34 +157,30 @@ export function ReportPending({ runId, userId, workflowType, projectName }: Repo
           </p>
         </div>
 
-        <Alert
-          variant={hasError ? "destructive" : "default"}
-          className={hasError ? "" : "bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-800"}
-        >
+        <Alert variant={hasError ? "destructive" : "default"} className={hasError ? "" : "bg-card border-border"}>
           {hasError && <AlertCircle className="h-4 w-4" />}
-          <AlertDescription className={hasError ? "" : "text-blue-900 dark:text-blue-100"}>
-            {statusText}
-          </AlertDescription>
+          <AlertDescription>{statusText}</AlertDescription>
         </Alert>
-
-        {sandboxUrl && !hasError && (
-          <Alert className="bg-yellow-50 border-yellow-200 dark:bg-yellow-950 dark:border-yellow-800">
-            <AlertDescription className="text-yellow-900 dark:text-yellow-100">
-              <span className="font-medium">Sandbox:</span>{" "}
-              <a
-                href={sandboxUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-600 hover:underline font-mono text-sm"
-              >
-                {sandboxUrl}
-              </a>
-            </AlertDescription>
-          </Alert>
-        )}
 
         <div className="bg-card border border-border rounded-lg p-4">
           <div className="text-sm font-medium text-foreground mb-3">Progress</div>
+          <div className="min-h-6 mb-3 text-xs text-muted-foreground">
+            {sandboxUrl && !hasError ? (
+              <>
+                <span className="font-medium">Sandbox:</span>{" "}
+                <a
+                  href={sandboxUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-mono hover:underline"
+                >
+                  {sandboxUrl}
+                </a>
+              </>
+            ) : (
+              <span>&nbsp;</span>
+            )}
+          </div>
           <div className="space-y-2">
             {STEP_LABELS.map((label, index) => {
               const isDone = activeIndex !== null && index < activeIndex

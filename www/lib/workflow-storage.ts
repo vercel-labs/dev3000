@@ -14,6 +14,7 @@ async function fetchJsonWithRetry(fetchUrl: string): Promise<Response> {
         headers: {
           Accept: "application/json"
         },
+        cache: "no-store",
         signal: controller.signal
       })
       clearTimeout(timeout)

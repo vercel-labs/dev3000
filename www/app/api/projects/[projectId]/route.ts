@@ -43,6 +43,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ proj
       id?: string
       name?: string
       framework?: string
+      rootDirectory?: string
       link?: unknown
       latestDeployments?: Array<{
         id?: string
@@ -68,6 +69,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ proj
       id: project.id,
       name: project.name,
       framework: project.framework,
+      rootDirectory: project.rootDirectory,
       link: project.link,
       latestDeployments:
         project.latestDeployments?.map((deployment) => ({

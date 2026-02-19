@@ -14,10 +14,6 @@ export default function LoadingReport() {
           </a>
           <span className="text-muted-foreground">/</span>
           <span className="text-muted-foreground">Workflow Report</span>
-          <span className="inline-flex items-center gap-2 rounded-full border border-border px-2 py-0.5 text-xs font-medium text-muted-foreground">
-            <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
-            Streaming report…
-          </span>
         </div>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-3 min-w-[220px]">

@@ -1,6 +1,6 @@
 "use client"
 
-import { ChevronDown, ChevronRight, ExternalLink } from "lucide-react"
+import { ChevronDown, ChevronRight } from "lucide-react"
 import { type ReactNode, useMemo, useState } from "react"
 import { Streamdown } from "streamdown"
 
@@ -167,37 +167,7 @@ function getStepPhase(step: ParsedStep): TranscriptPhase {
   return "analysis"
 }
 
-/**
- * Git Diff section with collapsible diff and GitHub link in title bar
- */
-function DiffSection({ gitDiff, prUrl }: { gitDiff: string; prUrl?: string }) {
-  const prDiffUrl = prUrl ? `${prUrl}.diff` : undefined
-  return (
-    <StepSection
-      title="View Diff"
-      headerAction={
-        prDiffUrl ? (
-          <a
-            href={prDiffUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center justify-center p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded transition-colors"
-            title="Open GitHub diff"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <ExternalLink className="h-4 w-4" />
-          </a>
-        ) : undefined
-      }
-    >
-      <pre className="mt-2 text-xs bg-muted/50 p-2 rounded overflow-x-auto whitespace-pre-wrap max-h-96 overflow-y-auto">
-        {gitDiff}
-      </pre>
-    </StepSection>
-  )
-}
-
-export function AgentAnalysis({ content, gitDiff, prUrl }: { content: string; gitDiff?: string; prUrl?: string }) {
+export function AgentAnalysis({ content }: { content: string }) {
   const parsed = useMemo(() => parseTranscript(content), [content])
 
   // Strip "## Git Diff" section from finalOutput if present (we'll show it separately)
@@ -308,9 +278,6 @@ export function AgentAnalysis({ content, gitDiff, prUrl }: { content: string; gi
           })}
         </div>
       )}
-
-      {/* Git Diff - shown last */}
-      {gitDiff && <DiffSection gitDiff={gitDiff} prUrl={prUrl} />}
     </div>
   )
 }
