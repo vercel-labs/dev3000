@@ -109,7 +109,6 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   const router = useRouter()
   const searchParams = useSearchParams()
   const baseBranchId = useId()
-  const bypassTokenId = useId()
   const customPromptId = useId()
   const githubPatId = useId()
   const startPathId = useId()
@@ -163,9 +162,6 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   const [redirectedRunId, setRedirectedRunId] = useState<string | null>(null)
   const [sandboxUrl, setSandboxUrl] = useState<string | null>(null)
   const [baseBranch, setBaseBranch] = useState("main")
-  const [bypassToken, setBypassToken] = useState("")
-  const [isCheckingProtection, setIsCheckingProtection] = useState(false)
-  const [needsBypassToken, setNeedsBypassToken] = useState(false)
   const [customPrompt, setCustomPrompt] = useState("")
   const [publicUrl, setPublicUrl] = useState("")
   const [githubPat, setGithubPat] = useState("")
@@ -180,14 +176,6 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   const [branchesError, setBranchesError] = useState(false)
   const loadedTeamIdRef = useRef<string | null>(null)
 
-  const getBypassTokenStorageKey = useCallback(
-    (projectId: string) => {
-      const teamId = selectedTeam?.id || "personal"
-      return `d3k_bypass_token_${teamId}_${projectId}`
-    },
-    [selectedTeam]
-  )
-
   const getGithubPatStorageKey = useCallback((projectId: string) => `d3k_github_pat_${projectId}`, [])
 
   const workflowSkillLabels: Record<string, string[]> = {
@@ -200,7 +188,6 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   }
 
   const isUrlAuditType = selectedTarget === "url"
-  const isTurbopackBundleAnalyzer = _selectedType === "turbopack-bundle-analyzer"
   const isValidPublicUrl = (() => {
     if (!publicUrl.trim()) return false
     try {
@@ -294,8 +281,6 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       setActiveRunId(null)
       setSandboxUrl(null)
       setBaseBranch("main")
-      setBypassToken("")
-      setNeedsBypassToken(false)
       setCustomPrompt("")
       setPublicUrl("")
       setRepoVisibility("unknown")
@@ -525,83 +510,6 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
 
     checkRepoVisibility()
   }, [isUrlAuditType, step, selectedRepoOwner, selectedRepoName])
-
-  // Check if deployment is protected when project is selected and on options step
-  useEffect(() => {
-    async function checkDeploymentProtection() {
-      console.log("[Bypass Token] useEffect triggered - step:", step, "selectedProject:", selectedProject?.name)
-
-      if (isTurbopackBundleAnalyzer) {
-        console.log("[Bypass Token] Skipping protection check for Turbopack Bundle Analyzer workflow")
-        setNeedsBypassToken(false)
-        setIsCheckingProtection(false)
-        return
-      }
-
-      if (!selectedProject) {
-        console.log("[Bypass Token] No selected project, skipping check")
-        return
-      }
-
-      if (step !== "options") {
-        console.log("[Bypass Token] Not on options step, skipping check")
-        return
-      }
-
-      // Reset token when project changes to avoid stale values
-      setBypassToken("")
-
-      // First priority: URL param (bypass or bypassToken)
-      const urlBypassToken = searchParams.get("bypass") || searchParams.get("bypassToken")
-      if (urlBypassToken) {
-        console.log("[Bypass Token] Found token in URL param")
-        setBypassToken(urlBypassToken)
-        const storageKey = getBypassTokenStorageKey(selectedProject.id)
-        localStorage.setItem(storageKey, urlBypassToken)
-      } else {
-        // Second priority: Load stored token for this project from localStorage
-        const storageKey = getBypassTokenStorageKey(selectedProject.id)
-        const storedToken = localStorage.getItem(storageKey)
-        if (storedToken) {
-          console.log("[Bypass Token] Found stored token for project", selectedProject.id)
-          setBypassToken(storedToken)
-        }
-      }
-
-      const latestDeployment = selectedProject.latestDeployments[0]
-      if (!latestDeployment) {
-        console.log("[Bypass Token] No latest deployment, skipping check")
-        return
-      }
-
-      setIsCheckingProtection(true)
-      console.log("[Bypass Token] Checking deployment protection...")
-      try {
-        const devUrl = `https://${latestDeployment.url}`
-        console.log("[Bypass Token] Checking URL:", devUrl)
-
-        // Use server-side API route to avoid CORS issues
-        const response = await fetch("/api/projects/check-protection", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url: devUrl })
-        })
-
-        const data = await response.json()
-        console.log("[Bypass Token] Protection check result:", data)
-
-        setNeedsBypassToken(data.isProtected)
-      } catch (error) {
-        console.error("[Bypass Token] Failed to check deployment protection:", error)
-        // Assume not protected on error
-        setNeedsBypassToken(false)
-      } finally {
-        setIsCheckingProtection(false)
-      }
-    }
-
-    checkDeploymentProtection()
-  }, [selectedProject, step, searchParams, getBypassTokenStorageKey, isTurbopackBundleAnalyzer])
 
   // Load recent projects for the selected team
   useEffect(() => {
@@ -843,7 +751,6 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
         devUrl,
         projectName: isUrlAuditType ? new URL(publicUrl).hostname : project?.name,
         userId,
-        bypassToken: isTurbopackBundleAnalyzer ? undefined : bypassToken,
         workflowType,
         analysisTargetType: isUrlAuditType ? "url" : "vercel-project",
         publicUrl: isUrlAuditType ? publicUrl : undefined,
@@ -1614,64 +1521,6 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                         This project is not connected to a GitHub repository. PRs cannot be created automatically.
                       </div>
                     )}
-                    {isCheckingProtection && (
-                      <div className="text-sm text-muted-foreground">Checking deployment protection...</div>
-                    )}
-                    {needsBypassToken && !isTurbopackBundleAnalyzer && (
-                      <div>
-                        <label htmlFor={bypassTokenId} className="block text-sm font-medium text-foreground mb-1">
-                          Deployment Protection Bypass Token
-                          <span className="text-red-500 ml-1">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          id={bypassTokenId}
-                          value={bypassToken}
-                          onChange={(e) => {
-                            const newToken = e.target.value
-                            setBypassToken(newToken)
-                            // Save to localStorage for this project
-                            if (selectedProject) {
-                              const storageKey = getBypassTokenStorageKey(selectedProject.id)
-                              if (newToken) {
-                                localStorage.setItem(storageKey, newToken)
-                                console.log(
-                                  "[Bypass Token] Saved token to localStorage for project",
-                                  selectedProject.id
-                                )
-                              } else {
-                                localStorage.removeItem(storageKey)
-                              }
-                            }
-                          }}
-                          className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground font-mono text-sm"
-                          placeholder="Enter your 32-character bypass token"
-                          required
-                        />
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          This deployment is protected. Get your bypass token from{" "}
-                          {selectedTeam && selectedProject ? (
-                            <a
-                              href={`https://vercel.com/${selectedTeam.slug}/${selectedProject.name}/settings/deployment-protection#protection-bypass-for-automation`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-blue-600 hover:underline"
-                            >
-                              Project Settings → Deployment Protection
-                            </a>
-                          ) : (
-                            <a
-                              href="https://vercel.com/docs/deployment-protection/methods-to-bypass-deployment-protection/protection-bypass-automation"
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-blue-600 hover:underline"
-                            >
-                              Vercel Dashboard → Project Settings → Deployment Protection
-                            </a>
-                          )}
-                        </p>
-                      </div>
-                    )}
                     {hasGitHubRepoInfo && (
                       <div>
                         <label
@@ -1823,7 +1672,6 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                       type="button"
                       onClick={startWorkflow}
                       disabled={
-                        (needsBypassToken && !isTurbopackBundleAnalyzer && !bypassToken) ||
                         (_selectedType === "prompt" && !customPrompt.trim()) ||
                         (isGithubPatRequired && !githubPat.trim()) ||
                         repoVisibility === "checking"
