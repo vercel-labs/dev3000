@@ -28,6 +28,14 @@ These apps are intentionally small and intentionally imperfect. Each app targets
     - Banner inserted after page load without reserving space
     - Large image without explicit dimensions
 
+- `turbopack-bundle-analyzer`
+  - Workflow type: `turbopack-bundle-analyzer`
+  - Skills expected: `d3k`, `analyze-bundle`
+  - Intentional issues:
+    - Home page marked as a client component unnecessarily
+    - Large static JSON payload imported directly into `/` bundle
+    - Expensive client-side filtering/sorting of the full payload
+
 ## Deployment
 
 Each app is a standalone Next.js project and can be deployed as its own Vercel project.
@@ -39,6 +47,7 @@ Suggested setup:
    - `example-apps/design-guidelines`
    - `example-apps/react-performance`
    - `example-apps/cls-fix`
+   - `example-apps/turbopack-bundle-analyzer`
 3. Use the default Next.js build settings.
 
 ## Local Dev
@@ -58,6 +67,7 @@ When running workflows against these apps:
 - Design Guidelines Review should suggest concrete improvements to color contrast, spacing, typography, and CTA hierarchy.
 - React Performance Review should parallelize data fetching and reduce expensive client-side renders.
 - CLS Fix should eliminate the banner shift and reserve space for media to prevent layout jump.
+- Turbopack Bundle Analyzer should reduce shipped JS on `/` by removing or deferring the giant catalog payload.
 
 ## Deployment Note
 
