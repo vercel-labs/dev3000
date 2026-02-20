@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { useCallback, useRef, useState } from "react"
 import useSWR from "swr"
+import { ThemeToggle } from "@/components/theme-toggle"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -17,7 +18,6 @@ import {
   DialogTitle
 } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { ThemeToggle } from "@/components/theme-toggle"
 import type { WorkflowRun } from "@/lib/workflow-storage"
 
 interface UserInfo {
@@ -196,7 +196,6 @@ export default function WorkflowsClient({ user, initialRuns }: WorkflowsClientPr
             <p className="mt-1 text-sm text-muted-foreground">Signed in as {user.email}</p>
           </div>
           <div className="flex gap-3">
-            <ThemeToggle />
             {selectedIds.size > 0 && (
               <Button variant="destructive" onClick={() => setIsDeleteDialogOpen(true)}>
                 Delete {selectedIds.size} selected
@@ -205,6 +204,7 @@ export default function WorkflowsClient({ user, initialRuns }: WorkflowsClientPr
             <Button asChild>
               <Link href="/workflows/new">New Workflow</Link>
             </Button>
+            <ThemeToggle />
             <Button variant="outline" onClick={handleSignOut} disabled={isSigningOut}>
               {isSigningOut ? "Signing out..." : "Sign out"}
             </Button>

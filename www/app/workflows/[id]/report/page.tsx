@@ -3,11 +3,11 @@ import type { Metadata } from "next"
 import Image from "next/image"
 import { redirect } from "next/navigation"
 import { Suspense } from "react"
+import { ThemeToggle } from "@/components/theme-toggle"
 import { getCurrentUser } from "@/lib/auth"
 import type { WorkflowRun } from "@/lib/workflow-storage"
 import { getPublicWorkflowRun, getWorkflowRun } from "@/lib/workflow-storage"
 import type { WorkflowReport } from "@/types"
-import { ThemeToggle } from "@/components/theme-toggle"
 import { AgentAnalysis } from "./agent-analysis"
 import { CoordinatedPlayers } from "./coordinated-players"
 import { DiffSection } from "./diff-section"
@@ -267,8 +267,8 @@ async function ReportContent({
             <p className="text-muted-foreground mt-1">{new Date(report.timestamp).toLocaleString()}</p>
           </div>
           <div className="flex items-center gap-3">
-            <ThemeToggle />
             {isOwner && <ShareButton runId={id} initialIsPublic={run.isPublic ?? false} />}
+            <ThemeToggle />
           </div>
         </div>
 

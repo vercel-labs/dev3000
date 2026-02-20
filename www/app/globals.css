@@ -162,6 +162,12 @@
 }
 
 @layer base {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+    mix-blend-mode: normal;
+  }
+
   * {
     @apply border-border outline-ring/50;
   }
