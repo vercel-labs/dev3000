@@ -629,14 +629,22 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
           "-lc",
           `
 set -euo pipefail
-if [ ! -x "$HOME/.fnm/fnm" ]; then
+if [ ! -x "$HOME/.fnm/fnm" ] && [ ! -x "$HOME/.local/share/fnm/fnm" ]; then
   curl -fsSL https://fnm.vercel.app/install | bash -s -- --skip-shell
 fi
-export PATH="$HOME/.fnm:$PATH"
-eval "$(fnm env --shell bash)"
-fnm install ${requiredNodeMajor}
-fnm use ${requiredNodeMajor}
-NODE_BIN="$(fnm which ${requiredNodeMajor})"
+if [ -x "$HOME/.fnm/fnm" ]; then
+  FNM_BIN="$HOME/.fnm/fnm"
+elif [ -x "$HOME/.local/share/fnm/fnm" ]; then
+  FNM_BIN="$HOME/.local/share/fnm/fnm"
+else
+  echo "fnm binary not found after install" >&2
+  exit 1
+fi
+export PATH="$(dirname "$FNM_BIN"):$PATH"
+eval "$("$FNM_BIN" env --shell bash)"
+"$FNM_BIN" install ${requiredNodeMajor}
+"$FNM_BIN" use ${requiredNodeMajor}
+NODE_BIN="$("$FNM_BIN" which ${requiredNodeMajor})"
 NODE_DIR="$(dirname "$NODE_BIN")"
 ln -sf "$NODE_BIN" /usr/local/bin/node
 [ -x "$NODE_DIR/npm" ] && ln -sf "$NODE_DIR/npm" /usr/local/bin/npm || true
@@ -649,7 +657,9 @@ node -v
         stderr: debug ? process.stderr : undefined
       })
       if (nodeSetupResult.exitCode !== 0) {
-        throw new Error(`Node version setup failed: ${nodeSetupResult.stderr || nodeSetupResult.stdout || "unknown error"}`)
+        throw new Error(
+          `Node version setup failed: ${nodeSetupResult.stderr || nodeSetupResult.stdout || "unknown error"}`
+        )
       }
       await reportProgress(`Using Node ${requiredNodeMajor}.x in sandbox`)
     }
@@ -673,7 +683,7 @@ node -v
               : "npm install"
 
       const nodePrefix = requiredNodeMajor
-        ? `export PATH="$HOME/.fnm:$PATH"; eval "$(fnm env --shell bash)"; fnm use ${requiredNodeMajor} >/dev/null 2>&1 || true;`
+        ? `if [ -x "$HOME/.fnm/fnm" ]; then FNM_BIN="$HOME/.fnm/fnm"; elif [ -x "$HOME/.local/share/fnm/fnm" ]; then FNM_BIN="$HOME/.local/share/fnm/fnm"; fi; if [ -n "\${FNM_BIN:-}" ]; then export PATH="$(dirname "$FNM_BIN"):$PATH"; eval "$("$FNM_BIN" env --shell bash)"; "$FNM_BIN" use ${requiredNodeMajor} >/dev/null 2>&1 || true; fi;`
         : ""
 
       installResult = await runCommandWithLogs(sandbox, {
