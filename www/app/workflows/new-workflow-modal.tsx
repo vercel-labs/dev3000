@@ -120,6 +120,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   const baseBranchId = useId()
   const customPromptId = useId()
   const githubPatId = useId()
+  const npmTokenId = useId()
   const startPathId = useId()
   const crawlDepthId = useId()
   const projectSearchId = useId()
@@ -175,6 +176,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   const [customPrompt, setCustomPrompt] = useState("")
   const [publicUrl, setPublicUrl] = useState("")
   const [githubPat, setGithubPat] = useState("")
+  const [npmToken, setNpmToken] = useState("")
   const [submitPullRequest, setSubmitPullRequest] = useState(false)
   const [repoVisibility, setRepoVisibility] = useState<RepoVisibility>("unknown")
   const [startPath, setStartPath] = useState("/")
@@ -746,7 +748,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       )
       return
     }
-    const project = selectedProject
+    let project = selectedProject
 
     // Reset any previous workflow result to prevent showing stale data
     setWorkflowResult(null)
@@ -763,6 +765,26 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
     setWorkflowStatus("Starting workflow...")
 
     try {
+      if (!isUrlAuditType && selectedTeam && selectedProject?.id) {
+        try {
+          const params = new URLSearchParams()
+          if (!selectedTeam.isPersonal) {
+            params.set("teamId", selectedTeam.id)
+          }
+          const projectUrl = params.toString()
+            ? `/api/projects/${selectedProject.id}?${params.toString()}`
+            : `/api/projects/${selectedProject.id}`
+          const projectResponse = await fetch(projectUrl)
+          const projectData = await projectResponse.json()
+          if (projectData.success && projectData.project) {
+            project = projectData.project as Project
+            setSelectedProject(project)
+          }
+        } catch (error) {
+          console.warn("[Start Workflow] Failed to refresh canonical project settings:", error)
+        }
+      }
+
       // Get the latest deployment URL
       console.log("[Start Workflow] latestDeployments:", project?.latestDeployments)
       let devUrl: string | undefined
@@ -819,12 +841,13 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
         customPrompt: workflowType === "prompt" ? customPrompt : undefined,
         crawlDepth: workflowType === "design-guidelines" ? crawlDepth : undefined,
         githubPat: !isUrlAuditType && hasGitHubRepoInfo && githubPat.trim() ? githubPat.trim() : undefined,
+        npmToken: !isUrlAuditType && npmToken.trim() ? npmToken.trim() : undefined,
         submitPullRequest: !isUrlAuditType && hasGitHubRepoInfo ? submitPullRequest : false,
         startPath: !isUrlAuditType && startPath !== "/" ? startPath : undefined // URL mode is single-URL today
       }
 
-      if (project?.rootDirectory) {
-        body.projectDir = project.rootDirectory
+      if (project?.rootDirectory?.trim()) {
+        body.projectDir = project.rootDirectory.trim()
       }
 
       // If we have repo info, pass it for sandbox creation
@@ -867,6 +890,11 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
         typeof githubPatValue === "string" && githubPatValue.length > 0
           ? `SET (length: ${githubPatValue.length})`
           : "NOT SET"
+      )
+      const npmTokenValue = body.npmToken
+      console.log(
+        "[Start Workflow] body.npmToken:",
+        typeof npmTokenValue === "string" && npmTokenValue.length > 0 ? `SET (length: ${npmTokenValue.length})` : "NOT SET"
       )
 
       // Create an AbortController for timeout handling
@@ -1699,6 +1727,24 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                             Create a GitHub PR
                           </label>
                         </div>
+                      </div>
+                    )}
+                    {!isUrlAuditType && (
+                      <div>
+                        <Label htmlFor={npmTokenId} className="mb-1 block">
+                          NPM Token <span className="text-muted-foreground">(optional)</span>
+                        </Label>
+                        <input
+                          type="password"
+                          id={npmTokenId}
+                          value={npmToken}
+                          onChange={(e) => setNpmToken(e.target.value)}
+                          className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground font-mono text-sm"
+                          placeholder="npm_xxxxx"
+                        />
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Use when the repo depends on private npm packages.
+                        </p>
                       </div>
                     )}
                     <div>

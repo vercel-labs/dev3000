@@ -211,6 +211,7 @@ export interface D3kSandboxConfig {
   repoUrl: string
   branch?: string
   githubPat?: string
+  npmToken?: string
   timeout?: StringValue
   skipD3kSetup?: boolean
   onProgress?: (message: string) => void | Promise<void>
@@ -331,6 +332,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     repoUrl,
     branch = "main",
     githubPat,
+    npmToken,
     timeout = "30m",
     skipD3kSetup = false,
     onProgress,
@@ -343,7 +345,8 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     debug = false
   } = config
 
-  const projectName = projectDir || repoUrl.split("/").pop()?.replace(".git", "") || "app"
+  const normalizedProjectDir = projectDir.replace(/^\/+|\/+$/g, "")
+  const projectName = normalizedProjectDir || repoUrl.split("/").pop()?.replace(".git", "") || "app"
 
   if (debug) {
     console.log("🚀 Creating d3k sandbox...")
@@ -571,7 +574,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
   await reportProgress("Sandbox instance created")
 
   try {
-    const sandboxCwd = projectDir ? `/vercel/sandbox/${projectDir}` : "/vercel/sandbox"
+    const sandboxCwd = normalizedProjectDir ? `/vercel/sandbox/${normalizedProjectDir}` : "/vercel/sandbox"
     if (debug) console.log(`  ✅ Repository initialized from source: ${repoUrlWithGit}@${branch}`)
 
     // Verify sandbox directory contents
@@ -665,6 +668,27 @@ node -v
       await ensureBunInstalled(sandbox)
     }
 
+    const resolvedNpmToken = npmToken || process.env.NPM_TOKEN
+    if (resolvedNpmToken) {
+      await reportProgress("Configuring npm auth token for private packages")
+      const npmAuthSetup = await runCommandWithLogs(sandbox, {
+        cmd: "bash",
+        args: [
+          "-lc",
+          `cat > "$HOME/.npmrc" <<EOF
+registry=https://registry.npmjs.org/
+//registry.npmjs.org/:_authToken=$NPM_TOKEN
+always-auth=true
+EOF`
+        ],
+        cwd: sandboxCwd,
+        env: { NPM_TOKEN: resolvedNpmToken }
+      })
+      if (npmAuthSetup.exitCode !== 0) {
+        throw new Error(`Failed to configure npm auth token: ${npmAuthSetup.stderr || npmAuthSetup.stdout}`)
+      }
+    }
+
     // Install project dependencies
     if (debug) console.log("  📦 Installing project dependencies...")
     await reportProgress("Installing project dependencies...")
@@ -674,7 +698,9 @@ node -v
         resolvedPackageManager === "bun"
           ? "bun install"
           : resolvedPackageManager === "pnpm"
-            ? "corepack pnpm install"
+            ? normalizedProjectDir
+              ? `corepack pnpm -C /vercel/sandbox install --filter "./${normalizedProjectDir}..."`
+              : "corepack pnpm install"
             : resolvedPackageManager === "yarn"
               ? "corepack yarn install"
               : "npm install"

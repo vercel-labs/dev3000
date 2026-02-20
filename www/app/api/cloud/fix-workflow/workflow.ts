@@ -81,6 +81,7 @@ export async function cloudFixWorkflow(params: {
   crawlDepth?: number | "all" // How many pages to crawl for design-guidelines workflow
   // PR creation params
   githubPat?: string
+  npmToken?: string
   submitPullRequest?: boolean
   repoOwner?: string
   repoName?: string
@@ -106,6 +107,7 @@ export async function cloudFixWorkflow(params: {
     customPrompt,
     crawlDepth,
     githubPat,
+    npmToken,
     submitPullRequest = true,
     repoOwner,
     repoName,
@@ -141,6 +143,7 @@ export async function cloudFixWorkflow(params: {
       reportId,
       startPath,
       githubPat,
+      npmToken,
       vercelOidcToken,
       progressContext
     )
@@ -338,6 +341,7 @@ async function initSandbox(
   reportId: string,
   startPath: string,
   githubPat?: string,
+  npmToken?: string,
   vercelOidcToken?: string,
   progressContext?: ProgressContext | null
 ): Promise<InitResult> {
@@ -351,6 +355,7 @@ async function initSandbox(
     reportId,
     startPath,
     githubPat,
+    npmToken,
     vercelOidcToken,
     progressContext
   )

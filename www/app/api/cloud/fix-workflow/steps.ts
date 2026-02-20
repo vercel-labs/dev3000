@@ -1024,6 +1024,7 @@ export async function initSandboxStep(
   reportId: string,
   _startPath: string,
   githubPat?: string,
+  npmToken?: string,
   vercelOidcToken?: string,
   progressContext?: ProgressContext | null
 ): Promise<{
@@ -1060,6 +1061,7 @@ export async function initSandboxStep(
       repoUrl,
       branch,
       githubPat,
+      npmToken,
       skipD3kSetup: isTurbopackBundleAnalyzer,
       onProgress: (message) => appendProgressLog(progressContext, `[Sandbox] ${message}`),
       projectDir: projectDir || "",
