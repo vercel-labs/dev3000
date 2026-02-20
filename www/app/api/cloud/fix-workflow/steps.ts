@@ -766,7 +766,11 @@ async function prepareTurbopackNdjsonArtifacts(
   projectDir?: string,
   progressContext?: ProgressContext | null
 ): Promise<{ outputDir: string; summary: string }> {
-  const projectCwd = projectDir ? `/vercel/sandbox/${projectDir.replace(/^\/+|\/+$/g, "")}` : "/vercel/sandbox"
+  const normalizedProjectDir = projectDir ? projectDir.replace(/^\/+|\/+$/g, "") : ""
+  const projectCwd = normalizedProjectDir ? `/vercel/sandbox/${normalizedProjectDir}` : "/vercel/sandbox"
+  const pnpmFilteredExec = normalizedProjectDir
+    ? `corepack pnpm -C /vercel/sandbox --filter "./${normalizedProjectDir}..." exec next`
+    : "corepack pnpm -C /vercel/sandbox exec next"
   const outputDir = ".next/diagnostics/analyze/ndjson"
   const scriptPath = "/tmp/analyze-to-ndjson.mjs"
   const startedAt = Date.now()
@@ -778,7 +782,10 @@ while [ "$SEARCH_DIR" != "/" ]; do \
   if [ -f "$SEARCH_DIR/node_modules/next/dist/bin/next" ]; then NEXT_BIN="node $SEARCH_DIR/node_modules/next/dist/bin/next"; break; fi; \
   SEARCH_DIR="$(dirname "$SEARCH_DIR")"; \
 done && \
-if [ -z "$NEXT_BIN" ]; then NEXT_BIN="bun x next"; fi`
+if [ -z "$NEXT_BIN" ] && command -v corepack >/dev/null 2>&1; then NEXT_BIN="${pnpmFilteredExec}"; fi && \
+if [ -z "$NEXT_BIN" ] && command -v npx >/dev/null 2>&1; then NEXT_BIN="npx --yes next"; fi && \
+if [ -z "$NEXT_BIN" ] && command -v bun >/dev/null 2>&1; then NEXT_BIN="bun x next"; fi && \
+if [ -z "$NEXT_BIN" ]; then echo "[Turbopack] Could not find a runnable Next.js CLI" >&2; exit 127; fi`
 
   workflowLog(`[Turbopack] Preparing analyzer artifacts in ${projectCwd}`)
   await appendProgressLog(progressContext, `[Turbopack] Preparing analyzer artifacts in ${projectCwd}`)
