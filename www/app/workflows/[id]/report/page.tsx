@@ -7,6 +7,7 @@ import { getCurrentUser } from "@/lib/auth"
 import type { WorkflowRun } from "@/lib/workflow-storage"
 import { getPublicWorkflowRun, getWorkflowRun } from "@/lib/workflow-storage"
 import type { WorkflowReport } from "@/types"
+import { ThemeToggle } from "@/components/theme-toggle"
 import { AgentAnalysis } from "./agent-analysis"
 import { CoordinatedPlayers } from "./coordinated-players"
 import { DiffSection } from "./diff-section"
@@ -266,6 +267,7 @@ async function ReportContent({
             <p className="text-muted-foreground mt-1">{new Date(report.timestamp).toLocaleString()}</p>
           </div>
           <div className="flex items-center gap-3">
+            <ThemeToggle />
             {isOwner && <ShareButton runId={id} initialIsPublic={run.isPublic ?? false} />}
           </div>
         </div>
@@ -809,8 +811,8 @@ async function ReportContent({
               <div
                 className={`mb-3 rounded-lg border px-3 py-2 text-sm ${
                   bundleComparison.delta.compressedBytes <= 0
-                    ? "border-green-700/40 bg-green-900/20 text-green-200"
-                    : "border-red-700/40 bg-red-900/20 text-red-200"
+                    ? "border-green-200 bg-green-50 text-green-800 dark:border-green-700/40 dark:bg-green-900/20 dark:text-green-200"
+                    : "border-red-200 bg-red-50 text-red-800 dark:border-red-700/40 dark:bg-red-900/20 dark:text-red-200"
                 }`}
               >
                 {bundleComparison.delta.compressedBytes <= 0 ? "Reduced shipped JS by " : "Increased shipped JS by "}
@@ -883,7 +885,9 @@ async function ReportContent({
                   </div>
                 </div>
               )}
-              {report.gitDiff && <DiffSection patch={report.gitDiff} prDiffUrl={prDiffUrl} inlineDiffUrl={inlineDiffUrl} />}
+              {report.gitDiff && (
+                <DiffSection patch={report.gitDiff} prDiffUrl={prDiffUrl} inlineDiffUrl={inlineDiffUrl} />
+              )}
             </div>
           )}
 

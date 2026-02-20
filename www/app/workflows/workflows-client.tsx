@@ -17,6 +17,7 @@ import {
   DialogTitle
 } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { ThemeToggle } from "@/components/theme-toggle"
 import type { WorkflowRun } from "@/lib/workflow-storage"
 
 interface UserInfo {
@@ -195,6 +196,7 @@ export default function WorkflowsClient({ user, initialRuns }: WorkflowsClientPr
             <p className="mt-1 text-sm text-muted-foreground">Signed in as {user.email}</p>
           </div>
           <div className="flex gap-3">
+            <ThemeToggle />
             {selectedIds.size > 0 && (
               <Button variant="destructive" onClick={() => setIsDeleteDialogOpen(true)}>
                 Delete {selectedIds.size} selected
