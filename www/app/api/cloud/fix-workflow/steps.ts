@@ -775,6 +775,22 @@ async function prepareTurbopackNdjsonArtifacts(
   const scriptPath = "/tmp/analyze-to-ndjson.mjs"
   const startedAt = Date.now()
   const nextCliBootstrap = `export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; cd ${projectCwd} && \
+FNM_BIN="" && \
+if [ -x "$HOME/.fnm/fnm" ]; then FNM_BIN="$HOME/.fnm/fnm"; \
+elif [ -x "$HOME/.local/share/fnm/fnm" ]; then FNM_BIN="$HOME/.local/share/fnm/fnm"; fi && \
+if [ -n "$FNM_BIN" ]; then \
+  export PATH="$(dirname "$FNM_BIN"):$PATH"; \
+  eval "$("$FNM_BIN" env --shell sh)"; \
+  REQUIRED_NODE="" && \
+  if [ -f .nvmrc ]; then REQUIRED_NODE="$(tr -d '[:space:]' < .nvmrc)"; fi && \
+  if [ -z "$REQUIRED_NODE" ] && [ -f package.json ]; then \
+    REQUIRED_NODE="$(node -e "try{const p=require('./package.json');process.stdout.write(p?.engines?.node||'')}catch{}" 2>/dev/null || true)"; \
+  fi && \
+  REQUIRED_MAJOR="$(printf '%s' "$REQUIRED_NODE" | sed -n 's/[^0-9]*\\([0-9][0-9]*\\).*/\\1/p' | head -1)" && \
+  if [ -n "$REQUIRED_MAJOR" ]; then \
+    "$FNM_BIN" use "$REQUIRED_MAJOR" >/dev/null 2>&1 || "$FNM_BIN" install "$REQUIRED_MAJOR" >/dev/null 2>&1 || true; \
+  fi; \
+fi && \
 NEXT_BIN="" && \
 SEARCH_DIR="$PWD" && \
 while [ "$SEARCH_DIR" != "/" ]; do \
