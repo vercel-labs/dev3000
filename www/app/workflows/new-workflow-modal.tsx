@@ -1591,7 +1591,13 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                                 <HelpCircle className="h-4 w-4" />
                               </button>
                             </TooltipTrigger>
-                            <TooltipContent side="right" className="max-w-sm text-left p-3">
+                            <TooltipContent
+                              side="bottom"
+                              align="start"
+                              sideOffset={8}
+                              collisionPadding={8}
+                              className="w-[min(22rem,calc(100vw-2rem))] max-h-[60vh] overflow-y-auto text-left p-3"
+                            >
                               <p className="font-semibold mb-2">How to create a GitHub PAT:</p>
                               <ol className="list-decimal list-inside space-y-1 text-xs">
                                 <li>Go to github.com/settings/tokens?type=beta</li>
