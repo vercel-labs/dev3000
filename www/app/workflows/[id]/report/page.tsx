@@ -47,6 +47,8 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
     redirect("/workflows")
   }
 
+  const reportCrumbLabel = run.type === "cls-fix" ? "Fix Report" : "Workflow Report"
+
   if (!run.reportBlobUrl) {
     if (user && isOwner) {
       return <ReportPending runId={id} userId={user.id} workflowType={run.type} projectName={run.projectName} />
@@ -57,7 +59,7 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
   const reportBlobUrl = run.reportBlobUrl
 
   return (
-    <Suspense fallback={<ReportLoading isPublicView={isPublicView} />}>
+    <Suspense fallback={<ReportLoading isPublicView={isPublicView} reportCrumbLabel={reportCrumbLabel} />}>
       <ReportContent id={id} run={run} isOwner={isOwner} isPublicView={isPublicView} reportBlobUrl={reportBlobUrl} />
     </Suspense>
   )
@@ -239,26 +241,8 @@ async function ReportContent({
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 pt-8 pb-24 max-w-4xl">
-        <div className="flex items-center gap-4 mb-6">
-          {isPublicView ? (
-            <span className="inline-flex items-center gap-2 text-muted-foreground">
-              <span className="font-semibold">d3k</span>
-              <span>/</span>
-              <span>Public Report</span>
-            </span>
-          ) : (
-            <>
-              <a
-                href="/workflows"
-                className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                <span className="font-semibold">d3k</span>
-              </a>
-              <span className="text-muted-foreground">/</span>
-              <span className="text-muted-foreground">{reportCrumbLabel}</span>
-            </>
-          )}
+        <div className="mb-6">
+          <ReportBreadcrumb isPublicView={isPublicView} reportCrumbLabel={reportCrumbLabel} />
         </div>
 
         <div className="flex items-center justify-between mb-4">
@@ -1092,30 +1076,12 @@ async function ReportContent({
   )
 }
 
-function ReportLoading({ isPublicView }: { isPublicView: boolean }) {
+function ReportLoading({ isPublicView, reportCrumbLabel }: { isPublicView: boolean; reportCrumbLabel: string }) {
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8 max-w-4xl">
-        <div className="flex items-center gap-4 mb-6">
-          {isPublicView ? (
-            <span className="inline-flex items-center gap-2 text-muted-foreground">
-              <span className="font-semibold">d3k</span>
-              <span>/</span>
-              <span>Public Report</span>
-            </span>
-          ) : (
-            <>
-              <a
-                href="/workflows"
-                className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                <span className="font-semibold">d3k</span>
-              </a>
-              <span className="text-muted-foreground">/</span>
-              <span className="text-muted-foreground">Workflow Report</span>
-            </>
-          )}
+        <div className="mb-6">
+          <ReportBreadcrumb isPublicView={isPublicView} reportCrumbLabel={reportCrumbLabel} />
         </div>
         <div className="h-8 w-2/3 bg-muted/40 rounded-md" />
         <div className="mt-4 h-4 w-1/3 bg-muted/30 rounded-md" />
@@ -1126,5 +1092,28 @@ function ReportLoading({ isPublicView }: { isPublicView: boolean }) {
         </div>
       </div>
     </div>
+  )
+}
+
+function ReportBreadcrumb({ isPublicView, reportCrumbLabel }: { isPublicView: boolean; reportCrumbLabel: string }) {
+  if (isPublicView) {
+    return (
+      <span className="inline-flex items-center gap-2 text-muted-foreground">
+        <span className="font-semibold">d3k</span>
+        <span>/</span>
+        <span>Public Report</span>
+      </span>
+    )
+  }
+
+  return (
+    <span className="inline-flex items-center gap-2 text-muted-foreground">
+      <a href="/workflows" className="inline-flex items-center gap-2 hover:text-foreground transition-colors">
+        <ArrowLeft className="h-4 w-4" />
+        <span className="font-semibold">d3k</span>
+      </a>
+      <span>/</span>
+      <span>{reportCrumbLabel}</span>
+    </span>
   )
 }
