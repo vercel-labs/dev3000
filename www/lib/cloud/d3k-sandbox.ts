@@ -644,7 +644,7 @@ export PATH="$(dirname "$FNM_BIN"):$PATH"
 eval "$("$FNM_BIN" env --shell bash)"
 "$FNM_BIN" install ${requiredNodeMajor}
 "$FNM_BIN" use ${requiredNodeMajor}
-NODE_BIN="$("$FNM_BIN" which ${requiredNodeMajor})"
+NODE_BIN="$(command -v node)"
 NODE_DIR="$(dirname "$NODE_BIN")"
 ln -sf "$NODE_BIN" /usr/local/bin/node
 [ -x "$NODE_DIR/npm" ] && ln -sf "$NODE_DIR/npm" /usr/local/bin/npm || true
