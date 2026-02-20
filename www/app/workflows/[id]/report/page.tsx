@@ -1019,16 +1019,12 @@ async function ReportContent({
                             </span>
                             <span className="text-muted-foreground">
                               Agent:{" "}
-                              <span className="font-mono text-xs">
-                                {formatSeconds(report.timing?.total?.agentMs)}
-                              </span>
+                              <span className="font-mono text-xs">{formatSeconds(report.timing?.total?.agentMs)}</span>
                             </span>
                             {report.timing?.total?.prMs && (
                               <span className="text-muted-foreground">
                                 PR:{" "}
-                                <span className="font-mono text-xs">
-                                  {formatSeconds(report.timing?.total?.prMs)}
-                                </span>
+                                <span className="font-mono text-xs">{formatSeconds(report.timing?.total?.prMs)}</span>
                               </span>
                             )}
                           </div>

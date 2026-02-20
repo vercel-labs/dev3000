@@ -168,12 +168,7 @@ export function ReportPending({ runId, userId, workflowType, projectName }: Repo
             {sandboxUrl && !hasError ? (
               <>
                 <span className="font-medium">Sandbox:</span>{" "}
-                <a
-                  href={sandboxUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-mono hover:underline"
-                >
+                <a href={sandboxUrl} target="_blank" rel="noopener noreferrer" className="font-mono hover:underline">
                   {sandboxUrl}
                 </a>
               </>
