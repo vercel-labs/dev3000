@@ -1,5 +1,7 @@
+import { createSocket } from "dgram"
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "fs"
 import https from "https"
+import { createServer } from "net"
 import { homedir, tmpdir } from "os"
 import { join } from "path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
@@ -25,6 +27,7 @@ const restoreHome = (tempHome: string) => {
 
 import {
   countActiveD3kInstances,
+  findAvailablePort,
   getSessionChromePids,
   gracefulKillProcess,
   isServerListening,
@@ -429,6 +432,52 @@ describe("ServerListeningResult type", () => {
     expect(notListening.listening).toBe(false)
   })
 })
+
+describe("findAvailablePort regression (#95)", () => {
+  it("does not treat outbound-only socket activity as port occupancy", async () => {
+    const startPort = await findUnusedTcpPort()
+    const udpSocket = createSocket("udp4")
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        udpSocket.once("error", reject)
+        udpSocket.connect(startPort, "127.0.0.1", () => {
+          udpSocket.removeListener("error", reject)
+          resolve()
+        })
+      })
+
+      const availablePort = await findAvailablePort(startPort)
+      expect(availablePort).toBe(String(startPort))
+    } finally {
+      udpSocket.close()
+    }
+  })
+})
+
+async function findUnusedTcpPort(): Promise<number> {
+  for (let port = 18080; port <= 18180; port++) {
+    const isAvailable = await new Promise<boolean>((resolve) => {
+      const server = createServer()
+
+      server.once("error", () => {
+        resolve(false)
+      })
+
+      server.once("listening", () => {
+        server.close(() => resolve(true))
+      })
+
+      server.listen(port, "127.0.0.1")
+    })
+
+    if (isAvailable) {
+      return port
+    }
+  }
+
+  throw new Error("Could not find an unused TCP port in test range")
+}
 
 /**
  * =============================================================================

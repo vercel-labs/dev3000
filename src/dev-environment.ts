@@ -12,6 +12,7 @@ import {
   writeFileSync
 } from "fs"
 import https from "https"
+import { createServer } from "net"
 import ora from "ora"
 import { homedir, tmpdir } from "os"
 import { dirname, join, resolve, sep } from "path"
@@ -263,52 +264,31 @@ export function countActiveD3kInstances(excludeCurrentPid: boolean = false): num
 /**
  * Check if a port is available for binding (no process is listening on it).
  * Used for finding available ports before starting servers.
- * In sandbox environments, skips checking since lsof often doesn't exist.
  */
 async function isPortAvailable(port: string): Promise<boolean> {
-  // In sandboxed environments, skip port checking - lsof often doesn't exist
-  // and port conflicts are rare due to process isolation
-  if (isInSandbox()) {
-    return true
+  const portNumber = Number.parseInt(port, 10)
+  if (!Number.isInteger(portNumber) || portNumber < 0 || portNumber > 65535) {
+    return false
   }
 
-  // Regular environment - do proper port checking with lsof
-  try {
-    // Check if lsof command exists first
-    const checkCmd = process.platform === "win32" ? "where" : "which"
-    try {
-      await new Promise<void>((resolve, reject) => {
-        const check = spawn(checkCmd, ["lsof"], { stdio: "pipe" })
-        check.on("error", reject)
-        check.on("exit", (code) => {
-          if (code === 0) resolve()
-          else reject(new Error("lsof not found"))
-        })
-      })
-    } catch {
-      // lsof doesn't exist, assume port is available
-      return true
-    }
+  return new Promise<boolean>((resolve) => {
+    const server = createServer()
 
-    // lsof exists, use it to check the port
-    const result = await new Promise<string>((resolve, reject) => {
-      const proc = spawn("lsof", ["-ti", `:${port}`], { stdio: "pipe" })
-      let output = ""
-
-      proc.on("error", (err) => {
-        reject(err)
-      })
-
-      proc.stdout?.on("data", (data) => {
-        output += data.toString()
-      })
-
-      proc.on("exit", () => resolve(output.trim()))
+    server.once("error", (error: NodeJS.ErrnoException) => {
+      // EADDRINUSE/EACCES both mean we cannot bind this port.
+      if (error.code === "EADDRINUSE" || error.code === "EACCES") {
+        resolve(false)
+        return
+      }
+      resolve(true)
     })
-    return !result // If no output, port is available
-  } catch {
-    return true // Assume port is available if check fails
-  }
+
+    server.once("listening", () => {
+      server.close(() => resolve(true))
+    })
+
+    server.listen(portNumber)
+  })
 }
 
 /**
