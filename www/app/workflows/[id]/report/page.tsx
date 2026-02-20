@@ -1,4 +1,4 @@
-import { ArrowLeft, ChevronRight, ExternalLink } from "lucide-react"
+import { ArrowLeft, ChevronRight, Download } from "lucide-react"
 import type { Metadata } from "next"
 import Image from "next/image"
 import { redirect } from "next/navigation"
@@ -9,6 +9,7 @@ import { getPublicWorkflowRun, getWorkflowRun } from "@/lib/workflow-storage"
 import type { WorkflowReport } from "@/types"
 import { AgentAnalysis } from "./agent-analysis"
 import { CoordinatedPlayers } from "./coordinated-players"
+import { DiffViewer } from "./diff-viewer"
 import { ReportPending } from "./report-pending"
 import { ScreenshotPlayer } from "./screenshot-player"
 import { ShareButton } from "./share-button"
@@ -883,9 +884,14 @@ async function ReportContent({
                 </div>
               )}
               {report.gitDiff && (
-                <div className="mt-4 rounded-lg border border-border bg-muted/20 p-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-sm font-medium">Code Diff Artifact</span>
+                <details className="group mt-4 relative">
+                  <summary className="inline-flex items-center gap-2 pr-24 cursor-pointer text-sm hover:text-foreground text-muted-foreground">
+                    <span className="font-medium inline-flex items-center gap-2">
+                      <ChevronRight className="h-4 w-4 transition-transform group-open:rotate-90" />
+                      Diff
+                    </span>
+                  </summary>
+                  <div className="absolute right-0 top-0">
                     {prDiffUrl ? (
                       <a
                         href={prDiffUrl}
@@ -894,7 +900,7 @@ async function ReportContent({
                         className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs border border-border rounded hover:bg-muted/60 transition-colors"
                         title="Download PR diff"
                       >
-                        <ExternalLink className="h-3.5 w-3.5" />
+                        <Download className="h-3.5 w-3.5" />
                         Download
                       </a>
                     ) : (
@@ -904,15 +910,20 @@ async function ReportContent({
                         className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs border border-border rounded hover:bg-muted/60 transition-colors"
                         title="Download generated diff"
                       >
-                        <ExternalLink className="h-3.5 w-3.5" />
+                        <Download className="h-3.5 w-3.5" />
                         Download
-                      </a>
-                    )}
+                        </a>
+                      )}
                   </div>
-                  <div className="mt-2 text-xs text-muted-foreground">
-                    {report.gitDiff.split("\n").length.toLocaleString()} lines
+                  <div className="mt-3 space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-xs text-muted-foreground">
+                        {report.gitDiff.split("\n").length.toLocaleString()} lines
+                      </span>
+                    </div>
+                    <DiffViewer patch={report.gitDiff} />
                   </div>
-                </div>
+                </details>
               )}
             </div>
           )}
