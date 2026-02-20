@@ -780,7 +780,7 @@ if [ -x "$HOME/.fnm/fnm" ]; then FNM_BIN="$HOME/.fnm/fnm"; \
 elif [ -x "$HOME/.local/share/fnm/fnm" ]; then FNM_BIN="$HOME/.local/share/fnm/fnm"; fi && \
 if [ -n "$FNM_BIN" ]; then \
   export PATH="$(dirname "$FNM_BIN"):$PATH"; \
-  eval "$("$FNM_BIN" env --shell sh)"; \
+  eval "$("$FNM_BIN" env --shell bash)"; \
   REQUIRED_NODE="" && \
   if [ -f .nvmrc ]; then REQUIRED_NODE="$(tr -d '[:space:]' < .nvmrc)"; fi && \
   if [ -z "$REQUIRED_NODE" ] && [ -f package.json ]; then \
