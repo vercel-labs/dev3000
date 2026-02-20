@@ -4,6 +4,7 @@ import Image from "next/image"
 import { redirect } from "next/navigation"
 import { Suspense } from "react"
 import { ThemeToggle } from "@/components/theme-toggle"
+import { Skeleton } from "@/components/ui/skeleton"
 import { getCurrentUser } from "@/lib/auth"
 import type { WorkflowRun } from "@/lib/workflow-storage"
 import { getPublicWorkflowRun, getWorkflowRun } from "@/lib/workflow-storage"
@@ -142,7 +143,6 @@ async function ReportContent({
             : workflowType === "url-audit"
               ? "URL Audit"
               : "CLS Fix"
-  const reportCrumbLabel = workflowType === "cls-fix" ? "Fix Report" : "Workflow Report"
   const step2Description =
     workflowType === "prompt"
       ? "AI agent executed your custom task and generated this report."
@@ -316,7 +316,7 @@ async function ReportContent({
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 pt-8 pb-24 max-w-4xl">
         <div className="mb-6 flex items-center justify-between gap-3">
-          <ReportBreadcrumb reportCrumbLabel={reportCrumbLabel} />
+          <ReportBreadcrumb reportCrumbLabel="Workflow Report" />
           <div className="flex items-center gap-3">
             {isOwner && <ShareButton runId={id} initialIsPublic={run.isPublic ?? false} />}
             <ThemeToggle />
@@ -1152,15 +1152,19 @@ function ReportLoading({ reportCrumbLabel }: { reportCrumbLabel: string }) {
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8 max-w-4xl">
-        <div className="mb-6">
+        <div className="mb-6 flex items-center justify-between gap-3">
           <ReportBreadcrumb reportCrumbLabel={reportCrumbLabel} />
+          <div className="flex items-center gap-3">
+            <Skeleton className="h-9 w-28" />
+            <Skeleton className="h-9 w-12" />
+          </div>
         </div>
-        <div className="h-8 w-2/3 bg-muted/40 rounded-md" />
-        <div className="mt-4 h-4 w-1/3 bg-muted/30 rounded-md" />
+        <Skeleton className="h-9 w-2/3" />
+        <Skeleton className="mt-4 h-4 w-1/3" />
         <div className="mt-8 space-y-4">
-          <div className="h-24 bg-muted/20 rounded-md" />
-          <div className="h-24 bg-muted/20 rounded-md" />
-          <div className="h-24 bg-muted/20 rounded-md" />
+          <Skeleton className="h-24 rounded-md" />
+          <Skeleton className="h-24 rounded-md" />
+          <Skeleton className="h-24 rounded-md" />
         </div>
       </div>
     </div>

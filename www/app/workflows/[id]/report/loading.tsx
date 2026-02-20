@@ -1,4 +1,5 @@
 import { ArrowLeft } from "lucide-react"
+import { Skeleton } from "@/components/ui/skeleton"
 
 export default function LoadingReport() {
   return (
@@ -17,18 +18,18 @@ export default function LoadingReport() {
         </div>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-3 min-w-[220px]">
-            <div className="h-9 w-72 bg-muted/40 rounded-md" />
-            <div className="h-4 w-44 bg-muted/30 rounded-md" />
+            <Skeleton className="h-9 w-72" />
+            <Skeleton className="h-4 w-44" />
           </div>
           <div className="flex gap-2">
-            <div className="h-9 w-28 bg-muted/30 rounded-md" />
-            <div className="h-9 w-32 bg-muted/40 rounded-md" />
+            <Skeleton className="h-9 w-28" />
+            <Skeleton className="h-9 w-12" />
           </div>
         </div>
         <div className="mt-8 grid gap-4">
-          <div className="h-28 bg-muted/20 rounded-lg" />
-          <div className="h-40 bg-muted/20 rounded-lg" />
-          <div className="h-40 bg-muted/20 rounded-lg" />
+          <Skeleton className="h-28 rounded-lg" />
+          <Skeleton className="h-40 rounded-lg" />
+          <Skeleton className="h-40 rounded-lg" />
         </div>
       </div>
     </div>
