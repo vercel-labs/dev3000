@@ -20,4 +20,3 @@ export function DiffViewer({ patch }: DiffViewerProps) {
     />
   )
 }
-

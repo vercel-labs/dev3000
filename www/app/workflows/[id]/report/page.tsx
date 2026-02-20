@@ -1,4 +1,4 @@
-import { ArrowLeft, ChevronRight, Download } from "lucide-react"
+import { ArrowLeft, ChevronRight } from "lucide-react"
 import type { Metadata } from "next"
 import Image from "next/image"
 import { redirect } from "next/navigation"
@@ -9,7 +9,7 @@ import { getPublicWorkflowRun, getWorkflowRun } from "@/lib/workflow-storage"
 import type { WorkflowReport } from "@/types"
 import { AgentAnalysis } from "./agent-analysis"
 import { CoordinatedPlayers } from "./coordinated-players"
-import { DiffViewer } from "./diff-viewer"
+import { DiffSection } from "./diff-section"
 import { ReportPending } from "./report-pending"
 import { ScreenshotPlayer } from "./screenshot-player"
 import { ShareButton } from "./share-button"
@@ -883,48 +883,7 @@ async function ReportContent({
                   </div>
                 </div>
               )}
-              {report.gitDiff && (
-                <details className="group mt-4 relative">
-                  <summary className="inline-flex items-center gap-2 pr-24 cursor-pointer text-sm hover:text-foreground text-muted-foreground">
-                    <span className="font-medium inline-flex items-center gap-2">
-                      <ChevronRight className="h-4 w-4 transition-transform group-open:rotate-90" />
-                      Diff
-                    </span>
-                  </summary>
-                  <div className="absolute right-0 top-0">
-                    {prDiffUrl ? (
-                      <a
-                        href={prDiffUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs border border-border rounded hover:bg-muted/60 transition-colors"
-                        title="Download PR diff"
-                      >
-                        <Download className="h-3.5 w-3.5" />
-                        Download
-                      </a>
-                    ) : (
-                      <a
-                        href={inlineDiffUrl}
-                        download="changes.diff"
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs border border-border rounded hover:bg-muted/60 transition-colors"
-                        title="Download generated diff"
-                      >
-                        <Download className="h-3.5 w-3.5" />
-                        Download
-                        </a>
-                      )}
-                  </div>
-                  <div className="mt-3 space-y-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-xs text-muted-foreground">
-                        {report.gitDiff.split("\n").length.toLocaleString()} lines
-                      </span>
-                    </div>
-                    <DiffViewer patch={report.gitDiff} />
-                  </div>
-                </details>
-              )}
+              {report.gitDiff && <DiffSection patch={report.gitDiff} prDiffUrl={prDiffUrl} inlineDiffUrl={inlineDiffUrl} />}
             </div>
           )}
 
@@ -1110,7 +1069,7 @@ async function ReportContent({
         <div className="mt-6 mb-4 flex gap-4">
           {!isPublicView && (
             <a href="/workflows" className="px-4 py-2 border border-border rounded-md hover:bg-muted transition-colors">
-              ← Back to Workflows
+              ← Workflows
             </a>
           )}
           {run.prUrl && (
