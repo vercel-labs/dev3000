@@ -63,7 +63,9 @@ export async function GET() {
     }
 
     // Sort alphabetically for stable UX in team picker.
-    teams.sort((a, b) => (a.name || a.slug || "").localeCompare(b.name || b.slug || "", undefined, { sensitivity: "base" }))
+    teams.sort((a, b) =>
+      (a.name || a.slug || "").localeCompare(b.name || b.slug || "", undefined, { sensitivity: "base" })
+    )
 
     const hasVercelTeam = teams.some((team) => {
       const slug = (team.slug || "").toLowerCase()

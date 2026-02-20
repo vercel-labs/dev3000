@@ -53,6 +53,7 @@ export async function GET(request: Request) {
     console.log(`Fetched ${data.deployments?.length || 0} deployments`)
 
     // Extract unique branches with their latest deployment info
+    const discoveredBranchNames = new Set<string>()
     const branchesMap = new Map<
       string,
       {
@@ -68,6 +69,7 @@ export async function GET(request: Request) {
 
     for (const deployment of data.deployments || []) {
       const branch = deployment.meta?.githubCommitRef || deployment.gitSource?.ref || "main"
+      discoveredBranchNames.add(branch)
 
       // Only include deployments that are ready
       if (deployment.readyState !== "READY") {
@@ -86,6 +88,26 @@ export async function GET(request: Request) {
           }
         })
       }
+    }
+
+    // Ensure a repo default branch option is always available.
+    // Prefer main/master if observed in deployment refs, otherwise fall back to main.
+    const fallbackDefaultBranch = discoveredBranchNames.has("main")
+      ? "main"
+      : discoveredBranchNames.has("master")
+        ? "master"
+        : "main"
+
+    if (!branchesMap.has(fallbackDefaultBranch)) {
+      branchesMap.set(fallbackDefaultBranch, {
+        name: fallbackDefaultBranch,
+        lastDeployment: {
+          url: "",
+          createdAt: 0,
+          state: "UNKNOWN",
+          readyState: "UNKNOWN"
+        }
+      })
     }
 
     // Convert to array and sort by most recent deployment

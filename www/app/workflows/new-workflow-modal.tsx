@@ -1556,8 +1556,9 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                               <SelectContent>
                                 {availableBranches.map((branch) => (
                                   <SelectItem key={branch.name} value={branch.name}>
-                                    {branch.name} (deployed{" "}
-                                    {new Date(branch.lastDeployment.createdAt).toLocaleDateString()})
+                                    {branch.lastDeployment.createdAt > 0
+                                      ? `${branch.name} (deployed ${new Date(branch.lastDeployment.createdAt).toLocaleDateString()})`
+                                      : branch.name}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
@@ -1683,7 +1684,9 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                         <div className="mt-3 rounded-md border border-border p-3 bg-muted/20">
                           <label
                             className={`inline-flex items-center gap-2 text-sm font-medium ${
-                              hasGitHubPat ? "text-foreground cursor-pointer" : "text-muted-foreground cursor-not-allowed"
+                              hasGitHubPat
+                                ? "text-foreground cursor-pointer"
+                                : "text-muted-foreground cursor-not-allowed"
                             }`}
                           >
                             <input

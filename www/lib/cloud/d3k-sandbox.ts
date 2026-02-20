@@ -226,6 +226,16 @@ export interface D3kSandboxConfig {
 
 type PackageManager = "bun" | "pnpm" | "npm" | "yarn"
 
+function parseRequiredNodeMajor(rawVersion: string): string | null {
+  const trimmed = rawVersion.trim()
+  if (!trimmed) return null
+  const match = trimmed.match(/(\d{1,2})/)
+  if (!match) return null
+  const major = Number.parseInt(match[1], 10)
+  if (!Number.isFinite(major) || major <= 0) return null
+  return String(major)
+}
+
 export interface D3kSandboxResult {
   sandbox: Sandbox
   devUrl: string
@@ -275,6 +285,35 @@ fi
   }
   if (debug) console.log(`  ⚠️ Failed to detect package manager, defaulting to pnpm`)
   return "pnpm"
+}
+
+async function detectRequiredNodeMajor(
+  run: (cmd: string, args: string[], cwd?: string) => Promise<{ exitCode: number; stdout: string; stderr: string }>,
+  sandboxCwd: string,
+  debug = false
+): Promise<string | null> {
+  const detectScript = `
+if [ -f .nvmrc ]; then
+  tr -d '[:space:]' < .nvmrc
+  exit 0
+fi
+if [ -f .node-version ]; then
+  tr -d '[:space:]' < .node-version
+  exit 0
+fi
+node -e "try{const pkg=require('./package.json');process.stdout.write(pkg?.engines?.node||'')}catch{}" 2>/dev/null
+`.trim()
+
+  const result = await run("sh", ["-c", detectScript], sandboxCwd)
+  const major = parseRequiredNodeMajor(result.stdout)
+  if (debug) {
+    if (major) {
+      console.log(`  ✅ Detected required Node major: ${major} (raw: "${result.stdout.trim()}")`)
+    } else {
+      console.log(`  ℹ️ No explicit Node version requirement detected`)
+    }
+  }
+  return major
 }
 
 /**
@@ -577,6 +616,44 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
       ))
     await reportProgress(`Detected package manager: ${resolvedPackageManager}`)
 
+    const requiredNodeMajor = await detectRequiredNodeMajor(
+      async (cmd, args, cwd) => runCommandWithLogs(sandbox, { cmd, args, cwd }),
+      sandboxCwd,
+      debug
+    )
+    if (requiredNodeMajor) {
+      await reportProgress(`Detected Node requirement: ${requiredNodeMajor}.x`)
+      const nodeSetupResult = await runCommandWithLogs(sandbox, {
+        cmd: "bash",
+        args: [
+          "-lc",
+          `
+set -euo pipefail
+if [ ! -x "$HOME/.fnm/fnm" ]; then
+  curl -fsSL https://fnm.vercel.app/install | bash -s -- --skip-shell
+fi
+export PATH="$HOME/.fnm:$PATH"
+eval "$(fnm env --shell bash)"
+fnm install ${requiredNodeMajor}
+fnm use ${requiredNodeMajor}
+NODE_BIN="$(fnm which ${requiredNodeMajor})"
+NODE_DIR="$(dirname "$NODE_BIN")"
+ln -sf "$NODE_BIN" /usr/local/bin/node
+[ -x "$NODE_DIR/npm" ] && ln -sf "$NODE_DIR/npm" /usr/local/bin/npm || true
+[ -x "$NODE_DIR/npx" ] && ln -sf "$NODE_DIR/npx" /usr/local/bin/npx || true
+node -v
+`.trim()
+        ],
+        cwd: sandboxCwd,
+        stdout: debug ? process.stdout : undefined,
+        stderr: debug ? process.stderr : undefined
+      })
+      if (nodeSetupResult.exitCode !== 0) {
+        throw new Error(`Node version setup failed: ${nodeSetupResult.stderr || nodeSetupResult.stdout || "unknown error"}`)
+      }
+      await reportProgress(`Using Node ${requiredNodeMajor}.x in sandbox`)
+    }
+
     if (resolvedPackageManager === "bun") {
       await ensureBunInstalled(sandbox)
     }
@@ -586,22 +663,26 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     await reportProgress("Installing project dependencies...")
     let installResult: { exitCode: number; stdout: string; stderr: string }
     try {
-      installResult =
+      const installCommand =
         resolvedPackageManager === "bun"
-          ? await runCommandWithLogs(sandbox, {
-              cmd: "sh",
-              args: ["-c", "export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; bun install"],
-              cwd: sandboxCwd,
-              stdout: debug ? process.stdout : undefined,
-              stderr: debug ? process.stderr : undefined
-            })
-          : await runCommandWithLogs(sandbox, {
-              cmd: resolvedPackageManager,
-              args: ["install"],
-              cwd: sandboxCwd,
-              stdout: debug ? process.stdout : undefined,
-              stderr: debug ? process.stderr : undefined
-            })
+          ? "bun install"
+          : resolvedPackageManager === "pnpm"
+            ? "corepack pnpm install"
+            : resolvedPackageManager === "yarn"
+              ? "corepack yarn install"
+              : "npm install"
+
+      const nodePrefix = requiredNodeMajor
+        ? `export PATH="$HOME/.fnm:$PATH"; eval "$(fnm env --shell bash)"; fnm use ${requiredNodeMajor} >/dev/null 2>&1 || true;`
+        : ""
+
+      installResult = await runCommandWithLogs(sandbox, {
+        cmd: "bash",
+        args: ["-lc", `${nodePrefix} export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; ${installCommand}`],
+        cwd: sandboxCwd,
+        stdout: debug ? process.stdout : undefined,
+        stderr: debug ? process.stderr : undefined
+      })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       await reportProgress(`Dependency install command error: ${message.slice(0, 240)}`)
