@@ -237,6 +237,19 @@ async function ReportContent({
   const inlineDiffUrl = report.gitDiff
     ? `data:text/plain;charset=utf-8,${encodeURIComponent(report.gitDiff)}`
     : undefined
+  const runStartedAt = new Date(run.timestamp)
+  const runEndedAt = run.completedAt ? new Date(run.completedAt) : null
+  const hasValidRunTiming =
+    !Number.isNaN(runStartedAt.getTime()) && !!runEndedAt && !Number.isNaN(runEndedAt.getTime()) && runEndedAt >= runStartedAt
+  const formatRunDuration = (durationMs: number) => {
+    const totalSeconds = Math.floor(durationMs / 1000)
+    const hours = Math.floor(totalSeconds / 3600)
+    const minutes = Math.floor((totalSeconds % 3600) / 60)
+    const seconds = totalSeconds % 60
+    if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`
+    if (minutes > 0) return `${minutes}m ${seconds}s`
+    return `${seconds}s`
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -248,7 +261,13 @@ async function ReportContent({
         <div className="flex items-center justify-between mb-4">
           <div>
             <h1 className="text-3xl font-bold">{reportTitle}</h1>
-            <p className="text-muted-foreground mt-1">{new Date(report.timestamp).toLocaleString()}</p>
+            <p className="text-muted-foreground mt-1">{new Date(report.timestamp).toLocaleDateString()}</p>
+            {hasValidRunTiming && runEndedAt && (
+              <p className="text-sm text-muted-foreground mt-1">
+                Run time: {runStartedAt.toLocaleTimeString()} → {runEndedAt.toLocaleTimeString()} (
+                {formatRunDuration(runEndedAt.getTime() - runStartedAt.getTime())})
+              </p>
+            )}
           </div>
           <div className="flex items-center gap-3">
             {isOwner && <ShareButton runId={id} initialIsPublic={run.isPublic ?? false} />}
@@ -841,10 +860,6 @@ async function ReportContent({
                   <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Coverage</div>
                   <div className="text-sm">Routes: {bundleComparison.before.routeCount}</div>
                   <div className="text-sm">Output files: {bundleComparison.before.outputFileCount}</div>
-                  <div className="text-xs text-muted-foreground mt-1">
-                    {new Date(bundleComparison.before.generatedAt).toLocaleTimeString()} →{" "}
-                    {new Date(bundleComparison.after.generatedAt).toLocaleTimeString()}
-                  </div>
                 </div>
               </div>
               {bundleRouteDeltas.length > 0 && (
