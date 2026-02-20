@@ -1,5 +1,5 @@
-import { ArrowLeft, ChevronRight } from "lucide-react"
 import type { Metadata } from "next"
+import { ArrowLeft, ChevronRight } from "lucide-react"
 import Image from "next/image"
 import { redirect } from "next/navigation"
 import { Suspense } from "react"
@@ -15,8 +15,56 @@ import { ReportPending } from "./report-pending"
 import { ScreenshotPlayer } from "./screenshot-player"
 import { ShareButton } from "./share-button"
 
-export const metadata: Metadata = {
-  title: "d3k workflow report"
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params
+  const publicRun = await getPublicWorkflowRun(id)
+
+  const title = publicRun ? `${publicRun.projectName} - d3k workflow report` : "d3k workflow report"
+  const description = "AI-powered workflow report from dev3000."
+
+  if (!publicRun) {
+    return {
+      title,
+      description,
+      openGraph: {
+        title,
+        description,
+        images: []
+      },
+      twitter: {
+        card: "summary",
+        title,
+        description,
+        images: []
+      }
+    }
+  }
+
+  const ogImageUrl = `/api/og/workflows/${id}`
+
+  return {
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      type: "website",
+      images: [
+        {
+          url: ogImageUrl,
+          width: 1200,
+          height: 630,
+          alt: `${publicRun.projectName} workflow report`
+        }
+      ]
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: [ogImageUrl]
+    }
+  }
 }
 
 const MIN_ROUTE_DELTA_BYTES = 10 * 1024
