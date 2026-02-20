@@ -645,10 +645,7 @@ eval "$("$FNM_BIN" env --shell bash)"
 "$FNM_BIN" install ${requiredNodeMajor}
 "$FNM_BIN" use ${requiredNodeMajor}
 NODE_BIN="$(command -v node)"
-NODE_DIR="$(dirname "$NODE_BIN")"
-ln -sf "$NODE_BIN" /usr/local/bin/node
-[ -x "$NODE_DIR/npm" ] && ln -sf "$NODE_DIR/npm" /usr/local/bin/npm || true
-[ -x "$NODE_DIR/npx" ] && ln -sf "$NODE_DIR/npx" /usr/local/bin/npx || true
+[ -n "$NODE_BIN" ] || { echo "node not found after fnm use" >&2; exit 1; }
 node -v
 `.trim()
         ],
