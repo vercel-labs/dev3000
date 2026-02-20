@@ -240,7 +240,10 @@ async function ReportContent({
   const runStartedAt = new Date(run.timestamp)
   const runEndedAt = run.completedAt ? new Date(run.completedAt) : null
   const hasValidRunTiming =
-    !Number.isNaN(runStartedAt.getTime()) && !!runEndedAt && !Number.isNaN(runEndedAt.getTime()) && runEndedAt >= runStartedAt
+    !Number.isNaN(runStartedAt.getTime()) &&
+    !!runEndedAt &&
+    !Number.isNaN(runEndedAt.getTime()) &&
+    runEndedAt >= runStartedAt
   const formatRunDuration = (durationMs: number) => {
     const totalSeconds = Math.floor(durationMs / 1000)
     const hours = Math.floor(totalSeconds / 3600)
@@ -249,6 +252,18 @@ async function ReportContent({
     if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`
     if (minutes > 0) return `${minutes}m ${seconds}s`
     return `${seconds}s`
+  }
+  const formatRunTimeRange = (start: Date, end: Date) => {
+    const startLabel = start.toLocaleTimeString()
+    const endLabel = end.toLocaleTimeString()
+    const startMeridiem = startLabel.match(/\s(AM|PM)$/)?.[1]
+    const endMeridiem = endLabel.match(/\s(AM|PM)$/)?.[1]
+
+    if (startMeridiem && endMeridiem && startMeridiem === endMeridiem) {
+      return `${startLabel.replace(/\s(AM|PM)$/, "")} → ${endLabel}`
+    }
+
+    return `${startLabel} → ${endLabel}`
   }
 
   return (
@@ -264,7 +279,7 @@ async function ReportContent({
             <p className="text-muted-foreground mt-1">{new Date(report.timestamp).toLocaleDateString()}</p>
             {hasValidRunTiming && runEndedAt && (
               <p className="text-sm text-muted-foreground mt-1">
-                Run time: {runStartedAt.toLocaleTimeString()} → {runEndedAt.toLocaleTimeString()} (
+                Run time: {formatRunTimeRange(runStartedAt, runEndedAt)} (
                 {formatRunDuration(runEndedAt.getTime() - runStartedAt.getTime())})
               </p>
             )}
