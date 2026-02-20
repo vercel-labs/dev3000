@@ -114,7 +114,7 @@ export default function HomePage() {
               <span className="pl-2 font-medium">Install dev3000</span>
               <div className="pl-6 pt-2 space-y-3">
                 <p className="text-muted-foreground">
-                  For the best experience, install{" "}
+                  For the split-screen TUI experience (agent + logs), install{" "}
                   <a href="https://github.com/tmux/tmux" className="underline underline-offset-2">
                     tmux
                   </a>{" "}

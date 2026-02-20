@@ -34,25 +34,8 @@ export async function GET() {
       user?: { id?: string; username?: string; name?: string }
     }
 
-    // Then fetch teams the user belongs to
-    const teamsResponse = await fetch("https://api.vercel.com/v2/teams", {
-      headers: {
-        Authorization: `Bearer ${accessToken}`
-      }
-    })
-
-    if (!teamsResponse.ok) {
-      const errorText = await teamsResponse.text()
-      console.error("Failed to fetch teams:", teamsResponse.status, errorText)
-      return Response.json(
-        { error: `Failed to fetch teams: ${teamsResponse.status} ${errorText}` },
-        { status: teamsResponse.status }
-      )
-    }
-
-    const teamsData = (await teamsResponse.json()) as {
-      teams?: Array<{ id?: string; slug?: string; name?: string }>
-    }
+    // Then fetch all teams the user belongs to (paginated).
+    const teamsData = await fetchAllTeams(accessToken)
 
     // Build teams array with personal account first
     const teams = []
@@ -68,8 +51,8 @@ export async function GET() {
     }
 
     // Add actual teams
-    if (teamsData.teams && Array.isArray(teamsData.teams)) {
-      for (const team of teamsData.teams) {
+    if (teamsData.length > 0) {
+      for (const team of teamsData) {
         teams.push({
           id: team.id,
           slug: team.slug,
@@ -79,7 +62,20 @@ export async function GET() {
       }
     }
 
-    console.log(`Fetched ${teams.length} teams (including personal account)`)
+    // Sort alphabetically for stable UX in team picker.
+    teams.sort((a, b) => (a.name || a.slug || "").localeCompare(b.name || b.slug || "", undefined, { sensitivity: "base" }))
+
+    const hasVercelTeam = teams.some((team) => {
+      const slug = (team.slug || "").toLowerCase()
+      const name = (team.name || "").toLowerCase()
+      return slug === "vercel" || name === "vercel"
+    })
+    console.log(
+      `[Teams API] fetched=${teams.length} hasVercelTeam=${hasVercelTeam} sample=${teams
+        .slice(0, 10)
+        .map((team) => `${team.name || "unknown"}(${team.slug || "no-slug"})`)
+        .join(", ")}`
+    )
 
     return Response.json({
       success: true,
@@ -95,4 +91,60 @@ export async function GET() {
       { status: 500 }
     )
   }
+}
+
+type VercelTeam = {
+  id?: string
+  slug?: string
+  name?: string
+}
+
+type TeamsResponse = {
+  teams?: VercelTeam[]
+  pagination?: {
+    next?: number
+  }
+}
+
+async function fetchAllTeams(accessToken: string): Promise<VercelTeam[]> {
+  const teams: VercelTeam[] = []
+  const seenTeamIds = new Set<string>()
+  let until: string | null = null
+
+  for (let page = 0; page < 20; page++) {
+    const apiUrl = new URL("https://api.vercel.com/v2/teams")
+    apiUrl.searchParams.set("limit", "100")
+    if (until) {
+      apiUrl.searchParams.set("until", until)
+    }
+
+    const teamsResponse = await fetch(apiUrl.toString(), {
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      }
+    })
+
+    if (!teamsResponse.ok) {
+      const errorText = await teamsResponse.text()
+      throw new Error(`Failed to fetch teams: ${teamsResponse.status} ${errorText}`)
+    }
+
+    const pageData = (await teamsResponse.json()) as TeamsResponse
+    const pageTeams = Array.isArray(pageData.teams) ? pageData.teams : []
+
+    for (const team of pageTeams) {
+      const dedupeKey = team.id || `${team.slug}:${team.name}`
+      if (!dedupeKey || seenTeamIds.has(dedupeKey)) continue
+      seenTeamIds.add(dedupeKey)
+      teams.push(team)
+    }
+
+    const nextCursor = pageData.pagination?.next
+    if (!nextCursor || pageTeams.length === 0) {
+      break
+    }
+    until = String(nextCursor)
+  }
+
+  return teams
 }

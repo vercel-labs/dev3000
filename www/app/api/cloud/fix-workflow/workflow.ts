@@ -81,6 +81,7 @@ export async function cloudFixWorkflow(params: {
   crawlDepth?: number | "all" // How many pages to crawl for design-guidelines workflow
   // PR creation params
   githubPat?: string
+  submitPullRequest?: boolean
   repoOwner?: string
   repoName?: string
   baseBranch?: string
@@ -105,6 +106,7 @@ export async function cloudFixWorkflow(params: {
     customPrompt,
     crawlDepth,
     githubPat,
+    submitPullRequest = true,
     repoOwner,
     repoName,
     baseBranch = "main",
@@ -209,7 +211,13 @@ export async function cloudFixWorkflow(params: {
     // ============================================================
     let prScreenshots: Array<{ route: string; beforeBlobUrl: string | null; afterBlobUrl: string | null }> = []
 
-    if (analysisTargetType !== "url" && fixResult.gitDiff && productionUrl && turbopackPrGate.allowPr) {
+    if (
+      analysisTargetType !== "url" &&
+      fixResult.gitDiff &&
+      productionUrl &&
+      turbopackPrGate.allowPr &&
+      submitPullRequest
+    ) {
       workflowLog("[Workflow] Step 2.5: Capturing before/after screenshots...")
       prScreenshots = await captureScreenshotsForPR(
         initResult.sandboxId,
@@ -232,6 +240,7 @@ export async function cloudFixWorkflow(params: {
     if (
       analysisTargetType !== "url" &&
       fixResult.gitDiff &&
+      submitPullRequest &&
       githubPat &&
       repoOwner &&
       repoName &&
@@ -272,6 +281,8 @@ export async function cloudFixWorkflow(params: {
       } else if (!turbopackPrGate.allowPr) {
         prError = turbopackPrGate.reason || "Skipped PR: No meaningful Turbopack bundle improvement"
         workflowLog(`[Workflow] ${prError}`)
+      } else if (!submitPullRequest) {
+        workflowLog("[Workflow] Skipping PR: submitPullRequest disabled")
       } else if (!githubPat) {
         workflowLog("[Workflow] Skipping PR: No GitHub PAT provided")
       } else {

@@ -8,6 +8,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Label } from "@/components/ui/label"
 import { Progress } from "@/components/ui/progress"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { DEV3000_API_URL } from "@/lib/constants"
@@ -153,6 +154,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   const [projects, setProjects] = useState<Project[]>([])
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
   const [loadingTeams, setLoadingTeams] = useState(false)
+  const [teamLoadAttempted, setTeamLoadAttempted] = useState(false)
   const [loadingProjects, setLoadingProjects] = useState(false)
   const [loadingProjectById, setLoadingProjectById] = useState(false)
   const [projectsError, setProjectsError] = useState<string | null>(null)
@@ -173,8 +175,8 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   const [customPrompt, setCustomPrompt] = useState("")
   const [publicUrl, setPublicUrl] = useState("")
   const [githubPat, setGithubPat] = useState("")
+  const [submitPullRequest, setSubmitPullRequest] = useState(false)
   const [repoVisibility, setRepoVisibility] = useState<RepoVisibility>("unknown")
-  const [repoVisibilityReason, setRepoVisibilityReason] = useState<string | null>(null)
   const [startPath, setStartPath] = useState("/")
   const [crawlDepth, setCrawlDepth] = useState<number | "all">(1)
   const [availableBranches, setAvailableBranches] = useState<
@@ -209,12 +211,14 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
 
   const selectedRepoOwner = selectedProject?.link?.org || selectedProject?.latestDeployments?.[0]?.meta?.githubOrg
   const selectedRepoName = selectedProject?.link?.repo || selectedProject?.latestDeployments?.[0]?.meta?.githubRepo
+  const hasGitHubPat = githubPat.trim().length > 0
   const recentProjectIds = new Set(recentProjects.map((project) => project.id))
   const allProjects = projects.filter((project) => !recentProjectIds.has(project.id))
 
   // Check if GitHub repo info is available from project link or deployment metadata
   const hasGitHubRepoInfo = Boolean(selectedRepoOwner && selectedRepoName)
   const isGithubPatRequired = hasGitHubRepoInfo && repoVisibility !== "public"
+  const isGitHubPatRequiredForRun = isGithubPatRequired || (hasGitHubRepoInfo && submitPullRequest)
 
   // Restore state from URL whenever searchParams change (after initial load)
   // This handles the case where user navigates via browser back/forward
@@ -328,6 +332,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       setSelectedProject(null)
       setProjects([])
       setTeams([])
+      setTeamLoadAttempted(false)
       setWorkflowStatus("")
       setWorkflowResult(null)
       setActiveRunId(null)
@@ -335,8 +340,8 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       setBaseBranch("main")
       setCustomPrompt("")
       setPublicUrl("")
+      setSubmitPullRequest(false)
       setRepoVisibility("unknown")
-      setRepoVisibilityReason(null)
       setStartPath("/")
       setProjectsError(null)
       setProjectSearch("")
@@ -530,12 +535,10 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
     async function checkRepoVisibility() {
       if (isUrlAuditType || step !== "options" || !selectedRepoOwner || !selectedRepoName) {
         setRepoVisibility("unknown")
-        setRepoVisibilityReason(null)
         return
       }
 
       setRepoVisibility("checking")
-      setRepoVisibilityReason(null)
 
       try {
         const params = new URLSearchParams({ owner: selectedRepoOwner, repo: selectedRepoName })
@@ -548,15 +551,13 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
 
         if (data.success && data.visibility) {
           setRepoVisibility(data.visibility)
-          setRepoVisibilityReason(data.reason || null)
           return
         }
 
         setRepoVisibility("private_or_unknown")
-        setRepoVisibilityReason("probe_failed")
       } catch (error) {
         setRepoVisibility("private_or_unknown")
-        setRepoVisibilityReason(error instanceof Error ? error.message : String(error))
+        console.warn("Repo visibility probe failed:", error)
       }
     }
 
@@ -598,6 +599,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       console.error("Failed to load teams:", error)
     } finally {
       setLoadingTeams(false)
+      setTeamLoadAttempted(true)
     }
   }
 
@@ -698,6 +700,12 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
 
   // Restore project from URL once projects are loaded
   useEffect(() => {
+    if (!hasGitHubPat && submitPullRequest) {
+      setSubmitPullRequest(false)
+    }
+  }, [hasGitHubPat, submitPullRequest])
+
+  useEffect(() => {
     if (isUrlAuditType) return
     const projectParam = searchParams.get("project")
     if (!projectParam || !selectedTeam) return
@@ -728,11 +736,13 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       setWorkflowStatus("Error: Enter a valid public https:// URL")
       return
     }
-    if (!isUrlAuditType && isGithubPatRequired && !githubPat.trim()) {
+    if (!isUrlAuditType && isGitHubPatRequiredForRun && !githubPat.trim()) {
       setWorkflowStatus(
         repoVisibility === "checking"
           ? "Error: Checking repository visibility. Please wait a moment and retry."
-          : "Error: This repository appears private. Add a GitHub PAT in Workflow options."
+          : submitPullRequest
+            ? "Error: Add a GitHub PAT to submit a PR."
+            : "Error: This repository appears private. Add a GitHub PAT in Workflow options."
       )
       return
     }
@@ -809,6 +819,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
         customPrompt: workflowType === "prompt" ? customPrompt : undefined,
         crawlDepth: workflowType === "design-guidelines" ? crawlDepth : undefined,
         githubPat: !isUrlAuditType && hasGitHubRepoInfo && githubPat.trim() ? githubPat.trim() : undefined,
+        submitPullRequest: !isUrlAuditType && hasGitHubRepoInfo ? submitPullRequest : false,
         startPath: !isUrlAuditType && startPath !== "/" ? startPath : undefined // URL mode is single-URL today
       }
 
@@ -1281,8 +1292,15 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
           {step === "team" && (
             <div>
               <h3 className="text-lg font-semibold mb-4 text-foreground">Select Team</h3>
-              {loadingTeams ? (
-                <div className="text-center py-8 text-muted-foreground">Loading teams...</div>
+              {loadingTeams || !teamLoadAttempted ? (
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {Array.from({ length: 5 }).map((_, index) => (
+                    <div key={`team-skeleton-${index}`} className="w-full p-4 border-2 border-border rounded-lg">
+                      <Skeleton className="h-5 w-40" />
+                      <Skeleton className="mt-2 h-4 w-56" />
+                    </div>
+                  ))}
+                </div>
               ) : (
                 <div className="space-y-2 max-h-96 overflow-y-auto">
                   {teams.map((team) => (
@@ -1580,7 +1598,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                           className="flex items-center gap-1 text-sm font-medium text-foreground mb-1"
                         >
                           GitHub Personal Access Token
-                          {isGithubPatRequired ? (
+                          {isGitHubPatRequiredForRun ? (
                             <span className="text-red-500 ml-1">*</span>
                           ) : (
                             <span className="text-muted-foreground">(optional)</span>
@@ -1600,7 +1618,17 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                             >
                               <p className="font-semibold mb-2">How to create a GitHub PAT:</p>
                               <ol className="list-decimal list-inside space-y-1 text-xs">
-                                <li>Go to github.com/settings/tokens?type=beta</li>
+                                <li>
+                                  Go to{" "}
+                                  <a
+                                    href="https://github.com/settings/tokens?type=beta"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-blue-600 hover:underline"
+                                  >
+                                    github.com/settings/tokens?type=beta
+                                  </a>
+                                </li>
                                 <li>Click &quot;Generate new token&quot;</li>
                                 <li>Give it a name like &quot;d3k-testing&quot;</li>
                                 <li>Set expiration (e.g., 30 days)</li>
@@ -1642,11 +1670,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                         />
                         <p className="mt-1 text-xs text-muted-foreground">
                           {repoVisibility === "checking" && "Checking repository visibility... "}
-                          {repoVisibility === "public" && "Optional for public repositories. "}
-                          {repoVisibility === "private_or_unknown" &&
-                            "Required for private repositories (or when visibility cannot be verified). "}
-                          {repoVisibilityReason ? `(${repoVisibilityReason}) ` : ""}
-                          Stored locally in your browser.
+                          Required for private repos and PR creation.{" "}
                           <a
                             href="https://github.com/settings/tokens?type=beta"
                             target="_blank"
@@ -1656,6 +1680,22 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                             Open GitHub token settings
                           </a>
                         </p>
+                        <div className="mt-3 rounded-md border border-border p-3 bg-muted/20">
+                          <label
+                            className={`inline-flex items-center gap-2 text-sm font-medium ${
+                              hasGitHubPat ? "text-foreground cursor-pointer" : "text-muted-foreground cursor-not-allowed"
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={submitPullRequest}
+                              onChange={(e) => setSubmitPullRequest(e.target.checked)}
+                              disabled={!hasGitHubPat}
+                              className="h-4 w-4 accent-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                            />
+                            Create a GitHub PR
+                          </label>
+                        </div>
                       </div>
                     )}
                     <div>

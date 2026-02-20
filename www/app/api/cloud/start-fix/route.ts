@@ -144,6 +144,7 @@ export async function POST(request: Request) {
       repoUrl,
       repoBranch,
       githubPat,
+      submitPullRequest,
       startPath,
       productionUrl,
       projectDir
@@ -195,6 +196,7 @@ export async function POST(request: Request) {
     workflowLog(`[Start Fix] Start Path: ${startPath || "/"}`)
     workflowLog(`[Start Fix] Bypass Token: ${bypassToken ? "provided" : "not provided"}`)
     workflowLog(`[Start Fix] GitHub PAT: ${githubPat ? "provided" : "not provided"}`)
+    workflowLog(`[Start Fix] Submit PR: ${submitPullRequest === false ? "no" : "yes"}`)
     if (repoUrl) {
       workflowLog(`[Start Fix] Will create sandbox from: ${repoUrl}`)
       workflowLog(`[Start Fix] Branch: ${repoBranch || "main"}`)
@@ -256,6 +258,7 @@ export async function POST(request: Request) {
       crawlDepth: workflowType === "design-guidelines" ? crawlDepth : undefined, // Crawl depth for design-guidelines
       // PR creation params
       githubPat,
+      submitPullRequest: submitPullRequest !== false,
       repoOwner,
       repoName,
       baseBranch: baseBranch || "main",
