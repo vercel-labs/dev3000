@@ -69,7 +69,15 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
 const MIN_ROUTE_DELTA_BYTES = 10 * 1024
 
-export default async function WorkflowReportPage({ params }: { params: Promise<{ id: string }> }) {
+export default function WorkflowReportPage({ params }: { params: Promise<{ id: string }> }) {
+  return (
+    <Suspense fallback={<ReportLoading reportCrumbLabel="Workflow Report" />}>
+      <WorkflowReportPageData params={params} />
+    </Suspense>
+  )
+}
+
+async function WorkflowReportPageData({ params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser()
   const { id } = await params
 
@@ -89,13 +97,9 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
     isOwner = run.userId === user.id
   }
 
-  const isPublicView = !isOwner && !!run?.isPublic
-
   if (!run) {
     redirect("/workflows")
   }
-
-  const reportCrumbLabel = run.type === "cls-fix" ? "Fix Report" : "Workflow Report"
 
   if (!run.reportBlobUrl) {
     if (user && isOwner) {
@@ -106,24 +110,18 @@ export default async function WorkflowReportPage({ params }: { params: Promise<{
 
   const reportBlobUrl = run.reportBlobUrl
 
-  return (
-    <Suspense fallback={<ReportLoading isPublicView={isPublicView} reportCrumbLabel={reportCrumbLabel} />}>
-      <ReportContent id={id} run={run} isOwner={isOwner} isPublicView={isPublicView} reportBlobUrl={reportBlobUrl} />
-    </Suspense>
-  )
+  return <ReportContent id={id} run={run} isOwner={isOwner} reportBlobUrl={reportBlobUrl} />
 }
 
 async function ReportContent({
   id,
   run,
   isOwner,
-  isPublicView,
   reportBlobUrl
 }: {
   id: string
   run: WorkflowRun
   isOwner: boolean
-  isPublicView: boolean
   reportBlobUrl: string
 }) {
   // Fetch the JSON report from the blob URL
@@ -318,7 +316,7 @@ async function ReportContent({
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 pt-8 pb-24 max-w-4xl">
         <div className="mb-6 flex items-center justify-between gap-3">
-          <ReportBreadcrumb isPublicView={isPublicView} reportCrumbLabel={reportCrumbLabel} />
+          <ReportBreadcrumb reportCrumbLabel={reportCrumbLabel} />
           <div className="flex items-center gap-3">
             {isOwner && <ShareButton runId={id} initialIsPublic={run.isPublic ?? false} />}
             <ThemeToggle />
@@ -1150,12 +1148,12 @@ async function ReportContent({
   )
 }
 
-function ReportLoading({ isPublicView, reportCrumbLabel }: { isPublicView: boolean; reportCrumbLabel: string }) {
+function ReportLoading({ reportCrumbLabel }: { reportCrumbLabel: string }) {
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8 max-w-4xl">
         <div className="mb-6">
-          <ReportBreadcrumb isPublicView={isPublicView} reportCrumbLabel={reportCrumbLabel} />
+          <ReportBreadcrumb reportCrumbLabel={reportCrumbLabel} />
         </div>
         <div className="h-8 w-2/3 bg-muted/40 rounded-md" />
         <div className="mt-4 h-4 w-1/3 bg-muted/30 rounded-md" />
@@ -1169,7 +1167,7 @@ function ReportLoading({ isPublicView, reportCrumbLabel }: { isPublicView: boole
   )
 }
 
-function ReportBreadcrumb({ isPublicView, reportCrumbLabel }: { isPublicView: boolean; reportCrumbLabel: string }) {
+function ReportBreadcrumb({ reportCrumbLabel }: { reportCrumbLabel: string }) {
   return (
     <span className="inline-flex items-center gap-2 text-muted-foreground">
       <a href="/workflows" className="inline-flex items-center gap-2 hover:text-foreground transition-colors">
@@ -1177,7 +1175,7 @@ function ReportBreadcrumb({ isPublicView, reportCrumbLabel }: { isPublicView: bo
         <span className="font-semibold">d3k</span>
       </a>
       <span>/</span>
-      <span>{isPublicView ? "Public Report" : reportCrumbLabel}</span>
+      <span>{reportCrumbLabel}</span>
     </span>
   )
 }
