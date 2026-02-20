@@ -67,10 +67,7 @@ export function ShareButton({ runId, initialIsPublic }: ShareButtonProps) {
       return
     }
     const updated = await setPublicStatus(true)
-    if (updated) {
-      await copyLink()
-      closeMenu()
-    }
+    if (updated) closeMenu()
   }
 
   const handlePrivateClick = async () => {
@@ -90,24 +87,24 @@ export function ShareButton({ runId, initialIsPublic }: ShareButtonProps) {
         {showCopied ? <Check className="h-4 w-4" /> : <Share2 className="h-4 w-4" />}
         <span>{showCopied ? "Copied!" : "Share"}</span>
       </summary>
-      <div className="absolute right-0 mt-1 min-w-[10.5rem] w-max rounded-md border border-border bg-card shadow-lg p-1 z-20">
+      <div className="absolute right-0 mt-1 w-fit min-w-[9rem] rounded-md border border-border bg-card shadow-lg p-1 z-20">
         <button
           type="button"
           onClick={handlePublicClick}
           disabled={isLoading}
-          className="w-full whitespace-nowrap text-left px-2 py-1.5 text-sm rounded hover:bg-muted transition-colors disabled:opacity-50"
-          title={isPublic ? "Copy link" : "Make public and copy link"}
+          className="w-full whitespace-nowrap text-left px-2 py-1.5 text-sm rounded hover:bg-muted/80 hover:text-foreground focus-visible:bg-muted/80 transition-colors disabled:opacity-50"
+          title={isPublic ? "Copy link" : "Make public"}
         >
           <span className="inline-flex items-center gap-1.5">
             {isPublic ? <LinkIcon className="h-3.5 w-3.5" /> : <Share2 className="h-3.5 w-3.5" />}
-            {isPublic ? "Copy link" : "Make public and copy link"}
+            {isPublic ? "Copy link" : "Make public"}
           </span>
         </button>
         <button
           type="button"
           onClick={handlePrivateClick}
           disabled={!isPublic || isLoading}
-          className="w-full whitespace-nowrap text-left px-2 py-1.5 text-sm rounded hover:bg-muted transition-colors disabled:opacity-50"
+          className="w-full whitespace-nowrap text-left px-2 py-1.5 text-sm rounded hover:bg-muted/80 hover:text-foreground focus-visible:bg-muted/80 transition-colors disabled:opacity-50"
           title="Make private"
         >
           <span className="inline-flex items-center gap-1.5">
