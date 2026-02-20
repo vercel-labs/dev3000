@@ -317,25 +317,23 @@ async function ReportContent({
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 pt-8 pb-24 max-w-4xl">
-        <div className="mb-6">
+        <div className="mb-6 flex items-center justify-between gap-3">
           <ReportBreadcrumb isPublicView={isPublicView} reportCrumbLabel={reportCrumbLabel} />
-        </div>
-
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-3xl font-bold">{reportTitle}</h1>
-            <p className="text-muted-foreground mt-1">{new Date(report.timestamp).toLocaleDateString()}</p>
-            {hasValidRunTiming && runEndedAt && (
-              <p className="text-sm text-muted-foreground mt-1">
-                Run time: {formatRunTimeRange(runStartedAt, runEndedAt)} (
-                {formatRunDuration(runEndedAt.getTime() - runStartedAt.getTime())})
-              </p>
-            )}
-          </div>
           <div className="flex items-center gap-3">
             {isOwner && <ShareButton runId={id} initialIsPublic={run.isPublic ?? false} />}
             <ThemeToggle />
           </div>
+        </div>
+
+        <div className="mb-4">
+          <h1 className="text-3xl font-bold">{reportTitle}</h1>
+          <p className="text-muted-foreground mt-1">{new Date(report.timestamp).toLocaleDateString()}</p>
+          {hasValidRunTiming && runEndedAt && (
+            <p className="text-sm text-muted-foreground mt-1">
+              Run time: {formatRunTimeRange(runStartedAt, runEndedAt)} (
+              {formatRunDuration(runEndedAt.getTime() - runStartedAt.getTime())})
+            </p>
+          )}
         </div>
 
         <div className="text-sm text-muted-foreground mb-1">
