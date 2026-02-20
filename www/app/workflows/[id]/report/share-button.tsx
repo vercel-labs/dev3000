@@ -92,8 +92,7 @@ export function ShareButton({ runId, initialIsPublic }: ShareButtonProps) {
           type="button"
           onClick={handlePublicClick}
           disabled={isLoading}
-          className="w-full whitespace-nowrap text-left px-2 py-1.5 text-sm rounded hover:bg-muted/80 hover:text-foreground focus-visible:bg-muted/80 transition-colors disabled:opacity-50"
-          title={isPublic ? "Copy link" : "Make public"}
+          className="w-full whitespace-nowrap text-left px-2 py-1.5 text-sm rounded hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent active:bg-accent transition-colors disabled:opacity-50"
         >
           <span className="inline-flex items-center gap-1.5">
             {isPublic ? <LinkIcon className="h-3.5 w-3.5" /> : <Share2 className="h-3.5 w-3.5" />}
@@ -104,8 +103,7 @@ export function ShareButton({ runId, initialIsPublic }: ShareButtonProps) {
           type="button"
           onClick={handlePrivateClick}
           disabled={!isPublic || isLoading}
-          className="w-full whitespace-nowrap text-left px-2 py-1.5 text-sm rounded hover:bg-muted/80 hover:text-foreground focus-visible:bg-muted/80 transition-colors disabled:opacity-50"
-          title="Make private"
+          className="w-full whitespace-nowrap text-left px-2 py-1.5 text-sm rounded hover:bg-accent hover:text-accent-foreground focus-visible:bg-accent active:bg-accent transition-colors disabled:opacity-50"
         >
           <span className="inline-flex items-center gap-1.5">
             <Lock className="h-3.5 w-3.5" />
