@@ -136,6 +136,18 @@ describe("tmux-helpers", () => {
       expect(commands[9]).toContain("opencode")
     })
 
+    it("should safely quote pane command when --command contains spaces", () => {
+      const config: TmuxSessionConfig = {
+        ...baseConfig,
+        d3kCommand: 'dev3000 --command "pnpm dev:user" --date-time local'
+      }
+      const commands = generateTmuxCommands(config)
+
+      expect(commands[0]).toContain(`--command "pnpm dev:user"`)
+      expect(commands[0]).toContain("'bash -c ")
+      expect(commands[0]).not.toContain('"bash -c \'dev3000 --command "pnpm dev:user"')
+    })
+
     it("should properly escape session name in session-targeted commands", () => {
       const config: TmuxSessionConfig = {
         ...baseConfig,

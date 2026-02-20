@@ -11,14 +11,21 @@ export interface TmuxSessionConfig {
 }
 
 /**
+ * Safely quote a value as a single shell argument using POSIX single-quote escaping.
+ */
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`
+}
+
+/**
  * Wrap a command to show error and wait for user input on failure.
  * This prevents the pane from immediately closing on crash, letting users see the error.
  */
 function wrapCommandWithErrorHandling(cmd: string, name: string): string {
-  // Use bash -c to run the command and capture its exit code
-  // If it fails, show the error and wait for Enter before exiting
-  // Note: Use escaped quotes for the inner strings since this gets embedded in tmux commands
-  return `bash -c '${cmd}; EXIT_CODE=\\$?; if [ \\$EXIT_CODE -ne 0 ]; then echo; echo ❌ ${name} exited with code \\$EXIT_CODE; echo Press Enter to close...; read; fi; exit \\$EXIT_CODE'`
+  // Use bash -c to run the command and capture its exit code.
+  // Quote the script safely so user commands with spaces/quotes don't break tmux startup.
+  const script = `${cmd}; EXIT_CODE=$?; if [ $EXIT_CODE -ne 0 ]; then echo; echo ❌ ${name} exited with code $EXIT_CODE; echo Press Enter to close...; read; fi; exit $EXIT_CODE`
+  return `bash -c ${shellQuote(script)}`
 }
 
 /**
@@ -33,7 +40,7 @@ export function generateTmuxCommands(config: TmuxSessionConfig): string[] {
 
   return [
     // Create new session with d3k in the first pane (will be right side)
-    `tmux new-session -d -s "${sessionName}" "${d3kWithErrorHandling}"`,
+    `tmux new-session -d -s "${sessionName}" ${shellQuote(d3kWithErrorHandling)}`,
 
     // Increase scrollback buffer for more history
     `tmux set-option -t "${sessionName}" history-limit 10000`,
@@ -60,7 +67,7 @@ export function generateTmuxCommands(config: TmuxSessionConfig): string[] {
     // Split horizontally and run agent in the new pane (left side)
     // -b puts the new pane before (left of) the current one
     // -l sets the size of the NEW pane (agent)
-    `tmux split-window -h -b -l ${paneWidthPercent}% -t "${sessionName}" "${agentWithErrorHandling}"`,
+    `tmux split-window -h -b -l ${paneWidthPercent}% -t "${sessionName}" ${shellQuote(agentWithErrorHandling)}`,
 
     // When focus changes (via mouse click or keyboard), resize focused pane to 75%
     // Note: pane-focus-in is a window-level hook, requires -w flag
