@@ -1,5 +1,5 @@
-import type { Metadata } from "next"
 import { ArrowLeft, ChevronRight } from "lucide-react"
+import type { Metadata } from "next"
 import Image from "next/image"
 import { redirect } from "next/navigation"
 import { Suspense } from "react"
@@ -1133,11 +1133,9 @@ async function ReportContent({
         </div>
 
         <div className="mt-6 mb-4 flex gap-4">
-          {!isPublicView && (
-            <a href="/workflows" className="px-4 py-2 border border-border rounded-md hover:bg-muted transition-colors">
-              ← Workflows
-            </a>
-          )}
+          <a href="/workflows" className="px-4 py-2 border border-border rounded-md hover:bg-muted transition-colors">
+            ← Workflows
+          </a>
           {run.prUrl && (
             <a
               href={run.prUrl}
@@ -1174,16 +1172,6 @@ function ReportLoading({ isPublicView, reportCrumbLabel }: { isPublicView: boole
 }
 
 function ReportBreadcrumb({ isPublicView, reportCrumbLabel }: { isPublicView: boolean; reportCrumbLabel: string }) {
-  if (isPublicView) {
-    return (
-      <span className="inline-flex items-center gap-2 text-muted-foreground">
-        <span className="font-semibold">d3k</span>
-        <span>/</span>
-        <span>Public Report</span>
-      </span>
-    )
-  }
-
   return (
     <span className="inline-flex items-center gap-2 text-muted-foreground">
       <a href="/workflows" className="inline-flex items-center gap-2 hover:text-foreground transition-colors">
@@ -1191,7 +1179,7 @@ function ReportBreadcrumb({ isPublicView, reportCrumbLabel }: { isPublicView: bo
         <span className="font-semibold">d3k</span>
       </a>
       <span>/</span>
-      <span>{reportCrumbLabel}</span>
+      <span>{isPublicView ? "Public Report" : reportCrumbLabel}</span>
     </span>
   )
 }

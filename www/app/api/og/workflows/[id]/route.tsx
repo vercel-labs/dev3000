@@ -42,7 +42,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     const routeDelta =
       bundle &&
       Array.from(
-        new Set([...bundle.before.topRoutes.map((route) => route.route), ...bundle.after.topRoutes.map((route) => route.route)])
+        new Set([
+          ...bundle.before.topRoutes.map((route) => route.route),
+          ...bundle.after.topRoutes.map((route) => route.route)
+        ])
       )
         .map((route) => {
           const beforeRoute = bundle.before.topRoutes.find((item) => item.route === route)
@@ -97,8 +100,12 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
               }}
             >
               {bundle.delta.compressedBytes <= 0 ? "Reduced shipped JS by " : "Increased shipped JS by "}
-              <span style={{ fontWeight: 700, marginLeft: "6px" }}>{formatBytes(Math.abs(bundle.delta.compressedBytes))}</span>
-              <span style={{ fontWeight: 700, marginLeft: "8px" }}>({formatSignedPercent(bundle.delta.compressedPercent)})</span>
+              <span style={{ fontWeight: 700, marginLeft: "6px" }}>
+                {formatBytes(Math.abs(bundle.delta.compressedBytes))}
+              </span>
+              <span style={{ fontWeight: 700, marginLeft: "8px" }}>
+                ({formatSignedPercent(bundle.delta.compressedPercent)})
+              </span>
             </div>
 
             <div style={{ display: "flex", gap: "16px", marginBottom: "16px" }}>
@@ -108,7 +115,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
                   {formatBytes(bundle.before.totalCompressedBytes)} → {formatBytes(bundle.after.totalCompressedBytes)}
                 </div>
                 <div style={{ ...deltaStyle, color: bundle.delta.compressedBytes <= 0 ? "#00d27a" : "#ff5f6d" }}>
-                  {formatSignedBytes(bundle.delta.compressedBytes)} ({formatSignedPercent(bundle.delta.compressedPercent)})
+                  {formatSignedBytes(bundle.delta.compressedBytes)} (
+                  {formatSignedPercent(bundle.delta.compressedPercent)})
                 </div>
               </div>
 
