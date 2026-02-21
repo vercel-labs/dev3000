@@ -281,7 +281,10 @@ async function ReportContent({
   const reportRepoTitle =
     report.repoOwner && report.repoName
       ? `${report.repoOwner}/${report.repoName}`
-      : report.repoUrl?.match(/github\.com\/([^/]+)\/([^/.]+)(?:\.git)?$/)?.slice(1, 3).join("/")
+      : report.repoUrl
+          ?.match(/github\.com\/([^/]+)\/([^/.]+)(?:\.git)?$/)
+          ?.slice(1, 3)
+          .join("/")
   const reportTitle = report.targetUrl || reportRepoTitle || report.projectName
   const prDiffUrl = run.prUrl ? `${run.prUrl}.diff` : undefined
   const inlineDiffUrl = report.gitDiff
