@@ -188,6 +188,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   const [loadingBranches, setLoadingBranches] = useState(false)
   const [branchesError, setBranchesError] = useState(false)
   const loadedTeamIdRef = useRef<string | null>(null)
+  const hasNavigatedToReportRef = useRef(false)
   const teamsRequestInFlightRef = useRef<Promise<void> | null>(null)
   const teamsAuthCooldownUntilRef = useRef(0)
   const teamsRetryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -358,6 +359,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       setLoadingBranches(false)
       setBranchesError(false)
       loadedTeamIdRef.current = null
+      hasNavigatedToReportRef.current = false
       teamsAuthCooldownUntilRef.current = 0
       teamsRequestInFlightRef.current = null
       if (teamsRetryTimeoutRef.current) {
@@ -485,7 +487,8 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
         }
         if (!run) return
 
-        if (redirectedRunId !== run.id) {
+        if (!hasNavigatedToReportRef.current && redirectedRunId !== run.id) {
+          hasNavigatedToReportRef.current = true
           setRedirectedRunId(run.id)
           router.push(`/workflows/${run.id}/report`)
         }
@@ -841,6 +844,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
     setWorkflowResult(null)
     setActiveRunId(null)
     setSandboxUrl(null)
+    hasNavigatedToReportRef.current = false
     if (selectedTarget) {
       setProgressTarget(selectedTarget)
     }
@@ -1046,7 +1050,8 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
         // Set activeRunId for polling - let polling handle status updates
         if (result.runId) {
           setActiveRunId(result.runId)
-          if (redirectedRunId !== result.runId) {
+          if (!hasNavigatedToReportRef.current && redirectedRunId !== result.runId) {
+            hasNavigatedToReportRef.current = true
             setRedirectedRunId(result.runId)
             router.push(`/workflows/${result.runId}/report`)
           }
