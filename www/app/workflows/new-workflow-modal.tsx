@@ -834,6 +834,8 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       const body: Record<string, unknown> = {
         devUrl,
         projectName: isUrlAuditType ? new URL(publicUrl).hostname : project?.name,
+        projectId: !isUrlAuditType ? project?.id : undefined,
+        teamId: !isUrlAuditType && selectedTeam && !selectedTeam.isPersonal ? selectedTeam.id : undefined,
         userId,
         workflowType,
         analysisTargetType: isUrlAuditType ? "url" : "vercel-project",
@@ -894,7 +896,9 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       const npmTokenValue = body.npmToken
       console.log(
         "[Start Workflow] body.npmToken:",
-        typeof npmTokenValue === "string" && npmTokenValue.length > 0 ? `SET (length: ${npmTokenValue.length})` : "NOT SET"
+        typeof npmTokenValue === "string" && npmTokenValue.length > 0
+          ? `SET (length: ${npmTokenValue.length})`
+          : "NOT SET"
       )
 
       // Create an AbortController for timeout handling

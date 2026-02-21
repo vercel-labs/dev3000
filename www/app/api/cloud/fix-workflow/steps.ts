@@ -1041,6 +1041,8 @@ export async function initSandboxStep(
   repoUrl: string,
   branch: string,
   projectDir: string | undefined,
+  projectId: string | undefined,
+  teamId: string | undefined,
   projectName: string,
   reportId: string,
   _startPath: string,
@@ -1073,6 +1075,48 @@ export async function initSandboxStep(
     process.env.VERCEL_OIDC_TOKEN = vercelOidcToken
   }
 
+  const developmentEnv: Record<string, string> = {}
+  if (projectId && vercelOidcToken) {
+    try {
+      await appendProgressLog(progressContext, "[Sandbox] Loading development environment variables...")
+      const params = new URLSearchParams({ target: "development", decrypt: "true", limit: "100" })
+      if (teamId) {
+        params.set("teamId", teamId)
+      }
+      const response = await fetch(`https://api.vercel.com/v10/projects/${projectId}/env?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${vercelOidcToken}` }
+      })
+
+      if (response.ok) {
+        const data = (await response.json()) as {
+          envs?: Array<{ key?: string; value?: string }>
+        }
+        for (const envVar of data.envs || []) {
+          if (envVar.key && typeof envVar.value === "string") {
+            developmentEnv[envVar.key] = envVar.value
+          }
+        }
+        await appendProgressLog(
+          progressContext,
+          `[Sandbox] Loaded ${Object.keys(developmentEnv).length} development env var(s)`
+        )
+      } else {
+        const errorText = await response.text()
+        await appendProgressLog(
+          progressContext,
+          `[Sandbox] Could not load development env vars (HTTP ${response.status}): ${errorText.slice(0, 180)}`
+        )
+      }
+    } catch (error) {
+      await appendProgressLog(
+        progressContext,
+        `[Sandbox] Could not load development env vars: ${error instanceof Error ? error.message : String(error)}`
+      )
+    }
+  } else {
+    await appendProgressLog(progressContext, "[Sandbox] Skipping development env load (missing projectId or OIDC token)")
+  }
+
   // Create sandbox using base snapshot (Chrome + d3k pre-installed)
   // The base snapshot is shared across ALL projects for fast startup
   timer.start("Create sandbox (getOrCreateD3kSandbox)")
@@ -1086,6 +1130,7 @@ export async function initSandboxStep(
       skipD3kSetup: isTurbopackBundleAnalyzer,
       onProgress: (message) => appendProgressLog(progressContext, `[Sandbox] ${message}`),
       projectDir: projectDir || "",
+      projectEnv: developmentEnv,
       timeout: "30m",
       debug: true
     })

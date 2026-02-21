@@ -148,7 +148,9 @@ export async function POST(request: Request) {
       submitPullRequest,
       startPath,
       productionUrl,
-      projectDir
+      projectDir,
+      projectId,
+      teamId
     } = body
     // Validate workflowType is a valid WorkflowType
     const validWorkflowTypes: WorkflowType[] = [
@@ -247,6 +249,8 @@ export async function POST(request: Request) {
         analysisTargetType === "url"
           ? (projectDir as string | undefined) || "example-apps/nextjs-test-app"
           : projectDir,
+      projectId: analysisTargetType === "url" ? undefined : projectId,
+      teamId: analysisTargetType === "url" ? undefined : teamId,
       projectName,
       vercelOidcToken,
       runId, // Pass runId to workflow for tracking

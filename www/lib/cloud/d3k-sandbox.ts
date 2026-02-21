@@ -212,6 +212,7 @@ export interface D3kSandboxConfig {
   branch?: string
   githubPat?: string
   npmToken?: string
+  projectEnv?: Record<string, string>
   timeout?: StringValue
   skipD3kSetup?: boolean
   onProgress?: (message: string) => void | Promise<void>
@@ -333,6 +334,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     branch = "main",
     githubPat,
     npmToken,
+    projectEnv = {},
     timeout = "30m",
     skipD3kSetup = false,
     onProgress,
@@ -575,6 +577,30 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
 
   try {
     const sandboxCwd = normalizedProjectDir ? `/vercel/sandbox/${normalizedProjectDir}` : "/vercel/sandbox"
+
+    if (Object.keys(projectEnv).length > 0) {
+      await reportProgress(`Writing ${Object.keys(projectEnv).length} development env var(s) to sandbox`)
+      const envWriteResult = await runCommandWithLogs(sandbox, {
+        cmd: "node",
+        args: [
+          "-e",
+          `const fs=require("fs");
+const env=JSON.parse(process.env.PROJECT_ENV_JSON||"{}");
+const lines=Object.entries(env).map(([k,v])=>\`\${k}=\${JSON.stringify(String(v ?? ""))}\`).join("\\n");
+fs.writeFileSync(".env.development.local", lines + (lines ? "\\n" : ""));
+console.log("wrote .env.development.local");`
+        ],
+        cwd: sandboxCwd,
+        env: {
+          PROJECT_ENV_JSON: JSON.stringify(projectEnv)
+        }
+      })
+      if (envWriteResult.exitCode !== 0) {
+        throw new Error(
+          `Failed to write .env.development.local: ${envWriteResult.stderr || envWriteResult.stdout || "unknown error"}`
+        )
+      }
+    }
     if (debug) console.log(`  ✅ Repository initialized from source: ${repoUrlWithGit}@${branch}`)
 
     // Verify sandbox directory contents
