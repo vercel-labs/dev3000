@@ -1073,7 +1073,7 @@ elif [ -x ../../node_modules/.bin/vercel ]; then VERCEL_CMD="../../node_modules/
 elif command -v corepack >/dev/null 2>&1; then VERCEL_CMD="corepack pnpm -C ${projectCwd} exec vercel"; fi && \
 if [ -z "$VERCEL_CMD" ]; then echo "vercel CLI not found"; exit 127; fi && \
 echo "[Sandbox] Pulling development env vars via: $VERCEL_CMD env pull .env.local --environment development --yes --token [REDACTED]${scopeArg}" && \
-eval "$VERCEL_CMD env pull .env.local --environment development --yes --token \"$TOKEN\"${scopeArg}" && \
+eval "$VERCEL_CMD env pull .env.local --environment development --yes --token "$TOKEN"${scopeArg}" && \
 test -f .env.local && echo "[Sandbox] .env.local created"`
   ])
 

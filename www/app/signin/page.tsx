@@ -26,6 +26,7 @@ export default async function SignInPage() {
           >
             Sign in with Vercel
           </Link>
+          <p className="mt-3 text-center text-xs text-amber-700">Currently only works for Vercelians.</p>
         </div>
 
         <p className="mt-4 text-center text-xs text-gray-500">
