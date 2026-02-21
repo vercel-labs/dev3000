@@ -1055,6 +1055,7 @@ async function pullDevelopmentEnvViaCliInSandbox(
   const scopeArg = teamId ? ` --scope "${teamId}"` : ""
 
   await appendProgressLog(progressContext, "[Sandbox] Falling back to vercel env pull (.env.local)...")
+  workflowLog("[Sandbox] Falling back to vercel env pull (.env.local)...")
 
   const pullResult = await runSandboxCommand(sandbox, "sh", [
     "-c",
@@ -1071,13 +1072,23 @@ elif [ -x node_modules/.bin/vercel ]; then VERCEL_CMD="./node_modules/.bin/verce
 elif [ -x ../../node_modules/.bin/vercel ]; then VERCEL_CMD="../../node_modules/.bin/vercel"; \
 elif command -v corepack >/dev/null 2>&1; then VERCEL_CMD="corepack pnpm -C ${projectCwd} exec vercel"; fi && \
 if [ -z "$VERCEL_CMD" ]; then echo "vercel CLI not found"; exit 127; fi && \
-echo "[Sandbox] Pulling development env vars via: $VERCEL_CMD env pull .env.local --environment development --yes${scopeArg}" && \
-eval "$VERCEL_CMD env pull .env.local --environment development --yes${scopeArg}" && \
+echo "[Sandbox] Pulling development env vars via: $VERCEL_CMD env pull .env.local --environment development --yes --token [REDACTED]${scopeArg}" && \
+eval "$VERCEL_CMD env pull .env.local --environment development --yes --token \"$TOKEN\"${scopeArg}" && \
 test -f .env.local && echo "[Sandbox] .env.local created"`
   ])
 
+  const stdoutPreview = (pullResult.stdout || "").trim().slice(-500)
+  const stderrPreview = (pullResult.stderr || "").trim().slice(-500)
+  workflowLog(
+    `[Sandbox] vercel env pull exit=${pullResult.exitCode} stdout=${stdoutPreview || "(empty)"} stderr=${stderrPreview || "(empty)"}`
+  )
+
   if (pullResult.exitCode === 0) {
     await appendProgressLog(progressContext, "[Sandbox] vercel env pull succeeded (.env.local)")
+    await appendProgressLog(
+      progressContext,
+      `[Sandbox] vercel env pull output: ${(stdoutPreview || "ok").replace(/\s+/g, " ").slice(0, 180)}`
+    )
     return
   }
 
