@@ -1114,7 +1114,10 @@ export async function initSandboxStep(
       )
     }
   } else {
-    await appendProgressLog(progressContext, "[Sandbox] Skipping development env load (missing projectId or OIDC token)")
+    await appendProgressLog(
+      progressContext,
+      "[Sandbox] Skipping development env load (missing projectId or OIDC token)"
+    )
   }
 
   // Create sandbox using base snapshot (Chrome + d3k pre-installed)
@@ -1158,9 +1161,19 @@ export async function initSandboxStep(
   )
 
   if (isTurbopackBundleAnalyzer) {
+    const effectiveProjectDir = await resolveSandboxProjectDir(
+      sandboxResult.sandbox,
+      projectDir,
+      projectName,
+      progressContext
+    )
     timer.start("Generate Turbopack NDJSON artifacts")
     await updateProgress(progressContext, 1, "Running Next.js analyzer build...")
-    const ndjsonResult = await prepareTurbopackNdjsonArtifacts(sandboxResult.sandbox, projectDir, progressContext)
+    const ndjsonResult = await prepareTurbopackNdjsonArtifacts(
+      sandboxResult.sandbox,
+      effectiveProjectDir,
+      progressContext
+    )
     workflowLog(`[Init] Turbopack NDJSON artifacts ready at ${ndjsonResult.outputDir}`)
     if (ndjsonResult.summary) {
       workflowLog(`[Init] Turbopack NDJSON summary:\n${ndjsonResult.summary}`)
@@ -1301,11 +1314,20 @@ export async function agentFixLoopStep(
     throw new Error(`Sandbox not running: ${sandbox.status}`)
   }
 
+  const effectiveProjectDir = isTurbopackBundleAnalyzer
+    ? await resolveSandboxProjectDir(sandbox, projectDir, projectName, progressContext)
+    : projectDir
+
   let turbopackBundleComparison: TurbopackBundleComparison | undefined
   let beforeBundleMetrics: TurbopackBundleMetricsSnapshot | null = null
   if (isTurbopackBundleAnalyzer) {
     await appendProgressLog(progressContext, "[Turbopack] Capturing baseline NDJSON bundle metrics")
-    beforeBundleMetrics = await collectTurbopackBundleMetrics(sandbox, projectDir, progressContext, "baseline")
+    beforeBundleMetrics = await collectTurbopackBundleMetrics(
+      sandbox,
+      effectiveProjectDir,
+      progressContext,
+      "baseline"
+    )
   }
 
   // Capture "before" Web Vitals via CDP before the agent makes any changes
@@ -1323,7 +1345,7 @@ export async function agentFixLoopStep(
     beforeCls,
     beforeGrade,
     startPath,
-    projectDir,
+    effectiveProjectDir,
     customPrompt,
     progressContext?.workflowType,
     crawlDepth
@@ -1376,12 +1398,17 @@ export async function agentFixLoopStep(
   if (isTurbopackBundleAnalyzer) {
     await appendProgressLog(progressContext, "[Turbopack] Re-running analyzer for after-fix bundle metrics")
     try {
-      await prepareTurbopackNdjsonArtifacts(sandbox, projectDir, progressContext)
+      await prepareTurbopackNdjsonArtifacts(sandbox, effectiveProjectDir, progressContext)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       await appendProgressLog(progressContext, `[Turbopack] Failed to regenerate NDJSON after changes: ${message}`)
     }
-    const afterBundleMetrics = await collectTurbopackBundleMetrics(sandbox, projectDir, progressContext, "after-fix")
+    const afterBundleMetrics = await collectTurbopackBundleMetrics(
+      sandbox,
+      effectiveProjectDir,
+      progressContext,
+      "after-fix"
+    )
     if (beforeBundleMetrics && afterBundleMetrics) {
       turbopackBundleComparison = buildTurbopackBundleComparison(beforeBundleMetrics, afterBundleMetrics)
       await appendProgressLog(
@@ -2419,6 +2446,54 @@ function synthesizeFinalOutputFromSteps(steps: unknown[], workflowType: string):
 // ============================================================
 // Helper Functions
 // ============================================================
+
+async function resolveSandboxProjectDir(
+  sandbox: Sandbox,
+  projectDir: string | undefined,
+  projectName: string,
+  progressContext?: ProgressContext | null
+): Promise<string | undefined> {
+  const normalizedInput = projectDir?.replace(/^\/+|\/+$/g, "") || ""
+  if (normalizedInput) {
+    const inputCheck = await runSandboxCommand(sandbox, "sh", [
+      "-c",
+      `if [ -f "/vercel/sandbox/${normalizedInput}/package.json" ]; then echo ok; fi`
+    ])
+    if (inputCheck.stdout.includes("ok")) {
+      await appendProgressLog(progressContext, `[Sandbox] Using project directory: ${normalizedInput}`)
+      return normalizedInput
+    }
+    await appendProgressLog(
+      progressContext,
+      `[Sandbox] Provided project directory not found: ${normalizedInput} (attempting monorepo auto-detect)`
+    )
+  }
+
+  const detectScript = `
+const fs = require("fs")
+const path = require("path")
+const root = "/vercel/sandbox"
+const name = ${JSON.stringify(projectName)}
+const candidates = [\`apps/\${name}\`, \`packages/\${name}\`, \`projects/\${name}\`, \`services/\${name}\`, name]
+for (const candidate of candidates) {
+  const abs = path.join(root, candidate)
+  if (fs.existsSync(path.join(abs, "package.json"))) {
+    process.stdout.write(candidate)
+    process.exit(0)
+  }
+}
+process.stdout.write("")
+`
+  const detectResult = await runSandboxCommand(sandbox, "sh", ["-c", `node <<'NODE'\n${detectScript}\nNODE`])
+  const resolved = detectResult.stdout.trim()
+  if (resolved) {
+    await appendProgressLog(progressContext, `[Sandbox] Auto-detected monorepo project directory: ${resolved}`)
+    return resolved
+  }
+
+  await appendProgressLog(progressContext, "[Sandbox] Could not auto-detect project directory, using repo root")
+  return normalizedInput || undefined
+}
 
 async function readSandboxSkillsInfo(
   sandbox: Sandbox
