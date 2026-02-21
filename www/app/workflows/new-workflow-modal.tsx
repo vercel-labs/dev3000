@@ -571,8 +571,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
     const patRepoOwner = selectedRepoOwner
     const patRepoName = selectedRepoName
     const projectStorageKey = projectIdForPat ? getGithubPatStorageKey(projectIdForPat) : null
-    const repoStorageKey =
-      patRepoOwner && patRepoName ? getGithubPatRepoStorageKey(patRepoOwner, patRepoName) : null
+    const repoStorageKey = patRepoOwner && patRepoName ? getGithubPatRepoStorageKey(patRepoOwner, patRepoName) : null
 
     if (projectStorageKey) {
       const storedProjectPat = localStorage.getItem(projectStorageKey)
@@ -1756,7 +1755,9 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                       {selectedTeam ? `${selectedTeam.slug}/${selectedProject.name}` : selectedProject.name}
                     </div>
                     {selectedRepoOwner && selectedRepoName && (
-                      <div className="mt-0.5 text-xs text-muted-foreground">Repo: {selectedRepoOwner}/{selectedRepoName}</div>
+                      <div className="mt-0.5 text-xs text-muted-foreground">
+                        Repo: {selectedRepoOwner}/{selectedRepoName}
+                      </div>
                     )}
                   </div>
                   <div className="space-y-4">
