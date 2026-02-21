@@ -10,6 +10,16 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.168",
+    date: "2026-02-21",
+    type: "patch",
+    highlights: [
+      "Fix tmux --with-agent startup when --command contains spaces and quoted values (closes #94, thanks @vehclab).",
+      'Fix false "port already in use" errors by switching to bind-based port availability checks (closes #95, thanks @someblue).'
+    ]
+  },
+
+  {
     version: "0.0.167",
     date: "2026-02-11",
     type: "minor",

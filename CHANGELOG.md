@@ -4,6 +4,13 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.168] - 2026-02-21
+
+**Patch Release**
+
+- Fix tmux --with-agent startup when --command contains spaces and quoted values (closes #94, thanks @vehclab).
+- Fix false "port already in use" errors by switching to bind-based port availability checks (closes #95, thanks @someblue).
+
 ## [0.0.167] - 2026-02-11
 
 **Feature Release**
