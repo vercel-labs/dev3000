@@ -1037,6 +1037,54 @@ head -n 300 ${outputDir}/routes.ndjson 2>/dev/null | sort -t: -k2,2nr | head -10
   }
 }
 
+async function pullDevelopmentEnvViaCliInSandbox(
+  sandbox: Sandbox,
+  projectDir: string | undefined,
+  projectId: string | undefined,
+  teamId: string | undefined,
+  vercelToken: string | undefined,
+  progressContext?: ProgressContext | null
+): Promise<void> {
+  if (!projectId || !vercelToken) {
+    return
+  }
+
+  const normalizedProjectDir = projectDir ? projectDir.replace(/^\/+|\/+$/g, "") : ""
+  const projectCwd = normalizedProjectDir ? `/vercel/sandbox/${normalizedProjectDir}` : "/vercel/sandbox"
+  const tokenBase64 = Buffer.from(vercelToken, "utf8").toString("base64")
+  const scopeArg = teamId ? ` --scope "${teamId}"` : ""
+
+  await appendProgressLog(progressContext, "[Sandbox] Falling back to vercel env pull (.env.local)...")
+
+  const pullResult = await runSandboxCommand(sandbox, "sh", [
+    "-c",
+    `cd ${projectCwd} && \
+TOKEN="$(printf '%s' '${tokenBase64}' | base64 -d 2>/dev/null)" && \
+if [ -z "$TOKEN" ]; then echo "missing token"; exit 1; fi && \
+export VERCEL_TOKEN="$TOKEN" && \
+export VERCEL_PROJECT_ID="${projectId}" && \
+if [ -n "${teamId || ""}" ]; then export VERCEL_ORG_ID="${teamId}"; fi && \
+VERCEL_CMD="" && \
+if command -v vc >/dev/null 2>&1; then VERCEL_CMD="vc"; \
+elif command -v vercel >/dev/null 2>&1; then VERCEL_CMD="vercel"; \
+elif [ -x node_modules/.bin/vercel ]; then VERCEL_CMD="./node_modules/.bin/vercel"; \
+elif [ -x ../../node_modules/.bin/vercel ]; then VERCEL_CMD="../../node_modules/.bin/vercel"; \
+elif command -v corepack >/dev/null 2>&1; then VERCEL_CMD="corepack pnpm -C ${projectCwd} exec vercel"; fi && \
+if [ -z "$VERCEL_CMD" ]; then echo "vercel CLI not found"; exit 127; fi && \
+echo "[Sandbox] Pulling development env vars via: $VERCEL_CMD env pull .env.local --environment development --yes${scopeArg}" && \
+eval "$VERCEL_CMD env pull .env.local --environment development --yes${scopeArg}" && \
+test -f .env.local && echo "[Sandbox] .env.local created"`
+  ])
+
+  if (pullResult.exitCode === 0) {
+    await appendProgressLog(progressContext, "[Sandbox] vercel env pull succeeded (.env.local)")
+    return
+  }
+
+  const detail = (pullResult.stderr || pullResult.stdout || "unknown error").slice(0, 500).trim()
+  await appendProgressLog(progressContext, `[Sandbox] vercel env pull failed: ${detail}`)
+}
+
 export async function initSandboxStep(
   repoUrl: string,
   branch: string,
@@ -1076,6 +1124,7 @@ export async function initSandboxStep(
   }
 
   const developmentEnv: Record<string, string> = {}
+  let developmentEnvLoadFailed = false
   if (projectId && vercelOidcToken) {
     try {
       await appendProgressLog(progressContext, "[Sandbox] Loading development environment variables...")
@@ -1106,12 +1155,14 @@ export async function initSandboxStep(
           progressContext,
           `[Sandbox] Could not load development env vars (HTTP ${response.status}): ${errorText.slice(0, 180)}`
         )
+        developmentEnvLoadFailed = true
       }
     } catch (error) {
       await appendProgressLog(
         progressContext,
         `[Sandbox] Could not load development env vars: ${error instanceof Error ? error.message : String(error)}`
       )
+      developmentEnvLoadFailed = true
     }
   } else {
     await appendProgressLog(
@@ -1167,6 +1218,18 @@ export async function initSandboxStep(
       projectName,
       progressContext
     )
+
+    if (developmentEnvLoadFailed || Object.keys(developmentEnv).length === 0) {
+      await pullDevelopmentEnvViaCliInSandbox(
+        sandboxResult.sandbox,
+        effectiveProjectDir,
+        projectId,
+        teamId,
+        vercelOidcToken,
+        progressContext
+      )
+    }
+
     timer.start("Generate Turbopack NDJSON artifacts")
     await updateProgress(progressContext, 1, "Running Next.js analyzer build...")
     const ndjsonResult = await prepareTurbopackNdjsonArtifacts(

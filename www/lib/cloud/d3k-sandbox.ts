@@ -587,8 +587,9 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
           `const fs=require("fs");
 const env=JSON.parse(process.env.PROJECT_ENV_JSON||"{}");
 const lines=Object.entries(env).map(([k,v])=>\`\${k}=\${JSON.stringify(String(v ?? ""))}\`).join("\\n");
+fs.writeFileSync(".env.local", lines + (lines ? "\\n" : ""));
 fs.writeFileSync(".env.development.local", lines + (lines ? "\\n" : ""));
-console.log("wrote .env.development.local");`
+console.log("wrote .env.local and .env.development.local");`
         ],
         cwd: sandboxCwd,
         env: {
@@ -597,7 +598,7 @@ console.log("wrote .env.development.local");`
       })
       if (envWriteResult.exitCode !== 0) {
         throw new Error(
-          `Failed to write .env.development.local: ${envWriteResult.stderr || envWriteResult.stdout || "unknown error"}`
+          `Failed to write development env files: ${envWriteResult.stderr || envWriteResult.stdout || "unknown error"}`
         )
       }
     }
