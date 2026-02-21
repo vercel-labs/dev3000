@@ -43,7 +43,9 @@ export async function GET(req: NextRequest) {
     code_challenge,
     code_challenge_method: "S256",
     response_type: "code",
-    scope: "openid email profile offline_access user team project deployment",
+    // Include write-level project/deployment scopes so workflow sandbox setup can read
+    // development env vars and other protected project settings.
+    scope: "openid email profile offline_access user team project project.write deployment deployment.write",
     prompt: "consent"
   })
 
