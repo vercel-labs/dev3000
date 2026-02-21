@@ -1322,12 +1322,7 @@ export async function agentFixLoopStep(
   let beforeBundleMetrics: TurbopackBundleMetricsSnapshot | null = null
   if (isTurbopackBundleAnalyzer) {
     await appendProgressLog(progressContext, "[Turbopack] Capturing baseline NDJSON bundle metrics")
-    beforeBundleMetrics = await collectTurbopackBundleMetrics(
-      sandbox,
-      effectiveProjectDir,
-      progressContext,
-      "baseline"
-    )
+    beforeBundleMetrics = await collectTurbopackBundleMetrics(sandbox, effectiveProjectDir, progressContext, "baseline")
   }
 
   // Capture "before" Web Vitals via CDP before the agent makes any changes
