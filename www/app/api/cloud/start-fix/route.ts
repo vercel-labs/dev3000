@@ -130,9 +130,11 @@ export async function POST(request: Request) {
     // Clear workflow log file at start of new workflow
     clearWorkflowLog()
 
-    // Get VERCEL_OIDC_TOKEN from request header (runtime token)
-    const vercelOidcToken = request.headers.get("x-vercel-oidc-token") || process.env.VERCEL_OIDC_TOKEN
-    workflowLog(`[Start Fix] VERCEL_OIDC_TOKEN available: ${!!vercelOidcToken}`)
+    // Resolve Vercel API token for downstream project API calls inside the workflow.
+    // Prefer request-scoped auth token (fresh user token), then explicit header, then env fallback.
+    const vercelApiToken =
+      accessToken || request.headers.get("x-vercel-oidc-token") || process.env.VERCEL_OIDC_TOKEN
+    workflowLog(`[Start Fix] Vercel API token available: ${!!vercelApiToken}`)
 
     const body = await request.json()
     const {
@@ -252,7 +254,7 @@ export async function POST(request: Request) {
       projectId: analysisTargetType === "url" ? undefined : projectId,
       teamId: analysisTargetType === "url" ? undefined : teamId,
       projectName,
-      vercelOidcToken,
+      vercelOidcToken: vercelApiToken,
       runId, // Pass runId to workflow for tracking
       userId, // For progress updates
       timestamp: runTimestamp, // For progress updates

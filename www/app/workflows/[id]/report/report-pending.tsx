@@ -164,18 +164,14 @@ export function ReportPending({ runId, userId, workflowType, projectName }: Repo
 
         <div className="bg-card border border-border rounded-lg p-4">
           <div className="text-sm font-medium text-foreground mb-3">Progress</div>
-          <div className="min-h-6 mb-3 text-xs text-muted-foreground">
-            {sandboxUrl && !hasError ? (
-              <>
-                <span className="font-medium">Sandbox:</span>{" "}
-                <a href={sandboxUrl} target="_blank" rel="noopener noreferrer" className="font-mono hover:underline">
-                  {sandboxUrl}
-                </a>
-              </>
-            ) : (
-              <span>&nbsp;</span>
-            )}
-          </div>
+          {sandboxUrl && !hasError && (
+            <div className="mb-3 text-xs text-muted-foreground">
+              <span className="font-medium">Sandbox:</span>{" "}
+              <a href={sandboxUrl} target="_blank" rel="noopener noreferrer" className="font-mono hover:underline">
+                {sandboxUrl}
+              </a>
+            </div>
+          )}
           <div className="space-y-2">
             {STEP_LABELS.map((label, index) => {
               const isDone = activeIndex !== null && index < activeIndex
