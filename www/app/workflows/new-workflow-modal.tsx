@@ -195,6 +195,12 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
 
   const getGithubPatStorageKey = useCallback((projectId: string) => `d3k_github_pat_${projectId}`, [])
   const getNpmTokenStorageKey = useCallback((projectId: string) => `d3k_npm_token_${projectId}`, [])
+  const getGithubPatRepoStorageKey = useCallback((repoOwner: string, repoName: string) => {
+    return `d3k_github_pat_repo_${repoOwner}/${repoName}`
+  }, [])
+  const getNpmTokenRepoStorageKey = useCallback((repoOwner: string, repoName: string) => {
+    return `d3k_npm_token_repo_${repoOwner}/${repoName}`
+  }, [])
 
   const workflowSkillLabels: Record<string, string[]> = {
     "design-guidelines": ["d3k", "vercel-design-guidelines"],
@@ -290,6 +296,42 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   useEffect(() => {
     if (!isOpen) return
 
+    const effectiveTarget = selectedTarget || progressTarget
+    const isUrlProgressFlow = effectiveTarget === "url"
+    const hasChosenTarget = Boolean(effectiveTarget)
+    const hasChosenWorkflowType = Boolean(_selectedType) || progressHasType
+
+    let stepIndex = 1
+    let totalSteps = 1
+    if (!hasChosenTarget) {
+      stepIndex = 1
+      totalSteps = 1
+    } else if (isUrlProgressFlow) {
+      totalSteps = 4
+      if (!hasChosenWorkflowType) {
+        stepIndex = 2
+      } else if (step === "running") {
+        stepIndex = 4
+      } else {
+        stepIndex = 3
+      }
+    } else {
+      totalSteps = 6
+      if (!hasChosenWorkflowType) {
+        stepIndex = 2
+      } else if (step === "team") {
+        stepIndex = 3
+      } else if (step === "project") {
+        stepIndex = 4
+      } else if (step === "options") {
+        stepIndex = 5
+      } else if (step === "running") {
+        stepIndex = 6
+      } else {
+        stepIndex = 2
+      }
+    }
+
     const workflowLabel = _selectedType ? WORKFLOW_DISPLAY_NAMES[_selectedType] || _selectedType : ""
     const projectLabel = selectedProject?.name || searchParams.get("project") || ""
     let urlLabel = ""
@@ -302,9 +344,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
     }
 
     let title = "d3k Workflow"
-    if (step === "running") {
-      title = workflowLabel ? `${workflowLabel} Running` : "Workflow Running"
-    } else if (step === "options") {
+    if (step === "options" || step === "running") {
       const targetLabel = projectLabel || urlLabel
       title =
         workflowLabel && targetLabel
@@ -325,8 +365,19 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
             : "Choose Workflow Target"
     }
 
-    document.title = `${title} | d3k`
-  }, [isOpen, step, _selectedType, selectedProject?.name, selectedTeam?.name, selectedTarget, publicUrl, searchParams])
+    document.title = `Step ${stepIndex}/${totalSteps}: ${title} | d3k`
+  }, [
+    isOpen,
+    step,
+    _selectedType,
+    progressHasType,
+    progressTarget,
+    selectedProject?.name,
+    selectedTeam?.name,
+    selectedTarget,
+    publicUrl,
+    searchParams
+  ])
 
   // Reset modal state when closed
   useEffect(() => {
@@ -444,8 +495,12 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
 
     const pollStatus = async () => {
       try {
-        // Use production API for consistent status (same domain as start-fix)
-        const response = await fetch(`${DEV3000_API_URL}/api/workflows?userId=${userId}`)
+        const workflowApiBaseUrl =
+          typeof window !== "undefined" &&
+          (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
+            ? window.location.origin
+            : DEV3000_API_URL
+        const response = await fetch(`${workflowApiBaseUrl}/api/workflows?userId=${userId}`)
         if (!response.ok) return
 
         const data = (await response.json()) as {
@@ -513,28 +568,55 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
     if (step !== "options" || isUrlAuditType) return
 
     const projectIdForPat = selectedProject?.id || searchParams.get("project")
-    if (!projectIdForPat) return
+    const patRepoOwner = selectedRepoOwner
+    const patRepoName = selectedRepoName
+    const projectStorageKey = projectIdForPat ? getGithubPatStorageKey(projectIdForPat) : null
+    const repoStorageKey =
+      patRepoOwner && patRepoName ? getGithubPatRepoStorageKey(patRepoOwner, patRepoName) : null
 
-    const projectStorageKey = getGithubPatStorageKey(projectIdForPat)
-    const storedProjectPat = localStorage.getItem(projectStorageKey)
-    if (storedProjectPat !== null) {
-      console.log("[GitHub PAT] Loaded from localStorage for project", projectIdForPat)
-      setGithubPat(storedProjectPat)
-      return
+    if (projectStorageKey) {
+      const storedProjectPat = localStorage.getItem(projectStorageKey)
+      if (storedProjectPat !== null) {
+        console.log("[GitHub PAT] Loaded from localStorage for project", projectIdForPat)
+        setGithubPat(storedProjectPat)
+        return
+      }
+    }
+    if (repoStorageKey) {
+      const storedRepoPat = localStorage.getItem(repoStorageKey)
+      if (storedRepoPat !== null) {
+        console.log("[GitHub PAT] Loaded from localStorage for repo", `${patRepoOwner}/${patRepoName}`)
+        setGithubPat(storedRepoPat)
+        return
+      }
     }
 
     const legacyPat = localStorage.getItem(LEGACY_GITHUB_PAT_STORAGE_KEY)
     if (legacyPat) {
-      // One-time migration from global key to project-scoped key.
-      localStorage.setItem(projectStorageKey, legacyPat)
+      // One-time migration from global key to scoped keys.
+      if (projectStorageKey) {
+        localStorage.setItem(projectStorageKey, legacyPat)
+      }
+      if (repoStorageKey) {
+        localStorage.setItem(repoStorageKey, legacyPat)
+      }
       localStorage.removeItem(LEGACY_GITHUB_PAT_STORAGE_KEY)
-      console.log("[GitHub PAT] Migrated legacy localStorage token to project", projectIdForPat)
+      console.log("[GitHub PAT] Migrated legacy localStorage token")
       setGithubPat(legacyPat)
       return
     }
 
     setGithubPat("")
-  }, [getGithubPatStorageKey, isUrlAuditType, searchParams, selectedProject, step])
+  }, [
+    getGithubPatRepoStorageKey,
+    getGithubPatStorageKey,
+    isUrlAuditType,
+    searchParams,
+    selectedProject,
+    selectedRepoName,
+    selectedRepoOwner,
+    step
+  ])
 
   // Load NPM token from localStorage when on options step.
   // Tokens are scoped per project to avoid cross-project leakage.
@@ -542,27 +624,54 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
     if (step !== "options" || isUrlAuditType) return
 
     const projectIdForToken = selectedProject?.id || searchParams.get("project")
-    if (!projectIdForToken) return
+    const tokenRepoOwner = selectedRepoOwner
+    const tokenRepoName = selectedRepoName
+    const projectStorageKey = projectIdForToken ? getNpmTokenStorageKey(projectIdForToken) : null
+    const repoStorageKey =
+      tokenRepoOwner && tokenRepoName ? getNpmTokenRepoStorageKey(tokenRepoOwner, tokenRepoName) : null
 
-    const projectStorageKey = getNpmTokenStorageKey(projectIdForToken)
-    const storedProjectToken = localStorage.getItem(projectStorageKey)
-    if (storedProjectToken !== null) {
-      console.log("[NPM Token] Loaded from localStorage for project", projectIdForToken)
-      setNpmToken(storedProjectToken)
-      return
+    if (projectStorageKey) {
+      const storedProjectToken = localStorage.getItem(projectStorageKey)
+      if (storedProjectToken !== null) {
+        console.log("[NPM Token] Loaded from localStorage for project", projectIdForToken)
+        setNpmToken(storedProjectToken)
+        return
+      }
+    }
+    if (repoStorageKey) {
+      const storedRepoToken = localStorage.getItem(repoStorageKey)
+      if (storedRepoToken !== null) {
+        console.log("[NPM Token] Loaded from localStorage for repo", `${tokenRepoOwner}/${tokenRepoName}`)
+        setNpmToken(storedRepoToken)
+        return
+      }
     }
 
     const legacyToken = localStorage.getItem(LEGACY_NPM_TOKEN_STORAGE_KEY)
     if (legacyToken) {
-      localStorage.setItem(projectStorageKey, legacyToken)
+      if (projectStorageKey) {
+        localStorage.setItem(projectStorageKey, legacyToken)
+      }
+      if (repoStorageKey) {
+        localStorage.setItem(repoStorageKey, legacyToken)
+      }
       localStorage.removeItem(LEGACY_NPM_TOKEN_STORAGE_KEY)
-      console.log("[NPM Token] Migrated legacy localStorage token to project", projectIdForToken)
+      console.log("[NPM Token] Migrated legacy localStorage token")
       setNpmToken(legacyToken)
       return
     }
 
     setNpmToken("")
-  }, [getNpmTokenStorageKey, isUrlAuditType, searchParams, selectedProject, step])
+  }, [
+    getNpmTokenRepoStorageKey,
+    getNpmTokenStorageKey,
+    isUrlAuditType,
+    searchParams,
+    selectedProject,
+    selectedRepoName,
+    selectedRepoOwner,
+    step
+  ])
 
   // Determine repository visibility so we can require PAT only when needed.
   useEffect(() => {
@@ -947,11 +1056,12 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       // Initial status - will be updated by polling
       setWorkflowStatus("Starting workflow...")
 
-      // Always call the production API directly - this ensures workflows run on Vercel
-      // infrastructure with full durability and observability, whether we're running
-      // locally or in production. The production API has CORS headers configured.
-      // NOTE: Use dev3000.ai directly (not d3k.dev) to avoid redirect which breaks CORS preflight
-      const apiUrl = `${DEV3000_API_URL}/api/cloud/start-fix`
+      const workflowApiBaseUrl =
+        typeof window !== "undefined" &&
+        (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1")
+          ? window.location.origin
+          : DEV3000_API_URL
+      const apiUrl = `${workflowApiBaseUrl}/api/cloud/start-fix`
 
       console.log("[Start Workflow] API URL:", apiUrl)
       console.log("[Start Workflow] Request body:", body)
@@ -1567,7 +1677,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
           {/* Step 4: Configure Options */}
           {step === "options" && (
             <div>
-              <h3 className="text-lg font-semibold mb-4 text-foreground">Configure Options</h3>
+              <h3 className="text-lg font-semibold mb-3 text-foreground">Configure Options</h3>
               {isUrlAuditType ? (
                 <>
                   <div className="mb-6 text-left">
@@ -1640,9 +1750,14 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                 </div>
               ) : (
                 <>
-                  <div className="mb-6 p-4 bg-muted rounded-lg">
-                    <div className="text-sm text-muted-foreground mb-2">Selected Project:</div>
-                    <div className="font-semibold text-foreground">{selectedProject.name}</div>
+                  <div className="mb-4 rounded-md border border-border/60 bg-muted/30 px-3 py-2">
+                    <div className="text-xs text-muted-foreground">Selected Project</div>
+                    <div className="mt-0.5 font-semibold text-foreground">
+                      {selectedTeam ? `${selectedTeam.slug}/${selectedProject.name}` : selectedProject.name}
+                    </div>
+                    {selectedRepoOwner && selectedRepoName && (
+                      <div className="mt-0.5 text-xs text-muted-foreground">Repo: {selectedRepoOwner}/{selectedRepoName}</div>
+                    )}
                   </div>
                   <div className="space-y-4">
                     {hasGitHubRepoInfo && (
@@ -1761,14 +1876,33 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                             setGithubPat(newPat)
                             // Save to localStorage for this project only
                             const projectIdForPat = selectedProject?.id || searchParams.get("project")
-                            if (!projectIdForPat) return
-                            const storageKey = getGithubPatStorageKey(projectIdForPat)
+                            const repoOwnerForPat = selectedRepoOwner
+                            const repoNameForPat = selectedRepoName
+                            const storageKey = projectIdForPat ? getGithubPatStorageKey(projectIdForPat) : null
+                            const repoStorageKey =
+                              repoOwnerForPat && repoNameForPat
+                                ? getGithubPatRepoStorageKey(repoOwnerForPat, repoNameForPat)
+                                : null
                             if (newPat) {
-                              localStorage.setItem(storageKey, newPat)
-                              console.log("[GitHub PAT] Saved to localStorage for project", projectIdForPat)
+                              if (storageKey) {
+                                localStorage.setItem(storageKey, newPat)
+                                console.log("[GitHub PAT] Saved to localStorage for project", projectIdForPat)
+                              }
+                              if (repoStorageKey) {
+                                localStorage.setItem(repoStorageKey, newPat)
+                                console.log(
+                                  "[GitHub PAT] Saved to localStorage for repo",
+                                  `${repoOwnerForPat}/${repoNameForPat}`
+                                )
+                              }
                             } else {
-                              localStorage.removeItem(storageKey)
-                              console.log("[GitHub PAT] Removed from localStorage for project", projectIdForPat)
+                              if (storageKey) {
+                                localStorage.removeItem(storageKey)
+                              }
+                              if (repoStorageKey) {
+                                localStorage.removeItem(repoStorageKey)
+                              }
+                              console.log("[GitHub PAT] Removed from localStorage")
                             }
                           }}
                           className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground font-mono text-sm"
@@ -1820,14 +1954,33 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                             setNpmToken(newToken)
 
                             const projectIdForToken = selectedProject?.id || searchParams.get("project")
-                            if (!projectIdForToken) return
-                            const storageKey = getNpmTokenStorageKey(projectIdForToken)
+                            const repoOwnerForToken = selectedRepoOwner
+                            const repoNameForToken = selectedRepoName
+                            const storageKey = projectIdForToken ? getNpmTokenStorageKey(projectIdForToken) : null
+                            const repoStorageKey =
+                              repoOwnerForToken && repoNameForToken
+                                ? getNpmTokenRepoStorageKey(repoOwnerForToken, repoNameForToken)
+                                : null
                             if (newToken) {
-                              localStorage.setItem(storageKey, newToken)
-                              console.log("[NPM Token] Saved to localStorage for project", projectIdForToken)
+                              if (storageKey) {
+                                localStorage.setItem(storageKey, newToken)
+                                console.log("[NPM Token] Saved to localStorage for project", projectIdForToken)
+                              }
+                              if (repoStorageKey) {
+                                localStorage.setItem(repoStorageKey, newToken)
+                                console.log(
+                                  "[NPM Token] Saved to localStorage for repo",
+                                  `${repoOwnerForToken}/${repoNameForToken}`
+                                )
+                              }
                             } else {
-                              localStorage.removeItem(storageKey)
-                              console.log("[NPM Token] Removed from localStorage for project", projectIdForToken)
+                              if (storageKey) {
+                                localStorage.removeItem(storageKey)
+                              }
+                              if (repoStorageKey) {
+                                localStorage.removeItem(repoStorageKey)
+                              }
+                              console.log("[NPM Token] Removed from localStorage")
                             }
                           }}
                           className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground font-mono text-sm"
