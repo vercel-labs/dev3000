@@ -699,7 +699,7 @@ EOF`
           ? "bun install"
           : resolvedPackageManager === "pnpm"
             ? normalizedProjectDir
-              ? `corepack pnpm -C /vercel/sandbox install --filter "./${normalizedProjectDir}..."`
+              ? `corepack pnpm -C ${sandboxCwd} install --filter .`
               : "corepack pnpm install"
             : resolvedPackageManager === "yarn"
               ? "corepack yarn install"
