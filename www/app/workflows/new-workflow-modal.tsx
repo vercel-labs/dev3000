@@ -463,28 +463,9 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
         }
         if (!data.success || !Array.isArray(data.runs)) return
 
-        // Find the run - either by activeRunId or by matching project + running status
-        let run:
-          | {
-              id: string
-              projectName?: string
-              status?: string
-              currentStep?: string
-              sandboxUrl?: string
-              reportBlobUrl?: string
-              prUrl?: string
-              error?: string
-            }
-          | undefined
-        if (activeRunId) {
-          run = data.runs.find((r) => r.id === activeRunId)
-        } else if (selectedProject) {
-          // Find the most recent running workflow for this project
-          run = data.runs.find((r) => r.projectName === selectedProject.name && r.status === "running")
-          if (run) {
-            setActiveRunId(run.id)
-          }
-        }
+        // Track only the run we explicitly started to avoid jumping to stale runs.
+        if (!activeRunId) return
+        const run = data.runs.find((r) => r.id === activeRunId)
         if (!run) return
 
         if (!hasNavigatedToReportRef.current && redirectedRunId !== run.id) {
@@ -1805,7 +1786,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                             Open GitHub token settings
                           </a>
                         </p>
-                        <div className="mt-3 rounded-md border border-border p-3 bg-muted/20">
+                        <div className="mt-3">
                           <label
                             className={`inline-flex items-center gap-2 text-sm font-medium ${
                               hasGitHubPat
