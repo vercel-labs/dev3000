@@ -72,6 +72,7 @@ function getAnalysisTarget(typeParam: string | null, targetParam: string | null)
 
 const RECENT_PROJECTS_KEY = "d3k_recent_projects"
 const LEGACY_GITHUB_PAT_STORAGE_KEY = "d3k_github_pat"
+const LEGACY_NPM_TOKEN_STORAGE_KEY = "d3k_npm_token"
 const WORKFLOW_DISPLAY_NAMES: Record<string, string> = {
   "cloud-fix": "CLS Fix",
   "design-guidelines": "Design Guidelines Review",
@@ -187,8 +188,12 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   const [loadingBranches, setLoadingBranches] = useState(false)
   const [branchesError, setBranchesError] = useState(false)
   const loadedTeamIdRef = useRef<string | null>(null)
+  const teamsRequestInFlightRef = useRef<Promise<void> | null>(null)
+  const teamsAuthCooldownUntilRef = useRef(0)
+  const teamsRetryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const getGithubPatStorageKey = useCallback((projectId: string) => `d3k_github_pat_${projectId}`, [])
+  const getNpmTokenStorageKey = useCallback((projectId: string) => `d3k_npm_token_${projectId}`, [])
 
   const workflowSkillLabels: Record<string, string[]> = {
     "design-guidelines": ["d3k", "vercel-design-guidelines"],
@@ -353,9 +358,24 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       setLoadingBranches(false)
       setBranchesError(false)
       loadedTeamIdRef.current = null
+      teamsAuthCooldownUntilRef.current = 0
+      teamsRequestInFlightRef.current = null
+      if (teamsRetryTimeoutRef.current) {
+        clearTimeout(teamsRetryTimeoutRef.current)
+        teamsRetryTimeoutRef.current = null
+      }
       router.replace("/workflows", { scroll: false })
     }
   }, [isOpen, router])
+
+  useEffect(() => {
+    return () => {
+      if (teamsRetryTimeoutRef.current) {
+        clearTimeout(teamsRetryTimeoutRef.current)
+        teamsRetryTimeoutRef.current = null
+      }
+    }
+  }, [])
 
   // Load teams when needed
   // biome-ignore lint/correctness/useExhaustiveDependencies: loadTeams is stable and doesn't need to be a dependency
@@ -532,6 +552,34 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
     setGithubPat("")
   }, [getGithubPatStorageKey, isUrlAuditType, searchParams, selectedProject, step])
 
+  // Load NPM token from localStorage when on options step.
+  // Tokens are scoped per project to avoid cross-project leakage.
+  useEffect(() => {
+    if (step !== "options" || isUrlAuditType) return
+
+    const projectIdForToken = selectedProject?.id || searchParams.get("project")
+    if (!projectIdForToken) return
+
+    const projectStorageKey = getNpmTokenStorageKey(projectIdForToken)
+    const storedProjectToken = localStorage.getItem(projectStorageKey)
+    if (storedProjectToken !== null) {
+      console.log("[NPM Token] Loaded from localStorage for project", projectIdForToken)
+      setNpmToken(storedProjectToken)
+      return
+    }
+
+    const legacyToken = localStorage.getItem(LEGACY_NPM_TOKEN_STORAGE_KEY)
+    if (legacyToken) {
+      localStorage.setItem(projectStorageKey, legacyToken)
+      localStorage.removeItem(LEGACY_NPM_TOKEN_STORAGE_KEY)
+      console.log("[NPM Token] Migrated legacy localStorage token to project", projectIdForToken)
+      setNpmToken(legacyToken)
+      return
+    }
+
+    setNpmToken("")
+  }, [getNpmTokenStorageKey, isUrlAuditType, searchParams, selectedProject, step])
+
   // Determine repository visibility so we can require PAT only when needed.
   useEffect(() => {
     async function checkRepoVisibility() {
@@ -581,27 +629,66 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
     setRecentProjects(next)
   }, [selectedTeam, selectedProject, isUrlAuditType])
 
-  async function loadTeams() {
+  function scheduleTeamsRetry(delayMs: number) {
+    if (teamsRetryTimeoutRef.current) return
     setLoadingTeams(true)
-    try {
-      const response = await fetch("/api/teams")
-      const data = await response.json()
-      if (data.success) {
-        // Sort teams alphabetically by name (personal account first if present, then alphabetically)
-        const sortedTeams = [...data.teams].sort((a, b) => {
-          // Personal accounts first
-          if (a.isPersonal && !b.isPersonal) return -1
-          if (!a.isPersonal && b.isPersonal) return 1
-          // Then alphabetically by name (case-insensitive)
-          return a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
-        })
-        setTeams(sortedTeams)
+    setTeamLoadAttempted(false)
+    teamsRetryTimeoutRef.current = setTimeout(() => {
+      teamsRetryTimeoutRef.current = null
+      void loadTeams({ force: true })
+    }, delayMs)
+  }
+
+  async function loadTeams(options?: { force?: boolean }) {
+    const force = options?.force ?? false
+    if (teamsRequestInFlightRef.current) {
+      await teamsRequestInFlightRef.current
+      return
+    }
+
+    const now = Date.now()
+    const cooldownRemainingMs = teamsAuthCooldownUntilRef.current - now
+    if (!force && cooldownRemainingMs > 0) {
+      scheduleTeamsRetry(cooldownRemainingMs)
+      return
+    }
+
+    setLoadingTeams(true)
+    const request = (async () => {
+      try {
+        const response = await fetch("/api/teams")
+        if (response.status === 401) {
+          teamsAuthCooldownUntilRef.current = Date.now() + 1500
+          scheduleTeamsRetry(1500)
+          return
+        }
+
+        const data = await response.json()
+        if (data.success) {
+          // Sort teams alphabetically by name (personal account first if present, then alphabetically)
+          const sortedTeams = [...data.teams].sort((a, b) => {
+            // Personal accounts first
+            if (a.isPersonal && !b.isPersonal) return -1
+            if (!a.isPersonal && b.isPersonal) return 1
+            // Then alphabetically by name (case-insensitive)
+            return a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
+          })
+          setTeams(sortedTeams)
+        }
+        setTeamLoadAttempted(true)
+      } catch (error) {
+        console.error("Failed to load teams:", error)
+        setTeamLoadAttempted(true)
+      } finally {
+        setLoadingTeams(teamsRetryTimeoutRef.current !== null)
       }
-    } catch (error) {
-      console.error("Failed to load teams:", error)
+    })()
+
+    teamsRequestInFlightRef.current = request
+    try {
+      await request
     } finally {
-      setLoadingTeams(false)
-      setTeamLoadAttempted(true)
+      teamsRequestInFlightRef.current = null
     }
   }
 
@@ -1742,7 +1829,21 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                           type="password"
                           id={npmTokenId}
                           value={npmToken}
-                          onChange={(e) => setNpmToken(e.target.value)}
+                          onChange={(e) => {
+                            const newToken = e.target.value
+                            setNpmToken(newToken)
+
+                            const projectIdForToken = selectedProject?.id || searchParams.get("project")
+                            if (!projectIdForToken) return
+                            const storageKey = getNpmTokenStorageKey(projectIdForToken)
+                            if (newToken) {
+                              localStorage.setItem(storageKey, newToken)
+                              console.log("[NPM Token] Saved to localStorage for project", projectIdForToken)
+                            } else {
+                              localStorage.removeItem(storageKey)
+                              console.log("[NPM Token] Removed from localStorage for project", projectIdForToken)
+                            }
+                          }}
                           className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground font-mono text-sm"
                           placeholder="npm_xxxxx"
                         />
