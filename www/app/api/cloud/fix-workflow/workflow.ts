@@ -15,6 +15,38 @@ const workflowLog = console.log
 const TURBOPACK_MIN_COMPRESSED_IMPROVEMENT_BYTES = 50 * 1024
 const TURBOPACK_MIN_COMPRESSED_IMPROVEMENT_PERCENT = 0.2
 
+function parseGitHubRepo(url: string): { owner: string; repo: string } | null {
+  const normalized = url.replace(/\.git$/i, "")
+  const match = normalized.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)$/i)
+  if (!match) return null
+  return { owner: match[1], repo: match[2] }
+}
+
+async function preflightGitHubPatRepoAccess(repoUrl: string, githubPat: string): Promise<void> {
+  const repo = parseGitHubRepo(repoUrl)
+  if (!repo) return
+
+  const response = await fetch(`https://api.github.com/repos/${repo.owner}/${repo.repo}`, {
+    headers: {
+      Authorization: `Bearer ${githubPat}`,
+      Accept: "application/vnd.github+json",
+      "User-Agent": "dev3000-workflow"
+    }
+  })
+
+  if (response.status === 200) return
+  if (response.status === 401) {
+    throw new Error(
+      `GitHub PAT authentication failed for ${repo.owner}/${repo.repo}. Verify the token is valid and not expired/revoked.`
+    )
+  }
+  if (response.status === 403 || response.status === 404) {
+    throw new Error(
+      `GitHub PAT does not have access to ${repo.owner}/${repo.repo} (HTTP ${response.status}). Grant repository read access to this token.`
+    )
+  }
+}
+
 interface InitResult {
   sandboxId: string
   devUrl: string
@@ -134,6 +166,11 @@ export async function cloudFixWorkflow(params: {
   // The workflow's wrun_xxx ID is not available inside the workflow itself
 
   try {
+    if (analysisTargetType !== "url" && repoUrl && githubPat && repoUrl.includes("github.com/")) {
+      workflowLog("[Workflow] Preflight: validating GitHub PAT repository access...")
+      await preflightGitHubPatRepoAccess(repoUrl, githubPat)
+    }
+
     // ============================================================
     // STEP 1: Init - Create sandbox and capture before state
     // ============================================================

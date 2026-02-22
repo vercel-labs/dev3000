@@ -1056,9 +1056,7 @@ async function pullDevelopmentEnvViaCliInSandbox(
     progressContext,
     "[Sandbox] Skipping vercel env pull fallback (.env.local) until env permissions are configured"
   )
-  workflowLog(
-    `[Sandbox] Skipping vercel env pull fallback for ${projectCwd}${teamId ? ` (scope ${teamId})` : ""}`
-  )
+  workflowLog(`[Sandbox] Skipping vercel env pull fallback for ${projectCwd}${teamId ? ` (scope ${teamId})` : ""}`)
   // Temporarily disabled: workflow should proceed without attempting CLI env pull.
   // If env vars are required, downstream steps may fail until project env permissions are fixed.
   return
@@ -1176,11 +1174,19 @@ export async function initSandboxStep(
         )
       } else {
         const errorText = await response.text()
-        await appendProgressLog(
-          progressContext,
-          `[Sandbox] Could not load development env vars (HTTP ${response.status}): ${errorText.slice(0, 180)}`
-        )
-        developmentEnvLoadFailed = true
+        if (response.status === 403) {
+          await appendProgressLog(
+            progressContext,
+            `[Sandbox] Env var API access denied (HTTP 403); continuing without development env vars: ${errorText.slice(0, 180)}`
+          )
+          developmentEnvLoadFailed = true
+        } else {
+          await appendProgressLog(
+            progressContext,
+            `[Sandbox] Could not load development env vars (HTTP ${response.status}); continuing without env vars: ${errorText.slice(0, 180)}`
+          )
+          developmentEnvLoadFailed = true
+        }
       }
     } catch (error) {
       await appendProgressLog(
