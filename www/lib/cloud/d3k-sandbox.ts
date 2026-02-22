@@ -706,13 +706,30 @@ node -v
 registry=https://registry.npmjs.org/
 //registry.npmjs.org/:_authToken=$NPM_TOKEN
 always-auth=true
-EOF`
+EOF
+cat > ".npmrc" <<EOF
+registry=https://registry.npmjs.org/
+//registry.npmjs.org/:_authToken=$NPM_TOKEN
+always-auth=true
+EOF
+chmod 0600 "$HOME/.npmrc" ".npmrc"`
         ],
         cwd: sandboxCwd,
         env: { NPM_TOKEN: resolvedNpmToken }
       })
       if (npmAuthSetup.exitCode !== 0) {
         throw new Error(`Failed to configure npm auth token: ${npmAuthSetup.stderr || npmAuthSetup.stdout}`)
+      }
+
+      await reportProgress("Validating npm auth token")
+      const npmAuthCheck = await runCommandWithLogs(sandbox, {
+        cmd: "bash",
+        args: ["-lc", "npm whoami --registry=https://registry.npmjs.org/"],
+        cwd: sandboxCwd,
+        env: { NPM_TOKEN: resolvedNpmToken, NODE_AUTH_TOKEN: resolvedNpmToken }
+      })
+      if (npmAuthCheck.exitCode !== 0) {
+        throw new Error(`NPM token authentication failed: ${npmAuthCheck.stderr || npmAuthCheck.stdout}`)
       }
     }
 
@@ -740,6 +757,7 @@ EOF`
         cmd: "bash",
         args: ["-lc", `${nodePrefix} export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; ${installCommand}`],
         cwd: sandboxCwd,
+        env: resolvedNpmToken ? { NPM_TOKEN: resolvedNpmToken, NODE_AUTH_TOKEN: resolvedNpmToken } : undefined,
         stdout: debug ? process.stdout : undefined,
         stderr: debug ? process.stderr : undefined
       })
