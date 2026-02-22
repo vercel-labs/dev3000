@@ -1051,6 +1051,19 @@ async function pullDevelopmentEnvViaCliInSandbox(
 
   const normalizedProjectDir = projectDir ? projectDir.replace(/^\/+|\/+$/g, "") : ""
   const projectCwd = normalizedProjectDir ? `/vercel/sandbox/${normalizedProjectDir}` : "/vercel/sandbox"
+
+  await appendProgressLog(
+    progressContext,
+    "[Sandbox] Skipping vercel env pull fallback (.env.local) until env permissions are configured"
+  )
+  workflowLog(
+    `[Sandbox] Skipping vercel env pull fallback for ${projectCwd}${teamId ? ` (scope ${teamId})` : ""}`
+  )
+  // Temporarily disabled: workflow should proceed without attempting CLI env pull.
+  // If env vars are required, downstream steps may fail until project env permissions are fixed.
+  return
+
+  /*
   const tokenBase64 = Buffer.from(vercelToken, "utf8").toString("base64")
   const scopeArg = teamId ? ` --scope "${teamId}"` : ""
 
@@ -1094,6 +1107,7 @@ test -f .env.local && echo "[Sandbox] .env.local created"`
 
   const detail = (pullResult.stderr || pullResult.stdout || "unknown error").slice(0, 500).trim()
   await appendProgressLog(progressContext, `[Sandbox] vercel env pull failed: ${detail}`)
+  */
 }
 
 export async function initSandboxStep(
