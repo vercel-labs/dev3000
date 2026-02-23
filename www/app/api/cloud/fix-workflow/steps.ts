@@ -338,6 +338,7 @@ function isSemverAtLeast(found: ParsedSemver, minimum: ParsedSemver): boolean {
 
 // Cache for agent-browser instance per sandbox
 const agentBrowserCache = new Map<string, SandboxAgentBrowser>()
+const agentBrowserProfileVersion = new Map<string, number>()
 
 function isRecoverableBrowserError(error: string | undefined): boolean {
   if (!error) return false
@@ -352,10 +353,14 @@ async function getAgentBrowser(sandbox: Sandbox, debug = false): Promise<Sandbox
   const cacheKey = sandbox.sandboxId
   let browser = agentBrowserCache.get(cacheKey)
   if (!browser) {
+    const nextVersion = (agentBrowserProfileVersion.get(cacheKey) || 0) + 1
+    agentBrowserProfileVersion.set(cacheKey, nextVersion)
+    const profilePath = `/tmp/agent-browser-profile-${cacheKey}-${nextVersion}`
     browser = await SandboxAgentBrowser.create(sandbox, {
-      profile: "/tmp/agent-browser-profile",
+      profile: profilePath,
       debug
     })
+    workflowLog(`[Browser] Created agent-browser profile ${profilePath}`)
     agentBrowserCache.set(cacheKey, browser)
   }
   return browser
