@@ -69,6 +69,85 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 }
 
 const MIN_ROUTE_DELTA_BYTES = 10 * 1024
+const IMPACT_BYTES_LARGE = 150 * 1024
+const IMPACT_PERCENT_LARGE = 2
+
+type ImpactBucket = "S" | "M" | "L"
+
+function calculateImpactfulness(
+  compressedBytes: number,
+  compressedPercent?: number | null
+): {
+  score: number
+  bucket: ImpactBucket
+  direction: "decrease" | "increase" | "neutral"
+} {
+  const bytesRatio = Math.abs(compressedBytes) / IMPACT_BYTES_LARGE
+  const percentRatio = typeof compressedPercent === "number" ? Math.abs(compressedPercent) / IMPACT_PERCENT_LARGE : 0
+  const score = Math.max(0, Math.min(1, Math.max(bytesRatio, percentRatio)))
+  const bucket: ImpactBucket = score < 0.34 ? "S" : score < 0.67 ? "M" : "L"
+  const direction = compressedBytes < 0 ? "decrease" : compressedBytes > 0 ? "increase" : "neutral"
+  return { score, bucket, direction }
+}
+
+function ImpactfulnessGauge({
+  score,
+  bucket,
+  direction
+}: {
+  score: number
+  bucket: ImpactBucket
+  direction: "decrease" | "increase" | "neutral"
+}) {
+  const angle = 180 - score * 180
+  const rad = (angle * Math.PI) / 180
+  const cx = 110
+  const cy = 110
+  const radius = 78
+  const x2 = cx + Math.cos(rad) * radius
+  const y2 = cy - Math.sin(rad) * radius
+  const title = bucket === "S" ? "Small" : bucket === "M" ? "Medium" : "Large"
+
+  return (
+    <div className="rounded-lg border border-border bg-muted/20 p-4">
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-xs uppercase tracking-wide text-muted-foreground">Impactfulness</div>
+        <div className="text-xs text-muted-foreground">
+          {direction === "decrease" ? "Bundle reduced" : direction === "increase" ? "Bundle increased" : "No change"}
+        </div>
+      </div>
+      <svg viewBox="0 0 220 130" className="w-full max-w-[340px] h-auto">
+        <path d="M20 110 A90 90 0 0 1 200 110" stroke="currentColor" strokeWidth="10" fill="none" className="text-border" />
+        <line x1="20" y1="110" x2="20" y2="102" className="text-muted-foreground" stroke="currentColor" strokeWidth="2" />
+        <line x1="110" y1="20" x2="110" y2="28" className="text-muted-foreground" stroke="currentColor" strokeWidth="2" />
+        <line x1="200" y1="110" x2="200" y2="102" className="text-muted-foreground" stroke="currentColor" strokeWidth="2" />
+        <line
+          x1={cx}
+          y1={cy}
+          x2={x2}
+          y2={y2}
+          stroke="currentColor"
+          strokeWidth="3"
+          className={direction === "increase" ? "text-red-500" : "text-green-500"}
+        />
+        <circle cx={cx} cy={cy} r="4" className={direction === "increase" ? "fill-red-500" : "fill-green-500"} />
+        <text x="20" y="124" textAnchor="middle" className="fill-muted-foreground text-[10px]">
+          S
+        </text>
+        <text x="110" y="12" textAnchor="middle" className="fill-muted-foreground text-[10px]">
+          M
+        </text>
+        <text x="200" y="124" textAnchor="middle" className="fill-muted-foreground text-[10px]">
+          L
+        </text>
+      </svg>
+      <div className="text-sm mt-2">
+        <span className="font-medium">{title}</span>
+        <span className="text-muted-foreground"> impact</span>
+      </div>
+    </div>
+  )
+}
 
 export default function WorkflowReportPage({ params }: { params: Promise<{ id: string }> }) {
   return (
@@ -212,6 +291,9 @@ async function ReportContent({
     workflowType === "cls-fix" &&
     (!!report.afterWebVitals || report.afterClsScore !== undefined)
   const bundleComparison = report.turbopackBundleComparison
+  const impactfulness = bundleComparison
+    ? calculateImpactfulness(bundleComparison.delta.compressedBytes, bundleComparison.delta.compressedPercent)
+    : null
   const bundleRouteDeltas = bundleComparison
     ? Array.from(
         new Set([
@@ -877,6 +959,15 @@ async function ReportContent({
           {workflowType === "turbopack-bundle-analyzer" && bundleComparison && (
             <div className="mb-6">
               <h3 className="text-lg font-medium mb-4">Bundle Delta (Before vs After)</h3>
+              {impactfulness && (
+                <div className="mb-3">
+                  <ImpactfulnessGauge
+                    score={impactfulness.score}
+                    bucket={impactfulness.bucket}
+                    direction={impactfulness.direction}
+                  />
+                </div>
+              )}
               <div
                 className={`mb-3 rounded-lg border px-3 py-2 text-sm ${
                   bundleComparison.delta.compressedBytes <= 0
