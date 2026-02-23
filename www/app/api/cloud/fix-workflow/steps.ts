@@ -339,6 +339,11 @@ function isSemverAtLeast(found: ParsedSemver, minimum: ParsedSemver): boolean {
 // Cache for agent-browser instance per sandbox
 const agentBrowserCache = new Map<string, SandboxAgentBrowser>()
 
+function isRecoverableBrowserError(error: string | undefined): boolean {
+  if (!error) return false
+  return /Target page, context or browser has been closed|browserType\.launchPersistentContext/i.test(error)
+}
+
 /**
  * Get or create an agent-browser instance for the sandbox
  * Uses agent-browser CLI for browser automation (preferred over CDP in cloud)
@@ -372,8 +377,22 @@ async function navigateBrowser(
       return { success: true }
     }
     workflowLog(`[Browser] agent-browser navigation failed: ${result.error}`)
+    if (isRecoverableBrowserError(result.error)) {
+      workflowLog("[Browser] Resetting cached agent-browser instance after recoverable navigation failure")
+      agentBrowserCache.delete(sandbox.sandboxId)
+      const retryBrowser = await getAgentBrowser(sandbox, debug)
+      const retryResult = await retryBrowser.open(url)
+      if (retryResult.success) {
+        workflowLog(`[Browser] Navigated to ${url} via agent-browser (retry)`)
+        return { success: true }
+      }
+      workflowLog(`[Browser] agent-browser navigation retry failed: ${retryResult.error}`)
+    }
   } catch (error) {
     workflowLog(`[Browser] agent-browser error: ${error instanceof Error ? error.message : String(error)}`)
+    if (isRecoverableBrowserError(error instanceof Error ? error.message : String(error))) {
+      agentBrowserCache.delete(sandbox.sandboxId)
+    }
   }
 
   return { success: false, error: "agent-browser navigation failed" }
@@ -391,8 +410,22 @@ async function reloadBrowser(sandbox: Sandbox, debug = false): Promise<{ success
       return { success: true }
     }
     workflowLog(`[Browser] agent-browser reload failed: ${result.error}`)
+    if (isRecoverableBrowserError(result.error)) {
+      workflowLog("[Browser] Resetting cached agent-browser instance after recoverable reload failure")
+      agentBrowserCache.delete(sandbox.sandboxId)
+      const retryBrowser = await getAgentBrowser(sandbox, debug)
+      const retryResult = await retryBrowser.reload()
+      if (retryResult.success) {
+        workflowLog("[Browser] Page reloaded via agent-browser (retry)")
+        return { success: true }
+      }
+      workflowLog(`[Browser] agent-browser reload retry failed: ${retryResult.error}`)
+    }
   } catch (error) {
     workflowLog(`[Browser] agent-browser error: ${error instanceof Error ? error.message : String(error)}`)
+    if (isRecoverableBrowserError(error instanceof Error ? error.message : String(error))) {
+      agentBrowserCache.delete(sandbox.sandboxId)
+    }
   }
 
   return { success: false, error: "agent-browser reload failed" }
@@ -412,8 +445,21 @@ async function evaluateInBrowser(
     if (result.success) {
       return { success: true, result: result.data }
     }
+    if (isRecoverableBrowserError(result.error)) {
+      workflowLog("[Browser] Resetting cached agent-browser instance after recoverable evaluate failure")
+      agentBrowserCache.delete(sandbox.sandboxId)
+      const retryBrowser = await getAgentBrowser(sandbox, debug)
+      const retryResult = await retryBrowser.evaluate(expression)
+      if (retryResult.success) {
+        return { success: true, result: retryResult.data }
+      }
+      return { success: false, error: retryResult.error }
+    }
     return { success: false, error: result.error }
   } catch (error) {
+    if (isRecoverableBrowserError(error instanceof Error ? error.message : String(error))) {
+      agentBrowserCache.delete(sandbox.sandboxId)
+    }
     return { success: false, error: error instanceof Error ? error.message : String(error) }
   }
 }
@@ -1642,8 +1688,10 @@ export async function agentFixLoopStep(
   // Capture "before" Web Vitals via CDP before the agent makes any changes
   timer.start("Capture before Web Vitals")
   workflowLog("[Agent] Capturing before Web Vitals via CDP...")
-  const { vitals: capturedBeforeWebVitals, diagnosticLogs: beforeWebVitalsDiagnostics } =
-    await fetchWebVitalsViaCDP(sandbox, localTargetUrl)
+  const { vitals: capturedBeforeWebVitals, diagnosticLogs: beforeWebVitalsDiagnostics } = await fetchWebVitalsViaCDP(
+    sandbox,
+    localTargetUrl
+  )
   workflowLog(`[Agent] Before Web Vitals captured: ${JSON.stringify(capturedBeforeWebVitals)}`)
 
   // Turbopack runs skip init-step CLS bootstrap, so force a deterministic before-CLS capture
@@ -1796,8 +1844,10 @@ export async function agentFixLoopStep(
   // Fetch "after" Web Vitals directly from browser via CDP (more reliable than parsing logs)
   timer.start("Fetch after Web Vitals")
   workflowLog("[Agent] Fetching after Web Vitals via CDP...")
-  const { vitals: afterWebVitalsResult, diagnosticLogs: afterWebVitalsDiagnostics } =
-    await fetchWebVitalsViaCDP(sandbox, localTargetUrl)
+  const { vitals: afterWebVitalsResult, diagnosticLogs: afterWebVitalsDiagnostics } = await fetchWebVitalsViaCDP(
+    sandbox,
+    localTargetUrl
+  )
   const effectiveAfterClsScore = finalCls.clsScore ?? afterWebVitalsResult.cls?.value ?? null
 
   // Use the capturedBeforeWebVitals we got at the start of this function
@@ -3102,7 +3152,9 @@ async function fetchWebVitalsViaCDP(
     if (clsFallback.clsScore !== null) {
       vitals.cls = {
         value: clsFallback.clsScore,
-        grade: clsFallback.clsGrade || (clsFallback.clsScore <= 0.1 ? "good" : clsFallback.clsScore <= 0.25 ? "needs-improvement" : "poor")
+        grade:
+          clsFallback.clsGrade ||
+          (clsFallback.clsScore <= 0.1 ? "good" : clsFallback.clsScore <= 0.25 ? "needs-improvement" : "poor")
       }
       diagLog(`[fetchWebVitals] CLS fallback from d3k logs: ${clsFallback.clsScore} (${vitals.cls.grade})`)
     }
