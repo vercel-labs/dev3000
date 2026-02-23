@@ -170,6 +170,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
     runId?: string
     pr?: { prUrl: string } | null
   } | null>(null)
+  const [isWorkflowRunning, setIsWorkflowRunning] = useState(false)
   const [activeRunId, setActiveRunId] = useState<string | null>(null)
   const [redirectedRunId, setRedirectedRunId] = useState<string | null>(null)
   const [sandboxUrl, setSandboxUrl] = useState<string | null>(null)
@@ -239,8 +240,9 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   useEffect(() => {
     if (!isOpen) return
 
-    // Don't interfere with the "running" state - it's controlled by workflow execution, not URL
-    if (step === "running") return
+    // Keep step 6 pinned only while an active run is in progress.
+    // If the run already ended, allow URL-derived step restoration (fixes stale back/forward state).
+    if (step === "running" && isWorkflowRunning) return
 
     const typeParam = searchParams.get("type")
     const targetParam = searchParams.get("target")
@@ -290,7 +292,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       setSelectedTeam(null)
       setSelectedProject(null)
     }
-  }, [isOpen, searchParams, step, _selectedType, selectedTarget, publicUrl])
+  }, [isOpen, searchParams, step, _selectedType, selectedTarget, publicUrl, isWorkflowRunning])
 
   // Make browser history entries distinguishable when navigating workflow steps.
   useEffect(() => {
@@ -394,6 +396,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
       setTeamLoadAttempted(false)
       setWorkflowStatus("")
       setWorkflowResult(null)
+      setIsWorkflowRunning(false)
       setActiveRunId(null)
       setSandboxUrl(null)
       setBaseBranch("main")
@@ -539,6 +542,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
 
         // Check for completion
         if (run.status === "done") {
+          setIsWorkflowRunning(false)
           setWorkflowStatus("Workflow completed successfully!")
           setWorkflowResult({
             success: true,
@@ -547,6 +551,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
             pr: run.prUrl ? { prUrl: run.prUrl } : null
           })
         } else if (run.status === "failure") {
+          setIsWorkflowRunning(false)
           setWorkflowStatus(`Workflow failed: ${run.error || "Unknown error"}`)
         }
       } catch (error) {
@@ -931,6 +936,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
 
     // Reset any previous workflow result to prevent showing stale data
     setWorkflowResult(null)
+    setIsWorkflowRunning(true)
     setActiveRunId(null)
     setSandboxUrl(null)
     hasNavigatedToReportRef.current = false
@@ -1151,6 +1157,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
         // The API may return success=true but polling should confirm the backend state
         // This prevents showing "completed" while the workflow is still running
         if (!result.success) {
+          setIsWorkflowRunning(false)
           setWorkflowStatus(`Workflow failed: ${result.error}`)
         }
         // If success, let polling update the status when it confirms the run is "done"
@@ -1173,6 +1180,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
           "Network error: Unable to connect to API. This might be a CORS issue, network problem, or Content Security Policy blocking the request."
       }
 
+      setIsWorkflowRunning(false)
       setWorkflowStatus(`Error: ${errorMessage}`)
     }
   }
