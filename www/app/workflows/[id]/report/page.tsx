@@ -365,7 +365,9 @@ async function ReportContent({
   const impactfulness = bundleComparison
     ? calculateImpactfulness(bundleComparison.delta.compressedBytes, report.beforeWebVitals, report.afterWebVitals)
     : null
-  const hasStructuredTurbopackResults = Boolean(bundleComparison || report.gitDiff || hasWebVitalsData)
+  // "Structured" here means top-level report sections that are visibly rendered.
+  // gitDiff alone does not currently render unless bundleComparison exists.
+  const hasStructuredTurbopackResults = Boolean(bundleComparison || hasWebVitalsData)
   const shouldAutoOpenAnalysis =
     workflowType === "turbopack-bundle-analyzer" && !hasStructuredTurbopackResults && Boolean(report.agentAnalysis)
   const bundleRouteDeltas = bundleComparison
