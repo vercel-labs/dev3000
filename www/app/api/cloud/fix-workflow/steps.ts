@@ -1646,8 +1646,8 @@ export async function agentFixLoopStep(
 
   // Turbopack runs skip init-step CLS bootstrap, so force a deterministic before-CLS capture
   // to guarantee at least one before/after CWV pair for verification.
-  let beforeClsForVerification = beforeCls
-  let beforeGradeForVerification = beforeGrade
+  let beforeClsForVerification = beforeCls ?? capturedBeforeWebVitals.cls?.value ?? null
+  let beforeGradeForVerification = beforeGrade ?? capturedBeforeWebVitals.cls?.grade ?? null
   if (isTurbopackBundleAnalyzer && beforeClsForVerification === null) {
     timer.start("Capture before CLS fallback")
     workflowLog("[Agent] Turbopack: capturing fallback before-CLS via d3k logs...")
@@ -1799,6 +1799,7 @@ export async function agentFixLoopStep(
   workflowLog("[Agent] Fetching after Web Vitals via CDP...")
   const { vitals: afterWebVitalsResult, diagnosticLogs: afterWebVitalsDiagnostics } =
     await fetchWebVitalsViaCDP(sandbox)
+  const effectiveAfterClsScore = finalCls.clsScore ?? afterWebVitalsResult.cls?.value ?? null
 
   // Use the capturedBeforeWebVitals we got at the start of this function
   // Merge with the beforeCls we got from init step if CDP didn't capture it
@@ -1807,18 +1808,15 @@ export async function agentFixLoopStep(
   if (!beforeWebVitals.cls && beforeClsForVerification !== null) {
     beforeWebVitals.cls = {
       value: beforeClsForVerification,
-      grade:
-        beforeClsForVerification <= 0.1
-          ? "good"
-          : beforeClsForVerification <= 0.25
-            ? "needs-improvement"
-            : "poor"
+      grade: beforeClsForVerification <= 0.1 ? "good" : beforeClsForVerification <= 0.25 ? "needs-improvement" : "poor"
     }
   }
-  if (!afterWebVitals.cls && finalCls.clsScore !== null) {
+  if (!afterWebVitals.cls && effectiveAfterClsScore !== null) {
     afterWebVitals.cls = {
-      value: finalCls.clsScore,
-      grade: finalCls.clsGrade || (finalCls.clsScore <= 0.1 ? "good" : finalCls.clsScore <= 0.25 ? "needs-improvement" : "poor")
+      value: effectiveAfterClsScore,
+      grade:
+        finalCls.clsGrade ||
+        (effectiveAfterClsScore <= 0.1 ? "good" : effectiveAfterClsScore <= 0.25 ? "needs-improvement" : "poor")
     }
   }
 
@@ -1872,8 +1870,16 @@ export async function agentFixLoopStep(
     clsGrade: beforeGradeForVerification ?? undefined,
     beforeScreenshots,
     beforeWebVitals: Object.keys(beforeWebVitals).length > 0 ? beforeWebVitals : undefined,
-    afterClsScore: finalCls.clsScore ?? undefined,
-    afterClsGrade: finalCls.clsGrade ?? undefined,
+    afterClsScore: effectiveAfterClsScore ?? undefined,
+    afterClsGrade:
+      finalCls.clsGrade ||
+      (effectiveAfterClsScore !== null
+        ? effectiveAfterClsScore <= 0.1
+          ? "good"
+          : effectiveAfterClsScore <= 0.25
+            ? "needs-improvement"
+            : "poor"
+        : undefined),
     afterScreenshots: finalCls.screenshots,
     afterWebVitals: Object.keys(afterWebVitals).length > 0 ? afterWebVitals : undefined,
     verificationStatus: status === "no-changes" ? "unchanged" : status,
@@ -1920,7 +1926,7 @@ export async function agentFixLoopStep(
     reportBlobUrl: blob.url,
     reportId,
     beforeCls: beforeClsForVerification,
-    afterCls: finalCls.clsScore,
+    afterCls: effectiveAfterClsScore,
     status,
     agentSummary: agentResult.summary,
     gitDiff,
@@ -2980,7 +2986,6 @@ async function fetchClsData(sandbox: Sandbox): Promise<{
 async function fetchWebVitalsViaCDP(
   sandbox: Sandbox
 ): Promise<{ vitals: import("@/types").WebVitals; diagnosticLogs: string[] }> {
-  const vitals: import("@/types").WebVitals = {}
   const diagnosticLogs: string[] = []
 
   // Helper to log and capture diagnostics
@@ -3000,60 +3005,76 @@ async function fetchWebVitalsViaCDP(
     return "poor"
   }
 
-  try {
-    diagLog("[fetchWebVitals] Capturing Web Vitals via agent-browser evaluate...")
+  const maxAttempts = 3
+  let vitals: import("@/types").WebVitals = {}
 
-    const finalizeLcpScript = `
-      document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      document.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      'lcp-finalized'
-    `
-    await evaluateInBrowser(sandbox, finalizeLcpScript)
-    await new Promise((resolve) => setTimeout(resolve, 500))
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      diagLog(`[fetchWebVitals] Capturing Web Vitals via agent-browser evaluate (attempt ${attempt}/${maxAttempts})...`)
 
-    await evaluateInBrowser(sandbox, buildWebVitalsInitScript())
-    await new Promise((resolve) => setTimeout(resolve, 1500))
+      const finalizeLcpScript = `
+        document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        document.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        'lcp-finalized'
+      `
+      await evaluateInBrowser(sandbox, finalizeLcpScript)
+      await new Promise((resolve) => setTimeout(resolve, 500))
 
-    const evalResult = await evaluateInBrowser(sandbox, buildWebVitalsReadScript())
-    diagLog(`[fetchWebVitals] Eval result: ${JSON.stringify(evalResult).substring(0, 500)}`)
+      await evaluateInBrowser(sandbox, buildWebVitalsInitScript())
+      await new Promise((resolve) => setTimeout(resolve, 1500))
 
-    if (evalResult.success && evalResult.result) {
-      let rawVitals: {
-        lcp: number | null
-        fcp: number | null
-        ttfb: number | null
-        cls: number
-        inp: number | null
-      } | null = null
-      try {
-        const resultStr = extractWebVitalsResultString(evalResult)
-        if (resultStr) {
-          rawVitals = JSON.parse(resultStr)
+      const evalResult = await evaluateInBrowser(sandbox, buildWebVitalsReadScript())
+      diagLog(`[fetchWebVitals] Eval result: ${JSON.stringify(evalResult).substring(0, 500)}`)
+
+      if (evalResult.success && evalResult.result) {
+        let rawVitals: {
+          lcp: number | null
+          fcp: number | null
+          ttfb: number | null
+          cls: number
+          inp: number | null
+        } | null = null
+        try {
+          const resultStr = extractWebVitalsResultString(evalResult)
+          if (resultStr) {
+            rawVitals = JSON.parse(resultStr)
+          }
+        } catch (err) {
+          diagLog(`[fetchWebVitals] Failed to parse result: ${err instanceof Error ? err.message : String(err)}`)
         }
-      } catch (err) {
-        diagLog(`[fetchWebVitals] Failed to parse result: ${err instanceof Error ? err.message : String(err)}`)
+
+        if (rawVitals) {
+          const attemptVitals: import("@/types").WebVitals = {}
+          if (rawVitals.lcp !== null) {
+            attemptVitals.lcp = { value: rawVitals.lcp, grade: gradeValue(rawVitals.lcp, 2500, 4000) }
+          }
+          if (rawVitals.fcp !== null) {
+            attemptVitals.fcp = { value: rawVitals.fcp, grade: gradeValue(rawVitals.fcp, 1800, 3000) }
+          }
+          if (rawVitals.ttfb !== null) {
+            attemptVitals.ttfb = { value: rawVitals.ttfb, grade: gradeValue(rawVitals.ttfb, 800, 1800) }
+          }
+          // CLS should be reported as 0 when no shifts were detected.
+          if (rawVitals.cls !== null) {
+            attemptVitals.cls = { value: rawVitals.cls, grade: gradeValue(rawVitals.cls, 0.1, 0.25) }
+          }
+          if (rawVitals.inp !== null) {
+            attemptVitals.inp = { value: rawVitals.inp, grade: gradeValue(rawVitals.inp, 200, 500) }
+          }
+
+          if (Object.keys(attemptVitals).length > 0) {
+            vitals = attemptVitals
+            break
+          }
+        }
       }
-
-      if (rawVitals) {
-        if (rawVitals.lcp !== null) {
-          vitals.lcp = { value: rawVitals.lcp, grade: gradeValue(rawVitals.lcp, 2500, 4000) }
-        }
-        if (rawVitals.fcp !== null) {
-          vitals.fcp = { value: rawVitals.fcp, grade: gradeValue(rawVitals.fcp, 1800, 3000) }
-        }
-        if (rawVitals.ttfb !== null) {
-          vitals.ttfb = { value: rawVitals.ttfb, grade: gradeValue(rawVitals.ttfb, 800, 1800) }
-        }
-        if (rawVitals.cls !== null) {
-          vitals.cls = { value: rawVitals.cls, grade: gradeValue(rawVitals.cls, 0.1, 0.25) }
-        }
-        if (rawVitals.inp !== null) {
-          vitals.inp = { value: rawVitals.inp, grade: gradeValue(rawVitals.inp, 200, 500) }
-        }
-      }
+    } catch (err) {
+      diagLog(`[fetchWebVitals] Error: ${err instanceof Error ? err.message : String(err)}`)
     }
-  } catch (err) {
-    diagLog(`[fetchWebVitals] Error: ${err instanceof Error ? err.message : String(err)}`)
+
+    if (attempt < maxAttempts) {
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+    }
   }
 
   diagLog(`[fetchWebVitals] Final result: ${JSON.stringify(vitals)}`)
