@@ -46,7 +46,9 @@ export function DiffViewer({ patch }: DiffViewerProps) {
     <div className="space-y-4">
       {filePatches.map((filePatch, index) => (
         <div key={`${getPatchLabel(filePatch, index)}-${index}`} className="space-y-2">
-          {filePatches.length > 1 && <div className="text-xs font-medium text-muted-foreground">{getPatchLabel(filePatch, index)}</div>}
+          {filePatches.length > 1 && (
+            <div className="text-xs font-medium text-muted-foreground">{getPatchLabel(filePatch, index)}</div>
+          )}
           <PatchDiff
             patch={filePatch}
             options={{

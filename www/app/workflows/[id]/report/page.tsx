@@ -110,7 +110,8 @@ function calculateImpactfulness(
 
   const cwvMetricsImproved = cwvMetricScores.filter((score) => score > 0).length
   const cwvVerified = cwvMetricsCompared > 0
-  const cwvScore = cwvMetricScores.length > 0 ? cwvMetricScores.reduce((sum, v) => sum + v, 0) / cwvMetricScores.length : 0
+  const cwvScore =
+    cwvMetricScores.length > 0 ? cwvMetricScores.reduce((sum, v) => sum + v, 0) / cwvMetricScores.length : 0
 
   const bundleScore = clamp01(Math.abs(compressedBytes) / IMPACT_BYTES_LARGE)
   const score = cwvVerified ? clamp01(cwvScore * 0.8 + bundleScore * 0.2) : clamp01(bundleScore * 0.35)
@@ -211,7 +212,9 @@ function ImpactfulnessGauge({
         <span className="text-muted-foreground"> impact</span>
       </div>
       <div className="text-xs text-muted-foreground mt-1">
-        {cwvVerified ? `CWV verified (${cwvMetricsImproved}/${cwvMetricsCompared} improved)` : "CWV verification unavailable"}
+        {cwvVerified
+          ? `CWV verified (${cwvMetricsImproved}/${cwvMetricsCompared} improved)`
+          : "CWV verification unavailable"}
       </div>
     </div>
   )
@@ -362,6 +365,9 @@ async function ReportContent({
   const impactfulness = bundleComparison
     ? calculateImpactfulness(bundleComparison.delta.compressedBytes, report.beforeWebVitals, report.afterWebVitals)
     : null
+  const hasStructuredTurbopackResults = Boolean(bundleComparison || report.gitDiff || hasWebVitalsData)
+  const shouldAutoOpenAnalysis =
+    workflowType === "turbopack-bundle-analyzer" && !hasStructuredTurbopackResults && Boolean(report.agentAnalysis)
   const bundleRouteDeltas = bundleComparison
     ? Array.from(
         new Set([
@@ -1118,9 +1124,15 @@ async function ReportContent({
             </div>
           )}
 
+          {workflowType === "turbopack-bundle-analyzer" && !hasStructuredTurbopackResults && (
+            <div className="mt-6 rounded-lg border border-amber-300/40 bg-amber-50/50 p-3 text-sm text-amber-900 dark:border-amber-700/40 dark:bg-amber-900/20 dark:text-amber-100">
+              Structured Turbopack metrics were not captured for this run. The full agent findings are shown below.
+            </div>
+          )}
+
           {/* Agent Transcript - shown for all workflow types */}
           <div className="mt-6 pt-6 border-t border-border">
-            <details className="group">
+            <details className="group" open={shouldAutoOpenAnalysis}>
               <summary className="inline-flex items-center gap-2 cursor-pointer text-sm hover:text-foreground text-muted-foreground">
                 <span className="font-medium inline-flex items-center gap-2">
                   <ChevronRight className="h-4 w-4 transition-transform group-open:rotate-90" />
