@@ -2,7 +2,7 @@
 
 import { AlertCircle, ArrowLeft } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Skeleton } from "@/components/ui/skeleton"
 
@@ -38,6 +38,7 @@ export function ReportPending({ runId, userId, workflowType, projectName }: Repo
   const [sandboxUrl, setSandboxUrl] = useState<string | null>(null)
   const [stepNumber, setStepNumber] = useState<number | null>(null)
   const [progressLogs, setProgressLogs] = useState<string[]>([])
+  const logsRef = useRef<HTMLTextAreaElement | null>(null)
 
   useEffect(() => {
     let isActive = true
@@ -112,6 +113,11 @@ export function ReportPending({ runId, userId, workflowType, projectName }: Repo
       clearInterval(interval)
     }
   }, [runId, userId, router])
+
+  useEffect(() => {
+    if (!logsRef.current) return
+    logsRef.current.scrollTop = logsRef.current.scrollHeight
+  }, [progressLogs])
 
   const normalizedStepNumber = normalizeStepNumber(stepNumber)
   const activeStepLabel = typeof normalizedStepNumber === "number" ? STEP_LABELS[normalizedStepNumber] : null
@@ -202,6 +208,7 @@ export function ReportPending({ runId, userId, workflowType, projectName }: Repo
             <div className="mt-4">
               <div className="text-xs font-medium text-muted-foreground mb-2">Live Logs</div>
               <textarea
+                ref={logsRef}
                 readOnly
                 value={progressLogs.join("\n")}
                 className="w-full h-28 rounded-md border border-border bg-muted/30 px-3 py-2 text-xs font-mono leading-relaxed resize-none"
