@@ -761,6 +761,115 @@ NODE`
   }
 }
 
+const TURBOPACK_NDJSON_REQUIRED_FILES = [
+  "routes.ndjson",
+  "sources.ndjson",
+  "output_files.ndjson",
+  "module_edges.ndjson",
+  "modules.ndjson"
+] as const
+
+interface TurbopackNdjsonStatus {
+  ok: boolean
+  projectCwd: string
+  missingFiles: string[]
+  routeRows: number
+  outputFileRows: number
+}
+
+async function checkTurbopackNdjsonArtifacts(
+  sandbox: Sandbox,
+  projectDir?: string
+): Promise<TurbopackNdjsonStatus> {
+  const normalizedProjectDir = projectDir ? projectDir.replace(/^\/+|\/+$/g, "") : ""
+  const projectCwd = normalizedProjectDir ? `/vercel/sandbox/${normalizedProjectDir}` : "/vercel/sandbox"
+
+  const checkResult = await runSandboxCommand(sandbox, "sh", [
+    "-c",
+    `cd ${projectCwd} && node <<'NODE'
+const fs = require("fs")
+const path = require("path")
+
+const required = ${JSON.stringify(TURBOPACK_NDJSON_REQUIRED_FILES)}
+const ndjsonDir = path.resolve(".next/diagnostics/analyze/ndjson")
+const missingFiles = []
+
+for (const file of required) {
+  if (!fs.existsSync(path.join(ndjsonDir, file))) {
+    missingFiles.push(file)
+  }
+}
+
+function countRows(file) {
+  try {
+    const fullPath = path.join(ndjsonDir, file)
+    if (!fs.existsSync(fullPath)) return 0
+    const raw = fs.readFileSync(fullPath, "utf8")
+    if (!raw.trim()) return 0
+    return raw.split("\\n").map((line) => line.trim()).filter(Boolean).length
+  } catch {
+    return 0
+  }
+}
+
+const routeRows = countRows("routes.ndjson")
+const outputFileRows = countRows("output_files.ndjson")
+const ok = missingFiles.length === 0 && routeRows > 0 && outputFileRows > 0
+
+console.log(JSON.stringify({ ok, missingFiles, routeRows, outputFileRows, ndjsonDir }))
+NODE`
+  ])
+
+  if (checkResult.exitCode !== 0) {
+    return {
+      ok: false,
+      projectCwd,
+      missingFiles: [...TURBOPACK_NDJSON_REQUIRED_FILES],
+      routeRows: 0,
+      outputFileRows: 0
+    }
+  }
+
+  const lastLine = (checkResult.stdout || "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .at(-1)
+  if (!lastLine) {
+    return {
+      ok: false,
+      projectCwd,
+      missingFiles: [...TURBOPACK_NDJSON_REQUIRED_FILES],
+      routeRows: 0,
+      outputFileRows: 0
+    }
+  }
+
+  try {
+    const parsed = JSON.parse(lastLine) as {
+      ok?: boolean
+      missingFiles?: string[]
+      routeRows?: number
+      outputFileRows?: number
+    }
+    return {
+      ok: Boolean(parsed.ok),
+      projectCwd,
+      missingFiles: Array.isArray(parsed.missingFiles) ? parsed.missingFiles : [...TURBOPACK_NDJSON_REQUIRED_FILES],
+      routeRows: typeof parsed.routeRows === "number" ? parsed.routeRows : 0,
+      outputFileRows: typeof parsed.outputFileRows === "number" ? parsed.outputFileRows : 0
+    }
+  } catch {
+    return {
+      ok: false,
+      projectCwd,
+      missingFiles: [...TURBOPACK_NDJSON_REQUIRED_FILES],
+      routeRows: 0,
+      outputFileRows: 0
+    }
+  }
+}
+
 async function prepareTurbopackNdjsonArtifacts(
   sandbox: Sandbox,
   projectDir?: string,
@@ -1347,6 +1456,16 @@ export async function initSandboxStep(
       effectiveProjectDir,
       progressContext
     )
+    const initNdjsonStatus = await checkTurbopackNdjsonArtifacts(sandboxResult.sandbox, effectiveProjectDir)
+    if (!initNdjsonStatus.ok) {
+      const missingDetail =
+        initNdjsonStatus.missingFiles.length > 0
+          ? `missing files: ${initNdjsonStatus.missingFiles.join(", ")}`
+          : "required files are empty"
+      throw new Error(
+        `Turbopack NDJSON artifacts were not generated in ${initNdjsonStatus.projectCwd} (${missingDetail}; routes=${initNdjsonStatus.routeRows}, output_files=${initNdjsonStatus.outputFileRows}).`
+      )
+    }
     workflowLog(`[Init] Turbopack NDJSON artifacts ready at ${ndjsonResult.outputDir}`)
     if (ndjsonResult.summary) {
       workflowLog(`[Init] Turbopack NDJSON summary:\n${ndjsonResult.summary}`)
@@ -1494,6 +1613,29 @@ export async function agentFixLoopStep(
   let turbopackBundleComparison: TurbopackBundleComparison | undefined
   let beforeBundleMetrics: TurbopackBundleMetricsSnapshot | null = null
   if (isTurbopackBundleAnalyzer) {
+    await appendProgressLog(progressContext, "[Turbopack] Verifying analyzer NDJSON artifacts before AI step")
+    let ndjsonStatus = await checkTurbopackNdjsonArtifacts(sandbox, effectiveProjectDir)
+    if (!ndjsonStatus.ok) {
+      const missingDetail =
+        ndjsonStatus.missingFiles.length > 0
+          ? `missing files: ${ndjsonStatus.missingFiles.join(", ")}`
+          : "required files are empty"
+      await appendProgressLog(
+        progressContext,
+        `[Turbopack] NDJSON artifacts missing before AI step (${missingDetail}; routes=${ndjsonStatus.routeRows}, output_files=${ndjsonStatus.outputFileRows}). Regenerating once...`
+      )
+      await prepareTurbopackNdjsonArtifacts(sandbox, effectiveProjectDir, progressContext)
+      ndjsonStatus = await checkTurbopackNdjsonArtifacts(sandbox, effectiveProjectDir)
+      if (!ndjsonStatus.ok) {
+        const postRetryDetail =
+          ndjsonStatus.missingFiles.length > 0
+            ? `missing files: ${ndjsonStatus.missingFiles.join(", ")}`
+            : "required files are empty"
+        throw new Error(
+          `Turbopack analyzer NDJSON artifacts unavailable in ${ndjsonStatus.projectCwd} after retry (${postRetryDetail}; routes=${ndjsonStatus.routeRows}, output_files=${ndjsonStatus.outputFileRows}). Aborting before AI step.`
+        )
+      }
+    }
     await appendProgressLog(progressContext, "[Turbopack] Capturing baseline NDJSON bundle metrics")
     beforeBundleMetrics = await collectTurbopackBundleMetrics(sandbox, effectiveProjectDir, progressContext, "baseline")
   }

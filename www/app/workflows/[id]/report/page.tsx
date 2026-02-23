@@ -1127,7 +1127,7 @@ async function ReportContent({
           )}
 
           {workflowType === "turbopack-bundle-analyzer" && !hasStructuredTurbopackResults && (
-            <div className="mt-6 rounded-lg border border-amber-300/40 bg-amber-50/50 p-3 text-sm text-amber-900 dark:border-amber-700/40 dark:bg-amber-900/20 dark:text-amber-100">
+            <div className="mt-6 rounded-lg border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
               Structured Turbopack metrics were not captured for this run. The full agent findings are shown below.
             </div>
           )}
