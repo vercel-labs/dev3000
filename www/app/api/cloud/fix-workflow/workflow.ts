@@ -15,38 +15,6 @@ const workflowLog = console.log
 const TURBOPACK_MIN_COMPRESSED_IMPROVEMENT_BYTES = 50 * 1024
 const TURBOPACK_MIN_COMPRESSED_IMPROVEMENT_PERCENT = 0.2
 
-function parseGitHubRepo(url: string): { owner: string; repo: string } | null {
-  const normalized = url.replace(/\.git$/i, "")
-  const match = normalized.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)$/i)
-  if (!match) return null
-  return { owner: match[1], repo: match[2] }
-}
-
-async function preflightGitHubPatRepoAccess(repoUrl: string, githubPat: string): Promise<void> {
-  const repo = parseGitHubRepo(repoUrl)
-  if (!repo) return
-
-  const response = await fetch(`https://api.github.com/repos/${repo.owner}/${repo.repo}`, {
-    headers: {
-      Authorization: `Bearer ${githubPat}`,
-      Accept: "application/vnd.github+json",
-      "User-Agent": "dev3000-workflow"
-    }
-  })
-
-  if (response.status === 200) return
-  if (response.status === 401) {
-    throw new Error(
-      `GitHub PAT authentication failed for ${repo.owner}/${repo.repo}. Verify the token is valid and not expired/revoked.`
-    )
-  }
-  if (response.status === 403 || response.status === 404) {
-    throw new Error(
-      `GitHub PAT does not have access to ${repo.owner}/${repo.repo} (HTTP ${response.status}). Grant repository read access to this token.`
-    )
-  }
-}
-
 interface InitResult {
   sandboxId: string
   devUrl: string
@@ -544,43 +512,22 @@ async function evaluateTurbopackPrGate(
   reportBlobUrl: string,
   gitDiff: string | null
 ): Promise<TurbopackPrGateResult> {
-  if (analysisTargetType === "url" || workflowType !== "turbopack-bundle-analyzer" || !gitDiff) {
-    return { allowPr: true }
-  }
+  "use step"
+  const { evaluateTurbopackPrGateStep } = await import("./steps")
+  return evaluateTurbopackPrGateStep(
+    workflowType,
+    analysisTargetType,
+    reportBlobUrl,
+    gitDiff,
+    TURBOPACK_MIN_COMPRESSED_IMPROVEMENT_BYTES,
+    TURBOPACK_MIN_COMPRESSED_IMPROVEMENT_PERCENT
+  )
+}
 
-  try {
-    const response = await fetch(reportBlobUrl)
-    if (!response.ok) {
-      return { allowPr: true }
-    }
-    const report = (await response.json()) as {
-      turbopackBundleComparison?: { delta?: { compressedBytes?: number; compressedPercent?: number | null } }
-    }
-    const delta = report.turbopackBundleComparison?.delta
-    const compressedBytes = typeof delta?.compressedBytes === "number" ? delta.compressedBytes : null
-    const compressedPercent = typeof delta?.compressedPercent === "number" ? delta.compressedPercent : null
-
-    if (compressedBytes === null) {
-      return { allowPr: false, reason: "Skipped PR: Missing Turbopack bundle delta metrics" }
-    }
-    if (compressedBytes >= 0) {
-      return { allowPr: false, reason: "Skipped PR: Turbopack compressed bundle did not improve" }
-    }
-
-    const meaningfulByBytes = Math.abs(compressedBytes) >= TURBOPACK_MIN_COMPRESSED_IMPROVEMENT_BYTES
-    const meaningfulByPercent =
-      compressedPercent !== null && Math.abs(compressedPercent) >= TURBOPACK_MIN_COMPRESSED_IMPROVEMENT_PERCENT
-    if (!meaningfulByBytes && !meaningfulByPercent) {
-      return { allowPr: false, reason: "Skipped PR: Turbopack bundle improvement was not meaningful" }
-    }
-
-    return { allowPr: true }
-  } catch (error) {
-    workflowLog(
-      `[Workflow] Failed to evaluate Turbopack PR gate: ${error instanceof Error ? error.message : String(error)}`
-    )
-    return { allowPr: true }
-  }
+async function preflightGitHubPatRepoAccess(repoUrl: string, githubPat: string): Promise<void> {
+  "use step"
+  const { preflightGitHubPatRepoAccessStep } = await import("./steps")
+  return preflightGitHubPatRepoAccessStep(repoUrl, githubPat)
 }
 
 async function saveDoneStatus(
