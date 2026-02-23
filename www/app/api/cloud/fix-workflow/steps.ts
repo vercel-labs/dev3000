@@ -1637,11 +1637,13 @@ export async function agentFixLoopStep(
     beforeBundleMetrics = await collectTurbopackBundleMetrics(sandbox, effectiveProjectDir, progressContext, "baseline")
   }
 
+  const localTargetUrl = `http://localhost:3000${startPath}`
+
   // Capture "before" Web Vitals via CDP before the agent makes any changes
   timer.start("Capture before Web Vitals")
   workflowLog("[Agent] Capturing before Web Vitals via CDP...")
   const { vitals: capturedBeforeWebVitals, diagnosticLogs: beforeWebVitalsDiagnostics } =
-    await fetchWebVitalsViaCDP(sandbox)
+    await fetchWebVitalsViaCDP(sandbox, localTargetUrl)
   workflowLog(`[Agent] Before Web Vitals captured: ${JSON.stringify(capturedBeforeWebVitals)}`)
 
   // Turbopack runs skip init-step CLS bootstrap, so force a deterministic before-CLS capture
@@ -1651,8 +1653,7 @@ export async function agentFixLoopStep(
   if (isTurbopackBundleAnalyzer && beforeClsForVerification === null) {
     timer.start("Capture before CLS fallback")
     workflowLog("[Agent] Turbopack: capturing fallback before-CLS via d3k logs...")
-    const beforeTargetUrl = `http://localhost:3000${startPath}`
-    const beforeNavResult = await navigateBrowser(sandbox, beforeTargetUrl)
+    const beforeNavResult = await navigateBrowser(sandbox, localTargetUrl)
     workflowLog(
       `[Agent] Before CLS fallback navigation: success=${beforeNavResult.success}${beforeNavResult.error ? `, error=${beforeNavResult.error}` : ""}`
     )
@@ -1702,10 +1703,8 @@ export async function agentFixLoopStep(
 
   // First navigate to localhost (NOT the public devUrl!) so CLS capture works
   // The screencast-manager only captures for localhost:3000, not the public sb-xxx.vercel.run URL
-  const targetUrl = `http://localhost:3000${startPath}`
-
   // Use agent-browser CLI for navigation (preferred over CDP in cloud)
-  const navResult = await navigateBrowser(sandbox, targetUrl)
+  const navResult = await navigateBrowser(sandbox, localTargetUrl)
   workflowLog(
     `[Agent] Navigate to devUrl result: success=${navResult.success}${navResult.error ? `, error=${navResult.error}` : ""}`
   )
@@ -1798,7 +1797,7 @@ export async function agentFixLoopStep(
   timer.start("Fetch after Web Vitals")
   workflowLog("[Agent] Fetching after Web Vitals via CDP...")
   const { vitals: afterWebVitalsResult, diagnosticLogs: afterWebVitalsDiagnostics } =
-    await fetchWebVitalsViaCDP(sandbox)
+    await fetchWebVitalsViaCDP(sandbox, localTargetUrl)
   const effectiveAfterClsScore = finalCls.clsScore ?? afterWebVitalsResult.cls?.value ?? null
 
   // Use the capturedBeforeWebVitals we got at the start of this function
@@ -1972,7 +1971,7 @@ export async function urlAuditStep(
   await new Promise((resolve) => setTimeout(resolve, 3000))
 
   timer.start("Capture Web Vitals")
-  const { vitals, diagnosticLogs } = await fetchWebVitalsViaCDP(sandbox)
+  const { vitals, diagnosticLogs } = await fetchWebVitalsViaCDP(sandbox, targetUrl)
 
   timer.start("Collect page diagnostics")
   const diagnosticsResult = await evaluateInBrowser(
@@ -2984,7 +2983,8 @@ async function fetchClsData(sandbox: Sandbox): Promise<{
  * This avoids any dependency on external tools services.
  */
 async function fetchWebVitalsViaCDP(
-  sandbox: Sandbox
+  sandbox: Sandbox,
+  targetUrl?: string
 ): Promise<{ vitals: import("@/types").WebVitals; diagnosticLogs: string[] }> {
   const diagnosticLogs: string[] = []
 
@@ -3025,6 +3025,26 @@ async function fetchWebVitalsViaCDP(
 
       const evalResult = await evaluateInBrowser(sandbox, buildWebVitalsReadScript())
       diagLog(`[fetchWebVitals] Eval result: ${JSON.stringify(evalResult).substring(0, 500)}`)
+
+      if (!evalResult.success) {
+        const errMessage = evalResult.error || ""
+        if (
+          targetUrl &&
+          /Target page, context or browser has been closed|browserType\.launchPersistentContext/i.test(errMessage)
+        ) {
+          diagLog(`[fetchWebVitals] Browser context closed; reopening ${targetUrl} before retry`)
+          const navResult = await navigateBrowser(sandbox, targetUrl)
+          diagLog(
+            `[fetchWebVitals] Reopen navigation result: success=${navResult.success}${navResult.error ? `, error=${navResult.error}` : ""}`
+          )
+          await new Promise((resolve) => setTimeout(resolve, 1500))
+          const reloadResult = await reloadBrowser(sandbox)
+          diagLog(
+            `[fetchWebVitals] Reopen reload result: success=${reloadResult.success}${reloadResult.error ? `, error=${reloadResult.error}` : ""}`
+          )
+          await new Promise((resolve) => setTimeout(resolve, 1500))
+        }
+      }
 
       if (evalResult.success && evalResult.result) {
         let rawVitals: {
@@ -3074,6 +3094,17 @@ async function fetchWebVitalsViaCDP(
 
     if (attempt < maxAttempts) {
       await new Promise((resolve) => setTimeout(resolve, 1000))
+    }
+  }
+
+  if (!vitals.cls) {
+    const clsFallback = await fetchClsData(sandbox)
+    if (clsFallback.clsScore !== null) {
+      vitals.cls = {
+        value: clsFallback.clsScore,
+        grade: clsFallback.clsGrade || (clsFallback.clsScore <= 0.1 ? "good" : clsFallback.clsScore <= 0.25 ? "needs-improvement" : "poor")
+      }
+      diagLog(`[fetchWebVitals] CLS fallback from d3k logs: ${clsFallback.clsScore} (${vitals.cls.grade})`)
     }
   }
 
