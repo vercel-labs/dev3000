@@ -1644,6 +1644,37 @@ export async function agentFixLoopStep(
     await fetchWebVitalsViaCDP(sandbox)
   workflowLog(`[Agent] Before Web Vitals captured: ${JSON.stringify(capturedBeforeWebVitals)}`)
 
+  // Turbopack runs skip init-step CLS bootstrap, so force a deterministic before-CLS capture
+  // to guarantee at least one before/after CWV pair for verification.
+  let beforeClsForVerification = beforeCls
+  let beforeGradeForVerification = beforeGrade
+  if (isTurbopackBundleAnalyzer && beforeClsForVerification === null) {
+    timer.start("Capture before CLS fallback")
+    workflowLog("[Agent] Turbopack: capturing fallback before-CLS via d3k logs...")
+    const beforeTargetUrl = `http://localhost:3000${startPath}`
+    const beforeNavResult = await navigateBrowser(sandbox, beforeTargetUrl)
+    workflowLog(
+      `[Agent] Before CLS fallback navigation: success=${beforeNavResult.success}${beforeNavResult.error ? `, error=${beforeNavResult.error}` : ""}`
+    )
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+    const beforeReloadResult = await reloadBrowser(sandbox)
+    workflowLog(
+      `[Agent] Before CLS fallback reload: success=${beforeReloadResult.success}${beforeReloadResult.error ? `, error=${beforeReloadResult.error}` : ""}`
+    )
+    await new Promise((resolve) => setTimeout(resolve, 5000))
+    const beforeClsFallback = await fetchClsData(sandbox)
+    if (beforeClsFallback.clsScore !== null) {
+      beforeClsForVerification = beforeClsFallback.clsScore
+      beforeGradeForVerification = beforeClsFallback.clsGrade
+      await appendProgressLog(
+        progressContext,
+        `[Turbopack] Fallback before CLS captured: ${beforeClsFallback.clsScore.toFixed(4)} (${beforeClsFallback.clsGrade})`
+      )
+    } else {
+      await appendProgressLog(progressContext, "[Turbopack] Fallback before CLS capture unavailable")
+    }
+  }
+
   // Run the agent with the new "diagnose" tool
   timer.start("Run AI agent (with tools)")
   const agentResult = await runAgentWithDiagnoseTool(
@@ -1729,10 +1760,10 @@ export async function agentFixLoopStep(
   let status: "improved" | "unchanged" | "degraded" | "no-changes"
   if (!hasChanges) {
     status = "no-changes"
-  } else if (finalCls.clsScore !== null && beforeCls !== null) {
-    if (finalCls.clsScore < beforeCls * 0.9) {
+  } else if (finalCls.clsScore !== null && beforeClsForVerification !== null) {
+    if (finalCls.clsScore < beforeClsForVerification * 0.9) {
       status = "improved"
-    } else if (finalCls.clsScore > beforeCls * 1.1) {
+    } else if (finalCls.clsScore > beforeClsForVerification * 1.1) {
       status = "degraded"
     } else {
       status = "unchanged"
@@ -1741,11 +1772,11 @@ export async function agentFixLoopStep(
     status = "unchanged"
   }
 
-  workflowLog(`[Agent] Status: ${status}, Before: ${beforeCls}, After: ${finalCls.clsScore}`)
+  workflowLog(`[Agent] Status: ${status}, Before: ${beforeClsForVerification}, After: ${finalCls.clsScore}`)
   await updateProgress(
     progressContext,
     4,
-    `Generating report... (CLS: ${beforeCls?.toFixed(3) || "?"} → ${finalCls.clsScore?.toFixed(3) || "?"})`,
+    `Generating report... (CLS: ${beforeClsForVerification?.toFixed(3) || "?"} → ${finalCls.clsScore?.toFixed(3) || "?"})`,
     devUrl
   )
 
@@ -1772,11 +1803,22 @@ export async function agentFixLoopStep(
   // Use the capturedBeforeWebVitals we got at the start of this function
   // Merge with the beforeCls we got from init step if CDP didn't capture it
   const beforeWebVitals: import("@/types").WebVitals = { ...capturedBeforeWebVitals }
-  const afterWebVitals = afterWebVitalsResult
-  if (!beforeWebVitals.cls && beforeCls !== null) {
+  const afterWebVitals: import("@/types").WebVitals = { ...afterWebVitalsResult }
+  if (!beforeWebVitals.cls && beforeClsForVerification !== null) {
     beforeWebVitals.cls = {
-      value: beforeCls,
-      grade: beforeCls <= 0.1 ? "good" : beforeCls <= 0.25 ? "needs-improvement" : "poor"
+      value: beforeClsForVerification,
+      grade:
+        beforeClsForVerification <= 0.1
+          ? "good"
+          : beforeClsForVerification <= 0.25
+            ? "needs-improvement"
+            : "poor"
+    }
+  }
+  if (!afterWebVitals.cls && finalCls.clsScore !== null) {
+    afterWebVitals.cls = {
+      value: finalCls.clsScore,
+      grade: finalCls.clsGrade || (finalCls.clsScore <= 0.1 ? "good" : finalCls.clsScore <= 0.25 ? "needs-improvement" : "poor")
     }
   }
 
@@ -1826,8 +1868,8 @@ export async function agentFixLoopStep(
     projectDir: projectDir || undefined,
     repoOwner: repoOwner || undefined,
     repoName: repoName || undefined,
-    clsScore: beforeCls ?? undefined,
-    clsGrade: beforeGrade ?? undefined,
+    clsScore: beforeClsForVerification ?? undefined,
+    clsGrade: beforeGradeForVerification ?? undefined,
     beforeScreenshots,
     beforeWebVitals: Object.keys(beforeWebVitals).length > 0 ? beforeWebVitals : undefined,
     afterClsScore: finalCls.clsScore ?? undefined,
@@ -1877,7 +1919,7 @@ export async function agentFixLoopStep(
   return {
     reportBlobUrl: blob.url,
     reportId,
-    beforeCls,
+    beforeCls: beforeClsForVerification,
     afterCls: finalCls.clsScore,
     status,
     agentSummary: agentResult.summary,
