@@ -777,10 +777,7 @@ interface TurbopackNdjsonStatus {
   outputFileRows: number
 }
 
-async function checkTurbopackNdjsonArtifacts(
-  sandbox: Sandbox,
-  projectDir?: string
-): Promise<TurbopackNdjsonStatus> {
+async function checkTurbopackNdjsonArtifacts(sandbox: Sandbox, projectDir?: string): Promise<TurbopackNdjsonStatus> {
   const normalizedProjectDir = projectDir ? projectDir.replace(/^\/+|\/+$/g, "") : ""
   const projectCwd = normalizedProjectDir ? `/vercel/sandbox/${normalizedProjectDir}` : "/vercel/sandbox"
 
