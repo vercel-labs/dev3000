@@ -95,15 +95,11 @@ function calculateImpactfulness(
 
   const cwvMetricScores = [
     metricDeltaImpact(beforeWebVitals?.lcp?.value, afterWebVitals?.lcp?.value, 500),
-    metricDeltaImpact(beforeWebVitals?.fcp?.value, afterWebVitals?.fcp?.value, 300),
-    metricDeltaImpact(beforeWebVitals?.ttfb?.value, afterWebVitals?.ttfb?.value, 150),
     metricDeltaImpact(beforeWebVitals?.inp?.value, afterWebVitals?.inp?.value, 100),
     metricDeltaImpact(beforeWebVitals?.cls?.value, afterWebVitals?.cls?.value, 0.05)
   ]
   const cwvMetricsCompared = [
     [beforeWebVitals?.lcp?.value, afterWebVitals?.lcp?.value],
-    [beforeWebVitals?.fcp?.value, afterWebVitals?.fcp?.value],
-    [beforeWebVitals?.ttfb?.value, afterWebVitals?.ttfb?.value],
     [beforeWebVitals?.inp?.value, afterWebVitals?.inp?.value],
     [beforeWebVitals?.cls?.value, afterWebVitals?.cls?.value]
   ].filter(([before, after]) => typeof before === "number" && typeof after === "number").length
@@ -793,30 +789,6 @@ async function ReportContent({
                           </span>
                         </div>
                       )}
-                      {report.beforeWebVitals?.fcp && (
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm" title="First Contentful Paint">
-                            FCP
-                          </span>
-                          <span
-                            className={`text-sm font-medium ${report.beforeWebVitals.fcp.grade === "good" ? "text-green-600" : report.beforeWebVitals.fcp.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}
-                          >
-                            {formatMs(report.beforeWebVitals.fcp.value)}
-                          </span>
-                        </div>
-                      )}
-                      {report.beforeWebVitals?.ttfb && (
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm" title="Time to First Byte">
-                            TTFB
-                          </span>
-                          <span
-                            className={`text-sm font-medium ${report.beforeWebVitals.ttfb.grade === "good" ? "text-green-600" : report.beforeWebVitals.ttfb.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}
-                          >
-                            {formatMs(report.beforeWebVitals.ttfb.value)}
-                          </span>
-                        </div>
-                      )}
                       {(report.beforeWebVitals?.cls || report.clsScore !== undefined) && (
                         <div className="flex justify-between items-center">
                           <span className="text-sm" title="Cumulative Layout Shift">
@@ -848,8 +820,6 @@ async function ReportContent({
                         </div>
                       )}
                       {!report.beforeWebVitals?.lcp &&
-                        !report.beforeWebVitals?.fcp &&
-                        !report.beforeWebVitals?.ttfb &&
                         !report.beforeWebVitals?.cls &&
                         !report.beforeWebVitals?.inp &&
                         report.clsScore === undefined && (
@@ -870,30 +840,6 @@ async function ReportContent({
                             className={`text-sm font-medium ${report.afterWebVitals.lcp.grade === "good" ? "text-green-600" : report.afterWebVitals.lcp.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}
                           >
                             {formatMs(report.afterWebVitals.lcp.value)}
-                          </span>
-                        </div>
-                      )}
-                      {report.afterWebVitals?.fcp && (
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm" title="First Contentful Paint">
-                            FCP
-                          </span>
-                          <span
-                            className={`text-sm font-medium ${report.afterWebVitals.fcp.grade === "good" ? "text-green-600" : report.afterWebVitals.fcp.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}
-                          >
-                            {formatMs(report.afterWebVitals.fcp.value)}
-                          </span>
-                        </div>
-                      )}
-                      {report.afterWebVitals?.ttfb && (
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm" title="Time to First Byte">
-                            TTFB
-                          </span>
-                          <span
-                            className={`text-sm font-medium ${report.afterWebVitals.ttfb.grade === "good" ? "text-green-600" : report.afterWebVitals.ttfb.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}
-                          >
-                            {formatMs(report.afterWebVitals.ttfb.value)}
                           </span>
                         </div>
                       )}
@@ -928,8 +874,6 @@ async function ReportContent({
                         </div>
                       )}
                       {!report.afterWebVitals?.lcp &&
-                        !report.afterWebVitals?.fcp &&
-                        !report.afterWebVitals?.ttfb &&
                         !report.afterWebVitals?.cls &&
                         !report.afterWebVitals?.inp &&
                         report.afterClsScore === undefined && (
@@ -953,30 +897,6 @@ async function ReportContent({
                           className={`text-sm font-medium ${(report.beforeWebVitals?.lcp?.grade || report.afterWebVitals?.lcp?.grade) === "good" ? "text-green-600" : (report.beforeWebVitals?.lcp?.grade || report.afterWebVitals?.lcp?.grade) === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}
                         >
                           {formatMs(report.beforeWebVitals?.lcp?.value ?? report.afterWebVitals?.lcp?.value)}
-                        </span>
-                      </div>
-                    )}
-                    {(report.beforeWebVitals?.fcp || report.afterWebVitals?.fcp) && (
-                      <div className="flex justify-between items-center md:justify-start md:gap-2">
-                        <span className="text-sm" title="First Contentful Paint">
-                          FCP
-                        </span>
-                        <span
-                          className={`text-sm font-medium ${(report.beforeWebVitals?.fcp?.grade || report.afterWebVitals?.fcp?.grade) === "good" ? "text-green-600" : (report.beforeWebVitals?.fcp?.grade || report.afterWebVitals?.fcp?.grade) === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}
-                        >
-                          {formatMs(report.beforeWebVitals?.fcp?.value ?? report.afterWebVitals?.fcp?.value)}
-                        </span>
-                      </div>
-                    )}
-                    {(report.beforeWebVitals?.ttfb || report.afterWebVitals?.ttfb) && (
-                      <div className="flex justify-between items-center md:justify-start md:gap-2">
-                        <span className="text-sm" title="Time to First Byte">
-                          TTFB
-                        </span>
-                        <span
-                          className={`text-sm font-medium ${(report.beforeWebVitals?.ttfb?.grade || report.afterWebVitals?.ttfb?.grade) === "good" ? "text-green-600" : (report.beforeWebVitals?.ttfb?.grade || report.afterWebVitals?.ttfb?.grade) === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}
-                        >
-                          {formatMs(report.beforeWebVitals?.ttfb?.value ?? report.afterWebVitals?.ttfb?.value)}
                         </span>
                       </div>
                     )}
