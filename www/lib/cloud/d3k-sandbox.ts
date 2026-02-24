@@ -1765,7 +1765,11 @@ async function createD3kSandboxFromBaseSnapshot(
   }
 
   const normalizedProjectDir = projectDir.replace(/^\/+|\/+$/g, "")
-  const repoName = repoUrl.split("/").pop()?.replace(/\.git$/i, "") || "app"
+  const repoName =
+    repoUrl
+      .split("/")
+      .pop()
+      ?.replace(/\.git$/i, "") || "app"
   const repoCloneUrl = getRepoUrlForClone(repoUrl, githubPat)
 
   try {
@@ -2005,47 +2009,45 @@ export async function getOrCreateD3kSandbox(config: D3kSandboxConfig): Promise<D
   }
 
   timer.start("Load base snapshot metadata")
-  let metadata = await loadBaseSnapshotId(debug)
+  const metadata = await loadBaseSnapshotId(debug)
   timer.end()
 
-  if (!metadata) {
+  let snapshotIdToUse: string | undefined
+  if (metadata) {
+    timer.start("Validate base snapshot")
+    const valid = await isSnapshotValid(metadata, BASE_SNAPSHOT_VERSION, debug)
+    timer.end()
+    if (valid) {
+      snapshotIdToUse = metadata.snapshotId
+    }
+  }
+
+  if (!snapshotIdToUse) {
     timer.start("Create base snapshot")
     try {
-      const snapshotId = await createAndSaveBaseSnapshot(timeoutMs, debug)
-      metadata = {
-        snapshotId,
-        createdAt: new Date().toISOString(),
-        version: BASE_SNAPSHOT_VERSION,
-        description: "Base d3k snapshot with Chrome system deps, bun, and d3k globally installed"
-      }
+      snapshotIdToUse = await createAndSaveBaseSnapshot(timeoutMs, debug)
     } finally {
       timer.end()
     }
   }
 
-  if (metadata) {
-    timer.start("Validate base snapshot")
-    const valid = await isSnapshotValid(metadata, BASE_SNAPSHOT_VERSION, debug)
-    timer.end()
-
-    if (valid) {
-      timer.start("Create sandbox from base snapshot")
-      try {
-        const result = await createD3kSandboxFromBaseSnapshot(config, metadata.snapshotId)
-        timer.end()
-        return {
-          ...result,
-          fromSnapshot: true,
-          snapshotId: metadata.snapshotId,
-          timing: timer.getData()
-        }
-      } catch (error) {
-        timer.end()
-        if (debug) {
-          console.log(
-            `  ⚠️ Snapshot sandbox path failed, falling back to git source: ${error instanceof Error ? error.message : String(error)}`
-          )
-        }
+  if (snapshotIdToUse) {
+    timer.start("Create sandbox from base snapshot")
+    try {
+      const result = await createD3kSandboxFromBaseSnapshot(config, snapshotIdToUse)
+      timer.end()
+      return {
+        ...result,
+        fromSnapshot: true,
+        snapshotId: snapshotIdToUse,
+        timing: timer.getData()
+      }
+    } catch (error) {
+      timer.end()
+      if (debug) {
+        console.log(
+          `  ⚠️ Snapshot sandbox path failed, falling back to git source: ${error instanceof Error ? error.message : String(error)}`
+        )
       }
     }
   }
