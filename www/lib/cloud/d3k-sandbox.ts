@@ -1682,6 +1682,304 @@ async function createAndSaveBaseSnapshot(timeoutMs: number, debug = false): Prom
   }
 }
 
+function getRepoUrlForClone(repoUrl: string, githubPat?: string): string {
+  const repoUrlWithGit = repoUrl.endsWith(".git") ? repoUrl : `${repoUrl}.git`
+  if (!githubPat || !repoUrlWithGit.includes("github.com/")) return repoUrlWithGit
+  try {
+    const parsed = new URL(repoUrlWithGit)
+    parsed.username = "x-access-token"
+    parsed.password = githubPat
+    return parsed.toString()
+  } catch {
+    return repoUrlWithGit
+  }
+}
+
+async function createD3kSandboxFromBaseSnapshot(
+  config: D3kSandboxConfig,
+  snapshotId: string
+): Promise<D3kSandboxResult> {
+  const {
+    repoUrl,
+    branch = "main",
+    githubPat,
+    npmToken,
+    projectEnv = {},
+    timeout = "30m",
+    skipD3kSetup = false,
+    onProgress,
+    projectDir = "",
+    packageManager,
+    preStartCommands = [],
+    preStartBackgroundCommand,
+    preStartWaitPort,
+    debug = false
+  } = config
+
+  const reportProgress = async (message: string) => {
+    if (!onProgress) return
+    try {
+      await onProgress(message)
+    } catch {
+      // Don't fail workflow progress updates.
+    }
+  }
+
+  const timeoutMs = ms(timeout)
+  if (typeof timeoutMs !== "number") {
+    throw new Error(`Invalid timeout value: ${timeout}`)
+  }
+
+  const sandbox = await Sandbox.create({
+    source: {
+      type: "snapshot",
+      snapshotId
+    },
+    resources: { vcpus: 8 },
+    timeout: timeoutMs,
+    ports: [3000],
+    runtime: "node22"
+  })
+
+  async function runCommandWithLogs(
+    options: Parameters<Sandbox["runCommand"]>[0]
+  ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+    const result = await sandbox.runCommand(options)
+    let stdout = ""
+    let stderr = ""
+    for await (const log of result.logs()) {
+      if (log.stream === "stdout") {
+        stdout += log.data
+        if (debug && options.stdout !== process.stdout) console.log(log.data)
+      } else {
+        stderr += log.data
+        if (debug && options.stderr !== process.stderr) console.debug(log.data)
+      }
+    }
+    await result.wait()
+    return {
+      exitCode: result.exitCode,
+      stdout,
+      stderr
+    }
+  }
+
+  const normalizedProjectDir = projectDir.replace(/^\/+|\/+$/g, "")
+  const repoName = repoUrl.split("/").pop()?.replace(/\.git$/i, "") || "app"
+  const repoCloneUrl = getRepoUrlForClone(repoUrl, githubPat)
+
+  try {
+    await reportProgress("Restoring project source from Git...")
+    const cloneScript = `
+set -euo pipefail
+rm -rf /vercel/sandbox
+mkdir -p /vercel
+if [[ "$REVISION" =~ ^[0-9a-fA-F]{40}$ ]]; then
+  git clone "$REPO_URL" /vercel/sandbox
+  cd /vercel/sandbox
+  git checkout "$REVISION"
+else
+  git clone --depth 1 --branch "$REVISION" "$REPO_URL" /vercel/sandbox
+fi
+`
+    const cloneResult = await runCommandWithLogs({
+      cmd: "bash",
+      args: ["-lc", cloneScript],
+      env: {
+        REPO_URL: repoCloneUrl,
+        REVISION: branch
+      }
+    })
+    if (cloneResult.exitCode !== 0) {
+      throw new Error(`Failed to clone repository in snapshot sandbox: ${cloneResult.stderr || cloneResult.stdout}`)
+    }
+
+    const sandboxCwd = normalizedProjectDir ? `/vercel/sandbox/${normalizedProjectDir}` : "/vercel/sandbox"
+
+    if (Object.keys(projectEnv).length > 0) {
+      await reportProgress(`Writing ${Object.keys(projectEnv).length} development env var(s) to sandbox`)
+      const envWriteResult = await runCommandWithLogs({
+        cmd: "node",
+        args: [
+          "-e",
+          `const fs=require("fs");
+const env=JSON.parse(process.env.PROJECT_ENV_JSON||"{}");
+const lines=Object.entries(env).map(([k,v])=>\`\${k}=\${JSON.stringify(String(v ?? ""))}\`).join("\\n");
+fs.writeFileSync(".env.local", lines + (lines ? "\\n" : ""));
+fs.writeFileSync(".env.development.local", lines + (lines ? "\\n" : ""));
+console.log("wrote .env.local and .env.development.local");`
+        ],
+        cwd: sandboxCwd,
+        env: {
+          PROJECT_ENV_JSON: JSON.stringify(projectEnv)
+        }
+      })
+      if (envWriteResult.exitCode !== 0) {
+        throw new Error(
+          `Failed to write development env files: ${envWriteResult.stderr || envWriteResult.stdout || "unknown error"}`
+        )
+      }
+    }
+
+    const detectedPm = await runCommandWithLogs({
+      cmd: "bash",
+      args: [
+        "-lc",
+        "if [ -f bun.lockb ] || [ -f bun.lock ]; then echo bun; elif [ -f pnpm-lock.yaml ]; then echo pnpm; elif [ -f yarn.lock ]; then echo yarn; else echo npm; fi"
+      ],
+      cwd: sandboxCwd
+    })
+    const resolvedPackageManager = (packageManager || detectedPm.stdout.trim() || "npm") as
+      | "bun"
+      | "pnpm"
+      | "npm"
+      | "yarn"
+    await reportProgress(`Detected package manager: ${resolvedPackageManager}`)
+
+    const resolvedNpmToken = npmToken || process.env.NPM_TOKEN
+    if (resolvedNpmToken) {
+      await reportProgress("Configuring npm auth token for private packages")
+      const npmAuthSetup = await runCommandWithLogs({
+        cmd: "bash",
+        args: [
+          "-lc",
+          `cat > "$HOME/.npmrc" <<EOF
+registry=https://registry.npmjs.org/
+//registry.npmjs.org/:_authToken=$NPM_TOKEN
+always-auth=true
+EOF
+cat > ".npmrc" <<EOF
+registry=https://registry.npmjs.org/
+//registry.npmjs.org/:_authToken=$NPM_TOKEN
+always-auth=true
+EOF
+chmod 0600 "$HOME/.npmrc" ".npmrc"`
+        ],
+        cwd: sandboxCwd,
+        env: { NPM_TOKEN: resolvedNpmToken }
+      })
+      if (npmAuthSetup.exitCode !== 0) {
+        throw new Error(`Failed to configure npm auth token: ${npmAuthSetup.stderr || npmAuthSetup.stdout}`)
+      }
+    }
+
+    await reportProgress("Installing project dependencies...")
+    const installCommand =
+      resolvedPackageManager === "bun"
+        ? "bun install"
+        : resolvedPackageManager === "pnpm"
+          ? normalizedProjectDir
+            ? `corepack pnpm -C ${sandboxCwd} install --filter .`
+            : "corepack pnpm install"
+          : resolvedPackageManager === "yarn"
+            ? "corepack yarn install"
+            : "npm install"
+
+    const installResult = await runCommandWithLogs({
+      cmd: "bash",
+      args: ["-lc", `export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; ${installCommand}`],
+      cwd: sandboxCwd,
+      env: resolvedNpmToken ? { NPM_TOKEN: resolvedNpmToken, NODE_AUTH_TOKEN: resolvedNpmToken } : undefined,
+      stdout: debug ? process.stdout : undefined,
+      stderr: debug ? process.stderr : undefined
+    })
+    if (installResult.exitCode !== 0) {
+      const stderrTail = installResult.stderr.slice(-1000)
+      const stdoutTail = installResult.stdout.slice(-500)
+      throw new Error(
+        `Project dependency installation failed with exit code ${installResult.exitCode}\nStderr: ${stderrTail || "(empty)"}\nStdout: ${stdoutTail || "(empty)"}`
+      )
+    }
+    await reportProgress("Project dependencies installed")
+
+    if (preStartCommands.length > 0) {
+      for (const preStartCommand of preStartCommands) {
+        const resolvedPreStartCommand = preStartCommand.replace(/\$\{packageManager\}/g, resolvedPackageManager)
+        const preStartResult = await runCommandWithLogs({
+          cmd: "sh",
+          args: [
+            "-c",
+            `export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; cd ${sandboxCwd} && ${resolvedPreStartCommand}`
+          ],
+          stdout: debug ? process.stdout : undefined,
+          stderr: debug ? process.stderr : undefined
+        })
+        if (preStartResult.exitCode !== 0) {
+          throw new Error(`Pre-start command failed (${resolvedPreStartCommand}): ${preStartResult.stderr}`)
+        }
+      }
+    }
+
+    if (preStartBackgroundCommand) {
+      const resolvedPreStartBackgroundCommand = preStartBackgroundCommand.replace(
+        /\$\{packageManager\}/g,
+        resolvedPackageManager
+      )
+      await sandbox.runCommand({
+        cmd: "sh",
+        args: [
+          "-c",
+          `mkdir -p /home/vercel-sandbox/.d3k/logs && export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; cd ${sandboxCwd} && ${resolvedPreStartBackgroundCommand} > /home/vercel-sandbox/.d3k/logs/pre-start-background.log 2>&1`
+        ],
+        detached: true
+      })
+      if (preStartWaitPort) {
+        await waitForServer(sandbox, preStartWaitPort, 120000, debug)
+      }
+    }
+
+    if (skipD3kSetup) {
+      const devUrl = sandbox.domain(3000)
+      return {
+        sandbox,
+        devUrl,
+        projectName: normalizedProjectDir || repoName,
+        bypassToken: undefined,
+        cleanup: async () => {
+          await sandbox.stop()
+        }
+      }
+    }
+
+    const chromiumPath = "/usr/bin/chromium"
+    const d3kStartupLog = "/home/vercel-sandbox/.d3k/logs/d3k-startup.log"
+    await sandbox.runCommand({
+      cmd: "sh",
+      args: [
+        "-c",
+        `mkdir -p /home/vercel-sandbox/.d3k/logs && export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; cd ${sandboxCwd} && d3k --no-tui --debug --headless --auto-skills --agent-name codex --browser ${chromiumPath} > ${d3kStartupLog} 2>&1`
+      ],
+      detached: true
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 5000))
+    await waitForServer(sandbox, 3000, 120000, debug)
+
+    const cdpUrl = await waitForCdpUrl(sandbox, 30000, debug)
+    if (cdpUrl) {
+      await waitForPageNavigation(sandbox, 30000, debug)
+    }
+
+    const devUrl = sandbox.domain(3000)
+    return {
+      sandbox,
+      devUrl,
+      projectName: normalizedProjectDir || repoName,
+      bypassToken: undefined,
+      cleanup: async () => {
+        await sandbox.stop()
+      }
+    }
+  } catch (error) {
+    try {
+      await sandbox.stop()
+    } catch {
+      // Ignore cleanup errors
+    }
+    throw error
+  }
+}
+
 /**
  * Get or create a d3k sandbox with automatic base snapshot management
  *
@@ -1700,11 +1998,63 @@ async function createAndSaveBaseSnapshot(timeoutMs: number, debug = false): Prom
  */
 export async function getOrCreateD3kSandbox(config: D3kSandboxConfig): Promise<D3kSandboxResultWithSnapshot> {
   const timer = new StepTimer()
+  const debug = config.debug ?? false
+  const timeoutMs = ms(config.timeout || "30m")
+  if (typeof timeoutMs !== "number") {
+    throw new Error(`Invalid timeout value: ${config.timeout}`)
+  }
+
+  timer.start("Load base snapshot metadata")
+  let metadata = await loadBaseSnapshotId(debug)
+  timer.end()
+
+  if (!metadata) {
+    timer.start("Create base snapshot")
+    try {
+      const snapshotId = await createAndSaveBaseSnapshot(timeoutMs, debug)
+      metadata = {
+        snapshotId,
+        createdAt: new Date().toISOString(),
+        version: BASE_SNAPSHOT_VERSION,
+        description: "Base d3k snapshot with Chrome system deps, bun, and d3k globally installed"
+      }
+    } finally {
+      timer.end()
+    }
+  }
+
+  if (metadata) {
+    timer.start("Validate base snapshot")
+    const valid = await isSnapshotValid(metadata, BASE_SNAPSHOT_VERSION, debug)
+    timer.end()
+
+    if (valid) {
+      timer.start("Create sandbox from base snapshot")
+      try {
+        const result = await createD3kSandboxFromBaseSnapshot(config, metadata.snapshotId)
+        timer.end()
+        return {
+          ...result,
+          fromSnapshot: true,
+          snapshotId: metadata.snapshotId,
+          timing: timer.getData()
+        }
+      } catch (error) {
+        timer.end()
+        if (debug) {
+          console.log(
+            `  ⚠️ Snapshot sandbox path failed, falling back to git source: ${error instanceof Error ? error.message : String(error)}`
+          )
+        }
+      }
+    }
+  }
+
   timer.start("Create sandbox from git source")
-  const result = await createD3kSandbox(config)
+  const fallback = await createD3kSandbox(config)
   timer.end()
   return {
-    ...result,
+    ...fallback,
     fromSnapshot: false,
     snapshotId: undefined,
     timing: timer.getData()
