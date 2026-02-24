@@ -1448,7 +1448,8 @@ export async function initSandboxStep(
       branch,
       githubPat,
       npmToken,
-      skipD3kSetup: isTurbopackBundleAnalyzer,
+      // Turbopack workflows now require CWV verification, so browser/d3k setup cannot be skipped.
+      skipD3kSetup: false,
       onProgress: (message) => appendProgressLog(progressContext, `[Sandbox] ${message}`),
       projectDir: projectDir || "",
       projectEnv: developmentEnv,
