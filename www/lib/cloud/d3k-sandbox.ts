@@ -1090,14 +1090,24 @@ async function waitForServer(sandbox: Sandbox, port: number, timeoutMs: number, 
   const url = sandbox.domain(port)
   let lastError: string | undefined
   let lastStatus: number | undefined
+  let lastLoggedStatus: number | undefined
+  let sameStatusCount = 0
+  let consecutiveServerErrors = 0
 
   while (Date.now() - startTime < timeoutMs) {
     try {
       const response = await fetch(url, { method: "HEAD", redirect: "manual" })
-      lastStatus = response.status
+      const currentStatus = response.status
+      if (lastStatus === currentStatus) {
+        sameStatusCount += 1
+      } else {
+        sameStatusCount = 1
+      }
+      lastStatus = currentStatus
 
-      if (debug && response.status !== lastStatus) {
+      if (debug && currentStatus !== lastLoggedStatus) {
         console.log(`  🔍 Port ${port} check: status ${response.status} ${response.statusText}`)
+        lastLoggedStatus = currentStatus
       }
 
       // Consider server ready if:
@@ -1112,8 +1122,23 @@ async function waitForServer(sandbox: Sandbox, port: number, timeoutMs: number, 
 
       // Log unexpected status codes
       if (response.status >= 400 && response.status !== 404) {
+        if (response.status >= 500) {
+          consecutiveServerErrors += 1
+        } else {
+          consecutiveServerErrors = 0
+        }
         lastError = `HTTP ${response.status} ${response.statusText}`
-        if (debug) console.log(`  ⚠️ Port ${port} returned ${lastError}`)
+        if (debug && (sameStatusCount === 1 || sameStatusCount % 10 === 0)) {
+          console.log(`  ⚠️ Port ${port} returned ${lastError} (${sameStatusCount} consecutive checks)`)
+        }
+        if (consecutiveServerErrors >= 30) {
+          throw new Error(
+            `Server on port ${port} is persistently returning ${lastError} (${consecutiveServerErrors} consecutive checks). ` +
+              "This usually means the app booted but is failing at runtime (often missing required env vars/services)."
+          )
+        }
+      } else {
+        consecutiveServerErrors = 0
       }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error)
