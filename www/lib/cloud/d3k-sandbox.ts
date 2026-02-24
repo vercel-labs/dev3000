@@ -900,7 +900,7 @@ chmod 0600 "$HOME/.npmrc" ".npmrc"`
     // Use chromium path from @sparticuz/chromium (or fallback)
     if (debug)
       console.log(
-        `  🔧 Command: export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; cd ${sandboxCwd} && d3k --no-tui --debug --headless --auto-skills --agent-name codex --browser ${chromiumPath}`
+        `  🔧 Command: export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; cd ${sandboxCwd} && d3k --no-tui --debug --headless --agent-name codex --browser ${chromiumPath}`
       )
 
     // Start d3k in detached mode with --headless flag
@@ -915,7 +915,7 @@ chmod 0600 "$HOME/.npmrc" ".npmrc"`
       cmd: "sh",
       args: [
         "-c",
-        `mkdir -p /home/vercel-sandbox/.d3k/logs && export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; cd ${sandboxCwd} && d3k --no-tui --debug --headless --auto-skills --agent-name codex --browser ${chromiumPath} > ${d3kStartupLog} 2>&1`
+        `mkdir -p /home/vercel-sandbox/.d3k/logs && export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; cd ${sandboxCwd} && d3k --no-tui --debug --headless --agent-name codex --browser ${chromiumPath} > ${d3kStartupLog} 2>&1`
       ],
       detached: true
     })
@@ -1951,7 +1951,7 @@ chmod 0600 "$HOME/.npmrc" ".npmrc"`
       cmd: "sh",
       args: [
         "-c",
-        `mkdir -p /home/vercel-sandbox/.d3k/logs && export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; cd ${sandboxCwd} && d3k --no-tui --debug --headless --auto-skills --agent-name codex --browser ${chromiumPath} > ${d3kStartupLog} 2>&1`
+        `mkdir -p /home/vercel-sandbox/.d3k/logs && export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; cd ${sandboxCwd} && d3k --no-tui --debug --headless --agent-name codex --browser ${chromiumPath} > ${d3kStartupLog} 2>&1`
       ],
       detached: true
     })
