@@ -4,6 +4,16 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.169] - 2026-02-26
+
+**Feature Release**
+
+- Add bundled React DevTools extension support for React/Next.js debugging (idea credit: Jude Gao).
+- Improve tmux --with-agent reliability with stronger setup ordering and fail-fast split checks.
+- Show clearer tmux diagnostics and keep pane output logs available for faster crash triage.
+- Fix Codex split-pane TTY handling by switching pane logging to tmux pipe-pane (no stdout-is-not-a-terminal regressions).
+- Add regression tests to prevent tmux logging and agent command quoting regressions.
+
 ## [0.0.168] - 2026-02-21
 
 **Patch Release**
