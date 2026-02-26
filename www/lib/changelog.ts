@@ -10,6 +10,19 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.169",
+    date: "2026-02-26",
+    type: "minor",
+    highlights: [
+      "Add bundled React DevTools extension support for React/Next.js debugging (idea credit: Jude Gao).",
+      "Improve tmux --with-agent reliability with stronger setup ordering and fail-fast split checks.",
+      "Show clearer tmux diagnostics and keep pane output logs available for faster crash triage.",
+      "Fix Codex split-pane TTY handling by switching pane logging to tmux pipe-pane (no stdout-is-not-a-terminal regressions).",
+      "Add regression tests to prevent tmux logging and agent command quoting regressions."
+    ]
+  },
+
+  {
     version: "0.0.168",
     date: "2026-02-21",
     type: "patch",

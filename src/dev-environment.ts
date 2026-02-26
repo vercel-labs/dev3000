@@ -1883,7 +1883,8 @@ export class DevEnvironment {
       this.options.pluginReactScan,
       this.options.port, // App server port to monitor
       this.options.debugPort, // Chrome debug port
-      this.options.headless // Headless mode for serverless/CI environments
+      this.options.headless, // Headless mode for serverless/CI environments
+      this.options.framework // Framework hint for optional React DevTools launch args
     )
 
     try {

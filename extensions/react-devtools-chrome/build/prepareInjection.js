@@ -1,0 +1,1 @@
+(()=>{let e;window.addEventListener("message",(function({data:o,source:n}){if(n===window&&o&&"react-devtools-hook"===o.source){const{source:n,payload:s}=o,t={source:n,payload:s};e=t,chrome.runtime.sendMessage(t)}})),window.addEventListener("pageshow",(function({target:o}){e&&o===window.document&&chrome.runtime.sendMessage(e)}))})();

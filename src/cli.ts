@@ -328,6 +328,8 @@ async function launchWithTmux(agentCommand: string, forwardedOptions: ForwardedO
 
   // Generate a unique session name
   const sessionName = generateSessionName()
+  const agentPaneLogPath = join(d3kDir, "tmux-last-agent.log")
+  const d3kPaneLogPath = join(d3kDir, "tmux-last-d3k.log")
 
   // Build d3k command with forwarded options
   const d3kCommand = buildD3kCommandWithOptions(forwardedOptions)
@@ -337,7 +339,9 @@ async function launchWithTmux(agentCommand: string, forwardedOptions: ForwardedO
     sessionName,
     d3kCommand,
     agentCommand,
-    paneWidthPercent: DEFAULT_TMUX_CONFIG.paneWidthPercent
+    paneWidthPercent: DEFAULT_TMUX_CONFIG.paneWidthPercent,
+    d3kLogPath: d3kPaneLogPath,
+    agentLogPath: agentPaneLogPath
   })
 
   // Create a shell script that sets up tmux and attaches
@@ -351,6 +355,8 @@ async function launchWithTmux(agentCommand: string, forwardedOptions: ForwardedO
   const newSessionWithSize = newSessionCmd.replace("tmux new-session -d", "tmux new-session -d -x $COLS -y $LINES")
 
   const scriptContent = `#!/bin/bash
+set -euo pipefail
+
 # Reset terminal state
 stty sane 2>/dev/null || true
 reset 2>/dev/null || true
@@ -363,11 +369,20 @@ LINES=$(tput lines)
 ${newSessionWithSize} && \\
 ${remainingCommands.join(" && \\\n")}
 
+# Verify split setup succeeded before attaching.
+PANE_COUNT=$(tmux list-panes -t "${sessionName}" 2>/dev/null | wc -l | tr -d ' ')
+if [ "\${PANE_COUNT}" -lt 2 ]; then
+  echo "❌ Failed to initialize split panes (expected 2, got \${PANE_COUNT})."
+  tmux kill-session -t "${sessionName}" 2>/dev/null || true
+  exit 1
+fi
+
 # Replace this process with tmux attach
 exec tmux attach-session -t "${sessionName}"
 `
 
   try {
+    const tmuxStartTime = Date.now()
     // Write the launch script
     writeFileSync(scriptPath, scriptContent, { mode: 0o755 })
 
@@ -378,6 +393,8 @@ exec tmux attach-session -t "${sessionName}"
       stdio: "inherit",
       shell: false
     })
+    const tmuxDurationMs = Date.now() - tmuxStartTime
+    const exitCode = result.status ?? (result.error ? 1 : 0)
 
     // Clean up session on exit
     try {
@@ -386,11 +403,27 @@ exec tmux attach-session -t "${sessionName}"
       // Session might already be killed
     }
 
-    // Clear screen and print exit message
-    process.stdout.write("\x1b[2J\x1b[H\x1b[3J")
-    console.log(chalk.gray("Thanks for using d3k!"))
+    // If tmux exits quickly, surface diagnostics to avoid a "silent crash" experience.
+    if (exitCode !== 0 || tmuxDurationMs < 15_000) {
+      console.error("")
+      if (exitCode !== 0) {
+        console.error(chalk.red(`❌ tmux session exited with code ${exitCode}`))
+      } else {
+        console.error(chalk.yellow("⚠️ tmux session exited quickly"))
+      }
+      console.error(chalk.gray(`Agent pane log: ${agentPaneLogPath}`))
+      console.error(chalk.gray(`d3k pane log:   ${d3kPaneLogPath}`))
+      console.error(chalk.gray(`Crash log:      ${crashLogPath}`))
+      console.error("")
+    }
 
-    process.exit(result.status || 0)
+    // Clear screen only on clean, long-running sessions.
+    if (exitCode === 0 && tmuxDurationMs >= 15_000) {
+      process.stdout.write("\x1b[2J\x1b[H\x1b[3J")
+      console.log(chalk.gray("Thanks for using d3k!"))
+    }
+
+    process.exit(exitCode)
   } catch (error) {
     logCrash("Failed to start tmux session", error)
     process.exit(1)

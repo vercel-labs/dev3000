@@ -34,7 +34,7 @@ describe("tmux-helpers", () => {
 
     it("should generate correct number of commands", () => {
       const commands = generateTmuxCommands(baseConfig)
-      expect(commands).toHaveLength(15)
+      expect(commands).toHaveLength(14)
     })
 
     it("should create session with d3k command first", () => {
@@ -68,48 +68,59 @@ describe("tmux-helpers", () => {
 
     it("should set pane-exited hook to kill session", () => {
       const commands = generateTmuxCommands(baseConfig)
-      expect(commands[5]).toBe('tmux set-hook -t "d3k-test-123" pane-exited "kill-session -t d3k-test-123"')
+      const paneExitedCmd = commands.find((cmd) => cmd.includes("pane-exited"))
+      expect(paneExitedCmd).toBe('tmux set-hook -t "d3k-test-123" pane-exited "kill-session -t d3k-test-123"')
     })
 
     it("should set client-resized hook to maintain pane ratio", () => {
       const commands = generateTmuxCommands(baseConfig)
-      expect(commands[6]).toContain("set-hook")
-      expect(commands[6]).toContain("client-resized")
-      expect(commands[6]).toContain("resize-pane -t :.0 -x 75%")
+      const clientResizedCmd = commands.find((cmd) => cmd.includes("client-resized"))
+      expect(clientResizedCmd).toBeDefined()
+      expect(clientResizedCmd).toContain("set-hook")
+      expect(clientResizedCmd).toContain("resize-pane -t :.0 -x 75%")
     })
 
     it("should set pane border styles with purple active border", () => {
       const commands = generateTmuxCommands(baseConfig)
-      expect(commands[7]).toBe('tmux set-option -t "d3k-test-123" pane-border-style "fg=#333333"')
-      expect(commands[8]).toBe('tmux set-option -t "d3k-test-123" pane-active-border-style "fg=#A18CE5"')
+      const paneBorderCmd = commands.find((cmd) => cmd.includes('pane-border-style "fg=#333333"'))
+      const paneActiveBorderCmd = commands.find((cmd) => cmd.includes('pane-active-border-style "fg=#A18CE5"'))
+      expect(paneBorderCmd).toBe('tmux set-option -t "d3k-test-123" pane-border-style "fg=#333333"')
+      expect(paneActiveBorderCmd).toBe('tmux set-option -t "d3k-test-123" pane-active-border-style "fg=#A18CE5"')
     })
 
     it("should split window with agent on left side with size", () => {
       const commands = generateTmuxCommands(baseConfig)
-      expect(commands[9]).toContain("split-window -h -b -l 75%")
-      expect(commands[9]).toContain("d3k-test-123")
+      const splitWindowCmd = commands.find((cmd) => cmd.includes("split-window"))
+      expect(splitWindowCmd).toBeDefined()
+      expect(splitWindowCmd).toContain("split-window -h -b -l 75%")
+      expect(splitWindowCmd).toContain("d3k-test-123")
     })
 
     it("should start agent directly without tools polling", () => {
       const commands = generateTmuxCommands(baseConfig)
-      expect(commands[9]).toContain("claude")
-      expect(commands[9]).not.toContain("curl")
-      expect(commands[9]).not.toContain("Waiting for d3k tools service")
+      const splitWindowCmd = commands.find((cmd) => cmd.includes("split-window"))
+      expect(splitWindowCmd).toBeDefined()
+      expect(splitWindowCmd).toContain("claude")
+      expect(splitWindowCmd).not.toContain("curl")
+      expect(splitWindowCmd).not.toContain("Waiting for d3k tools service")
     })
 
     it("should set pane-focus-in hook with window flag to resize on click", () => {
       const commands = generateTmuxCommands(baseConfig)
-      expect(commands[10]).toContain("set-hook -w")
-      expect(commands[10]).toContain("pane-focus-in")
-      expect(commands[10]).toContain("resize-pane -x 75%")
+      const paneFocusInCmd = commands.find((cmd) => cmd.includes("pane-focus-in"))
+      expect(paneFocusInCmd).toBeDefined()
+      expect(paneFocusInCmd).toContain("set-hook -w")
+      expect(paneFocusInCmd).toContain("resize-pane -x 75%")
     })
 
     it("should bind arrow keys for focus+resize after split", () => {
       const commands = generateTmuxCommands(baseConfig)
-      expect(commands[11]).toContain("bind-key -T prefix Left")
-      expect(commands[11]).toContain("'select-pane -t :.0 ; resize-pane -t :.0 -x 75%'")
-      expect(commands[12]).toContain("bind-key -T prefix Right")
-      expect(commands[12]).toContain("'select-pane -t :.1 ; resize-pane -t :.1 -x 75%'")
+      const leftBindCmd = commands.find((cmd) => cmd.includes("bind-key -T prefix Left"))
+      const rightBindCmd = commands.find((cmd) => cmd.includes("bind-key -T prefix Right"))
+      expect(leftBindCmd).toBeDefined()
+      expect(leftBindCmd).toContain("'select-pane -t :.0 ; resize-pane -t :.0 -x 75%'")
+      expect(rightBindCmd).toBeDefined()
+      expect(rightBindCmd).toContain("'select-pane -t :.1 ; resize-pane -t :.1 -x 75%'")
     })
 
     it("should select agent pane after split", () => {
@@ -124,7 +135,9 @@ describe("tmux-helpers", () => {
       }
       const commands = generateTmuxCommands(config)
       // Split window command should have the specified percentage
-      expect(commands[9]).toContain("-l 50%")
+      const splitWindowCmd = commands.find((cmd) => cmd.includes("split-window"))
+      expect(splitWindowCmd).toBeDefined()
+      expect(splitWindowCmd).toContain("-l 50%")
     })
 
     it("should handle different agent commands", () => {
@@ -133,7 +146,9 @@ describe("tmux-helpers", () => {
         agentCommand: "opencode"
       }
       const commands = generateTmuxCommands(config)
-      expect(commands[9]).toContain("opencode")
+      const splitWindowCmd = commands.find((cmd) => cmd.includes("split-window"))
+      expect(splitWindowCmd).toBeDefined()
+      expect(splitWindowCmd).toContain("opencode")
     })
 
     it("should safely quote pane command when --command contains spaces", () => {
@@ -159,6 +174,40 @@ describe("tmux-helpers", () => {
       for (const cmd of sessionTargetedCommands) {
         expect(cmd).toContain("d3k-special-session")
       }
+    })
+
+    it("should use tmux pipe-pane logging without tee wrappers when log paths are provided", () => {
+      const config: TmuxSessionConfig = {
+        ...baseConfig,
+        d3kLogPath: "/tmp/d3k-pane.log",
+        agentLogPath: "/tmp/agent-pane.log"
+      }
+      const commands = generateTmuxCommands(config)
+
+      const agentPipeCmd = commands.find((cmd) => cmd.includes('pipe-pane -o -t "d3k-test-123:0.0"'))
+      const d3kPipeCmd = commands.find((cmd) => cmd.includes('pipe-pane -o -t "d3k-test-123:0.1"'))
+      expect(agentPipeCmd).toBe('tmux pipe-pane -o -t "d3k-test-123:0.0" "cat >> \'/tmp/agent-pane.log\'"')
+      expect(d3kPipeCmd).toBe('tmux pipe-pane -o -t "d3k-test-123:0.1" "cat >> \'/tmp/d3k-pane.log\'"')
+
+      // Piping pane process output through tee breaks TTY detection for interactive agents.
+      expect(commands.some((cmd) => cmd.includes("tee -a"))).toBe(false)
+      expect(commands.some((cmd) => cmd.includes("PIPESTATUS"))).toBe(false)
+    })
+
+    it("should set pipe-pane logging only after split-window exists", () => {
+      const config: TmuxSessionConfig = {
+        ...baseConfig,
+        d3kLogPath: "/tmp/d3k-pane.log",
+        agentLogPath: "/tmp/agent-pane.log"
+      }
+      const commands = generateTmuxCommands(config)
+      const splitWindowIndex = commands.findIndex((cmd) => cmd.includes("split-window"))
+      const agentPipeIndex = commands.findIndex((cmd) => cmd.includes('pipe-pane -o -t "d3k-test-123:0.0"'))
+      const d3kPipeIndex = commands.findIndex((cmd) => cmd.includes('pipe-pane -o -t "d3k-test-123:0.1"'))
+
+      expect(splitWindowIndex).toBeGreaterThan(-1)
+      expect(agentPipeIndex).toBeGreaterThan(splitWindowIndex)
+      expect(d3kPipeIndex).toBeGreaterThan(splitWindowIndex)
     })
   })
 
@@ -267,11 +316,11 @@ describe("tmux-helpers", () => {
       expect(commands[0]).toContain("new-session")
       expect(commands[3]).toContain("mouse on")
       expect(commands[4]).toContain("focus-events on")
-      expect(commands[5]).toContain("set-hook")
-      expect(commands[6]).toContain("client-resized")
-      expect(commands[9]).toContain("split-window")
-      expect(commands[9]).toContain("-l 75%")
-      expect(commands[10]).toContain("pane-focus-in")
+      expect(commands[5]).toContain("client-resized")
+      expect(commands[8]).toContain("split-window")
+      expect(commands[8]).toContain("-l 75%")
+      expect(commands[9]).toContain("pane-focus-in")
+      expect(commands[12]).toContain("pane-exited")
       expect(commands[13]).toContain("select-pane")
     })
 
@@ -285,7 +334,7 @@ describe("tmux-helpers", () => {
       const commands = generateTmuxCommands(config)
 
       expect(commands[0]).toContain("dev3000")
-      expect(commands[9]).toContain("opencode")
+      expect(commands[8]).toContain("opencode")
     })
   })
 })

@@ -18,6 +18,15 @@ export interface CDPConnection {
   nextId: number
 }
 
+interface ReactDebugSnapshot {
+  hookPresent: boolean
+  rendererCount: number
+  rootCount: number
+  rendererVersion: string | null
+  bundleType: number | null
+  operationsSeen: number
+}
+
 const EMBEDDED_LOADING_HTML = `<!DOCTYPE html>
 <html>
 <head>
@@ -80,6 +89,9 @@ export class CDPMonitor {
   private onWindowClosedCallback: (() => void) | null = null // Callback for when window is manually closed
   private appServerPort?: string // Port of the user's app server to monitor
   private headless: boolean = false // Run Chrome in headless mode
+  private framework?: "nextjs" | "svelte" | "other" // Framework hint from project detection
+  private reactTrackingEnabled: boolean = false
+  private lastReactSnapshotLogTime: number = 0
 
   constructor(
     profileDir: string,
@@ -90,7 +102,8 @@ export class CDPMonitor {
     pluginReactScan: boolean = false,
     appServerPort?: string,
     debugPort?: number,
-    headless: boolean = false
+    headless: boolean = false,
+    framework?: "nextjs" | "svelte" | "other"
   ) {
     this.profileDir = profileDir
     this.screenshotDir = screenshotDir
@@ -100,10 +113,41 @@ export class CDPMonitor {
     this.browserPath = browserPath
     this.pluginReactScan = pluginReactScan
     this.headless = headless
+    this.framework = framework
+    this.reactTrackingEnabled = framework === "nextjs"
     // Use custom debug port if provided, otherwise use default 9222
     if (debugPort) {
       this.debugPort = debugPort
     }
+  }
+
+  private resolveReactDevToolsExtensionPath(): string | null {
+    const envPath = process.env.D3K_REACT_DEVTOOLS_EXTENSION_PATH
+    if (envPath) {
+      const envManifest = join(envPath, "manifest.json")
+      if (existsSync(envManifest)) {
+        return envPath
+      }
+    }
+
+    const currentFile = fileURLToPath(import.meta.url)
+    const currentDir = dirname(currentFile)
+
+    const candidates = [
+      join(process.cwd(), "extensions", "react-devtools-chrome"),
+      join(process.cwd(), "tmp", "ppr-ralph", "extensions", "react-devtools-chrome"),
+      join(currentDir, "extensions", "react-devtools-chrome"),
+      join(currentDir, "..", "extensions", "react-devtools-chrome"),
+      join(currentDir, "..", "tmp", "ppr-ralph", "extensions", "react-devtools-chrome")
+    ]
+
+    for (const candidate of candidates) {
+      if (existsSync(join(candidate, "manifest.json"))) {
+        return candidate
+      }
+    }
+
+    return null
   }
 
   private debugLog(message: string) {
@@ -428,6 +472,9 @@ export class CDPMonitor {
         this.debugLog(`Trying Chrome path [${attemptIndex}]: ${chromePath}`)
         attemptIndex++
 
+        const shouldEnableReactDevTools = this.framework === "nextjs" && !this.headless
+        const reactDevToolsExtensionPath = shouldEnableReactDevTools ? this.resolveReactDevToolsExtensionPath() : null
+
         // Build Chrome args - add headless flag if enabled
         const chromeArgs = [
           `--remote-debugging-port=${this.debugPort}`,
@@ -442,6 +489,18 @@ export class CDPMonitor {
           "--disable-session-crashed-bubble",
           "--disable-restore-session-state"
         ]
+
+        if (shouldEnableReactDevTools && reactDevToolsExtensionPath) {
+          chromeArgs.push(`--disable-extensions-except=${reactDevToolsExtensionPath}`)
+          chromeArgs.push(`--load-extension=${reactDevToolsExtensionPath}`)
+          chromeArgs.push("--auto-open-devtools-for-tabs")
+          this.logger("browser", "[CDP] React app detected (Next.js): enabling React DevTools extension")
+        } else if (shouldEnableReactDevTools) {
+          this.logger(
+            "browser",
+            "[CDP] React app detected (Next.js), but React DevTools extension was not found; continuing without extension"
+          )
+        }
 
         if (this.headless) {
           // Use new headless mode (Chrome 112+) which has better compatibility
@@ -766,6 +825,87 @@ export class CDPMonitor {
     })
   }
 
+  private getBundleTypeLabel(bundleType: number | null): string {
+    if (bundleType === 0) return "production"
+    if (bundleType === 1) return "development"
+    return "unknown"
+  }
+
+  private async getReactDebugSnapshot(): Promise<ReactDebugSnapshot | null> {
+    if (!this.reactTrackingEnabled) return null
+
+    try {
+      const result = (await this.sendCDPCommand("Runtime.evaluate", {
+        expression: `
+          (() => {
+            const hook = window.__REACT_DEVTOOLS_GLOBAL_HOOK__;
+            const state = window.__dev3000_react_state || {};
+
+            let rendererCount = 0;
+            let rootCount = 0;
+            let rendererVersion = null;
+            let bundleType = null;
+
+            if (hook && hook.renderers && typeof hook.renderers.forEach === 'function') {
+              hook.renderers.forEach((renderer, id) => {
+                rendererCount++;
+                if (rendererVersion === null && renderer && typeof renderer.version === 'string') {
+                  rendererVersion = renderer.version;
+                }
+                if (bundleType === null && renderer && typeof renderer.bundleType === 'number') {
+                  bundleType = renderer.bundleType;
+                }
+
+                if (hook.getFiberRoots) {
+                  const roots = hook.getFiberRoots(id);
+                  if (roots && typeof roots.size === 'number') {
+                    rootCount += roots.size;
+                  }
+                }
+              });
+            }
+
+            return {
+              hookPresent: !!hook,
+              rendererCount,
+              rootCount,
+              rendererVersion: state.rendererVersion ?? rendererVersion ?? null,
+              bundleType: state.bundleType ?? bundleType ?? null,
+              operationsSeen: Number(state.operationsSeen || 0)
+            };
+          })()
+        `,
+        returnByValue: true
+      })) as { result?: { value?: ReactDebugSnapshot } }
+
+      return result.result?.value ?? null
+    } catch (error) {
+      this.debugLog(`Failed to capture React debug snapshot: ${String(error)}`)
+      return null
+    }
+  }
+
+  private async logReactSnapshot(reason: string, force: boolean = false): Promise<void> {
+    if (!this.reactTrackingEnabled) return
+
+    // Limit passive snapshots to avoid log noise.
+    const now = Date.now()
+    if (!force && now - this.lastReactSnapshotLogTime < 5000) {
+      return
+    }
+
+    const snapshot = await this.getReactDebugSnapshot()
+    if (!snapshot || !snapshot.hookPresent) {
+      return
+    }
+
+    this.lastReactSnapshotLogTime = now
+    this.logger(
+      "browser",
+      `[REACT] ${reason}: renderer=${snapshot.rendererVersion || "unknown"} mode=${this.getBundleTypeLabel(snapshot.bundleType)} renderers=${snapshot.rendererCount} roots=${snapshot.rootCount} ops=${snapshot.operationsSeen}`
+    )
+  }
+
   private async enableCDPDomains(): Promise<void> {
     const domains = [
       "Runtime", // Console logs, exceptions
@@ -942,6 +1082,7 @@ export class CDPMonitor {
       }
 
       this.logger("browser", errorMsg)
+      void this.logReactSnapshot("exception context", true)
 
       // Take screenshot immediately on errors (no delay needed)
       this.takeScreenshot("error")
@@ -1073,6 +1214,7 @@ export class CDPMonitor {
       this.takeScreenshot("page-loaded")
       // Reinject interaction tracking on page load
       await this.setupInteractionTracking()
+      void this.logReactSnapshot("post-load context")
     })
 
     this.onCDPEvent("Page.domContentEventFired", async (_event) => {
@@ -1080,6 +1222,7 @@ export class CDPMonitor {
       // Skip screenshot on DOM content loaded - we'll get one on page-loaded
       // Reinject interaction tracking on DOM content loaded
       await this.setupInteractionTracking()
+      void this.logReactSnapshot("domcontentloaded context")
     })
 
     // Network activity tracking for better screenshot timing
@@ -1393,6 +1536,67 @@ export class CDPMonitor {
             
             // Listen for our custom interaction events and store them for CDP polling
             window.__dev3000_interactions = [];
+
+            // Lightweight React bridge telemetry (no PPR-specific parsing).
+            if (!window.__dev3000_react_tracking) {
+              window.__dev3000_react_tracking = true;
+              window.__dev3000_react_events = [];
+              window.__dev3000_react_state = {
+                connected: false,
+                rendererVersion: null,
+                bundleType: null,
+                operationsSeen: 0
+              };
+
+              const pushReactEvent = (event) => {
+                window.__dev3000_react_events.push({
+                  timestamp: Date.now(),
+                  ...event
+                });
+                if (window.__dev3000_react_events.length > 50) {
+                  window.__dev3000_react_events = window.__dev3000_react_events.slice(-50);
+                }
+              };
+
+              window.addEventListener('message', (event) => {
+                const data = event.data;
+                if (
+                  event.source !== window ||
+                  !data ||
+                  data.source !== 'react-devtools-bridge' ||
+                  !data.payload
+                ) {
+                  return;
+                }
+
+                const payload = data.payload;
+                const bridgeEvent = payload.event;
+
+                if (bridgeEvent === 'renderer') {
+                  window.__dev3000_react_state.connected = true;
+                  window.__dev3000_react_state.rendererVersion =
+                    payload?.payload?.renderer?.version ?? null;
+                  window.__dev3000_react_state.bundleType =
+                    typeof payload?.payload?.renderer?.bundleType === 'number'
+                      ? payload.payload.renderer.bundleType
+                      : null;
+                  pushReactEvent({
+                    type: 'renderer',
+                    rendererVersion: window.__dev3000_react_state.rendererVersion,
+                    bundleType: window.__dev3000_react_state.bundleType
+                  });
+                  return;
+                }
+
+                if (bridgeEvent === 'operations') {
+                  window.__dev3000_react_state.connected = true;
+                  window.__dev3000_react_state.operationsSeen += 1;
+                  if (window.__dev3000_react_state.operationsSeen === 1) {
+                    pushReactEvent({ type: 'operations-first' });
+                  }
+                }
+              });
+            }
             
             window.addEventListener('dev3000-interaction', function(e) {
               const detail = e.detail;
@@ -1482,20 +1686,50 @@ export class CDPMonitor {
         const result = (await this.sendCDPCommand("Runtime.evaluate", {
           expression: `
             (() => {
+              const interactions = [];
               if (window.__dev3000_interactions && window.__dev3000_interactions.length > 0) {
-                const interactions = [...window.__dev3000_interactions];
+                interactions.push(...window.__dev3000_interactions);
                 window.__dev3000_interactions = []; // Clear the array
-                return interactions;
               }
-              return [];
+
+              let reactEvents = [];
+              let reactState = null;
+              if (window.__dev3000_react_tracking) {
+                if (window.__dev3000_react_events && window.__dev3000_react_events.length > 0) {
+                  reactEvents = [...window.__dev3000_react_events];
+                  window.__dev3000_react_events = [];
+                }
+                reactState = window.__dev3000_react_state || null;
+              }
+
+              return { interactions, reactEvents, reactState };
             })()
           `,
           returnByValue: true
         })) as {
-          result?: { value?: Array<{ timestamp: number; message: string }> }
+          result?: {
+            value?: {
+              interactions?: Array<{ timestamp: number; message: string }>
+              reactEvents?: Array<{
+                timestamp: number
+                type: string
+                rendererVersion?: string | null
+                bundleType?: number | null
+              }>
+              reactState?: {
+                connected?: boolean
+                rendererVersion?: string | null
+                bundleType?: number | null
+                operationsSeen?: number
+              } | null
+            }
+          }
         }
 
-        const interactions = result.result?.value || []
+        const value = result.result?.value || {}
+        const interactions = value.interactions || []
+        const reactEvents = value.reactEvents || []
+        const reactState = value.reactState || null
 
         for (const interaction of interactions) {
           this.logger("browser", `[INTERACTION] ${interaction.message}`)
@@ -1503,6 +1737,26 @@ export class CDPMonitor {
           // Take screenshot when scroll settles
           if (interaction.message.startsWith("SCROLL_SETTLED")) {
             this.takeScreenshot("scroll-settled")
+          }
+        }
+
+        for (const reactEvent of reactEvents) {
+          if (reactEvent.type === "renderer") {
+            this.logger(
+              "browser",
+              `[REACT] renderer detected: version=${reactEvent.rendererVersion || "unknown"} mode=${this.getBundleTypeLabel(reactEvent.bundleType ?? null)}`
+            )
+            continue
+          }
+
+          if (reactEvent.type === "operations-first") {
+            const rendererVersion = reactState?.rendererVersion || "unknown"
+            const mode = this.getBundleTypeLabel(reactState?.bundleType ?? null)
+            const operationsSeen = Number(reactState?.operationsSeen || 0)
+            this.logger(
+              "browser",
+              `[REACT] devtools bridge connected: renderer=${rendererVersion} mode=${mode} ops=${operationsSeen}`
+            )
           }
         }
       } catch (error) {

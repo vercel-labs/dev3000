@@ -8,6 +8,8 @@ export interface TmuxSessionConfig {
   d3kCommand: string
   agentCommand: string
   paneWidthPercent: number // percentage for agent pane (left side)
+  d3kLogPath?: string
+  agentLogPath?: string
 }
 
 /**
@@ -21,10 +23,11 @@ function shellQuote(value: string): string {
  * Wrap a command to show error and wait for user input on failure.
  * This prevents the pane from immediately closing on crash, letting users see the error.
  */
-function wrapCommandWithErrorHandling(cmd: string, name: string): string {
+function wrapCommandWithErrorHandling(cmd: string, name: string, pauseOnAnyExit = false): string {
   // Use bash -c to run the command and capture its exit code.
   // Quote the script safely so user commands with spaces/quotes don't break tmux startup.
-  const script = `${cmd}; EXIT_CODE=$?; if [ $EXIT_CODE -ne 0 ]; then echo; echo ❌ ${name} exited with code $EXIT_CODE; echo Press Enter to close...; read; fi; exit $EXIT_CODE`
+  const shouldPauseCondition = pauseOnAnyExit ? "true" : "[ $EXIT_CODE -ne 0 ]"
+  const script = `${cmd}; EXIT_CODE=$?; if ${shouldPauseCondition}; then echo; if [ $EXIT_CODE -ne 0 ]; then echo ❌ ${name} exited with code $EXIT_CODE; else echo ℹ️ ${name} exited with code $EXIT_CODE; fi; echo Press Enter to close...; read; fi; exit $EXIT_CODE`
   return `bash -c ${shellQuote(script)}`
 }
 
@@ -32,13 +35,15 @@ function wrapCommandWithErrorHandling(cmd: string, name: string): string {
  * Generate tmux commands for setting up split-screen mode.
  */
 export function generateTmuxCommands(config: TmuxSessionConfig): string[] {
-  const { sessionName, d3kCommand, agentCommand, paneWidthPercent } = config
+  const { sessionName, d3kCommand, agentCommand, paneWidthPercent, d3kLogPath, agentLogPath } = config
 
   // Wrap commands with error handling so users can see crash output
-  const d3kWithErrorHandling = wrapCommandWithErrorHandling(d3kCommand, "d3k")
-  const agentWithErrorHandling = wrapCommandWithErrorHandling(agentCommand, "agent")
+  const d3kWithErrorHandling = wrapCommandWithErrorHandling(d3kCommand, "d3k", false)
+  // Always pause when the agent pane exits so users can see why split-screen closed.
+  // This catches both failures and fast-exit cases (e.g. missing auth/session).
+  const agentWithErrorHandling = wrapCommandWithErrorHandling(agentCommand, "agent", true)
 
-  return [
+  const commands = [
     // Create new session with d3k in the first pane (will be right side)
     `tmux new-session -d -s "${sessionName}" ${shellQuote(d3kWithErrorHandling)}`,
 
@@ -54,9 +59,6 @@ export function generateTmuxCommands(config: TmuxSessionConfig): string[] {
     // Enable focus events (required for pane-focus-in hook to work)
     `tmux set-option -g focus-events on`,
 
-    // When any pane exits, kill the entire session (so Ctrl-C in either pane exits both)
-    `tmux set-hook -t "${sessionName}" pane-exited "kill-session -t ${sessionName}"`,
-
     // When terminal is resized, maintain the pane width ratio
     `tmux set-hook -t "${sessionName}" client-resized "resize-pane -t :.0 -x ${paneWidthPercent}%"`,
 
@@ -69,6 +71,11 @@ export function generateTmuxCommands(config: TmuxSessionConfig): string[] {
     // -l sets the size of the NEW pane (agent)
     `tmux split-window -h -b -l ${paneWidthPercent}% -t "${sessionName}" ${shellQuote(agentWithErrorHandling)}`,
 
+    // Mirror pane output to log files without breaking TTY semantics for interactive CLIs.
+    // Pane 0 is agent (left), pane 1 is d3k (right) after split-window -b.
+    ...(agentLogPath ? [`tmux pipe-pane -o -t "${sessionName}:0.0" "cat >> ${shellQuote(agentLogPath)}"`] : []),
+    ...(d3kLogPath ? [`tmux pipe-pane -o -t "${sessionName}:0.1" "cat >> ${shellQuote(d3kLogPath)}"`] : []),
+
     // When focus changes (via mouse click or keyboard), resize focused pane to 75%
     // Note: pane-focus-in is a window-level hook, requires -w flag
     `tmux set-hook -w -t "${sessionName}" pane-focus-in 'resize-pane -x ${paneWidthPercent}%'`,
@@ -80,14 +87,15 @@ export function generateTmuxCommands(config: TmuxSessionConfig): string[] {
     // Bind Ctrl+B Right to focus d3k pane (right/pane 1) AND resize it
     `tmux bind-key -T prefix Right 'select-pane -t :.1 ; resize-pane -t :.1 -x ${paneWidthPercent}%'`,
 
-    // Focus on the agent pane (left side, pane 0 after split with -b)
-    `tmux select-pane -t "${sessionName}:0.0"`,
+    // When any pane exits, kill the entire session (so Ctrl-C in either pane exits both).
+    // Important: install this after split/bind setup to avoid a race if the agent exits quickly.
+    `tmux set-hook -t "${sessionName}" pane-exited "kill-session -t ${sessionName}"`,
 
-    // Trigger a resize after TUI starts to force a redraw and clear stale terminal content
-    // The d3k pane is pane 1 (right side), resize it slightly then back to force redraw
-    // Wait 2 seconds to ensure TUI is fully initialized before triggering resize
-    `tmux run-shell -t "${sessionName}" 'sleep 2 && tmux resize-pane -t :.1 -x 24% && sleep 0.1 && tmux resize-pane -t :.1 -x ${100 - paneWidthPercent}%'`
+    // Focus on the agent pane (left side, pane 0 after split with -b)
+    `tmux select-pane -t "${sessionName}:0.0"`
   ]
+
+  return commands
 }
 
 /**

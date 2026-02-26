@@ -22,8 +22,8 @@ export interface KnownAgent {
   subOptions?: AgentSubOption[]
 }
 
-// Use '\'' to escape single quotes inside bash -c's single-quoted string
-const D3K_PROMPT = "'\\''load the d3k skill and await further instruction'\\''"
+// Keep this as a normal quoted argument; tmux/bash wrapping handles shell escaping.
+const D3K_PROMPT = '"load the d3k skill and await further instruction"'
 export const KNOWN_AGENTS: KnownAgent[] = [
   {
     name: "claude",
