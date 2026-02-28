@@ -10,6 +10,15 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.170",
+    date: "2026-02-28",
+    type: "patch",
+    highlights: [
+      "Fix d3k skill CDP connection instructions by using the direct port value (from PR #96, thanks Boris Besemer)."
+    ]
+  },
+
+  {
     version: "0.0.169",
     date: "2026-02-26",
     type: "minor",
