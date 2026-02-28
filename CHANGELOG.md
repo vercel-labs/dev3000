@@ -4,6 +4,12 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.170] - 2026-02-28
+
+**Patch Release**
+
+- Fix d3k skill CDP connection instructions by using the direct port value (from PR #96, thanks Boris Besemer).
+
 ## [0.0.169] - 2026-02-26
 
 **Feature Release**
