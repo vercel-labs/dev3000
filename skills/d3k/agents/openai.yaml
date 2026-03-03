@@ -1,0 +1,4 @@
+interface:
+  display_name: "d3k"
+  short_description: "Bootstraps d3k runtime for standalone AI apps"
+  default_prompt: "Use $d3k to initialize d3k, start the correct runtime, and drive debugging with unified logs and CDP browser controls."

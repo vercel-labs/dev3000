@@ -4,6 +4,45 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NOTE**: CLAUDE.md is symlinked to this file (AGENTS.md) as the source of truth. Any edits to either file will affect both.
 
+## Standalone AI App + d3k (Required Runtime)
+
+When working from a standalone AI app (Codex.app, Claude Code app, etc.) in this repo, use `d3k` as the default runtime so the agent gets server logs + CDP browser data + screenshots from one session.
+
+### Why this is better than running `npm/bun dev` directly
+
+- `d3k` captures both server and browser telemetry in one timeline (`d3k.log`), which prevents partial debugging context.
+- `d3k` exposes a stable CDP session (`d3k cdp-port`) so the agent can drive the same real browser instance users see.
+- `d3k` records screenshots and interaction context automatically, making regressions easier to verify and replay.
+- Running raw `npm dev`/`bun dev` skips this unified context and leads to weaker diagnoses.
+
+1. Start d3k (headed browser, no split-agent prompt):
+   ```bash
+   d3k --no-agent --no-tui -t
+   ```
+2. Keep d3k running while making/fixing changes. Do not run `bun run dev` directly.
+3. Use d3k diagnostics as first-line debugging:
+   ```bash
+   d3k errors --context
+   d3k logs -n 200
+   d3k logs --type browser
+   d3k logs --type server
+   ```
+4. Use the same monitored browser session via CDP:
+   ```bash
+   CDP_PORT="$(d3k cdp-port)"
+   d3k agent-browser --cdp "$CDP_PORT" open http://localhost:3000
+   d3k agent-browser --cdp "$CDP_PORT" snapshot -i
+   d3k agent-browser --cdp "$CDP_PORT" click @e2
+   d3k agent-browser --cdp "$CDP_PORT" screenshot /tmp/d3k-current.png
+   ```
+5. Primary artifacts for Codex context:
+   - `~/.d3k/{project}/d3k.log`
+   - `~/.d3k/{project}/logs/`
+   - `~/.d3k/{project}/screenshots/`
+   - `~/.d3k/{project}/session.json`
+
+Use `--servers-only` or `--headless` only if the user explicitly asks.
+
 ## Core Development Rules
 
 **NEVER RUN**:
