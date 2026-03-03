@@ -45,6 +45,7 @@ export const KNOWN_AGENTS: KnownAgent[] = [
     command: `codex --dangerously-bypass-approvals-and-sandbox ${D3K_PROMPT}`
   },
   { name: "opencode", binary: "opencode", displayName: "opencode" },
+  { name: "blackbox", binary: "blackbox", displayName: "blackbox" },
   { name: "gemini", binary: "gemini", displayName: "gemini" },
   { name: "cline", binary: "cline", displayName: "cline" },
   { name: "cursor-agent", binary: "cursor-agent", displayName: "cursor-agent" }

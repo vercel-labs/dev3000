@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest"
 import { getAgentByName, KNOWN_AGENTS } from "./agent-selection.js"
 
 describe("agent-selection", () => {
+  it("should include blackbox in known agents", () => {
+    const blackbox = getAgentByName("blackbox")
+    expect(blackbox?.binary).toBe("blackbox")
+  })
+
   it("should use plain quoted d3k prompt for codex variants", () => {
     const codex = getAgentByName("codex")
     const codexYolo = getAgentByName("codex-yolo")
