@@ -72,7 +72,6 @@ function getAnalysisTarget(typeParam: string | null, targetParam: string | null)
 
 const RECENT_PROJECTS_KEY = "d3k_recent_projects"
 const LEGACY_GITHUB_PAT_STORAGE_KEY = "d3k_github_pat"
-const LEGACY_NPM_TOKEN_STORAGE_KEY = "d3k_npm_token"
 const WORKFLOW_DISPLAY_NAMES: Record<string, string> = {
   "cloud-fix": "CLS Fix",
   "design-guidelines": "Design Guidelines Review",
@@ -121,7 +120,6 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   const baseBranchId = useId()
   const customPromptId = useId()
   const githubPatId = useId()
-  const npmTokenId = useId()
   const startPathId = useId()
   const crawlDepthId = useId()
   const projectSearchId = useId()
@@ -178,7 +176,6 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   const [customPrompt, setCustomPrompt] = useState("")
   const [publicUrl, setPublicUrl] = useState("")
   const [githubPat, setGithubPat] = useState("")
-  const [npmToken, setNpmToken] = useState("")
   const [submitPullRequest, setSubmitPullRequest] = useState(false)
   const [repoVisibility, setRepoVisibility] = useState<RepoVisibility>("unknown")
   const [startPath, setStartPath] = useState("/")
@@ -195,12 +192,8 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
   const teamsRetryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const getGithubPatStorageKey = useCallback((projectId: string) => `d3k_github_pat_${projectId}`, [])
-  const getNpmTokenStorageKey = useCallback((projectId: string) => `d3k_npm_token_${projectId}`, [])
   const getGithubPatRepoStorageKey = useCallback((repoOwner: string, repoName: string) => {
     return `d3k_github_pat_repo_${repoOwner}/${repoName}`
-  }, [])
-  const getNpmTokenRepoStorageKey = useCallback((repoOwner: string, repoName: string) => {
-    return `d3k_npm_token_repo_${repoOwner}/${repoName}`
   }, [])
 
   const workflowSkillLabels: Record<string, string[]> = {
@@ -622,61 +615,6 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
     step
   ])
 
-  // Load NPM token from localStorage when on options step.
-  // Tokens are scoped per project to avoid cross-project leakage.
-  useEffect(() => {
-    if (step !== "options" || isUrlAuditType) return
-
-    const projectIdForToken = selectedProject?.id || searchParams.get("project")
-    const tokenRepoOwner = selectedRepoOwner
-    const tokenRepoName = selectedRepoName
-    const projectStorageKey = projectIdForToken ? getNpmTokenStorageKey(projectIdForToken) : null
-    const repoStorageKey =
-      tokenRepoOwner && tokenRepoName ? getNpmTokenRepoStorageKey(tokenRepoOwner, tokenRepoName) : null
-
-    if (projectStorageKey) {
-      const storedProjectToken = localStorage.getItem(projectStorageKey)
-      if (storedProjectToken !== null) {
-        console.log("[NPM Token] Loaded from localStorage for project", projectIdForToken)
-        setNpmToken(storedProjectToken)
-        return
-      }
-    }
-    if (repoStorageKey) {
-      const storedRepoToken = localStorage.getItem(repoStorageKey)
-      if (storedRepoToken !== null) {
-        console.log("[NPM Token] Loaded from localStorage for repo", `${tokenRepoOwner}/${tokenRepoName}`)
-        setNpmToken(storedRepoToken)
-        return
-      }
-    }
-
-    const legacyToken = localStorage.getItem(LEGACY_NPM_TOKEN_STORAGE_KEY)
-    if (legacyToken) {
-      if (projectStorageKey) {
-        localStorage.setItem(projectStorageKey, legacyToken)
-      }
-      if (repoStorageKey) {
-        localStorage.setItem(repoStorageKey, legacyToken)
-      }
-      localStorage.removeItem(LEGACY_NPM_TOKEN_STORAGE_KEY)
-      console.log("[NPM Token] Migrated legacy localStorage token")
-      setNpmToken(legacyToken)
-      return
-    }
-
-    setNpmToken("")
-  }, [
-    getNpmTokenRepoStorageKey,
-    getNpmTokenStorageKey,
-    isUrlAuditType,
-    searchParams,
-    selectedProject,
-    selectedRepoName,
-    selectedRepoOwner,
-    step
-  ])
-
   // Determine repository visibility so we can require PAT only when needed.
   useEffect(() => {
     async function checkRepoVisibility() {
@@ -1029,7 +967,6 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
         customPrompt: workflowType === "prompt" ? customPrompt : undefined,
         crawlDepth: workflowType === "design-guidelines" ? crawlDepth : undefined,
         githubPat: !isUrlAuditType && hasGitHubRepoInfo && githubPat.trim() ? githubPat.trim() : undefined,
-        npmToken: !isUrlAuditType && npmToken.trim() ? npmToken.trim() : undefined,
         submitPullRequest: !isUrlAuditType && hasGitHubRepoInfo ? submitPullRequest : false,
         startPath: !isUrlAuditType && startPath !== "/" ? startPath : undefined // URL mode is single-URL today
       }
@@ -1078,13 +1015,6 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
         "[Start Workflow] body.githubPat:",
         typeof githubPatValue === "string" && githubPatValue.length > 0
           ? `SET (length: ${githubPatValue.length})`
-          : "NOT SET"
-      )
-      const npmTokenValue = body.npmToken
-      console.log(
-        "[Start Workflow] body.npmToken:",
-        typeof npmTokenValue === "string" && npmTokenValue.length > 0
-          ? `SET (length: ${npmTokenValue.length})`
           : "NOT SET"
       )
 
@@ -1947,57 +1877,6 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
                             Create a GitHub PR
                           </label>
                         </div>
-                      </div>
-                    )}
-                    {!isUrlAuditType && (
-                      <div>
-                        <Label htmlFor={npmTokenId} className="mb-1 block">
-                          NPM Token <span className="text-muted-foreground">(optional)</span>
-                        </Label>
-                        <input
-                          type="password"
-                          id={npmTokenId}
-                          value={npmToken}
-                          onChange={(e) => {
-                            const newToken = e.target.value
-                            setNpmToken(newToken)
-
-                            const projectIdForToken = selectedProject?.id || searchParams.get("project")
-                            const repoOwnerForToken = selectedRepoOwner
-                            const repoNameForToken = selectedRepoName
-                            const storageKey = projectIdForToken ? getNpmTokenStorageKey(projectIdForToken) : null
-                            const repoStorageKey =
-                              repoOwnerForToken && repoNameForToken
-                                ? getNpmTokenRepoStorageKey(repoOwnerForToken, repoNameForToken)
-                                : null
-                            if (newToken) {
-                              if (storageKey) {
-                                localStorage.setItem(storageKey, newToken)
-                                console.log("[NPM Token] Saved to localStorage for project", projectIdForToken)
-                              }
-                              if (repoStorageKey) {
-                                localStorage.setItem(repoStorageKey, newToken)
-                                console.log(
-                                  "[NPM Token] Saved to localStorage for repo",
-                                  `${repoOwnerForToken}/${repoNameForToken}`
-                                )
-                              }
-                            } else {
-                              if (storageKey) {
-                                localStorage.removeItem(storageKey)
-                              }
-                              if (repoStorageKey) {
-                                localStorage.removeItem(repoStorageKey)
-                              }
-                              console.log("[NPM Token] Removed from localStorage")
-                            }
-                          }}
-                          className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground font-mono text-sm"
-                          placeholder="npm_xxxxx"
-                        />
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          Use when the repo depends on private npm packages.
-                        </p>
                       </div>
                     )}
                     <div>

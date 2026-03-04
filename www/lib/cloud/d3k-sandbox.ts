@@ -228,6 +228,16 @@ export interface D3kSandboxConfig {
 
 type PackageManager = "bun" | "pnpm" | "npm" | "yarn"
 
+function resolveNpmTokenValue(
+  explicitToken: string | undefined,
+  projectEnv: Record<string, string> | undefined
+): string | undefined {
+  if (explicitToken) return explicitToken
+  const envToken =
+    projectEnv?.NPM_TOKEN || projectEnv?.NODE_AUTH_TOKEN || process.env.NPM_TOKEN || process.env.NODE_AUTH_TOKEN
+  return envToken || undefined
+}
+
 function parseRequiredNodeMajor(rawVersion: string): string | null {
   const trimmed = rawVersion.trim()
   if (!trimmed) return null
@@ -695,7 +705,7 @@ node -v
       await ensureBunInstalled(sandbox)
     }
 
-    const resolvedNpmToken = npmToken || process.env.NPM_TOKEN
+    const resolvedNpmToken = resolveNpmTokenValue(npmToken, projectEnv)
     if (resolvedNpmToken) {
       await reportProgress("Configuring npm auth token for private packages")
       const npmAuthSetup = await runCommandWithLogs(sandbox, {
@@ -1865,7 +1875,7 @@ console.log("wrote .env.local and .env.development.local");`
       | "yarn"
     await reportProgress(`Detected package manager: ${resolvedPackageManager}`)
 
-    const resolvedNpmToken = npmToken || process.env.NPM_TOKEN
+    const resolvedNpmToken = resolveNpmTokenValue(npmToken, projectEnv)
     if (resolvedNpmToken) {
       await reportProgress("Configuring npm auth token for private packages")
       const npmAuthSetup = await runCommandWithLogs({
