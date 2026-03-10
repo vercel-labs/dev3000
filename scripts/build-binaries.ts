@@ -12,6 +12,8 @@ import { $ } from "bun"
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync } from "fs"
 import { dirname, join } from "path"
 
+import { formatBuildVersion } from "../src/utils/build-version.js"
+
 const ROOT_DIR = dirname(dirname(import.meta.path))
 const DIST_BIN_DIR = join(ROOT_DIR, "dist-bin")
 
@@ -19,6 +21,10 @@ const DIST_BIN_DIR = join(ROOT_DIR, "dist-bin")
 function getPackageVersion(): string {
   const packageJson = JSON.parse(readFileSync(join(ROOT_DIR, "package.json"), "utf8"))
   return packageJson.version
+}
+
+function getBinaryVersion(version: string): string {
+  return formatBuildVersion(version, process.env.D3K_CANARY_BUILD_STAMP)
 }
 
 // Target platforms
@@ -63,10 +69,11 @@ async function compileForTarget(target: (typeof TARGETS)[number]) {
   const targetDir = join(DIST_BIN_DIR, target.name)
   const binDir = join(targetDir, "bin")
   const bunTarget = `bun-${target.os}-${target.arch}`
-  const version = getPackageVersion()
+  const packageVersion = getPackageVersion()
+  const binaryVersion = getBinaryVersion(packageVersion)
   const isWindows = target.os === "windows"
 
-  console.log(`\n🔨 Compiling for ${bunTarget} (v${version})...`)
+  console.log(`\n🔨 Compiling for ${bunTarget} (v${binaryVersion})...`)
 
   // Create output directories
   mkdirSync(binDir, { recursive: true })
@@ -79,7 +86,7 @@ async function compileForTarget(target: (typeof TARGETS)[number]) {
 
   try {
     // Use --define to inject the version at compile time
-    await $`bun build ${entrypoint} --compile --target=${bunTarget} --outfile=${outputBinary} --define __D3K_VERSION__='"${version}"'`
+    await $`bun build ${entrypoint} --compile --target=${bunTarget} --outfile=${outputBinary} --define __D3K_VERSION__='"${binaryVersion}"'`
     console.log(`✅ Binary created: ${outputBinary}`)
   } catch (error) {
     console.error(`❌ Failed to compile for ${bunTarget}:`, error)

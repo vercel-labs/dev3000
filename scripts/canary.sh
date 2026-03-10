@@ -7,6 +7,9 @@ ROOT_DIR="$(dirname "$SCRIPT_DIR")"
 echo "🧪 Starting canary test process..."
 
 export D3K_BUILD_TARGETS="${D3K_BUILD_TARGETS:-darwin-arm64}"
+export D3K_CANARY_BUILD_STAMP="${D3K_CANARY_BUILD_STAMP:-$(date -u +%Y%m%dT%H%M%SZ)}"
+
+echo "🔖 Canary build stamp: $D3K_CANARY_BUILD_STAMP"
 
 has_target() {
   case ",$D3K_BUILD_TARGETS," in
@@ -86,7 +89,9 @@ echo "📥 Installing main package globally..."
 bun add -g --ignore-scripts "file:$ROOT_DIR/$MAIN_PACKAGE_FILE"
 
 echo "✅ Canary package build completed successfully!"
-echo "🚀 Global install updated. Run 'd3k --version' to verify."
+echo "🚀 Global install updated:"
+GLOBAL_D3K_PATH="$(bun pm -g bin)/d3k"
+"$GLOBAL_D3K_PATH" --version
 
 echo "🧪 Running canary smoke test..."
 bun run canary:smoke
