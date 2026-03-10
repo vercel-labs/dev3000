@@ -7,6 +7,14 @@ interface DiffViewerProps {
   patch: string
 }
 
+function getStableKey(value: string): string {
+  let hash = 0
+  for (let i = 0; i < value.length; i += 1) {
+    hash = (hash * 31 + value.charCodeAt(i)) | 0
+  }
+  return Math.abs(hash).toString(36)
+}
+
 function splitPatchByFile(patch: string): string[] {
   const normalized = patch.replace(/\r\n/g, "\n")
   const lines = normalized.split("\n")
@@ -45,7 +53,7 @@ export function DiffViewer({ patch }: DiffViewerProps) {
   return (
     <div className="space-y-4">
       {filePatches.map((filePatch, index) => (
-        <div key={`${getPatchLabel(filePatch, index)}-${index}`} className="space-y-2">
+        <div key={getStableKey(filePatch)} className="space-y-2">
           {filePatches.length > 1 && (
             <div className="text-xs font-medium text-muted-foreground">{getPatchLabel(filePatch, index)}</div>
           )}

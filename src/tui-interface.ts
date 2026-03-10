@@ -46,11 +46,12 @@ export class DevTUI {
     console.error = suppressReactHookWarnings
 
     try {
-      // Choose TUI implementation based on platform
-      // OpenTUI has native bindings only available on macOS, use Ink-based TUI elsewhere
+      // Choose TUI implementation based on platform/runtime.
+      // OpenTUI's macOS path depends on Bun-only native bindings, so the
+      // published Node CLI must only load it when running under Bun.
       // Use explicit string paths (not variables) so bun compile can statically analyze the imports
       const mod =
-        process.platform === "darwin"
+        process.platform === "darwin" && Boolean(process.versions?.bun)
           ? await import("./tui-interface-opentui.js")
           : await import("./tui-interface-impl.js")
       const { app, updateStatus, updateAppPort, updateUpdateInfo, updateUseHttps } = await mod.runTUI(this.options)

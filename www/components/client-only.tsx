@@ -11,7 +11,6 @@ export function ClientOnly({ children, fallback = null }: ClientOnlyProps) {
   const [hasMounted, setHasMounted] = useState(false)
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- Intentional: hydration detection pattern
     setHasMounted(true)
   }, [])
 

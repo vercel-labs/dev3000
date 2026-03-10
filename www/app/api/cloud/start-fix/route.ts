@@ -153,6 +153,10 @@ export async function POST(request: Request) {
       projectId,
       teamId
     } = body
+    const resolvedNpmToken =
+      typeof npmToken === "string" && npmToken.trim().length > 0
+        ? npmToken.trim()
+        : process.env.NPM_TOKEN || process.env.NODE_AUTH_TOKEN
     // Validate workflowType is a valid WorkflowType
     const validWorkflowTypes: WorkflowType[] = [
       "cls-fix",
@@ -200,7 +204,7 @@ export async function POST(request: Request) {
     workflowLog(`[Start Fix] Start Path: ${startPath || "/"}`)
     workflowLog(`[Start Fix] Bypass Token: ${bypassToken ? "provided" : "not provided"}`)
     workflowLog(`[Start Fix] GitHub PAT: ${githubPat ? "provided" : "not provided"}`)
-    workflowLog(`[Start Fix] NPM token: ${npmToken ? "provided" : "not provided"}`)
+    workflowLog(`[Start Fix] NPM token: ${resolvedNpmToken ? "provided" : "not provided"}`)
     workflowLog(`[Start Fix] Submit PR: ${submitPullRequest === false ? "no" : "yes"}`)
     if (repoUrl) {
       workflowLog(`[Start Fix] Will create sandbox from: ${repoUrl}`)
@@ -265,7 +269,7 @@ export async function POST(request: Request) {
       crawlDepth: workflowType === "design-guidelines" ? crawlDepth : undefined, // Crawl depth for design-guidelines
       // PR creation params
       githubPat,
-      npmToken,
+      npmToken: resolvedNpmToken,
       submitPullRequest: submitPullRequest !== false,
       repoOwner,
       repoName,

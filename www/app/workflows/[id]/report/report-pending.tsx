@@ -115,6 +115,7 @@ export function ReportPending({ runId, userId, workflowType, projectName }: Repo
   }, [runId, userId, router])
 
   useEffect(() => {
+    if (progressLogs.length === 0) return
     if (!logsRef.current) return
     logsRef.current.scrollTop = logsRef.current.scrollHeight
   }, [progressLogs])

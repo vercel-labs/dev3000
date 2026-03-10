@@ -72,6 +72,7 @@ function getAnalysisTarget(typeParam: string | null, targetParam: string | null)
 
 const RECENT_PROJECTS_KEY = "d3k_recent_projects"
 const LEGACY_GITHUB_PAT_STORAGE_KEY = "d3k_github_pat"
+const TEAM_SKELETON_KEYS = ["team-a", "team-b", "team-c", "team-d", "team-e"] as const
 const WORKFLOW_DISPLAY_NAMES: Record<string, string> = {
   "cloud-fix": "CLS Fix",
   "design-guidelines": "Design Guidelines Review",
@@ -558,7 +559,7 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
     pollStatus()
 
     return () => clearInterval(interval)
-  }, [activeRunId, userId, step, selectedProject, redirectedRunId, router])
+  }, [activeRunId, userId, step, redirectedRunId, router])
 
   // Load GitHub PAT from localStorage when on options step.
   // PATs are now scoped per project to avoid cross-project leakage.
@@ -1446,8 +1447,8 @@ export default function NewWorkflowModal({ isOpen, onClose, userId }: NewWorkflo
               <h3 className="text-lg font-semibold mb-4 text-foreground">Select Team</h3>
               {loadingTeams || !teamLoadAttempted ? (
                 <div className="space-y-2 max-h-96 overflow-y-auto">
-                  {Array.from({ length: 5 }).map((_, index) => (
-                    <div key={`team-skeleton-${index}`} className="w-full p-4 border-2 border-border rounded-lg">
+                  {TEAM_SKELETON_KEYS.map((key) => (
+                    <div key={key} className="w-full p-4 border-2 border-border rounded-lg">
                       <Skeleton className="h-5 w-40" />
                       <Skeleton className="mt-2 h-4 w-56" />
                     </div>

@@ -1,4 +1,3 @@
-import createWithVercelToolbar from "@vercel/toolbar/plugins/next"
 import type { NextConfig } from "next"
 import path from "path"
 import { fileURLToPath } from "url"
@@ -20,5 +19,4 @@ const nextConfig: NextConfig = {
   }
 }
 
-const withVercelToolbar = createWithVercelToolbar()
-export default withWorkflow(withVercelToolbar(nextConfig))
+export default withWorkflow(nextConfig)

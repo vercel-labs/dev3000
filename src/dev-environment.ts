@@ -1,5 +1,5 @@
 import chalk from "chalk"
-import { type ChildProcess, spawn } from "child_process"
+import { type ChildProcess, execSync, spawn, spawnSync } from "child_process"
 import {
   appendFileSync,
   copyFileSync,
@@ -709,7 +709,6 @@ export class DevEnvironment {
 
         // Use git to detect if we're in the dev3000 source repository
         try {
-          const { execSync } = require("child_process")
           const gitRemote = execSync("git remote get-url origin 2>/dev/null", {
             cwd: packageRoot,
             encoding: "utf8"
@@ -869,7 +868,6 @@ export class DevEnvironment {
     }
 
     // Best-effort synchronous cleanup (mirrors SIGHUP handler).
-    const { spawnSync } = require("child_process")
     const port = this.options.port
     this.debugLog(`Synchronous kill for port ${port}`)
     spawnSync("sh", ["-c", `lsof -ti:${port} | xargs kill -9 2>/dev/null`], {
@@ -955,7 +953,6 @@ export class DevEnvironment {
 
           // CRITICAL: Kill port processes SYNCHRONOUSLY first, before anything else
           // This ensures cleanup happens even if the event loop gets interrupted
-          const { spawnSync } = require("child_process")
           const port = this.options.port
           this.debugLog(`Synchronous kill for port ${port}`)
           spawnSync("sh", ["-c", `lsof -ti:${port} | xargs kill -9 2>/dev/null`], {
@@ -1429,7 +1426,6 @@ export class DevEnvironment {
 
     if (!isInSandbox()) {
       try {
-        const { spawnSync } = require("child_process")
         spawnSync("pkill", ["-P", pid.toString()], { stdio: "ignore" })
       } catch {
         // Ignore pkill errors
@@ -2119,7 +2115,6 @@ export class DevEnvironment {
 
       // CRITICAL: Kill port processes SYNCHRONOUSLY first, before anything else
       // This ensures cleanup happens even if the event loop gets interrupted
-      const { spawnSync } = require("child_process")
       const port = this.options.port
       this.debugLog(`Synchronous kill for port ${port}`)
       spawnSync("sh", ["-c", `lsof -ti:${port} | xargs kill -9 2>/dev/null`], {
@@ -2185,7 +2180,6 @@ export class DevEnvironment {
       }
 
       // CRITICAL: Kill port processes SYNCHRONOUSLY first, before anything else
-      const { spawnSync } = require("child_process")
       const port = this.options.port
       this.debugLog(`Synchronous kill for port ${port}`)
       spawnSync("sh", ["-c", `lsof -ti:${port} | xargs kill -9 2>/dev/null`], {

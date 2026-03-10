@@ -1195,7 +1195,7 @@ head -n 300 ${outputDir}/routes.ndjson 2>/dev/null | sort -t: -k2,2nr | head -10
 }
 
 async function pullDevelopmentEnvViaCliInSandbox(
-  sandbox: Sandbox,
+  _sandbox: Sandbox,
   projectDir: string | undefined,
   projectId: string | undefined,
   teamId: string | undefined,
@@ -1384,45 +1384,60 @@ export async function initSandboxStep(
 
   const developmentEnv: Record<string, string> = {}
   let developmentEnvLoadFailed = false
-  if (projectId && vercelOidcToken) {
+  const envFetchTokens = Array.from(
+    new Set([process.env.VERCEL_TOKEN, process.env.VERCEL_OIDC_TOKEN, vercelOidcToken].filter(Boolean) as string[])
+  )
+
+  if (projectId && envFetchTokens.length > 0) {
     try {
       await appendProgressLog(progressContext, "[Sandbox] Loading development environment variables...")
       const params = new URLSearchParams({ target: "development", decrypt: "true", limit: "100" })
       if (teamId) {
         params.set("teamId", teamId)
       }
-      const response = await fetch(`https://api.vercel.com/v10/projects/${projectId}/env?${params.toString()}`, {
-        headers: { Authorization: `Bearer ${vercelOidcToken}` }
-      })
+      let envLoaded = false
+      let lastStatus: number | null = null
+      let lastErrorText = ""
 
-      if (response.ok) {
-        const data = (await response.json()) as {
-          envs?: Array<{ key?: string; value?: string }>
-        }
-        for (const envVar of data.envs || []) {
-          if (envVar.key && typeof envVar.value === "string") {
-            developmentEnv[envVar.key] = envVar.value
+      for (const token of envFetchTokens) {
+        const response = await fetch(`https://api.vercel.com/v10/projects/${projectId}/env?${params.toString()}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+
+        if (response.ok) {
+          const data = (await response.json()) as {
+            envs?: Array<{ key?: string; value?: string }>
           }
-        }
-        await appendProgressLog(
-          progressContext,
-          `[Sandbox] Loaded ${Object.keys(developmentEnv).length} development env var(s)`
-        )
-      } else {
-        const errorText = await response.text()
-        if (response.status === 403) {
+          for (const envVar of data.envs || []) {
+            if (envVar.key && typeof envVar.value === "string") {
+              developmentEnv[envVar.key] = envVar.value
+            }
+          }
           await appendProgressLog(
             progressContext,
-            `[Sandbox] Env var API access denied (HTTP 403); continuing without development env vars: ${errorText.slice(0, 180)}`
+            `[Sandbox] Loaded ${Object.keys(developmentEnv).length} development env var(s)`
           )
-          developmentEnvLoadFailed = true
+          envLoaded = true
+          break
+        }
+
+        lastStatus = response.status
+        lastErrorText = await response.text()
+      }
+
+      if (!envLoaded) {
+        if (lastStatus === 403) {
+          await appendProgressLog(
+            progressContext,
+            `[Sandbox] Env var API access denied (HTTP 403); continuing without development env vars: ${lastErrorText.slice(0, 180)}`
+          )
         } else {
           await appendProgressLog(
             progressContext,
-            `[Sandbox] Could not load development env vars (HTTP ${response.status}); continuing without env vars: ${errorText.slice(0, 180)}`
+            `[Sandbox] Could not load development env vars (HTTP ${lastStatus ?? "unknown"}); continuing without env vars: ${lastErrorText.slice(0, 180)}`
           )
-          developmentEnvLoadFailed = true
         }
+        developmentEnvLoadFailed = true
       }
     } catch (error) {
       await appendProgressLog(
@@ -1434,9 +1449,20 @@ export async function initSandboxStep(
   } else {
     await appendProgressLog(
       progressContext,
-      "[Sandbox] Skipping development env load (missing projectId or OIDC token)"
+      "[Sandbox] Skipping development env load (missing projectId or Vercel auth token)"
     )
   }
+
+  const effectiveNpmToken =
+    npmToken ||
+    developmentEnv.NPM_TOKEN ||
+    developmentEnv.NODE_AUTH_TOKEN ||
+    process.env.NPM_TOKEN ||
+    process.env.NODE_AUTH_TOKEN
+  await appendProgressLog(
+    progressContext,
+    `[Sandbox] npm auth token ${effectiveNpmToken ? "detected" : "not detected"} for dependency install`
+  )
 
   // Create sandbox using base snapshot (Chrome + d3k pre-installed)
   // The base snapshot is shared across ALL projects for fast startup
@@ -1447,7 +1473,7 @@ export async function initSandboxStep(
       repoUrl,
       branch,
       githubPat,
-      npmToken,
+      npmToken: effectiveNpmToken,
       // Turbopack workflows now require CWV verification, so browser/d3k setup cannot be skipped.
       skipD3kSetup: false,
       onProgress: (message) => appendProgressLog(progressContext, `[Sandbox] ${message}`),

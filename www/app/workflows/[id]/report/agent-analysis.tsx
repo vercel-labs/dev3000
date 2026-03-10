@@ -28,6 +28,14 @@ function normalizeReportMarkdown(text: string): string {
   return text.replace(/(^|\n)(\d+)\.\s*\n+\s*(?![-*]\s)(?!\d+\.\s)([^\n]+?)(?=\n|$)/g, "$1$2. $3")
 }
 
+function getStableKey(value: string): string {
+  let hash = 0
+  for (let i = 0; i < value.length; i += 1) {
+    hash = (hash * 31 + value.charCodeAt(i)) | 0
+  }
+  return Math.abs(hash).toString(36)
+}
+
 /**
  * Parse the agent transcript markdown into structured data
  */
@@ -253,8 +261,13 @@ export function AgentAnalysis({ content }: { content: string }) {
                           </div>
                         )}
 
-                        {step.toolCalls.map((toolCall, idx) => (
-                          <div key={`step-${step.stepNumber}-tool-${idx}`} className="border border-border rounded p-2">
+                        {step.toolCalls.map((toolCall) => (
+                          <div
+                            key={`step-${step.stepNumber}-tool-${getStableKey(
+                              `${toolCall.name}\n${toolCall.args}\n${toolCall.result}`
+                            )}`}
+                            className="border border-border rounded p-2"
+                          >
                             <div className="text-xs font-medium text-muted-foreground mb-1">Tool: {toolCall.name}</div>
                             <pre className="text-xs bg-muted/50 p-2 rounded overflow-x-auto whitespace-pre-wrap max-h-40 overflow-y-auto">
                               {toolCall.args || "{}"}

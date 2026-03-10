@@ -1,14 +1,9 @@
 #!/usr/bin/env bun
 
-// Intercept agent-browser command early, before Commander parses args
-// This allows passing all args directly to agent-browser without Commander interference
+// Intercept agent-browser command early, before Commander parses args.
+// This allows passing all args directly to agent-browser without Commander interference.
 const agentBrowserIndex = process.argv.indexOf("agent-browser")
 if (agentBrowserIndex >= 0 && (process.argv[1]?.includes("d3k") || process.argv[1]?.includes("dev3000"))) {
-  // Use require for synchronous execution before other imports
-  const { spawnSync } = require("child_process")
-  const { existsSync } = require("fs")
-  const { join } = require("path")
-
   const args = process.argv.slice(agentBrowserIndex + 1)
 
   // Intercept "errors" and "console" subcommands - redirect to d3k's superior commands
@@ -40,7 +35,7 @@ if (agentBrowserIndex >= 0 && (process.argv[1]?.includes("d3k") || process.argv[
     const platformPkg = `${os}-${arch}`
 
     const cwd = process.cwd()
-    const home = require("os").homedir()
+    const home = homedir()
 
     // Prefer native binary to avoid shell wrapper needing node in PATH
     const searchPaths = [
@@ -124,6 +119,7 @@ if (agentBrowserIndex >= 0 && (process.argv[1]?.includes("d3k") || process.argv[
 }
 
 import chalk from "chalk"
+import { execSync, spawnSync } from "child_process"
 import { Command } from "commander"
 import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync } from "fs"
 import { homedir, tmpdir } from "os"
@@ -553,7 +549,7 @@ function detectPythonCommand(debug = false): string {
 
   // Check if python3 is available and prefer it
   try {
-    require("child_process").execSync("python3 --version", { stdio: "ignore" })
+    execSync("python3 --version", { stdio: "ignore" })
     if (debug) {
       console.log(`[DEBUG] python3 is available, using python3`)
     }
@@ -719,7 +715,6 @@ function getVersion(): string {
 
     // Use git to detect if we're in the dev3000 source repository
     try {
-      const { execSync } = require("child_process")
       const gitRemote = execSync("git remote get-url origin 2>/dev/null", {
         cwd: packageRoot,
         encoding: "utf8"

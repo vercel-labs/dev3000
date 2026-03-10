@@ -1,7 +1,7 @@
 "use client"
 
 import { Check, Link as LinkIcon, Lock, Share2 } from "lucide-react"
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 
 interface ShareButtonProps {
   runId: string
@@ -42,9 +42,9 @@ export function ShareButton({ runId, initialIsPublic }: ShareButtonProps) {
     setTimeout(() => setShowCopied(false), 2000)
   }
 
-  const closeMenu = () => {
+  const closeMenu = useCallback(() => {
     detailsRef.current?.removeAttribute("open")
-  }
+  }, [])
 
   useEffect(() => {
     const handleOutsideClick = (event: MouseEvent) => {
@@ -59,7 +59,7 @@ export function ShareButton({ runId, initialIsPublic }: ShareButtonProps) {
 
     document.addEventListener("mousedown", handleOutsideClick)
     return () => document.removeEventListener("mousedown", handleOutsideClick)
-  }, [])
+  }, [closeMenu])
 
   const handlePublicClick = async () => {
     if (isPublic) {

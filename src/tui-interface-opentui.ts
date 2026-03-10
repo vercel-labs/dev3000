@@ -347,7 +347,7 @@ class D3kTUI {
         const targetId = target?.id || "(none)"
         const selection = this.renderer?.getSelection()
         this.debugLog(
-          `[MOUSE_DOWN_CB] x=${event.x}, y=${event.y}, target=${targetId}, hasSelection=${this.renderer?.hasSelection}, isSelecting=${selection?.isSelecting}`
+          `[MOUSE_DOWN_CB] x=${event.x}, y=${event.y}, target=${targetId}, hasSelection=${this.renderer?.hasSelection}, isDragging=${selection?.isDragging}`
         )
       },
       onMouseUp: (event) => {
@@ -360,7 +360,7 @@ class D3kTUI {
       onMouseDrag: (event) => {
         const target = event.target
         const targetId = target?.id || "(none)"
-        this.debugLog(`[MOUSE_DRAG] x=${event.x}, y=${event.y}, target=${targetId}, isSelecting=${event.isSelecting}`)
+        this.debugLog(`[MOUSE_DRAG] x=${event.x}, y=${event.y}, target=${targetId}, isDragging=${event.isDragging}`)
       }
     })
     logsSection.add(this.logsScrollBox)
@@ -653,7 +653,7 @@ class D3kTUI {
         const focusedId = focusedRenderable?.id || "(none)"
         const selectionContainer = this.renderer?.getSelectionContainer()
         const containerId = selectionContainer?.id || "(none)"
-        const message = `hasSelection: ${hasSelection}, isSelecting: ${selection?.isSelecting}, renderables: ${selection?.selectedRenderables?.length ?? 0}, focus: ${focusedId}, container: ${containerId}, text: "${selectedText.slice(0, 30)}"`
+        const message = `hasSelection: ${hasSelection}, isDragging: ${selection?.isDragging}, renderables: ${selection?.selectedRenderables?.length ?? 0}, focus: ${focusedId}, container: ${containerId}, text: "${selectedText.slice(0, 30)}"`
         // Write to file if debug mode is on
         this.debugLog(`[SELECTION_STATE] ${message}`)
         // Always show in UI
@@ -713,7 +713,7 @@ class D3kTUI {
         return
       }
 
-      if (selection.isSelecting || !selection.isActive) return
+      if (selection.isDragging || !selection.isActive) return
 
       const text = selection.getSelectedText()
       if (!text || text.trim().length === 0) return
