@@ -652,7 +652,7 @@ describe("writeSessionInfo", () => {
 
     // Verify the function signature accepts chromePids
     const writeWithChromePids = () => {
-      writeSessionInfo("test", "/tmp/test.log", "3000", null, [12345, 67890])
+      writeSessionInfo("test", "/tmp/test.log", "3000", null, null, [12345, 67890])
     }
 
     // Should not throw
@@ -661,7 +661,7 @@ describe("writeSessionInfo", () => {
 
   it("should include serverPid field in session info structure", () => {
     const writeWithServerPid = () => {
-      writeSessionInfo("test", "/tmp/test.log", "3000", undefined, undefined, undefined, undefined, 44444)
+      writeSessionInfo("test", "/tmp/test.log", "3000", undefined, undefined, undefined, undefined, undefined, 44444)
     }
 
     // Should not throw

@@ -37,6 +37,27 @@ if (agentBrowserIndex >= 0 && (process.argv[1]?.includes("d3k") || process.argv[
     const cwd = process.cwd()
     const home = homedir()
 
+    const getRunnablePath = (searchPath: string): string | null => {
+      if (!existsSync(searchPath)) {
+        return null
+      }
+      if (process.platform === "win32") {
+        return searchPath
+      }
+      try {
+        accessSync(searchPath, constants.X_OK)
+        return searchPath
+      } catch {
+        try {
+          chmodSync(searchPath, 0o755)
+          accessSync(searchPath, constants.X_OK)
+          return searchPath
+        } catch {
+          return null
+        }
+      }
+    }
+
     // Prefer native binary to avoid shell wrapper needing node in PATH
     const searchPaths = [
       // Bun global install paths (native binary) - use homedir since compiled binary has virtual path
@@ -62,9 +83,9 @@ if (agentBrowserIndex >= 0 && (process.argv[1]?.includes("d3k") || process.argv[
       ),
       join(home, ".bun", "install", "global", "node_modules", "dev3000", "node_modules", ".bin", "agent-browser"),
       join(home, ".bun", "install", "global", "node_modules", ".bin", "agent-browser"),
-      join(home, ".bun", "install", "global", "node_modules", "agent-browser", "bin", "agent-browser"),
+      join(home, ".bun", "install", "global", "node_modules", "agent-browser", "bin", "agent-browser.js"),
       join(cwd, "node_modules", ".bin", "agent-browser"),
-      join(cwd, "node_modules", "agent-browser", "bin", "agent-browser")
+      join(cwd, "node_modules", "agent-browser", "bin", "agent-browser.js")
     ]
 
     // npm/pnpm/yarn global install locations (best-effort)
@@ -76,11 +97,12 @@ if (agentBrowserIndex >= 0 && (process.argv[1]?.includes("d3k") || process.argv[
       searchPaths.push(join(root, "dev3000", "node_modules", ".bin", nativeName))
       searchPaths.push(join(root, "dev3000", "node_modules", ".bin", "agent-browser"))
       searchPaths.push(join(root, "agent-browser", "bin", nativeName))
-      searchPaths.push(join(root, "agent-browser", "bin", "agent-browser"))
+      searchPaths.push(join(root, "agent-browser", "bin", "agent-browser.js"))
     }
 
     for (const p of searchPaths) {
-      if (existsSync(p)) return p
+      const runnablePath = getRunnablePath(p)
+      if (runnablePath) return runnablePath
     }
     return "agent-browser" // fallback to PATH
   }
@@ -121,7 +143,7 @@ if (agentBrowserIndex >= 0 && (process.argv[1]?.includes("d3k") || process.argv[
 import chalk from "chalk"
 import { execSync, spawnSync } from "child_process"
 import { Command } from "commander"
-import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync } from "fs"
+import { accessSync, appendFileSync, chmodSync, constants, copyFileSync, existsSync, mkdirSync, readFileSync } from "fs"
 import { homedir, tmpdir } from "os"
 import { detect } from "package-manager-detector"
 import { dirname, join } from "path"
@@ -804,6 +826,7 @@ program
   .option("--debug", "Enable debug logging to console (automatically disables TUI)")
   .option("-t, --tail", "Output consolidated logfile to terminal (like tail -f)")
   .option("--no-tui", "Disable TUI mode and use standard terminal output")
+  .option("--no-portless", "Use localhost URLs instead of portless .localhost aliases")
   .option(
     "--date-time <format>",
     "Timestamp format: 'local' (default, e.g. 12:54:03 PM) or 'utc' (ISO string)",
@@ -1172,6 +1195,7 @@ program
         startupTimeoutSeconds,
         tail: options.tail,
         tui: options.tui && !options.debug, // TUI is default unless --no-tui or --debug is specified
+        portless: options.portless !== false,
         dateTimeFormat: options.dateTime || "local",
         pluginReactScan: options.pluginReactScan || false,
         skillsAgentId: skillsAgentId || undefined,

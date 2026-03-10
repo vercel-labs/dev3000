@@ -6,16 +6,40 @@
  */
 
 import { execSync, spawn } from "child_process"
-import { existsSync, mkdirSync } from "fs"
+import { accessSync, chmodSync, constants, existsSync, mkdirSync } from "fs"
 import { homedir } from "os"
 import { dirname, join } from "path"
 import { fileURLToPath } from "url"
 
+function getRunnablePath(searchPath: string): string | null {
+  if (!existsSync(searchPath)) {
+    return null
+  }
+  if (process.platform === "win32") {
+    return searchPath
+  }
+  try {
+    accessSync(searchPath, constants.X_OK)
+    return searchPath
+  } catch {
+    try {
+      chmodSync(searchPath, 0o755)
+      accessSync(searchPath, constants.X_OK)
+      return searchPath
+    } catch {
+      return null
+    }
+  }
+}
+
 // Find the agent-browser binary in node_modules
 function getAgentBrowserPath(): string {
   // 1. Check environment variable first (set by d3k when starting tools service)
-  if (process.env.AGENT_BROWSER_PATH && existsSync(process.env.AGENT_BROWSER_PATH)) {
-    return process.env.AGENT_BROWSER_PATH
+  if (process.env.AGENT_BROWSER_PATH) {
+    const runnablePath = getRunnablePath(process.env.AGENT_BROWSER_PATH)
+    if (runnablePath) {
+      return runnablePath
+    }
   }
 
   // Build search paths from multiple starting points
@@ -43,7 +67,7 @@ function getAgentBrowserPath(): string {
   searchPaths.push(
     join(homedir(), ".bun", "install", "global", "node_modules", "dev3000", "node_modules", ".bin", "agent-browser"),
     join(homedir(), ".bun", "install", "global", "node_modules", ".bin", "agent-browser"),
-    join(homedir(), ".bun", "install", "global", "node_modules", "agent-browser", "bin", "agent-browser")
+    join(homedir(), ".bun", "install", "global", "node_modules", "agent-browser", "bin", "agent-browser.js")
   )
 
   // 4. Use process.cwd() as fallback - essential for Next.js bundled code
@@ -52,10 +76,10 @@ function getAgentBrowserPath(): string {
   searchPaths.push(
     // Direct node_modules
     join(cwd, "node_modules", ".bin", "agent-browser"),
-    join(cwd, "node_modules", "agent-browser", "bin", "agent-browser"),
+    join(cwd, "node_modules", "agent-browser", "bin", "agent-browser.js"),
     // Parent node_modules (when cwd is nested)
     join(cwd, "..", "node_modules", ".bin", "agent-browser"),
-    join(cwd, "..", "node_modules", "agent-browser", "bin", "agent-browser")
+    join(cwd, "..", "node_modules", "agent-browser", "bin", "agent-browser.js")
   )
 
   // 5. npm/pnpm/yarn global install locations (best-effort)
@@ -65,12 +89,13 @@ function getAgentBrowserPath(): string {
   ]
   for (const root of globalNodeModules) {
     searchPaths.push(join(root, "dev3000", "node_modules", ".bin", "agent-browser"))
-    searchPaths.push(join(root, "agent-browser", "bin", "agent-browser"))
+    searchPaths.push(join(root, "agent-browser", "bin", "agent-browser.js"))
   }
 
   for (const searchPath of searchPaths) {
-    if (existsSync(searchPath)) {
-      return searchPath
+    const runnablePath = getRunnablePath(searchPath)
+    if (runnablePath) {
+      return runnablePath
     }
   }
 

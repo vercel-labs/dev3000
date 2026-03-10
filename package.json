@@ -58,6 +58,7 @@
     "next": "16.1.6",
     "ora": "9.3.0",
     "package-manager-detector": "^1.3.0",
+    "portless": "0.5.2",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "typescript": "^5.0.0",

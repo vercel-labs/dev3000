@@ -13,6 +13,7 @@ export type UpdateInfo =
 
 export interface TUIOptions {
   appPort: string
+  appUrl?: string | null
   logFile: string
   commandName: string
   serversOnly?: boolean
@@ -147,6 +148,7 @@ const LogLine = memo(
 
 const TUIApp = ({
   appPort: initialAppPort,
+  appUrl: initialAppUrl,
   logFile,
   commandName: _commandName,
   serversOnly,
@@ -156,11 +158,13 @@ const TUIApp = ({
   useHttps: initialUseHttps,
   onStatusUpdate,
   onAppPortUpdate,
+  onAppUrlUpdate,
   onUpdateInfoUpdate,
   onUseHttpsUpdate
 }: TUIOptions & {
   onStatusUpdate: (fn: (status: string | null) => void) => void
   onAppPortUpdate: (fn: (port: string) => void) => void
+  onAppUrlUpdate: (fn: (url: string | null) => void) => void
   onUpdateInfoUpdate: (fn: (info: UpdateInfo) => void) => void
   onUseHttpsUpdate: (fn: (useHttps: boolean) => void) => void
 }) => {
@@ -168,6 +172,7 @@ const TUIApp = ({
   const [scrollOffset, setScrollOffset] = useState(0)
   const [initStatus, setInitStatus] = useState<string | null>(null)
   const [appPort, setAppPort] = useState<string>(initialAppPort)
+  const [appUrl, setAppUrl] = useState<string | null>(initialAppUrl || null)
   const [useHttps, setUseHttps] = useState<boolean>(initialUseHttps || false)
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo>(initialUpdateInfo || null)
   const [portConfirmed, setPortConfirmed] = useState<boolean>(false)
@@ -240,6 +245,12 @@ const TUIApp = ({
       setPortConfirmed(true)
     })
   }, [onAppPortUpdate])
+
+  useEffect(() => {
+    onAppUrlUpdate((url: string | null) => {
+      setAppUrl(url)
+    })
+  }, [onAppUrlUpdate])
 
   // Provide update info function to parent
   useEffect(() => {
@@ -440,6 +451,7 @@ const TUIApp = ({
 
   // Get clean project name (strip hash suffix like "-935beb")
   const cleanProjectName = projectName ? projectName.replace(/-[a-f0-9]{6}$/, "") : ""
+  const displayedAppUrl = appUrl || `${useHttps ? "https" : "http"}://localhost:${appPort}`
 
   // Render compact header for small terminals
   const renderCompactHeader = () => (
@@ -453,7 +465,7 @@ const TUIApp = ({
         </Box>
         {!isVeryCompact && (
           <Box flexDirection="column">
-            <Text dimColor>App: localhost:{appPort}</Text>
+            <Text dimColor>App: {displayedAppUrl}</Text>
             <Text dimColor>📋 Logs: {logFile}</Text>
           </Box>
         )}
@@ -495,9 +507,7 @@ const TUIApp = ({
             {/* Info on the right */}
             <Box flexDirection="column" flexGrow={1}>
               <Box>
-                <Text color="cyan">
-                  🌐 App: {useHttps ? "https" : "http"}://localhost:{appPort}{" "}
-                </Text>
+                <Text color="cyan">🌐 App: {displayedAppUrl} </Text>
                 {!portConfirmed && <Spinner type="dots" />}
               </Box>
               <Text color="cyan">📋 Logs: {logFile}</Text>
@@ -567,6 +577,7 @@ export async function runTUI(options: TUIOptions): Promise<{
   app: { unmount: () => void }
   updateStatus: (status: string | null) => void
   updateAppPort: (port: string) => void
+  updateAppUrl: (url: string | null) => void
   updateUpdateInfo: (info: UpdateInfo) => void
   updateUseHttps: (useHttps: boolean) => void
 }> {
@@ -574,6 +585,7 @@ export async function runTUI(options: TUIOptions): Promise<{
     try {
       let statusUpdater: ((status: string | null) => void) | null = null
       let appPortUpdater: ((port: string) => void) | null = null
+      let appUrlUpdater: ((url: string | null) => void) | null = null
       let updateInfoUpdater: ((info: UpdateInfo) => void) | null = null
       let httpsUpdater: ((useHttps: boolean) => void) | null = null
 
@@ -612,6 +624,9 @@ export async function runTUI(options: TUIOptions): Promise<{
           onAppPortUpdate={(fn) => {
             appPortUpdater = fn
           }}
+          onAppUrlUpdate={(fn) => {
+            appUrlUpdater = fn
+          }}
           onUpdateInfoUpdate={(fn) => {
             updateInfoUpdater = fn
           }}
@@ -634,6 +649,11 @@ export async function runTUI(options: TUIOptions): Promise<{
           updateAppPort: (port: string) => {
             if (appPortUpdater) {
               appPortUpdater(port)
+            }
+          },
+          updateAppUrl: (url: string | null) => {
+            if (appUrlUpdater) {
+              appUrlUpdater(url)
             }
           },
           updateUpdateInfo: (info: UpdateInfo) => {

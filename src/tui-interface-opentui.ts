@@ -31,6 +31,7 @@ export type UpdateInfo =
 
 export interface TUIOptions {
   appPort: string
+  appUrl?: string | null
   logFile: string
   commandName: string
   serversOnly?: boolean
@@ -178,6 +179,7 @@ class D3kTUI {
 
   // State
   private appPort: string
+  private appUrl: string | null
   private useHttps: boolean
   private portConfirmed = false
   private updateInfo: UpdateInfo
@@ -202,6 +204,7 @@ class D3kTUI {
   constructor(options: TUIOptions) {
     this.options = options
     this.appPort = options.appPort
+    this.appUrl = options.appUrl || null
     this.useHttps = options.useHttps || false
     this.updateInfo = options.updateInfo || null
   }
@@ -210,6 +213,7 @@ class D3kTUI {
     app: { unmount: () => void }
     updateStatus: (status: string | null) => void
     updateAppPort: (port: string) => void
+    updateAppUrl: (url: string | null) => void
     updateUpdateInfo: (info: UpdateInfo) => void
     updateUseHttps: (useHttps: boolean) => void
   }> {
@@ -269,6 +273,7 @@ class D3kTUI {
       app: { unmount: () => this.shutdown() },
       updateStatus: (status) => this.setStatus(status),
       updateAppPort: (port) => this.setAppPort(port),
+      updateAppUrl: (url) => this.setAppUrl(url),
       updateUpdateInfo: (info) => this.setUpdateInfo(info),
       updateUseHttps: (useHttps) => this.setUseHttps(useHttps)
     }
@@ -484,11 +489,12 @@ class D3kTUI {
 
     const protocol = this.useHttps ? "https" : "http"
     const portStatus = this.portConfirmed ? "" : " ..."
+    const displayedAppUrl = this.appUrl || `${protocol}://localhost:${this.appPort}`
     const appLine = new TextRenderable(this.renderer, {
       id: "app-url",
       content: this.portConfirmed
-        ? t`${cyan(`🌐 App: ${protocol}://localhost:${this.appPort}`)}`
-        : t`${cyan(`🌐 App: ${protocol}://localhost:${this.appPort}`)}${yellow(portStatus)}`
+        ? t`${cyan(`🌐 App: ${displayedAppUrl}`)}`
+        : t`${cyan(`🌐 App: ${displayedAppUrl}`)}${yellow(portStatus)}`
     })
     infoCol.add(appLine)
 
@@ -954,6 +960,11 @@ class D3kTUI {
     this.rebuildUI()
   }
 
+  setAppUrl(url: string | null) {
+    this.appUrl = url
+    this.rebuildUI()
+  }
+
   setUpdateInfo(info: UpdateInfo) {
     this.updateInfo = info
     this.updateStatusDisplay()
@@ -1017,6 +1028,7 @@ export async function runTUI(options: TUIOptions): Promise<{
   app: { unmount: () => void }
   updateStatus: (status: string | null) => void
   updateAppPort: (port: string) => void
+  updateAppUrl: (url: string | null) => void
   updateUpdateInfo: (info: UpdateInfo) => void
   updateUseHttps: (useHttps: boolean) => void
 }> {

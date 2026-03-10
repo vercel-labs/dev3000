@@ -19,6 +19,7 @@ export interface CrawlOptions {
 interface Session {
   projectName: string
   appPort: string
+  publicUrl?: string | null
   cdpUrl?: string
 }
 
@@ -90,7 +91,7 @@ export async function crawlApp(options: CrawlOptions): Promise<void> {
 
   const session = sessions[0]
   const appPort = session.appPort || "3000"
-  const baseUrl = `http://localhost:${appPort}`
+  const baseUrl = session.publicUrl || `http://localhost:${appPort}`
 
   console.log(chalk.cyan(`🕷️ Crawling ${baseUrl}`))
   console.log(chalk.gray(`   Depth: ${options.depth === "all" ? "exhaustive" : maxDepth}`))

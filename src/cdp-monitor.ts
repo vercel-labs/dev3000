@@ -1303,13 +1303,11 @@ export class CDPMonitor {
     }
   }
 
-  async navigateToApp(port: string, useHttps: boolean = false): Promise<void> {
+  async navigateToUrl(url: string): Promise<void> {
     if (!this.connection) {
       throw new Error("No CDP connection available")
     }
 
-    const protocol = useHttps ? "https" : "http"
-    const url = `${protocol}://localhost:${port}`
     const navigationStartTime = Date.now()
     this.debugLog(`Navigating to ${url}`)
 
@@ -1366,6 +1364,11 @@ export class CDPMonitor {
     this.startInteractionPolling()
 
     // Multiple screenshot triggers will ensure we catch the initial page load
+  }
+
+  async navigateToApp(port: string, useHttps: boolean = false): Promise<void> {
+    const protocol = useHttps ? "https" : "http"
+    await this.navigateToUrl(`${protocol}://localhost:${port}`)
   }
 
   private async setupInteractionTracking(): Promise<void> {

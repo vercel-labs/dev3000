@@ -5,6 +5,7 @@ export type UpdateInfo =
 
 export interface TUIOptions {
   appPort: string
+  appUrl?: string | null
   logFile: string
   commandName: string
   serversOnly?: boolean
@@ -22,6 +23,7 @@ export class DevTUI {
   private app: InkApp | null = null
   private updateStatusFn: ((status: string | null) => void) | null = null
   private updateAppPortFn: ((port: string) => void) | null = null
+  private updateAppUrlFn: ((url: string | null) => void) | null = null
   private updateUpdateInfoFn: ((info: UpdateInfo) => void) | null = null
   private updateUseHttpsFn: ((useHttps: boolean) => void) | null = null
 
@@ -54,10 +56,13 @@ export class DevTUI {
         process.platform === "darwin" && Boolean(process.versions?.bun)
           ? await import("./tui-interface-opentui.js")
           : await import("./tui-interface-impl.js")
-      const { app, updateStatus, updateAppPort, updateUpdateInfo, updateUseHttps } = await mod.runTUI(this.options)
+      const { app, updateStatus, updateAppPort, updateAppUrl, updateUpdateInfo, updateUseHttps } = await mod.runTUI(
+        this.options
+      )
       this.app = app
       this.updateStatusFn = updateStatus
       this.updateAppPortFn = updateAppPort
+      this.updateAppUrlFn = updateAppUrl
       this.updateUpdateInfoFn = updateUpdateInfo
       this.updateUseHttpsFn = updateUseHttps
     } catch (error) {
@@ -80,6 +85,12 @@ export class DevTUI {
   updateAppPort(port: string): void {
     if (this.updateAppPortFn) {
       this.updateAppPortFn(port)
+    }
+  }
+
+  updateAppUrl(url: string | null): void {
+    if (this.updateAppUrlFn) {
+      this.updateAppUrlFn(url)
     }
   }
 

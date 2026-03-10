@@ -38,6 +38,7 @@ export class ScreencastManager {
   private screenshotDir: string
   private messageId = 1000 // Start high to avoid conflicts
   private appPort: string
+  private allowedUrlMatches: string[] = []
   private layoutShifts: Array<{ score: number; timestamp: number; sources?: LayoutShiftSource[] }> = []
   private viewportInfo: Record<string, number> = {}
   private captureTrigger: "navigation" | "load" = "load"
@@ -46,10 +47,19 @@ export class ScreencastManager {
     private cdpUrl: string,
     private logFn: (msg: string) => void,
     appPort?: string,
-    private debug: boolean = false
+    private debug: boolean = false,
+    appUrl?: string | null
   ) {
     this.screenshotDir = process.env.SCREENSHOT_DIR || join(tmpdir(), "dev3000-mcp-deps", "public", "screenshots")
     this.appPort = appPort || process.env.APP_PORT || "3000"
+    this.allowedUrlMatches = [`localhost:${this.appPort}`]
+    if (appUrl) {
+      try {
+        this.allowedUrlMatches.push(new URL(appUrl).origin)
+      } catch {
+        // Ignore invalid URLs and keep localhost matching.
+      }
+    }
     if (!existsSync(this.screenshotDir)) {
       mkdirSync(this.screenshotDir, { recursive: true })
     }
@@ -174,7 +184,7 @@ export class ScreencastManager {
   }
 
   /**
-   * Check URL before starting capture - only capture localhost:{appPort}
+   * Check URL before starting capture - only capture the active app origin.
    */
   private async checkUrlAndStartCapture(): Promise<void> {
     try {
@@ -198,12 +208,11 @@ export class ScreencastManager {
           const url = message.result.result.value
           // this.logFn(`[CDP] Current URL: ${url}`)
 
-          // Only capture if it's the app URL (localhost:appPort)
-          if (url.includes(`localhost:${this.appPort}`)) {
+          if (this.allowedUrlMatches.some((match) => url.includes(match))) {
             // this.logFn("[CDP] URL matches app, starting capture")
             this.onNavigationStart()
           } else {
-            // this.logFn(`[CDP] Skipping capture - URL does not match localhost:${this.appPort}`)
+            // this.logFn("[CDP] Skipping capture - URL does not match tracked app origins")
           }
 
           // Remove listener after handling

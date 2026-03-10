@@ -19,6 +19,7 @@ import { dirname, join, resolve, sep } from "path"
 import { fileURLToPath } from "url"
 import { stripVTControlCharacters } from "util"
 import { CDPMonitor } from "./cdp-monitor.js"
+import { ensurePortlessAlias, getPortlessUrl, isPortlessInstalled, removePortlessAlias } from "./portless.js"
 import { ScreencastManager } from "./screencast-manager.js"
 import { type LogEntry, NextJsErrorDetector, OutputProcessor, StandardLogParser } from "./services/parsers/index.js"
 import { getBundledSkillsPath, listAvailableSkills } from "./skills/index.js"
@@ -168,6 +169,7 @@ interface DevEnvironmentOptions {
   userSetPort?: boolean // Whether user explicitly set the port
   tail?: boolean // Whether to tail the log file to terminal
   tui?: boolean // Whether to use TUI mode (default true)
+  portless?: boolean // Prefer portless .localhost URLs when the portless CLI is installed
   dateTimeFormat?: "local" | "utc" // Timestamp format option
   pluginReactScan?: boolean // Whether to enable react-scan performance monitoring
   debugPort?: number // Chrome debugging port (default 9222, auto-incremented for multiple instances)
@@ -498,6 +500,7 @@ export function writeSessionInfo(
   projectName: string,
   logFilePath: string,
   appPort: string,
+  publicUrl?: string | null,
   cdpUrl?: string | null,
   chromePids?: number[],
   serverCommand?: string,
@@ -519,6 +522,7 @@ export function writeSessionInfo(
       projectName,
       logFilePath,
       appPort,
+      publicUrl: publicUrl || null,
       cdpUrl: cdpUrl || null,
       startTime: new Date().toISOString(),
       pid: process.pid,
@@ -657,10 +661,20 @@ export class DevEnvironment {
   private portChangeMessage: string | null = null
   private portDetected: boolean = false
   private serverUsesHttps: boolean = false
+  private publicAppUrl: string | null = null
+  private portlessAliasName: string | null = null
 
   /** Returns "https" or "http" based on detected server protocol */
   private get serverProtocol(): "http" | "https" {
     return this.serverUsesHttps ? "https" : "http"
+  }
+
+  private get localhostAppUrl(): string {
+    return `${this.serverProtocol}://localhost:${this.options.port}`
+  }
+
+  private get preferredAppUrl(): string {
+    return this.publicAppUrl || this.localhostAppUrl
   }
 
   constructor(options: DevEnvironmentOptions) {
@@ -731,6 +745,12 @@ export class DevEnvironment {
       spinner: "dots",
       isEnabled: !options.tui && !options.tail // Disable spinner in TUI mode
     })
+
+    const portlessOptOut = process.env.PORTLESS === "0" || process.env.PORTLESS === "skip"
+    if (options.portless !== false && !portlessOptOut && isPortlessInstalled()) {
+      this.portlessAliasName = projectName
+      this.publicAppUrl = getPortlessUrl(projectName)
+    }
 
     // Ensure screenshot directory exists
     try {
@@ -934,6 +954,7 @@ export class DevEnvironment {
       // Start TUI interface with initial status and updated port
       this.tui = new DevTUI({
         appPort: this.options.port, // This may have been updated by checkPortsAvailable
+        appUrl: this.publicAppUrl,
         logFile: this.options.logFile,
         commandName: this.options.commandName,
         serversOnly: this.options.serversOnly,
@@ -1031,6 +1052,7 @@ export class DevEnvironment {
 
       // Update the app port in TUI (may have changed during port check)
       this.tui.updateAppPort(this.options.port)
+      this.tui.updateAppUrl(this.publicAppUrl)
 
       // Show port change message if needed
       if (this.portChangeMessage) {
@@ -1078,6 +1100,8 @@ export class DevEnvironment {
 
       // Update TUI with confirmed port (may have changed during server startup)
       this.tui.updateAppPort(this.options.port)
+      this.syncPortlessAlias()
+      this.tui.updateAppUrl(this.publicAppUrl)
 
       // Legacy tools server removed - using CLI commands instead
       // await this.waitForMcpServer()
@@ -1093,21 +1117,7 @@ export class DevEnvironment {
       }
 
       // Write session info for tooling discovery (include CDP URL if browser monitoring was started)
-      const cdpUrl = this.cdpMonitor?.getCdpUrl() || null
-      const chromePids = this.cdpMonitor?.getChromePids() || []
-      const skillsInstalled = listAvailableSkills(process.cwd())
-      writeSessionInfo(
-        projectName,
-        this.options.logFile,
-        this.options.port,
-        cdpUrl,
-        chromePids,
-        this.options.serverCommand,
-        this.options.framework,
-        this.serverProcess?.pid,
-        skillsInstalled,
-        this.options.skillsAgentId ?? null
-      )
+      this.writeCurrentSessionInfo(projectName)
 
       // Clear status - ready!
       await this.tui.updateStatus(null)
@@ -1166,6 +1176,7 @@ export class DevEnvironment {
 
       // Legacy server removed - using CLI commands instead
       // await this.waitForMcpServer()
+      this.syncPortlessAlias()
 
       // Start CDP monitoring only if server started successfully and not in servers-only mode
       if (!this.options.serversOnly && serverStarted) {
@@ -1179,22 +1190,7 @@ export class DevEnvironment {
 
       // Get project name for session info and Visual Timeline URL
       const projectName = getProjectName()
-      // Include CDP URL if browser monitoring was started
-      const cdpUrl = this.cdpMonitor?.getCdpUrl() || null
-      const chromePids = this.cdpMonitor?.getChromePids() || []
-      const skillsInstalled = listAvailableSkills(process.cwd())
-      writeSessionInfo(
-        projectName,
-        this.options.logFile,
-        this.options.port,
-        cdpUrl,
-        chromePids,
-        this.options.serverCommand,
-        this.options.framework,
-        this.serverProcess?.pid,
-        skillsInstalled,
-        this.options.skillsAgentId ?? null
-      )
+      this.writeCurrentSessionInfo(projectName)
 
       // Complete startup with success message only in non-TUI mode
       this.spinner.succeed("Development environment ready!")
@@ -1202,7 +1198,7 @@ export class DevEnvironment {
       // Regular console output (when TUI is disabled with --no-tui)
       console.log(chalk.cyan(`Logs: ${this.options.logFile}`))
       console.log(chalk.cyan("☝️ Give this to an AI to auto debug and fix your app\n"))
-      console.log(chalk.cyan(`🌐 Your App: ${this.serverProtocol}://localhost:${this.options.port}`))
+      console.log(chalk.cyan(`🌐 Your App: ${this.preferredAppUrl}`))
       console.log(chalk.cyan(`🔧 CLI Tools: d3k fix, d3k crawl, d3k find-component`))
       if (this.options.serversOnly) {
         console.log(chalk.cyan("🖥️  Servers-only mode - browser monitoring disabled"))
@@ -1242,11 +1238,19 @@ export class DevEnvironment {
     this.debugLog(`Starting server process: ${this.options.serverCommand}`)
 
     this.serverStartTime = Date.now()
+    const serverEnv = { ...process.env }
+
+    if (this.publicAppUrl) {
+      serverEnv.PORTLESS_URL = this.publicAppUrl
+      serverEnv.__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS = ".localhost"
+    }
+
     // Use the full command string with shell: true to properly handle complex commands
     this.serverProcess = spawn(this.options.serverCommand, {
       stdio: ["ignore", "pipe", "pipe"],
       shell: true,
-      detached: true // Run independently
+      detached: true, // Run independently
+      env: serverEnv
     })
 
     this.debugLog(`Server process spawned with PID: ${this.serverProcess.pid}`)
@@ -1501,6 +1505,49 @@ export class DevEnvironment {
     }
   }
 
+  private syncPortlessAlias() {
+    if (!this.portlessAliasName) {
+      return
+    }
+
+    const result = ensurePortlessAlias(this.portlessAliasName, this.options.port)
+    if (result.success) {
+      this.publicAppUrl = result.url
+      this.debugLog(`Portless alias ready: ${this.portlessAliasName} -> ${this.options.port} (${result.url})`)
+    } else {
+      this.publicAppUrl = null
+      this.debugLog(`Portless alias setup failed: ${result.error}`)
+    }
+  }
+
+  private clearPortlessAlias() {
+    if (!this.portlessAliasName) {
+      return
+    }
+
+    removePortlessAlias(this.portlessAliasName)
+  }
+
+  private writeCurrentSessionInfo(projectName: string = getProjectName()) {
+    const cdpUrl = this.cdpMonitor?.getCdpUrl() || null
+    const chromePids = this.cdpMonitor?.getChromePids() || []
+    const skillsInstalled = listAvailableSkills(process.cwd())
+
+    writeSessionInfo(
+      projectName,
+      this.options.logFile,
+      this.options.port,
+      this.publicAppUrl,
+      cdpUrl,
+      chromePids,
+      this.options.serverCommand,
+      this.options.framework,
+      this.serverProcess?.pid,
+      skillsInstalled,
+      this.options.skillsAgentId ?? null
+    )
+  }
+
   private detectPortChange(text: string) {
     // Detect Next.js port switch: "⚠ Port 3000 is in use by process 39543, using available port 3001 instead."
     // Also detect: "Local: http://localhost:3001"
@@ -1515,42 +1562,26 @@ export class DevEnvironment {
       this.logger.log("server", `[PORT] Server switched from port ${oldPort} to ${detectedPort}`)
       this.options.port = detectedPort
       this.portDetected = true
+      this.syncPortlessAlias()
 
       // Update session info with new port
       const projectName = getProjectName()
-      const cdpUrl = this.cdpMonitor?.getCdpUrl()
-      const chromePids = this.cdpMonitor?.getChromePids() || []
-
-      if (cdpUrl || chromePids.length > 0) {
-        const skillsInstalled = listAvailableSkills(process.cwd())
-        writeSessionInfo(
-          projectName,
-          this.options.logFile,
-          this.options.port,
-          cdpUrl || undefined,
-          chromePids,
-          this.options.serverCommand,
-          this.options.framework,
-          this.serverProcess?.pid,
-          skillsInstalled,
-          this.options.skillsAgentId ?? null
-        )
+      if (this.cdpMonitor || this.serverProcess?.pid) {
+        this.writeCurrentSessionInfo(projectName)
         this.debugLog(`Updated session info with new port: ${this.options.port}`)
       }
 
       // Update TUI header with new port
       if (this.tui) {
         this.tui.updateAppPort(detectedPort)
+        this.tui.updateAppUrl(this.publicAppUrl)
       }
 
       // Navigate browser to new port if CDP monitor is active
       if (this.cdpMonitor) {
         this.debugLog(`Re-navigating browser from port ${oldPort} to ${detectedPort}`)
-        this.logger.log(
-          "browser",
-          `[CDP] Port changed - navigating to ${this.serverProtocol}://localhost:${detectedPort}`
-        )
-        this.cdpMonitor.navigateToApp(detectedPort, this.serverUsesHttps).catch((error: Error) => {
+        this.logger.log("browser", `[CDP] Port changed - navigating to ${this.preferredAppUrl}`)
+        this.cdpMonitor.navigateToUrl(this.preferredAppUrl).catch((error: Error) => {
           this.debugLog(`Failed to navigate browser to new port: ${error}`)
         })
       }
@@ -1910,7 +1941,8 @@ export class DevEnvironment {
             this.logger.log("browser", msg)
           },
           this.options.port.toString(),
-          this.options.debug
+          this.options.debug,
+          this.publicAppUrl
         )
         await this.screencastManager.start()
         // this.logger.log("browser", "[Screencast] Auto-capture enabled for navigation events")
@@ -1918,24 +1950,13 @@ export class DevEnvironment {
 
       // Always write session info after CDP monitoring starts - this is critical for
       // sandbox environments where external tools poll for the cdpUrl in the session file
-      writeSessionInfo(
-        projectName,
-        this.options.logFile,
-        this.options.port,
-        cdpUrl || undefined,
-        chromePids,
-        this.options.serverCommand,
-        this.options.framework,
-        this.serverProcess?.pid,
-        listAvailableSkills(process.cwd()),
-        this.options.skillsAgentId ?? null
-      )
+      this.writeCurrentSessionInfo(projectName)
       this.debugLog(`Updated session info with CDP URL: ${cdpUrl}, Chrome PIDs: [${chromePids.join(", ")}]`)
       this.logger.log("browser", `[CDP] Session info written with cdpUrl: ${cdpUrl ? "available" : "null"}`)
 
       // Navigate to the app
-      await this.cdpMonitor.navigateToApp(this.options.port, this.serverUsesHttps)
-      this.logger.log("browser", `[CDP] Navigated to ${this.serverProtocol}://localhost:${this.options.port}`)
+      await this.cdpMonitor.navigateToUrl(this.preferredAppUrl)
+      this.logger.log("browser", `[CDP] Navigated to ${this.preferredAppUrl}`)
     } catch (error) {
       // Log error and throw to trigger graceful shutdown
       this.logger.log("browser", `[CDP] Failed to start CDP monitoring: ${error}`)
@@ -1970,6 +1991,8 @@ export class DevEnvironment {
       // Non-fatal - ignore cleanup errors
     }
 
+    this.clearPortlessAlias()
+
     // Check PID file ownership BEFORE deleting (needed for cleanup decisions)
     let weOwnPidFile = false
     try {
@@ -1984,6 +2007,8 @@ export class DevEnvironment {
     } catch (_error) {
       // Non-fatal - ignore cleanup errors
     }
+
+    this.clearPortlessAlias()
 
     // Stop TUI if it's running
     if (this.tui) {
