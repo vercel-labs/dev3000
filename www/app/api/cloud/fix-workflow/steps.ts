@@ -14,6 +14,7 @@ import { createGateway, generateText, stepCountIs, tool } from "ai"
 import { z } from "zod"
 import { getOrCreateD3kSandbox, type SandboxTimingData, StepTimer } from "@/lib/cloud/d3k-sandbox"
 import { SandboxAgentBrowser } from "@/lib/cloud/sandbox-agent-browser"
+import type { RecipeSkillRef } from "@/lib/recipes"
 import { skillFallbacks } from "@/lib/skills/fallbacks"
 import { listWorkflowRuns, saveWorkflowRun, type WorkflowType } from "@/lib/workflow-storage"
 import type { TurbopackBundleComparison, TurbopackBundleMetricsSnapshot, WorkflowReport } from "@/types"
@@ -615,6 +616,11 @@ interface ProgressContext {
   runId: string
   projectName: string
   workflowType?: string
+  recipeId?: string
+  recipeName?: string
+  recipeDescription?: string
+  recipeExecutionMode?: "dev-server" | "preview-pr"
+  recipeSandboxBrowser?: "none" | "agent-browser" | "next-browser"
 }
 
 // Helper to update workflow progress
@@ -643,6 +649,11 @@ async function updateProgress(
       timestamp: ctx.timestamp,
       status: "running",
       type: (ctx.workflowType as WorkflowType) || "cls-fix",
+      recipeId: ctx.recipeId,
+      recipeName: ctx.recipeName,
+      recipeDescription: ctx.recipeDescription,
+      recipeExecutionMode: ctx.recipeExecutionMode,
+      recipeSandboxBrowser: ctx.recipeSandboxBrowser,
       stepNumber,
       currentStep,
       sandboxUrl,
@@ -674,6 +685,11 @@ async function appendProgressLog(ctx: ProgressContext | null | undefined, messag
       timestamp: ctx.timestamp,
       status: "running",
       type: (ctx.workflowType as WorkflowType) || "cls-fix",
+      recipeId: ctx.recipeId,
+      recipeName: ctx.recipeName,
+      recipeDescription: ctx.recipeDescription,
+      recipeExecutionMode: ctx.recipeExecutionMode,
+      recipeSandboxBrowser: ctx.recipeSandboxBrowser,
       stepNumber: existingRun?.stepNumber ?? 1,
       currentStep: existingRun?.currentStep ?? "Running workflow...",
       sandboxUrl: existingRun?.sandboxUrl,
@@ -1655,6 +1671,11 @@ export async function agentFixLoopStep(
   repoName?: string,
   customPrompt?: string,
   crawlDepth?: number | "all",
+  recipeName?: string,
+  recipeInstructions?: string,
+  recipeExecutionMode?: "dev-server" | "preview-pr",
+  recipeSandboxBrowser?: "none" | "agent-browser" | "next-browser",
+  recipeSkillRefs?: RecipeSkillRef[],
   progressContext?: ProgressContext | null,
   initTiming?: InitStepTiming,
   fromSnapshot?: boolean,
@@ -1684,6 +1705,8 @@ export async function agentFixLoopStep(
   const effectiveProjectDir = isTurbopackBundleAnalyzer
     ? await resolveSandboxProjectDir(sandbox, projectDir, projectName, progressContext)
     : projectDir
+
+  await installRecipeSkillsInSandbox(sandbox, effectiveProjectDir, recipeSkillRefs, progressContext)
 
   let turbopackBundleComparison: TurbopackBundleComparison | undefined
   let beforeBundleMetrics: TurbopackBundleMetricsSnapshot | null = null
@@ -1767,7 +1790,12 @@ export async function agentFixLoopStep(
     effectiveProjectDir,
     customPrompt,
     progressContext?.workflowType,
-    crawlDepth
+    crawlDepth,
+    recipeName,
+    recipeInstructions,
+    recipeExecutionMode,
+    recipeSandboxBrowser,
+    recipeSkillRefs
   )
   await updateProgress(progressContext, 3, "Agent finished, verifying CLS improvements...", devUrl)
 
@@ -1937,7 +1965,15 @@ export async function agentFixLoopStep(
     id: reportId,
     projectName,
     timestamp: new Date().toISOString(),
+    recipeId: progressContext?.recipeId,
+    recipeName: recipeName || progressContext?.recipeName,
+    recipeDescription: progressContext?.recipeDescription,
+    recipeExecutionMode: recipeExecutionMode || progressContext?.recipeExecutionMode,
+    recipeSandboxBrowser: recipeSandboxBrowser || progressContext?.recipeSandboxBrowser,
     workflowType,
+    recipePrompt: recipeInstructions || undefined,
+    recipeInstructions: recipeInstructions || undefined,
+    recipeSkills: recipeSkillRefs?.length ? recipeSkillRefs : undefined,
     analysisTargetType: "vercel-project",
     customPrompt: customPrompt ?? undefined,
     systemPrompt: agentResult.systemPrompt,
@@ -2246,6 +2282,66 @@ Constraints:
 // Agent with Diagnose Tool
 // ============================================================
 
+function shellEscape(value: string): string {
+  return `'${value.replaceAll("'", `'\\''`)}'`
+}
+
+async function installRecipeSkillsInSandbox(
+  sandbox: Sandbox,
+  projectDir: string | undefined,
+  recipeSkillRefs: RecipeSkillRef[] | undefined,
+  progressContext?: ProgressContext | null
+): Promise<void> {
+  if (!recipeSkillRefs || recipeSkillRefs.length === 0) {
+    return
+  }
+
+  const SANDBOX_CWD = projectDir ? `/vercel/sandbox/${projectDir.replace(/^\/+|\/+$/g, "")}` : "/vercel/sandbox"
+
+  for (const skill of recipeSkillRefs) {
+    if (!skill.installArg || skill.displayName.toLowerCase() === "d3k") {
+      continue
+    }
+
+    await appendProgressLog(progressContext, `[Skills] Installing ${skill.displayName} (${skill.installArg})`)
+    const result = await runSandboxCommand(sandbox, "sh", [
+      "-c",
+      [
+        "export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH",
+        `cd ${shellEscape(SANDBOX_CWD)}`,
+        `npx --yes skills@latest add ${shellEscape(skill.installArg)} --agent codex -y`
+      ].join(" && ")
+    ])
+
+    if (result.exitCode !== 0) {
+      throw new Error(
+        `Failed to install skill ${skill.displayName}: ${(result.stderr || result.stdout || "unknown error").trim()}`
+      )
+    }
+  }
+}
+
+function buildRecipeSkillLoadInstructions(recipeSkillRefs: RecipeSkillRef[] | undefined): string {
+  const recipeSkills = recipeSkillRefs?.filter((skill) => skill.displayName.toLowerCase() !== "d3k") || []
+  const skillCalls = [
+    'get_skill({ name: "d3k" })',
+    ...recipeSkills.map((skill) => `get_skill({ name: "${skill.skillName}" })`)
+  ]
+  return skillCalls.join(" then ")
+}
+
+function buildRecipeSandboxBrowserGuidance(
+  recipeSandboxBrowser: "none" | "agent-browser" | "next-browser" | undefined
+): string {
+  if (recipeSandboxBrowser === "none") {
+    return "Browser mode: none. Stay code-first and use browser tools only if they are necessary for final verification."
+  }
+  if (recipeSandboxBrowser === "next-browser") {
+    return "Browser mode: next-browser. Prioritize preview-style browser validation and use browser tools when they materially improve evidence."
+  }
+  return "Browser mode: agent-browser. Use the sandbox browser tools directly for capture, inspection, and validation."
+}
+
 async function runAgentWithDiagnoseTool(
   sandbox: Sandbox,
   devUrl: string,
@@ -2255,7 +2351,12 @@ async function runAgentWithDiagnoseTool(
   projectDir?: string,
   customPrompt?: string,
   workflowType?: string,
-  crawlDepth?: number | "all"
+  crawlDepth?: number | "all",
+  recipeName?: string,
+  recipeInstructions?: string,
+  recipeExecutionMode?: "dev-server" | "preview-pr",
+  recipeSandboxBrowser?: "none" | "agent-browser" | "next-browser",
+  recipeSkillRefs?: RecipeSkillRef[]
 ): Promise<{ transcript: string; summary: string; systemPrompt: string; skillsLoaded: string[] }> {
   const SANDBOX_CWD = projectDir ? `/vercel/sandbox/${projectDir.replace(/^\/+|\/+$/g, "")}` : "/vercel/sandbox"
   const skillAliases: Record<string, string> = {
@@ -2667,10 +2768,21 @@ Use this to diagnose and verify performance improvements.`,
 
   // Determine workflow type
   const workflowTypeForPrompt = workflowType || "cls-fix"
+  const hasRecipePrompt = Boolean(recipeInstructions?.trim())
+  const skillLoadInstructions = buildRecipeSkillLoadInstructions(recipeSkillRefs)
+  const browserGuidance = buildRecipeSandboxBrowserGuidance(recipeSandboxBrowser)
 
   // Build system prompt based on workflow type
   let systemPrompt: string
-  if (workflowTypeForPrompt === "design-guidelines") {
+  if (hasRecipePrompt) {
+    systemPrompt = buildEnhancedPrompt(
+      `${recipeName ? `Recipe: ${recipeName}\n` : ""}${recipeInstructions?.trim() || ""}${
+        customPrompt?.trim() ? `\n\nRun-specific instructions:\n${customPrompt.trim()}` : ""
+      }\n\n${browserGuidance}`,
+      startPath,
+      devUrl
+    )
+  } else if (workflowTypeForPrompt === "design-guidelines") {
     systemPrompt = buildDesignGuidelinesPrompt(startPath, devUrl, crawlDepth)
   } else if (workflowTypeForPrompt === "react-performance") {
     systemPrompt = buildReactPerformancePrompt(startPath, devUrl)
@@ -2684,7 +2796,24 @@ Use this to diagnose and verify performance improvements.`,
 
   // Build user prompt based on workflow type
   let userPromptMessage: string
-  if (workflowTypeForPrompt === "design-guidelines") {
+  if (hasRecipePrompt) {
+    const validationHint =
+      recipeExecutionMode === "preview-pr"
+        ? "Work from the codebase and preview validation, then prepare PR-ready changes."
+        : "Use diagnose and runtime signals to validate each meaningful fix before you finish."
+    userPromptMessage = `Run the "${recipeName || "custom"}" recipe on ${startPath}. Dev URL: ${devUrl}
+
+First, call ${skillLoadInstructions} to load the recipe skills.
+
+Recipe prompt:
+${recipeInstructions?.trim()}${customPrompt?.trim() ? `\n\nRun-specific instructions:\n${customPrompt.trim()}` : ""}
+
+Validation:
+- ${browserGuidance}
+- ${validationHint}
+- Prefer targeted changes over broad refactors.
+- Summarize the concrete improvements you made and any validation evidence you gathered.`
+  } else if (workflowTypeForPrompt === "design-guidelines") {
     const crawlInfo =
       crawlDepth && crawlDepth !== 1
         ? ` Then use crawl_app with depth=${crawlDepth} to discover all pages to audit.`

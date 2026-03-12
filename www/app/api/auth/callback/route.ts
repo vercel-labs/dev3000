@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
     cookieStore.set("oauth_nonce", "", { maxAge: 0 })
     cookieStore.set("oauth_code_verifier", "", { maxAge: 0 })
 
-    return Response.redirect(new URL("/workflows", request.url))
+    return Response.redirect(new URL("/recipes/runs", request.url))
   } catch (error) {
     console.error("OAuth callback error:", error)
     return Response.redirect(new URL("/auth/error", request.url))

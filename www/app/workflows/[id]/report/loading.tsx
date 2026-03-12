@@ -7,14 +7,14 @@ export default function LoadingReport() {
       <div className="container mx-auto px-4 py-8 max-w-4xl">
         <div className="flex flex-wrap items-center gap-3 mb-6">
           <a
-            href="/workflows"
+            href="/recipes/runs"
             className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="h-4 w-4" />
             <span className="font-semibold">d3k</span>
           </a>
           <span className="text-muted-foreground">/</span>
-          <span className="text-muted-foreground">Workflow Report</span>
+          <span className="text-muted-foreground">Recipe Report</span>
         </div>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-3 min-w-[220px]">

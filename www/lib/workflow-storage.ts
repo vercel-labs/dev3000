@@ -46,6 +46,11 @@ export interface WorkflowRun {
   timestamp: string
   status: "running" | "done" | "failure"
   type?: WorkflowType // Workflow type (cls-fix, prompt, etc.)
+  recipeId?: string
+  recipeName?: string
+  recipeDescription?: string
+  recipeExecutionMode?: "dev-server" | "preview-pr"
+  recipeSandboxBrowser?: "none" | "agent-browser" | "next-browser"
   currentStep?: string // Current step being executed (for live progress)
   stepNumber?: number // 0-4 to show progress (0=sandbox, 1=logs, 2=ai, 3=upload, 4=pr)
   completedAt?: string // ISO timestamp when workflow finished (for duration calc)

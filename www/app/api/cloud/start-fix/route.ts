@@ -1,4 +1,5 @@
 import { start } from "workflow/api"
+import { getRecipe, incrementRecipeUsage, type Recipe } from "@/lib/recipes"
 import { clearWorkflowLog, workflowError, workflowLog } from "@/lib/workflow-logger"
 import { saveWorkflowRun, type WorkflowType } from "@/lib/workflow-storage"
 import { cloudFixWorkflow } from "../fix-workflow/workflow"
@@ -92,6 +93,7 @@ export async function POST(request: Request) {
   let runId: string | undefined
   let runTimestamp: string | undefined
   let workflowType: WorkflowType = "cls-fix"
+  let recipe: Recipe | null = null
   let customPrompt: string | undefined
   let crawlDepth: number | "all" | undefined
   let analysisTargetType: "vercel-project" | "url" = "vercel-project"
@@ -166,7 +168,13 @@ export async function POST(request: Request) {
       "url-audit",
       "turbopack-bundle-analyzer"
     ]
-    if (body.workflowType && validWorkflowTypes.includes(body.workflowType)) {
+    if (typeof body.recipeId === "string" && body.recipeId.trim().length > 0) {
+      recipe = await getRecipe(body.recipeId.trim())
+      if (!recipe) {
+        return Response.json({ success: false, error: "Recipe not found." }, { status: 404, headers: corsHeaders })
+      }
+      workflowType = recipe.legacyWorkflowType || "prompt"
+    } else if (body.workflowType && validWorkflowTypes.includes(body.workflowType)) {
       workflowType = body.workflowType
     }
     analysisTargetType =
@@ -176,10 +184,17 @@ export async function POST(request: Request) {
         ? "url"
         : "vercel-project"
     publicUrl = typeof body.publicUrl === "string" ? body.publicUrl : undefined
-    customPrompt = body.customPrompt
-    crawlDepth = body.crawlDepth
+    customPrompt = typeof body.customPrompt === "string" ? body.customPrompt : undefined
+    crawlDepth = typeof body.crawlDepth === "number" || body.crawlDepth === "all" ? body.crawlDepth : undefined
     userId = body.userId || (isTestMode ? "test-user" : undefined)
     projectName = body.projectName
+
+    if (recipe?.requiresCustomPrompt && !customPrompt?.trim()) {
+      return Response.json(
+        { success: false, error: "This recipe requires custom instructions before it can run." },
+        { status: 400, headers: corsHeaders }
+      )
+    }
 
     if (analysisTargetType === "url") {
       if (!publicUrl) {
@@ -262,11 +277,18 @@ export async function POST(request: Request) {
       userId, // For progress updates
       timestamp: runTimestamp, // For progress updates
       workflowType, // For progress updates
+      recipeId: recipe?.id,
+      recipeName: recipe?.name,
+      recipeDescription: recipe?.description,
+      recipeInstructions: recipe?.instructions,
+      recipeExecutionMode: recipe?.executionMode,
+      recipeSandboxBrowser: recipe?.sandboxBrowser,
+      recipeSkillRefs: recipe?.skillRefs,
       analysisTargetType,
       publicUrl,
       startPath: startPath || "/", // Page path to analyze (e.g., "/about")
       customPrompt: workflowType === "prompt" ? customPrompt : undefined, // User's custom instructions
-      crawlDepth: workflowType === "design-guidelines" ? crawlDepth : undefined, // Crawl depth for design-guidelines
+      crawlDepth: recipe?.supportsCrawlDepth || workflowType === "design-guidelines" ? crawlDepth : undefined,
       // PR creation params
       githubPat,
       npmToken: resolvedNpmToken,
@@ -280,6 +302,12 @@ export async function POST(request: Request) {
 
     // Run setup/enqueue in the background so the API can return runId immediately.
     void (async () => {
+      if (recipe?.id) {
+        await incrementRecipeUsage(recipe.id).catch((usageError) => {
+          workflowError("[Start Fix] Failed to update recipe usage count:", usageError)
+        })
+      }
+
       if (userId && projectName) {
         try {
           await saveWorkflowRun({
@@ -289,6 +317,11 @@ export async function POST(request: Request) {
             timestamp: runTimestamp,
             status: "running",
             type: workflowType,
+            recipeId: recipe?.id,
+            recipeName: recipe?.name,
+            recipeDescription: recipe?.description,
+            recipeExecutionMode: recipe?.executionMode,
+            recipeSandboxBrowser: recipe?.sandboxBrowser,
             currentStep: "Step 1: Initializing sandbox...",
             stepNumber: 1,
             customPrompt: workflowType === "prompt" ? customPrompt : undefined
@@ -315,6 +348,11 @@ export async function POST(request: Request) {
             timestamp: runTimestamp,
             status: "failure",
             type: workflowType,
+            recipeId: recipe?.id,
+            recipeName: recipe?.name,
+            recipeDescription: recipe?.description,
+            recipeExecutionMode: recipe?.executionMode,
+            recipeSandboxBrowser: recipe?.sandboxBrowser,
             completedAt: new Date().toISOString(),
             error: startError instanceof Error ? startError.message : String(startError),
             customPrompt: workflowType === "prompt" ? customPrompt : undefined
@@ -356,6 +394,11 @@ export async function POST(request: Request) {
         timestamp: runTimestamp,
         status: "failure",
         type: workflowType,
+        recipeId: recipe?.id,
+        recipeName: recipe?.name,
+        recipeDescription: recipe?.description,
+        recipeExecutionMode: recipe?.executionMode,
+        recipeSandboxBrowser: recipe?.sandboxBrowser,
         completedAt: new Date().toISOString(),
         error: error instanceof Error ? error.message : String(error),
         customPrompt: workflowType === "prompt" ? customPrompt : undefined

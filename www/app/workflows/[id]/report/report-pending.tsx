@@ -28,7 +28,7 @@ function getPendingReportLabel(workflowType?: string) {
   if (workflowType === "react-performance") return "React Performance Report"
   if (workflowType === "url-audit") return "URL Audit Report"
   if (workflowType === "prompt") return "Custom Prompt Report"
-  return "Workflow Report"
+  return "Recipe Report"
 }
 
 export function ReportPending({ runId, userId, workflowType, projectName }: ReportPendingProps) {
@@ -138,7 +138,7 @@ export function ReportPending({ runId, userId, workflowType, projectName }: Repo
   const activeIndex = fallbackActiveIndex >= 0 ? fallbackActiveIndex : normalizedStepNumber
   const pendingLabel = getPendingReportLabel(workflowType)
   const pendingTitle =
-    workflowType === "turbopack-bundle-analyzer" ? "d3k Turbopack Bundle Analyzer Report" : "d3k Workflow Report"
+    workflowType === "turbopack-bundle-analyzer" ? "d3k Turbopack Bundle Analyzer Report" : "d3k Recipe Report"
   const pendingReportTitle = projectName || pendingTitle
 
   return (
@@ -146,7 +146,7 @@ export function ReportPending({ runId, userId, workflowType, projectName }: Repo
       <div className="container mx-auto px-4 py-8 max-w-4xl space-y-6">
         <div className="flex items-center gap-4">
           <a
-            href="/workflows"
+            href="/recipes/runs"
             className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="h-4 w-4" />

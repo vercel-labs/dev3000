@@ -76,6 +76,20 @@ export async function cloudFixWorkflow(params: {
   userId?: string // For progress updates
   timestamp?: string // For progress updates
   workflowType?: string // For progress updates
+  recipeId?: string
+  recipeName?: string
+  recipeDescription?: string
+  recipeInstructions?: string
+  recipeExecutionMode?: "dev-server" | "preview-pr"
+  recipeSandboxBrowser?: "none" | "agent-browser" | "next-browser"
+  recipeSkillRefs?: Array<{
+    id: string
+    installArg: string
+    packageName?: string
+    skillName: string
+    displayName: string
+    sourceUrl?: string
+  }>
   analysisTargetType?: "vercel-project" | "url"
   publicUrl?: string
   startPath?: string // Page path to analyze (e.g., "/about")
@@ -105,6 +119,13 @@ export async function cloudFixWorkflow(params: {
     userId,
     timestamp,
     workflowType,
+    recipeId,
+    recipeName,
+    recipeDescription,
+    recipeInstructions,
+    recipeExecutionMode,
+    recipeSandboxBrowser,
+    recipeSkillRefs,
     analysisTargetType = "vercel-project",
     publicUrl,
     startPath = "/",
@@ -123,7 +144,21 @@ export async function cloudFixWorkflow(params: {
   const reportId = runId || crypto.randomUUID()
 
   // Progress context for step updates
-  const progressContext = userId && timestamp && runId ? { userId, timestamp, runId, projectName, workflowType } : null
+  const progressContext =
+    userId && timestamp && runId
+      ? {
+          userId,
+          timestamp,
+          runId,
+          projectName,
+          workflowType,
+          recipeId,
+          recipeName,
+          recipeDescription,
+          recipeExecutionMode,
+          recipeSandboxBrowser
+        }
+      : null
 
   workflowLog("[Workflow] Starting cloud fix workflow...")
   workflowLog(`[Workflow] Project: ${projectName}, Repo: ${repoUrl || "(none)"}`)
@@ -203,6 +238,11 @@ export async function cloudFixWorkflow(params: {
         repoName,
         customPrompt,
         crawlDepth,
+        recipeName,
+        recipeInstructions,
+        recipeExecutionMode,
+        recipeSandboxBrowser,
+        recipeSkillRefs,
         progressContext,
         // Pass timing and snapshot info from init step
         initResult.timing,
@@ -342,6 +382,11 @@ interface ProgressContext {
   runId: string
   projectName: string
   workflowType?: string
+  recipeId?: string
+  recipeName?: string
+  recipeDescription?: string
+  recipeExecutionMode?: "dev-server" | "preview-pr"
+  recipeSandboxBrowser?: "none" | "agent-browser" | "next-browser"
 }
 
 async function initSandbox(
@@ -393,6 +438,18 @@ async function agentFixLoop(
   repoName?: string,
   customPrompt?: string,
   crawlDepth?: number | "all",
+  recipeName?: string,
+  recipeInstructions?: string,
+  recipeExecutionMode?: "dev-server" | "preview-pr",
+  recipeSandboxBrowser?: "none" | "agent-browser" | "next-browser",
+  recipeSkillRefs?: Array<{
+    id: string
+    installArg: string
+    packageName?: string
+    skillName: string
+    displayName: string
+    sourceUrl?: string
+  }>,
   progressContext?: ProgressContext | null,
   initTiming?: InitResult["timing"],
   fromSnapshot?: boolean,
@@ -417,6 +474,11 @@ async function agentFixLoop(
     repoName,
     customPrompt,
     crawlDepth,
+    recipeName,
+    recipeInstructions,
+    recipeExecutionMode,
+    recipeSandboxBrowser,
+    recipeSkillRefs,
     progressContext,
     initTiming,
     fromSnapshot,
@@ -552,6 +614,11 @@ async function saveDoneStatus(
         | "react-performance"
         | "url-audit"
         | "turbopack-bundle-analyzer") || "cls-fix",
+    recipeId: progressContext.recipeId,
+    recipeName: progressContext.recipeName,
+    recipeDescription: progressContext.recipeDescription,
+    recipeExecutionMode: progressContext.recipeExecutionMode,
+    recipeSandboxBrowser: progressContext.recipeSandboxBrowser,
     completedAt: new Date().toISOString(),
     reportBlobUrl,
     prUrl: prUrl || undefined,
@@ -577,6 +644,11 @@ async function saveFailureStatus(progressContext: ProgressContext, errorMessage:
           | "react-performance"
           | "url-audit"
           | "turbopack-bundle-analyzer") || "cls-fix",
+      recipeId: progressContext.recipeId,
+      recipeName: progressContext.recipeName,
+      recipeDescription: progressContext.recipeDescription,
+      recipeExecutionMode: progressContext.recipeExecutionMode,
+      recipeSandboxBrowser: progressContext.recipeSandboxBrowser,
       completedAt: new Date().toISOString(),
       error: errorMessage
     })

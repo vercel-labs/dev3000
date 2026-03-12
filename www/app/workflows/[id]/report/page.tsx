@@ -245,7 +245,7 @@ async function WorkflowReportPageData({ params }: { params: Promise<{ id: string
   }
 
   if (!run) {
-    redirect("/workflows")
+    redirect("/recipes/runs")
   }
 
   if (!run.reportBlobUrl) {
@@ -278,7 +278,9 @@ async function ReportContent({
   // Use report's workflowType, fallback to run's type (for backward compat with old reports)
   const workflowType = report.workflowType || run.type || "cls-fix"
   const workflowLabel =
-    workflowType === "prompt"
+    report.recipeName ||
+    run.recipeName ||
+    (workflowType === "prompt"
       ? "Custom Prompt"
       : workflowType === "design-guidelines"
         ? "Design Guidelines"
@@ -288,21 +290,24 @@ async function ReportContent({
             ? "Turbopack Bundle Analyzer"
             : workflowType === "url-audit"
               ? "URL Audit"
-              : "CLS Fix"
+              : "CLS Fix")
   const step2Description =
-    workflowType === "prompt"
-      ? "AI agent executed your custom task and generated this report."
-      : workflowType === "design-guidelines"
-        ? "Read-only design and UX analysis of the target URL."
-        : workflowType === "react-performance"
-          ? "Read-only React performance analysis of the target URL."
-          : workflowType === "turbopack-bundle-analyzer"
-            ? "AI explored Turbopack bundle analyzer output and generated optimization guidance."
-            : workflowType === "url-audit"
-              ? "Read-only UX and performance analysis of the target URL."
-              : "AI agent attempted to fix CLS issues (up to 3 retries)."
-  const reportHeading =
-    workflowType === "design-guidelines"
+    report.recipeExecutionMode === "preview-pr"
+      ? "Recipe ran in preview-and-PR mode and generated this report."
+      : workflowType === "prompt"
+        ? "AI agent executed your custom task and generated this report."
+        : workflowType === "design-guidelines"
+          ? "Read-only design and UX analysis of the target URL."
+          : workflowType === "react-performance"
+            ? "Read-only React performance analysis of the target URL."
+            : workflowType === "turbopack-bundle-analyzer"
+              ? "AI explored Turbopack bundle analyzer output and generated optimization guidance."
+              : workflowType === "url-audit"
+                ? "Read-only UX and performance analysis of the target URL."
+                : "AI agent attempted to fix CLS issues (up to 3 retries)."
+  const reportHeading = report.recipeName
+    ? `Report Results: ${report.recipeName}`
+    : workflowType === "design-guidelines"
       ? "Report: Vercel Web Design Guidelines Audit"
       : workflowType === "turbopack-bundle-analyzer"
         ? "Report: Turbopack Bundle Analyzer"
@@ -1232,8 +1237,11 @@ async function ReportContent({
         </div>
 
         <div className="mt-6 mb-4 flex gap-4">
-          <a href="/workflows" className="px-4 py-2 border border-border rounded-md hover:bg-muted transition-colors">
-            ← Workflows
+          <a
+            href="/recipes/runs"
+            className="px-4 py-2 border border-border rounded-md hover:bg-muted transition-colors"
+          >
+            ← Recipe Runs
           </a>
           {run.prUrl && (
             <a
@@ -1277,7 +1285,7 @@ function ReportLoading({ reportCrumbLabel }: { reportCrumbLabel: string }) {
 function ReportBreadcrumb({ reportCrumbLabel }: { reportCrumbLabel: string }) {
   return (
     <span className="inline-flex items-center gap-2 text-muted-foreground">
-      <a href="/workflows" className="inline-flex items-center gap-2 hover:text-foreground transition-colors">
+      <a href="/recipes/runs" className="inline-flex items-center gap-2 hover:text-foreground transition-colors">
         <ArrowLeft className="h-4 w-4" />
         <span className="font-semibold">d3k</span>
       </a>

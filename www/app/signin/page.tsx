@@ -5,9 +5,9 @@ import { getCurrentUser } from "@/lib/auth"
 export default async function SignInPage() {
   const user = await getCurrentUser()
 
-  // If already signed in, redirect to workflows
+  // If already signed in, redirect to recipes
   if (user) {
-    redirect("/workflows")
+    redirect("/recipes")
   }
 
   return (
@@ -15,7 +15,7 @@ export default async function SignInPage() {
       <div className="w-full max-w-md space-y-8 rounded-lg bg-white p-8 shadow-md">
         <div className="text-center">
           <h1 className="text-3xl font-bold tracking-tight text-gray-900">Sign in to dev3000</h1>
-          <p className="mt-2 text-sm text-gray-600">Access your workflows and projects</p>
+          <p className="mt-2 text-sm text-gray-600">Access your recipes, runs, and projects</p>
         </div>
 
         <div className="mt-8">
