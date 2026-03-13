@@ -4,6 +4,16 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.171] - 2026-03-13
+
+**Feature Release**
+
+- Fix browser startup and log pane selection
+- Build recipes workflow prototype
+- Add canary build timestamps
+- Bundle portless and prefer stable local app URLs
+- Update runtime dependencies and compatibility
+
 ## [0.0.170] - 2026-02-28
 
 **Patch Release**

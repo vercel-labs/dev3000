@@ -10,6 +10,19 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.171",
+    date: "2026-03-13",
+    type: "minor",
+    highlights: [
+      "Fix browser startup and log pane selection",
+      "Build recipes workflow prototype",
+      "Add canary build timestamps",
+      "Bundle portless and prefer stable local app URLs",
+      "Update runtime dependencies and compatibility"
+    ]
+  },
+
+  {
     version: "0.0.170",
     date: "2026-02-28",
     type: "patch",
