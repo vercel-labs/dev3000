@@ -144,7 +144,7 @@ import chalk from "chalk"
 import { execSync, spawnSync } from "child_process"
 import { Command } from "commander"
 import { accessSync, appendFileSync, chmodSync, constants, copyFileSync, existsSync, mkdirSync, readFileSync } from "fs"
-import { homedir, tmpdir } from "os"
+import { homedir } from "os"
 import { detect } from "package-manager-detector"
 import { dirname, join } from "path"
 import { fileURLToPath } from "url"
@@ -817,7 +817,7 @@ program
   .option("-s, --script <script>", "Script to run (e.g. dev, main.py) - auto-detected by project type")
   .option("-c, --command <command>", "Custom command to run (overrides auto-detection and --script)")
   .option("--startup-timeout <seconds>", "Seconds to wait for your app server to become reachable", "30")
-  .option("--profile-dir <dir>", "Chrome profile directory", join(tmpdir(), "dev3000-chrome-profile"))
+  .option("--profile-dir <dir>", "Chrome profile directory")
   .option(
     "--browser <path>",
     "Full path to browser executable (e.g. for Arc: '/Applications/Arc.app/Contents/MacOS/Arc')"
@@ -826,7 +826,7 @@ program
   .option("--debug", "Enable debug logging to console (automatically disables TUI)")
   .option("-t, --tail", "Output consolidated logfile to terminal (like tail -f)")
   .option("--no-tui", "Disable TUI mode and use standard terminal output")
-  .option("--no-portless", "Use localhost URLs instead of portless .localhost aliases")
+  .option("--portless", "Use portless .localhost aliases instead of localhost URLs")
   .option(
     "--date-time <format>",
     "Timestamp format: 'local' (default, e.g. 12:54:03 PM) or 'utc' (ISO string)",
@@ -1171,8 +1171,9 @@ program
       // Create persistent log file
       const logFile = createPersistentLogFile()
 
-      // Get project directory for chrome profile
-      const profileDir = join(getProjectDir(), "chrome-profile")
+      // Use a per-project Chrome profile by default so concurrent d3k sessions
+      // don't fight over the same browser state. Honor explicit overrides.
+      const profileDir = options.profileDir || join(getProjectDir(), "chrome-profile")
 
       // Find available Chrome debug port (starting from 9222)
       // Each d3k instance needs its own debug port to avoid conflicts
@@ -1195,7 +1196,7 @@ program
         startupTimeoutSeconds,
         tail: options.tail,
         tui: options.tui && !options.debug, // TUI is default unless --no-tui or --debug is specified
-        portless: options.portless !== false,
+        portless: options.portless === true,
         dateTimeFormat: options.dateTime || "local",
         pluginReactScan: options.pluginReactScan || false,
         skillsAgentId: skillsAgentId || undefined,

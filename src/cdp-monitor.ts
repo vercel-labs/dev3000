@@ -88,6 +88,7 @@ export class CDPMonitor {
   private chromePids: Set<number> = new Set() // Track all Chrome PIDs for this instance
   private onWindowClosedCallback: (() => void) | null = null // Callback for when window is manually closed
   private appServerPort?: string // Port of the user's app server to monitor
+  private initialAppUrl?: string // App URL that the loading page should hand off to
   private headless: boolean = false // Run Chrome in headless mode
   private framework?: "nextjs" | "svelte" | "other" // Framework hint from project detection
   private reactTrackingEnabled: boolean = false
@@ -101,6 +102,7 @@ export class CDPMonitor {
     browserPath?: string,
     pluginReactScan: boolean = false,
     appServerPort?: string,
+    initialAppUrl?: string,
     debugPort?: number,
     headless: boolean = false,
     framework?: "nextjs" | "svelte" | "other"
@@ -112,6 +114,7 @@ export class CDPMonitor {
     this.debug = debug
     this.browserPath = browserPath
     this.pluginReactScan = pluginReactScan
+    this.initialAppUrl = initialAppUrl
     this.headless = headless
     this.framework = framework
     this.reactTrackingEnabled = framework === "nextjs"
@@ -320,7 +323,7 @@ export class CDPMonitor {
     }
   }
 
-  private createLoadingPage(): string {
+  private createLoadingPage(targetUrl?: string): string {
     // Use a unique temp directory per launch to avoid stale file:// cache artifacts.
     const loadingDir = mkdtempSync(join(tmpdir(), "dev3000-loading-"))
     const loadingPath = join(loadingDir, "loading.html")
@@ -344,6 +347,23 @@ export class CDPMonitor {
     } catch (_error) {
       // Fall back to embedded HTML so compiled binaries always render the full loading page.
       loadingHtml = EMBEDDED_LOADING_HTML
+    }
+
+    if (targetUrl) {
+      const redirectScript = `
+<script>
+  (() => {
+    const targetUrl = ${JSON.stringify(targetUrl)};
+    if (!targetUrl) return;
+
+    setTimeout(() => {
+      window.location.replace(targetUrl);
+    }, 1200);
+  })();
+</script>
+</body>`
+
+      loadingHtml = loadingHtml.replace("</body>", redirectScript)
     }
 
     writeFileSync(loadingPath, loadingHtml)
@@ -516,7 +536,7 @@ export class CDPMonitor {
         }
 
         // Add initial page
-        chromeArgs.push(this.createLoadingPage())
+        chromeArgs.push(this.createLoadingPage(this.initialAppUrl))
 
         this.browser = spawn(chromePath, chromeArgs, {
           stdio: "pipe",
@@ -625,11 +645,25 @@ export class CDPMonitor {
       try {
         // Get the WebSocket URL from Chrome's debug endpoint
         const targetsResponse = await fetch(`http://localhost:${this.debugPort}/json`)
-        const targets = await targetsResponse.json()
+        let targets = await targetsResponse.json()
 
         this.debugLog(
           `Found ${targets.length} targets: ${JSON.stringify(targets.map((t: { type: string; url: string }) => ({ type: t.type, url: t.url })))}`
         )
+
+        if (targets.length === 0) {
+          this.debugLog("No debuggable targets found; creating a blank page target")
+          const newTargetResponse = await fetch(`http://localhost:${this.debugPort}/json/new?about:blank`, {
+            method: "PUT"
+          })
+          if (newTargetResponse.ok) {
+            const createdTarget = await newTargetResponse.json()
+            targets = [createdTarget]
+            this.debugLog(`Created page target: ${createdTarget.id || "unknown"} - ${createdTarget.url || ""}`)
+          } else {
+            this.debugLog(`Failed to create page target: HTTP ${newTargetResponse.status}`)
+          }
+        }
 
         // Find the first page target (tab) - prefer 'page' type but accept any target with a webSocketDebuggerUrl
         let pageTarget = targets.find(
@@ -763,8 +797,10 @@ export class CDPMonitor {
     // Attempt to reconnect
     try {
       await this.connectToCDP()
-      this.logger("browser", "[CDP] Reconnection successful!")
-      this.debugLog("CDP reconnection completed successfully")
+      await this.enableCDPDomains()
+      await this.setupInteractionTracking()
+      this.logger("browser", "[CDP] Reconnection successful! Monitoring restored.")
+      this.debugLog("CDP reconnection completed successfully and monitoring was restored")
     } catch (err) {
       this.logger("browser", `[CDP] Reconnection failed: ${err}`)
       throw err

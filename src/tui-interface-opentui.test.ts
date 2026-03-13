@@ -68,9 +68,12 @@ describe("OpenTUI TUI Implementation", () => {
     const tuiFilePath = join(__dirname, "tui-interface-opentui.ts")
     const fileContent = readFileSync(tuiFilePath, "utf-8")
 
-    // Ensure logs selection fallback exists for scroll box hit testing
+    // Ensure logs selection is owned by d3k instead of OpenTUI's native text selection.
     expect(fileContent).toContain("findLogLineAt")
-    expect(fileContent).toContain("startSelection")
+    expect(fileContent).toContain("findLogLineAtRow")
+    expect(fileContent).toContain("beginLogSelection")
+    expect(fileContent).toContain("updateLogSelection")
+    expect(fileContent).toContain("getSelectedLogText")
     expect(fileContent).toContain("logsContainer.add(logLine)")
   })
 

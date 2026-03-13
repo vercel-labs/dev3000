@@ -169,7 +169,7 @@ interface DevEnvironmentOptions {
   userSetPort?: boolean // Whether user explicitly set the port
   tail?: boolean // Whether to tail the log file to terminal
   tui?: boolean // Whether to use TUI mode (default true)
-  portless?: boolean // Prefer portless .localhost URLs when the portless CLI is installed
+  portless?: boolean // Enable portless .localhost URLs when explicitly requested
   dateTimeFormat?: "local" | "utc" // Timestamp format option
   pluginReactScan?: boolean // Whether to enable react-scan performance monitoring
   debugPort?: number // Chrome debugging port (default 9222, auto-incremented for multiple instances)
@@ -746,8 +746,7 @@ export class DevEnvironment {
       isEnabled: !options.tui && !options.tail // Disable spinner in TUI mode
     })
 
-    const portlessOptOut = process.env.PORTLESS === "0" || process.env.PORTLESS === "skip"
-    if (options.portless !== false && !portlessOptOut && isPortlessInstalled()) {
+    if (options.portless === true && isPortlessInstalled()) {
       this.portlessAliasName = projectName
       this.publicAppUrl = getPortlessUrl(projectName)
     }
@@ -1909,6 +1908,7 @@ export class DevEnvironment {
       this.options.browser,
       this.options.pluginReactScan,
       this.options.port, // App server port to monitor
+      this.preferredAppUrl,
       this.options.debugPort, // Chrome debug port
       this.options.headless, // Headless mode for serverless/CI environments
       this.options.framework // Framework hint for optional React DevTools launch args

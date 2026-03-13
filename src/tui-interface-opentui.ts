@@ -48,6 +48,21 @@ interface LogEntry {
   timestamp?: string // Extracted timestamp like "12:34:56.789"
 }
 
+interface SelectionMouseEvent {
+  x: number
+  y: number
+  target?: { selectable?: boolean; id?: string } | null
+  button?: number
+}
+
+interface LogSelectionState {
+  anchorLogId: number
+  focusLogId: number
+  startX: number
+  startY: number
+  hasDragged: boolean
+}
+
 // Compact ASCII logo for very small terminals
 const COMPACT_LOGO = "d3k"
 
@@ -195,11 +210,17 @@ class D3kTUI {
   private debugMode = false
   private lastFocusedId: string | null = null
   private debugLogFile: string = join(process.env.HOME || tmpdir(), ".d3k", "tui-debug.log")
+  private selectionDebugEnabled = process.env.D3K_TUI_SELECTION_DEBUG !== "0"
+  private selectionDebugLogFile: string = join(process.env.HOME || tmpdir(), ".d3k", "tui-selection-debug.log")
   private lastCopiedSelection: string | null = null
   private selectionCopyHandler: ((selection: Selection | null) => void) | null = null
   private isCompact = false
   private isVeryCompact = false
   private isRebuilding = false
+  private logContentWidth = 80
+  private logRenderables = new Map<number, TextRenderable>()
+  private logSelection: LogSelectionState | null = null
+  private readonly logSelectionBackground = RGBA.fromInts(70, 130, 180)
 
   constructor(options: TUIOptions) {
     this.options = options
@@ -250,6 +271,7 @@ class D3kTUI {
     process.stdout.write = createFilteredWrite(originalStdoutWrite)
     process.stderr.write = createFilteredWrite(originalStderrWrite)
 
+    this.initializeSelectionDebugLog()
     this.renderer = await createCliRenderer(config)
 
     // Setup UI after renderer is created
@@ -268,6 +290,12 @@ class D3kTUI {
     // Force a redraw after start to ensure borders render correctly
     process.stdout.write("\x1b[2J\x1b[H")
     this.renderer.requestRender()
+    setTimeout(() => {
+      this.logSelectionDebug(
+        `[START] renderer=${this.renderer?.width}x${this.renderer?.height} logContentWidth=${this.logContentWidth}`
+      )
+      this.logLogPaneMetrics("post-start")
+    }, 150)
 
     return {
       app: { unmount: () => this.shutdown() },
@@ -285,6 +313,7 @@ class D3kTUI {
     const { width, height } = this.renderer
     const isCompact = width < 80
     const isVeryCompact = width < 60 || height < 15
+    this.logContentWidth = Math.max(20, width - 6)
     this.isCompact = isCompact
     this.isVeryCompact = isVeryCompact
 
@@ -323,7 +352,6 @@ class D3kTUI {
       stickyStart: "bottom",
       scrollAcceleration: new MacOSScrollAccel({ maxMultiplier: 8 }),
       viewportCulling: false, // Disable culling to ensure all items are in hit grid
-      paddingLeft: 1, // Force left position calculation for selection hit testing
       onMouse: (event) => {
         // Log ALL mouse events to understand the flow
         if (event.type === "down" || event.type === "up") {
@@ -336,16 +364,20 @@ class D3kTUI {
           this.debugLog(
             `[MOUSE_${event.type.toUpperCase()}] screen(${event.x},${event.y}) target=${targetId} pos(${targetX},${targetY}) size(${targetW}x${targetH}) selectable=${target?.selectable} hasSelection=${this.renderer?.hasSelection}`
           )
+          this.logSelectionDebug(
+            `[MOUSE_${event.type.toUpperCase()}] screen(${event.x},${event.y}) target=${targetId} pos(${targetX},${targetY}) size(${targetW}x${targetH}) selectable=${target?.selectable} ${this.describeSelection()}`
+          )
         }
       },
       onMouseDown: (event) => {
-        if (this.renderer && !this.renderer.hasSelection && event.button === 0) {
-          const target = event.target
-          if (!target?.selectable) {
-            const logLine = this.findLogLineAt(event.x, event.y)
-            if (logLine) {
-              this.renderer.startSelection(logLine, event.x, event.y)
-            }
+        if (event.button === 0) {
+          const logLine = this.getSelectionLogLine(event)
+          if (logLine) {
+            this.logSelectionDebug(
+              `[START_SELECTION] target=${logLine.id} pos(${logLine.x},${logLine.y}) size(${logLine.width}x${logLine.height}) screen(${event.x},${event.y})`
+            )
+            this.beginLogSelection(logLine.id, event.x, event.y)
+            this.logSelectionDebug(`[START_SELECTION_AFTER] ${this.describeSelection()}`)
           }
         }
         const target = event.target
@@ -354,35 +386,63 @@ class D3kTUI {
         this.debugLog(
           `[MOUSE_DOWN_CB] x=${event.x}, y=${event.y}, target=${targetId}, hasSelection=${this.renderer?.hasSelection}, isDragging=${selection?.isDragging}`
         )
+        this.logSelectionDebug(
+          `[MOUSE_DOWN_CB] x=${event.x}, y=${event.y}, target=${targetId} ${this.describeSelection()}`
+        )
       },
       onMouseUp: (event) => {
-        const selection = this.renderer?.getSelection()
-        const selectedText = selection?.getSelectedText() || "(none)"
+        if (event.button === 0) {
+          const logLine = this.getSelectionLogLine(event)
+          this.finishLogSelection(logLine?.id ?? null, event.x, event.y)
+          this.logSelectionDebug(
+            `[FINISH_SELECTION] target=${logLine?.id || "(none)"} screen(${event.x},${event.y}) ${this.describeSelection()}`
+          )
+        }
+        const selectedText = this.getSelectedLogText() || "(none)"
         this.debugLog(
-          `[MOUSE_UP] x=${event.x}, y=${event.y}, hasSelection=${this.renderer?.hasSelection}, text="${selectedText.slice(0, 30)}"`
+          `[MOUSE_UP] x=${event.x}, y=${event.y}, hasSelection=${Boolean(this.logSelection)}, text="${selectedText.slice(0, 30)}"`
+        )
+        this.logSelectionDebug(
+          `[MOUSE_UP] x=${event.x}, y=${event.y}, text="${selectedText.slice(0, 60)}" ${this.describeSelection()}`
         )
       },
       onMouseDrag: (event) => {
+        if (this.logSelection) {
+          const logLine = this.getSelectionLogLine(event)
+          this.updateLogSelection(logLine?.id ?? null, event.x, event.y)
+          this.logSelectionDebug(
+            `[UPDATE_SELECTION] target=${logLine?.id || "(none)"} screen(${event.x},${event.y}) ${this.describeSelection()}`
+          )
+        }
         const target = event.target
         const targetId = target?.id || "(none)"
         this.debugLog(`[MOUSE_DRAG] x=${event.x}, y=${event.y}, target=${targetId}, isDragging=${event.isDragging}`)
+        this.logSelectionDebug(
+          `[MOUSE_DRAG] x=${event.x}, y=${event.y}, target=${targetId}, eventDragging=${event.isDragging} ${this.describeSelection()}`
+        )
       }
     })
+    this.logsScrollBox.content.flexDirection = "column"
+    this.logsScrollBox.content.left = 0
+    this.logsScrollBox.content.top = 0
+    this.logsScrollBox.content.width = this.logContentWidth
     logsSection.add(this.logsScrollBox)
 
     // Track focus changes on scroll box
     this.logsScrollBox.on("focused", () => {
       this.debugLog(`[FOCUS] logsScrollBox focused`)
+      this.logSelectionDebug("[FOCUS] logsScrollBox focused")
     })
     this.logsScrollBox.on("blurred", () => {
       this.debugLog(`[FOCUS] logsScrollBox blurred`)
+      this.logSelectionDebug("[FOCUS] logsScrollBox blurred")
     })
 
     // Container for log lines inside scroll box - provides valid X positions
     this.logsContainer = new BoxRenderable(this.renderer, {
       id: "logs-content",
       flexDirection: "column",
-      width: "100%"
+      width: this.logContentWidth
     })
     this.logsScrollBox.add(this.logsContainer)
 
@@ -419,11 +479,26 @@ class D3kTUI {
     // Handle resize - only rebuild when compact mode changes
     this.renderer.root.onSizeChange = () => {
       if (!this.renderer || this.isRebuilding) return
+      this.logContentWidth = Math.max(20, this.renderer.width - 6)
       const nextCompact = this.renderer.width < 80
       const nextVeryCompact = this.renderer.width < 60 || this.renderer.height < 15
       if (nextCompact !== this.isCompact || nextVeryCompact !== this.isVeryCompact) {
         this.rebuildUI()
         return
+      }
+      if (this.logsContainer) {
+        this.logsContainer.width = this.logContentWidth
+      }
+      if (this.logsScrollBox) {
+        this.logsScrollBox.content.left = 0
+        this.logsScrollBox.content.top = 0
+        this.logsScrollBox.content.width = this.logContentWidth
+      }
+      for (const child of this.logsContainer?.getChildren() || []) {
+        if (child instanceof TextRenderable) {
+          child.width = this.logContentWidth
+          child.left = 0
+        }
       }
       this.renderer.requestRender()
     }
@@ -625,6 +700,7 @@ class D3kTUI {
           this.baseLogId = undefined
           this.refreshLogs()
         }
+        this.clearLogSelection()
         this.renderer?.clearSelection()
         return
       }
@@ -716,9 +792,11 @@ class D3kTUI {
     this.selectionCopyHandler = (selection) => {
       if (!selection) {
         this.lastCopiedSelection = null
+        this.logSelectionDebug("[SELECTION_EVENT] selection cleared")
         return
       }
 
+      this.logSelectionDebug(`[SELECTION_EVENT] ${this.describeSelection(selection)}`)
       if (selection.isDragging || !selection.isActive) return
 
       const text = selection.getSelectedText()
@@ -727,15 +805,14 @@ class D3kTUI {
 
       this.lastCopiedSelection = text
       this.copyToClipboard(text)
+      this.logSelectionDebug(`[SELECTION_COPY] length=${text.length} text="${text.slice(0, 120)}"`)
     }
 
     this.renderer.on("selection", this.selectionCopyHandler)
   }
 
   private copySelectionToClipboard() {
-    if (!this.renderer) return
-    const selection = this.renderer.getSelection()
-    const text = selection?.getSelectedText()
+    const text = this.getSelectedLogText() || this.renderer?.getSelection()?.getSelectedText()
     if (!text || text.trim().length === 0) return
     this.lastCopiedSelection = text
     this.copyToClipboard(text)
@@ -854,16 +931,20 @@ class D3kTUI {
         id: `log-${log.id}`,
         content: formatted,
         wrapMode: "none",
-        selectable: true,
+        selectable: false,
         selectionBg: RGBA.fromInts(70, 130, 180), // Steel blue highlight
         selectionFg: RGBA.fromInts(255, 255, 255), // White text on selection
-        width: "100%",
+        width: this.logContentWidth,
+        left: 0,
         flexShrink: 0,
         onMouseDown: (event) => {
           // Record start position for click detection
           clickStartX = event.x
           clickStartY = event.y
           this.debugLog(
+            `[TEXT_DOWN] id=${logLine.id} screen(${event.x},${event.y}) pos(${logLine.x},${logLine.y}) size(${logLine.width}x${logLine.height})`
+          )
+          this.logSelectionDebug(
             `[TEXT_DOWN] id=${logLine.id} screen(${event.x},${event.y}) pos(${logLine.x},${logLine.y}) size(${logLine.width}x${logLine.height})`
           )
         },
@@ -877,6 +958,7 @@ class D3kTUI {
             const TIMESTAMP_COLUMN_WIDTH = 15 // "[HH:MM:SS.mmm] " is ~14 chars
 
             if (textLocalX <= TIMESTAMP_COLUMN_WIDTH) {
+              this.clearLogSelection()
               // Toggle baseline timestamp on click
               const timestampMs = parseTimestampToMs(log.timestamp)
               if (timestampMs !== null) {
@@ -898,12 +980,17 @@ class D3kTUI {
           clickStartY = -1
         }
       })
+      this.logRenderables.set(log.id, logLine)
       this.logsContainer.add(logLine)
+      this.updateLogLineSelectionStyle(log.id)
     }
 
     // Force render to update hit grid after adding new logs
     // This prevents stale hit grid when new logs trigger scroll/layout changes
     this.renderer.requestRender()
+    setTimeout(() => {
+      this.logLogPaneMetrics(`after-add-${newLogs.length}`)
+    }, 0)
   }
 
   private findLogLineAt(x: number, y: number): TextRenderable | null {
@@ -917,6 +1004,43 @@ class D3kTUI {
     return null
   }
 
+  private findLogLineAtRow(y: number): TextRenderable | null {
+    if (!this.logsContainer) return null
+    for (const child of this.logsContainer.getChildren()) {
+      if (!(child instanceof TextRenderable)) continue
+      const withinY = y >= child.y && y < child.y + Math.max(child.height, 1)
+      if (withinY) return child
+    }
+    return null
+  }
+
+  private getSelectionLogLine(event: SelectionMouseEvent): TextRenderable | null {
+    const target = event.target
+    if (target?.id?.startsWith("log-")) {
+      const child = this.logsContainer?.getChildren().find((entry) => entry.id === target.id)
+      if (child instanceof TextRenderable) {
+        this.logSelectionDebug(
+          `[HIT] direct target=${target.id} pos(${child.x},${child.y}) size(${child.width}x${child.height})`
+        )
+        return child
+      }
+    }
+
+    const fallback = this.findLogLineAt(event.x, event.y)
+    if (fallback) {
+      this.logSelectionDebug(
+        `[HIT] fallback screen(${event.x},${event.y}) -> ${fallback.id} pos(${fallback.x},${fallback.y}) size(${fallback.width}x${fallback.height})`
+      )
+      return fallback
+    }
+
+    const rowFallback = this.findLogLineAtRow(event.y)
+    this.logSelectionDebug(
+      `[HIT] row-fallback screen(${event.x},${event.y}) -> ${rowFallback?.id || "(none)"} pos(${rowFallback?.x ?? "?"},${rowFallback?.y ?? "?"}) size(${rowFallback?.width ?? "?"}x${rowFallback?.height ?? "?"})`
+    )
+    return rowFallback
+  }
+
   private refreshLogs() {
     if (!this.renderer || !this.logsContainer) return
 
@@ -924,10 +1048,109 @@ class D3kTUI {
     for (const child of this.logsContainer.getChildren()) {
       child.destroy()
     }
+    this.logRenderables.clear()
 
     // Re-add filtered logs
     const filteredLogs = this.logs.filter((log) => log.id > this.clearFromLogId)
     this.addLogLines(filteredLogs)
+    this.normalizeLogSelection()
+  }
+
+  private beginLogSelection(logRenderableId: string, x: number, y: number) {
+    const logId = this.parseLogRenderableId(logRenderableId)
+    if (logId === null) return
+    this.logSelection = {
+      anchorLogId: logId,
+      focusLogId: logId,
+      startX: x,
+      startY: y,
+      hasDragged: false
+    }
+    this.updateLogSelectionStyles()
+  }
+
+  private updateLogSelection(logRenderableId: string | null, x: number, y: number) {
+    if (!this.logSelection) return
+    const logId = logRenderableId ? this.parseLogRenderableId(logRenderableId) : null
+    if (logId !== null) {
+      this.logSelection.focusLogId = logId
+    }
+    if (x !== this.logSelection.startX || y !== this.logSelection.startY) {
+      this.logSelection.hasDragged = true
+    }
+    this.updateLogSelectionStyles()
+  }
+
+  private finishLogSelection(logRenderableId: string | null, x: number, y: number) {
+    if (!this.logSelection) return
+    this.updateLogSelection(logRenderableId, x, y)
+    if (!this.logSelection?.hasDragged) {
+      this.clearLogSelection()
+      return
+    }
+
+    const text = this.getSelectedLogText()
+    if (!text || text.trim().length === 0 || text === this.lastCopiedSelection) return
+
+    this.lastCopiedSelection = text
+    this.copyToClipboard(text)
+    this.logSelectionDebug(`[SELECTION_COPY] length=${text.length} text="${text.slice(0, 120)}"`)
+  }
+
+  private clearLogSelection() {
+    if (!this.logSelection) return
+    this.logSelection = null
+    this.updateLogSelectionStyles()
+  }
+
+  private normalizeLogSelection() {
+    if (!this.logSelection) return
+    const selectedLogIds = this.getSelectedLogIds()
+    if (selectedLogIds.length === 0) {
+      this.logSelection = null
+      this.updateLogSelectionStyles()
+    }
+  }
+
+  private getSelectedLogIds(): number[] {
+    if (!this.logSelection) return []
+    const visibleLogIds = [...this.logRenderables.keys()].sort((a, b) => a - b)
+    const anchorIndex = visibleLogIds.indexOf(this.logSelection.anchorLogId)
+    const focusIndex = visibleLogIds.indexOf(this.logSelection.focusLogId)
+    if (anchorIndex === -1 || focusIndex === -1) return []
+    const startIndex = Math.min(anchorIndex, focusIndex)
+    const endIndex = Math.max(anchorIndex, focusIndex)
+    return visibleLogIds.slice(startIndex, endIndex + 1)
+  }
+
+  private getSelectedLogText(): string {
+    const selectedIds = new Set(this.getSelectedLogIds())
+    if (selectedIds.size === 0) return ""
+    return this.logs
+      .filter((log) => log.id > this.clearFromLogId && selectedIds.has(log.id))
+      .map((log) => log.content)
+      .join("\n")
+  }
+
+  private updateLogSelectionStyles() {
+    for (const logId of this.logRenderables.keys()) {
+      this.updateLogLineSelectionStyle(logId)
+    }
+    this.renderer?.requestRender()
+  }
+
+  private updateLogLineSelectionStyle(logId: number) {
+    const renderable = this.logRenderables.get(logId)
+    if (!renderable) return
+    const selectedIds = new Set(this.getSelectedLogIds())
+    renderable.bg = selectedIds.has(logId) ? this.logSelectionBackground : undefined
+  }
+
+  private parseLogRenderableId(logRenderableId: string): number | null {
+    const match = logRenderableId.match(/^log-(\d+)$/)
+    if (!match) return null
+    const logId = Number.parseInt(match[1], 10)
+    return Number.isNaN(logId) ? null : logId
   }
 
   private updateStatusDisplay() {
@@ -991,6 +1214,65 @@ class D3kTUI {
     } catch {
       // Ignore write errors
     }
+  }
+
+  private initializeSelectionDebugLog() {
+    if (!this.selectionDebugEnabled) return
+    try {
+      mkdirSync(join(process.env.HOME || tmpdir(), ".d3k"), { recursive: true })
+      writeFileSync(
+        this.selectionDebugLogFile,
+        [
+          `Selection debug started at ${new Date().toISOString()}`,
+          `project=${this.options.projectName || "(unknown)"}`,
+          `logFile=${this.options.logFile}`,
+          `appPort=${this.options.appPort}`,
+          ""
+        ].join("\n")
+      )
+    } catch {
+      // Ignore write errors
+    }
+  }
+
+  private logSelectionDebug(message: string) {
+    if (!this.selectionDebugEnabled) return
+    const timestamp = new Date().toISOString()
+    try {
+      appendFileSync(this.selectionDebugLogFile, `[${timestamp}] ${message}\n`)
+    } catch {
+      // Ignore write errors
+    }
+  }
+
+  private describeSelection(selection: Selection | null = this.renderer?.getSelection() || null): string {
+    const logSelectionIds = this.getSelectedLogIds()
+    const logSelectionText = this.getSelectedLogText()
+    const logSelectionDescription =
+      logSelectionIds.length === 0
+        ? "logSelection=(none)"
+        : `logSelection={dragging:${Boolean(this.logSelection?.hasDragged)},lines:${logSelectionIds.length},textLen:${logSelectionText.length}}`
+
+    if (!selection) {
+      return logSelectionDescription
+    }
+
+    const text = selection.getSelectedText()
+    return `${logSelectionDescription} nativeSelection={active:${selection.isActive},dragging:${selection.isDragging},renderables:${selection.selectedRenderables.length},textLen:${text.length}}`
+  }
+
+  private logLogPaneMetrics(reason: string) {
+    if (!this.selectionDebugEnabled) return
+    const children = this.logsContainer?.getChildren() || []
+    const logLines = children.filter((child): child is TextRenderable => child instanceof TextRenderable)
+    const sample = logLines
+      .slice(0, 3)
+      .map((line) => `${line.id}@(${line.x},${line.y}) ${line.width}x${line.height}`)
+      .join(", ")
+    const last = logLines.at(-1)
+    this.logSelectionDebug(
+      `[LAYOUT:${reason}] scroll=${this.logsScrollBox?.x ?? "?"},${this.logsScrollBox?.y ?? "?"} ${this.logsScrollBox?.width ?? "?"}x${this.logsScrollBox?.height ?? "?"} content=${this.logsContainer?.x ?? "?"},${this.logsContainer?.y ?? "?"} ${this.logsContainer?.width ?? "?"}x${this.logsContainer?.height ?? "?"} lines=${logLines.length} sample=[${sample}] last=${last ? `${last.id}@(${last.x},${last.y}) ${last.width}x${last.height}` : "(none)"}`
+    )
   }
 
   shutdown() {
