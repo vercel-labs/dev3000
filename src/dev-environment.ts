@@ -159,6 +159,7 @@ interface DevEnvironmentOptions {
   serverCommand: string
   startupTimeoutSeconds: number
   profileDir: string
+  browserTool: "agent-browser" | "next-browser"
   logFile: string
   debug?: boolean
   serversOnly?: boolean
@@ -507,7 +508,8 @@ export function writeSessionInfo(
   framework?: "nextjs" | "svelte" | "other",
   serverPid?: number,
   skillsInstalled?: string[],
-  skillsAgentId?: string | null
+  skillsAgentId?: string | null,
+  preferredBrowserTool?: "agent-browser" | "next-browser"
 ): void {
   const projectDir = getProjectDir()
 
@@ -532,7 +534,8 @@ export function writeSessionInfo(
       framework: framework || null,
       serverPid: serverPid || null,
       skillsInstalled: skillsInstalled || [],
-      skillsAgentId: skillsAgentId || null
+      skillsAgentId: skillsAgentId || null,
+      preferredBrowserTool: preferredBrowserTool || "agent-browser"
     }
 
     // Write session file in project directory
@@ -1543,7 +1546,8 @@ export class DevEnvironment {
       this.options.framework,
       this.serverProcess?.pid,
       skillsInstalled,
-      this.options.skillsAgentId ?? null
+      this.options.skillsAgentId ?? null,
+      this.options.browserTool
     )
   }
 

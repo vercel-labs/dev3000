@@ -59,6 +59,40 @@ d3k agent-browser --cdp "$CDP_PORT" click @e2
 d3k agent-browser --cdp "$CDP_PORT" screenshot /tmp/d3k-current.png
 ```
 
+## Browser Tool Choice
+
+Use the browser tool that matches the task instead of treating them as interchangeable:
+
+- `agent-browser`
+  - Default choice.
+  - Best for generic web apps and for driving the exact headed browser session that d3k is already monitoring via CDP.
+  - Use it when you need `snapshot`, ref-based `click`, `fill`, or to reproduce what the user sees in the monitored tab.
+- `next-browser`
+  - Next.js-specific tool.
+  - Best for React/Next introspection: `tree`, `errors`, `logs`, `routes`, `project`, PPR inspection, and related Next dev-server signals.
+  - It is not a drop-in replacement for `agent-browser`: no accessibility `snapshot`, no ref-based `click`, and no `fill`.
+  - It launches its own daemon/browser flow and does not use `d3k cdp-port`.
+
+Practical rule:
+
+- Need to drive the same browser d3k is monitoring: use `agent-browser`.
+- Need Next.js component tree or Next-specific diagnostics: use `next-browser`.
+
+Examples:
+
+```bash
+# Same monitored browser session
+CDP_PORT="$(d3k cdp-port)"
+d3k agent-browser --cdp "$CDP_PORT" snapshot -i
+d3k agent-browser --cdp "$CDP_PORT" click @e2
+
+# Next.js-specific inspection
+d3k next-browser open http://localhost:3000
+d3k next-browser tree
+d3k next-browser errors
+d3k next-browser logs
+```
+
 ## Artifacts to Read
 
 - `~/.d3k/{project}/d3k.log`

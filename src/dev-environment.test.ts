@@ -667,6 +667,27 @@ describe("writeSessionInfo", () => {
     // Should not throw
     expect(writeWithServerPid).not.toThrow()
   })
+
+  it("should include preferredBrowserTool field in session info structure", () => {
+    const writeWithPreferredBrowserTool = () => {
+      writeSessionInfo(
+        "test",
+        "/tmp/test.log",
+        "3000",
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        "next-browser"
+      )
+    }
+
+    expect(writeWithPreferredBrowserTool).not.toThrow()
+  })
 })
 
 describe("Process cleanup invariants", () => {

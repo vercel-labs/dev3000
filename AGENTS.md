@@ -41,6 +41,14 @@ When working from a standalone AI app (Codex.app, Claude Code app, etc.) in this
    - `~/.d3k/{project}/screenshots/`
    - `~/.d3k/{project}/session.json`
 
+### Browser Tool Choice
+
+- Use `agent-browser` by default.
+- Use `agent-browser` when you need to drive the exact headed browser session d3k is already monitoring via CDP, especially for `snapshot`, ref-based `click`, and `fill`.
+- Use `next-browser` for Next.js-specific diagnostics like `tree`, `errors`, `logs`, `routes`, and other Next introspection.
+- Do not treat `next-browser` as a drop-in replacement for `agent-browser`; it does not use `d3k cdp-port` and does not support the same ref-based interaction model.
+- If you need to switch the local preferred tool, use `d3k --browser-tool next-browser` or `d3k --browser-tool agent-browser`.
+
 Use `--servers-only` or `--headless` only if the user explicitly asks.
 
 ## Core Development Rules

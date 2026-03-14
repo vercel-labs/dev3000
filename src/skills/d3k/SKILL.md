@@ -44,6 +44,46 @@ d3k agent-browser --cdp 9222 fill @e3 "text"
 d3k agent-browser --cdp 9222 screenshot /tmp/shot.png
 ```
 
+## Browser Tool Choice
+
+Use the browser tool that matches the task:
+
+- `agent-browser`
+  - Default choice.
+  - Best for generic web apps and for driving the exact headed browser session d3k is already monitoring.
+  - Use it when you need `snapshot`, ref-based `click`, `fill`, or to reproduce what the user sees in the monitored tab.
+- `next-browser`
+  - Next.js-specific tool.
+  - Best for Next/React introspection: `tree`, `errors`, `logs`, `routes`, `project`, and related Next dev-server diagnostics.
+  - It is not a drop-in replacement for `agent-browser`: no accessibility `snapshot`, no ref-based `click`, and no `fill`.
+  - It runs its own daemon/browser flow and does not use `d3k cdp-port`.
+
+Practical rule:
+
+- Need to drive the same monitored browser session: use `agent-browser`.
+- Need Next.js component-tree or Next-specific diagnostics: use `next-browser`.
+
+Examples:
+
+```bash
+# Same monitored browser session
+d3k agent-browser --cdp 9222 snapshot -i
+d3k agent-browser --cdp 9222 click @e2
+
+# Next.js-specific inspection
+d3k next-browser open http://localhost:3000
+d3k next-browser tree
+d3k next-browser errors
+d3k next-browser logs
+```
+
+To make d3k prefer one locally when it launches helper browser commands, use:
+
+```bash
+d3k --browser-tool agent-browser
+d3k --browser-tool next-browser
+```
+
 ## Fix Workflow
 
 1. `d3k errors --context` - See errors and what triggered them

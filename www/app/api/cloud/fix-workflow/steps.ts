@@ -14,6 +14,7 @@ import { createGateway, generateText, stepCountIs, tool } from "ai"
 import { z } from "zod"
 import { getOrCreateD3kSandbox, type SandboxTimingData, StepTimer } from "@/lib/cloud/d3k-sandbox"
 import { SandboxAgentBrowser } from "@/lib/cloud/sandbox-agent-browser"
+import { SandboxNextBrowser } from "@/lib/cloud/sandbox-next-browser"
 import type { RecipeSkillRef } from "@/lib/recipes"
 import { skillFallbacks } from "@/lib/skills/fallbacks"
 import { listWorkflowRuns, saveWorkflowRun, type WorkflowType } from "@/lib/workflow-storage"
@@ -337,13 +338,25 @@ function isSemverAtLeast(found: ParsedSemver, minimum: ParsedSemver): boolean {
   return found.patch >= minimum.patch
 }
 
+type CloudBrowserMode = "agent-browser" | "next-browser"
+
 // Cache for agent-browser instance per sandbox
 const agentBrowserCache = new Map<string, SandboxAgentBrowser>()
 const agentBrowserProfileVersion = new Map<string, number>()
+const nextBrowserCache = new Map<string, SandboxNextBrowser>()
+const nextBrowserHomeVersion = new Map<string, number>()
+
+function resolveCloudBrowserMode(
+  recipeSandboxBrowser: "none" | "agent-browser" | "next-browser" | undefined
+): CloudBrowserMode {
+  return recipeSandboxBrowser === "next-browser" ? "next-browser" : "agent-browser"
+}
 
 function isRecoverableBrowserError(error: string | undefined): boolean {
   if (!error) return false
-  return /Target page, context or browser has been closed|browserType\.launchPersistentContext/i.test(error)
+  return /Target page, context or browser has been closed|browserType\.launchPersistentContext|browser not open|daemon failed to start|ECONNREFUSED|EPIPE|socket hang up/i.test(
+    error
+  )
 }
 
 /**
@@ -367,94 +380,143 @@ async function getAgentBrowser(sandbox: Sandbox, debug = false): Promise<Sandbox
   return browser
 }
 
+async function getNextBrowser(sandbox: Sandbox, debug = false): Promise<SandboxNextBrowser> {
+  const cacheKey = sandbox.sandboxId
+  let browser = nextBrowserCache.get(cacheKey)
+  if (!browser) {
+    const nextVersion = (nextBrowserHomeVersion.get(cacheKey) || 0) + 1
+    nextBrowserHomeVersion.set(cacheKey, nextVersion)
+    const homeDir = `/tmp/next-browser-home-${cacheKey}-${nextVersion}`
+    browser = await SandboxNextBrowser.create(sandbox, {
+      homeDir,
+      debug
+    })
+    workflowLog(`[Browser] Created next-browser home ${homeDir}`)
+    nextBrowserCache.set(cacheKey, browser)
+  }
+  return browser
+}
+
 /**
- * Navigate browser to URL using agent-browser CLI
+ * Navigate browser to URL using the configured browser CLI.
  */
 async function navigateBrowser(
   sandbox: Sandbox,
   url: string,
+  browserMode: CloudBrowserMode = "agent-browser",
   debug = false
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const browser = await getAgentBrowser(sandbox, debug)
+    const browser =
+      browserMode === "next-browser" ? await getNextBrowser(sandbox, debug) : await getAgentBrowser(sandbox, debug)
     const result = await browser.open(url)
     if (result.success) {
-      workflowLog(`[Browser] Navigated to ${url} via agent-browser`)
+      workflowLog(`[Browser] Navigated to ${url} via ${browserMode}`)
       return { success: true }
     }
-    workflowLog(`[Browser] agent-browser navigation failed: ${result.error}`)
+    workflowLog(`[Browser] ${browserMode} navigation failed: ${result.error}`)
     if (isRecoverableBrowserError(result.error)) {
-      workflowLog("[Browser] Resetting cached agent-browser instance after recoverable navigation failure")
-      agentBrowserCache.delete(sandbox.sandboxId)
-      const retryBrowser = await getAgentBrowser(sandbox, debug)
+      workflowLog(`[Browser] Resetting cached ${browserMode} instance after recoverable navigation failure`)
+      if (browserMode === "next-browser") {
+        nextBrowserCache.delete(sandbox.sandboxId)
+      } else {
+        agentBrowserCache.delete(sandbox.sandboxId)
+      }
+      const retryBrowser =
+        browserMode === "next-browser" ? await getNextBrowser(sandbox, debug) : await getAgentBrowser(sandbox, debug)
       const retryResult = await retryBrowser.open(url)
       if (retryResult.success) {
-        workflowLog(`[Browser] Navigated to ${url} via agent-browser (retry)`)
+        workflowLog(`[Browser] Navigated to ${url} via ${browserMode} (retry)`)
         return { success: true }
       }
-      workflowLog(`[Browser] agent-browser navigation retry failed: ${retryResult.error}`)
+      workflowLog(`[Browser] ${browserMode} navigation retry failed: ${retryResult.error}`)
     }
   } catch (error) {
-    workflowLog(`[Browser] agent-browser error: ${error instanceof Error ? error.message : String(error)}`)
+    workflowLog(`[Browser] ${browserMode} error: ${error instanceof Error ? error.message : String(error)}`)
     if (isRecoverableBrowserError(error instanceof Error ? error.message : String(error))) {
-      agentBrowserCache.delete(sandbox.sandboxId)
+      if (browserMode === "next-browser") {
+        nextBrowserCache.delete(sandbox.sandboxId)
+      } else {
+        agentBrowserCache.delete(sandbox.sandboxId)
+      }
     }
   }
 
-  return { success: false, error: "agent-browser navigation failed" }
+  return { success: false, error: `${browserMode} navigation failed` }
 }
 
 /**
- * Reload browser page using agent-browser CLI
+ * Reload browser page using the configured browser CLI.
  */
-async function reloadBrowser(sandbox: Sandbox, debug = false): Promise<{ success: boolean; error?: string }> {
+async function reloadBrowser(
+  sandbox: Sandbox,
+  browserMode: CloudBrowserMode = "agent-browser",
+  debug = false
+): Promise<{ success: boolean; error?: string }> {
   try {
-    const browser = await getAgentBrowser(sandbox, debug)
+    const browser =
+      browserMode === "next-browser" ? await getNextBrowser(sandbox, debug) : await getAgentBrowser(sandbox, debug)
     const result = await browser.reload()
     if (result.success) {
-      workflowLog("[Browser] Page reloaded via agent-browser")
+      workflowLog(`[Browser] Page reloaded via ${browserMode}`)
       return { success: true }
     }
-    workflowLog(`[Browser] agent-browser reload failed: ${result.error}`)
+    workflowLog(`[Browser] ${browserMode} reload failed: ${result.error}`)
     if (isRecoverableBrowserError(result.error)) {
-      workflowLog("[Browser] Resetting cached agent-browser instance after recoverable reload failure")
-      agentBrowserCache.delete(sandbox.sandboxId)
-      const retryBrowser = await getAgentBrowser(sandbox, debug)
+      workflowLog(`[Browser] Resetting cached ${browserMode} instance after recoverable reload failure`)
+      if (browserMode === "next-browser") {
+        nextBrowserCache.delete(sandbox.sandboxId)
+      } else {
+        agentBrowserCache.delete(sandbox.sandboxId)
+      }
+      const retryBrowser =
+        browserMode === "next-browser" ? await getNextBrowser(sandbox, debug) : await getAgentBrowser(sandbox, debug)
       const retryResult = await retryBrowser.reload()
       if (retryResult.success) {
-        workflowLog("[Browser] Page reloaded via agent-browser (retry)")
+        workflowLog(`[Browser] Page reloaded via ${browserMode} (retry)`)
         return { success: true }
       }
-      workflowLog(`[Browser] agent-browser reload retry failed: ${retryResult.error}`)
+      workflowLog(`[Browser] ${browserMode} reload retry failed: ${retryResult.error}`)
     }
   } catch (error) {
-    workflowLog(`[Browser] agent-browser error: ${error instanceof Error ? error.message : String(error)}`)
+    workflowLog(`[Browser] ${browserMode} error: ${error instanceof Error ? error.message : String(error)}`)
     if (isRecoverableBrowserError(error instanceof Error ? error.message : String(error))) {
-      agentBrowserCache.delete(sandbox.sandboxId)
+      if (browserMode === "next-browser") {
+        nextBrowserCache.delete(sandbox.sandboxId)
+      } else {
+        agentBrowserCache.delete(sandbox.sandboxId)
+      }
     }
   }
 
-  return { success: false, error: "agent-browser reload failed" }
+  return { success: false, error: `${browserMode} reload failed` }
 }
 
 /**
- * Evaluate JavaScript in browser using agent-browser CLI
+ * Evaluate JavaScript in browser using the configured browser CLI.
  */
 async function evaluateInBrowser(
   sandbox: Sandbox,
   expression: string,
+  browserMode: CloudBrowserMode = "agent-browser",
   debug = false
 ): Promise<{ success: boolean; result?: unknown; error?: string }> {
   try {
-    const browser = await getAgentBrowser(sandbox, debug)
+    const browser =
+      browserMode === "next-browser" ? await getNextBrowser(sandbox, debug) : await getAgentBrowser(sandbox, debug)
     const result = await browser.evaluate(expression)
     if (result.success) {
       return { success: true, result: result.data }
     }
     if (isRecoverableBrowserError(result.error)) {
-      workflowLog("[Browser] Resetting cached agent-browser instance after recoverable evaluate failure")
-      agentBrowserCache.delete(sandbox.sandboxId)
-      const retryBrowser = await getAgentBrowser(sandbox, debug)
+      workflowLog(`[Browser] Resetting cached ${browserMode} instance after recoverable evaluate failure`)
+      if (browserMode === "next-browser") {
+        nextBrowserCache.delete(sandbox.sandboxId)
+      } else {
+        agentBrowserCache.delete(sandbox.sandboxId)
+      }
+      const retryBrowser =
+        browserMode === "next-browser" ? await getNextBrowser(sandbox, debug) : await getAgentBrowser(sandbox, debug)
       const retryResult = await retryBrowser.evaluate(expression)
       if (retryResult.success) {
         return { success: true, result: retryResult.data }
@@ -464,7 +526,11 @@ async function evaluateInBrowser(
     return { success: false, error: result.error }
   } catch (error) {
     if (isRecoverableBrowserError(error instanceof Error ? error.message : String(error))) {
-      agentBrowserCache.delete(sandbox.sandboxId)
+      if (browserMode === "next-browser") {
+        nextBrowserCache.delete(sandbox.sandboxId)
+      } else {
+        agentBrowserCache.delete(sandbox.sandboxId)
+      }
     }
     return { success: false, error: error instanceof Error ? error.message : String(error) }
   }
@@ -587,22 +653,25 @@ function extractWebVitalsResultString(evalResult: { success: boolean; result?: u
 }
 
 /**
- * Take a screenshot using agent-browser CLI
+ * Take a screenshot using the configured browser CLI.
  */
 async function _screenshotBrowser(
   sandbox: Sandbox,
   outputPath: string,
   options: { fullPage?: boolean } = {},
+  browserMode: CloudBrowserMode = "agent-browser",
   debug = false
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const browser = await getAgentBrowser(sandbox, debug)
-    const result = await browser.screenshot(outputPath, options)
+    const result =
+      browserMode === "next-browser"
+        ? await (await getNextBrowser(sandbox, debug)).screenshot(outputPath)
+        : await (await getAgentBrowser(sandbox, debug)).screenshot(outputPath, options)
     if (result.success) {
-      workflowLog(`[Browser] Screenshot saved to ${outputPath} via agent-browser`)
+      workflowLog(`[Browser] Screenshot saved to ${outputPath} via ${browserMode}`)
       return { success: true }
     }
-    workflowLog(`[Browser] agent-browser screenshot failed: ${result.error}`)
+    workflowLog(`[Browser] ${browserMode} screenshot failed: ${result.error}`)
     return { success: false, error: result.error }
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : String(error) }
@@ -1739,13 +1808,15 @@ export async function agentFixLoopStep(
   }
 
   const localTargetUrl = `http://localhost:3000${startPath}`
+  const cloudBrowserMode = resolveCloudBrowserMode(recipeSandboxBrowser)
 
   // Capture "before" Web Vitals via CDP before the agent makes any changes
   timer.start("Capture before Web Vitals")
   workflowLog("[Agent] Capturing before Web Vitals via CDP...")
   const { vitals: capturedBeforeWebVitals, diagnosticLogs: beforeWebVitalsDiagnostics } = await fetchWebVitalsViaCDP(
     sandbox,
-    localTargetUrl
+    localTargetUrl,
+    cloudBrowserMode
   )
   workflowLog(`[Agent] Before Web Vitals captured: ${JSON.stringify(capturedBeforeWebVitals)}`)
 
@@ -1756,12 +1827,12 @@ export async function agentFixLoopStep(
   if (isTurbopackBundleAnalyzer && beforeClsForVerification === null) {
     timer.start("Capture before CLS fallback")
     workflowLog("[Agent] Turbopack: capturing fallback before-CLS via d3k logs...")
-    const beforeNavResult = await navigateBrowser(sandbox, localTargetUrl)
+    const beforeNavResult = await navigateBrowser(sandbox, localTargetUrl, cloudBrowserMode)
     workflowLog(
       `[Agent] Before CLS fallback navigation: success=${beforeNavResult.success}${beforeNavResult.error ? `, error=${beforeNavResult.error}` : ""}`
     )
     await new Promise((resolve) => setTimeout(resolve, 1000))
-    const beforeReloadResult = await reloadBrowser(sandbox)
+    const beforeReloadResult = await reloadBrowser(sandbox, cloudBrowserMode)
     workflowLog(
       `[Agent] Before CLS fallback reload: success=${beforeReloadResult.success}${beforeReloadResult.error ? `, error=${beforeReloadResult.error}` : ""}`
     )
@@ -1812,7 +1883,7 @@ export async function agentFixLoopStep(
   // First navigate to localhost (NOT the public devUrl!) so CLS capture works
   // The screencast-manager only captures for localhost:3000, not the public sb-xxx.vercel.run URL
   // Use agent-browser CLI for navigation (preferred over CDP in cloud)
-  const navResult = await navigateBrowser(sandbox, localTargetUrl)
+  const navResult = await navigateBrowser(sandbox, localTargetUrl, cloudBrowserMode)
   workflowLog(
     `[Agent] Navigate to devUrl result: success=${navResult.success}${navResult.error ? `, error=${navResult.error}` : ""}`
   )
@@ -1820,7 +1891,7 @@ export async function agentFixLoopStep(
 
   // Now reload the page to trigger fresh CLS capture
   // Use agent-browser reload (preferred over CDP in cloud)
-  const reloadResult = await reloadBrowser(sandbox)
+  const reloadResult = await reloadBrowser(sandbox, cloudBrowserMode)
   workflowLog(
     `[Agent] Page reload result: success=${reloadResult.success}${reloadResult.error ? `, error=${reloadResult.error}` : ""}`
   )
@@ -1906,7 +1977,8 @@ export async function agentFixLoopStep(
   workflowLog("[Agent] Fetching after Web Vitals via CDP...")
   const { vitals: afterWebVitalsResult, diagnosticLogs: afterWebVitalsDiagnostics } = await fetchWebVitalsViaCDP(
     sandbox,
-    localTargetUrl
+    localTargetUrl,
+    cloudBrowserMode
   )
   const effectiveAfterClsScore = finalCls.clsScore ?? afterWebVitalsResult.cls?.value ?? null
 
@@ -2082,14 +2154,14 @@ export async function urlAuditStep(
   }
 
   timer.start("Navigate to target URL")
-  const navResult = await navigateBrowser(sandbox, targetUrl)
+  const navResult = await navigateBrowser(sandbox, targetUrl, "agent-browser")
   if (!navResult.success) {
     throw new Error(`Failed to open target URL: ${navResult.error || "unknown error"}`)
   }
   await new Promise((resolve) => setTimeout(resolve, 3000))
 
   timer.start("Capture Web Vitals")
-  const { vitals, diagnosticLogs } = await fetchWebVitalsViaCDP(sandbox, targetUrl)
+  const { vitals, diagnosticLogs } = await fetchWebVitalsViaCDP(sandbox, targetUrl, "agent-browser")
 
   timer.start("Collect page diagnostics")
   const diagnosticsResult = await evaluateInBrowser(
@@ -2129,7 +2201,8 @@ export async function urlAuditStep(
         sourceMapCandidates,
         topResources: resources
       })
-    })()`
+    })()`,
+    "agent-browser"
   )
 
   const diagnosticsRaw = extractWebVitalsResultString(diagnosticsResult)
@@ -2359,6 +2432,7 @@ async function runAgentWithDiagnoseTool(
   recipeSkillRefs?: RecipeSkillRef[]
 ): Promise<{ transcript: string; summary: string; systemPrompt: string; skillsLoaded: string[] }> {
   const SANDBOX_CWD = projectDir ? `/vercel/sandbox/${projectDir.replace(/^\/+|\/+$/g, "")}` : "/vercel/sandbox"
+  const cloudBrowserMode = resolveCloudBrowserMode(recipeSandboxBrowser)
   const skillAliases: Record<string, string> = {
     "react-performance": "vercel-react-best-practices",
     "vercel-design-guidelines": "web-design-guidelines",
@@ -2395,11 +2469,10 @@ This navigates the page fresh to get accurate measurements.`,
         const diagnoseUrl = `http://localhost:3000${startPath}`
 
         // Use agent-browser CLI for navigation (preferred over CDP in cloud)
-        await navigateBrowser(sandbox, diagnoseUrl)
+        await navigateBrowser(sandbox, diagnoseUrl, cloudBrowserMode)
         await new Promise((resolve) => setTimeout(resolve, 1000))
 
-        // Use agent-browser reload
-        await reloadBrowser(sandbox)
+        await reloadBrowser(sandbox, cloudBrowserMode)
 
         await new Promise((resolve) => setTimeout(resolve, 5000))
 
@@ -2512,7 +2585,7 @@ Use this before audits or performance reviews to get the full guidelines.`,
         url: z.string().describe("URL to open")
       }),
       execute: async ({ url }: { url: string }) => {
-        const result = await navigateBrowser(sandbox, url)
+        const result = await navigateBrowser(sandbox, url, cloudBrowserMode)
         if (!result.success) return `Failed to open URL: ${result.error || "unknown error"}`
         return `Opened ${url}`
       }
@@ -2522,6 +2595,13 @@ Use this before audits or performance reviews to get the full guidelines.`,
       description: "Capture interactive page snapshot and element refs for clicking.",
       inputSchema: z.object({}),
       execute: async () => {
+        if (cloudBrowserMode === "next-browser") {
+          const browser = await getNextBrowser(sandbox)
+          const result = await browser.tree()
+          return result.success
+            ? String(result.data || result.stdout).substring(0, 6000)
+            : `next-browser tree failed: ${result.error || "unknown error"}`
+        }
         const browser = await getAgentBrowser(sandbox)
         const snapshot = await browser.snapshot({ interactive: true })
         return snapshot.raw.substring(0, 6000)
@@ -2534,6 +2614,9 @@ Use this before audits or performance reviews to get the full guidelines.`,
         ref: z.string().describe("Snapshot element ref, such as @e12")
       }),
       execute: async ({ ref }: { ref: string }) => {
+        if (cloudBrowserMode === "next-browser") {
+          return "next-browser does not expose clickable snapshot refs. Use openUrl, browserSnapshot/tree, eval, or file/code inspection instead."
+        }
         const browser = await getAgentBrowser(sandbox)
         const result = await browser.click(ref)
         return result.success ? `Clicked ${ref}` : `Failed to click ${ref}: ${result.error || "unknown error"}`
@@ -2547,6 +2630,17 @@ Use this before audits or performance reviews to get the full guidelines.`,
         amount: z.number().optional()
       }),
       execute: async ({ direction, amount }: { direction: "up" | "down" | "left" | "right"; amount?: number }) => {
+        if (cloudBrowserMode === "next-browser") {
+          const delta = amount ?? 600
+          const expression =
+            direction === "up" || direction === "down"
+              ? `window.scrollBy(0, ${direction === "up" ? -delta : delta}); window.scrollY`
+              : `window.scrollBy(${direction === "left" ? -delta : delta}, 0); window.scrollX`
+          const result = await evaluateInBrowser(sandbox, expression, cloudBrowserMode)
+          return result.success
+            ? `Scrolled ${direction}${amount ? ` by ${amount}` : ""}`
+            : `Failed to scroll: ${result.error || "unknown error"}`
+        }
         const browser = await getAgentBrowser(sandbox)
         const result = await browser.scroll(direction, amount)
         return result.success
@@ -2586,14 +2680,14 @@ Use this to diagnose and verify performance improvements.`,
 
         // Navigate to get fresh metrics using agent-browser
         const diagnoseUrl = `http://localhost:3000${startPath}`
-        await navigateBrowser(sandbox, diagnoseUrl)
+        await navigateBrowser(sandbox, diagnoseUrl, cloudBrowserMode)
         await new Promise((resolve) => setTimeout(resolve, 3000))
 
         // Prime vitals observers, then read after a short delay
-        await evaluateInBrowser(sandbox, buildWebVitalsInitScript())
+        await evaluateInBrowser(sandbox, buildWebVitalsInitScript(), cloudBrowserMode)
         await new Promise((resolve) => setTimeout(resolve, 1500))
 
-        const evalResult = await evaluateInBrowser(sandbox, buildWebVitalsReadScript())
+        const evalResult = await evaluateInBrowser(sandbox, buildWebVitalsReadScript(), cloudBrowserMode)
         workflowLog(`[getWebVitals] Eval result: ${JSON.stringify(evalResult).substring(0, 500)}`)
 
         // Parse the result
@@ -3190,12 +3284,13 @@ async function fetchClsData(sandbox: Sandbox): Promise<{
 }
 
 /**
- * Fetch Web Vitals using agent-browser evaluation.
+ * Fetch Web Vitals using the configured browser CLI.
  * This avoids any dependency on external tools services.
  */
 async function fetchWebVitalsViaCDP(
   sandbox: Sandbox,
-  targetUrl?: string
+  targetUrl?: string,
+  browserMode: CloudBrowserMode = "agent-browser"
 ): Promise<{ vitals: import("@/types").WebVitals; diagnosticLogs: string[] }> {
   const diagnosticLogs: string[] = []
 
@@ -3221,20 +3316,22 @@ async function fetchWebVitalsViaCDP(
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      diagLog(`[fetchWebVitals] Capturing Web Vitals via agent-browser evaluate (attempt ${attempt}/${maxAttempts})...`)
+      diagLog(
+        `[fetchWebVitals] Capturing Web Vitals via ${browserMode} evaluate (attempt ${attempt}/${maxAttempts})...`
+      )
 
       const finalizeLcpScript = `
         document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }));
         document.dispatchEvent(new MouseEvent('click', { bubbles: true }));
         'lcp-finalized'
       `
-      await evaluateInBrowser(sandbox, finalizeLcpScript)
+      await evaluateInBrowser(sandbox, finalizeLcpScript, browserMode)
       await new Promise((resolve) => setTimeout(resolve, 500))
 
-      await evaluateInBrowser(sandbox, buildWebVitalsInitScript())
+      await evaluateInBrowser(sandbox, buildWebVitalsInitScript(), browserMode)
       await new Promise((resolve) => setTimeout(resolve, 1500))
 
-      const evalResult = await evaluateInBrowser(sandbox, buildWebVitalsReadScript())
+      const evalResult = await evaluateInBrowser(sandbox, buildWebVitalsReadScript(), browserMode)
       diagLog(`[fetchWebVitals] Eval result: ${JSON.stringify(evalResult).substring(0, 500)}`)
 
       if (!evalResult.success) {
@@ -3244,12 +3341,12 @@ async function fetchWebVitalsViaCDP(
           /Target page, context or browser has been closed|browserType\.launchPersistentContext/i.test(errMessage)
         ) {
           diagLog(`[fetchWebVitals] Browser context closed; reopening ${targetUrl} before retry`)
-          const navResult = await navigateBrowser(sandbox, targetUrl)
+          const navResult = await navigateBrowser(sandbox, targetUrl, browserMode)
           diagLog(
             `[fetchWebVitals] Reopen navigation result: success=${navResult.success}${navResult.error ? `, error=${navResult.error}` : ""}`
           )
           await new Promise((resolve) => setTimeout(resolve, 1500))
-          const reloadResult = await reloadBrowser(sandbox)
+          const reloadResult = await reloadBrowser(sandbox, browserMode)
           diagLog(
             `[fetchWebVitals] Reopen reload result: success=${reloadResult.success}${reloadResult.error ? `, error=${reloadResult.error}` : ""}`
           )
