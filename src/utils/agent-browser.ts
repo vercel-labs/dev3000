@@ -158,11 +158,9 @@ function buildArgs(options: AgentBrowserOptions): string[] {
     args.push("--session", options.session)
   }
 
-  // NOTE: --profile flag is not yet supported by agent-browser CLI
-  // Keeping the option in the interface for future compatibility
-  // if (options.profile) {
-  //   args.push("--profile", options.profile)
-  // }
+  if (options.profile) {
+    args.push("--profile", options.profile)
+  }
 
   // Always use JSON output for parsing
   args.push("--json")
@@ -298,7 +296,7 @@ export async function click(target: string, options: AgentBrowserOptions = {}): 
  */
 export async function type(text: string, options: AgentBrowserOptions = {}): Promise<ActionResult> {
   try {
-    const output = await execAgentBrowser(["type", text], options)
+    const output = await execAgentBrowser(["keyboard", "type", text], options)
     return { success: true, output }
   } catch (error) {
     return {
@@ -362,7 +360,7 @@ export async function screenshot(
 
     const args = ["screenshot", outputPath]
     if (options.fullPage) {
-      args.push("--full-page")
+      args.push("--full")
     }
 
     await execAgentBrowser(args, options)
@@ -467,7 +465,7 @@ export async function close(options: AgentBrowserOptions = {}): Promise<ActionRe
  */
 export async function getCurrentUrl(options: AgentBrowserOptions = {}): Promise<string | null> {
   try {
-    const output = await execAgentBrowser(["url"], options)
+    const output = await execAgentBrowser(["get", "url"], options)
     return output.trim()
   } catch {
     return null
@@ -479,7 +477,7 @@ export async function getCurrentUrl(options: AgentBrowserOptions = {}): Promise<
  */
 export async function getTitle(options: AgentBrowserOptions = {}): Promise<string | null> {
   try {
-    const output = await execAgentBrowser(["title"], options)
+    const output = await execAgentBrowser(["get", "title"], options)
     return output.trim()
   } catch {
     return null
@@ -491,7 +489,7 @@ export async function getTitle(options: AgentBrowserOptions = {}): Promise<strin
  */
 export async function evaluate(expression: string, options: AgentBrowserOptions = {}): Promise<ActionResult> {
   try {
-    const output = await execAgentBrowser(["evaluate", expression], options)
+    const output = await execAgentBrowser(["eval", expression], options)
     return { success: true, output }
   } catch (error) {
     return {
