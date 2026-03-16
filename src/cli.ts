@@ -231,13 +231,12 @@ function runLocalBrowserTool(browserTool: LocalBrowserTool, args: string[]) {
   process.exit(result.status ?? 1)
 }
 
-const browserCommandIndex = process.argv.findIndex(
-  (arg) => arg === "agent-browser" || arg === "next-browser" || arg === "browser"
-)
+import { getBrowserCommandInvocation } from "./utils/browser-command-argv.js"
 
-if (browserCommandIndex >= 0 && (process.argv[1]?.includes("d3k") || process.argv[1]?.includes("dev3000"))) {
-  const browserCommand = process.argv[browserCommandIndex]
-  const args = process.argv.slice(browserCommandIndex + 1)
+const browserCommandInvocation = getBrowserCommandInvocation(process.argv.slice(2))
+
+if (browserCommandInvocation && (process.argv[1]?.includes("d3k") || process.argv[1]?.includes("dev3000"))) {
+  const { browserCommand, args } = browserCommandInvocation
   const browserTool =
     browserCommand === "browser"
       ? getProjectBrowserToolPreference()
