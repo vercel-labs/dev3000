@@ -10,6 +10,17 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.173",
+    date: "2026-03-16",
+    type: "minor",
+    highlights: [
+      "Fix browser subcommand argv parsing",
+      "Upgrade bundled agent-browser",
+      "Add next-browser support for local and cloud runs"
+    ]
+  },
+
+  {
     version: "0.0.172",
     date: "2026-03-16",
     type: "minor",
