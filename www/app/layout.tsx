@@ -6,6 +6,7 @@ import { NextDevIndicatorFix } from "@/components/next-dev-indicator-fix"
 import { ThemeProvider } from "@/components/theme-provider"
 import { DEV3000_URL } from "@/lib/constants"
 import { AnalyticsTools } from "./analytics.client"
+import { BrowserTracing } from "./tracing.client"
 import "./globals.css"
 
 const geistSans = Geist({
@@ -91,6 +92,9 @@ export default function RootLayout({
         <NextDevIndicatorFix />
         <Suspense fallback={null}>
           <AnalyticsTools />
+        </Suspense>
+        <Suspense fallback={null}>
+          <BrowserTracing />
         </Suspense>
       </body>
     </html>

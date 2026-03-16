@@ -2333,12 +2333,14 @@ export class DevEnvironment {
     }
 
     // Shutdown CDP monitor FIRST - this should close Chrome
+    let chromeShutdownHandled = false
     if (this.cdpMonitor) {
       try {
         if (!this.options.tui) {
           console.log(chalk.cyan("🔄 Closing Chrome browser..."))
         }
         await this.cdpMonitor.shutdown()
+        chromeShutdownHandled = true
         if (!this.options.tui) {
           console.log(chalk.green("✅ Chrome browser closed"))
         }
@@ -2375,8 +2377,10 @@ export class DevEnvironment {
       }
     }
 
-    // Safety net: ensure tracked Chrome processes are always terminated on shutdown.
-    this.killTrackedChromePids(sessionInfo?.chromePids ?? [], "handleShutdown")
+    if (!chromeShutdownHandled) {
+      // Safety net: ensure tracked Chrome processes are always terminated on shutdown.
+      this.killTrackedChromePids(sessionInfo?.chromePids ?? [], "handleShutdown")
+    }
 
     // REMOVED: No longer clean up CLI config files on shutdown
     // This was causing Claude Code instances to crash when dev3000 was killed

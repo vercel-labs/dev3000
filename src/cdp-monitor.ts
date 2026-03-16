@@ -1952,11 +1952,45 @@ export class CDPMonitor {
     this.debugLog("Shutdown signaled - reconnection attempts will be blocked")
   }
 
+  private async waitForBrowserExit(timeoutMs: number): Promise<boolean> {
+    const browser = this.browser
+    if (!browser) {
+      return true
+    }
+
+    if (browser.exitCode !== null || browser.killed) {
+      return true
+    }
+
+    return await new Promise((resolve) => {
+      const onExit = () => {
+        clearTimeout(timer)
+        resolve(true)
+      }
+
+      const timer = setTimeout(() => {
+        browser.removeListener("exit", onExit)
+        resolve(false)
+      }, timeoutMs)
+
+      browser.once("exit", onExit)
+    })
+  }
+
   async shutdown(): Promise<void> {
     this.isShuttingDown = true
+    let browserClosedCleanly = false
 
-    // Try to close the page first, then the tab
+    // Ask the browser process to exit first so Chrome doesn't think it crashed.
     if (this.connection?.sessionId) {
+      try {
+        await this.sendCDPCommand("Browser.close")
+        this.debugLog("Sent Browser.close command")
+        browserClosedCleanly = await this.waitForBrowserExit(2000)
+      } catch (_e) {
+        this.debugLog("Browser.close failed, trying page/tab close fallback")
+      }
+
       try {
         // Try to close the page
         await this.sendCDPCommand("Page.close")
@@ -1988,6 +2022,10 @@ export class CDPMonitor {
       } catch (_e) {
         this.debugLog("Failed to close tab via CDP, will force close Chrome")
       }
+
+      if (!browserClosedCleanly) {
+        browserClosedCleanly = await this.waitForBrowserExit(1500)
+      }
     }
 
     // Close CDP connection
@@ -2000,7 +2038,12 @@ export class CDPMonitor {
       this.connection = null
     }
 
-    // Kill only the Chrome processes for THIS instance
+    if (browserClosedCleanly) {
+      this.chromePids.clear()
+      return
+    }
+
+    // Kill only the Chrome processes for THIS instance as a fallback.
     await this.killInstanceChromeProcesses()
   }
 
