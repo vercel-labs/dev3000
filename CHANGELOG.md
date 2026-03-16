@@ -4,6 +4,14 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.172] - 2026-03-16
+
+**Feature Release**
+
+- Fix browser subcommand argv parsing
+- Upgrade bundled agent-browser
+- Add next-browser support for local and cloud runs
+
 ## [0.0.171] - 2026-03-13
 
 **Feature Release**
