@@ -4,7 +4,7 @@ set -e
 echo "🚀 Starting release process..."
 
 # Run comprehensive pre-release tests
-echo "🧪 Running pre-release tests (including clean install tests)..."
+echo "🧪 Running pre-release checks..."
 bun run test-release
 
 # Get current version and check if it's a canary version

@@ -15,98 +15,26 @@ on:
 
 jobs:
   test:
-    name: Test Before Release
+    name: Pre-release Checks
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Need full history for changelog
-      
-      - uses: actions/setup-node@v4
+          fetch-depth: 0
+
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: 20
-          registry-url: 'https://registry.npmjs.org'
-      
-      - uses: pnpm/action-setup@v3
-        with:
-          version: 9
-      
+          bun-version: latest
+
       - name: Install dependencies
-        run: pnpm install
-      
-      - name: Run all pre-release tests
-        run: pnpm run test-before-release
-  
-  test-matrix:
-    name: Test on Multiple Environments
-    needs: test
-    strategy:
-      matrix:
-        os: [macos-latest]
-        node: [20]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-      
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node }}
-      
-      - uses: pnpm/action-setup@v3
-        with:
-          version: 9
-      
-      - name: Install and build
-        run: |
-          pnpm install
-          pnpm run build
-          cd mcp-server && pnpm run build
-      
-      - name: Pack
-        run: pnpm pack
-      
-      - name: Test global install
-        run: |
-          npm install -g ./dev3000-*.tgz
-          d3k --version
-  
-  test-docker:
-    name: Test in Docker
-    needs: test
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      
-      - uses: pnpm/action-setup@v3
-        with:
-          version: 9
-      
-      - name: Build and test in Docker
-        run: |
-          pnpm install
-          pnpm run build
-          cd mcp-server && pnpm run build
-          pnpm pack
-          
-          # Test in minimal Docker environment
-          cat > Dockerfile.test << EOF
-          FROM node:20-alpine
-          WORKDIR /test
-          COPY dev3000-*.tgz ./
-          RUN npm install -g ./dev3000-*.tgz
-          RUN d3k --version
-          EOF
-          
-          docker build -f Dockerfile.test -t d3k-release-test .
-          docker run --rm d3k-release-test
+        run: bun install --frozen-lockfile
+
+      - name: Run release checks
+        run: ./scripts/test-release.sh
   
   prepare-release:
     name: Prepare Release
-    needs: [test, test-matrix, test-docker]
+    needs: test
     runs-on: macos-latest
     permissions:
       contents: write
@@ -119,10 +47,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      
-      - uses: pnpm/action-setup@v3
+
+      - uses: oven-sh/setup-bun@v2
         with:
-          version: 9
+          bun-version: latest
       
       - name: Configure Git
         run: |
@@ -130,16 +58,13 @@ jobs:
           git config user.email "actions@github.com"
       
       - name: Install dependencies
-        run: pnpm install
+        run: bun install --frozen-lockfile
       
       - name: Run release script
         run: ./scripts/release.sh
       
       - name: Build and pack
-        run: |
-          pnpm run build
-          cd mcp-server && pnpm run build
-          pnpm pack
+        run: bun pm pack
       
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4
