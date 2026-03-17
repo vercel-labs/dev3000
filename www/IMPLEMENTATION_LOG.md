@@ -132,7 +132,10 @@ Connect developer code authorship to production execution data to enable:
 
 ### 3.1 Set Up Trace Drain → Blob Pipeline
 - **Type**: 🔧 Code Change + ⚙️ Vercel Config (dashboard-only)
-- **Status**: [x] Receiver built, [ ] **Drain config is manual (dashboard)**
+- **Status**: [x] Complete — receiver deployed, drain active
+- **Drain ID**: `drn_rKQi8xXdW9WC6hyD`
+- **Drain endpoint**: `https://dev3000.ai/api/drain/traces`
+- **Created via**: `vercel api /v1/drains -X POST` (not dashboard — CLI works despite no dedicated `vercel drain` command)
 - **Architecture**:
   - Vercel Trace Drain → `POST /api/drain/traces` → Vercel Blob
   - Raw OTLP payloads stored at `traces/{YYYY-MM-DD}/{timestamp}-{random}.json`
@@ -219,7 +222,7 @@ Connect developer code authorship to production execution data to enable:
 | Issue | Category | Severity | Notes |
 |-------|----------|----------|-------|
 | ~~OTEL enable not in CLI~~ | ~~Missing CLI~~ | ~~N/A~~ | **Retracted** — no toggle exists because OTEL auto-enables when `@vercel/otel` + `instrumentation.ts` are deployed. No config needed. |
-| No `vercel drain` CLI command | Missing CLI | **High** | Drains can only be created via dashboard (Team Settings → Drains). No CLI command, no non-deprecated REST API for trace drains. The deprecated `POST /v1/log-drains` only supports logs. Blocks full automation of the setup. |
+| No dedicated `vercel drain` CLI command | Missing CLI | **Medium** | No first-class `vercel drain create` command, but `vercel api /v1/drains -X POST` works. Drain CRUD is fully scriptable via the REST API — just not discoverable. |
 | No programmatic trace query API | Missing API | High | Can only view traces in dashboard — no REST API to query spans for aggregation. Solved by using Trace Drain → Blob pipeline instead. |
 | Browser OTEL needs proxy route | Architecture gap | Medium | Vercel's OTEL collector is server-only. Client traces require a custom `/api/traces` route to bridge into the pipeline. A built-in client trace endpoint would eliminate this. |
 | Edge Runtime spans excluded from Trace Drains | Platform limitation | Medium | Custom spans from Edge Runtime functions are NOT forwarded via Trace Drains. Only Node.js runtime spans are included. |
