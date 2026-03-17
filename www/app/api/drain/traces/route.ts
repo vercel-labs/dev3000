@@ -31,7 +31,9 @@ function verifySignature(body: string, signature: string | null): boolean {
   }
   if (!signature) return false
 
-  const expected = createHmac("sha1", secret).update(body).digest("hex")
+  // `vercel env add <name> <target> <<EOF` stores the trailing newline from stdin.
+  // Normalize that common case so the runtime secret matches the drain secret.
+  const expected = createHmac("sha1", secret.trimEnd()).update(body).digest("hex")
   return signature === expected
 }
 
