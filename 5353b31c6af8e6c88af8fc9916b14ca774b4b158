@@ -1,0 +1,25 @@
+src/dev-environment.test.ts
+  c34c5d3e3be9db4d 34,38,695-732
+src/dev-environment.ts
+  c34c5d3e3be9db4d 267-407,1616,1618-1619,1623-1624,1627-1636
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.17",
+  "base_commit_sha": "5353b31c6af8e6c88af8fc9916b14ca774b4b158",
+  "prompts": {
+    "c34c5d3e3be9db4d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d1b68-dc01-7973-a3af-524244222f89",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh <elsigh@gmail.com>",
+      "messages": [],
+      "total_additions": 203,
+      "total_deletions": 14,
+      "accepted_lines": 201,
+      "overriden_lines": 0
+    }
+  }
+}
