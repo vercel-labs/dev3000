@@ -264,6 +264,147 @@ export function countActiveD3kInstances(excludeCurrentPid: boolean = false): num
   }
 }
 
+type D3kLockInfo = {
+  pid: number
+  cwd?: string | null
+  createdAt?: string | null
+  processStartTime?: string | null
+}
+
+type LockValidationResult = {
+  active: boolean
+  reason: string
+  lockInfo: D3kLockInfo | null
+}
+
+type LockValidationDeps = {
+  processExists?: (pid: number) => boolean
+  getProcessStartTime?: (pid: number) => string | null
+  getProcessCommand?: (pid: number) => string | null
+}
+
+export function parseD3kLockContent(content: string): D3kLockInfo | null {
+  const trimmed = content.trim()
+  if (!trimmed) return null
+
+  if (/^\d+$/.test(trimmed)) {
+    const pid = Number.parseInt(trimmed, 10)
+    return Number.isInteger(pid) && pid > 0 ? { pid } : null
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed) as Partial<D3kLockInfo>
+    const pid = parsed?.pid
+    if (!parsed || typeof parsed !== "object" || typeof pid !== "number" || !Number.isInteger(pid) || pid <= 0) {
+      return null
+    }
+
+    return {
+      pid,
+      cwd: typeof parsed.cwd === "string" ? parsed.cwd : null,
+      createdAt: typeof parsed.createdAt === "string" ? parsed.createdAt : null,
+      processStartTime: typeof parsed.processStartTime === "string" ? parsed.processStartTime : null
+    }
+  } catch {
+    return null
+  }
+}
+
+function getProcessPsField(pid: number, field: "command" | "lstart"): string | null {
+  try {
+    const result = spawnSync("ps", ["-p", String(pid), "-o", `${field}=`], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"]
+    })
+
+    if (result.status !== 0) return null
+
+    const output = result.stdout.trim()
+    return output || null
+  } catch {
+    return null
+  }
+}
+
+export function getProcessStartTime(pid: number): string | null {
+  return getProcessPsField(pid, "lstart")
+}
+
+export function getProcessCommand(pid: number): string | null {
+  return getProcessPsField(pid, "command")
+}
+
+function isLikelyD3kCommand(command: string): boolean {
+  const normalized = command.toLowerCase()
+  return normalized.includes("d3k") || normalized.includes("dev3000")
+}
+
+export function validateD3kLockContent(content: string, deps: LockValidationDeps = {}): LockValidationResult {
+  const lockInfo = parseD3kLockContent(content)
+  if (!lockInfo) {
+    return {
+      active: false,
+      reason: "lock file contents are invalid",
+      lockInfo: null
+    }
+  }
+
+  const processExists =
+    deps.processExists ||
+    ((pid: number) => {
+      try {
+        process.kill(pid, 0)
+        return true
+      } catch {
+        return false
+      }
+    })
+
+  if (!processExists(lockInfo.pid)) {
+    return {
+      active: false,
+      reason: `process ${lockInfo.pid} is not running`,
+      lockInfo
+    }
+  }
+
+  const getStartTime = deps.getProcessStartTime || getProcessStartTime
+  if (lockInfo.processStartTime) {
+    const liveStartTime = getStartTime(lockInfo.pid)
+    if (liveStartTime && liveStartTime !== lockInfo.processStartTime) {
+      return {
+        active: false,
+        reason: `pid ${lockInfo.pid} was reused by a different process`,
+        lockInfo
+      }
+    }
+
+    if (liveStartTime === lockInfo.processStartTime) {
+      return {
+        active: true,
+        reason: `process ${lockInfo.pid} matches recorded start time`,
+        lockInfo
+      }
+    }
+  }
+
+  const getCommand = deps.getProcessCommand || getProcessCommand
+  const liveCommand = getCommand(lockInfo.pid)
+  if (liveCommand && !isLikelyD3kCommand(liveCommand)) {
+    return {
+      active: false,
+      reason: `pid ${lockInfo.pid} belongs to a non-d3k process`,
+      lockInfo
+    }
+  }
+
+  return {
+    active: true,
+    reason: `process ${lockInfo.pid} still owns the lock`,
+    lockInfo
+  }
+}
+
 /**
  * Check if a port is available for binding (no process is listening on it).
  * Used for finding available ports before starting servers.
@@ -1472,22 +1613,27 @@ export class DevEnvironment {
       // Check if lock file exists
       if (existsSync(this.lockFile)) {
         const lockContent = readFileSync(this.lockFile, "utf8")
-        const oldPID = parseInt(lockContent, 10)
+        const validation = validateD3kLockContent(lockContent)
 
-        // Check if the process is still running
-        try {
-          process.kill(oldPID, 0) // Signal 0 just checks if process exists
-          // Process is running, lock is valid
+        if (validation.active) {
+          this.debugLog(`Lock file is active: ${validation.reason}`)
           return false
-        } catch {
-          // Process doesn't exist, remove stale lock
-          this.debugLog(`Removing stale lock file for PID ${oldPID}`)
-          unlinkSync(this.lockFile)
         }
+
+        this.debugLog(`Removing stale lock file: ${validation.reason}`)
+        unlinkSync(this.lockFile)
       }
 
-      // Create lock file with our PID
-      writeFileSync(this.lockFile, process.pid.toString())
+      // Store enough metadata to detect PID reuse after crashes.
+      writeFileSync(
+        this.lockFile,
+        JSON.stringify({
+          pid: process.pid,
+          cwd: process.cwd(),
+          createdAt: new Date().toISOString(),
+          processStartTime: getProcessStartTime(process.pid)
+        })
+      )
       this.debugLog(`Acquired lock file: ${this.lockFile}`)
       return true
     } catch (error) {

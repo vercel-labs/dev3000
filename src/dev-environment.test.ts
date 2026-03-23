@@ -31,9 +31,11 @@ import {
   getSessionChromePids,
   gracefulKillProcess,
   isServerListening,
+  parseD3kLockContent,
   type ServerListeningResult,
   tryHttpConnection,
   tryHttpsConnection,
+  validateD3kLockContent,
   writeSessionInfo
 } from "./dev-environment"
 
@@ -687,6 +689,47 @@ describe("writeSessionInfo", () => {
     }
 
     expect(writeWithPreferredBrowserTool).not.toThrow()
+  })
+})
+
+describe("d3k lock validation", () => {
+  it("parses legacy PID lock files", () => {
+    expect(parseD3kLockContent("12345")).toEqual({ pid: 12345 })
+  })
+
+  it("treats a reused PID as a stale structured lock", () => {
+    const result = validateD3kLockContent(
+      JSON.stringify({
+        pid: 12345,
+        processStartTime: "Mon Mar 23 10:00:00 2026"
+      }),
+      {
+        processExists: () => true,
+        getProcessStartTime: () => "Mon Mar 23 11:00:00 2026"
+      }
+    )
+
+    expect(result.active).toBe(false)
+    expect(result.reason).toContain("reused")
+  })
+
+  it("treats legacy locks as stale when the PID now belongs to a non-d3k process", () => {
+    const result = validateD3kLockContent("12345", {
+      processExists: () => true,
+      getProcessCommand: () => "bun dev"
+    })
+
+    expect(result.active).toBe(false)
+    expect(result.reason).toContain("non-d3k")
+  })
+
+  it("keeps a lock active when the PID still points at d3k", () => {
+    const result = validateD3kLockContent("12345", {
+      processExists: () => true,
+      getProcessCommand: () => "bun run d3k --no-agent --no-tui -t"
+    })
+
+    expect(result.active).toBe(true)
   })
 })
 

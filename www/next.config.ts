@@ -11,7 +11,9 @@ const nextConfig: NextConfig = {
   typedRoutes: true,
   cacheComponents: true,
   experimental: {
-    turbopackFileSystemCacheForDev: true
+    turbopackFileSystemCacheForDev: true,
+    varyParams: true,
+    optimisticRouting: true
   },
   outputFileTracingRoot: path.join(currentDir, ".."),
   turbopack: {
