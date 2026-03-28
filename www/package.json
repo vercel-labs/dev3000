@@ -83,6 +83,7 @@
     "swr": "2.4.1",
     "tailwind-merge": "3.5.0",
     "tailwindcss-animate": "^1.0.7",
+    "v0-sdk": "^0.16.4",
     "vaul": "^1.1.2",
     "workflow": "4.2.0-beta.66",
     "zod": "4.3.6"

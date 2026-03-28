@@ -1,5 +1,6 @@
 import { start } from "workflow/api"
-import { getRecipe, incrementRecipeUsage, type Recipe } from "@/lib/recipes"
+import { resolveDevAgentRunner } from "@/lib/cloud/dev-agent-runner"
+import { type DevAgent, getDevAgent, incrementDevAgentUsage } from "@/lib/dev-agents"
 import { clearWorkflowLog, workflowError, workflowLog } from "@/lib/workflow-logger"
 import { saveWorkflowRun, type WorkflowType } from "@/lib/workflow-storage"
 import { cloudFixWorkflow } from "../fix-workflow/workflow"
@@ -93,7 +94,7 @@ export async function POST(request: Request) {
   let runId: string | undefined
   let runTimestamp: string | undefined
   let workflowType: WorkflowType = "cls-fix"
-  let recipe: Recipe | null = null
+  let devAgent: DevAgent | null = null
   let customPrompt: string | undefined
   let crawlDepth: number | "all" | undefined
   let analysisTargetType: "vercel-project" | "url" = "vercel-project"
@@ -138,6 +139,10 @@ export async function POST(request: Request) {
     workflowLog(`[Start Fix] Vercel API token available: ${!!vercelApiToken}`)
 
     const body = await request.json()
+    const devAgentRunner = resolveDevAgentRunner(
+      typeof body.useV0DevAgentRunner === "boolean" ? body.useV0DevAgentRunner : undefined
+    )
+    const useV0DevAgentRunner = devAgentRunner === "v0"
     const {
       devUrl,
       repoOwner,
@@ -168,12 +173,12 @@ export async function POST(request: Request) {
       "url-audit",
       "turbopack-bundle-analyzer"
     ]
-    if (typeof body.recipeId === "string" && body.recipeId.trim().length > 0) {
-      recipe = await getRecipe(body.recipeId.trim())
-      if (!recipe) {
-        return Response.json({ success: false, error: "Recipe not found." }, { status: 404, headers: corsHeaders })
+    if (typeof body.devAgentId === "string" && body.devAgentId.trim().length > 0) {
+      devAgent = await getDevAgent(body.devAgentId.trim())
+      if (!devAgent) {
+        return Response.json({ success: false, error: "Dev Agent not found." }, { status: 404, headers: corsHeaders })
       }
-      workflowType = recipe.legacyWorkflowType || "prompt"
+      workflowType = devAgent.legacyWorkflowType || "prompt"
     } else if (body.workflowType && validWorkflowTypes.includes(body.workflowType)) {
       workflowType = body.workflowType
     }
@@ -189,9 +194,9 @@ export async function POST(request: Request) {
     userId = body.userId || (isTestMode ? "test-user" : undefined)
     projectName = body.projectName
 
-    if (recipe?.requiresCustomPrompt && !customPrompt?.trim()) {
+    if (devAgent?.requiresCustomPrompt && !customPrompt?.trim()) {
       return Response.json(
-        { success: false, error: "This recipe requires custom instructions before it can run." },
+        { success: false, error: "This dev agent requires custom instructions before it can run." },
         { status: 400, headers: corsHeaders }
       )
     }
@@ -221,6 +226,7 @@ export async function POST(request: Request) {
     workflowLog(`[Start Fix] GitHub PAT: ${githubPat ? "provided" : "not provided"}`)
     workflowLog(`[Start Fix] NPM token: ${resolvedNpmToken ? "provided" : "not provided"}`)
     workflowLog(`[Start Fix] Submit PR: ${submitPullRequest === false ? "no" : "yes"}`)
+    workflowLog(`[Start Fix] Dev Agent runner: ${devAgentRunner}`)
     if (repoUrl) {
       workflowLog(`[Start Fix] Will create sandbox from: ${repoUrl}`)
       workflowLog(`[Start Fix] Branch: ${repoBranch || "main"}`)
@@ -236,9 +242,12 @@ export async function POST(request: Request) {
     }
 
     // Validate required fields for v2 workflow
-    if (analysisTargetType !== "url" && !repoUrl) {
+    if (analysisTargetType !== "url" && !repoUrl && !(useV0DevAgentRunner && projectId)) {
       return Response.json(
-        { success: false, error: "repoUrl is required for the workflow" },
+        {
+          success: false,
+          error: "repoUrl is required for the workflow unless a Vercel project-backed V0 devAgent run is used."
+        },
         { status: 400, headers: corsHeaders }
       )
     }
@@ -277,18 +286,19 @@ export async function POST(request: Request) {
       userId, // For progress updates
       timestamp: runTimestamp, // For progress updates
       workflowType, // For progress updates
-      recipeId: recipe?.id,
-      recipeName: recipe?.name,
-      recipeDescription: recipe?.description,
-      recipeInstructions: recipe?.instructions,
-      recipeExecutionMode: recipe?.executionMode,
-      recipeSandboxBrowser: recipe?.sandboxBrowser,
-      recipeSkillRefs: recipe?.skillRefs,
+      devAgentId: devAgent?.id,
+      devAgentName: devAgent?.name,
+      devAgentDescription: devAgent?.description,
+      devAgentInstructions: devAgent?.instructions,
+      devAgentExecutionMode: devAgent?.executionMode,
+      devAgentSandboxBrowser: devAgent?.sandboxBrowser,
+      devAgentActionSteps: devAgent?.actionSteps,
+      devAgentSkillRefs: devAgent?.skillRefs,
       analysisTargetType,
       publicUrl,
       startPath: startPath || "/", // Page path to analyze (e.g., "/about")
       customPrompt: workflowType === "prompt" ? customPrompt : undefined, // User's custom instructions
-      crawlDepth: recipe?.supportsCrawlDepth || workflowType === "design-guidelines" ? crawlDepth : undefined,
+      crawlDepth: devAgent?.supportsCrawlDepth || workflowType === "design-guidelines" ? crawlDepth : undefined,
       // PR creation params
       githubPat,
       npmToken: resolvedNpmToken,
@@ -297,14 +307,15 @@ export async function POST(request: Request) {
       repoName,
       baseBranch: baseBranch || "main",
       // For before/after screenshots in PR
-      productionUrl
+      productionUrl,
+      useV0DevAgentRunner
     }
 
     // Run setup/enqueue in the background so the API can return runId immediately.
     void (async () => {
-      if (recipe?.id) {
-        await incrementRecipeUsage(recipe.id).catch((usageError) => {
-          workflowError("[Start Fix] Failed to update recipe usage count:", usageError)
+      if (devAgent?.id) {
+        await incrementDevAgentUsage(devAgent.id).catch((usageError) => {
+          workflowError("[Start Fix] Failed to update devAgent usage count:", usageError)
         })
       }
 
@@ -317,11 +328,11 @@ export async function POST(request: Request) {
             timestamp: runTimestamp,
             status: "running",
             type: workflowType,
-            recipeId: recipe?.id,
-            recipeName: recipe?.name,
-            recipeDescription: recipe?.description,
-            recipeExecutionMode: recipe?.executionMode,
-            recipeSandboxBrowser: recipe?.sandboxBrowser,
+            devAgentId: devAgent?.id,
+            devAgentName: devAgent?.name,
+            devAgentDescription: devAgent?.description,
+            devAgentExecutionMode: devAgent?.executionMode,
+            devAgentSandboxBrowser: devAgent?.sandboxBrowser,
             currentStep: "Step 1: Initializing sandbox...",
             stepNumber: 1,
             customPrompt: workflowType === "prompt" ? customPrompt : undefined
@@ -348,11 +359,11 @@ export async function POST(request: Request) {
             timestamp: runTimestamp,
             status: "failure",
             type: workflowType,
-            recipeId: recipe?.id,
-            recipeName: recipe?.name,
-            recipeDescription: recipe?.description,
-            recipeExecutionMode: recipe?.executionMode,
-            recipeSandboxBrowser: recipe?.sandboxBrowser,
+            devAgentId: devAgent?.id,
+            devAgentName: devAgent?.name,
+            devAgentDescription: devAgent?.description,
+            devAgentExecutionMode: devAgent?.executionMode,
+            devAgentSandboxBrowser: devAgent?.sandboxBrowser,
             completedAt: new Date().toISOString(),
             error: startError instanceof Error ? startError.message : String(startError),
             customPrompt: workflowType === "prompt" ? customPrompt : undefined
@@ -394,11 +405,11 @@ export async function POST(request: Request) {
         timestamp: runTimestamp,
         status: "failure",
         type: workflowType,
-        recipeId: recipe?.id,
-        recipeName: recipe?.name,
-        recipeDescription: recipe?.description,
-        recipeExecutionMode: recipe?.executionMode,
-        recipeSandboxBrowser: recipe?.sandboxBrowser,
+        devAgentId: devAgent?.id,
+        devAgentName: devAgent?.name,
+        devAgentDescription: devAgent?.description,
+        devAgentExecutionMode: devAgent?.executionMode,
+        devAgentSandboxBrowser: devAgent?.sandboxBrowser,
         completedAt: new Date().toISOString(),
         error: error instanceof Error ? error.message : String(error),
         customPrompt: workflowType === "prompt" ? customPrompt : undefined

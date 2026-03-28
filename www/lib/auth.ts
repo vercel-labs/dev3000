@@ -40,8 +40,8 @@ export async function getCurrentUser(): Promise<UserInfo | null> {
     return null
   }
 
-  // For Vercel OAuth, we need to fetch user info from the API
-  // Note: Token refresh is handled by middleware before this function is called
+  // Fetch user info from the Vercel API using the access token
+  // Token refresh is handled by proxy.ts before requests reach Server Components
   try {
     const response = await fetch("https://api.vercel.com/v2/user", {
       headers: {
@@ -80,7 +80,7 @@ export async function isAuthenticated(): Promise<boolean> {
  * Get a valid access token
  * Returns null if no token available
  *
- * Note: Token refresh is handled by middleware before requests reach Server Components
+ * Token refresh is handled by proxy.ts before requests reach Server Components
  */
 export async function getValidAccessToken(): Promise<string | null> {
   const cookieStore = await cookies()

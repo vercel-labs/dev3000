@@ -1,6 +1,7 @@
 import crypto from "node:crypto"
 import { cookies } from "next/headers"
 import { type NextRequest, NextResponse } from "next/server"
+import { sanitizeAuthRedirectPath } from "@/lib/auth-redirect"
 
 function generateSecureRandomString(length: number) {
   return crypto
@@ -14,6 +15,7 @@ export async function GET(req: NextRequest) {
   const nonce = generateSecureRandomString(43)
   const code_verifier = generateSecureRandomString(43)
   const code_challenge = crypto.createHash("sha256").update(code_verifier).digest("base64url")
+  const returnTo = sanitizeAuthRedirectPath(req.nextUrl.searchParams.get("next"))
   const cookieStore = await cookies()
 
   cookieStore.set("oauth_state", state, {
@@ -29,6 +31,12 @@ export async function GET(req: NextRequest) {
     sameSite: "lax"
   })
   cookieStore.set("oauth_code_verifier", code_verifier, {
+    maxAge: 10 * 60, // 10 minutes
+    secure: true,
+    httpOnly: true,
+    sameSite: "lax"
+  })
+  cookieStore.set("oauth_return_to", returnTo, {
     maxAge: 10 * 60, // 10 minutes
     secure: true,
     httpOnly: true,

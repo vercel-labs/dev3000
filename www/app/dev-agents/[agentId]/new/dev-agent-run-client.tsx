@@ -1,0 +1,689 @@
+"use client"
+
+import { ArrowRight, ExternalLink, Search } from "lucide-react"
+import { usePathname, useSearchParams } from "next/navigation"
+import { useEffect, useId, useMemo, useRef, useState } from "react"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Spinner } from "@/components/ui/spinner"
+import { Textarea } from "@/components/ui/textarea"
+import type { DevAgent, DevAgentTeam } from "@/lib/dev-agents"
+
+interface UserInfo {
+  id: string
+  email: string
+  name: string
+  username: string
+}
+
+interface Project {
+  id: string
+  name: string
+  framework: string | null
+  rootDirectory?: string | null
+  link: {
+    type: string
+    repo: string
+    repoId: number
+    org: string
+  } | null
+  latestDeployments: Array<{
+    id: string
+    url: string
+    state: string
+    readyState: string
+    createdAt: number
+    gitSource: {
+      type: string
+      repoId: number
+      ref: string
+      sha: string
+      message: string
+    } | null
+    meta: {
+      githubOrg: string
+      githubRepo: string
+    } | null
+  }>
+}
+
+type RepoVisibility = "unknown" | "checking" | "public" | "private_or_unknown"
+
+interface MarketplaceStats {
+  projectRuns: string
+  successRate: string
+  tokensUsed: string
+  previouslyPurchased: boolean
+}
+
+interface DevAgentRunClientProps {
+  devAgent: DevAgent
+  ownerName: string
+  team: DevAgentTeam
+  user: UserInfo
+  defaultUseV0DevAgentRunner: boolean
+  marketplaceStats?: MarketplaceStats
+}
+
+const GITHUB_PAT_STORAGE_KEY = "d3k_github_pat"
+
+function VercelTriangle({ className }: { className?: string }) {
+  return (
+    <svg aria-hidden="true" fill="currentColor" viewBox="0 0 75 65" className={className}>
+      <path d="M37.59.25l36.95 64H.64l36.95-64z" />
+    </svg>
+  )
+}
+
+function formatExecutionMode(mode: DevAgent["executionMode"]): string {
+  return mode === "dev-server" ? "Dev Server" : "Preview + PR"
+}
+
+export default function DevAgentRunClient({
+  devAgent,
+  ownerName,
+  team,
+  user,
+  defaultUseV0DevAgentRunner,
+  marketplaceStats
+}: DevAgentRunClientProps) {
+  const projectSearchId = useId()
+  const startPathId = useId()
+  const customPromptId = useId()
+  const githubPatId = useId()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const [projects, setProjects] = useState<Project[]>([])
+  const [projectsLoading, setProjectsLoading] = useState(false)
+  const [projectSearch, setProjectSearch] = useState("")
+  const [selectedProjectId, setSelectedProjectId] = useState(() => searchParams.get("project") ?? "")
+  const [availableBranches, setAvailableBranches] = useState<Array<{ name: string; lastDeployment?: { url: string } }>>(
+    []
+  )
+  const [branchesLoading, setBranchesLoading] = useState(false)
+  const [baseBranch, setBaseBranch] = useState("main")
+  const [startPath, setStartPath] = useState("/")
+  const [customPrompt, setCustomPrompt] = useState("")
+  const [githubPat, setGithubPat] = useState("")
+  const [repoVisibility, setRepoVisibility] = useState<RepoVisibility>("unknown")
+  const [status, setStatus] = useState("")
+  const [error, setError] = useState<string | null>(null)
+  const [isRunning, setIsRunning] = useState(false)
+  const [activeRunId, setActiveRunId] = useState<string | null>(null)
+  const [sandboxUrl, setSandboxUrl] = useState<string | null>(null)
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const selectedTeam = team
+  const filteredProjects = useMemo(() => {
+    const query = projectSearch.trim().toLowerCase()
+    if (!query) return projects
+    return projects.filter((project) => project.name.toLowerCase().includes(query))
+  }, [projectSearch, projects])
+  const selectedProject = useMemo(
+    () => projects.find((project) => project.id === selectedProjectId) || null,
+    [projects, selectedProjectId]
+  )
+  const selectedRepoOwner = selectedProject?.link?.org || selectedProject?.latestDeployments[0]?.meta?.githubOrg
+  const selectedRepoName = selectedProject?.link?.repo || selectedProject?.latestDeployments[0]?.meta?.githubRepo
+  const hasGitHubRepoInfo = Boolean(selectedRepoOwner && selectedRepoName)
+  const requiresGitHubPatForRepoAccess = !defaultUseV0DevAgentRunner && hasGitHubRepoInfo && repoVisibility !== "public"
+  const shouldShowGitHubPatField = hasGitHubRepoInfo && !defaultUseV0DevAgentRunner
+
+  useEffect(() => {
+    const stored = localStorage.getItem(GITHUB_PAT_STORAGE_KEY)
+    if (stored) {
+      setGithubPat(stored)
+    }
+  }, [])
+
+  const selectedTeamId = selectedTeam?.id
+  const selectedTeamIsPersonal = selectedTeam?.isPersonal
+  useEffect(() => {
+    if (!selectedTeamId) {
+      setProjects([])
+      setSelectedProjectId("")
+      return
+    }
+
+    const controller = new AbortController()
+    setProjectsLoading(true)
+    setError(null)
+
+    const params = new URLSearchParams()
+    if (!selectedTeamIsPersonal) {
+      params.set("teamId", selectedTeamId)
+    }
+
+    void fetch(params.toString() ? `/api/projects?${params.toString()}` : "/api/projects", {
+      signal: controller.signal
+    })
+      .then(async (response) => {
+        const data = await response.json()
+        if (!response.ok || !data.success) {
+          throw new Error(data.error || "Failed to load projects.")
+        }
+        if (controller.signal.aborted) return
+        setProjects(Array.isArray(data.projects) ? data.projects : [])
+      })
+      .catch((loadError: unknown) => {
+        if (controller.signal.aborted) return
+        setError(loadError instanceof Error ? loadError.message : String(loadError))
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setProjectsLoading(false)
+        }
+      })
+
+    return () => controller.abort()
+  }, [selectedTeamId, selectedTeamIsPersonal])
+
+  useEffect(() => {
+    const projectParam = searchParams.get("project")
+    if (projectParam && projects.some((project) => project.id === projectParam) && selectedProjectId !== projectParam) {
+      setSelectedProjectId(projectParam)
+    }
+  }, [projects, searchParams, selectedProjectId])
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+
+    if (selectedProjectId) {
+      params.set("project", selectedProjectId)
+    } else {
+      params.delete("project")
+    }
+
+    const nextQuery = params.toString()
+    const nextUrl = nextQuery ? `${pathname}?${nextQuery}` : pathname
+    if (nextUrl !== `${window.location.pathname}${window.location.search}`) {
+      window.history.replaceState(null, "", nextUrl)
+    }
+  }, [pathname, selectedProjectId])
+
+  const selectedProjectIdStable = selectedProject?.id
+  useEffect(() => {
+    if (!selectedProjectIdStable || !selectedTeamId) {
+      setAvailableBranches([])
+      return
+    }
+
+    const controller = new AbortController()
+    setBranchesLoading(true)
+    const params = new URLSearchParams({ projectId: selectedProjectIdStable })
+    if (!selectedTeamIsPersonal) {
+      params.set("teamId", selectedTeamId)
+    }
+
+    void fetch(`/api/projects/branches?${params.toString()}`, {
+      signal: controller.signal
+    })
+      .then(async (response) => {
+        const data = await response.json()
+        if (!response.ok || !data.success) {
+          throw new Error(data.error || "Failed to load branches.")
+        }
+        if (controller.signal.aborted) return
+        const nextBranches = Array.isArray(data.branches)
+          ? (data.branches as Array<{ name: string; lastDeployment?: { url: string } }>)
+          : []
+        setAvailableBranches(nextBranches)
+        if (!nextBranches.some((branch) => branch.name === baseBranch) && nextBranches[0]) {
+          setBaseBranch(nextBranches[0].name)
+        }
+      })
+      .catch((loadError: unknown) => {
+        if (!controller.signal.aborted) {
+          setError(loadError instanceof Error ? loadError.message : String(loadError))
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setBranchesLoading(false)
+        }
+      })
+
+    return () => controller.abort()
+  }, [baseBranch, selectedProjectIdStable, selectedTeamId, selectedTeamIsPersonal])
+
+  useEffect(() => {
+    if (!selectedRepoOwner || !selectedRepoName) {
+      setRepoVisibility("unknown")
+      return
+    }
+
+    const controller = new AbortController()
+    setRepoVisibility("checking")
+
+    const params = new URLSearchParams({ owner: selectedRepoOwner, repo: selectedRepoName })
+    void fetch(`/api/github/repo-visibility?${params.toString()}`, {
+      signal: controller.signal
+    })
+      .then(async (response) => {
+        const data = await response.json()
+        if (!response.ok || !data.success) {
+          throw new Error(data.error || "Failed to inspect repository visibility.")
+        }
+        if (!controller.signal.aborted) {
+          setRepoVisibility(data.visibility || "private_or_unknown")
+        }
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setRepoVisibility("private_or_unknown")
+        }
+      })
+
+    return () => controller.abort()
+  }, [selectedRepoName, selectedRepoOwner])
+
+  useEffect(() => {
+    if (!activeRunId) return
+
+    async function pollStatus() {
+      try {
+        const response = await fetch(`/api/workflows?userId=${encodeURIComponent(user.id)}`)
+        const data = (await response.json()) as {
+          success?: boolean
+          runs?: Array<{
+            id: string
+            status?: string
+            currentStep?: string
+            sandboxUrl?: string
+            error?: string
+          }>
+        }
+        if (!data.success || !Array.isArray(data.runs)) return
+
+        const run = data.runs.find((entry) => entry.id === activeRunId)
+        if (!run) return
+
+        if (run.currentStep) {
+          setStatus(run.currentStep)
+        }
+        if (run.sandboxUrl) {
+          setSandboxUrl(run.sandboxUrl)
+        }
+        if (run.status === "done") {
+          window.location.href = `/workflows/${run.id}/report`
+        }
+        if (run.status === "failure") {
+          setIsRunning(false)
+          setError(run.error || "Dev agent run failed.")
+        }
+      } catch (pollError) {
+        setError(pollError instanceof Error ? pollError.message : String(pollError))
+      }
+    }
+
+    pollIntervalRef.current = setInterval(pollStatus, 3000)
+    void pollStatus()
+
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current)
+        pollIntervalRef.current = null
+      }
+    }
+  }, [activeRunId, user.id])
+
+  async function startDevAgentRun() {
+    if (!selectedProject || !selectedTeam) {
+      setError("Choose a project before starting.")
+      return
+    }
+    if (devAgent.requiresCustomPrompt && !customPrompt.trim()) {
+      setError("This dev agent requires custom instructions.")
+      return
+    }
+    if (requiresGitHubPatForRepoAccess && !githubPat.trim()) {
+      setError("A GitHub PAT is required for this dev agent and repository.")
+      return
+    }
+
+    setError(null)
+    setIsRunning(true)
+    setStatus("Starting dev agent run…")
+
+    const projectResponse = await fetch(
+      selectedTeam.isPersonal
+        ? `/api/projects/${selectedProject.id}`
+        : `/api/projects/${selectedProject.id}?teamId=${encodeURIComponent(selectedTeam.id)}`
+    )
+    const projectData = await projectResponse.json()
+    const project = (projectData.success ? projectData.project : selectedProject) as Project
+    const latestDeployment = project.latestDeployments[0]
+
+    if (!latestDeployment) {
+      setIsRunning(false)
+      setError("This project has no deployments to use as a starting point.")
+      return
+    }
+
+    const repoOwner = project.link?.org || latestDeployment.meta?.githubOrg
+    const repoName = project.link?.repo || latestDeployment.meta?.githubRepo
+    const gitRef = latestDeployment.gitSource?.ref || baseBranch || latestDeployment.gitSource?.sha || "main"
+
+    if (githubPat.trim()) {
+      localStorage.setItem(GITHUB_PAT_STORAGE_KEY, githubPat.trim())
+    }
+
+    const tokenResponse = await fetch("/api/auth/token")
+    const tokenData = await tokenResponse.json()
+    const accessToken = tokenData.accessToken as string | undefined
+    if (!accessToken) {
+      setIsRunning(false)
+      setError("Your auth session is missing an access token. Sign in again.")
+      return
+    }
+
+    const response = await fetch("/api/cloud/start-fix", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`
+      },
+      body: JSON.stringify({
+        userId: user.id,
+        devAgentId: devAgent.id,
+        projectName: project.name,
+        projectId: project.id,
+        teamId: selectedTeam.isPersonal ? undefined : selectedTeam.id,
+        projectDir: project.rootDirectory?.trim() || undefined,
+        repoUrl: repoOwner && repoName ? `https://github.com/${repoOwner}/${repoName}` : undefined,
+        repoOwner,
+        repoName,
+        repoBranch: gitRef,
+        baseBranch,
+        startPath: devAgent.supportsPathInput && startPath.trim() ? startPath.trim() : undefined,
+        githubPat: githubPat.trim() || undefined,
+        submitPullRequest: true,
+        customPrompt: devAgent.requiresCustomPrompt ? customPrompt.trim() : undefined,
+        productionUrl: latestDeployment.url ? `https://${latestDeployment.url}` : undefined,
+        useV0DevAgentRunner: defaultUseV0DevAgentRunner
+      })
+    })
+
+    const result = (await response.json()) as {
+      success?: boolean
+      error?: string
+      runId?: string
+    }
+
+    if (!response.ok || !result.success || !result.runId) {
+      setIsRunning(false)
+      setError(result.error || "Failed to start the dev agent run.")
+      return
+    }
+
+    setActiveRunId(result.runId)
+    setStatus("Dev agent run started.")
+  }
+
+  return (
+    <div className="flex max-w-5xl flex-col gap-5">
+      {/* Agent info bar */}
+      <div className="rounded-lg border border-[#1f1f1f]">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-3 px-4 py-3">
+          {/* Owner */}
+          <span className="inline-flex items-center gap-1.5 text-[13px] text-[#888]">
+            {ownerName === "Vercel" ? (
+              <span className="flex size-4 items-center justify-center">
+                <VercelTriangle className="size-3 text-[#888]" />
+              </span>
+            ) : (
+              <Avatar className="size-4 border border-[#333]">
+                <AvatarImage src={`https://github.com/${ownerName}.png?size=64`} alt={ownerName} />
+                <AvatarFallback className="bg-[#1a1a1a] text-[8px] font-medium text-[#888]">
+                  {ownerName.slice(0, 2).toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+            )}
+            <span>{ownerName}</span>
+          </span>
+
+          <span className="text-[#333]">|</span>
+
+          {/* Stats */}
+          <span className="text-[13px] text-[#888]">{formatExecutionMode(devAgent.executionMode)}</span>
+          {devAgent.sandboxBrowser !== "none" ? (
+            <span className="text-[13px] text-[#666]">{devAgent.sandboxBrowser}</span>
+          ) : null}
+          {devAgent.skillRefs.slice(0, 3).map((skill) => (
+            <span key={skill.id} className="rounded-md bg-[#1a1a1a] px-2 py-0.5 text-[11px] text-[#666]">
+              {skill.displayName}
+            </span>
+          ))}
+          {marketplaceStats?.previouslyPurchased ? (
+            <span className="rounded-full border border-blue-500/20 bg-blue-500/10 px-2 py-0.5 text-[11px] text-blue-400">
+              Previously Purchased
+            </span>
+          ) : null}
+        </div>
+
+        {/* Marketplace social proof stats */}
+        {marketplaceStats ? (
+          <div className="border-t border-[#1f1f1f] px-4 py-3">
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <div className="text-[11px] uppercase tracking-wider text-[#555]">Project Runs</div>
+                <div className="mt-0.5 text-[13px] font-medium text-[#ededed]">{marketplaceStats.projectRuns}</div>
+              </div>
+              <div>
+                <div className="text-[11px] uppercase tracking-wider text-[#555]">Success Rate</div>
+                <div className="mt-0.5 text-[13px] font-medium text-[#ededed]">{marketplaceStats.successRate}</div>
+              </div>
+              <div>
+                <div className="text-[11px] uppercase tracking-wider text-[#555]">Tokens Used</div>
+                <div className="mt-0.5 text-[13px] font-medium text-[#ededed]">{marketplaceStats.tokensUsed}</div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="border-t border-[#1f1f1f] px-4 py-2.5">
+            <span className="text-[13px] text-[#888]">
+              <span className="text-[#ededed]">{devAgent.usageCount}</span> runs
+            </span>
+          </div>
+        )}
+      </div>
+
+      {error && (
+        <div className="rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-3 text-[13px] text-red-400">
+          {error}
+        </div>
+      )}
+
+      <div className="grid gap-5 lg:grid-cols-2">
+        {/* Project selection */}
+        <div className="rounded-lg border border-[#1f1f1f] p-5">
+          <div className="mb-4">
+            <h2 className="text-[14px] font-medium text-[#ededed]">Project</h2>
+            <p className="mt-0.5 text-[13px] text-[#888]">Select a project in {team.name}.</p>
+          </div>
+
+          <div className="space-y-3">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-2.5 size-3.5 text-[#555]" />
+              <Input
+                id={projectSearchId}
+                value={projectSearch}
+                onChange={(event) => setProjectSearch(event.target.value)}
+                placeholder="Filter projects…"
+                className="h-9 border-[#1f1f1f] bg-transparent pl-9 text-[13px] text-[#ededed] placeholder:text-[#555]"
+              />
+            </div>
+
+            <div className="max-h-[24rem] space-y-1 overflow-y-auto">
+              {projectsLoading ? (
+                <div className="flex items-center gap-2 py-3 text-[13px] text-[#666]">
+                  <Spinner className="size-3.5" />
+                  Loading projects…
+                </div>
+              ) : filteredProjects.length === 0 ? (
+                <p className="py-3 text-[13px] text-[#666]">No matching projects.</p>
+              ) : (
+                filteredProjects.map((project) => (
+                  <button
+                    type="button"
+                    key={project.id}
+                    onClick={() => setSelectedProjectId(project.id)}
+                    className={`flex w-full items-center justify-between rounded-md border px-3 py-2.5 text-left transition-colors ${
+                      selectedProjectId === project.id
+                        ? "border-[#ededed] bg-[#1a1a1a]"
+                        : "border-[#1f1f1f] hover:border-[#333]"
+                    }`}
+                  >
+                    <div>
+                      <div className="text-[13px] font-medium text-[#ededed]">{project.name}</div>
+                      <div className="text-[11px] text-[#666]">
+                        {project.framework ? `${project.framework} · ` : ""}
+                        {project.latestDeployments[0]?.url || "No deployment"}
+                      </div>
+                    </div>
+                    <ArrowRight className="size-3.5 text-[#555]" />
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Run configuration */}
+        <div className="rounded-lg border border-[#1f1f1f] p-5">
+          <div className="mb-4">
+            <h2 className="text-[14px] font-medium text-[#ededed]">Configuration</h2>
+            <p className="mt-0.5 text-[13px] text-[#888]">Repo-specific inputs for this run.</p>
+          </div>
+
+          {!selectedProject ? (
+            <p className="py-3 text-[13px] text-[#666]">Pick a project first.</p>
+          ) : (
+            <div className="space-y-4">
+              <div className="rounded-md border border-[#1f1f1f] bg-[#111] p-3">
+                <div className="text-[13px] font-medium text-[#ededed]">{selectedProject.name}</div>
+                <div className="mt-0.5 text-[12px] text-[#666]">
+                  {selectedRepoOwner && selectedRepoName
+                    ? `${selectedRepoOwner}/${selectedRepoName}`
+                    : "Repository not linked"}
+                </div>
+                {selectedProject.latestDeployments[0]?.url && (
+                  <a
+                    href={`https://${selectedProject.latestDeployments[0].url}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-2 inline-flex items-center gap-1 text-[11px] text-[#888] hover:text-[#ededed]"
+                  >
+                    Open deployment
+                    <ExternalLink className="size-3" />
+                  </a>
+                )}
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label className="text-[13px] text-[#888]">Base Branch</Label>
+                  <Select value={baseBranch} onValueChange={setBaseBranch} disabled={branchesLoading}>
+                    <SelectTrigger className="h-9 border-[#1f1f1f] bg-transparent text-[13px] text-[#ededed]">
+                      <SelectValue placeholder={branchesLoading ? "Loading…" : "Select branch"} />
+                    </SelectTrigger>
+                    <SelectContent className="border-[#333] bg-[#0a0a0a]">
+                      {availableBranches.map((branch) => (
+                        <SelectItem key={branch.name} value={branch.name} className="text-[13px]">
+                          {branch.name}
+                        </SelectItem>
+                      ))}
+                      {availableBranches.length === 0 && (
+                        <SelectItem value="main" className="text-[13px]">
+                          main
+                        </SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {devAgent.supportsPathInput && (
+                  <div className="space-y-1.5">
+                    <Label htmlFor={startPathId} className="text-[13px] text-[#888]">
+                      Start Path
+                    </Label>
+                    <Input
+                      id={startPathId}
+                      value={startPath}
+                      onChange={(event) => setStartPath(event.target.value)}
+                      className="h-9 border-[#1f1f1f] bg-transparent text-[13px] text-[#ededed]"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {devAgent.requiresCustomPrompt && (
+                <div className="space-y-1.5">
+                  <Label htmlFor={customPromptId} className="text-[13px] text-[#888]">
+                    Custom Instructions
+                  </Label>
+                  <Textarea
+                    id={customPromptId}
+                    value={customPrompt}
+                    onChange={(event) => setCustomPrompt(event.target.value)}
+                    placeholder="Describe the task for this run."
+                    rows={4}
+                    className="border-[#1f1f1f] bg-transparent text-[13px] text-[#ededed] placeholder:text-[#555]"
+                  />
+                </div>
+              )}
+
+              {shouldShowGitHubPatField && (
+                <div className="space-y-1.5">
+                  <Label htmlFor={githubPatId} className="text-[13px] text-[#888]">
+                    GitHub PAT
+                    {requiresGitHubPatForRepoAccess ? <span className="ml-1 text-red-400">*</span> : null}
+                  </Label>
+                  <Input
+                    id={githubPatId}
+                    type="password"
+                    value={githubPat}
+                    onChange={(event) => setGithubPat(event.target.value)}
+                    placeholder="ghp_..."
+                    className="h-9 border-[#1f1f1f] bg-transparent text-[13px] text-[#ededed]"
+                  />
+                  <p className="text-[11px] text-[#555]">
+                    Visibility: {repoVisibility === "checking" ? "checking…" : repoVisibility.replaceAll("_", " ")}
+                    {requiresGitHubPatForRepoAccess ? " · Required for private repos." : ""}
+                  </p>
+                </div>
+              )}
+
+              {sandboxUrl && (
+                <div className="rounded-md border border-[#1f1f1f] bg-[#111] p-3 text-[13px] text-[#888]">
+                  Sandbox:{" "}
+                  <a href={sandboxUrl} target="_blank" rel="noreferrer" className="text-[#ededed] hover:underline">
+                    {sandboxUrl}
+                  </a>
+                </div>
+              )}
+
+              {status && (
+                <div className="rounded-md border border-[#1f1f1f] bg-[#111] p-3 text-[13px] text-[#888]">{status}</div>
+              )}
+
+              <div className="flex items-center gap-2 pt-1">
+                <Button
+                  onClick={startDevAgentRun}
+                  disabled={isRunning || !selectedProject}
+                  size="sm"
+                  className="h-8 rounded-md bg-[#ededed] px-4 text-[13px] font-medium text-[#0a0a0a] hover:bg-white disabled:opacity-40"
+                >
+                  {isRunning ? "Running…" : "Start Run"}
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}

@@ -32,3 +32,4 @@ next-env.d.ts
 .agents/
 opencode.json
 .env*.local
+.blackboxcli/

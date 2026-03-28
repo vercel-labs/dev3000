@@ -1,35 +1,7 @@
-import { del, head, list, put } from "@vercel/blob"
-
-const FETCH_TIMEOUT_MS = 6000
-const FETCH_RETRIES = 2
-
-async function fetchJsonWithRetry(fetchUrl: string): Promise<Response> {
-  let lastError: unknown
-
-  for (let attempt = 0; attempt <= FETCH_RETRIES; attempt++) {
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
-    try {
-      const response = await fetch(fetchUrl, {
-        headers: {
-          Accept: "application/json"
-        },
-        cache: "no-store",
-        signal: controller.signal
-      })
-      clearTimeout(timeout)
-      return response
-    } catch (error) {
-      clearTimeout(timeout)
-      lastError = error
-      if (attempt < FETCH_RETRIES) {
-        await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)))
-      }
-    }
-  }
-
-  throw lastError
-}
+import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import path from "node:path"
+import { del, get, list, put } from "@vercel/blob"
 
 export type WorkflowType =
   | "cls-fix"
@@ -46,11 +18,11 @@ export interface WorkflowRun {
   timestamp: string
   status: "running" | "done" | "failure"
   type?: WorkflowType // Workflow type (cls-fix, prompt, etc.)
-  recipeId?: string
-  recipeName?: string
-  recipeDescription?: string
-  recipeExecutionMode?: "dev-server" | "preview-pr"
-  recipeSandboxBrowser?: "none" | "agent-browser" | "next-browser"
+  devAgentId?: string
+  devAgentName?: string
+  devAgentDescription?: string
+  devAgentExecutionMode?: "dev-server" | "preview-pr"
+  devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser"
   currentStep?: string // Current step being executed (for live progress)
   stepNumber?: number // 0-4 to show progress (0=sandbox, 1=logs, 2=ai, 3=upload, 4=pr)
   completedAt?: string // ISO timestamp when workflow finished (for duration calc)
@@ -66,12 +38,95 @@ export interface WorkflowRun {
   progressLogs?: string[] // Rolling log lines for live pending UI
 }
 
+const LOCAL_WORKFLOW_CACHE_ROOT = path.join(tmpdir(), "dev3000-workflow-runs")
+
+function isLocalWorkflowCacheEnabled(): boolean {
+  return process.env.NODE_ENV !== "production"
+}
+
+function getLocalWorkflowCacheDir(userId: string): string {
+  return path.join(LOCAL_WORKFLOW_CACHE_ROOT, encodeURIComponent(userId))
+}
+
+function getLocalWorkflowCachePath(run: Pick<WorkflowRun, "userId" | "timestamp" | "projectName">): string {
+  return path.join(
+    getLocalWorkflowCacheDir(run.userId),
+    `${encodeURIComponent(run.timestamp)}-${encodeURIComponent(run.projectName)}.json`
+  )
+}
+
+async function saveLocalWorkflowRun(run: WorkflowRun): Promise<void> {
+  if (!isLocalWorkflowCacheEnabled()) {
+    return
+  }
+
+  const filePath = getLocalWorkflowCachePath(run)
+  await mkdir(path.dirname(filePath), { recursive: true })
+  await writeFile(filePath, JSON.stringify(run, null, 2))
+}
+
+async function listLocalWorkflowRuns(userId: string): Promise<WorkflowRun[] | null> {
+  if (!isLocalWorkflowCacheEnabled()) {
+    return null
+  }
+
+  try {
+    const dir = getLocalWorkflowCacheDir(userId)
+    const entries = await readdir(dir, { withFileTypes: true })
+    const runs = await Promise.all(
+      entries
+        .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
+        .map(async (entry) => {
+          const filePath = path.join(dir, entry.name)
+          const content = await readFile(filePath, "utf8")
+          return JSON.parse(content) as WorkflowRun
+        })
+    )
+    return runs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+  } catch {
+    return null
+  }
+}
+
+async function deleteLocalWorkflowRun(run: Pick<WorkflowRun, "userId" | "timestamp" | "projectName">): Promise<void> {
+  if (!isLocalWorkflowCacheEnabled()) {
+    return
+  }
+
+  const filePath = getLocalWorkflowCachePath(run)
+  await rm(filePath, { force: true })
+}
+
+async function readWorkflowRunBlob(url: string, pathname: string): Promise<WorkflowRun | null> {
+  try {
+    const blobResult = await get(url, {
+      access: "public",
+      useCache: false
+    })
+
+    if (!blobResult || blobResult.statusCode !== 200) {
+      return null
+    }
+
+    if (!blobResult.blob.contentType?.includes("application/json")) {
+      console.error(`[Workflow Storage] Unexpected content type ${blobResult.blob.contentType} for ${pathname}`)
+      return null
+    }
+
+    return (await new Response(blobResult.stream).json()) as WorkflowRun
+  } catch (error) {
+    console.error(`[Workflow Storage] Failed to fetch ${url}:`, error)
+    return null
+  }
+}
+
 /**
  * Save a workflow run to blob storage
  * Path format: workflows/{userId}/{timestamp}-{projectName}.json
  */
 export async function saveWorkflowRun(run: WorkflowRun): Promise<string> {
   const path = `workflows/${run.userId}/${run.timestamp}-${run.projectName}.json`
+  await saveLocalWorkflowRun(run)
 
   const blob = await put(path, JSON.stringify(run, null, 2), {
     access: "public",
@@ -88,6 +143,11 @@ export async function saveWorkflowRun(run: WorkflowRun): Promise<string> {
  * Returns runs sorted by timestamp (newest first)
  */
 export async function listWorkflowRuns(userId: string): Promise<WorkflowRun[]> {
+  const localRuns = await listLocalWorkflowRuns(userId)
+  if (localRuns) {
+    return localRuns
+  }
+
   const prefix = `workflows/${userId}/`
 
   let blobs: Awaited<ReturnType<typeof list>>["blobs"] = []
@@ -106,53 +166,7 @@ export async function listWorkflowRuns(userId: string): Promise<WorkflowRun[]> {
   }
 
   // Fetch and parse each blob
-  // Note: Use head() first to verify blob exists, then fetch with special headers
-  // to avoid Vercel Security Checkpoint when fetching from serverless functions
-  const runs = await Promise.all(
-    blobs.map(async (blob) => {
-      try {
-        // First verify blob exists using authenticated head() call
-        const blobInfo = await head(blob.url)
-        if (!blobInfo) {
-          console.error(`[Workflow Storage] Blob not found: ${blob.url}`)
-          return null
-        }
-
-        // Check content type from head - if not JSON, skip it
-        if (!blobInfo.contentType?.includes("application/json")) {
-          console.error(`[Workflow Storage] Unexpected content type ${blobInfo.contentType} for ${blob.url}`)
-          return null
-        }
-
-        // Use downloadUrl if available (authenticated), otherwise fall back to public url
-        const fetchUrl = blobInfo.downloadUrl || blob.url
-        const response = await fetchJsonWithRetry(fetchUrl)
-
-        // Check for non-OK responses (security checkpoint returns 200 but HTML)
-        if (!response.ok) {
-          console.error(
-            `[Workflow Storage] HTTP ${response.status} fetching ${fetchUrl} (content-type: ${response.headers.get("content-type")})`
-          )
-          return null
-        }
-
-        // Double-check response is actually JSON (security checkpoint returns text/html)
-        const contentType = response.headers.get("content-type")
-        if (contentType && !contentType.includes("application/json")) {
-          console.error(
-            `[Workflow Storage] Response is not JSON: ${contentType} for ${fetchUrl} (likely Vercel Security Checkpoint)`
-          )
-          return null
-        }
-
-        const run: WorkflowRun = await response.json()
-        return run
-      } catch (error) {
-        console.error(`[Workflow Storage] Failed to fetch ${blob.url}:`, error)
-        return null
-      }
-    })
-  )
+  const runs = await Promise.all(blobs.map(async (blob) => readWorkflowRunBlob(blob.url, blob.pathname)))
 
   // Filter out failed fetches and sort by timestamp
   return runs
@@ -188,28 +202,9 @@ export async function getPublicWorkflowRun(runId: string): Promise<WorkflowRun |
 
     // Search through current page of blobs to find the matching run ID
     for (const blob of pageResult.blobs) {
-      try {
-        // Use authenticated head() call to verify blob and get downloadUrl
-        const blobInfo = await head(blob.url)
-        if (!blobInfo || !blobInfo.contentType?.includes("application/json")) {
-          continue
-        }
-
-        const fetchUrl = blobInfo.downloadUrl || blob.url
-        const response = await fetchJsonWithRetry(fetchUrl)
-
-        // Skip if response is HTML (security checkpoint)
-        const contentType = response.headers.get("content-type")
-        if (contentType && !contentType.includes("application/json")) {
-          continue
-        }
-
-        const run: WorkflowRun = await response.json()
-        if (run.id === runId && run.isPublic) {
-          return run
-        }
-      } catch {
-        // Skip invalid blobs
+      const run = await readWorkflowRunBlob(blob.url, blob.pathname)
+      if (run?.id === runId && run.isPublic) {
+        return run
       }
     }
 
@@ -320,6 +315,7 @@ export async function deleteWorkflowRuns(
         await del(urlsToDelete)
         console.log(`[Workflow Storage] Deleted ${urlsToDelete.length} blobs for run ${run.id}`)
       }
+      await deleteLocalWorkflowRun(run)
       deleted++
     } catch (error) {
       const errorMsg = `Failed to delete run ${run.id}: ${error instanceof Error ? error.message : String(error)}`

@@ -6,6 +6,7 @@ import { Suspense } from "react"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { Skeleton } from "@/components/ui/skeleton"
 import { getCurrentUser } from "@/lib/auth"
+import { getSignInPath } from "@/lib/auth-redirect"
 import type { WorkflowRun } from "@/lib/workflow-storage"
 import { getPublicWorkflowRun, getWorkflowRun } from "@/lib/workflow-storage"
 import type { WorkflowReport } from "@/types"
@@ -236,7 +237,7 @@ async function WorkflowReportPageData({ params }: { params: Promise<{ id: string
   if (!run) {
     run = await getPublicWorkflowRun(id)
     if (!run && !user) {
-      redirect("/signin")
+      redirect(getSignInPath(`/workflows/${id}/report`))
     }
   }
 
@@ -245,7 +246,7 @@ async function WorkflowReportPageData({ params }: { params: Promise<{ id: string
   }
 
   if (!run) {
-    redirect("/recipes/runs")
+    redirect("/dev-agents/runs")
   }
 
   if (!run.reportBlobUrl) {
@@ -278,8 +279,8 @@ async function ReportContent({
   // Use report's workflowType, fallback to run's type (for backward compat with old reports)
   const workflowType = report.workflowType || run.type || "cls-fix"
   const workflowLabel =
-    report.recipeName ||
-    run.recipeName ||
+    report.devAgentName ||
+    run.devAgentName ||
     (workflowType === "prompt"
       ? "Custom Prompt"
       : workflowType === "design-guidelines"
@@ -292,8 +293,8 @@ async function ReportContent({
               ? "URL Audit"
               : "CLS Fix")
   const step2Description =
-    report.recipeExecutionMode === "preview-pr"
-      ? "Recipe ran in preview-and-PR mode and generated this report."
+    report.devAgentExecutionMode === "preview-pr"
+      ? "Dev Agent ran in preview-and-PR mode and generated this report."
       : workflowType === "prompt"
         ? "AI agent executed your custom task and generated this report."
         : workflowType === "design-guidelines"
@@ -305,8 +306,8 @@ async function ReportContent({
               : workflowType === "url-audit"
                 ? "Read-only UX and performance analysis of the target URL."
                 : "AI agent attempted to fix CLS issues (up to 3 retries)."
-  const reportHeading = report.recipeName
-    ? `Report Results: ${report.recipeName}`
+  const reportHeading = report.devAgentName
+    ? `Report Results: ${report.devAgentName}`
     : workflowType === "design-guidelines"
       ? "Report: Vercel Web Design Guidelines Audit"
       : workflowType === "turbopack-bundle-analyzer"
@@ -1238,10 +1239,10 @@ async function ReportContent({
 
         <div className="mt-6 mb-4 flex gap-4">
           <a
-            href="/recipes/runs"
+            href="/dev-agents/runs"
             className="px-4 py-2 border border-border rounded-md hover:bg-muted transition-colors"
           >
-            ← Recipe Runs
+            ← Dev Agent Runs
           </a>
           {run.prUrl && (
             <a
@@ -1285,9 +1286,9 @@ function ReportLoading({ reportCrumbLabel }: { reportCrumbLabel: string }) {
 function ReportBreadcrumb({ reportCrumbLabel }: { reportCrumbLabel: string }) {
   return (
     <span className="inline-flex items-center gap-2 text-muted-foreground">
-      <a href="/recipes/runs" className="inline-flex items-center gap-2 hover:text-foreground transition-colors">
+      <a href="/dev-agents/runs" className="inline-flex items-center gap-2 hover:text-foreground transition-colors">
         <ArrowLeft className="h-4 w-4" />
-        <span className="font-semibold">d3k</span>
+        <span className="font-semibold">Dev Agent Runs</span>
       </a>
       <span>/</span>
       <span>{reportCrumbLabel}</span>

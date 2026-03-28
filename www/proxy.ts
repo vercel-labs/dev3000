@@ -11,103 +11,40 @@ interface RefreshTokenResponse {
 }
 
 export async function proxy(request: NextRequest) {
-  // Only check auth on protected routes
-  const protectedPaths = ["/workflows"]
-  const isProtectedPath = protectedPaths.some((path) => request.nextUrl.pathname.startsWith(path))
-
-  // Skip logging and auth checks for non-protected paths
-  if (!isProtectedPath) {
-    return NextResponse.next()
-  }
-
   const accessToken = request.cookies.get("access_token")?.value
   const refreshToken = request.cookies.get("refresh_token")?.value
 
-  console.log("[Middleware] Protected path:", request.nextUrl.pathname, "| tokens:", !!accessToken, !!refreshToken)
-
-  // If no tokens at all, let the page handle redirect
-  if (!accessToken && !refreshToken) {
-    console.log("[Middleware] No tokens found, letting page handle redirect")
+  // If no refresh token, nothing to do — let pages handle auth redirects
+  if (!refreshToken) {
     return NextResponse.next()
   }
 
-  // If we have a refresh token but no access token, try to refresh immediately
-  if (!accessToken && refreshToken) {
-    console.log("[Middleware] No access token but have refresh token, attempting refresh...")
-    const newAccessToken = await attemptRefresh(refreshToken)
-
-    if (newAccessToken) {
-      // Create response and set new cookies
-      const response = NextResponse.next()
-      response.cookies.set("access_token", newAccessToken.access_token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        maxAge: newAccessToken.expires_in
-      })
-      response.cookies.set("refresh_token", newAccessToken.refresh_token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        maxAge: 60 * 60 * 24 * 30 // 30 days
-      })
-      console.log("[Middleware] Token refreshed successfully")
-      return response
-    } else {
-      console.log("[Middleware] Token refresh failed")
-      return NextResponse.next()
-    }
-  }
-
-  // If we have an access token, verify it's still valid
+  // If access token cookie still exists, it's valid (cookie maxAge = expires_in)
   if (accessToken) {
-    try {
-      const response = await fetch("https://api.vercel.com/v2/user", {
-        headers: {
-          Authorization: `Bearer ${accessToken}`
-        }
-      })
-
-      // Token is valid, continue
-      if (response.ok) {
-        console.log("[Middleware] Access token is valid")
-        return NextResponse.next()
-      }
-
-      // Token expired (401), try to refresh
-      if (response.status === 401 && refreshToken) {
-        console.log("[Middleware] Access token expired, attempting refresh...")
-        const newAccessToken = await attemptRefresh(refreshToken)
-
-        if (newAccessToken) {
-          // Create response and set new cookies
-          const response = NextResponse.next()
-          response.cookies.set("access_token", newAccessToken.access_token, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "lax",
-            maxAge: newAccessToken.expires_in
-          })
-          response.cookies.set("refresh_token", newAccessToken.refresh_token, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "lax",
-            maxAge: 60 * 60 * 24 * 30 // 30 days
-          })
-          console.log("[Middleware] Token refreshed successfully")
-          return response
-        } else {
-          console.log("[Middleware] Token refresh failed")
-        }
-      }
-    } catch (error) {
-      console.error("[Middleware] Error checking token:", error)
-    }
+    return NextResponse.next()
   }
 
-  // If we get here, token refresh failed or no valid tokens
-  // Let the page component handle the redirect
-  return NextResponse.next()
+  // Access token expired but we have a refresh token — attempt silent refresh
+  const newTokens = await attemptRefresh(refreshToken)
+
+  if (!newTokens) {
+    return NextResponse.next()
+  }
+
+  const response = NextResponse.next()
+  response.cookies.set("access_token", newTokens.access_token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: newTokens.expires_in
+  })
+  response.cookies.set("refresh_token", newTokens.refresh_token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 60 * 60 * 24 * 30 // 30 days
+  })
+  return response
 }
 
 async function attemptRefresh(refreshToken: string): Promise<RefreshTokenResponse | null> {

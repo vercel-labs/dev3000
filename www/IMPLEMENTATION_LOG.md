@@ -65,7 +65,7 @@ Connect developer code authorship to production execution data to enable:
   - `lib/tracing.ts` — Core tracing utilities
 - **Files modified**:
   - `app/api/workflows/route.ts` — GET and DELETE handlers wrapped
-  - `app/api/recipes/route.ts` — GET handler wrapped
+  - `app/api/dev-agents/route.ts` — GET handler wrapped
 - **Utilities provided**:
   - `withSpan(name, fn)` — Simple span wrapper for any async function
   - `withAttributedSpan({ name, file, fn, lines? }, callback)` — Span with source-code attribution metadata (`code.filepath`, `code.function`, `code.lineno`, `vcs.commit.sha`, `vcs.branch`)
@@ -275,5 +275,5 @@ vercel inspect <deployment-url>
 | `app/layout.tsx` | Modified | 🔧 Added `<BrowserTracing />` |
 | `app/api/traces/route.ts` | Created | 🔧 Browser trace collector endpoint |
 | `app/api/workflows/route.ts` | Modified | 🔧 Wrapped GET/DELETE in attributed spans |
-| `app/api/recipes/route.ts` | Modified | 🔧 Wrapped GET in attributed span |
+| `app/api/dev-agents/route.ts` | Modified | 🔧 Wrapped GET in attributed span |
 | `package.json` | **Needs update** | 🔧 Run `bun add` commands above |

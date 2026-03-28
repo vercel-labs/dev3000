@@ -4,10 +4,10 @@ import { getCurrentUser } from "@/lib/auth"
 import { getAuthorizePath } from "@/lib/auth-redirect"
 import { getDefaultTeam } from "@/lib/vercel-teams"
 
-export default async function WorkflowsPage() {
+export default async function NewDevAgentRedirectPage() {
   const user = await getCurrentUser()
   if (!user) {
-    redirect(getAuthorizePath("/workflows"))
+    redirect(getAuthorizePath("/dev-agents/new"))
   }
 
   const defaultTeam = await getDefaultTeam()
@@ -15,5 +15,5 @@ export default async function WorkflowsPage() {
     notFound()
   }
 
-  redirect(`/${defaultTeam.slug}/dev-agents` as Route)
+  redirect(`/${defaultTeam.slug}/dev-agents/new` as Route)
 }

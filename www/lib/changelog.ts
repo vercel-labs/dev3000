@@ -37,7 +37,7 @@ export const changelog: Release[] = [
     type: "minor",
     highlights: [
       "Fix browser startup and log pane selection",
-      "Build recipes workflow prototype",
+      "Build devAgents workflow prototype",
       "Add canary build timestamps",
       "Bundle portless and prefer stable local app URLs",
       "Update runtime dependencies and compatibility"

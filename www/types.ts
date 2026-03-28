@@ -48,11 +48,11 @@ export interface WorkflowReport {
   id: string
   projectName: string
   timestamp: string
-  recipeId?: string
-  recipeName?: string
-  recipeDescription?: string
-  recipeExecutionMode?: "dev-server" | "preview-pr"
-  recipeSandboxBrowser?: "none" | "agent-browser" | "next-browser"
+  devAgentId?: string
+  devAgentName?: string
+  devAgentDescription?: string
+  devAgentExecutionMode?: "dev-server" | "preview-pr"
+  devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser"
 
   // Workflow type and prompts
   workflowType?:
@@ -64,9 +64,9 @@ export interface WorkflowReport {
     | "turbopack-bundle-analyzer"
   customPrompt?: string // User's original prompt (for prompt workflows)
   systemPrompt?: string // The full system prompt used by the agent
-  recipeInstructions?: string
-  recipePrompt?: string
-  recipeSkills?: Array<{
+  devAgentInstructions?: string
+  devAgentPrompt?: string
+  devAgentSkills?: Array<{
     id: string
     installArg: string
     packageName?: string

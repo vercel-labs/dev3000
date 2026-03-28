@@ -27,7 +27,7 @@ interface UserInfo {
   username: string
 }
 
-interface RecipeRunsClientProps {
+interface DevAgentRunsClientProps {
   user: UserInfo
   initialRuns: WorkflowRun[]
 }
@@ -62,15 +62,15 @@ function formatLegacyWorkflowType(type?: string): string {
     case "turbopack-bundle-analyzer":
       return "Turbopack Bundle Analyzer"
     default:
-      return "Recipe Run"
+      return "Dev Agent Run"
   }
 }
 
-function formatRecipeLabel(run: WorkflowRun): string {
-  return run.recipeName || formatLegacyWorkflowType(run.type)
+function formatDevAgentLabel(run: WorkflowRun): string {
+  return run.devAgentName || formatLegacyWorkflowType(run.type)
 }
 
-export default function RecipeRunsClient({ user, initialRuns }: RecipeRunsClientProps) {
+export default function DevAgentRunsClient({ user, initialRuns }: DevAgentRunsClientProps) {
   const [isSigningOut, setIsSigningOut] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
@@ -173,12 +173,12 @@ export default function RecipeRunsClient({ user, initialRuns }: RecipeRunsClient
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-2">
             <h1 className="text-3xl font-bold text-foreground">
-              <Link href="/recipes" className="hover:opacity-80 transition-opacity">
-                Agent Recipes
+              <Link href="/dev-agents" className="hover:opacity-80 transition-opacity">
+                Dev Agents
               </Link>
               <span> - Runs</span>
             </h1>
-            <p className="text-muted-foreground">View all of your recipe-driven analyses, fixes, and PR-ready runs.</p>
+            <p className="text-muted-foreground">View all of your dev-agent analyses, fixes, and PR-ready runs.</p>
             <p className="text-sm text-muted-foreground">Signed in as {user.email}</p>
           </div>
           <div className="flex flex-wrap gap-3">
@@ -188,7 +188,7 @@ export default function RecipeRunsClient({ user, initialRuns }: RecipeRunsClient
               </Button>
             )}
             <Button asChild>
-              <Link href="/recipes/new">Create Recipe</Link>
+              <Link href="/dev-agents/new">Create Dev Agent</Link>
             </Button>
             <ThemeToggle />
             <Button variant="outline" onClick={handleSignOut} disabled={isSigningOut}>
@@ -200,8 +200,8 @@ export default function RecipeRunsClient({ user, initialRuns }: RecipeRunsClient
         {runs.length === 0 ? (
           <Card className="p-12 text-center">
             <CardContent>
-              <p className="text-muted-foreground">No recipe runs yet.</p>
-              <p className="mt-2 text-sm text-muted-foreground/70">Choose a recipe and run it against a project.</p>
+              <p className="text-muted-foreground">No dev agent runs yet.</p>
+              <p className="mt-2 text-sm text-muted-foreground/70">Choose a dev agent and run it against a project.</p>
             </CardContent>
           </Card>
         ) : (
@@ -216,7 +216,7 @@ export default function RecipeRunsClient({ user, initialRuns }: RecipeRunsClient
                       aria-label="Select all runs"
                     />
                   </TableHead>
-                  <TableHead>Recipe</TableHead>
+                  <TableHead>Dev Agent</TableHead>
                   <TableHead>Project</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Created</TableHead>
@@ -245,14 +245,14 @@ export default function RecipeRunsClient({ user, initialRuns }: RecipeRunsClient
                       <TableCell>
                         <div className="space-y-1">
                           <Link
-                            href={`/recipes/runs/${run.id}/report`}
+                            href={`/dev-agents/runs/${run.id}/report`}
                             className="font-medium text-primary hover:underline"
                           >
-                            {formatRecipeLabel(run)}
+                            {formatDevAgentLabel(run)}
                           </Link>
-                          {run.recipeExecutionMode && (
+                          {run.devAgentExecutionMode && (
                             <div className="text-xs text-muted-foreground">
-                              {run.recipeExecutionMode === "dev-server" ? "Dev Server" : "Preview + PR"}
+                              {run.devAgentExecutionMode === "dev-server" ? "Dev Server" : "Preview + PR"}
                             </div>
                           )}
                         </div>
@@ -269,7 +269,9 @@ export default function RecipeRunsClient({ user, initialRuns }: RecipeRunsClient
                       </TableCell>
                       <TableCell>{createdAt.toLocaleString()}</TableCell>
                       <TableCell>{duration}</TableCell>
-                      <TableCell>{run.recipeExecutionMode === "preview-pr" ? "Preview + PR" : "Dev Server"}</TableCell>
+                      <TableCell>
+                        {run.devAgentExecutionMode === "preview-pr" ? "Preview + PR" : "Dev Server"}
+                      </TableCell>
                     </TableRow>
                   )
                 })}
@@ -282,7 +284,7 @@ export default function RecipeRunsClient({ user, initialRuns }: RecipeRunsClient
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Delete recipe runs?</DialogTitle>
+            <DialogTitle>Delete dev agent runs?</DialogTitle>
             <DialogDescription>
               This removes the selected run metadata and any attached blobs, including screenshots and reports.
             </DialogDescription>

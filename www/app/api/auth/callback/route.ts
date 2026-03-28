@@ -1,5 +1,6 @@
 import { cookies } from "next/headers"
 import type { NextRequest } from "next/server"
+import { sanitizeAuthRedirectPath } from "@/lib/auth-redirect"
 
 interface TokenData {
   access_token: string
@@ -35,6 +36,7 @@ export async function GET(request: NextRequest) {
     const storedState = request.cookies.get("oauth_state")?.value
     const storedNonce = request.cookies.get("oauth_nonce")?.value
     const codeVerifier = request.cookies.get("oauth_code_verifier")?.value
+    const returnTo = sanitizeAuthRedirectPath(request.cookies.get("oauth_return_to")?.value)
 
     if (!validate(state, storedState)) {
       throw new Error("State mismatch")
@@ -55,8 +57,9 @@ export async function GET(request: NextRequest) {
     cookieStore.set("oauth_state", "", { maxAge: 0 })
     cookieStore.set("oauth_nonce", "", { maxAge: 0 })
     cookieStore.set("oauth_code_verifier", "", { maxAge: 0 })
+    cookieStore.set("oauth_return_to", "", { maxAge: 0 })
 
-    return Response.redirect(new URL("/recipes/runs", request.url))
+    return Response.redirect(new URL(returnTo, request.url))
   } catch (error) {
     console.error("OAuth callback error:", error)
     return Response.redirect(new URL("/auth/error", request.url))

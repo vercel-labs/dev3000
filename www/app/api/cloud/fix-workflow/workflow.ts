@@ -46,6 +46,12 @@ interface FixResult {
   gitDiff: string | null
 }
 
+interface V0DevAgentSourceResult {
+  tarballUrl?: string
+  sourceLabel?: string
+  fallbackReason?: string
+}
+
 interface UrlAuditResult {
   reportBlobUrl: string
   reportId: string
@@ -76,13 +82,17 @@ export async function cloudFixWorkflow(params: {
   userId?: string // For progress updates
   timestamp?: string // For progress updates
   workflowType?: string // For progress updates
-  recipeId?: string
-  recipeName?: string
-  recipeDescription?: string
-  recipeInstructions?: string
-  recipeExecutionMode?: "dev-server" | "preview-pr"
-  recipeSandboxBrowser?: "none" | "agent-browser" | "next-browser"
-  recipeSkillRefs?: Array<{
+  devAgentId?: string
+  devAgentName?: string
+  devAgentDescription?: string
+  devAgentInstructions?: string
+  devAgentExecutionMode?: "dev-server" | "preview-pr"
+  devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser"
+  devAgentActionSteps?: Array<{
+    kind: string
+    config: Record<string, string>
+  }>
+  devAgentSkillRefs?: Array<{
     id: string
     installArg: string
     packageName?: string
@@ -104,6 +114,7 @@ export async function cloudFixWorkflow(params: {
   baseBranch?: string
   // For before/after screenshots in PR
   productionUrl?: string
+  useV0DevAgentRunner?: boolean
 }) {
   "use workflow"
 
@@ -119,13 +130,14 @@ export async function cloudFixWorkflow(params: {
     userId,
     timestamp,
     workflowType,
-    recipeId,
-    recipeName,
-    recipeDescription,
-    recipeInstructions,
-    recipeExecutionMode,
-    recipeSandboxBrowser,
-    recipeSkillRefs,
+    devAgentId,
+    devAgentName,
+    devAgentDescription,
+    devAgentInstructions,
+    devAgentExecutionMode,
+    devAgentSandboxBrowser,
+    devAgentActionSteps,
+    devAgentSkillRefs,
     analysisTargetType = "vercel-project",
     publicUrl,
     startPath = "/",
@@ -137,7 +149,8 @@ export async function cloudFixWorkflow(params: {
     repoOwner,
     repoName,
     baseBranch = "main",
-    productionUrl
+    productionUrl,
+    useV0DevAgentRunner = false
   } = params
   // Use runId if provided (from start-fix route), otherwise generate one
   // The reportId is used for blob naming and tracking
@@ -152,11 +165,11 @@ export async function cloudFixWorkflow(params: {
           runId,
           projectName,
           workflowType,
-          recipeId,
-          recipeName,
-          recipeDescription,
-          recipeExecutionMode,
-          recipeSandboxBrowser
+          devAgentId,
+          devAgentName,
+          devAgentDescription,
+          devAgentExecutionMode,
+          devAgentSandboxBrowser
         }
       : null
 
@@ -169,6 +182,38 @@ export async function cloudFixWorkflow(params: {
   // The workflow's wrun_xxx ID is not available inside the workflow itself
 
   try {
+    const shouldAttemptV0DevAgentFlow = analysisTargetType !== "url" && Boolean(devAgentId) && useV0DevAgentRunner
+
+    let sourceTarballUrl: string | undefined
+    let sourceLabel: string | undefined
+    if (shouldAttemptV0DevAgentFlow) {
+      workflowLog("[Workflow] Dev Agent runner: V0 source-entry path enabled")
+
+      const v0Source = await prepareV0DevAgentSource(
+        projectName,
+        reportId,
+        projectId,
+        teamId,
+        repoUrl,
+        repoBranch,
+        vercelOidcToken,
+        progressContext
+      )
+      if (v0Source.fallbackReason) {
+        if (!repoUrl) {
+          throw new Error(
+            `${v0Source.fallbackReason} Legacy sandbox fallback is unavailable because repoUrl is missing.`
+          )
+        }
+        workflowLog(
+          `[Workflow] V0 source-entry unavailable, falling back to legacy sandbox flow: ${v0Source.fallbackReason}`
+        )
+      } else {
+        sourceTarballUrl = v0Source.tarballUrl
+        sourceLabel = v0Source.sourceLabel
+      }
+    }
+
     if (analysisTargetType !== "url" && repoUrl && githubPat && repoUrl.includes("github.com/")) {
       workflowLog("[Workflow] Preflight: validating GitHub PAT repository access...")
       await preflightGitHubPatRepoAccess(repoUrl, githubPat)
@@ -191,7 +236,9 @@ export async function cloudFixWorkflow(params: {
       githubPat,
       npmToken,
       vercelOidcToken,
-      progressContext
+      progressContext,
+      sourceTarballUrl,
+      sourceLabel
     )
 
     workflowLog(`[Workflow] Sandbox: ${initResult.sandboxId}, CLS: ${initResult.beforeCls}`)
@@ -238,11 +285,12 @@ export async function cloudFixWorkflow(params: {
         repoName,
         customPrompt,
         crawlDepth,
-        recipeName,
-        recipeInstructions,
-        recipeExecutionMode,
-        recipeSandboxBrowser,
-        recipeSkillRefs,
+        devAgentName,
+        devAgentInstructions,
+        devAgentExecutionMode,
+        devAgentSandboxBrowser,
+        devAgentActionSteps,
+        devAgentSkillRefs,
         progressContext,
         // Pass timing and snapshot info from init step
         initResult.timing,
@@ -382,11 +430,11 @@ interface ProgressContext {
   runId: string
   projectName: string
   workflowType?: string
-  recipeId?: string
-  recipeName?: string
-  recipeDescription?: string
-  recipeExecutionMode?: "dev-server" | "preview-pr"
-  recipeSandboxBrowser?: "none" | "agent-browser" | "next-browser"
+  devAgentId?: string
+  devAgentName?: string
+  devAgentDescription?: string
+  devAgentExecutionMode?: "dev-server" | "preview-pr"
+  devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser"
 }
 
 async function initSandbox(
@@ -401,7 +449,9 @@ async function initSandbox(
   githubPat?: string,
   npmToken?: string,
   vercelOidcToken?: string,
-  progressContext?: ProgressContext | null
+  progressContext?: ProgressContext | null,
+  sourceTarballUrl?: string,
+  sourceLabel?: string
 ): Promise<InitResult> {
   "use step"
   const { initSandboxStep } = await import("./steps")
@@ -417,8 +467,34 @@ async function initSandbox(
     githubPat,
     npmToken,
     vercelOidcToken,
-    progressContext
+    progressContext,
+    sourceTarballUrl,
+    sourceLabel
   )
+}
+
+async function prepareV0DevAgentSource(
+  projectName: string,
+  reportId: string,
+  projectId: string | undefined,
+  teamId: string | undefined,
+  repoUrl: string | undefined,
+  repoBranch: string,
+  vercelApiToken: string | undefined,
+  progressContext?: ProgressContext | null
+): Promise<V0DevAgentSourceResult> {
+  "use step"
+  const { prepareV0DevAgentSourceStep } = await import("./steps")
+  return prepareV0DevAgentSourceStep({
+    projectName,
+    reportId,
+    projectId,
+    teamId,
+    repoUrl,
+    repoBranch,
+    vercelApiToken,
+    progressContext
+  })
 }
 
 async function agentFixLoop(
@@ -438,11 +514,12 @@ async function agentFixLoop(
   repoName?: string,
   customPrompt?: string,
   crawlDepth?: number | "all",
-  recipeName?: string,
-  recipeInstructions?: string,
-  recipeExecutionMode?: "dev-server" | "preview-pr",
-  recipeSandboxBrowser?: "none" | "agent-browser" | "next-browser",
-  recipeSkillRefs?: Array<{
+  devAgentName?: string,
+  devAgentInstructions?: string,
+  devAgentExecutionMode?: "dev-server" | "preview-pr",
+  devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser",
+  devAgentActionSteps?: Array<{ kind: string; config: Record<string, string> }>,
+  devAgentSkillRefs?: Array<{
     id: string
     installArg: string
     packageName?: string
@@ -474,11 +551,12 @@ async function agentFixLoop(
     repoName,
     customPrompt,
     crawlDepth,
-    recipeName,
-    recipeInstructions,
-    recipeExecutionMode,
-    recipeSandboxBrowser,
-    recipeSkillRefs,
+    devAgentName,
+    devAgentInstructions,
+    devAgentExecutionMode,
+    devAgentSandboxBrowser,
+    devAgentActionSteps,
+    devAgentSkillRefs,
     progressContext,
     initTiming,
     fromSnapshot,
@@ -596,7 +674,8 @@ async function saveDoneStatus(
   progressContext: ProgressContext,
   reportBlobUrl: string,
   prUrl: string | null,
-  prError: string | null
+  prError: string | null,
+  sandboxUrl?: string | null
 ): Promise<void> {
   "use step"
   const { saveWorkflowRun } = await import("@/lib/workflow-storage")
@@ -614,15 +693,16 @@ async function saveDoneStatus(
         | "react-performance"
         | "url-audit"
         | "turbopack-bundle-analyzer") || "cls-fix",
-    recipeId: progressContext.recipeId,
-    recipeName: progressContext.recipeName,
-    recipeDescription: progressContext.recipeDescription,
-    recipeExecutionMode: progressContext.recipeExecutionMode,
-    recipeSandboxBrowser: progressContext.recipeSandboxBrowser,
+    devAgentId: progressContext.devAgentId,
+    devAgentName: progressContext.devAgentName,
+    devAgentDescription: progressContext.devAgentDescription,
+    devAgentExecutionMode: progressContext.devAgentExecutionMode,
+    devAgentSandboxBrowser: progressContext.devAgentSandboxBrowser,
     completedAt: new Date().toISOString(),
     reportBlobUrl,
     prUrl: prUrl || undefined,
-    prError: prError || undefined
+    prError: prError || undefined,
+    sandboxUrl: sandboxUrl || undefined
   })
 }
 
@@ -644,11 +724,11 @@ async function saveFailureStatus(progressContext: ProgressContext, errorMessage:
           | "react-performance"
           | "url-audit"
           | "turbopack-bundle-analyzer") || "cls-fix",
-      recipeId: progressContext.recipeId,
-      recipeName: progressContext.recipeName,
-      recipeDescription: progressContext.recipeDescription,
-      recipeExecutionMode: progressContext.recipeExecutionMode,
-      recipeSandboxBrowser: progressContext.recipeSandboxBrowser,
+      devAgentId: progressContext.devAgentId,
+      devAgentName: progressContext.devAgentName,
+      devAgentDescription: progressContext.devAgentDescription,
+      devAgentExecutionMode: progressContext.devAgentExecutionMode,
+      devAgentSandboxBrowser: progressContext.devAgentSandboxBrowser,
       completedAt: new Date().toISOString(),
       error: errorMessage
     })

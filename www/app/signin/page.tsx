@@ -1,13 +1,22 @@
+import type { Route } from "next"
 import Link from "next/link"
 import { redirect } from "next/navigation"
 import { getCurrentUser } from "@/lib/auth"
+import { getAuthorizePath, sanitizeAuthRedirectPath } from "@/lib/auth-redirect"
 
-export default async function SignInPage() {
+export default async function SignInPage({
+  searchParams
+}: {
+  searchParams: Promise<{ next?: string | string[] | undefined }>
+}) {
+  const resolvedSearchParams = await searchParams
+  const nextParam = Array.isArray(resolvedSearchParams.next) ? resolvedSearchParams.next[0] : resolvedSearchParams.next
+  const returnTo = sanitizeAuthRedirectPath(nextParam)
   const user = await getCurrentUser()
 
-  // If already signed in, redirect to recipes
+  // If already signed in, redirect to the requested destination
   if (user) {
-    redirect("/recipes")
+    redirect(returnTo as Route)
   }
 
   return (
@@ -15,12 +24,12 @@ export default async function SignInPage() {
       <div className="w-full max-w-md space-y-8 rounded-lg bg-white p-8 shadow-md">
         <div className="text-center">
           <h1 className="text-3xl font-bold tracking-tight text-gray-900">Sign in to dev3000</h1>
-          <p className="mt-2 text-sm text-gray-600">Access your recipes, runs, and projects</p>
+          <p className="mt-2 text-sm text-gray-600">Access your dev agents, runs, and projects</p>
         </div>
 
         <div className="mt-8">
           <Link
-            href="/api/auth/authorize"
+            href={getAuthorizePath(returnTo)}
             prefetch={false}
             className="flex w-full justify-center rounded-md bg-black px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-gray-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black"
           >

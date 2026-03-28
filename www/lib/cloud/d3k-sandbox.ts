@@ -211,6 +211,11 @@ export interface D3kSandboxConfig {
   repoUrl: string
   branch?: string
   githubPat?: string
+  projectId?: string
+  teamId?: string
+  vercelToken?: string
+  sourceTarballUrl?: string
+  sourceLabel?: string
   npmToken?: string
   projectEnv?: Record<string, string>
   timeout?: StringValue
@@ -343,6 +348,11 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     repoUrl,
     branch = "main",
     githubPat,
+    projectId,
+    teamId,
+    vercelToken,
+    sourceTarballUrl,
+    sourceLabel,
     npmToken,
     projectEnv = {},
     timeout = "30m",
@@ -358,7 +368,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
   } = config
 
   const normalizedProjectDir = projectDir.replace(/^\/+|\/+$/g, "")
-  const projectName = normalizedProjectDir || repoUrl.split("/").pop()?.replace(".git", "") || "app"
+  const projectName = normalizedProjectDir || sourceLabel || repoUrl.split("/").pop()?.replace(".git", "") || "app"
 
   if (debug) {
     console.log("🚀 Creating d3k sandbox...")
@@ -377,7 +387,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
   }
 
   // Check for required credentials
-  const token = process.env.VERCEL_TOKEN || process.env.VERCEL_OIDC_TOKEN
+  const token = vercelToken || process.env.VERCEL_TOKEN || process.env.VERCEL_OIDC_TOKEN
   if (!token) {
     throw new Error(
       "Missing VERCEL_TOKEN or VERCEL_OIDC_TOKEN environment variable. " +
@@ -385,6 +395,8 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
         "Check your workflow configuration and ensure it has access to Vercel API credentials."
     )
   }
+
+  const sandboxCredentials = projectId && teamId ? { token, projectId, teamId } : {}
 
   if (debug) {
     console.log(`  Token type: ${process.env.VERCEL_OIDC_TOKEN ? "OIDC" : "static"}`)
@@ -500,30 +512,36 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     throw new Error(`Invalid timeout value: ${timeout}`)
   }
   const repoUrlWithGit = repoUrl.endsWith(".git") ? repoUrl : `${repoUrl}.git`
-  if (githubPat && repoUrlWithGit.includes("github.com/")) {
+  if (!sourceTarballUrl && githubPat && repoUrlWithGit.includes("github.com/")) {
     await reportProgress("Validating GitHub PAT access...")
     await validateGithubPatAccess(repoUrlWithGit, githubPat)
   }
   const isCommitSha = /^[0-9a-f]{40}$/i.test(branch)
-  const source = githubPat
+  const source = sourceTarballUrl
     ? {
-        type: "git" as const,
-        url: repoUrlWithGit,
-        revision: branch,
-        ...(isCommitSha ? {} : { depth: 1 }),
-        username: "x-access-token",
-        password: githubPat
+        type: "tarball" as const,
+        url: sourceTarballUrl
       }
-    : {
-        type: "git" as const,
-        url: repoUrlWithGit,
-        revision: branch,
-        ...(isCommitSha ? {} : { depth: 1 })
-      }
+    : githubPat
+      ? {
+          type: "git" as const,
+          url: repoUrlWithGit,
+          revision: branch,
+          ...(isCommitSha ? {} : { depth: 1 }),
+          username: "x-access-token",
+          password: githubPat
+        }
+      : {
+          type: "git" as const,
+          url: repoUrlWithGit,
+          revision: branch,
+          ...(isCommitSha ? {} : { depth: 1 })
+        }
   let sandbox: Sandbox
   try {
     await reportProgress("Creating sandbox instance...")
     sandbox = await Sandbox.create({
+      ...sandboxCredentials,
       source,
       resources: { vcpus: 8 },
       timeout: timeoutMs,
@@ -586,7 +604,23 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
   await reportProgress("Sandbox instance created")
 
   try {
-    const sandboxCwd = normalizedProjectDir ? `/vercel/sandbox/${normalizedProjectDir}` : "/vercel/sandbox"
+    let effectiveProjectDir = normalizedProjectDir
+    if (sourceTarballUrl && effectiveProjectDir) {
+      const projectDirCheck = await runCommandWithLogs(sandbox, {
+        cmd: "test",
+        args: ["-d", `/vercel/sandbox/${effectiveProjectDir}`]
+      })
+      if (projectDirCheck.exitCode !== 0) {
+        if (debug) {
+          console.log(
+            `  ℹ️ Tarball source did not include ${effectiveProjectDir}; falling back to /vercel/sandbox for setup`
+          )
+        }
+        effectiveProjectDir = ""
+      }
+    }
+
+    const sandboxCwd = effectiveProjectDir ? `/vercel/sandbox/${effectiveProjectDir}` : "/vercel/sandbox"
 
     if (Object.keys(projectEnv).length > 0) {
       await reportProgress(`Writing ${Object.keys(projectEnv).length} development env var(s) to sandbox`)
@@ -612,7 +646,24 @@ console.log("wrote .env.local and .env.development.local");`
         )
       }
     }
-    if (debug) console.log(`  ✅ Repository initialized from source: ${repoUrlWithGit}@${branch}`)
+    if (sourceTarballUrl) {
+      await reportProgress("Initializing git baseline for tarball source")
+      const gitInitResult = await runCommandWithLogs(sandbox, {
+        cmd: "bash",
+        args: [
+          "-lc",
+          `cd ${sandboxCwd} && git init && git config user.email "dev3000@local" && git config user.name "Dev3000" && git add . && git commit -m "Initial V0 source snapshot" || true`
+        ]
+      })
+      if (debug && gitInitResult.exitCode !== 0) {
+        console.log(`  ⚠️ git baseline init exited with code ${gitInitResult.exitCode}`)
+      }
+    }
+    if (debug) {
+      console.log(
+        `  ✅ Repository initialized from source: ${sourceTarballUrl ? sourceTarballUrl : `${repoUrlWithGit}@${branch}`}`
+      )
+    }
 
     // Verify sandbox directory contents
     if (debug) console.log("  📂 Checking sandbox directory contents...")
@@ -2041,6 +2092,30 @@ export async function getOrCreateD3kSandbox(config: D3kSandboxConfig): Promise<D
   const timeoutMs = ms(config.timeout || "30m")
   if (typeof timeoutMs !== "number") {
     throw new Error(`Invalid timeout value: ${config.timeout}`)
+  }
+
+  if (config.sourceTarballUrl) {
+    timer.start("Create sandbox from tarball source")
+    const result = await createD3kSandbox(config)
+    timer.end()
+    return {
+      ...result,
+      fromSnapshot: false,
+      snapshotId: undefined,
+      timing: timer.getData()
+    }
+  }
+
+  if (config.projectId && config.teamId && !config.githubPat) {
+    timer.start("Create sandbox from git source")
+    const result = await createD3kSandbox(config)
+    timer.end()
+    return {
+      ...result,
+      fromSnapshot: false,
+      snapshotId: undefined,
+      timing: timer.getData()
+    }
   }
 
   timer.start("Load base snapshot metadata")
