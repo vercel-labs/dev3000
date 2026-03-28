@@ -1,0 +1,163 @@
+www/app/api/cloud/fix-workflow/workflow.ts
+  eaf53dab8d3e4614 91-94,139,292,521,558
+www/components/dev-agents/dev-agents-catalog.tsx
+  d61ca9784b9c8aa5 3,6,11,19-20,22,28,35-65,74-76,78-89,91,93,96-101,103-113,115,117,120,125-131,133,142-144,146-148,150-152,154-158,161-169,172-173,176-177,183-193,203,209-215,217-227,229-230,233,239,253,257,264
+  43792f099f615f9a 204,246
+www/app/[team]/dev-agents/page.tsx
+  d61ca9784b9c8aa5 32-51,57,61-62,65,74
+www/app/dev-agents/[agentId]/new/dev-agent-run-client.tsx
+  17d171e9d8b4c484 4,97-98,102,183-185,187-191,193-200,204-205
+  d61ca9784b9c8aa5 6,55-61,64,68,73-84,87,90-91,427-493,495,497,500-505,508,510,515-516,520,522-523,527,534,536-537,541-544,547,555-559,562-571,573-582,584-606,608-611,614-617,621,623-635,639-651,653-655,658,660-665,669-685
+  43792f099f615f9a 142-143,145,156-157,182,186,192,201-203,207,209,216-218,250,403
+www/lib/dev-agents-route.ts
+  43792f099f615f9a 2,12-14,16,18-19,25
+www/app/dev-agents/new/new-dev-agent-client.tsx
+  43792f099f615f9a 3-16,18,21-28,30-31,35-36,60-73,76-84,86-96,98-102,104-114,116-118,134-260,263-326,328-344,346-347,360-361,364-368,377-378,389-390,398,444,456,465-488,490,498,502-504,529-534,539-540,544-546,548-586,588-615,617-657,659-679,683-690,692-696,698-715,718,720-781
+  eaf53dab8d3e4614 33,379-388,505
+www/proxy.ts
+  d61ca9784b9c8aa5 17-18,22,24-25,27-28,30-31,34-47
+www/components/dev-agents/dashboard-shell.tsx
+  43792f099f615f9a 12,14,118-127,129,131
+  d61ca9784b9c8aa5 1,13,30,36-46,51-56,60-62,69-71,73,81-86,90-111,115-117,128,132-134
+www/app/[team]/dev-agents/runs/[runId]/report/page.tsx
+  d61ca9784b9c8aa5 1-344,346-567
+www/lib/dev-agents.ts
+  eaf53dab8d3e4614 56-68,78,613,628,658,677
+  d61ca9784b9c8aa5 22,311-399,425-438,441-442
+  43792f099f615f9a 54-55,77,400-404,407-421,439-440
+  17d171e9d8b4c484 405-406
+www/app/api/dev-agents/[id]/route.ts
+  eaf53dab8d3e4614 4-5,26-45,94,104,136-142,149
+www/app/[team]/dev-agents/[agentId]/page.tsx
+  43792f099f615f9a 12-14,37
+www/app/[team]/dev-agents/new/page.tsx
+  43792f099f615f9a 27
+www/app/[team]/dev-agents/[agentId]/new/page.tsx
+  d61ca9784b9c8aa5 37-39,44-45,49,53
+  43792f099f615f9a 13-15
+www/lib/auth.ts
+  d61ca9784b9c8aa5 43-44,83
+www/lib/vercel-teams.ts
+  43792f099f615f9a 75-83
+www/app/api/dev-agents/route.ts
+  eaf53dab8d3e4614 4-5,40-59,88,98,146-152,159
+www/app/api/cloud/start-fix/route.ts
+  eaf53dab8d3e4614 295
+www/app/api/cloud/fix-workflow/steps.ts
+  eaf53dab8d3e4614 1830,1953,2503-2561,2576,3015,3017-3018,3020-3026,3048-3053
+www/components/dev-agents/team-switcher.tsx
+  d61ca9784b9c8aa5 16-20,22-23,39-44,46,51
+src/tui-interface-opentui.test.ts
+  eaf53dab8d3e4614 9-12,14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.20",
+  "base_commit_sha": "0e0409fb124f7532c940176d10804bfa23d70ec3",
+  "prompts": {
+    "0aa6513ae1b3fe4b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d2b40-e55f-7e13-bbd6-f82ba94fd54e",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh <elsigh@gmail.com>",
+      "messages": [],
+      "total_additions": 351,
+      "total_deletions": 77,
+      "accepted_lines": 350,
+      "overriden_lines": 0
+    },
+    "15ee34bf56102da9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d2b5c-2480-7471-951b-48309e64d895",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh <elsigh@gmail.com>",
+      "messages": [],
+      "total_additions": 42,
+      "total_deletions": 4,
+      "accepted_lines": 29,
+      "overriden_lines": 0
+    },
+    "17d171e9d8b4c484": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d31a9-30e2-77b3-9001-03845041379b",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh <elsigh@gmail.com>",
+      "messages": [],
+      "total_additions": 42,
+      "total_deletions": 2,
+      "accepted_lines": 24,
+      "overriden_lines": 0
+    },
+    "43792f099f615f9a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cac4c253-7a95-45c2-b886-a834d50111b6",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "elsigh <elsigh@gmail.com>",
+      "messages": [],
+      "total_additions": 747,
+      "total_deletions": 499,
+      "accepted_lines": 651,
+      "overriden_lines": 0
+    },
+    "c34c5d3e3be9db4d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d1b68-dc01-7973-a3af-524244222f89",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh <elsigh@gmail.com>",
+      "messages": [],
+      "total_additions": 32,
+      "total_deletions": 4,
+      "accepted_lines": 32,
+      "overriden_lines": 0
+    },
+    "d61ca9784b9c8aa5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a8fd0df5-8dfc-4bb7-93d5-8d4238aaec62",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "elsigh <elsigh@gmail.com>",
+      "messages": [],
+      "total_additions": 1524,
+      "total_deletions": 808,
+      "accepted_lines": 1180,
+      "overriden_lines": 4
+    },
+    "eaf53dab8d3e4614": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3100790b-46a2-474e-b27d-cabedcbca85f",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "elsigh <elsigh@gmail.com>",
+      "messages": [],
+      "total_additions": 198,
+      "total_deletions": 22,
+      "accepted_lines": 187,
+      "overriden_lines": 0
+    },
+    "f17c0955a9b412cc": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d2c3c-3753-70a2-b378-537f035ab65b",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh <elsigh@gmail.com>",
+      "messages": [],
+      "total_additions": 32,
+      "total_deletions": 11,
+      "accepted_lines": 32,
+      "overriden_lines": 0
+    }
+  }
+}
