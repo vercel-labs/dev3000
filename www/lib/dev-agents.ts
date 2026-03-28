@@ -87,6 +87,7 @@ export interface DevAgent {
   supportsPullRequest?: boolean
   supportsCrawlDepth?: boolean
   requiresCustomPrompt?: boolean
+  successEval?: string
 }
 
 interface StoredDevAgent extends Omit<DevAgent, "usageCount" | "sandboxBrowser"> {
@@ -206,7 +207,8 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
     updatedAt: "2026-03-12T00:00:00.000Z",
     legacyWorkflowType: "cls-fix",
     supportsPathInput: true,
-    supportsPullRequest: true
+    supportsPullRequest: true,
+    successEval: "Is the CLS score now ≤ 0.1 and improved from the baseline?"
   },
   {
     id: "r_d91q7k",
@@ -233,7 +235,8 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
     legacyWorkflowType: "design-guidelines",
     supportsPathInput: true,
     supportsPullRequest: true,
-    supportsCrawlDepth: true
+    supportsCrawlDepth: true,
+    successEval: "Were the highest-priority design guideline violations resolved?"
   },
   {
     id: "r_p47n6x",
@@ -259,7 +262,8 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
     updatedAt: "2026-03-12T00:00:00.000Z",
     legacyWorkflowType: "react-performance",
     supportsPathInput: true,
-    supportsPullRequest: true
+    supportsPullRequest: true,
+    successEval: "Did the targeted optimizations improve or maintain Web Vitals?"
   },
   {
     id: "r_t62v8m",
@@ -284,7 +288,8 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
     createdAt: "2026-03-12T00:00:00.000Z",
     updatedAt: "2026-03-12T00:00:00.000Z",
     legacyWorkflowType: "turbopack-bundle-analyzer",
-    supportsPullRequest: true
+    supportsPullRequest: true,
+    successEval: "Was the total shipped JavaScript measurably reduced?"
   },
   {
     id: "r_u35h9c",
@@ -307,7 +312,8 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
     legacyWorkflowType: "prompt",
     supportsPathInput: true,
     supportsPullRequest: true,
-    requiresCustomPrompt: true
+    requiresCustomPrompt: true,
+    successEval: "Were the user's instructions completed successfully with evidence?"
   },
   // ── Marketplace agents (demo) ──────────────────────────────────────────
   {
@@ -329,7 +335,8 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
     createdAt: "2026-02-18T00:00:00.000Z",
     updatedAt: "2026-03-15T00:00:00.000Z",
     supportsPathInput: true,
-    supportsPullRequest: true
+    supportsPullRequest: true,
+    successEval: "Were duplicate fetches eliminated and caching behavior measurably improved?"
   },
   {
     id: "r_mp_ta02",
@@ -350,7 +357,8 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
     createdAt: "2026-01-22T00:00:00.000Z",
     updatedAt: "2026-03-10T00:00:00.000Z",
     supportsPathInput: true,
-    supportsPullRequest: true
+    supportsPullRequest: true,
+    successEval: "Were transactional bottlenecks isolated and error handling hardened with evidence?"
   },
   {
     id: "r_mp_pt03",
@@ -375,7 +383,8 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
     createdAt: "2026-01-05T00:00:00.000Z",
     updatedAt: "2026-03-20T00:00:00.000Z",
     supportsPathInput: true,
-    supportsPullRequest: true
+    supportsPullRequest: true,
+    successEval: "Were rendering and caching regressions resolved with before/after metrics?"
   },
   {
     id: "r_mp_st04",
@@ -396,7 +405,8 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
     createdAt: "2026-02-02T00:00:00.000Z",
     updatedAt: "2026-03-08T00:00:00.000Z",
     supportsPathInput: true,
-    supportsPullRequest: true
+    supportsPullRequest: true,
+    successEval: "Were navigation flows converted to SPA-like transitions without losing Next.js features?"
   },
   {
     id: "r_mp_ae05",
@@ -418,7 +428,8 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
     createdAt: "2026-03-01T00:00:00.000Z",
     updatedAt: "2026-03-25T00:00:00.000Z",
     supportsPathInput: true,
-    supportsPullRequest: true
+    supportsPullRequest: true,
+    successEval: "Were analytics events deduplicated and aligned with the data schema?"
   }
 ]
 
@@ -428,16 +439,47 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
 export interface MarketplaceAgentStats {
   projectRuns: string
   successRate: string
+  mergeRate: string
   tokensUsed: string
   previouslyPurchased: boolean
 }
 
 export const MARKETPLACE_AGENT_STATS: Record<string, MarketplaceAgentStats> = {
-  r_mp_rd01: { projectRuns: "2,184", successRate: "97.4%", tokensUsed: "4.8M", previouslyPurchased: true },
-  r_mp_ta02: { projectRuns: "1,326", successRate: "95.9%", tokensUsed: "3.2M", previouslyPurchased: false },
-  r_mp_pt03: { projectRuns: "3,942", successRate: "98.1%", tokensUsed: "8.6M", previouslyPurchased: false },
-  r_mp_st04: { projectRuns: "896", successRate: "93.7%", tokensUsed: "2.4M", previouslyPurchased: false },
-  r_mp_ae05: { projectRuns: "1,753", successRate: "96.2%", tokensUsed: "5.1M", previouslyPurchased: false }
+  r_mp_rd01: {
+    projectRuns: "2,184",
+    successRate: "97.4%",
+    mergeRate: "84.2%",
+    tokensUsed: "4.8M",
+    previouslyPurchased: true
+  },
+  r_mp_ta02: {
+    projectRuns: "1,326",
+    successRate: "95.9%",
+    mergeRate: "78.6%",
+    tokensUsed: "3.2M",
+    previouslyPurchased: false
+  },
+  r_mp_pt03: {
+    projectRuns: "3,942",
+    successRate: "98.1%",
+    mergeRate: "91.3%",
+    tokensUsed: "8.6M",
+    previouslyPurchased: false
+  },
+  r_mp_st04: {
+    projectRuns: "896",
+    successRate: "93.7%",
+    mergeRate: "72.1%",
+    tokensUsed: "2.4M",
+    previouslyPurchased: false
+  },
+  r_mp_ae05: {
+    projectRuns: "1,753",
+    successRate: "96.2%",
+    mergeRate: "80.5%",
+    tokensUsed: "5.1M",
+    previouslyPurchased: false
+  }
 }
 
 async function readJsonBlob<T>(pathname: string): Promise<T | null> {
@@ -614,6 +656,7 @@ export async function createCustomDevAgent(input: {
   skillRefs: DevAgentSkillRef[]
   author: DevAgentAuthor
   team: DevAgentTeam
+  successEval?: string
 }): Promise<DevAgent> {
   const id = generateDevAgentId()
   const now = new Date().toISOString()
@@ -632,7 +675,8 @@ export async function createCustomDevAgent(input: {
     createdAt: now,
     updatedAt: now,
     supportsPathInput: true,
-    supportsPullRequest: true
+    supportsPullRequest: true,
+    successEval: input.successEval?.trim() || undefined
   }
 
   await put(`${CUSTOM_DEV_AGENT_PREFIX}${id}.json`, JSON.stringify(storedDevAgent, null, 2), {
@@ -659,6 +703,7 @@ export async function updateCustomDevAgent(
     skillRefs: DevAgentSkillRef[]
     author: DevAgentAuthor
     team?: DevAgentTeam
+    successEval?: string
   }
 ): Promise<DevAgent | null> {
   const canonicalDevAgentId = canonicalizeDevAgentId(devAgentId)
@@ -678,7 +723,8 @@ export async function updateCustomDevAgent(
     skillRefs: input.skillRefs,
     author: input.author,
     team: input.team ?? existingDevAgent.team,
-    updatedAt: new Date().toISOString()
+    updatedAt: new Date().toISOString(),
+    successEval: input.successEval?.trim() || existingDevAgent.successEval
   }
 
   await put(`${CUSTOM_DEV_AGENT_PREFIX}${canonicalDevAgentId}.json`, JSON.stringify(updatedDevAgent, null, 2), {

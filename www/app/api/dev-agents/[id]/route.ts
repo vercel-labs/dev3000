@@ -94,6 +94,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       actionSteps?: unknown[]
       skillRefs?: unknown[]
       team?: DevAgentTeam
+      successEval?: string
     }
 
     const name = body.name?.trim() || ""
@@ -149,7 +150,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       actionSteps: actionSteps.length > 0 ? actionSteps : undefined,
       skillRefs,
       author: user,
-      team
+      team,
+      successEval: typeof body.successEval === "string" ? body.successEval : undefined
     })
 
     if (!devAgent) {

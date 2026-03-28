@@ -2,7 +2,7 @@
 
 import { ArrowRight, ExternalLink, Search } from "lucide-react"
 import { usePathname, useSearchParams } from "next/navigation"
-import { useEffect, useId, useMemo, useRef, useState } from "react"
+import { useEffect, useId, useMemo, useState } from "react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -55,6 +55,7 @@ type RepoVisibility = "unknown" | "checking" | "public" | "private_or_unknown"
 interface MarketplaceStats {
   projectRuns: string
   successRate: string
+  mergeRate: string
   tokensUsed: string
   previouslyPurchased: boolean
 }
@@ -109,12 +110,10 @@ export default function DevAgentRunClient({
   const [customPrompt, setCustomPrompt] = useState("")
   const [githubPat, setGithubPat] = useState("")
   const [repoVisibility, setRepoVisibility] = useState<RepoVisibility>("unknown")
-  const [status, setStatus] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [isRunning, setIsRunning] = useState(false)
-  const [activeRunId, setActiveRunId] = useState<string | null>(null)
-  const [sandboxUrl, setSandboxUrl] = useState<string | null>(null)
-  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const [repoVisibilities, setRepoVisibilities] = useState<Map<string, RepoVisibility>>(new Map())
 
   const selectedTeam = team
   const filteredProjects = useMemo(() => {
@@ -130,7 +129,7 @@ export default function DevAgentRunClient({
   const selectedRepoName = selectedProject?.link?.repo || selectedProject?.latestDeployments[0]?.meta?.githubRepo
   const hasGitHubRepoInfo = Boolean(selectedRepoOwner && selectedRepoName)
   const requiresGitHubPatForRepoAccess = !defaultUseV0DevAgentRunner && hasGitHubRepoInfo && repoVisibility !== "public"
-  const shouldShowGitHubPatField = hasGitHubRepoInfo && !defaultUseV0DevAgentRunner
+  const shouldShowGitHubPatField = hasGitHubRepoInfo && !defaultUseV0DevAgentRunner && repoVisibility !== "public"
 
   useEffect(() => {
     const stored = localStorage.getItem(GITHUB_PAT_STORAGE_KEY)
@@ -180,6 +179,44 @@ export default function DevAgentRunClient({
 
     return () => controller.abort()
   }, [selectedTeamId, selectedTeamIsPersonal])
+
+  // Batch-fetch repo visibility for all projects with GitHub links
+  useEffect(() => {
+    if (projects.length === 0) return
+
+    const controller = new AbortController()
+    const projectsWithGithub = projects.filter((p) => p.link?.org && p.link?.repo).slice(0, 20) // cap to avoid rate limits
+
+    if (projectsWithGithub.length === 0) return
+
+    void Promise.allSettled(
+      projectsWithGithub.map(async (project) => {
+        const params = new URLSearchParams({
+          owner: project.link!.org,
+          repo: project.link!.repo
+        })
+        const response = await fetch(`/api/github/repo-visibility?${params.toString()}`, {
+          signal: controller.signal
+        })
+        const data = await response.json()
+        return {
+          projectId: project.id,
+          visibility: (data.success ? data.visibility : "private_or_unknown") as RepoVisibility
+        }
+      })
+    ).then((results) => {
+      if (controller.signal.aborted) return
+      const nextMap = new Map<string, RepoVisibility>()
+      for (const result of results) {
+        if (result.status === "fulfilled") {
+          nextMap.set(result.value.projectId, result.value.visibility)
+        }
+      }
+      setRepoVisibilities(nextMap)
+    })
+
+    return () => controller.abort()
+  }, [projects])
 
   useEffect(() => {
     const projectParam = searchParams.get("project")
@@ -280,56 +317,6 @@ export default function DevAgentRunClient({
     return () => controller.abort()
   }, [selectedRepoName, selectedRepoOwner])
 
-  useEffect(() => {
-    if (!activeRunId) return
-
-    async function pollStatus() {
-      try {
-        const response = await fetch(`/api/workflows?userId=${encodeURIComponent(user.id)}`)
-        const data = (await response.json()) as {
-          success?: boolean
-          runs?: Array<{
-            id: string
-            status?: string
-            currentStep?: string
-            sandboxUrl?: string
-            error?: string
-          }>
-        }
-        if (!data.success || !Array.isArray(data.runs)) return
-
-        const run = data.runs.find((entry) => entry.id === activeRunId)
-        if (!run) return
-
-        if (run.currentStep) {
-          setStatus(run.currentStep)
-        }
-        if (run.sandboxUrl) {
-          setSandboxUrl(run.sandboxUrl)
-        }
-        if (run.status === "done") {
-          window.location.href = `/workflows/${run.id}/report`
-        }
-        if (run.status === "failure") {
-          setIsRunning(false)
-          setError(run.error || "Dev agent run failed.")
-        }
-      } catch (pollError) {
-        setError(pollError instanceof Error ? pollError.message : String(pollError))
-      }
-    }
-
-    pollIntervalRef.current = setInterval(pollStatus, 3000)
-    void pollStatus()
-
-    return () => {
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current)
-        pollIntervalRef.current = null
-      }
-    }
-  }, [activeRunId, user.id])
-
   async function startDevAgentRun() {
     if (!selectedProject || !selectedTeam) {
       setError("Choose a project before starting.")
@@ -346,7 +333,6 @@ export default function DevAgentRunClient({
 
     setError(null)
     setIsRunning(true)
-    setStatus("Starting dev agent run…")
 
     const projectResponse = await fetch(
       selectedTeam.isPersonal
@@ -419,8 +405,7 @@ export default function DevAgentRunClient({
       return
     }
 
-    setActiveRunId(result.runId)
-    setStatus("Dev agent run started.")
+    window.location.href = `/workflows/${result.runId}/report`
   }
 
   return (
@@ -467,7 +452,7 @@ export default function DevAgentRunClient({
         {/* Marketplace social proof stats */}
         {marketplaceStats ? (
           <div className="border-t border-[#1f1f1f] px-4 py-3">
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-4 gap-3">
               <div>
                 <div className="text-[11px] uppercase tracking-wider text-[#555]">Project Runs</div>
                 <div className="mt-0.5 text-[13px] font-medium text-[#ededed]">{marketplaceStats.projectRuns}</div>
@@ -475,6 +460,10 @@ export default function DevAgentRunClient({
               <div>
                 <div className="text-[11px] uppercase tracking-wider text-[#555]">Success Rate</div>
                 <div className="mt-0.5 text-[13px] font-medium text-[#ededed]">{marketplaceStats.successRate}</div>
+              </div>
+              <div>
+                <div className="text-[11px] uppercase tracking-wider text-[#555]">Merge Rate</div>
+                <div className="mt-0.5 text-[13px] font-medium text-[#ededed]">{marketplaceStats.mergeRate}</div>
               </div>
               <div>
                 <div className="text-[11px] uppercase tracking-wider text-[#555]">Tokens Used</div>
@@ -537,14 +526,25 @@ export default function DevAgentRunClient({
                         : "border-[#1f1f1f] hover:border-[#333]"
                     }`}
                   >
-                    <div>
+                    <div className="min-w-0 flex-1">
                       <div className="text-[13px] font-medium text-[#ededed]">{project.name}</div>
                       <div className="text-[11px] text-[#666]">
                         {project.framework ? `${project.framework} · ` : ""}
                         {project.latestDeployments[0]?.url || "No deployment"}
                       </div>
                     </div>
-                    <ArrowRight className="size-3.5 text-[#555]" />
+                    <div className="flex shrink-0 items-center gap-2">
+                      {repoVisibilities.get(project.id) === "public" ? (
+                        <span className="rounded-full border border-[#333] bg-[#1a1a1a] px-2 py-0.5 text-[10px] text-[#888]">
+                          Public
+                        </span>
+                      ) : repoVisibilities.get(project.id) === "private_or_unknown" ? (
+                        <span className="rounded-full border border-[#333] bg-[#1a1a1a] px-2 py-0.5 text-[10px] text-[#666]">
+                          Private
+                        </span>
+                      ) : null}
+                      <ArrowRight className="size-3.5 text-[#555]" />
+                    </div>
                   </button>
                 ))
               )}
@@ -655,19 +655,6 @@ export default function DevAgentRunClient({
                     {requiresGitHubPatForRepoAccess ? " · Required for private repos." : ""}
                   </p>
                 </div>
-              )}
-
-              {sandboxUrl && (
-                <div className="rounded-md border border-[#1f1f1f] bg-[#111] p-3 text-[13px] text-[#888]">
-                  Sandbox:{" "}
-                  <a href={sandboxUrl} target="_blank" rel="noreferrer" className="text-[#ededed] hover:underline">
-                    {sandboxUrl}
-                  </a>
-                </div>
-              )}
-
-              {status && (
-                <div className="rounded-md border border-[#1f1f1f] bg-[#111] p-3 text-[13px] text-[#888]">{status}</div>
               )}
 
               <div className="flex items-center gap-2 pt-1">

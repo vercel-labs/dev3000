@@ -111,6 +111,9 @@ function TeamAgentCard({ teamBasePath, agent }: { teamBasePath: string; agent: T
               {devAgent.usageCount} runs
             </span>
           ) : null}
+          {devAgent.successEval ? (
+            <span className="rounded-md bg-[#1a1a1a] px-2 py-0.5 text-[11px] text-[#888]">Eval</span>
+          ) : null}
           {devAgent.skillRefs.slice(0, 2).map((skill) => (
             <span
               key={`${devAgent.id}-${skill.id}`}
@@ -163,7 +166,7 @@ function MarketplaceAgentCard({ agent, teamBasePath }: { agent: MarketplaceCatal
 
         {/* Stats */}
         <div className="rounded-md border border-[#1f1f1f] bg-[#111] p-3">
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-4 gap-3">
             <div>
               <div className="text-[11px] uppercase tracking-wider text-[#555]">Project Runs</div>
               <div className="mt-0.5 text-[13px] font-medium text-[#ededed]">{stats.projectRuns}</div>
@@ -171,6 +174,10 @@ function MarketplaceAgentCard({ agent, teamBasePath }: { agent: MarketplaceCatal
             <div>
               <div className="text-[11px] uppercase tracking-wider text-[#555]">Success Rate</div>
               <div className="mt-0.5 text-[13px] font-medium text-[#ededed]">{stats.successRate}</div>
+            </div>
+            <div>
+              <div className="text-[11px] uppercase tracking-wider text-[#555]">Merge Rate</div>
+              <div className="mt-0.5 text-[13px] font-medium text-[#ededed]">{stats.mergeRate}</div>
             </div>
             <div>
               <div className="text-[11px] uppercase tracking-wider text-[#555]">Tokens Used</div>

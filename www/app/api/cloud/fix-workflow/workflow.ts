@@ -100,6 +100,7 @@ export async function cloudFixWorkflow(params: {
     displayName: string
     sourceUrl?: string
   }>
+  devAgentSuccessEval?: string
   analysisTargetType?: "vercel-project" | "url"
   publicUrl?: string
   startPath?: string // Page path to analyze (e.g., "/about")
@@ -138,6 +139,7 @@ export async function cloudFixWorkflow(params: {
     devAgentSandboxBrowser,
     devAgentActionSteps,
     devAgentSkillRefs,
+    devAgentSuccessEval,
     analysisTargetType = "vercel-project",
     publicUrl,
     startPath = "/",
@@ -295,7 +297,8 @@ export async function cloudFixWorkflow(params: {
         // Pass timing and snapshot info from init step
         initResult.timing,
         initResult.fromSnapshot,
-        initResult.snapshotId
+        initResult.snapshotId,
+        devAgentSuccessEval
       )
     }
 
@@ -530,7 +533,8 @@ async function agentFixLoop(
   progressContext?: ProgressContext | null,
   initTiming?: InitResult["timing"],
   fromSnapshot?: boolean,
-  snapshotId?: string
+  snapshotId?: string,
+  devAgentSuccessEval?: string
 ): Promise<FixResult> {
   "use step"
   const { agentFixLoopStep } = await import("./steps")
@@ -560,7 +564,8 @@ async function agentFixLoop(
     progressContext,
     initTiming,
     fromSnapshot,
-    snapshotId
+    snapshotId,
+    devAgentSuccessEval
   )
 }
 

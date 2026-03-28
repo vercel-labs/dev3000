@@ -294,6 +294,7 @@ export async function POST(request: Request) {
       devAgentSandboxBrowser: devAgent?.sandboxBrowser,
       devAgentActionSteps: devAgent?.actionSteps,
       devAgentSkillRefs: devAgent?.skillRefs,
+      devAgentSuccessEval: devAgent?.successEval,
       analysisTargetType,
       publicUrl,
       startPath: startPath || "/", // Page path to analyze (e.g., "/about")

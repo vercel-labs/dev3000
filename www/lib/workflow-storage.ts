@@ -36,6 +36,7 @@ export interface WorkflowRun {
   isPublic?: boolean // If true, the report can be viewed without authentication
   customPrompt?: string // For prompt type: the user's custom instruction
   progressLogs?: string[] // Rolling log lines for live pending UI
+  successEvalResult?: boolean | null // Result of the success eval (true/false/null)
 }
 
 const LOCAL_WORKFLOW_CACHE_ROOT = path.join(tmpdir(), "dev3000-workflow-runs")

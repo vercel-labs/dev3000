@@ -22,6 +22,7 @@ import type { TurbopackBundleComparison, TurbopackBundleMetricsSnapshot, Workflo
 
 const workflowLog = console.log
 const TURBOPACK_MIN_NEXT_VERSION = "16.1.0"
+const SUCCESS_EVAL_MODEL = "openai/gpt-5.4"
 const ANALYZE_TO_NDJSON_SCRIPT = `#!/usr/bin/env node
 // Converts Next.js bundle analyzer .data files to NDJSON for offline analysis.
 // Usage: node analyze-to-ndjson.mjs [--input <dir>] [--output <dir>]
@@ -364,7 +365,7 @@ function isRecoverableBrowserError(error: string | undefined): boolean {
  * Uses agent-browser CLI for browser automation (preferred over CDP in cloud)
  */
 async function getAgentBrowser(sandbox: Sandbox, debug = false): Promise<SandboxAgentBrowser> {
-  const cacheKey = sandbox.sandboxId
+  const cacheKey = sandbox.name
   let browser = agentBrowserCache.get(cacheKey)
   if (!browser) {
     const nextVersion = (agentBrowserProfileVersion.get(cacheKey) || 0) + 1
@@ -381,7 +382,7 @@ async function getAgentBrowser(sandbox: Sandbox, debug = false): Promise<Sandbox
 }
 
 async function getNextBrowser(sandbox: Sandbox, debug = false): Promise<SandboxNextBrowser> {
-  const cacheKey = sandbox.sandboxId
+  const cacheKey = sandbox.name
   let browser = nextBrowserCache.get(cacheKey)
   if (!browser) {
     const nextVersion = (nextBrowserHomeVersion.get(cacheKey) || 0) + 1
@@ -418,9 +419,9 @@ async function navigateBrowser(
     if (isRecoverableBrowserError(result.error)) {
       workflowLog(`[Browser] Resetting cached ${browserMode} instance after recoverable navigation failure`)
       if (browserMode === "next-browser") {
-        nextBrowserCache.delete(sandbox.sandboxId)
+        nextBrowserCache.delete(sandbox.name)
       } else {
-        agentBrowserCache.delete(sandbox.sandboxId)
+        agentBrowserCache.delete(sandbox.name)
       }
       const retryBrowser =
         browserMode === "next-browser" ? await getNextBrowser(sandbox, debug) : await getAgentBrowser(sandbox, debug)
@@ -435,9 +436,9 @@ async function navigateBrowser(
     workflowLog(`[Browser] ${browserMode} error: ${error instanceof Error ? error.message : String(error)}`)
     if (isRecoverableBrowserError(error instanceof Error ? error.message : String(error))) {
       if (browserMode === "next-browser") {
-        nextBrowserCache.delete(sandbox.sandboxId)
+        nextBrowserCache.delete(sandbox.name)
       } else {
-        agentBrowserCache.delete(sandbox.sandboxId)
+        agentBrowserCache.delete(sandbox.name)
       }
     }
   }
@@ -465,9 +466,9 @@ async function reloadBrowser(
     if (isRecoverableBrowserError(result.error)) {
       workflowLog(`[Browser] Resetting cached ${browserMode} instance after recoverable reload failure`)
       if (browserMode === "next-browser") {
-        nextBrowserCache.delete(sandbox.sandboxId)
+        nextBrowserCache.delete(sandbox.name)
       } else {
-        agentBrowserCache.delete(sandbox.sandboxId)
+        agentBrowserCache.delete(sandbox.name)
       }
       const retryBrowser =
         browserMode === "next-browser" ? await getNextBrowser(sandbox, debug) : await getAgentBrowser(sandbox, debug)
@@ -482,9 +483,9 @@ async function reloadBrowser(
     workflowLog(`[Browser] ${browserMode} error: ${error instanceof Error ? error.message : String(error)}`)
     if (isRecoverableBrowserError(error instanceof Error ? error.message : String(error))) {
       if (browserMode === "next-browser") {
-        nextBrowserCache.delete(sandbox.sandboxId)
+        nextBrowserCache.delete(sandbox.name)
       } else {
-        agentBrowserCache.delete(sandbox.sandboxId)
+        agentBrowserCache.delete(sandbox.name)
       }
     }
   }
@@ -511,9 +512,9 @@ async function evaluateInBrowser(
     if (isRecoverableBrowserError(result.error)) {
       workflowLog(`[Browser] Resetting cached ${browserMode} instance after recoverable evaluate failure`)
       if (browserMode === "next-browser") {
-        nextBrowserCache.delete(sandbox.sandboxId)
+        nextBrowserCache.delete(sandbox.name)
       } else {
-        agentBrowserCache.delete(sandbox.sandboxId)
+        agentBrowserCache.delete(sandbox.name)
       }
       const retryBrowser =
         browserMode === "next-browser" ? await getNextBrowser(sandbox, debug) : await getAgentBrowser(sandbox, debug)
@@ -527,9 +528,9 @@ async function evaluateInBrowser(
   } catch (error) {
     if (isRecoverableBrowserError(error instanceof Error ? error.message : String(error))) {
       if (browserMode === "next-browser") {
-        nextBrowserCache.delete(sandbox.sandboxId)
+        nextBrowserCache.delete(sandbox.name)
       } else {
-        agentBrowserCache.delete(sandbox.sandboxId)
+        agentBrowserCache.delete(sandbox.name)
       }
     }
     return { success: false, error: error instanceof Error ? error.message : String(error) }
@@ -1587,7 +1588,7 @@ export async function initSandboxStep(
     throw error
   }
 
-  workflowLog(`[Init] Sandbox: ${sandboxResult.sandbox.sandboxId}`)
+  workflowLog(`[Init] Sandbox: ${sandboxResult.sandbox.name}`)
   workflowLog(`[Init] Dev URL: ${sandboxResult.devUrl}`)
   workflowLog(`[Init] From base snapshot: ${sandboxResult.fromSnapshot}`)
   await updateProgress(
@@ -1655,7 +1656,7 @@ export async function initSandboxStep(
     }
 
     return {
-      sandboxId: sandboxResult.sandbox.sandboxId,
+      sandboxId: sandboxResult.sandbox.name,
       devUrl: sandboxResult.devUrl,
       reportId,
       beforeCls: null,
@@ -1703,7 +1704,7 @@ export async function initSandboxStep(
   }
 
   return {
-    sandboxId: sandboxResult.sandbox.sandboxId,
+    sandboxId: sandboxResult.sandbox.name,
     devUrl: sandboxResult.devUrl,
     reportId,
     beforeCls: clsData.clsScore,
@@ -1832,7 +1833,8 @@ export async function agentFixLoopStep(
   progressContext?: ProgressContext | null,
   initTiming?: InitStepTiming,
   fromSnapshot?: boolean,
-  snapshotId?: string
+  snapshotId?: string,
+  devAgentSuccessEval?: string
 ): Promise<{
   reportBlobUrl: string
   reportId: string
@@ -1842,6 +1844,7 @@ export async function agentFixLoopStep(
   agentSummary: string
   gitDiff: string | null
   timing: AgentStepTiming
+  successEvalResult?: boolean | null
 }> {
   const timer = new StepTimer()
   const isTurbopackBundleAnalyzer = progressContext?.workflowType === "turbopack-bundle-analyzer"
@@ -1850,9 +1853,27 @@ export async function agentFixLoopStep(
   workflowLog(`[Agent] Reconnecting to sandbox: ${sandboxId}`)
   await updateProgress(progressContext, 2, "AI agent analyzing CLS issues...", devUrl)
 
-  const sandbox = await Sandbox.get({ sandboxId })
-  if (sandbox.status !== "running") {
-    throw new Error(`Sandbox not running: ${sandbox.status}`)
+  let sandbox: Sandbox
+  try {
+    sandbox = await Sandbox.get({ name: sandboxId })
+    if (sandbox.status !== "running") {
+      throw new Error(`Sandbox not running: ${sandbox.status}`)
+    }
+  } catch (sandboxError) {
+    workflowLog(
+      `[Agent] Sandbox ${sandboxId} unavailable (${sandboxError instanceof Error ? sandboxError.message : String(sandboxError)}), creating a new one...`
+    )
+    await appendProgressLog(progressContext, "[Agent] Previous sandbox expired, creating a fresh one...")
+    const freshResult = await getOrCreateD3kSandbox({
+      repoUrl,
+      branch: repoBranch,
+      projectDir: projectDir || "",
+      timeout: "30m",
+      debug: true,
+      onProgress: (message) => appendProgressLog(progressContext, `[Sandbox] ${message}`)
+    })
+    sandbox = freshResult.sandbox
+    workflowLog(`[Agent] Fresh sandbox created: ${sandbox.name}`)
   }
 
   const effectiveProjectDir = isTurbopackBundleAnalyzer
@@ -2118,6 +2139,43 @@ export async function agentFixLoopStep(
 
   const { skillsInstalled } = await readSandboxSkillsInfo(sandbox)
 
+  // ── Success Eval ──────────────────────────────────────────────────────
+  let successEvalResult: boolean | null = null
+  if (devAgentSuccessEval?.trim()) {
+    try {
+      timer.start("Success eval")
+      workflowLog(`[Agent] Running success eval with ${SUCCESS_EVAL_MODEL}`)
+      const evalGateway = createGateway({
+        apiKey: process.env.AI_GATEWAY_API_KEY,
+        baseURL: "https://ai-gateway.vercel.sh/v1/ai"
+      })
+      const evalResult = await generateText({
+        model: evalGateway(SUCCESS_EVAL_MODEL),
+        system:
+          'You are an evaluation judge. Given the agent\'s work summary and the success criteria, respond ONLY with a JSON object: {"success": true} or {"success": false}. No explanation.',
+        prompt: `Success criteria: "${devAgentSuccessEval.trim()}"
+
+Agent work summary:
+${agentResult.summary}
+
+Git diff summary:
+${gitDiff ? gitDiff.slice(0, 4000) : "No changes made."}
+
+Did the agent meet the success criteria? Respond with JSON only.`
+      })
+      const evalText = evalResult.text.trim()
+      const jsonMatch = evalText.match(/\{[^}]*"success"\s*:\s*(true|false)[^}]*\}/)
+      if (jsonMatch) {
+        successEvalResult = JSON.parse(jsonMatch[0]).success === true
+      }
+      workflowLog(`[Agent] Success eval result: ${successEvalResult}`)
+      timer.end()
+    } catch (evalError) {
+      workflowLog(`[Agent] Success eval failed: ${evalError instanceof Error ? evalError.message : String(evalError)}`)
+      successEvalResult = null
+    }
+  }
+
   const report: WorkflowReport = {
     id: reportId,
     projectName,
@@ -2170,6 +2228,9 @@ export async function agentFixLoopStep(
       before: beforeWebVitalsDiagnostics,
       after: afterWebVitalsDiagnostics
     },
+    // Success eval
+    successEval: devAgentSuccessEval || undefined,
+    successEvalResult,
     // Sandbox and timing info
     fromSnapshot: fromSnapshot ?? false,
     snapshotId,
@@ -2204,7 +2265,8 @@ export async function agentFixLoopStep(
     status,
     agentSummary: agentResult.summary,
     gitDiff,
-    timing: timingData
+    timing: timingData,
+    successEvalResult
   }
 }
 
@@ -2233,7 +2295,7 @@ export async function urlAuditStep(
   timer.start("Reconnect to sandbox")
   await updateProgress(progressContext, 2, "Launching external URL audit...", targetUrl)
 
-  const sandbox = await Sandbox.get({ sandboxId })
+  const sandbox = await Sandbox.get({ name: sandboxId })
   if (sandbox.status !== "running") {
     throw new Error(`Sandbox not running: ${sandbox.status}`)
   }
@@ -3589,7 +3651,7 @@ async function fetchWebVitalsViaCDP(
 export async function cleanupSandbox(sandboxId: string): Promise<void> {
   workflowLog(`[Cleanup] Stopping sandbox ${sandboxId}`)
   try {
-    const sandbox = await Sandbox.get({ sandboxId })
+    const sandbox = await Sandbox.get({ name: sandboxId })
     await sandbox.stop()
     workflowLog("[Cleanup] Sandbox stopped")
   } catch (err) {
@@ -3630,7 +3692,7 @@ export async function createPullRequestStep(
   try {
     timer.start("Get sandbox")
     workflowLog(`[PR] Getting sandbox ${sandboxId}...`)
-    const sandbox = await Sandbox.get({ sandboxId })
+    const sandbox = await Sandbox.get({ name: sandboxId })
     workflowLog(`[PR] Sandbox status: ${sandbox.status}`)
     if (sandbox.status !== "running") {
       throw new Error(`Sandbox not running: ${sandbox.status}`)
@@ -3931,7 +3993,7 @@ export async function captureScreenshotsForPRStep(
 
   try {
     // Get sandbox
-    const sandbox = await Sandbox.get({ sandboxId })
+    const sandbox = await Sandbox.get({ name: sandboxId })
     if (sandbox.status !== "running") {
       workflowLog(`[Screenshots] Sandbox not running: ${sandbox.status}`)
       return []

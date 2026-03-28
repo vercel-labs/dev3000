@@ -107,6 +107,19 @@ To test the d3k-in-the-cloud workflow:
 - Automatic screenshots on errors and navigation
 - Works with any web framework (Next.js, Vite, Rails, etc.)
 
+## UI & Design System
+
+**Follow Vercel Geist design guidelines** for all UI work. Reference: https://vercel.com/geist/introduction
+
+- **Fonts**: Geist Sans for interface text, Geist Mono for code/metrics. Already configured globally via `next/font/google` with `--font-geist-sans` and `--font-geist-mono` CSS variables.
+- **Colors**: Use the neutral gray palette established in the codebase. The `www/` frontend uses hardcoded Vercel dark-theme hex values:
+  - `#0a0a0a` background, `#111` darker bg, `#1a1a1a` tag/badge bg
+  - `#1f1f1f` borders, `#333` hover borders, `#444` dividers
+  - `#555` uppercase labels, `#666` tertiary text, `#888` secondary text, `#ededed` primary text
+- **No color semantics**: Do not use green for success, red for error, yellow for warning, etc. Use the neutral gray scale for status indicators, pills, and badges. The only exception is `blue-500/blue-400` for "Previously Purchased" marketplace badges (pre-existing pattern).
+- **Dark mode default**: The app forces dark mode. All UI should be designed for dark backgrounds.
+- **Component patterns**: Use shadcn/ui primitives (Badge, Button, Input, etc.) from `@/components/ui/`. Follow existing card patterns in `components/dev-agents/` for consistency.
+
 ## Sandbox/Cloud Environment Constraints
 
 **CRITICAL: No `lsof` in Vercel Sandbox or Docker containers!**

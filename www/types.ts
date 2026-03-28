@@ -148,6 +148,10 @@ export interface WorkflowReport {
   verificationStatus?: "improved" | "unchanged" | "degraded" | "error"
   verificationError?: string
 
+  // Success eval
+  successEval?: string
+  successEvalResult?: boolean | null
+
   // PR info (future)
   prUrl?: string
   prDiff?: string

@@ -11,6 +11,7 @@ import {
   Plus,
   RotateCcw,
   Search,
+  ShieldCheck,
   Trash2,
   X,
   Zap
@@ -375,6 +376,9 @@ export default function NewDevAgentClient({
   const [isSearching, setIsSearching] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
 
+  // Success eval
+  const [successEval, setSuccessEval] = useState(devAgent?.successEval ?? "")
+
   // Action steps
   const [actionSteps, setActionSteps] = useState<ActionStep[]>(() => {
     if (devAgent?.actionSteps?.length) {
@@ -504,7 +508,8 @@ export default function NewDevAgentClient({
             sandboxBrowser: "agent-browser",
             actionSteps: actionSteps.map(({ kind, config }): DevAgentActionStep => ({ kind, config })),
             skillRefs: effectiveSelectedSkills,
-            team
+            team,
+            successEval: successEval.trim() || undefined
           })
         })
 
@@ -539,6 +544,7 @@ export default function NewDevAgentClient({
     actionSteps.length > 0 &&
     hasPromptContent &&
     effectiveSelectedSkills.length > 0 &&
+    successEval.trim().length > 0 &&
     !isPending
 
   // Step numbering: fixed steps are 1-2, skills is 3, agent is 4, actions start at 5
@@ -770,6 +776,34 @@ export default function NewDevAgentClient({
             </DropdownMenu>
           </>
         )}
+
+        {/* Success Eval — fixed final step */}
+        <StepConnector />
+        <div className="relative rounded-lg border border-border/60 bg-background/90">
+          <div className="flex items-start gap-3 px-4 py-3">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted/30 text-xs font-medium text-foreground">
+              {actionStepBaseNumber + actionSteps.length}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="size-4 text-muted-foreground" />
+                  <span className="text-sm font-medium text-foreground">Success Eval</span>
+                </div>
+                <Badge variant="secondary" className="shrink-0 rounded-full px-2 py-0.5 text-[10px]">
+                  Required
+                </Badge>
+              </div>
+              <Textarea
+                value={successEval}
+                onChange={(e) => setSuccessEval(e.target.value)}
+                placeholder="Describe what success looks like for this agent..."
+                className="mt-2 min-h-16 text-xs"
+                disabled={!canEdit}
+              />
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Submit */}

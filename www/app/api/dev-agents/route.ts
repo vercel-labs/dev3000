@@ -88,6 +88,7 @@ export async function POST(request: Request) {
           actionSteps?: unknown[]
           skillRefs?: unknown[]
           team?: DevAgentTeam
+          successEval?: string
         }
 
         const name = body.name?.trim() || ""
@@ -159,7 +160,8 @@ export async function POST(request: Request) {
           actionSteps: actionSteps.length > 0 ? actionSteps : undefined,
           skillRefs,
           author: user,
-          team
+          team,
+          successEval: typeof body.successEval === "string" ? body.successEval : undefined
         })
 
         return Response.json({ success: true, devAgent })
