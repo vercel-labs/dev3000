@@ -17,7 +17,7 @@ export function isV0DevAgentRunnerEnabled(explicit?: boolean): boolean {
     parseBooleanFlag(process.env.NEXT_PUBLIC_RECIPE_V0_RUNNER) ??
     parseBooleanFlag(process.env.D3K_RECIPE_V0_RUNNER)
 
-  return envFlag ?? true
+  return envFlag ?? false
 }
 
 export function resolveDevAgentRunner(explicit?: boolean): DevAgentRunner {
