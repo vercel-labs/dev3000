@@ -6,6 +6,10 @@ import { SandboxChrome } from "./sandbox-chrome"
 // Re-export Snapshot for consumers
 export { Snapshot }
 
+const SANDBOX_D3K_TOP_LEVEL_LOG_DIR = "/home/vercel-sandbox/.d3k/logs"
+const SANDBOX_D3K_LOG_GLOB = "/home/vercel-sandbox/.d3k/*/logs/*.log /home/vercel-sandbox/.d3k/logs/*.log"
+const SANDBOX_D3K_LOG_DIR_GLOB = "/home/vercel-sandbox/.d3k/*/logs /home/vercel-sandbox/.d3k/logs"
+
 // ============================================================
 // TIMING UTILITIES
 // ============================================================
@@ -967,16 +971,17 @@ chmod 0600 "$HOME/.npmrc" ".npmrc"`
     // Start d3k in detached mode with --headless flag
     // This tells d3k to launch Chrome in headless mode, which works in serverless environments
     // We explicitly pass --browser with the path from @sparticuz/chromium
-    // Logs are written to /home/vercel-sandbox/.d3k/logs/ and can be read later.
+    // d3k writes its unified logs under a project-scoped ~/.d3k/*/logs directory.
+    // We also keep a top-level startup log here for detached-process diagnostics.
     // IMPORTANT: Do NOT start infinite log streaming loops here - they prevent
     // the workflow step function from completing properly.
     // DIAGNOSTIC: Also capture stdout/stderr to d3k-startup.log for debugging
-    const d3kStartupLog = "/home/vercel-sandbox/.d3k/logs/d3k-startup.log"
+    const d3kStartupLog = `${SANDBOX_D3K_TOP_LEVEL_LOG_DIR}/d3k-startup.log`
     await sandbox.runCommand({
       cmd: "sh",
       args: [
         "-c",
-        `mkdir -p /home/vercel-sandbox/.d3k/logs && export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; cd ${sandboxCwd} && d3k --no-tui --debug --headless --agent-name codex --browser ${chromiumPath} > ${d3kStartupLog} 2>&1`
+        `mkdir -p ${SANDBOX_D3K_TOP_LEVEL_LOG_DIR} && export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; cd ${sandboxCwd} && d3k --no-tui --debug --headless --agent-name codex --browser ${chromiumPath} > ${d3kStartupLog} 2>&1`
       ],
       detached: true
     })
@@ -999,7 +1004,7 @@ chmod 0600 "$HOME/.npmrc" ".npmrc"`
       console.log("  🔍 Checking for d3k log files...")
       const logsCheck = await runCommandWithLogs(sandbox, {
         cmd: "sh",
-        args: ["-c", "ls -lah /home/vercel-sandbox/.d3k/logs/ 2>/dev/null || echo 'No .d3k/logs directory found'"]
+        args: ["-c", `ls -lah ${SANDBOX_D3K_LOG_DIR_GLOB} 2>/dev/null || echo 'No d3k log directories found'`]
       })
       console.log(`  📋 Log files:\n${logsCheck.stdout}`)
 
@@ -1008,7 +1013,7 @@ chmod 0600 "$HOME/.npmrc" ".npmrc"`
         cmd: "sh",
         args: [
           "-c",
-          'for log in /home/vercel-sandbox/.d3k/logs/*.log; do [ -f "$log" ] && echo "=== $log ===" && head -50 "$log" || true; done 2>/dev/null || true'
+          `for log in ${SANDBOX_D3K_LOG_GLOB}; do [ -f "$log" ] && echo "=== $log ===" && head -50 "$log" || true; done 2>/dev/null || true`
         ]
       })
       console.log(`  📋 Initial log content:\n${allLogsCheck.stdout}`)
@@ -1032,7 +1037,10 @@ chmod 0600 "$HOME/.npmrc" ".npmrc"`
         // Use cat with wildcard to capture all log files
         const logsCheck = await runCommandWithLogs(sandbox, {
           cmd: "sh",
-          args: ["-c", "cat /home/vercel-sandbox/.d3k/logs/*.log 2>/dev/null || echo 'No log files found'"]
+          args: [
+            "-c",
+            `for log in ${SANDBOX_D3K_LOG_GLOB}; do [ -f "$log" ] && cat "$log" || true; done 2>/dev/null || echo 'No log files found'`
+          ]
         })
         if (logsCheck.exitCode === 0) {
           console.log("  📋 All d3k logs:")
@@ -1070,7 +1078,7 @@ chmod 0600 "$HOME/.npmrc" ".npmrc"`
           cmd: "sh",
           args: [
             "-c",
-            'for log in /home/vercel-sandbox/.d3k/logs/*.log; do [ -f "$log" ] && echo "\\n=== $log ===" && cat "$log" || true; done 2>/dev/null || echo "No log files found"'
+            `for log in ${SANDBOX_D3K_LOG_GLOB}; do [ -f "$log" ] && echo "\\n=== $log ===" && cat "$log" || true; done 2>/dev/null || echo "No log files found"`
           ]
         })
         console.log(cdpFailLogs.stdout)
@@ -1088,7 +1096,7 @@ chmod 0600 "$HOME/.npmrc" ".npmrc"`
         cmd: "sh",
         args: [
           "-c",
-          'for log in /home/vercel-sandbox/.d3k/logs/*.log; do [ -f "$log" ] && echo "\\n=== $log ===" && cat "$log" || true; done 2>/dev/null || echo "No log files found"'
+          `for log in ${SANDBOX_D3K_LOG_GLOB}; do [ -f "$log" ] && echo "\\n=== $log ===" && cat "$log" || true; done 2>/dev/null || echo "No log files found"`
         ]
       })
       console.log(fullLogsCheck.stdout)
@@ -1359,10 +1367,7 @@ async function waitForPageNavigation(sandbox: Sandbox, timeoutMs: number, debug 
       // d3k logs "[CDP] Navigated to http://localhost:PORT" after Page.navigate
       const logsResult = await runCommandWithLogs(sandbox, {
         cmd: "sh",
-        args: [
-          "-c",
-          'grep -r "Navigated to http://localhost" /home/vercel-sandbox/.d3k/logs/*.log 2>/dev/null | head -1 || true'
-        ]
+        args: ["-c", `grep -h "Navigated to http://localhost" ${SANDBOX_D3K_LOG_GLOB} 2>/dev/null | head -1 || true`]
       })
 
       if (logsResult.stdout.includes("Navigated to http://localhost")) {
@@ -1509,12 +1514,12 @@ export async function createD3kSandboxFromSnapshot(config: D3kSandboxFromSnapsho
 
     // Start d3k (it should already be installed in the snapshot)
     if (debug) console.log("  🚀 Starting d3k...")
-    const d3kStartupLog = "/home/vercel-sandbox/.d3k/logs/d3k-startup.log"
+    const d3kStartupLog = `${SANDBOX_D3K_TOP_LEVEL_LOG_DIR}/d3k-startup.log`
     await sandbox.runCommand({
       cmd: "sh",
       args: [
         "-c",
-        `mkdir -p /home/vercel-sandbox/.d3k/logs && export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; cd ${sandboxCwd} && d3k --no-tui --debug --headless --browser ${chromiumPath} > ${d3kStartupLog} 2>&1`
+        `mkdir -p ${SANDBOX_D3K_TOP_LEVEL_LOG_DIR} && export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; cd ${sandboxCwd} && d3k --no-tui --debug --headless --browser ${chromiumPath} > ${d3kStartupLog} 2>&1`
       ],
       detached: true
     })
@@ -2032,12 +2037,12 @@ chmod 0600 "$HOME/.npmrc" ".npmrc"`
     }
 
     const chromiumPath = "/usr/bin/chromium"
-    const d3kStartupLog = "/home/vercel-sandbox/.d3k/logs/d3k-startup.log"
+    const d3kStartupLog = `${SANDBOX_D3K_TOP_LEVEL_LOG_DIR}/d3k-startup.log`
     await sandbox.runCommand({
       cmd: "sh",
       args: [
         "-c",
-        `mkdir -p /home/vercel-sandbox/.d3k/logs && export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; cd ${sandboxCwd} && d3k --no-tui --debug --headless --agent-name codex --browser ${chromiumPath} > ${d3kStartupLog} 2>&1`
+        `mkdir -p ${SANDBOX_D3K_TOP_LEVEL_LOG_DIR} && export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; cd ${sandboxCwd} && d3k --no-tui --debug --headless --agent-name codex --browser ${chromiumPath} > ${d3kStartupLog} 2>&1`
       ],
       detached: true
     })

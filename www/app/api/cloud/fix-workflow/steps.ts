@@ -3051,12 +3051,8 @@ This navigates the page fresh to get accurate measurements.`,
 
         await new Promise((resolve) => setTimeout(resolve, 5000))
 
-        // Read d3k logs for CLS data
-        const logsResult = await runSandboxCommand(sandbox, "sh", [
-          "-c",
-          'for log in /home/vercel-sandbox/.d3k/logs/*.log; do [ -f "$log" ] && tail -200 "$log" || true; done 2>/dev/null'
-        ])
-        const logs = logsResult.stdout || ""
+        // Read d3k logs for CLS data from the active project session.
+        const logs = await readSandboxD3kLogs(sandbox)
 
         // Use timestamp-based logic to get CLS from the MOST RECENT page load
         // When CLS = 0, there's no "Detected" line - only "CLS observer installed"
@@ -3753,17 +3749,12 @@ async function readSandboxSkillsInfo(
   sandbox: Sandbox
 ): Promise<{ skillsInstalled: string[]; skillsAgentId?: string | null }> {
   try {
-    const sessionPathResult = await runSandboxCommand(sandbox, "sh", [
-      "-c",
-      "ls -t /home/vercel-sandbox/.d3k/*/session.json 2>/dev/null | head -1"
-    ])
-    const sessionPath = sessionPathResult.stdout.trim().split("\n")[0]
-    if (!sessionPath) {
+    const sessionResult = await readLatestSandboxSession(sandbox)
+    if (!sessionResult.session) {
       return { skillsInstalled: [] }
     }
 
-    const sessionResult = await runSandboxCommand(sandbox, "sh", ["-c", `cat "${sessionPath}" 2>/dev/null`])
-    const parsed = JSON.parse(sessionResult.stdout) as { skillsInstalled?: string[]; skillsAgentId?: string | null }
+    const parsed = sessionResult.session as { skillsInstalled?: string[]; skillsAgentId?: string | null }
 
     return {
       skillsInstalled: Array.isArray(parsed.skillsInstalled) ? parsed.skillsInstalled : [],
@@ -3793,6 +3784,106 @@ async function runSandboxCommand(
   return { exitCode: result.exitCode, stdout, stderr }
 }
 
+async function readLatestSandboxSession(
+  sandbox: Sandbox
+): Promise<{ sessionPath: string | null; session: Record<string, unknown> | null }> {
+  try {
+    const sessionPathResult = await runSandboxCommand(sandbox, "sh", [
+      "-c",
+      "ls -t /home/vercel-sandbox/.d3k/*/session.json 2>/dev/null | head -1"
+    ])
+    const sessionPath = sessionPathResult.stdout.trim().split("\n")[0] || null
+    if (!sessionPath) {
+      return { sessionPath: null, session: null }
+    }
+
+    const sessionResult = await runSandboxCommand(sandbox, "sh", ["-c", `cat "${sessionPath}" 2>/dev/null`])
+    if (!sessionResult.stdout.trim()) {
+      return { sessionPath, session: null }
+    }
+
+    return {
+      sessionPath,
+      session: JSON.parse(sessionResult.stdout) as Record<string, unknown>
+    }
+  } catch (error) {
+    workflowLog(`[Sandbox] Failed to read latest session: ${error instanceof Error ? error.message : String(error)}`)
+    return { sessionPath: null, session: null }
+  }
+}
+
+async function readSandboxD3kLogs(sandbox: Sandbox): Promise<string> {
+  const logReadScript = String.raw`
+const fs = require("fs")
+const path = require("path")
+
+const baseDir = "/home/vercel-sandbox/.d3k"
+const seen = new Set()
+const logFiles = []
+
+const addFile = (filePath) => {
+  if (!filePath || seen.has(filePath) || !fs.existsSync(filePath)) return
+  const stat = fs.statSync(filePath)
+  if (!stat.isFile()) return
+  seen.add(filePath)
+  logFiles.push({ path: filePath, mtimeMs: stat.mtimeMs })
+}
+
+const addDirLogs = (dirPath) => {
+  if (!dirPath || !fs.existsSync(dirPath)) return
+  for (const entry of fs.readdirSync(dirPath)) {
+    if (!entry.endsWith(".log")) continue
+    addFile(path.join(dirPath, entry))
+  }
+}
+
+let sessionPath = null
+let session = null
+
+if (fs.existsSync(baseDir)) {
+  const sessionCandidates = []
+  for (const entry of fs.readdirSync(baseDir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue
+    const candidate = path.join(baseDir, entry.name, "session.json")
+    if (fs.existsSync(candidate)) sessionCandidates.push(candidate)
+  }
+  sessionCandidates.sort((left, right) => fs.statSync(right).mtimeMs - fs.statSync(left).mtimeMs)
+  sessionPath = sessionCandidates[0] || null
+}
+
+if (sessionPath) {
+  try {
+    session = JSON.parse(fs.readFileSync(sessionPath, "utf8"))
+  } catch {}
+}
+
+if (session && typeof session.logFilePath === "string") {
+  addFile(session.logFilePath)
+  addDirLogs(path.dirname(session.logFilePath))
+}
+
+if (sessionPath) {
+  const projectDir = path.dirname(sessionPath)
+  addDirLogs(path.join(projectDir, "logs"))
+  addFile(path.join(projectDir, "d3k.log"))
+}
+
+addDirLogs(path.join(baseDir, "logs"))
+
+logFiles.sort((left, right) => left.mtimeMs - right.mtimeMs)
+
+for (const file of logFiles) {
+  try {
+    process.stdout.write(fs.readFileSync(file.path, "utf8"))
+    process.stdout.write("\n")
+  } catch {}
+}
+`
+
+  const logsResult = await runSandboxCommand(sandbox, "sh", ["-c", `node <<'NODE'\n${logReadScript}\nNODE`])
+  return logsResult.stdout || ""
+}
+
 async function fetchClsData(sandbox: Sandbox): Promise<{
   clsScore: number | null
   clsGrade: "good" | "needs-improvement" | "poor" | null
@@ -3807,14 +3898,8 @@ async function fetchClsData(sandbox: Sandbox): Promise<{
   }
 
   try {
-    // Read d3k logs for CLS
-    const logsResult = await runSandboxCommand(sandbox, "sh", [
-      "-c",
-      'for log in /home/vercel-sandbox/.d3k/logs/*.log; do [ -f "$log" ] && cat "$log"; done 2>/dev/null || echo ""'
-    ])
-
-    // Store the full logs
-    result.d3kLogs = logsResult.stdout || ""
+    // Read d3k logs for CLS from the active project session directory.
+    result.d3kLogs = await readSandboxD3kLogs(sandbox)
 
     // Log diagnostic info about the log file
     workflowLog(`[fetchClsData] Log file size: ${result.d3kLogs.length} chars`)
@@ -3829,7 +3914,7 @@ async function fetchClsData(sandbox: Sandbox): Promise<{
     // 2. Check if there are any "Detected X layout shifts" entries AFTER it
     // 3. If none, CLS = 0 (no shifts detected on that page load)
 
-    const logs = logsResult.stdout
+    const logs = result.d3kLogs
 
     // Find all timestamps for "CLS observer installed" (marks new page loads)
     const observerMatches = [...logs.matchAll(/\[(\d{2}:\d{2}:\d{2}\.\d{3})\].*CLS observer installed/g)]
@@ -3914,6 +3999,21 @@ async function fetchWebVitalsViaCDP(
       diagLog(
         `[fetchWebVitals] Capturing Web Vitals via ${browserMode} evaluate (attempt ${attempt}/${maxAttempts})...`
       )
+
+      if (targetUrl) {
+        diagLog(`[fetchWebVitals] Opening ${targetUrl} before capture`)
+        const navResult = await navigateBrowser(sandbox, targetUrl, browserMode)
+        diagLog(
+          `[fetchWebVitals] Navigation result: success=${navResult.success}${navResult.error ? `, error=${navResult.error}` : ""}`
+        )
+        await new Promise((resolve) => setTimeout(resolve, 1500))
+
+        const reloadResult = await reloadBrowser(sandbox, browserMode)
+        diagLog(
+          `[fetchWebVitals] Reload result: success=${reloadResult.success}${reloadResult.error ? `, error=${reloadResult.error}` : ""}`
+        )
+        await new Promise((resolve) => setTimeout(resolve, 1500))
+      }
 
       const finalizeLcpScript = `
         document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }));
