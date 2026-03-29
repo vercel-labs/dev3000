@@ -1866,12 +1866,17 @@ export async function observeBaselineStep(
   startPath: string,
   repoUrl: string,
   repoBranch: string,
+  vercelOidcToken?: string,
   projectDir?: string,
   devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser",
   devAgentSkillRefs?: DevAgentSkillRef[],
   progressContext?: ProgressContext | null
 ): Promise<ObserveResult> {
   const timer = new StepTimer()
+
+  if (vercelOidcToken && !process.env.VERCEL_OIDC_TOKEN) {
+    process.env.VERCEL_OIDC_TOKEN = vercelOidcToken
+  }
 
   timer.start("Reconnect to sandbox")
   workflowLog(`[Observe] Reconnecting to sandbox: ${sandboxId}`)
@@ -1891,6 +1896,7 @@ export async function observeBaselineStep(
     const freshResult = await getOrCreateD3kSandbox({
       repoUrl,
       branch: repoBranch,
+      vercelToken: vercelOidcToken,
       projectDir: projectDir || "",
       timeout: "30m",
       debug: true,
@@ -2151,6 +2157,7 @@ export async function agentFixLoopStep(
   startPath: string,
   repoUrl: string,
   repoBranch: string,
+  vercelOidcToken?: string,
   projectDir?: string,
   repoOwner?: string,
   repoName?: string,
@@ -2182,6 +2189,10 @@ export async function agentFixLoopStep(
   const timer = new StepTimer()
   const isTurbopackBundleAnalyzer = progressContext?.workflowType === "turbopack-bundle-analyzer"
 
+  if (vercelOidcToken && !process.env.VERCEL_OIDC_TOKEN) {
+    process.env.VERCEL_OIDC_TOKEN = vercelOidcToken
+  }
+
   timer.start("Reconnect to sandbox")
   workflowLog(`[Agent] Reconnecting to sandbox: ${sandboxId}`)
   await updateProgress(progressContext, 2, "AI agent analyzing CLS issues...", devUrl)
@@ -2200,6 +2211,7 @@ export async function agentFixLoopStep(
     const freshResult = await getOrCreateD3kSandbox({
       repoUrl,
       branch: repoBranch,
+      vercelToken: vercelOidcToken,
       projectDir: projectDir || "",
       timeout: "30m",
       debug: true,
