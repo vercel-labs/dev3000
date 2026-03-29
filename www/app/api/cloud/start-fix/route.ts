@@ -312,38 +312,40 @@ export async function POST(request: Request) {
       useV0DevAgentRunner
     }
 
-    // Run setup/enqueue in the background so the API can return runId immediately.
+    // Save workflow run metadata BEFORE returning — the client navigates to the report
+    // page immediately, so the run must exist in blob storage when the page loads.
+    if (userId && projectName) {
+      try {
+        await saveWorkflowRun({
+          id: runId,
+          userId,
+          projectName,
+          timestamp: runTimestamp,
+          status: "running",
+          type: workflowType,
+          devAgentId: devAgent?.id,
+          devAgentName: devAgent?.name,
+          devAgentDescription: devAgent?.description,
+          devAgentExecutionMode: devAgent?.executionMode,
+          devAgentSandboxBrowser: devAgent?.sandboxBrowser,
+          currentStep: "Step 1: Initializing sandbox...",
+          stepNumber: 1,
+          customPrompt: workflowType === "prompt" ? customPrompt : undefined
+        })
+        workflowLog(`[Start Fix] Saved workflow run metadata (running): ${runId}`)
+      } catch (saveError) {
+        workflowError("[Start Fix] ERROR saving workflow metadata:", saveError)
+      }
+    } else {
+      workflowError(`[Start Fix] Cannot save - missing userId (${!!userId}) or projectName (${!!projectName})`)
+    }
+
+    // Run workflow start + usage increment in the background.
     void (async () => {
       if (devAgent?.id) {
         await incrementDevAgentUsage(devAgent.id).catch((usageError) => {
           workflowError("[Start Fix] Failed to update devAgent usage count:", usageError)
         })
-      }
-
-      if (userId && projectName) {
-        try {
-          await saveWorkflowRun({
-            id: runId,
-            userId,
-            projectName,
-            timestamp: runTimestamp,
-            status: "running",
-            type: workflowType,
-            devAgentId: devAgent?.id,
-            devAgentName: devAgent?.name,
-            devAgentDescription: devAgent?.description,
-            devAgentExecutionMode: devAgent?.executionMode,
-            devAgentSandboxBrowser: devAgent?.sandboxBrowser,
-            currentStep: "Step 1: Initializing sandbox...",
-            stepNumber: 1,
-            customPrompt: workflowType === "prompt" ? customPrompt : undefined
-          })
-          workflowLog(`[Start Fix] Saved workflow run metadata (running): ${runId}`)
-        } catch (saveError) {
-          workflowError("[Start Fix] ERROR saving workflow metadata:", saveError)
-        }
-      } else {
-        workflowError(`[Start Fix] Cannot save - missing userId (${!!userId}) or projectName (${!!projectName})`)
       }
 
       // Start the workflow (fire-and-forget style)
