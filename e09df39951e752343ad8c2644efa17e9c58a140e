@@ -1,0 +1,89 @@
+www/app/api/cloud/start-fix/route.ts
+  d967579f4a415b72 299
+www/types.ts
+  d967579f4a415b72 165-168
+www/app/api/dev-agents/route.ts
+  d967579f4a415b72 92,166-167
+www/lib/dev-agents.ts
+  d967579f4a415b72 91,212-213,662,682-683,711,732-733
+www/app/api/cloud/fix-workflow/steps.ts
+  d967579f4a415b72 1836-1838,1840-1860,1862,1866-2035,2037-2039,2054-2055,2065-2067,2078,2080,2086-2093,2095,2098-2100,2105-2106,2133-2134,2136,2168-2169,2215-2216,2218,2251,2253-2258,2260-2274,2291-2299,2302
+www/app/dev-agents/new/new-dev-agent-client.tsx
+  d967579f4a415b72 328-330,498-499,790-810,853-873
+www/app/api/cloud/fix-workflow/workflow.ts
+  d967579f4a415b72 49-53,110,151,259,261-264,275,279-280,282-287,289-290,292-304,306-310,313-321,331,362-364,387-388,591-641,676-677,708-709,713-715,737-738,741-744,759-760
+www/app/api/dev-agents/[id]/route.ts
+  d967579f4a415b72 98,159-160
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.22",
+  "base_commit_sha": "e09df39951e752343ad8c2644efa17e9c58a140e",
+  "prompts": {
+    "0aa6513ae1b3fe4b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d2b40-e55f-7e13-bbd6-f82ba94fd54e",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh <elsigh@gmail.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 343,
+      "overriden_lines": 0
+    },
+    "15ee34bf56102da9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d2b5c-2480-7471-951b-48309e64d895",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh <elsigh@gmail.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 28,
+      "overriden_lines": 0
+    },
+    "c34c5d3e3be9db4d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d1b68-dc01-7973-a3af-524244222f89",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh <elsigh@gmail.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 32,
+      "overriden_lines": 0
+    },
+    "d967579f4a415b72": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5d5b126b-6fa1-4445-9f56-8571053f59d6",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "elsigh <elsigh@gmail.com>",
+      "messages": [],
+      "total_additions": 489,
+      "total_deletions": 127,
+      "accepted_lines": 454,
+      "overriden_lines": 0
+    },
+    "f17c0955a9b412cc": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d2c3c-3753-70a2-b378-537f035ab65b",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh <elsigh@gmail.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 32,
+      "overriden_lines": 0
+    }
+  }
+}
