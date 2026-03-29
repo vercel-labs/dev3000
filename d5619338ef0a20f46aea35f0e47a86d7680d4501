@@ -1,0 +1,77 @@
+www/lib/workflow-storage.ts
+  6b43adaa4adc235e 4,101,103-107
+www/types.ts
+  6b43adaa4adc235e 151-160
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.22",
+  "base_commit_sha": "d5619338ef0a20f46aea35f0e47a86d7680d4501",
+  "prompts": {
+    "0aa6513ae1b3fe4b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d2b40-e55f-7e13-bbd6-f82ba94fd54e",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh <elsigh@gmail.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 343,
+      "overriden_lines": 0
+    },
+    "15ee34bf56102da9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d2b5c-2480-7471-951b-48309e64d895",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh <elsigh@gmail.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 28,
+      "overriden_lines": 0
+    },
+    "6b43adaa4adc235e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "90b45e68-316e-467f-80cd-d3cd61f397fc",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "elsigh <elsigh@gmail.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 17,
+      "overriden_lines": 0
+    },
+    "c34c5d3e3be9db4d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d1b68-dc01-7973-a3af-524244222f89",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh <elsigh@gmail.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 32,
+      "overriden_lines": 0
+    },
+    "f17c0955a9b412cc": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d2c3c-3753-70a2-b378-537f035ab65b",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh <elsigh@gmail.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 32,
+      "overriden_lines": 0
+    }
+  }
+}
