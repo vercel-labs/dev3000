@@ -205,15 +205,19 @@ export default function DevAgentRunClient({
     if (projects.length === 0) return
 
     const controller = new AbortController()
-    const projectsWithGithub = projects.filter((p) => p.link?.org && p.link?.repo).slice(0, 20) // cap to avoid rate limits
+    const projectsWithGithub = projects
+      .filter((project): project is Project & { link: { org: string; repo: string } } =>
+        Boolean(project.link?.org && project.link?.repo)
+      )
+      .slice(0, 20) // cap to avoid rate limits
 
     if (projectsWithGithub.length === 0) return
 
     void Promise.allSettled(
       projectsWithGithub.map(async (project) => {
         const params = new URLSearchParams({
-          owner: project.link!.org,
-          repo: project.link!.repo
+          owner: project.link.org,
+          repo: project.link.repo
         })
         const response = await fetch(`/api/github/repo-visibility?${params.toString()}`, {
           signal: controller.signal

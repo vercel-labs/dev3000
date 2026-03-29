@@ -54,6 +54,7 @@ export default async function DevAgentsPage({ params }: { params: Promise<{ team
       const stats = MARKETPLACE_AGENT_STATS[devAgent.id] ?? {
         projectRuns: "0",
         successRate: "—",
+        mergeRate: "—",
         tokensUsed: "0",
         previouslyPurchased: false
       }

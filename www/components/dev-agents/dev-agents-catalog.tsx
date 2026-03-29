@@ -3,8 +3,9 @@
 import { Play, ShoppingCart } from "lucide-react"
 import type { Route } from "next"
 import Link from "next/link"
-import { usePathname, useRouter, useSearchParams } from "next/navigation"
+import { usePathname, useSearchParams } from "next/navigation"
 import type React from "react"
+import { useEffect, useState } from "react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -243,21 +244,32 @@ function CatalogSection({ title, children }: { title: string; children: React.Re
 
 export function DevAgentsCatalog({ teamBasePath, teamAgents, marketplaceAgents }: DevAgentsCatalogProps) {
   const searchParams = useSearchParams()
-  const router = useRouter()
   const pathname = usePathname()
-  const activeTab = searchParams.get("tab") === "marketplace" ? "marketplace" : "team"
+  const searchParamTab = searchParams.get("tab") === "marketplace" ? "marketplace" : "team"
+  const [activeTab, setActiveTab] = useState<"team" | "marketplace">(searchParamTab)
   const favoriteAgents = marketplaceAgents.filter((a) => a.stats.previouslyPurchased)
   const otherMarketplaceAgents = marketplaceAgents.filter((a) => !a.stats.previouslyPurchased)
 
+  useEffect(() => {
+    setActiveTab(searchParamTab)
+  }, [searchParamTab])
+
   function onTabChange(value: string) {
+    const nextTab = value === "marketplace" ? "marketplace" : "team"
+    setActiveTab(nextTab)
+
+    if (typeof window === "undefined") {
+      return
+    }
+
     const params = new URLSearchParams(searchParams.toString())
-    if (value === "marketplace") {
+    if (nextTab === "marketplace") {
       params.set("tab", "marketplace")
     } else {
       params.delete("tab")
     }
     const qs = params.toString()
-    router.replace(`${pathname}${qs ? `?${qs}` : ""}` as Route, { scroll: false })
+    window.history.replaceState(window.history.state, "", `${pathname}${qs ? `?${qs}` : ""}`)
   }
 
   return (
