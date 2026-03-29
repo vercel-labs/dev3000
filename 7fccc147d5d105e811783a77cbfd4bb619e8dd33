@@ -1,0 +1,129 @@
+www/app/api/workflows/route.ts
+  b4a0577f34eb35cd 1
+www/app/dev-agents/[agentId]/new/dev-agent-run-client.tsx
+  b4a0577f34eb35cd 408
+www/app/dev-agents/runs/runs-client.tsx
+  b4a0577f34eb35cd 80,140
+www/app/dev-agents/runs/[id]/report/page.tsx
+  b4a0577f34eb35cd 24-25,45,59,222,240,475
+www/app/workflows/[id]/report/page.tsx
+  b4a0577f34eb35cd 3,5
+www/app/dev-agents/runs/[id]/report/report-pending.tsx
+  b4a0577f34eb35cd 53,55,73,84,104
+www/app/workflows/[id]/report/loading.tsx
+  b4a0577f34eb35cd 1
+www/app/api/cloud/fix-workflow/steps.ts
+  6b43adaa4adc235e 694,2272-2275,2300-2301,2367-2374,2789,3315,3390-3395
+  b4a0577f34eb35cd 1677-1678,1681-1692,1695-1705,1707-1709,1835-1939,3995
+www/app/dev-agents/runs/[id]/report/share-button.tsx
+  b4a0577f34eb35cd 20
+www/components/dev-agents/dashboard-shell.tsx
+  b4a0577f34eb35cd 98,100
+www/app/api/og/workflows/[id]/route.tsx
+  b4a0577f34eb35cd 1
+www/app/api/dev-agents/runs/[id]/public/route.ts
+  b4a0577f34eb35cd 5
+www/app/api/og/dev-agents/runs/[id]/route.tsx
+  b4a0577f34eb35cd 78,165
+www/app/dev-agents/new/new-dev-agent-client.tsx
+  6b43adaa4adc235e 64,72-85,89,91,95,97,101,103,107,109,174,188,190-201,254,262-263,270,276-279,282-283,328,331-354,447,449-453
+  b4a0577f34eb35cd 6,145-163,280-281,311-314,359-369,372,474-477,479,489,492,509-514,521-524,526,531,579-600,628-635,706,740,742-754,756-757,759,761-785,788-806,808-817,819-826,829-830,836-841
+www/app/api/dev-agents/[id]/route.ts
+  6b43adaa4adc235e 109-114
+www/app/api/dev-agents/runs/route.ts
+  b4a0577f34eb35cd 21-22,29,66-67,75
+www/app/api/cloud/start-fix/route.ts
+  6b43adaa4adc235e 295
+www/app/api/dev-agents/route.ts
+  6b43adaa4adc235e 103-104,107
+www/app/api/workflows/[id]/public/route.ts
+  b4a0577f34eb35cd 1
+www/app/api/cloud/fix-workflow/workflow.ts
+  6b43adaa4adc235e 91,141,176-177,497
+  b4a0577f34eb35cd 251-303,629-685
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.22",
+  "base_commit_sha": "7fccc147d5d105e811783a77cbfd4bb619e8dd33",
+  "prompts": {
+    "0aa6513ae1b3fe4b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d2b40-e55f-7e13-bbd6-f82ba94fd54e",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh <elsigh@gmail.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 343,
+      "overriden_lines": 0
+    },
+    "15ee34bf56102da9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d2b5c-2480-7471-951b-48309e64d895",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh <elsigh@gmail.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 28,
+      "overriden_lines": 0
+    },
+    "6b43adaa4adc235e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "90b45e68-316e-467f-80cd-d3cd61f397fc",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "elsigh <elsigh@gmail.com>",
+      "messages": [],
+      "total_additions": 260,
+      "total_deletions": 245,
+      "accepted_lines": 133,
+      "overriden_lines": 0
+    },
+    "b4a0577f34eb35cd": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "000643f2-ad3d-4d2a-a360-0f227b36762f",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "elsigh <elsigh@gmail.com>",
+      "messages": [],
+      "total_additions": 526,
+      "total_deletions": 1928,
+      "accepted_lines": 488,
+      "overriden_lines": 0
+    },
+    "c34c5d3e3be9db4d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d1b68-dc01-7973-a3af-524244222f89",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh <elsigh@gmail.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 32,
+      "overriden_lines": 0
+    },
+    "f17c0955a9b412cc": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d2c3c-3753-70a2-b378-537f035ab65b",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh <elsigh@gmail.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 32,
+      "overriden_lines": 0
+    }
+  }
+}
