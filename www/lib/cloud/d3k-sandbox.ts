@@ -1462,7 +1462,7 @@ export async function createD3kSandboxFromSnapshot(config: D3kSandboxFromSnapsho
     ports: [3000] // App port
   })
 
-  if (debug) console.log(`  ✅ Sandbox created from snapshot: ${sandbox.name}`)
+  if (debug) console.log(`  ✅ Sandbox created from snapshot: ${sandbox.sandboxId}`)
 
   const sandboxCwd = "/vercel/sandbox"
 
@@ -1590,7 +1590,7 @@ export async function createD3kSandboxFromSnapshot(config: D3kSandboxFromSnapsho
  */
 export async function createSnapshotFromSandbox(sandbox: Sandbox, debug = false): Promise<Snapshot> {
   if (debug) {
-    console.log(`  📸 Creating snapshot from sandbox ${sandbox.name}...`)
+    console.log(`  📸 Creating snapshot from sandbox ${sandbox.sandboxId}...`)
     console.log("  ⚠️ Note: This will stop the sandbox")
   }
 
@@ -1598,7 +1598,7 @@ export async function createSnapshotFromSandbox(sandbox: Sandbox, debug = false)
 
   if (debug) {
     console.log(`  ✅ Snapshot created: ${snapshot.snapshotId}`)
-    console.log(`  Source session: ${snapshot.sourceSessionId}`)
+    console.log(`  Source sandbox: ${snapshot.sourceSandboxId}`)
     console.log(`  Status: ${snapshot.status}`)
   }
 
@@ -1672,7 +1672,7 @@ async function createAndSaveBaseSnapshot(timeoutMs: number, debug = false): Prom
     runtime: "node22"
   })
 
-  if (debug) console.log(`  ✅ Base sandbox created: ${baseSandbox.name}`)
+  if (debug) console.log(`  ✅ Base sandbox created: ${baseSandbox.sandboxId}`)
 
   // Helper to run commands
   async function runCmd(
