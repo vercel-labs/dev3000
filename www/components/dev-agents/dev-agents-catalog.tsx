@@ -14,6 +14,7 @@ export interface TeamCatalogAgent {
   devAgent: DevAgent
   canEdit: boolean
   ownerName: string
+  stats: MarketplaceAgentStats
 }
 
 export interface MarketplaceCatalogAgent {
@@ -67,8 +68,52 @@ function OwnerIdentity({ name }: { name: string }) {
   )
 }
 
+function DevAgentCriteria({ devAgent }: { devAgent: DevAgent }) {
+  const earlyExitText = devAgent.earlyExitEval?.trim() || "None"
+
+  return (
+    <div className="space-y-2 rounded-md border border-[#1f1f1f] bg-[#111] p-3">
+      <div className="grid gap-2">
+        <div>
+          <div className="text-[11px] uppercase tracking-wider text-[#555]">Success Eval</div>
+          <div className="mt-1 text-[13px] leading-[18px] text-[#888]">{devAgent.successEval?.trim() || "None"}</div>
+        </div>
+        <div>
+          <div className="text-[11px] uppercase tracking-wider text-[#555]">Early Exit</div>
+          <div className="mt-1 text-[13px] leading-[18px] text-[#888]">{earlyExitText}</div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function DevAgentStats({ stats }: { stats: MarketplaceAgentStats }) {
+  return (
+    <div className="rounded-md border border-[#1f1f1f] bg-[#111] p-3">
+      <div className="grid grid-cols-4 gap-3">
+        <div>
+          <div className="text-[11px] uppercase tracking-wider text-[#555]">Runs</div>
+          <div className="mt-0.5 text-[13px] font-medium text-[#ededed]">{stats.projectRuns}</div>
+        </div>
+        <div>
+          <div className="text-[11px] uppercase tracking-wider text-[#555]">Success</div>
+          <div className="mt-0.5 text-[13px] font-medium text-[#ededed]">{stats.successRate}</div>
+        </div>
+        <div>
+          <div className="text-[11px] uppercase tracking-wider text-[#555]">Merges</div>
+          <div className="mt-0.5 text-[13px] font-medium text-[#ededed]">{stats.mergeRate}</div>
+        </div>
+        <div>
+          <div className="text-[11px] uppercase tracking-wider text-[#555]">Tokens</div>
+          <div className="mt-0.5 text-[13px] font-medium text-[#ededed]">{stats.tokensUsed}</div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function TeamAgentCard({ teamBasePath, agent }: { teamBasePath: string; agent: TeamCatalogAgent }) {
-  const { devAgent, canEdit, ownerName } = agent
+  const { devAgent, canEdit, ownerName, stats } = agent
 
   return (
     <div className="flex flex-col justify-between rounded-lg border border-[#1f1f1f] bg-[#0a0a0a] p-4 transition-colors hover:border-[#333]">
@@ -96,6 +141,10 @@ function TeamAgentCard({ teamBasePath, agent }: { teamBasePath: string; agent: T
         {/* Description */}
         <p className="line-clamp-2 text-[13px] leading-[20px] text-[#888]">{devAgent.description}</p>
 
+        <DevAgentCriteria devAgent={devAgent} />
+
+        <DevAgentStats stats={stats} />
+
         {/* Tags */}
         <div className="flex flex-wrap gap-1.5">
           <span className="rounded-md bg-[#1a1a1a] px-2 py-0.5 text-[11px] text-[#888]">
@@ -110,9 +159,6 @@ function TeamAgentCard({ teamBasePath, agent }: { teamBasePath: string; agent: T
             <span className="rounded-md bg-[#1a1a1a] px-2 py-0.5 text-[11px] text-[#888]">
               {devAgent.usageCount} runs
             </span>
-          ) : null}
-          {devAgent.successEval ? (
-            <span className="rounded-md bg-[#1a1a1a] px-2 py-0.5 text-[11px] text-[#888]">Eval</span>
           ) : null}
           {devAgent.skillRefs.slice(0, 2).map((skill) => (
             <span
@@ -164,27 +210,9 @@ function MarketplaceAgentCard({ agent, teamBasePath }: { agent: MarketplaceCatal
         {/* Description */}
         <p className="line-clamp-2 text-[13px] leading-[20px] text-[#888]">{devAgent.description}</p>
 
-        {/* Stats */}
-        <div className="rounded-md border border-[#1f1f1f] bg-[#111] p-3">
-          <div className="grid grid-cols-4 gap-3">
-            <div>
-              <div className="text-[11px] uppercase tracking-wider text-[#555]">Project Runs</div>
-              <div className="mt-0.5 text-[13px] font-medium text-[#ededed]">{stats.projectRuns}</div>
-            </div>
-            <div>
-              <div className="text-[11px] uppercase tracking-wider text-[#555]">Success Rate</div>
-              <div className="mt-0.5 text-[13px] font-medium text-[#ededed]">{stats.successRate}</div>
-            </div>
-            <div>
-              <div className="text-[11px] uppercase tracking-wider text-[#555]">Merge Rate</div>
-              <div className="mt-0.5 text-[13px] font-medium text-[#ededed]">{stats.mergeRate}</div>
-            </div>
-            <div>
-              <div className="text-[11px] uppercase tracking-wider text-[#555]">Tokens Used</div>
-              <div className="mt-0.5 text-[13px] font-medium text-[#ededed]">{stats.tokensUsed}</div>
-            </div>
-          </div>
-        </div>
+        <DevAgentCriteria devAgent={devAgent} />
+
+        <DevAgentStats stats={stats} />
       </div>
 
       {/* Actions */}

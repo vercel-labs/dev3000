@@ -33,7 +33,18 @@ export default async function DevAgentsPage({ params }: { params: Promise<{ team
     .filter((a) => a.kind !== "marketplace")
     .map((devAgent) => {
       const ownerName = devAgent.author.id === "system" ? "Vercel" : devAgent.author.name || devAgent.author.username
-      return { devAgent, ownerName, canEdit: canEditDevAgent(devAgent, user) }
+      return {
+        devAgent,
+        ownerName,
+        canEdit: canEditDevAgent(devAgent, user),
+        stats: {
+          projectRuns: devAgent.usageCount.toLocaleString(),
+          successRate: "—",
+          mergeRate: "—",
+          tokensUsed: "—",
+          previouslyPurchased: false
+        }
+      }
     })
 
   const marketplaceAgents = devAgents

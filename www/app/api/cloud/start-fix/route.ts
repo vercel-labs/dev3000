@@ -301,7 +301,9 @@ export async function POST(request: Request) {
       devAgentActionSteps: devAgent?.actionSteps,
       devAgentSkillRefs: devAgent?.skillRefs,
       devAgentSuccessEval: devAgent?.successEval,
+      devAgentEarlyExitMode: devAgent?.earlyExitMode,
       devAgentEarlyExitEval: devAgent?.earlyExitEval,
+      devAgentEarlyExitRule: devAgent?.earlyExitRule,
       analysisTargetType,
       publicUrl,
       startPath: startPath || "/", // Page path to analyze (e.g., "/about")

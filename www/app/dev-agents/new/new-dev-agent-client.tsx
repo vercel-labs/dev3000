@@ -32,7 +32,16 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import type { DevAgent, DevAgentActionStep, DevAgentAiAgent, DevAgentTeam } from "@/lib/dev-agents"
+import type {
+  DevAgent,
+  DevAgentActionStep,
+  DevAgentAiAgent,
+  DevAgentEarlyExitMode,
+  DevAgentEarlyExitOperator,
+  DevAgentEarlyExitRule,
+  DevAgentEarlyExitValueType,
+  DevAgentTeam
+} from "@/lib/dev-agents"
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -107,6 +116,63 @@ const PROMPT_TEMPLATES: Array<{
     prompt: "Go back to step N and repeat from there to verify improvements."
   }
 ]
+
+const BUILTIN_EARLY_EXIT_METRICS = [
+  { value: "cls", label: "CLS", description: "Cumulative Layout Shift" },
+  { value: "lcp", label: "LCP", description: "Largest Contentful Paint (ms)" },
+  { value: "fcp", label: "FCP", description: "First Contentful Paint (ms)" },
+  { value: "ttfb", label: "TTFB", description: "Time to First Byte (ms)" },
+  { value: "inp", label: "INP", description: "Interaction to Next Paint (ms)" },
+  { value: "cls_grade", label: "CLS Grade", description: "good / needs-improvement / poor" },
+  { value: "lcp_grade", label: "LCP Grade", description: "good / needs-improvement / poor" },
+  { value: "fcp_grade", label: "FCP Grade", description: "good / needs-improvement / poor" },
+  { value: "ttfb_grade", label: "TTFB Grade", description: "good / needs-improvement / poor" },
+  { value: "inp_grade", label: "INP Grade", description: "good / needs-improvement / poor" },
+  { value: "skills_installed_count", label: "Installed Skills Count", description: "Number of sandbox skills" },
+  { value: "has_skills_installed", label: "Has Installed Skills", description: "true / false" },
+  { value: "cloud_browser_mode", label: "Cloud Browser Mode", description: "agent-browser / next-browser" }
+] as const
+
+const NUMERIC_OPERATORS: DevAgentEarlyExitOperator[] = ["<", "<=", ">", ">=", "===", "!==", "between"]
+const MATCH_OPERATORS: DevAgentEarlyExitOperator[] = ["===", "!=="]
+
+function createDefaultEarlyExitRule(): DevAgentEarlyExitRule {
+  return {
+    metricType: "builtin",
+    metricKey: "cls",
+    valueType: "number",
+    operator: "<=",
+    valueNumber: 0.1
+  }
+}
+
+function getEarlyExitOperators(valueType: DevAgentEarlyExitValueType): DevAgentEarlyExitOperator[] {
+  return valueType === "number" ? NUMERIC_OPERATORS : MATCH_OPERATORS
+}
+
+function getBuiltinMetricMeta(metricKey: string) {
+  return BUILTIN_EARLY_EXIT_METRICS.find((metric) => metric.value === metricKey)
+}
+
+function buildStructuredEarlyExitPreview(rule: DevAgentEarlyExitRule): string {
+  const metricLabel =
+    rule.metricType === "builtin"
+      ? getBuiltinMetricMeta(rule.metricKey)?.label || rule.metricKey
+      : rule.label?.trim() || rule.metricKey
+
+  if (rule.valueType === "number") {
+    if (rule.operator === "between") {
+      return `${metricLabel} is between ${rule.valueNumber ?? "?"} and ${rule.secondaryValueNumber ?? "?"}`
+    }
+    return `${metricLabel} ${rule.operator} ${rule.valueNumber ?? "?"}`
+  }
+
+  if (rule.valueType === "boolean") {
+    return `${metricLabel} ${rule.operator} ${String(rule.valueBoolean ?? false)}`
+  }
+
+  return `${metricLabel} ${rule.operator} "${rule.valueString ?? ""}"`
+}
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -205,6 +271,238 @@ function InsertStepButton({ onInsert }: { onInsert: (prompt: string) => void }) 
   )
 }
 
+function EarlyExitEditor({
+  mode,
+  rule,
+  textValue,
+  canEdit,
+  onModeChange,
+  onRuleChange,
+  onTextChange
+}: {
+  mode: DevAgentEarlyExitMode
+  rule: DevAgentEarlyExitRule
+  textValue: string
+  canEdit: boolean
+  onModeChange: (mode: DevAgentEarlyExitMode) => void
+  onRuleChange: (rule: DevAgentEarlyExitRule) => void
+  onTextChange: (value: string) => void
+}) {
+  const operators = getEarlyExitOperators(rule.valueType)
+  const preview = buildStructuredEarlyExitPreview(rule)
+
+  return (
+    <div className="rounded-lg border border-border/60 bg-background/90 p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Zap className="size-4 text-muted-foreground" />
+          <span className="text-sm font-medium text-foreground">Early Exit Condition</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Badge variant="secondary" className="shrink-0 rounded-full px-2 py-0.5 text-[10px]">
+            Optional
+          </Badge>
+          <Select
+            value={mode}
+            onValueChange={(value) => onModeChange(value as DevAgentEarlyExitMode)}
+            disabled={!canEdit}
+          >
+            <SelectTrigger className="h-8 w-[170px] text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="structured">Structured Rule</SelectItem>
+              <SelectItem value="text">Advanced Text</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {mode === "structured" ? (
+        <div className="mt-3 grid gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Metric Type</Label>
+              <Select
+                value={rule.metricType}
+                onValueChange={(value) =>
+                  onRuleChange({
+                    ...rule,
+                    metricType: value as DevAgentEarlyExitRule["metricType"],
+                    metricKey: value === "builtin" ? "cls" : rule.metricKey || "custom_metric"
+                  })
+                }
+                disabled={!canEdit}
+              >
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="builtin">Built-in Metric</SelectItem>
+                  <SelectItem value="custom">Custom Metric</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Metric</Label>
+              {rule.metricType === "builtin" ? (
+                <Select
+                  value={rule.metricKey}
+                  onValueChange={(value) => onRuleChange({ ...rule, metricKey: value })}
+                  disabled={!canEdit}
+                >
+                  <SelectTrigger className="h-9 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {BUILTIN_EARLY_EXIT_METRICS.map((metric) => (
+                      <SelectItem key={metric.value} value={metric.value}>
+                        {metric.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  value={rule.metricKey}
+                  onChange={(event) => onRuleChange({ ...rule, metricKey: event.target.value })}
+                  placeholder="e.g. auth_enabled"
+                  className="h-9 text-xs"
+                  disabled={!canEdit}
+                />
+              )}
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Value Type</Label>
+              <Select
+                value={rule.valueType}
+                onValueChange={(value) => {
+                  const valueType = value as DevAgentEarlyExitValueType
+                  onRuleChange({
+                    ...rule,
+                    valueType,
+                    operator: getEarlyExitOperators(valueType)[0],
+                    valueNumber: valueType === "number" ? (rule.valueNumber ?? 0) : undefined,
+                    secondaryValueNumber: valueType === "number" ? rule.secondaryValueNumber : undefined,
+                    valueBoolean: valueType === "boolean" ? (rule.valueBoolean ?? true) : undefined,
+                    valueString: valueType === "string" ? (rule.valueString ?? "") : undefined
+                  })
+                }}
+                disabled={!canEdit}
+              >
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="number">Number</SelectItem>
+                  <SelectItem value="boolean">Boolean</SelectItem>
+                  <SelectItem value="string">String</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Operator</Label>
+              <Select
+                value={rule.operator}
+                onValueChange={(value) => onRuleChange({ ...rule, operator: value as DevAgentEarlyExitOperator })}
+                disabled={!canEdit}
+              >
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {operators.map((operator) => (
+                    <SelectItem key={operator} value={operator}>
+                      {operator}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Value</Label>
+              {rule.valueType === "number" ? (
+                <Input
+                  type="number"
+                  step="any"
+                  value={typeof rule.valueNumber === "number" ? String(rule.valueNumber) : ""}
+                  onChange={(event) =>
+                    onRuleChange({
+                      ...rule,
+                      valueNumber: event.target.value === "" ? undefined : Number(event.target.value)
+                    })
+                  }
+                  className="h-9 text-xs"
+                  disabled={!canEdit}
+                />
+              ) : rule.valueType === "boolean" ? (
+                <Select
+                  value={String(rule.valueBoolean ?? true)}
+                  onValueChange={(value) => onRuleChange({ ...rule, valueBoolean: value === "true" })}
+                  disabled={!canEdit}
+                >
+                  <SelectTrigger className="h-9 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="true">true</SelectItem>
+                    <SelectItem value="false">false</SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input
+                  value={rule.valueString ?? ""}
+                  onChange={(event) => onRuleChange({ ...rule, valueString: event.target.value })}
+                  className="h-9 text-xs"
+                  disabled={!canEdit}
+                />
+              )}
+            </div>
+          </div>
+
+          {rule.valueType === "number" && rule.operator === "between" ? (
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Upper Bound</Label>
+              <Input
+                type="number"
+                step="any"
+                value={typeof rule.secondaryValueNumber === "number" ? String(rule.secondaryValueNumber) : ""}
+                onChange={(event) =>
+                  onRuleChange({
+                    ...rule,
+                    secondaryValueNumber: event.target.value === "" ? undefined : Number(event.target.value)
+                  })
+                }
+                className="h-9 text-xs"
+                disabled={!canEdit}
+              />
+            </div>
+          ) : null}
+
+          <div className="rounded-md border border-border/50 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">Preview:</span> {preview}
+          </div>
+        </div>
+      ) : (
+        <Textarea
+          value={textValue}
+          onChange={(event) => onTextChange(event.target.value)}
+          placeholder="Describe when this agent should skip running..."
+          className="mt-3 min-h-12 text-xs"
+          rows={2}
+          disabled={!canEdit}
+        />
+      )}
+    </div>
+  )
+}
+
 function FixedStepCard({
   stepNumber,
   title,
@@ -290,7 +588,7 @@ function ActionStepCard({
 // ── Main Component ──────────────────────────────────────────────────────────
 
 export default function NewDevAgentClient({
-  user,
+  user: _user,
   team,
   devAgent,
   mode = "create",
@@ -326,7 +624,15 @@ export default function NewDevAgentClient({
   const [successEval, setSuccessEval] = useState(devAgent?.successEval ?? "")
 
   // Early exit eval
+  const [earlyExitMode, setEarlyExitMode] = useState<DevAgentEarlyExitMode>(() => {
+    if (devAgent?.earlyExitRule) return devAgent.earlyExitMode ?? "structured"
+    if (devAgent?.earlyExitEval) return devAgent.earlyExitMode ?? "text"
+    return "structured"
+  })
   const [earlyExitEval, setEarlyExitEval] = useState(devAgent?.earlyExitEval ?? "")
+  const [earlyExitRule, setEarlyExitRule] = useState<DevAgentEarlyExitRule>(
+    () => devAgent?.earlyExitRule ?? createDefaultEarlyExitRule()
+  )
 
   // Action steps — migrate legacy kinds to send-prompt on load
   const [actionSteps, setActionSteps] = useState<ActionStep[]>(() => {
@@ -477,6 +783,8 @@ export default function NewDevAgentClient({
     // If in text mode, sync text back to action steps before submitting
     const resolvedSteps = workflowView === "text" ? parseTextToSteps(textModeValue) : actionSteps
     const resolvedPrompt = resolvedSteps.length > 0 ? `[${resolvedSteps.length} structured action steps]` : ""
+    const resolvedEarlyExitEval =
+      earlyExitMode === "structured" ? buildStructuredEarlyExitPreview(earlyExitRule) : earlyExitEval.trim()
 
     setSubmitError(null)
     setSavedMessage(null)
@@ -496,7 +804,9 @@ export default function NewDevAgentClient({
             skillRefs: effectiveSelectedSkills,
             team,
             successEval: successEval.trim() || undefined,
-            earlyExitEval: earlyExitEval.trim() || undefined
+            earlyExitMode,
+            earlyExitEval: resolvedEarlyExitEval || undefined,
+            earlyExitRule: earlyExitMode === "structured" ? earlyExitRule : undefined
           })
         })
 
@@ -788,26 +1098,15 @@ export default function NewDevAgentClient({
                 </div>
               </div>
 
-              {/* Early Exit Condition */}
-              <div className="rounded-lg border border-border/60 bg-background/90 p-4">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <Zap className="size-4 text-muted-foreground" />
-                    <span className="text-sm font-medium text-foreground">Early Exit Condition</span>
-                  </div>
-                  <Badge variant="secondary" className="shrink-0 rounded-full px-2 py-0.5 text-[10px]">
-                    Optional
-                  </Badge>
-                </div>
-                <Textarea
-                  value={earlyExitEval}
-                  onChange={(e) => setEarlyExitEval(e.target.value)}
-                  placeholder="Describe when this agent should skip running (e.g. 'CLS score is 0.1 or below')..."
-                  className="mt-2 min-h-12 text-xs"
-                  rows={2}
-                  disabled={!canEdit}
-                />
-              </div>
+              <EarlyExitEditor
+                mode={earlyExitMode}
+                rule={earlyExitRule}
+                textValue={earlyExitEval}
+                canEdit={canEdit}
+                onModeChange={setEarlyExitMode}
+                onRuleChange={setEarlyExitRule}
+                onTextChange={setEarlyExitEval}
+              />
             </div>
           </>
         ) : (
@@ -851,26 +1150,15 @@ export default function NewDevAgentClient({
                 />
               </div>
 
-              {/* Early Exit Condition — separate textarea in text mode */}
-              <div className="rounded-lg border border-border/60 bg-background/90 p-4">
-                <div className="flex items-center justify-between gap-2 mb-2">
-                  <div className="flex items-center gap-2">
-                    <Zap className="size-4 text-muted-foreground" />
-                    <span className="text-sm font-medium text-foreground">Early Exit Condition</span>
-                  </div>
-                  <Badge variant="secondary" className="shrink-0 rounded-full px-2 py-0.5 text-[10px]">
-                    Optional
-                  </Badge>
-                </div>
-                <Textarea
-                  value={earlyExitEval}
-                  onChange={(e) => setEarlyExitEval(e.target.value)}
-                  placeholder="Describe when this agent should skip running (e.g. 'CLS score is 0.1 or below')..."
-                  className="min-h-12 text-xs"
-                  rows={2}
-                  disabled={!canEdit}
-                />
-              </div>
+              <EarlyExitEditor
+                mode={earlyExitMode}
+                rule={earlyExitRule}
+                textValue={earlyExitEval}
+                canEdit={canEdit}
+                onModeChange={setEarlyExitMode}
+                onRuleChange={setEarlyExitRule}
+                onTextChange={setEarlyExitEval}
+              />
             </div>
           </>
         )}

@@ -52,6 +52,84 @@ export interface DevAgentSkillRef {
 }
 
 export type DevAgentAiAgent = "d3k" | "claude" | "codex"
+export type DevAgentEarlyExitMode = "structured" | "text"
+export type DevAgentEarlyExitMetricType = "builtin" | "custom"
+export type DevAgentEarlyExitValueType = "number" | "boolean" | "string"
+export type DevAgentEarlyExitOperator = "<" | "<=" | ">" | ">=" | "===" | "!==" | "between"
+
+export interface DevAgentEarlyExitRule {
+  metricType: DevAgentEarlyExitMetricType
+  metricKey: string
+  label?: string
+  valueType: DevAgentEarlyExitValueType
+  operator: DevAgentEarlyExitOperator
+  valueNumber?: number
+  secondaryValueNumber?: number
+  valueBoolean?: boolean
+  valueString?: string
+}
+
+export function isDevAgentEarlyExitMode(value: string): value is DevAgentEarlyExitMode {
+  return value === "structured" || value === "text"
+}
+
+export function isDevAgentEarlyExitRule(value: unknown): value is DevAgentEarlyExitRule {
+  if (!value || typeof value !== "object") return false
+  const rule = value as Record<string, unknown>
+  if (rule.metricType !== "builtin" && rule.metricType !== "custom") return false
+  if (typeof rule.metricKey !== "string" || rule.metricKey.trim().length === 0) return false
+  if (typeof rule.label !== "undefined" && typeof rule.label !== "string") return false
+  if (rule.valueType !== "number" && rule.valueType !== "boolean" && rule.valueType !== "string") return false
+  if (!["<", "<=", ">", ">=", "===", "!==", "between"].includes(String(rule.operator))) return false
+
+  if (rule.valueType === "number") {
+    if (typeof rule.valueNumber !== "number" || !Number.isFinite(rule.valueNumber)) return false
+    if (rule.operator === "between") {
+      return typeof rule.secondaryValueNumber === "number" && Number.isFinite(rule.secondaryValueNumber)
+    }
+    return true
+  }
+
+  if (rule.operator === "between") return false
+
+  if (rule.valueType === "boolean") {
+    return typeof rule.valueBoolean === "boolean"
+  }
+
+  return typeof rule.valueString === "string"
+}
+
+export function parseDevAgentEarlyExitRule(input: DevAgentEarlyExitRule): DevAgentEarlyExitRule {
+  const metricKey = input.metricKey.trim()
+  const label = input.label?.trim() || undefined
+  const baseRule: DevAgentEarlyExitRule = {
+    metricType: input.metricType,
+    metricKey,
+    label,
+    valueType: input.valueType,
+    operator: input.operator
+  }
+
+  if (input.valueType === "number") {
+    return {
+      ...baseRule,
+      valueNumber: input.valueNumber,
+      secondaryValueNumber: input.operator === "between" ? input.secondaryValueNumber : undefined
+    }
+  }
+
+  if (input.valueType === "boolean") {
+    return {
+      ...baseRule,
+      valueBoolean: input.valueBoolean
+    }
+  }
+
+  return {
+    ...baseRule,
+    valueString: input.valueString?.trim() ?? ""
+  }
+}
 
 export type DevAgentActionStepKind =
   | "browse-to-page"
@@ -88,7 +166,9 @@ export interface DevAgent {
   supportsCrawlDepth?: boolean
   requiresCustomPrompt?: boolean
   successEval?: string
+  earlyExitMode?: DevAgentEarlyExitMode
   earlyExitEval?: string
+  earlyExitRule?: DevAgentEarlyExitRule
 }
 
 interface StoredDevAgent extends Omit<DevAgent, "usageCount" | "sandboxBrowser"> {
@@ -210,7 +290,15 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
     supportsPathInput: true,
     supportsPullRequest: true,
     successEval: "Is the CLS score now ≤ 0.1 and improved from the baseline?",
-    earlyExitEval: "CLS score is 0.1 or below (already good)"
+    earlyExitMode: "structured",
+    earlyExitEval: "CLS score is 0.1 or below (already good)",
+    earlyExitRule: {
+      metricType: "builtin",
+      metricKey: "cls",
+      valueType: "number",
+      operator: "<=",
+      valueNumber: 0.1
+    }
   },
   {
     id: "r_d91q7k",
@@ -659,7 +747,9 @@ export async function createCustomDevAgent(input: {
   author: DevAgentAuthor
   team: DevAgentTeam
   successEval?: string
+  earlyExitMode?: DevAgentEarlyExitMode
   earlyExitEval?: string
+  earlyExitRule?: DevAgentEarlyExitRule
 }): Promise<DevAgent> {
   const id = generateDevAgentId()
   const now = new Date().toISOString()
@@ -680,7 +770,9 @@ export async function createCustomDevAgent(input: {
     supportsPathInput: true,
     supportsPullRequest: true,
     successEval: input.successEval?.trim() || undefined,
-    earlyExitEval: input.earlyExitEval?.trim() || undefined
+    earlyExitMode: input.earlyExitMode,
+    earlyExitEval: input.earlyExitEval?.trim() || undefined,
+    earlyExitRule: input.earlyExitRule ? parseDevAgentEarlyExitRule(input.earlyExitRule) : undefined
   }
 
   await put(`${CUSTOM_DEV_AGENT_PREFIX}${id}.json`, JSON.stringify(storedDevAgent, null, 2), {
@@ -708,7 +800,9 @@ export async function updateCustomDevAgent(
     author: DevAgentAuthor
     team?: DevAgentTeam
     successEval?: string
+    earlyExitMode?: DevAgentEarlyExitMode
     earlyExitEval?: string
+    earlyExitRule?: DevAgentEarlyExitRule
   }
 ): Promise<DevAgent | null> {
   const canonicalDevAgentId = canonicalizeDevAgentId(devAgentId)
@@ -730,7 +824,13 @@ export async function updateCustomDevAgent(
     team: input.team ?? existingDevAgent.team,
     updatedAt: new Date().toISOString(),
     successEval: input.successEval?.trim() || existingDevAgent.successEval,
-    earlyExitEval: input.earlyExitEval?.trim() || existingDevAgent.earlyExitEval
+    earlyExitMode: input.earlyExitMode ?? existingDevAgent.earlyExitMode,
+    earlyExitEval: input.earlyExitEval?.trim() || existingDevAgent.earlyExitEval,
+    earlyExitRule: input.earlyExitRule
+      ? parseDevAgentEarlyExitRule(input.earlyExitRule)
+      : input.earlyExitMode === "text"
+        ? undefined
+        : existingDevAgent.earlyExitRule
   }
 
   await put(`${CUSTOM_DEV_AGENT_PREFIX}${canonicalDevAgentId}.json`, JSON.stringify(updatedDevAgent, null, 2), {

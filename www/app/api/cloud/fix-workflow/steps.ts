@@ -15,7 +15,7 @@ import { z } from "zod"
 import { getOrCreateD3kSandbox, type SandboxTimingData, StepTimer } from "@/lib/cloud/d3k-sandbox"
 import { SandboxAgentBrowser } from "@/lib/cloud/sandbox-agent-browser"
 import { SandboxNextBrowser } from "@/lib/cloud/sandbox-next-browser"
-import type { DevAgentSkillRef } from "@/lib/dev-agents"
+import type { DevAgentEarlyExitRule, DevAgentSkillRef } from "@/lib/dev-agents"
 import { skillFallbacks } from "@/lib/skills/fallbacks"
 import { listWorkflowRuns, saveWorkflowRun, type WorkflowType } from "@/lib/workflow-storage"
 import type { TurbopackBundleComparison, TurbopackBundleMetricsSnapshot, WorkflowReport } from "@/types"
@@ -1875,6 +1875,141 @@ export interface ObserveResult {
   timing: { totalMs: number; steps: Array<{ name: string; durationMs: number }> }
 }
 
+type EarlyExitMetricValue = number | boolean | string
+
+function normalizeMetricKey(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+}
+
+function buildObservationMetricMap(observation: ObserveResult): Record<string, EarlyExitMetricValue> {
+  const metrics: Record<string, EarlyExitMetricValue> = {}
+
+  const setMetric = (key: string, value: EarlyExitMetricValue | null | undefined) => {
+    if (value === null || typeof value === "undefined") return
+    metrics[normalizeMetricKey(key)] = value
+  }
+
+  const clsValue = observation.beforeCls ?? observation.beforeWebVitals.cls?.value
+  const clsGrade = observation.beforeGrade ?? observation.beforeWebVitals.cls?.grade
+  setMetric("cls", clsValue)
+  setMetric("cls_grade", clsGrade)
+
+  for (const key of ["lcp", "fcp", "ttfb", "inp"] as const) {
+    const metric = observation.beforeWebVitals[key]
+    setMetric(key, metric?.value)
+    setMetric(`${key}_grade`, metric?.grade)
+  }
+
+  setMetric("skills_installed_count", observation.skillsInstalled.length)
+  setMetric("has_skills_installed", observation.skillsInstalled.length > 0)
+  setMetric("cloud_browser_mode", observation.cloudBrowserMode)
+
+  return metrics
+}
+
+function formatMetricValue(value: EarlyExitMetricValue): string {
+  return typeof value === "string" ? `"${value}"` : String(value)
+}
+
+function evaluateStructuredEarlyExitRule(
+  rule: DevAgentEarlyExitRule | undefined,
+  observation: ObserveResult
+): { shouldExit: boolean; reason: string } | null {
+  if (!rule) return null
+
+  const metricMap = buildObservationMetricMap(observation)
+  const metricKey = normalizeMetricKey(rule.metricKey)
+  const metricValue = metricMap[metricKey]
+  const metricLabel = rule.label?.trim() || rule.metricKey
+
+  if (typeof metricValue === "undefined") {
+    return {
+      shouldExit: false,
+      reason: `Metric "${metricLabel}" was unavailable`
+    }
+  }
+
+  if (rule.valueType === "number") {
+    if (typeof metricValue !== "number") {
+      return {
+        shouldExit: false,
+        reason: `Metric "${metricLabel}" was not numeric`
+      }
+    }
+
+    const target = rule.valueNumber
+    const secondaryTarget = rule.secondaryValueNumber
+    if (typeof target !== "number" || !Number.isFinite(target)) {
+      return {
+        shouldExit: false,
+        reason: `Metric "${metricLabel}" had an invalid numeric threshold`
+      }
+    }
+
+    const comparisons: Record<string, boolean> = {
+      "<": metricValue < target,
+      "<=": metricValue <= target,
+      ">": metricValue > target,
+      ">=": metricValue >= target,
+      "===": metricValue === target,
+      "!==": metricValue !== target,
+      between:
+        typeof secondaryTarget === "number" && Number.isFinite(secondaryTarget)
+          ? metricValue >= Math.min(target, secondaryTarget) && metricValue <= Math.max(target, secondaryTarget)
+          : false
+    }
+    const shouldExit = comparisons[rule.operator]
+    const thresholdText =
+      rule.operator === "between" && typeof secondaryTarget === "number"
+        ? `${Math.min(target, secondaryTarget)} and ${Math.max(target, secondaryTarget)}`
+        : String(target)
+    return {
+      shouldExit,
+      reason: `${metricLabel} was ${metricValue}, which ${shouldExit ? "matched" : "did not match"} ${rule.operator} ${thresholdText}`
+    }
+  }
+
+  if (rule.valueType === "boolean") {
+    if (typeof metricValue !== "boolean") {
+      return {
+        shouldExit: false,
+        reason: `Metric "${metricLabel}" was not boolean`
+      }
+    }
+
+    const target = rule.valueBoolean
+    if (typeof target !== "boolean") {
+      return {
+        shouldExit: false,
+        reason: `Metric "${metricLabel}" had an invalid boolean threshold`
+      }
+    }
+    const shouldExit = rule.operator === "!==" ? metricValue !== target : metricValue === target
+    return {
+      shouldExit,
+      reason: `${metricLabel} was ${metricValue}, which ${shouldExit ? "matched" : "did not match"} ${rule.operator} ${target}`
+    }
+  }
+
+  if (typeof metricValue !== "string") {
+    return {
+      shouldExit: false,
+      reason: `Metric "${metricLabel}" was not a string`
+    }
+  }
+
+  const target = rule.valueString ?? ""
+  const shouldExit = rule.operator === "!==" ? metricValue !== target : metricValue === target
+  return {
+    shouldExit,
+    reason: `${metricLabel} was ${formatMetricValue(metricValue)}, which ${shouldExit ? "matched" : "did not match"} ${rule.operator} ${formatMetricValue(target)}`
+  }
+}
+
 /**
  * Observe baseline step: reconnect to sandbox, install skills,
  * capture before Web Vitals and CLS data. Extracted from the
@@ -1992,14 +2127,31 @@ export async function observeBaselineStep(
  */
 export async function evaluateEarlyExitStep(
   earlyExitEval: string | undefined,
+  earlyExitRule: DevAgentEarlyExitRule | undefined,
   observation: ObserveResult,
   progressContext?: ProgressContext | null
 ): Promise<{ shouldExit: boolean; reason: string }> {
-  if (!earlyExitEval?.trim()) {
+  if (!earlyExitRule && !earlyExitEval?.trim()) {
     return { shouldExit: false, reason: "" }
   }
 
   try {
+    const structuredResult = evaluateStructuredEarlyExitRule(earlyExitRule, observation)
+    if (structuredResult) {
+      workflowLog(
+        `[EarlyExit] Structured rule result: shouldExit=${structuredResult.shouldExit}, reason=${structuredResult.reason}`
+      )
+      await appendProgressLog(
+        progressContext,
+        `[EarlyExit] Structured rule: shouldExit=${structuredResult.shouldExit} — ${structuredResult.reason}`
+      )
+      return structuredResult
+    }
+
+    if (!earlyExitEval?.trim()) {
+      return { shouldExit: false, reason: "" }
+    }
+
     workflowLog(`[EarlyExit] Evaluating condition: "${earlyExitEval}"`)
     await appendProgressLog(progressContext, `[EarlyExit] Evaluating: "${earlyExitEval}"`)
 
@@ -2083,7 +2235,8 @@ export async function earlyExitReportStep(
   fromSnapshot?: boolean,
   snapshotId?: string,
   devAgentSuccessEval?: string,
-  devAgentEarlyExitEval?: string
+  devAgentEarlyExitEval?: string,
+  devAgentEarlyExitRule?: DevAgentEarlyExitRule
 ): Promise<{
   reportBlobUrl: string
   reportId: string
@@ -2135,6 +2288,7 @@ export async function earlyExitReportStep(
     successEval: devAgentSuccessEval || undefined,
     successEvalResult: true,
     earlyExitEval: devAgentEarlyExitEval || undefined,
+    earlyExitRule: devAgentEarlyExitRule,
     earlyExitResult: { shouldExit: true, reason },
     fromSnapshot: fromSnapshot ?? false,
     snapshotId,

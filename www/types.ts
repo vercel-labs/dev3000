@@ -1,4 +1,5 @@
 // Types for workflow reports and cloud workflows
+import type { DevAgentEarlyExitRule } from "@/lib/dev-agents"
 
 /**
  * Core Web Vitals metrics with grades
@@ -165,6 +166,7 @@ export interface WorkflowReport {
 
   // Early exit eval
   earlyExitEval?: string
+  earlyExitRule?: DevAgentEarlyExitRule
   earlyExitResult?: { shouldExit: boolean; reason: string }
 
   // PR info (future)

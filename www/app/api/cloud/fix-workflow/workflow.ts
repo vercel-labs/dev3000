@@ -107,7 +107,9 @@ export async function cloudFixWorkflow(params: {
     sourceUrl?: string
   }>
   devAgentSuccessEval?: string
+  devAgentEarlyExitMode?: "structured" | "text"
   devAgentEarlyExitEval?: string
+  devAgentEarlyExitRule?: import("@/lib/dev-agents").DevAgentEarlyExitRule
   analysisTargetType?: "vercel-project" | "url"
   publicUrl?: string
   startPath?: string // Page path to analyze (e.g., "/about")
@@ -148,7 +150,9 @@ export async function cloudFixWorkflow(params: {
     devAgentActionSteps,
     devAgentSkillRefs,
     devAgentSuccessEval,
+    devAgentEarlyExitMode,
     devAgentEarlyExitEval,
+    devAgentEarlyExitRule,
     analysisTargetType = "vercel-project",
     publicUrl,
     startPath = "/",
@@ -283,9 +287,14 @@ export async function cloudFixWorkflow(params: {
     // ============================================================
     // STEP 1.6: Evaluate early exit (if earlyExitEval is defined)
     // ============================================================
-    if (observation && devAgentEarlyExitEval) {
+    if (observation && (devAgentEarlyExitMode === "structured" ? devAgentEarlyExitRule : devAgentEarlyExitEval)) {
       workflowLog("[Workflow] Step 1.6: Evaluating early exit condition...")
-      const earlyExitResult = await evaluateEarlyExit(devAgentEarlyExitEval, observation, progressContext)
+      const earlyExitResult = await evaluateEarlyExit(
+        devAgentEarlyExitEval,
+        devAgentEarlyExitRule,
+        observation,
+        progressContext
+      )
 
       if (earlyExitResult.shouldExit) {
         workflowLog(`[Workflow] Early exit triggered: ${earlyExitResult.reason}`)
@@ -308,7 +317,8 @@ export async function cloudFixWorkflow(params: {
           initResult.fromSnapshot,
           initResult.snapshotId,
           devAgentSuccessEval,
-          devAgentEarlyExitEval
+          devAgentEarlyExitEval,
+          devAgentEarlyExitRule
         )
 
         // Cleanup sandbox
@@ -635,12 +645,13 @@ async function observeBaseline(
 
 async function evaluateEarlyExit(
   earlyExitEval: string | undefined,
+  earlyExitRule: import("@/lib/dev-agents").DevAgentEarlyExitRule | undefined,
   observation: import("./steps").ObserveResult,
   progressContext?: ProgressContext | null
 ): Promise<EarlyExitResult> {
   "use step"
   const { evaluateEarlyExitStep } = await import("./steps")
-  return evaluateEarlyExitStep(earlyExitEval, observation, progressContext)
+  return evaluateEarlyExitStep(earlyExitEval, earlyExitRule, observation, progressContext)
 }
 
 async function agentFixLoop(
@@ -741,7 +752,8 @@ async function earlyExitReport(
   fromSnapshot?: boolean,
   snapshotId?: string,
   devAgentSuccessEval?: string,
-  devAgentEarlyExitEval?: string
+  devAgentEarlyExitEval?: string,
+  devAgentEarlyExitRule?: import("@/lib/dev-agents").DevAgentEarlyExitRule
 ): Promise<FixResult> {
   "use step"
   const { earlyExitReportStep } = await import("./steps")
@@ -763,7 +775,8 @@ async function earlyExitReport(
     fromSnapshot,
     snapshotId,
     devAgentSuccessEval,
-    devAgentEarlyExitEval
+    devAgentEarlyExitEval,
+    devAgentEarlyExitRule
   )
 }
 

@@ -3,11 +3,15 @@ import {
   canEditDevAgent,
   type DevAgentActionStep,
   type DevAgentActionStepKind,
+  type DevAgentEarlyExitRule,
   type DevAgentSkillRef,
   type DevAgentTeam,
   getDevAgent,
+  isDevAgentEarlyExitMode,
+  isDevAgentEarlyExitRule,
   isDevAgentExecutionMode,
   isDevAgentSandboxBrowser,
+  parseDevAgentEarlyExitRule,
   parseDevAgentSkillRef,
   updateCustomDevAgent
 } from "@/lib/dev-agents"
@@ -95,7 +99,9 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       skillRefs?: unknown[]
       team?: DevAgentTeam
       successEval?: string
+      earlyExitMode?: string
       earlyExitEval?: string
+      earlyExitRule?: unknown
     }
 
     const name = body.name?.trim() || ""
@@ -123,6 +129,18 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       return Response.json({ success: false, error: "Invalid sandbox browser." }, { status: 400 })
     }
 
+    if (typeof body.earlyExitMode !== "undefined" && !isDevAgentEarlyExitMode(body.earlyExitMode)) {
+      return Response.json({ success: false, error: "Invalid early exit mode." }, { status: 400 })
+    }
+
+    if (typeof body.earlyExitRule !== "undefined" && !isDevAgentEarlyExitRule(body.earlyExitRule)) {
+      return Response.json({ success: false, error: "Invalid early exit rule." }, { status: 400 })
+    }
+
+    if (body.earlyExitMode === "structured" && typeof body.earlyExitRule === "undefined") {
+      return Response.json({ success: false, error: "Structured early exit mode requires a rule." }, { status: 400 })
+    }
+
     if (rawSkillRefs.length === 0) {
       return Response.json({ success: false, error: "Choose at least one skill." }, { status: 400 })
     }
@@ -145,6 +163,10 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         config: step.config as Record<string, string>
       })
     )
+    const earlyExitRule =
+      body.earlyExitRule && isDevAgentEarlyExitRule(body.earlyExitRule)
+        ? parseDevAgentEarlyExitRule(body.earlyExitRule as DevAgentEarlyExitRule)
+        : undefined
 
     const devAgent = await updateCustomDevAgent(id, {
       name,
@@ -157,7 +179,9 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       author: user,
       team,
       successEval: typeof body.successEval === "string" ? body.successEval : undefined,
-      earlyExitEval: typeof body.earlyExitEval === "string" ? body.earlyExitEval : undefined
+      earlyExitMode: body.earlyExitMode,
+      earlyExitEval: typeof body.earlyExitEval === "string" ? body.earlyExitEval : undefined,
+      earlyExitRule
     })
 
     if (!devAgent) {

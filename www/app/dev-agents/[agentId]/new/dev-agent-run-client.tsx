@@ -83,6 +83,26 @@ function formatExecutionMode(mode: DevAgent["executionMode"]): string {
   return mode === "dev-server" ? "Dev Server" : "Preview + PR"
 }
 
+function DevAgentCriteriaSummary({ devAgent }: { devAgent: DevAgent }) {
+  const successEvalText = devAgent.successEval?.trim() || "None"
+  const earlyExitText = devAgent.earlyExitEval?.trim() || "None"
+
+  return (
+    <div className="border-t border-[#1f1f1f] px-4 py-3">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <div className="text-[11px] uppercase tracking-wider text-[#555]">Success Eval</div>
+          <div className="mt-1 text-[13px] leading-[18px] text-[#888]">{successEvalText}</div>
+        </div>
+        <div>
+          <div className="text-[11px] uppercase tracking-wider text-[#555]">Early Exit</div>
+          <div className="mt-1 text-[13px] leading-[18px] text-[#888]">{earlyExitText}</div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function DevAgentRunClient({
   devAgent,
   ownerName,
@@ -455,19 +475,19 @@ export default function DevAgentRunClient({
           <div className="border-t border-[#1f1f1f] px-4 py-3">
             <div className="grid grid-cols-4 gap-3">
               <div>
-                <div className="text-[11px] uppercase tracking-wider text-[#555]">Project Runs</div>
+                <div className="text-[11px] uppercase tracking-wider text-[#555]">Runs</div>
                 <div className="mt-0.5 text-[13px] font-medium text-[#ededed]">{marketplaceStats.projectRuns}</div>
               </div>
               <div>
-                <div className="text-[11px] uppercase tracking-wider text-[#555]">Success Rate</div>
+                <div className="text-[11px] uppercase tracking-wider text-[#555]">Success</div>
                 <div className="mt-0.5 text-[13px] font-medium text-[#ededed]">{marketplaceStats.successRate}</div>
               </div>
               <div>
-                <div className="text-[11px] uppercase tracking-wider text-[#555]">Merge Rate</div>
+                <div className="text-[11px] uppercase tracking-wider text-[#555]">Merges</div>
                 <div className="mt-0.5 text-[13px] font-medium text-[#ededed]">{marketplaceStats.mergeRate}</div>
               </div>
               <div>
-                <div className="text-[11px] uppercase tracking-wider text-[#555]">Tokens Used</div>
+                <div className="text-[11px] uppercase tracking-wider text-[#555]">Tokens</div>
                 <div className="mt-0.5 text-[13px] font-medium text-[#ededed]">{marketplaceStats.tokensUsed}</div>
               </div>
             </div>
@@ -479,6 +499,8 @@ export default function DevAgentRunClient({
             </span>
           </div>
         )}
+
+        <DevAgentCriteriaSummary devAgent={devAgent} />
       </div>
 
       {error && (

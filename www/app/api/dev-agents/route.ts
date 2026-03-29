@@ -3,11 +3,15 @@ import {
   createCustomDevAgent,
   type DevAgentActionStep,
   type DevAgentActionStepKind,
+  type DevAgentEarlyExitRule,
   type DevAgentSkillRef,
   type DevAgentTeam,
+  isDevAgentEarlyExitMode,
+  isDevAgentEarlyExitRule,
   isDevAgentExecutionMode,
   isDevAgentSandboxBrowser,
   listDevAgents,
+  parseDevAgentEarlyExitRule,
   parseDevAgentSkillRef
 } from "@/lib/dev-agents"
 import { withAttributedSpan } from "@/lib/tracing"
@@ -89,7 +93,9 @@ export async function POST(request: Request) {
           skillRefs?: unknown[]
           team?: DevAgentTeam
           successEval?: string
+          earlyExitMode?: string
           earlyExitEval?: string
+          earlyExitRule?: unknown
         }
 
         const name = body.name?.trim() || ""
@@ -118,6 +124,24 @@ export async function POST(request: Request) {
         if (!isDevAgentSandboxBrowser(sandboxBrowser)) {
           span.setAttribute("http.status_code", 400)
           return Response.json({ success: false, error: "Invalid sandbox browser." }, { status: 400 })
+        }
+
+        if (typeof body.earlyExitMode !== "undefined" && !isDevAgentEarlyExitMode(body.earlyExitMode)) {
+          span.setAttribute("http.status_code", 400)
+          return Response.json({ success: false, error: "Invalid early exit mode." }, { status: 400 })
+        }
+
+        if (typeof body.earlyExitRule !== "undefined" && !isDevAgentEarlyExitRule(body.earlyExitRule)) {
+          span.setAttribute("http.status_code", 400)
+          return Response.json({ success: false, error: "Invalid early exit rule." }, { status: 400 })
+        }
+
+        if (body.earlyExitMode === "structured" && typeof body.earlyExitRule === "undefined") {
+          span.setAttribute("http.status_code", 400)
+          return Response.json(
+            { success: false, error: "Structured early exit mode requires a rule." },
+            { status: 400 }
+          )
         }
 
         if (rawSkillRefs.length === 0) {
@@ -152,6 +176,10 @@ export async function POST(request: Request) {
             config: step.config as Record<string, string>
           })
         )
+        const earlyExitRule =
+          body.earlyExitRule && isDevAgentEarlyExitRule(body.earlyExitRule)
+            ? parseDevAgentEarlyExitRule(body.earlyExitRule as DevAgentEarlyExitRule)
+            : undefined
 
         const devAgent = await createCustomDevAgent({
           name,
@@ -164,7 +192,9 @@ export async function POST(request: Request) {
           author: user,
           team,
           successEval: typeof body.successEval === "string" ? body.successEval : undefined,
-          earlyExitEval: typeof body.earlyExitEval === "string" ? body.earlyExitEval : undefined
+          earlyExitMode: body.earlyExitMode,
+          earlyExitEval: typeof body.earlyExitEval === "string" ? body.earlyExitEval : undefined,
+          earlyExitRule
         })
 
         return Response.json({ success: true, devAgent })
