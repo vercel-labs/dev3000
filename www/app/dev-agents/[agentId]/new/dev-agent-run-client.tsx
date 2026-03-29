@@ -352,9 +352,10 @@ export default function DevAgentRunClient({
     const repoOwner = project.link?.org || latestDeployment.meta?.githubOrg
     const repoName = project.link?.repo || latestDeployment.meta?.githubRepo
     const gitRef = latestDeployment.gitSource?.ref || baseBranch || latestDeployment.gitSource?.sha || "main"
+    const effectiveGithubPat = shouldShowGitHubPatField ? githubPat.trim() : ""
 
-    if (githubPat.trim()) {
-      localStorage.setItem(GITHUB_PAT_STORAGE_KEY, githubPat.trim())
+    if (effectiveGithubPat) {
+      localStorage.setItem(GITHUB_PAT_STORAGE_KEY, effectiveGithubPat)
     }
 
     const tokenResponse = await fetch("/api/auth/token")
@@ -385,7 +386,7 @@ export default function DevAgentRunClient({
         repoBranch: gitRef,
         baseBranch,
         startPath: devAgent.supportsPathInput && startPath.trim() ? startPath.trim() : undefined,
-        githubPat: githubPat.trim() || undefined,
+        githubPat: effectiveGithubPat || undefined,
         submitPullRequest: true,
         customPrompt: devAgent.requiresCustomPrompt ? customPrompt.trim() : undefined,
         productionUrl: latestDeployment.url ? `https://${latestDeployment.url}` : undefined,
