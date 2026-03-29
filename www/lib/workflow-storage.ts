@@ -1,7 +1,7 @@
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
-import { del, get, list, put } from "@vercel/blob"
+import { del, list, put } from "@vercel/blob"
 
 export type WorkflowType =
   | "cls-fix"
@@ -98,23 +98,13 @@ async function deleteLocalWorkflowRun(run: Pick<WorkflowRun, "userId" | "timesta
   await rm(filePath, { force: true })
 }
 
-async function readWorkflowRunBlob(url: string, pathname: string): Promise<WorkflowRun | null> {
+async function readWorkflowRunBlob(url: string, _pathname: string): Promise<WorkflowRun | null> {
   try {
-    const blobResult = await get(url, {
-      access: "public",
-      useCache: false
-    })
-
-    if (!blobResult || blobResult.statusCode !== 200) {
-      return null
-    }
-
-    if (!blobResult.blob.contentType?.includes("application/json")) {
-      console.error(`[Workflow Storage] Unexpected content type ${blobResult.blob.contentType} for ${pathname}`)
-      return null
-    }
-
-    return (await new Response(blobResult.stream).json()) as WorkflowRun
+    const response = await fetch(url, { cache: "no-store" })
+    if (!response.ok) return null
+    const contentType = response.headers.get("content-type")
+    if (contentType && !contentType.includes("application/json")) return null
+    return (await response.json()) as WorkflowRun
   } catch (error) {
     console.error(`[Workflow Storage] Failed to fetch ${url}:`, error)
     return null

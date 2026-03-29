@@ -148,6 +148,16 @@ export interface WorkflowReport {
   verificationStatus?: "improved" | "unchanged" | "degraded" | "error"
   verificationError?: string
 
+  // AI Gateway usage
+  gatewayUsage?: {
+    totalTokens?: number
+    promptTokens?: number
+    completionTokens?: number
+  }
+
+  // Whether this was a marketplace agent run (hides internal implementation details)
+  isMarketplaceAgent?: boolean
+
   // Success eval
   successEval?: string
   successEvalResult?: boolean | null
