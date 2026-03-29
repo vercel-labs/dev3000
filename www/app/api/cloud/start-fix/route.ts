@@ -1,7 +1,7 @@
 import { start } from "workflow/api"
 import { resolveDevAgentRunner } from "@/lib/cloud/dev-agent-runner"
 import { type DevAgent, getDevAgent, incrementDevAgentUsage } from "@/lib/dev-agents"
-import { proxyWorkflowRequest, shouldProxyWorkflowRequest } from "@/lib/workflow-api"
+import { proxyWorkflowJsonRequest, shouldProxyWorkflowRequest } from "@/lib/workflow-api"
 import { clearWorkflowLog, workflowError, workflowLog } from "@/lib/workflow-logger"
 import { saveWorkflowRun, type WorkflowType } from "@/lib/workflow-storage"
 import { cloudFixWorkflow } from "../fix-workflow/workflow"
@@ -91,7 +91,7 @@ export async function OPTIONS() {
 
 export async function POST(request: Request) {
   if (shouldProxyWorkflowRequest(request)) {
-    return proxyWorkflowRequest(request)
+    return proxyWorkflowJsonRequest(request)
   }
 
   let userId: string | undefined

@@ -1,5 +1,5 @@
 import { getCurrentUserFromRequest } from "@/lib/auth"
-import { proxyWorkflowRequest, shouldProxyWorkflowRequest } from "@/lib/workflow-api"
+import { proxyWorkflowJsonRequest, shouldProxyWorkflowRequest } from "@/lib/workflow-api"
 import { getWorkflowRun, setWorkflowPublic } from "@/lib/workflow-storage"
 
 /**
@@ -11,7 +11,7 @@ import { getWorkflowRun, setWorkflowPublic } from "@/lib/workflow-storage"
  */
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   if (shouldProxyWorkflowRequest(request)) {
-    return proxyWorkflowRequest(request)
+    return proxyWorkflowJsonRequest(request)
   }
 
   try {

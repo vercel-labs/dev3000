@@ -1,5 +1,5 @@
 import { withAttributedSpan } from "@/lib/tracing"
-import { proxyWorkflowRequest, shouldProxyWorkflowRequest } from "@/lib/workflow-api"
+import { proxyWorkflowJsonRequest, shouldProxyWorkflowRequest } from "@/lib/workflow-api"
 import { deleteWorkflowRuns, listWorkflowRuns } from "@/lib/workflow-storage"
 
 // CORS headers - allowing credentials from localhost
@@ -27,7 +27,7 @@ export async function OPTIONS() {
  */
 export async function GET(request: Request) {
   if (shouldProxyWorkflowRequest(request)) {
-    return proxyWorkflowRequest(request)
+    return proxyWorkflowJsonRequest(request)
   }
 
   return withAttributedSpan(
@@ -77,7 +77,7 @@ export async function GET(request: Request) {
  */
 export async function DELETE(request: Request) {
   if (shouldProxyWorkflowRequest(request)) {
-    return proxyWorkflowRequest(request)
+    return proxyWorkflowJsonRequest(request)
   }
 
   return withAttributedSpan(

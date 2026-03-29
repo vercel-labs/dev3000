@@ -10,6 +10,7 @@ const nextConfig: NextConfig = {
   reactCompiler: true,
   typedRoutes: true,
   cacheComponents: true,
+  compress: process.env.NODE_ENV === "production",
   experimental: {
     turbopackFileSystemCacheForDev: true,
     varyParams: true,
