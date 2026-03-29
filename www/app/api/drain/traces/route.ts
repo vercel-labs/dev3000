@@ -18,6 +18,7 @@
  */
 
 import { createHmac } from "node:crypto"
+import { after } from "next/server"
 import { put } from "@vercel/blob"
 
 // Verify the request came from Vercel using the drain signature secret.
@@ -75,12 +76,10 @@ export async function POST(request: Request) {
       }
     }
 
-    // Build storage path: traces/{date}/{timestamp}-{random}.json
+    // Build storage path: traces/{date}/{timestamp}.json (Blob adds random suffix)
     const now = new Date()
     const dateStr = now.toISOString().split("T")[0] // YYYY-MM-DD
-    const timestamp = now.getTime()
-    const random = Math.random().toString(36).slice(2, 8)
-    const blobPath = `traces/${dateStr}/${timestamp}-${random}.json`
+    const blobPath = `traces/${dateStr}/${now.getTime()}.json`
 
     // Store with metadata envelope
     const envelope = {
@@ -93,16 +92,20 @@ export async function POST(request: Request) {
       resourceSpans: payload.resourceSpans
     }
 
-    await put(blobPath, JSON.stringify(envelope), {
-      contentType: "application/json",
-      access: "public", // Blob requires access level; data isn't sensitive (trace telemetry)
-      addRandomSuffix: false // We handle uniqueness via timestamp+random in the path
+    // Write to Blob in background — respond immediately to avoid timeout
+    after(async () => {
+      try {
+        await put(blobPath, JSON.stringify(envelope), {
+          contentType: "application/json",
+          access: "public", // Blob requires access level; data isn't sensitive (trace telemetry)
+          addRandomSuffix: true
+        })
+      } catch (error) {
+        console.error("[TraceDrain] Error writing trace to Blob storage:", error)
+      }
     })
 
-    return Response.json({
-      accepted: spanCount,
-      path: blobPath
-    })
+    return Response.json({ accepted: spanCount })
   } catch (error) {
     console.error("[TraceDrain] Error processing trace payload:", error)
     return Response.json({ error: error instanceof Error ? error.message : "Internal error" }, { status: 500 })
