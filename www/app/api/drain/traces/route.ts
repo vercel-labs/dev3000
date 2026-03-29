@@ -94,11 +94,15 @@ export async function POST(request: Request) {
 
     // Write to Blob in background — respond immediately to avoid timeout
     after(async () => {
-      await put(blobPath, JSON.stringify(envelope), {
-        contentType: "application/json",
-        access: "public", // Blob requires access level; data isn't sensitive (trace telemetry)
-        addRandomSuffix: true
-      })
+      try {
+        await put(blobPath, JSON.stringify(envelope), {
+          contentType: "application/json",
+          access: "public", // Blob requires access level; data isn't sensitive (trace telemetry)
+          addRandomSuffix: true
+        })
+      } catch (error) {
+        console.error("[TraceDrain] Error writing trace to Blob storage:", error)
+      }
     })
 
     return Response.json({ accepted: spanCount })
