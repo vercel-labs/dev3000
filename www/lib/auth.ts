@@ -7,6 +7,33 @@ interface UserInfo {
   username: string
 }
 
+async function fetchUserFromAccessToken(accessToken: string): Promise<UserInfo | null> {
+  try {
+    const response = await fetch("https://api.vercel.com/v2/user", {
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      }
+    })
+
+    if (!response.ok) {
+      console.error("Failed to fetch user info:", response.status)
+      return null
+    }
+
+    const data = await response.json()
+
+    return {
+      id: data.user?.uid || data.user?.id || "",
+      email: data.user?.email || "",
+      name: data.user?.name || "",
+      username: data.user?.username || ""
+    }
+  } catch (error) {
+    console.error("Failed to get current user:", error)
+    return null
+  }
+}
+
 /**
  * Decode the JWT ID token to extract user information
  * This is a simple decoder - for production you should verify the signature
@@ -40,32 +67,7 @@ export async function getCurrentUser(): Promise<UserInfo | null> {
     return null
   }
 
-  // Fetch user info from the Vercel API using the access token
-  // Token refresh is handled by proxy.ts before requests reach Server Components
-  try {
-    const response = await fetch("https://api.vercel.com/v2/user", {
-      headers: {
-        Authorization: `Bearer ${accessToken}`
-      }
-    })
-
-    if (!response.ok) {
-      console.error("Failed to fetch user info:", response.status)
-      return null
-    }
-
-    const data = await response.json()
-
-    return {
-      id: data.user?.uid || data.user?.id || "",
-      email: data.user?.email || "",
-      name: data.user?.name || "",
-      username: data.user?.username || ""
-    }
-  } catch (error) {
-    console.error("Failed to get current user:", error)
-    return null
-  }
+  return fetchUserFromAccessToken(accessToken)
 }
 
 /**
@@ -89,4 +91,13 @@ export async function getValidAccessToken(): Promise<string | null> {
   // Return the access token if it exists
   // Token refresh is handled by middleware, not here
   return accessToken || null
+}
+
+export async function getCurrentUserFromRequest(request: Request): Promise<UserInfo | null> {
+  const authHeader = request.headers.get("authorization")
+  if (authHeader?.startsWith("Bearer ")) {
+    return fetchUserFromAccessToken(authHeader.slice("Bearer ".length))
+  }
+
+  return getCurrentUser()
 }

@@ -1,4 +1,5 @@
-import { getCurrentUser } from "@/lib/auth"
+import { getCurrentUserFromRequest } from "@/lib/auth"
+import { proxyWorkflowRequest, shouldProxyWorkflowRequest } from "@/lib/workflow-api"
 import { getWorkflowRun, setWorkflowPublic } from "@/lib/workflow-storage"
 
 /**
@@ -9,8 +10,12 @@ import { getWorkflowRun, setWorkflowPublic } from "@/lib/workflow-storage"
  * - isPublic: boolean - Whether the report should be publicly accessible
  */
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  if (shouldProxyWorkflowRequest(request)) {
+    return proxyWorkflowRequest(request)
+  }
+
   try {
-    const user = await getCurrentUser()
+    const user = await getCurrentUserFromRequest(request)
 
     if (!user) {
       return Response.json({ error: "Unauthorized" }, { status: 401 })

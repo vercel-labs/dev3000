@@ -1,5 +1,5 @@
 import { getCurrentUser } from "@/lib/auth"
-import { resolveTeamFromParam, type VercelTeam } from "@/lib/vercel-teams"
+import { getPreferredTeam, listCurrentUserTeams, resolveTeamFromParam, type VercelTeam } from "@/lib/vercel-teams"
 
 interface RouteContext {
   user: Awaited<ReturnType<typeof getCurrentUser>>
@@ -23,5 +23,22 @@ export async function getDevAgentsRouteContext(teamParam: string): Promise<Route
     teams,
     selectedTeam,
     defaultTeam: teams[0] ?? null
+  }
+}
+
+export async function getDefaultDevAgentsRouteContext(): Promise<RouteContext> {
+  const user = await getCurrentUser()
+  if (!user) {
+    return { user, teams: [], selectedTeam: null, defaultTeam: null }
+  }
+
+  const teams = await listCurrentUserTeams()
+  const defaultTeam = await getPreferredTeam(teams)
+
+  return {
+    user,
+    teams,
+    selectedTeam: defaultTeam,
+    defaultTeam
   }
 }

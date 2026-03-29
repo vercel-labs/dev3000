@@ -18,8 +18,8 @@
  */
 
 import { createHmac } from "node:crypto"
-import { after } from "next/server"
 import { put } from "@vercel/blob"
+import { after } from "next/server"
 
 // Verify the request came from Vercel using the drain signature secret.
 // Set TRACE_DRAIN_SECRET env var to the secret you configure in the dashboard.

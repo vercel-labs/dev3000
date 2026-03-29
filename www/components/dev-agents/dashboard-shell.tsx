@@ -9,9 +9,9 @@ import type { VercelTeam } from "@/lib/vercel-teams"
 interface DevAgentsDashboardShellProps {
   teams: VercelTeam[]
   selectedTeam: VercelTeam
-  title?: string
-  subtitle?: string
-  description?: string
+  title?: React.ReactNode
+  subtitle?: React.ReactNode
+  description?: React.ReactNode
   actions?: React.ReactNode
   children: React.ReactNode
 }
@@ -126,7 +126,9 @@ export function DevAgentsDashboardShell({
                       {subtitle ? <span className="text-[13px] text-[#666]">{subtitle}</span> : null}
                     </div>
                   )}
-                  {description && <p className="max-w-xl text-[14px] leading-[22px] text-[#888]">{description}</p>}
+                  {description ? (
+                    <div className="max-w-xl text-[14px] leading-[22px] text-[#888]">{description}</div>
+                  ) : null}
                 </div>
                 {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
               </div>

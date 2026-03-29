@@ -120,8 +120,7 @@ export async function listCurrentUserTeams(): Promise<VercelTeam[]> {
   return teams
 }
 
-export async function getDefaultTeam(): Promise<VercelTeam | null> {
-  const teams = await listCurrentUserTeams()
+export async function getPreferredTeam(teams: VercelTeam[]): Promise<VercelTeam | null> {
   if (teams.length === 0) {
     return null
   }
@@ -138,6 +137,11 @@ export async function getDefaultTeam(): Promise<VercelTeam | null> {
   }
 
   return teams[0] ?? null
+}
+
+export async function getDefaultTeam(): Promise<VercelTeam | null> {
+  const teams = await listCurrentUserTeams()
+  return getPreferredTeam(teams)
 }
 
 export async function resolveTeamFromParam(teamParam: string): Promise<{

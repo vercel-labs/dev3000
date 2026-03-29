@@ -1,151 +1,101 @@
 # AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file is the source of truth for agent guidance in this repo. `CLAUDE.md` is symlinked here.
 
-**NOTE**: CLAUDE.md is symlinked to this file (AGENTS.md) as the source of truth. Any edits to either file will affect both.
+## Runtime
 
-## Standalone AI App + d3k (Required Runtime)
+- Use `d3k` as the default local runtime.
+- Do not run `bun run dev` or `bun run build` for `www/`.
+- Start d3k with:
+  ```bash
+  d3k --no-agent --no-tui -t
+  ```
+- Primary debugging commands:
+  ```bash
+  d3k errors --context
+  d3k logs -n 200
+  d3k logs --type browser
+  d3k logs --type server
+  ```
+- Drive the monitored browser with:
+  ```bash
+  CDP_PORT="$(d3k cdp-port)"
+  d3k agent-browser --cdp "$CDP_PORT" snapshot -i
+  d3k agent-browser --cdp "$CDP_PORT" click @e2
+  ```
 
-When working from a standalone AI app (Codex.app, Claude Code app, etc.) in this repo, use `d3k` as the default runtime so the agent gets server logs + CDP browser data + screenshots from one session.
+## Local UI, Production Workflows
 
-### Why this is better than running `npm/bun dev` directly
+- Local `www/` is for the UI only.
+- Workflow execution, workflow orchestration, and sandbox activity must run in production, not in the local Next server.
+- On localhost, workflow API routes must proxy to production instead of starting workflows or managing sandboxes in-process.
+- When testing locally, treat `localhost` as a production-backed shell:
+  - start runs from the local UI
+  - let production own workflow startup, execution, retries, and completion
+  - let production own sandbox creation, sandbox control, and sandbox logs
+  - let report pages and runs pages read workflow state from production APIs or shared remote storage
+- Do not add new local-only workflow shortcuts, localhost-only workflow execution paths, or tmp-cache fallbacks unless the user explicitly asks for them.
+- Do not make localhost the source of truth for workflow state.
+- If local workflow storage is ever needed for debugging, gate it behind an explicit env var and keep it off by default.
+- If a workflow feature behaves differently locally than in production, prefer removing the local special case rather than extending it.
 
-- `d3k` captures both server and browser telemetry in one timeline (`d3k.log`), which prevents partial debugging context.
-- `d3k` exposes a stable CDP session (`d3k cdp-port`) so the agent can drive the same real browser instance users see.
-- `d3k` records screenshots and interaction context automatically, making regressions easier to verify and replay.
-- Running raw `npm dev`/`bun dev` skips this unified context and leads to weaker diagnoses.
-
-1. Start d3k (headed browser, no split-agent prompt):
-   ```bash
-   d3k --no-agent --no-tui -t
-   ```
-2. Keep d3k running while making/fixing changes. Do not run `bun run dev` directly.
-3. Use d3k diagnostics as first-line debugging:
-   ```bash
-   d3k errors --context
-   d3k logs -n 200
-   d3k logs --type browser
-   d3k logs --type server
-   ```
-4. Use the same monitored browser session via CDP:
-   ```bash
-   CDP_PORT="$(d3k cdp-port)"
-   d3k agent-browser --cdp "$CDP_PORT" open http://localhost:3000
-   d3k agent-browser --cdp "$CDP_PORT" snapshot -i
-   d3k agent-browser --cdp "$CDP_PORT" click @e2
-   d3k agent-browser --cdp "$CDP_PORT" screenshot /tmp/d3k-current.png
-   ```
-5. Primary artifacts for Codex context:
-   - `~/.d3k/{project}/d3k.log`
-   - `~/.d3k/{project}/logs/`
-   - `~/.d3k/{project}/screenshots/`
-   - `~/.d3k/{project}/session.json`
-
-### Browser Tool Choice
+## Browser Tools
 
 - Use `agent-browser` by default.
-- Use `agent-browser` when you need to drive the exact headed browser session d3k is already monitoring via CDP, especially for `snapshot`, ref-based `click`, and `fill`.
-- Use `next-browser` for Next.js-specific diagnostics like `tree`, `errors`, `logs`, `routes`, and other Next introspection.
-- Do not treat `next-browser` as a drop-in replacement for `agent-browser`; it does not use `d3k cdp-port` and does not support the same ref-based interaction model.
-- If you need to switch the local preferred tool, use `d3k --browser-tool next-browser` or `d3k --browser-tool agent-browser`.
+- Use `agent-browser` when you need to drive the exact headed browser session d3k is already monitoring via CDP.
+- Use `next-browser` only for Next.js-specific inspection such as `tree`, `errors`, `logs`, or `routes`.
+- Do not treat `next-browser` as a drop-in replacement for `agent-browser`.
 
-Use `--servers-only` or `--headless` only if the user explicitly asks.
+## Development Rules
 
-## Core Development Rules
+- Package manager: `bun` only.
+- Never disable Turbopack in favor of webpack.
+- Do not run `./scripts/publish.sh`.
+- When the user asks to release, you may run `./scripts/release.sh`, then tell the user to run `./scripts/publish.sh`.
 
-**NEVER RUN**:
-- Do not run `bun run build` or `bun run dev` during development - the user tests manually.
-- Do not run `./scripts/publish.sh` - the user runs this manually (requires npm auth).
+## Validation
 
-**RELEASING**: When the user asks to release:
-- You CAN run `./scripts/release.sh` - this builds, tests, bumps version, and creates the git tag
-- After release.sh completes, tell the user to run `./scripts/publish.sh` themselves
+After any code changes, always run:
 
-
-**ALWAYS RUN**: When completing any code changes, you MUST run:
-- `bun run lint` - Fix all linting errors before committing
-- `bun run typecheck` - Fix all TypeScript errors before committing
-- Never bypass pre-commit hooks or use --no-verify. Fix all issues until the code passes.
-
-**AFTER COMMITTING**: When you push to main, Vercel auto-deploys. Monitor the deployment:
-1. First, get the latest deployment URL: `vercel ls --scope team_nLlpyC6REAqxydlFKbrMDlud | head -10`
-2. Wait for deployment to complete (status changes from "Building" to "Ready")
-3. Monitor runtime logs with the deployment URL: `vercel logs <deployment-url>.vercel.sh --scope team_nLlpyC6REAqxydlFKbrMDlud`
-   - Example: `vercel logs dev3000-6tynruehj.vercel.sh --scope team_nLlpyC6REAqxydlFKbrMDlud`
-   - NOTE: `d3k.vercel.app` doesn't work for `vercel logs` - you need the specific deployment URL
-4. Once deployed, proceed with testing the changes - don't wait for user confirmation
-
-**PACKAGE MANAGER**: This project uses bun exclusively. Do not use npm, pnpm, or yarn.
-
-**TURBOPACK**: NEVER disable turbopack in favor of webpack. This project uses turbopack exclusively for Next.js builds. Do not switch to webpack under any circumstances.
-
-## Testing
-
-**BUILD CANARY AFTER d3k CHANGES**: When making changes to the d3k CLI or TUI (anything in `src/`), you MUST run `bun run canary` after committing so the user can test. This is the only way to test d3k changes locally. However, you do NOT need to rebuild canary for:
-- Changes to `www/` (website) - those are tested via `bun run dev` in www/
-
-For local testing, use:
 ```bash
-bun run canary
+bun run lint
+bun run typecheck
 ```
 
-To test the d3k-in-the-cloud workflow:
-- Navigate to `http://localhost:3000/workflows/new?type=cloud-fix&team=team_aMS4jZUlMooxyr9VgMKJf9uT&project=prj_0ITI5UHrH4Kp92G5OLEMrlgVX08p`
-- Start monitoring production logs BEFORE triggering: `vercel logs <deployment> --scope team_nLlpyC6REAqxydlFKbrMDlud`
-- The local dev server must be running for the UI to work
+Fix errors before finishing. Do not bypass hooks with `--no-verify`.
 
-## Quick Architecture Reference
+## After Pushing Main
 
-**Main Files**:
-- `src/cli.ts` - CLI entry point (start/setup commands)
-- `src/dev-environment.ts` - Orchestrates dev server + browser monitoring
-- `src/tui-interface.ts` - TUI loader (switches between implementations)
-- `src/tui-interface-opentui.ts` - TUI implementation with OpenTUI (mouse scroll support)
-- `src/tui-interface-impl.tsx` - Legacy TUI implementation with Ink/React
+When changes are pushed to `main`:
 
-**Key Features**:
-- Automatic screenshots on errors and navigation
-- Works with any web framework (Next.js, Vite, Rails, etc.)
+1. Get the latest deployment URL:
+   ```bash
+   vercel ls --scope team_nLlpyC6REAqxydlFKbrMDlud | head -10
+   ```
+2. Wait for the deployment to become `Ready`.
+3. Monitor runtime logs with the specific deployment URL:
+   ```bash
+   vercel logs <deployment-url>.vercel.sh --scope team_nLlpyC6REAqxydlFKbrMDlud
+   ```
 
-## UI & Design System
+## d3k CLI/TUI Changes
 
-**Follow Vercel Geist design guidelines** for all UI work. Reference: https://vercel.com/geist/introduction
+- For changes under `src/`, run:
+  ```bash
+  bun run canary
+  ```
+- This is required for d3k CLI/TUI changes.
+- It is not required for `www/`-only changes.
 
-- **Fonts**: Geist Sans for interface text, Geist Mono for code/metrics. Already configured globally via `next/font/google` with `--font-geist-sans` and `--font-geist-mono` CSS variables.
-- **Colors**: Use the neutral gray palette established in the codebase. The `www/` frontend uses hardcoded Vercel dark-theme hex values:
-  - `#0a0a0a` background, `#111` darker bg, `#1a1a1a` tag/badge bg
-  - `#1f1f1f` borders, `#333` hover borders, `#444` dividers
-  - `#555` uppercase labels, `#666` tertiary text, `#888` secondary text, `#ededed` primary text
-- **No color semantics**: Do not use green for success, red for error, yellow for warning, etc. Use the neutral gray scale for status indicators, pills, and badges. The only exception is `blue-500/blue-400` for "Previously Purchased" marketplace badges (pre-existing pattern).
-- **Dark mode default**: The app forces dark mode. All UI should be designed for dark backgrounds.
-- **Component patterns**: Use shadcn/ui primitives (Badge, Button, Input, etc.) from `@/components/ui/`. Follow existing card patterns in `components/dev-agents/` for consistency.
+## UI Guidance
 
-## Sandbox/Cloud Environment Constraints
+- Follow Geist patterns already used in `www/`.
+- Use the existing neutral dark palette.
+- Do not introduce semantic success/error colors for new UI status treatments unless the existing surface already uses them.
+- Prefer existing shadcn/ui primitives and patterns from `components/dev-agents/`.
 
-**CRITICAL: No `lsof` in Vercel Sandbox or Docker containers!**
+## Sandbox Constraints
 
-When writing code that runs in:
-- Vercel Sandbox (cloud workflows)
-- Docker containers
-- Any constrained environment
-
-**NEVER use `lsof`** - it doesn't exist in these environments and will crash with `spawn lsof ENOENT`.
-
-Instead, use the `isInSandbox()` helper function (defined in `src/dev-environment.ts`) to detect sandbox environments and skip lsof-based operations:
-
-```typescript
-function isInSandbox(): boolean {
-  return (
-    process.env.VERCEL_SANDBOX === "1" ||
-    process.env.VERCEL === "1" ||
-    existsSync("/.dockerenv") ||
-    existsSync("/run/.containerenv")
-  )
-}
-```
-
-Other unavailable commands in sandbox: `netstat`, `ss` (sometimes), most system utilities.
-
-## Memories
-
-- number 3 sounds pretty reliable, number 2 sounds second best and those are better than the other two I think
+- Code running in Vercel Sandbox, Docker, or similar constrained environments must not use `lsof`.
+- Use sandbox-aware checks such as `isInSandbox()` instead.
+- Other commands like `netstat` and `ss` may also be unavailable.

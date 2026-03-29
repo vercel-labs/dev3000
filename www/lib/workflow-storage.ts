@@ -42,7 +42,7 @@ export interface WorkflowRun {
 const LOCAL_WORKFLOW_CACHE_ROOT = path.join(tmpdir(), "dev3000-workflow-runs")
 
 function isLocalWorkflowCacheEnabled(): boolean {
-  return process.env.NODE_ENV !== "production"
+  return process.env.DEV3000_ENABLE_LOCAL_WORKFLOW_CACHE === "1"
 }
 
 function getLocalWorkflowCacheDir(userId: string): string {

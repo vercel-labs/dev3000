@@ -1,15 +1,18 @@
-import { ArrowLeft, ChevronRight, ShieldCheck } from "lucide-react"
+import { ArrowLeft, ChevronRight, ExternalLink, ShieldCheck } from "lucide-react"
 import type { Metadata } from "next"
 import Image from "next/image"
 import { redirect } from "next/navigation"
-import { Suspense } from "react"
+import { type ReactNode, Suspense } from "react"
+import { DevAgentsDashboardShell } from "@/components/dev-agents/dashboard-shell"
 import { ThemeToggle } from "@/components/theme-toggle"
+import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { getCurrentUser } from "@/lib/auth"
 import { getSignInPath } from "@/lib/auth-redirect"
+import { getDefaultDevAgentsRouteContext } from "@/lib/dev-agents-route"
 import type { WorkflowRun } from "@/lib/workflow-storage"
 import { getPublicWorkflowRun, getWorkflowRun } from "@/lib/workflow-storage"
-import type { WorkflowReport } from "@/types"
+import type { WebVitals, WorkflowReport } from "@/types"
 import { AgentAnalysis } from "./agent-analysis"
 import { CoordinatedPlayers } from "./coordinated-players"
 import { DiffSection } from "./diff-section"
@@ -70,9 +73,35 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 }
 
 const MIN_ROUTE_DELTA_BYTES = 10 * 1024
-const IMPACT_BYTES_LARGE = 1024 * 1024 // 1MB shipped JS change
+const IMPACT_BYTES_LARGE = 1024 * 1024
 
 type ImpactBucket = "S" | "M" | "L"
+type MetricKey = keyof WebVitals
+
+interface MetricDefinition {
+  key: MetricKey
+  label: string
+  description: string
+}
+
+interface MetricSnapshot {
+  value: number
+  grade?: "good" | "needs-improvement" | "poor"
+}
+
+interface MetricRow extends MetricDefinition {
+  before?: MetricSnapshot
+  after?: MetricSnapshot
+  current?: MetricSnapshot
+}
+
+const METRIC_DEFINITIONS: MetricDefinition[] = [
+  { key: "lcp", label: "LCP", description: "Largest Contentful Paint" },
+  { key: "fcp", label: "FCP", description: "First Contentful Paint" },
+  { key: "ttfb", label: "TTFB", description: "Time to First Byte" },
+  { key: "inp", label: "INP", description: "Interaction to Next Paint" },
+  { key: "cls", label: "CLS", description: "Cumulative Layout Shift" }
+]
 
 function calculateImpactfulness(
   compressedBytes: number,
@@ -108,7 +137,7 @@ function calculateImpactfulness(
   const cwvMetricsImproved = cwvMetricScores.filter((score) => score > 0).length
   const cwvVerified = cwvMetricsCompared > 0
   const cwvScore =
-    cwvMetricScores.length > 0 ? cwvMetricScores.reduce((sum, v) => sum + v, 0) / cwvMetricScores.length : 0
+    cwvMetricScores.length > 0 ? cwvMetricScores.reduce((sum, value) => sum + value, 0) / cwvMetricScores.length : 0
 
   const bundleScore = clamp01(Math.abs(compressedBytes) / IMPACT_BYTES_LARGE)
   const score = cwvVerified ? clamp01(cwvScore * 0.8 + bundleScore * 0.2) : clamp01(bundleScore * 0.35)
@@ -143,13 +172,13 @@ function ImpactfulnessGauge({
 
   return (
     <div className="inline-flex flex-col rounded-lg border border-border bg-muted/20 p-3">
-      <div className="flex items-center justify-between mb-2">
+      <div className="mb-2 flex items-center justify-between">
         <div className="text-xs uppercase tracking-wide text-muted-foreground">Impactfulness</div>
         <div className="text-xs text-muted-foreground">
           {direction === "decrease" ? "Bundle reduced" : direction === "increase" ? "Bundle increased" : "No change"}
         </div>
       </div>
-      <svg viewBox="0 0 220 130" className="w-[220px] h-auto">
+      <svg viewBox="0 0 220 130" className="h-auto w-[220px]">
         <path
           d="M20 110 A90 90 0 0 1 200 110"
           stroke="currentColor"
@@ -184,16 +213,8 @@ function ImpactfulnessGauge({
           stroke="currentColor"
           strokeWidth="2"
         />
-        <line
-          x1={cx}
-          y1={cy}
-          x2={x2}
-          y2={y2}
-          stroke="currentColor"
-          strokeWidth="3"
-          className={direction === "increase" ? "text-red-500" : "text-green-500"}
-        />
-        <circle cx={cx} cy={cy} r="4" className={direction === "increase" ? "fill-red-500" : "fill-green-500"} />
+        <line x1={cx} y1={cy} x2={x2} y2={y2} stroke="currentColor" strokeWidth="3" className="text-foreground" />
+        <circle cx={cx} cy={cy} r="4" className="fill-foreground" />
         <text x="20" y="124" textAnchor="middle" className="fill-muted-foreground text-[10px]">
           S
         </text>
@@ -204,11 +225,11 @@ function ImpactfulnessGauge({
           L
         </text>
       </svg>
-      <div className="text-sm mt-2">
+      <div className="mt-2 text-sm">
         <span className="font-medium">{title}</span>
         <span className="text-muted-foreground"> impact</span>
       </div>
-      <div className="text-xs text-muted-foreground mt-1">
+      <div className="mt-1 text-xs text-muted-foreground">
         {cwvVerified
           ? `CWV verified (${cwvMetricsImproved}/${cwvMetricsCompared} improved)`
           : "CWV verification unavailable"}
@@ -217,1092 +238,258 @@ function ImpactfulnessGauge({
   )
 }
 
-export default function WorkflowReportPage({ params }: { params: Promise<{ id: string }> }) {
-  return (
-    <Suspense fallback={<ReportLoading reportCrumbLabel="Report" />}>
-      <WorkflowReportPageData params={params} />
-    </Suspense>
-  )
+function formatMs(value?: number) {
+  return typeof value === "number" ? `${value.toFixed(0)}ms` : "—"
 }
 
-async function WorkflowReportPageData({ params }: { params: Promise<{ id: string }> }) {
-  const user = await getCurrentUser()
-  const { id } = await params
+function formatClsValue(value?: number) {
+  return typeof value === "number" ? value.toFixed(4) : "—"
+}
 
-  // Prefer owner lookup first when authenticated (much faster than global public scan).
-  let run = user ? await getWorkflowRun(user.id, id) : null
-  let isOwner = false
+function formatMetricValue(key: MetricKey, value?: number) {
+  return key === "cls" ? formatClsValue(value) : formatMs(value)
+}
 
-  // Fall back to public report lookup when owner lookup misses (or user is signed out).
-  if (!run) {
-    run = await getPublicWorkflowRun(id)
-    if (!run && !user) {
-      redirect(getSignInPath(`/dev-agents/runs/${id}/report`))
+function formatMetricDelta(key: MetricKey, before: number, after: number) {
+  const delta = after - before
+  const sign = delta > 0 ? "+" : ""
+  return key === "cls" ? `${sign}${delta.toFixed(4)}` : `${sign}${delta.toFixed(0)}ms`
+}
+
+function formatSeconds(ms?: number) {
+  return typeof ms === "number" ? `${(ms / 1000).toFixed(1)}s` : "—"
+}
+
+function formatBytes(bytes?: number) {
+  if (typeof bytes !== "number") return "—"
+  const absolute = Math.abs(bytes)
+  if (absolute >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
+  return `${(bytes / 1024).toFixed(1)} KB`
+}
+
+function formatSignedBytes(bytes?: number) {
+  if (typeof bytes !== "number") return "—"
+  const sign = bytes > 0 ? "+" : ""
+  return `${sign}${formatBytes(bytes)}`
+}
+
+function formatSignedPercent(value?: number | null) {
+  if (typeof value !== "number") return "—"
+  const sign = value > 0 ? "+" : ""
+  return `${sign}${value.toFixed(1)}%`
+}
+
+function formatGrade(grade?: MetricSnapshot["grade"]) {
+  if (!grade) return null
+  return grade === "needs-improvement" ? "Needs improvement" : grade[0].toUpperCase() + grade.slice(1)
+}
+
+function getMetricSnapshot(
+  report: WorkflowReport,
+  key: MetricKey,
+  phase: "before" | "after"
+): MetricSnapshot | undefined {
+  const vitals = phase === "before" ? report.beforeWebVitals : report.afterWebVitals
+  const fromVitals = vitals?.[key]
+  if (fromVitals) {
+    return fromVitals
+  }
+
+  if (key === "cls") {
+    const value = phase === "before" ? report.clsScore : report.afterClsScore
+    const grade = phase === "before" ? report.clsGrade : report.afterClsGrade
+    if (typeof value === "number") {
+      return { value, grade }
     }
   }
 
-  if (user && run) {
-    isOwner = run.userId === user.id
-  }
-
-  if (!run) {
-    redirect("/dev-agents/runs")
-  }
-
-  if (!run.reportBlobUrl) {
-    if (user && isOwner) {
-      return <ReportPending runId={id} userId={user.id} workflowType={run.type} projectName={run.projectName} />
-    }
-    return <ReportPending runId={id} workflowType={run.type} projectName={run.projectName} />
-  }
-
-  const reportBlobUrl = run.reportBlobUrl
-
-  return <ReportContent id={id} run={run} isOwner={isOwner} reportBlobUrl={reportBlobUrl} />
+  return undefined
 }
 
-async function ReportContent({
-  id,
-  run,
-  isOwner,
-  reportBlobUrl
-}: {
-  id: string
-  run: WorkflowRun
-  isOwner: boolean
-  reportBlobUrl: string
-}) {
-  // Fetch the JSON report from the blob URL
-  const response = await fetch(reportBlobUrl)
-  const report: WorkflowReport = await response.json()
+function buildMetricRows(report: WorkflowReport): MetricRow[] {
+  const rows: MetricRow[] = []
 
-  // Use report's workflowType, fallback to run's type (for backward compat with old reports)
+  for (const definition of METRIC_DEFINITIONS) {
+    const before = getMetricSnapshot(report, definition.key, "before")
+    const after = getMetricSnapshot(report, definition.key, "after")
+    const current = after || before
+
+    if (!current) {
+      continue
+    }
+
+    rows.push({
+      ...definition,
+      before,
+      after,
+      current
+    })
+  }
+
+  return rows
+}
+
+function getWorkflowLabel(report: WorkflowReport, run: WorkflowRun): string {
   const workflowType = report.workflowType || run.type || "cls-fix"
-  const workflowLabel =
-    report.devAgentName ||
-    run.devAgentName ||
-    (workflowType === "prompt"
-      ? "Custom Prompt"
-      : workflowType === "design-guidelines"
-        ? "Design Guidelines"
-        : workflowType === "react-performance"
-          ? "React Performance"
-          : workflowType === "turbopack-bundle-analyzer"
-            ? "Turbopack Bundle Analyzer"
-            : workflowType === "url-audit"
-              ? "URL Audit"
-              : "CLS Fix")
-  const step2Description =
-    report.devAgentExecutionMode === "preview-pr"
-      ? "Dev Agent ran in preview-and-PR mode and generated this report."
-      : workflowType === "prompt"
-        ? "AI agent executed your custom task and generated this report."
-        : workflowType === "design-guidelines"
-          ? "Read-only design and UX analysis of the target URL."
-          : workflowType === "react-performance"
-            ? "Read-only React performance analysis of the target URL."
-            : workflowType === "turbopack-bundle-analyzer"
-              ? "AI explored Turbopack bundle analyzer output and generated optimization guidance."
-              : workflowType === "url-audit"
-                ? "Read-only UX and performance analysis of the target URL."
-                : "AI agent attempted to fix CLS issues (up to 3 retries)."
-  const reportHeading = report.devAgentName
-    ? `Report Results: ${report.devAgentName}`
-    : workflowType === "design-guidelines"
-      ? "Report: Vercel Web Design Guidelines Audit"
-      : workflowType === "turbopack-bundle-analyzer"
-        ? "Report: Turbopack Bundle Analyzer"
-        : `Report Results: ${workflowLabel}`
 
-  // Helper to format CLS grade
-  const gradeColor = (grade?: string) => {
-    switch (grade) {
-      case "good":
-        return "text-green-600 bg-green-100"
-      case "needs-improvement":
-        return "text-yellow-600 bg-yellow-100"
-      case "poor":
-        return "text-red-600 bg-red-100"
-      default:
-        return "text-gray-600 bg-gray-100"
-    }
+  if (report.devAgentName || run.devAgentName) {
+    return report.devAgentName || run.devAgentName || "Dev Agent"
   }
 
-  const formatSeconds = (ms?: number) => (typeof ms === "number" ? `${(ms / 1000).toFixed(1)}s` : "—")
-  const formatMs = (ms?: number) => (typeof ms === "number" ? `${ms.toFixed(0)}ms` : "—")
-  const formatClsValue = (value?: number) => (typeof value === "number" ? value.toFixed(4) : "—")
-  const formatBytes = (bytes?: number) => {
-    if (typeof bytes !== "number") return "—"
-    const abs = Math.abs(bytes)
-    if (abs >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
-    return `${(bytes / 1024).toFixed(1)} KB`
+  switch (workflowType) {
+    case "prompt":
+      return "Custom Prompt"
+    case "design-guidelines":
+      return "Design Guidelines"
+    case "react-performance":
+      return "React Performance"
+    case "turbopack-bundle-analyzer":
+      return "Turbopack Bundle Analyzer"
+    case "url-audit":
+      return "URL Audit"
+    case "cls-fix":
+      return "CLS Fix"
+    default:
+      return "Dev Agent"
   }
-  const formatSignedBytes = (bytes?: number) => {
-    if (typeof bytes !== "number") return "—"
-    const sign = bytes > 0 ? "+" : ""
-    return `${sign}${formatBytes(bytes)}`
+}
+
+function getWorkflowDescription(report: WorkflowReport, workflowLabel: string): string {
+  if (report.devAgentDescription) {
+    return report.devAgentDescription
   }
-  const formatSignedPercent = (value?: number | null) => {
-    if (typeof value !== "number") return "—"
-    const sign = value > 0 ? "+" : ""
-    return `${sign}${value.toFixed(1)}%`
+
+  if (report.devAgentExecutionMode === "preview-pr") {
+    return `${workflowLabel} ran in preview-and-PR mode and generated this report.`
   }
-  const formatClsDeltaPercent = (before?: number, after?: number) => {
-    if (typeof before !== "number" || typeof after !== "number" || before === 0) {
-      return "—"
-    }
-    return `${((Math.abs(after - before) / before) * 100).toFixed(0)}%`
+
+  switch (report.workflowType) {
+    case "design-guidelines":
+      return "Read-only design and UX analysis of the target URL."
+    case "react-performance":
+      return "Read-only React performance analysis of the target URL."
+    case "turbopack-bundle-analyzer":
+      return "Bundle analysis with before/after metrics and optimization guidance."
+    case "url-audit":
+      return "Read-only UX and performance analysis of the target URL."
+    case "prompt":
+      return "AI agent executed your custom task and generated this report."
+    default:
+      return "AI agent completed a run and generated this report."
   }
-  const hasWebVitalsData =
-    !!report.beforeWebVitals ||
-    !!report.afterWebVitals ||
-    report.clsScore !== undefined ||
-    report.afterClsScore !== undefined
-  const isReadOnlyUrlWorkflow = workflowType === "url-audit" || report.analysisTargetType === "url"
-  const showBeforeAfterVitals =
-    !isReadOnlyUrlWorkflow &&
-    workflowType === "cls-fix" &&
-    (!!report.afterWebVitals || report.afterClsScore !== undefined)
-  const bundleComparison = report.turbopackBundleComparison
-  const impactfulness = bundleComparison
-    ? calculateImpactfulness(bundleComparison.delta.compressedBytes, report.beforeWebVitals, report.afterWebVitals)
-    : null
-  // "Structured" here means top-level report sections that are visibly rendered.
-  // gitDiff alone does not currently render unless bundleComparison exists.
-  const hasStructuredTurbopackResults = Boolean(bundleComparison || hasWebVitalsData)
-  const shouldAutoOpenAnalysis =
-    workflowType === "turbopack-bundle-analyzer" && !hasStructuredTurbopackResults && Boolean(report.agentAnalysis)
-  const bundleRouteDeltas = bundleComparison
-    ? Array.from(
-        new Set([
-          ...bundleComparison.before.topRoutes.map((route) => route.route),
-          ...bundleComparison.after.topRoutes.map((route) => route.route)
-        ])
-      )
-        .map((route) => {
-          const beforeRoute = bundleComparison.before.topRoutes.find((item) => item.route === route)
-          const afterRoute = bundleComparison.after.topRoutes.find((item) => item.route === route)
-          const beforeCompressedBytes = beforeRoute?.compressedBytes ?? 0
-          const afterCompressedBytes = afterRoute?.compressedBytes ?? 0
-          const compressedDelta = afterCompressedBytes - beforeCompressedBytes
-          return {
-            route,
-            beforeCompressedBytes,
-            afterCompressedBytes,
-            compressedDelta
-          }
-        })
-        .filter((route) => Math.abs(route.compressedDelta) >= MIN_ROUTE_DELTA_BYTES)
-        .sort((a, b) => a.compressedDelta - b.compressedDelta)
-        .slice(0, 5)
-    : []
-  const skillLink = (skill: string) => {
-    const normalized = skill.trim().toLowerCase()
-    if (normalized === "d3k" || normalized.includes("d3k")) {
-      return "https://github.com/vercel-labs/dev3000/blob/main/www/.agents/skills/d3k/SKILL.md"
-    }
-    if (
-      normalized === "analyze-bundle" ||
-      normalized.includes("bundle-analyzer-agentic") ||
-      normalized.includes("bundle-analyzer")
-    ) {
-      return "https://github.com/vercel-labs/dev3000/blob/main/www/.agents/skills/analyze-bundle/SKILL.md"
-    }
-    if (normalized.includes("web-design-guidelines") || normalized.includes("vercel web design guidelines")) {
-      return "https://skills.sh/vercel-labs/agent-skills/web-design-guidelines"
-    }
-    return `https://skills.sh/vercel-labs/agent-skills/${normalized.replace(/\s+/g, "-")}`
-  }
-  const normalizeSkillLabel = (skill: string) => {
-    const normalized = skill.trim().toLowerCase()
-    if (normalized.includes("web-design-guidelines")) return "Vercel Web Design Guidelines"
-    if (
-      normalized === "analyze-bundle" ||
-      normalized.includes("bundle-analyzer-agentic") ||
-      normalized.includes("bundle-analyzer")
-    ) {
-      return "analyze-bundle"
-    }
-    if (normalized === "d3k" || normalized.includes("d3k")) return "d3k"
-    return skill
-  }
-  const explicitSkills = [...(report.skillsLoaded || []), ...(report.skillsInstalled || [])]
-  const inferredSkills: string[] = ["d3k"]
-  if (workflowType === "design-guidelines") inferredSkills.unshift("Vercel Web Design Guidelines")
-  if (workflowType === "turbopack-bundle-analyzer") inferredSkills.unshift("analyze-bundle")
-  const skillsUsed = Array.from(
-    new Map(
-      [...explicitSkills, ...inferredSkills].map((skill) => {
-        const label = normalizeSkillLabel(skill)
-        return [label.toLowerCase(), { label, url: skillLink(skill) }]
-      })
-    ).values()
+}
+
+function getVerificationSummary(report: WorkflowReport, metricRows: MetricRow[]) {
+  const comparedMetrics = metricRows.flatMap((row) =>
+    row.before && row.after ? [{ before: row.before, after: row.after }] : []
   )
-  const reportRepoTitle =
-    report.repoOwner && report.repoName
-      ? `${report.repoOwner}/${report.repoName}`
-      : report.repoUrl
-          ?.match(/github\.com\/([^/]+)\/([^/.]+)(?:\.git)?$/)
-          ?.slice(1, 3)
-          .join("/")
-  const reportTitle = report.targetUrl || reportRepoTitle || report.projectName
-  const isMarketplaceAgent = report.isMarketplaceAgent || report.devAgentId?.startsWith("r_mp_") || false
-  const formatNumber = (n: number) => Intl.NumberFormat("en-US").format(n)
-  const prDiffUrl = run.prUrl ? `${run.prUrl}.diff` : undefined
-  const inlineDiffUrl = report.gitDiff
-    ? `data:text/plain;charset=utf-8,${encodeURIComponent(report.gitDiff)}`
-    : undefined
-  const runStartedAt = new Date(run.timestamp)
-  const runEndedAt = run.completedAt ? new Date(run.completedAt) : null
-  const hasValidRunTiming =
-    !Number.isNaN(runStartedAt.getTime()) &&
-    !!runEndedAt &&
-    !Number.isNaN(runEndedAt.getTime()) &&
-    runEndedAt >= runStartedAt
-  const formatRunDuration = (durationMs: number) => {
-    const totalSeconds = Math.floor(durationMs / 1000)
-    const hours = Math.floor(totalSeconds / 3600)
-    const minutes = Math.floor((totalSeconds % 3600) / 60)
-    const seconds = totalSeconds % 60
-    if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`
-    if (minutes > 0) return `${minutes}m ${seconds}s`
-    return `${seconds}s`
+  const improvedMetrics = comparedMetrics.filter((row) => row.after.value < row.before.value)
+  const degradedMetrics = comparedMetrics.filter((row) => row.after.value > row.before.value)
+
+  if (report.verificationError) {
+    return {
+      title: "Verification hit an error",
+      description: report.verificationError
+    }
   }
+
+  if (report.verificationStatus === "improved") {
+    return {
+      title: "Post-run verification captured an improvement",
+      description:
+        comparedMetrics.length > 0
+          ? `Compared ${comparedMetrics.length} metric${comparedMetrics.length === 1 ? "" : "s"} with ${improvedMetrics.length} improvement${improvedMetrics.length === 1 ? "" : "s"}.`
+          : "The report recorded an improved verification result."
+    }
+  }
+
+  if (report.verificationStatus === "degraded") {
+    return {
+      title: "Post-run verification captured a regression",
+      description:
+        comparedMetrics.length > 0
+          ? `Compared ${comparedMetrics.length} metric${comparedMetrics.length === 1 ? "" : "s"} and detected ${degradedMetrics.length} regression${degradedMetrics.length === 1 ? "" : "s"}.`
+          : "The report recorded a degraded verification result."
+    }
+  }
+
+  if (report.verificationStatus === "unchanged") {
+    return {
+      title: "Post-run verification was stable",
+      description:
+        comparedMetrics.length > 0
+          ? `Compared ${comparedMetrics.length} metric${comparedMetrics.length === 1 ? "" : "s"} and found no material change.`
+          : "The report recorded an unchanged verification result."
+    }
+  }
+
+  if (comparedMetrics.length > 0) {
+    return {
+      title: "Before and after metrics were captured",
+      description: `${improvedMetrics.length} improved, ${degradedMetrics.length} regressed, ${comparedMetrics.length - improvedMetrics.length - degradedMetrics.length} unchanged.`
+    }
+  }
+
+  return null
+}
+
+function skillLink(skill: string) {
+  const normalized = skill.trim().toLowerCase()
+  if (normalized === "d3k" || normalized.includes("d3k")) {
+    return "https://github.com/vercel-labs/dev3000/blob/main/www/.agents/skills/d3k/SKILL.md"
+  }
+  if (
+    normalized === "analyze-bundle" ||
+    normalized.includes("bundle-analyzer-agentic") ||
+    normalized.includes("bundle-analyzer")
+  ) {
+    return "https://github.com/vercel-labs/dev3000/blob/main/www/.agents/skills/analyze-bundle/SKILL.md"
+  }
+  if (normalized.includes("web-design-guidelines") || normalized.includes("vercel web design guidelines")) {
+    return "https://skills.sh/vercel-labs/agent-skills/web-design-guidelines"
+  }
+  return `https://skills.sh/vercel-labs/agent-skills/${normalized.replace(/\s+/g, "-")}`
+}
+
+function normalizeSkillLabel(skill: string) {
+  const normalized = skill.trim().toLowerCase()
+  if (normalized.includes("web-design-guidelines")) return "Vercel Web Design Guidelines"
+  if (
+    normalized === "analyze-bundle" ||
+    normalized.includes("bundle-analyzer-agentic") ||
+    normalized.includes("bundle-analyzer")
+  ) {
+    return "analyze-bundle"
+  }
+  if (normalized === "d3k" || normalized.includes("d3k")) return "d3k"
+  return skill
+}
+
+function ReportSection({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 pt-8 pb-24 max-w-4xl">
-        <div className="mb-6 flex items-center justify-between gap-3">
-          <ReportBreadcrumb reportCrumbLabel="Report" />
-          <div className="flex items-center gap-3">
-            {isOwner && <ShareButton runId={id} initialIsPublic={run.isPublic ?? false} />}
-            <ThemeToggle />
-          </div>
-        </div>
-
-        <div className="mb-4">
-          <h1 className="text-3xl font-bold">
-            {reportTitle}
-            {workflowLabel && <span className="text-[#888] font-normal text-xl ml-2">(via {workflowLabel})</span>}
-          </h1>
-        </div>
-
-        {/* Success Eval Card */}
-        {report.successEvalResult != null && (
-          <div className="rounded-lg border border-[#1f1f1f] bg-[#0a0a0a] p-4 mb-4">
-            <div className="flex items-center gap-2">
-              <ShieldCheck className="size-4 text-[#888]" />
-              <span className="text-[14px] font-medium text-[#ededed]">
-                Success Eval: {report.successEvalResult ? "Pass" : "Fail"}
-              </span>
-            </div>
-            {report.successEval && <p className="mt-1 text-[13px] text-[#666]">{report.successEval}</p>}
-          </div>
-        )}
-
-        {/* Info Card */}
-        <div className="rounded-lg border border-[#1f1f1f] bg-[#0a0a0a] p-4 mb-6">
-          <div className="grid grid-cols-2 gap-x-8 gap-y-2">
-            <div className="text-[13px]">
-              <span className="text-[#888]">Date: </span>
-              <span className="text-[#ededed]">
-                {new Date(report.timestamp).toLocaleDateString("en-US", {
-                  month: "short",
-                  day: "numeric",
-                  year: "numeric"
-                })}
-              </span>
-            </div>
-            {!isMarketplaceAgent && (
-              <div className="text-[13px]">
-                <span className="text-[#888]">Model: </span>
-                <span className="text-[#ededed]">{report.agentAnalysisModel || "unknown"}</span>
-              </div>
-            )}
-            {hasValidRunTiming && runEndedAt && (
-              <div className="text-[13px]">
-                <span className="text-[#888]">Run time: </span>
-                <span className="text-[#ededed]">
-                  {formatRunDuration(runEndedAt.getTime() - runStartedAt.getTime())}
-                </span>
-              </div>
-            )}
-            {!isMarketplaceAgent && skillsUsed.length > 0 && (
-              <div className="text-[13px]">
-                <span className="text-[#888]">Skills: </span>
-                <span>
-                  {skillsUsed.map((skill, index) => (
-                    <span key={`skills-used-${skill.label}`}>
-                      <a
-                        href={skill.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="hover:underline text-[#ededed]"
-                      >
-                        {skill.label}
-                      </a>
-                      {index < skillsUsed.length - 1 ? ", " : ""}
-                    </span>
-                  ))}
-                </span>
-              </div>
-            )}
-            {report.gatewayUsage?.totalTokens && (
-              <div className="text-[13px]">
-                <span className="text-[#888]">Tokens: </span>
-                <span className="text-[#ededed]">
-                  {formatNumber(report.gatewayUsage.totalTokens)}
-                  {report.gatewayUsage.promptTokens && report.gatewayUsage.completionTokens && (
-                    <span className="text-[#666]">
-                      {" "}
-                      (prompt: {formatNumber(report.gatewayUsage.promptTokens)} · completion:{" "}
-                      {formatNumber(report.gatewayUsage.completionTokens)})
-                    </span>
-                  )}
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Report */}
-        <div className="bg-card border border-border rounded-lg p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4">{reportHeading}</h2>
-          <p className="text-sm text-muted-foreground mb-4">{step2Description}</p>
-
-          {/* Custom Prompt Section (for prompt workflow type) */}
-          {workflowType === "prompt" && report.customPrompt && (
-            <div className="mb-4">
-              <h3 className="text-sm font-medium text-muted-foreground mb-2">Your Task</h3>
-              <div className="bg-muted/50 rounded p-4 text-sm whitespace-pre-wrap">{report.customPrompt}</div>
-            </div>
-          )}
-
-          {/* CLS Results - only show for cls-fix workflow type */}
-          {workflowType === "cls-fix" && report.clsScore !== undefined && (
-            <>
-              <h3 className="text-lg font-medium mb-3">CLS Results</h3>
-
-              {/* Show before/after if we have verification data */}
-              {report.afterClsScore !== undefined ? (
-                <div className="space-y-4">
-                  {/* Verification Status Banner */}
-                  <div
-                    className={`rounded-lg p-4 ${
-                      report.verificationStatus === "improved"
-                        ? "bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800"
-                        : report.verificationStatus === "degraded"
-                          ? "bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800"
-                          : "bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-lg">
-                        {report.verificationStatus === "improved"
-                          ? "✅"
-                          : report.verificationStatus === "degraded"
-                            ? "❌"
-                            : "⚠️"}
-                      </span>
-                      <span className="font-semibold">
-                        {report.verificationStatus === "improved"
-                          ? "Fix Verified - CLS Improved!"
-                          : report.verificationStatus === "degraded"
-                            ? "Fix May Have Caused Regression"
-                            : "CLS Unchanged After Fix"}
-                      </span>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      {report.verificationStatus === "improved"
-                        ? `CLS reduced by ${formatClsDeltaPercent(report.clsScore, report.afterClsScore)}`
-                        : report.verificationStatus === "degraded"
-                          ? `CLS increased by ${formatClsDeltaPercent(report.clsScore, report.afterClsScore)}`
-                          : "The fix did not significantly impact CLS score"}
-                    </p>
-                  </div>
-
-                  {/* Before / After Comparison */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="text-center p-4 bg-muted/30 rounded-lg">
-                      <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Before</div>
-                      <div className="text-3xl font-bold">{formatClsValue(report.clsScore)}</div>
-                      {report.clsGrade && (
-                        <span
-                          className={`inline-block mt-2 px-2 py-0.5 rounded-full text-xs font-medium ${gradeColor(report.clsGrade)}`}
-                        >
-                          {report.clsGrade}
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-center p-4 bg-muted/30 rounded-lg">
-                      <div className="text-xs text-muted-foreground uppercase tracking-wide mb-1">After</div>
-                      <div className="text-3xl font-bold">{formatClsValue(report.afterClsScore)}</div>
-                      {report.afterClsGrade && (
-                        <span
-                          className={`inline-block mt-2 px-2 py-0.5 rounded-full text-xs font-medium ${gradeColor(report.afterClsGrade)}`}
-                        >
-                          {report.afterClsGrade}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                /* Original display if no verification data */
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="text-4xl font-bold">{formatClsValue(report.clsScore)}</div>
-                  {report.clsGrade && (
-                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${gradeColor(report.clsGrade)}`}>
-                      {report.clsGrade}
-                    </span>
-                  )}
-                </div>
-              )}
-
-              {/* Verification Error */}
-              {report.verificationError && (
-                <div className="mt-4 p-3 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded text-sm text-red-800 dark:text-red-200">
-                  <span className="font-medium">Verification Error: </span>
-                  {report.verificationError}
-                </div>
-              )}
-
-              {/* Layout Shifts Details */}
-              {report.layoutShifts && report.layoutShifts.length > 0 && (
-                <div className="mt-4">
-                  <h3 className="text-sm font-medium text-muted-foreground mb-2">Layout Shift Details</h3>
-                  <div className="space-y-2">
-                    {report.layoutShifts.map((shift, i) => (
-                      <div key={`shift-${shift.timestamp}`} className="bg-muted/50 rounded p-3 text-sm">
-                        <div className="flex justify-between mb-1">
-                          <span className="font-medium">Shift #{i + 1}</span>
-                          <span className="text-muted-foreground">score: {formatClsValue(shift.score)}</span>
-                        </div>
-                        {shift.elements.length > 0 && (
-                          <div className="text-muted-foreground text-xs">Elements: {shift.elements.join(", ")}</div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-
-          {/* Screenshots - shown for ALL workflow types */}
-          {(report.beforeScreenshots?.length ||
-            report.afterScreenshots?.length ||
-            report.clsScreenshots?.length ||
-            report.beforeScreenshotUrl ||
-            report.afterScreenshotUrl) && (
-            <div className="mt-6 pt-4 border-t border-border">
-              <h3 className="text-lg font-medium mb-3">Screenshots</h3>
-
-              {/* Animated players for before/after screenshot sequences */}
-              {(report.beforeScreenshots?.length || report.clsScreenshots?.length) &&
-              report.afterScreenshots?.length ? (
-                /* Both before and after have animated screenshots - use coordinated player */
-                <CoordinatedPlayers
-                  beforeScreenshots={report.beforeScreenshots || report.clsScreenshots || []}
-                  afterScreenshots={report.afterScreenshots}
-                  fps={2}
-                  loopDelayMs={10000}
-                />
-              ) : report.beforeScreenshots?.length ||
-                report.afterScreenshots?.length ||
-                report.clsScreenshots?.length ? (
-                /* Only one side has animated screenshots - use individual players */
-                <div className="grid grid-cols-2 gap-4">
-                  {/* Before - use beforeScreenshots or fallback to clsScreenshots */}
-                  {report.beforeScreenshots?.length || report.clsScreenshots?.length ? (
-                    <ScreenshotPlayer
-                      screenshots={report.beforeScreenshots || report.clsScreenshots || []}
-                      title="Before"
-                      autoPlay={true}
-                      fps={2}
-                      loop={true}
-                    />
-                  ) : report.beforeScreenshotUrl ? (
-                    <div className="bg-muted/30 rounded-lg overflow-hidden">
-                      <div className="px-3 py-2 border-b border-border bg-muted/50">
-                        <span className="text-xs text-muted-foreground uppercase tracking-wide">Before</span>
-                      </div>
-                      <a href={report.beforeScreenshotUrl} target="_blank" rel="noopener noreferrer">
-                        <Image
-                          src={report.beforeScreenshotUrl}
-                          alt="Before screenshot"
-                          width={400}
-                          height={225}
-                          unoptimized
-                          className="w-full h-auto"
-                        />
-                      </a>
-                    </div>
-                  ) : null}
-
-                  {/* After */}
-                  {report.afterScreenshots?.length ? (
-                    <ScreenshotPlayer
-                      screenshots={report.afterScreenshots}
-                      title="After"
-                      autoPlay={true}
-                      fps={2}
-                      loop={true}
-                    />
-                  ) : report.afterScreenshotUrl ? (
-                    <div className="bg-muted/30 rounded-lg overflow-hidden">
-                      <div className="px-3 py-2 border-b border-border bg-muted/50">
-                        <span className="text-xs text-muted-foreground uppercase tracking-wide">After</span>
-                      </div>
-                      <a href={report.afterScreenshotUrl} target="_blank" rel="noopener noreferrer">
-                        <Image
-                          src={report.afterScreenshotUrl}
-                          alt="After screenshot"
-                          width={400}
-                          height={225}
-                          unoptimized
-                          className="w-full h-auto"
-                        />
-                      </a>
-                    </div>
-                  ) : null}
-                </div>
-              ) : (
-                /* Fallback: static images only */
-                <div className="grid grid-cols-2 gap-4">
-                  {report.beforeScreenshotUrl && (
-                    <div className="bg-muted/30 rounded-lg overflow-hidden">
-                      <div className="px-3 py-2 border-b border-border bg-muted/50">
-                        <span className="text-xs text-muted-foreground uppercase tracking-wide">Before</span>
-                      </div>
-                      <a href={report.beforeScreenshotUrl} target="_blank" rel="noopener noreferrer">
-                        <Image
-                          src={report.beforeScreenshotUrl}
-                          alt="Before screenshot"
-                          width={400}
-                          height={225}
-                          unoptimized
-                          className="w-full h-auto"
-                        />
-                      </a>
-                    </div>
-                  )}
-                  {report.afterScreenshotUrl && (
-                    <div className="bg-muted/30 rounded-lg overflow-hidden">
-                      <div className="px-3 py-2 border-b border-border bg-muted/50">
-                        <span className="text-xs text-muted-foreground uppercase tracking-wide">After</span>
-                      </div>
-                      <a href={report.afterScreenshotUrl} target="_blank" rel="noopener noreferrer">
-                        <Image
-                          src={report.afterScreenshotUrl}
-                          alt="After screenshot"
-                          width={400}
-                          height={225}
-                          unoptimized
-                          className="w-full h-auto"
-                        />
-                      </a>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Web Vitals - shown for all workflow types when we have metrics or CLS scores */}
-          {hasWebVitalsData && (
-            <div className="mt-6 pt-6 border-t border-border">
-              <h3 className="text-lg font-medium mb-4">Core Web Vitals</h3>
-              {showBeforeAfterVitals ? (
-                <div className="grid grid-cols-2 gap-4">
-                  {/* Before */}
-                  <div className="bg-muted/30 rounded-lg p-4">
-                    <div className="text-xs text-muted-foreground uppercase tracking-wide mb-3">Before</div>
-                    <div className="space-y-2">
-                      {report.beforeWebVitals?.lcp && (
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm" title="Largest Contentful Paint">
-                            LCP
-                          </span>
-                          <span
-                            className={`text-sm font-medium ${report.beforeWebVitals.lcp.grade === "good" ? "text-green-600" : report.beforeWebVitals.lcp.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}
-                          >
-                            {formatMs(report.beforeWebVitals.lcp.value)}
-                          </span>
-                        </div>
-                      )}
-                      {(report.beforeWebVitals?.cls || report.clsScore !== undefined) && (
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm" title="Cumulative Layout Shift">
-                            CLS
-                          </span>
-                          <span
-                            className={`text-sm font-medium ${
-                              (report.beforeWebVitals?.cls?.grade || report.clsGrade) === "good"
-                                ? "text-green-600"
-                                : (report.beforeWebVitals?.cls?.grade || report.clsGrade) === "needs-improvement"
-                                  ? "text-yellow-600"
-                                  : "text-red-600"
-                            }`}
-                          >
-                            {formatClsValue(report.beforeWebVitals?.cls?.value ?? report.clsScore)}
-                          </span>
-                        </div>
-                      )}
-                      {report.beforeWebVitals?.inp && (
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm" title="Interaction to Next Paint">
-                            INP
-                          </span>
-                          <span
-                            className={`text-sm font-medium ${report.beforeWebVitals.inp.grade === "good" ? "text-green-600" : report.beforeWebVitals.inp.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}
-                          >
-                            {formatMs(report.beforeWebVitals.inp.value)}
-                          </span>
-                        </div>
-                      )}
-                      {!report.beforeWebVitals?.lcp &&
-                        !report.beforeWebVitals?.cls &&
-                        !report.beforeWebVitals?.inp &&
-                        report.clsScore === undefined && (
-                          <span className="text-sm text-muted-foreground">No metrics captured</span>
-                        )}
-                    </div>
-                  </div>
-                  {/* After */}
-                  <div className="bg-muted/30 rounded-lg p-4">
-                    <div className="text-xs text-muted-foreground uppercase tracking-wide mb-3">After</div>
-                    <div className="space-y-2">
-                      {report.afterWebVitals?.lcp && (
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm" title="Largest Contentful Paint">
-                            LCP
-                          </span>
-                          <span
-                            className={`text-sm font-medium ${report.afterWebVitals.lcp.grade === "good" ? "text-green-600" : report.afterWebVitals.lcp.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}
-                          >
-                            {formatMs(report.afterWebVitals.lcp.value)}
-                          </span>
-                        </div>
-                      )}
-                      {(report.afterWebVitals?.cls || report.afterClsScore !== undefined) && (
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm" title="Cumulative Layout Shift">
-                            CLS
-                          </span>
-                          <span
-                            className={`text-sm font-medium ${
-                              (report.afterWebVitals?.cls?.grade || report.afterClsGrade) === "good"
-                                ? "text-green-600"
-                                : (report.afterWebVitals?.cls?.grade || report.afterClsGrade) === "needs-improvement"
-                                  ? "text-yellow-600"
-                                  : "text-red-600"
-                            }`}
-                          >
-                            {formatClsValue(report.afterWebVitals?.cls?.value ?? report.afterClsScore)}
-                          </span>
-                        </div>
-                      )}
-                      {report.afterWebVitals?.inp && (
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm" title="Interaction to Next Paint">
-                            INP
-                          </span>
-                          <span
-                            className={`text-sm font-medium ${report.afterWebVitals.inp.grade === "good" ? "text-green-600" : report.afterWebVitals.inp.grade === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}
-                          >
-                            {formatMs(report.afterWebVitals.inp.value)}
-                          </span>
-                        </div>
-                      )}
-                      {!report.afterWebVitals?.lcp &&
-                        !report.afterWebVitals?.cls &&
-                        !report.afterWebVitals?.inp &&
-                        report.afterClsScore === undefined && (
-                          <span className="text-sm text-muted-foreground">No metrics captured</span>
-                        )}
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="bg-muted/30 rounded-lg p-4">
-                  {!isReadOnlyUrlWorkflow && (
-                    <div className="text-xs text-muted-foreground uppercase tracking-wide mb-3">Current</div>
-                  )}
-                  <div className="space-y-2 md:space-y-0 md:flex md:flex-wrap md:items-center md:gap-x-8 md:gap-y-2">
-                    {(report.beforeWebVitals?.lcp || report.afterWebVitals?.lcp) && (
-                      <div className="flex justify-between items-center md:justify-start md:gap-2">
-                        <span className="text-sm" title="Largest Contentful Paint">
-                          LCP
-                        </span>
-                        <span
-                          className={`text-sm font-medium ${(report.beforeWebVitals?.lcp?.grade || report.afterWebVitals?.lcp?.grade) === "good" ? "text-green-600" : (report.beforeWebVitals?.lcp?.grade || report.afterWebVitals?.lcp?.grade) === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}
-                        >
-                          {formatMs(report.beforeWebVitals?.lcp?.value ?? report.afterWebVitals?.lcp?.value)}
-                        </span>
-                      </div>
-                    )}
-                    {(report.beforeWebVitals?.cls ||
-                      report.afterWebVitals?.cls ||
-                      report.clsScore !== undefined ||
-                      report.afterClsScore !== undefined) && (
-                      <div className="flex justify-between items-center md:justify-start md:gap-2">
-                        <span className="text-sm" title="Cumulative Layout Shift">
-                          CLS
-                        </span>
-                        <span
-                          className={`text-sm font-medium ${
-                            (
-                              report.beforeWebVitals?.cls?.grade ||
-                                report.afterWebVitals?.cls?.grade ||
-                                report.clsGrade ||
-                                report.afterClsGrade
-                            ) === "good"
-                              ? "text-green-600"
-                              : (report.beforeWebVitals?.cls?.grade ||
-                                    report.afterWebVitals?.cls?.grade ||
-                                    report.clsGrade ||
-                                    report.afterClsGrade) === "needs-improvement"
-                                ? "text-yellow-600"
-                                : "text-red-600"
-                          }`}
-                        >
-                          {formatClsValue(
-                            report.beforeWebVitals?.cls?.value ??
-                              report.afterWebVitals?.cls?.value ??
-                              report.clsScore ??
-                              report.afterClsScore
-                          )}
-                        </span>
-                      </div>
-                    )}
-                    {(report.beforeWebVitals?.inp || report.afterWebVitals?.inp) && (
-                      <div className="flex justify-between items-center md:justify-start md:gap-2">
-                        <span className="text-sm" title="Interaction to Next Paint">
-                          INP
-                        </span>
-                        <span
-                          className={`text-sm font-medium ${(report.beforeWebVitals?.inp?.grade || report.afterWebVitals?.inp?.grade) === "good" ? "text-green-600" : (report.beforeWebVitals?.inp?.grade || report.afterWebVitals?.inp?.grade) === "needs-improvement" ? "text-yellow-600" : "text-red-600"}`}
-                        >
-                          {formatMs(report.beforeWebVitals?.inp?.value ?? report.afterWebVitals?.inp?.value)}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {workflowType === "turbopack-bundle-analyzer" && bundleComparison && (
-            <div className="mb-6">
-              <h3 className="text-lg font-medium mb-4">Bundle Delta (Before vs After)</h3>
-              {impactfulness && (
-                <div className="mb-3">
-                  <ImpactfulnessGauge
-                    score={impactfulness.score}
-                    bucket={impactfulness.bucket}
-                    direction={impactfulness.direction}
-                    cwvVerified={impactfulness.cwvVerified}
-                    cwvMetricsCompared={impactfulness.cwvMetricsCompared}
-                    cwvMetricsImproved={impactfulness.cwvMetricsImproved}
-                  />
-                </div>
-              )}
-              <div
-                className={`mb-3 rounded-lg border px-3 py-2 text-sm ${
-                  bundleComparison.delta.compressedBytes <= 0
-                    ? "border-green-200 bg-green-50 text-green-800 dark:border-green-700/40 dark:bg-green-900/20 dark:text-green-200"
-                    : "border-red-200 bg-red-50 text-red-800 dark:border-red-700/40 dark:bg-red-900/20 dark:text-red-200"
-                }`}
-              >
-                {bundleComparison.delta.compressedBytes <= 0 ? "Reduced shipped JS by " : "Increased shipped JS by "}
-                <span className="font-semibold">{formatBytes(Math.abs(bundleComparison.delta.compressedBytes))}</span>
-                {" ("}
-                <span className="font-semibold">
-                  {formatSignedPercent(bundleComparison.delta.compressedPercent)?.replace("+", "")}
-                </span>
-                {") across "}
-                <span className="font-semibold">{bundleComparison.before.routeCount}</span>
-                {" analyzed route"}
-                {bundleComparison.before.routeCount === 1 ? "" : "s"}.
-              </div>
-              <div className="grid gap-3 md:grid-cols-3">
-                <div className="rounded-lg border border-border bg-muted/20 p-3">
-                  <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Compressed JS</div>
-                  <div className="text-sm">
-                    {formatBytes(bundleComparison.before.totalCompressedBytes)} →{" "}
-                    {formatBytes(bundleComparison.after.totalCompressedBytes)}
-                  </div>
-                  <div
-                    className={`text-sm font-medium ${bundleComparison.delta.compressedBytes <= 0 ? "text-green-600" : "text-red-600"}`}
-                  >
-                    {formatSignedBytes(bundleComparison.delta.compressedBytes)} (
-                    {formatSignedPercent(bundleComparison.delta.compressedPercent)})
-                  </div>
-                </div>
-                <div className="rounded-lg border border-border bg-muted/20 p-3">
-                  <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Raw JS</div>
-                  <div className="text-sm">
-                    {formatBytes(bundleComparison.before.totalRawBytes)} →{" "}
-                    {formatBytes(bundleComparison.after.totalRawBytes)}
-                  </div>
-                  <div
-                    className={`text-sm font-medium ${bundleComparison.delta.rawBytes <= 0 ? "text-green-600" : "text-red-600"}`}
-                  >
-                    {formatSignedBytes(bundleComparison.delta.rawBytes)} (
-                    {formatSignedPercent(bundleComparison.delta.rawPercent)})
-                  </div>
-                </div>
-                <div className="rounded-lg border border-border bg-muted/20 p-3">
-                  <div className="text-xs uppercase tracking-wide text-muted-foreground mb-1">Coverage</div>
-                  <div className="text-sm">Routes: {bundleComparison.before.routeCount}</div>
-                  <div className="text-sm">Output files: {bundleComparison.before.outputFileCount}</div>
-                </div>
-              </div>
-              {bundleRouteDeltas.length > 0 && (
-                <div className="mt-4 rounded-lg border border-border bg-muted/20 p-3">
-                  <div className="text-xs uppercase tracking-wide text-muted-foreground mb-2">
-                    Top Route-Level Compressed JS Changes
-                  </div>
-                  <div className="space-y-2">
-                    {bundleRouteDeltas.map((routeDelta) => (
-                      <div
-                        key={routeDelta.route}
-                        className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] gap-3 text-sm items-center"
-                      >
-                        <span className="font-mono truncate">{routeDelta.route}</span>
-                        <span className="text-muted-foreground">{formatBytes(routeDelta.beforeCompressedBytes)}</span>
-                        <span className="text-muted-foreground">→ {formatBytes(routeDelta.afterCompressedBytes)}</span>
-                        <span className={routeDelta.compressedDelta <= 0 ? "text-green-600" : "text-red-600"}>
-                          {formatSignedBytes(routeDelta.compressedDelta)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {report.gitDiff && (
-                <DiffSection patch={report.gitDiff} prDiffUrl={prDiffUrl} inlineDiffUrl={inlineDiffUrl} />
-              )}
-            </div>
-          )}
-
-          {workflowType === "turbopack-bundle-analyzer" && !hasStructuredTurbopackResults && (
-            <div className="mt-6 rounded-lg border border-border bg-muted/30 p-3 text-sm text-muted-foreground">
-              Structured Turbopack metrics were not captured for this run. The full agent findings are shown below.
-            </div>
-          )}
-
-          {/* Agent Transcript - hidden for marketplace agents */}
-          {!isMarketplaceAgent && (
-            <div className="mt-6 pt-6 border-t border-border">
-              <details className="group" open={shouldAutoOpenAnalysis}>
-                <summary className="inline-flex items-center gap-2 cursor-pointer text-sm hover:text-foreground text-muted-foreground">
-                  <span className="font-medium inline-flex items-center gap-2">
-                    <ChevronRight className="h-4 w-4 transition-transform group-open:rotate-90" />
-                    Show analysis details
-                  </span>
-                </summary>
-                <div className="mt-4 space-y-5">
-                  {(report.timing || report.initD3kLogs || report.d3kLogs || report.afterD3kLogs) && (
-                    <div className="rounded-lg border border-border bg-muted/20 p-4 space-y-4">
-                      <div className="text-sm font-medium">d3k agent transcript</div>
-                      {(report.sandboxDevUrl ||
-                        report.targetUrl ||
-                        report.repoUrl ||
-                        report.repoBranch ||
-                        report.projectDir) && (
-                        <div className="text-xs text-muted-foreground">
-                          <ul className="flex flex-wrap gap-x-6 gap-y-1">
-                            {report.sandboxDevUrl && (
-                              <li>
-                                <span>{report.analysisTargetType === "url" ? "Sandbox: " : "Dev: "}</span>
-                                <a
-                                  href={report.sandboxDevUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="font-mono hover:underline"
-                                >
-                                  {report.sandboxDevUrl}
-                                </a>
-                              </li>
-                            )}
-                            {report.targetUrl && (
-                              <li>
-                                <span>Target: </span>
-                                <a
-                                  href={report.targetUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="font-mono hover:underline"
-                                >
-                                  {report.targetUrl}
-                                </a>
-                              </li>
-                            )}
-                            {report.repoUrl && (
-                              <li>
-                                <span>Repo: </span>
-                                <a
-                                  href={report.repoUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="font-mono hover:underline"
-                                >
-                                  {report.repoUrl}
-                                </a>
-                              </li>
-                            )}
-                            {report.repoBranch && (
-                              <li>
-                                <span>Ref: </span>
-                                <span className="font-mono">{report.repoBranch}</span>
-                              </li>
-                            )}
-                            {report.projectDir && (
-                              <li>
-                                <span>Dir: </span>
-                                <span className="font-mono">{report.projectDir}</span>
-                              </li>
-                            )}
-                          </ul>
-                        </div>
-                      )}
-
-                      {report.timing && (
-                        <>
-                          <div className="flex flex-wrap items-center gap-4">
-                            <div className="flex items-center gap-2">
-                              <span
-                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
-                                  report.fromSnapshot
-                                    ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-                                    : "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200"
-                                }`}
-                              >
-                                {report.fromSnapshot ? "Snapshot Reused" : "Fresh Sandbox"}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-4 text-sm">
-                              <span className="text-muted-foreground">
-                                Total:{" "}
-                                <span className="font-medium text-foreground">
-                                  {formatSeconds(report.timing?.total?.totalMs)}
-                                </span>
-                              </span>
-                              <span className="text-muted-foreground">
-                                Init:{" "}
-                                <span className="font-mono text-xs">{formatSeconds(report.timing?.total?.initMs)}</span>
-                              </span>
-                              <span className="text-muted-foreground">
-                                Agent:{" "}
-                                <span className="font-mono text-xs">
-                                  {formatSeconds(report.timing?.total?.agentMs)}
-                                </span>
-                              </span>
-                              {report.timing?.total?.prMs && (
-                                <span className="text-muted-foreground">
-                                  PR:{" "}
-                                  <span className="font-mono text-xs">{formatSeconds(report.timing?.total?.prMs)}</span>
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                          <details className="pt-1">
-                            <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
-                              View step-by-step timing breakdown
-                            </summary>
-                            <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                              {report.timing.init?.steps && report.timing.init.steps.length > 0 && (
-                                <div>
-                                  <div className="font-medium text-muted-foreground mb-1">Init Steps</div>
-                                  <ul className="space-y-0.5 font-mono">
-                                    {report.timing.init.steps.map((step) => (
-                                      <li key={`init-${step.name}`} className="flex justify-between">
-                                        <span className="truncate mr-2">{step.name}</span>
-                                        <span className="text-muted-foreground">{formatSeconds(step.durationMs)}</span>
-                                      </li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              )}
-                              {report.timing.agent?.steps && report.timing.agent.steps.length > 0 && (
-                                <div>
-                                  <div className="font-medium text-muted-foreground mb-1">Agent Steps</div>
-                                  <ul className="space-y-0.5 font-mono">
-                                    {report.timing.agent.steps.map((step) => (
-                                      <li key={`agent-${step.name}`} className="flex justify-between">
-                                        <span className="truncate mr-2">{step.name}</span>
-                                        <span className="text-muted-foreground">{formatSeconds(step.durationMs)}</span>
-                                      </li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              )}
-                            </div>
-                          </details>
-                        </>
-                      )}
-
-                      {(report.initD3kLogs || report.d3kLogs) && (
-                        <details>
-                          <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
-                            Init logs
-                          </summary>
-                          <pre className="mt-2 bg-muted/50 rounded p-4 text-xs font-mono overflow-x-auto whitespace-pre-wrap max-h-96 overflow-y-auto">
-                            {report.initD3kLogs || report.d3kLogs}
-                          </pre>
-                        </details>
-                      )}
-
-                      {report.afterD3kLogs && (
-                        <details>
-                          <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
-                            After logs
-                          </summary>
-                          <pre className="mt-2 bg-muted/50 rounded p-4 text-xs font-mono overflow-x-auto whitespace-pre-wrap max-h-96 overflow-y-auto">
-                            {report.afterD3kLogs}
-                          </pre>
-                        </details>
-                      )}
-                    </div>
-                  )}
-
-                  <AgentAnalysis content={report.agentAnalysis} />
-                </div>
-              </details>
-            </div>
-          )}
-        </div>
-
-        <div className="mt-6 mb-4 flex gap-4">
-          <a
-            href="/dev-agents/runs"
-            className="px-4 py-2 border border-border rounded-md hover:bg-muted transition-colors"
-          >
-            ← Dev Agent Runs
-          </a>
-          {run.prUrl && (
-            <a
-              href={run.prUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
-            >
-              View Pull Request →
-            </a>
-          )}
-        </div>
+    <section className="rounded-lg border border-border bg-card p-6">
+      <div className="mb-4">
+        <h2 className="text-lg font-semibold">{title}</h2>
+        {description ? <p className="mt-1 text-sm text-muted-foreground">{description}</p> : null}
       </div>
-    </div>
+      {children}
+    </section>
+  )
+}
+
+function MetricGradeBadge({ grade }: { grade?: MetricSnapshot["grade"] }) {
+  const label = formatGrade(grade)
+  if (!label) return null
+
+  return (
+    <span className="rounded-full border border-[#333] bg-[#111] px-2 py-0.5 text-[11px] text-[#888]">{label}</span>
   )
 }
 
 function ReportLoading({ reportCrumbLabel }: { reportCrumbLabel: string }) {
   return (
     <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-8 max-w-4xl">
+      <div className="container mx-auto max-w-4xl px-4 py-8">
         <div className="mb-6 flex items-center justify-between gap-3">
           <ReportBreadcrumb reportCrumbLabel={reportCrumbLabel} />
           <div className="flex items-center gap-3">
@@ -1325,12 +512,799 @@ function ReportLoading({ reportCrumbLabel }: { reportCrumbLabel: string }) {
 function ReportBreadcrumb({ reportCrumbLabel }: { reportCrumbLabel: string }) {
   return (
     <span className="inline-flex items-center gap-2 text-muted-foreground">
-      <a href="/dev-agents/runs" className="inline-flex items-center gap-2 hover:text-foreground transition-colors">
+      <a href="/dev-agents/runs" className="inline-flex items-center gap-2 transition-colors hover:text-foreground">
         <ArrowLeft className="h-4 w-4" />
         <span className="font-semibold">Dev Agent Runs</span>
       </a>
       <span>/</span>
       <span>{reportCrumbLabel}</span>
     </span>
+  )
+}
+
+function StandaloneReportFrame({
+  title,
+  subtitle,
+  description,
+  actions,
+  children
+}: {
+  title: ReactNode
+  subtitle?: ReactNode
+  description?: ReactNode
+  actions?: ReactNode
+  children: ReactNode
+}) {
+  return (
+    <div className="min-h-screen bg-background">
+      <div className="container mx-auto max-w-5xl px-4 py-8">
+        <div className="mb-6 flex items-center justify-between gap-3">
+          <ReportBreadcrumb reportCrumbLabel="Report" />
+          <div className="flex items-center gap-3">
+            {actions}
+            <ThemeToggle />
+          </div>
+        </div>
+        <div className="mb-6">
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-3xl font-bold">{title}</h1>
+            {subtitle ? <span className="text-sm text-muted-foreground">{subtitle}</span> : null}
+          </div>
+          {description ? <div className="mt-2 text-sm text-muted-foreground">{description}</div> : null}
+        </div>
+        <div className="space-y-6">{children}</div>
+      </div>
+    </div>
+  )
+}
+
+export default function WorkflowReportPage({ params }: { params: Promise<{ id: string }> }) {
+  return (
+    <Suspense fallback={<ReportLoading reportCrumbLabel="Report" />}>
+      <WorkflowReportPageData params={params} />
+    </Suspense>
+  )
+}
+
+async function WorkflowReportPageData({ params }: { params: Promise<{ id: string }> }) {
+  const user = await getCurrentUser()
+  const { id } = await params
+
+  let run = user ? await getWorkflowRun(user.id, id) : null
+  let isOwner = false
+
+  if (!run) {
+    run = await getPublicWorkflowRun(id)
+    if (!run && !user) {
+      redirect(getSignInPath(`/dev-agents/runs/${id}/report`))
+    }
+  }
+
+  if (user && run) {
+    isOwner = run.userId === user.id
+  }
+
+  if (!run) {
+    redirect("/dev-agents/runs")
+  }
+
+  const ownerRouteContext = isOwner ? await getDefaultDevAgentsRouteContext() : null
+  const canUseDashboardShell = Boolean(ownerRouteContext?.selectedTeam)
+
+  if (!run.reportBlobUrl) {
+    const pending = (
+      <ReportPending
+        runId={id}
+        userId={isOwner && user ? user.id : undefined}
+        workflowType={run.type}
+        projectName={run.projectName}
+        embedded={canUseDashboardShell}
+      />
+    )
+
+    if (canUseDashboardShell && ownerRouteContext?.selectedTeam) {
+      return (
+        <DevAgentsDashboardShell
+          teams={ownerRouteContext.teams}
+          selectedTeam={ownerRouteContext.selectedTeam}
+          title={run.projectName}
+          subtitle="Run in progress"
+          description="This run is still collecting evidence and generating the final report."
+        >
+          {pending}
+        </DevAgentsDashboardShell>
+      )
+    }
+
+    return pending
+  }
+
+  const response = await fetch(run.reportBlobUrl, { cache: "no-store" })
+  const report: WorkflowReport = await response.json()
+
+  const workflowLabel = getWorkflowLabel(report, run)
+  const reportDescription = getWorkflowDescription(report, workflowLabel)
+  const devAgentId = report.devAgentId || run.devAgentId
+  const devAgentHref =
+    ownerRouteContext?.selectedTeam && devAgentId
+      ? `/${ownerRouteContext.selectedTeam.slug}/dev-agents/${devAgentId}`
+      : null
+  const primaryHeading = devAgentHref ? (
+    <>
+      Run Report:{" "}
+      <a href={devAgentHref} className="underline decoration-[#333] underline-offset-4 hover:decoration-[#666]">
+        {workflowLabel} Dev Agent
+      </a>
+    </>
+  ) : (
+    `Run Report: ${workflowLabel} Dev Agent`
+  )
+  const pageActions = (
+    <>
+      {isOwner ? <ShareButton runId={id} initialIsPublic={run.isPublic ?? false} /> : null}
+      {run.prUrl ? (
+        <Button asChild size="sm" className="h-8 rounded-md px-3 text-[13px]">
+          <a href={run.prUrl} target="_blank" rel="noopener noreferrer">
+            View PR
+            <ExternalLink className="ml-1 size-3.5" />
+          </a>
+        </Button>
+      ) : null}
+    </>
+  )
+
+  const reportBody = <ReportContentBody run={run} report={report} />
+
+  if (canUseDashboardShell && ownerRouteContext?.selectedTeam) {
+    return (
+      <DevAgentsDashboardShell
+        teams={ownerRouteContext.teams}
+        selectedTeam={ownerRouteContext.selectedTeam}
+        title={primaryHeading}
+        description={reportDescription}
+        actions={pageActions}
+      >
+        {reportBody}
+      </DevAgentsDashboardShell>
+    )
+  }
+
+  return (
+    <StandaloneReportFrame
+      title={primaryHeading}
+      description={reportDescription}
+      actions={isOwner || run.prUrl ? pageActions : undefined}
+    >
+      {reportBody}
+    </StandaloneReportFrame>
+  )
+}
+
+function ReportContentBody({ run, report }: { run: WorkflowRun; report: WorkflowReport }) {
+  const workflowType = report.workflowType || run.type || "cls-fix"
+  const metricRows = buildMetricRows(report)
+  const hasMetricComparison = metricRows.some((row) => row.before && row.after)
+  const metricsWithCurrentValues = metricRows.filter((row) => row.current)
+  const verificationSummary = getVerificationSummary(report, metricRows)
+  const explicitSkills = [...(report.skillsLoaded || []), ...(report.skillsInstalled || [])]
+  const inferredSkills: string[] = ["d3k"]
+  if (workflowType === "design-guidelines") inferredSkills.unshift("Vercel Web Design Guidelines")
+  if (workflowType === "turbopack-bundle-analyzer") inferredSkills.unshift("analyze-bundle")
+  const skillsUsed = Array.from(
+    new Map(
+      [...explicitSkills, ...inferredSkills].map((skill) => {
+        const label = normalizeSkillLabel(skill)
+        return [label.toLowerCase(), { label, url: skillLink(skill) }]
+      })
+    ).values()
+  )
+  const isMarketplaceAgent = report.isMarketplaceAgent || report.devAgentId?.startsWith("r_mp_") || false
+  const bundleComparison = report.turbopackBundleComparison
+  const impactfulness = bundleComparison
+    ? calculateImpactfulness(bundleComparison.delta.compressedBytes, report.beforeWebVitals, report.afterWebVitals)
+    : null
+  const bundleRouteDeltas = bundleComparison
+    ? Array.from(
+        new Set([
+          ...bundleComparison.before.topRoutes.map((route) => route.route),
+          ...bundleComparison.after.topRoutes.map((route) => route.route)
+        ])
+      )
+        .map((route) => {
+          const beforeRoute = bundleComparison.before.topRoutes.find((item) => item.route === route)
+          const afterRoute = bundleComparison.after.topRoutes.find((item) => item.route === route)
+          const beforeCompressedBytes = beforeRoute?.compressedBytes ?? 0
+          const afterCompressedBytes = afterRoute?.compressedBytes ?? 0
+          return {
+            route,
+            beforeCompressedBytes,
+            afterCompressedBytes,
+            compressedDelta: afterCompressedBytes - beforeCompressedBytes
+          }
+        })
+        .filter((route) => Math.abs(route.compressedDelta) >= MIN_ROUTE_DELTA_BYTES)
+        .sort((a, b) => a.compressedDelta - b.compressedDelta)
+        .slice(0, 5)
+    : []
+  const prDiffUrl = run.prUrl ? `${run.prUrl}.diff` : undefined
+  const inlineDiffUrl = report.gitDiff
+    ? `data:text/plain;charset=utf-8,${encodeURIComponent(report.gitDiff)}`
+    : undefined
+  const runStartedAt = new Date(run.timestamp)
+  const runEndedAt = run.completedAt ? new Date(run.completedAt) : null
+  const hasValidRunTiming =
+    !Number.isNaN(runStartedAt.getTime()) &&
+    !!runEndedAt &&
+    !Number.isNaN(runEndedAt.getTime()) &&
+    runEndedAt >= runStartedAt
+  const formatRunDuration = (durationMs: number) => {
+    const totalSeconds = Math.floor(durationMs / 1000)
+    const hours = Math.floor(totalSeconds / 3600)
+    const minutes = Math.floor((totalSeconds % 3600) / 60)
+    const seconds = totalSeconds % 60
+    if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`
+    if (minutes > 0) return `${minutes}m ${seconds}s`
+    return `${seconds}s`
+  }
+  const shouldAutoOpenAnalysis =
+    workflowType === "turbopack-bundle-analyzer" &&
+    !bundleComparison &&
+    metricRows.length === 0 &&
+    Boolean(report.agentAnalysis)
+
+  return (
+    <div className="space-y-6">
+      {(report.successEvalResult != null || verificationSummary) && (
+        <div className="grid gap-4 md:grid-cols-2">
+          {report.successEvalResult != null && (
+            <div className="rounded-lg border border-[#1f1f1f] bg-[#0a0a0a] p-4">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="size-4 text-[#888]" />
+                <span className="text-sm font-medium text-[#ededed]">
+                  Success Eval: {report.successEvalResult ? "Pass" : "Fail"}
+                </span>
+              </div>
+              {report.successEval ? <p className="mt-1 text-sm text-[#666]">{report.successEval}</p> : null}
+            </div>
+          )}
+          {verificationSummary && (
+            <div className="rounded-lg border border-[#1f1f1f] bg-[#0a0a0a] p-4">
+              <div className="text-sm font-medium text-[#ededed]">{verificationSummary.title}</div>
+              <p className="mt-1 text-sm text-[#666]">{verificationSummary.description}</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {metricsWithCurrentValues.length > 0 ? (
+        <ReportSection
+          title="Web Vitals"
+          description="Baseline and follow-up web vitals captured during the run when available."
+        >
+          {hasMetricComparison ? (
+            <div className="overflow-hidden rounded-lg border border-border">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/30 text-muted-foreground">
+                  <tr>
+                    <th className="px-4 py-3 text-left font-medium">Metric</th>
+                    <th className="px-4 py-3 text-left font-medium">Before</th>
+                    <th className="px-4 py-3 text-left font-medium">After</th>
+                    <th className="px-4 py-3 text-left font-medium">Change</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {metricsWithCurrentValues.map((row) => (
+                    <tr key={row.key} className="border-t border-border">
+                      <td className="px-4 py-3 align-top">
+                        <div className="font-medium">{row.label}</div>
+                        <div className="text-xs text-muted-foreground">{row.description}</div>
+                      </td>
+                      <td className="px-4 py-3 align-top">
+                        {row.before ? (
+                          <div className="space-y-1">
+                            <div>{formatMetricValue(row.key, row.before.value)}</div>
+                            <MetricGradeBadge grade={row.before.grade} />
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 align-top">
+                        {row.after ? (
+                          <div className="space-y-1">
+                            <div>{formatMetricValue(row.key, row.after.value)}</div>
+                            <MetricGradeBadge grade={row.after.grade} />
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 align-top">
+                        {row.before && row.after ? (
+                          <div className="space-y-1">
+                            <div>{formatMetricDelta(row.key, row.before.value, row.after.value)}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {row.after.value < row.before.value
+                                ? "Improved"
+                                : row.after.value > row.before.value
+                                  ? "Regressed"
+                                  : "Unchanged"}
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">Not compared</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {metricsWithCurrentValues.map((row) => (
+                <div key={row.key} className="rounded-lg border border-border bg-muted/20 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-medium">{row.label}</div>
+                      <div className="text-xs text-muted-foreground">{row.description}</div>
+                    </div>
+                    <MetricGradeBadge grade={row.current?.grade} />
+                  </div>
+                  <div className="mt-4 text-2xl font-semibold">{formatMetricValue(row.key, row.current?.value)}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </ReportSection>
+      ) : null}
+
+      <ReportSection title="Run Context" description="Compact run metadata and environment details.">
+        <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2 xl:grid-cols-3">
+          <SummaryItem
+            label="Date"
+            value={new Date(report.timestamp).toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+              year: "numeric"
+            })}
+          />
+          {!isMarketplaceAgent ? <SummaryItem label="Model" value={report.agentAnalysisModel || "unknown"} /> : null}
+          {hasValidRunTiming && runEndedAt ? (
+            <SummaryItem label="Run time" value={formatRunDuration(runEndedAt.getTime() - runStartedAt.getTime())} />
+          ) : null}
+          {report.targetUrl ? (
+            <SummaryItem label="Target URL" value={report.targetUrl} mono href={report.targetUrl} />
+          ) : null}
+          {report.repoUrl ? <SummaryItem label="Repository" value={report.repoUrl} mono href={report.repoUrl} /> : null}
+          {report.repoBranch ? <SummaryItem label="Branch" value={report.repoBranch} mono /> : null}
+          {report.projectDir ? <SummaryItem label="Directory" value={report.projectDir} mono /> : null}
+          {report.startPath ? <SummaryItem label="Path" value={report.startPath} mono /> : null}
+          {report.gatewayUsage?.totalTokens ? (
+            <SummaryItem
+              label="Tokens"
+              value={Intl.NumberFormat("en-US").format(report.gatewayUsage.totalTokens)}
+              detail={
+                report.gatewayUsage.promptTokens && report.gatewayUsage.completionTokens
+                  ? `prompt ${Intl.NumberFormat("en-US").format(report.gatewayUsage.promptTokens)} · completion ${Intl.NumberFormat("en-US").format(report.gatewayUsage.completionTokens)}`
+                  : undefined
+              }
+            />
+          ) : null}
+          {!isMarketplaceAgent && skillsUsed.length > 0 ? (
+            <div className="sm:col-span-2 xl:col-span-3">
+              <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Skills</div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {skillsUsed.map((skill) => (
+                  <a
+                    key={skill.label}
+                    href={skill.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-full border border-[#333] bg-[#111] px-2.5 py-1 text-xs text-[#888] hover:text-[#ededed]"
+                  >
+                    {skill.label}
+                  </a>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </ReportSection>
+
+      {workflowType === "prompt" && report.customPrompt ? (
+        <ReportSection title="Requested Task" description="The custom task supplied when this run was started.">
+          <div className="whitespace-pre-wrap rounded-lg border border-border bg-muted/20 p-4 text-sm">
+            {report.customPrompt}
+          </div>
+        </ReportSection>
+      ) : null}
+
+      {report.layoutShifts && report.layoutShifts.length > 0 ? (
+        <ReportSection
+          title="Layout Shift Evidence"
+          description="Detailed layout shift events captured during the run."
+        >
+          <div className="space-y-3">
+            {report.layoutShifts.map((shift, index) => (
+              <div key={`shift-${shift.timestamp}`} className="rounded-lg border border-border bg-muted/20 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="font-medium">Shift #{index + 1}</div>
+                  <div className="text-sm text-muted-foreground">{formatClsValue(shift.score)}</div>
+                </div>
+                <div className="mt-2 text-xs text-muted-foreground">
+                  Timestamp: {shift.timestamp}
+                  {shift.elements.length > 0 ? ` · Elements: ${shift.elements.join(", ")}` : ""}
+                </div>
+              </div>
+            ))}
+          </div>
+        </ReportSection>
+      ) : null}
+
+      {(report.beforeScreenshots?.length ||
+        report.afterScreenshots?.length ||
+        report.clsScreenshots?.length ||
+        report.beforeScreenshotUrl ||
+        report.afterScreenshotUrl) && (
+        <ReportSection title="Screenshots" description="Visual evidence captured before and after the run.">
+          {(report.beforeScreenshots?.length || report.clsScreenshots?.length) && report.afterScreenshots?.length ? (
+            <CoordinatedPlayers
+              beforeScreenshots={report.beforeScreenshots || report.clsScreenshots || []}
+              afterScreenshots={report.afterScreenshots}
+              fps={2}
+              loopDelayMs={10000}
+            />
+          ) : report.beforeScreenshots?.length || report.afterScreenshots?.length || report.clsScreenshots?.length ? (
+            <div className="grid gap-4 md:grid-cols-2">
+              {report.beforeScreenshots?.length || report.clsScreenshots?.length ? (
+                <ScreenshotPlayer
+                  screenshots={report.beforeScreenshots || report.clsScreenshots || []}
+                  title="Before"
+                  autoPlay={true}
+                  fps={2}
+                  loop={true}
+                />
+              ) : report.beforeScreenshotUrl ? (
+                <StaticScreenshot title="Before" url={report.beforeScreenshotUrl} />
+              ) : null}
+              {report.afterScreenshots?.length ? (
+                <ScreenshotPlayer
+                  screenshots={report.afterScreenshots}
+                  title="After"
+                  autoPlay={true}
+                  fps={2}
+                  loop={true}
+                />
+              ) : report.afterScreenshotUrl ? (
+                <StaticScreenshot title="After" url={report.afterScreenshotUrl} />
+              ) : null}
+            </div>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2">
+              {report.beforeScreenshotUrl ? <StaticScreenshot title="Before" url={report.beforeScreenshotUrl} /> : null}
+              {report.afterScreenshotUrl ? <StaticScreenshot title="After" url={report.afterScreenshotUrl} /> : null}
+            </div>
+          )}
+        </ReportSection>
+      )}
+
+      {bundleComparison ? (
+        <ReportSection title="Bundle Delta" description="Before and after bundle output captured for the run.">
+          {impactfulness ? (
+            <div className="mb-4">
+              <ImpactfulnessGauge
+                score={impactfulness.score}
+                bucket={impactfulness.bucket}
+                direction={impactfulness.direction}
+                cwvVerified={impactfulness.cwvVerified}
+                cwvMetricsCompared={impactfulness.cwvMetricsCompared}
+                cwvMetricsImproved={impactfulness.cwvMetricsImproved}
+              />
+            </div>
+          ) : null}
+          <div className="mb-4 rounded-lg border border-border bg-muted/20 px-4 py-3 text-sm">
+            {bundleComparison.delta.compressedBytes <= 0 ? "Reduced shipped JS by " : "Increased shipped JS by "}
+            <span className="font-semibold">{formatBytes(Math.abs(bundleComparison.delta.compressedBytes))}</span>
+            {" ("}
+            <span className="font-semibold">
+              {formatSignedPercent(bundleComparison.delta.compressedPercent)?.replace("+", "")}
+            </span>
+            {") across "}
+            <span className="font-semibold">{bundleComparison.before.routeCount}</span>
+            {" analyzed route"}
+            {bundleComparison.before.routeCount === 1 ? "" : "s"}.
+          </div>
+          <div className="grid gap-3 md:grid-cols-3">
+            <BundleSummaryCard
+              label="Compressed JS"
+              before={formatBytes(bundleComparison.before.totalCompressedBytes)}
+              after={formatBytes(bundleComparison.after.totalCompressedBytes)}
+              delta={`${formatSignedBytes(bundleComparison.delta.compressedBytes)} (${formatSignedPercent(bundleComparison.delta.compressedPercent)})`}
+            />
+            <BundleSummaryCard
+              label="Raw JS"
+              before={formatBytes(bundleComparison.before.totalRawBytes)}
+              after={formatBytes(bundleComparison.after.totalRawBytes)}
+              delta={`${formatSignedBytes(bundleComparison.delta.rawBytes)} (${formatSignedPercent(bundleComparison.delta.rawPercent)})`}
+            />
+            <div className="rounded-lg border border-border bg-muted/20 p-3">
+              <div className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">Coverage</div>
+              <div className="text-sm">Routes: {bundleComparison.before.routeCount}</div>
+              <div className="text-sm">Output files: {bundleComparison.before.outputFileCount}</div>
+            </div>
+          </div>
+          {bundleRouteDeltas.length > 0 ? (
+            <div className="mt-4 rounded-lg border border-border bg-muted/20 p-3">
+              <div className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">
+                Top Route-Level Compressed JS Changes
+              </div>
+              <div className="space-y-2">
+                {bundleRouteDeltas.map((routeDelta) => (
+                  <div
+                    key={routeDelta.route}
+                    className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-3 text-sm"
+                  >
+                    <span className="truncate font-mono">{routeDelta.route}</span>
+                    <span className="text-muted-foreground">{formatBytes(routeDelta.beforeCompressedBytes)}</span>
+                    <span className="text-muted-foreground">→ {formatBytes(routeDelta.afterCompressedBytes)}</span>
+                    <span>{formatSignedBytes(routeDelta.compressedDelta)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </ReportSection>
+      ) : null}
+
+      {report.gitDiff ? (
+        <ReportSection title="Code Diff" description="Patch output captured for this run.">
+          <DiffSection patch={report.gitDiff} prDiffUrl={prDiffUrl} inlineDiffUrl={inlineDiffUrl} />
+        </ReportSection>
+      ) : null}
+
+      <ReportSection title="Analysis" description="The final agent output for this run.">
+        <AgentAnalysis content={report.agentAnalysis} />
+        {!isMarketplaceAgent && (report.timing || report.initD3kLogs || report.d3kLogs || report.afterD3kLogs) ? (
+          <details className="group mt-6" open={shouldAutoOpenAnalysis}>
+            <summary className="inline-flex cursor-pointer items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+              <span className="inline-flex items-center gap-2 font-medium">
+                <ChevronRight className="h-4 w-4 transition-transform group-open:rotate-90" />
+                Show diagnostic transcript
+              </span>
+            </summary>
+            <div className="mt-4 space-y-4 rounded-lg border border-border bg-muted/20 p-4">
+              {(report.sandboxDevUrl ||
+                report.targetUrl ||
+                report.repoUrl ||
+                report.repoBranch ||
+                report.projectDir) && (
+                <div className="text-xs text-muted-foreground">
+                  <ul className="flex flex-wrap gap-x-6 gap-y-1">
+                    {report.sandboxDevUrl ? (
+                      <li>
+                        <span>{report.analysisTargetType === "url" ? "Sandbox: " : "Dev: "}</span>
+                        <a
+                          href={report.sandboxDevUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-mono hover:underline"
+                        >
+                          {report.sandboxDevUrl}
+                        </a>
+                      </li>
+                    ) : null}
+                    {report.targetUrl ? (
+                      <li>
+                        <span>Target: </span>
+                        <a
+                          href={report.targetUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-mono hover:underline"
+                        >
+                          {report.targetUrl}
+                        </a>
+                      </li>
+                    ) : null}
+                    {report.repoUrl ? (
+                      <li>
+                        <span>Repo: </span>
+                        <a
+                          href={report.repoUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-mono hover:underline"
+                        >
+                          {report.repoUrl}
+                        </a>
+                      </li>
+                    ) : null}
+                    {report.repoBranch ? (
+                      <li>
+                        <span>Ref: </span>
+                        <span className="font-mono">{report.repoBranch}</span>
+                      </li>
+                    ) : null}
+                    {report.projectDir ? (
+                      <li>
+                        <span>Dir: </span>
+                        <span className="font-mono">{report.projectDir}</span>
+                      </li>
+                    ) : null}
+                  </ul>
+                </div>
+              )}
+
+              {report.timing ? (
+                <>
+                  <div className="flex flex-wrap items-center gap-4">
+                    <div className="rounded-full border border-[#333] bg-[#111] px-2.5 py-1 text-xs text-[#888]">
+                      {report.fromSnapshot ? "Snapshot Reused" : "Fresh Sandbox"}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-4 text-sm">
+                      <span className="text-muted-foreground">
+                        Total: <span className="text-foreground">{formatSeconds(report.timing.total.totalMs)}</span>
+                      </span>
+                      <span className="text-muted-foreground">
+                        Init: <span className="font-mono text-xs">{formatSeconds(report.timing.total.initMs)}</span>
+                      </span>
+                      <span className="text-muted-foreground">
+                        Agent: <span className="font-mono text-xs">{formatSeconds(report.timing.total.agentMs)}</span>
+                      </span>
+                      {report.timing.total.prMs ? (
+                        <span className="text-muted-foreground">
+                          PR: <span className="font-mono text-xs">{formatSeconds(report.timing.total.prMs)}</span>
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <details className="pt-1">
+                    <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+                      View step-by-step timing breakdown
+                    </summary>
+                    <div className="mt-2 grid gap-4 text-xs md:grid-cols-2">
+                      {report.timing.init?.steps && report.timing.init.steps.length > 0 ? (
+                        <div>
+                          <div className="mb-1 font-medium text-muted-foreground">Init Steps</div>
+                          <ul className="space-y-0.5 font-mono">
+                            {report.timing.init.steps.map((step) => (
+                              <li key={`init-${step.name}`} className="flex justify-between">
+                                <span className="mr-2 truncate">{step.name}</span>
+                                <span className="text-muted-foreground">{formatSeconds(step.durationMs)}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : null}
+                      {report.timing.agent?.steps && report.timing.agent.steps.length > 0 ? (
+                        <div>
+                          <div className="mb-1 font-medium text-muted-foreground">Agent Steps</div>
+                          <ul className="space-y-0.5 font-mono">
+                            {report.timing.agent.steps.map((step) => (
+                              <li key={`agent-${step.name}`} className="flex justify-between">
+                                <span className="mr-2 truncate">{step.name}</span>
+                                <span className="text-muted-foreground">{formatSeconds(step.durationMs)}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : null}
+                    </div>
+                  </details>
+                </>
+              ) : null}
+
+              {report.initD3kLogs || report.d3kLogs ? (
+                <details>
+                  <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+                    Init logs
+                  </summary>
+                  <pre className="mt-2 max-h-96 overflow-x-auto overflow-y-auto whitespace-pre-wrap rounded p-4 font-mono text-xs bg-muted/50">
+                    {report.initD3kLogs || report.d3kLogs}
+                  </pre>
+                </details>
+              ) : null}
+
+              {report.afterD3kLogs ? (
+                <details>
+                  <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+                    After logs
+                  </summary>
+                  <pre className="mt-2 max-h-96 overflow-x-auto overflow-y-auto whitespace-pre-wrap rounded p-4 font-mono text-xs bg-muted/50">
+                    {report.afterD3kLogs}
+                  </pre>
+                </details>
+              ) : null}
+            </div>
+          </details>
+        ) : null}
+      </ReportSection>
+
+      <div className="flex flex-wrap gap-3">
+        <Button asChild variant="outline">
+          <a href="/dev-agents/runs">Back to runs</a>
+        </Button>
+        {run.prUrl ? (
+          <Button asChild>
+            <a href={run.prUrl} target="_blank" rel="noopener noreferrer">
+              View Pull Request
+              <ExternalLink className="ml-1 size-3.5" />
+            </a>
+          </Button>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+function SummaryItem({
+  label,
+  value,
+  detail,
+  mono = false,
+  href
+}: {
+  label: string
+  value: string
+  detail?: string
+  mono?: boolean
+  href?: string
+}) {
+  const valueClassName = mono ? "font-mono text-sm text-foreground" : "text-sm text-foreground"
+
+  return (
+    <div>
+      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      {href ? (
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={`${valueClassName} mt-1 block break-all hover:underline`}
+        >
+          {value}
+        </a>
+      ) : (
+        <div className={`${valueClassName} mt-1 break-all`}>{value}</div>
+      )}
+      {detail ? <div className="mt-1 text-xs text-muted-foreground">{detail}</div> : null}
+    </div>
+  )
+}
+
+function StaticScreenshot({ title, url }: { title: string; url: string }) {
+  return (
+    <div className="overflow-hidden rounded-lg bg-muted/30">
+      <div className="border-b border-border bg-muted/50 px-3 py-2">
+        <span className="text-xs uppercase tracking-wide text-muted-foreground">{title}</span>
+      </div>
+      <a href={url} target="_blank" rel="noopener noreferrer">
+        <Image src={url} alt={`${title} screenshot`} width={400} height={225} unoptimized className="h-auto w-full" />
+      </a>
+    </div>
+  )
+}
+
+function BundleSummaryCard({
+  label,
+  before,
+  after,
+  delta
+}: {
+  label: string
+  before: string
+  after: string
+  delta: string
+}) {
+  return (
+    <div className="rounded-lg border border-border bg-muted/20 p-3">
+      <div className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="text-sm">
+        {before} → {after}
+      </div>
+      <div className="text-sm font-medium">{delta}</div>
+    </div>
   )
 }

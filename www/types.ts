@@ -78,6 +78,7 @@ export interface WorkflowReport {
   // Sandbox URLs
   sandboxDevUrl: string
   targetUrl?: string
+  startPath?: string
   analysisTargetType?: "vercel-project" | "url"
   repoUrl?: string
   repoBranch?: string

@@ -11,6 +11,7 @@ interface ReportPendingProps {
   userId?: string
   workflowType?: string
   projectName?: string
+  embedded?: boolean
 }
 
 const STEP_LABELS = ["Creating sandbox", "Capturing baseline", "Agent in progress", "Generating report", "Finishing up"]
@@ -31,7 +32,7 @@ function getPendingReportLabel(workflowType?: string) {
   return "Dev Agent Report"
 }
 
-export function ReportPending({ runId, userId, workflowType, projectName }: ReportPendingProps) {
+export function ReportPending({ runId, userId, workflowType, projectName, embedded = false }: ReportPendingProps) {
   const router = useRouter()
   const [status, setStatus] = useState<string>("Creating sandbox...")
   const [hasError, setHasError] = useState(false)
@@ -141,9 +142,9 @@ export function ReportPending({ runId, userId, workflowType, projectName }: Repo
     workflowType === "turbopack-bundle-analyzer" ? "d3k Turbopack Bundle Analyzer Report" : "d3k Dev Agent Report"
   const pendingReportTitle = projectName || pendingTitle
 
-  return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-8 max-w-4xl space-y-6">
+  const content = (
+    <div className="space-y-6">
+      {!embedded && (
         <div className="flex items-center gap-4">
           <a
             href="/dev-agents/runs"
@@ -155,93 +156,99 @@ export function ReportPending({ runId, userId, workflowType, projectName }: Repo
           <span className="text-muted-foreground">/</span>
           <span className="text-muted-foreground">{pendingLabel}</span>
         </div>
+      )}
 
+      <div>
+        <div className="text-xs uppercase tracking-wide text-muted-foreground">{pendingLabel}</div>
+        <h1 className="text-3xl font-bold mt-2">{pendingReportTitle}</h1>
+        <p className="text-muted-foreground mt-1">We&apos;re assembling the results and will show them here shortly.</p>
+      </div>
+
+      <Alert variant={hasError ? "destructive" : "default"} className={hasError ? "" : "bg-card border-border"}>
+        {hasError && <AlertCircle className="h-4 w-4" />}
+        <AlertDescription>{statusText}</AlertDescription>
+      </Alert>
+
+      <div className="bg-card border border-border rounded-lg p-4">
+        <div className="text-sm font-medium text-foreground mb-3">Progress</div>
+        {sandboxUrl && !hasError && (
+          <div className="mb-3 text-xs text-muted-foreground">
+            <span className="font-medium">Sandbox:</span>{" "}
+            <a href={sandboxUrl} target="_blank" rel="noopener noreferrer" className="font-mono hover:underline">
+              {sandboxUrl}
+            </a>
+          </div>
+        )}
+        <div className="space-y-2">
+          {STEP_LABELS.map((label, index) => {
+            const isDone = activeIndex !== null && index < activeIndex
+            const isActive = activeIndex !== null && index === activeIndex
+            return (
+              <div key={label} className="flex items-center gap-3 text-sm">
+                <span
+                  className={`h-2.5 w-2.5 rounded-full ${isDone ? "bg-green-500" : isActive ? "bg-blue-500" : "bg-muted"}`}
+                />
+                <span
+                  className={
+                    isActive && !hasError
+                      ? "text-shimmer font-medium inline-block"
+                      : isDone
+                        ? "text-foreground"
+                        : "text-muted-foreground"
+                  }
+                >
+                  {label}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+        {progressLogs.length > 0 && (
+          <div className="mt-4">
+            <div className="text-xs font-medium text-muted-foreground mb-2">Live Logs</div>
+            <textarea
+              ref={logsRef}
+              readOnly
+              value={progressLogs.join("\n")}
+              className="w-full h-28 rounded-md border border-border bg-muted/30 px-3 py-2 text-xs font-mono leading-relaxed resize-none"
+            />
+          </div>
+        )}
+      </div>
+
+      <div className="grid gap-4">
         <div>
-          <div className="text-xs uppercase tracking-wide text-muted-foreground">{pendingLabel}</div>
-          <h1 className="text-3xl font-bold mt-2">{pendingReportTitle}</h1>
-          <p className="text-muted-foreground mt-1">
-            We&apos;re assembling the results and will show them here shortly.
-          </p>
+          <div className="text-sm font-medium text-foreground mb-2">Sandbox Summary</div>
+          <Skeleton className="h-10 w-2/3" />
         </div>
-
-        <Alert variant={hasError ? "destructive" : "default"} className={hasError ? "" : "bg-card border-border"}>
-          {hasError && <AlertCircle className="h-4 w-4" />}
-          <AlertDescription>{statusText}</AlertDescription>
-        </Alert>
-
-        <div className="bg-card border border-border rounded-lg p-4">
-          <div className="text-sm font-medium text-foreground mb-3">Progress</div>
-          {sandboxUrl && !hasError && (
-            <div className="mb-3 text-xs text-muted-foreground">
-              <span className="font-medium">Sandbox:</span>{" "}
-              <a href={sandboxUrl} target="_blank" rel="noopener noreferrer" className="font-mono hover:underline">
-                {sandboxUrl}
-              </a>
-            </div>
-          )}
-          <div className="space-y-2">
-            {STEP_LABELS.map((label, index) => {
-              const isDone = activeIndex !== null && index < activeIndex
-              const isActive = activeIndex !== null && index === activeIndex
-              return (
-                <div key={label} className="flex items-center gap-3 text-sm">
-                  <span
-                    className={`h-2.5 w-2.5 rounded-full ${
-                      isDone ? "bg-green-500" : isActive ? "bg-blue-500" : "bg-muted"
-                    }`}
-                  />
-                  <span
-                    className={
-                      isActive && !hasError
-                        ? "text-shimmer font-medium inline-block"
-                        : isDone
-                          ? "text-foreground"
-                          : "text-muted-foreground"
-                    }
-                  >
-                    {label}
-                  </span>
-                </div>
-              )
-            })}
-          </div>
-          {progressLogs.length > 0 && (
-            <div className="mt-4">
-              <div className="text-xs font-medium text-muted-foreground mb-2">Live Logs</div>
-              <textarea
-                ref={logsRef}
-                readOnly
-                value={progressLogs.join("\n")}
-                className="w-full h-28 rounded-md border border-border bg-muted/30 px-3 py-2 text-xs font-mono leading-relaxed resize-none"
-              />
-            </div>
-          )}
+        <div>
+          <div className="text-sm font-medium text-foreground mb-2">Timing Breakdown</div>
+          <Skeleton className="h-6 w-1/2" />
         </div>
-
-        <div className="grid gap-4">
-          <div>
-            <div className="text-sm font-medium text-foreground mb-2">Sandbox Summary</div>
-            <Skeleton className="h-10 w-2/3" />
-          </div>
-          <div>
-            <div className="text-sm font-medium text-foreground mb-2">Timing Breakdown</div>
-            <Skeleton className="h-6 w-1/2" />
-          </div>
-          <Skeleton className="h-40 w-full" />
-          <div className="grid grid-cols-2 gap-4">
-            <Skeleton className="h-24 w-full" />
-            <Skeleton className="h-24 w-full" />
-          </div>
-          <div>
-            <div className="text-sm font-medium text-foreground mb-2">d3k Diagnostic Transcript</div>
-            <Skeleton className="h-32 w-full" />
-          </div>
-          <div>
-            <div className="text-sm font-medium text-foreground mb-2">Agent Analysis</div>
-            <Skeleton className="h-32 w-full" />
-          </div>
+        <Skeleton className="h-40 w-full" />
+        <div className="grid grid-cols-2 gap-4">
+          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-24 w-full" />
+        </div>
+        <div>
+          <div className="text-sm font-medium text-foreground mb-2">d3k Diagnostic Transcript</div>
+          <Skeleton className="h-32 w-full" />
+        </div>
+        <div>
+          <div className="text-sm font-medium text-foreground mb-2">Agent Analysis</div>
+          <Skeleton className="h-32 w-full" />
         </div>
       </div>
+    </div>
+  )
+
+  if (embedded) {
+    return content
+  }
+
+  return (
+    <div className="min-h-screen bg-background">
+      <div className="container mx-auto px-4 py-8 max-w-4xl">{content}</div>
     </div>
   )
 }

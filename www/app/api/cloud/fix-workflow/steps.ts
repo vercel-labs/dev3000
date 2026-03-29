@@ -2078,6 +2078,7 @@ export async function earlyExitReportStep(
     workflowType: (progressContext?.workflowType as WorkflowReport["workflowType"]) || "cls-fix",
     analysisTargetType: "vercel-project",
     sandboxDevUrl: observation.devUrl,
+    startPath,
     repoUrl,
     repoBranch,
     projectDir: projectDir || undefined,
@@ -2547,6 +2548,7 @@ Did the agent meet the success criteria? Respond with JSON only.`
     customPrompt: customPrompt ?? undefined,
     systemPrompt: agentResult.systemPrompt,
     sandboxDevUrl: devUrl,
+    startPath,
     repoUrl,
     repoBranch,
     projectDir: projectDir || undefined,
@@ -2793,6 +2795,14 @@ Constraints:
 
   const initMs = initTiming?.totalMs ?? 0
   const agentMs = timer.getData().totalMs
+  const reportStartPath = (() => {
+    try {
+      const url = new URL(targetUrl)
+      return `${url.pathname || "/"}${url.search}`
+    } catch {
+      return "/"
+    }
+  })()
   const reportTiming: WorkflowReport["timing"] = {
     total: {
       initMs,
@@ -2820,6 +2830,7 @@ Constraints:
     analysisTargetType: "url",
     targetUrl,
     sandboxDevUrl,
+    startPath: reportStartPath,
     beforeWebVitals: Object.keys(vitals).length > 0 ? vitals : undefined,
     afterWebVitals: Object.keys(vitals).length > 0 ? vitals : undefined,
     agentAnalysis: analysisResponse.text,
