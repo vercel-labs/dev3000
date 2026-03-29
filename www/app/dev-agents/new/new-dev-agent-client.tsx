@@ -325,6 +325,9 @@ export default function NewDevAgentClient({
   // Success eval
   const [successEval, setSuccessEval] = useState(devAgent?.successEval ?? "")
 
+  // Early exit eval
+  const [earlyExitEval, setEarlyExitEval] = useState(devAgent?.earlyExitEval ?? "")
+
   // Action steps — migrate legacy kinds to send-prompt on load
   const [actionSteps, setActionSteps] = useState<ActionStep[]>(() => {
     if (devAgent?.actionSteps?.length) {
@@ -492,7 +495,8 @@ export default function NewDevAgentClient({
             actionSteps: resolvedSteps.map(({ kind, config }): DevAgentActionStep => ({ kind, config })),
             skillRefs: effectiveSelectedSkills,
             team,
-            successEval: successEval.trim() || undefined
+            successEval: successEval.trim() || undefined,
+            earlyExitEval: earlyExitEval.trim() || undefined
           })
         })
 
@@ -783,6 +787,27 @@ export default function NewDevAgentClient({
                   />
                 </div>
               </div>
+
+              {/* Early Exit Condition */}
+              <div className="rounded-lg border border-border/60 bg-background/90 p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Zap className="size-4 text-muted-foreground" />
+                    <span className="text-sm font-medium text-foreground">Early Exit Condition</span>
+                  </div>
+                  <Badge variant="secondary" className="shrink-0 rounded-full px-2 py-0.5 text-[10px]">
+                    Optional
+                  </Badge>
+                </div>
+                <Textarea
+                  value={earlyExitEval}
+                  onChange={(e) => setEarlyExitEval(e.target.value)}
+                  placeholder="Describe when this agent should skip running (e.g. 'CLS score is 0.1 or below')..."
+                  className="mt-2 min-h-12 text-xs"
+                  rows={2}
+                  disabled={!canEdit}
+                />
+              </div>
             </div>
           </>
         ) : (
@@ -820,6 +845,27 @@ export default function NewDevAgentClient({
                   value={successEval}
                   onChange={(e) => setSuccessEval(e.target.value)}
                   placeholder="Describe what success looks like for this agent..."
+                  className="min-h-12 text-xs"
+                  rows={2}
+                  disabled={!canEdit}
+                />
+              </div>
+
+              {/* Early Exit Condition — separate textarea in text mode */}
+              <div className="rounded-lg border border-border/60 bg-background/90 p-4">
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <div className="flex items-center gap-2">
+                    <Zap className="size-4 text-muted-foreground" />
+                    <span className="text-sm font-medium text-foreground">Early Exit Condition</span>
+                  </div>
+                  <Badge variant="secondary" className="shrink-0 rounded-full px-2 py-0.5 text-[10px]">
+                    Optional
+                  </Badge>
+                </div>
+                <Textarea
+                  value={earlyExitEval}
+                  onChange={(e) => setEarlyExitEval(e.target.value)}
+                  placeholder="Describe when this agent should skip running (e.g. 'CLS score is 0.1 or below')..."
                   className="min-h-12 text-xs"
                   rows={2}
                   disabled={!canEdit}

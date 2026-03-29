@@ -1833,16 +1833,210 @@ export interface AgentStepTiming {
 }
 
 /**
- * Early exit step: CLS is already good (≤ 0.1). Generate a report
- * showing the baseline score and mark the run as successful.
+ * Observation result from the observeBaseline step.
+ * Contains everything needed to evaluate early exit and to skip
+ * redundant boot/measure work in the agent step.
  */
-export async function earlyExitClsGoodStep(
-  _sandboxId: string,
+export interface ObserveResult {
+  sandboxId: string
+  devUrl: string
+  beforeWebVitals: import("@/types").WebVitals
+  beforeCls: number | null
+  beforeGrade: "good" | "needs-improvement" | "poor" | null
+  beforeScreenshots: Array<{ timestamp: number; blobUrl: string; label?: string }>
+  d3kLogs: string
+  cloudBrowserMode: "agent-browser" | "next-browser"
+  skillsInstalled: string[]
+  timing: { totalMs: number; steps: Array<{ name: string; durationMs: number }> }
+}
+
+/**
+ * Observe baseline step: reconnect to sandbox, install skills,
+ * capture before Web Vitals and CLS data. Extracted from the
+ * beginning of agentFixLoopStep so early exit can be evaluated
+ * before running the expensive agent.
+ */
+export async function observeBaselineStep(
+  sandboxId: string,
   devUrl: string,
-  beforeCls: number,
+  beforeCls: number | null,
   beforeGrade: "good" | "needs-improvement" | "poor" | null,
   beforeScreenshots: Array<{ timestamp: number; blobUrl: string; label?: string }>,
   initD3kLogs: string,
+  startPath: string,
+  repoUrl: string,
+  repoBranch: string,
+  projectDir?: string,
+  devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser",
+  devAgentSkillRefs?: DevAgentSkillRef[],
+  progressContext?: ProgressContext | null
+): Promise<ObserveResult> {
+  const timer = new StepTimer()
+
+  timer.start("Reconnect to sandbox")
+  workflowLog(`[Observe] Reconnecting to sandbox: ${sandboxId}`)
+  await updateProgress(progressContext, 2, "Observing baseline metrics...", devUrl)
+
+  let sandbox: Sandbox
+  try {
+    sandbox = await Sandbox.get({ sandboxId })
+    if (sandbox.status !== "running") {
+      throw new Error(`Sandbox not running: ${sandbox.status}`)
+    }
+  } catch (sandboxError) {
+    workflowLog(
+      `[Observe] Sandbox ${sandboxId} unavailable (${sandboxError instanceof Error ? sandboxError.message : String(sandboxError)}), creating a new one...`
+    )
+    await appendProgressLog(progressContext, "[Observe] Previous sandbox expired, creating a fresh one...")
+    const freshResult = await getOrCreateD3kSandbox({
+      repoUrl,
+      branch: repoBranch,
+      projectDir: projectDir || "",
+      timeout: "30m",
+      debug: true,
+      onProgress: (message) => appendProgressLog(progressContext, `[Sandbox] ${message}`)
+    })
+    sandbox = freshResult.sandbox
+    sandboxId = sandbox.sandboxId
+    workflowLog(`[Observe] Fresh sandbox created: ${sandbox.sandboxId}`)
+  }
+
+  await installDevAgentSkillsInSandbox(sandbox, projectDir, devAgentSkillRefs, progressContext)
+
+  const localTargetUrl = `http://localhost:3000${startPath}`
+  const cloudBrowserMode = resolveCloudBrowserMode(devAgentSandboxBrowser)
+
+  // Capture "before" Web Vitals via CDP
+  timer.start("Capture before Web Vitals")
+  workflowLog("[Observe] Capturing before Web Vitals via CDP...")
+  const { vitals: capturedBeforeWebVitals } = await fetchWebVitalsViaCDP(sandbox, localTargetUrl, cloudBrowserMode)
+  workflowLog(`[Observe] Before Web Vitals captured: ${JSON.stringify(capturedBeforeWebVitals)}`)
+
+  // CLS fallback via d3k logs if CDP didn't capture it
+  let effectiveBeforeCls = beforeCls ?? capturedBeforeWebVitals.cls?.value ?? null
+  let effectiveBeforeGrade = beforeGrade ?? capturedBeforeWebVitals.cls?.grade ?? null
+  if (effectiveBeforeCls === null) {
+    timer.start("Capture before CLS fallback")
+    workflowLog("[Observe] Capturing fallback before-CLS via d3k logs...")
+    const beforeNavResult = await navigateBrowser(sandbox, localTargetUrl, cloudBrowserMode)
+    workflowLog(`[Observe] Before CLS fallback navigation: success=${beforeNavResult.success}`)
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+    const beforeReloadResult = await reloadBrowser(sandbox, cloudBrowserMode)
+    workflowLog(`[Observe] Before CLS fallback reload: success=${beforeReloadResult.success}`)
+    await new Promise((resolve) => setTimeout(resolve, 5000))
+    const beforeClsFallback = await fetchClsData(sandbox)
+    if (beforeClsFallback.clsScore !== null) {
+      effectiveBeforeCls = beforeClsFallback.clsScore
+      effectiveBeforeGrade = beforeClsFallback.clsGrade
+      workflowLog(`[Observe] Fallback before CLS: ${effectiveBeforeCls?.toFixed(4)} (${effectiveBeforeGrade})`)
+    }
+  }
+
+  const { skillsInstalled } = await readSandboxSkillsInfo(sandbox)
+
+  timer.end()
+  const timingData = timer.getData()
+
+  return {
+    sandboxId,
+    devUrl,
+    beforeWebVitals: capturedBeforeWebVitals,
+    beforeCls: effectiveBeforeCls,
+    beforeGrade: effectiveBeforeGrade,
+    beforeScreenshots,
+    d3kLogs: initD3kLogs,
+    cloudBrowserMode,
+    skillsInstalled,
+    timing: {
+      totalMs: timingData.totalMs,
+      steps: timingData.steps.map((s) => ({ name: s.name, durationMs: s.durationMs }))
+    }
+  }
+}
+
+/**
+ * Evaluate whether the early exit condition is met based on observation data.
+ * Uses a fast/cheap LLM to judge whether the baseline metrics match the condition.
+ * Returns { shouldExit: false } if earlyExitEval is empty or on any error.
+ */
+export async function evaluateEarlyExitStep(
+  earlyExitEval: string | undefined,
+  observation: ObserveResult,
+  progressContext?: ProgressContext | null
+): Promise<{ shouldExit: boolean; reason: string }> {
+  if (!earlyExitEval?.trim()) {
+    return { shouldExit: false, reason: "" }
+  }
+
+  try {
+    workflowLog(`[EarlyExit] Evaluating condition: "${earlyExitEval}"`)
+    await appendProgressLog(progressContext, `[EarlyExit] Evaluating: "${earlyExitEval}"`)
+
+    const gateway = createGateway({
+      apiKey: process.env.AI_GATEWAY_API_KEY,
+      baseURL: "https://ai-gateway.vercel.sh/v1/ai"
+    })
+
+    const metricsContext = [
+      `CLS score: ${observation.beforeCls !== null ? observation.beforeCls.toFixed(4) : "unavailable"}`,
+      `CLS grade: ${observation.beforeGrade || "unavailable"}`,
+      observation.beforeWebVitals.lcp
+        ? `LCP: ${observation.beforeWebVitals.lcp.value.toFixed(0)}ms (${observation.beforeWebVitals.lcp.grade})`
+        : null,
+      observation.beforeWebVitals.fcp
+        ? `FCP: ${observation.beforeWebVitals.fcp.value.toFixed(0)}ms (${observation.beforeWebVitals.fcp.grade})`
+        : null,
+      observation.beforeWebVitals.inp
+        ? `INP: ${observation.beforeWebVitals.inp.value.toFixed(0)}ms (${observation.beforeWebVitals.inp.grade})`
+        : null,
+      observation.beforeWebVitals.ttfb
+        ? `TTFB: ${observation.beforeWebVitals.ttfb.value.toFixed(0)}ms (${observation.beforeWebVitals.ttfb.grade})`
+        : null,
+      `Skills installed: ${observation.skillsInstalled.length > 0 ? observation.skillsInstalled.join(", ") : "none"}`
+    ]
+      .filter(Boolean)
+      .join("\n")
+
+    const evalResult = await generateText({
+      model: gateway(SUCCESS_EVAL_MODEL),
+      system:
+        'You are a metrics evaluator. Given baseline metrics and a condition, determine if the condition is met. Respond ONLY with a JSON object: {"shouldExit": true, "reason": "..."} or {"shouldExit": false, "reason": "..."}. The reason should be a brief explanation.',
+      prompt: `Condition to evaluate: "${earlyExitEval.trim()}"
+
+Baseline metrics:
+${metricsContext}
+
+Does the condition hold based on these metrics? Respond with JSON only.`
+    })
+
+    const evalText = evalResult.text.trim()
+    const jsonMatch = evalText.match(/\{[^}]*"shouldExit"\s*:\s*(true|false)[^}]*\}/)
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0])
+      const shouldExit = parsed.shouldExit === true
+      const reason = typeof parsed.reason === "string" ? parsed.reason : ""
+      workflowLog(`[EarlyExit] Result: shouldExit=${shouldExit}, reason=${reason}`)
+      await appendProgressLog(progressContext, `[EarlyExit] Result: shouldExit=${shouldExit} — ${reason}`)
+      return { shouldExit, reason }
+    }
+
+    workflowLog(`[EarlyExit] Failed to parse LLM response: ${evalText}`)
+    return { shouldExit: false, reason: "Failed to parse evaluation response" }
+  } catch (error) {
+    workflowLog(`[EarlyExit] Error: ${error instanceof Error ? error.message : String(error)}`)
+    return { shouldExit: false, reason: `Evaluation error: ${error instanceof Error ? error.message : String(error)}` }
+  }
+}
+
+/**
+ * Generalized early exit report step.
+ * Accepts ObserveResult + a reason string and generates a report
+ * showing the baseline metrics. Used by both the hardcoded CLS check
+ * and the LLM-based earlyExitEval.
+ */
+export async function earlyExitReportStep(
+  observation: ObserveResult,
+  reason: string,
   projectName: string,
   reportId: string,
   startPath: string,
@@ -1857,7 +2051,8 @@ export async function earlyExitClsGoodStep(
   initTiming?: InitStepTiming,
   fromSnapshot?: boolean,
   snapshotId?: string,
-  devAgentSuccessEval?: string
+  devAgentSuccessEval?: string,
+  devAgentEarlyExitEval?: string
 ): Promise<{
   reportBlobUrl: string
   reportId: string
@@ -1867,8 +2062,9 @@ export async function earlyExitClsGoodStep(
   agentSummary: string
   gitDiff: string | null
 }> {
-  workflowLog(`[Early Exit] CLS already good: ${beforeCls.toFixed(4)} (${beforeGrade || "good"})`)
-  await updateProgress(progressContext, 4, "CLS already good — no fix needed")
+  const clsDisplay = observation.beforeCls !== null ? observation.beforeCls.toFixed(4) : "unavailable"
+  workflowLog(`[Early Exit] ${reason} (CLS: ${clsDisplay}, grade: ${observation.beforeGrade || "n/a"})`)
+  await updateProgress(progressContext, 4, `Early exit — ${reason}`)
 
   const report: WorkflowReport = {
     id: reportId,
@@ -1879,30 +2075,35 @@ export async function earlyExitClsGoodStep(
     devAgentDescription: progressContext?.devAgentDescription,
     devAgentExecutionMode: progressContext?.devAgentExecutionMode,
     devAgentSandboxBrowser: progressContext?.devAgentSandboxBrowser,
-    workflowType: "cls-fix",
+    workflowType: (progressContext?.workflowType as WorkflowReport["workflowType"]) || "cls-fix",
     analysisTargetType: "vercel-project",
-    sandboxDevUrl: devUrl,
+    sandboxDevUrl: observation.devUrl,
     repoUrl,
     repoBranch,
     projectDir: projectDir || undefined,
     repoOwner: repoOwner || undefined,
     repoName: repoName || undefined,
-    clsScore: beforeCls,
-    clsGrade: beforeGrade || "good",
-    beforeScreenshots,
-    afterClsScore: beforeCls,
-    afterClsGrade: beforeGrade || "good",
-    afterScreenshots: beforeScreenshots,
+    clsScore: observation.beforeCls ?? undefined,
+    clsGrade: observation.beforeGrade || undefined,
+    beforeWebVitals: Object.keys(observation.beforeWebVitals).length > 0 ? observation.beforeWebVitals : undefined,
+    beforeScreenshots: observation.beforeScreenshots,
+    afterClsScore: observation.beforeCls ?? undefined,
+    afterClsGrade: observation.beforeGrade || undefined,
+    afterWebVitals: Object.keys(observation.beforeWebVitals).length > 0 ? observation.beforeWebVitals : undefined,
+    afterScreenshots: observation.beforeScreenshots,
     verificationStatus: "unchanged",
-    agentAnalysis: `## Final Output\n\nCLS score is already **${beforeCls.toFixed(4)}** which is within the "good" threshold (≤ 0.1). No fix is needed.\n\nBaseline measured on \`${startPath}\`.`,
+    agentAnalysis: `## Early Exit\n\n${reason}\n\nBaseline CLS: **${clsDisplay}** (${observation.beforeGrade || "n/a"})\nMeasured on \`${startPath}\`.\n\nNo agent changes were made.`,
     agentAnalysisModel: "n/a",
     devAgentSkills: devAgentSkillRefs?.length ? devAgentSkillRefs : undefined,
-    d3kLogs: initD3kLogs,
-    initD3kLogs,
+    skillsInstalled: observation.skillsInstalled.length > 0 ? observation.skillsInstalled : undefined,
+    d3kLogs: observation.d3kLogs,
+    initD3kLogs: observation.d3kLogs,
     gatewayUsage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
     isMarketplaceAgent: progressContext?.isMarketplaceAgent || undefined,
     successEval: devAgentSuccessEval || undefined,
     successEvalResult: true,
+    earlyExitEval: devAgentEarlyExitEval || undefined,
+    earlyExitResult: { shouldExit: true, reason },
     fromSnapshot: fromSnapshot ?? false,
     snapshotId,
     timing: initTiming
@@ -1929,10 +2130,10 @@ export async function earlyExitClsGoodStep(
   return {
     reportBlobUrl: blob.url,
     reportId,
-    beforeCls,
-    afterCls: beforeCls,
+    beforeCls: observation.beforeCls,
+    afterCls: observation.beforeCls,
     status: "no-changes",
-    agentSummary: `CLS is already good (${beforeCls.toFixed(4)}). No changes needed.`,
+    agentSummary: reason,
     gitDiff: null
   }
 }
@@ -1964,7 +2165,8 @@ export async function agentFixLoopStep(
   initTiming?: InitStepTiming,
   fromSnapshot?: boolean,
   snapshotId?: string,
-  devAgentSuccessEval?: string
+  devAgentSuccessEval?: string,
+  observation?: ObserveResult
 ): Promise<{
   reportBlobUrl: string
   reportId: string
@@ -2010,7 +2212,10 @@ export async function agentFixLoopStep(
     ? await resolveSandboxProjectDir(sandbox, projectDir, projectName, progressContext)
     : projectDir
 
-  await installDevAgentSkillsInSandbox(sandbox, effectiveProjectDir, devAgentSkillRefs, progressContext)
+  // Skip skill installation if observe step already did it
+  if (!observation) {
+    await installDevAgentSkillsInSandbox(sandbox, effectiveProjectDir, devAgentSkillRefs, progressContext)
+  }
 
   let turbopackBundleComparison: TurbopackBundleComparison | undefined
   let beforeBundleMetrics: TurbopackBundleMetricsSnapshot | null = null
@@ -2043,45 +2248,58 @@ export async function agentFixLoopStep(
   }
 
   const localTargetUrl = `http://localhost:3000${startPath}`
-  const cloudBrowserMode = resolveCloudBrowserMode(devAgentSandboxBrowser)
+  const cloudBrowserMode = observation?.cloudBrowserMode ?? resolveCloudBrowserMode(devAgentSandboxBrowser)
 
-  // Capture "before" Web Vitals via CDP before the agent makes any changes
-  timer.start("Capture before Web Vitals")
-  workflowLog("[Agent] Capturing before Web Vitals via CDP...")
-  const { vitals: capturedBeforeWebVitals, diagnosticLogs: beforeWebVitalsDiagnostics } = await fetchWebVitalsViaCDP(
-    sandbox,
-    localTargetUrl,
-    cloudBrowserMode
-  )
-  workflowLog(`[Agent] Before Web Vitals captured: ${JSON.stringify(capturedBeforeWebVitals)}`)
+  // Use observation data if available (observe step already captured these),
+  // otherwise capture fresh web vitals
+  let capturedBeforeWebVitals: import("@/types").WebVitals
+  let beforeWebVitalsDiagnostics: string[] | undefined
+  let beforeClsForVerification: number | null
+  let beforeGradeForVerification: "good" | "needs-improvement" | "poor" | null
 
-  // Turbopack runs skip init-step CLS bootstrap, so force a deterministic before-CLS capture
-  // to guarantee at least one before/after CWV pair for verification.
-  let beforeClsForVerification = beforeCls ?? capturedBeforeWebVitals.cls?.value ?? null
-  let beforeGradeForVerification = beforeGrade ?? capturedBeforeWebVitals.cls?.grade ?? null
-  if (isTurbopackBundleAnalyzer && beforeClsForVerification === null) {
-    timer.start("Capture before CLS fallback")
-    workflowLog("[Agent] Turbopack: capturing fallback before-CLS via d3k logs...")
-    const beforeNavResult = await navigateBrowser(sandbox, localTargetUrl, cloudBrowserMode)
-    workflowLog(
-      `[Agent] Before CLS fallback navigation: success=${beforeNavResult.success}${beforeNavResult.error ? `, error=${beforeNavResult.error}` : ""}`
-    )
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-    const beforeReloadResult = await reloadBrowser(sandbox, cloudBrowserMode)
-    workflowLog(
-      `[Agent] Before CLS fallback reload: success=${beforeReloadResult.success}${beforeReloadResult.error ? `, error=${beforeReloadResult.error}` : ""}`
-    )
-    await new Promise((resolve) => setTimeout(resolve, 5000))
-    const beforeClsFallback = await fetchClsData(sandbox)
-    if (beforeClsFallback.clsScore !== null) {
-      beforeClsForVerification = beforeClsFallback.clsScore
-      beforeGradeForVerification = beforeClsFallback.clsGrade
-      await appendProgressLog(
-        progressContext,
-        `[Turbopack] Fallback before CLS captured: ${beforeClsFallback.clsScore.toFixed(4)} (${beforeClsFallback.clsGrade})`
+  if (observation) {
+    workflowLog("[Agent] Using observation data from observe step (skipping redundant capture)")
+    capturedBeforeWebVitals = observation.beforeWebVitals
+    beforeWebVitalsDiagnostics = undefined
+    beforeClsForVerification = observation.beforeCls
+    beforeGradeForVerification = observation.beforeGrade
+  } else {
+    // Capture "before" Web Vitals via CDP before the agent makes any changes
+    timer.start("Capture before Web Vitals")
+    workflowLog("[Agent] Capturing before Web Vitals via CDP...")
+    const webVitalsResult = await fetchWebVitalsViaCDP(sandbox, localTargetUrl, cloudBrowserMode)
+    capturedBeforeWebVitals = webVitalsResult.vitals
+    beforeWebVitalsDiagnostics = webVitalsResult.diagnosticLogs
+    workflowLog(`[Agent] Before Web Vitals captured: ${JSON.stringify(capturedBeforeWebVitals)}`)
+
+    // Turbopack runs skip init-step CLS bootstrap, so force a deterministic before-CLS capture
+    // to guarantee at least one before/after CWV pair for verification.
+    beforeClsForVerification = beforeCls ?? capturedBeforeWebVitals.cls?.value ?? null
+    beforeGradeForVerification = beforeGrade ?? capturedBeforeWebVitals.cls?.grade ?? null
+    if (isTurbopackBundleAnalyzer && beforeClsForVerification === null) {
+      timer.start("Capture before CLS fallback")
+      workflowLog("[Agent] Turbopack: capturing fallback before-CLS via d3k logs...")
+      const beforeNavResult = await navigateBrowser(sandbox, localTargetUrl, cloudBrowserMode)
+      workflowLog(
+        `[Agent] Before CLS fallback navigation: success=${beforeNavResult.success}${beforeNavResult.error ? `, error=${beforeNavResult.error}` : ""}`
       )
-    } else {
-      await appendProgressLog(progressContext, "[Turbopack] Fallback before CLS capture unavailable")
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+      const beforeReloadResult = await reloadBrowser(sandbox, cloudBrowserMode)
+      workflowLog(
+        `[Agent] Before CLS fallback reload: success=${beforeReloadResult.success}${beforeReloadResult.error ? `, error=${beforeReloadResult.error}` : ""}`
+      )
+      await new Promise((resolve) => setTimeout(resolve, 5000))
+      const beforeClsFallback = await fetchClsData(sandbox)
+      if (beforeClsFallback.clsScore !== null) {
+        beforeClsForVerification = beforeClsFallback.clsScore
+        beforeGradeForVerification = beforeClsFallback.clsGrade
+        await appendProgressLog(
+          progressContext,
+          `[Turbopack] Fallback before CLS captured: ${beforeClsFallback.clsScore.toFixed(4)} (${beforeClsFallback.clsGrade})`
+        )
+      } else {
+        await appendProgressLog(progressContext, "[Turbopack] Fallback before CLS capture unavailable")
+      }
     }
   }
 

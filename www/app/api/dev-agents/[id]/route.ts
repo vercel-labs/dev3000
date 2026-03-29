@@ -95,6 +95,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       skillRefs?: unknown[]
       team?: DevAgentTeam
       successEval?: string
+      earlyExitEval?: string
     }
 
     const name = body.name?.trim() || ""
@@ -155,7 +156,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       skillRefs,
       author: user,
       team,
-      successEval: typeof body.successEval === "string" ? body.successEval : undefined
+      successEval: typeof body.successEval === "string" ? body.successEval : undefined,
+      earlyExitEval: typeof body.earlyExitEval === "string" ? body.earlyExitEval : undefined
     })
 
     if (!devAgent) {

@@ -88,6 +88,7 @@ export interface DevAgent {
   supportsCrawlDepth?: boolean
   requiresCustomPrompt?: boolean
   successEval?: string
+  earlyExitEval?: string
 }
 
 interface StoredDevAgent extends Omit<DevAgent, "usageCount" | "sandboxBrowser"> {
@@ -208,7 +209,8 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
     legacyWorkflowType: "cls-fix",
     supportsPathInput: true,
     supportsPullRequest: true,
-    successEval: "Is the CLS score now ≤ 0.1 and improved from the baseline?"
+    successEval: "Is the CLS score now ≤ 0.1 and improved from the baseline?",
+    earlyExitEval: "CLS score is 0.1 or below (already good)"
   },
   {
     id: "r_d91q7k",
@@ -657,6 +659,7 @@ export async function createCustomDevAgent(input: {
   author: DevAgentAuthor
   team: DevAgentTeam
   successEval?: string
+  earlyExitEval?: string
 }): Promise<DevAgent> {
   const id = generateDevAgentId()
   const now = new Date().toISOString()
@@ -676,7 +679,8 @@ export async function createCustomDevAgent(input: {
     updatedAt: now,
     supportsPathInput: true,
     supportsPullRequest: true,
-    successEval: input.successEval?.trim() || undefined
+    successEval: input.successEval?.trim() || undefined,
+    earlyExitEval: input.earlyExitEval?.trim() || undefined
   }
 
   await put(`${CUSTOM_DEV_AGENT_PREFIX}${id}.json`, JSON.stringify(storedDevAgent, null, 2), {
@@ -704,6 +708,7 @@ export async function updateCustomDevAgent(
     author: DevAgentAuthor
     team?: DevAgentTeam
     successEval?: string
+    earlyExitEval?: string
   }
 ): Promise<DevAgent | null> {
   const canonicalDevAgentId = canonicalizeDevAgentId(devAgentId)
@@ -724,7 +729,8 @@ export async function updateCustomDevAgent(
     author: input.author,
     team: input.team ?? existingDevAgent.team,
     updatedAt: new Date().toISOString(),
-    successEval: input.successEval?.trim() || existingDevAgent.successEval
+    successEval: input.successEval?.trim() || existingDevAgent.successEval,
+    earlyExitEval: input.earlyExitEval?.trim() || existingDevAgent.earlyExitEval
   }
 
   await put(`${CUSTOM_DEV_AGENT_PREFIX}${canonicalDevAgentId}.json`, JSON.stringify(updatedDevAgent, null, 2), {

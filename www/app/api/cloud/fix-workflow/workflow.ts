@@ -46,6 +46,11 @@ interface FixResult {
   gitDiff: string | null
 }
 
+interface EarlyExitResult {
+  shouldExit: boolean
+  reason: string
+}
+
 interface V0DevAgentSourceResult {
   tarballUrl?: string
   sourceLabel?: string
@@ -102,6 +107,7 @@ export async function cloudFixWorkflow(params: {
     sourceUrl?: string
   }>
   devAgentSuccessEval?: string
+  devAgentEarlyExitEval?: string
   analysisTargetType?: "vercel-project" | "url"
   publicUrl?: string
   startPath?: string // Page path to analyze (e.g., "/about")
@@ -142,6 +148,7 @@ export async function cloudFixWorkflow(params: {
     devAgentActionSteps,
     devAgentSkillRefs,
     devAgentSuccessEval,
+    devAgentEarlyExitEval,
     analysisTargetType = "vercel-project",
     publicUrl,
     startPath = "/",
@@ -249,56 +256,79 @@ export async function cloudFixWorkflow(params: {
     workflowLog(`[Workflow] Sandbox: ${initResult.sandboxId}, CLS: ${initResult.beforeCls}`)
 
     // ============================================================
-    // Early exit: CLS is already good — skip agent, generate report
+    // STEP 1.5: Observe baseline — boot browser, capture metrics
     // ============================================================
-    const isClsWorkflow = workflowType === "cls-fix" && analysisTargetType !== "url"
-    const clsAlreadyGood = isClsWorkflow && initResult.beforeCls !== null && initResult.beforeCls <= 0.1
-
-    if (clsAlreadyGood && initResult.beforeCls !== null) {
-      workflowLog(`[Workflow] CLS already good (${initResult.beforeCls.toFixed(4)}). Skipping agent fix loop.`)
-
-      const earlyResult = await earlyExitClsGood(
+    let observation: Awaited<ReturnType<typeof observeBaseline>> | null = null
+    if (analysisTargetType !== "url") {
+      workflowLog("[Workflow] Step 1.5: Observing baseline metrics...")
+      observation = await observeBaseline(
         initResult.sandboxId,
         initResult.devUrl,
         initResult.beforeCls,
         initResult.beforeGrade,
         initResult.beforeScreenshots,
         initResult.initD3kLogs,
-        projectName,
-        reportId,
         startPath,
         repoUrl || "https://github.com/vercel-labs/dev3000",
         repoBranch,
         projectDir,
-        repoOwner,
-        repoName,
-        devAgentName,
+        devAgentSandboxBrowser,
         devAgentSkillRefs,
-        progressContext,
-        initResult.timing,
-        initResult.fromSnapshot,
-        initResult.snapshotId,
-        devAgentSuccessEval
+        progressContext
       )
+      workflowLog(`[Workflow] Observation: CLS=${observation.beforeCls}, grade=${observation.beforeGrade}`)
+    }
 
-      // Cleanup sandbox
-      await cleanupSandbox(initResult.sandboxId)
+    // ============================================================
+    // STEP 1.6: Evaluate early exit (if earlyExitEval is defined)
+    // ============================================================
+    if (observation && devAgentEarlyExitEval) {
+      workflowLog("[Workflow] Step 1.6: Evaluating early exit condition...")
+      const earlyExitResult = await evaluateEarlyExit(devAgentEarlyExitEval, observation, progressContext)
 
-      // Save final "done" status
-      if (progressContext) {
-        await saveDoneStatus(progressContext, earlyResult.reportBlobUrl, null, null)
-        workflowLog(`[Workflow] Saved final "done" status for ${progressContext.runId}`)
+      if (earlyExitResult.shouldExit) {
+        workflowLog(`[Workflow] Early exit triggered: ${earlyExitResult.reason}`)
+
+        const earlyResult = await earlyExitReport(
+          observation,
+          earlyExitResult.reason,
+          projectName,
+          reportId,
+          startPath,
+          repoUrl || "https://github.com/vercel-labs/dev3000",
+          repoBranch,
+          projectDir,
+          repoOwner,
+          repoName,
+          devAgentName,
+          devAgentSkillRefs,
+          progressContext,
+          initResult.timing,
+          initResult.fromSnapshot,
+          initResult.snapshotId,
+          devAgentSuccessEval,
+          devAgentEarlyExitEval
+        )
+
+        // Cleanup sandbox
+        await cleanupSandbox(initResult.sandboxId)
+
+        // Save final "done" status
+        if (progressContext) {
+          await saveDoneStatus(progressContext, earlyResult.reportBlobUrl, null, null)
+          workflowLog(`[Workflow] Saved final "done" status for ${progressContext.runId}`)
+        }
+
+        return Response.json({
+          blobUrl: earlyResult.reportBlobUrl,
+          reportId: earlyResult.reportId,
+          status: earlyResult.status,
+          beforeCls: earlyResult.beforeCls,
+          afterCls: earlyResult.afterCls,
+          pr: null,
+          prError: null
+        })
       }
-
-      return Response.json({
-        blobUrl: earlyResult.reportBlobUrl,
-        reportId: earlyResult.reportId,
-        status: earlyResult.status,
-        beforeCls: earlyResult.beforeCls,
-        afterCls: earlyResult.afterCls,
-        pr: null,
-        prError: null
-      })
     }
 
     let fixResult: FixResult | UrlAuditResult
@@ -329,9 +359,9 @@ export async function cloudFixWorkflow(params: {
       fixResult = await agentFixLoop(
         initResult.sandboxId,
         initResult.devUrl,
-        initResult.beforeCls,
-        initResult.beforeGrade,
-        initResult.beforeScreenshots,
+        observation?.beforeCls ?? initResult.beforeCls,
+        observation?.beforeGrade ?? initResult.beforeGrade,
+        observation?.beforeScreenshots ?? initResult.beforeScreenshots,
         initResult.initD3kLogs,
         projectName,
         reportId,
@@ -354,7 +384,8 @@ export async function cloudFixWorkflow(params: {
         initResult.timing,
         initResult.fromSnapshot,
         initResult.snapshotId,
-        devAgentSuccessEval
+        devAgentSuccessEval,
+        observation
       )
     }
 
@@ -557,6 +588,57 @@ async function prepareV0DevAgentSource(
   })
 }
 
+async function observeBaseline(
+  sandboxId: string,
+  devUrl: string,
+  beforeCls: number | null,
+  beforeGrade: "good" | "needs-improvement" | "poor" | null,
+  beforeScreenshots: Array<{ timestamp: number; blobUrl: string; label?: string }>,
+  initD3kLogs: string,
+  startPath: string,
+  repoUrl: string,
+  repoBranch: string,
+  projectDir?: string,
+  devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser",
+  devAgentSkillRefs?: Array<{
+    id: string
+    installArg: string
+    packageName?: string
+    skillName: string
+    displayName: string
+    sourceUrl?: string
+  }>,
+  progressContext?: ProgressContext | null
+): Promise<import("./steps").ObserveResult> {
+  "use step"
+  const { observeBaselineStep } = await import("./steps")
+  return observeBaselineStep(
+    sandboxId,
+    devUrl,
+    beforeCls,
+    beforeGrade,
+    beforeScreenshots,
+    initD3kLogs,
+    startPath,
+    repoUrl,
+    repoBranch,
+    projectDir,
+    devAgentSandboxBrowser,
+    devAgentSkillRefs,
+    progressContext
+  )
+}
+
+async function evaluateEarlyExit(
+  earlyExitEval: string | undefined,
+  observation: import("./steps").ObserveResult,
+  progressContext?: ProgressContext | null
+): Promise<EarlyExitResult> {
+  "use step"
+  const { evaluateEarlyExitStep } = await import("./steps")
+  return evaluateEarlyExitStep(earlyExitEval, observation, progressContext)
+}
+
 async function agentFixLoop(
   sandboxId: string,
   devUrl: string,
@@ -591,7 +673,8 @@ async function agentFixLoop(
   initTiming?: InitResult["timing"],
   fromSnapshot?: boolean,
   snapshotId?: string,
-  devAgentSuccessEval?: string
+  devAgentSuccessEval?: string,
+  observation?: import("./steps").ObserveResult | null
 ): Promise<FixResult> {
   "use step"
   const { agentFixLoopStep } = await import("./steps")
@@ -622,17 +705,14 @@ async function agentFixLoop(
     initTiming,
     fromSnapshot,
     snapshotId,
-    devAgentSuccessEval
+    devAgentSuccessEval,
+    observation ?? undefined
   )
 }
 
-async function earlyExitClsGood(
-  sandboxId: string,
-  devUrl: string,
-  beforeCls: number,
-  beforeGrade: "good" | "needs-improvement" | "poor" | null,
-  beforeScreenshots: Array<{ timestamp: number; blobUrl: string; label?: string }>,
-  initD3kLogs: string,
+async function earlyExitReport(
+  observation: import("./steps").ObserveResult,
+  reason: string,
   projectName: string,
   reportId: string,
   startPath: string,
@@ -654,17 +734,14 @@ async function earlyExitClsGood(
   initTiming?: InitResult["timing"],
   fromSnapshot?: boolean,
   snapshotId?: string,
-  devAgentSuccessEval?: string
+  devAgentSuccessEval?: string,
+  devAgentEarlyExitEval?: string
 ): Promise<FixResult> {
   "use step"
-  const { earlyExitClsGoodStep } = await import("./steps")
-  return earlyExitClsGoodStep(
-    sandboxId,
-    devUrl,
-    beforeCls,
-    beforeGrade,
-    beforeScreenshots,
-    initD3kLogs,
+  const { earlyExitReportStep } = await import("./steps")
+  return earlyExitReportStep(
+    observation,
+    reason,
     projectName,
     reportId,
     startPath,
@@ -679,7 +756,8 @@ async function earlyExitClsGood(
     initTiming,
     fromSnapshot,
     snapshotId,
-    devAgentSuccessEval
+    devAgentSuccessEval,
+    devAgentEarlyExitEval
   )
 }
 

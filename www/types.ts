@@ -162,6 +162,10 @@ export interface WorkflowReport {
   successEval?: string
   successEvalResult?: boolean | null
 
+  // Early exit eval
+  earlyExitEval?: string
+  earlyExitResult?: { shouldExit: boolean; reason: string }
+
   // PR info (future)
   prUrl?: string
   prDiff?: string
