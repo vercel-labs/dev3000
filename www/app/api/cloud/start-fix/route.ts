@@ -347,42 +347,41 @@ export async function POST(request: Request) {
       workflowError(`[Start Fix] Cannot save - missing userId (${!!userId}) or projectName (${!!projectName})`)
     }
 
-    // Run workflow start + usage increment in the background.
-    void (async () => {
-      if (devAgent?.id) {
-        await incrementDevAgentUsage(devAgent.id).catch((usageError) => {
-          workflowError("[Start Fix] Failed to update devAgent usage count:", usageError)
-        })
+    if (devAgent?.id) {
+      void incrementDevAgentUsage(devAgent.id).catch((usageError) => {
+        workflowError("[Start Fix] Failed to update devAgent usage count:", usageError)
+      })
+    }
+
+    // Enqueue the workflow before returning so the request cannot finish first
+    // and leave the run stuck in its initial "running" placeholder state.
+    try {
+      await start(cloudFixWorkflow, [workflowParams])
+      workflowLog(`[Start Fix] Workflow enqueued with runId: ${runId}`)
+    } catch (startError) {
+      workflowError("[Start Fix] Failed to enqueue workflow:", startError)
+
+      if (userId && projectName && runId && runTimestamp) {
+        await saveWorkflowRun({
+          id: runId,
+          userId,
+          projectName,
+          timestamp: runTimestamp,
+          status: "failure",
+          type: workflowType,
+          devAgentId: devAgent?.id,
+          devAgentName: devAgent?.name,
+          devAgentDescription: devAgent?.description,
+          devAgentExecutionMode: devAgent?.executionMode,
+          devAgentSandboxBrowser: devAgent?.sandboxBrowser,
+          completedAt: new Date().toISOString(),
+          error: startError instanceof Error ? startError.message : String(startError),
+          customPrompt: workflowType === "prompt" ? customPrompt : undefined
+        }).catch((err) => workflowError("[Start Fix] Failed to save startup failure metadata:", err))
       }
 
-      // Start the workflow (fire-and-forget style)
-      // The workflow will update its own status to "done" or "failure" when complete.
-      // If startup fails, mark the run as failure so it doesn't stay stuck at "running".
-      void start(cloudFixWorkflow, [workflowParams]).catch(async (startError) => {
-        workflowError("[Start Fix] Failed to enqueue workflow:", startError)
-
-        if (userId && projectName && runId && runTimestamp) {
-          await saveWorkflowRun({
-            id: runId,
-            userId,
-            projectName,
-            timestamp: runTimestamp,
-            status: "failure",
-            type: workflowType,
-            devAgentId: devAgent?.id,
-            devAgentName: devAgent?.name,
-            devAgentDescription: devAgent?.description,
-            devAgentExecutionMode: devAgent?.executionMode,
-            devAgentSandboxBrowser: devAgent?.sandboxBrowser,
-            completedAt: new Date().toISOString(),
-            error: startError instanceof Error ? startError.message : String(startError),
-            customPrompt: workflowType === "prompt" ? customPrompt : undefined
-          }).catch((err) => workflowError("[Start Fix] Failed to save startup failure metadata:", err))
-        }
-      })
-
-      workflowLog(`[Start Fix] Workflow enqueued with runId: ${runId}`)
-    })()
+      throw startError
+    }
 
     // Return immediately - client can navigate to report and poll.
     workflowLog(`[Start Fix] Returning immediately with runId: ${runId}`)
