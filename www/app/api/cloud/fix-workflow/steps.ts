@@ -692,6 +692,10 @@ interface ProgressContext {
   devAgentExecutionMode?: "dev-server" | "preview-pr"
   devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser"
   isMarketplaceAgent?: boolean
+  activeStepNumber?: number
+  activeCurrentStep?: string
+  sandboxUrl?: string
+  progressLogs?: string[]
 }
 
 // Helper to update workflow progress
@@ -704,9 +708,17 @@ async function updateProgress(
   if (!ctx) return
   try {
     const existingRun = (await listWorkflowRuns(ctx.userId)).find((run) => run.id === ctx.runId)
+    ctx.activeStepNumber = stepNumber
+    ctx.activeCurrentStep = currentStep
+    ctx.sandboxUrl = sandboxUrl ?? ctx.sandboxUrl ?? existingRun?.sandboxUrl
     const timestampPrefix = new Date().toISOString().slice(11, 19)
     const nextLogLine = `[${timestampPrefix}] ${currentStep}`
-    const existingLogs = Array.isArray(existingRun?.progressLogs) ? existingRun.progressLogs : []
+    const existingLogs =
+      Array.isArray(ctx.progressLogs) && ctx.progressLogs.length > 0
+        ? ctx.progressLogs
+        : Array.isArray(existingRun?.progressLogs)
+          ? existingRun.progressLogs
+          : []
     const progressLogs =
       existingLogs[existingLogs.length - 1] === nextLogLine
         ? existingLogs.slice(-40)
@@ -727,9 +739,10 @@ async function updateProgress(
       devAgentSandboxBrowser: ctx.devAgentSandboxBrowser,
       stepNumber,
       currentStep,
-      sandboxUrl,
+      sandboxUrl: ctx.sandboxUrl,
       progressLogs
     })
+    ctx.progressLogs = progressLogs
     workflowLog(`[Progress] Updated: Step ${stepNumber} - ${currentStep}`)
   } catch (err) {
     workflowLog(`[Progress] Failed to update: ${err instanceof Error ? err.message : String(err)}`)
@@ -742,11 +755,22 @@ async function appendProgressLog(ctx: ProgressContext | null | undefined, messag
     const existingRun = (await listWorkflowRuns(ctx.userId)).find((run) => run.id === ctx.runId)
     const timestampPrefix = new Date().toISOString().slice(11, 19)
     const nextLogLine = `[${timestampPrefix}] ${message}`
-    const existingLogs = Array.isArray(existingRun?.progressLogs) ? existingRun.progressLogs : []
+    const existingLogs =
+      Array.isArray(ctx.progressLogs) && ctx.progressLogs.length > 0
+        ? ctx.progressLogs
+        : Array.isArray(existingRun?.progressLogs)
+          ? existingRun.progressLogs
+          : []
     const progressLogs =
       existingLogs[existingLogs.length - 1] === nextLogLine
         ? existingLogs.slice(-80)
         : [...existingLogs, nextLogLine].slice(-80)
+    const stepNumber = Math.max(existingRun?.stepNumber ?? 0, ctx.activeStepNumber ?? 0, 1)
+    const currentStep = ctx.activeCurrentStep ?? existingRun?.currentStep ?? "Running workflow..."
+    const sandboxUrl = ctx.sandboxUrl ?? existingRun?.sandboxUrl
+    if (!ctx.sandboxUrl && sandboxUrl) {
+      ctx.sandboxUrl = sandboxUrl
+    }
 
     await saveWorkflowRun({
       ...existingRun,
@@ -761,11 +785,12 @@ async function appendProgressLog(ctx: ProgressContext | null | undefined, messag
       devAgentDescription: ctx.devAgentDescription,
       devAgentExecutionMode: ctx.devAgentExecutionMode,
       devAgentSandboxBrowser: ctx.devAgentSandboxBrowser,
-      stepNumber: existingRun?.stepNumber ?? 1,
-      currentStep: existingRun?.currentStep ?? "Running workflow...",
-      sandboxUrl: existingRun?.sandboxUrl,
+      stepNumber,
+      currentStep,
+      sandboxUrl,
       progressLogs
     })
+    ctx.progressLogs = progressLogs
   } catch (err) {
     workflowLog(`[Progress] Failed to append log: ${err instanceof Error ? err.message : String(err)}`)
   }
