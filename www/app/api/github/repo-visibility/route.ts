@@ -40,10 +40,36 @@ export async function GET(request: Request) {
       })
     }
 
+    // The GitHub REST API can return 403/429 for unauthenticated rate limits even when the
+    // repository is public. Fall back to the public repo URL before forcing a PAT in the UI.
+    const repoPageResponse = await fetch(`https://github.com/${owner}/${repo}`, {
+      method: "HEAD",
+      redirect: "follow",
+      headers: {
+        "User-Agent": "dev3000-repo-visibility-check"
+      }
+    })
+
+    if (repoPageResponse.status === 200) {
+      return Response.json({
+        success: true,
+        visibility: "public",
+        reason: `repo_page_${githubResponse.status}`
+      })
+    }
+
+    if (repoPageResponse.status === 404) {
+      return Response.json({
+        success: true,
+        visibility: "private_or_unknown",
+        reason: `repo_page_${githubResponse.status}_not_found_or_private`
+      })
+    }
+
     return Response.json({
       success: true,
       visibility: "unknown",
-      reason: `github_status_${githubResponse.status}`
+      reason: `github_status_${githubResponse.status}_repo_page_${repoPageResponse.status}`
     })
   } catch (error) {
     return Response.json(
