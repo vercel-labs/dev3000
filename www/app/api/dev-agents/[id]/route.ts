@@ -106,8 +106,12 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     const rawSkillRefs = Array.isArray(body.skillRefs) ? body.skillRefs : []
     const team = isValidDevAgentTeam(body.team) ? body.team : undefined
 
-    if (!name || !description || !instructions) {
-      return Response.json({ success: false, error: "Name, description, and prompt are required." }, { status: 400 })
+    const hasActionSteps = rawActionSteps.length > 0
+    if (!name || !description || (!instructions && !hasActionSteps)) {
+      return Response.json(
+        { success: false, error: "Name, description, and prompt (or action steps) are required." },
+        { status: 400 }
+      )
     }
 
     if (!isDevAgentExecutionMode(executionMode)) {

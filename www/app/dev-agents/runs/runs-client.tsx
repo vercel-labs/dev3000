@@ -77,7 +77,7 @@ export default function DevAgentRunsClient({ user, initialRuns }: DevAgentRunsCl
   const [isDeleting, setIsDeleting] = useState(false)
   const lastSelectedIndex = useRef<number | null>(null)
 
-  const { data: runs = initialRuns, mutate } = useSWR(`/api/workflows?userId=${user.id}`, fetcher, {
+  const { data: runs = initialRuns, mutate } = useSWR(`/api/dev-agents/runs?userId=${user.id}`, fetcher, {
     fallbackData: initialRuns,
     refreshInterval: 5000,
     revalidateOnFocus: true
@@ -137,7 +137,7 @@ export default function DevAgentRunsClient({ user, initialRuns }: DevAgentRunsCl
   const handleDelete = async () => {
     setIsDeleting(true)
     try {
-      const response = await fetch("/api/workflows", {
+      const response = await fetch("/api/dev-agents/runs", {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json"

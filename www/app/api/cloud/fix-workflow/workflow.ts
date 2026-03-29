@@ -88,6 +88,7 @@ export async function cloudFixWorkflow(params: {
   devAgentInstructions?: string
   devAgentExecutionMode?: "dev-server" | "preview-pr"
   devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser"
+  isMarketplaceAgent?: boolean
   devAgentActionSteps?: Array<{
     kind: string
     config: Record<string, string>
@@ -137,6 +138,7 @@ export async function cloudFixWorkflow(params: {
     devAgentInstructions,
     devAgentExecutionMode,
     devAgentSandboxBrowser,
+    isMarketplaceAgent,
     devAgentActionSteps,
     devAgentSkillRefs,
     devAgentSuccessEval,
@@ -171,7 +173,8 @@ export async function cloudFixWorkflow(params: {
           devAgentName,
           devAgentDescription,
           devAgentExecutionMode,
-          devAgentSandboxBrowser
+          devAgentSandboxBrowser,
+          isMarketplaceAgent
         }
       : null
 
@@ -244,6 +247,59 @@ export async function cloudFixWorkflow(params: {
     )
 
     workflowLog(`[Workflow] Sandbox: ${initResult.sandboxId}, CLS: ${initResult.beforeCls}`)
+
+    // ============================================================
+    // Early exit: CLS is already good — skip agent, generate report
+    // ============================================================
+    const isClsWorkflow = workflowType === "cls-fix" && analysisTargetType !== "url"
+    const clsAlreadyGood = isClsWorkflow && initResult.beforeCls !== null && initResult.beforeCls <= 0.1
+
+    if (clsAlreadyGood && initResult.beforeCls !== null) {
+      workflowLog(`[Workflow] CLS already good (${initResult.beforeCls.toFixed(4)}). Skipping agent fix loop.`)
+
+      const earlyResult = await earlyExitClsGood(
+        initResult.sandboxId,
+        initResult.devUrl,
+        initResult.beforeCls,
+        initResult.beforeGrade,
+        initResult.beforeScreenshots,
+        initResult.initD3kLogs,
+        projectName,
+        reportId,
+        startPath,
+        repoUrl || "https://github.com/vercel-labs/dev3000",
+        repoBranch,
+        projectDir,
+        repoOwner,
+        repoName,
+        devAgentName,
+        devAgentSkillRefs,
+        progressContext,
+        initResult.timing,
+        initResult.fromSnapshot,
+        initResult.snapshotId,
+        devAgentSuccessEval
+      )
+
+      // Cleanup sandbox
+      await cleanupSandbox(initResult.sandboxId)
+
+      // Save final "done" status
+      if (progressContext) {
+        await saveDoneStatus(progressContext, earlyResult.reportBlobUrl, null, null)
+        workflowLog(`[Workflow] Saved final "done" status for ${progressContext.runId}`)
+      }
+
+      return Response.json({
+        blobUrl: earlyResult.reportBlobUrl,
+        reportId: earlyResult.reportId,
+        status: earlyResult.status,
+        beforeCls: earlyResult.beforeCls,
+        afterCls: earlyResult.afterCls,
+        pr: null,
+        prError: null
+      })
+    }
 
     let fixResult: FixResult | UrlAuditResult
     if (analysisTargetType === "url") {
@@ -438,6 +494,7 @@ interface ProgressContext {
   devAgentDescription?: string
   devAgentExecutionMode?: "dev-server" | "preview-pr"
   devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser"
+  isMarketplaceAgent?: boolean
 }
 
 async function initSandbox(
@@ -560,6 +617,63 @@ async function agentFixLoop(
     devAgentExecutionMode,
     devAgentSandboxBrowser,
     devAgentActionSteps,
+    devAgentSkillRefs,
+    progressContext,
+    initTiming,
+    fromSnapshot,
+    snapshotId,
+    devAgentSuccessEval
+  )
+}
+
+async function earlyExitClsGood(
+  sandboxId: string,
+  devUrl: string,
+  beforeCls: number,
+  beforeGrade: "good" | "needs-improvement" | "poor" | null,
+  beforeScreenshots: Array<{ timestamp: number; blobUrl: string; label?: string }>,
+  initD3kLogs: string,
+  projectName: string,
+  reportId: string,
+  startPath: string,
+  repoUrl: string,
+  repoBranch: string,
+  projectDir?: string,
+  repoOwner?: string,
+  repoName?: string,
+  devAgentName?: string,
+  devAgentSkillRefs?: Array<{
+    id: string
+    installArg: string
+    packageName?: string
+    skillName: string
+    displayName: string
+    sourceUrl?: string
+  }>,
+  progressContext?: ProgressContext | null,
+  initTiming?: InitResult["timing"],
+  fromSnapshot?: boolean,
+  snapshotId?: string,
+  devAgentSuccessEval?: string
+): Promise<FixResult> {
+  "use step"
+  const { earlyExitClsGoodStep } = await import("./steps")
+  return earlyExitClsGoodStep(
+    sandboxId,
+    devUrl,
+    beforeCls,
+    beforeGrade,
+    beforeScreenshots,
+    initD3kLogs,
+    projectName,
+    reportId,
+    startPath,
+    repoUrl,
+    repoBranch,
+    projectDir,
+    repoOwner,
+    repoName,
+    devAgentName,
     devAgentSkillRefs,
     progressContext,
     initTiming,

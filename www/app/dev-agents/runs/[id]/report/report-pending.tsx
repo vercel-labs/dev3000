@@ -50,9 +50,9 @@ export function ReportPending({ runId, userId, workflowType, projectName }: Repo
       }
 
       try {
-        const response = await fetch(`/api/workflows?userId=${userId}`)
+        const response = await fetch(`/api/dev-agents/runs?userId=${userId}`)
         if (!response.ok) {
-          throw new Error(`Failed to load workflow status (${response.status})`)
+          throw new Error(`Failed to load run status (${response.status})`)
         }
 
         const data = (await response.json()) as {
@@ -70,7 +70,7 @@ export function ReportPending({ runId, userId, workflowType, projectName }: Repo
         }
 
         if (!data.success || !Array.isArray(data.runs)) {
-          throw new Error("Invalid workflow status response")
+          throw new Error("Invalid run status response")
         }
 
         const run = data.runs.find((item) => item.id === runId)
@@ -81,7 +81,7 @@ export function ReportPending({ runId, userId, workflowType, projectName }: Repo
         if (run.status === "failure") {
           if (isActive) {
             setHasError(true)
-            setStatus(run.error || "Workflow failed to generate report.")
+            setStatus(run.error || "Failed to generate report.")
           }
           return
         }
@@ -101,7 +101,7 @@ export function ReportPending({ runId, userId, workflowType, projectName }: Repo
       } catch (error) {
         if (!isActive) return
         setHasError(true)
-        setStatus(error instanceof Error ? error.message : "Unable to load workflow status.")
+        setStatus(error instanceof Error ? error.message : "Unable to load run status.")
       }
     }
 

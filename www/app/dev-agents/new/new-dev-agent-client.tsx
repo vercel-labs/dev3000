@@ -3,13 +3,14 @@
 import {
   Bot,
   Cloud,
+  Code2,
   GitBranch,
   Globe,
   MessageSquare,
   Monitor,
-  Play,
   Plus,
   RotateCcw,
+  Rows3,
   Search,
   ShieldCheck,
   Trash2,
@@ -60,13 +61,7 @@ interface NewDevAgentClientProps {
   canEdit?: boolean
 }
 
-type ActionStepKind =
-  | "browse-to-page"
-  | "start-dev-server"
-  | "capture-loading-frames"
-  | "capture-cwv"
-  | "go-back-to-step"
-  | "send-prompt"
+type ActionStepKind = "send-prompt"
 
 interface ActionStep {
   id: string
@@ -74,47 +69,44 @@ interface ActionStep {
   config: Record<string, string>
 }
 
-const ACTION_STEP_META: Record<
-  ActionStepKind,
-  { label: string; icon: typeof Globe; description: string; accent: string }
-> = {
-  "browse-to-page": {
+// Prompt templates — each menu item inserts a send-prompt with pre-filled text
+const PROMPT_TEMPLATES: Array<{
+  label: string
+  icon: typeof Globe
+  description: string
+  prompt: string
+}> = [
+  {
+    label: "Blank Prompt",
+    icon: MessageSquare,
+    description: "Empty prompt — write your own instructions",
+    prompt: ""
+  },
+  {
     label: "Browse to Page",
     icon: Globe,
     description: "Navigate to a URL in the sandbox browser",
-    accent: "border-l-blue-500"
+    prompt: "Browse to http://localhost:3000/ and take a snapshot of what you see."
   },
-  "start-dev-server": {
-    label: "Start Dev Server",
-    icon: Play,
-    description: "Start the development server",
-    accent: "border-l-green-500"
-  },
-  "capture-loading-frames": {
+  {
     label: "Capture Loading Frames",
     icon: Monitor,
     description: "Capture page loading frame sequence",
-    accent: "border-l-purple-500"
+    prompt: "Capture the page loading sequence with screenshots showing how the page renders over time."
   },
-  "capture-cwv": {
+  {
     label: "Capture Core Web Vitals",
     icon: Zap,
     description: "Measure LCP, CLS, INP, FCP, TTFB",
-    accent: "border-l-yellow-500"
+    prompt: "Use getWebVitals to measure all Core Web Vitals (LCP, CLS, INP, FCP, TTFB) and report the results."
   },
-  "go-back-to-step": {
+  {
     label: "Go Back to Step",
     icon: RotateCcw,
     description: "Loop back to a previous step",
-    accent: "border-l-orange-500"
-  },
-  "send-prompt": {
-    label: "Send Prompt",
-    icon: MessageSquare,
-    description: "Send custom instructions to the agent",
-    accent: "border-l-pink-500"
+    prompt: "Go back to step N and repeat from there to verify improvements."
   }
-}
+]
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -139,42 +131,6 @@ function generateStepId(): string {
   return `step_${crypto.randomUUID().replace(/-/g, "").slice(0, 8)}`
 }
 
-function buildPromptFromSteps(steps: ActionStep[]): string {
-  const parts: string[] = []
-  for (const step of steps) {
-    const meta = ACTION_STEP_META[step.kind]
-    switch (step.kind) {
-      case "browse-to-page":
-        if (step.config.url) {
-          parts.push(`Browse to ${step.config.url}`)
-        }
-        break
-      case "start-dev-server":
-        parts.push("Start the dev server")
-        break
-      case "capture-loading-frames":
-        parts.push("Capture loading frames")
-        break
-      case "capture-cwv":
-        parts.push("Capture Core Web Vitals")
-        break
-      case "go-back-to-step":
-        if (step.config.stepNumber) {
-          parts.push(`Go back to step ${step.config.stepNumber}`)
-        }
-        break
-      case "send-prompt":
-        if (step.config.prompt) {
-          parts.push(step.config.prompt)
-        }
-        break
-      default:
-        parts.push(meta.label)
-    }
-  }
-  return parts.join("\n\n")
-}
-
 function parseInstructionsToSteps(instructions: string): ActionStep[] {
   if (!instructions.trim()) return []
   return [
@@ -186,6 +142,25 @@ function parseInstructionsToSteps(instructions: string): ActionStep[] {
   ]
 }
 
+const STEP_SEPARATOR = "\n\n---\n\n"
+
+function serializeStepsToText(steps: ActionStep[]): string {
+  return steps.map((step) => step.config.prompt ?? "").join(STEP_SEPARATOR)
+}
+
+function parseTextToSteps(text: string): ActionStep[] {
+  return text
+    .split(STEP_SEPARATOR)
+    .map((prompt) => ({
+      id: generateStepId(),
+      kind: "send-prompt" as ActionStepKind,
+      config: { prompt }
+    }))
+    .filter((step) => step.config.prompt.trim().length > 0)
+}
+
+type WorkflowViewMode = "ui" | "text"
+
 // ── Fixed Step Cards ────────────────────────────────────────────────────────
 
 function StepConnector() {
@@ -196,7 +171,7 @@ function StepConnector() {
   )
 }
 
-function InsertStepButton({ onInsert }: { onInsert: (kind: ActionStepKind) => void }) {
+function InsertStepButton({ onInsert }: { onInsert: (prompt: string) => void }) {
   return (
     <div className="flex justify-center py-1">
       <DropdownMenu>
@@ -210,22 +185,20 @@ function InsertStepButton({ onInsert }: { onInsert: (kind: ActionStepKind) => vo
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="center" className="w-64">
-          <DropdownMenuLabel>Insert Action</DropdownMenuLabel>
+          <DropdownMenuLabel>Insert Prompt</DropdownMenuLabel>
           <DropdownMenuSeparator />
-          {(Object.entries(ACTION_STEP_META) as Array<[ActionStepKind, (typeof ACTION_STEP_META)[ActionStepKind]]>).map(
-            ([kind, meta]) => {
-              const Icon = meta.icon
-              return (
-                <DropdownMenuItem key={kind} onClick={() => onInsert(kind)}>
-                  <Icon className="size-4" />
-                  <div className="flex flex-col">
-                    <span>{meta.label}</span>
-                    <span className="text-[11px] text-muted-foreground">{meta.description}</span>
-                  </div>
-                </DropdownMenuItem>
-              )
-            }
-          )}
+          {PROMPT_TEMPLATES.map((tmpl) => {
+            const Icon = tmpl.icon
+            return (
+              <DropdownMenuItem key={tmpl.label} onClick={() => onInsert(tmpl.prompt)}>
+                <Icon className="size-4" />
+                <div className="flex flex-col">
+                  <span>{tmpl.label}</span>
+                  <span className="text-[11px] text-muted-foreground">{tmpl.description}</span>
+                </div>
+              </DropdownMenuItem>
+            )
+          })}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
@@ -277,11 +250,8 @@ function ActionStepCard({
   onUpdate: (id: string, config: Record<string, string>) => void
   onRemove: (id: string) => void
 }) {
-  const meta = ACTION_STEP_META[step.kind]
-  const Icon = meta.icon
-
   return (
-    <div className={`relative rounded-lg border border-border/60 bg-background/80 ${meta.accent} border-l-2`}>
+    <div className="relative rounded-lg border border-border/60 bg-background/80 border-l-pink-500 border-l-2">
       <div className="flex items-start gap-3 px-4 py-3">
         <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted/30 text-xs font-medium text-foreground">
           {stepNumber}
@@ -289,56 +259,28 @@ function ActionStepCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <Icon className="size-4 text-muted-foreground" />
-              <span className="text-sm font-medium text-foreground">{meta.label}</span>
+              <MessageSquare className="size-4 text-muted-foreground" />
+              <span className="text-sm font-medium text-foreground">Prompt</span>
             </div>
             {canEdit && (
               <button
                 type="button"
                 onClick={() => onRemove(step.id)}
                 className="rounded-md p-1 text-muted-foreground transition hover:bg-muted hover:text-destructive"
-                aria-label={`Remove ${meta.label}`}
+                aria-label="Remove prompt"
               >
                 <Trash2 className="size-3.5" />
               </button>
             )}
           </div>
-
-          {step.kind === "browse-to-page" && (
-            <Input
-              value={step.config.url ?? ""}
-              onChange={(e) => onUpdate(step.id, { ...step.config, url: e.target.value })}
-              placeholder="http://localhost:3000/page"
-              className="mt-2 h-8 text-xs"
-              disabled={!canEdit}
-            />
-          )}
-
-          {step.kind === "go-back-to-step" && (
-            <Input
-              type="number"
-              value={step.config.stepNumber ?? ""}
-              onChange={(e) => onUpdate(step.id, { ...step.config, stepNumber: e.target.value })}
-              placeholder="Step number (e.g. 5)"
-              className="mt-2 h-8 w-32 text-xs"
-              min={1}
-              disabled={!canEdit}
-            />
-          )}
-
-          {step.kind === "send-prompt" && (
-            <Textarea
-              value={step.config.prompt ?? ""}
-              onChange={(e) => onUpdate(step.id, { ...step.config, prompt: e.target.value })}
-              placeholder="Describe what the agent should do..."
-              className="mt-2 min-h-24 text-xs"
-              disabled={!canEdit}
-            />
-          )}
-
-          {(step.kind === "start-dev-server" ||
-            step.kind === "capture-loading-frames" ||
-            step.kind === "capture-cwv") && <p className="mt-0.5 text-xs text-muted-foreground">{meta.description}</p>}
+          <Textarea
+            value={step.config.prompt ?? ""}
+            onChange={(e) => onUpdate(step.id, { ...step.config, prompt: e.target.value })}
+            placeholder="Describe what the agent should do..."
+            className="mt-2 min-h-12 text-xs"
+            rows={2}
+            disabled={!canEdit}
+          />
         </div>
       </div>
     </div>
@@ -366,6 +308,10 @@ export default function NewDevAgentClient({
   // AI agent picker (presentational only for now)
   const [aiAgent, setAiAgent] = useState<DevAgentAiAgent>(devAgent?.aiAgent ?? "d3k")
 
+  // Workflow view mode — UI (step cards) or Text (single textarea)
+  const [workflowView, setWorkflowView] = useState<WorkflowViewMode>("ui")
+  const [textModeValue, setTextModeValue] = useState("")
+
   // Skills
   const [searchQuery, setSearchQuery] = useState("")
   const deferredSearchQuery = useDeferredValue(searchQuery)
@@ -379,20 +325,51 @@ export default function NewDevAgentClient({
   // Success eval
   const [successEval, setSuccessEval] = useState(devAgent?.successEval ?? "")
 
-  // Action steps
+  // Action steps — migrate legacy kinds to send-prompt on load
   const [actionSteps, setActionSteps] = useState<ActionStep[]>(() => {
     if (devAgent?.actionSteps?.length) {
-      return devAgent.actionSteps.map((step) => ({
-        id: generateStepId(),
-        kind: step.kind as ActionStepKind,
-        config: { ...step.config }
-      }))
+      return devAgent.actionSteps.map((step) => {
+        // Legacy kinds → convert to send-prompt with descriptive text
+        if (step.kind !== "send-prompt") {
+          const legacyPrompts: Record<string, string> = {
+            "browse-to-page": `Browse to ${step.config.url || "http://localhost:3000/"} and take a snapshot of what you see.`,
+            "start-dev-server": "Start the development server.",
+            "capture-loading-frames":
+              "Capture the page loading sequence with screenshots showing how the page renders over time.",
+            "capture-cwv":
+              "Use getWebVitals to measure all Core Web Vitals (LCP, CLS, INP, FCP, TTFB) and report the results.",
+            "go-back-to-step": `Go back to step ${step.config.stepNumber || "N"} and repeat from there to verify improvements.`
+          }
+          return {
+            id: generateStepId(),
+            kind: "send-prompt" as ActionStepKind,
+            config: { prompt: legacyPrompts[step.kind] || step.config.prompt || "" }
+          }
+        }
+        return {
+          id: generateStepId(),
+          kind: "send-prompt" as ActionStepKind,
+          config: { ...step.config }
+        }
+      })
     }
     return parseInstructionsToSteps(devAgent?.instructions ?? "")
   })
 
+  const switchToTextMode = useCallback(() => {
+    setTextModeValue(serializeStepsToText(actionSteps))
+    setWorkflowView("text")
+  }, [actionSteps])
+
+  const switchToUiMode = useCallback(() => {
+    const parsed = parseTextToSteps(textModeValue)
+    setActionSteps(parsed.length > 0 ? parsed : [{ id: generateStepId(), kind: "send-prompt", config: { prompt: "" } }])
+    setWorkflowView("ui")
+  }, [textModeValue])
+
   // Submit
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [savedMessage, setSavedMessage] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
   const teamBasePath = `/${team.slug}/dev-agents`
@@ -467,9 +444,13 @@ export default function NewDevAgentClient({
   }
 
   // Action step management
-  const addActionStep = useCallback((kind: ActionStepKind, atIndex?: number) => {
+  const addActionStep = useCallback((prompt?: string, atIndex?: number) => {
     setActionSteps((current) => {
-      const newStep = { id: generateStepId(), kind, config: {} }
+      const newStep: ActionStep = {
+        id: generateStepId(),
+        kind: "send-prompt",
+        config: prompt ? { prompt } : {}
+      }
       if (atIndex !== undefined && atIndex >= 0 && atIndex <= current.length) {
         const next = [...current]
         next.splice(atIndex, 0, newStep)
@@ -487,13 +468,15 @@ export default function NewDevAgentClient({
     setActionSteps((current) => current.filter((step) => step.id !== id))
   }, [])
 
-  // Derive prompt from action steps
-  const derivedPrompt = useMemo(() => buildPromptFromSteps(actionSteps), [actionSteps])
-
   function submitDevAgent() {
     if (!canEdit) return
 
+    // If in text mode, sync text back to action steps before submitting
+    const resolvedSteps = workflowView === "text" ? parseTextToSteps(textModeValue) : actionSteps
+    const resolvedPrompt = resolvedSteps.length > 0 ? `[${resolvedSteps.length} structured action steps]` : ""
+
     setSubmitError(null)
+    setSavedMessage(null)
     startTransition(async () => {
       try {
         const endpoint = isEditMode && devAgent ? `/api/dev-agents/${devAgent.id}` : "/api/dev-agents"
@@ -503,10 +486,10 @@ export default function NewDevAgentClient({
           body: JSON.stringify({
             name,
             description,
-            prompt: derivedPrompt,
+            prompt: resolvedPrompt,
             executionMode: "dev-server",
             sandboxBrowser: "agent-browser",
-            actionSteps: actionSteps.map(({ kind, config }): DevAgentActionStep => ({ kind, config })),
+            actionSteps: resolvedSteps.map(({ kind, config }): DevAgentActionStep => ({ kind, config })),
             skillRefs: effectiveSelectedSkills,
             team,
             successEval: successEval.trim() || undefined
@@ -523,25 +506,29 @@ export default function NewDevAgentClient({
           throw new Error(data.error || (isEditMode ? "Failed to save dev agent." : "Failed to create dev agent."))
         }
 
-        window.location.href = isEditMode
-          ? `${teamBasePath}/${data.devAgent.id}`
-          : `${teamBasePath}/${data.devAgent.id}/new`
+        if (isEditMode) {
+          setSavedMessage("Saved")
+          setTimeout(() => setSavedMessage(null), 2000)
+        } else {
+          window.location.href = `${teamBasePath}/${data.devAgent.id}/new`
+        }
       } catch (error) {
         setSubmitError(error instanceof Error ? error.message : String(error))
       }
     })
   }
 
-  const hasPromptContent = actionSteps.some((step) => {
-    if (step.kind === "send-prompt") return (step.config.prompt ?? "").trim().length > 0
-    if (step.kind === "browse-to-page") return (step.config.url ?? "").trim().length > 0
-    return true
-  })
+  const hasPromptContent =
+    workflowView === "text"
+      ? textModeValue.trim().length > 0
+      : actionSteps.some((step) => (step.config.prompt ?? "").trim().length > 0)
+
+  const hasSteps = workflowView === "text" ? textModeValue.trim().length > 0 : actionSteps.length > 0
 
   const isFormValid =
     name.trim().length > 0 &&
     description.trim().length > 0 &&
-    actionSteps.length > 0 &&
+    hasSteps &&
     hasPromptContent &&
     effectiveSelectedSkills.length > 0 &&
     successEval.trim().length > 0 &&
@@ -589,6 +576,28 @@ export default function NewDevAgentClient({
           <div className="h-px flex-1 bg-border/40" />
           <span className="text-xs font-medium uppercase tracking-widest text-muted-foreground">Agent Workflow</span>
           <div className="h-px flex-1 bg-border/40" />
+          <div className="flex rounded-md border border-border/60 text-[11px]">
+            <button
+              type="button"
+              onClick={() => (workflowView === "text" ? switchToUiMode() : undefined)}
+              className={`inline-flex items-center gap-1 px-2 py-1 rounded-l-md transition-colors ${
+                workflowView === "ui" ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Rows3 className="size-3" />
+              UI
+            </button>
+            <button
+              type="button"
+              onClick={() => (workflowView === "ui" ? switchToTextMode() : undefined)}
+              className={`inline-flex items-center gap-1 px-2 py-1 rounded-r-md transition-colors ${
+                workflowView === "text" ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Code2 className="size-3" />
+              Text
+            </button>
+          </div>
         </div>
 
         {/* Step 1: Hydrate Sandbox */}
@@ -616,9 +625,14 @@ export default function NewDevAgentClient({
               3
             </div>
             <div className="min-w-0 flex-1 space-y-3">
-              <div className="flex items-center gap-2">
-                <Search className="size-4 text-muted-foreground" />
-                <span className="text-sm font-medium text-foreground">Install Skills</span>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Search className="size-4 text-muted-foreground" />
+                  <span className="text-sm font-medium text-foreground">Install Skills</span>
+                </div>
+                <Badge variant="secondary" className="shrink-0 rounded-full px-2 py-0.5 text-[10px]">
+                  System
+                </Badge>
               </div>
 
               {/* Skill search */}
@@ -689,7 +703,7 @@ export default function NewDevAgentClient({
         </div>
         <StepConnector />
 
-        {/* Step 4: Start Agent */}
+        {/* Step 4: Start Agent — always visible (system step) */}
         <div className="rounded-lg border border-border/60 bg-background/90">
           <div className="flex items-start gap-3 px-4 py-3">
             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted/30 text-xs font-medium text-foreground">
@@ -723,95 +737,108 @@ export default function NewDevAgentClient({
           </div>
         </div>
 
-        {/* Action Steps with insert buttons between them */}
-        {actionSteps.map((step, index) => (
-          <div key={step.id}>
-            {canEdit && index > 0 ? (
-              <InsertStepButton onInsert={(kind) => addActionStep(kind, index)} />
-            ) : (
-              <StepConnector />
-            )}
-            <ActionStepCard
-              step={step}
-              stepNumber={actionStepBaseNumber + index}
-              canEdit={canEdit}
-              onUpdate={updateActionStep}
-              onRemove={removeActionStep}
-            />
-          </div>
-        ))}
-
-        {/* Add Action Button (append to end) */}
-        {canEdit && (
+        {workflowView === "ui" ? (
           <>
+            {/* Action Steps with insert buttons between them */}
+            {actionSteps.map((step, index) => (
+              <div key={step.id}>
+                {canEdit ? <InsertStepButton onInsert={(prompt) => addActionStep(prompt, index)} /> : <StepConnector />}
+                <ActionStepCard
+                  step={step}
+                  stepNumber={actionStepBaseNumber + index}
+                  canEdit={canEdit}
+                  onUpdate={updateActionStep}
+                  onRemove={removeActionStep}
+                />
+              </div>
+            ))}
+
+            {/* Add Prompt Button (append to end) */}
+            {canEdit && <InsertStepButton onInsert={(prompt) => addActionStep(prompt)} />}
+
+            {/* Success Eval — fixed final step */}
             <StepConnector />
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-border/60 bg-background/50 py-3 text-sm text-muted-foreground transition hover:border-border hover:bg-muted/20 hover:text-foreground"
-                >
-                  <Plus className="size-4" />
-                  Add Action Step
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="center" className="w-64">
-                <DropdownMenuLabel>Action Type</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {(
-                  Object.entries(ACTION_STEP_META) as Array<[ActionStepKind, (typeof ACTION_STEP_META)[ActionStepKind]]>
-                ).map(([kind, meta]) => {
-                  const Icon = meta.icon
-                  return (
-                    <DropdownMenuItem key={kind} onClick={() => addActionStep(kind)}>
-                      <Icon className="size-4" />
-                      <div className="flex flex-col">
-                        <span>{meta.label}</span>
-                        <span className="text-[11px] text-muted-foreground">{meta.description}</span>
-                      </div>
-                    </DropdownMenuItem>
-                  )
-                })}
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <div className="relative rounded-lg border border-border/60 bg-background/90">
+              <div className="flex items-start gap-3 px-4 py-3">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted/30 text-xs font-medium text-foreground">
+                  {actionStepBaseNumber + actionSteps.length}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="size-4 text-muted-foreground" />
+                      <span className="text-sm font-medium text-foreground">Success Eval</span>
+                    </div>
+                    <Badge variant="secondary" className="shrink-0 rounded-full px-2 py-0.5 text-[10px]">
+                      Required
+                    </Badge>
+                  </div>
+                  <Textarea
+                    value={successEval}
+                    onChange={(e) => setSuccessEval(e.target.value)}
+                    placeholder="Describe what success looks like for this agent..."
+                    className="mt-2 min-h-12 text-xs"
+                    rows={2}
+                    disabled={!canEdit}
+                  />
+                </div>
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Text Mode — single textarea for all prompts */}
+            <StepConnector />
+            <div className="space-y-3">
+              <div className="rounded-lg border border-border/60 bg-background/80 border-l-pink-500 border-l-2 p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <MessageSquare className="size-4 text-muted-foreground" />
+                  <span className="text-sm font-medium text-foreground">Agent Prompts</span>
+                  <span className="text-[11px] text-muted-foreground">(separate steps with ---)</span>
+                </div>
+                <Textarea
+                  value={textModeValue}
+                  onChange={(e) => setTextModeValue(e.target.value)}
+                  placeholder={"Step 1 prompt...\n\n---\n\nStep 2 prompt..."}
+                  className="min-h-48 text-xs font-mono"
+                  disabled={!canEdit}
+                />
+              </div>
+
+              {/* Success Eval — separate textarea in text mode */}
+              <div className="rounded-lg border border-border/60 bg-background/90 p-4">
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="size-4 text-muted-foreground" />
+                    <span className="text-sm font-medium text-foreground">Success Eval</span>
+                  </div>
+                  <Badge variant="secondary" className="shrink-0 rounded-full px-2 py-0.5 text-[10px]">
+                    Required
+                  </Badge>
+                </div>
+                <Textarea
+                  value={successEval}
+                  onChange={(e) => setSuccessEval(e.target.value)}
+                  placeholder="Describe what success looks like for this agent..."
+                  className="min-h-12 text-xs"
+                  rows={2}
+                  disabled={!canEdit}
+                />
+              </div>
+            </div>
           </>
         )}
-
-        {/* Success Eval — fixed final step */}
-        <StepConnector />
-        <div className="relative rounded-lg border border-border/60 bg-background/90">
-          <div className="flex items-start gap-3 px-4 py-3">
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted/30 text-xs font-medium text-foreground">
-              {actionStepBaseNumber + actionSteps.length}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <ShieldCheck className="size-4 text-muted-foreground" />
-                  <span className="text-sm font-medium text-foreground">Success Eval</span>
-                </div>
-                <Badge variant="secondary" className="shrink-0 rounded-full px-2 py-0.5 text-[10px]">
-                  Required
-                </Badge>
-              </div>
-              <Textarea
-                value={successEval}
-                onChange={(e) => setSuccessEval(e.target.value)}
-                placeholder="Describe what success looks like for this agent..."
-                className="mt-2 min-h-16 text-xs"
-                disabled={!canEdit}
-              />
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* Submit */}
       {submitError && <p className="text-sm text-destructive">{submitError}</p>}
       {!isReadOnly ? (
-        <Button onClick={submitDevAgent} disabled={!isFormValid}>
-          {isPending ? (isEditMode ? "Saving..." : "Creating...") : submitLabel}
-        </Button>
+        <div className="flex items-center gap-3">
+          <Button onClick={submitDevAgent} disabled={!isFormValid}>
+            {isPending ? (isEditMode ? "Saving..." : "Creating...") : submitLabel}
+          </Button>
+          {savedMessage && <span className="text-sm text-muted-foreground">{savedMessage}</span>}
+        </div>
       ) : null}
     </div>
   )

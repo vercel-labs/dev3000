@@ -691,6 +691,7 @@ interface ProgressContext {
   devAgentDescription?: string
   devAgentExecutionMode?: "dev-server" | "preview-pr"
   devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser"
+  isMarketplaceAgent?: boolean
 }
 
 // Helper to update workflow progress
@@ -1673,15 +1674,39 @@ export async function initSandboxStep(
     }
   }
 
-  // Wait for d3k to capture initial CLS
-  timer.start("Wait for CLS capture (5s)")
+  // Wait for d3k to capture initial CLS — retry until CLS observer is installed or timeout
+  timer.start("Wait for CLS capture")
   workflowLog(`[Init] Waiting for d3k CLS capture...`)
   await updateProgress(progressContext, 1, "Dev server running, capturing initial CLS...")
+
+  const CLS_POLL_INTERVAL_MS = 3000
+  const CLS_POLL_MAX_MS = 30000
+  let clsData = {
+    clsScore: null as number | null,
+    clsGrade: null as "good" | "needs-improvement" | "poor" | null,
+    screenshots: [] as Array<{ timestamp: number; blobUrl: string; label?: string }>,
+    d3kLogs: ""
+  }
+  const clsPollStart = Date.now()
+
+  // Initial wait for d3k and Chrome to boot
   await new Promise((resolve) => setTimeout(resolve, 5000))
 
-  // Get CLS data from d3k
-  timer.start("Fetch CLS data from d3k")
-  const clsData = await fetchClsData(sandboxResult.sandbox)
+  while (Date.now() - clsPollStart < CLS_POLL_MAX_MS) {
+    clsData = await fetchClsData(sandboxResult.sandbox)
+    if (clsData.clsScore !== null) {
+      workflowLog(`[Init] CLS captured after ${((Date.now() - clsPollStart) / 1000).toFixed(1)}s: ${clsData.clsScore}`)
+      break
+    }
+    workflowLog(
+      `[Init] CLS not yet available (${((Date.now() - clsPollStart) / 1000).toFixed(0)}s elapsed), retrying...`
+    )
+    await new Promise((resolve) => setTimeout(resolve, CLS_POLL_INTERVAL_MS))
+  }
+
+  if (clsData.clsScore === null) {
+    workflowLog("[Init] CLS capture timed out — will rely on agent step to measure")
+  }
 
   workflowLog(`[Init] Before CLS: ${clsData.clsScore} (${clsData.clsGrade})`)
   workflowLog(`[Init] Captured ${clsData.d3kLogs.length} chars of d3k logs`)
@@ -1805,6 +1830,111 @@ export async function prepareV0DevAgentSourceStep({
 export interface AgentStepTiming {
   totalMs: number
   steps: { name: string; durationMs: number; startedAt: string }[]
+}
+
+/**
+ * Early exit step: CLS is already good (≤ 0.1). Generate a report
+ * showing the baseline score and mark the run as successful.
+ */
+export async function earlyExitClsGoodStep(
+  _sandboxId: string,
+  devUrl: string,
+  beforeCls: number,
+  beforeGrade: "good" | "needs-improvement" | "poor" | null,
+  beforeScreenshots: Array<{ timestamp: number; blobUrl: string; label?: string }>,
+  initD3kLogs: string,
+  projectName: string,
+  reportId: string,
+  startPath: string,
+  repoUrl: string,
+  repoBranch: string,
+  projectDir?: string,
+  repoOwner?: string,
+  repoName?: string,
+  devAgentName?: string,
+  devAgentSkillRefs?: DevAgentSkillRef[],
+  progressContext?: ProgressContext | null,
+  initTiming?: InitStepTiming,
+  fromSnapshot?: boolean,
+  snapshotId?: string,
+  devAgentSuccessEval?: string
+): Promise<{
+  reportBlobUrl: string
+  reportId: string
+  beforeCls: number | null
+  afterCls: number | null
+  status: "improved" | "unchanged" | "degraded" | "no-changes"
+  agentSummary: string
+  gitDiff: string | null
+}> {
+  workflowLog(`[Early Exit] CLS already good: ${beforeCls.toFixed(4)} (${beforeGrade || "good"})`)
+  await updateProgress(progressContext, 4, "CLS already good — no fix needed")
+
+  const report: WorkflowReport = {
+    id: reportId,
+    projectName,
+    timestamp: new Date().toISOString(),
+    devAgentId: progressContext?.devAgentId,
+    devAgentName: devAgentName || progressContext?.devAgentName,
+    devAgentDescription: progressContext?.devAgentDescription,
+    devAgentExecutionMode: progressContext?.devAgentExecutionMode,
+    devAgentSandboxBrowser: progressContext?.devAgentSandboxBrowser,
+    workflowType: "cls-fix",
+    analysisTargetType: "vercel-project",
+    sandboxDevUrl: devUrl,
+    repoUrl,
+    repoBranch,
+    projectDir: projectDir || undefined,
+    repoOwner: repoOwner || undefined,
+    repoName: repoName || undefined,
+    clsScore: beforeCls,
+    clsGrade: beforeGrade || "good",
+    beforeScreenshots,
+    afterClsScore: beforeCls,
+    afterClsGrade: beforeGrade || "good",
+    afterScreenshots: beforeScreenshots,
+    verificationStatus: "unchanged",
+    agentAnalysis: `## Final Output\n\nCLS score is already **${beforeCls.toFixed(4)}** which is within the "good" threshold (≤ 0.1). No fix is needed.\n\nBaseline measured on \`${startPath}\`.`,
+    agentAnalysisModel: "n/a",
+    devAgentSkills: devAgentSkillRefs?.length ? devAgentSkillRefs : undefined,
+    d3kLogs: initD3kLogs,
+    initD3kLogs,
+    gatewayUsage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+    isMarketplaceAgent: progressContext?.isMarketplaceAgent || undefined,
+    successEval: devAgentSuccessEval || undefined,
+    successEvalResult: true,
+    fromSnapshot: fromSnapshot ?? false,
+    snapshotId,
+    timing: initTiming
+      ? {
+          total: { initMs: initTiming.totalMs, agentMs: 0, totalMs: initTiming.totalMs },
+          init: {
+            sandboxCreationMs: initTiming.sandboxCreation.totalMs,
+            fromSnapshot: fromSnapshot ?? false,
+            steps: initTiming.steps.map((s) => ({ name: s.name, durationMs: s.durationMs }))
+          }
+        }
+      : undefined
+  }
+
+  const blob = await put(`report-${reportId}.json`, JSON.stringify(report, null, 2), {
+    access: "public",
+    contentType: "application/json",
+    addRandomSuffix: false,
+    allowOverwrite: true
+  })
+
+  workflowLog(`[Early Exit] Report saved: ${blob.url}`)
+
+  return {
+    reportBlobUrl: blob.url,
+    reportId,
+    beforeCls,
+    afterCls: beforeCls,
+    status: "no-changes",
+    agentSummary: `CLS is already good (${beforeCls.toFixed(4)}). No changes needed.`,
+    gitDiff: null
+  }
 }
 
 export async function agentFixLoopStep(
@@ -2139,6 +2269,10 @@ export async function agentFixLoopStep(
 
   const { skillsInstalled } = await readSandboxSkillsInfo(sandbox)
 
+  // ── Token usage tracking ────────────────────────────────────────────
+  let totalPromptTokens = agentResult.usage.promptTokens
+  let totalCompletionTokens = agentResult.usage.completionTokens
+
   // ── Success Eval ──────────────────────────────────────────────────────
   let successEvalResult: boolean | null = null
   if (devAgentSuccessEval?.trim()) {
@@ -2163,6 +2297,8 @@ ${gitDiff ? gitDiff.slice(0, 4000) : "No changes made."}
 
 Did the agent meet the success criteria? Respond with JSON only.`
       })
+      totalPromptTokens += evalResult.usage.inputTokens ?? 0
+      totalCompletionTokens += evalResult.usage.outputTokens ?? 0
       const evalText = evalResult.text.trim()
       const jsonMatch = evalText.match(/\{[^}]*"success"\s*:\s*(true|false)[^}]*\}/)
       if (jsonMatch) {
@@ -2228,6 +2364,14 @@ Did the agent meet the success criteria? Respond with JSON only.`
       before: beforeWebVitalsDiagnostics,
       after: afterWebVitalsDiagnostics
     },
+    // AI Gateway usage
+    gatewayUsage: {
+      promptTokens: totalPromptTokens,
+      completionTokens: totalCompletionTokens,
+      totalTokens: totalPromptTokens + totalCompletionTokens
+    },
+    // Marketplace agent flag
+    isMarketplaceAgent: progressContext?.isMarketplaceAgent || undefined,
     // Success eval
     successEval: devAgentSuccessEval || undefined,
     successEvalResult,
@@ -2637,7 +2781,13 @@ async function runAgentWithDiagnoseTool(
   devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser",
   devAgentActionSteps?: Array<{ kind: string; config: Record<string, string> }>,
   devAgentSkillRefs?: DevAgentSkillRef[]
-): Promise<{ transcript: string; summary: string; systemPrompt: string; skillsLoaded: string[] }> {
+): Promise<{
+  transcript: string
+  summary: string
+  systemPrompt: string
+  skillsLoaded: string[]
+  usage: { promptTokens: number; completionTokens: number; totalTokens: number }
+}> {
   const SANDBOX_CWD = projectDir ? `/vercel/sandbox/${projectDir.replace(/^\/+|\/+$/g, "")}` : "/vercel/sandbox"
   const cloudBrowserMode = resolveCloudBrowserMode(devAgentSandboxBrowser)
   const skillAliases: Record<string, string> = {
@@ -3076,7 +3226,7 @@ Use this to diagnose and verify performance improvements.`,
   // Build system prompt based on workflow type
   const hasStructuredSteps = devAgentActionSteps && devAgentActionSteps.length > 0
   let systemPrompt: string
-  if (hasDevAgentPrompt && hasStructuredSteps) {
+  if (hasStructuredSteps) {
     const structured = buildStructuredWorkflowPrompt(devAgentActionSteps, skillLoadInstructions, browserGuidance)
     systemPrompt = buildEnhancedPrompt(
       `${devAgentName ? `Dev Agent: ${devAgentName}\n` : ""}${structured.system}${
@@ -3107,7 +3257,7 @@ Use this to diagnose and verify performance improvements.`,
 
   // Build user prompt based on workflow type
   let userPromptMessage: string
-  if (hasDevAgentPrompt && hasStructuredSteps) {
+  if (hasStructuredSteps) {
     const structured = buildStructuredWorkflowPrompt(devAgentActionSteps, skillLoadInstructions, browserGuidance)
     userPromptMessage = `Run the "${devAgentName || "custom"}" devAgent on ${startPath}. Dev URL: ${devUrl}
 
@@ -3162,7 +3312,7 @@ Constraints:
   }
 
   const maxSteps = workflowTypeForPrompt === "turbopack-bundle-analyzer" ? 35 : 15
-  const { text, steps } = await generateText({
+  const { text, steps, totalUsage } = await generateText({
     model,
     system: systemPrompt,
     prompt: userPromptMessage,
@@ -3237,7 +3387,12 @@ Constraints:
     transcript: transcript.join("\n"),
     summary: finalSummary,
     systemPrompt,
-    skillsLoaded: Array.from(skillsLoaded)
+    skillsLoaded: Array.from(skillsLoaded),
+    usage: {
+      promptTokens: totalUsage.inputTokens ?? 0,
+      completionTokens: totalUsage.outputTokens ?? 0,
+      totalTokens: (totalUsage.inputTokens ?? 0) + (totalUsage.outputTokens ?? 0)
+    }
   }
 }
 
@@ -3837,7 +3992,7 @@ ${screenshotRows}
     }
 
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://dev3000.ai"
-    const reportPageUrl = `${siteUrl}/workflows/${reportId}/report`
+    const reportPageUrl = `${siteUrl}/dev-agents/runs/${reportId}/report`
 
     const extractFinalOutputSummary = (analysis?: string): string[] => {
       if (!analysis) return []

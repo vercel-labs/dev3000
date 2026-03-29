@@ -17,7 +17,7 @@ export function ShareButton({ runId, initialIsPublic }: ShareButtonProps) {
   const setPublicStatus = async (nextIsPublic: boolean) => {
     setIsLoading(true)
     try {
-      const response = await fetch(`/api/workflows/${runId}/public`, {
+      const response = await fetch(`/api/dev-agents/runs/${runId}/public`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isPublic: nextIsPublic })

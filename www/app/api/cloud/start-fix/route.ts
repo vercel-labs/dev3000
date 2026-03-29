@@ -292,6 +292,7 @@ export async function POST(request: Request) {
       devAgentInstructions: devAgent?.instructions,
       devAgentExecutionMode: devAgent?.executionMode,
       devAgentSandboxBrowser: devAgent?.sandboxBrowser,
+      isMarketplaceAgent: devAgent?.kind === "marketplace",
       devAgentActionSteps: devAgent?.actionSteps,
       devAgentSkillRefs: devAgent?.skillRefs,
       devAgentSuccessEval: devAgent?.successEval,

@@ -100,10 +100,11 @@ export async function POST(request: Request) {
         const rawSkillRefs = Array.isArray(body.skillRefs) ? body.skillRefs : []
         const team = isValidDevAgentTeam(body.team) ? body.team : null
 
-        if (!name || !description || !instructions) {
+        const hasActionSteps = rawActionSteps.length > 0
+        if (!name || !description || (!instructions && !hasActionSteps)) {
           span.setAttribute("http.status_code", 400)
           return Response.json(
-            { success: false, error: "Name, description, and prompt are required." },
+            { success: false, error: "Name, description, and prompt (or action steps) are required." },
             { status: 400 }
           )
         }

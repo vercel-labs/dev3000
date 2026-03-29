@@ -405,7 +405,7 @@ export default function DevAgentRunClient({
       return
     }
 
-    window.location.href = `/workflows/${result.runId}/report`
+    window.location.href = `/dev-agents/runs/${result.runId}/report`
   }
 
   return (

@@ -95,7 +95,9 @@ export function DevAgentsDashboardShell({
             <div className="flex items-center gap-2 text-[13px]">
               <span className="text-[#888]">{selectedTeam.name}</span>
               <span className="text-[#444]">/</span>
-              <span className="text-[#ededed]">Dev Agents</span>
+              <Link href={`/${selectedTeam.slug}/dev-agents`} className="text-[#ededed] hover:underline">
+                Dev Agents
+              </Link>
             </div>
 
             {/* Right side actions */}
