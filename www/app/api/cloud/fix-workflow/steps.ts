@@ -3624,7 +3624,9 @@ async function ensureClaudeCodeInstalledInSandbox(
   sandbox: Sandbox,
   progressContext?: ProgressContext | null
 ): Promise<void> {
-  const pathEnv = "/home/vercel-sandbox/.bun/bin:/home/vercel-sandbox/.local/bin:/usr/local/bin:/usr/bin:/bin"
+  const claudeInstallRoot = "/home/vercel-sandbox/.claude-code"
+  const localClaudeBin = `${claudeInstallRoot}/node_modules/.bin`
+  const pathEnv = `${localClaudeBin}:/home/vercel-sandbox/.bun/bin:/home/vercel-sandbox/.local/bin:/usr/local/bin:/usr/bin:/bin`
   const whichResult = await runSandboxCommandWithOptions(sandbox, {
     cmd: "sh",
     args: ["-c", "command -v claude || true"],
@@ -3635,38 +3637,83 @@ async function ensureClaudeCodeInstalledInSandbox(
   }
 
   await appendProgressLog(progressContext, "[Claude] Installing Claude Code CLI in sandbox...")
-  let installResult = await runSandboxCommandWithOptions(sandbox, {
-    cmd: "bun",
-    args: ["add", "-g", CLAUDE_CODE_PACKAGE],
-    env: { PATH: pathEnv }
-  })
+  const installAttempts = [
+    {
+      label: "bun-local",
+      options: {
+        cmd: "sh",
+        args: [
+          "-lc",
+          [
+            `mkdir -p "${claudeInstallRoot}" /home/vercel-sandbox/.local/bin`,
+            `cd "${claudeInstallRoot}"`,
+            `if [ ! -f package.json ]; then printf '%s' '{"name":"claude-code-runtime","private":true}' > package.json; fi`,
+            `bun add ${CLAUDE_CODE_PACKAGE}`,
+            `ln -sf "${localClaudeBin}/claude" /home/vercel-sandbox/.local/bin/claude`
+          ].join(" && ")
+        ],
+        env: {
+          PATH: pathEnv,
+          HOME: "/home/vercel-sandbox"
+        }
+      }
+    },
+    {
+      label: "npm-local",
+      options: {
+        cmd: "sh",
+        args: [
+          "-lc",
+          [
+            `mkdir -p "${claudeInstallRoot}" /home/vercel-sandbox/.local/bin`,
+            `cd "${claudeInstallRoot}"`,
+            `if [ ! -f package.json ]; then printf '%s' '{"name":"claude-code-runtime","private":true}' > package.json; fi`,
+            `npm install ${CLAUDE_CODE_PACKAGE}`,
+            `ln -sf "${localClaudeBin}/claude" /home/vercel-sandbox/.local/bin/claude`
+          ].join(" && ")
+        ],
+        env: {
+          PATH: pathEnv,
+          HOME: "/home/vercel-sandbox"
+        }
+      }
+    },
+    {
+      label: "bun-global",
+      options: {
+        cmd: "bun",
+        args: ["add", "-g", CLAUDE_CODE_PACKAGE],
+        env: {
+          PATH: pathEnv,
+          HOME: "/home/vercel-sandbox"
+        }
+      }
+    }
+  ] satisfies Array<{
+    label: string
+    options: Parameters<Sandbox["runCommand"]>[0]
+  }>
 
-  if (installResult.exitCode !== 0) {
-    installResult = await runSandboxCommandWithOptions(sandbox, {
-      cmd: "npm",
-      args: ["install", "-g", CLAUDE_CODE_PACKAGE],
-      env: { PATH: pathEnv },
-      sudo: true
-    })
+  let installResult: { exitCode: number; stdout: string; stderr: string } | null = null
+  const installErrors: string[] = []
+
+  for (const attempt of installAttempts) {
+    try {
+      installResult = await runSandboxCommandWithOptions(sandbox, attempt.options)
+      if (installResult.exitCode === 0) {
+        break
+      }
+      installErrors.push(
+        `${attempt.label}: exit=${installResult.exitCode} stdout=${formatClaudeOutputPreview(installResult.stdout)} stderr=${formatClaudeOutputPreview(installResult.stderr)}`
+      )
+    } catch (error) {
+      installErrors.push(`${attempt.label}: threw=${error instanceof Error ? error.message : String(error)}`)
+    }
   }
 
-  if (installResult.exitCode !== 0) {
-    installResult = await runSandboxCommandWithOptions(sandbox, {
-      cmd: "bash",
-      args: [
-        "-lc",
-        `mkdir -p /home/vercel-sandbox/.local && npm install -g --prefix /home/vercel-sandbox/.local ${CLAUDE_CODE_PACKAGE}`
-      ],
-      env: { PATH: pathEnv }
-    })
-  }
-
-  if (installResult.exitCode !== 0) {
-    await appendProgressLog(
-      progressContext,
-      `[Claude] Claude Code CLI install failed exit=${installResult.exitCode} stdout=${formatClaudeOutputPreview(installResult.stdout)} stderr=${formatClaudeOutputPreview(installResult.stderr)}`
-    )
-    throw new Error(`Failed to install Claude Code CLI: ${installResult.stderr || installResult.stdout}`)
+  if (!installResult || installResult.exitCode !== 0) {
+    await appendProgressLog(progressContext, `[Claude] Claude Code CLI install failed ${installErrors.join(" | ")}`)
+    throw new Error(`Failed to install Claude Code CLI: ${installErrors.join(" | ")}`)
   }
 
   const verifyResult = await runSandboxCommandWithOptions(sandbox, {
