@@ -2060,24 +2060,34 @@ export async function observeBaselineStep(
       `[Observe] Sandbox ${sandboxId} unavailable (${sandboxError instanceof Error ? sandboxError.message : String(sandboxError)}), creating a new one...`
     )
     await appendProgressLog(progressContext, "[Observe] Previous sandbox expired, creating a fresh one...")
-    const freshResult = await getOrCreateD3kSandbox({
-      repoUrl,
-      branch: repoBranch,
-      githubPat,
-      projectId,
-      teamId,
-      vercelToken: vercelOidcToken,
-      npmToken,
-      sourceTarballUrl,
-      sourceLabel,
-      projectDir: projectDir || "",
-      devCommand: devAgentDevServerCommand,
-      timeout: "30m",
-      debug: true,
-      onProgress: (message) => appendProgressLog(progressContext, `[Sandbox] ${message}`)
-    })
+    let freshResult: Awaited<ReturnType<typeof getOrCreateD3kSandbox>>
+    try {
+      freshResult = await getOrCreateD3kSandbox({
+        repoUrl,
+        branch: repoBranch,
+        githubPat,
+        projectId,
+        teamId,
+        vercelToken: vercelOidcToken,
+        npmToken,
+        sourceTarballUrl,
+        sourceLabel,
+        projectDir: projectDir || "",
+        devCommand: devAgentDevServerCommand,
+        timeout: "30m",
+        debug: true,
+        onProgress: (message) => appendProgressLog(progressContext, `[Sandbox] ${message}`)
+      })
+    } catch (freshSandboxError) {
+      await appendProgressLog(
+        progressContext,
+        `[Observe] Fresh sandbox creation failed: ${freshSandboxError instanceof Error ? freshSandboxError.message : String(freshSandboxError)}`
+      )
+      throw freshSandboxError
+    }
     sandbox = freshResult.sandbox
     sandboxId = sandbox.sandboxId
+    await appendProgressLog(progressContext, `[Observe] Fresh sandbox ready: ${sandbox.sandboxId}`)
     workflowLog(`[Observe] Fresh sandbox created: ${sandbox.sandboxId}`)
   }
 
@@ -2410,24 +2420,34 @@ export async function agentFixLoopStep(
       `[Agent] Sandbox ${sandboxId} unavailable (${sandboxError instanceof Error ? sandboxError.message : String(sandboxError)}), creating a new one...`
     )
     await appendProgressLog(progressContext, "[Agent] Previous sandbox expired, creating a fresh one...")
-    const freshResult = await getOrCreateD3kSandbox({
-      repoUrl,
-      branch: repoBranch,
-      githubPat,
-      projectId,
-      teamId,
-      vercelToken: vercelOidcToken,
-      npmToken,
-      sourceTarballUrl,
-      sourceLabel,
-      projectDir: projectDir || "",
-      devCommand: devAgentDevServerCommand,
-      timeout: "30m",
-      debug: true,
-      onProgress: (message) => appendProgressLog(progressContext, `[Sandbox] ${message}`)
-    })
+    let freshResult: Awaited<ReturnType<typeof getOrCreateD3kSandbox>>
+    try {
+      freshResult = await getOrCreateD3kSandbox({
+        repoUrl,
+        branch: repoBranch,
+        githubPat,
+        projectId,
+        teamId,
+        vercelToken: vercelOidcToken,
+        npmToken,
+        sourceTarballUrl,
+        sourceLabel,
+        projectDir: projectDir || "",
+        devCommand: devAgentDevServerCommand,
+        timeout: "30m",
+        debug: true,
+        onProgress: (message) => appendProgressLog(progressContext, `[Sandbox] ${message}`)
+      })
+    } catch (freshSandboxError) {
+      await appendProgressLog(
+        progressContext,
+        `[Agent] Fresh sandbox creation failed: ${freshSandboxError instanceof Error ? freshSandboxError.message : String(freshSandboxError)}`
+      )
+      throw freshSandboxError
+    }
     sandbox = freshResult.sandbox
     recreatedSandbox = true
+    await appendProgressLog(progressContext, `[Agent] Fresh sandbox ready: ${sandbox.sandboxId}`)
     workflowLog(`[Agent] Fresh sandbox created: ${sandbox.sandboxId}`)
   }
 
@@ -3184,6 +3204,8 @@ async function installDevAgentSkillsInSandbox(
         `Failed to install skill ${skill.displayName}: ${(result.stderr || result.stdout || "unknown error").trim()}`
       )
     }
+
+    await appendProgressLog(progressContext, `[Skills] Installed ${skill.displayName}`)
   }
 }
 
