@@ -3578,11 +3578,19 @@ async function ensureClaudeCodeInstalledInSandbox(
 
   await appendProgressLog(progressContext, "[Claude] Installing Claude Code CLI in sandbox...")
   let installResult = await runSandboxCommandWithOptions(sandbox, {
-    cmd: "npm",
-    args: ["install", "-g", CLAUDE_CODE_PACKAGE],
-    env: { PATH: pathEnv },
-    sudo: true
+    cmd: "bun",
+    args: ["add", "-g", CLAUDE_CODE_PACKAGE],
+    env: { PATH: pathEnv }
   })
+
+  if (installResult.exitCode !== 0) {
+    installResult = await runSandboxCommandWithOptions(sandbox, {
+      cmd: "npm",
+      args: ["install", "-g", CLAUDE_CODE_PACKAGE],
+      env: { PATH: pathEnv },
+      sudo: true
+    })
+  }
 
   if (installResult.exitCode !== 0) {
     installResult = await runSandboxCommandWithOptions(sandbox, {
