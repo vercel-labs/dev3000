@@ -1,0 +1,47 @@
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.22",
+  "base_commit_sha": "c6ddcc63b9802c4d49a81fd2402b95d30b428946",
+  "prompts": {
+    "57936b28b87e778b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d383c-fc58-73d1-ae43-e83e4061e42b",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh <elsigh@gmail.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 763,
+      "overriden_lines": 0
+    },
+    "600f23c473a4c63d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d3d3a-9e16-7962-8d2a-8c11ed71d9a3",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh <elsigh@gmail.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 345,
+      "overriden_lines": 0
+    },
+    "c16330db51a618a2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1fecf3ee-0fcd-4e11-b828-f9774172847f",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "elsigh <elsigh@gmail.com>",
+      "messages": [],
+      "total_additions": 40,
+      "total_deletions": 37,
+      "accepted_lines": 35,
+      "overriden_lines": 0
+    }
+  }
+}
