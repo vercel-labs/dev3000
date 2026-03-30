@@ -3628,6 +3628,10 @@ async function ensureClaudeCodeInstalledInSandbox(
   }
 
   if (installResult.exitCode !== 0) {
+    await appendProgressLog(
+      progressContext,
+      `[Claude] Claude Code CLI install failed exit=${installResult.exitCode} stdout=${formatClaudeOutputPreview(installResult.stdout)} stderr=${formatClaudeOutputPreview(installResult.stderr)}`
+    )
     throw new Error(`Failed to install Claude Code CLI: ${installResult.stderr || installResult.stdout}`)
   }
 
@@ -3637,6 +3641,10 @@ async function ensureClaudeCodeInstalledInSandbox(
     env: { PATH: pathEnv }
   })
   if (!verifyResult.stdout.trim()) {
+    await appendProgressLog(
+      progressContext,
+      `[Claude] Claude Code CLI missing from PATH after install stdout=${formatClaudeOutputPreview(verifyResult.stdout)} stderr=${formatClaudeOutputPreview(verifyResult.stderr)}`
+    )
     throw new Error("Claude Code CLI installed but `claude` is still not on PATH inside the sandbox.")
   }
 
