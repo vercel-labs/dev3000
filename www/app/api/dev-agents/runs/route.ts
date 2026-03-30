@@ -1,5 +1,4 @@
 import { withAttributedSpan } from "@/lib/tracing"
-import { proxyWorkflowJsonRequest, shouldProxyWorkflowRequest } from "@/lib/workflow-api"
 import { deleteWorkflowRuns, listWorkflowRuns } from "@/lib/workflow-storage"
 
 // CORS headers - allowing credentials from localhost
@@ -26,10 +25,6 @@ export async function OPTIONS() {
  * - userId: Required. The user ID to fetch runs for
  */
 export async function GET(request: Request) {
-  if (shouldProxyWorkflowRequest(request)) {
-    return proxyWorkflowJsonRequest(request)
-  }
-
   return withAttributedSpan(
     { name: "dev-agent-runs.list", file: "app/api/dev-agents/runs/route.ts", fn: "GET" },
     async (span) => {
@@ -76,10 +71,6 @@ export async function GET(request: Request) {
  * - runIds: Required. Array of run IDs to delete
  */
 export async function DELETE(request: Request) {
-  if (shouldProxyWorkflowRequest(request)) {
-    return proxyWorkflowJsonRequest(request)
-  }
-
   return withAttributedSpan(
     { name: "dev-agent-runs.delete", file: "app/api/dev-agents/runs/route.ts", fn: "DELETE" },
     async (span) => {

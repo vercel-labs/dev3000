@@ -57,6 +57,13 @@ export type DevAgentEarlyExitMetricType = "builtin" | "custom"
 export type DevAgentEarlyExitValueType = "number" | "boolean" | "string"
 export type DevAgentEarlyExitOperator = "<" | "<=" | ">" | ">=" | "===" | "!==" | "between"
 
+const D3K_SKILL_INSTALL_ARG = "vercel-labs/dev3000@d3k"
+const LEGACY_D3K_SKILL_INSTALL_ARGS = new Set([
+  "https://github.com/vercel-labs/dev3000/tree/main/skills/d3k",
+  "https://github.com/vercel-labs/dev3000/tree/main/.agents/skills/d3k",
+  "https://skills.sh/vercel-labs/dev3000/d3k"
+])
+
 export interface DevAgentEarlyExitRule {
   metricType: DevAgentEarlyExitMetricType
   metricKey: string
@@ -250,7 +257,8 @@ export function parseDevAgentSkillRef(input: {
   sourceUrl?: string
   displayName?: string
 }): DevAgentSkillRef {
-  const installArg = input.installArg.trim()
+  const rawInstallArg = input.installArg.trim()
+  const installArg = LEGACY_D3K_SKILL_INSTALL_ARGS.has(rawInstallArg) ? D3K_SKILL_INSTALL_ARG : rawInstallArg
   const packageAndSkill = installArg.split("@")
   const packageName = packageAndSkill.length > 1 ? packageAndSkill.slice(0, -1).join("@") : undefined
   const rawSkillName = packageAndSkill.length > 1 ? packageAndSkill[packageAndSkill.length - 1] : installArg
@@ -267,7 +275,9 @@ export function parseDevAgentSkillRef(input: {
     packageName,
     skillName: normalizedSkillName || slugify(installArg),
     displayName: input.displayName?.trim() || titleCaseSkillName(normalizedSkillName || rawSkillName),
-    sourceUrl: input.sourceUrl?.trim() || undefined
+    sourceUrl:
+      input.sourceUrl?.trim() ||
+      (normalizedSkillName === "d3k" ? "https://github.com/vercel-labs/dev3000/tree/main/skills/d3k" : undefined)
   }
 }
 
@@ -290,7 +300,7 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
     sandboxBrowser: "agent-browser",
     skillRefs: [
       parseDevAgentSkillRef({
-        installArg: "https://github.com/vercel-labs/dev3000/tree/main/skills/d3k",
+        installArg: D3K_SKILL_INSTALL_ARG,
         displayName: "d3k"
       })
     ],
@@ -324,7 +334,7 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
     sandboxBrowser: "next-browser",
     skillRefs: [
       parseDevAgentSkillRef({
-        installArg: "https://github.com/vercel-labs/dev3000/tree/main/skills/d3k",
+        installArg: D3K_SKILL_INSTALL_ARG,
         displayName: "d3k"
       }),
       parseDevAgentSkillRef({
@@ -354,7 +364,7 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
     sandboxBrowser: "next-browser",
     skillRefs: [
       parseDevAgentSkillRef({
-        installArg: "https://github.com/vercel-labs/dev3000/tree/main/skills/d3k",
+        installArg: D3K_SKILL_INSTALL_ARG,
         displayName: "d3k"
       }),
       parseDevAgentSkillRef({
@@ -383,7 +393,7 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
     sandboxBrowser: "none",
     skillRefs: [
       parseDevAgentSkillRef({
-        installArg: "https://github.com/vercel-labs/dev3000/tree/main/skills/d3k",
+        installArg: D3K_SKILL_INSTALL_ARG,
         displayName: "d3k"
       }),
       parseDevAgentSkillRef({
@@ -411,7 +421,7 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
     sandboxBrowser: "agent-browser",
     skillRefs: [
       parseDevAgentSkillRef({
-        installArg: "https://github.com/vercel-labs/dev3000/tree/main/skills/d3k",
+        installArg: D3K_SKILL_INSTALL_ARG,
         displayName: "d3k"
       })
     ],
@@ -438,7 +448,7 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
     sandboxBrowser: "agent-browser",
     skillRefs: [
       parseDevAgentSkillRef({
-        installArg: "https://github.com/vercel-labs/dev3000/tree/main/skills/d3k",
+        installArg: D3K_SKILL_INSTALL_ARG,
         displayName: "d3k"
       })
     ],
@@ -462,7 +472,7 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
     sandboxBrowser: "agent-browser",
     skillRefs: [
       parseDevAgentSkillRef({
-        installArg: "https://github.com/vercel-labs/dev3000/tree/main/skills/d3k",
+        installArg: D3K_SKILL_INSTALL_ARG,
         displayName: "d3k"
       })
     ],
@@ -484,7 +494,7 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
     sandboxBrowser: "agent-browser",
     skillRefs: [
       parseDevAgentSkillRef({
-        installArg: "https://github.com/vercel-labs/dev3000/tree/main/skills/d3k",
+        installArg: D3K_SKILL_INSTALL_ARG,
         displayName: "d3k"
       }),
       parseDevAgentSkillRef({
@@ -510,7 +520,7 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
     sandboxBrowser: "next-browser",
     skillRefs: [
       parseDevAgentSkillRef({
-        installArg: "https://github.com/vercel-labs/dev3000/tree/main/skills/d3k",
+        installArg: D3K_SKILL_INSTALL_ARG,
         displayName: "d3k"
       })
     ],
@@ -533,7 +543,7 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
     sandboxBrowser: "agent-browser",
     skillRefs: [
       parseDevAgentSkillRef({
-        installArg: "https://github.com/vercel-labs/dev3000/tree/main/skills/d3k",
+        installArg: D3K_SKILL_INSTALL_ARG,
         displayName: "d3k"
       })
     ],

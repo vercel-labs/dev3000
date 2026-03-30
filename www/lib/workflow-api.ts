@@ -115,11 +115,48 @@ export async function proxyWorkflowJsonRequest(request: Request): Promise<Respon
   }
 
   const text = await upstreamResponse.text()
-  const body = text.length > 0 ? JSON.parse(text) : null
+  if (text.length === 0) {
+    return Response.json(null, {
+      status: upstreamResponse.status,
+      statusText: upstreamResponse.statusText,
+      headers: responseHeaders
+    })
+  }
 
-  return Response.json(body, {
-    status: upstreamResponse.status,
-    statusText: upstreamResponse.statusText,
-    headers: responseHeaders
-  })
+  try {
+    const body = JSON.parse(text)
+
+    return Response.json(body, {
+      status: upstreamResponse.status,
+      statusText: upstreamResponse.statusText,
+      headers: responseHeaders
+    })
+  } catch (error) {
+    const contentType = upstreamResponse.headers.get("content-type") || "unknown"
+    const preview = text.slice(0, 400)
+
+    console.error("[Workflow Proxy] Upstream returned non-JSON for JSON request", {
+      status: upstreamResponse.status,
+      statusText: upstreamResponse.statusText,
+      contentType,
+      url: request.url,
+      preview,
+      error: error instanceof Error ? error.message : String(error)
+    })
+
+    return Response.json(
+      {
+        success: false,
+        error: "Workflow proxy expected JSON but received a non-JSON upstream response.",
+        upstreamStatus: upstreamResponse.status,
+        upstreamStatusText: upstreamResponse.statusText,
+        upstreamContentType: contentType,
+        upstreamBodyPreview: preview
+      },
+      {
+        status: upstreamResponse.status >= 400 ? upstreamResponse.status : 502,
+        headers: responseHeaders
+      }
+    )
+  }
 }

@@ -20,7 +20,7 @@ const workflowLog = console.log
 const TURBOPACK_MIN_NEXT_VERSION = "16.1.0"
 const SUCCESS_EVAL_MODEL = "openai/gpt-5.4"
 const CLAUDE_CODE_PACKAGE = "@anthropic-ai/claude-code"
-const D3K_SKILL_INSTALL_ARG = "https://github.com/vercel-labs/dev3000/tree/main/skills/d3k"
+const D3K_SKILL_INSTALL_ARG = "vercel-labs/dev3000@d3k"
 const ANALYZE_TO_NDJSON_SCRIPT = `#!/usr/bin/env node
 // Converts Next.js bundle analyzer .data files to NDJSON for offline analysis.
 // Usage: node analyze-to-ndjson.mjs [--input <dir>] [--output <dir>]
@@ -3087,6 +3087,29 @@ function getInstalledSkillNames(devAgentSkillRefs: DevAgentSkillRef[] | undefine
   return Array.from(names)
 }
 
+function buildSkillsInstallShellCommand(installArg: string): string {
+  const normalizedInstallArg = installArg.trim()
+  const isHttpSource = /^https?:\/\//i.test(normalizedInstallArg)
+
+  if (!isHttpSource && normalizedInstallArg.includes("@")) {
+    const packageAndSkill = normalizedInstallArg.split("@")
+    const packageName = packageAndSkill.slice(0, -1).join("@").trim()
+    const skillName = packageAndSkill[packageAndSkill.length - 1]?.trim()
+
+    if (packageName && skillName) {
+      return [
+        "npx --yes skills@latest add",
+        shellEscape(packageName),
+        "--skill",
+        shellEscape(skillName),
+        "--agent claude -y"
+      ].join(" ")
+    }
+  }
+
+  return `npx --yes skills@latest add ${shellEscape(normalizedInstallArg)} --agent claude -y`
+}
+
 async function installDevAgentSkillsInSandbox(
   sandbox: Sandbox,
   projectDir: string | undefined,
@@ -3124,7 +3147,7 @@ async function installDevAgentSkillsInSandbox(
       [
         "export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH",
         `cd ${shellEscape(SANDBOX_CWD)}`,
-        `npx --yes skills@latest add ${shellEscape(skill.installArg)} --agent claude -y`
+        buildSkillsInstallShellCommand(skill.installArg)
       ].join(" && ")
     ])
 

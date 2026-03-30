@@ -182,10 +182,10 @@ function buildStructuredEarlyExitPreview(rule: DevAgentEarlyExitRule): string {
 
 const implicitD3kSkill: SkillSearchResult = {
   id: "d3k",
-  installArg: "https://github.com/vercel-labs/dev3000/tree/main/skills/d3k",
+  installArg: "vercel-labs/dev3000@d3k",
   skillName: "d3k",
   displayName: "d3k",
-  sourceUrl: "https://skills.sh/vercel-labs/dev3000/d3k"
+  sourceUrl: "https://github.com/vercel-labs/dev3000/tree/main/skills/d3k"
 }
 
 function isD3kSkill(skill: Pick<SkillSearchResult, "id" | "installArg" | "skillName" | "displayName">): boolean {
