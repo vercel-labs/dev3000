@@ -682,11 +682,21 @@ function normalizeDevAgent(devAgent: StoredDevAgent | Omit<DevAgent, "usageCount
     typeof devAgent.devServerCommand === "string" && devAgent.devServerCommand.trim().length > 0
       ? devAgent.devServerCommand.trim()
       : undefined
+  const skillRefs = Array.isArray(devAgent.skillRefs)
+    ? devAgent.skillRefs.map((skillRef) =>
+        parseDevAgentSkillRef({
+          installArg: skillRef.installArg,
+          sourceUrl: skillRef.sourceUrl,
+          displayName: skillRef.displayName
+        })
+      )
+    : []
   return {
     ...devAgent,
     id: canonicalizeDevAgentId(devAgent.id),
     aiAgent,
     devServerCommand,
+    skillRefs,
     sandboxBrowser:
       sandboxBrowser && isDevAgentSandboxBrowser(sandboxBrowser)
         ? sandboxBrowser
