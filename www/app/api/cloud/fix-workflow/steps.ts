@@ -6,23 +6,21 @@
  * iterate internally instead of external workflow orchestration.
  */
 
-import { existsSync, readFileSync } from "node:fs"
-import { join } from "node:path"
 import { put } from "@vercel/blob"
 import { Sandbox } from "@vercel/sandbox"
-import { createGateway, generateText, stepCountIs, tool } from "ai"
-import { z } from "zod"
+import { createGateway, generateText } from "ai"
 import { getOrCreateD3kSandbox, type SandboxTimingData, StepTimer } from "@/lib/cloud/d3k-sandbox"
 import { SandboxAgentBrowser } from "@/lib/cloud/sandbox-agent-browser"
 import { SandboxNextBrowser } from "@/lib/cloud/sandbox-next-browser"
-import type { DevAgentEarlyExitRule, DevAgentSkillRef } from "@/lib/dev-agents"
-import { skillFallbacks } from "@/lib/skills/fallbacks"
+import { type DevAgentEarlyExitRule, type DevAgentSkillRef, getDevAgentModelLabel } from "@/lib/dev-agents"
 import { listWorkflowRuns, saveWorkflowRun, type WorkflowType } from "@/lib/workflow-storage"
 import type { TurbopackBundleComparison, TurbopackBundleMetricsSnapshot, WorkflowReport } from "@/types"
 
 const workflowLog = console.log
 const TURBOPACK_MIN_NEXT_VERSION = "16.1.0"
 const SUCCESS_EVAL_MODEL = "openai/gpt-5.4"
+const CLAUDE_CODE_PACKAGE = "@anthropic-ai/claude-code"
+const D3K_SKILL_INSTALL_ARG = "https://github.com/vercel-labs/dev3000/tree/main/skills/d3k"
 const ANALYZE_TO_NDJSON_SCRIPT = `#!/usr/bin/env node
 // Converts Next.js bundle analyzer .data files to NDJSON for offline analysis.
 // Usage: node analyze-to-ndjson.mjs [--input <dir>] [--output <dir>]
@@ -1468,6 +1466,7 @@ export async function initSandboxStep(
   githubPat?: string,
   npmToken?: string,
   vercelOidcToken?: string,
+  devAgentDevServerCommand?: string,
   progressContext?: ProgressContext | null,
   sourceTarballUrl?: string,
   sourceLabel?: string
@@ -1597,6 +1596,7 @@ export async function initSandboxStep(
       skipD3kSetup: false,
       onProgress: (message) => appendProgressLog(progressContext, `[Sandbox] ${message}`),
       projectDir: projectDir || "",
+      devCommand: devAgentDevServerCommand,
       projectEnv: developmentEnv,
       timeout: "30m",
       debug: true
@@ -2029,6 +2029,7 @@ export async function observeBaselineStep(
   vercelOidcToken?: string,
   projectDir?: string,
   devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser",
+  devAgentDevServerCommand?: string,
   devAgentSkillRefs?: DevAgentSkillRef[],
   progressContext?: ProgressContext | null
 ): Promise<ObserveResult> {
@@ -2058,6 +2059,7 @@ export async function observeBaselineStep(
       branch: repoBranch,
       vercelToken: vercelOidcToken,
       projectDir: projectDir || "",
+      devCommand: devAgentDevServerCommand,
       timeout: "30m",
       debug: true,
       onProgress: (message) => appendProgressLog(progressContext, `[Sandbox] ${message}`)
@@ -2346,6 +2348,8 @@ export async function agentFixLoopStep(
   devAgentInstructions?: string,
   devAgentExecutionMode?: "dev-server" | "preview-pr",
   devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser",
+  devAgentAiAgent?: import("@/lib/dev-agents").DevAgentAiAgent,
+  devAgentDevServerCommand?: string,
   devAgentActionSteps?: Array<{ kind: string; config: Record<string, string> }>,
   devAgentSkillRefs?: DevAgentSkillRef[],
   progressContext?: ProgressContext | null,
@@ -2392,6 +2396,7 @@ export async function agentFixLoopStep(
       branch: repoBranch,
       vercelToken: vercelOidcToken,
       projectDir: projectDir || "",
+      devCommand: devAgentDevServerCommand,
       timeout: "30m",
       debug: true,
       onProgress: (message) => appendProgressLog(progressContext, `[Sandbox] ${message}`)
@@ -2495,8 +2500,8 @@ export async function agentFixLoopStep(
     }
   }
 
-  // Run the agent with the new "diagnose" tool
-  timer.start("Run AI agent (with tools)")
+  // Run the real Claude Code agent inside the sandbox
+  timer.start("Run Claude Code agent")
   const agentResult = await runAgentWithDiagnoseTool(
     sandbox,
     devUrl,
@@ -2511,8 +2516,10 @@ export async function agentFixLoopStep(
     devAgentInstructions,
     devAgentExecutionMode,
     devAgentSandboxBrowser,
+    devAgentAiAgent,
     devAgentActionSteps,
-    devAgentSkillRefs
+    devAgentSkillRefs,
+    progressContext
   )
   await updateProgress(progressContext, 3, "Agent finished, verifying CLS improvements...", devUrl)
 
@@ -2763,7 +2770,7 @@ Did the agent meet the success criteria? Respond with JSON only.`
     afterWebVitals: Object.keys(afterWebVitals).length > 0 ? afterWebVitals : undefined,
     verificationStatus: status === "no-changes" ? "unchanged" : status,
     agentAnalysis: agentResult.transcript,
-    agentAnalysisModel: "openai/gpt-5.2",
+    agentAnalysisModel: agentResult.modelId,
     skillsInstalled: skillsInstalled.length > 0 ? skillsInstalled : undefined,
     skillsLoaded: agentResult.skillsLoaded.length > 0 ? agentResult.skillsLoaded : undefined,
     turbopackBundleComparison,
@@ -2924,7 +2931,7 @@ export async function urlAuditStep(
   })
 
   const analysisResponse = await generateText({
-    model: gateway("openai/gpt-5.2"),
+    model: gateway("openai/gpt-5.4"),
     prompt:
       workflowType === "prompt" && customPrompt
         ? `You are a senior web analyst operating in read-only mode on a public URL.
@@ -3025,7 +3032,7 @@ Constraints:
     beforeWebVitals: Object.keys(vitals).length > 0 ? vitals : undefined,
     afterWebVitals: Object.keys(vitals).length > 0 ? vitals : undefined,
     agentAnalysis: analysisResponse.text,
-    agentAnalysisModel: "openai/gpt-5.2",
+    agentAnalysisModel: "openai/gpt-5.4",
     d3kLogs: diagnosticLogs.join("\n"),
     initD3kLogs: diagnosticLogs.join("\n"),
     webVitalsDiagnostics: {
@@ -3070,20 +3077,44 @@ function shellEscape(value: string): string {
   return `'${value.replaceAll("'", `'\\''`)}'`
 }
 
+function getInstalledSkillNames(devAgentSkillRefs: DevAgentSkillRef[] | undefined): string[] {
+  const names = new Set<string>(["d3k"])
+  for (const skill of devAgentSkillRefs || []) {
+    const label = skill.displayName?.trim() || skill.skillName?.trim()
+    if (!label) continue
+    names.add(label)
+  }
+  return Array.from(names)
+}
+
 async function installDevAgentSkillsInSandbox(
   sandbox: Sandbox,
   projectDir: string | undefined,
   devAgentSkillRefs: DevAgentSkillRef[] | undefined,
   progressContext?: ProgressContext | null
 ): Promise<void> {
-  if (!devAgentSkillRefs || devAgentSkillRefs.length === 0) {
+  const requestedSkills = [...(devAgentSkillRefs || [])]
+  const hasD3kSkill = requestedSkills.some((skill) => {
+    const identifier = `${skill.id} ${skill.skillName} ${skill.displayName} ${skill.installArg}`.toLowerCase()
+    return identifier.includes("d3k")
+  })
+  if (!hasD3kSkill) {
+    requestedSkills.unshift({
+      id: "d3k",
+      installArg: D3K_SKILL_INSTALL_ARG,
+      skillName: "d3k",
+      displayName: "d3k",
+      sourceUrl: D3K_SKILL_INSTALL_ARG
+    })
+  }
+  if (requestedSkills.length === 0) {
     return
   }
 
   const SANDBOX_CWD = projectDir ? `/vercel/sandbox/${projectDir.replace(/^\/+|\/+$/g, "")}` : "/vercel/sandbox"
 
-  for (const skill of devAgentSkillRefs) {
-    if (!skill.installArg || skill.displayName.toLowerCase() === "d3k") {
+  for (const skill of requestedSkills) {
+    if (!skill.installArg) {
       continue
     }
 
@@ -3093,7 +3124,7 @@ async function installDevAgentSkillsInSandbox(
       [
         "export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH",
         `cd ${shellEscape(SANDBOX_CWD)}`,
-        `npx --yes skills@latest add ${shellEscape(skill.installArg)} --agent codex -y`
+        `npx --yes skills@latest add ${shellEscape(skill.installArg)} --agent claude -y`
       ].join(" && ")
     ])
 
@@ -3106,12 +3137,11 @@ async function installDevAgentSkillsInSandbox(
 }
 
 function buildDevAgentSkillLoadInstructions(devAgentSkillRefs: DevAgentSkillRef[] | undefined): string {
-  const devAgentSkills = devAgentSkillRefs?.filter((skill) => skill.displayName.toLowerCase() !== "d3k") || []
-  const skillCalls = [
-    'get_skill({ name: "d3k" })',
-    ...devAgentSkills.map((skill) => `get_skill({ name: "${skill.skillName}" })`)
-  ]
-  return skillCalls.join(" then ")
+  const skillNames = getInstalledSkillNames(devAgentSkillRefs)
+  if (skillNames.length === 1) {
+    return `the installed ${skillNames[0]} skill`
+  }
+  return `the installed skills: ${skillNames.join(", ")}`
 }
 
 function buildDevAgentSandboxBrowserGuidance(
@@ -3126,27 +3156,40 @@ function buildDevAgentSandboxBrowserGuidance(
   return "Browser mode: agent-browser. Use the sandbox browser tools directly for capture, inspection, and validation."
 }
 
-function buildStructuredWorkflowPrompt(
+function _buildStructuredWorkflowPrompt(
   actionSteps: Array<{ kind: string; config: Record<string, string> }>,
   skillLoadInstructions: string,
-  browserGuidance: string
+  browserGuidance: string,
+  devAgentAiAgent?: import("@/lib/dev-agents").DevAgentAiAgent,
+  devAgentDevServerCommand?: string
 ): { system: string; user: string } {
-  // Step 1 is always "Load Skills"
-  const numberedSteps: string[] = [`1. Load Skills — Call ${skillLoadInstructions}`]
+  const resolvedDevServerCommand = devAgentDevServerCommand?.trim() || "bun run dev"
+  const selectedModel = getDevAgentModelLabel(devAgentAiAgent)
+  const usesD3kRuntime = /^d3k(?:\s|$)/.test(resolvedDevServerCommand)
+
+  const numberedSteps: string[] = [
+    `1. Review Installed Skills — Review ${skillLoadInstructions} before you begin`,
+    usesD3kRuntime
+      ? `2. Start Dev Server — Start d3k with the standard sandbox flags and wait for localhost:3000 to be healthy`
+      : `2. Start Dev Server — Run "${resolvedDevServerCommand}" and wait for localhost:3000 to be healthy`,
+    `3. Start Model — Use ${selectedModel} as the reasoning model while executing the remaining steps`
+  ]
 
   for (const step of actionSteps) {
+    if (step.kind === "start-dev-server") {
+      continue
+    }
     const n = numberedSteps.length + 1
     switch (step.kind) {
-      case "start-dev-server":
-        numberedSteps.push(`${n}. Start Dev Server — Ensure the dev server is running and healthy`)
-        break
       case "browse-to-page":
         numberedSteps.push(
-          `${n}. Browse to Page — Navigate to ${step.config.url || "http://localhost:3000/"} using the diagnose tool`
+          `${n}. Browse to Page — Navigate to ${step.config.url || "http://localhost:3000/"} in the sandbox browser and inspect it`
         )
         break
       case "capture-cwv":
-        numberedSteps.push(`${n}. Capture Core Web Vitals — Use getWebVitals to measure LCP, CLS, INP, FCP, TTFB`)
+        numberedSteps.push(
+          `${n}. Capture Core Web Vitals — Measure LCP, CLS, INP, FCP, and TTFB using d3k/browser tooling`
+        )
         break
       case "capture-loading-frames":
         numberedSteps.push(`${n}. Capture Loading Frames — Capture the page loading sequence with screenshots`)
@@ -3180,9 +3223,478 @@ After completing all steps, summarize the concrete improvements made.
 
 ${browserGuidance}`
 
-  const user = `Run the structured agent workflow above. Follow each numbered step in sequence. Use diagnose and runtime signals to validate each meaningful change before moving to the next step.`
+  const user = `Run the structured agent workflow above. Follow each numbered step in sequence. Use the installed skills, d3k logs, browser tooling, and runtime signals to validate each meaningful change before moving to the next step.`
 
   return { system, user }
+}
+
+type ClaudeTurnPrompt = {
+  label: string
+  prompt: string
+  maxTurns: number
+}
+
+type ClaudeTurnResult = {
+  sessionId: string
+  resultText: string
+  rawJson: string
+  costUsd: number
+  durationMs: number
+  numTurns: number
+}
+
+function resolveClaudeModelSelection(selectedModel?: import("@/lib/dev-agents").DevAgentAiAgent): {
+  modelId: import("@/lib/dev-agents").DevAgentAiAgent
+  cliModel: "opus" | "sonnet"
+  extraEnv: Record<string, string>
+} {
+  if (selectedModel === "anthropic/claude-sonnet-4.6") {
+    return {
+      modelId: "anthropic/claude-sonnet-4.6",
+      cliModel: "sonnet",
+      extraEnv: {
+        ANTHROPIC_DEFAULT_SONNET_MODEL: "anthropic/claude-sonnet-4.6"
+      }
+    }
+  }
+
+  return {
+    modelId: "anthropic/claude-opus-4.6",
+    cliModel: "opus",
+    extraEnv: {
+      ANTHROPIC_DEFAULT_OPUS_MODEL: "anthropic/claude-opus-4.6"
+    }
+  }
+}
+
+function buildClaudeSystemPrompt({
+  devUrl,
+  startPath,
+  projectDir,
+  browserGuidance,
+  selectedModelLabel
+}: {
+  devUrl: string
+  startPath: string
+  projectDir?: string
+  browserGuidance: string
+  selectedModelLabel: string
+}): string {
+  return `You are Claude Code running inside a Vercel Sandbox.
+
+Environment:
+- Working directory: ${projectDir ? `/vercel/sandbox/${projectDir.replace(/^\/+|\/+$/g, "")}` : "/vercel/sandbox"}
+- Start path: ${startPath}
+- Dev URL: ${devUrl || "(dev server intentionally skipped)"}
+- Workflow model: ${selectedModelLabel}
+- d3k is running standalone for dev server, browser control, logs, and diagnostics when a dev server is enabled.
+- The d3k skill and any selected task skills are installed locally for Claude Code.
+
+Execution rules:
+- Work directly in the sandbox repo using your normal code-editing and shell abilities.
+- Use the installed d3k skill for browser control, diagnostics, and runtime inspection whenever it helps.
+- ${browserGuidance}
+- Prefer targeted, evidence-driven fixes over broad refactors.
+- Validate meaningful changes before you conclude.
+- Summaries should include concrete changes, validation evidence, and remaining risks.`
+}
+
+function buildClaudeSetupPrompt(
+  devAgentName: string | undefined,
+  startPath: string,
+  devUrl: string,
+  skillLoadInstructions: string,
+  customPrompt?: string
+): ClaudeTurnPrompt {
+  return {
+    label: "Setup",
+    maxTurns: 4,
+    prompt: `You are starting the ${devAgentName || "dev agent"} workflow.
+
+Context:
+- Start path: ${startPath}
+- Dev URL: ${devUrl || "(dev server intentionally skipped)"}
+- Installed skills: ${skillLoadInstructions}
+${customPrompt?.trim() ? `- Run-specific instructions: ${customPrompt.trim()}` : ""}
+
+Before doing any major work, review the installed skills that are relevant, especially d3k. Then summarize your plan for this run in 3-5 bullets and begin executing it.`
+  }
+}
+
+function buildClaudeActionStepPrompt(
+  step: { kind: string; config: Record<string, string> },
+  index: number
+): ClaudeTurnPrompt {
+  switch (step.kind) {
+    case "browse-to-page":
+      return {
+        label: `Step ${index + 1}`,
+        maxTurns: 6,
+        prompt: `Step ${index + 1}: Browse to ${step.config.url || "http://localhost:3000/"} in the sandbox app and inspect what you see.`
+      }
+    case "capture-cwv":
+      return {
+        label: `Step ${index + 1}`,
+        maxTurns: 6,
+        prompt: `Step ${index + 1}: Capture the current Core Web Vitals for the page and explain the results.`
+      }
+    case "capture-loading-frames":
+      return {
+        label: `Step ${index + 1}`,
+        maxTurns: 6,
+        prompt: `Step ${index + 1}: Capture the page loading sequence and describe how the page renders over time.`
+      }
+    case "go-back-to-step":
+      return {
+        label: `Step ${index + 1}`,
+        maxTurns: 8,
+        prompt: `Step ${index + 1}: Go back to step ${step.config.stepNumber || "the prior relevant step"} and repeat from there to verify improvements.`
+      }
+    default:
+      return {
+        label: `Step ${index + 1}`,
+        maxTurns: 10,
+        prompt: step.config.prompt || `Step ${index + 1}: Continue the workflow.`
+      }
+  }
+}
+
+function buildClaudeMainTaskPrompt({
+  workflowType,
+  startPath,
+  devUrl,
+  customPrompt,
+  crawlDepth,
+  devAgentName,
+  devAgentInstructions,
+  devAgentExecutionMode,
+  skillLoadInstructions,
+  beforeCls,
+  beforeGrade
+}: {
+  workflowType: string
+  startPath: string
+  devUrl: string
+  customPrompt?: string
+  crawlDepth?: number | "all"
+  devAgentName?: string
+  devAgentInstructions?: string
+  devAgentExecutionMode?: "dev-server" | "preview-pr"
+  skillLoadInstructions: string
+  beforeCls: number | null
+  beforeGrade: "good" | "needs-improvement" | "poor" | null
+}): ClaudeTurnPrompt {
+  const validationHint =
+    devAgentExecutionMode === "preview-pr"
+      ? "Work from the codebase and preview validation, then prepare PR-ready changes."
+      : "Use d3k logs, browser evidence, and runtime signals to validate each meaningful fix before you finish."
+
+  if (devAgentInstructions?.trim()) {
+    return {
+      label: "Main task",
+      maxTurns: workflowType === "turbopack-bundle-analyzer" ? 25 : 18,
+      prompt: `Run the "${devAgentName || "custom"}" dev agent on ${startPath}. Dev URL: ${devUrl}
+
+Use ${skillLoadInstructions} as relevant to this task.
+
+Dev agent instructions:
+${devAgentInstructions.trim()}${customPrompt?.trim() ? `\n\nRun-specific instructions:\n${customPrompt.trim()}` : ""}
+
+Validation:
+- ${validationHint}
+- Prefer targeted changes over broad refactors.
+- Summarize the concrete improvements you made and the evidence you gathered.`
+    }
+  }
+
+  if (workflowType === "design-guidelines") {
+    return {
+      label: "Main task",
+      maxTurns: 18,
+      prompt: `Evaluate and fix design guideline violations on ${startPath}. Dev URL: ${devUrl}
+
+Use ${skillLoadInstructions} as relevant. ${
+        crawlDepth && crawlDepth !== 1
+          ? `Audit multiple pages discovered from the site up to depth ${crawlDepth} when that materially improves the result.`
+          : "Focus on the current page and nearby shared UI."
+      }
+
+Prioritize high-impact issues, implement real fixes, and verify that the app still works after your changes.`
+    }
+  }
+
+  if (workflowType === "react-performance") {
+    return {
+      label: "Main task",
+      maxTurns: 18,
+      prompt: `Analyze and optimize React/Next.js performance on ${startPath}. Dev URL: ${devUrl}
+
+Use ${skillLoadInstructions} as relevant. Capture a baseline, inspect the code for the highest-impact issues, implement targeted fixes, and verify the effect with runtime evidence.`
+    }
+  }
+
+  if (workflowType === "turbopack-bundle-analyzer") {
+    return {
+      label: "Main task",
+      maxTurns: 25,
+      prompt: `Analyze the generated Turbopack bundle NDJSON artifacts for this project and make only bundle-size/performance improvements.
+
+Use ${skillLoadInstructions} as relevant.
+
+Focus on:
+- .next/diagnostics/analyze/ndjson/
+- highest-impact shipped-JS problems
+- code changes that reduce shipped JavaScript
+- minimal smoke checks only
+
+Do not manually rerun analyzer build commands. The workflow runtime handles the post-change analyzer rerun.`
+    }
+  }
+
+  if (customPrompt?.trim()) {
+    return {
+      label: "Main task",
+      maxTurns: 18,
+      prompt: `${customPrompt.trim()}
+
+Use ${skillLoadInstructions} as relevant. Validate meaningful changes before you finish.`
+    }
+  }
+
+  return {
+    label: "Main task",
+    maxTurns: 18,
+    prompt: `Fix the CLS issues on ${startPath}. Dev URL: ${devUrl}
+
+Baseline:
+- CLS: ${beforeCls?.toFixed(4) || "unknown"}
+- Grade: ${beforeGrade || "unknown"}
+
+Use ${skillLoadInstructions} as relevant. Start by measuring the page, identify what is shifting, implement a real fix, and verify the result before you finish.`
+  }
+}
+
+function buildClaudeTurnPrompts({
+  workflowType,
+  startPath,
+  devUrl,
+  customPrompt,
+  crawlDepth,
+  devAgentName,
+  devAgentInstructions,
+  devAgentExecutionMode,
+  devAgentActionSteps,
+  skillLoadInstructions,
+  beforeCls,
+  beforeGrade
+}: {
+  workflowType: string
+  startPath: string
+  devUrl: string
+  customPrompt?: string
+  crawlDepth?: number | "all"
+  devAgentName?: string
+  devAgentInstructions?: string
+  devAgentExecutionMode?: "dev-server" | "preview-pr"
+  devAgentActionSteps?: Array<{ kind: string; config: Record<string, string> }>
+  skillLoadInstructions: string
+  beforeCls: number | null
+  beforeGrade: "good" | "needs-improvement" | "poor" | null
+}): ClaudeTurnPrompt[] {
+  const prompts: ClaudeTurnPrompt[] = [
+    buildClaudeSetupPrompt(devAgentName, startPath, devUrl, skillLoadInstructions, customPrompt)
+  ]
+
+  if (devAgentActionSteps && devAgentActionSteps.length > 0) {
+    prompts.push(...devAgentActionSteps.map((step, index) => buildClaudeActionStepPrompt(step, index)))
+  } else {
+    prompts.push(
+      buildClaudeMainTaskPrompt({
+        workflowType,
+        startPath,
+        devUrl,
+        customPrompt,
+        crawlDepth,
+        devAgentName,
+        devAgentInstructions,
+        devAgentExecutionMode,
+        skillLoadInstructions,
+        beforeCls,
+        beforeGrade
+      })
+    )
+  }
+
+  prompts.push({
+    label: "Final summary",
+    maxTurns: 4,
+    prompt:
+      "Provide a concise final summary of the changes you made, the validation evidence you gathered, any remaining issues, and recommended follow-up work."
+  })
+
+  return prompts
+}
+
+async function ensureClaudeCodeInstalledInSandbox(
+  sandbox: Sandbox,
+  progressContext?: ProgressContext | null
+): Promise<void> {
+  const pathEnv = "/home/vercel-sandbox/.bun/bin:/home/vercel-sandbox/.local/bin:/usr/local/bin:/usr/bin:/bin"
+  const whichResult = await runSandboxCommandWithOptions(sandbox, {
+    cmd: "sh",
+    args: ["-c", "command -v claude || true"],
+    env: { PATH: pathEnv }
+  })
+  if (whichResult.stdout.trim()) {
+    return
+  }
+
+  await appendProgressLog(progressContext, "[Claude] Installing Claude Code CLI in sandbox...")
+  let installResult = await runSandboxCommandWithOptions(sandbox, {
+    cmd: "npm",
+    args: ["install", "-g", CLAUDE_CODE_PACKAGE],
+    env: { PATH: pathEnv },
+    sudo: true
+  })
+
+  if (installResult.exitCode !== 0) {
+    installResult = await runSandboxCommandWithOptions(sandbox, {
+      cmd: "bash",
+      args: [
+        "-lc",
+        `mkdir -p /home/vercel-sandbox/.local && npm install -g --prefix /home/vercel-sandbox/.local ${CLAUDE_CODE_PACKAGE}`
+      ],
+      env: { PATH: pathEnv }
+    })
+  }
+
+  if (installResult.exitCode !== 0) {
+    throw new Error(`Failed to install Claude Code CLI: ${installResult.stderr || installResult.stdout}`)
+  }
+
+  const verifyResult = await runSandboxCommandWithOptions(sandbox, {
+    cmd: "sh",
+    args: ["-c", "command -v claude || true"],
+    env: { PATH: pathEnv }
+  })
+  if (!verifyResult.stdout.trim()) {
+    throw new Error("Claude Code CLI installed but `claude` is still not on PATH inside the sandbox.")
+  }
+
+  await appendProgressLog(progressContext, "[Claude] Claude Code CLI ready")
+}
+
+function parseClaudeJsonResult(raw: string): {
+  session_id?: string
+  result?: string
+  total_cost_usd?: number
+  duration_ms?: number
+  num_turns?: number
+  is_error?: boolean
+} {
+  const trimmed = raw.trim()
+  if (!trimmed) {
+    throw new Error("Claude returned empty output.")
+  }
+
+  try {
+    return JSON.parse(trimmed) as {
+      session_id?: string
+      result?: string
+      total_cost_usd?: number
+      duration_ms?: number
+      num_turns?: number
+      is_error?: boolean
+    }
+  } catch {
+    const lines = trimmed
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+    for (let index = lines.length - 1; index >= 0; index--) {
+      try {
+        return JSON.parse(lines[index]) as {
+          session_id?: string
+          result?: string
+          total_cost_usd?: number
+          duration_ms?: number
+          num_turns?: number
+          is_error?: boolean
+        }
+      } catch {}
+    }
+    throw new Error(`Failed to parse Claude JSON output: ${trimmed.slice(0, 400)}`)
+  }
+}
+
+async function runClaudeTurnInSandbox(
+  sandbox: Sandbox,
+  cwd: string,
+  prompt: ClaudeTurnPrompt,
+  options: {
+    sessionId?: string
+    systemPrompt?: string
+    modelId?: import("@/lib/dev-agents").DevAgentAiAgent
+  }
+): Promise<ClaudeTurnResult> {
+  const gatewayApiKey = process.env.AI_GATEWAY_API_KEY
+  if (!gatewayApiKey) {
+    throw new Error("AI_GATEWAY_API_KEY is required to run Claude Code through AI Gateway.")
+  }
+
+  const modelSelection = resolveClaudeModelSelection(options.modelId)
+  const pathEnv = "/home/vercel-sandbox/.bun/bin:/home/vercel-sandbox/.local/bin:/usr/local/bin:/usr/bin:/bin"
+  const args = [
+    ...(options.sessionId ? ["--resume", options.sessionId] : []),
+    "-p",
+    prompt.prompt,
+    "--output-format",
+    "json",
+    "--max-turns",
+    String(prompt.maxTurns),
+    "--model",
+    modelSelection.cliModel,
+    "--dangerously-skip-permissions"
+  ]
+  if (!options.sessionId && options.systemPrompt?.trim()) {
+    args.push("--append-system-prompt", options.systemPrompt.trim())
+  }
+
+  const result = await runSandboxCommandWithOptions(sandbox, {
+    cmd: "claude",
+    args,
+    cwd,
+    env: {
+      PATH: pathEnv,
+      ANTHROPIC_BASE_URL: "https://ai-gateway.vercel.sh",
+      ANTHROPIC_AUTH_TOKEN: gatewayApiKey,
+      ANTHROPIC_API_KEY: "",
+      ...modelSelection.extraEnv
+    }
+  })
+
+  if (result.exitCode !== 0) {
+    throw new Error(`Claude turn failed (${prompt.label}): ${result.stderr || result.stdout || "unknown error"}`)
+  }
+
+  const parsed = parseClaudeJsonResult(result.stdout)
+  if (parsed.is_error) {
+    throw new Error(`Claude reported an error during ${prompt.label}: ${result.stdout}`)
+  }
+
+  const sessionId = parsed.session_id || options.sessionId
+  if (!sessionId) {
+    throw new Error(`Claude did not return a session id for ${prompt.label}.`)
+  }
+
+  return {
+    sessionId,
+    resultText: typeof parsed.result === "string" ? parsed.result.trim() : result.stdout.trim(),
+    rawJson: result.stdout.trim(),
+    costUsd: typeof parsed.total_cost_usd === "number" ? parsed.total_cost_usd : 0,
+    durationMs: typeof parsed.duration_ms === "number" ? parsed.duration_ms : 0,
+    numTurns: typeof parsed.num_turns === "number" ? parsed.num_turns : 0
+  }
 }
 
 async function runAgentWithDiagnoseTool(
@@ -3199,620 +3711,104 @@ async function runAgentWithDiagnoseTool(
   devAgentInstructions?: string,
   devAgentExecutionMode?: "dev-server" | "preview-pr",
   devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser",
+  devAgentAiAgent?: import("@/lib/dev-agents").DevAgentAiAgent,
   devAgentActionSteps?: Array<{ kind: string; config: Record<string, string> }>,
-  devAgentSkillRefs?: DevAgentSkillRef[]
+  devAgentSkillRefs?: DevAgentSkillRef[],
+  progressContext?: ProgressContext | null
 ): Promise<{
   transcript: string
   summary: string
   systemPrompt: string
+  modelId: string
   skillsLoaded: string[]
   usage: { promptTokens: number; completionTokens: number; totalTokens: number }
 }> {
   const SANDBOX_CWD = projectDir ? `/vercel/sandbox/${projectDir.replace(/^\/+|\/+$/g, "")}` : "/vercel/sandbox"
-  const cloudBrowserMode = resolveCloudBrowserMode(devAgentSandboxBrowser)
-  const skillAliases: Record<string, string> = {
-    "react-performance": "vercel-react-best-practices",
-    "vercel-design-guidelines": "web-design-guidelines",
-    "design-guidelines": "web-design-guidelines",
-    "bundle-analyzer-agentic": "analyze-bundle",
-    "turbopack-bundle-analyzer": "analyze-bundle"
-  }
-  const skillsLoaded = new Set<string>()
-
-  const gateway = createGateway({
-    apiKey: process.env.AI_GATEWAY_API_KEY,
-    baseURL: "https://ai-gateway.vercel.sh/v1/ai"
-  })
-
-  const model = gateway("openai/gpt-5.2")
-
-  // Create tools - the key new one is `diagnose`
-  const tools = {
-    // THE KEY NEW TOOL: Like local fix_my_app
-    diagnose: tool({
-      description: `Get current CLS status from d3k - like running "fix_my_app" locally.
-Returns real-time CLS score, which elements shifted, and jank screenshots.
-USE THIS AFTER EVERY FIX to verify your changes worked!
-This navigates the page fresh to get accurate measurements.`,
-      inputSchema: z.object({
-        reason: z.string().describe("Why you're running diagnosis (e.g., 'verify fix', 'initial check')")
-      }),
-      execute: async ({ reason }: { reason: string }) => {
-        workflowLog(`[diagnose] Running: ${reason}`)
-
-        // Reload the page to trigger fresh CLS capture
-        // NOTE: Navigate to localhost:3000 + startPath, not the public devUrl!
-        // The screencast-manager only captures CLS for localhost:3000, not sb-xxx.vercel.run
-        const diagnoseUrl = `http://localhost:3000${startPath}`
-
-        // Use agent-browser CLI for navigation (preferred over CDP in cloud)
-        await navigateBrowser(sandbox, diagnoseUrl, cloudBrowserMode)
-        await new Promise((resolve) => setTimeout(resolve, 1000))
-
-        await reloadBrowser(sandbox, cloudBrowserMode)
-
-        await new Promise((resolve) => setTimeout(resolve, 5000))
-
-        // Read d3k logs for CLS data from the active project session.
-        const logs = await readSandboxD3kLogs(sandbox)
-
-        // Use timestamp-based logic to get CLS from the MOST RECENT page load
-        // When CLS = 0, there's no "Detected" line - only "CLS observer installed"
-        const observerMatches = [...logs.matchAll(/\[(\d{2}:\d{2}:\d{2}\.\d{3})\].*CLS observer installed/g)]
-        const clsMatches = [
-          ...logs.matchAll(/\[(\d{2}:\d{2}:\d{2}\.\d{3})\].*\[CDP\] Detected (\d+) layout shifts \(CLS: ([\d.]+)\)/g)
-        ]
-
-        if (observerMatches.length > 0) {
-          const lastObserverTime = observerMatches[observerMatches.length - 1][1]
-          const clsAfterObserver = clsMatches.filter((m) => m[1] > lastObserverTime)
-
-          if (clsAfterObserver.length > 0) {
-            // CLS detected after page load
-            const lastCls = clsAfterObserver[clsAfterObserver.length - 1]
-            const shiftCount = parseInt(lastCls[2], 10)
-            const clsScore = parseFloat(lastCls[3])
-            const grade = clsScore <= 0.1 ? "GOOD" : clsScore <= 0.25 ? "NEEDS-IMPROVEMENT" : "POOR"
-
-            // Parse shift details from recent logs
-            const shiftDetailRegex = /\[CDP\]\s+-\s+<(\w+)>\s+shifted\s+(.+)/g
-            const shifts: string[] = []
-            for (const match of logs.matchAll(shiftDetailRegex)) {
-              shifts.push(`  - <${match[1]}> shifted ${match[2]}`)
-            }
-
-            const emoji = clsScore <= 0.1 ? "✅" : clsScore <= 0.25 ? "⚠️" : "❌"
-
-            return `## CLS Diagnosis ${emoji}
-
-**Score: ${clsScore.toFixed(4)}** (${grade})
-**Shifts: ${shiftCount}**
-${shifts.length > 0 ? `\n### Elements that shifted:\n${shifts.join("\n")}` : ""}
-
-${clsScore <= 0.1 ? "🎉 CLS is GOOD! Fix successful!" : `⚠️ CLS still ${grade}. Before was: ${beforeCls?.toFixed(4) || "unknown"}`}`
-          } else {
-            // No CLS detected after observer = CLS is 0!
-            return `## CLS Diagnosis ✅
-
-**Score: 0.0000** (GOOD)
-**Shifts: 0**
-
-🎉 CLS is GOOD! No layout shifts detected. Fix successful!`
-          }
-        }
-
-        // Fallback: no observer found
-        return `## CLS Diagnosis
-
-No CLS observer found in logs. Page may not have fully loaded.
-Try running diagnose again.`
-      }
-    }),
-
-    get_skill: tool({
-      description: `Load a d3k skill by name and return its contents (SKILL.md).
-Use this before audits or performance reviews to get the full guidelines.`,
-      inputSchema: z.object({
-        name: z.string().describe("Skill name (e.g. react-performance, vercel-design-guidelines)")
-      }),
-      execute: async ({ name }: { name: string }) => {
-        const normalized = name.trim().toLowerCase()
-        const resolved = skillAliases[normalized] ?? normalized
-        skillsLoaded.add(normalized)
-
-        const safeName = resolved.replace(/[^a-z0-9-]/g, "")
-        if (!safeName) {
-          return `ERROR: Invalid skill name "${name}".`
-        }
-
-        const skillPath = `${SANDBOX_CWD}/.agents/skills/${safeName}/SKILL.md`
-        const skillResult = await runSandboxCommand(sandbox, "sh", [
-          "-c",
-          `cat "${skillPath}" 2>/dev/null || echo "ERROR: Skill not found at ${skillPath}"`
-        ])
-
-        if (skillResult.stdout.startsWith("ERROR:")) {
-          const localSkillPath = join(process.cwd(), ".agents", "skills", safeName, "SKILL.md")
-          if (existsSync(localSkillPath)) {
-            return readFileSync(localSkillPath, "utf8")
-          }
-          if (skillFallbacks[safeName]) {
-            return skillFallbacks[safeName]
-          }
-
-          const listResult = await runSandboxCommand(sandbox, "sh", [
-            "-c",
-            `ls -1 "${SANDBOX_CWD}/.agents/skills" 2>/dev/null || true`
-          ])
-          const available = listResult.stdout.trim()
-          return `${skillResult.stdout}\nAvailable skills (sandbox):\n${available || "(none found)"}`
-        }
-
-        return skillResult.stdout
-      }
-    }),
-
-    openUrl: tool({
-      description: "Open a URL in the browser. Supports https:// and file:// URLs.",
-      inputSchema: z.object({
-        url: z.string().describe("URL to open")
-      }),
-      execute: async ({ url }: { url: string }) => {
-        const result = await navigateBrowser(sandbox, url, cloudBrowserMode)
-        if (!result.success) return `Failed to open URL: ${result.error || "unknown error"}`
-        return `Opened ${url}`
-      }
-    }),
-
-    browserSnapshot: tool({
-      description: "Capture interactive page snapshot and element refs for clicking.",
-      inputSchema: z.object({}),
-      execute: async () => {
-        if (cloudBrowserMode === "next-browser") {
-          const browser = await getNextBrowser(sandbox)
-          const result = await browser.tree()
-          return result.success
-            ? String(result.data || result.stdout).substring(0, 6000)
-            : `next-browser tree failed: ${result.error || "unknown error"}`
-        }
-        const browser = await getAgentBrowser(sandbox)
-        const snapshot = await browser.snapshot({ interactive: true })
-        return snapshot.raw.substring(0, 6000)
-      }
-    }),
-
-    browserClick: tool({
-      description: "Click a page element using a snapshot ref (for example, @e12).",
-      inputSchema: z.object({
-        ref: z.string().describe("Snapshot element ref, such as @e12")
-      }),
-      execute: async ({ ref }: { ref: string }) => {
-        if (cloudBrowserMode === "next-browser") {
-          return "next-browser does not expose clickable snapshot refs. Use openUrl, browserSnapshot/tree, eval, or file/code inspection instead."
-        }
-        const browser = await getAgentBrowser(sandbox)
-        const result = await browser.click(ref)
-        return result.success ? `Clicked ${ref}` : `Failed to click ${ref}: ${result.error || "unknown error"}`
-      }
-    }),
-
-    browserScroll: tool({
-      description: "Scroll the page to inspect additional content.",
-      inputSchema: z.object({
-        direction: z.enum(["up", "down", "left", "right"]),
-        amount: z.number().optional()
-      }),
-      execute: async ({ direction, amount }: { direction: "up" | "down" | "left" | "right"; amount?: number }) => {
-        if (cloudBrowserMode === "next-browser") {
-          const delta = amount ?? 600
-          const expression =
-            direction === "up" || direction === "down"
-              ? `window.scrollBy(0, ${direction === "up" ? -delta : delta}); window.scrollY`
-              : `window.scrollBy(${direction === "left" ? -delta : delta}, 0); window.scrollX`
-          const result = await evaluateInBrowser(sandbox, expression, cloudBrowserMode)
-          return result.success
-            ? `Scrolled ${direction}${amount ? ` by ${amount}` : ""}`
-            : `Failed to scroll: ${result.error || "unknown error"}`
-        }
-        const browser = await getAgentBrowser(sandbox)
-        const result = await browser.scroll(direction, amount)
-        return result.success
-          ? `Scrolled ${direction}${amount ? ` by ${amount}` : ""}`
-          : `Failed to scroll: ${result.error || "unknown error"}`
-      }
-    }),
-
-    runProjectCommand: tool({
-      description: "Run a shell command in the project root (/vercel/sandbox) for verification tasks.",
-      inputSchema: z.object({
-        command: z.string().describe("Shell command to run from project root")
-      }),
-      execute: async ({ command }: { command: string }) => {
-        const result = await runSandboxCommand(sandbox, "sh", [
-          "-c",
-          `export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; cd ${SANDBOX_CWD} && ${command}`
-        ])
-        const stdout = result.stdout.trim()
-        const stderr = result.stderr.trim()
-        const output = [stdout, stderr].filter(Boolean).join("\n")
-        const capped = output.length > 6000 ? `${output.substring(0, 6000)}\n...[truncated]` : output
-        return `Exit code: ${result.exitCode}\n${capped || "(no output)"}`
-      }
-    }),
-
-    // Get all Core Web Vitals (LCP, FCP, TTFB, CLS, INP)
-    getWebVitals: tool({
-      description: `Get all Core Web Vitals performance metrics from the page.
-Returns LCP (Largest Contentful Paint), FCP (First Contentful Paint), TTFB (Time to First Byte), CLS (Cumulative Layout Shift), and INP (Interaction to Next Paint) if available.
-Use this to diagnose and verify performance improvements.`,
-      inputSchema: z.object({
-        reason: z.string().describe("Why you're checking performance metrics")
-      }),
-      execute: async ({ reason }: { reason: string }) => {
-        workflowLog(`[getWebVitals] Running: ${reason}`)
-
-        // Navigate to get fresh metrics using agent-browser
-        const diagnoseUrl = `http://localhost:3000${startPath}`
-        await navigateBrowser(sandbox, diagnoseUrl, cloudBrowserMode)
-        await new Promise((resolve) => setTimeout(resolve, 3000))
-
-        // Prime vitals observers, then read after a short delay
-        await evaluateInBrowser(sandbox, buildWebVitalsInitScript(), cloudBrowserMode)
-        await new Promise((resolve) => setTimeout(resolve, 1500))
-
-        const evalResult = await evaluateInBrowser(sandbox, buildWebVitalsReadScript(), cloudBrowserMode)
-        workflowLog(`[getWebVitals] Eval result: ${JSON.stringify(evalResult).substring(0, 500)}`)
-
-        // Parse the result
-        let vitals: {
-          lcp: number | null
-          fcp: number | null
-          ttfb: number | null
-          cls: number
-          fid: number | null
-          inp: number | null
-        } = { lcp: null, fcp: null, ttfb: null, cls: 0, fid: null, inp: null }
-
-        try {
-          const resultStr = extractWebVitalsResultString(evalResult)
-          if (resultStr) {
-            vitals = JSON.parse(resultStr)
-          }
-        } catch (e) {
-          workflowLog(`[getWebVitals] Failed to parse result: ${e}`)
-        }
-
-        // Build report with grades
-        const metrics: Record<string, { value: string; grade: string }> = {}
-
-        // LCP (Largest Contentful Paint) - good: ≤2.5s, needs improvement: ≤4s, poor: >4s
-        if (vitals.lcp !== null) {
-          const grade = vitals.lcp <= 2500 ? "GOOD ✅" : vitals.lcp <= 4000 ? "NEEDS IMPROVEMENT ⚠️" : "POOR ❌"
-          metrics.LCP = { value: `${vitals.lcp.toFixed(0)}ms`, grade }
-        }
-
-        // FCP (First Contentful Paint) - good: ≤1.8s, needs improvement: ≤3s, poor: >3s
-        if (vitals.fcp !== null) {
-          const grade = vitals.fcp <= 1800 ? "GOOD ✅" : vitals.fcp <= 3000 ? "NEEDS IMPROVEMENT ⚠️" : "POOR ❌"
-          metrics.FCP = { value: `${vitals.fcp.toFixed(0)}ms`, grade }
-        }
-
-        // TTFB (Time to First Byte) - good: ≤800ms, needs improvement: ≤1800ms, poor: >1800ms
-        if (vitals.ttfb !== null) {
-          const grade = vitals.ttfb <= 800 ? "GOOD ✅" : vitals.ttfb <= 1800 ? "NEEDS IMPROVEMENT ⚠️" : "POOR ❌"
-          metrics.TTFB = { value: `${vitals.ttfb.toFixed(0)}ms`, grade }
-        }
-
-        // CLS (Cumulative Layout Shift) - good: ≤0.1, needs improvement: ≤0.25, poor: >0.25
-        const clsGrade = vitals.cls <= 0.1 ? "GOOD ✅" : vitals.cls <= 0.25 ? "NEEDS IMPROVEMENT ⚠️" : "POOR ❌"
-        metrics.CLS = { value: vitals.cls.toFixed(4), grade: clsGrade }
-
-        // FID/INP (First Input Delay) - good: ≤100ms, needs improvement: ≤300ms, poor: >300ms
-        if (vitals.fid !== null) {
-          const grade = vitals.fid <= 100 ? "GOOD ✅" : vitals.fid <= 300 ? "NEEDS IMPROVEMENT ⚠️" : "POOR ❌"
-          metrics.FID = { value: `${vitals.fid.toFixed(0)}ms`, grade }
-        }
-        if (vitals.inp !== null) {
-          const grade = vitals.inp <= 200 ? "GOOD ✅" : vitals.inp <= 500 ? "NEEDS IMPROVEMENT ⚠️" : "POOR ❌"
-          metrics.INP = { value: `${vitals.inp.toFixed(0)}ms`, grade }
-        }
-
-        // Build report
-        let report = "## Web Vitals Report\n\n"
-        if (Object.keys(metrics).length === 0) {
-          report += "No Web Vitals entries found. Try reloading the page or interacting with it.\n"
-        }
-        for (const [name, data] of Object.entries(metrics)) {
-          report += `**${name}:** ${data.value} (${data.grade})\n`
-        }
-        if (!metrics.LCP) report += "**LCP:** not available (no entry captured)\n"
-        if (!metrics.FCP) report += "**FCP:** not available (no entry captured)\n"
-        if (!metrics.TTFB) report += "**TTFB:** not available (no entry captured)\n"
-        if (!metrics.INP && !metrics.FID) report += "**INP:** not available (no interaction captured)\n"
-
-        // Add thresholds reference
-        report += `
-### Thresholds Reference
-- **LCP** (Largest Contentful Paint): Good ≤2.5s, Needs Improvement ≤4s
-- **FCP** (First Contentful Paint): Good ≤1.8s, Needs Improvement ≤3s
-- **TTFB** (Time to First Byte): Good ≤800ms, Needs Improvement ≤1.8s
-- **CLS** (Cumulative Layout Shift): Good ≤0.1, Needs Improvement ≤0.25
-- **INP** (Interaction to Next Paint): Good ≤200ms, Needs Improvement ≤500ms
-- **FID** (First Input Delay): Good ≤100ms, Needs Improvement ≤300ms`
-
-        return report
-      }
-    }),
-
-    readFile: tool({
-      description: "Read a file from the codebase.",
-      inputSchema: z.object({
-        path: z.string().describe("File path relative to project root")
-      }),
-      execute: async ({ path }: { path: string }) => {
-        const result = await runSandboxCommand(sandbox, "sh", [
-          "-c",
-          `head -n 500 "${SANDBOX_CWD}/${path}" 2>&1 || echo "ERROR: File not found"`
-        ])
-        return result.stdout.startsWith("ERROR:") ? result.stdout : `\`\`\`\n${result.stdout}\n\`\`\``
-      }
-    }),
-
-    writeFile: tool({
-      description: "Write/overwrite a file. Use this to fix CLS issues.",
-      inputSchema: z.object({
-        path: z.string().describe("File path relative to project root"),
-        content: z.string().describe("Complete file content")
-      }),
-      execute: async ({ path, content }: { path: string; content: string }) => {
-        const result = await runSandboxCommand(sandbox, "sh", [
-          "-c",
-          `cat > "${SANDBOX_CWD}/${path}" << 'FILEEOF'\n${content}\nFILEEOF`
-        ])
-        if (result.exitCode !== 0) return `Failed: ${result.stderr}`
-        // Wait for HMR
-        await new Promise((resolve) => setTimeout(resolve, 2000))
-        return `✅ Wrote ${content.length} chars to ${path}. HMR should apply changes. Run diagnose to verify!`
-      }
-    }),
-
-    globSearch: tool({
-      description: "Find files by pattern.",
-      inputSchema: z.object({
-        pattern: z.string().describe("Glob pattern like '*.tsx' or 'layout.*'")
-      }),
-      execute: async ({ pattern }: { pattern: string }) => {
-        const result = await runSandboxCommand(sandbox, "sh", [
-          "-c",
-          `cd ${SANDBOX_CWD} && find . -type f -name "${pattern}" 2>/dev/null | head -20 | sed 's|^\\./||'`
-        ])
-        return result.stdout.trim() || "No files found"
-      }
-    }),
-
-    grepSearch: tool({
-      description: "Search for text in files.",
-      inputSchema: z.object({
-        pattern: z.string().describe("Search pattern"),
-        fileGlob: z.string().optional().describe("File pattern to search in")
-      }),
-      execute: async ({ pattern, fileGlob }: { pattern: string; fileGlob?: string }) => {
-        const include = fileGlob ? `--include="${fileGlob}"` : ""
-        const result = await runSandboxCommand(sandbox, "sh", [
-          "-c",
-          `cd ${SANDBOX_CWD} && grep -rn ${include} "${pattern}" . 2>/dev/null | head -20`
-        ])
-        return result.stdout.trim() || "No matches"
-      }
-    }),
-
-    listDir: tool({
-      description: "List directory contents.",
-      inputSchema: z.object({
-        path: z.string().optional().describe("Directory path")
-      }),
-      execute: async ({ path = "" }: { path?: string }) => {
-        const result = await runSandboxCommand(sandbox, "sh", [
-          "-c",
-          `ls -la "${path ? `${SANDBOX_CWD}/${path}` : SANDBOX_CWD}" 2>&1`
-        ])
-        return result.stdout
-      }
-    }),
-
-    gitDiff: tool({
-      description: "Get git diff of your changes.",
-      inputSchema: z.object({}),
-      execute: async () => {
-        const result = await runSandboxCommand(sandbox, "sh", [
-          "-c",
-          `cd ${SANDBOX_CWD} && git diff --no-color 2>/dev/null || echo "No changes"`
-        ])
-        return result.stdout.trim() || "No changes"
-      }
-    })
-  }
-
-  // Determine workflow type
   const workflowTypeForPrompt = workflowType || "cls-fix"
-  const hasDevAgentPrompt = Boolean(devAgentInstructions?.trim())
   const skillLoadInstructions = buildDevAgentSkillLoadInstructions(devAgentSkillRefs)
   const browserGuidance = buildDevAgentSandboxBrowserGuidance(devAgentSandboxBrowser)
+  const modelSelection = resolveClaudeModelSelection(devAgentAiAgent)
+  const selectedModelLabel = getDevAgentModelLabel(modelSelection.modelId)
 
-  // Build system prompt based on workflow type
-  const hasStructuredSteps = devAgentActionSteps && devAgentActionSteps.length > 0
-  let systemPrompt: string
-  if (hasStructuredSteps) {
-    const structured = buildStructuredWorkflowPrompt(devAgentActionSteps, skillLoadInstructions, browserGuidance)
-    systemPrompt = buildEnhancedPrompt(
-      `${devAgentName ? `Dev Agent: ${devAgentName}\n` : ""}${structured.system}${
-        customPrompt?.trim() ? `\n\nRun-specific instructions:\n${customPrompt.trim()}` : ""
-      }`,
-      startPath,
-      devUrl
-    )
-  } else if (hasDevAgentPrompt) {
-    systemPrompt = buildEnhancedPrompt(
-      `${devAgentName ? `Dev Agent: ${devAgentName}\n` : ""}${devAgentInstructions?.trim() || ""}${
-        customPrompt?.trim() ? `\n\nRun-specific instructions:\n${customPrompt.trim()}` : ""
-      }\n\n${browserGuidance}`,
-      startPath,
-      devUrl
-    )
-  } else if (workflowTypeForPrompt === "design-guidelines") {
-    systemPrompt = buildDesignGuidelinesPrompt(startPath, devUrl, crawlDepth)
-  } else if (workflowTypeForPrompt === "react-performance") {
-    systemPrompt = buildReactPerformancePrompt(startPath, devUrl)
-  } else if (workflowTypeForPrompt === "turbopack-bundle-analyzer") {
-    systemPrompt = buildTurbopackBundleAnalyzerPrompt(startPath, devUrl)
-  } else if (customPrompt) {
-    systemPrompt = buildEnhancedPrompt(customPrompt, startPath, devUrl)
-  } else {
-    systemPrompt = buildClsFixPrompt(beforeCls, beforeGrade, startPath)
-  }
+  await ensureClaudeCodeInstalledInSandbox(sandbox, progressContext)
 
-  // Build user prompt based on workflow type
-  let userPromptMessage: string
-  if (hasStructuredSteps) {
-    const structured = buildStructuredWorkflowPrompt(devAgentActionSteps, skillLoadInstructions, browserGuidance)
-    userPromptMessage = `Run the "${devAgentName || "custom"}" devAgent on ${startPath}. Dev URL: ${devUrl}
-
-${structured.user}${customPrompt?.trim() ? `\n\nRun-specific instructions:\n${customPrompt.trim()}` : ""}`
-  } else if (hasDevAgentPrompt) {
-    const validationHint =
-      devAgentExecutionMode === "preview-pr"
-        ? "Work from the codebase and preview validation, then prepare PR-ready changes."
-        : "Use diagnose and runtime signals to validate each meaningful fix before you finish."
-    userPromptMessage = `Run the "${devAgentName || "custom"}" devAgent on ${startPath}. Dev URL: ${devUrl}
-
-First, call ${skillLoadInstructions} to load the devAgent skills.
-
-Dev Agent prompt:
-${devAgentInstructions?.trim()}${customPrompt?.trim() ? `\n\nRun-specific instructions:\n${customPrompt.trim()}` : ""}
-
-Validation:
-- ${browserGuidance}
-- ${validationHint}
-- Prefer targeted changes over broad refactors.
-- Summarize the concrete improvements you made and any validation evidence you gathered.`
-  } else if (workflowTypeForPrompt === "design-guidelines") {
-    const crawlInfo =
-      crawlDepth && crawlDepth !== 1
-        ? ` Then use crawl_app with depth=${crawlDepth} to discover all pages to audit.`
-        : ""
-    userPromptMessage = `Evaluate and fix design guideline violations on the ${startPath} page. Dev URL: ${devUrl}\n\nFirst, call get_skill({ name: "d3k" }) then get_skill({ name: "vercel-design-guidelines" }) to load the skills.${crawlInfo} Then read and audit the code.`
-  } else if (workflowTypeForPrompt === "react-performance") {
-    userPromptMessage = `Analyze and optimize React/Next.js performance on the ${startPath} page. Dev URL: ${devUrl}\n\nFirst, call get_skill({ name: "d3k" }) then get_skill({ name: "react-performance" }) to load the skills. Then use getWebVitals to capture current metrics, and analyze the codebase for optimization opportunities.`
-  } else if (workflowTypeForPrompt === "turbopack-bundle-analyzer") {
-    userPromptMessage = `Analyze Turbopack bundle analyzer output for this project and make only bundle-size/performance improvements.
-
-Workflow:
-1) Call get_skill({ name: "d3k" }) then get_skill({ name: "analyze-bundle" }) first.
-2) Read the generated NDJSON artifacts at .next/diagnostics/analyze/ndjson/ (routes.ndjson, sources.ndjson, output_files.ndjson, module_edges.ndjson, modules.ndjson).
-3) Identify concrete highest-impact sources of shipped JS.
-4) Implement high-impact fixes in code that reduce shipped JS.
-5) Validate changes did not break the app with minimal smoke checks.
-6) Summarize the expected bundle-size impact from your changes and list tradeoffs.
-7) Do not manually rerun analyzer build commands; the workflow runtime re-runs analyzer and computes before/after deltas after your changes.
-
-Constraints:
-- Do not work on CLS, styling, UX, accessibility, SEO, or general refactors unless directly required for bundle-size reduction.
-- Do not make unrelated dependency upgrades or feature changes.
-- Prioritize concrete fixes over generic advice.
-- Prefer improvements that reduce shipped JS, duplicate modules, and initial route payload.
-`
-  } else if (customPrompt) {
-    userPromptMessage = `Proceed with the task. First, call get_skill({ name: "d3k" }) to load the skill. The dev server is running at ${devUrl}`
-  } else {
-    userPromptMessage = `Fix the CLS issues on the ${startPath} page of this app. Dev URL: ${devUrl}\n\nFirst, call get_skill({ name: "d3k" }), then start with diagnose to see what's shifting, and fix it.`
-  }
-
-  const maxSteps = workflowTypeForPrompt === "turbopack-bundle-analyzer" ? 35 : 15
-  const { text, steps, totalUsage } = await generateText({
-    model,
-    system: systemPrompt,
-    prompt: userPromptMessage,
-    tools,
-    stopWhen: stepCountIs(maxSteps)
+  const systemPrompt = buildClaudeSystemPrompt({
+    devUrl,
+    startPath,
+    projectDir,
+    browserGuidance,
+    selectedModelLabel
   })
-  const finalSummary = text.trim() || synthesizeFinalOutputFromSteps(steps, workflowTypeForPrompt)
+  const turnPrompts = buildClaudeTurnPrompts({
+    workflowType: workflowTypeForPrompt,
+    startPath,
+    devUrl,
+    customPrompt,
+    crawlDepth,
+    devAgentName,
+    devAgentInstructions,
+    devAgentExecutionMode,
+    devAgentActionSteps,
+    skillLoadInstructions,
+    beforeCls,
+    beforeGrade
+  })
 
-  workflowLog(`[Agent] Completed in ${steps.length} steps`)
-
-  // Build transcript in format expected by agent-analysis.tsx parser
   const transcript: string[] = []
-
-  // Include system prompt for full transparency
   transcript.push("## System Prompt")
   transcript.push("```")
   transcript.push(systemPrompt)
   transcript.push("```")
   transcript.push("")
-
-  // Include user prompt
-  transcript.push("## User Prompt")
-  transcript.push("```")
-  transcript.push(userPromptMessage)
-  transcript.push("```")
+  transcript.push(`## Claude Session (${selectedModelLabel})`)
   transcript.push("")
 
-  transcript.push(`## Agent Execution (${steps.length} steps)\n`)
+  let currentSessionId: string | undefined
+  let finalSummary = ""
 
-  for (let i = 0; i < steps.length; i++) {
-    const step = steps[i]
-    transcript.push(`### Step ${i + 1}`)
+  for (let index = 0; index < turnPrompts.length; index++) {
+    const turnPrompt = turnPrompts[index]
+    await appendProgressLog(progressContext, `[Claude] ${turnPrompt.label}: ${turnPrompt.prompt.slice(0, 120)}`)
+    const turnResult = await runClaudeTurnInSandbox(sandbox, SANDBOX_CWD, turnPrompt, {
+      sessionId: currentSessionId,
+      systemPrompt: currentSessionId ? undefined : systemPrompt,
+      modelId: modelSelection.modelId
+    })
+    currentSessionId = turnResult.sessionId
+    finalSummary = turnResult.resultText || finalSummary
 
-    // Assistant text (reasoning/thinking)
-    if (step.text) {
-      transcript.push("**Assistant:**")
-      transcript.push(step.text)
-    }
-
-    // Tool calls and results
-    if (step.toolCalls?.length) {
-      for (let j = 0; j < step.toolCalls.length; j++) {
-        const tc = step.toolCalls[j] as unknown as { toolName: string; input?: unknown }
-        const tr = step.toolResults?.[j] as unknown as { output?: unknown } | undefined
-
-        transcript.push(`\n**Tool Call: ${tc.toolName}**`)
-        transcript.push("```json")
-        transcript.push(JSON.stringify(tc.input || {}, null, 2))
-        transcript.push("```")
-
-        let result =
-          tr?.output !== undefined
-            ? typeof tr.output === "string"
-              ? tr.output
-              : JSON.stringify(tr.output)
-            : "[no result]"
-        if (result.length > 1500) result = `${result.substring(0, 1500)}\n...[truncated]`
-        transcript.push("**Tool Result:**")
-        transcript.push("```")
-        transcript.push(result)
-        transcript.push("```")
-      }
-    }
+    transcript.push(`### ${turnPrompt.label}`)
+    transcript.push("")
+    transcript.push("**User:**")
+    transcript.push("```")
+    transcript.push(turnPrompt.prompt)
+    transcript.push("```")
+    transcript.push("")
+    transcript.push("**Claude:**")
+    transcript.push(turnResult.resultText || "(no textual result)")
+    transcript.push("")
+    transcript.push("**Result JSON:**")
+    transcript.push("```json")
+    transcript.push(turnResult.rawJson)
+    transcript.push("```")
     transcript.push("")
   }
-
-  transcript.push("## Final Output")
-  transcript.push("")
-  transcript.push(finalSummary)
 
   return {
     transcript: transcript.join("\n"),
     summary: finalSummary,
     systemPrompt,
-    skillsLoaded: Array.from(skillsLoaded),
+    modelId: modelSelection.modelId,
+    skillsLoaded: getInstalledSkillNames(devAgentSkillRefs),
     usage: {
-      promptTokens: totalUsage.inputTokens ?? 0,
-      completionTokens: totalUsage.outputTokens ?? 0,
-      totalTokens: (totalUsage.inputTokens ?? 0) + (totalUsage.outputTokens ?? 0)
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0
     }
   }
 }
 
-function synthesizeFinalOutputFromSteps(steps: unknown[], workflowType: string): string {
+function _synthesizeFinalOutputFromSteps(steps: unknown[], workflowType: string): string {
   const inspectedPaths = new Set<string>()
   const writtenFiles = new Set<string>()
   const verificationRuns: string[] = []
@@ -3976,6 +3972,21 @@ async function runSandboxCommand(
   args: string[]
 ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
   const result = await sandbox.runCommand({ cmd, args })
+  let stdout = ""
+  let stderr = ""
+  for await (const log of result.logs()) {
+    if (log.stream === "stdout") stdout += log.data
+    else stderr += log.data
+  }
+  await result.wait()
+  return { exitCode: result.exitCode, stdout, stderr }
+}
+
+async function runSandboxCommandWithOptions(
+  sandbox: Sandbox,
+  options: Parameters<Sandbox["runCommand"]>[0]
+): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+  const result = await sandbox.runCommand(options)
   let stdout = ""
   let stderr = ""
   for await (const log of result.logs()) {
@@ -4726,7 +4737,7 @@ export async function captureScreenshotsForPRStep(
 /**
  * Build the CLS-specific system prompt (default for cls-fix workflow type)
  */
-function buildClsFixPrompt(
+function _buildClsFixPrompt(
   beforeCls: number | null,
   beforeGrade: "good" | "needs-improvement" | "poor" | null,
   startPath: string
@@ -4782,7 +4793,7 @@ Start with diagnose, then QUICKLY find and fix the code. Do not over-analyze!`
  * Build system prompt for the design-guidelines workflow type
  * This instructs the agent to use the get_skill tool to load the vercel-design-guidelines skill
  */
-function buildDesignGuidelinesPrompt(startPath: string, devUrl: string, crawlDepth?: number | "all"): string {
+function _buildDesignGuidelinesPrompt(startPath: string, devUrl: string, crawlDepth?: number | "all"): string {
   // Determine if we should crawl multiple pages
   const shouldCrawl = crawlDepth && crawlDepth !== 1
   const crawlInstructions = shouldCrawl
@@ -4877,7 +4888,7 @@ ${shouldCrawl ? `Start by calling get_skill to load the d3k skill and design gui
  * Build system prompt for the react-performance workflow type
  * This instructs the agent to use the get_skill tool to load the react-performance skill
  */
-function buildReactPerformancePrompt(startPath: string, devUrl: string): string {
+function _buildReactPerformancePrompt(startPath: string, devUrl: string): string {
   return `You are a React/Next.js performance optimization specialist. Your task is to analyze this codebase for performance issues and implement fixes.
 
 ## FIRST STEP - LOAD THE SKILLS
@@ -4953,7 +4964,7 @@ Start by calling get_skill({ name: "d3k" }) then get_skill({ name: "react-perfor
 /**
  * Build system prompt for the turbopack-bundle-analyzer workflow type.
  */
-function buildTurbopackBundleAnalyzerPrompt(startPath: string, devUrl: string): string {
+function _buildTurbopackBundleAnalyzerPrompt(startPath: string, devUrl: string): string {
   return `You are a Turbopack bundle optimization specialist.
 
 Your only mission is to reduce bundle size and improve load performance by reducing shipped JavaScript.
@@ -4999,7 +5010,7 @@ get_skill({ name: "analyze-bundle" })
  * Build an enhanced system prompt that wraps the user's custom instructions
  * with d3k tooling guidance and best practices
  */
-function buildEnhancedPrompt(userPrompt: string, startPath: string, devUrl: string): string {
+function _buildEnhancedPrompt(userPrompt: string, startPath: string, devUrl: string): string {
   return `You are an AI developer assistant with access to a live development environment.
 You can make changes to the codebase and see results in real-time.
 

@@ -93,6 +93,8 @@ export async function cloudFixWorkflow(params: {
   devAgentInstructions?: string
   devAgentExecutionMode?: "dev-server" | "preview-pr"
   devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser"
+  devAgentAiAgent?: import("@/lib/dev-agents").DevAgentAiAgent
+  devAgentDevServerCommand?: string
   isMarketplaceAgent?: boolean
   devAgentActionSteps?: Array<{
     kind: string
@@ -146,6 +148,8 @@ export async function cloudFixWorkflow(params: {
     devAgentInstructions,
     devAgentExecutionMode,
     devAgentSandboxBrowser,
+    devAgentAiAgent,
+    devAgentDevServerCommand,
     isMarketplaceAgent,
     devAgentActionSteps,
     devAgentSkillRefs,
@@ -252,6 +256,7 @@ export async function cloudFixWorkflow(params: {
       githubPat,
       npmToken,
       vercelOidcToken,
+      devAgentDevServerCommand,
       progressContext,
       sourceTarballUrl,
       sourceLabel
@@ -278,6 +283,7 @@ export async function cloudFixWorkflow(params: {
         vercelOidcToken,
         projectDir,
         devAgentSandboxBrowser,
+        devAgentDevServerCommand,
         devAgentSkillRefs,
         progressContext
       )
@@ -389,6 +395,8 @@ export async function cloudFixWorkflow(params: {
         devAgentInstructions,
         devAgentExecutionMode,
         devAgentSandboxBrowser,
+        devAgentAiAgent,
+        devAgentDevServerCommand,
         devAgentActionSteps,
         devAgentSkillRefs,
         progressContext,
@@ -552,6 +560,7 @@ async function initSandbox(
   githubPat?: string,
   npmToken?: string,
   vercelOidcToken?: string,
+  devAgentDevServerCommand?: string,
   progressContext?: ProgressContext | null,
   sourceTarballUrl?: string,
   sourceLabel?: string
@@ -570,6 +579,7 @@ async function initSandbox(
     githubPat,
     npmToken,
     vercelOidcToken,
+    devAgentDevServerCommand,
     progressContext,
     sourceTarballUrl,
     sourceLabel
@@ -613,6 +623,7 @@ async function observeBaseline(
   vercelOidcToken?: string,
   projectDir?: string,
   devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser",
+  devAgentDevServerCommand?: string,
   devAgentSkillRefs?: Array<{
     id: string
     installArg: string
@@ -638,6 +649,7 @@ async function observeBaseline(
     vercelOidcToken,
     projectDir,
     devAgentSandboxBrowser,
+    devAgentDevServerCommand,
     devAgentSkillRefs,
     progressContext
   )
@@ -676,6 +688,8 @@ async function agentFixLoop(
   devAgentInstructions?: string,
   devAgentExecutionMode?: "dev-server" | "preview-pr",
   devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser",
+  devAgentAiAgent?: import("@/lib/dev-agents").DevAgentAiAgent,
+  devAgentDevServerCommand?: string,
   devAgentActionSteps?: Array<{ kind: string; config: Record<string, string> }>,
   devAgentSkillRefs?: Array<{
     id: string
@@ -716,6 +730,8 @@ async function agentFixLoop(
     devAgentInstructions,
     devAgentExecutionMode,
     devAgentSandboxBrowser,
+    devAgentAiAgent,
+    devAgentDevServerCommand,
     devAgentActionSteps,
     devAgentSkillRefs,
     progressContext,

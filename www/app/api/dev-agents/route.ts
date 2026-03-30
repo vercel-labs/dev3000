@@ -3,9 +3,11 @@ import {
   createCustomDevAgent,
   type DevAgentActionStep,
   type DevAgentActionStepKind,
+  type DevAgentAiAgent,
   type DevAgentEarlyExitRule,
   type DevAgentSkillRef,
   type DevAgentTeam,
+  isDevAgentAiAgent,
   isDevAgentEarlyExitMode,
   isDevAgentEarlyExitRule,
   isDevAgentExecutionMode,
@@ -89,6 +91,8 @@ export async function POST(request: Request) {
           instructions?: string
           executionMode?: string
           sandboxBrowser?: string
+          aiAgent?: string
+          devServerCommand?: string
           actionSteps?: unknown[]
           skillRefs?: unknown[]
           team?: DevAgentTeam
@@ -96,6 +100,7 @@ export async function POST(request: Request) {
           earlyExitMode?: string
           earlyExitEval?: string
           earlyExitRule?: unknown
+          earlyExitPlacementIndex?: unknown
         }
 
         const name = body.name?.trim() || ""
@@ -103,6 +108,8 @@ export async function POST(request: Request) {
         const instructions = body.prompt?.trim() || body.instructions?.trim() || ""
         const executionMode = body.executionMode || ""
         const sandboxBrowser = body.sandboxBrowser || ""
+        const aiAgent = body.aiAgent || ""
+        const devServerCommand = body.devServerCommand?.trim() || ""
         const rawActionSteps = Array.isArray(body.actionSteps) ? body.actionSteps : []
         const rawSkillRefs = Array.isArray(body.skillRefs) ? body.skillRefs : []
         const team = isValidDevAgentTeam(body.team) ? body.team : null
@@ -124,6 +131,16 @@ export async function POST(request: Request) {
         if (!isDevAgentSandboxBrowser(sandboxBrowser)) {
           span.setAttribute("http.status_code", 400)
           return Response.json({ success: false, error: "Invalid sandbox browser." }, { status: 400 })
+        }
+
+        if (aiAgent && !isDevAgentAiAgent(aiAgent)) {
+          span.setAttribute("http.status_code", 400)
+          return Response.json({ success: false, error: "Invalid AI agent." }, { status: 400 })
+        }
+
+        if (!devServerCommand) {
+          span.setAttribute("http.status_code", 400)
+          return Response.json({ success: false, error: "A dev server command is required." }, { status: 400 })
         }
 
         if (typeof body.earlyExitMode !== "undefined" && !isDevAgentEarlyExitMode(body.earlyExitMode)) {
@@ -180,6 +197,10 @@ export async function POST(request: Request) {
           body.earlyExitRule && isDevAgentEarlyExitRule(body.earlyExitRule)
             ? parseDevAgentEarlyExitRule(body.earlyExitRule as DevAgentEarlyExitRule)
             : undefined
+        const earlyExitPlacementIndex =
+          typeof body.earlyExitPlacementIndex === "number" && Number.isInteger(body.earlyExitPlacementIndex)
+            ? Math.max(0, body.earlyExitPlacementIndex)
+            : undefined
 
         const devAgent = await createCustomDevAgent({
           name,
@@ -187,6 +208,8 @@ export async function POST(request: Request) {
           instructions,
           executionMode,
           sandboxBrowser,
+          aiAgent: aiAgent ? (aiAgent as DevAgentAiAgent) : undefined,
+          devServerCommand,
           actionSteps: actionSteps.length > 0 ? actionSteps : undefined,
           skillRefs,
           author: user,
@@ -194,7 +217,8 @@ export async function POST(request: Request) {
           successEval: typeof body.successEval === "string" ? body.successEval : undefined,
           earlyExitMode: body.earlyExitMode,
           earlyExitEval: typeof body.earlyExitEval === "string" ? body.earlyExitEval : undefined,
-          earlyExitRule
+          earlyExitRule,
+          earlyExitPlacementIndex
         })
 
         return Response.json({ success: true, devAgent })

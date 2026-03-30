@@ -51,7 +51,7 @@ export interface DevAgentSkillRef {
   sourceUrl?: string
 }
 
-export type DevAgentAiAgent = "d3k" | "claude" | "codex"
+export type DevAgentAiAgent = "anthropic/claude-opus-4.6" | "anthropic/claude-sonnet-4.6"
 export type DevAgentEarlyExitMode = "structured" | "text"
 export type DevAgentEarlyExitMetricType = "builtin" | "custom"
 export type DevAgentEarlyExitValueType = "number" | "boolean" | "string"
@@ -71,6 +71,15 @@ export interface DevAgentEarlyExitRule {
 
 export function isDevAgentEarlyExitMode(value: string): value is DevAgentEarlyExitMode {
   return value === "structured" || value === "text"
+}
+
+export function isDevAgentAiAgent(value: string): value is DevAgentAiAgent {
+  return value === "anthropic/claude-opus-4.6" || value === "anthropic/claude-sonnet-4.6"
+}
+
+export function getDevAgentModelLabel(value: DevAgentAiAgent | undefined): string {
+  if (value === "anthropic/claude-sonnet-4.6") return "Claude Sonnet 4.6"
+  return "Claude Opus 4.6"
 }
 
 export function isDevAgentEarlyExitRule(value: unknown): value is DevAgentEarlyExitRule {
@@ -153,6 +162,7 @@ export interface DevAgent {
   executionMode: DevAgentExecutionMode
   sandboxBrowser: DevAgentSandboxBrowser
   aiAgent?: DevAgentAiAgent
+  devServerCommand?: string
   actionSteps?: DevAgentActionStep[]
   skillRefs: DevAgentSkillRef[]
   author: DevAgentAuthor
@@ -169,6 +179,7 @@ export interface DevAgent {
   earlyExitMode?: DevAgentEarlyExitMode
   earlyExitEval?: string
   earlyExitRule?: DevAgentEarlyExitRule
+  earlyExitPlacementIndex?: number
 }
 
 interface StoredDevAgent extends Omit<DevAgent, "usageCount" | "sandboxBrowser"> {
@@ -289,6 +300,8 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
     legacyWorkflowType: "cls-fix",
     supportsPathInput: true,
     supportsPullRequest: true,
+    aiAgent: "anthropic/claude-opus-4.6",
+    devServerCommand: "d3k",
     successEval: "Is the CLS score now ≤ 0.1 and improved from the baseline?",
     earlyExitMode: "structured",
     earlyExitEval: "CLS score is 0.1 or below (already good)",
@@ -326,6 +339,8 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
     supportsPathInput: true,
     supportsPullRequest: true,
     supportsCrawlDepth: true,
+    aiAgent: "anthropic/claude-opus-4.6",
+    devServerCommand: "d3k",
     successEval: "Were the highest-priority design guideline violations resolved?"
   },
   {
@@ -353,6 +368,8 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
     legacyWorkflowType: "react-performance",
     supportsPathInput: true,
     supportsPullRequest: true,
+    aiAgent: "anthropic/claude-opus-4.6",
+    devServerCommand: "d3k",
     successEval: "Did the targeted optimizations improve or maintain Web Vitals?"
   },
   {
@@ -379,6 +396,8 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
     updatedAt: "2026-03-12T00:00:00.000Z",
     legacyWorkflowType: "turbopack-bundle-analyzer",
     supportsPullRequest: true,
+    aiAgent: "anthropic/claude-opus-4.6",
+    devServerCommand: "d3k",
     successEval: "Was the total shipped JavaScript measurably reduced?"
   },
   {
@@ -403,6 +422,8 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
     supportsPathInput: true,
     supportsPullRequest: true,
     requiresCustomPrompt: true,
+    aiAgent: "anthropic/claude-opus-4.6",
+    devServerCommand: "d3k",
     successEval: "Were the user's instructions completed successfully with evidence?"
   },
   // ── Marketplace agents (demo) ──────────────────────────────────────────
@@ -426,6 +447,8 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
     updatedAt: "2026-03-15T00:00:00.000Z",
     supportsPathInput: true,
     supportsPullRequest: true,
+    aiAgent: "anthropic/claude-opus-4.6",
+    devServerCommand: "d3k",
     successEval: "Were duplicate fetches eliminated and caching behavior measurably improved?"
   },
   {
@@ -637,9 +660,23 @@ function getDefaultSandboxBrowser(executionMode: DevAgentExecutionMode): DevAgen
 
 function normalizeDevAgent(devAgent: StoredDevAgent | Omit<DevAgent, "usageCount">): Omit<DevAgent, "usageCount"> {
   const sandboxBrowser = devAgent.sandboxBrowser
+  const aiAgent =
+    devAgent.aiAgent === "anthropic/claude-opus-4.6" || devAgent.aiAgent === "anthropic/claude-sonnet-4.6"
+      ? devAgent.aiAgent
+      : devAgent.aiAgent === "claude"
+        ? "anthropic/claude-opus-4.6"
+        : devAgent.aiAgent === "codex" || devAgent.aiAgent === "d3k"
+          ? "anthropic/claude-opus-4.6"
+          : undefined
+  const devServerCommand =
+    typeof devAgent.devServerCommand === "string" && devAgent.devServerCommand.trim().length > 0
+      ? devAgent.devServerCommand.trim()
+      : undefined
   return {
     ...devAgent,
     id: canonicalizeDevAgentId(devAgent.id),
+    aiAgent,
+    devServerCommand,
     sandboxBrowser:
       sandboxBrowser && isDevAgentSandboxBrowser(sandboxBrowser)
         ? sandboxBrowser
@@ -742,6 +779,8 @@ export async function createCustomDevAgent(input: {
   instructions: string
   executionMode: DevAgentExecutionMode
   sandboxBrowser: DevAgentSandboxBrowser
+  aiAgent?: DevAgentAiAgent
+  devServerCommand?: string
   actionSteps?: DevAgentActionStep[]
   skillRefs: DevAgentSkillRef[]
   author: DevAgentAuthor
@@ -750,6 +789,7 @@ export async function createCustomDevAgent(input: {
   earlyExitMode?: DevAgentEarlyExitMode
   earlyExitEval?: string
   earlyExitRule?: DevAgentEarlyExitRule
+  earlyExitPlacementIndex?: number
 }): Promise<DevAgent> {
   const id = generateDevAgentId()
   const now = new Date().toISOString()
@@ -761,6 +801,8 @@ export async function createCustomDevAgent(input: {
     instructions: input.instructions.trim(),
     executionMode: input.executionMode,
     sandboxBrowser: input.sandboxBrowser,
+    aiAgent: input.aiAgent,
+    devServerCommand: input.devServerCommand?.trim() || undefined,
     actionSteps: input.actionSteps,
     skillRefs: input.skillRefs,
     author: input.author,
@@ -772,7 +814,11 @@ export async function createCustomDevAgent(input: {
     successEval: input.successEval?.trim() || undefined,
     earlyExitMode: input.earlyExitMode,
     earlyExitEval: input.earlyExitEval?.trim() || undefined,
-    earlyExitRule: input.earlyExitRule ? parseDevAgentEarlyExitRule(input.earlyExitRule) : undefined
+    earlyExitRule: input.earlyExitRule ? parseDevAgentEarlyExitRule(input.earlyExitRule) : undefined,
+    earlyExitPlacementIndex:
+      typeof input.earlyExitPlacementIndex === "number" && Number.isInteger(input.earlyExitPlacementIndex)
+        ? Math.max(0, input.earlyExitPlacementIndex)
+        : undefined
   }
 
   await put(`${CUSTOM_DEV_AGENT_PREFIX}${id}.json`, JSON.stringify(storedDevAgent, null, 2), {
@@ -795,6 +841,8 @@ export async function updateCustomDevAgent(
     instructions: string
     executionMode: DevAgentExecutionMode
     sandboxBrowser: DevAgentSandboxBrowser
+    aiAgent?: DevAgentAiAgent
+    devServerCommand?: string
     actionSteps?: DevAgentActionStep[]
     skillRefs: DevAgentSkillRef[]
     author: DevAgentAuthor
@@ -803,6 +851,7 @@ export async function updateCustomDevAgent(
     earlyExitMode?: DevAgentEarlyExitMode
     earlyExitEval?: string
     earlyExitRule?: DevAgentEarlyExitRule
+    earlyExitPlacementIndex?: number
   }
 ): Promise<DevAgent | null> {
   const canonicalDevAgentId = canonicalizeDevAgentId(devAgentId)
@@ -818,6 +867,8 @@ export async function updateCustomDevAgent(
     instructions: input.instructions.trim(),
     executionMode: input.executionMode,
     sandboxBrowser: input.sandboxBrowser,
+    aiAgent: input.aiAgent ?? existingDevAgent.aiAgent,
+    devServerCommand: input.devServerCommand?.trim() || existingDevAgent.devServerCommand,
     actionSteps: input.actionSteps,
     skillRefs: input.skillRefs,
     author: input.author,
@@ -830,7 +881,11 @@ export async function updateCustomDevAgent(
       ? parseDevAgentEarlyExitRule(input.earlyExitRule)
       : input.earlyExitMode === "text"
         ? undefined
-        : existingDevAgent.earlyExitRule
+        : existingDevAgent.earlyExitRule,
+    earlyExitPlacementIndex:
+      typeof input.earlyExitPlacementIndex === "number" && Number.isInteger(input.earlyExitPlacementIndex)
+        ? Math.max(0, input.earlyExitPlacementIndex)
+        : existingDevAgent.earlyExitPlacementIndex
   }
 
   await put(`${CUSTOM_DEV_AGENT_PREFIX}${canonicalDevAgentId}.json`, JSON.stringify(updatedDevAgent, null, 2), {

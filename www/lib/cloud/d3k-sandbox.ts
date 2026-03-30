@@ -1,6 +1,11 @@
 import { head, put } from "@vercel/blob"
 import { Sandbox, Snapshot } from "@vercel/sandbox"
 import ms, { type StringValue } from "ms"
+import {
+  inferDevServerCommandFromPackageJson,
+  NO_DEV_SERVER_COMMAND,
+  type SupportedPackageManager
+} from "@/lib/dev-server-command"
 import { SandboxChrome } from "./sandbox-chrome"
 
 // Re-export Snapshot for consumers
@@ -237,6 +242,90 @@ export interface D3kSandboxConfig {
 
 type PackageManager = "bun" | "pnpm" | "npm" | "yarn"
 
+function shellQuote(value: string): string {
+  return `'${value.replaceAll("'", `'\\''`)}'`
+}
+
+function looksLikeD3kCommand(command: string): boolean {
+  const trimmed = command.trim()
+  if (!trimmed) return false
+  const [binary] = trimmed.split(/\s+/, 1)
+  return binary === "d3k"
+}
+
+function isNoDevServerCommand(command: string): boolean {
+  return command.trim().toLowerCase() === NO_DEV_SERVER_COMMAND
+}
+
+function buildD3kLaunchCommand(command: string, browserPath: string): string {
+  let resolved = command.trim() || "d3k"
+
+  if (!/\s--no-tui(?:\s|$)|^d3k --no-tui(?:\s|$)/.test(resolved)) {
+    resolved += " --no-tui"
+  }
+  if (!/\s--no-agent(?:\s|$)|^d3k --no-agent(?:\s|$)/.test(resolved)) {
+    resolved += " --no-agent"
+  }
+  if (!/\s--debug(?:\s|$)|^d3k --debug(?:\s|$)/.test(resolved)) {
+    resolved += " --debug"
+  }
+  if (!/\s--headless(?:\s|$)|^d3k --headless(?:\s|$)/.test(resolved)) {
+    resolved += " --headless"
+  }
+  if (!/\s--browser(?:\s|$)|^d3k --browser(?:\s|$)/.test(resolved)) {
+    resolved += ` --browser ${shellQuote(browserPath)}`
+  }
+
+  return resolved
+}
+
+async function detectProjectDevCommand(
+  runCommand: (
+    cmd: string,
+    args: string[],
+    cwd?: string
+  ) => Promise<{ exitCode: number; stdout: string; stderr: string }>,
+  cwd: string,
+  packageManager: SupportedPackageManager,
+  debug = false
+): Promise<string | undefined> {
+  const result = await runCommand(
+    "node",
+    [
+      "-e",
+      `try {
+        const pkg = require("./package.json");
+        process.stdout.write(JSON.stringify({
+          packageManager: typeof pkg.packageManager === "string" ? pkg.packageManager : undefined,
+          scripts: pkg.scripts && typeof pkg.scripts === "object" ? pkg.scripts : undefined
+        }));
+      } catch {
+        process.stdout.write("");
+      }`
+    ],
+    cwd
+  )
+
+  if (result.exitCode !== 0 || !result.stdout.trim()) {
+    if (debug) {
+      console.log(`  ℹ️ Could not infer dev server command from package.json at ${cwd}`)
+    }
+    return undefined
+  }
+
+  try {
+    const packageJson = JSON.parse(result.stdout) as { packageManager?: string; scripts?: Record<string, string> }
+    return inferDevServerCommandFromPackageJson(packageJson, packageManager)
+  } catch (error) {
+    if (debug) {
+      console.log(
+        `  ⚠️ Failed to parse package.json for dev command: ${error instanceof Error ? error.message : String(error)}`
+      )
+    }
+    return undefined
+  }
+}
+
 function resolveNpmTokenValue(
   explicitToken: string | undefined,
   projectEnv: Record<string, string> | undefined
@@ -365,6 +454,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     projectDir = "",
     framework = "Next.js",
     packageManager,
+    devCommand,
     preStartCommands = [],
     preStartBackgroundCommand,
     preStartWaitPort,
@@ -847,7 +937,7 @@ chmod 0600 "$HOME/.npmrc" ".npmrc"`
     if (skipD3kSetup) {
       if (debug) console.log("  ⏩ Analyzer-only mode: skipping d3k/chrome installation and startup")
       await reportProgress("Skipping d3k/chrome setup (analyzer-only mode)")
-      const devUrl = sandbox.domain(3000)
+      const devUrl = ""
       return {
         sandbox,
         devUrl,
@@ -917,6 +1007,17 @@ chmod 0600 "$HOME/.npmrc" ".npmrc"`
 
     if (debug) console.log("  ✅ d3k installed globally")
 
+    const inferredDevCommand = await detectProjectDevCommand(
+      async (cmd, args, cwd) => runCommandWithLogs(sandbox, { cmd, args, cwd }),
+      sandboxCwd,
+      resolvedPackageManager,
+      debug
+    )
+    const resolvedDevCommand =
+      devCommand?.trim() || inferredDevCommand || inferDevServerCommandFromPackageJson(null, resolvedPackageManager)
+    const usesD3kRuntime = looksLikeD3kCommand(resolvedDevCommand)
+    const skipsDevServerStartup = isNoDevServerCommand(resolvedDevCommand)
+
     if (preStartCommands.length > 0) {
       for (const preStartCommand of preStartCommands) {
         const resolvedPreStartCommand = preStartCommand.replace(/\$\{packageManager\}/g, resolvedPackageManager)
@@ -958,134 +1059,120 @@ chmod 0600 "$HOME/.npmrc" ".npmrc"`
       if (debug) console.log("  ✅ Pre-start background command ready")
     }
 
-    // Start d3k (which starts browser + logging)
-    if (debug) console.log("  🚀 Starting d3k...")
-    if (debug) console.log(`  📂 Working directory: ${sandboxCwd}`)
+    if (!skipsDevServerStartup) {
+      if (debug) console.log(`  🚀 Starting dev server with: ${resolvedDevCommand}`)
+      if (debug) console.log(`  📂 Working directory: ${sandboxCwd}`)
 
-    // Use chromium path from @sparticuz/chromium (or fallback)
-    if (debug)
-      console.log(
-        `  🔧 Command: export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; cd ${sandboxCwd} && d3k --no-tui --debug --headless --agent-name codex --browser ${chromiumPath}`
-      )
+      const startupCommand = usesD3kRuntime
+        ? buildD3kLaunchCommand(resolvedDevCommand, chromiumPath)
+        : resolvedDevCommand
+      if (debug) {
+        console.log(
+          `  🔧 Command: export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; cd ${sandboxCwd} && ${startupCommand}`
+        )
+      }
 
-    // Start d3k in detached mode with --headless flag
-    // This tells d3k to launch Chrome in headless mode, which works in serverless environments
-    // We explicitly pass --browser with the path from @sparticuz/chromium
-    // d3k writes its unified logs under a project-scoped ~/.d3k/*/logs directory.
-    // We also keep a top-level startup log here for detached-process diagnostics.
-    // IMPORTANT: Do NOT start infinite log streaming loops here - they prevent
-    // the workflow step function from completing properly.
-    // DIAGNOSTIC: Also capture stdout/stderr to d3k-startup.log for debugging
-    const d3kStartupLog = `${SANDBOX_D3K_TOP_LEVEL_LOG_DIR}/d3k-startup.log`
-    await sandbox.runCommand({
-      cmd: "sh",
-      args: [
-        "-c",
-        `mkdir -p ${SANDBOX_D3K_TOP_LEVEL_LOG_DIR} && export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; cd ${sandboxCwd} && d3k --no-tui --debug --headless --agent-name codex --browser ${chromiumPath} > ${d3kStartupLog} 2>&1`
-      ],
-      detached: true
-    })
-
-    if (debug) console.log("  ✅ d3k started in detached mode (headless)")
-
-    // Give d3k a moment to start and create log files
-    if (debug) console.log("  ⏳ Waiting for d3k to start...")
-    await new Promise((resolve) => setTimeout(resolve, 5000))
-
-    // Debug: Check d3k process and log files
-    if (debug) {
-      console.log("  🔍 Checking d3k process status...")
-      const psCheck = await runCommandWithLogs(sandbox, {
-        cmd: "sh",
-        args: ["-c", "ps aux | grep -E '(d3k|pnpm|next)' | grep -v grep || echo 'No d3k/pnpm/next processes found'"]
-      })
-      console.log(`  📋 Process list:\n${psCheck.stdout}`)
-
-      console.log("  🔍 Checking for d3k log files...")
-      const logsCheck = await runCommandWithLogs(sandbox, {
-        cmd: "sh",
-        args: ["-c", `ls -lah ${SANDBOX_D3K_LOG_DIR_GLOB} 2>/dev/null || echo 'No d3k log directories found'`]
-      })
-      console.log(`  📋 Log files:\n${logsCheck.stdout}`)
-
-      // Check ALL d3k log files for initial content
-      const allLogsCheck = await runCommandWithLogs(sandbox, {
+      const d3kStartupLog = `${SANDBOX_D3K_TOP_LEVEL_LOG_DIR}/d3k-startup.log`
+      await sandbox.runCommand({
         cmd: "sh",
         args: [
           "-c",
-          `for log in ${SANDBOX_D3K_LOG_GLOB}; do [ -f "$log" ] && echo "=== $log ===" && head -50 "$log" || true; done 2>/dev/null || true`
-        ]
+          `mkdir -p ${SANDBOX_D3K_TOP_LEVEL_LOG_DIR} && export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; cd ${sandboxCwd} && ${startupCommand} > ${d3kStartupLog} 2>&1`
+        ],
+        detached: true
       })
-      console.log(`  📋 Initial log content:\n${allLogsCheck.stdout}`)
-    }
 
-    // Note: We do NOT start infinite log streaming loops here because they prevent
-    // the workflow step function from completing. Logs are written to files and can
-    // be read synchronously when needed (see checks above).
+      if (debug) {
+        console.log(`  ✅ ${usesD3kRuntime ? "d3k runtime" : "custom dev server"} started in detached mode`)
+      }
 
-    // Wait for dev server to be ready
-    if (debug) console.log("  ⏳ Waiting for dev server on port 3000...")
-    try {
-      await waitForServer(sandbox, 3000, 120000, debug) // 2 minutes for d3k to start everything
-    } catch (error) {
-      // If dev server didn't start, try to get diagnostic info
-      console.log(`  ⚠️ Dev server failed to start: ${error instanceof Error ? error.message : String(error)}`)
-      console.log("  🔍 Checking d3k logs for errors...")
+      if (debug) console.log("  ⏳ Waiting for d3k to start...")
+      await new Promise((resolve) => setTimeout(resolve, 5000))
 
-      try {
-        // d3k creates log files with pattern: {projectName}-{timestamp}.log
-        // Use cat with wildcard to capture all log files
+      if (debug) {
+        console.log("  🔍 Checking d3k process status...")
+        const psCheck = await runCommandWithLogs(sandbox, {
+          cmd: "sh",
+          args: ["-c", "ps aux | grep -E '(d3k|pnpm|next)' | grep -v grep || echo 'No d3k/pnpm/next processes found'"]
+        })
+        console.log(`  📋 Process list:\n${psCheck.stdout}`)
+
+        console.log("  🔍 Checking for d3k log files...")
         const logsCheck = await runCommandWithLogs(sandbox, {
           cmd: "sh",
-          args: [
-            "-c",
-            `for log in ${SANDBOX_D3K_LOG_GLOB}; do [ -f "$log" ] && cat "$log" || true; done 2>/dev/null || echo 'No log files found'`
-          ]
+          args: ["-c", `ls -lah ${SANDBOX_D3K_LOG_DIR_GLOB} 2>/dev/null || echo 'No d3k log directories found'`]
         })
-        if (logsCheck.exitCode === 0) {
-          console.log("  📋 All d3k logs:")
-          console.log(logsCheck.stdout)
-        }
-      } catch (logError) {
-        console.log(`  ⚠️ Could not read d3k logs: ${logError instanceof Error ? logError.message : String(logError)}`)
-      }
+        console.log(`  📋 Log files:\n${logsCheck.stdout}`)
 
-      throw error
-    }
-
-    const devUrl = sandbox.domain(3000)
-    if (debug) console.log(`  ✅ Dev server ready: ${devUrl}`)
-
-    // Wait for CDP URL to be available (needed for browser automation)
-    // This is more reliable than a fixed timeout because it actually waits for
-    // d3k to connect to Chrome and write the CDP URL to the session file
-    if (debug) console.log("  ⏳ Waiting for d3k to initialize Chrome and populate CDP URL...")
-    const cdpUrl = await waitForCdpUrl(sandbox, 30000, debug) // 30 second timeout
-    if (cdpUrl) {
-      if (debug) console.log(`  ✅ CDP URL ready: ${cdpUrl}`)
-
-      // CRITICAL: Wait for d3k to complete navigation to the app
-      // d3k writes session info BEFORE navigating, so CDP URL being ready doesn't
-      // mean the page has loaded. We need to wait for navigation to complete.
-      if (debug) console.log("  ⏳ Waiting for d3k to complete page navigation...")
-      await waitForPageNavigation(sandbox, 30000, debug)
-    } else {
-      console.log("  ⚠️ CDP URL not found - browser automation features may not work")
-      // DIAGNOSTIC: Dump all logs immediately when CDP fails - this is critical for debugging
-      console.log("  📋 === d3k LOG DUMP (CDP URL not found) ===")
-      try {
-        const cdpFailLogs = await runCommandWithLogs(sandbox, {
+        const allLogsCheck = await runCommandWithLogs(sandbox, {
           cmd: "sh",
           args: [
             "-c",
-            `for log in ${SANDBOX_D3K_LOG_GLOB}; do [ -f "$log" ] && echo "\\n=== $log ===" && cat "$log" || true; done 2>/dev/null || echo "No log files found"`
+            `for log in ${SANDBOX_D3K_LOG_GLOB}; do [ -f "$log" ] && echo "=== $log ===" && head -50 "$log" || true; done 2>/dev/null || true`
           ]
         })
-        console.log(cdpFailLogs.stdout)
-      } catch (logErr) {
-        console.log(`  ⚠️ Could not read logs: ${logErr instanceof Error ? logErr.message : String(logErr)}`)
+        console.log(`  📋 Initial log content:\n${allLogsCheck.stdout}`)
       }
-      console.log("  📋 === END d3k LOG DUMP ===")
+
+      if (debug) console.log("  ⏳ Waiting for dev server on port 3000...")
+      try {
+        await waitForServer(sandbox, 3000, 120000, debug)
+      } catch (error) {
+        console.log(`  ⚠️ Dev server failed to start: ${error instanceof Error ? error.message : String(error)}`)
+        console.log("  🔍 Checking d3k logs for errors...")
+
+        try {
+          const logsCheck = await runCommandWithLogs(sandbox, {
+            cmd: "sh",
+            args: [
+              "-c",
+              `for log in ${SANDBOX_D3K_LOG_GLOB}; do [ -f "$log" ] && cat "$log" || true; done 2>/dev/null || echo 'No log files found'`
+            ]
+          })
+          if (logsCheck.exitCode === 0) {
+            console.log("  📋 All d3k logs:")
+            console.log(logsCheck.stdout)
+          }
+        } catch (logError) {
+          console.log(`  ⚠️ Could not read d3k logs: ${logError instanceof Error ? logError.message : String(logError)}`)
+        }
+
+        throw error
+      }
+    } else {
+      await reportProgress("Skipping dev server startup (Start Dev Server = none)")
+      if (debug) console.log("  ⏭️ Skipping dev server startup because Start Dev Server is set to none")
+    }
+
+    const devUrl = skipsDevServerStartup ? "" : sandbox.domain(3000)
+    if (!skipsDevServerStartup && debug) console.log(`  ✅ Dev server ready: ${devUrl}`)
+
+    if (!skipsDevServerStartup && usesD3kRuntime) {
+      if (debug) console.log("  ⏳ Waiting for d3k to initialize Chrome and populate CDP URL...")
+      const cdpUrl = await waitForCdpUrl(sandbox, 30000, debug)
+      if (cdpUrl) {
+        if (debug) console.log(`  ✅ CDP URL ready: ${cdpUrl}`)
+        if (debug) console.log("  ⏳ Waiting for d3k to complete page navigation...")
+        await waitForPageNavigation(sandbox, 30000, debug)
+      } else {
+        console.log("  ⚠️ CDP URL not found - browser automation features may not work")
+        console.log("  📋 === d3k LOG DUMP (CDP URL not found) ===")
+        try {
+          const cdpFailLogs = await runCommandWithLogs(sandbox, {
+            cmd: "sh",
+            args: [
+              "-c",
+              `for log in ${SANDBOX_D3K_LOG_GLOB}; do [ -f "$log" ] && echo "\\n=== $log ===" && cat "$log" || true; done 2>/dev/null || echo "No log files found"`
+            ]
+          })
+          console.log(cdpFailLogs.stdout)
+        } catch (logErr) {
+          console.log(`  ⚠️ Could not read logs: ${logErr instanceof Error ? logErr.message : String(logErr)}`)
+        }
+        console.log("  📋 === END d3k LOG DUMP ===")
+      }
+    } else if (!skipsDevServerStartup && debug) {
+      console.log("  ℹ️ Custom dev server command selected; skipping d3k CDP/session wait")
     }
 
     // Dump ALL d3k logs after initialization for debugging
@@ -1801,6 +1888,7 @@ async function createD3kSandboxFromBaseSnapshot(
     onProgress,
     projectDir = "",
     packageManager,
+    devCommand,
     preStartCommands = [],
     preStartBackgroundCommand,
     preStartWaitPort,
@@ -1930,6 +2018,16 @@ console.log("wrote .env.local and .env.development.local");`
       | "npm"
       | "yarn"
     await reportProgress(`Detected package manager: ${resolvedPackageManager}`)
+    const inferredDevCommand = await detectProjectDevCommand(
+      async (cmd, args, cwd) => runCommandWithLogs({ cmd, args, cwd }),
+      sandboxCwd,
+      resolvedPackageManager,
+      debug
+    )
+    const resolvedDevCommand =
+      devCommand?.trim() || inferredDevCommand || inferDevServerCommandFromPackageJson(null, resolvedPackageManager)
+    const usesD3kRuntime = looksLikeD3kCommand(resolvedDevCommand)
+    const skipsDevServerStartup = isNoDevServerCommand(resolvedDevCommand)
 
     const resolvedNpmToken = resolveNpmTokenValue(npmToken, projectEnv)
     if (resolvedNpmToken) {
@@ -2024,7 +2122,7 @@ chmod 0600 "$HOME/.npmrc" ".npmrc"`
     }
 
     if (skipD3kSetup) {
-      const devUrl = sandbox.domain(3000)
+      const devUrl = ""
       return {
         sandbox,
         devUrl,
@@ -2036,26 +2134,35 @@ chmod 0600 "$HOME/.npmrc" ".npmrc"`
       }
     }
 
-    const chromiumPath = "/usr/bin/chromium"
-    const d3kStartupLog = `${SANDBOX_D3K_TOP_LEVEL_LOG_DIR}/d3k-startup.log`
-    await sandbox.runCommand({
-      cmd: "sh",
-      args: [
-        "-c",
-        `mkdir -p ${SANDBOX_D3K_TOP_LEVEL_LOG_DIR} && export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; cd ${sandboxCwd} && d3k --no-tui --debug --headless --agent-name codex --browser ${chromiumPath} > ${d3kStartupLog} 2>&1`
-      ],
-      detached: true
-    })
+    if (!skipsDevServerStartup) {
+      const chromiumPath = "/usr/bin/chromium"
+      const startupCommand = usesD3kRuntime
+        ? buildD3kLaunchCommand(resolvedDevCommand, chromiumPath)
+        : resolvedDevCommand
+      const d3kStartupLog = `${SANDBOX_D3K_TOP_LEVEL_LOG_DIR}/d3k-startup.log`
+      await sandbox.runCommand({
+        cmd: "sh",
+        args: [
+          "-c",
+          `mkdir -p ${SANDBOX_D3K_TOP_LEVEL_LOG_DIR} && export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; cd ${sandboxCwd} && ${startupCommand} > ${d3kStartupLog} 2>&1`
+        ],
+        detached: true
+      })
 
-    await new Promise((resolve) => setTimeout(resolve, 5000))
-    await waitForServer(sandbox, 3000, 120000, debug)
+      await new Promise((resolve) => setTimeout(resolve, 5000))
+      await waitForServer(sandbox, 3000, 120000, debug)
 
-    const cdpUrl = await waitForCdpUrl(sandbox, 30000, debug)
-    if (cdpUrl) {
-      await waitForPageNavigation(sandbox, 30000, debug)
+      if (usesD3kRuntime) {
+        const cdpUrl = await waitForCdpUrl(sandbox, 30000, debug)
+        if (cdpUrl) {
+          await waitForPageNavigation(sandbox, 30000, debug)
+        }
+      }
+    } else {
+      await reportProgress("Skipping dev server startup (Start Dev Server = none)")
     }
 
-    const devUrl = sandbox.domain(3000)
+    const devUrl = skipsDevServerStartup ? "" : sandbox.domain(3000)
     return {
       sandbox,
       devUrl,

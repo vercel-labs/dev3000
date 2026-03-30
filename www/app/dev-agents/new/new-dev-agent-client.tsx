@@ -13,6 +13,7 @@ import {
   Rows3,
   Search,
   ShieldCheck,
+  Terminal,
   Trash2,
   X,
   Zap
@@ -32,16 +33,18 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import type {
-  DevAgent,
-  DevAgentActionStep,
-  DevAgentAiAgent,
-  DevAgentEarlyExitMode,
-  DevAgentEarlyExitOperator,
-  DevAgentEarlyExitRule,
-  DevAgentEarlyExitValueType,
-  DevAgentTeam
+import {
+  type DevAgent,
+  type DevAgentActionStep,
+  type DevAgentAiAgent,
+  type DevAgentEarlyExitMode,
+  type DevAgentEarlyExitOperator,
+  type DevAgentEarlyExitRule,
+  type DevAgentEarlyExitValueType,
+  type DevAgentTeam,
+  getDevAgentModelLabel
 } from "@/lib/dev-agents"
+import { NO_DEV_SERVER_COMMAND } from "@/lib/dev-server-command"
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -68,6 +71,7 @@ interface NewDevAgentClientProps {
   devAgent?: DevAgent
   mode?: "create" | "edit"
   canEdit?: boolean
+  defaultDevServerCommand: string
 }
 
 type ActionStepKind = "send-prompt"
@@ -237,7 +241,13 @@ function StepConnector() {
   )
 }
 
-function InsertStepButton({ onInsert }: { onInsert: (prompt: string) => void }) {
+function InsertStepButton({
+  onInsert,
+  onConfigureEarlyExit
+}: {
+  onInsert: (prompt: string) => void
+  onConfigureEarlyExit: () => void
+}) {
   return (
     <div className="flex justify-center py-1">
       <DropdownMenu>
@@ -253,7 +263,28 @@ function InsertStepButton({ onInsert }: { onInsert: (prompt: string) => void }) 
         <DropdownMenuContent align="center" className="w-64">
           <DropdownMenuLabel>Insert Prompt</DropdownMenuLabel>
           <DropdownMenuSeparator />
-          {PROMPT_TEMPLATES.map((tmpl) => {
+          {PROMPT_TEMPLATES.slice(0, 1).map((tmpl) => {
+            const Icon = tmpl.icon
+            return (
+              <DropdownMenuItem key={tmpl.label} onClick={() => onInsert(tmpl.prompt)}>
+                <Icon className="size-4" />
+                <div className="flex flex-col">
+                  <span>{tmpl.label}</span>
+                  <span className="text-[11px] text-muted-foreground">{tmpl.description}</span>
+                </div>
+              </DropdownMenuItem>
+            )
+          })}
+          <DropdownMenuItem onClick={onConfigureEarlyExit}>
+            <Zap className="size-4" />
+            <div className="flex flex-col">
+              <span>Early Exit</span>
+              <span className="text-[11px] text-muted-foreground">
+                Configure a rule to skip the agent when already passing
+              </span>
+            </div>
+          </DropdownMenuItem>
+          {PROMPT_TEMPLATES.slice(1).map((tmpl) => {
             const Icon = tmpl.icon
             return (
               <DropdownMenuItem key={tmpl.label} onClick={() => onInsert(tmpl.prompt)}>
@@ -267,6 +298,40 @@ function InsertStepButton({ onInsert }: { onInsert: (prompt: string) => void }) 
           })}
         </DropdownMenuContent>
       </DropdownMenu>
+    </div>
+  )
+}
+
+function InlineEarlyExitCard({
+  editorId,
+  mode,
+  rule,
+  textValue,
+  canEdit,
+  onModeChange,
+  onRuleChange,
+  onTextChange
+}: {
+  editorId: string
+  mode: DevAgentEarlyExitMode
+  rule: DevAgentEarlyExitRule
+  textValue: string
+  canEdit: boolean
+  onModeChange: (mode: DevAgentEarlyExitMode) => void
+  onRuleChange: (rule: DevAgentEarlyExitRule) => void
+  onTextChange: (value: string) => void
+}) {
+  return (
+    <div id={editorId} className="rounded-lg border border-border/60 bg-background/90">
+      <EarlyExitEditor
+        mode={mode}
+        rule={rule}
+        textValue={textValue}
+        canEdit={canEdit}
+        onModeChange={onModeChange}
+        onRuleChange={onRuleChange}
+        onTextChange={onTextChange}
+      />
     </div>
   )
 }
@@ -592,7 +657,8 @@ export default function NewDevAgentClient({
   team,
   devAgent,
   mode = "create",
-  canEdit = true
+  canEdit = true,
+  defaultDevServerCommand
 }: NewDevAgentClientProps) {
   const nameId = useId()
   const descriptionId = useId()
@@ -603,8 +669,17 @@ export default function NewDevAgentClient({
   const [name, setName] = useState(devAgent?.name ?? "")
   const [description, setDescription] = useState(devAgent?.description ?? "")
 
-  // AI agent picker (presentational only for now)
-  const [aiAgent, setAiAgent] = useState<DevAgentAiAgent>(devAgent?.aiAgent ?? "d3k")
+  const legacyStartDevServerStep = devAgent?.actionSteps?.find((step) => step.kind === "start-dev-server")
+  const normalizedStoredActionStepCount =
+    devAgent?.actionSteps?.filter((step) => step.kind !== "start-dev-server").length ?? 0
+
+  const [devServerCommand, setDevServerCommand] = useState(
+    devAgent?.devServerCommand?.trim() || legacyStartDevServerStep?.config.command?.trim() || defaultDevServerCommand
+  )
+
+  const [aiAgent, setAiAgent] = useState<DevAgentAiAgent>(
+    devAgent?.aiAgent === "anthropic/claude-sonnet-4.6" ? "anthropic/claude-sonnet-4.6" : "anthropic/claude-opus-4.6"
+  )
 
   // Workflow view mode — UI (step cards) or Text (single textarea)
   const [workflowView, setWorkflowView] = useState<WorkflowViewMode>("ui")
@@ -633,34 +708,47 @@ export default function NewDevAgentClient({
   const [earlyExitRule, setEarlyExitRule] = useState<DevAgentEarlyExitRule>(
     () => devAgent?.earlyExitRule ?? createDefaultEarlyExitRule()
   )
+  const [earlyExitPlacementIndex, setEarlyExitPlacementIndex] = useState<number | null>(() => {
+    if (typeof devAgent?.earlyExitPlacementIndex === "number") {
+      return devAgent.earlyExitPlacementIndex
+    }
+    if (devAgent?.earlyExitRule || devAgent?.earlyExitEval) {
+      return normalizedStoredActionStepCount
+    }
+    return null
+  })
 
   // Action steps — migrate legacy kinds to send-prompt on load
   const [actionSteps, setActionSteps] = useState<ActionStep[]>(() => {
     if (devAgent?.actionSteps?.length) {
-      return devAgent.actionSteps.map((step) => {
-        // Legacy kinds → convert to send-prompt with descriptive text
-        if (step.kind !== "send-prompt") {
-          const legacyPrompts: Record<string, string> = {
-            "browse-to-page": `Browse to ${step.config.url || "http://localhost:3000/"} and take a snapshot of what you see.`,
-            "start-dev-server": "Start the development server.",
-            "capture-loading-frames":
-              "Capture the page loading sequence with screenshots showing how the page renders over time.",
-            "capture-cwv":
-              "Use getWebVitals to measure all Core Web Vitals (LCP, CLS, INP, FCP, TTFB) and report the results.",
-            "go-back-to-step": `Go back to step ${step.config.stepNumber || "N"} and repeat from there to verify improvements.`
+      return devAgent.actionSteps
+        .map((step) => {
+          if (step.kind === "start-dev-server") {
+            return null
+          }
+          // Legacy kinds → convert to send-prompt with descriptive text
+          if (step.kind !== "send-prompt") {
+            const legacyPrompts: Record<string, string> = {
+              "browse-to-page": `Browse to ${step.config.url || "http://localhost:3000/"} and take a snapshot of what you see.`,
+              "capture-loading-frames":
+                "Capture the page loading sequence with screenshots showing how the page renders over time.",
+              "capture-cwv":
+                "Use getWebVitals to measure all Core Web Vitals (LCP, CLS, INP, FCP, TTFB) and report the results.",
+              "go-back-to-step": `Go back to step ${step.config.stepNumber || "N"} and repeat from there to verify improvements.`
+            }
+            return {
+              id: generateStepId(),
+              kind: "send-prompt" as ActionStepKind,
+              config: { prompt: legacyPrompts[step.kind] || step.config.prompt || "" }
+            }
           }
           return {
             id: generateStepId(),
             kind: "send-prompt" as ActionStepKind,
-            config: { prompt: legacyPrompts[step.kind] || step.config.prompt || "" }
+            config: { ...step.config }
           }
-        }
-        return {
-          id: generateStepId(),
-          kind: "send-prompt" as ActionStepKind,
-          config: { ...step.config }
-        }
-      })
+        })
+        .filter((step): step is ActionStep => step !== null)
     }
     return parseInstructionsToSteps(devAgent?.instructions ?? "")
   })
@@ -680,6 +768,7 @@ export default function NewDevAgentClient({
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [savedMessage, setSavedMessage] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const earlyExitEditorId = useId()
 
   const teamBasePath = `/${team.slug}/dev-agents`
   const submitLabel = isEditMode ? "Save Dev Agent" : "Create Dev Agent"
@@ -777,6 +866,18 @@ export default function NewDevAgentClient({
     setActionSteps((current) => current.filter((step) => step.id !== id))
   }, [])
 
+  const configureEarlyExit = useCallback(
+    (placementIndex: number) => {
+      setEarlyExitMode("structured")
+      setEarlyExitRule((current) => current ?? createDefaultEarlyExitRule())
+      setEarlyExitPlacementIndex(placementIndex)
+      window.requestAnimationFrame(() => {
+        document.getElementById(earlyExitEditorId)?.scrollIntoView({ behavior: "smooth", block: "center" })
+      })
+    },
+    [earlyExitEditorId]
+  )
+
   function submitDevAgent() {
     if (!canEdit) return
 
@@ -800,13 +901,16 @@ export default function NewDevAgentClient({
             prompt: resolvedPrompt,
             executionMode: "dev-server",
             sandboxBrowser: "agent-browser",
+            aiAgent,
+            devServerCommand: devServerCommand.trim(),
             actionSteps: resolvedSteps.map(({ kind, config }): DevAgentActionStep => ({ kind, config })),
             skillRefs: effectiveSelectedSkills,
             team,
             successEval: successEval.trim() || undefined,
             earlyExitMode,
             earlyExitEval: resolvedEarlyExitEval || undefined,
-            earlyExitRule: earlyExitMode === "structured" ? earlyExitRule : undefined
+            earlyExitRule: earlyExitMode === "structured" ? earlyExitRule : undefined,
+            earlyExitPlacementIndex: earlyExitPlacementIndex ?? undefined
           })
         })
 
@@ -842,14 +946,19 @@ export default function NewDevAgentClient({
   const isFormValid =
     name.trim().length > 0 &&
     description.trim().length > 0 &&
+    devServerCommand.trim().length > 0 &&
     hasSteps &&
     hasPromptContent &&
     effectiveSelectedSkills.length > 0 &&
     successEval.trim().length > 0 &&
     !isPending
 
-  // Step numbering: fixed steps are 1-2, skills is 3, agent is 4, actions start at 5
-  const actionStepBaseNumber = 5
+  // Step numbering: fixed steps are 1-2, skills is 3, start dev server is 4, agent is 5, actions start at 6
+  const actionStepBaseNumber = 6
+  const effectiveEarlyExitPlacementIndex =
+    workflowView === "ui" && (earlyExitRule || earlyExitEval.trim() || earlyExitPlacementIndex !== null)
+      ? Math.min(Math.max(earlyExitPlacementIndex ?? actionSteps.length, 0), actionSteps.length)
+      : null
 
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-8 px-1 py-2 sm:px-2 lg:px-3">
@@ -1017,35 +1126,85 @@ export default function NewDevAgentClient({
         </div>
         <StepConnector />
 
-        {/* Step 4: Start Agent — always visible (system step) */}
+        {/* Step 4: Start Dev Server — always visible (system step) */}
         <div className="rounded-lg border border-border/60 bg-background/90">
           <div className="flex items-start gap-3 px-4 py-3">
             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted/30 text-xs font-medium text-foreground">
               4
             </div>
             <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <Terminal className="size-4 text-muted-foreground" />
+                <span className="text-sm font-medium text-foreground">Start Dev Server</span>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant={devServerCommand.trim() === "d3k" ? "secondary" : "outline"}
+                  size="sm"
+                  className="h-7 text-[11px]"
+                  onClick={() => setDevServerCommand("d3k")}
+                  disabled={!canEdit}
+                >
+                  Use d3k
+                </Button>
+                <Button
+                  type="button"
+                  variant={devServerCommand.trim().toLowerCase() === NO_DEV_SERVER_COMMAND ? "secondary" : "outline"}
+                  size="sm"
+                  className="h-7 text-[11px]"
+                  onClick={() => setDevServerCommand(NO_DEV_SERVER_COMMAND)}
+                  disabled={!canEdit}
+                >
+                  Use none
+                </Button>
+              </div>
+              <Input
+                value={devServerCommand}
+                onChange={(event) => setDevServerCommand(event.target.value)}
+                placeholder={defaultDevServerCommand}
+                className="mt-2 h-9 text-xs font-mono"
+                disabled={!canEdit}
+              />
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                Use a repo-aware dev command like <code>bun run dev</code>. If you set this to <code>d3k</code>, the
+                workflow expands it to the standard sandbox d3k runtime flags and keeps d3k focused on the dev server,
+                browser, and logs. Use <code>none</code> to skip dev-server startup entirely for code-only agents.
+              </p>
+            </div>
+          </div>
+        </div>
+        <StepConnector />
+
+        {/* Step 5: Claude Model — always visible (system step) */}
+        <div className="rounded-lg border border-border/60 bg-background/90">
+          <div className="flex items-start gap-3 px-4 py-3">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted/30 text-xs font-medium text-foreground">
+              5
+            </div>
+            <div className="min-w-0 flex-1">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <Bot className="size-4 text-muted-foreground" />
-                  <span className="text-sm font-medium text-foreground">Start Agent</span>
+                  <span className="text-sm font-medium text-foreground">Claude Model</span>
                 </div>
                 <Select
                   value={aiAgent}
                   onValueChange={(value) => setAiAgent(value as DevAgentAiAgent)}
                   disabled={!canEdit}
                 >
-                  <SelectTrigger className="h-7 w-28 text-xs">
+                  <SelectTrigger className="h-8 w-44 text-xs">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="d3k">d3k</SelectItem>
-                    <SelectItem value="claude">Claude</SelectItem>
-                    <SelectItem value="codex">Codex</SelectItem>
+                    <SelectItem value="anthropic/claude-opus-4.6">Claude Opus 4.6</SelectItem>
+                    <SelectItem value="anthropic/claude-sonnet-4.6">Claude Sonnet 4.6</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                Launch the AI agent to execute the following action steps
+                Select which Claude model the sandbox agent should use through AI Gateway.{" "}
+                {getDevAgentModelLabel(aiAgent)} is the current default for this run.
               </p>
             </div>
           </div>
@@ -1056,7 +1215,29 @@ export default function NewDevAgentClient({
             {/* Action Steps with insert buttons between them */}
             {actionSteps.map((step, index) => (
               <div key={step.id}>
-                {canEdit ? <InsertStepButton onInsert={(prompt) => addActionStep(prompt, index)} /> : <StepConnector />}
+                {canEdit ? (
+                  <InsertStepButton
+                    onInsert={(prompt) => addActionStep(prompt, index)}
+                    onConfigureEarlyExit={() => configureEarlyExit(index)}
+                  />
+                ) : (
+                  <StepConnector />
+                )}
+                {effectiveEarlyExitPlacementIndex === index ? (
+                  <>
+                    <InlineEarlyExitCard
+                      editorId={earlyExitEditorId}
+                      mode={earlyExitMode}
+                      rule={earlyExitRule}
+                      textValue={earlyExitEval}
+                      canEdit={canEdit}
+                      onModeChange={setEarlyExitMode}
+                      onRuleChange={setEarlyExitRule}
+                      onTextChange={setEarlyExitEval}
+                    />
+                    <StepConnector />
+                  </>
+                ) : null}
                 <ActionStepCard
                   step={step}
                   stepNumber={actionStepBaseNumber + index}
@@ -1068,7 +1249,24 @@ export default function NewDevAgentClient({
             ))}
 
             {/* Add Prompt Button (append to end) */}
-            {canEdit && <InsertStepButton onInsert={(prompt) => addActionStep(prompt)} />}
+            {canEdit && (
+              <InsertStepButton
+                onInsert={(prompt) => addActionStep(prompt)}
+                onConfigureEarlyExit={() => configureEarlyExit(actionSteps.length)}
+              />
+            )}
+            {effectiveEarlyExitPlacementIndex === actionSteps.length ? (
+              <InlineEarlyExitCard
+                editorId={earlyExitEditorId}
+                mode={earlyExitMode}
+                rule={earlyExitRule}
+                textValue={earlyExitEval}
+                canEdit={canEdit}
+                onModeChange={setEarlyExitMode}
+                onRuleChange={setEarlyExitRule}
+                onTextChange={setEarlyExitEval}
+              />
+            ) : null}
 
             {/* Success Eval — fixed final step */}
             <StepConnector />
@@ -1097,16 +1295,6 @@ export default function NewDevAgentClient({
                   />
                 </div>
               </div>
-
-              <EarlyExitEditor
-                mode={earlyExitMode}
-                rule={earlyExitRule}
-                textValue={earlyExitEval}
-                canEdit={canEdit}
-                onModeChange={setEarlyExitMode}
-                onRuleChange={setEarlyExitRule}
-                onTextChange={setEarlyExitEval}
-              />
             </div>
           </>
         ) : (
@@ -1150,15 +1338,17 @@ export default function NewDevAgentClient({
                 />
               </div>
 
-              <EarlyExitEditor
-                mode={earlyExitMode}
-                rule={earlyExitRule}
-                textValue={earlyExitEval}
-                canEdit={canEdit}
-                onModeChange={setEarlyExitMode}
-                onRuleChange={setEarlyExitRule}
-                onTextChange={setEarlyExitEval}
-              />
+              <div id={earlyExitEditorId}>
+                <EarlyExitEditor
+                  mode={earlyExitMode}
+                  rule={earlyExitRule}
+                  textValue={earlyExitEval}
+                  canEdit={canEdit}
+                  onModeChange={setEarlyExitMode}
+                  onRuleChange={setEarlyExitRule}
+                  onTextChange={setEarlyExitEval}
+                />
+              </div>
             </div>
           </>
         )}
