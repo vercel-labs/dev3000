@@ -3704,6 +3704,9 @@ async function runClaudeTurnInSandbox(
       ANTHROPIC_BASE_URL: "https://ai-gateway.vercel.sh",
       ANTHROPIC_AUTH_TOKEN: gatewayApiKey,
       ANTHROPIC_API_KEY: "",
+      // Claude Code can send experimental beta headers that Anthropic-format
+      // gateways backed by Bedrock/Vertex may reject with 400s.
+      CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: "1",
       ...modelSelection.extraEnv
     }
   })
