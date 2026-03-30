@@ -2622,6 +2622,12 @@ export async function agentFixLoopStep(
   ])
   const gitDiff = diffResult.stdout.trim() || null
   const hasChanges = !!gitDiff && gitDiff.length > 0
+  const transcriptClsEvidence = extractClsEvidence(agentResult.summary, agentResult.transcript)
+  if (transcriptClsEvidence.beforeCls !== null || transcriptClsEvidence.afterCls !== null) {
+    workflowLog(
+      `[Agent] Transcript CLS fallback (${transcriptClsEvidence.source || "unknown"}): before=${transcriptClsEvidence.beforeCls}, after=${transcriptClsEvidence.afterCls}`
+    )
+  }
 
   if (isTurbopackBundleAnalyzer) {
     await appendProgressLog(progressContext, "[Turbopack] Re-running analyzer for after-fix bundle metrics")
@@ -2646,30 +2652,6 @@ export async function agentFixLoopStep(
     }
   }
 
-  // Determine status
-  let status: "improved" | "unchanged" | "degraded" | "no-changes"
-  if (!hasChanges) {
-    status = "no-changes"
-  } else if (finalCls.clsScore !== null && beforeClsForVerification !== null) {
-    if (finalCls.clsScore < beforeClsForVerification * 0.9) {
-      status = "improved"
-    } else if (finalCls.clsScore > beforeClsForVerification * 1.1) {
-      status = "degraded"
-    } else {
-      status = "unchanged"
-    }
-  } else {
-    status = "unchanged"
-  }
-
-  workflowLog(`[Agent] Status: ${status}, Before: ${beforeClsForVerification}, After: ${finalCls.clsScore}`)
-  await updateProgress(
-    progressContext,
-    4,
-    `Generating report... (CLS: ${beforeClsForVerification?.toFixed(3) || "?"} → ${finalCls.clsScore?.toFixed(3) || "?"})`,
-    devUrl
-  )
-
   // Separate d3k logs for Step 1 (init) and Step 2 (after fix)
   const afterD3kLogs = finalCls.d3kLogs.replace(initD3kLogs, "").trim() || "(no new logs)"
   const combinedD3kLogs = `=== Step 1: Init (before agent) ===\n${initD3kLogs}\n\n=== Step 2: After agent fix ===\n${afterD3kLogs}`
@@ -2692,24 +2674,40 @@ export async function agentFixLoopStep(
     localTargetUrl,
     cloudBrowserMode
   )
-  const effectiveAfterClsScore = finalCls.clsScore ?? afterWebVitalsResult.cls?.value ?? null
+  const effectiveBeforeClsScore = beforeClsForVerification ?? transcriptClsEvidence.beforeCls ?? null
+  const effectiveBeforeClsGrade = beforeGradeForVerification ?? gradeClsValue(effectiveBeforeClsScore)
+  const effectiveAfterClsScore =
+    finalCls.clsScore ?? afterWebVitalsResult.cls?.value ?? transcriptClsEvidence.afterCls ?? null
+  const effectiveAfterClsGrade =
+    finalCls.clsGrade || afterWebVitalsResult.cls?.grade || gradeClsValue(effectiveAfterClsScore)
+  const status = determineClsStatus({
+    hasChanges,
+    beforeCls: effectiveBeforeClsScore,
+    afterCls: effectiveAfterClsScore
+  })
+
+  workflowLog(`[Agent] Status: ${status}, Before: ${effectiveBeforeClsScore}, After: ${effectiveAfterClsScore}`)
+  await updateProgress(
+    progressContext,
+    4,
+    `Generating report... (CLS: ${effectiveBeforeClsScore?.toFixed(3) || "?"} → ${effectiveAfterClsScore?.toFixed(3) || "?"})`,
+    devUrl
+  )
 
   // Use the capturedBeforeWebVitals we got at the start of this function
   // Merge with the beforeCls we got from init step if CDP didn't capture it
   const beforeWebVitals: import("@/types").WebVitals = { ...capturedBeforeWebVitals }
   const afterWebVitals: import("@/types").WebVitals = { ...afterWebVitalsResult }
-  if (!beforeWebVitals.cls && beforeClsForVerification !== null) {
+  if (!beforeWebVitals.cls && effectiveBeforeClsScore !== null) {
     beforeWebVitals.cls = {
-      value: beforeClsForVerification,
-      grade: beforeClsForVerification <= 0.1 ? "good" : beforeClsForVerification <= 0.25 ? "needs-improvement" : "poor"
+      value: effectiveBeforeClsScore,
+      grade: effectiveBeforeClsGrade || "good"
     }
   }
   if (!afterWebVitals.cls && effectiveAfterClsScore !== null) {
     afterWebVitals.cls = {
       value: effectiveAfterClsScore,
-      grade:
-        finalCls.clsGrade ||
-        (effectiveAfterClsScore <= 0.1 ? "good" : effectiveAfterClsScore <= 0.25 ? "needs-improvement" : "poor")
+      grade: effectiveAfterClsGrade || "good"
     }
   }
 
@@ -2788,6 +2786,18 @@ Did the agent meet the success criteria? Respond with JSON only.`
     }
   }
 
+  let verificationStatus: WorkflowReport["verificationStatus"] = status === "no-changes" ? "unchanged" : status
+  if (
+    verificationStatus !== "improved" &&
+    hasChanges &&
+    successEvalResult === true &&
+    effectiveBeforeClsScore !== null &&
+    effectiveAfterClsScore !== null &&
+    effectiveAfterClsScore < effectiveBeforeClsScore
+  ) {
+    verificationStatus = "improved"
+  }
+
   const report: WorkflowReport = {
     id: reportId,
     projectName,
@@ -2811,23 +2821,15 @@ Did the agent meet the success criteria? Respond with JSON only.`
     projectDir: projectDir || undefined,
     repoOwner: repoOwner || undefined,
     repoName: repoName || undefined,
-    clsScore: beforeClsForVerification ?? undefined,
-    clsGrade: beforeGradeForVerification ?? undefined,
+    clsScore: effectiveBeforeClsScore ?? undefined,
+    clsGrade: effectiveBeforeClsGrade ?? undefined,
     beforeScreenshots,
     beforeWebVitals: Object.keys(beforeWebVitals).length > 0 ? beforeWebVitals : undefined,
     afterClsScore: effectiveAfterClsScore ?? undefined,
-    afterClsGrade:
-      finalCls.clsGrade ||
-      (effectiveAfterClsScore !== null
-        ? effectiveAfterClsScore <= 0.1
-          ? "good"
-          : effectiveAfterClsScore <= 0.25
-            ? "needs-improvement"
-            : "poor"
-        : undefined),
+    afterClsGrade: effectiveAfterClsGrade ?? undefined,
     afterScreenshots: finalCls.screenshots,
     afterWebVitals: Object.keys(afterWebVitals).length > 0 ? afterWebVitals : undefined,
-    verificationStatus: status === "no-changes" ? "unchanged" : status,
+    verificationStatus,
     agentAnalysis: agentResult.transcript,
     agentAnalysisModel: agentResult.modelId,
     skillsInstalled: skillsInstalled.length > 0 ? skillsInstalled : undefined,
@@ -2881,7 +2883,7 @@ Did the agent meet the success criteria? Respond with JSON only.`
   return {
     reportBlobUrl: blob.url,
     reportId,
-    beforeCls: beforeClsForVerification,
+    beforeCls: effectiveBeforeClsScore,
     afterCls: effectiveAfterClsScore,
     status,
     agentSummary: agentResult.summary,
@@ -3618,6 +3620,131 @@ function buildClaudeTurnPrompts({
   })
 
   return prompts
+}
+
+function parseClsValue(rawValue?: string): number | null {
+  if (!rawValue) return null
+  const parsed = Number.parseFloat(rawValue)
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 10) {
+    return null
+  }
+  return parsed
+}
+
+function gradeClsValue(clsScore: number | null): "good" | "needs-improvement" | "poor" | null {
+  if (clsScore === null) return null
+  return clsScore <= 0.1 ? "good" : clsScore <= 0.25 ? "needs-improvement" : "poor"
+}
+
+function extractClsEvidenceFromText(text?: string): {
+  beforeCls: number | null
+  afterCls: number | null
+  source: string | null
+} {
+  if (!text) {
+    return {
+      beforeCls: null,
+      afterCls: null,
+      source: null
+    }
+  }
+
+  const candidates: Array<{
+    source: string
+    beforeCls: number | null
+    afterCls: number | null
+  }> = [
+    (() => {
+      const match = text.match(
+        /CLS(?:\s+score)?\s+improved\s+from[^0-9]*([0-9]*\.?[0-9]+)\s*(?:→|->)\s*([0-9]*\.?[0-9]+)/i
+      )
+      return {
+        source: "cls-improved-summary",
+        beforeCls: parseClsValue(match?.[1]),
+        afterCls: parseClsValue(match?.[2])
+      }
+    })(),
+    (() => {
+      const baselineMatch = text.match(/Baseline CLS[^0-9]*([0-9]*\.?[0-9]+)/i)
+      const postFixMatch = text.match(/Post-fix CLS[^0-9]*([0-9]*\.?[0-9]+)/i)
+      return {
+        source: "baseline-post-fix-summary",
+        beforeCls: parseClsValue(baselineMatch?.[1]),
+        afterCls: parseClsValue(postFixMatch?.[1])
+      }
+    })(),
+    (() => {
+      const match = text.match(/Before[^0-9]*([0-9]*\.?[0-9]+)[\s\S]{0,200}?After[^0-9]*([0-9]*\.?[0-9]+)/i)
+      return {
+        source: "before-after-summary",
+        beforeCls: parseClsValue(match?.[1]),
+        afterCls: parseClsValue(match?.[2])
+      }
+    })()
+  ]
+
+  for (const candidate of candidates) {
+    if (candidate.beforeCls !== null || candidate.afterCls !== null) {
+      return candidate
+    }
+  }
+
+  return {
+    beforeCls: null,
+    afterCls: null,
+    source: null
+  }
+}
+
+function extractClsEvidence(...texts: Array<string | undefined>): {
+  beforeCls: number | null
+  afterCls: number | null
+  source: string | null
+} {
+  let beforeCls: number | null = null
+  let afterCls: number | null = null
+  let source: string | null = null
+
+  for (const text of texts) {
+    const extracted = extractClsEvidenceFromText(text)
+    if (beforeCls === null && extracted.beforeCls !== null) {
+      beforeCls = extracted.beforeCls
+      source = source || extracted.source
+    }
+    if (afterCls === null && extracted.afterCls !== null) {
+      afterCls = extracted.afterCls
+      source = source || extracted.source
+    }
+    if (beforeCls !== null && afterCls !== null) {
+      break
+    }
+  }
+
+  return { beforeCls, afterCls, source }
+}
+
+function determineClsStatus({
+  hasChanges,
+  beforeCls,
+  afterCls
+}: {
+  hasChanges: boolean
+  beforeCls: number | null
+  afterCls: number | null
+}): "improved" | "unchanged" | "degraded" | "no-changes" {
+  if (!hasChanges) {
+    return "no-changes"
+  }
+  if (beforeCls === null || afterCls === null) {
+    return "unchanged"
+  }
+  if (afterCls < beforeCls * 0.9) {
+    return "improved"
+  }
+  if (afterCls > beforeCls * 1.1) {
+    return "degraded"
+  }
+  return "unchanged"
 }
 
 async function ensureClaudeCodeInstalledInSandbox(
