@@ -3626,7 +3626,8 @@ async function ensureClaudeCodeInstalledInSandbox(
 ): Promise<void> {
   const claudeInstallRoot = "/home/vercel-sandbox/.claude-code"
   const localClaudeBin = `${claudeInstallRoot}/node_modules/.bin`
-  const pathEnv = `${localClaudeBin}:/home/vercel-sandbox/.bun/bin:/home/vercel-sandbox/.local/bin:/usr/local/bin:/usr/bin:/bin`
+  const pathEnv = buildClaudeSandboxPathEnv()
+  const ensureNodeShim = `if ! command -v node >/dev/null 2>&1; then ln -sf "$(command -v bun)" /home/vercel-sandbox/.local/bin/node; fi`
   const whichResult = await runSandboxCommandWithOptions(sandbox, {
     cmd: "sh",
     args: ["-c", "command -v claude || true"],
@@ -3649,6 +3650,7 @@ async function ensureClaudeCodeInstalledInSandbox(
             `cd "${claudeInstallRoot}"`,
             `if [ ! -f package.json ]; then printf '%s' '{"name":"claude-code-runtime","private":true}' > package.json; fi`,
             `bun add ${CLAUDE_CODE_PACKAGE}`,
+            ensureNodeShim,
             `ln -sf "${localClaudeBin}/claude" /home/vercel-sandbox/.local/bin/claude`
           ].join(" && ")
         ],
@@ -3669,6 +3671,7 @@ async function ensureClaudeCodeInstalledInSandbox(
             `cd "${claudeInstallRoot}"`,
             `if [ ! -f package.json ]; then printf '%s' '{"name":"claude-code-runtime","private":true}' > package.json; fi`,
             `npm install ${CLAUDE_CODE_PACKAGE}`,
+            ensureNodeShim,
             `ln -sf "${localClaudeBin}/claude" /home/vercel-sandbox/.local/bin/claude`
           ].join(" && ")
         ],
@@ -3729,6 +3732,19 @@ async function ensureClaudeCodeInstalledInSandbox(
     throw new Error("Claude Code CLI installed but `claude` is still not on PATH inside the sandbox.")
   }
 
+  const nodeResult = await runSandboxCommandWithOptions(sandbox, {
+    cmd: "sh",
+    args: ["-c", `${ensureNodeShim} && command -v node || true`],
+    env: { PATH: pathEnv, HOME: "/home/vercel-sandbox" }
+  })
+  if (!nodeResult.stdout.trim()) {
+    await appendProgressLog(
+      progressContext,
+      `[Claude] Node missing from PATH after install stdout=${formatClaudeOutputPreview(nodeResult.stdout)} stderr=${formatClaudeOutputPreview(nodeResult.stderr)}`
+    )
+    throw new Error("Claude Code CLI installed but `node` is still not on PATH inside the sandbox.")
+  }
+
   await appendProgressLog(progressContext, "[Claude] Claude Code CLI ready")
 }
 
@@ -3738,12 +3754,16 @@ function formatClaudeOutputPreview(raw: string | undefined, maxLength = 240): st
   return normalized || "<empty>"
 }
 
+function buildClaudeSandboxPathEnv(): string {
+  return "/home/vercel-sandbox/.claude-code/node_modules/.bin:/home/vercel-sandbox/.bun/bin:/home/vercel-sandbox/.local/bin:/usr/local/bin:/usr/bin:/bin"
+}
+
 async function logClaudeCliDiagnostics(
   sandbox: Sandbox,
   pathEnv: string,
   progressContext?: ProgressContext | null
 ): Promise<void> {
-  const [whichResult, versionResult] = await Promise.all([
+  const [whichResult, versionResult, nodeWhichResult, nodeVersionResult] = await Promise.all([
     runSandboxCommandWithOptions(sandbox, {
       cmd: "sh",
       args: ["-c", "command -v claude || true"],
@@ -3753,12 +3773,27 @@ async function logClaudeCliDiagnostics(
       cmd: "sh",
       args: ["-c", "claude --version || true"],
       env: { PATH: pathEnv }
+    }),
+    runSandboxCommandWithOptions(sandbox, {
+      cmd: "sh",
+      args: ["-c", "command -v node || true"],
+      env: { PATH: pathEnv }
+    }),
+    runSandboxCommandWithOptions(sandbox, {
+      cmd: "sh",
+      args: ["-c", "node --version || true"],
+      env: { PATH: pathEnv }
     })
   ])
 
   const claudePath = whichResult.stdout.trim() || "<missing>"
   const claudeVersion = formatClaudeOutputPreview(versionResult.stdout || versionResult.stderr, 120)
-  await appendProgressLog(progressContext, `[Claude] CLI path=${claudePath} version=${claudeVersion}`)
+  const nodePath = nodeWhichResult.stdout.trim() || "<missing>"
+  const nodeVersion = formatClaudeOutputPreview(nodeVersionResult.stdout || nodeVersionResult.stderr, 120)
+  await appendProgressLog(
+    progressContext,
+    `[Claude] CLI path=${claudePath} version=${claudeVersion} node=${nodePath} nodeVersion=${nodeVersion}`
+  )
 }
 
 function parseClaudeJsonResult(raw: string): {
@@ -3821,7 +3856,7 @@ async function runClaudeTurnInSandbox(
   }
 
   const modelSelection = resolveClaudeModelSelection(options.modelId)
-  const pathEnv = "/home/vercel-sandbox/.bun/bin:/home/vercel-sandbox/.local/bin:/usr/local/bin:/usr/bin:/bin"
+  const pathEnv = buildClaudeSandboxPathEnv()
   const args = [
     ...(options.sessionId ? ["--resume", options.sessionId] : []),
     "-p",
