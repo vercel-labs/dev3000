@@ -2381,6 +2381,7 @@ export async function agentFixLoopStep(
   await updateProgress(progressContext, 2, "AI agent analyzing CLS issues...", devUrl)
 
   let sandbox: Sandbox
+  let recreatedSandbox = false
   try {
     sandbox = await Sandbox.get({ sandboxId })
     if (sandbox.status !== "running") {
@@ -2402,6 +2403,7 @@ export async function agentFixLoopStep(
       onProgress: (message) => appendProgressLog(progressContext, `[Sandbox] ${message}`)
     })
     sandbox = freshResult.sandbox
+    recreatedSandbox = true
     workflowLog(`[Agent] Fresh sandbox created: ${sandbox.sandboxId}`)
   }
 
@@ -2409,8 +2411,9 @@ export async function agentFixLoopStep(
     ? await resolveSandboxProjectDir(sandbox, projectDir, projectName, progressContext)
     : projectDir
 
-  // Skip skill installation if observe step already did it
-  if (!observation) {
+  // Observation step only guarantees skills were installed in the previous sandbox.
+  // If we had to recreate the sandbox for the agent step, reinstall them.
+  if (!observation || recreatedSandbox) {
     await installDevAgentSkillsInSandbox(sandbox, effectiveProjectDir, devAgentSkillRefs, progressContext)
   }
 
