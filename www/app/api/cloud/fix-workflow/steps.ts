@@ -3090,6 +3090,7 @@ function getInstalledSkillNames(devAgentSkillRefs: DevAgentSkillRef[] | undefine
 function buildSkillsInstallShellCommand(installArg: string): string {
   const normalizedInstallArg = installArg.trim()
   const isHttpSource = /^https?:\/\//i.test(normalizedInstallArg)
+  const agentSlug = "claude-code"
 
   if (!isHttpSource && normalizedInstallArg.includes("@")) {
     const packageAndSkill = normalizedInstallArg.split("@")
@@ -3102,12 +3103,12 @@ function buildSkillsInstallShellCommand(installArg: string): string {
         shellEscape(packageName),
         "--skill",
         shellEscape(skillName),
-        "--agent claude -y"
+        `--agent ${agentSlug} -y`
       ].join(" ")
     }
   }
 
-  return `npx --yes skills@latest add ${shellEscape(normalizedInstallArg)} --agent claude -y`
+  return `npx --yes skills@latest add ${shellEscape(normalizedInstallArg)} --agent ${agentSlug} -y`
 }
 
 async function installDevAgentSkillsInSandbox(
