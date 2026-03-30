@@ -3619,6 +3619,35 @@ async function ensureClaudeCodeInstalledInSandbox(
   await appendProgressLog(progressContext, "[Claude] Claude Code CLI ready")
 }
 
+function formatClaudeOutputPreview(raw: string | undefined, maxLength = 240): string {
+  const normalized = (raw || "").replace(/\s+/g, " ").trim().slice(0, maxLength)
+
+  return normalized || "<empty>"
+}
+
+async function logClaudeCliDiagnostics(
+  sandbox: Sandbox,
+  pathEnv: string,
+  progressContext?: ProgressContext | null
+): Promise<void> {
+  const [whichResult, versionResult] = await Promise.all([
+    runSandboxCommandWithOptions(sandbox, {
+      cmd: "sh",
+      args: ["-c", "command -v claude || true"],
+      env: { PATH: pathEnv }
+    }),
+    runSandboxCommandWithOptions(sandbox, {
+      cmd: "sh",
+      args: ["-c", "claude --version || true"],
+      env: { PATH: pathEnv }
+    })
+  ])
+
+  const claudePath = whichResult.stdout.trim() || "<missing>"
+  const claudeVersion = formatClaudeOutputPreview(versionResult.stdout || versionResult.stderr, 120)
+  await appendProgressLog(progressContext, `[Claude] CLI path=${claudePath} version=${claudeVersion}`)
+}
+
 function parseClaudeJsonResult(raw: string): {
   session_id?: string
   result?: string
@@ -3670,6 +3699,7 @@ async function runClaudeTurnInSandbox(
     sessionId?: string
     systemPrompt?: string
     modelId?: import("@/lib/dev-agents").DevAgentAiAgent
+    progressContext?: ProgressContext | null
   }
 ): Promise<ClaudeTurnResult> {
   const gatewayApiKey = process.env.AI_GATEWAY_API_KEY
@@ -3695,28 +3725,44 @@ async function runClaudeTurnInSandbox(
     args.push("--append-system-prompt", options.systemPrompt.trim())
   }
 
+  const claudeEnv = {
+    PATH: pathEnv,
+    ANTHROPIC_BASE_URL: "https://ai-gateway.vercel.sh",
+    ANTHROPIC_AUTH_TOKEN: gatewayApiKey,
+    ANTHROPIC_API_KEY: "",
+    // Claude Code can send experimental beta headers that Anthropic-format
+    // gateways backed by Bedrock/Vertex may reject with 400s.
+    CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: "1",
+    ...modelSelection.extraEnv
+  }
+
+  await logClaudeCliDiagnostics(sandbox, pathEnv, options.progressContext)
+  await appendProgressLog(
+    options.progressContext,
+    `[Claude] Running ${prompt.label} (model=${modelSelection.cliModel}, resume=${options.sessionId ? "yes" : "no"}, authToken=present, apiKey=empty, baseUrl=${claudeEnv.ANTHROPIC_BASE_URL}, extraEnv=${Object.keys(modelSelection.extraEnv).join(",") || "none"})`
+  )
+
   const result = await runSandboxCommandWithOptions(sandbox, {
     cmd: "claude",
     args,
     cwd,
-    env: {
-      PATH: pathEnv,
-      ANTHROPIC_BASE_URL: "https://ai-gateway.vercel.sh",
-      ANTHROPIC_AUTH_TOKEN: gatewayApiKey,
-      ANTHROPIC_API_KEY: "",
-      // Claude Code can send experimental beta headers that Anthropic-format
-      // gateways backed by Bedrock/Vertex may reject with 400s.
-      CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: "1",
-      ...modelSelection.extraEnv
-    }
+    env: claudeEnv
   })
 
   if (result.exitCode !== 0) {
+    await appendProgressLog(
+      options.progressContext,
+      `[Claude] ${prompt.label} failed exit=${result.exitCode} stdout=${formatClaudeOutputPreview(result.stdout)} stderr=${formatClaudeOutputPreview(result.stderr)}`
+    )
     throw new Error(`Claude turn failed (${prompt.label}): ${result.stderr || result.stdout || "unknown error"}`)
   }
 
   const parsed = parseClaudeJsonResult(result.stdout)
   if (parsed.is_error) {
+    await appendProgressLog(
+      options.progressContext,
+      `[Claude] ${prompt.label} returned is_error stdout=${formatClaudeOutputPreview(result.stdout)}`
+    )
     throw new Error(`Claude reported an error during ${prompt.label}: ${result.stdout}`)
   }
 
@@ -3810,7 +3856,8 @@ async function runAgentWithDiagnoseTool(
     const turnResult = await runClaudeTurnInSandbox(sandbox, SANDBOX_CWD, turnPrompt, {
       sessionId: currentSessionId,
       systemPrompt: currentSessionId ? undefined : systemPrompt,
-      modelId: modelSelection.modelId
+      modelId: modelSelection.modelId,
+      progressContext
     })
     currentSessionId = turnResult.sessionId
     finalSummary = turnResult.resultText || finalSummary
