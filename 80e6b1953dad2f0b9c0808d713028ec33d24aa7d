@@ -1,0 +1,21 @@
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.22",
+  "base_commit_sha": "80e6b1953dad2f0b9c0808d713028ec33d24aa7d",
+  "prompts": {
+    "57936b28b87e778b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d383c-fc58-73d1-ae43-e83e4061e42b",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh <elsigh@gmail.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 1108,
+      "overriden_lines": 0
+    }
+  }
+}
