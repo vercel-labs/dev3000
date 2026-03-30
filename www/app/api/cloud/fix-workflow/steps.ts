@@ -2458,7 +2458,19 @@ export async function agentFixLoopStep(
   // Observation step only guarantees skills were installed in the previous sandbox.
   // If we had to recreate the sandbox for the agent step, reinstall them.
   if (!observation || recreatedSandbox) {
-    await installDevAgentSkillsInSandbox(sandbox, effectiveProjectDir, devAgentSkillRefs, progressContext)
+    await appendProgressLog(
+      progressContext,
+      `[Agent] Reinstalling skills in ${recreatedSandbox ? "recreated" : "initial"} agent sandbox...`
+    )
+    try {
+      await installDevAgentSkillsInSandbox(sandbox, effectiveProjectDir, devAgentSkillRefs, progressContext)
+    } catch (skillInstallError) {
+      await appendProgressLog(
+        progressContext,
+        `[Agent] Skill reinstall failed: ${skillInstallError instanceof Error ? skillInstallError.message : String(skillInstallError)}`
+      )
+      throw skillInstallError
+    }
   }
 
   let turbopackBundleComparison: TurbopackBundleComparison | undefined
@@ -3868,7 +3880,16 @@ async function runAgentWithDiagnoseTool(
   const modelSelection = resolveClaudeModelSelection(devAgentAiAgent)
   const selectedModelLabel = getDevAgentModelLabel(modelSelection.modelId)
 
-  await ensureClaudeCodeInstalledInSandbox(sandbox, progressContext)
+  await appendProgressLog(progressContext, "[Claude] Ensuring Claude Code CLI is available...")
+  try {
+    await ensureClaudeCodeInstalledInSandbox(sandbox, progressContext)
+  } catch (claudeInstallError) {
+    await appendProgressLog(
+      progressContext,
+      `[Claude] Bootstrap failed: ${claudeInstallError instanceof Error ? claudeInstallError.message : String(claudeInstallError)}`
+    )
+    throw claudeInstallError
+  }
 
   const systemPrompt = buildClaudeSystemPrompt({
     devUrl,
