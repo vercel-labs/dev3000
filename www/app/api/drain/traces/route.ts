@@ -19,7 +19,6 @@
 
 import { createHmac } from "node:crypto"
 import { put } from "@vercel/blob"
-import { after } from "next/server"
 
 // Verify the request came from Vercel using the drain signature secret.
 // Set TRACE_DRAIN_SECRET env var to the secret you configure in the dashboard.
@@ -92,17 +91,10 @@ export async function POST(request: Request) {
       resourceSpans: payload.resourceSpans
     }
 
-    // Write to Blob in background — respond immediately to avoid timeout
-    after(async () => {
-      try {
-        await put(blobPath, JSON.stringify(envelope), {
-          contentType: "application/json",
-          access: "public", // Blob requires access level; data isn't sensitive (trace telemetry)
-          addRandomSuffix: true
-        })
-      } catch (error) {
-        console.error("[TraceDrain] Error writing trace to Blob storage:", error)
-      }
+    await put(blobPath, JSON.stringify(envelope), {
+      contentType: "application/json",
+      access: "public", // Blob requires access level; data isn't sensitive (trace telemetry)
+      addRandomSuffix: true
     })
 
     return Response.json({ accepted: spanCount })
