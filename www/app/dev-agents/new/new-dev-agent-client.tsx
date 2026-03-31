@@ -614,7 +614,7 @@ function ActionStepCard({
   onRemove: (id: string) => void
 }) {
   return (
-    <div className="relative rounded-lg border border-border/60 bg-background/80 border-l-pink-500 border-l-2">
+    <div className="relative rounded-lg border border-border/60 bg-background/80">
       <div className="flex items-start gap-3 px-4 py-3">
         <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted/30 text-xs font-medium text-foreground">
           {stepNumber}
@@ -1235,7 +1235,14 @@ export default function NewDevAgentClient({
                       onRuleChange={setEarlyExitRule}
                       onTextChange={setEarlyExitEval}
                     />
-                    <StepConnector />
+                    {canEdit ? (
+                      <InsertStepButton
+                        onInsert={(prompt) => addActionStep(prompt, index)}
+                        onConfigureEarlyExit={() => configureEarlyExit(index)}
+                      />
+                    ) : (
+                      <StepConnector />
+                    )}
                   </>
                 ) : null}
                 <ActionStepCard
@@ -1256,16 +1263,24 @@ export default function NewDevAgentClient({
               />
             )}
             {effectiveEarlyExitPlacementIndex === actionSteps.length ? (
-              <InlineEarlyExitCard
-                editorId={earlyExitEditorId}
-                mode={earlyExitMode}
-                rule={earlyExitRule}
-                textValue={earlyExitEval}
-                canEdit={canEdit}
-                onModeChange={setEarlyExitMode}
-                onRuleChange={setEarlyExitRule}
-                onTextChange={setEarlyExitEval}
-              />
+              <>
+                <InlineEarlyExitCard
+                  editorId={earlyExitEditorId}
+                  mode={earlyExitMode}
+                  rule={earlyExitRule}
+                  textValue={earlyExitEval}
+                  canEdit={canEdit}
+                  onModeChange={setEarlyExitMode}
+                  onRuleChange={setEarlyExitRule}
+                  onTextChange={setEarlyExitEval}
+                />
+                {canEdit ? (
+                  <InsertStepButton
+                    onInsert={(prompt) => addActionStep(prompt, actionSteps.length)}
+                    onConfigureEarlyExit={() => configureEarlyExit(actionSteps.length)}
+                  />
+                ) : null}
+              </>
             ) : null}
 
             {/* Success Eval — fixed final step */}
@@ -1302,7 +1317,7 @@ export default function NewDevAgentClient({
             {/* Text Mode — single textarea for all prompts */}
             <StepConnector />
             <div className="space-y-3">
-              <div className="rounded-lg border border-border/60 bg-background/80 border-l-pink-500 border-l-2 p-4">
+              <div className="rounded-lg border border-border/60 bg-background/80 p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <MessageSquare className="size-4 text-muted-foreground" />
                   <span className="text-sm font-medium text-foreground">Agent Prompts</span>
