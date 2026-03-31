@@ -433,6 +433,17 @@ function getVerificationSummary(report: WorkflowReport, metricRows: MetricRow[])
   return null
 }
 
+function getEarlyExitSummary(report: WorkflowReport) {
+  if (!report.earlyExitResult?.shouldExit) {
+    return null
+  }
+
+  return {
+    title: "Early Exit",
+    description: report.earlyExitResult.reason
+  }
+}
+
 function skillLink(skill: string) {
   const normalized = skill.trim().toLowerCase()
   if (normalized === "d3k" || normalized.includes("d3k")) {
@@ -684,7 +695,9 @@ function ReportContentBody({ run, report }: { run: WorkflowRun; report: Workflow
   const metricRows = buildMetricRows(report)
   const hasMetricComparison = metricRows.some((row) => row.before && row.after)
   const metricsWithCurrentValues = metricRows.filter((row) => row.current)
+  const earlyExitSummary = getEarlyExitSummary(report)
   const verificationSummary = getVerificationSummary(report, metricRows)
+  const secondarySummary = earlyExitSummary ?? verificationSummary
   const explicitSkills = [...(report.skillsLoaded || []), ...(report.skillsInstalled || [])]
   const inferredSkills: string[] = ["d3k"]
   if (workflowType === "design-guidelines") inferredSkills.unshift("Vercel Web Design Guidelines")
@@ -753,7 +766,7 @@ function ReportContentBody({ run, report }: { run: WorkflowRun; report: Workflow
 
   return (
     <div className="space-y-6">
-      {(report.successEvalResult != null || verificationSummary) && (
+      {(report.successEvalResult != null || secondarySummary) && (
         <div className="grid gap-4 md:grid-cols-2">
           {report.successEvalResult != null && (
             <div className="rounded-lg border border-[#1f1f1f] bg-[#0a0a0a] p-4">
@@ -766,10 +779,10 @@ function ReportContentBody({ run, report }: { run: WorkflowRun; report: Workflow
               {report.successEval ? <p className="mt-1 text-sm text-[#666]">{report.successEval}</p> : null}
             </div>
           )}
-          {verificationSummary && (
+          {secondarySummary && (
             <div className="rounded-lg border border-[#1f1f1f] bg-[#0a0a0a] p-4">
-              <div className="text-sm font-medium text-[#ededed]">{verificationSummary.title}</div>
-              <p className="mt-1 text-sm text-[#666]">{verificationSummary.description}</p>
+              <div className="text-sm font-medium text-[#ededed]">{secondarySummary.title}</div>
+              <p className="mt-1 text-sm text-[#666]">{secondarySummary.description}</p>
             </div>
           )}
         </div>
