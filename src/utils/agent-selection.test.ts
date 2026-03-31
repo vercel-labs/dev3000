@@ -15,6 +15,12 @@ describe("agent-selection", () => {
     expect(codexYolo?.command).toContain('"load the d3k skill and await further instruction"')
   })
 
+  it("should append the d3k prompt to blackbox", () => {
+    const blackbox = getAgentByName("blackbox")
+
+    expect(blackbox?.command).toContain('"load the d3k skill and await further instruction"')
+  })
+
   it("should not include legacy escaped single-quote prompt sequences", () => {
     const commands = KNOWN_AGENTS.map((agent) => agent.command).filter((command): command is string => Boolean(command))
     const hasLegacyEscaping = commands.some((command) => command.includes("'\\''"))

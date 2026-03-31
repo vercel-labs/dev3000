@@ -1,5 +1,5 @@
 import { createSocket } from "dgram"
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "fs"
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs"
 import https from "https"
 import { createServer } from "net"
 import { homedir, tmpdir } from "os"
@@ -38,6 +38,7 @@ import {
   validateD3kLockContent,
   writeSessionInfo
 } from "./dev-environment"
+import { getProjectDir } from "./utils/project-name"
 
 describe("gracefulKillProcess", () => {
   // This test suite ensures that process termination follows the correct sequence:
@@ -455,6 +456,26 @@ describe("findAvailablePort regression (#95)", () => {
       udpSocket.close()
     }
   })
+
+  it("skips ports that already have a TCP listener on loopback", async () => {
+    const startPort = await findUnusedTcpPort()
+    const server = createServer()
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        server.once("error", reject)
+        server.listen(startPort, "127.0.0.1", () => {
+          server.removeListener("error", reject)
+          resolve()
+        })
+      })
+
+      const availablePort = await findAvailablePort(startPort)
+      expect(availablePort).toBe(String(startPort + 1))
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()))
+    }
+  })
 })
 
 async function findUnusedTcpPort(): Promise<number> {
@@ -689,6 +710,82 @@ describe("writeSessionInfo", () => {
     }
 
     expect(writeWithPreferredBrowserTool).not.toThrow()
+  })
+
+  it("should include agentName in session.json", () => {
+    const projectDir = getProjectDir()
+    const sessionFile = join(projectDir, "session.json")
+
+    writeSessionInfo(
+      "test",
+      "/tmp/test.log",
+      "3000",
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      "codex-yolo"
+    )
+
+    const sessionInfo = JSON.parse(readFileSync(sessionFile, "utf-8")) as { agentName?: string | null }
+    expect(sessionInfo.agentName).toBe("codex-yolo")
+  })
+
+  it("should preserve the last remembered agentName when a later run has no agent", () => {
+    const projectDir = getProjectDir()
+    const sessionFile = join(projectDir, "session.json")
+
+    writeSessionInfo(
+      "test",
+      "/tmp/test.log",
+      "3000",
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      "claude"
+    )
+    writeSessionInfo("test", "/tmp/test.log", "3000")
+
+    const sessionInfo = JSON.parse(readFileSync(sessionFile, "utf-8")) as { agentName?: string | null }
+    expect(sessionInfo.agentName).toBe("claude")
+  })
+
+  it("should restore the last remembered agentName even after session cleanup removed session.json", () => {
+    const projectDir = getProjectDir()
+    const sessionFile = join(projectDir, "session.json")
+
+    writeSessionInfo(
+      "test",
+      "/tmp/test.log",
+      "3000",
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      "codex-yolo"
+    )
+
+    rmSync(sessionFile, { force: true })
+    writeSessionInfo("test", "/tmp/test.log", "3000")
+
+    const sessionInfo = JSON.parse(readFileSync(sessionFile, "utf-8")) as { agentName?: string | null }
+    expect(sessionInfo.agentName).toBe("codex-yolo")
   })
 })
 

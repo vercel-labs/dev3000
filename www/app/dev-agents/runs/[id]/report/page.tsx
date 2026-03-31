@@ -609,7 +609,6 @@ async function WorkflowReportPageData({ params }: { params: Promise<{ id: string
           selectedTeam={ownerRouteContext.selectedTeam}
           title={run.projectName}
           subtitle="Run in progress"
-          description="This run is still collecting evidence and generating the final report."
         >
           {pending}
         </DevAgentsDashboardShell>

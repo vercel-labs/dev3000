@@ -12,7 +12,7 @@ import {
   RGBA,
   ScrollBoxRenderable,
   type Selection,
-  type StyledText,
+  StyledText,
   TextRenderable,
   t,
   yellow
@@ -178,6 +178,16 @@ function formatLogLine(content: string, isCompact: boolean, baseTimestampMs?: nu
   return t`  ${content}`
 }
 
+export function applySelectionToStyledText(content: StyledText, bgColor: RGBA, fgColor?: RGBA): StyledText {
+  return new StyledText(
+    content.chunks.map((chunk) => ({
+      ...chunk,
+      bg: bgColor,
+      fg: fgColor ?? chunk.fg
+    }))
+  )
+}
+
 class D3kTUI {
   private renderer: CliRenderer | null = null
   private options: TUIOptions
@@ -219,8 +229,10 @@ class D3kTUI {
   private isRebuilding = false
   private logContentWidth = 80
   private logRenderables = new Map<number, TextRenderable>()
+  private logBaseContent = new Map<number, StyledText>()
   private logSelection: LogSelectionState | null = null
   private readonly logSelectionBackground = RGBA.fromInts(70, 130, 180)
+  private readonly logSelectionForeground = RGBA.fromInts(255, 255, 255)
 
   constructor(options: TUIOptions) {
     this.options = options
@@ -923,6 +935,7 @@ class D3kTUI {
 
       const isBaseLog = this.baseLogId === log.id
       const formatted = formatLogLine(log.content, isCompact, this.baseTimestampMs, isBaseLog)
+      this.logBaseContent.set(log.id, formatted)
       // Track click start position to detect clicks vs drags
       let clickStartX = -1
       let clickStartY = -1
@@ -1049,6 +1062,7 @@ class D3kTUI {
       child.destroy()
     }
     this.logRenderables.clear()
+    this.logBaseContent.clear()
 
     // Re-add filtered logs
     const filteredLogs = this.logs.filter((log) => log.id > this.clearFromLogId)
@@ -1141,9 +1155,12 @@ class D3kTUI {
 
   private updateLogLineSelectionStyle(logId: number) {
     const renderable = this.logRenderables.get(logId)
-    if (!renderable) return
+    const baseContent = this.logBaseContent.get(logId)
+    if (!renderable || !baseContent) return
     const selectedIds = new Set(this.getSelectedLogIds())
-    renderable.bg = selectedIds.has(logId) ? this.logSelectionBackground : undefined
+    renderable.content = selectedIds.has(logId)
+      ? applySelectionToStyledText(baseContent, this.logSelectionBackground, this.logSelectionForeground)
+      : baseContent
   }
 
   private parseLogRenderableId(logRenderableId: string): number | null {

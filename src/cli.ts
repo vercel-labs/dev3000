@@ -262,6 +262,7 @@ import { getBundledSkillsPath, getSkill, getSkillsInfo, listAvailableSkills } fr
 import { detectAIAgent } from "./utils/agent-detection.js"
 import { getAvailableAgents, getSkillsAgentId } from "./utils/agent-selection.js"
 import { ensureD3kHomeDir } from "./utils/d3k-dir.js"
+import { readProjectAgentName } from "./utils/project-metadata.js"
 import { getProjectDir, getProjectDisplayName } from "./utils/project-name.js"
 import {
   checkForSkillUpdates,
@@ -1006,7 +1007,8 @@ program
         // Continue with normal startup
       } else {
         // Always show prompt, pre-selecting the last-used option
-        selectedAgent = await promptAgentSelection(userConfig.defaultAgent?.name)
+        const preferredAgentName = readProjectAgentName() || userConfig.defaultAgent?.name
+        selectedAgent = await promptAgentSelection(preferredAgentName)
         didPromptAgentSelection = true
 
         if (selectedAgent) {
@@ -1156,7 +1158,8 @@ program
           serversOnly: options.serversOnly,
           headless: options.headless,
           dateTime: options.dateTime,
-          pluginReactScan: options.pluginReactScan
+          pluginReactScan: options.pluginReactScan,
+          agentName: selectedAgent.name
         })
         return
       }
@@ -1317,6 +1320,7 @@ program
         portless: options.portless === true,
         dateTimeFormat: options.dateTime || "local",
         pluginReactScan: options.pluginReactScan || false,
+        agentName: options.agentName || undefined,
         skillsAgentId: skillsAgentId || undefined,
         autoSkills: options.skills !== false ? options.autoSkills || false : false,
         installSkills: options.skills !== false
@@ -1541,6 +1545,14 @@ program
   .action(async (selector) => {
     const { findComponent } = await import("./commands/find-component.js")
     await findComponent(selector)
+  })
+
+program
+  .command("resume")
+  .description("Resume the last supported AI agent session for this project")
+  .action(async () => {
+    const { resumeLastAgent } = await import("./commands/resume.js")
+    await resumeLastAgent()
   })
 
 // CDP port command - get the CDP port from the session file

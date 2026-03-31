@@ -26,4 +26,10 @@ describe("runtime compatibility", () => {
     expect(cliContent).not.toContain("require(")
     expect(devEnvironmentContent).not.toContain("require(")
   })
+
+  it("forwards the selected tmux agent name back into d3k", () => {
+    const cliContent = readSourceFile("cli.ts")
+
+    expect(cliContent).toContain("agentName: selectedAgent.name")
+  })
 })

@@ -18,6 +18,22 @@ export interface CDPConnection {
   nextId: number
 }
 
+export interface CDPTargetInfo {
+  id?: string
+  type?: string
+  title?: string
+  url?: string
+  webSocketDebuggerUrl?: string
+}
+
+interface PendingCDPRequest {
+  method: string
+  startedAt: number
+  timeout: NodeJS.Timeout
+  resolve: (value: Record<string, unknown>) => void
+  reject: (error: Error) => void
+}
+
 interface ReactDebugSnapshot {
   hookPresent: boolean
   rendererCount: number
@@ -67,6 +83,112 @@ const EMBEDDED_LOADING_HTML = `<!DOCTYPE html>
 </body>
 </html>`
 
+function isD3kLoadingPageUrl(url: string | undefined): boolean {
+  if (!url?.startsWith("file://")) {
+    return false
+  }
+
+  try {
+    const pathname = decodeURIComponent(new URL(url).pathname)
+    return pathname.includes("/dev3000-loading-") && pathname.endsWith("/loading.html")
+  } catch {
+    return false
+  }
+}
+
+function matchesAppServerPort(url: string | undefined, appServerPort?: string): boolean {
+  if (!url || !appServerPort) {
+    return false
+  }
+
+  try {
+    const parsed = new URL(url)
+    const hostname = parsed.hostname
+    const port = parsed.port || (parsed.protocol === "https:" ? "443" : "80")
+    return (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "0.0.0.0") && port === appServerPort
+  } catch {
+    return false
+  }
+}
+
+function matchesInitialAppUrl(url: string | undefined, initialAppUrl?: string): boolean {
+  if (!url || !initialAppUrl) {
+    return false
+  }
+
+  try {
+    const actual = new URL(url)
+    const expected = new URL(initialAppUrl)
+    const actualPort = actual.port || (actual.protocol === "https:" ? "443" : "80")
+    const expectedPort = expected.port || (expected.protocol === "https:" ? "443" : "80")
+
+    return (
+      actual.protocol === expected.protocol &&
+      actual.hostname === expected.hostname &&
+      actualPort === expectedPort &&
+      actual.pathname === expected.pathname
+    )
+  } catch {
+    return false
+  }
+}
+
+function formatTargetForLog(target: CDPTargetInfo): string {
+  return `${target.type || "unknown"}:${target.url || "<no-url>"}`
+}
+
+export function selectCDPTarget(
+  targets: CDPTargetInfo[],
+  options: {
+    appServerPort?: string
+    initialAppUrl?: string
+  } = {}
+): CDPTargetInfo {
+  const debuggableTargets = targets.filter((target) => target.webSocketDebuggerUrl)
+
+  if (debuggableTargets.length === 0) {
+    throw new Error(`No debuggable target found in Chrome (found ${targets.length} targets)`)
+  }
+
+  const contextualMatches = debuggableTargets
+    .map((target) => ({
+      target,
+      score:
+        (matchesInitialAppUrl(target.url, options.initialAppUrl) ? 100 : 0) +
+        (matchesAppServerPort(target.url, options.appServerPort) ? 70 : 0) +
+        (isD3kLoadingPageUrl(target.url) ? 90 : 0) +
+        (target.type === "page" ? 10 : 0)
+    }))
+    .sort((left, right) => right.score - left.score)
+
+  const bestContextualScore = contextualMatches[0]?.score || 0
+  const minimumContextualScore = 70
+  if (bestContextualScore >= minimumContextualScore) {
+    return contextualMatches[0].target
+  }
+
+  const pageTarget = debuggableTargets.find((target) => target.type === "page")
+  if (!options.appServerPort && !options.initialAppUrl) {
+    return pageTarget || debuggableTargets[0]
+  }
+
+  if (debuggableTargets.length === 1 && debuggableTargets[0]?.url === "about:blank") {
+    return debuggableTargets[0]
+  }
+
+  const expectedDetails = [
+    options.initialAppUrl ? `url ${options.initialAppUrl}` : null,
+    options.appServerPort ? `port ${options.appServerPort}` : null,
+    "d3k loading page"
+  ]
+    .filter(Boolean)
+    .join(", ")
+
+  throw new Error(
+    `CDP target mismatch on port ${options.appServerPort || "unknown"}; expected ${expectedDetails}, found ${debuggableTargets.map(formatTargetForLog).join(", ")}`
+  )
+}
+
 export class CDPMonitor {
   private browser: ChildProcess | null = null
   private connection: CDPConnection | null = null
@@ -93,6 +215,7 @@ export class CDPMonitor {
   private framework?: "nextjs" | "svelte" | "other" // Framework hint from project detection
   private reactTrackingEnabled: boolean = false
   private lastReactSnapshotLogTime: number = 0
+  private pendingCommands = new Map<number, PendingCDPRequest>()
 
   constructor(
     profileDir: string,
@@ -645,10 +768,12 @@ export class CDPMonitor {
       try {
         // Get the WebSocket URL from Chrome's debug endpoint
         const targetsResponse = await fetch(`http://localhost:${this.debugPort}/json`)
-        let targets = await targetsResponse.json()
+        let targets = (await targetsResponse.json()) as CDPTargetInfo[]
 
         this.debugLog(
-          `Found ${targets.length} targets: ${JSON.stringify(targets.map((t: { type: string; url: string }) => ({ type: t.type, url: t.url })))}`
+          `Found ${targets.length} targets: ${JSON.stringify(
+            targets.map((target) => ({ type: target.type ?? "unknown", url: target.url ?? "" }))
+          )}`
         )
 
         if (targets.length === 0) {
@@ -657,7 +782,7 @@ export class CDPMonitor {
             method: "PUT"
           })
           if (newTargetResponse.ok) {
-            const createdTarget = await newTargetResponse.json()
+            const createdTarget = (await newTargetResponse.json()) as CDPTargetInfo
             targets = [createdTarget]
             this.debugLog(`Created page target: ${createdTarget.id || "unknown"} - ${createdTarget.url || ""}`)
           } else {
@@ -665,24 +790,16 @@ export class CDPMonitor {
           }
         }
 
-        // Find the first page target (tab) - prefer 'page' type but accept any target with a webSocketDebuggerUrl
-        let pageTarget = targets.find(
-          (target: { type: string; webSocketDebuggerUrl: string }) => target.type === "page"
-        )
-
-        // Fallback: if no 'page' type found, try to use any target with a debugger URL
-        if (!pageTarget && targets.length > 0) {
-          pageTarget = targets.find((target: { webSocketDebuggerUrl?: string }) => target.webSocketDebuggerUrl)
-          if (pageTarget) {
-            this.debugLog(`No 'page' type target found, using target of type '${pageTarget.type}' instead`)
-          }
-        }
-
-        if (!pageTarget) {
-          throw new Error(`No debuggable target found in Chrome (found ${targets.length} targets)`)
-        }
+        const pageTarget = selectCDPTarget(targets, {
+          appServerPort: this.appServerPort,
+          initialAppUrl: this.initialAppUrl
+        })
 
         const wsUrl = pageTarget.webSocketDebuggerUrl
+        if (!wsUrl) {
+          throw new Error(`Selected CDP target does not have a websocket URL: ${formatTargetForLog(pageTarget)}`)
+        }
+
         this.cdpUrl = wsUrl // Store the CDP URL
         this.debugLog(`Found page target: ${pageTarget.title || "Unknown"} - ${pageTarget.url}`)
         this.debugLog(`Got CDP WebSocket URL: ${wsUrl}`)
@@ -720,6 +837,7 @@ export class CDPMonitor {
 
           ws.on("close", (code, reason) => {
             this.debugLog(`WebSocket closed with code ${code}, reason: ${reason}`)
+            this.rejectPendingCDPCommands(new Error(`CDP connection closed before response (code=${code})`))
             if (!this.isShuttingDown) {
               this.logger("browser", `[CDP] Connection lost unexpectedly (code: ${code}, reason: ${reason})`)
               this.logger("browser", "[CDP] CDP connection lost - check for Chrome crash or server issues")
@@ -807,7 +925,11 @@ export class CDPMonitor {
     }
   }
 
-  private async sendCDPCommand(method: string, params: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
+  private async sendCDPCommand(
+    method: string,
+    params: Record<string, unknown> = {},
+    timeoutMs: number = 10000
+  ): Promise<Record<string, unknown>> {
     if (!this.connection) {
       throw new Error("No CDP connection available")
     }
@@ -819,45 +941,36 @@ export class CDPMonitor {
         method,
         params
       }
-
-      const messageHandler = (data: Buffer) => {
-        try {
-          const message = JSON.parse(data.toString())
-          if (message.id === id) {
-            this.connection?.ws.removeListener("message", messageHandler)
-            if (message.error) {
-              reject(new Error(message.error.message))
-            } else {
-              resolve(message.result)
-            }
-          }
-        } catch (error) {
-          this.connection?.ws.removeListener("message", messageHandler)
-          reject(error)
-        }
-      }
-
-      this.connection?.ws.on("message", messageHandler)
-
-      // Command timeout
       const timeout = setTimeout(() => {
-        this.connection?.ws.removeListener("message", messageHandler)
+        this.pendingCommands.delete(id)
+        this.debugLog(`CDP command #${id} timed out after ${timeoutMs}ms: ${method}`)
         reject(new Error(`CDP command timeout: ${method}`))
-      }, 10000)
+      }, timeoutMs)
 
-      // Clear timeout if command succeeds/fails
-      const originalResolve = resolve
-      const originalReject = reject
-      resolve = (value: Record<string, unknown> | PromiseLike<Record<string, unknown>>) => {
-        clearTimeout(timeout)
-        originalResolve(value)
-      }
-      reject = (reason: unknown) => {
-        clearTimeout(timeout)
-        originalReject(reason)
-      }
+      this.pendingCommands.set(id, {
+        method,
+        startedAt: Date.now(),
+        timeout,
+        resolve,
+        reject: (error) => reject(error)
+      })
 
-      this.connection?.ws.send(JSON.stringify(command))
+      this.debugLog(`Sending CDP command #${id}: ${method} ${JSON.stringify(params)}`)
+      this.connection?.ws.send(JSON.stringify(command), (error) => {
+        if (!error) {
+          return
+        }
+
+        const pending = this.pendingCommands.get(id)
+        if (!pending) {
+          return
+        }
+
+        clearTimeout(pending.timeout)
+        this.pendingCommands.delete(id)
+        this.debugLog(`Failed to send CDP command #${id}: ${method}: ${String(error)}`)
+        reject(error instanceof Error ? error : new Error(String(error)))
+      })
     })
   }
 
@@ -944,40 +1057,45 @@ export class CDPMonitor {
 
   private async enableCDPDomains(): Promise<void> {
     const domains = [
-      "Runtime", // Console logs, exceptions
-      "Network", // Network requests/responses
-      "Page", // Page events, navigation
-      "DOM", // DOM mutations
-      "Performance", // Performance metrics
-      "Security", // Security events
-      "Log", // Browser console logs
-      "Target" // Target events (window/tab creation/destruction)
+      { name: "Runtime", required: true },
+      { name: "Network", required: true },
+      { name: "Page", required: true },
+      { name: "DOM", required: true },
+      { name: "Performance", required: false },
+      { name: "Security", required: false },
+      { name: "Log", required: true },
+      { name: "Target", required: false }
       // Note: Input domain is for dispatching events, not monitoring them - we use JS injection instead
     ]
 
     for (const domain of domains) {
       try {
-        this.debugLog(`Enabling CDP domain: ${domain}`)
-        await this.sendCDPCommand(`${domain}.enable`)
-        this.debugLog(`Successfully enabled CDP domain: ${domain}`)
+        this.debugLog(`Enabling CDP domain: ${domain.name}`)
+        await this.sendCDPCommand(`${domain.name}.enable`, {}, 3000)
+        this.debugLog(`Successfully enabled CDP domain: ${domain.name}`)
         if (this.debug) {
-          this.logger("browser", `[CDP] Enabled ${domain} domain`)
+          this.logger("browser", `[CDP] Enabled ${domain.name} domain`)
         }
       } catch (error) {
-        this.debugLog(`Failed to enable CDP domain ${domain}: ${error}`)
-        // Only log CDP errors when debug mode is enabled
-        if (this.debug) {
-          this.logger("browser", `[CDP] Failed to enable ${domain}: ${error}`)
+        this.debugLog(`Failed to enable CDP domain ${domain.name}: ${error}`)
+        if (domain.required) {
+          throw new Error(`Failed to enable required CDP domain ${domain.name}: ${String(error)}`)
         }
-        // Continue with other domains instead of throwing
+
+        if (this.debug) {
+          this.logger("browser", `[CDP] Failed to enable optional ${domain.name}: ${error}`)
+        }
       }
     }
 
-    this.debugLog("Enabling runtime for console and exception capture")
-    await this.sendCDPCommand("Runtime.enable")
-    await this.sendCDPCommand("Runtime.setAsyncCallStackDepth", {
-      maxDepth: 32
-    })
+    this.debugLog("Setting async call stack depth for console and exception capture")
+    await this.sendCDPCommand(
+      "Runtime.setAsyncCallStackDepth",
+      {
+        maxDepth: 32
+      },
+      3000
+    )
     this.debugLog("CDP domains enabled successfully")
 
     // Set viewport for headless mode to ensure consistent CLS measurements
@@ -1324,8 +1442,48 @@ export class CDPMonitor {
     this.eventHandlers.set(method, handler)
   }
 
-  private handleCDPMessage(message: { method?: string; params?: Record<string, unknown>; sessionId?: string }): void {
+  private rejectPendingCDPCommands(error: Error): void {
+    for (const [id, pending] of this.pendingCommands) {
+      clearTimeout(pending.timeout)
+      this.pendingCommands.delete(id)
+      pending.reject(error)
+    }
+  }
+
+  private handleCDPMessage(message: {
+    id?: number
+    method?: string
+    params?: Record<string, unknown>
+    result?: Record<string, unknown>
+    error?: { message?: string }
+    sessionId?: string
+  }): void {
+    if (typeof message.id === "number") {
+      const pending = this.pendingCommands.get(message.id)
+      if (!pending) {
+        this.debugLog(`Received CDP response for unknown command #${message.id}`)
+        return
+      }
+
+      clearTimeout(pending.timeout)
+      this.pendingCommands.delete(message.id)
+
+      const duration = Date.now() - pending.startedAt
+      if (message.error) {
+        this.debugLog(
+          `Received CDP error for #${message.id} (${pending.method}) after ${duration}ms: ${message.error.message}`
+        )
+        pending.reject(new Error(message.error.message || `CDP command failed: ${pending.method}`))
+        return
+      }
+
+      this.debugLog(`Received CDP response for #${message.id} (${pending.method}) after ${duration}ms`)
+      pending.resolve(message.result || {})
+      return
+    }
+
     if (message.method) {
+      this.debugLog(`Received CDP event: ${message.method}`)
       const handler = this.eventHandlers.get(message.method)
       if (handler) {
         const event: CDPEvent = {

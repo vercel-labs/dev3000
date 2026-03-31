@@ -12,7 +12,7 @@ import {
   writeFileSync
 } from "fs"
 import https from "https"
-import { createServer } from "net"
+import { createConnection, createServer } from "net"
 import ora from "ora"
 import { homedir, tmpdir } from "os"
 import { dirname, join, resolve, sep } from "path"
@@ -24,6 +24,7 @@ import { ScreencastManager } from "./screencast-manager.js"
 import { type LogEntry, NextJsErrorDetector, OutputProcessor, StandardLogParser } from "./services/parsers/index.js"
 import { getBundledSkillsPath, listAvailableSkills } from "./skills/index.js"
 import { DevTUI } from "./tui-interface.js"
+import { readProjectAgentName, rememberProjectAgentName } from "./utils/project-metadata.js"
 import { getProjectDir, getProjectDisplayName, getProjectName } from "./utils/project-name.js"
 import {
   getApplicablePackages,
@@ -176,6 +177,7 @@ interface DevEnvironmentOptions {
   debugPort?: number // Chrome debugging port (default 9222, auto-incremented for multiple instances)
   headless?: boolean // Run Chrome in headless mode (for serverless/CI environments)
   withAgent?: string // Command to run an embedded agent (e.g. "claude --dangerously-skip-permissions")
+  agentName?: string // Selected agent name (e.g. "claude", "codex-yolo")
   skillsAgentId?: string // Selected agent id for skills/d3k skill placement
   autoSkills?: boolean // Auto-install recommended skills (non-interactive)
   installSkills?: boolean // Disable skill installation/update checks when false
@@ -415,6 +417,50 @@ async function isPortAvailable(port: string): Promise<boolean> {
     return false
   }
 
+  const hasActiveListener = await Promise.any(
+    ["127.0.0.1", "::1", "localhost"].map(
+      (host) =>
+        new Promise<boolean>((resolve, reject) => {
+          const socket = createConnection({ host, port: portNumber })
+          let settled = false
+
+          const finish = (result: boolean, shouldReject: boolean = false) => {
+            if (settled) return
+            settled = true
+            socket.destroy()
+            if (shouldReject) {
+              reject(new Error("unreachable"))
+            } else {
+              resolve(result)
+            }
+          }
+
+          socket.once("connect", () => finish(true))
+          socket.once("timeout", () => finish(false, true))
+          socket.once("error", (error: NodeJS.ErrnoException) => {
+            if (
+              error.code === "ECONNREFUSED" ||
+              error.code === "EHOSTUNREACH" ||
+              error.code === "ENETUNREACH" ||
+              error.code === "EINVAL"
+            ) {
+              finish(false, true)
+              return
+            }
+            finish(false)
+          })
+
+          socket.setTimeout(150)
+        })
+    )
+  )
+    .then((result) => result)
+    .catch(() => false)
+
+  if (hasActiveListener) {
+    return false
+  }
+
   return new Promise<boolean>((resolve) => {
     const server = createServer()
 
@@ -650,7 +696,8 @@ export function writeSessionInfo(
   serverPid?: number,
   skillsInstalled?: string[],
   skillsAgentId?: string | null,
-  preferredBrowserTool?: "agent-browser" | "next-browser"
+  preferredBrowserTool?: "agent-browser" | "next-browser",
+  agentName?: string | null
 ): void {
   const projectDir = getProjectDir()
 
@@ -659,6 +706,9 @@ export function writeSessionInfo(
     if (!existsSync(projectDir)) {
       mkdirSync(projectDir, { recursive: true })
     }
+
+    const sessionFile = join(projectDir, "session.json")
+    const persistedAgentName = readProjectAgentName()
 
     // Session file contains project info
     const sessionInfo = {
@@ -676,12 +726,15 @@ export function writeSessionInfo(
       serverPid: serverPid || null,
       skillsInstalled: skillsInstalled || [],
       skillsAgentId: skillsAgentId || null,
-      preferredBrowserTool: preferredBrowserTool || "agent-browser"
+      preferredBrowserTool: preferredBrowserTool || "agent-browser",
+      agentName: agentName || persistedAgentName || null
     }
 
     // Write session file in project directory
-    const sessionFile = join(projectDir, "session.json")
     writeFileSync(sessionFile, JSON.stringify(sessionInfo, null, 2))
+    if (sessionInfo.agentName) {
+      rememberProjectAgentName(sessionInfo.agentName)
+    }
   } catch (error) {
     // Non-fatal - just log a warning
     console.warn(chalk.yellow(`⚠️ Could not write session info: ${error}`))
@@ -1693,7 +1746,8 @@ export class DevEnvironment {
       this.serverProcess?.pid,
       skillsInstalled,
       this.options.skillsAgentId ?? null,
-      this.options.browserTool
+      this.options.browserTool,
+      this.options.agentName ?? null
     )
   }
 
