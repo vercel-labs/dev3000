@@ -72,8 +72,9 @@ export async function listCurrentUserTeams(): Promise<VercelTeam[]> {
     return []
   }
 
-  // Fetch user info and teams in parallel to avoid sequential waterfall
-  const [userResponse, fetchedTeams] = await Promise.all([
+  // Fetch user info and teams in parallel, but degrade gracefully if the
+  // Vercel API flakes so report pages still render.
+  const [userResult, teamsResult] = await Promise.allSettled([
     fetch("https://api.vercel.com/v2/user", {
       headers: {
         Authorization: `Bearer ${accessToken}`
@@ -82,17 +83,31 @@ export async function listCurrentUserTeams(): Promise<VercelTeam[]> {
     fetchAllTeams(accessToken)
   ])
 
-  if (!userResponse.ok) {
-    const errorText = await userResponse.text()
-    throw new Error(`Failed to fetch user: ${userResponse.status} ${errorText}`)
+  let userData: { user?: { id?: string; username?: string; name?: string } } | null = null
+  if (userResult.status === "fulfilled") {
+    if (userResult.value.ok) {
+      userData = (await userResult.value.json()) as {
+        user?: { id?: string; username?: string; name?: string }
+      }
+    } else {
+      const errorText = await userResult.value.text()
+      console.error(`[Vercel Teams] Failed to fetch user: ${userResult.value.status} ${errorText}`)
+    }
+  } else {
+    console.error("[Vercel Teams] Failed to fetch user:", userResult.reason)
   }
 
-  const userData = (await userResponse.json()) as {
-    user?: { id?: string; username?: string; name?: string }
-  }
+  const fetchedTeams =
+    teamsResult.status === "fulfilled"
+      ? teamsResult.value
+      : (() => {
+          console.error("[Vercel Teams] Failed to fetch teams:", teamsResult.reason)
+          return []
+        })()
+
   const teams: VercelTeam[] = []
 
-  if (userData.user?.id && userData.user?.username) {
+  if (userData?.user?.id && userData.user?.username) {
     teams.push({
       id: userData.user.id,
       slug: userData.user.username,
