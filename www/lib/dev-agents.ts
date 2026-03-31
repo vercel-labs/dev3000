@@ -669,21 +669,24 @@ function getDefaultSandboxBrowser(executionMode: DevAgentExecutionMode): DevAgen
 }
 
 function normalizeDevAgent(devAgent: StoredDevAgent | Omit<DevAgent, "usageCount">): Omit<DevAgent, "usageCount"> {
-  const sandboxBrowser = devAgent.sandboxBrowser
+  const canonicalDevAgentId = canonicalizeDevAgentId(devAgent.id)
+  const builtinDefaults = BUILTIN_DEV_AGENTS.find((candidate) => candidate.id === canonicalDevAgentId)
+  const mergedDevAgent = builtinDefaults ? { ...builtinDefaults, ...devAgent } : devAgent
+  const sandboxBrowser = mergedDevAgent.sandboxBrowser
   const aiAgent =
-    devAgent.aiAgent === "anthropic/claude-opus-4.6" || devAgent.aiAgent === "anthropic/claude-sonnet-4.6"
-      ? devAgent.aiAgent
-      : devAgent.aiAgent === "claude"
+    mergedDevAgent.aiAgent === "anthropic/claude-opus-4.6" || mergedDevAgent.aiAgent === "anthropic/claude-sonnet-4.6"
+      ? mergedDevAgent.aiAgent
+      : mergedDevAgent.aiAgent === "claude"
         ? "anthropic/claude-opus-4.6"
-        : devAgent.aiAgent === "codex" || devAgent.aiAgent === "d3k"
+        : mergedDevAgent.aiAgent === "codex" || mergedDevAgent.aiAgent === "d3k"
           ? "anthropic/claude-opus-4.6"
           : undefined
   const devServerCommand =
-    typeof devAgent.devServerCommand === "string" && devAgent.devServerCommand.trim().length > 0
-      ? devAgent.devServerCommand.trim()
+    typeof mergedDevAgent.devServerCommand === "string" && mergedDevAgent.devServerCommand.trim().length > 0
+      ? mergedDevAgent.devServerCommand.trim()
       : undefined
-  const skillRefs = Array.isArray(devAgent.skillRefs)
-    ? devAgent.skillRefs.map((skillRef) =>
+  const skillRefs = Array.isArray(mergedDevAgent.skillRefs)
+    ? mergedDevAgent.skillRefs.map((skillRef) =>
         parseDevAgentSkillRef({
           installArg: skillRef.installArg,
           sourceUrl: skillRef.sourceUrl,
@@ -692,15 +695,15 @@ function normalizeDevAgent(devAgent: StoredDevAgent | Omit<DevAgent, "usageCount
       )
     : []
   return {
-    ...devAgent,
-    id: canonicalizeDevAgentId(devAgent.id),
+    ...mergedDevAgent,
+    id: canonicalDevAgentId,
     aiAgent,
     devServerCommand,
     skillRefs,
     sandboxBrowser:
       sandboxBrowser && isDevAgentSandboxBrowser(sandboxBrowser)
         ? sandboxBrowser
-        : getDefaultSandboxBrowser(devAgent.executionMode)
+        : getDefaultSandboxBrowser(mergedDevAgent.executionMode)
   }
 }
 
