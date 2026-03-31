@@ -1,0 +1,75 @@
+src/utils/agent-selection.ts
+  57936b28b87e778b 48
+src/commands/resume.test.ts
+  57936b28b87e778b 1-80
+src/dev-environment.test.ts
+  57936b28b87e778b 2,41,459-478,714-788
+src/cli.ts
+  57936b28b87e778b 265,1010-1011,1161-1162,1323,1550-1555
+src/utils/agent-selection.test.ts
+  57936b28b87e778b 18-23
+src/dev-environment.ts
+  57936b28b87e778b 15,27,180,420-463,699-700,710-711,729-730,735-737,1749-1750
+www/app/dev-agents/runs/[id]/report/report-pending.tsx
+  c16330db51a618a2 148-159,161-168
+src/commands/resume.ts
+  57936b28b87e778b 1-93
+src/cdp-monitor.ts
+  57936b28b87e778b 21-36,86-173,175-191,218,771,774-776,785,793-796,798-800,840,928-932,945-946,948,950-956,958-962,964-967,969-973,1060-1067,1073-1075,1077,1080-1084,1086,1091-1098,1445-1483,1486
+src/utils/project-metadata.ts
+  57936b28b87e778b 1-65
+src/utils/project-metadata.test.ts
+  57936b28b87e778b 1-43
+src/cdp-monitor.test.ts
+  57936b28b87e778b 1-52
+src/runtime-compat.test.ts
+  57936b28b87e778b 29-34
+src/tui-interface-opentui.ts
+  57936b28b87e778b 15,181-190,232,235,938,1065,1158-1159,1161-1163
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.22",
+  "base_commit_sha": "3e173ce3fe0fedc7c04523c116cee8288f17ab06",
+  "prompts": {
+    "57936b28b87e778b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d383c-fc58-73d1-ae43-e83e4061e42b",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh <elsigh@gmail.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 763,
+      "overriden_lines": 0
+    },
+    "600f23c473a4c63d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d3d3a-9e16-7962-8d2a-8c11ed71d9a3",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh <elsigh@gmail.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 349,
+      "overriden_lines": 0
+    },
+    "c16330db51a618a2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1fecf3ee-0fcd-4e11-b828-f9774172847f",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "elsigh <elsigh@gmail.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 20,
+      "overriden_lines": 0
+    }
+  }
+}
