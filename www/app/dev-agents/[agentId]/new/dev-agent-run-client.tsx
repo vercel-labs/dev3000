@@ -120,7 +120,7 @@ export default function DevAgentRunClient({
   const [projects, setProjects] = useState<Project[]>([])
   const [projectsLoading, setProjectsLoading] = useState(false)
   const [projectSearch, setProjectSearch] = useState("")
-  const [selectedProjectId, setSelectedProjectId] = useState(() => searchParams.get("project") ?? "")
+  const [selectedProjectId, setSelectedProjectId] = useState(() => searchParams?.get("project") ?? "")
   const [availableBranches, setAvailableBranches] = useState<Array<{ name: string; lastDeployment?: { url: string } }>>(
     []
   )
@@ -243,7 +243,7 @@ export default function DevAgentRunClient({
   }, [projects])
 
   useEffect(() => {
-    const projectParam = searchParams.get("project")
+    const projectParam = searchParams?.get("project")
     if (projectParam && projects.some((project) => project.id === projectParam) && selectedProjectId !== projectParam) {
       setSelectedProjectId(projectParam)
     }

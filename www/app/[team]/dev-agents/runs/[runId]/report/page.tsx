@@ -417,6 +417,7 @@ function AgentSummary({ report }: { report: DevAgentRunReport }) {
 export default function DevAgentRunReportPage() {
   const params = useParams<{ team: string; runId: string }>()
   const report = DEMO_REPORT
+  const teamSlug = params?.team ?? ""
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] font-sans text-[#ededed]">
@@ -425,7 +426,7 @@ export default function DevAgentRunReportPage() {
         <div className="mx-auto flex h-[52px] max-w-[1100px] items-center justify-between px-6">
           <div className="flex items-center gap-3">
             <Link
-              href={`/${params.team}/dev-agents`}
+              href={`/${teamSlug}/dev-agents`}
               className="flex items-center gap-1.5 text-[13px] text-[#888] transition-colors hover:text-[#ededed]"
             >
               <ArrowLeft className="size-3.5" />

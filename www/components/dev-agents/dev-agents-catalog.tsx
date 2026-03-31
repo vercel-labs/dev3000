@@ -245,7 +245,7 @@ function CatalogSection({ title, children }: { title: string; children: React.Re
 export function DevAgentsCatalog({ teamBasePath, teamAgents, marketplaceAgents }: DevAgentsCatalogProps) {
   const searchParams = useSearchParams()
   const pathname = usePathname()
-  const searchParamTab = searchParams.get("tab") === "marketplace" ? "marketplace" : "team"
+  const searchParamTab = searchParams?.get("tab") === "marketplace" ? "marketplace" : "team"
   const [activeTab, setActiveTab] = useState<"team" | "marketplace">(searchParamTab)
   const favoriteAgents = marketplaceAgents.filter((a) => a.stats.previouslyPurchased)
   const otherMarketplaceAgents = marketplaceAgents.filter((a) => !a.stats.previouslyPurchased)
@@ -262,7 +262,7 @@ export function DevAgentsCatalog({ teamBasePath, teamAgents, marketplaceAgents }
       return
     }
 
-    const params = new URLSearchParams(searchParams.toString())
+    const params = new URLSearchParams(searchParams?.toString() ?? "")
     if (nextTab === "marketplace") {
       params.set("tab", "marketplace")
     } else {
