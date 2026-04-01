@@ -677,6 +677,86 @@ async function _screenshotBrowser(
   }
 }
 
+function sanitizeScreenshotPathSegment(value: string): string {
+  return (
+    value
+      .replace(/^\//, "")
+      .replace(/\//g, "-")
+      .replace(/[^a-zA-Z0-9-_]/g, "")
+      .slice(0, 60) || "root"
+  )
+}
+
+async function uploadSandboxScreenshot(
+  sandbox: Sandbox,
+  screenshotPath: string,
+  projectName: string,
+  kind: string,
+  route: string
+): Promise<string | null> {
+  try {
+    const catResult = await sandbox.runCommand({
+      cmd: "cat",
+      args: [screenshotPath]
+    })
+
+    const chunks: Buffer[] = []
+    for await (const log of catResult.logs()) {
+      if (log.stream === "stdout") {
+        chunks.push(Buffer.from(log.data, "binary"))
+      }
+    }
+    await catResult.wait()
+
+    if (catResult.exitCode !== 0 || chunks.length === 0) {
+      return null
+    }
+
+    const imageBuffer = Buffer.concat(chunks)
+    const blob = await put(
+      `workflow-${sanitizeScreenshotPathSegment(projectName)}-${kind}-${sanitizeScreenshotPathSegment(route)}-${Date.now()}.png`,
+      imageBuffer,
+      {
+        access: "public",
+        contentType: "image/png"
+      }
+    )
+
+    return blob.url
+  } catch (error) {
+    workflowLog(
+      `[Browser] Failed to upload sandbox screenshot ${screenshotPath}: ${error instanceof Error ? error.message : String(error)}`
+    )
+    return null
+  }
+}
+
+async function captureBaselineScreenshot(
+  sandbox: Sandbox,
+  route: string,
+  browserMode: CloudBrowserMode,
+  projectName: string
+): Promise<Array<{ timestamp: number; blobUrl: string; label?: string }>> {
+  const screenshotPath = `/tmp/baseline-${Date.now()}.png`
+  const screenshotResult = await _screenshotBrowser(sandbox, screenshotPath, { fullPage: false }, browserMode)
+  if (!screenshotResult.success) {
+    return []
+  }
+
+  const blobUrl = await uploadSandboxScreenshot(sandbox, screenshotPath, projectName, "baseline", route)
+  if (!blobUrl) {
+    return []
+  }
+
+  return [
+    {
+      timestamp: Date.now(),
+      blobUrl,
+      label: "Baseline"
+    }
+  ]
+}
+
 // Progress context for updating workflow status
 interface ProgressContext {
   userId: string
@@ -2095,12 +2175,25 @@ export async function observeBaselineStep(
 
   const localTargetUrl = `http://localhost:3000${startPath}`
   const cloudBrowserMode = resolveCloudBrowserMode(devAgentSandboxBrowser)
+  let effectiveBeforeScreenshots = beforeScreenshots
 
   // Capture "before" Web Vitals via CDP
   timer.start("Capture before Web Vitals")
   workflowLog("[Observe] Capturing before Web Vitals via CDP...")
   const { vitals: capturedBeforeWebVitals } = await fetchWebVitalsViaCDP(sandbox, localTargetUrl, cloudBrowserMode)
   workflowLog(`[Observe] Before Web Vitals captured: ${JSON.stringify(capturedBeforeWebVitals)}`)
+
+  if (effectiveBeforeScreenshots.length === 0) {
+    timer.start("Capture baseline screenshot")
+    effectiveBeforeScreenshots = await captureBaselineScreenshot(
+      sandbox,
+      startPath,
+      cloudBrowserMode,
+      progressContext?.projectName || "workflow"
+    )
+    timer.end()
+    workflowLog(`[Observe] Captured ${effectiveBeforeScreenshots.length} baseline screenshot(s)`)
+  }
 
   // CLS fallback via d3k logs if CDP didn't capture it
   let effectiveBeforeCls = beforeCls ?? capturedBeforeWebVitals.cls?.value ?? null
@@ -2133,7 +2226,7 @@ export async function observeBaselineStep(
     beforeWebVitals: capturedBeforeWebVitals,
     beforeCls: effectiveBeforeCls,
     beforeGrade: effectiveBeforeGrade,
-    beforeScreenshots,
+    beforeScreenshots: effectiveBeforeScreenshots,
     d3kLogs: initD3kLogs,
     cloudBrowserMode,
     skillsInstalled,
