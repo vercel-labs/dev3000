@@ -2416,6 +2416,7 @@ export async function earlyExitReportStep(
     afterWebVitals: Object.keys(observation.beforeWebVitals).length > 0 ? observation.beforeWebVitals : undefined,
     afterScreenshots: observation.beforeScreenshots,
     verificationStatus: "unchanged",
+    costUsd: 0,
     agentAnalysis: `## Early Exit\n\n${reason}\n\nBaseline CLS: **${clsDisplay}** (${effectiveBeforeGrade || "n/a"})\nMeasured on \`${startPath}\`.\n\nNo agent changes were made.`,
     agentAnalysisModel: "n/a",
     devAgentSkills: devAgentSkillRefs?.length ? devAgentSkillRefs : undefined,
@@ -2861,6 +2862,9 @@ export async function agentFixLoopStep(
   // ── Token usage tracking ────────────────────────────────────────────
   let totalPromptTokens = agentResult.usage.promptTokens
   let totalCompletionTokens = agentResult.usage.completionTokens
+  const totalCacheReadTokens = agentResult.usage.cacheReadTokens
+  const totalCacheCreationTokens = agentResult.usage.cacheCreationTokens
+  const totalCostUsd = agentResult.costUsd
 
   // ── Success Eval ──────────────────────────────────────────────────────
   let successEvalResult: boolean | null = null
@@ -2945,6 +2949,7 @@ Did the agent meet the success criteria? Respond with JSON only.`
     afterScreenshots: finalCls.screenshots,
     afterWebVitals: Object.keys(afterWebVitals).length > 0 ? afterWebVitals : undefined,
     verificationStatus,
+    costUsd: totalCostUsd,
     agentAnalysis: agentResult.transcript,
     agentAnalysisModel: agentResult.modelId,
     skillsInstalled: skillsInstalled.length > 0 ? skillsInstalled : undefined,
@@ -2962,7 +2967,9 @@ Did the agent meet the success criteria? Respond with JSON only.`
     gatewayUsage: {
       promptTokens: totalPromptTokens,
       completionTokens: totalCompletionTokens,
-      totalTokens: totalPromptTokens + totalCompletionTokens
+      cacheReadTokens: totalCacheReadTokens,
+      cacheCreationTokens: totalCacheCreationTokens,
+      totalTokens: totalPromptTokens + totalCompletionTokens + totalCacheReadTokens + totalCacheCreationTokens
     },
     // Marketplace agent flag
     isMarketplaceAgent: progressContext?.isMarketplaceAgent || undefined,
@@ -3443,6 +3450,13 @@ type ClaudeTurnResult = {
   costUsd: number
   durationMs: number
   numTurns: number
+  usage: {
+    promptTokens: number
+    completionTokens: number
+    cacheReadTokens: number
+    cacheCreationTokens: number
+    totalTokens: number
+  }
 }
 
 function resolveClaudeModelSelection(selectedModel?: import("@/lib/dev-agents").DevAgentAiAgent): {
@@ -4072,6 +4086,12 @@ function parseClaudeJsonResult(raw: string): {
   duration_ms?: number
   num_turns?: number
   is_error?: boolean
+  usage?: {
+    input_tokens?: number
+    output_tokens?: number
+    cache_read_input_tokens?: number
+    cache_creation_input_tokens?: number
+  }
 } {
   const trimmed = raw.trim()
   if (!trimmed) {
@@ -4086,6 +4106,12 @@ function parseClaudeJsonResult(raw: string): {
       duration_ms?: number
       num_turns?: number
       is_error?: boolean
+      usage?: {
+        input_tokens?: number
+        output_tokens?: number
+        cache_read_input_tokens?: number
+        cache_creation_input_tokens?: number
+      }
     }
   } catch {
     const lines = trimmed
@@ -4101,6 +4127,12 @@ function parseClaudeJsonResult(raw: string): {
           duration_ms?: number
           num_turns?: number
           is_error?: boolean
+          usage?: {
+            input_tokens?: number
+            output_tokens?: number
+            cache_read_input_tokens?: number
+            cache_creation_input_tokens?: number
+          }
         }
       } catch {}
     }
@@ -4194,7 +4226,18 @@ async function runClaudeTurnInSandbox(
     rawJson: result.stdout.trim(),
     costUsd: typeof parsed.total_cost_usd === "number" ? parsed.total_cost_usd : 0,
     durationMs: typeof parsed.duration_ms === "number" ? parsed.duration_ms : 0,
-    numTurns: typeof parsed.num_turns === "number" ? parsed.num_turns : 0
+    numTurns: typeof parsed.num_turns === "number" ? parsed.num_turns : 0,
+    usage: {
+      promptTokens: parsed.usage?.input_tokens ?? 0,
+      completionTokens: parsed.usage?.output_tokens ?? 0,
+      cacheReadTokens: parsed.usage?.cache_read_input_tokens ?? 0,
+      cacheCreationTokens: parsed.usage?.cache_creation_input_tokens ?? 0,
+      totalTokens:
+        (parsed.usage?.input_tokens ?? 0) +
+        (parsed.usage?.output_tokens ?? 0) +
+        (parsed.usage?.cache_read_input_tokens ?? 0) +
+        (parsed.usage?.cache_creation_input_tokens ?? 0)
+    }
   }
 }
 
@@ -4222,7 +4265,14 @@ async function runAgentWithDiagnoseTool(
   systemPrompt: string
   modelId: string
   skillsLoaded: string[]
-  usage: { promptTokens: number; completionTokens: number; totalTokens: number }
+  usage: {
+    promptTokens: number
+    completionTokens: number
+    cacheReadTokens: number
+    cacheCreationTokens: number
+    totalTokens: number
+  }
+  costUsd: number
 }> {
   const SANDBOX_CWD = projectDir ? `/vercel/sandbox/${projectDir.replace(/^\/+|\/+$/g, "")}` : "/vercel/sandbox"
   const workflowTypeForPrompt = workflowType || "cls-fix"
@@ -4275,6 +4325,11 @@ async function runAgentWithDiagnoseTool(
 
   let currentSessionId: string | undefined
   let finalSummary = ""
+  let totalCostUsd = 0
+  let totalPromptTokens = 0
+  let totalCompletionTokens = 0
+  let totalCacheReadTokens = 0
+  let totalCacheCreationTokens = 0
 
   for (let index = 0; index < turnPrompts.length; index++) {
     const turnPrompt = turnPrompts[index]
@@ -4287,6 +4342,11 @@ async function runAgentWithDiagnoseTool(
     })
     currentSessionId = turnResult.sessionId
     finalSummary = turnResult.resultText || finalSummary
+    totalCostUsd += turnResult.costUsd
+    totalPromptTokens += turnResult.usage.promptTokens
+    totalCompletionTokens += turnResult.usage.completionTokens
+    totalCacheReadTokens += turnResult.usage.cacheReadTokens
+    totalCacheCreationTokens += turnResult.usage.cacheCreationTokens
 
     transcript.push(`### ${turnPrompt.label}`)
     transcript.push("")
@@ -4312,10 +4372,13 @@ async function runAgentWithDiagnoseTool(
     modelId: modelSelection.modelId,
     skillsLoaded: getInstalledSkillNames(devAgentSkillRefs),
     usage: {
-      promptTokens: 0,
-      completionTokens: 0,
-      totalTokens: 0
-    }
+      promptTokens: totalPromptTokens,
+      completionTokens: totalCompletionTokens,
+      cacheReadTokens: totalCacheReadTokens,
+      cacheCreationTokens: totalCacheCreationTokens,
+      totalTokens: totalPromptTokens + totalCompletionTokens + totalCacheReadTokens + totalCacheCreationTokens
+    },
+    costUsd: totalCostUsd
   }
 }
 

@@ -155,7 +155,10 @@ export interface WorkflowReport {
     totalTokens?: number
     promptTokens?: number
     completionTokens?: number
+    cacheReadTokens?: number
+    cacheCreationTokens?: number
   }
+  costUsd?: number
 
   // Whether this was a marketplace agent run (hides internal implementation details)
   isMarketplaceAgent?: boolean

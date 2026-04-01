@@ -279,6 +279,16 @@ function formatSignedPercent(value?: number | null) {
   return `${sign}${value.toFixed(1)}%`
 }
 
+function formatUsd(value?: number) {
+  if (typeof value !== "number") return "—"
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: value < 1 ? 3 : 2,
+    maximumFractionDigits: value < 1 ? 3 : 2
+  }).format(value)
+}
+
 function formatGrade(grade?: MetricSnapshot["grade"]) {
   if (!grade) return null
   return grade === "needs-improvement" ? "Needs improvement" : grade[0].toUpperCase() + grade.slice(1)
@@ -891,6 +901,9 @@ function ReportContentBody({ run, report }: { run: WorkflowRun; report: Workflow
           {hasValidRunTiming && runEndedAt ? (
             <SummaryItem label="Run time" value={formatRunDuration(runEndedAt.getTime() - runStartedAt.getTime())} />
           ) : null}
+          {typeof report.costUsd === "number" && report.costUsd > 0 ? (
+            <SummaryItem label="Cost" value={formatUsd(report.costUsd)} />
+          ) : null}
           {report.targetUrl ? (
             <SummaryItem label="Target URL" value={report.targetUrl} mono href={report.targetUrl} />
           ) : null}
@@ -903,9 +916,23 @@ function ReportContentBody({ run, report }: { run: WorkflowRun; report: Workflow
               label="Tokens"
               value={Intl.NumberFormat("en-US").format(report.gatewayUsage.totalTokens)}
               detail={
-                report.gatewayUsage.promptTokens && report.gatewayUsage.completionTokens
-                  ? `prompt ${Intl.NumberFormat("en-US").format(report.gatewayUsage.promptTokens)} · completion ${Intl.NumberFormat("en-US").format(report.gatewayUsage.completionTokens)}`
-                  : undefined
+                [
+                  typeof report.gatewayUsage.promptTokens === "number"
+                    ? `prompt ${Intl.NumberFormat("en-US").format(report.gatewayUsage.promptTokens)}`
+                    : null,
+                  typeof report.gatewayUsage.completionTokens === "number"
+                    ? `completion ${Intl.NumberFormat("en-US").format(report.gatewayUsage.completionTokens)}`
+                    : null,
+                  typeof report.gatewayUsage.cacheReadTokens === "number" && report.gatewayUsage.cacheReadTokens > 0
+                    ? `cache read ${Intl.NumberFormat("en-US").format(report.gatewayUsage.cacheReadTokens)}`
+                    : null,
+                  typeof report.gatewayUsage.cacheCreationTokens === "number" &&
+                  report.gatewayUsage.cacheCreationTokens > 0
+                    ? `cache write ${Intl.NumberFormat("en-US").format(report.gatewayUsage.cacheCreationTokens)}`
+                    : null
+                ]
+                  .filter(Boolean)
+                  .join(" · ") || undefined
               }
             />
           ) : null}
