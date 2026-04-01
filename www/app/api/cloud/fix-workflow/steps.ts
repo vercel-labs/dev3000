@@ -4779,7 +4779,11 @@ await new Promise((resolve, reject) => {
 const cleanup = async (targetId) => {
   try {
     if (targetId) {
-      await send("Target.closeTarget", { targetId })
+      if (attachedToExistingTarget && sessionId) {
+        await send("Target.detachFromTarget", { sessionId })
+      } else {
+        await send("Target.closeTarget", { targetId })
+      }
     }
   } finally {
     browser.close()
@@ -4787,20 +4791,47 @@ const cleanup = async (targetId) => {
 }
 
 let targetId = null
+let attachedToExistingTarget = false
+let sessionId = null
 
 try {
-  const target = await send("Target.createTarget", { url: "about:blank" })
-  targetId = target.targetId
+  const targetList = await send("Target.getTargets")
+  const targetInfos = Array.isArray(targetList.targetInfos) ? targetList.targetInfos : []
+  const normalizedTargetUrl = targetUrl.replace(/\\/$/, "")
+  const existingTarget =
+    targetInfos.find(
+      (info) =>
+        info?.type === "page" &&
+        typeof info.url === "string" &&
+        (info.url.replace(/\\/$/, "") === normalizedTargetUrl ||
+          info.url.startsWith(normalizedTargetUrl) ||
+          info.url.startsWith("http://localhost:3000"))
+    ) || null
+
+  if (existingTarget?.targetId) {
+    targetId = existingTarget.targetId
+    attachedToExistingTarget = true
+    await send("Target.activateTarget", { targetId })
+  } else {
+    const target = await send("Target.createTarget", { url: "about:blank" })
+    targetId = target.targetId
+  }
+
   const attached = await send("Target.attachToTarget", { targetId, flatten: true })
-  const sessionId = attached.sessionId
+  sessionId = attached.sessionId
 
   await send("Page.enable", {}, sessionId)
   await send("Runtime.enable", {}, sessionId)
+  await send("Page.bringToFront", {}, sessionId)
   await send("Page.addScriptToEvaluateOnNewDocument", {
     source: ${initScript}
   }, sessionId)
 
-  await send("Page.navigate", { url: targetUrl }, sessionId)
+  if (attachedToExistingTarget) {
+    await send("Page.reload", { ignoreCache: true }, sessionId)
+  } else {
+    await send("Page.navigate", { url: targetUrl }, sessionId)
+  }
   await delay(7000)
 
   const evalResult = await send(
@@ -4821,7 +4852,7 @@ try {
   if (raw.cls !== null) vitals.cls = { value: raw.cls, grade: gradeValue(raw.cls, 0.1, 0.25) }
   if (raw.inp !== null) vitals.inp = { value: raw.inp, grade: gradeValue(raw.inp, 200, 500) }
 
-  console.log(JSON.stringify({ vitals, raw }))
+  console.log(JSON.stringify({ vitals, raw, attachedToExistingTarget }))
   await cleanup(targetId)
 } catch (error) {
   await cleanup(targetId)
