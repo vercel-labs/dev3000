@@ -4129,6 +4129,16 @@ function formatClaudeOutputPreview(raw: string | undefined, maxLength = 240): st
   return normalized || "<empty>"
 }
 
+const CLAUDE_HEARTBEAT_MARKER = "__D3K_CLAUDE_HEARTBEAT__"
+
+function stripClaudeHeartbeatNoise(raw: string | undefined): string {
+  if (!raw) return ""
+  return raw
+    .split("\n")
+    .filter((line) => !line.includes(CLAUDE_HEARTBEAT_MARKER))
+    .join("\n")
+}
+
 function buildClaudeSandboxPathEnv(): string {
   return "/home/vercel-sandbox/.claude-code/node_modules/.bin:/home/vercel-sandbox/.bun/bin:/home/vercel-sandbox/.local/bin:/usr/local/bin:/usr/bin:/bin"
 }
@@ -4280,31 +4290,48 @@ async function runClaudeTurnInSandbox(
   await logClaudeCliDiagnostics(sandbox, pathEnv, options.progressContext)
   await appendProgressLog(
     options.progressContext,
-    `[Claude] Running ${prompt.label} (model=${modelSelection.cliModel}, resume=${options.sessionId ? "yes" : "no"}, authToken=present, apiKey=empty, baseUrl=${claudeEnv.ANTHROPIC_BASE_URL}, extraEnv=${Object.keys(modelSelection.extraEnv).join(",") || "none"})`
+    `[Claude] Running ${prompt.label} (model=${modelSelection.cliModel}, resume=${options.sessionId ? "yes" : "no"}, authToken=present, apiKey=empty, baseUrl=${claudeEnv.ANTHROPIC_BASE_URL}, extraEnv=${Object.keys(modelSelection.extraEnv).join(",") || "none"}, heartbeat=yes)`
   )
 
+  const wrappedClaudeCommand = [
+    "stdout_file=$(mktemp)",
+    "stderr_file=$(mktemp)",
+    'claude "$@" >"$stdout_file" 2>"$stderr_file" &',
+    "claude_pid=$!",
+    `while kill -0 "$claude_pid" 2>/dev/null; do echo "${CLAUDE_HEARTBEAT_MARKER}" >&2; sleep 15; done`,
+    'wait "$claude_pid"',
+    "status=$?",
+    'cat "$stdout_file"',
+    'cat "$stderr_file" >&2',
+    'rm -f "$stdout_file" "$stderr_file"',
+    'exit "$status"'
+  ].join("; ")
+
   const result = await runSandboxCommandWithOptions(sandbox, {
-    cmd: "claude",
-    args,
+    cmd: "sh",
+    args: ["-lc", wrappedClaudeCommand, "sh", ...args],
     cwd,
     env: claudeEnv
   })
 
+  const sanitizedStdout = stripClaudeHeartbeatNoise(result.stdout)
+  const sanitizedStderr = stripClaudeHeartbeatNoise(result.stderr)
+
   if (result.exitCode !== 0) {
     await appendProgressLog(
       options.progressContext,
-      `[Claude] ${prompt.label} failed exit=${result.exitCode} stdout=${formatClaudeOutputPreview(result.stdout)} stderr=${formatClaudeOutputPreview(result.stderr)}`
+      `[Claude] ${prompt.label} failed exit=${result.exitCode} stdout=${formatClaudeOutputPreview(sanitizedStdout)} stderr=${formatClaudeOutputPreview(sanitizedStderr)}`
     )
-    throw new Error(`Claude turn failed (${prompt.label}): ${result.stderr || result.stdout || "unknown error"}`)
+    throw new Error(`Claude turn failed (${prompt.label}): ${sanitizedStderr || sanitizedStdout || "unknown error"}`)
   }
 
-  const parsed = parseClaudeJsonResult(result.stdout)
+  const parsed = parseClaudeJsonResult(sanitizedStdout)
   if (parsed.is_error) {
     await appendProgressLog(
       options.progressContext,
-      `[Claude] ${prompt.label} returned is_error stdout=${formatClaudeOutputPreview(result.stdout)}`
+      `[Claude] ${prompt.label} returned is_error stdout=${formatClaudeOutputPreview(sanitizedStdout)}`
     )
-    throw new Error(`Claude reported an error during ${prompt.label}: ${result.stdout}`)
+    throw new Error(`Claude reported an error during ${prompt.label}: ${sanitizedStdout}`)
   }
 
   const sessionId = parsed.session_id || options.sessionId
@@ -4314,8 +4341,8 @@ async function runClaudeTurnInSandbox(
 
   return {
     sessionId,
-    resultText: typeof parsed.result === "string" ? parsed.result.trim() : result.stdout.trim(),
-    rawJson: result.stdout.trim(),
+    resultText: typeof parsed.result === "string" ? parsed.result.trim() : sanitizedStdout.trim(),
+    rawJson: sanitizedStdout.trim(),
     costUsd: typeof parsed.total_cost_usd === "number" ? parsed.total_cost_usd : 0,
     durationMs: typeof parsed.duration_ms === "number" ? parsed.duration_ms : 0,
     numTurns: typeof parsed.num_turns === "number" ? parsed.num_turns : 0,
