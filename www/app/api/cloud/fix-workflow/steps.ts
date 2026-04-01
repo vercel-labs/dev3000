@@ -1973,8 +1973,8 @@ function buildObservationMetricMap(observation: ObserveResult): Record<string, E
     metrics[normalizeMetricKey(key)] = value
   }
 
-  const clsValue = observation.beforeCls ?? observation.beforeWebVitals.cls?.value
-  const clsGrade = observation.beforeGrade ?? observation.beforeWebVitals.cls?.grade
+  const clsValue = observation.beforeWebVitals.cls?.value ?? observation.beforeCls
+  const clsGrade = observation.beforeWebVitals.cls?.grade ?? observation.beforeGrade
   setMetric("cls", clsValue)
   setMetric("cls_grade", clsGrade)
 
@@ -2196,8 +2196,8 @@ export async function observeBaselineStep(
   }
 
   // CLS fallback via d3k logs if CDP didn't capture it
-  let effectiveBeforeCls = beforeCls ?? capturedBeforeWebVitals.cls?.value ?? null
-  let effectiveBeforeGrade = beforeGrade ?? capturedBeforeWebVitals.cls?.grade ?? null
+  let effectiveBeforeCls = capturedBeforeWebVitals.cls?.value ?? beforeCls ?? null
+  let effectiveBeforeGrade = capturedBeforeWebVitals.cls?.grade ?? beforeGrade ?? null
   if (effectiveBeforeCls === null) {
     timer.start("Capture before CLS fallback")
     workflowLog("[Observe] Capturing fallback before-CLS via d3k logs...")
@@ -2363,8 +2363,12 @@ export async function earlyExitReportStep(
   agentSummary: string
   gitDiff: string | null
 }> {
-  const clsDisplay = observation.beforeCls !== null ? observation.beforeCls.toFixed(4) : "unavailable"
-  workflowLog(`[Early Exit] ${reason} (CLS: ${clsDisplay}, grade: ${observation.beforeGrade || "n/a"})`)
+  const effectiveBeforeCls = observation.beforeWebVitals.cls?.value ?? observation.beforeCls
+  const effectiveBeforeGrade = observation.beforeWebVitals.cls?.grade ?? observation.beforeGrade
+  const clsDisplay =
+    effectiveBeforeCls !== null && typeof effectiveBeforeCls !== "undefined" ? effectiveBeforeCls.toFixed(4) : "n/a"
+
+  workflowLog(`[Early Exit] ${reason} (CLS: ${clsDisplay}, grade: ${effectiveBeforeGrade || "n/a"})`)
   await updateProgress(progressContext, 4, `Early exit — ${reason}`)
 
   const report: WorkflowReport = {
@@ -2385,16 +2389,16 @@ export async function earlyExitReportStep(
     projectDir: projectDir || undefined,
     repoOwner: repoOwner || undefined,
     repoName: repoName || undefined,
-    clsScore: observation.beforeCls ?? undefined,
-    clsGrade: observation.beforeGrade || undefined,
+    clsScore: effectiveBeforeCls ?? undefined,
+    clsGrade: effectiveBeforeGrade || undefined,
     beforeWebVitals: Object.keys(observation.beforeWebVitals).length > 0 ? observation.beforeWebVitals : undefined,
     beforeScreenshots: observation.beforeScreenshots,
-    afterClsScore: observation.beforeCls ?? undefined,
-    afterClsGrade: observation.beforeGrade || undefined,
+    afterClsScore: effectiveBeforeCls ?? undefined,
+    afterClsGrade: effectiveBeforeGrade || undefined,
     afterWebVitals: Object.keys(observation.beforeWebVitals).length > 0 ? observation.beforeWebVitals : undefined,
     afterScreenshots: observation.beforeScreenshots,
     verificationStatus: "unchanged",
-    agentAnalysis: `## Early Exit\n\n${reason}\n\nBaseline CLS: **${clsDisplay}** (${observation.beforeGrade || "n/a"})\nMeasured on \`${startPath}\`.\n\nNo agent changes were made.`,
+    agentAnalysis: `## Early Exit\n\n${reason}\n\nBaseline CLS: **${clsDisplay}** (${effectiveBeforeGrade || "n/a"})\nMeasured on \`${startPath}\`.\n\nNo agent changes were made.`,
     agentAnalysisModel: "n/a",
     devAgentSkills: devAgentSkillRefs?.length ? devAgentSkillRefs : undefined,
     skillsInstalled: observation.skillsInstalled.length > 0 ? observation.skillsInstalled : undefined,
@@ -2623,8 +2627,8 @@ export async function agentFixLoopStep(
 
     // Turbopack runs skip init-step CLS bootstrap, so force a deterministic before-CLS capture
     // to guarantee at least one before/after CWV pair for verification.
-    beforeClsForVerification = beforeCls ?? capturedBeforeWebVitals.cls?.value ?? null
-    beforeGradeForVerification = beforeGrade ?? capturedBeforeWebVitals.cls?.grade ?? null
+    beforeClsForVerification = capturedBeforeWebVitals.cls?.value ?? beforeCls ?? null
+    beforeGradeForVerification = capturedBeforeWebVitals.cls?.grade ?? beforeGrade ?? null
     if (isTurbopackBundleAnalyzer && beforeClsForVerification === null) {
       timer.start("Capture before CLS fallback")
       workflowLog("[Agent] Turbopack: capturing fallback before-CLS via d3k logs...")
