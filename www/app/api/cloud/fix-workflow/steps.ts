@@ -3615,6 +3615,48 @@ function buildClaudeActionStepPrompt(
   }
 }
 
+function buildClsActionStepGuidance(
+  actionSteps: Array<{ kind: string; config: Record<string, string> }>
+): string | null {
+  const lines: string[] = []
+
+  for (const [index, step] of actionSteps.entries()) {
+    switch (step.kind) {
+      case "browse-to-page":
+        lines.push(
+          `${index + 1}. Inspect ${step.config.url || "http://localhost:3000/"} only if you need extra visual confirmation while fixing the issue.`
+        )
+        break
+      case "capture-cwv":
+        lines.push(
+          `${index + 1}. Use the workflow-provided baseline and final Web Vitals as the source of truth; only re-measure manually if the runtime evidence looks inconsistent.`
+        )
+        break
+      case "capture-loading-frames":
+        lines.push(
+          `${index + 1}. Use the captured before/after visual evidence to reason about the loading sequence and layout shift source.`
+        )
+        break
+      case "go-back-to-step":
+        lines.push(`${index + 1}. Re-check the relevant visual/metric evidence after your fix before you conclude.`)
+        break
+      case "send-prompt":
+        if (step.config.prompt?.trim()) {
+          lines.push(`${index + 1}. ${step.config.prompt.trim()}`)
+        }
+        break
+      default:
+        break
+    }
+  }
+
+  if (lines.length === 0) {
+    return null
+  }
+
+  return `Workflow editor guidance:\n${lines.join("\n")}`
+}
+
 function buildClaudeMainTaskPrompt({
   workflowType,
   startPath,
@@ -3646,6 +3688,15 @@ function buildClaudeMainTaskPrompt({
       : "Use d3k logs, browser evidence, and runtime signals to validate each meaningful fix before you finish."
 
   if (devAgentInstructions?.trim()) {
+    const clsRuntimeEvidenceBlock =
+      workflowType === "cls-fix"
+        ? `\n\nRuntime-provided evidence:
+- Baseline CLS: ${beforeCls?.toFixed(4) || "unknown"}
+- Baseline grade: ${beforeGrade || "unknown"}
+- The workflow already captured baseline visuals/metrics and will perform final verification after your code changes.
+- Focus your turns on identifying the shift source and fixing code rather than redoing deterministic measurement steps unless the provided evidence seems inconsistent.`
+        : ""
+
     return {
       label: "Main task",
       maxTurns: workflowType === "turbopack-bundle-analyzer" ? 25 : 18,
@@ -3654,7 +3705,7 @@ function buildClaudeMainTaskPrompt({
 Use ${skillLoadInstructions} as relevant to this task.
 
 Dev agent instructions:
-${devAgentInstructions.trim()}${customPrompt?.trim() ? `\n\nRun-specific instructions:\n${customPrompt.trim()}` : ""}
+${devAgentInstructions.trim()}${clsRuntimeEvidenceBlock}${customPrompt?.trim() ? `\n\nRun-specific instructions:\n${customPrompt.trim()}` : ""}
 
 Validation:
 - ${validationHint}
@@ -4320,6 +4371,14 @@ async function runAgentWithDiagnoseTool(
   const browserGuidance = buildDevAgentSandboxBrowserGuidance(devAgentSandboxBrowser)
   const modelSelection = resolveClaudeModelSelection(devAgentAiAgent)
   const selectedModelLabel = getDevAgentModelLabel(modelSelection.modelId)
+  const collapsedClsActionStepGuidance =
+    workflowTypeForPrompt === "cls-fix" && devAgentActionSteps?.length
+      ? buildClsActionStepGuidance(devAgentActionSteps)
+      : null
+  const effectiveDevAgentInstructions = [devAgentInstructions?.trim(), collapsedClsActionStepGuidance]
+    .filter((value): value is string => Boolean(value))
+    .join("\n\n")
+  const effectiveActionSteps = workflowTypeForPrompt === "cls-fix" ? undefined : devAgentActionSteps
 
   await appendProgressLog(progressContext, "[Claude] Ensuring Claude Code CLI is available...")
   try {
@@ -4346,9 +4405,9 @@ async function runAgentWithDiagnoseTool(
     customPrompt,
     crawlDepth,
     devAgentName,
-    devAgentInstructions,
+    devAgentInstructions: effectiveDevAgentInstructions,
     devAgentExecutionMode,
-    devAgentActionSteps,
+    devAgentActionSteps: effectiveActionSteps,
     skillLoadInstructions,
     beforeCls,
     beforeGrade
