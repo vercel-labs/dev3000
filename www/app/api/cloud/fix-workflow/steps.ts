@@ -3682,6 +3682,7 @@ function buildClaudeMainTaskPrompt({
   beforeCls: number | null
   beforeGrade: "good" | "needs-improvement" | "poor" | null
 }): ClaudeTurnPrompt {
+  const mainTaskMaxTurns = workflowType === "cls-fix" ? 30 : workflowType === "turbopack-bundle-analyzer" ? 25 : 18
   const validationHint =
     devAgentExecutionMode === "preview-pr"
       ? "Work from the codebase and preview validation, then prepare PR-ready changes."
@@ -3699,7 +3700,7 @@ function buildClaudeMainTaskPrompt({
 
     return {
       label: "Main task",
-      maxTurns: workflowType === "turbopack-bundle-analyzer" ? 25 : 18,
+      maxTurns: mainTaskMaxTurns,
       prompt: `Run the "${devAgentName || "custom"}" dev agent on ${startPath}. Dev URL: ${devUrl}
 
 Use ${skillLoadInstructions} as relevant to this task.
@@ -3761,7 +3762,7 @@ Do not manually rerun analyzer build commands. The workflow runtime handles the 
   if (customPrompt?.trim()) {
     return {
       label: "Main task",
-      maxTurns: 18,
+      maxTurns: mainTaskMaxTurns,
       prompt: `${customPrompt.trim()}
 
 Use ${skillLoadInstructions} as relevant. Validate meaningful changes before you finish.`
@@ -3770,7 +3771,7 @@ Use ${skillLoadInstructions} as relevant. Validate meaningful changes before you
 
   return {
     label: "Main task",
-    maxTurns: 18,
+    maxTurns: mainTaskMaxTurns,
     prompt: `Fix the CLS issues on ${startPath}. Dev URL: ${devUrl}
 
 Baseline:
