@@ -653,6 +653,10 @@ export class CDPMonitor {
           chromeArgs.push("--disable-setuid-sandbox")
           chromeArgs.push("--disable-gpu")
           chromeArgs.push("--disable-dev-shm-usage")
+          chromeArgs.push("--disable-background-timer-throttling")
+          chromeArgs.push("--disable-backgrounding-occluded-windows")
+          chromeArgs.push("--disable-renderer-backgrounding")
+          chromeArgs.push("--window-size=1920,1080")
           this.debugLog("Launching Chrome in headless mode")
         } else {
           chromeArgs.push("--new-window") // Force new window (only for non-headless)
@@ -1113,6 +1117,18 @@ export class CDPMonitor {
         this.logger("browser", "[CDP] Set viewport to 1920x1080 for headless mode")
       } catch (error) {
         this.debugLog(`Failed to set viewport: ${error}`)
+      }
+
+      try {
+        await this.sendCDPCommand("Page.bringToFront", {})
+      } catch (error) {
+        this.debugLog(`Failed to bring headless page to front: ${error}`)
+      }
+
+      try {
+        await this.sendCDPCommand("Emulation.setFocusEmulationEnabled", { enabled: true })
+      } catch (error) {
+        this.debugLog(`Failed to enable focus emulation: ${error}`)
       }
     }
   }
