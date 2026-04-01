@@ -2218,18 +2218,6 @@ export async function getOrCreateD3kSandbox(config: D3kSandboxConfig): Promise<D
     }
   }
 
-  if (config.projectId && config.teamId && !config.githubPat) {
-    timer.start("Create sandbox from git source")
-    const result = await createD3kSandbox(config)
-    timer.end()
-    return {
-      ...result,
-      fromSnapshot: false,
-      snapshotId: undefined,
-      timing: timer.getData()
-    }
-  }
-
   timer.start("Load base snapshot metadata")
   const metadata = await loadBaseSnapshotId(debug)
   timer.end()
