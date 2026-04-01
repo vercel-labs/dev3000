@@ -4433,12 +4433,21 @@ async function runAgentWithDiagnoseTool(
   for (let index = 0; index < turnPrompts.length; index++) {
     const turnPrompt = turnPrompts[index]
     await appendProgressLog(progressContext, `[Claude] ${turnPrompt.label}: ${turnPrompt.prompt.slice(0, 120)}`)
-    const turnResult = await runClaudeTurnInSandbox(sandbox, SANDBOX_CWD, turnPrompt, {
-      sessionId: currentSessionId,
-      systemPrompt: currentSessionId ? undefined : systemPrompt,
-      modelId: modelSelection.modelId,
-      progressContext
-    })
+    let turnResult: ClaudeTurnResult
+    try {
+      turnResult = await runClaudeTurnInSandbox(sandbox, SANDBOX_CWD, turnPrompt, {
+        sessionId: currentSessionId,
+        systemPrompt: currentSessionId ? undefined : systemPrompt,
+        modelId: modelSelection.modelId,
+        progressContext
+      })
+    } catch (error) {
+      await appendProgressLog(
+        progressContext,
+        `[Claude] ${turnPrompt.label} threw before completion: ${error instanceof Error ? error.message : String(error)}`
+      )
+      throw error
+    }
     currentSessionId = turnResult.sessionId
     finalSummary = turnResult.resultText || finalSummary
     totalCostUsd += turnResult.costUsd
