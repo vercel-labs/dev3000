@@ -121,10 +121,10 @@ export function DevAgentsDashboardShell({
               <div className="mb-6 flex items-start justify-between">
                 <div className="space-y-1">
                   {title && (
-                    <div className="flex items-center gap-2.5">
+                    <>
                       <h1 className="text-[24px] font-semibold tracking-[-0.020em] text-[#ededed]">{title}</h1>
-                      {subtitle ? <span className="text-[13px] text-[#666]">{subtitle}</span> : null}
-                    </div>
+                      {subtitle ? <div className="text-[13px] text-[#666]">{subtitle}</div> : null}
+                    </>
                   )}
                   {description ? (
                     <div className="max-w-xl text-[14px] leading-[22px] text-[#888]">{description}</div>

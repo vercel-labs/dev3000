@@ -567,10 +567,8 @@ function StandaloneReportFrame({
           </div>
         </div>
         <div className="mb-6">
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-3xl font-bold">{title}</h1>
-            {subtitle ? <span className="text-sm text-muted-foreground">{subtitle}</span> : null}
-          </div>
+          <h1 className="text-3xl font-bold">{title}</h1>
+          {subtitle ? <div className="mt-1 text-sm text-muted-foreground">{subtitle}</div> : null}
           {description ? <div className="mt-2 text-sm text-muted-foreground">{description}</div> : null}
         </div>
         <div className="space-y-6">{children}</div>
@@ -681,6 +679,7 @@ async function WorkflowReportPageData({ params }: { params: Promise<{ id: string
         teams={ownerRouteContext.teams}
         selectedTeam={ownerRouteContext.selectedTeam}
         title={primaryHeading}
+        subtitle={report.projectName}
         description={reportDescription}
         actions={pageActions}
       >
@@ -692,6 +691,7 @@ async function WorkflowReportPageData({ params }: { params: Promise<{ id: string
   return (
     <StandaloneReportFrame
       title={primaryHeading}
+      subtitle={report.projectName}
       description={reportDescription}
       actions={isOwner || run.prUrl ? pageActions : undefined}
     >

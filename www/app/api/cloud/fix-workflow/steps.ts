@@ -2177,6 +2177,20 @@ export async function observeBaselineStep(
   const cloudBrowserMode = resolveCloudBrowserMode(devAgentSandboxBrowser)
   let effectiveBeforeScreenshots = beforeScreenshots
 
+  timer.start("Prime baseline browser")
+  workflowLog(`[Observe] Priming baseline browser at ${localTargetUrl}...`)
+  const beforeNavResult = await navigateBrowser(sandbox, localTargetUrl, cloudBrowserMode)
+  workflowLog(
+    `[Observe] Baseline navigation: success=${beforeNavResult.success}${beforeNavResult.error ? `, error=${beforeNavResult.error}` : ""}`
+  )
+  await new Promise((resolve) => setTimeout(resolve, 2000))
+  const beforeReloadResult = await reloadBrowser(sandbox, cloudBrowserMode)
+  workflowLog(
+    `[Observe] Baseline reload: success=${beforeReloadResult.success}${beforeReloadResult.error ? `, error=${beforeReloadResult.error}` : ""}`
+  )
+  await new Promise((resolve) => setTimeout(resolve, 5000))
+  timer.end()
+
   // Capture "before" Web Vitals via CDP
   timer.start("Capture before Web Vitals")
   workflowLog("[Observe] Capturing before Web Vitals via CDP...")
