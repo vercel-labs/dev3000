@@ -147,11 +147,15 @@ export default function DevAgentRunClient({
     () => projects.find((project) => project.id === selectedProjectId) || null,
     [projects, selectedProjectId]
   )
+  const selectedProjectListVisibility = selectedProjectId ? repoVisibilities.get(selectedProjectId) : undefined
   const selectedRepoOwner = selectedProject?.link?.org || selectedProject?.latestDeployments[0]?.meta?.githubOrg
   const selectedRepoName = selectedProject?.link?.repo || selectedProject?.latestDeployments[0]?.meta?.githubRepo
   const hasGitHubRepoInfo = Boolean(selectedRepoOwner && selectedRepoName)
-  const requiresGitHubPatForRepoAccess = !defaultUseV0DevAgentRunner && hasGitHubRepoInfo && repoVisibility !== "public"
-  const shouldShowGitHubPatField = hasGitHubRepoInfo && !defaultUseV0DevAgentRunner && repoVisibility !== "public"
+  const effectiveRepoVisibility = selectedProjectListVisibility ?? repoVisibility
+  const requiresGitHubPatForRepoAccess =
+    !defaultUseV0DevAgentRunner && hasGitHubRepoInfo && effectiveRepoVisibility === "private_or_unknown"
+  const shouldShowGitHubPatField =
+    hasGitHubRepoInfo && !defaultUseV0DevAgentRunner && effectiveRepoVisibility === "private_or_unknown"
 
   useEffect(() => {
     const stored = localStorage.getItem(GITHUB_PAT_STORAGE_KEY)
@@ -322,6 +326,11 @@ export default function DevAgentRunClient({
       return
     }
 
+    if (selectedProjectListVisibility === "public" || selectedProjectListVisibility === "private_or_unknown") {
+      setRepoVisibility(selectedProjectListVisibility)
+      return
+    }
+
     const controller = new AbortController()
     setRepoVisibility("checking")
 
@@ -345,7 +354,7 @@ export default function DevAgentRunClient({
       })
 
     return () => controller.abort()
-  }, [selectedRepoName, selectedRepoOwner])
+  }, [selectedProjectListVisibility, selectedRepoName, selectedRepoOwner])
 
   async function startDevAgentRun() {
     if (!selectedProject || !selectedTeam) {
@@ -704,7 +713,7 @@ export default function DevAgentRunClient({
                     className="h-9 border-[#1f1f1f] bg-transparent text-[13px] text-[#ededed]"
                   />
                   <p className="text-[11px] text-[#555]">
-                    Visibility: {repoVisibility === "checking" ? "checking…" : repoVisibility.replaceAll("_", " ")}
+                    Visibility: {effectiveRepoVisibility.replaceAll("_", " ")}
                     {requiresGitHubPatForRepoAccess ? " · Required for private repos." : ""}
                   </p>
                 </div>
