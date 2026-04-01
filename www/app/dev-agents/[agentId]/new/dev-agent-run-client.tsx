@@ -113,6 +113,7 @@ export default function DevAgentRunClient({
 }: DevAgentRunClientProps) {
   const projectSearchId = useId()
   const startPathId = useId()
+  const projectDirectoryId = useId()
   const customPromptId = useId()
   const githubPatId = useId()
   const pathname = usePathname()
@@ -127,6 +128,7 @@ export default function DevAgentRunClient({
   const [branchesLoading, setBranchesLoading] = useState(false)
   const [baseBranch, setBaseBranch] = useState("main")
   const [startPath, setStartPath] = useState("/")
+  const [projectDirectory, setProjectDirectory] = useState("")
   const [customPrompt, setCustomPrompt] = useState("")
   const [githubPat, setGithubPat] = useState("")
   const [repoVisibility, setRepoVisibility] = useState<RepoVisibility>("unknown")
@@ -264,6 +266,10 @@ export default function DevAgentRunClient({
       window.history.replaceState(null, "", nextUrl)
     }
   }, [pathname, selectedProjectId])
+
+  useEffect(() => {
+    setProjectDirectory(selectedProject?.rootDirectory?.trim() || "")
+  }, [selectedProject?.rootDirectory])
 
   const selectedProjectIdStable = selectedProject?.id
   useEffect(() => {
@@ -403,7 +409,7 @@ export default function DevAgentRunClient({
         projectName: project.name,
         projectId: project.id,
         teamId: selectedTeam.isPersonal ? undefined : selectedTeam.id,
-        projectDir: project.rootDirectory?.trim() || undefined,
+        projectDir: projectDirectory.trim() || project.rootDirectory?.trim() || undefined,
         repoUrl: repoOwner && repoName ? `https://github.com/${repoOwner}/${repoName}` : undefined,
         repoOwner,
         repoName,
@@ -597,6 +603,9 @@ export default function DevAgentRunClient({
                     ? `${selectedRepoOwner}/${selectedRepoName}`
                     : "Repository not linked"}
                 </div>
+                <div className="mt-0.5 text-[12px] text-[#666]">
+                  Root directory: {selectedProject.rootDirectory?.trim() || "Repo root"}
+                </div>
                 {selectedProject.latestDeployments[0]?.url && (
                   <a
                     href={`https://${selectedProject.latestDeployments[0].url}`}
@@ -645,6 +654,23 @@ export default function DevAgentRunClient({
                     />
                   </div>
                 )}
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor={projectDirectoryId} className="text-[13px] text-[#888]">
+                  Project Directory
+                </Label>
+                <Input
+                  id={projectDirectoryId}
+                  value={projectDirectory}
+                  onChange={(event) => setProjectDirectory(event.target.value)}
+                  placeholder="Repo root"
+                  className="h-9 border-[#1f1f1f] bg-transparent text-[13px] text-[#ededed] placeholder:text-[#555]"
+                />
+                <p className="text-[11px] text-[#555]">
+                  Defaults to Vercel project Root Directory. Override for monorepos when the run should start below the
+                  repo root.
+                </p>
               </div>
 
               {devAgent.requiresCustomPrompt && (

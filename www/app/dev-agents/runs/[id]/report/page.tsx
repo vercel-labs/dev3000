@@ -693,7 +693,9 @@ async function WorkflowReportPageData({ params }: { params: Promise<{ id: string
 function ReportContentBody({ run, report }: { run: WorkflowRun; report: WorkflowReport }) {
   const workflowType = report.workflowType || run.type || "cls-fix"
   const metricRows = buildMetricRows(report)
+  const isEarlyExit = Boolean(report.earlyExitResult?.shouldExit)
   const hasMetricComparison = metricRows.some((row) => row.before && row.after)
+  const showMetricComparisonTable = hasMetricComparison || (isEarlyExit && metricRows.some((row) => row.before))
   const metricsWithCurrentValues = metricRows.filter((row) => row.current)
   const earlyExitSummary = getEarlyExitSummary(report)
   const verificationSummary = getVerificationSummary(report, metricRows)
@@ -793,7 +795,7 @@ function ReportContentBody({ run, report }: { run: WorkflowRun; report: Workflow
           title="Web Vitals"
           description="Baseline and follow-up web vitals captured during the run when available."
         >
-          {hasMetricComparison ? (
+          {showMetricComparisonTable ? (
             <div className="overflow-hidden rounded-lg border border-border">
               <table className="w-full text-sm">
                 <thead className="bg-muted/30 text-muted-foreground">
@@ -805,50 +807,54 @@ function ReportContentBody({ run, report }: { run: WorkflowRun; report: Workflow
                   </tr>
                 </thead>
                 <tbody>
-                  {metricsWithCurrentValues.map((row) => (
-                    <tr key={row.key} className="border-t border-border">
-                      <td className="px-4 py-3 align-top">
-                        <div className="font-medium">{row.label}</div>
-                        <div className="text-xs text-muted-foreground">{row.description}</div>
-                      </td>
-                      <td className="px-4 py-3 align-top">
-                        {row.before ? (
-                          <div className="space-y-1">
-                            <div>{formatMetricValue(row.key, row.before.value)}</div>
-                            <MetricGradeBadge grade={row.before.grade} />
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 align-top">
-                        {row.after ? (
-                          <div className="space-y-1">
-                            <div>{formatMetricValue(row.key, row.after.value)}</div>
-                            <MetricGradeBadge grade={row.after.grade} />
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 align-top">
-                        {row.before && row.after ? (
-                          <div className="space-y-1">
-                            <div>{formatMetricDelta(row.key, row.before.value, row.after.value)}</div>
-                            <div className="text-xs text-muted-foreground">
-                              {row.after.value < row.before.value
-                                ? "Improved"
-                                : row.after.value > row.before.value
-                                  ? "Regressed"
-                                  : "Unchanged"}
+                  {metricsWithCurrentValues.map((row) => {
+                    const afterSnapshot = isEarlyExit ? undefined : row.after
+
+                    return (
+                      <tr key={row.key} className="border-t border-border">
+                        <td className="px-4 py-3 align-top">
+                          <div className="font-medium">{row.label}</div>
+                          <div className="text-xs text-muted-foreground">{row.description}</div>
+                        </td>
+                        <td className="px-4 py-3 align-top">
+                          {row.before ? (
+                            <div className="space-y-1">
+                              <div>{formatMetricValue(row.key, row.before.value)}</div>
+                              <MetricGradeBadge grade={row.before.grade} />
                             </div>
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">Not compared</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 align-top">
+                          {afterSnapshot ? (
+                            <div className="space-y-1">
+                              <div>{formatMetricValue(row.key, afterSnapshot.value)}</div>
+                              <MetricGradeBadge grade={afterSnapshot.grade} />
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 align-top">
+                          {row.before && afterSnapshot ? (
+                            <div className="space-y-1">
+                              <div>{formatMetricDelta(row.key, row.before.value, afterSnapshot.value)}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {afterSnapshot.value < row.before.value
+                                  ? "Improved"
+                                  : afterSnapshot.value > row.before.value
+                                    ? "Regressed"
+                                    : "Unchanged"}
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>

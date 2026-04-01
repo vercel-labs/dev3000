@@ -668,10 +668,23 @@ function getDefaultSandboxBrowser(executionMode: DevAgentExecutionMode): DevAgen
   return executionMode === "preview-pr" ? "next-browser" : "agent-browser"
 }
 
+function getBuiltinDevAgentDefaults(devAgentId: string): Omit<DevAgent, "usageCount"> | undefined {
+  const canonicalDevAgentId = canonicalizeDevAgentId(devAgentId)
+  return BUILTIN_DEV_AGENTS.find((candidate) => candidate.id === canonicalDevAgentId)
+}
+
 function normalizeDevAgent(devAgent: StoredDevAgent | Omit<DevAgent, "usageCount">): Omit<DevAgent, "usageCount"> {
   const canonicalDevAgentId = canonicalizeDevAgentId(devAgent.id)
-  const builtinDefaults = BUILTIN_DEV_AGENTS.find((candidate) => candidate.id === canonicalDevAgentId)
-  const mergedDevAgent = builtinDefaults ? { ...builtinDefaults, ...devAgent } : devAgent
+  const builtinDefaults = getBuiltinDevAgentDefaults(canonicalDevAgentId)
+  const mergedDevAgent = builtinDefaults
+    ? {
+        ...builtinDefaults,
+        ...devAgent,
+        kind: builtinDefaults.kind,
+        author: builtinDefaults.author,
+        team: builtinDefaults.team
+      }
+    : devAgent
   const sandboxBrowser = mergedDevAgent.sandboxBrowser
   const aiAgent =
     mergedDevAgent.aiAgent === "anthropic/claude-opus-4.6" || mergedDevAgent.aiAgent === "anthropic/claude-sonnet-4.6"
@@ -882,6 +895,7 @@ export async function updateCustomDevAgent(
   if (!existingDevAgent) {
     return null
   }
+  const builtinDefaults = getBuiltinDevAgentDefaults(canonicalDevAgentId)
 
   const updatedDevAgent: StoredDevAgent = {
     ...existingDevAgent,
@@ -894,8 +908,8 @@ export async function updateCustomDevAgent(
     devServerCommand: input.devServerCommand?.trim() || existingDevAgent.devServerCommand,
     actionSteps: input.actionSteps,
     skillRefs: input.skillRefs,
-    author: input.author,
-    team: input.team ?? existingDevAgent.team,
+    author: builtinDefaults?.author ?? input.author,
+    team: builtinDefaults?.team ?? input.team ?? existingDevAgent.team,
     updatedAt: new Date().toISOString(),
     successEval: input.successEval?.trim() || existingDevAgent.successEval,
     earlyExitMode: input.earlyExitMode ?? existingDevAgent.earlyExitMode,
