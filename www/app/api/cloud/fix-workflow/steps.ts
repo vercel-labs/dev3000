@@ -3558,7 +3558,7 @@ function buildClaudeSetupPrompt(
 ): ClaudeTurnPrompt {
   return {
     label: "Setup",
-    maxTurns: 4,
+    maxTurns: 8,
     prompt: `You are starting the ${devAgentName || "dev agent"} workflow.
 
 Context:
@@ -3567,7 +3567,13 @@ Context:
 - Installed skills: ${skillLoadInstructions}
 ${customPrompt?.trim() ? `- Run-specific instructions: ${customPrompt.trim()}` : ""}
 
-Before doing any major work, review the installed skills that are relevant, especially d3k. Then summarize your plan for this run in 3-5 bullets and begin executing it.`
+Before doing any major work, summarize your plan for this run in 3-5 bullets.
+
+Setup-step rules:
+- Do not use tools in this step.
+- Do not inspect files yet.
+- Do not start implementing or making code changes yet.
+- Keep the response short so the later workflow steps can spend their turns on execution.`
   }
 }
 
