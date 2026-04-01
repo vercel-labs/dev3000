@@ -4487,6 +4487,171 @@ async function readLatestSandboxSession(
   }
 }
 
+function extractSandboxCdpUrl(value: unknown): string | null {
+  if (typeof value === "string" && /^wss?:\/\/.+\/devtools\/browser\//.test(value)) {
+    return value
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = extractSandboxCdpUrl(item)
+      if (found) return found
+    }
+    return null
+  }
+  if (value && typeof value === "object") {
+    for (const nested of Object.values(value)) {
+      const found = extractSandboxCdpUrl(nested)
+      if (found) return found
+    }
+  }
+  return null
+}
+
+async function fetchWebVitalsFromDocumentStart(
+  sandbox: Sandbox,
+  targetUrl: string
+): Promise<{ vitals: import("@/types").WebVitals | null; diagnosticLogs: string[] }> {
+  const diagnosticLogs: string[] = []
+  const diagLog = (msg: string) => {
+    workflowLog(msg)
+    diagnosticLogs.push(msg)
+  }
+
+  const { sessionPath, session } = await readLatestSandboxSession(sandbox)
+  const cdpUrl = extractSandboxCdpUrl(session)
+  if (!cdpUrl) {
+    diagLog(
+      `[fetchWebVitals] No sandbox CDP URL available${sessionPath ? ` in ${sessionPath}` : ""}; falling back to browser CLI capture`
+    )
+    return { vitals: null, diagnosticLogs }
+  }
+
+  const initScript = JSON.stringify(buildWebVitalsInitScript())
+  const readScript = JSON.stringify(buildWebVitalsReadScript())
+  const measureScript = `
+const cdpUrl = process.env.D3K_CDP_URL
+const targetUrl = process.env.D3K_TARGET_URL
+
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+const gradeValue = (value, goodThreshold, needsImprovementThreshold) => {
+  if (value <= goodThreshold) return "good"
+  if (value <= needsImprovementThreshold) return "needs-improvement"
+  return "poor"
+}
+
+const browser = new WebSocket(cdpUrl)
+let nextId = 0
+const pending = new Map()
+
+const send = (method, params = {}, sessionId) =>
+  new Promise((resolve, reject) => {
+    const id = ++nextId
+    pending.set(id, { resolve, reject })
+    browser.send(JSON.stringify(sessionId ? { id, method, params, sessionId } : { id, method, params }))
+  })
+
+browser.onmessage = (event) => {
+  const message = JSON.parse(event.data)
+  if (!message.id || !pending.has(message.id)) return
+  const { resolve, reject } = pending.get(message.id)
+  pending.delete(message.id)
+  if (message.error) reject(new Error(JSON.stringify(message.error)))
+  else resolve(message.result)
+}
+
+await new Promise((resolve, reject) => {
+  browser.onopen = resolve
+  browser.onerror = () => reject(new Error("Failed to connect to sandbox CDP"))
+})
+
+const cleanup = async (targetId) => {
+  try {
+    if (targetId) {
+      await send("Target.closeTarget", { targetId })
+    }
+  } finally {
+    browser.close()
+  }
+}
+
+let targetId = null
+
+try {
+  const target = await send("Target.createTarget", { url: "about:blank" })
+  targetId = target.targetId
+  const attached = await send("Target.attachToTarget", { targetId, flatten: true })
+  const sessionId = attached.sessionId
+
+  await send("Page.enable", {}, sessionId)
+  await send("Runtime.enable", {}, sessionId)
+  await send("Page.addScriptToEvaluateOnNewDocument", {
+    source: ${initScript}
+  }, sessionId)
+
+  await send("Page.navigate", { url: targetUrl }, sessionId)
+  await delay(7000)
+
+  const evalResult = await send(
+    "Runtime.evaluate",
+    {
+      expression: ${readScript},
+      returnByValue: true,
+      awaitPromise: true
+    },
+    sessionId
+  )
+
+  const raw = JSON.parse(evalResult.result.value)
+  const vitals = {}
+  if (raw.lcp !== null) vitals.lcp = { value: raw.lcp, grade: gradeValue(raw.lcp, 2500, 4000) }
+  if (raw.fcp !== null) vitals.fcp = { value: raw.fcp, grade: gradeValue(raw.fcp, 1800, 3000) }
+  if (raw.ttfb !== null) vitals.ttfb = { value: raw.ttfb, grade: gradeValue(raw.ttfb, 800, 1800) }
+  if (raw.cls !== null) vitals.cls = { value: raw.cls, grade: gradeValue(raw.cls, 0.1, 0.25) }
+  if (raw.inp !== null) vitals.inp = { value: raw.inp, grade: gradeValue(raw.inp, 200, 500) }
+
+  console.log(JSON.stringify({ vitals, raw }))
+  await cleanup(targetId)
+} catch (error) {
+  await cleanup(targetId)
+  console.error(error instanceof Error ? error.message : String(error))
+  process.exit(1)
+}
+`
+
+  const result = await runSandboxCommandWithOptions(sandbox, {
+    cmd: "node",
+    args: ["--input-type=module", "-e", measureScript],
+    env: {
+      D3K_CDP_URL: cdpUrl,
+      D3K_TARGET_URL: targetUrl
+    }
+  })
+
+  if (result.exitCode !== 0 || !result.stdout.trim()) {
+    diagLog(
+      `[fetchWebVitals] Document-start CDP capture failed: ${result.stderr.trim() || result.stdout.trim() || "no output"}`
+    )
+    return { vitals: null, diagnosticLogs }
+  }
+
+  try {
+    const parsed = JSON.parse(result.stdout.trim()) as {
+      vitals?: import("@/types").WebVitals
+      raw?: Record<string, unknown>
+    }
+    diagLog(
+      `[fetchWebVitals] Document-start CDP result: ${JSON.stringify(parsed.raw || parsed.vitals || {}).slice(0, 500)}`
+    )
+    return { vitals: parsed.vitals || {}, diagnosticLogs }
+  } catch (error) {
+    diagLog(
+      `[fetchWebVitals] Failed to parse document-start CDP JSON: ${error instanceof Error ? error.message : String(error)}`
+    )
+    return { vitals: null, diagnosticLogs }
+  }
+}
+
 async function readSandboxD3kLogs(sandbox: Sandbox): Promise<string> {
   const logReadScript = String.raw`
 const fs = require("fs")
@@ -4668,6 +4833,15 @@ async function fetchWebVitalsViaCDP(
 
   const maxAttempts = 3
   let vitals: import("@/types").WebVitals = {}
+
+  if (targetUrl) {
+    const documentStartResult = await fetchWebVitalsFromDocumentStart(sandbox, targetUrl)
+    diagnosticLogs.push(...documentStartResult.diagnosticLogs)
+    if (documentStartResult.vitals && Object.keys(documentStartResult.vitals).length > 0) {
+      diagLog(`[fetchWebVitals] Using document-start CDP capture for ${targetUrl}`)
+      return { vitals: documentStartResult.vitals, diagnosticLogs }
+    }
+  }
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
