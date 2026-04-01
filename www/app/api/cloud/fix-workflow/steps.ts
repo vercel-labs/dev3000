@@ -2198,6 +2198,24 @@ export async function observeBaselineStep(
   // CLS fallback via d3k logs if CDP didn't capture it
   let effectiveBeforeCls = capturedBeforeWebVitals.cls?.value ?? beforeCls ?? null
   let effectiveBeforeGrade = capturedBeforeWebVitals.cls?.grade ?? beforeGrade ?? null
+
+  const directBeforeClsFallback = await fetchClsData(sandbox)
+  const reconciledBeforeCls = pickMoreCredibleCls(
+    { value: effectiveBeforeCls, grade: effectiveBeforeGrade },
+    { value: directBeforeClsFallback.clsScore, grade: directBeforeClsFallback.clsGrade }
+  )
+  if (reconciledBeforeCls.source === "fallback") {
+    effectiveBeforeCls = reconciledBeforeCls.value
+    effectiveBeforeGrade = reconciledBeforeCls.grade
+    if (effectiveBeforeCls !== null && effectiveBeforeGrade) {
+      capturedBeforeWebVitals.cls = {
+        value: effectiveBeforeCls,
+        grade: effectiveBeforeGrade
+      }
+    }
+    workflowLog(`[Observe] Adopted d3k CLS fallback: ${effectiveBeforeCls?.toFixed(4)} (${effectiveBeforeGrade})`)
+  }
+
   if (effectiveBeforeCls === null) {
     timer.start("Capture before CLS fallback")
     workflowLog("[Observe] Capturing fallback before-CLS via d3k logs...")
@@ -3731,6 +3749,33 @@ function parseClsValue(rawValue?: string): number | null {
 function gradeClsValue(clsScore: number | null): "good" | "needs-improvement" | "poor" | null {
   if (clsScore === null) return null
   return clsScore <= 0.1 ? "good" : clsScore <= 0.25 ? "needs-improvement" : "poor"
+}
+
+function pickMoreCredibleCls(
+  primary: { value: number | null; grade?: "good" | "needs-improvement" | "poor" | null },
+  fallback: { value: number | null; grade?: "good" | "needs-improvement" | "poor" | null },
+  tolerance = 0.005
+): {
+  value: number | null
+  grade: "good" | "needs-improvement" | "poor" | null
+  source: "primary" | "fallback" | null
+} {
+  const primaryValue = primary.value
+  const fallbackValue = fallback.value
+
+  if (primaryValue === null && fallbackValue === null) {
+    return { value: null, grade: null, source: null }
+  }
+  if (primaryValue === null) {
+    return { value: fallbackValue, grade: fallback.grade ?? gradeClsValue(fallbackValue), source: "fallback" }
+  }
+  if (fallbackValue === null) {
+    return { value: primaryValue, grade: primary.grade ?? gradeClsValue(primaryValue), source: "primary" }
+  }
+  if (fallbackValue > primaryValue + tolerance) {
+    return { value: fallbackValue, grade: fallback.grade ?? gradeClsValue(fallbackValue), source: "fallback" }
+  }
+  return { value: primaryValue, grade: primary.grade ?? gradeClsValue(primaryValue), source: "primary" }
 }
 
 function extractClsEvidenceFromText(text?: string): {
