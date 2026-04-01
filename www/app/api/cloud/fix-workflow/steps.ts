@@ -2233,7 +2233,7 @@ export async function observeBaselineStep(
     workflowLog(`[Observe] Adopted d3k CLS fallback: ${effectiveBeforeCls?.toFixed(4)} (${effectiveBeforeGrade})`)
   }
 
-  const needsActiveClsFallback = effectiveBeforeCls === null || effectiveBeforeCls <= 0.001
+  const needsActiveClsFallback = effectiveBeforeCls === null || effectiveBeforeCls <= 0.02
   if (needsActiveClsFallback) {
     timer.start("Capture before CLS fallback")
     workflowLog("[Observe] Capturing active fallback before-CLS via d3k logs...")
@@ -5024,6 +5024,7 @@ async function fetchWebVitalsViaCDP(
   browserMode: CloudBrowserMode = "agent-browser"
 ): Promise<{ vitals: import("@/types").WebVitals; diagnosticLogs: string[] }> {
   const diagnosticLogs: string[] = []
+  let documentStartVitals: import("@/types").WebVitals | null = null
 
   // Helper to log and capture diagnostics
   const diagLog = (msg: string) => {
@@ -5049,8 +5050,10 @@ async function fetchWebVitalsViaCDP(
     const documentStartResult = await fetchWebVitalsFromDocumentStart(sandbox, targetUrl)
     diagnosticLogs.push(...documentStartResult.diagnosticLogs)
     if (documentStartResult.vitals && Object.keys(documentStartResult.vitals).length > 0) {
-      diagLog(`[fetchWebVitals] Using document-start CDP capture for ${targetUrl}`)
-      return { vitals: documentStartResult.vitals, diagnosticLogs }
+      documentStartVitals = documentStartResult.vitals
+      diagLog(
+        `[fetchWebVitals] Document-start candidate captured for ${targetUrl}: ${JSON.stringify(documentStartVitals)}`
+      )
     }
   }
 
@@ -5157,6 +5160,38 @@ async function fetchWebVitalsViaCDP(
 
     if (attempt < maxAttempts) {
       await new Promise((resolve) => setTimeout(resolve, 1000))
+    }
+  }
+
+  if (documentStartVitals && Object.keys(documentStartVitals).length > 0) {
+    if (Object.keys(vitals).length === 0) {
+      vitals = documentStartVitals
+      diagLog("[fetchWebVitals] Active-browser capture unavailable; using document-start candidate")
+    } else {
+      const mergedVitals: import("@/types").WebVitals = {
+        ...documentStartVitals,
+        ...vitals
+      }
+      const reconciledCls = pickMoreCredibleCls(
+        {
+          value: vitals.cls?.value ?? null,
+          grade: vitals.cls?.grade ?? null
+        },
+        {
+          value: documentStartVitals.cls?.value ?? null,
+          grade: documentStartVitals.cls?.grade ?? null
+        }
+      )
+      if (reconciledCls.value !== null && reconciledCls.grade) {
+        mergedVitals.cls = {
+          value: reconciledCls.value,
+          grade: reconciledCls.grade
+        }
+      }
+      vitals = mergedVitals
+      diagLog(
+        `[fetchWebVitals] Reconciled active/document-start CLS: active=${vitals.cls?.value ?? "null"}, documentStart=${documentStartVitals.cls?.value ?? "null"}, chosen=${reconciledCls.value ?? "null"} (${reconciledCls.source ?? "none"})`
+      )
     }
   }
 
