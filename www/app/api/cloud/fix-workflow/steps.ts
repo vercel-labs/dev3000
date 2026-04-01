@@ -3585,25 +3585,25 @@ function buildClaudeActionStepPrompt(
     case "browse-to-page":
       return {
         label: `Step ${index + 1}`,
-        maxTurns: 6,
+        maxTurns: 14,
         prompt: `Step ${index + 1}: Browse to ${step.config.url || "http://localhost:3000/"} in the sandbox app and inspect what you see.`
       }
     case "capture-cwv":
       return {
         label: `Step ${index + 1}`,
-        maxTurns: 6,
+        maxTurns: 14,
         prompt: `Step ${index + 1}: Capture the current Core Web Vitals for the page and explain the results.`
       }
     case "capture-loading-frames":
       return {
         label: `Step ${index + 1}`,
-        maxTurns: 6,
+        maxTurns: 14,
         prompt: `Step ${index + 1}: Capture the page loading sequence and describe how the page renders over time.`
       }
     case "go-back-to-step":
       return {
         label: `Step ${index + 1}`,
-        maxTurns: 8,
+        maxTurns: 14,
         prompt: `Step ${index + 1}: Go back to step ${step.config.stepNumber || "the prior relevant step"} and repeat from there to verify improvements.`
       }
     default:
