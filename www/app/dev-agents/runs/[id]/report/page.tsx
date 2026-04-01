@@ -642,11 +642,32 @@ async function WorkflowReportPageData({ params }: { params: Promise<{ id: string
 
   const workflowLabel = getWorkflowLabel(report, run)
   const reportDescription = getWorkflowDescription(report, workflowLabel)
+  const projectDisplayName = report.projectName || run.projectName
   const devAgentId = report.devAgentId || run.devAgentId
   const devAgentHref =
     ownerRouteContext?.selectedTeam && devAgentId
       ? `/${ownerRouteContext.selectedTeam.slug}/dev-agents/${devAgentId}`
       : null
+  const vercelProjectHref = ownerRouteContext?.selectedTeam
+    ? `https://vercel.com/${ownerRouteContext.selectedTeam.slug}/${encodeURIComponent(projectDisplayName)}`
+    : null
+  const projectSubtitle = (
+    <span>
+      Project:{" "}
+      {vercelProjectHref ? (
+        <a
+          href={vercelProjectHref}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-semibold text-foreground hover:underline"
+        >
+          {projectDisplayName}
+        </a>
+      ) : (
+        <span className="font-semibold text-foreground">{projectDisplayName}</span>
+      )}
+    </span>
+  )
   const primaryHeading = devAgentHref ? (
     <>
       Run Report:{" "}
@@ -679,7 +700,7 @@ async function WorkflowReportPageData({ params }: { params: Promise<{ id: string
         teams={ownerRouteContext.teams}
         selectedTeam={ownerRouteContext.selectedTeam}
         title={primaryHeading}
-        subtitle={report.projectName}
+        subtitle={projectSubtitle}
         description={reportDescription}
         actions={pageActions}
       >
@@ -691,7 +712,7 @@ async function WorkflowReportPageData({ params }: { params: Promise<{ id: string
   return (
     <StandaloneReportFrame
       title={primaryHeading}
-      subtitle={report.projectName}
+      subtitle={projectSubtitle}
       description={reportDescription}
       actions={isOwner || run.prUrl ? pageActions : undefined}
     >
