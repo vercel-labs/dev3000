@@ -2176,9 +2176,11 @@ export async function observeBaselineStep(
   const localTargetUrl = `http://localhost:3000${startPath}`
   const cloudBrowserMode = resolveCloudBrowserMode(devAgentSandboxBrowser)
   let effectiveBeforeScreenshots = beforeScreenshots
+  let effectiveObservationLogs = initD3kLogs
 
   timer.start("Prime baseline browser")
   workflowLog(`[Observe] Priming baseline browser at ${localTargetUrl}...`)
+  await appendProgressLog(progressContext, `[Observe] Priming browser at ${localTargetUrl}`)
   const beforeNavResult = await navigateBrowser(sandbox, localTargetUrl, cloudBrowserMode)
   workflowLog(
     `[Observe] Baseline navigation: success=${beforeNavResult.success}${beforeNavResult.error ? `, error=${beforeNavResult.error}` : ""}`
@@ -2213,14 +2215,15 @@ export async function observeBaselineStep(
   let effectiveBeforeCls = capturedBeforeWebVitals.cls?.value ?? beforeCls ?? null
   let effectiveBeforeGrade = capturedBeforeWebVitals.cls?.grade ?? beforeGrade ?? null
 
-  const directBeforeClsFallback = await fetchClsData(sandbox)
+  let baselineClsEvidence = await fetchClsData(sandbox)
   const reconciledBeforeCls = pickMoreCredibleCls(
     { value: effectiveBeforeCls, grade: effectiveBeforeGrade },
-    { value: directBeforeClsFallback.clsScore, grade: directBeforeClsFallback.clsGrade }
+    { value: baselineClsEvidence.clsScore, grade: baselineClsEvidence.clsGrade }
   )
   if (reconciledBeforeCls.source === "fallback") {
     effectiveBeforeCls = reconciledBeforeCls.value
     effectiveBeforeGrade = reconciledBeforeCls.grade
+    effectiveObservationLogs = baselineClsEvidence.d3kLogs || effectiveObservationLogs
     if (effectiveBeforeCls !== null && effectiveBeforeGrade) {
       capturedBeforeWebVitals.cls = {
         value: effectiveBeforeCls,
@@ -2230,21 +2233,38 @@ export async function observeBaselineStep(
     workflowLog(`[Observe] Adopted d3k CLS fallback: ${effectiveBeforeCls?.toFixed(4)} (${effectiveBeforeGrade})`)
   }
 
-  if (effectiveBeforeCls === null) {
+  const needsActiveClsFallback = effectiveBeforeCls === null || effectiveBeforeCls <= 0.001
+  if (needsActiveClsFallback) {
     timer.start("Capture before CLS fallback")
-    workflowLog("[Observe] Capturing fallback before-CLS via d3k logs...")
-    const beforeNavResult = await navigateBrowser(sandbox, localTargetUrl, cloudBrowserMode)
-    workflowLog(`[Observe] Before CLS fallback navigation: success=${beforeNavResult.success}`)
+    workflowLog("[Observe] Capturing active fallback before-CLS via d3k logs...")
+    await appendProgressLog(progressContext, "[Observe] Re-measuring baseline CLS via active browser fallback")
+    const activeBeforeNavResult = await navigateBrowser(sandbox, localTargetUrl, cloudBrowserMode)
+    workflowLog(
+      `[Observe] Before CLS fallback navigation: success=${activeBeforeNavResult.success}${activeBeforeNavResult.error ? `, error=${activeBeforeNavResult.error}` : ""}`
+    )
     await new Promise((resolve) => setTimeout(resolve, 1000))
-    const beforeReloadResult = await reloadBrowser(sandbox, cloudBrowserMode)
-    workflowLog(`[Observe] Before CLS fallback reload: success=${beforeReloadResult.success}`)
+    const activeBeforeReloadResult = await reloadBrowser(sandbox, cloudBrowserMode)
+    workflowLog(
+      `[Observe] Before CLS fallback reload: success=${activeBeforeReloadResult.success}${activeBeforeReloadResult.error ? `, error=${activeBeforeReloadResult.error}` : ""}`
+    )
     await new Promise((resolve) => setTimeout(resolve, 5000))
-    const beforeClsFallback = await fetchClsData(sandbox)
-    if (beforeClsFallback.clsScore !== null) {
-      effectiveBeforeCls = beforeClsFallback.clsScore
-      effectiveBeforeGrade = beforeClsFallback.clsGrade
+    baselineClsEvidence = await fetchClsData(sandbox)
+    effectiveObservationLogs = baselineClsEvidence.d3kLogs || effectiveObservationLogs
+    if (baselineClsEvidence.clsScore !== null) {
+      effectiveBeforeCls = baselineClsEvidence.clsScore
+      effectiveBeforeGrade = baselineClsEvidence.clsGrade
+      if (effectiveBeforeCls !== null && effectiveBeforeGrade) {
+        capturedBeforeWebVitals.cls = {
+          value: effectiveBeforeCls,
+          grade: effectiveBeforeGrade
+        }
+      }
       workflowLog(`[Observe] Fallback before CLS: ${effectiveBeforeCls?.toFixed(4)} (${effectiveBeforeGrade})`)
     }
+    if (effectiveBeforeScreenshots.length === 0 && baselineClsEvidence.screenshots.length > 0) {
+      effectiveBeforeScreenshots = baselineClsEvidence.screenshots
+    }
+    timer.end()
   }
 
   const { skillsInstalled } = await readSandboxSkillsInfo(sandbox)
@@ -2259,7 +2279,7 @@ export async function observeBaselineStep(
     beforeCls: effectiveBeforeCls,
     beforeGrade: effectiveBeforeGrade,
     beforeScreenshots: effectiveBeforeScreenshots,
-    d3kLogs: initD3kLogs,
+    d3kLogs: effectiveObservationLogs,
     cloudBrowserMode,
     skillsInstalled,
     timing: {
