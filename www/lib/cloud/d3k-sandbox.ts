@@ -984,22 +984,40 @@ chmod 0600 "$HOME/.npmrc" ".npmrc"`
       console.log("  🔍 ===== END CHROMIUM DIAGNOSTIC TEST =====")
     }
 
-    // Install d3k globally from npm (always use latest)
-    if (debug) console.log("  📦 Installing d3k globally from npm (dev3000@latest)")
-    const d3kInstallResult =
+    // Install d3k from the checked-out repo first so sandbox runs use the current commit.
+    if (debug) console.log("  📦 Installing d3k globally from repo checkout (/vercel/sandbox)")
+    let d3kInstallResult =
       resolvedPackageManager === "bun"
         ? await runCommandWithLogs(sandbox, {
             cmd: "sh",
-            args: ["-c", "export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; bun add -g dev3000@latest"],
+            args: ["-c", "export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; bun add -g /vercel/sandbox"],
             stdout: debug ? process.stdout : undefined,
             stderr: debug ? process.stderr : undefined
           })
         : await runCommandWithLogs(sandbox, {
             cmd: "pnpm",
-            args: ["i", "-g", "dev3000@latest"],
+            args: ["i", "-g", "/vercel/sandbox"],
             stdout: debug ? process.stdout : undefined,
             stderr: debug ? process.stderr : undefined
           })
+
+    if (d3kInstallResult.exitCode !== 0) {
+      if (debug) console.log("  ⚠️ Local d3k install failed, falling back to npm (dev3000@latest)")
+      d3kInstallResult =
+        resolvedPackageManager === "bun"
+          ? await runCommandWithLogs(sandbox, {
+              cmd: "sh",
+              args: ["-c", "export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; bun add -g dev3000@latest"],
+              stdout: debug ? process.stdout : undefined,
+              stderr: debug ? process.stderr : undefined
+            })
+          : await runCommandWithLogs(sandbox, {
+              cmd: "pnpm",
+              args: ["i", "-g", "dev3000@latest"],
+              stdout: debug ? process.stdout : undefined,
+              stderr: debug ? process.stderr : undefined
+            })
+    }
 
     if (d3kInstallResult.exitCode !== 0) {
       throw new Error(`d3k installation failed with exit code ${d3kInstallResult.exitCode}`)
@@ -1814,9 +1832,13 @@ async function createAndSaveBaseSnapshot(timeoutMs: number, debug = false): Prom
       console.log(`  ✅ bun found at ${bunWhich.stdout.trim()}`)
     }
 
-    // Install d3k globally
-    if (debug) console.log("  📦 Installing d3k globally...")
-    const d3kInstall = await runCmd("pnpm", ["i", "-g", "dev3000@latest"])
+    // Install d3k globally from the checked-out repo first so sandbox runs use the current commit.
+    if (debug) console.log("  📦 Installing d3k globally from repo checkout...")
+    let d3kInstall = await runCmd("pnpm", ["i", "-g", "/vercel/sandbox"])
+    if (d3kInstall.exitCode !== 0) {
+      if (debug) console.log("  ⚠️ Local d3k install failed, falling back to npm (dev3000@latest)")
+      d3kInstall = await runCmd("pnpm", ["i", "-g", "dev3000@latest"])
+    }
     if (d3kInstall.exitCode !== 0) {
       throw new Error(`d3k installation failed: ${d3kInstall.stderr}`)
     }
