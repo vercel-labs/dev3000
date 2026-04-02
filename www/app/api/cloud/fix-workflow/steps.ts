@@ -2562,7 +2562,12 @@ export async function agentFixLoopStep(
 
   timer.start("Reconnect to sandbox")
   workflowLog(`[Agent] Reconnecting to sandbox: ${sandboxId}`)
-  await updateProgress(progressContext, 2, "AI agent analyzing CLS issues...", devUrl)
+  await updateProgress(
+    progressContext,
+    2,
+    isTurbopackBundleAnalyzer ? "AI agent analyzing bundle issues..." : "AI agent analyzing CLS issues...",
+    devUrl
+  )
 
   let sandbox: Sandbox
   let recreatedSandbox = false
@@ -2669,7 +2674,12 @@ export async function agentFixLoopStep(
   let beforeClsForVerification: number | null
   let beforeGradeForVerification: "good" | "needs-improvement" | "poor" | null
 
-  if (observation) {
+  if (isTurbopackBundleAnalyzer) {
+    capturedBeforeWebVitals = {}
+    beforeWebVitalsDiagnostics = undefined
+    beforeClsForVerification = null
+    beforeGradeForVerification = null
+  } else if (observation) {
     workflowLog("[Agent] Using observation data from observe step (skipping redundant capture)")
     capturedBeforeWebVitals = observation.beforeWebVitals
     beforeWebVitalsDiagnostics = undefined
@@ -2684,35 +2694,8 @@ export async function agentFixLoopStep(
     beforeWebVitalsDiagnostics = webVitalsResult.diagnosticLogs
     workflowLog(`[Agent] Before Web Vitals captured: ${JSON.stringify(capturedBeforeWebVitals)}`)
 
-    // Turbopack runs skip init-step CLS bootstrap, so force a deterministic before-CLS capture
-    // to guarantee at least one before/after CWV pair for verification.
     beforeClsForVerification = capturedBeforeWebVitals.cls?.value ?? beforeCls ?? null
     beforeGradeForVerification = capturedBeforeWebVitals.cls?.grade ?? beforeGrade ?? null
-    if (isTurbopackBundleAnalyzer && beforeClsForVerification === null) {
-      timer.start("Capture before CLS fallback")
-      workflowLog("[Agent] Turbopack: capturing fallback before-CLS via d3k logs...")
-      const beforeNavResult = await navigateBrowser(sandbox, localTargetUrl, cloudBrowserMode)
-      workflowLog(
-        `[Agent] Before CLS fallback navigation: success=${beforeNavResult.success}${beforeNavResult.error ? `, error=${beforeNavResult.error}` : ""}`
-      )
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-      const beforeReloadResult = await reloadBrowser(sandbox, cloudBrowserMode)
-      workflowLog(
-        `[Agent] Before CLS fallback reload: success=${beforeReloadResult.success}${beforeReloadResult.error ? `, error=${beforeReloadResult.error}` : ""}`
-      )
-      await new Promise((resolve) => setTimeout(resolve, 5000))
-      const beforeClsFallback = await fetchClsData(sandbox)
-      if (beforeClsFallback.clsScore !== null) {
-        beforeClsForVerification = beforeClsFallback.clsScore
-        beforeGradeForVerification = beforeClsFallback.clsGrade
-        await appendProgressLog(
-          progressContext,
-          `[Turbopack] Fallback before CLS captured: ${beforeClsFallback.clsScore.toFixed(4)} (${beforeClsFallback.clsGrade})`
-        )
-      } else {
-        await appendProgressLog(progressContext, "[Turbopack] Fallback before CLS capture unavailable")
-      }
-    }
   }
 
   // Run the real Claude Code agent inside the sandbox
@@ -2736,39 +2719,54 @@ export async function agentFixLoopStep(
     devAgentSkillRefs,
     progressContext
   )
-  await updateProgress(progressContext, 3, "Agent finished, verifying CLS improvements...", devUrl)
-
-  // Force a fresh page reload to capture new CLS measurement
-  // The agent might not have called diagnose after its last change
-  //
-  // IMPORTANT: We use Page.reload instead of navigating to about:blank and back.
-  // Reason: d3k's screencast manager checks window.location.href when navigation starts.
-  // When navigating FROM about:blank TO localhost, the URL check still sees about:blank
-  // (because the navigation just started), so it SKIPS capture. Page.reload avoids this.
-  timer.start("Reload page for final CLS")
-  workflowLog("[Agent] Forcing page reload to capture final CLS...")
-
-  // First navigate to localhost (NOT the public devUrl!) so CLS capture works
-  // The screencast-manager only captures for localhost:3000, not the public sb-xxx.vercel.run URL
-  // Use agent-browser CLI for navigation (preferred over CDP in cloud)
-  const navResult = await navigateBrowser(sandbox, localTargetUrl, cloudBrowserMode)
-  workflowLog(
-    `[Agent] Navigate to devUrl result: success=${navResult.success}${navResult.error ? `, error=${navResult.error}` : ""}`
+  await updateProgress(
+    progressContext,
+    3,
+    isTurbopackBundleAnalyzer
+      ? "Agent finished, verifying bundle improvements..."
+      : "Agent finished, verifying CLS improvements...",
+    devUrl
   )
-  await new Promise((resolve) => setTimeout(resolve, 2000))
 
-  // Now reload the page to trigger fresh CLS capture
-  // Use agent-browser reload (preferred over CDP in cloud)
-  const reloadResult = await reloadBrowser(sandbox, cloudBrowserMode)
-  workflowLog(
-    `[Agent] Page reload result: success=${reloadResult.success}${reloadResult.error ? `, error=${reloadResult.error}` : ""}`
-  )
-  workflowLog("[Agent] Waiting for CLS to be captured...")
-  await new Promise((resolve) => setTimeout(resolve, 8000)) // 8 seconds for CLS to be detected
+  let finalCls: {
+    clsScore: number | null
+    clsGrade: "good" | "needs-improvement" | "poor" | null
+    screenshots: Array<{ timestamp: number; blobUrl: string; label?: string }>
+    d3kLogs: string
+  } = {
+    clsScore: null,
+    clsGrade: null,
+    screenshots: [],
+    d3kLogs: ""
+  }
 
-  // Get final CLS measurement
-  timer.start("Fetch final CLS data")
-  const finalCls = await fetchClsData(sandbox)
+  if (!isTurbopackBundleAnalyzer) {
+    // Force a fresh page reload to capture new CLS measurement
+    // The agent might not have called diagnose after its last change
+    //
+    // IMPORTANT: We use Page.reload instead of navigating to about:blank and back.
+    // Reason: d3k's screencast manager checks window.location.href when navigation starts.
+    // When navigating FROM about:blank TO localhost, the URL check still sees about:blank
+    // (because the navigation just started), so it SKIPS capture. Page.reload avoids this.
+    timer.start("Reload page for final CLS")
+    workflowLog("[Agent] Forcing page reload to capture final CLS...")
+
+    const navResult = await navigateBrowser(sandbox, localTargetUrl, cloudBrowserMode)
+    workflowLog(
+      `[Agent] Navigate to devUrl result: success=${navResult.success}${navResult.error ? `, error=${navResult.error}` : ""}`
+    )
+    await new Promise((resolve) => setTimeout(resolve, 2000))
+
+    const reloadResult = await reloadBrowser(sandbox, cloudBrowserMode)
+    workflowLog(
+      `[Agent] Page reload result: success=${reloadResult.success}${reloadResult.error ? `, error=${reloadResult.error}` : ""}`
+    )
+    workflowLog("[Agent] Waiting for CLS to be captured...")
+    await new Promise((resolve) => setTimeout(resolve, 8000))
+
+    timer.start("Fetch final CLS data")
+    finalCls = await fetchClsData(sandbox)
+  }
 
   // Get git diff (exclude package.json which gets modified by sandbox initialization)
   timer.start("Get git diff")
@@ -2808,8 +2806,9 @@ export async function agentFixLoopStep(
     }
   }
 
-  // Separate d3k logs for Step 1 (init) and Step 2 (after fix)
-  const afterD3kLogs = finalCls.d3kLogs.replace(initD3kLogs, "").trim() || "(no new logs)"
+  const afterD3kLogs = isTurbopackBundleAnalyzer
+    ? "(bundle analyzer workflow does not use d3k browser verification)"
+    : finalCls.d3kLogs.replace(initD3kLogs, "").trim() || "(no new logs)"
   const combinedD3kLogs = `=== Step 1: Init (before agent) ===\n${initD3kLogs}\n\n=== Step 2: After agent fix ===\n${afterD3kLogs}`
 
   // Determine workflow type from progress context
@@ -2822,31 +2821,43 @@ export async function agentFixLoopStep(
       | "url-audit"
       | "turbopack-bundle-analyzer") || "cls-fix"
 
-  // Fetch "after" Web Vitals directly from browser via CDP (more reliable than parsing logs)
-  timer.start("Fetch after Web Vitals")
-  workflowLog("[Agent] Fetching after Web Vitals via CDP...")
-  const { vitals: afterWebVitalsResult, diagnosticLogs: afterWebVitalsDiagnostics } = await fetchWebVitalsViaCDP(
-    sandbox,
-    localTargetUrl,
-    cloudBrowserMode
-  )
+  let afterWebVitalsResult: import("@/types").WebVitals = {}
+  let afterWebVitalsDiagnostics: string[] | undefined
+  if (!isTurbopackBundleAnalyzer) {
+    timer.start("Fetch after Web Vitals")
+    workflowLog("[Agent] Fetching after Web Vitals via CDP...")
+    const afterVitals = await fetchWebVitalsViaCDP(sandbox, localTargetUrl, cloudBrowserMode)
+    afterWebVitalsResult = afterVitals.vitals
+    afterWebVitalsDiagnostics = afterVitals.diagnosticLogs
+  }
   const effectiveBeforeClsScore = beforeClsForVerification ?? transcriptClsEvidence.beforeCls ?? null
   const effectiveBeforeClsGrade = beforeGradeForVerification ?? gradeClsValue(effectiveBeforeClsScore)
   const effectiveAfterClsScore =
     finalCls.clsScore ?? afterWebVitalsResult.cls?.value ?? transcriptClsEvidence.afterCls ?? null
   const effectiveAfterClsGrade =
     finalCls.clsGrade || afterWebVitalsResult.cls?.grade || gradeClsValue(effectiveAfterClsScore)
-  const status = determineClsStatus({
-    hasChanges,
-    beforeCls: effectiveBeforeClsScore,
-    afterCls: effectiveAfterClsScore
-  })
+  const status = isTurbopackBundleAnalyzer
+    ? determineTurbopackStatus({
+        hasChanges,
+        bundleComparison: turbopackBundleComparison
+      })
+    : determineClsStatus({
+        hasChanges,
+        beforeCls: effectiveBeforeClsScore,
+        afterCls: effectiveAfterClsScore
+      })
 
-  workflowLog(`[Agent] Status: ${status}, Before: ${effectiveBeforeClsScore}, After: ${effectiveAfterClsScore}`)
+  workflowLog(
+    isTurbopackBundleAnalyzer
+      ? `[Agent] Status: ${status}, Bundle delta: ${turbopackBundleComparison?.delta.compressedBytes ?? "n/a"} bytes`
+      : `[Agent] Status: ${status}, Before: ${effectiveBeforeClsScore}, After: ${effectiveAfterClsScore}`
+  )
   await updateProgress(
     progressContext,
     4,
-    `Generating report... (CLS: ${effectiveBeforeClsScore?.toFixed(3) || "?"} → ${effectiveAfterClsScore?.toFixed(3) || "?"})`,
+    isTurbopackBundleAnalyzer
+      ? `Generating report... (bundle delta: ${turbopackBundleComparison ? `${Math.round(turbopackBundleComparison.delta.compressedBytes / 1024)}KB` : "n/a"})`
+      : `Generating report... (CLS: ${effectiveBeforeClsScore?.toFixed(3) || "?"} → ${effectiveAfterClsScore?.toFixed(3) || "?"})`,
     devUrl
   )
 
@@ -2854,13 +2865,13 @@ export async function agentFixLoopStep(
   // Merge with the beforeCls we got from init step if CDP didn't capture it
   const beforeWebVitals: import("@/types").WebVitals = { ...capturedBeforeWebVitals }
   const afterWebVitals: import("@/types").WebVitals = { ...afterWebVitalsResult }
-  if (!beforeWebVitals.cls && effectiveBeforeClsScore !== null) {
+  if (!isTurbopackBundleAnalyzer && !beforeWebVitals.cls && effectiveBeforeClsScore !== null) {
     beforeWebVitals.cls = {
       value: effectiveBeforeClsScore,
       grade: effectiveBeforeClsGrade || "good"
     }
   }
-  if (!afterWebVitals.cls && effectiveAfterClsScore !== null) {
+  if (!isTurbopackBundleAnalyzer && !afterWebVitals.cls && effectiveAfterClsScore !== null) {
     afterWebVitals.cls = {
       value: effectiveAfterClsScore,
       grade: effectiveAfterClsGrade || "good"
@@ -4046,6 +4057,30 @@ function determineClsStatus({
     return "improved"
   }
   if (afterCls > beforeCls * 1.1) {
+    return "degraded"
+  }
+  return "unchanged"
+}
+
+function determineTurbopackStatus({
+  hasChanges,
+  bundleComparison
+}: {
+  hasChanges: boolean
+  bundleComparison?: TurbopackBundleComparison
+}): "improved" | "unchanged" | "degraded" | "no-changes" {
+  if (!hasChanges) {
+    return "no-changes"
+  }
+  if (!bundleComparison) {
+    return "unchanged"
+  }
+
+  const compressedDelta = bundleComparison.delta.compressedBytes
+  if (compressedDelta < 0) {
+    return "improved"
+  }
+  if (compressedDelta > 0) {
     return "degraded"
   }
   return "unchanged"

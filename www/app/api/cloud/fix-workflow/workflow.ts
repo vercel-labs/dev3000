@@ -174,6 +174,7 @@ export async function cloudFixWorkflow(params: {
   // Use runId if provided (from start-fix route), otherwise generate one
   // The reportId is used for blob naming and tracking
   const reportId = runId || crypto.randomUUID()
+  const isTurbopackBundleAnalyzer = workflowType === "turbopack-bundle-analyzer"
 
   // Progress context for step updates
   const progressContext =
@@ -268,7 +269,7 @@ export async function cloudFixWorkflow(params: {
     // STEP 1.5: Observe baseline — boot browser, capture metrics
     // ============================================================
     let observation: Awaited<ReturnType<typeof observeBaseline>> | null = null
-    if (analysisTargetType !== "url") {
+    if (analysisTargetType !== "url" && !isTurbopackBundleAnalyzer) {
       workflowLog("[Workflow] Step 1.5: Observing baseline metrics...")
       observation = await observeBaseline(
         initResult.sandboxId,
@@ -299,7 +300,11 @@ export async function cloudFixWorkflow(params: {
     // ============================================================
     // STEP 1.6: Evaluate early exit (if earlyExitEval is defined)
     // ============================================================
-    if (observation && (devAgentEarlyExitMode === "structured" ? devAgentEarlyExitRule : devAgentEarlyExitEval)) {
+    if (
+      !isTurbopackBundleAnalyzer &&
+      observation &&
+      (devAgentEarlyExitMode === "structured" ? devAgentEarlyExitRule : devAgentEarlyExitEval)
+    ) {
       workflowLog("[Workflow] Step 1.6: Evaluating early exit condition...")
       const earlyExitResult = await evaluateEarlyExit(
         devAgentEarlyExitEval,
@@ -377,7 +382,11 @@ export async function cloudFixWorkflow(params: {
       // ============================================================
       // STEP 2: Agent Fix Loop - Single step with internal iteration
       // ============================================================
-      workflowLog("[Workflow] Step 2: Agent fixing CLS issues...")
+      workflowLog(
+        isTurbopackBundleAnalyzer
+          ? "[Workflow] Step 2: Agent optimizing Turbopack bundle..."
+          : "[Workflow] Step 2: Agent fixing CLS issues..."
+      )
 
       fixResult = await agentFixLoop(
         initResult.sandboxId,
