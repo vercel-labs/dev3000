@@ -244,6 +244,13 @@ function parseInstructionsToSteps(instructions: string): ActionStep[] {
 
 const STEP_SEPARATOR = "\n\n---\n\n"
 
+function summarizeStepsForInstructions(steps: ActionStep[]): string {
+  return steps
+    .map((step, index) => step.config.prompt?.trim() || `${index + 1}. Continue the workflow`)
+    .filter((value) => value.length > 0)
+    .join("\n")
+}
+
 function serializeStepsToText(steps: ActionStep[]): string {
   return steps.map((step) => step.config.prompt ?? "").join(STEP_SEPARATOR)
 }
@@ -945,7 +952,7 @@ export default function NewDevAgentClient({
 
     // If in text mode, sync text back to action steps before submitting
     const resolvedSteps = workflowView === "text" ? parseTextToSteps(textModeValue) : actionSteps
-    const resolvedPrompt = resolvedSteps.length > 0 ? `[${resolvedSteps.length} structured action steps]` : ""
+    const resolvedPrompt = summarizeStepsForInstructions(resolvedSteps)
     const resolvedEarlyExitEval = isEarlyExitEnabled
       ? earlyExitMode === "structured"
         ? buildStructuredEarlyExitPreview(earlyExitRule)

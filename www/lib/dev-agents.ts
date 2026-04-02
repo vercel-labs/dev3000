@@ -731,6 +731,10 @@ function getBuiltinDevAgentDefaults(devAgentId: string): Omit<DevAgent, "usageCo
   return BUILTIN_DEV_AGENTS.find((candidate) => candidate.id === canonicalDevAgentId)
 }
 
+function isStructuredActionStepsPlaceholder(instructions: string | undefined): boolean {
+  return typeof instructions === "string" && /^\[\d+\s+structured action steps\]$/i.test(instructions.trim())
+}
+
 function normalizeDevAgent(devAgent: StoredDevAgent | Omit<DevAgent, "usageCount">): Omit<DevAgent, "usageCount"> {
   const canonicalDevAgentId = canonicalizeDevAgentId(devAgent.id)
   const builtinDefaults = getBuiltinDevAgentDefaults(canonicalDevAgentId)
@@ -743,6 +747,10 @@ function normalizeDevAgent(devAgent: StoredDevAgent | Omit<DevAgent, "usageCount
         team: builtinDefaults.team
       }
     : devAgent
+  const normalizedInstructions =
+    builtinDefaults && isStructuredActionStepsPlaceholder(mergedDevAgent.instructions)
+      ? builtinDefaults.instructions
+      : mergedDevAgent.instructions
   const sandboxBrowser = mergedDevAgent.sandboxBrowser
   const aiAgent =
     mergedDevAgent.aiAgent === "anthropic/claude-opus-4.6" || mergedDevAgent.aiAgent === "anthropic/claude-sonnet-4.6"
@@ -768,6 +776,7 @@ function normalizeDevAgent(devAgent: StoredDevAgent | Omit<DevAgent, "usageCount
   return {
     ...mergedDevAgent,
     id: canonicalDevAgentId,
+    instructions: normalizedInstructions,
     aiAgent,
     devServerCommand,
     skillRefs,
