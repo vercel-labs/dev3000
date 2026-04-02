@@ -338,6 +338,7 @@ function InlineEarlyExitCard({
   rule,
   textValue,
   canEdit,
+  onRemove,
   onModeChange,
   onRuleChange,
   onTextChange
@@ -347,6 +348,7 @@ function InlineEarlyExitCard({
   rule: DevAgentEarlyExitRule
   textValue: string
   canEdit: boolean
+  onRemove: () => void
   onModeChange: (mode: DevAgentEarlyExitMode) => void
   onRuleChange: (rule: DevAgentEarlyExitRule) => void
   onTextChange: (value: string) => void
@@ -358,6 +360,7 @@ function InlineEarlyExitCard({
         rule={rule}
         textValue={textValue}
         canEdit={canEdit}
+        onRemove={onRemove}
         onModeChange={onModeChange}
         onRuleChange={onRuleChange}
         onTextChange={onTextChange}
@@ -371,6 +374,7 @@ function EarlyExitEditor({
   rule,
   textValue,
   canEdit,
+  onRemove,
   onModeChange,
   onRuleChange,
   onTextChange
@@ -379,6 +383,7 @@ function EarlyExitEditor({
   rule: DevAgentEarlyExitRule
   textValue: string
   canEdit: boolean
+  onRemove?: () => void
   onModeChange: (mode: DevAgentEarlyExitMode) => void
   onRuleChange: (rule: DevAgentEarlyExitRule) => void
   onTextChange: (value: string) => void
@@ -394,9 +399,12 @@ function EarlyExitEditor({
           <span className="text-sm font-medium text-foreground">Early Exit Condition</span>
         </div>
         <div className="flex items-center gap-2">
-          <Badge variant="secondary" className="shrink-0 rounded-full px-2 py-0.5 text-[10px]">
-            Optional
-          </Badge>
+          {canEdit && onRemove ? (
+            <Button type="button" variant="ghost" size="icon" className="h-8 w-8" onClick={onRemove}>
+              <Trash2 className="size-4 text-muted-foreground" />
+              <span className="sr-only">Remove early exit condition</span>
+            </Button>
+          ) : null}
           <Select
             value={mode}
             onValueChange={(value) => onModeChange(value as DevAgentEarlyExitMode)}
@@ -407,7 +415,7 @@ function EarlyExitEditor({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="structured">Structured Rule</SelectItem>
-              <SelectItem value="text">Advanced Text</SelectItem>
+              <SelectItem value="text">Text Rule</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -732,12 +740,20 @@ export default function NewDevAgentClient({
   const [earlyExitMode, setEarlyExitMode] = useState<DevAgentEarlyExitMode>(() => {
     if (devAgent?.earlyExitRule) return devAgent.earlyExitMode ?? "structured"
     if (devAgent?.earlyExitEval) return devAgent.earlyExitMode ?? "text"
-    return "structured"
+    return "text"
   })
   const [earlyExitEval, setEarlyExitEval] = useState(devAgent?.earlyExitEval ?? "")
   const [earlyExitRule, setEarlyExitRule] = useState<DevAgentEarlyExitRule>(
     () => devAgent?.earlyExitRule ?? createDefaultEarlyExitRule()
   )
+  const [isEarlyExitEnabled, setIsEarlyExitEnabled] = useState(() => {
+    if (devAgent) {
+      return Boolean(
+        devAgent.earlyExitRule || devAgent.earlyExitEval || typeof devAgent.earlyExitPlacementIndex === "number"
+      )
+    }
+    return true
+  })
   const [earlyExitPlacementIndex, setEarlyExitPlacementIndex] = useState<number | null>(() => {
     if (typeof devAgent?.earlyExitPlacementIndex === "number") {
       return devAgent.earlyExitPlacementIndex
@@ -908,7 +924,8 @@ export default function NewDevAgentClient({
 
   const configureEarlyExit = useCallback(
     (placementIndex: number) => {
-      setEarlyExitMode("structured")
+      setIsEarlyExitEnabled(true)
+      setEarlyExitMode("text")
       setEarlyExitRule((current) => current ?? createDefaultEarlyExitRule())
       setEarlyExitPlacementIndex(placementIndex)
       window.requestAnimationFrame(() => {
@@ -918,14 +935,22 @@ export default function NewDevAgentClient({
     [earlyExitEditorId]
   )
 
+  const removeEarlyExit = useCallback(() => {
+    setIsEarlyExitEnabled(false)
+    setEarlyExitPlacementIndex(null)
+  }, [])
+
   function submitDevAgent() {
     if (!canEdit) return
 
     // If in text mode, sync text back to action steps before submitting
     const resolvedSteps = workflowView === "text" ? parseTextToSteps(textModeValue) : actionSteps
     const resolvedPrompt = resolvedSteps.length > 0 ? `[${resolvedSteps.length} structured action steps]` : ""
-    const resolvedEarlyExitEval =
-      earlyExitMode === "structured" ? buildStructuredEarlyExitPreview(earlyExitRule) : earlyExitEval.trim()
+    const resolvedEarlyExitEval = isEarlyExitEnabled
+      ? earlyExitMode === "structured"
+        ? buildStructuredEarlyExitPreview(earlyExitRule)
+        : earlyExitEval.trim()
+      : ""
 
     setSubmitError(null)
     setSavedMessage(null)
@@ -947,10 +972,10 @@ export default function NewDevAgentClient({
             skillRefs: effectiveSelectedSkills,
             team,
             successEval: successEval.trim() || undefined,
-            earlyExitMode,
-            earlyExitEval: resolvedEarlyExitEval || undefined,
-            earlyExitRule: earlyExitMode === "structured" ? earlyExitRule : undefined,
-            earlyExitPlacementIndex: earlyExitPlacementIndex ?? undefined
+            earlyExitMode: isEarlyExitEnabled ? earlyExitMode : undefined,
+            earlyExitEval: isEarlyExitEnabled ? resolvedEarlyExitEval || undefined : undefined,
+            earlyExitRule: isEarlyExitEnabled && earlyExitMode === "structured" ? earlyExitRule : undefined,
+            earlyExitPlacementIndex: isEarlyExitEnabled ? (earlyExitPlacementIndex ?? undefined) : undefined
           })
         })
 
@@ -996,7 +1021,7 @@ export default function NewDevAgentClient({
   // Step numbering: fixed steps are 1-2, skills is 3, start dev server is 4, agent is 5, actions start at 6
   const actionStepBaseNumber = 6
   const effectiveEarlyExitPlacementIndex =
-    workflowView === "ui" && (earlyExitRule || earlyExitEval.trim() || earlyExitPlacementIndex !== null)
+    workflowView === "ui" && isEarlyExitEnabled
       ? Math.min(Math.max(earlyExitPlacementIndex ?? actionSteps.length, 0), actionSteps.length)
       : null
 
@@ -1283,6 +1308,7 @@ export default function NewDevAgentClient({
                       rule={earlyExitRule}
                       textValue={earlyExitEval}
                       canEdit={canEdit}
+                      onRemove={removeEarlyExit}
                       onModeChange={setEarlyExitMode}
                       onRuleChange={setEarlyExitRule}
                       onTextChange={setEarlyExitEval}
@@ -1322,6 +1348,7 @@ export default function NewDevAgentClient({
                   rule={earlyExitRule}
                   textValue={earlyExitEval}
                   canEdit={canEdit}
+                  onRemove={removeEarlyExit}
                   onModeChange={setEarlyExitMode}
                   onRuleChange={setEarlyExitRule}
                   onTextChange={setEarlyExitEval}
@@ -1405,17 +1432,31 @@ export default function NewDevAgentClient({
                 />
               </div>
 
-              <div id={earlyExitEditorId}>
-                <EarlyExitEditor
-                  mode={earlyExitMode}
-                  rule={earlyExitRule}
-                  textValue={earlyExitEval}
-                  canEdit={canEdit}
-                  onModeChange={setEarlyExitMode}
-                  onRuleChange={setEarlyExitRule}
-                  onTextChange={setEarlyExitEval}
-                />
-              </div>
+              {isEarlyExitEnabled ? (
+                <div id={earlyExitEditorId}>
+                  <EarlyExitEditor
+                    mode={earlyExitMode}
+                    rule={earlyExitRule}
+                    textValue={earlyExitEval}
+                    canEdit={canEdit}
+                    onRemove={removeEarlyExit}
+                    onModeChange={setEarlyExitMode}
+                    onRuleChange={setEarlyExitRule}
+                    onTextChange={setEarlyExitEval}
+                  />
+                </div>
+              ) : canEdit ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-fit"
+                  onClick={() => configureEarlyExit(actionSteps.length)}
+                >
+                  <Plus className="size-4" />
+                  Add Early Exit Condition
+                </Button>
+              ) : null}
             </div>
           </>
         )}
