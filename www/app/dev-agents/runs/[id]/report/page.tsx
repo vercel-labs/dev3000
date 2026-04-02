@@ -738,6 +738,7 @@ async function WorkflowReportPageData({ params }: { params: Promise<{ id: string
         userId={isOwner && user ? user.id : undefined}
         workflowType={run.type}
         projectName={run.projectName}
+        devAgentName={run.devAgentName}
         embedded={canUseDashboardShell}
       />
     )

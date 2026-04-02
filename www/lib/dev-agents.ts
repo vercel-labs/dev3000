@@ -55,11 +55,52 @@ export type DevAgentEarlyExitMetricType = "builtin" | "custom"
 export type DevAgentEarlyExitValueType = "number" | "boolean" | "string"
 export type DevAgentEarlyExitOperator = "<" | "<=" | ">" | ">=" | "===" | "!==" | "between"
 
-const D3K_SKILL_INSTALL_ARG = "vercel-labs/dev3000@d3k"
+export const D3K_SKILL_INSTALL_ARG = "vercel-labs/dev3000@d3k"
+export const ANALYZE_BUNDLE_SKILL_INSTALL_ARG = "vercel-labs/dev3000@analyze-bundle"
+export const VERCEL_PLUGIN_INSTALL_ARG = "vercel/vercel-plugin"
 const LEGACY_D3K_SKILL_INSTALL_ARGS = new Set([
   "https://github.com/vercel-labs/dev3000/tree/main/skills/d3k",
   "https://github.com/vercel-labs/dev3000/tree/main/.agents/skills/d3k",
   "https://skills.sh/vercel-labs/dev3000/d3k"
+])
+const LEGACY_ANALYZE_BUNDLE_SKILL_INSTALL_ARGS = new Set([
+  "vercel-labs/skills@analyze-bundle",
+  "https://skills.sh/vercel-labs/skills/analyze-bundle",
+  "https://github.com/vercel-labs/dev3000/tree/main/.agents/skills/analyze-bundle",
+  "https://github.com/vercel-labs/dev3000/tree/main/skills/analyze-bundle"
+])
+const VERCEL_PLUGIN_SKILL_NAMES = new Set([
+  "ai-gateway",
+  "ai-sdk",
+  "auth",
+  "bootstrap",
+  "chat-sdk",
+  "deployments-cicd",
+  "env-vars",
+  "knowledge-update",
+  "marketplace",
+  "next-cache-components",
+  "next-upgrade",
+  "nextjs",
+  "react-best-practices",
+  "routing-middleware",
+  "runtime-cache",
+  "shadcn",
+  "turbopack",
+  "vercel-agent",
+  "vercel-cli",
+  "vercel-functions",
+  "vercel-sandbox",
+  "vercel-storage",
+  "verification",
+  "workflow",
+  "benchmark-agents",
+  "benchmark-e2e",
+  "benchmark-sandbox",
+  "benchmark-testing",
+  "plugin-audit",
+  "release",
+  "vercel-plugin-eval"
 ])
 
 export interface DevAgentEarlyExitRule {
@@ -250,13 +291,54 @@ function titleCaseSkillName(skillName: string): string {
     .join(" ")
 }
 
+function normalizeSkillIdentifier(value?: string): string {
+  return (value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "")
+}
+
+export function isVercelPluginSkillRef(input: {
+  installArg?: string
+  packageName?: string
+  skillName?: string
+  id?: string
+}): boolean {
+  const installArg = input.installArg?.trim().toLowerCase() || ""
+  const packageName = input.packageName?.trim().toLowerCase() || ""
+  const skillName = normalizeSkillIdentifier(input.skillName || input.id)
+
+  return (
+    packageName === VERCEL_PLUGIN_INSTALL_ARG ||
+    installArg === VERCEL_PLUGIN_INSTALL_ARG ||
+    installArg.startsWith(`${VERCEL_PLUGIN_INSTALL_ARG.toLowerCase()}@`) ||
+    VERCEL_PLUGIN_SKILL_NAMES.has(skillName)
+  )
+}
+
+export function isSandboxBuiltinSkillRef(input: {
+  installArg?: string
+  packageName?: string
+  skillName?: string
+  id?: string
+}): boolean {
+  const installArg = input.installArg?.trim() || ""
+  return installArg === D3K_SKILL_INSTALL_ARG || isVercelPluginSkillRef(input)
+}
+
 export function parseDevAgentSkillRef(input: {
   installArg: string
   sourceUrl?: string
   displayName?: string
 }): DevAgentSkillRef {
   const rawInstallArg = input.installArg.trim()
-  const installArg = LEGACY_D3K_SKILL_INSTALL_ARGS.has(rawInstallArg) ? D3K_SKILL_INSTALL_ARG : rawInstallArg
+  const installArg = LEGACY_D3K_SKILL_INSTALL_ARGS.has(rawInstallArg)
+    ? D3K_SKILL_INSTALL_ARG
+    : LEGACY_ANALYZE_BUNDLE_SKILL_INSTALL_ARGS.has(rawInstallArg)
+      ? ANALYZE_BUNDLE_SKILL_INSTALL_ARG
+      : rawInstallArg
   const packageAndSkill = installArg.split("@")
   const packageName = packageAndSkill.length > 1 ? packageAndSkill.slice(0, -1).join("@") : undefined
   const rawSkillName = packageAndSkill.length > 1 ? packageAndSkill[packageAndSkill.length - 1] : installArg
@@ -275,7 +357,11 @@ export function parseDevAgentSkillRef(input: {
     displayName: input.displayName?.trim() || titleCaseSkillName(normalizedSkillName || rawSkillName),
     sourceUrl:
       input.sourceUrl?.trim() ||
-      (normalizedSkillName === "d3k" ? "https://github.com/vercel-labs/dev3000/tree/main/skills/d3k" : undefined)
+      (normalizedSkillName === "d3k"
+        ? "https://github.com/vercel-labs/dev3000/tree/main/skills/d3k"
+        : normalizedSkillName === "analyze-bundle"
+          ? "https://github.com/vercel-labs/dev3000/tree/main/www/.agents/skills/analyze-bundle"
+          : undefined)
   }
 }
 
@@ -395,8 +481,8 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
         displayName: "d3k"
       }),
       parseDevAgentSkillRef({
-        installArg: "vercel-labs/skills@analyze-bundle",
-        sourceUrl: "https://skills.sh/vercel-labs/skills/analyze-bundle"
+        installArg: ANALYZE_BUNDLE_SKILL_INSTALL_ARG,
+        sourceUrl: "https://github.com/vercel-labs/dev3000/tree/main/www/.agents/skills/analyze-bundle"
       })
     ],
     author: systemAuthor,

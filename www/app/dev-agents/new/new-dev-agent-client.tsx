@@ -42,7 +42,9 @@ import {
   type DevAgentEarlyExitRule,
   type DevAgentEarlyExitValueType,
   type DevAgentTeam,
-  getDevAgentModelLabel
+  getDevAgentModelLabel,
+  isSandboxBuiltinSkillRef,
+  isVercelPluginSkillRef
 } from "@/lib/dev-agents"
 import { NO_DEV_SERVER_COMMAND } from "@/lib/dev-server-command"
 
@@ -63,6 +65,8 @@ interface SkillSearchResult {
   displayName: string
   sourceUrl?: string
   installsLabel?: string
+  isBuiltIn?: boolean
+  builtInLabel?: string
 }
 
 interface NewDevAgentClientProps {
@@ -185,7 +189,9 @@ const implicitD3kSkill: SkillSearchResult = {
   installArg: "vercel-labs/dev3000@d3k",
   skillName: "d3k",
   displayName: "d3k",
-  sourceUrl: "https://github.com/vercel-labs/dev3000/tree/main/skills/d3k"
+  sourceUrl: "https://github.com/vercel-labs/dev3000/tree/main/skills/d3k",
+  isBuiltIn: true,
+  builtInLabel: "Sandbox base"
 }
 
 function isD3kSkill(skill: Pick<SkillSearchResult, "id" | "installArg" | "skillName" | "displayName">): boolean {
@@ -195,6 +201,30 @@ function isD3kSkill(skill: Pick<SkillSearchResult, "id" | "installArg" | "skillN
     skill.displayName.toLowerCase() === "d3k" ||
     skill.installArg === implicitD3kSkill.installArg
   )
+}
+
+function normalizeSkillResult(skill: SkillSearchResult): SkillSearchResult {
+  if (isD3kSkill(skill)) {
+    return {
+      ...skill,
+      isBuiltIn: true,
+      builtInLabel: "Sandbox base"
+    }
+  }
+
+  if (isVercelPluginSkillRef(skill)) {
+    return {
+      ...skill,
+      isBuiltIn: true,
+      builtInLabel: skill.builtInLabel || "Vercel plugin"
+    }
+  }
+
+  return {
+    ...skill,
+    isBuiltIn: skill.isBuiltIn ?? false,
+    builtInLabel: skill.builtInLabel
+  }
 }
 
 function generateStepId(): string {
@@ -690,7 +720,7 @@ export default function NewDevAgentClient({
   const deferredSearchQuery = useDeferredValue(searchQuery)
   const [searchResults, setSearchResults] = useState<SkillSearchResult[]>([])
   const [selectedSkills, setSelectedSkills] = useState<SkillSearchResult[]>(() =>
-    (devAgent?.skillRefs ?? []).filter((skill) => !isD3kSkill(skill))
+    (devAgent?.skillRefs ?? []).map(normalizeSkillResult).filter((skill) => !isD3kSkill(skill))
   )
   const [isSearching, setIsSearching] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
@@ -805,7 +835,7 @@ export default function NewDevAgentClient({
         if (!response.ok || !data.success) {
           throw new Error(data.error || "Skill search failed.")
         }
-        setSearchResults(Array.isArray(data.results) ? data.results : [])
+        setSearchResults(Array.isArray(data.results) ? data.results.map(normalizeSkillResult) : [])
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted) return
@@ -832,8 +862,18 @@ export default function NewDevAgentClient({
 
   function addSkill(skill: SkillSearchResult) {
     setSelectedSkills((current) => {
-      if (current.some((item) => item.id === skill.id)) return current
-      return [...current, skill]
+      const normalized = normalizeSkillResult(skill)
+      if (
+        current.some(
+          (item) =>
+            item.id === normalized.id ||
+            item.installArg === normalized.installArg ||
+            (normalized.isBuiltIn && isSandboxBuiltinSkillRef(item))
+        )
+      ) {
+        return current
+      }
+      return [...current, normalized]
     })
   }
 
@@ -1087,7 +1127,14 @@ export default function NewDevAgentClient({
                         className="flex w-full items-start justify-between rounded-md border border-transparent bg-background/60 px-2.5 py-2 text-left transition hover:border-border disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         <div className="space-y-0.5">
-                          <div className="text-xs font-medium text-foreground">{skill.displayName}</div>
+                          <div className="flex items-center gap-2">
+                            <div className="text-xs font-medium text-foreground">{skill.displayName}</div>
+                            {skill.isBuiltIn ? (
+                              <Badge variant="secondary" className="rounded-full px-2 py-0.5 text-[10px]">
+                                Built-in
+                              </Badge>
+                            ) : null}
+                          </div>
                           <div className="text-[11px] text-muted-foreground">{skill.installArg}</div>
                         </div>
                         <Badge variant="outline" className="text-[10px]">
@@ -1109,6 +1156,11 @@ export default function NewDevAgentClient({
                       className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/20 px-3 py-1"
                     >
                       <span className="text-xs font-medium text-foreground">{skill.displayName}</span>
+                      {skill.isBuiltIn ? (
+                        <Badge variant="secondary" className="rounded-full px-1.5 py-0 text-[10px]">
+                          Built-in
+                        </Badge>
+                      ) : null}
                       <button
                         type="button"
                         onClick={() => removeSkill(skill.id)}

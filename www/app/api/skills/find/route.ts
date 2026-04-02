@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process"
+import { isVercelPluginSkillRef } from "@/lib/dev-agents"
 
 interface SkillSearchResult {
   id: string
@@ -8,6 +9,8 @@ interface SkillSearchResult {
   displayName: string
   sourceUrl?: string
   installsLabel?: string
+  isBuiltIn?: boolean
+  builtInLabel?: string
 }
 
 function stripAnsi(value: string): string {
@@ -65,7 +68,7 @@ function parseSkillsFindOutput(stdout: string): SkillSearchResult[] {
     const nextLine = lines[index + 1]
     const sourceUrl = nextLine?.startsWith("└ ") ? nextLine.replace(/^└\s+/, "") : undefined
 
-    results.push({
+    const result: SkillSearchResult = {
       id: skillName.toLowerCase(),
       installArg,
       packageName,
@@ -73,7 +76,14 @@ function parseSkillsFindOutput(stdout: string): SkillSearchResult[] {
       displayName: titleCaseSkillName(skillName),
       sourceUrl,
       installsLabel: match[2]
-    })
+    }
+
+    if (isVercelPluginSkillRef(result)) {
+      result.isBuiltIn = true
+      result.builtInLabel = "Vercel plugin"
+    }
+
+    results.push(result)
   }
 
   return results

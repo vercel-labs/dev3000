@@ -12,7 +12,12 @@ import { createGateway, generateText } from "ai"
 import { getOrCreateD3kSandbox, type SandboxTimingData, StepTimer } from "@/lib/cloud/d3k-sandbox"
 import { SandboxAgentBrowser } from "@/lib/cloud/sandbox-agent-browser"
 import { SandboxNextBrowser } from "@/lib/cloud/sandbox-next-browser"
-import { type DevAgentEarlyExitRule, type DevAgentSkillRef, getDevAgentModelLabel } from "@/lib/dev-agents"
+import {
+  type DevAgentEarlyExitRule,
+  type DevAgentSkillRef,
+  getDevAgentModelLabel,
+  isVercelPluginSkillRef
+} from "@/lib/dev-agents"
 import { listWorkflowRuns, saveWorkflowRun, type WorkflowType } from "@/lib/workflow-storage"
 import type { TurbopackBundleComparison, TurbopackBundleMetricsSnapshot, WorkflowReport } from "@/types"
 
@@ -21,6 +26,7 @@ const TURBOPACK_MIN_NEXT_VERSION = "16.1.0"
 const SUCCESS_EVAL_MODEL = "openai/gpt-5.4"
 const CLAUDE_CODE_PACKAGE = "@anthropic-ai/claude-code"
 const D3K_SKILL_INSTALL_ARG = "vercel-labs/dev3000@d3k"
+const VERCEL_PLUGIN_INSTALL_ARG = "vercel/vercel-plugin"
 const ANALYZE_TO_NDJSON_SCRIPT = `#!/usr/bin/env node
 // Converts Next.js bundle analyzer .data files to NDJSON for offline analysis.
 // Usage: node analyze-to-ndjson.mjs [--input <dir>] [--output <dir>]
@@ -3309,6 +3315,10 @@ function buildSkillsInstallShellCommand(installArg: string): string {
   const isHttpSource = /^https?:\/\//i.test(normalizedInstallArg)
   const agentSlug = "claude-code"
 
+  if (normalizedInstallArg === VERCEL_PLUGIN_INSTALL_ARG) {
+    return `npx --yes skills@latest add ${shellEscape(normalizedInstallArg)} --agent ${agentSlug} --skill '*' -y`
+  }
+
   if (!isHttpSource && normalizedInstallArg.includes("@")) {
     const packageAndSkill = normalizedInstallArg.split("@")
     const packageName = packageAndSkill.slice(0, -1).join("@").trim()
@@ -3335,10 +3345,23 @@ async function installDevAgentSkillsInSandbox(
   progressContext?: ProgressContext | null
 ): Promise<void> {
   const requestedSkills = [...(devAgentSkillRefs || [])]
+  const hasVercelPlugin = requestedSkills.some((skill) => {
+    const identifier = `${skill.id} ${skill.skillName} ${skill.displayName} ${skill.installArg}`.toLowerCase()
+    return identifier.includes("vercel-plugin") || identifier.includes("vercel/vercel-plugin")
+  })
   const hasD3kSkill = requestedSkills.some((skill) => {
     const identifier = `${skill.id} ${skill.skillName} ${skill.displayName} ${skill.installArg}`.toLowerCase()
     return identifier.includes("d3k")
   })
+  if (!hasVercelPlugin) {
+    requestedSkills.unshift({
+      id: "vercel-plugin",
+      installArg: VERCEL_PLUGIN_INSTALL_ARG,
+      skillName: "vercel-plugin",
+      displayName: "Vercel plugin",
+      sourceUrl: "https://github.com/vercel/vercel-plugin"
+    })
+  }
   if (!hasD3kSkill) {
     requestedSkills.unshift({
       id: "d3k",
@@ -3356,6 +3379,11 @@ async function installDevAgentSkillsInSandbox(
 
   for (const skill of requestedSkills) {
     if (!skill.installArg) {
+      continue
+    }
+
+    if (skill.installArg !== VERCEL_PLUGIN_INSTALL_ARG && isVercelPluginSkillRef(skill)) {
+      await appendProgressLog(progressContext, `[Skills] Using built-in ${skill.displayName} from Vercel plugin`)
       continue
     }
 
@@ -3557,7 +3585,7 @@ function buildClaudeSetupPrompt(
   customPrompt?: string
 ): ClaudeTurnPrompt {
   return {
-    label: "Setup",
+    label: "Agent setup",
     maxTurns: 8,
     prompt: `You are starting the ${devAgentName || "dev agent"} workflow.
 
@@ -3699,7 +3727,7 @@ function buildClaudeMainTaskPrompt({
         : ""
 
     return {
-      label: "Main task",
+      label: "Agent main task",
       maxTurns: mainTaskMaxTurns,
       prompt: `Run the "${devAgentName || "custom"}" dev agent on ${startPath}. Dev URL: ${devUrl}
 
@@ -3717,7 +3745,7 @@ Validation:
 
   if (workflowType === "design-guidelines") {
     return {
-      label: "Main task",
+      label: "Agent main task",
       maxTurns: 18,
       prompt: `Evaluate and fix design guideline violations on ${startPath}. Dev URL: ${devUrl}
 
@@ -3733,7 +3761,7 @@ Prioritize high-impact issues, implement real fixes, and verify that the app sti
 
   if (workflowType === "react-performance") {
     return {
-      label: "Main task",
+      label: "Agent main task",
       maxTurns: 18,
       prompt: `Analyze and optimize React/Next.js performance on ${startPath}. Dev URL: ${devUrl}
 
@@ -3743,7 +3771,7 @@ Use ${skillLoadInstructions} as relevant. Capture a baseline, inspect the code f
 
   if (workflowType === "turbopack-bundle-analyzer") {
     return {
-      label: "Main task",
+      label: "Agent main task",
       maxTurns: 25,
       prompt: `Analyze the generated Turbopack bundle NDJSON artifacts for this project and make only bundle-size/performance improvements.
 
@@ -3761,7 +3789,7 @@ Do not manually rerun analyzer build commands. The workflow runtime handles the 
 
   if (customPrompt?.trim()) {
     return {
-      label: "Main task",
+      label: "Agent main task",
       maxTurns: mainTaskMaxTurns,
       prompt: `${customPrompt.trim()}
 
@@ -3770,7 +3798,7 @@ Use ${skillLoadInstructions} as relevant. Validate meaningful changes before you
   }
 
   return {
-    label: "Main task",
+    label: "Agent main task",
     maxTurns: mainTaskMaxTurns,
     prompt: `Fix the CLS issues on ${startPath}. Dev URL: ${devUrl}
 

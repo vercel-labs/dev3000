@@ -1,9 +1,9 @@
 "use client"
 
+import type { Route } from "next"
 import Link from "next/link"
 import { useCallback, useRef, useState } from "react"
 import useSWR from "swr"
-import { ThemeToggle } from "@/components/theme-toggle"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -20,15 +20,8 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import type { WorkflowRun } from "@/lib/workflow-storage"
 
-interface UserInfo {
-  id: string
-  email: string
-  name: string
-  username: string
-}
-
 interface DevAgentRunsClientProps {
-  user: UserInfo
+  userId: string
   initialRuns: WorkflowRun[]
 }
 
@@ -70,39 +63,17 @@ function formatDevAgentLabel(run: WorkflowRun): string {
   return run.devAgentName || formatLegacyWorkflowType(run.type)
 }
 
-export default function DevAgentRunsClient({ user, initialRuns }: DevAgentRunsClientProps) {
-  const [isSigningOut, setIsSigningOut] = useState(false)
+export default function DevAgentRunsClient({ userId, initialRuns }: DevAgentRunsClientProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const lastSelectedIndex = useRef<number | null>(null)
 
-  const { data: runs = initialRuns, mutate } = useSWR(`/api/dev-agents/runs?userId=${user.id}`, fetcher, {
+  const { data: runs = initialRuns, mutate } = useSWR(`/api/dev-agents/runs?userId=${userId}`, fetcher, {
     fallbackData: initialRuns,
     refreshInterval: 5000,
     revalidateOnFocus: true
   })
-
-  async function handleSignOut() {
-    setIsSigningOut(true)
-    try {
-      await fetch("/api/auth/signout", { method: "POST" })
-      const keysToRemove: string[] = []
-      for (let index = 0; index < localStorage.length; index++) {
-        const key = localStorage.key(index)
-        if (key?.startsWith("d3k_")) {
-          keysToRemove.push(key)
-        }
-      }
-      for (const key of keysToRemove) {
-        localStorage.removeItem(key)
-      }
-      window.location.href = "/"
-    } catch (error) {
-      console.error("Failed to sign out:", error)
-      setIsSigningOut(false)
-    }
-  }
 
   const handleSelectAll = useCallback(
     (checked: boolean) => {
@@ -143,7 +114,7 @@ export default function DevAgentRunsClient({ user, initialRuns }: DevAgentRunsCl
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          userId: user.id,
+          userId,
           runIds: Array.from(selectedIds)
         })
       })
@@ -168,118 +139,95 @@ export default function DevAgentRunsClient({ user, initialRuns }: DevAgentRunsCl
   const someSelected = selectedIds.size > 0 && selectedIds.size < runs.length
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 pb-8 pt-8 sm:px-6 lg:px-8">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="space-y-2">
-            <h1 className="text-3xl font-bold text-foreground">
-              <Link href="/dev-agents" className="hover:opacity-80 transition-opacity">
-                Dev Agents
-              </Link>
-              <span> - Runs</span>
-            </h1>
-            <p className="text-muted-foreground">View all of your dev-agent analyses, fixes, and PR-ready runs.</p>
-            <p className="text-sm text-muted-foreground">Signed in as {user.email}</p>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            {selectedIds.size > 0 && (
-              <Button variant="destructive" onClick={() => setIsDeleteDialogOpen(true)}>
-                Delete {selectedIds.size} selected
-              </Button>
-            )}
-            <Button asChild>
-              <Link href="/dev-agents/new">Create Dev Agent</Link>
-            </Button>
-            <ThemeToggle />
-            <Button variant="outline" onClick={handleSignOut} disabled={isSigningOut}>
-              {isSigningOut ? "Signing out..." : "Sign out"}
-            </Button>
-          </div>
+    <div className="space-y-4">
+      {selectedIds.size > 0 ? (
+        <div className="flex justify-end">
+          <Button variant="destructive" size="sm" onClick={() => setIsDeleteDialogOpen(true)}>
+            Delete {selectedIds.size} selected
+          </Button>
         </div>
+      ) : null}
 
-        {runs.length === 0 ? (
-          <Card className="p-12 text-center">
-            <CardContent>
-              <p className="text-muted-foreground">No dev agent runs yet.</p>
-              <p className="mt-2 text-sm text-muted-foreground/70">Choose a dev agent and run it against a project.</p>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="overflow-x-auto rounded-xl border border-border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-12">
-                    <Checkbox
-                      checked={allSelected ? true : someSelected ? "indeterminate" : false}
-                      onCheckedChange={(checked) => handleSelectAll(checked === true)}
-                      aria-label="Select all runs"
-                    />
-                  </TableHead>
-                  <TableHead>Dev Agent</TableHead>
-                  <TableHead>Project</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead>Duration</TableHead>
-                  <TableHead>Mode</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {runs.map((run, index) => {
-                  const createdAt = new Date(run.timestamp)
-                  const completedAt = run.completedAt ? new Date(run.completedAt) : null
-                  const duration = completedAt ? formatDuration(createdAt, completedAt) : "Running"
+      {runs.length === 0 ? (
+        <Card className="border-[#1f1f1f] bg-[#111] p-12 text-center">
+          <CardContent>
+            <p className="text-[#888]">No dev agent runs yet.</p>
+            <p className="mt-2 text-sm text-[#666]">Choose a dev agent and run it against a project.</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border border-[#1f1f1f] bg-[#111]">
+          <Table>
+            <TableHeader>
+              <TableRow className="border-[#1f1f1f] hover:bg-transparent">
+                <TableHead className="w-12 text-[#888]">
+                  <Checkbox
+                    checked={allSelected ? true : someSelected ? "indeterminate" : false}
+                    onCheckedChange={(checked) => handleSelectAll(checked === true)}
+                    aria-label="Select all runs"
+                  />
+                </TableHead>
+                <TableHead className="text-[#888]">Dev Agent</TableHead>
+                <TableHead className="text-[#888]">Project</TableHead>
+                <TableHead className="text-[#888]">Status</TableHead>
+                <TableHead className="text-[#888]">Created</TableHead>
+                <TableHead className="text-[#888]">Duration</TableHead>
+                <TableHead className="text-[#888]">Mode</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {runs.map((run, index) => {
+                const createdAt = new Date(run.timestamp)
+                const completedAt = run.completedAt ? new Date(run.completedAt) : null
+                const duration = completedAt ? formatDuration(createdAt, completedAt) : "Running"
 
-                  return (
-                    <TableRow key={run.id}>
-                      <TableCell>
-                        <Checkbox
-                          checked={selectedIds.has(run.id)}
-                          onCheckedChange={() =>
-                            handleSelectRow(run.id, index, { shiftKey: false } as React.MouseEvent)
-                          }
-                          onClick={(event) => handleSelectRow(run.id, index, event as unknown as React.MouseEvent)}
-                          aria-label={`Select ${run.projectName}`}
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-1">
-                          <Link
-                            href={`/dev-agents/runs/${run.id}/report`}
-                            className="font-medium text-primary hover:underline"
-                          >
-                            {formatDevAgentLabel(run)}
-                          </Link>
-                          {run.devAgentExecutionMode && (
-                            <div className="text-xs text-muted-foreground">
-                              {run.devAgentExecutionMode === "dev-server" ? "Dev Server" : "Preview + PR"}
-                            </div>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>{run.projectName}</TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={
-                            run.status === "done" ? "default" : run.status === "failure" ? "destructive" : "secondary"
-                          }
+                return (
+                  <TableRow key={run.id} className="border-[#1f1f1f] hover:bg-[#161616]">
+                    <TableCell>
+                      <Checkbox
+                        checked={selectedIds.has(run.id)}
+                        onCheckedChange={() => handleSelectRow(run.id, index, { shiftKey: false } as React.MouseEvent)}
+                        onClick={(event) => handleSelectRow(run.id, index, event as unknown as React.MouseEvent)}
+                        aria-label={`Select ${run.projectName}`}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <div className="space-y-1">
+                        <Link
+                          href={`/dev-agents/runs/${run.id}/report` as Route}
+                          className="font-medium text-[#ededed] hover:underline"
                         >
-                          {run.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{createdAt.toLocaleString()}</TableCell>
-                      <TableCell>{duration}</TableCell>
-                      <TableCell>
-                        {run.devAgentExecutionMode === "preview-pr" ? "Preview + PR" : "Dev Server"}
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-      </div>
+                          {formatDevAgentLabel(run)}
+                        </Link>
+                        {run.devAgentExecutionMode ? (
+                          <div className="text-xs text-[#666]">
+                            {run.devAgentExecutionMode === "dev-server" ? "Dev Server" : "Preview + PR"}
+                          </div>
+                        ) : null}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-[#ededed]">{run.projectName}</TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={
+                          run.status === "done" ? "default" : run.status === "failure" ? "destructive" : "secondary"
+                        }
+                      >
+                        {run.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-[#888]">{createdAt.toLocaleString()}</TableCell>
+                    <TableCell className="text-[#888]">{duration}</TableCell>
+                    <TableCell className="text-[#888]">
+                      {run.devAgentExecutionMode === "preview-pr" ? "Preview + PR" : "Dev Server"}
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
+            </TableBody>
+          </Table>
+        </div>
+      )}
 
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <DialogContent>

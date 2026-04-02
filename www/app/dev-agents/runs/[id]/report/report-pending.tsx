@@ -11,10 +11,44 @@ interface ReportPendingProps {
   userId?: string
   workflowType?: string
   projectName?: string
+  devAgentName?: string
   embedded?: boolean
 }
 
 const STEP_LABELS = ["Creating sandbox", "Capturing baseline", "Agent in progress", "Generating report", "Finishing up"]
+
+function stripAnsi(value: string): string {
+  let result = ""
+
+  for (let index = 0; index < value.length; index++) {
+    const charCode = value.charCodeAt(index)
+    if (charCode === 27 && value[index + 1] === "[") {
+      while (index < value.length && value[index] !== "m") {
+        index++
+      }
+      continue
+    }
+    result += value[index]
+  }
+
+  return result
+}
+
+function sanitizeDisplayText(value: string): string {
+  const stripped = stripAnsi(value)
+  let printable = ""
+
+  for (let index = 0; index < stripped.length; index++) {
+    const charCode = stripped.charCodeAt(index)
+    const isDisallowedControl =
+      (charCode >= 0 && charCode <= 8) || (charCode >= 11 && charCode <= 31) || (charCode >= 127 && charCode <= 159)
+    if (!isDisallowedControl) {
+      printable += stripped[index]
+    }
+  }
+
+  return printable.replace(/\s+/g, " ").trim()
+}
 
 function normalizeStepNumber(stepNumber: number | null): number | null {
   if (stepNumber === null) return null
@@ -23,7 +57,8 @@ function normalizeStepNumber(stepNumber: number | null): number | null {
   return null
 }
 
-function getPendingReportLabel(workflowType?: string) {
+function getPendingReportLabel(workflowType?: string, devAgentName?: string) {
+  if (devAgentName?.trim()) return `${devAgentName.trim()} Dev Agent Report`
   if (workflowType === "turbopack-bundle-analyzer") return "Turbopack Bundle Analyzer Report"
   if (workflowType === "design-guidelines") return "Design Guidelines Report"
   if (workflowType === "react-performance") return "React Performance Report"
@@ -32,7 +67,23 @@ function getPendingReportLabel(workflowType?: string) {
   return "Dev Agent Report"
 }
 
-export function ReportPending({ runId, userId, workflowType, projectName, embedded = false }: ReportPendingProps) {
+function getLegacyWorkflowLabel(workflowType?: string) {
+  if (workflowType === "turbopack-bundle-analyzer") return "Turbopack Bundle Analyzer"
+  if (workflowType === "design-guidelines") return "Design Guidelines Review"
+  if (workflowType === "react-performance") return "React Performance Review"
+  if (workflowType === "url-audit") return "URL Audit"
+  if (workflowType === "prompt") return "Custom Prompt"
+  return "Dev Agent"
+}
+
+export function ReportPending({
+  runId,
+  userId,
+  workflowType,
+  projectName,
+  devAgentName,
+  embedded = false
+}: ReportPendingProps) {
   const router = useRouter()
   const [status, setStatus] = useState<string>("Creating sandbox...")
   const [hasError, setHasError] = useState(false)
@@ -82,7 +133,7 @@ export function ReportPending({ runId, userId, workflowType, projectName, embedd
         if (run.status === "failure") {
           if (isActive) {
             setHasError(true)
-            setStatus(run.error || "Failed to generate report.")
+            setStatus(sanitizeDisplayText(run.error || "Failed to generate report."))
           }
           return
         }
@@ -94,15 +145,17 @@ export function ReportPending({ runId, userId, workflowType, projectName, embedd
 
         if (isActive) {
           setHasError(false)
-          setStatus(run.currentStep || "Generating report...")
+          setStatus(sanitizeDisplayText(run.currentStep || "Generating report..."))
           setStepNumber(typeof run.stepNumber === "number" ? run.stepNumber : null)
           setSandboxUrl(run.sandboxUrl || null)
-          setProgressLogs(Array.isArray(run.progressLogs) ? run.progressLogs : [])
+          setProgressLogs(
+            Array.isArray(run.progressLogs) ? run.progressLogs.map((line) => sanitizeDisplayText(line)) : []
+          )
         }
       } catch (error) {
         if (!isActive) return
         setHasError(true)
-        setStatus(error instanceof Error ? error.message : "Unable to load run status.")
+        setStatus(sanitizeDisplayText(error instanceof Error ? error.message : "Unable to load run status."))
       }
     }
 
@@ -137,10 +190,9 @@ export function ReportPending({ runId, userId, workflowType, projectName, embedd
   })
   const fallbackActiveIndex = statusMatchIndex >= 0 ? statusMatchIndex : -1
   const activeIndex = fallbackActiveIndex >= 0 ? fallbackActiveIndex : normalizedStepNumber
-  const pendingLabel = getPendingReportLabel(workflowType)
-  const pendingTitle =
-    workflowType === "turbopack-bundle-analyzer" ? "d3k Turbopack Bundle Analyzer Report" : "d3k Dev Agent Report"
-  const pendingReportTitle = projectName || pendingTitle
+  const workflowLabel = devAgentName?.trim() || getLegacyWorkflowLabel(workflowType)
+  const pendingLabel = getPendingReportLabel(workflowType, devAgentName)
+  const pendingReportTitle = `Run Report: ${workflowLabel} Dev Agent`
 
   const content = (
     <div className="space-y-6">
@@ -148,7 +200,8 @@ export function ReportPending({ runId, userId, workflowType, projectName, embedd
         <div>
           <div className="text-xs uppercase tracking-wide text-muted-foreground">{pendingLabel}</div>
           <h1 className="text-3xl font-bold mt-2">{pendingReportTitle}</h1>
-          <p className="text-muted-foreground mt-1">
+          {projectName ? <p className="mt-1 text-sm text-muted-foreground">Project: {projectName}</p> : null}
+          <p className="text-muted-foreground mt-2">
             We&apos;re assembling the results and will show them here shortly.
           </p>
         </div>
