@@ -3947,10 +3947,22 @@ function extractClsEvidenceFromText(text?: string): {
     })()
   ]
 
+  let bestCandidate: (typeof candidates)[number] | null = null
+  let bestScore = 0
+
   for (const candidate of candidates) {
-    if (candidate.beforeCls !== null || candidate.afterCls !== null) {
-      return candidate
+    const score = (candidate.beforeCls !== null ? 1 : 0) + (candidate.afterCls !== null ? 1 : 0)
+    if (score === 0) {
+      continue
     }
+    if (!bestCandidate || score > bestScore) {
+      bestCandidate = candidate
+      bestScore = score
+    }
+  }
+
+  if (bestCandidate) {
+    return bestCandidate
   }
 
   return {
