@@ -4488,7 +4488,10 @@ async function runAgentWithDiagnoseTool(
   const effectiveDevAgentInstructions = [devAgentInstructions?.trim(), collapsedClsActionStepGuidance]
     .filter((value): value is string => Boolean(value))
     .join("\n\n")
-  const effectiveActionSteps = workflowTypeForPrompt === "cls-fix" ? undefined : devAgentActionSteps
+  const effectiveActionSteps =
+    workflowTypeForPrompt === "cls-fix" || workflowTypeForPrompt === "turbopack-bundle-analyzer"
+      ? undefined
+      : devAgentActionSteps
 
   await appendProgressLog(progressContext, "[Claude] Ensuring Claude Code CLI is available...")
   try {
