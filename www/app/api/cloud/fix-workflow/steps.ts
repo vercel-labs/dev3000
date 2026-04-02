@@ -3922,6 +3922,22 @@ function extractClsEvidenceFromText(text?: string): {
       }
     })(),
     (() => {
+      const match = text.match(/Baseline CLS[^0-9]*([0-9]*\.?[0-9]+)[^\n]*?Fixed CLS[^0-9]*([0-9]*\.?[0-9]+)/i)
+      return {
+        source: "baseline-fixed-summary",
+        beforeCls: parseClsValue(match?.[1]),
+        afterCls: parseClsValue(match?.[2])
+      }
+    })(),
+    (() => {
+      const match = text.match(/\|\s*CLS\s*\|\s*([0-9]*\.?[0-9]+)\s*\|\s*([0-9]*\.?[0-9]+)\s*\|/i)
+      return {
+        source: "cls-table-row",
+        beforeCls: parseClsValue(match?.[1]),
+        afterCls: parseClsValue(match?.[2])
+      }
+    })(),
+    (() => {
       const match = text.match(/Before[^0-9]*([0-9]*\.?[0-9]+)[\s\S]{0,200}?After[^0-9]*([0-9]*\.?[0-9]+)/i)
       return {
         source: "before-after-summary",
