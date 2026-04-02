@@ -740,7 +740,14 @@ function normalizeDevAgent(devAgent: StoredDevAgent | Omit<DevAgent, "usageCount
         ...devAgent,
         kind: builtinDefaults.kind,
         author: builtinDefaults.author,
-        team: builtinDefaults.team
+        team: builtinDefaults.team,
+        executionMode: builtinDefaults.executionMode,
+        sandboxBrowser: builtinDefaults.sandboxBrowser,
+        devServerCommand: builtinDefaults.devServerCommand,
+        skillRefs: builtinDefaults.skillRefs,
+        supportsPathInput: builtinDefaults.supportsPathInput,
+        supportsPullRequest: builtinDefaults.supportsPullRequest,
+        legacyWorkflowType: builtinDefaults.legacyWorkflowType
       }
     : devAgent
   const normalizedInstructions =
