@@ -294,6 +294,127 @@ function formatGrade(grade?: MetricSnapshot["grade"]) {
   return grade === "needs-improvement" ? "Needs improvement" : grade[0].toUpperCase() + grade.slice(1)
 }
 
+function gradeClsValue(value: number): "good" | "needs-improvement" | "poor" {
+  if (value <= 0.1) return "good"
+  if (value <= 0.25) return "needs-improvement"
+  return "poor"
+}
+
+function parseClsValue(value?: string) {
+  if (!value) return null
+  const parsed = Number.parseFloat(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function extractClsEvidenceFromReport(text?: string): {
+  beforeCls: number | null
+  afterCls: number | null
+} {
+  if (!text) {
+    return { beforeCls: null, afterCls: null }
+  }
+
+  const candidates: Array<{ beforeCls: number | null; afterCls: number | null }> = [
+    (() => {
+      const match = text.match(
+        /CLS(?:\s+score)?\s+improved\s+from[^0-9]*([0-9]*\.?[0-9]+)\s*(?:→|->)\s*([0-9]*\.?[0-9]+)/i
+      )
+      return { beforeCls: parseClsValue(match?.[1]), afterCls: parseClsValue(match?.[2]) }
+    })(),
+    (() => {
+      const baselineMatch = text.match(/Baseline CLS[^0-9]*([0-9]*\.?[0-9]+)/i)
+      const postFixMatch = text.match(/Post-fix CLS[^0-9]*([0-9]*\.?[0-9]+)/i)
+      return { beforeCls: parseClsValue(baselineMatch?.[1]), afterCls: parseClsValue(postFixMatch?.[1]) }
+    })(),
+    (() => {
+      const match = text.match(/Baseline CLS[^0-9]*([0-9]*\.?[0-9]+)[^\n]*?Fixed CLS[^0-9]*([0-9]*\.?[0-9]+)/i)
+      return { beforeCls: parseClsValue(match?.[1]), afterCls: parseClsValue(match?.[2]) }
+    })(),
+    (() => {
+      const match = text.match(/\|\s*CLS\s*\|\s*([0-9]*\.?[0-9]+)\s*\|\s*([0-9]*\.?[0-9]+)\s*\|/i)
+      return { beforeCls: parseClsValue(match?.[1]), afterCls: parseClsValue(match?.[2]) }
+    })()
+  ]
+
+  let bestCandidate: (typeof candidates)[number] | null = null
+  let bestScore = 0
+
+  for (const candidate of candidates) {
+    const score = (candidate.beforeCls !== null ? 1 : 0) + (candidate.afterCls !== null ? 1 : 0)
+    if (score === 0) continue
+    if (!bestCandidate || score > bestScore) {
+      bestCandidate = candidate
+      bestScore = score
+    }
+  }
+
+  return bestCandidate || { beforeCls: null, afterCls: null }
+}
+
+function applyTranscriptClsFallback(report: WorkflowReport): WorkflowReport {
+  const transcriptEvidence = extractClsEvidenceFromReport(report.agentAnalysis)
+  if (transcriptEvidence.beforeCls === null && transcriptEvidence.afterCls === null) {
+    return report
+  }
+
+  const nextReport: WorkflowReport = {
+    ...report,
+    beforeWebVitals: report.beforeWebVitals ? { ...report.beforeWebVitals } : undefined,
+    afterWebVitals: report.afterWebVitals ? { ...report.afterWebVitals } : undefined
+  }
+
+  if (transcriptEvidence.beforeCls !== null) {
+    const beforeGrade: NonNullable<MetricSnapshot["grade"]> =
+      nextReport.clsGrade ?? gradeClsValue(transcriptEvidence.beforeCls)
+    if (typeof nextReport.clsScore !== "number") {
+      nextReport.clsScore = transcriptEvidence.beforeCls
+    }
+    if (!nextReport.clsGrade) {
+      nextReport.clsGrade = beforeGrade
+    }
+    if (!nextReport.beforeWebVitals?.cls) {
+      nextReport.beforeWebVitals = {
+        ...nextReport.beforeWebVitals,
+        cls: {
+          value: nextReport.clsScore ?? transcriptEvidence.beforeCls,
+          grade: beforeGrade
+        }
+      }
+    }
+  }
+
+  if (transcriptEvidence.afterCls !== null) {
+    const afterGrade: NonNullable<MetricSnapshot["grade"]> =
+      nextReport.afterClsGrade ?? gradeClsValue(transcriptEvidence.afterCls)
+    if (typeof nextReport.afterClsScore !== "number") {
+      nextReport.afterClsScore = transcriptEvidence.afterCls
+    }
+    if (!nextReport.afterClsGrade) {
+      nextReport.afterClsGrade = afterGrade
+    }
+    if (!nextReport.afterWebVitals?.cls) {
+      nextReport.afterWebVitals = {
+        ...nextReport.afterWebVitals,
+        cls: {
+          value: nextReport.afterClsScore ?? transcriptEvidence.afterCls,
+          grade: afterGrade
+        }
+      }
+    }
+  }
+
+  if (
+    nextReport.verificationStatus === "unchanged" &&
+    typeof nextReport.clsScore === "number" &&
+    typeof nextReport.afterClsScore === "number" &&
+    nextReport.afterClsScore < nextReport.clsScore
+  ) {
+    nextReport.verificationStatus = "improved"
+  }
+
+  return nextReport
+}
+
 function getMetricSnapshot(
   report: WorkflowReport,
   key: MetricKey,
@@ -638,7 +759,7 @@ async function WorkflowReportPageData({ params }: { params: Promise<{ id: string
   }
 
   const response = await fetch(run.reportBlobUrl, { cache: "no-store" })
-  const report: WorkflowReport = await response.json()
+  const report = applyTranscriptClsFallback((await response.json()) as WorkflowReport)
 
   const workflowLabel = getWorkflowLabel(report, run)
   const reportDescription = getWorkflowDescription(report, workflowLabel)
