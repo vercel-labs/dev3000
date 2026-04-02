@@ -122,6 +122,7 @@ export default function DevAgentRunClient({
   const [projectsLoading, setProjectsLoading] = useState(false)
   const [projectSearch, setProjectSearch] = useState("")
   const [selectedProjectId, setSelectedProjectId] = useState(() => searchParams?.get("project") ?? "")
+  const [selectedProjectFallback, setSelectedProjectFallback] = useState<Project | null>(null)
   const [availableBranches, setAvailableBranches] = useState<Array<{ name: string; lastDeployment?: { url: string } }>>(
     []
   )
@@ -138,14 +139,20 @@ export default function DevAgentRunClient({
   const [repoVisibilities, setRepoVisibilities] = useState<Map<string, RepoVisibility>>(new Map())
 
   const selectedTeam = team
+  const allProjects = useMemo(() => {
+    if (!selectedProjectFallback || projects.some((project) => project.id === selectedProjectFallback.id)) {
+      return projects
+    }
+    return [selectedProjectFallback, ...projects]
+  }, [projects, selectedProjectFallback])
   const filteredProjects = useMemo(() => {
     const query = projectSearch.trim().toLowerCase()
-    if (!query) return projects
-    return projects.filter((project) => project.name.toLowerCase().includes(query))
-  }, [projectSearch, projects])
+    if (!query) return allProjects
+    return allProjects.filter((project) => project.name.toLowerCase().includes(query))
+  }, [allProjects, projectSearch])
   const selectedProject = useMemo(
-    () => projects.find((project) => project.id === selectedProjectId) || null,
-    [projects, selectedProjectId]
+    () => allProjects.find((project) => project.id === selectedProjectId) || null,
+    [allProjects, selectedProjectId]
   )
   const selectedProjectListVisibility = selectedProjectId ? repoVisibilities.get(selectedProjectId) : undefined
   const selectedRepoOwner = selectedProject?.link?.org || selectedProject?.latestDeployments[0]?.meta?.githubOrg
@@ -169,6 +176,7 @@ export default function DevAgentRunClient({
   useEffect(() => {
     if (!selectedTeamId) {
       setProjects([])
+      setSelectedProjectFallback(null)
       setSelectedProjectId("")
       return
     }
@@ -206,12 +214,47 @@ export default function DevAgentRunClient({
     return () => controller.abort()
   }, [selectedTeamId, selectedTeamIsPersonal])
 
-  // Batch-fetch repo visibility for all projects with GitHub links
   useEffect(() => {
-    if (projects.length === 0) return
+    if (!selectedProjectId || !selectedTeamId) {
+      setSelectedProjectFallback(null)
+      return
+    }
+
+    if (projects.some((project) => project.id === selectedProjectId)) {
+      setSelectedProjectFallback(null)
+      return
+    }
 
     const controller = new AbortController()
-    const projectsWithGithub = projects
+    const params = selectedTeamIsPersonal ? "" : `?teamId=${encodeURIComponent(selectedTeamId)}`
+
+    void fetch(`/api/projects/${selectedProjectId}${params}`, {
+      signal: controller.signal
+    })
+      .then(async (response) => {
+        const data = await response.json()
+        if (!response.ok || !data.success || !data.project) {
+          throw new Error(data.error || "Failed to load selected project.")
+        }
+        if (controller.signal.aborted) return
+        setSelectedProjectFallback(data.project as Project)
+        setError((currentError) => (currentError === "fetch failed" ? null : currentError))
+      })
+      .catch((loadError: unknown) => {
+        if (controller.signal.aborted) return
+        setSelectedProjectFallback(null)
+        setError((currentError) => currentError || (loadError instanceof Error ? loadError.message : String(loadError)))
+      })
+
+    return () => controller.abort()
+  }, [projects, selectedProjectId, selectedTeamId, selectedTeamIsPersonal])
+
+  // Batch-fetch repo visibility for all projects with GitHub links
+  useEffect(() => {
+    if (allProjects.length === 0) return
+
+    const controller = new AbortController()
+    const projectsWithGithub = allProjects
       .filter((project): project is Project & { link: { org: string; repo: string } } =>
         Boolean(project.link?.org && project.link?.repo)
       )
@@ -246,7 +289,7 @@ export default function DevAgentRunClient({
     })
 
     return () => controller.abort()
-  }, [projects])
+  }, [allProjects])
 
   useEffect(() => {
     const projectParam = searchParams?.get("project")

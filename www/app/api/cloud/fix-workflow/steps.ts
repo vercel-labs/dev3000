@@ -2126,6 +2126,7 @@ export async function observeBaselineStep(
   progressContext?: ProgressContext | null
 ): Promise<ObserveResult> {
   const timer = new StepTimer()
+  const isTurbopackBundleAnalyzer = progressContext?.workflowType === "turbopack-bundle-analyzer"
 
   if (vercelOidcToken && !process.env.VERCEL_OIDC_TOKEN) {
     process.env.VERCEL_OIDC_TOKEN = vercelOidcToken
@@ -2177,7 +2178,9 @@ export async function observeBaselineStep(
     workflowLog(`[Observe] Fresh sandbox created: ${sandbox.sandboxId}`)
   }
 
-  await installDevAgentSkillsInSandbox(sandbox, projectDir, devAgentSkillRefs, progressContext)
+  await installDevAgentSkillsInSandbox(sandbox, projectDir, devAgentSkillRefs, progressContext, {
+    includeD3k: !isTurbopackBundleAnalyzer
+  })
 
   const localTargetUrl = `http://localhost:3000${startPath}`
   const cloudBrowserMode = resolveCloudBrowserMode(devAgentSandboxBrowser)
@@ -2624,7 +2627,9 @@ export async function agentFixLoopStep(
       `[Agent] Reinstalling skills in ${recreatedSandbox ? "recreated" : "initial"} agent sandbox...`
     )
     try {
-      await installDevAgentSkillsInSandbox(sandbox, effectiveProjectDir, devAgentSkillRefs, progressContext)
+      await installDevAgentSkillsInSandbox(sandbox, effectiveProjectDir, devAgentSkillRefs, progressContext, {
+        includeD3k: !isTurbopackBundleAnalyzer
+      })
     } catch (skillInstallError) {
       await appendProgressLog(
         progressContext,
@@ -3311,8 +3316,14 @@ function shellEscape(value: string): string {
   return `'${value.replaceAll("'", `'\\''`)}'`
 }
 
-function getInstalledSkillNames(devAgentSkillRefs: DevAgentSkillRef[] | undefined): string[] {
-  const names = new Set<string>(["d3k"])
+function getInstalledSkillNames(
+  devAgentSkillRefs: DevAgentSkillRef[] | undefined,
+  options?: { includeD3k?: boolean }
+): string[] {
+  const names = new Set<string>()
+  if (options?.includeD3k !== false) {
+    names.add("d3k")
+  }
   for (const skill of devAgentSkillRefs || []) {
     const label = skill.displayName?.trim() || skill.skillName?.trim()
     if (!label) continue
@@ -3353,7 +3364,8 @@ async function installDevAgentSkillsInSandbox(
   sandbox: Sandbox,
   projectDir: string | undefined,
   devAgentSkillRefs: DevAgentSkillRef[] | undefined,
-  progressContext?: ProgressContext | null
+  progressContext?: ProgressContext | null,
+  options?: { includeD3k?: boolean }
 ): Promise<void> {
   const requestedSkills = [...(devAgentSkillRefs || [])]
   const hasVercelPlugin = requestedSkills.some((skill) => {
@@ -3373,7 +3385,7 @@ async function installDevAgentSkillsInSandbox(
       sourceUrl: "https://github.com/vercel/vercel-plugin"
     })
   }
-  if (!hasD3kSkill) {
+  if (options?.includeD3k !== false && !hasD3kSkill) {
     requestedSkills.unshift({
       id: "d3k",
       installArg: D3K_SKILL_INSTALL_ARG,
@@ -3418,8 +3430,11 @@ async function installDevAgentSkillsInSandbox(
   }
 }
 
-function buildDevAgentSkillLoadInstructions(devAgentSkillRefs: DevAgentSkillRef[] | undefined): string {
-  const skillNames = getInstalledSkillNames(devAgentSkillRefs)
+function buildDevAgentSkillLoadInstructions(
+  devAgentSkillRefs: DevAgentSkillRef[] | undefined,
+  options?: { includeD3k?: boolean }
+): string {
+  const skillNames = getInstalledSkillNames(devAgentSkillRefs, options)
   if (skillNames.length === 1) {
     return `the installed ${skillNames[0]} skill`
   }
@@ -4459,7 +4474,10 @@ async function runAgentWithDiagnoseTool(
 }> {
   const SANDBOX_CWD = projectDir ? `/vercel/sandbox/${projectDir.replace(/^\/+|\/+$/g, "")}` : "/vercel/sandbox"
   const workflowTypeForPrompt = workflowType || "cls-fix"
-  const skillLoadInstructions = buildDevAgentSkillLoadInstructions(devAgentSkillRefs)
+  const includeD3kSkill = workflowTypeForPrompt !== "turbopack-bundle-analyzer"
+  const skillLoadInstructions = buildDevAgentSkillLoadInstructions(devAgentSkillRefs, {
+    includeD3k: includeD3kSkill
+  })
   const browserGuidance = buildDevAgentSandboxBrowserGuidance(devAgentSandboxBrowser)
   const modelSelection = resolveClaudeModelSelection(devAgentAiAgent)
   const selectedModelLabel = getDevAgentModelLabel(modelSelection.modelId)
@@ -4570,7 +4588,7 @@ async function runAgentWithDiagnoseTool(
     summary: finalSummary,
     systemPrompt,
     modelId: modelSelection.modelId,
-    skillsLoaded: getInstalledSkillNames(devAgentSkillRefs),
+    skillsLoaded: getInstalledSkillNames(devAgentSkillRefs, { includeD3k: includeD3kSkill }),
     usage: {
       promptTokens: totalPromptTokens,
       completionTokens: totalCompletionTokens,
