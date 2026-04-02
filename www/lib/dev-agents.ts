@@ -11,12 +11,10 @@ const BUILTIN_DEV_AGENT_ID_ALIASES = {
   "dev-agent-design-guidelines": "r_d91q7k",
   "dev-agent-react-performance": "r_p47n6x",
   "dev-agent-turbopack-bundle-analyzer": "r_t62v8m",
-  "dev-agent-custom-prompt": "r_u35h9c",
   "devAgent-cls-fix": "r_c84m2f",
   "devAgent-design-guidelines": "r_d91q7k",
   "devAgent-react-performance": "r_p47n6x",
-  "devAgent-turbopack-bundle-analyzer": "r_t62v8m",
-  "devAgent-custom-prompt": "r_u35h9c"
+  "devAgent-turbopack-bundle-analyzer": "r_t62v8m"
 } as const
 
 export type DevAgentKind = "builtin" | "custom" | "marketplace"
@@ -409,32 +407,6 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
     aiAgent: "anthropic/claude-opus-4.6",
     devServerCommand: "d3k",
     successEval: "Was the total shipped JavaScript measurably reduced?"
-  },
-  {
-    id: "r_u35h9c",
-    kind: "builtin",
-    name: "Custom Prompt",
-    description: "Provide one-off instructions for a project and run them with the selected repo context.",
-    instructions:
-      "Use the supplied custom prompt as the primary task, load the d3k skill first, and complete the request against the selected project with evidence-backed validation.",
-    executionMode: "dev-server",
-    sandboxBrowser: "agent-browser",
-    skillRefs: [
-      parseDevAgentSkillRef({
-        installArg: D3K_SKILL_INSTALL_ARG,
-        displayName: "d3k"
-      })
-    ],
-    author: systemAuthor,
-    createdAt: "2026-03-12T00:00:00.000Z",
-    updatedAt: "2026-03-12T00:00:00.000Z",
-    legacyWorkflowType: "prompt",
-    supportsPathInput: true,
-    supportsPullRequest: true,
-    requiresCustomPrompt: true,
-    aiAgent: "anthropic/claude-opus-4.6",
-    devServerCommand: "d3k",
-    successEval: "Were the user's instructions completed successfully with evidence?"
   },
   // ── Marketplace agents (demo) ──────────────────────────────────────────
   {
