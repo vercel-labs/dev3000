@@ -940,6 +940,7 @@ function readNdjsonRows(filePath) {
 const ndjsonDir = path.resolve(".next/diagnostics/analyze/ndjson")
 const routes = readNdjsonRows(path.join(ndjsonDir, "routes.ndjson"))
 const outputFiles = readNdjsonRows(path.join(ndjsonDir, "output_files.ndjson"))
+const sources = readNdjsonRows(path.join(ndjsonDir, "sources.ndjson"))
 
 if (routes.length === 0 && outputFiles.length === 0) {
   console.log("null")
@@ -965,6 +966,47 @@ const topRoutes = routeMetrics
   .sort((a, b) => b.compressedBytes - a.compressedBytes)
   .slice(0, 10)
 
+const topSourceMap = new Map()
+for (const row of sources) {
+  const fullPath =
+    typeof row.full_path === "string" && row.full_path.trim()
+      ? row.full_path.trim()
+      : typeof row.path === "string" && row.path.trim()
+        ? row.path.trim()
+        : null
+  if (!fullPath || row.is_dir) continue
+  if (!row.client || !row.js) continue
+
+  const compressedBytes = Number(row.compressed_size || 0)
+  const rawBytes = Number(row.size || 0)
+  if (!Number.isFinite(compressedBytes) || compressedBytes <= 0 || !Number.isFinite(rawBytes) || rawBytes < 0) {
+    continue
+  }
+
+  const existing = topSourceMap.get(fullPath) || {
+    fullPath,
+    compressedBytes: 0,
+    rawBytes: 0,
+    routes: new Set()
+  }
+  existing.compressedBytes += compressedBytes
+  existing.rawBytes += rawBytes
+  if (typeof row.route === "string" && row.route) {
+    existing.routes.add(row.route)
+  }
+  topSourceMap.set(fullPath, existing)
+}
+
+const topSources = Array.from(topSourceMap.values())
+  .map((row) => ({
+    fullPath: row.fullPath,
+    compressedBytes: row.compressedBytes,
+    rawBytes: row.rawBytes,
+    routes: Array.from(row.routes)
+  }))
+  .sort((a, b) => b.compressedBytes - a.compressedBytes)
+  .slice(0, 10)
+
 console.log(
   JSON.stringify({
     generatedAt: new Date().toISOString(),
@@ -972,7 +1014,8 @@ console.log(
     totalRawBytes: totalRawFromRoutes > 0 ? totalRawFromRoutes : totalRawFromOutput,
     routeCount: routeMetrics.length,
     outputFileCount: outputFiles.length,
-    topRoutes
+    topRoutes,
+    topSources
   })
 )
 NODE`
@@ -997,15 +1040,48 @@ NODE`
 
   try {
     const parsed = JSON.parse(lastLine) as TurbopackBundleMetricsSnapshot
+    const topSourcesSummary =
+      parsed.topSources && parsed.topSources.length > 0
+        ? parsed.topSources
+            .slice(0, 3)
+            .map((source) => `${source.fullPath} (${Math.round(source.compressedBytes / 1024)}KB)`)
+            .join(", ")
+        : null
     await appendProgressLog(
       progressContext,
-      `[Turbopack] ${label || "bundle"} metrics: ${Math.round(parsed.totalCompressedBytes / 1024)}KB compressed, ${parsed.routeCount} routes`
+      `[Turbopack] ${label || "bundle"} metrics: ${Math.round(parsed.totalCompressedBytes / 1024)}KB compressed, ${parsed.routeCount} routes${topSourcesSummary ? `, top sources: ${topSourcesSummary}` : ""}`
     )
     return parsed
   } catch {
     await appendProgressLog(progressContext, `[Turbopack] Failed to parse ${label || "bundle"} metrics output`)
     return null
   }
+}
+
+function formatTurbopackBundleBaselineSummary(snapshot: TurbopackBundleMetricsSnapshot | null): string | undefined {
+  if (!snapshot) return undefined
+
+  const lines = [
+    `- Total compressed JS: ${Math.round(snapshot.totalCompressedBytes / 1024)} KB`,
+    `- Route count: ${snapshot.routeCount}`
+  ]
+
+  const topRoute = snapshot.topRoutes?.[0]
+  if (topRoute) {
+    lines.push(`- Heaviest route: ${topRoute.route} (${Math.round(topRoute.compressedBytes / 1024)} KB compressed)`)
+  }
+
+  const topSources = snapshot.topSources?.slice(0, 3) || []
+  if (topSources.length > 0) {
+    lines.push("- Top shipped client sources:")
+    for (const source of topSources) {
+      lines.push(
+        `  - ${source.fullPath} (${Math.round(source.compressedBytes / 1024)} KB compressed${source.routes.length > 0 ? ` across ${source.routes.join(", ")}` : ""})`
+      )
+    }
+  }
+
+  return lines.join("\n")
 }
 
 const TURBOPACK_NDJSON_REQUIRED_FILES = [
@@ -2668,6 +2744,9 @@ export async function agentFixLoopStep(
     await appendProgressLog(progressContext, "[Turbopack] Capturing baseline NDJSON bundle metrics")
     beforeBundleMetrics = await collectTurbopackBundleMetrics(sandbox, effectiveProjectDir, progressContext, "baseline")
   }
+  const bundleBaselineSummary = isTurbopackBundleAnalyzer
+    ? formatTurbopackBundleBaselineSummary(beforeBundleMetrics)
+    : undefined
 
   const localTargetUrl = `http://localhost:3000${startPath}`
   const cloudBrowserMode = observation?.cloudBrowserMode ?? resolveCloudBrowserMode(devAgentSandboxBrowser)
@@ -2722,6 +2801,7 @@ export async function agentFixLoopStep(
     devAgentAiAgent,
     devAgentActionSteps,
     devAgentSkillRefs,
+    bundleBaselineSummary,
     progressContext
   )
   await updateProgress(
@@ -3576,14 +3656,26 @@ function buildClaudeSystemPrompt({
   startPath,
   projectDir,
   browserGuidance,
-  selectedModelLabel
+  selectedModelLabel,
+  skillLoadInstructions
 }: {
   devUrl: string
   startPath: string
   projectDir?: string
   browserGuidance: string
   selectedModelLabel: string
+  skillLoadInstructions: string
 }): string {
+  const hasD3kSkill = /\bd3k\b/i.test(skillLoadInstructions)
+  const environmentRuntimeLines = hasD3kSkill
+    ? `- d3k is running standalone for dev server, browser control, logs, and diagnostics when a dev server is enabled.
+- Installed skills: ${skillLoadInstructions}`
+    : `- Installed skills: ${skillLoadInstructions}`
+  const executionRuntimeLines = hasD3kSkill
+    ? `- Use the installed d3k skill for browser control, diagnostics, and runtime inspection whenever it helps.
+- ${browserGuidance}`
+    : `- ${browserGuidance}`
+
   return `You are Claude Code running inside a Vercel Sandbox.
 
 Environment:
@@ -3591,13 +3683,11 @@ Environment:
 - Start path: ${startPath}
 - Dev URL: ${devUrl || "(dev server intentionally skipped)"}
 - Workflow model: ${selectedModelLabel}
-- d3k is running standalone for dev server, browser control, logs, and diagnostics when a dev server is enabled.
-- The d3k skill and any selected task skills are installed locally for Claude Code.
+${environmentRuntimeLines}
 
 Execution rules:
 - Work directly in the sandbox repo using your normal code-editing and shell abilities.
-- Use the installed d3k skill for browser control, diagnostics, and runtime inspection whenever it helps.
-- ${browserGuidance}
+${executionRuntimeLines}
 - Prefer targeted, evidence-driven fixes over broad refactors.
 - Validate meaningful changes before you conclude.
 - Summaries should include concrete changes, validation evidence, and remaining risks.`
@@ -3721,6 +3811,7 @@ function buildClaudeMainTaskPrompt({
   devAgentInstructions,
   devAgentExecutionMode,
   skillLoadInstructions,
+  bundleBaselineSummary,
   beforeCls,
   beforeGrade
 }: {
@@ -3733,6 +3824,7 @@ function buildClaudeMainTaskPrompt({
   devAgentInstructions?: string
   devAgentExecutionMode?: "dev-server" | "preview-pr"
   skillLoadInstructions: string
+  bundleBaselineSummary?: string
   beforeCls: number | null
   beforeGrade: "good" | "needs-improvement" | "poor" | null
 }): ClaudeTurnPrompt {
@@ -3809,6 +3901,8 @@ Focus on:
 - code changes that reduce shipped JavaScript
 - minimal smoke checks only
 
+${bundleBaselineSummary ? `Workflow-provided bundle baseline:\n${bundleBaselineSummary}\n\n` : ""}
+
 Do not manually rerun analyzer build commands. The workflow runtime handles the post-change analyzer rerun.`
     }
   }
@@ -3847,6 +3941,7 @@ function buildClaudeTurnPrompts({
   devAgentExecutionMode,
   devAgentActionSteps,
   skillLoadInstructions,
+  bundleBaselineSummary,
   beforeCls,
   beforeGrade
 }: {
@@ -3860,6 +3955,7 @@ function buildClaudeTurnPrompts({
   devAgentExecutionMode?: "dev-server" | "preview-pr"
   devAgentActionSteps?: Array<{ kind: string; config: Record<string, string> }>
   skillLoadInstructions: string
+  bundleBaselineSummary?: string
   beforeCls: number | null
   beforeGrade: "good" | "needs-improvement" | "poor" | null
 }): ClaudeTurnPrompt[] {
@@ -3867,7 +3963,37 @@ function buildClaudeTurnPrompts({
     buildClaudeSetupPrompt(devAgentName, startPath, devUrl, skillLoadInstructions, customPrompt)
   ]
 
-  if (devAgentActionSteps && devAgentActionSteps.length > 0) {
+  if (workflowType === "turbopack-bundle-analyzer") {
+    prompts.push({
+      label: "Agent analysis",
+      maxTurns: 8,
+      prompt: `Use only the generated Turbopack NDJSON artifacts to identify the single highest-impact shipped-JS optimization opportunity.
+
+Use ${skillLoadInstructions} as relevant.
+
+${bundleBaselineSummary ? `Workflow-provided bundle baseline:\n${bundleBaselineSummary}\n\n` : ""}Rules:
+- Do not use browser tools.
+- Do not rerun next build or analyzer commands.
+- Do not make code changes in this step.
+- Read the NDJSON artifacts and the relevant source files only.
+- End with a short implementation plan that names the exact file(s) you will edit next and the concrete change you will make.`
+    })
+    prompts.push({
+      label: "Agent implementation",
+      maxTurns: 14,
+      prompt: `Implement the highest-confidence bundle reduction identified in the previous step.
+
+Use ${skillLoadInstructions} as relevant.
+
+${bundleBaselineSummary ? `Workflow-provided bundle baseline:\n${bundleBaselineSummary}\n\n` : ""}Requirements:
+- You must make a concrete code change when the root cause is clear.
+- Prioritize moving oversized data or logic out of the client bundle.
+- Keep the fix tightly scoped. Prefer editing 1-4 files.
+- Do not rerun analyzer build commands; the workflow runtime will do that after this step.
+- Use only minimal smoke validation such as lint/typecheck or a targeted sanity check if needed.
+- Finish with a concise summary of the files changed and the expected bundle impact.`
+    })
+  } else if (devAgentActionSteps && devAgentActionSteps.length > 0) {
     prompts.push(...devAgentActionSteps.map((step, index) => buildClaudeActionStepPrompt(step, index)))
   } else {
     prompts.push(
@@ -3881,6 +4007,7 @@ function buildClaudeTurnPrompts({
         devAgentInstructions,
         devAgentExecutionMode,
         skillLoadInstructions,
+        bundleBaselineSummary,
         beforeCls,
         beforeGrade
       })
@@ -4389,12 +4516,26 @@ async function runClaudeTurnInSandbox(
     `[Claude] Running ${prompt.label} (model=${modelSelection.cliModel}, resume=${options.sessionId ? "yes" : "no"}, authToken=present, apiKey=empty, baseUrl=${claudeEnv.ANTHROPIC_BASE_URL}, extraEnv=${Object.keys(modelSelection.extraEnv).join(",") || "none"})`
   )
 
-  const result = await runSandboxCommandWithOptions(sandbox, {
-    cmd: "claude",
-    args,
-    cwd,
-    env: claudeEnv
-  })
+  const startedAt = Date.now()
+  const heartbeat = setInterval(() => {
+    const elapsedSeconds = Math.round((Date.now() - startedAt) / 1000)
+    void appendProgressLog(
+      options.progressContext,
+      `[Claude] ${prompt.label} still running (${elapsedSeconds}s elapsed)`
+    )
+  }, 20000)
+
+  let result: Awaited<ReturnType<typeof runSandboxCommandWithOptions>>
+  try {
+    result = await runSandboxCommandWithOptions(sandbox, {
+      cmd: "claude",
+      args,
+      cwd,
+      env: claudeEnv
+    })
+  } finally {
+    clearInterval(heartbeat)
+  }
 
   if (result.exitCode !== 0) {
     await appendProgressLog(
@@ -4456,6 +4597,7 @@ async function runAgentWithDiagnoseTool(
   devAgentAiAgent?: import("@/lib/dev-agents").DevAgentAiAgent,
   devAgentActionSteps?: Array<{ kind: string; config: Record<string, string> }>,
   devAgentSkillRefs?: DevAgentSkillRef[],
+  bundleBaselineSummary?: string,
   progressContext?: ProgressContext | null
 ): Promise<{
   transcript: string
@@ -4509,7 +4651,8 @@ async function runAgentWithDiagnoseTool(
     startPath,
     projectDir,
     browserGuidance,
-    selectedModelLabel
+    selectedModelLabel,
+    skillLoadInstructions
   })
   const turnPrompts = buildClaudeTurnPrompts({
     workflowType: workflowTypeForPrompt,
@@ -4522,6 +4665,7 @@ async function runAgentWithDiagnoseTool(
     devAgentExecutionMode,
     devAgentActionSteps: effectiveActionSteps,
     skillLoadInstructions,
+    bundleBaselineSummary,
     beforeCls,
     beforeGrade
   })

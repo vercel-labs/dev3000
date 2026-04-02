@@ -18,6 +18,13 @@ export interface TurbopackBundleRouteMetric {
   rawBytes: number
 }
 
+export interface TurbopackBundleSourceMetric {
+  fullPath: string
+  compressedBytes: number
+  rawBytes: number
+  routes: string[]
+}
+
 export interface TurbopackBundleMetricsSnapshot {
   generatedAt: string
   totalCompressedBytes: number
@@ -25,6 +32,7 @@ export interface TurbopackBundleMetricsSnapshot {
   routeCount: number
   outputFileCount: number
   topRoutes: TurbopackBundleRouteMetric[]
+  topSources?: TurbopackBundleSourceMetric[]
 }
 
 export interface TurbopackBundleDelta {

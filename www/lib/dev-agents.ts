@@ -472,14 +472,10 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
     name: "Turbopack Bundle Analyzer",
     description: "Generate analyzer output, inspect the heaviest routes, and ship targeted bundle reductions.",
     instructions:
-      "Generate the Turbopack analyzer artifacts, identify the largest route and bundle regressions, and make improvements that materially reduce shipped JavaScript before opening a PR.",
+      "Generate the Turbopack analyzer artifacts, identify the heaviest shipped-JS sources, and implement a concrete code change that materially reduces shipped JavaScript. Prefer moving oversized data out of client components, splitting server and client responsibilities, and keeping the fix tightly scoped.",
     executionMode: "preview-pr",
     sandboxBrowser: "none",
     skillRefs: [
-      parseDevAgentSkillRef({
-        installArg: D3K_SKILL_INSTALL_ARG,
-        displayName: "d3k"
-      }),
       parseDevAgentSkillRef({
         installArg: ANALYZE_BUNDLE_SKILL_INSTALL_ARG,
         sourceUrl: "https://github.com/vercel-labs/dev3000/tree/main/www/.agents/skills/analyze-bundle"
