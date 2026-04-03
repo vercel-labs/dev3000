@@ -63,6 +63,8 @@ export interface DevAgentAshArtifact {
   tarballUrl?: string
 }
 
+export type DevAgentAshArtifactAvailability = "existing" | "reused" | "stored"
+
 export type DevAgentAiAgent = "anthropic/claude-opus-4.6" | "anthropic/claude-sonnet-4.6"
 export type DevAgentEarlyExitMode = "structured" | "text"
 export type DevAgentEarlyExitMetricType = "builtin" | "custom"
@@ -1159,18 +1161,30 @@ export async function incrementDevAgentUsage(devAgentId: string): Promise<void> 
 }
 
 export async function ensureDevAgentAshArtifactPublished(devAgent: DevAgent): Promise<DevAgentAshArtifact> {
+  const prepared = await ensureDevAgentAshArtifactPrepared(devAgent)
+  return prepared.artifact
+}
+
+export async function ensureDevAgentAshArtifactPrepared(
+  devAgent: DevAgent
+): Promise<{ artifact: DevAgentAshArtifact; state: DevAgentAshArtifactAvailability }> {
   if (devAgent.ashArtifact?.tarballUrl) {
-    return devAgent.ashArtifact
+    return { artifact: devAgent.ashArtifact, state: "existing" }
   }
 
-  const { publishDevAgentAshArtifact } = await import("@/lib/dev-agent-ash")
-  return publishDevAgentAshArtifact(
+  const { publishDevAgentAshArtifactWithStatus } = await import("@/lib/dev-agent-ash")
+  const { artifact, publishState } = await publishDevAgentAshArtifactWithStatus(
     toDevAgentAshInput({
       ...devAgent,
       sandboxBrowser: devAgent.sandboxBrowser
     }),
     devAgent.ashArtifact?.revision ?? 1
   )
+
+  return {
+    artifact,
+    state: publishState
+  }
 }
 
 export function isDevAgentExecutionMode(value: string): value is DevAgentExecutionMode {

@@ -1,11 +1,19 @@
 import { gzipSync } from "node:zlib"
-import { put } from "@vercel/blob"
+import { head, put } from "@vercel/blob"
 import type { DevAgentAshArtifact, DevAgentAshInput } from "@/lib/dev-agent-ash-spec"
 import { createDevAgentAshSource } from "@/lib/dev-agent-ash-spec"
 
 const ASH_ARTIFACT_PREFIX = "dev-agents/ash/"
+const ASH_ARTIFACT_CACHE_PREFIX = `${ASH_ARTIFACT_PREFIX}cache/`
 
 const TAR_BLOCK_SIZE = 512
+
+export type DevAgentAshArtifactPublishState = "stored" | "reused"
+
+export interface DevAgentAshArtifactPublishResult {
+  artifact: DevAgentAshArtifact
+  publishState: DevAgentAshArtifactPublishState
+}
 
 function encodeTarString(value: string, length: number): Buffer {
   const buffer = Buffer.alloc(length)
@@ -71,31 +79,52 @@ function createTarGzBuffer(rootFolder: string, files: Array<{ path: string; cont
   return gzipSync(Buffer.concat(chunks))
 }
 
+export async function publishDevAgentAshArtifactWithStatus(
+  input: DevAgentAshInput,
+  revision: number
+): Promise<DevAgentAshArtifactPublishResult> {
+  const source = createDevAgentAshSource(input, revision)
+  const cachePath = `${ASH_ARTIFACT_CACHE_PREFIX}${source.specHash}.tgz`
+
+  let tarballUrl: string
+  let publishState: DevAgentAshArtifactPublishState = "stored"
+
+  try {
+    const cachedBlob = await head(cachePath)
+    tarballUrl = cachedBlob.url
+    publishState = "reused"
+  } catch {
+    const tarballBuffer = createTarGzBuffer(source.packageName, source.files)
+    tarballUrl = (
+      await put(cachePath, tarballBuffer, {
+        access: "public",
+        addRandomSuffix: false,
+        allowOverwrite: true,
+        contentType: "application/gzip"
+      })
+    ).url
+  }
+
+  return {
+    artifact: {
+      framework: "experimental-ash",
+      revision,
+      specHash: source.specHash,
+      generatedAt: new Date().toISOString(),
+      packageName: source.packageName,
+      packageVersion: source.packageVersion,
+      sourceLabel: source.sourceLabel,
+      systemPrompt: source.systemPrompt,
+      tarballUrl
+    },
+    publishState
+  }
+}
+
 export async function publishDevAgentAshArtifact(
   input: DevAgentAshInput,
   revision: number
 ): Promise<DevAgentAshArtifact> {
-  const source = createDevAgentAshSource(input, revision)
-  const tarballBuffer = createTarGzBuffer(source.packageName, source.files)
-  const blobPath = `${ASH_ARTIFACT_PREFIX}${input.id}/v${String(revision).padStart(4, "0")}-${source.specHash.slice(0, 12)}.tgz`
-  const tarballUrl = (
-    await put(blobPath, tarballBuffer, {
-      access: "public",
-      addRandomSuffix: false,
-      allowOverwrite: true,
-      contentType: "application/gzip"
-    })
-  ).url
-
-  return {
-    framework: "experimental-ash",
-    revision,
-    specHash: source.specHash,
-    generatedAt: new Date().toISOString(),
-    packageName: source.packageName,
-    packageVersion: source.packageVersion,
-    sourceLabel: source.sourceLabel,
-    systemPrompt: source.systemPrompt,
-    tarballUrl
-  }
+  const { artifact } = await publishDevAgentAshArtifactWithStatus(input, revision)
+  return artifact
 }

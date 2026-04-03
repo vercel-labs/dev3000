@@ -87,6 +87,9 @@ export async function cloudFixWorkflow(params: {
   userId?: string // For progress updates
   timestamp?: string // For progress updates
   workflowType?: string // For progress updates
+  initialStepNumber?: number
+  initialCurrentStep?: string
+  initialProgressLogs?: string[]
   devAgentId?: string
   devAgentName?: string
   devAgentDescription?: string
@@ -144,6 +147,9 @@ export async function cloudFixWorkflow(params: {
     userId,
     timestamp,
     workflowType,
+    initialStepNumber,
+    initialCurrentStep,
+    initialProgressLogs,
     devAgentId,
     devAgentName,
     devAgentDescription,
@@ -196,7 +202,10 @@ export async function cloudFixWorkflow(params: {
           devAgentSpecHash,
           devAgentExecutionMode,
           devAgentSandboxBrowser,
-          isMarketplaceAgent
+          isMarketplaceAgent,
+          activeStepNumber: initialStepNumber,
+          activeCurrentStep: initialCurrentStep,
+          progressLogs: initialProgressLogs
         }
       : null
 

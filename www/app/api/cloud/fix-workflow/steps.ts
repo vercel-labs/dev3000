@@ -4531,7 +4531,7 @@ async function runClaudeTurnInSandbox(
       options.progressContext,
       `[Claude] ${prompt.label} still running (${elapsedSeconds}s elapsed)`
     )
-  }, 20000)
+  }, 5000)
 
   let result: Awaited<ReturnType<typeof runSandboxCommandWithOptions>>
   try {

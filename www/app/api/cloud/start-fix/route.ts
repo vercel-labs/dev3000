@@ -1,11 +1,6 @@
 import { start } from "workflow/api"
 import { resolveDevAgentRunner } from "@/lib/cloud/dev-agent-runner"
-import {
-  type DevAgent,
-  ensureDevAgentAshArtifactPublished,
-  getDevAgent,
-  incrementDevAgentUsage
-} from "@/lib/dev-agents"
+import { type DevAgent, ensureDevAgentAshArtifactPrepared, getDevAgent, incrementDevAgentUsage } from "@/lib/dev-agents"
 import { proxyWorkflowJsonRequest, shouldProxyWorkflowRequest } from "@/lib/workflow-api"
 import { clearWorkflowLog, workflowError, workflowLog } from "@/lib/workflow-logger"
 import { saveWorkflowRun, type WorkflowType } from "@/lib/workflow-storage"
@@ -105,6 +100,7 @@ export async function POST(request: Request) {
   let runTimestamp: string | undefined
   let workflowType: WorkflowType = "cls-fix"
   let devAgent: DevAgent | null = null
+  let ashArtifactState: "existing" | "reused" | "stored" | null = null
   let customPrompt: string | undefined
   let crawlDepth: number | "all" | undefined
   let analysisTargetType: "vercel-project" | "url" = "vercel-project"
@@ -188,13 +184,20 @@ export async function POST(request: Request) {
       if (!devAgent) {
         return Response.json({ success: false, error: "Dev Agent not found." }, { status: 404, headers: corsHeaders })
       }
-      if (!devAgent.ashArtifact?.tarballUrl) {
-        devAgent = {
-          ...devAgent,
-          ashArtifact: await ensureDevAgentAshArtifactPublished(devAgent)
-        }
+      const preparedAshArtifact = await ensureDevAgentAshArtifactPrepared(devAgent)
+      ashArtifactState = preparedAshArtifact.state
+      devAgent = {
+        ...devAgent,
+        ashArtifact: preparedAshArtifact.artifact
       }
+      const ashStatusLabel =
+        preparedAshArtifact.state === "reused" || preparedAshArtifact.state === "existing"
+          ? "Reusing ASH app"
+          : "Storing ASH app"
       workflowType = devAgent.legacyWorkflowType || "prompt"
+      workflowLog(
+        `[Start Fix] ${ashStatusLabel}: ${preparedAshArtifact.artifact.sourceLabel} (${preparedAshArtifact.artifact.specHash.slice(0, 8)})`
+      )
     } else if (body.workflowType && validWorkflowTypes.includes(body.workflowType)) {
       workflowType = body.workflowType
     }
@@ -283,6 +286,19 @@ export async function POST(request: Request) {
     console.log(`[Start Fix] Generated runId: ${runId}`)
     console.log(`[Start Fix] userId: ${userId}, projectName: ${projectName}`)
 
+    const initialAshStep =
+      devAgent?.ashArtifact?.sourceLabel && devAgent?.ashArtifact?.specHash
+        ? `${ashArtifactState === "stored" ? "Storing" : "Reusing"} ASH app...`
+        : undefined
+    const initialProgressLogs = [
+      ...(devAgent?.ashArtifact?.sourceLabel && devAgent?.ashArtifact?.specHash
+        ? [
+            `[ASH] ${ashArtifactState === "stored" ? "Storing ASH app" : "Reusing ASH app"}: ${devAgent.ashArtifact.sourceLabel} (${devAgent.ashArtifact.specHash.slice(0, 8)})`
+          ]
+        : []),
+      "[Sandbox] Queued sandbox creation..."
+    ]
+
     // V2 workflow params - simplified "local-style" architecture
     const workflowParams = {
       repoUrl:
@@ -302,6 +318,9 @@ export async function POST(request: Request) {
       userId, // For progress updates
       timestamp: runTimestamp, // For progress updates
       workflowType, // For progress updates
+      initialStepNumber: devAgent ? 0 : 1,
+      initialCurrentStep: initialAshStep || "Creating sandbox environment...",
+      initialProgressLogs,
       devAgentId: devAgent?.id,
       devAgentName: devAgent?.name,
       devAgentDescription: devAgent?.description,
@@ -354,8 +373,9 @@ export async function POST(request: Request) {
           devAgentSpecHash: devAgent?.ashArtifact?.specHash,
           devAgentExecutionMode: devAgent?.executionMode,
           devAgentSandboxBrowser: devAgent?.sandboxBrowser,
-          currentStep: "Step 1: Initializing sandbox...",
-          stepNumber: 1,
+          currentStep: initialAshStep || "Creating sandbox environment...",
+          stepNumber: devAgent ? 0 : 1,
+          progressLogs: initialProgressLogs,
           customPrompt: workflowType === "prompt" ? customPrompt : undefined
         })
         workflowLog(`[Start Fix] Saved workflow run metadata (running): ${runId}`)

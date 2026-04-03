@@ -1,6 +1,6 @@
 "use client"
 
-import { AlertCircle } from "lucide-react"
+import { AlertCircle, CheckCircle2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -15,7 +15,14 @@ interface ReportPendingProps {
   embedded?: boolean
 }
 
-const STEP_LABELS = ["Creating sandbox", "Capturing baseline", "Agent in progress", "Generating report", "Finishing up"]
+const STEP_LABELS = [
+  "Preparing ASH app",
+  "Creating sandbox",
+  "Capturing baseline",
+  "Agent in progress",
+  "Generating report",
+  "Finishing up"
+]
 
 function stripAnsi(value: string): string {
   let result = ""
@@ -52,8 +59,9 @@ function sanitizeDisplayText(value: string): string {
 
 function normalizeStepNumber(stepNumber: number | null): number | null {
   if (stepNumber === null) return null
-  if (stepNumber >= 1 && stepNumber <= STEP_LABELS.length) return stepNumber - 1
   if (stepNumber >= 0 && stepNumber < STEP_LABELS.length) return stepNumber
+  if (stepNumber >= 1 && stepNumber < STEP_LABELS.length) return stepNumber
+  if (stepNumber === STEP_LABELS.length) return STEP_LABELS.length - 1
   return null
 }
 
@@ -85,12 +93,17 @@ export function ReportPending({
   embedded = false
 }: ReportPendingProps) {
   const router = useRouter()
+  const [isHydrated, setIsHydrated] = useState(false)
   const [status, setStatus] = useState<string>("Creating sandbox...")
   const [hasError, setHasError] = useState(false)
   const [sandboxUrl, setSandboxUrl] = useState<string | null>(null)
   const [stepNumber, setStepNumber] = useState<number | null>(null)
   const [progressLogs, setProgressLogs] = useState<string[]>([])
   const logsRef = useRef<HTMLTextAreaElement | null>(null)
+
+  useEffect(() => {
+    setIsHydrated(true)
+  }, [])
 
   useEffect(() => {
     let isActive = true
@@ -207,10 +220,12 @@ export function ReportPending({
         </div>
       )}
 
-      <Alert variant={hasError ? "destructive" : "default"} className={hasError ? "" : "bg-card border-border"}>
-        {hasError && <AlertCircle className="h-4 w-4" />}
-        <AlertDescription>{statusText}</AlertDescription>
-      </Alert>
+      {hasError ? (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{statusText}</AlertDescription>
+        </Alert>
+      ) : null}
 
       <div className="bg-card border border-border rounded-lg p-4">
         <div className="text-sm font-medium text-foreground mb-3">Progress</div>
@@ -222,15 +237,20 @@ export function ReportPending({
             </a>
           </div>
         )}
+        {!hasError && isHydrated && showStatus ? (
+          <div className="mb-3 text-xs text-muted-foreground">{statusText}</div>
+        ) : null}
         <div className="space-y-2">
           {STEP_LABELS.map((label, index) => {
             const isDone = activeIndex !== null && index < activeIndex
             const isActive = activeIndex !== null && index === activeIndex
             return (
               <div key={label} className="flex items-center gap-3 text-sm">
-                <span
-                  className={`h-2.5 w-2.5 rounded-full ${isDone ? "bg-green-500" : isActive ? "bg-blue-500" : "bg-muted"}`}
-                />
+                {isDone ? (
+                  <CheckCircle2 className="h-3.5 w-3.5 text-foreground/80" />
+                ) : (
+                  <span className={`h-2.5 w-2.5 rounded-full ${isActive ? "bg-blue-500" : "bg-muted"}`} />
+                )}
                 <span
                   className={
                     isActive && !hasError
