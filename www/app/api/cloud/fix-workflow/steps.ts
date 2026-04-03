@@ -3974,7 +3974,7 @@ function buildClaudeTurnPrompts({
   if (workflowType === "turbopack-bundle-analyzer") {
     prompts.push({
       label: "Agent analysis",
-      maxTurns: 8,
+      maxTurns: 12,
       prompt: `Use only the generated Turbopack NDJSON artifacts to identify the single highest-impact shipped-JS optimization opportunity.
 
 Use ${skillLoadInstructions} as relevant.
