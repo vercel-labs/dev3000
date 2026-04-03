@@ -894,14 +894,24 @@ async function getRunningSandboxWithRetry(
   progressContext?: ProgressContext | null,
   phase?: "observe" | "agent",
   attempts = 3,
-  retryDelayMs = 2000
+  retryDelayMs = 2000,
+  credentials?: {
+    teamId?: string
+    projectId?: string
+    token?: string
+  }
 ): Promise<Sandbox> {
   let lastError: unknown
   const phaseLabel = phase === "observe" ? "Observe" : phase === "agent" ? "Agent" : "Sandbox"
 
   for (let attempt = 1; attempt <= attempts; attempt++) {
     try {
-      const sandbox = await Sandbox.get({ sandboxId })
+      const sandbox = await Sandbox.get({
+        sandboxId,
+        teamId: credentials?.teamId,
+        projectId: credentials?.projectId,
+        token: credentials?.token
+      })
       if (sandbox.status !== "running") {
         throw new Error(`Sandbox not running: ${sandbox.status}`)
       }
@@ -2281,7 +2291,11 @@ export async function observeBaselineStep(
 
   let sandbox: Sandbox
   try {
-    sandbox = await getRunningSandboxWithRetry(sandboxId, progressContext, "observe")
+    sandbox = await getRunningSandboxWithRetry(sandboxId, progressContext, "observe", 3, 2000, {
+      teamId,
+      projectId,
+      token: vercelOidcToken
+    })
   } catch (sandboxError) {
     const canFallbackToInitObservation =
       beforeCls !== null || beforeScreenshots.length > 0 || Boolean(initD3kLogs.trim())
@@ -2759,7 +2773,11 @@ export async function agentFixLoopStep(
   let sandbox: Sandbox
   let recreatedSandbox = false
   try {
-    sandbox = await getRunningSandboxWithRetry(sandboxId, progressContext, "agent")
+    sandbox = await getRunningSandboxWithRetry(sandboxId, progressContext, "agent", 3, 2000, {
+      teamId,
+      projectId,
+      token: vercelOidcToken
+    })
   } catch (sandboxError) {
     workflowLog(
       `[Agent] Sandbox ${sandboxId} unavailable (${sandboxError instanceof Error ? sandboxError.message : String(sandboxError)}), creating a new one...`
