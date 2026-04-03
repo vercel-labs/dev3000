@@ -1860,11 +1860,25 @@ export interface D3kSandboxResultWithSnapshot extends D3kSandboxResult {
  * Create a base snapshot with Chrome system deps + d3k installed.
  * This is a one-time operation - the snapshot is reused across all projects.
  */
-async function createAndSaveBaseSnapshot(timeoutMs: number, debug = false): Promise<string> {
+async function createAndSaveBaseSnapshot(
+  timeoutMs: number,
+  debug = false,
+  onProgress?: (message: string) => void | Promise<void>
+): Promise<string> {
+  const reportProgress = async (message: string) => {
+    if (!onProgress) return
+    try {
+      await onProgress(message)
+    } catch {
+      // Ignore progress reporting failures.
+    }
+  }
+
   if (debug) {
     console.log("  📦 Creating base snapshot (Chrome + d3k)...")
     console.log("  ⚠️ This is a one-time operation for initial setup")
   }
+  await reportProgress("Rebuilding shared base snapshot...")
 
   // Create empty sandbox for base snapshot
   const baseSandbox = await Sandbox.create({
@@ -1901,11 +1915,13 @@ async function createAndSaveBaseSnapshot(timeoutMs: number, debug = false): Prom
   try {
     // Install Chrome system dependencies
     if (debug) console.log("  🔧 Installing Chrome system dependencies...")
+    await reportProgress("Installing Chrome system dependencies into shared snapshot...")
     await SandboxChrome.installSystemDependencies(baseSandbox, { debug })
     if (debug) console.log("  ✅ Chrome system dependencies installed")
 
     // Ensure bun is available in the base snapshot (projects may use bun run dev)
     if (debug) console.log("  📦 Ensuring bun is available...")
+    await reportProgress("Ensuring bun is available in shared snapshot...")
     const bunWhich = await runCmd("sh", [
       "-c",
       "export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; command -v bun || true"
@@ -1926,6 +1942,7 @@ async function createAndSaveBaseSnapshot(timeoutMs: number, debug = false): Prom
 
     // Install d3k globally from the checked-out repo first so sandbox runs use the current commit.
     if (debug) console.log("  📦 Installing d3k globally from repo checkout...")
+    await reportProgress("Installing d3k in shared snapshot...")
     let d3kInstall = await runCmd("pnpm", ["i", "-g", "/vercel/sandbox"])
     let d3kVerify =
       d3kInstall.exitCode === 0
@@ -1956,6 +1973,7 @@ async function createAndSaveBaseSnapshot(timeoutMs: number, debug = false): Prom
 
     // Install agent-browser globally for CLI browser automation
     if (debug) console.log("  📦 Installing agent-browser globally...")
+    await reportProgress("Installing agent-browser in shared snapshot...")
     const agentBrowserInstall = await runCmd("pnpm", ["i", "-g", "agent-browser@latest"])
     if (agentBrowserInstall.exitCode !== 0) {
       // Don't fail - agent-browser is optional, workflow can run without it
@@ -1975,6 +1993,7 @@ async function createAndSaveBaseSnapshot(timeoutMs: number, debug = false): Prom
     // Install the shared Claude agent runtime into the base snapshot so
     // workflow sandboxes do not pay this bootstrap cost on every run.
     if (debug) console.log("  📦 Installing shared Claude agent runtime...")
+    await reportProgress("Installing Claude Code and shared skills in shared snapshot...")
     const sharedHomeEnv = {
       PATH: "/home/vercel-sandbox/.bun/bin:/home/vercel-sandbox/.local/bin:/usr/local/bin:/usr/bin:/bin",
       HOME: "/home/vercel-sandbox"
@@ -2009,14 +2028,19 @@ async function createAndSaveBaseSnapshot(timeoutMs: number, debug = false): Prom
 
     // Create snapshot (this stops the sandbox)
     if (debug) console.log("  📸 Creating snapshot...")
+    await reportProgress("Saving shared base snapshot...")
     const snapshot = await baseSandbox.snapshot()
     if (debug) console.log(`  ✅ Base snapshot created: ${snapshot.snapshotId}`)
 
     // Save to blob store
     await saveBaseSnapshotId(snapshot.snapshotId, debug)
+    await reportProgress("Shared base snapshot ready")
 
     return snapshot.snapshotId
   } catch (error) {
+    await reportProgress(
+      `Shared base snapshot rebuild failed: ${error instanceof Error ? error.message : String(error)}`
+    )
     // Clean up on failure
     try {
       await baseSandbox.stop()
@@ -2419,7 +2443,16 @@ export async function getOrCreateD3kSandbox(config: D3kSandboxConfig): Promise<D
   if (!snapshotIdToUse) {
     timer.start("Create base snapshot")
     try {
-      snapshotIdToUse = await createAndSaveBaseSnapshot(timeoutMs, debug)
+      snapshotIdToUse = await createAndSaveBaseSnapshot(timeoutMs, debug, config.onProgress)
+    } catch (error) {
+      if (debug) {
+        console.log(
+          `  ⚠️ Base snapshot creation failed, falling back to fresh sandbox: ${error instanceof Error ? error.message : String(error)}`
+        )
+      }
+      if (config.onProgress) {
+        await config.onProgress("Shared base snapshot unavailable, falling back to fresh sandbox...")
+      }
     } finally {
       timer.end()
     }
