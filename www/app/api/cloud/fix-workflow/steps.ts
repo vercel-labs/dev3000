@@ -894,6 +894,7 @@ async function getRunningSandboxWithRetry(
   retryDelayMs = 2000
 ): Promise<Sandbox> {
   let lastError: unknown
+  const phaseLabel = phase === "observe" ? "Observe" : phase === "agent" ? "Agent" : "Sandbox"
 
   for (let attempt = 1; attempt <= attempts; attempt++) {
     try {
@@ -904,19 +905,42 @@ async function getRunningSandboxWithRetry(
       return sandbox
     } catch (error) {
       lastError = error
+      const apiError = error as {
+        message?: string
+        response?: { status?: number; statusText?: string }
+        sandboxId?: string
+        json?: unknown
+      }
+      const responsePayload =
+        apiError?.json && typeof apiError.json === "object" && "error" in apiError.json
+          ? (apiError.json as { error?: { code?: string; message?: string; sandboxId?: string } }).error
+          : undefined
+      const detail = [
+        responsePayload?.message || apiError?.message || String(error),
+        apiError?.response?.status ? `status=${apiError.response.status}` : null,
+        responsePayload?.code ? `code=${responsePayload.code}` : null,
+        responsePayload?.sandboxId || apiError?.sandboxId
+          ? `sandboxId=${responsePayload?.sandboxId || apiError?.sandboxId}`
+          : null
+      ]
+        .filter(Boolean)
+        .join(" ")
+      workflowLog(`[${phaseLabel}] Sandbox reattach attempt ${attempt}/${attempts} failed: ${detail}`)
       if (attempt >= attempts) {
         break
       }
 
-      const phaseLabel = phase === "observe" ? "Observe" : phase === "agent" ? "Agent" : "Sandbox"
       await appendProgressLog(
         progressContext,
-        `[${phaseLabel}] Sandbox unavailable, retrying reattach (${attempt}/${attempts - 1})...`
+        `[${phaseLabel}] Sandbox unavailable, retrying reattach (${attempt}/${attempts - 1})... ${detail}`.slice(0, 280)
       )
       await new Promise((resolve) => setTimeout(resolve, retryDelayMs))
     }
   }
 
+  workflowLog(
+    `[${phaseLabel}] Sandbox reattach exhausted after ${attempts} attempt(s): ${lastError instanceof Error ? lastError.message : String(lastError)}`
+  )
   throw lastError instanceof Error ? lastError : new Error(String(lastError))
 }
 
