@@ -15,6 +15,9 @@ const SANDBOX_D3K_TOP_LEVEL_LOG_DIR = "/home/vercel-sandbox/.d3k/logs"
 const SANDBOX_D3K_LOG_GLOB = "/home/vercel-sandbox/.d3k/*/logs/*.log /home/vercel-sandbox/.d3k/logs/*.log"
 const SANDBOX_D3K_LOG_DIR_GLOB = "/home/vercel-sandbox/.d3k/*/logs /home/vercel-sandbox/.d3k/logs"
 const DEFAULT_SANDBOX_TIMEOUT = "60m" as const
+const CLAUDE_CODE_PACKAGE = "@anthropic-ai/claude-code"
+const VERCEL_PLUGIN_INSTALL_ARG = "vercel/vercel-plugin"
+const D3K_SKILL_INSTALL_ARG = "vercel-labs/dev3000@d3k"
 
 // ============================================================
 // TIMING UTILITIES
@@ -95,7 +98,7 @@ export class StepTimer {
 // After restoring from base snapshot, we clone the repo and install deps.
 
 const BASE_SNAPSHOT_KEY = "d3k-snapshots/base-snapshot.json"
-const BASE_SNAPSHOT_VERSION = "2026-04-03-bun"
+const BASE_SNAPSHOT_VERSION = "2026-04-03-agent-runtime"
 
 /**
  * Metadata stored for the base snapshot
@@ -1877,9 +1880,9 @@ async function createAndSaveBaseSnapshot(timeoutMs: number, debug = false): Prom
   async function runCmd(
     cmd: string,
     args: string[],
-    opts?: { cwd?: string }
+    opts?: { cwd?: string; env?: Record<string, string> }
   ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-    const result = await baseSandbox.runCommand({ cmd, args, cwd: opts?.cwd })
+    const result = await baseSandbox.runCommand({ cmd, args, cwd: opts?.cwd, env: opts?.env })
     let stdout = ""
     let stderr = ""
     for await (const log of result.logs()) {
@@ -1968,6 +1971,41 @@ async function createAndSaveBaseSnapshot(timeoutMs: number, debug = false): Prom
         if (debug) console.log("  ✅ Playwright browsers installed")
       }
     }
+
+    // Install the shared Claude agent runtime into the base snapshot so
+    // workflow sandboxes do not pay this bootstrap cost on every run.
+    if (debug) console.log("  📦 Installing shared Claude agent runtime...")
+    const sharedHomeEnv = {
+      PATH: "/home/vercel-sandbox/.bun/bin:/home/vercel-sandbox/.local/bin:/usr/local/bin:/usr/bin:/bin",
+      HOME: "/home/vercel-sandbox"
+    }
+    const claudeInstallRoot = "/home/vercel-sandbox/.claude-code"
+    const sharedRuntimeInstall = await runCmd(
+      "sh",
+      [
+        "-lc",
+        [
+          "mkdir -p /home/vercel-sandbox/.local/bin",
+          `mkdir -p "${claudeInstallRoot}"`,
+          `cd "${claudeInstallRoot}"`,
+          `if [ ! -f package.json ]; then printf '%s' '{"name":"claude-code-runtime","private":true}' > package.json; fi`,
+          `bun add ${CLAUDE_CODE_PACKAGE}`,
+          `if ! command -v node >/dev/null 2>&1; then ln -sf "$(command -v bun)" /home/vercel-sandbox/.local/bin/node; fi`,
+          `ln -sf "${claudeInstallRoot}/node_modules/.bin/claude" /home/vercel-sandbox/.local/bin/claude`,
+          `npx --yes skills@latest add ${VERCEL_PLUGIN_INSTALL_ARG} --agent claude-code --skill '*' -y`,
+          `npx --yes skills@latest add ${D3K_SKILL_INSTALL_ARG.split("@")[0]} --skill d3k --agent claude-code -y`,
+          "command -v claude",
+          "claude --version"
+        ].join(" && ")
+      ],
+      { env: sharedHomeEnv }
+    )
+    if (sharedRuntimeInstall.exitCode !== 0) {
+      throw new Error(
+        `shared Claude agent runtime installation failed: ${sharedRuntimeInstall.stderr || sharedRuntimeInstall.stdout}`
+      )
+    }
+    if (debug) console.log("  ✅ Shared Claude agent runtime installed")
 
     // Create snapshot (this stops the sandbox)
     if (debug) console.log("  📸 Creating snapshot...")
