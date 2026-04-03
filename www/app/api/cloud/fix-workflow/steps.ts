@@ -4091,7 +4091,8 @@ function buildClsTurnPrompts({
   devAgentInstructions,
   skillLoadInstructions,
   beforeCls,
-  beforeGrade
+  beforeGrade,
+  codeHints
 }: {
   startPath: string
   devUrl: string
@@ -4100,11 +4101,13 @@ function buildClsTurnPrompts({
   skillLoadInstructions: string
   beforeCls: number | null
   beforeGrade: "good" | "needs-improvement" | "poor" | null
+  codeHints?: string
 }): ClaudeTurnPrompt[] {
   const baselineBlock = `Baseline evidence:
 - CLS: ${beforeCls?.toFixed(4) || "unknown"}
 - Grade: ${beforeGrade || "unknown"}
 - The workflow already captured baseline visuals and will run final verification after your code changes.`
+  const codeHintBlock = codeHints?.trim() ? `\n\nWorkflow-provided suspicious code hints:\n${codeHints.trim()}` : ""
   const instructionBlock = devAgentInstructions?.trim()
     ? `\n\nDev agent instructions:\n${devAgentInstructions.trim()}`
     : ""
@@ -4118,7 +4121,7 @@ function buildClsTurnPrompts({
 
 Use ${skillLoadInstructions} as relevant.
 
-${baselineBlock}${instructionBlock}${runSpecificBlock}
+${baselineBlock}${codeHintBlock}${instructionBlock}${runSpecificBlock}
 
 Requirements:
 - Be action-oriented. Diagnose only enough to identify the shift source, then make the fix.
@@ -4134,6 +4137,37 @@ Requirements:
   ]
 }
 
+async function gatherClsCodeHints(sandbox: Sandbox, cwd: string): Promise<string | null> {
+  const result = await runSandboxCommandWithOptions(sandbox, {
+    cmd: "sh",
+    args: [
+      "-lc",
+      `if command -v rg >/dev/null 2>&1; then
+  rg -n --hidden --glob '!node_modules' --glob '!.next' --glob '!dist' --glob '!coverage' --glob '!tmp' "(setTimeout|useEffect\\(|requestAnimationFrame|layout shift|cls|skeleton|placeholder|banner|hero|min-h-|height:|width:|loading=|Image\\(|img )" .
+else
+  find . -type f | sed 's#^./##'
+fi | head -n 12`
+    ],
+    cwd
+  })
+
+  if (result.exitCode !== 0) {
+    return null
+  }
+
+  const lines = (result.stdout || "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, 12)
+
+  if (lines.length === 0) {
+    return null
+  }
+
+  return lines.map((line) => `- ${line}`).join("\n")
+}
+
 function buildClaudeTurnPrompts({
   workflowType,
   startPath,
@@ -4147,7 +4181,8 @@ function buildClaudeTurnPrompts({
   skillLoadInstructions,
   bundleBaselineSummary,
   beforeCls,
-  beforeGrade
+  beforeGrade,
+  codeHints
 }: {
   workflowType: string
   startPath: string
@@ -4162,6 +4197,7 @@ function buildClaudeTurnPrompts({
   bundleBaselineSummary?: string
   beforeCls: number | null
   beforeGrade: "good" | "needs-improvement" | "poor" | null
+  codeHints?: string
 }): ClaudeTurnPrompt[] {
   const prompts: ClaudeTurnPrompt[] =
     workflowType === "cls-fix"
@@ -4177,7 +4213,8 @@ function buildClaudeTurnPrompts({
         devAgentInstructions,
         skillLoadInstructions,
         beforeCls,
-        beforeGrade
+        beforeGrade,
+        codeHints
       })
     )
   } else if (workflowType === "turbopack-bundle-analyzer") {
@@ -4840,6 +4877,7 @@ async function runAgentWithDiagnoseTool(
   const browserGuidance = buildDevAgentSandboxBrowserGuidance(devAgentSandboxBrowser)
   const modelSelection = resolveClaudeModelSelection(devAgentAiAgent)
   const selectedModelLabel = getDevAgentModelLabel(modelSelection.modelId)
+  const clsCodeHints = workflowTypeForPrompt === "cls-fix" ? await gatherClsCodeHints(sandbox, SANDBOX_CWD) : null
   const collapsedClsActionStepGuidance =
     workflowTypeForPrompt === "cls-fix"
       ? null
@@ -4887,7 +4925,8 @@ async function runAgentWithDiagnoseTool(
     skillLoadInstructions,
     bundleBaselineSummary,
     beforeCls,
-    beforeGrade
+    beforeGrade,
+    codeHints: clsCodeHints ?? undefined
   })
 
   const transcript: string[] = []
