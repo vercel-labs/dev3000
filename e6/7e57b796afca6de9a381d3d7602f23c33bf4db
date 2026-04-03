@@ -1,0 +1,23 @@
+www/lib/cloud/d3k-sandbox.ts
+  600f23c473a4c63d 18-20,101,1883,1885,1975-2008
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "e67e57b796afca6de9a381d3d7602f23c33bf4db",
+  "prompts": {
+    "600f23c473a4c63d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d3d3a-9e16-7962-8d2a-8c11ed71d9a3",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 41,
+      "total_deletions": 3,
+      "accepted_lines": 41,
+      "overriden_lines": 0
+    }
+  }
+}
