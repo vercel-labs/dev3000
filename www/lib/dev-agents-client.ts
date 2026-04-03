@@ -108,6 +108,9 @@ export interface MarketplaceAgentStats {
   successRate: string
   mergeRate: string
   tokensUsed: string
+  avgTime: string
+  avgCost: string
+  estCost: string
   previouslyPurchased: boolean
 }
 

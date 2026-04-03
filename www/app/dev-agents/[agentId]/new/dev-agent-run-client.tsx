@@ -57,6 +57,9 @@ interface MarketplaceStats {
   successRate: string
   mergeRate: string
   tokensUsed: string
+  avgTime: string
+  avgCost: string
+  estCost: string
   previouslyPurchased: boolean
 }
 
@@ -540,7 +543,7 @@ export default function DevAgentRunClient({
         {/* Marketplace social proof stats */}
         {marketplaceStats ? (
           <div className="border-t border-[#1f1f1f] px-4 py-3">
-            <div className="grid grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
               <div>
                 <div className="text-[11px] uppercase tracking-wider text-[#555]">Runs</div>
                 <div className="mt-0.5 text-[13px] font-medium text-[#ededed]">{marketplaceStats.projectRuns}</div>
@@ -554,8 +557,16 @@ export default function DevAgentRunClient({
                 <div className="mt-0.5 text-[13px] font-medium text-[#ededed]">{marketplaceStats.mergeRate}</div>
               </div>
               <div>
-                <div className="text-[11px] uppercase tracking-wider text-[#555]">Tokens</div>
-                <div className="mt-0.5 text-[13px] font-medium text-[#ededed]">{marketplaceStats.tokensUsed}</div>
+                <div className="text-[11px] uppercase tracking-wider text-[#555]">Avg Time</div>
+                <div className="mt-0.5 text-[13px] font-medium text-[#ededed]">{marketplaceStats.avgTime}</div>
+              </div>
+              <div>
+                <div className="text-[11px] uppercase tracking-wider text-[#555]">Avg Cost</div>
+                <div className="mt-0.5 text-[13px] font-medium text-[#ededed]">{marketplaceStats.avgCost}</div>
+              </div>
+              <div>
+                <div className="text-[11px] uppercase tracking-wider text-[#555]">Est Cost</div>
+                <div className="mt-0.5 text-[13px] font-medium text-[#ededed]">{marketplaceStats.estCost}</div>
               </div>
             </div>
           </div>

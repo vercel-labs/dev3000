@@ -91,7 +91,7 @@ function DevAgentCriteria({ devAgent }: { devAgent: DevAgent }) {
 function DevAgentStats({ stats }: { stats: MarketplaceAgentStats }) {
   return (
     <div className="rounded-md border border-[#1f1f1f] bg-[#111] p-3">
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-3 gap-3 lg:grid-cols-5">
         <div>
           <div className="text-[11px] uppercase tracking-wider text-[#555]">Runs</div>
           <div className="mt-0.5 text-[13px] font-medium text-[#ededed]">{stats.projectRuns}</div>
@@ -105,8 +105,12 @@ function DevAgentStats({ stats }: { stats: MarketplaceAgentStats }) {
           <div className="mt-0.5 text-[13px] font-medium text-[#ededed]">{stats.mergeRate}</div>
         </div>
         <div>
-          <div className="text-[11px] uppercase tracking-wider text-[#555]">Tokens</div>
-          <div className="mt-0.5 text-[13px] font-medium text-[#ededed]">{stats.tokensUsed}</div>
+          <div className="text-[11px] uppercase tracking-wider text-[#555]">Avg Time</div>
+          <div className="mt-0.5 text-[13px] font-medium text-[#ededed]">{stats.avgTime}</div>
+        </div>
+        <div>
+          <div className="text-[11px] uppercase tracking-wider text-[#555]">Avg Cost</div>
+          <div className="mt-0.5 text-[13px] font-medium text-[#ededed]">{stats.avgCost}</div>
         </div>
       </div>
     </div>

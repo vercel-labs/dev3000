@@ -9,7 +9,7 @@
         "@opentui/core": "0.1.86",
         "@vercel/next-browser": "0.1.6",
         "@vercel/sandbox": "1.9.0",
-        "agent-browser": "0.20.1",
+        "agent-browser": "0.24.0",
         "ai": "6.0.116",
         "chalk": "^5.3.0",
         "commander": "14.0.3",
@@ -1051,7 +1051,7 @@
 
     "acorn-import-attributes": ["acorn-import-attributes@1.9.5", "", { "peerDependencies": { "acorn": "^8" } }, "sha512-n02Vykv5uA3eHGM/Z2dQrcD56kL8TyDb2p1+0P83PClMnC/nc+anbQRhIOWnSq4Ke/KvDPrY3C9hDtC/A3eHnQ=="],
 
-    "agent-browser": ["agent-browser@0.20.1", "", { "bin": { "agent-browser": "bin/agent-browser.js" } }, "sha512-5qHjx9fCDDIwfsddgdV6ZTTk9Q1J/Ks6WzpDaXeOT3pymHJdr4uIiiDeO8UoTXZ3+5XCz3RlPlYsrHeU06hVew=="],
+    "agent-browser": ["agent-browser@0.24.0", "", { "bin": { "agent-browser": "bin/agent-browser.js" } }, "sha512-GawZbaVLB+hghqwhv4eLlXb66VKFcCnkDWQ56kF56W98zzMUymryYG8mn2JnWonpWRwXvv9kzhdezBKFW2tKKA=="],
 
     "ai": ["ai@6.0.116", "", { "dependencies": { "@ai-sdk/gateway": "3.0.66", "@ai-sdk/provider": "3.0.8", "@ai-sdk/provider-utils": "4.0.19", "@opentelemetry/api": "1.9.0" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-7yM+cTmyRLeNIXwt4Vj+mrrJgVQ9RMIW5WO0ydoLoYkewIvsMcvUmqS4j2RJTUXaF1HphwmSKUMQ/HypNRGOmA=="],
 

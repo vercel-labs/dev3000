@@ -533,6 +533,29 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
     successEval: "Were duplicate fetches eliminated and caching behavior measurably improved?"
   },
   {
+    id: "r_mp_sc06",
+    kind: "marketplace",
+    name: "shadcn Component Optimizer",
+    description:
+      "Update and enhance customized shadcn components only when the change is clearly safe, worthwhile, and consistent with the local design system.",
+    instructions:
+      "Inspect the project's customized shadcn components and supporting UI primitives. Identify safe upgrades such as API cleanup, accessibility fixes, composition improvements, styling consistency, and low-risk modernization. Only update components when the change is clearly compatible with the existing codebase and design language. Preserve intentional customizations, avoid broad rewrites, and verify the UI still behaves correctly before finishing.",
+    executionMode: "preview-pr",
+    sandboxBrowser: "next-browser",
+    skillRefs: [
+      parseDevAgentSkillRef({
+        installArg: `${VERCEL_PLUGIN_INSTALL_ARG}@shadcn`,
+        displayName: "shadcn"
+      })
+    ],
+    author: { id: "shadcn", email: "", name: "shadcn", username: "shadcn" },
+    createdAt: "2026-04-02T00:00:00.000Z",
+    updatedAt: "2026-04-02T00:00:00.000Z",
+    supportsPathInput: true,
+    supportsPullRequest: true,
+    successEval: "Were customized shadcn components safely improved without regressing behavior or visual consistency?"
+  },
+  {
     id: "r_mp_ta02",
     kind: "marketplace",
     name: "Transaction Analyzer",
@@ -635,6 +658,9 @@ export interface MarketplaceAgentStats {
   successRate: string
   mergeRate: string
   tokensUsed: string
+  avgTime: string
+  avgCost: string
+  estCost: string
   previouslyPurchased: boolean
 }
 
@@ -644,6 +670,9 @@ export const MARKETPLACE_AGENT_STATS: Record<string, MarketplaceAgentStats> = {
     successRate: "97.4%",
     mergeRate: "84.2%",
     tokensUsed: "4.8M",
+    avgTime: "6m 20s",
+    avgCost: "$2.30",
+    estCost: "$2.10-$2.90",
     previouslyPurchased: true
   },
   r_mp_ta02: {
@@ -651,6 +680,9 @@ export const MARKETPLACE_AGENT_STATS: Record<string, MarketplaceAgentStats> = {
     successRate: "95.9%",
     mergeRate: "78.6%",
     tokensUsed: "3.2M",
+    avgTime: "4m 10s",
+    avgCost: "$1.70",
+    estCost: "$1.40-$2.20",
     previouslyPurchased: false
   },
   r_mp_pt03: {
@@ -658,6 +690,9 @@ export const MARKETPLACE_AGENT_STATS: Record<string, MarketplaceAgentStats> = {
     successRate: "98.1%",
     mergeRate: "91.3%",
     tokensUsed: "8.6M",
+    avgTime: "8m 35s",
+    avgCost: "$3.40",
+    estCost: "$2.80-$4.60",
     previouslyPurchased: false
   },
   r_mp_st04: {
@@ -665,6 +700,9 @@ export const MARKETPLACE_AGENT_STATS: Record<string, MarketplaceAgentStats> = {
     successRate: "93.7%",
     mergeRate: "72.1%",
     tokensUsed: "2.4M",
+    avgTime: "2m 45s",
+    avgCost: "$1.20",
+    estCost: "$0.90-$1.80",
     previouslyPurchased: false
   },
   r_mp_ae05: {
@@ -672,9 +710,31 @@ export const MARKETPLACE_AGENT_STATS: Record<string, MarketplaceAgentStats> = {
     successRate: "96.2%",
     mergeRate: "80.5%",
     tokensUsed: "5.1M",
+    avgTime: "5m 50s",
+    avgCost: "$2.90",
+    estCost: "$2.20-$3.80",
     previouslyPurchased: false
+  },
+  r_mp_sc06: {
+    projectRuns: "742",
+    successRate: "97.8%",
+    mergeRate: "88.4%",
+    tokensUsed: "2.9M",
+    avgTime: "3m 15s",
+    avgCost: "$1.80",
+    estCost: "$1.20-$2.40",
+    previouslyPurchased: true
   }
 }
+
+export const MARKETPLACE_AGENT_ORDER = [
+  "r_mp_rd01",
+  "r_mp_sc06",
+  "r_mp_ta02",
+  "r_mp_pt03",
+  "r_mp_st04",
+  "r_mp_ae05"
+] as const
 
 async function readJsonBlob<T>(pathname: string): Promise<T | null> {
   try {

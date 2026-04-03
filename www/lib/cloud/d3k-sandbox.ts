@@ -301,6 +301,39 @@ async function getBrowserBinarySummary(sandbox: Sandbox, browserPath: string): P
   return summary || `path=${browserPath} exists=unknown`
 }
 
+async function verifyInstalledD3kBinary(
+  sandbox: Sandbox,
+  options?: { cwd?: string; debug?: boolean }
+): Promise<{ ok: boolean; detail: string }> {
+  const result = await sandbox.runCommand({
+    cmd: "sh",
+    args: ["-c", "export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; d3k --version"],
+    cwd: options?.cwd
+  })
+
+  let stdout = ""
+  let stderr = ""
+  for await (const log of result.logs()) {
+    if (log.stream === "stdout") {
+      stdout += log.data
+      if (options?.debug) process.stdout.write(log.data)
+    } else {
+      stderr += log.data
+      if (options?.debug) process.stderr.write(log.data)
+    }
+  }
+  const finished = await result.wait()
+  const exitCode = finished.exitCode
+
+  const combinedOutput = `${stdout}\n${stderr}`.trim()
+  const missingBinary = combinedOutput.includes("Could not find @d3k/linux-x64 binary")
+
+  return {
+    ok: exitCode === 0 && !missingBinary,
+    detail: combinedOutput.slice(-500) || `exit=${exitCode}`
+  }
+}
+
 async function detectProjectDevCommand(
   runCommand: (
     cmd: string,
@@ -1024,8 +1057,18 @@ chmod 0600 "$HOME/.npmrc" ".npmrc"`
             stderr: debug ? process.stderr : undefined
           })
 
-    if (d3kInstallResult.exitCode !== 0) {
-      if (debug) console.log("  ⚠️ Local d3k install failed, falling back to npm (dev3000@latest)")
+    let d3kVerification =
+      d3kInstallResult.exitCode === 0
+        ? await verifyInstalledD3kBinary(sandbox, { cwd: sandboxCwd, debug })
+        : { ok: false, detail: d3kInstallResult.stderr || d3kInstallResult.stdout || "install failed" }
+
+    if (!d3kVerification.ok) {
+      if (debug) {
+        console.log(
+          `  ⚠️ Local d3k install failed validation, falling back to npm (dev3000@latest): ${d3kVerification.detail}`
+        )
+      }
+      await reportProgress("[Sandbox] Local d3k install unusable, falling back to published package")
       d3kInstallResult =
         resolvedPackageManager === "bun"
           ? await runCommandWithLogs(sandbox, {
@@ -1044,6 +1087,11 @@ chmod 0600 "$HOME/.npmrc" ".npmrc"`
 
     if (d3kInstallResult.exitCode !== 0) {
       throw new Error(`d3k installation failed with exit code ${d3kInstallResult.exitCode}`)
+    }
+
+    d3kVerification = await verifyInstalledD3kBinary(sandbox, { cwd: sandboxCwd, debug })
+    if (!d3kVerification.ok) {
+      throw new Error(`d3k installed but is not runnable: ${d3kVerification.detail}`)
     }
 
     if (debug) console.log("  ✅ d3k installed globally")
@@ -1876,12 +1924,30 @@ async function createAndSaveBaseSnapshot(timeoutMs: number, debug = false): Prom
     // Install d3k globally from the checked-out repo first so sandbox runs use the current commit.
     if (debug) console.log("  📦 Installing d3k globally from repo checkout...")
     let d3kInstall = await runCmd("pnpm", ["i", "-g", "/vercel/sandbox"])
-    if (d3kInstall.exitCode !== 0) {
-      if (debug) console.log("  ⚠️ Local d3k install failed, falling back to npm (dev3000@latest)")
+    let d3kVerify =
+      d3kInstall.exitCode === 0
+        ? await runCmd("sh", ["-c", "export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; d3k --version"])
+        : d3kInstall
+    const localD3kMissingBinary = `${d3kVerify.stdout}\n${d3kVerify.stderr}`.includes(
+      "Could not find @d3k/linux-x64 binary"
+    )
+    if (d3kInstall.exitCode !== 0 || d3kVerify.exitCode !== 0 || localD3kMissingBinary) {
+      if (debug) {
+        console.log(
+          `  ⚠️ Local d3k install failed validation, falling back to npm (dev3000@latest): ${(d3kVerify.stderr || d3kVerify.stdout || d3kInstall.stderr).slice(-400)}`
+        )
+      }
       d3kInstall = await runCmd("pnpm", ["i", "-g", "dev3000@latest"])
     }
     if (d3kInstall.exitCode !== 0) {
       throw new Error(`d3k installation failed: ${d3kInstall.stderr}`)
+    }
+    d3kVerify = await runCmd("sh", ["-c", "export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; d3k --version"])
+    const publishedD3kMissingBinary = `${d3kVerify.stdout}\n${d3kVerify.stderr}`.includes(
+      "Could not find @d3k/linux-x64 binary"
+    )
+    if (d3kVerify.exitCode !== 0 || publishedD3kMissingBinary) {
+      throw new Error(`d3k install is not runnable: ${d3kVerify.stderr || d3kVerify.stdout}`)
     }
     if (debug) console.log("  ✅ d3k installed globally")
 
