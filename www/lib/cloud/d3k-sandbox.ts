@@ -1043,56 +1043,70 @@ chmod 0600 "$HOME/.npmrc" ".npmrc"`
       console.log("  🔍 ===== END CHROMIUM DIAGNOSTIC TEST =====")
     }
 
-    // Install d3k from the checked-out repo first so sandbox runs use the current commit.
-    if (debug) console.log("  📦 Installing d3k globally from repo checkout (/vercel/sandbox)")
-    let d3kInstallResult =
-      resolvedPackageManager === "bun"
-        ? await runCommandWithLogs(sandbox, {
-            cmd: "sh",
-            args: ["-c", "export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; bun add -g /vercel/sandbox"],
-            stdout: debug ? process.stdout : undefined,
-            stderr: debug ? process.stderr : undefined
-          })
-        : await runCommandWithLogs(sandbox, {
-            cmd: "pnpm",
-            args: ["i", "-g", "/vercel/sandbox"],
-            stdout: debug ? process.stdout : undefined,
-            stderr: debug ? process.stderr : undefined
-          })
+    // Prefer the preinstalled d3k from the shared snapshot. Only reinstall if that
+    // binary is missing or invalid.
+    let d3kVerification = await verifyInstalledD3kBinary(sandbox, { cwd: sandboxCwd, debug })
+    let d3kInstallResult = { exitCode: 0, stdout: "", stderr: "" }
 
-    let d3kVerification =
-      d3kInstallResult.exitCode === 0
-        ? await verifyInstalledD3kBinary(sandbox, { cwd: sandboxCwd, debug })
-        : { ok: false, detail: d3kInstallResult.stderr || d3kInstallResult.stdout || "install failed" }
-
-    if (!d3kVerification.ok) {
+    if (d3kVerification.ok) {
+      if (debug) console.log("  ✅ Using preinstalled d3k from shared snapshot")
+      await reportProgress("[Sandbox] Using preinstalled d3k from shared snapshot")
+    } else {
       if (debug) {
-        console.log(
-          `  ⚠️ Local d3k install failed validation, falling back to npm (dev3000@latest): ${d3kVerification.detail}`
-        )
+        console.log(`  ⚠️ Preinstalled d3k failed validation, attempting repo install: ${d3kVerification.detail}`)
       }
-      await reportProgress("[Sandbox] Local d3k install unusable, falling back to published package")
+
+      // Install d3k from the checked-out repo first so sandbox runs use the current commit.
+      if (debug) console.log("  📦 Installing d3k globally from repo checkout (/vercel/sandbox)")
       d3kInstallResult =
         resolvedPackageManager === "bun"
           ? await runCommandWithLogs(sandbox, {
               cmd: "sh",
-              args: ["-c", "export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; bun add -g dev3000@latest"],
+              args: ["-c", "export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; bun add -g /vercel/sandbox"],
               stdout: debug ? process.stdout : undefined,
               stderr: debug ? process.stderr : undefined
             })
           : await runCommandWithLogs(sandbox, {
               cmd: "pnpm",
-              args: ["i", "-g", "dev3000@latest"],
+              args: ["i", "-g", "/vercel/sandbox"],
               stdout: debug ? process.stdout : undefined,
               stderr: debug ? process.stderr : undefined
             })
-    }
 
-    if (d3kInstallResult.exitCode !== 0) {
-      throw new Error(`d3k installation failed with exit code ${d3kInstallResult.exitCode}`)
-    }
+      d3kVerification =
+        d3kInstallResult.exitCode === 0
+          ? await verifyInstalledD3kBinary(sandbox, { cwd: sandboxCwd, debug })
+          : { ok: false, detail: d3kInstallResult.stderr || d3kInstallResult.stdout || "install failed" }
 
-    d3kVerification = await verifyInstalledD3kBinary(sandbox, { cwd: sandboxCwd, debug })
+      if (!d3kVerification.ok) {
+        if (debug) {
+          console.log(
+            `  ⚠️ Local d3k install failed validation, falling back to npm (dev3000@latest): ${d3kVerification.detail}`
+          )
+        }
+        await reportProgress("[Sandbox] Local d3k install unusable, falling back to published package")
+        d3kInstallResult =
+          resolvedPackageManager === "bun"
+            ? await runCommandWithLogs(sandbox, {
+                cmd: "sh",
+                args: ["-c", "export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; bun add -g dev3000@latest"],
+                stdout: debug ? process.stdout : undefined,
+                stderr: debug ? process.stderr : undefined
+              })
+            : await runCommandWithLogs(sandbox, {
+                cmd: "pnpm",
+                args: ["i", "-g", "dev3000@latest"],
+                stdout: debug ? process.stdout : undefined,
+                stderr: debug ? process.stderr : undefined
+              })
+      }
+
+      if (d3kInstallResult.exitCode !== 0) {
+        throw new Error(`d3k installation failed with exit code ${d3kInstallResult.exitCode}`)
+      }
+
+      d3kVerification = await verifyInstalledD3kBinary(sandbox, { cwd: sandboxCwd, debug })
+    }
     if (!d3kVerification.ok) {
       throw new Error(`d3k installed but is not runnable: ${d3kVerification.detail}`)
     }
