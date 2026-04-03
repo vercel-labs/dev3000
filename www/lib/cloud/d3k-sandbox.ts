@@ -1172,14 +1172,22 @@ chmod 0600 "$HOME/.npmrc" ".npmrc"`
     }
 
     if (!skipsDevServerStartup && usesD3kRuntime) {
-      await reportProgress("Waiting for d3k browser session...")
+      const browserSessionWaitStartedAt = Date.now()
+      await reportProgress("Waiting for d3k browser session (CDP URL)...")
       if (debug) console.log("  ⏳ Waiting for d3k to initialize Chrome and populate CDP URL...")
       const cdpUrl = await waitForCdpUrl(sandbox, 30000, debug)
       if (cdpUrl) {
         if (debug) console.log(`  ✅ CDP URL ready: ${cdpUrl}`)
-        await reportProgress("d3k browser session ready")
+        await reportProgress(
+          `d3k browser session ready (${Math.round((Date.now() - browserSessionWaitStartedAt) / 1000)}s to CDP)`
+        )
+        const pageNavigationWaitStartedAt = Date.now()
+        await reportProgress("Waiting for initial page navigation...")
         if (debug) console.log("  ⏳ Waiting for d3k to complete page navigation...")
         await waitForPageNavigation(sandbox, 30000, debug)
+        await reportProgress(
+          `Initial page navigation complete (${Math.round((Date.now() - pageNavigationWaitStartedAt) / 1000)}s)`
+        )
       } else {
         console.log("  ⚠️ CDP URL not found - browser automation features may not work")
         console.log("  📋 === d3k LOG DUMP (CDP URL not found) ===")
