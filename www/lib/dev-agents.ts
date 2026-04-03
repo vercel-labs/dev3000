@@ -1,9 +1,4 @@
 import { list, put } from "@vercel/blob"
-import {
-  createDevAgentAshArtifactDescriptor,
-  type DevAgentAshArtifact,
-  publishDevAgentAshArtifact
-} from "@/lib/dev-agent-ash"
 
 const FETCH_TIMEOUT_MS = 6000
 const FETCH_RETRIES = 2
@@ -52,6 +47,18 @@ export interface DevAgentSkillRef {
   skillName: string
   displayName: string
   sourceUrl?: string
+}
+
+export interface DevAgentAshArtifact {
+  framework: "experimental-ash"
+  revision: number
+  specHash: string
+  generatedAt: string
+  packageName: string
+  packageVersion: string
+  sourceLabel: string
+  systemPrompt: string
+  tarballUrl?: string
 }
 
 export type DevAgentAiAgent = "anthropic/claude-opus-4.6" | "anthropic/claude-sonnet-4.6"
@@ -823,22 +830,6 @@ function normalizeDevAgent(devAgent: StoredDevAgent | Omit<DevAgent, "usageCount
         })
       )
     : []
-  const normalizedSandboxBrowser =
-    sandboxBrowser && isDevAgentSandboxBrowser(sandboxBrowser)
-      ? sandboxBrowser
-      : getDefaultSandboxBrowser(mergedDevAgent.executionMode)
-  const ashBase = createDevAgentAshArtifactDescriptor(
-    toDevAgentAshInput({
-      ...mergedDevAgent,
-      id: canonicalDevAgentId,
-      instructions: normalizedInstructions,
-      aiAgent,
-      devServerCommand,
-      skillRefs,
-      sandboxBrowser: normalizedSandboxBrowser
-    }),
-    mergedDevAgent.ashArtifact?.revision ?? 1
-  )
   return {
     ...mergedDevAgent,
     id: canonicalDevAgentId,
@@ -846,18 +837,10 @@ function normalizeDevAgent(devAgent: StoredDevAgent | Omit<DevAgent, "usageCount
     aiAgent,
     devServerCommand,
     skillRefs,
-    sandboxBrowser: normalizedSandboxBrowser,
-    ashArtifact: {
-      ...ashBase,
-      ...mergedDevAgent.ashArtifact,
-      framework: "experimental-ash",
-      revision: mergedDevAgent.ashArtifact?.revision ?? ashBase.revision,
-      specHash: mergedDevAgent.ashArtifact?.specHash ?? ashBase.specHash,
-      packageName: mergedDevAgent.ashArtifact?.packageName ?? ashBase.packageName,
-      packageVersion: mergedDevAgent.ashArtifact?.packageVersion ?? ashBase.packageVersion,
-      sourceLabel: mergedDevAgent.ashArtifact?.sourceLabel ?? ashBase.sourceLabel,
-      systemPrompt: mergedDevAgent.ashArtifact?.systemPrompt ?? ashBase.systemPrompt
-    }
+    sandboxBrowser:
+      sandboxBrowser && isDevAgentSandboxBrowser(sandboxBrowser)
+        ? sandboxBrowser
+        : getDefaultSandboxBrowser(mergedDevAgent.executionMode)
   }
 }
 
@@ -975,6 +958,7 @@ export async function createCustomDevAgent(input: {
     typeof input.earlyExitPlacementIndex === "number" && Number.isInteger(input.earlyExitPlacementIndex)
       ? Math.max(0, input.earlyExitPlacementIndex)
       : undefined
+  const { publishDevAgentAshArtifact } = await import("@/lib/dev-agent-ash")
   const ashArtifact = await publishDevAgentAshArtifact(
     {
       id,
@@ -1062,6 +1046,7 @@ export async function updateCustomDevAgent(
   }
   const builtinDefaults = getBuiltinDevAgentDefaults(canonicalDevAgentId)
   const nextRevision = (existingDevAgent.ashArtifact?.revision ?? 1) + 1
+  const { publishDevAgentAshArtifact } = await import("@/lib/dev-agent-ash")
 
   const updatedDevAgent: StoredDevAgent = {
     ...existingDevAgent,
@@ -1150,6 +1135,7 @@ export async function ensureDevAgentAshArtifactPublished(devAgent: DevAgent): Pr
     return devAgent.ashArtifact
   }
 
+  const { publishDevAgentAshArtifact } = await import("@/lib/dev-agent-ash")
   return publishDevAgentAshArtifact(
     toDevAgentAshInput({
       ...devAgent,
