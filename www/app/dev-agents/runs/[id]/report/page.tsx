@@ -73,9 +73,6 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 }
 
 const MIN_ROUTE_DELTA_BYTES = 10 * 1024
-const IMPACT_BYTES_LARGE = 1024 * 1024
-
-type ImpactBucket = "S" | "M" | "L"
 type MetricKey = keyof WebVitals
 
 interface MetricDefinition {
@@ -102,141 +99,6 @@ const METRIC_DEFINITIONS: MetricDefinition[] = [
   { key: "inp", label: "INP", description: "Interaction to Next Paint" },
   { key: "cls", label: "CLS", description: "Cumulative Layout Shift" }
 ]
-
-function calculateImpactfulness(
-  compressedBytes: number,
-  beforeWebVitals?: WorkflowReport["beforeWebVitals"],
-  afterWebVitals?: WorkflowReport["afterWebVitals"]
-): {
-  score: number
-  bucket: ImpactBucket
-  direction: "decrease" | "increase" | "neutral"
-  cwvVerified: boolean
-  cwvMetricsCompared: number
-  cwvMetricsImproved: number
-} {
-  const clamp01 = (value: number) => Math.max(0, Math.min(1, value))
-  const metricDeltaImpact = (before: number | undefined, after: number | undefined, largeDelta: number): number => {
-    if (typeof before !== "number" || typeof after !== "number" || before <= 0) return 0
-    const improvement = before - after
-    if (improvement <= 0) return 0
-    return clamp01(Math.max(improvement / before, improvement / largeDelta))
-  }
-
-  const cwvMetricScores = [
-    metricDeltaImpact(beforeWebVitals?.lcp?.value, afterWebVitals?.lcp?.value, 500),
-    metricDeltaImpact(beforeWebVitals?.inp?.value, afterWebVitals?.inp?.value, 100),
-    metricDeltaImpact(beforeWebVitals?.cls?.value, afterWebVitals?.cls?.value, 0.05)
-  ]
-  const cwvMetricsCompared = [
-    [beforeWebVitals?.lcp?.value, afterWebVitals?.lcp?.value],
-    [beforeWebVitals?.inp?.value, afterWebVitals?.inp?.value],
-    [beforeWebVitals?.cls?.value, afterWebVitals?.cls?.value]
-  ].filter(([before, after]) => typeof before === "number" && typeof after === "number").length
-
-  const cwvMetricsImproved = cwvMetricScores.filter((score) => score > 0).length
-  const cwvVerified = cwvMetricsCompared > 0
-  const cwvScore =
-    cwvMetricScores.length > 0 ? cwvMetricScores.reduce((sum, value) => sum + value, 0) / cwvMetricScores.length : 0
-
-  const bundleScore = clamp01(Math.abs(compressedBytes) / IMPACT_BYTES_LARGE)
-  const score = cwvVerified ? clamp01(cwvScore * 0.8 + bundleScore * 0.2) : clamp01(bundleScore * 0.35)
-  const bucket: ImpactBucket = score < 0.34 ? "S" : score < 0.67 ? "M" : "L"
-  const direction = compressedBytes < 0 ? "decrease" : compressedBytes > 0 ? "increase" : "neutral"
-  return { score, bucket, direction, cwvVerified, cwvMetricsCompared, cwvMetricsImproved }
-}
-
-function ImpactfulnessGauge({
-  score,
-  bucket,
-  direction,
-  cwvVerified,
-  cwvMetricsCompared,
-  cwvMetricsImproved
-}: {
-  score: number
-  bucket: ImpactBucket
-  direction: "decrease" | "increase" | "neutral"
-  cwvVerified: boolean
-  cwvMetricsCompared: number
-  cwvMetricsImproved: number
-}) {
-  const angle = 180 - score * 180
-  const rad = (angle * Math.PI) / 180
-  const cx = 110
-  const cy = 110
-  const radius = 78
-  const x2 = cx + Math.cos(rad) * radius
-  const y2 = cy - Math.sin(rad) * radius
-  const title = bucket === "S" ? "Small" : bucket === "M" ? "Medium" : "Large"
-
-  return (
-    <div className="inline-flex flex-col rounded-lg border border-border bg-muted/20 p-3">
-      <div className="mb-2 flex items-center justify-between">
-        <div className="text-xs uppercase tracking-wide text-muted-foreground">Impactfulness</div>
-        <div className="text-xs text-muted-foreground">
-          {direction === "decrease" ? "Bundle reduced" : direction === "increase" ? "Bundle increased" : "No change"}
-        </div>
-      </div>
-      <svg viewBox="0 0 220 130" className="h-auto w-[220px]">
-        <path
-          d="M20 110 A90 90 0 0 1 200 110"
-          stroke="currentColor"
-          strokeWidth="10"
-          fill="none"
-          className="text-border"
-        />
-        <line
-          x1="20"
-          y1="110"
-          x2="20"
-          y2="102"
-          className="text-muted-foreground"
-          stroke="currentColor"
-          strokeWidth="2"
-        />
-        <line
-          x1="110"
-          y1="20"
-          x2="110"
-          y2="28"
-          className="text-muted-foreground"
-          stroke="currentColor"
-          strokeWidth="2"
-        />
-        <line
-          x1="200"
-          y1="110"
-          x2="200"
-          y2="102"
-          className="text-muted-foreground"
-          stroke="currentColor"
-          strokeWidth="2"
-        />
-        <line x1={cx} y1={cy} x2={x2} y2={y2} stroke="currentColor" strokeWidth="3" className="text-foreground" />
-        <circle cx={cx} cy={cy} r="4" className="fill-foreground" />
-        <text x="20" y="124" textAnchor="middle" className="fill-muted-foreground text-[10px]">
-          S
-        </text>
-        <text x="110" y="12" textAnchor="middle" className="fill-muted-foreground text-[10px]">
-          M
-        </text>
-        <text x="200" y="124" textAnchor="middle" className="fill-muted-foreground text-[10px]">
-          L
-        </text>
-      </svg>
-      <div className="mt-2 text-sm">
-        <span className="font-medium">{title}</span>
-        <span className="text-muted-foreground"> impact</span>
-      </div>
-      <div className="mt-1 text-xs text-muted-foreground">
-        {cwvVerified
-          ? `CWV verified (${cwvMetricsImproved}/${cwvMetricsCompared} improved)`
-          : "CWV verification unavailable"}
-      </div>
-    </div>
-  )
-}
 
 function formatMs(value?: number) {
   return typeof value === "number" ? `${value.toFixed(0)}ms` : "—"
@@ -510,60 +372,6 @@ function getWorkflowDescription(report: WorkflowReport, workflowLabel: string): 
   }
 }
 
-function getVerificationSummary(report: WorkflowReport, metricRows: MetricRow[]) {
-  const comparedMetrics = metricRows.flatMap((row) =>
-    row.before && row.after ? [{ before: row.before, after: row.after }] : []
-  )
-  const improvedMetrics = comparedMetrics.filter((row) => row.after.value < row.before.value)
-  const degradedMetrics = comparedMetrics.filter((row) => row.after.value > row.before.value)
-
-  if (report.verificationError) {
-    return {
-      title: "Verification hit an error",
-      description: report.verificationError
-    }
-  }
-
-  if (report.verificationStatus === "improved") {
-    return {
-      title: "Post-run verification captured an improvement",
-      description:
-        comparedMetrics.length > 0
-          ? `Compared ${comparedMetrics.length} metric${comparedMetrics.length === 1 ? "" : "s"} with ${improvedMetrics.length} improvement${improvedMetrics.length === 1 ? "" : "s"}.`
-          : "The report recorded an improved verification result."
-    }
-  }
-
-  if (report.verificationStatus === "degraded") {
-    return {
-      title: "Post-run verification captured a regression",
-      description:
-        comparedMetrics.length > 0
-          ? `Compared ${comparedMetrics.length} metric${comparedMetrics.length === 1 ? "" : "s"} and detected ${degradedMetrics.length} regression${degradedMetrics.length === 1 ? "" : "s"}.`
-          : "The report recorded a degraded verification result."
-    }
-  }
-
-  if (report.verificationStatus === "unchanged") {
-    return {
-      title: "Post-run verification was stable",
-      description:
-        comparedMetrics.length > 0
-          ? `Compared ${comparedMetrics.length} metric${comparedMetrics.length === 1 ? "" : "s"} and found no material change.`
-          : "The report recorded an unchanged verification result."
-    }
-  }
-
-  if (comparedMetrics.length > 0) {
-    return {
-      title: "Before and after metrics were captured",
-      description: `${improvedMetrics.length} improved, ${degradedMetrics.length} regressed, ${comparedMetrics.length - improvedMetrics.length - degradedMetrics.length} unchanged.`
-    }
-  }
-
-  return null
-}
-
 function getEarlyExitSummary(report: WorkflowReport) {
   if (!report.earlyExitResult?.shouldExit) {
     return null
@@ -581,6 +389,7 @@ function skillLink(skill: string) {
     return "https://github.com/vercel-labs/dev3000/blob/main/www/.agents/skills/d3k/SKILL.md"
   }
   if (
+    normalized === "analyze bundle" ||
     normalized === "analyze-bundle" ||
     normalized.includes("bundle-analyzer-agentic") ||
     normalized.includes("bundle-analyzer")
@@ -597,6 +406,7 @@ function normalizeSkillLabel(skill: string) {
   const normalized = skill.trim().toLowerCase()
   if (normalized.includes("web-design-guidelines")) return "Vercel Web Design Guidelines"
   if (
+    normalized === "analyze bundle" ||
     normalized === "analyze-bundle" ||
     normalized.includes("bundle-analyzer-agentic") ||
     normalized.includes("bundle-analyzer")
@@ -851,10 +661,9 @@ function ReportContentBody({ run, report }: { run: WorkflowRun; report: Workflow
   const showMetricComparisonTable = hasMetricComparison || (isEarlyExit && metricRows.some((row) => row.before))
   const metricsWithCurrentValues = metricRows.filter((row) => row.current)
   const earlyExitSummary = getEarlyExitSummary(report)
-  const verificationSummary = getVerificationSummary(report, metricRows)
-  const secondarySummary = earlyExitSummary ?? verificationSummary
+  const secondarySummary = earlyExitSummary
   const explicitSkills = [...(report.skillsLoaded || []), ...(report.skillsInstalled || [])]
-  const inferredSkills: string[] = ["d3k"]
+  const inferredSkills: string[] = workflowType === "turbopack-bundle-analyzer" ? [] : ["d3k"]
   if (workflowType === "design-guidelines") inferredSkills.unshift("Vercel Web Design Guidelines")
   if (workflowType === "turbopack-bundle-analyzer") inferredSkills.unshift("analyze-bundle")
   const skillsUsed = Array.from(
@@ -867,9 +676,6 @@ function ReportContentBody({ run, report }: { run: WorkflowRun; report: Workflow
   )
   const isMarketplaceAgent = report.isMarketplaceAgent || report.devAgentId?.startsWith("r_mp_") || false
   const bundleComparison = report.turbopackBundleComparison
-  const impactfulness = bundleComparison
-    ? calculateImpactfulness(bundleComparison.delta.compressedBytes, report.beforeWebVitals, report.afterWebVitals)
-    : null
   const bundleRouteDeltas = bundleComparison
     ? Array.from(
         new Set([
@@ -893,6 +699,34 @@ function ReportContentBody({ run, report }: { run: WorkflowRun; report: Workflow
         .sort((a, b) => a.compressedDelta - b.compressedDelta)
         .slice(0, 5)
     : []
+  const bundleSourceDeltas = bundleComparison
+    ? Array.from(
+        new Set([
+          ...(bundleComparison.before.topSources || []).map((source) => source.fullPath),
+          ...(bundleComparison.after.topSources || []).map((source) => source.fullPath)
+        ])
+      )
+        .map((fullPath) => {
+          const beforeSource = (bundleComparison.before.topSources || []).find((item) => item.fullPath === fullPath)
+          const afterSource = (bundleComparison.after.topSources || []).find((item) => item.fullPath === fullPath)
+          const beforeCompressedBytes = beforeSource?.compressedBytes ?? 0
+          const afterCompressedBytes = afterSource?.compressedBytes ?? 0
+          return {
+            fullPath,
+            beforeCompressedBytes,
+            afterCompressedBytes,
+            compressedDelta: afterCompressedBytes - beforeCompressedBytes
+          }
+        })
+        .filter((source) => Math.abs(source.compressedDelta) >= MIN_ROUTE_DELTA_BYTES)
+        .sort((a, b) => a.compressedDelta - b.compressedDelta)
+        .slice(0, 5)
+    : []
+  const primaryRouteDelta = bundleRouteDeltas[0]
+  const compressedDeltaPercent =
+    typeof bundleComparison?.delta.compressedPercent === "number"
+      ? Math.abs(bundleComparison.delta.compressedPercent)
+      : null
   const prDiffUrl = run.prUrl ? `${run.prUrl}.diff` : undefined
   const inlineDiffUrl = report.gitDiff
     ? `data:text/plain;charset=utf-8,${encodeURIComponent(report.gitDiff)}`
@@ -913,12 +747,6 @@ function ReportContentBody({ run, report }: { run: WorkflowRun; report: Workflow
     if (minutes > 0) return `${minutes}m ${seconds}s`
     return `${seconds}s`
   }
-  const shouldAutoOpenAnalysis =
-    workflowType === "turbopack-bundle-analyzer" &&
-    !bundleComparison &&
-    metricRows.length === 0 &&
-    Boolean(report.agentAnalysis)
-
   return (
     <div className="space-y-6">
       {(report.successEvalResult != null || secondarySummary) && (
@@ -1179,31 +1007,25 @@ function ReportContentBody({ run, report }: { run: WorkflowRun; report: Workflow
 
       {bundleComparison ? (
         <ReportSection title="Bundle Delta" description="Before and after bundle output captured for the run.">
-          {impactfulness ? (
-            <div className="mb-4">
-              <ImpactfulnessGauge
-                score={impactfulness.score}
-                bucket={impactfulness.bucket}
-                direction={impactfulness.direction}
-                cwvVerified={impactfulness.cwvVerified}
-                cwvMetricsCompared={impactfulness.cwvMetricsCompared}
-                cwvMetricsImproved={impactfulness.cwvMetricsImproved}
-              />
-            </div>
-          ) : null}
           <div className="mb-4 rounded-lg border border-border bg-muted/20 px-4 py-3 text-sm">
-            {bundleComparison.delta.compressedBytes <= 0 ? "Reduced shipped JS by " : "Increased shipped JS by "}
-            <span className="font-semibold">{formatBytes(Math.abs(bundleComparison.delta.compressedBytes))}</span>
-            {" ("}
             <span className="font-semibold">
-              {formatSignedPercent(bundleComparison.delta.compressedPercent)?.replace("+", "")}
+              {bundleComparison.delta.compressedBytes <= 0 ? "Bundle reduced" : "Bundle increased"}
             </span>
-            {") across "}
+            {" by "}
+            <span className="font-semibold">{formatBytes(Math.abs(bundleComparison.delta.compressedBytes))}</span>
+            {compressedDeltaPercent !== null ? (
+              <>
+                {" ("}
+                <span className="font-semibold">{compressedDeltaPercent.toFixed(1)}%</span>
+                {")"}
+              </>
+            ) : null}
+            {" across "}
             <span className="font-semibold">{bundleComparison.before.routeCount}</span>
             {" analyzed route"}
             {bundleComparison.before.routeCount === 1 ? "" : "s"}.
           </div>
-          <div className="grid gap-3 md:grid-cols-3">
+          <div className="grid gap-3 md:grid-cols-4">
             <BundleSummaryCard
               label="Compressed JS"
               before={formatBytes(bundleComparison.before.totalCompressedBytes)}
@@ -1217,9 +1039,26 @@ function ReportContentBody({ run, report }: { run: WorkflowRun; report: Workflow
               delta={`${formatSignedBytes(bundleComparison.delta.rawBytes)} (${formatSignedPercent(bundleComparison.delta.rawPercent)})`}
             />
             <div className="rounded-lg border border-border bg-muted/20 p-3">
+              <div className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">Largest Route Win</div>
+              {primaryRouteDelta ? (
+                <>
+                  <div className="text-sm font-medium">{primaryRouteDelta.route}</div>
+                  <div className="text-sm text-muted-foreground">
+                    {formatBytes(primaryRouteDelta.beforeCompressedBytes)} →{" "}
+                    {formatBytes(primaryRouteDelta.afterCompressedBytes)}
+                  </div>
+                  <div className="text-sm">{formatSignedBytes(primaryRouteDelta.compressedDelta)}</div>
+                </>
+              ) : (
+                <div className="text-sm text-muted-foreground">No material route-level delta</div>
+              )}
+            </div>
+            <div className="rounded-lg border border-border bg-muted/20 p-3">
               <div className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">Coverage</div>
               <div className="text-sm">Routes: {bundleComparison.before.routeCount}</div>
-              <div className="text-sm">Output files: {bundleComparison.before.outputFileCount}</div>
+              <div className="text-sm">
+                Output files: {bundleComparison.before.outputFileCount} → {bundleComparison.after.outputFileCount}
+              </div>
             </div>
           </div>
           {bundleRouteDeltas.length > 0 ? (
@@ -1242,6 +1081,26 @@ function ReportContentBody({ run, report }: { run: WorkflowRun; report: Workflow
               </div>
             </div>
           ) : null}
+          {bundleSourceDeltas.length > 0 ? (
+            <div className="mt-4 rounded-lg border border-border bg-muted/20 p-3">
+              <div className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">
+                Top Source-Level Compressed JS Changes
+              </div>
+              <div className="space-y-2">
+                {bundleSourceDeltas.map((sourceDelta) => (
+                  <div
+                    key={sourceDelta.fullPath}
+                    className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-3 text-sm"
+                  >
+                    <span className="truncate font-mono">{sourceDelta.fullPath}</span>
+                    <span className="text-muted-foreground">{formatBytes(sourceDelta.beforeCompressedBytes)}</span>
+                    <span className="text-muted-foreground">→ {formatBytes(sourceDelta.afterCompressedBytes)}</span>
+                    <span>{formatSignedBytes(sourceDelta.compressedDelta)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </ReportSection>
       ) : null}
 
@@ -1251,164 +1110,169 @@ function ReportContentBody({ run, report }: { run: WorkflowRun; report: Workflow
         </ReportSection>
       ) : null}
 
-      <ReportSection title="Analysis" description="The final agent output for this run.">
-        <AgentAnalysis content={report.agentAnalysis} />
-        {!isMarketplaceAgent && (report.timing || report.initD3kLogs || report.d3kLogs || report.afterD3kLogs) ? (
-          <details className="group mt-6" open={shouldAutoOpenAnalysis}>
+      {!isMarketplaceAgent && report.agentAnalysis ? (
+        <ReportSection title="Analysis" description="Internal agent output and diagnostics for this run.">
+          <details className="group">
             <summary className="inline-flex cursor-pointer items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
               <span className="inline-flex items-center gap-2 font-medium">
                 <ChevronRight className="h-4 w-4 transition-transform group-open:rotate-90" />
-                Show diagnostic transcript
+                Show analysis
               </span>
             </summary>
-            <div className="mt-4 space-y-4 rounded-lg border border-border bg-muted/20 p-4">
-              {(report.sandboxDevUrl ||
-                report.targetUrl ||
-                report.repoUrl ||
-                report.repoBranch ||
-                report.projectDir) && (
-                <div className="text-xs text-muted-foreground">
-                  <ul className="flex flex-wrap gap-x-6 gap-y-1">
-                    {report.sandboxDevUrl ? (
-                      <li>
-                        <span>{report.analysisTargetType === "url" ? "Sandbox: " : "Dev: "}</span>
-                        <a
-                          href={report.sandboxDevUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="font-mono hover:underline"
-                        >
-                          {report.sandboxDevUrl}
-                        </a>
-                      </li>
-                    ) : null}
-                    {report.targetUrl ? (
-                      <li>
-                        <span>Target: </span>
-                        <a
-                          href={report.targetUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="font-mono hover:underline"
-                        >
-                          {report.targetUrl}
-                        </a>
-                      </li>
-                    ) : null}
-                    {report.repoUrl ? (
-                      <li>
-                        <span>Repo: </span>
-                        <a
-                          href={report.repoUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="font-mono hover:underline"
-                        >
-                          {report.repoUrl}
-                        </a>
-                      </li>
-                    ) : null}
-                    {report.repoBranch ? (
-                      <li>
-                        <span>Ref: </span>
-                        <span className="font-mono">{report.repoBranch}</span>
-                      </li>
-                    ) : null}
-                    {report.projectDir ? (
-                      <li>
-                        <span>Dir: </span>
-                        <span className="font-mono">{report.projectDir}</span>
-                      </li>
-                    ) : null}
-                  </ul>
+            <div className="mt-4 space-y-6">
+              <AgentAnalysis content={report.agentAnalysis} />
+              {report.timing || report.initD3kLogs || report.d3kLogs || report.afterD3kLogs ? (
+                <div className="space-y-4 rounded-lg border border-border bg-muted/20 p-4">
+                  {(report.sandboxDevUrl ||
+                    report.targetUrl ||
+                    report.repoUrl ||
+                    report.repoBranch ||
+                    report.projectDir) && (
+                    <div className="text-xs text-muted-foreground">
+                      <ul className="flex flex-wrap gap-x-6 gap-y-1">
+                        {report.sandboxDevUrl ? (
+                          <li>
+                            <span>{report.analysisTargetType === "url" ? "Sandbox: " : "Dev: "}</span>
+                            <a
+                              href={report.sandboxDevUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-mono hover:underline"
+                            >
+                              {report.sandboxDevUrl}
+                            </a>
+                          </li>
+                        ) : null}
+                        {report.targetUrl ? (
+                          <li>
+                            <span>Target: </span>
+                            <a
+                              href={report.targetUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-mono hover:underline"
+                            >
+                              {report.targetUrl}
+                            </a>
+                          </li>
+                        ) : null}
+                        {report.repoUrl ? (
+                          <li>
+                            <span>Repo: </span>
+                            <a
+                              href={report.repoUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-mono hover:underline"
+                            >
+                              {report.repoUrl}
+                            </a>
+                          </li>
+                        ) : null}
+                        {report.repoBranch ? (
+                          <li>
+                            <span>Ref: </span>
+                            <span className="font-mono">{report.repoBranch}</span>
+                          </li>
+                        ) : null}
+                        {report.projectDir ? (
+                          <li>
+                            <span>Dir: </span>
+                            <span className="font-mono">{report.projectDir}</span>
+                          </li>
+                        ) : null}
+                      </ul>
+                    </div>
+                  )}
+
+                  {report.timing ? (
+                    <>
+                      <div className="flex flex-wrap items-center gap-4">
+                        <div className="rounded-full border border-[#333] bg-[#111] px-2.5 py-1 text-xs text-[#888]">
+                          {report.fromSnapshot ? "Snapshot Reused" : "Fresh Sandbox"}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-4 text-sm">
+                          <span className="text-muted-foreground">
+                            Total: <span className="text-foreground">{formatSeconds(report.timing.total.totalMs)}</span>
+                          </span>
+                          <span className="text-muted-foreground">
+                            Init: <span className="font-mono text-xs">{formatSeconds(report.timing.total.initMs)}</span>
+                          </span>
+                          <span className="text-muted-foreground">
+                            Agent:{" "}
+                            <span className="font-mono text-xs">{formatSeconds(report.timing.total.agentMs)}</span>
+                          </span>
+                          {report.timing.total.prMs ? (
+                            <span className="text-muted-foreground">
+                              PR: <span className="font-mono text-xs">{formatSeconds(report.timing.total.prMs)}</span>
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      <details className="pt-1">
+                        <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+                          View step-by-step timing breakdown
+                        </summary>
+                        <div className="mt-2 grid gap-4 text-xs md:grid-cols-2">
+                          {report.timing.init?.steps && report.timing.init.steps.length > 0 ? (
+                            <div>
+                              <div className="mb-1 font-medium text-muted-foreground">Init Steps</div>
+                              <ul className="space-y-0.5 font-mono">
+                                {report.timing.init.steps.map((step) => (
+                                  <li key={`init-${step.name}`} className="flex justify-between">
+                                    <span className="mr-2 truncate">{step.name}</span>
+                                    <span className="text-muted-foreground">{formatSeconds(step.durationMs)}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          ) : null}
+                          {report.timing.agent?.steps && report.timing.agent.steps.length > 0 ? (
+                            <div>
+                              <div className="mb-1 font-medium text-muted-foreground">Agent Steps</div>
+                              <ul className="space-y-0.5 font-mono">
+                                {report.timing.agent.steps.map((step) => (
+                                  <li key={`agent-${step.name}`} className="flex justify-between">
+                                    <span className="mr-2 truncate">{step.name}</span>
+                                    <span className="text-muted-foreground">{formatSeconds(step.durationMs)}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          ) : null}
+                        </div>
+                      </details>
+                    </>
+                  ) : null}
+
+                  {report.initD3kLogs || report.d3kLogs ? (
+                    <details>
+                      <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+                        Init logs
+                      </summary>
+                      <pre className="mt-2 max-h-96 overflow-x-auto overflow-y-auto whitespace-pre-wrap rounded bg-muted/50 p-4 font-mono text-xs">
+                        {report.initD3kLogs || report.d3kLogs}
+                      </pre>
+                    </details>
+                  ) : null}
+
+                  {report.afterD3kLogs ? (
+                    <details>
+                      <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+                        After logs
+                      </summary>
+                      <pre className="mt-2 max-h-96 overflow-x-auto overflow-y-auto whitespace-pre-wrap rounded bg-muted/50 p-4 font-mono text-xs">
+                        {report.afterD3kLogs}
+                      </pre>
+                    </details>
+                  ) : null}
                 </div>
-              )}
-
-              {report.timing ? (
-                <>
-                  <div className="flex flex-wrap items-center gap-4">
-                    <div className="rounded-full border border-[#333] bg-[#111] px-2.5 py-1 text-xs text-[#888]">
-                      {report.fromSnapshot ? "Snapshot Reused" : "Fresh Sandbox"}
-                    </div>
-                    <div className="flex flex-wrap items-center gap-4 text-sm">
-                      <span className="text-muted-foreground">
-                        Total: <span className="text-foreground">{formatSeconds(report.timing.total.totalMs)}</span>
-                      </span>
-                      <span className="text-muted-foreground">
-                        Init: <span className="font-mono text-xs">{formatSeconds(report.timing.total.initMs)}</span>
-                      </span>
-                      <span className="text-muted-foreground">
-                        Agent: <span className="font-mono text-xs">{formatSeconds(report.timing.total.agentMs)}</span>
-                      </span>
-                      {report.timing.total.prMs ? (
-                        <span className="text-muted-foreground">
-                          PR: <span className="font-mono text-xs">{formatSeconds(report.timing.total.prMs)}</span>
-                        </span>
-                      ) : null}
-                    </div>
-                  </div>
-
-                  <details className="pt-1">
-                    <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
-                      View step-by-step timing breakdown
-                    </summary>
-                    <div className="mt-2 grid gap-4 text-xs md:grid-cols-2">
-                      {report.timing.init?.steps && report.timing.init.steps.length > 0 ? (
-                        <div>
-                          <div className="mb-1 font-medium text-muted-foreground">Init Steps</div>
-                          <ul className="space-y-0.5 font-mono">
-                            {report.timing.init.steps.map((step) => (
-                              <li key={`init-${step.name}`} className="flex justify-between">
-                                <span className="mr-2 truncate">{step.name}</span>
-                                <span className="text-muted-foreground">{formatSeconds(step.durationMs)}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      ) : null}
-                      {report.timing.agent?.steps && report.timing.agent.steps.length > 0 ? (
-                        <div>
-                          <div className="mb-1 font-medium text-muted-foreground">Agent Steps</div>
-                          <ul className="space-y-0.5 font-mono">
-                            {report.timing.agent.steps.map((step) => (
-                              <li key={`agent-${step.name}`} className="flex justify-between">
-                                <span className="mr-2 truncate">{step.name}</span>
-                                <span className="text-muted-foreground">{formatSeconds(step.durationMs)}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      ) : null}
-                    </div>
-                  </details>
-                </>
-              ) : null}
-
-              {report.initD3kLogs || report.d3kLogs ? (
-                <details>
-                  <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
-                    Init logs
-                  </summary>
-                  <pre className="mt-2 max-h-96 overflow-x-auto overflow-y-auto whitespace-pre-wrap rounded p-4 font-mono text-xs bg-muted/50">
-                    {report.initD3kLogs || report.d3kLogs}
-                  </pre>
-                </details>
-              ) : null}
-
-              {report.afterD3kLogs ? (
-                <details>
-                  <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
-                    After logs
-                  </summary>
-                  <pre className="mt-2 max-h-96 overflow-x-auto overflow-y-auto whitespace-pre-wrap rounded p-4 font-mono text-xs bg-muted/50">
-                    {report.afterD3kLogs}
-                  </pre>
-                </details>
               ) : null}
             </div>
           </details>
-        ) : null}
-      </ReportSection>
+        </ReportSection>
+      ) : null}
 
       <div className="flex flex-wrap gap-3">
         <Button asChild variant="outline">
