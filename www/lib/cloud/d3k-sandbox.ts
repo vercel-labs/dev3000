@@ -14,6 +14,7 @@ export { Snapshot }
 const SANDBOX_D3K_TOP_LEVEL_LOG_DIR = "/home/vercel-sandbox/.d3k/logs"
 const SANDBOX_D3K_LOG_GLOB = "/home/vercel-sandbox/.d3k/*/logs/*.log /home/vercel-sandbox/.d3k/logs/*.log"
 const SANDBOX_D3K_LOG_DIR_GLOB = "/home/vercel-sandbox/.d3k/*/logs /home/vercel-sandbox/.d3k/logs"
+const DEFAULT_SANDBOX_TIMEOUT = "60m" as const
 
 // ============================================================
 // TIMING UTILITIES
@@ -448,7 +449,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     sourceLabel,
     npmToken,
     projectEnv = {},
-    timeout = "30m",
+    timeout = DEFAULT_SANDBOX_TIMEOUT,
     skipD3kSetup = false,
     onProgress,
     projectDir = "",
@@ -1546,7 +1547,7 @@ export interface D3kSandboxFromSnapshotConfig {
  * @returns D3kSandboxResult with sandbox and URLs
  */
 export async function createD3kSandboxFromSnapshot(config: D3kSandboxFromSnapshotConfig): Promise<D3kSandboxResult> {
-  const { snapshotId, timeout = "30m", debug = false } = config
+  const { snapshotId, timeout = DEFAULT_SANDBOX_TIMEOUT, debug = false } = config
 
   if (debug) {
     console.log("🚀 Creating d3k sandbox from snapshot...")
@@ -1912,7 +1913,7 @@ async function createD3kSandboxFromBaseSnapshot(
     githubPat,
     npmToken,
     projectEnv = {},
-    timeout = "30m",
+    timeout = DEFAULT_SANDBOX_TIMEOUT,
     skipD3kSetup = false,
     onProgress,
     projectDir = "",
@@ -2246,7 +2247,7 @@ chmod 0600 "$HOME/.npmrc" ".npmrc"`
 export async function getOrCreateD3kSandbox(config: D3kSandboxConfig): Promise<D3kSandboxResultWithSnapshot> {
   const timer = new StepTimer()
   const debug = config.debug ?? false
-  const timeoutMs = ms(config.timeout || "30m")
+  const timeoutMs = ms(config.timeout || DEFAULT_SANDBOX_TIMEOUT)
   if (typeof timeoutMs !== "number") {
     throw new Error(`Invalid timeout value: ${config.timeout}`)
   }

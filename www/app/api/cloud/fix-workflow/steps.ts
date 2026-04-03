@@ -786,6 +786,8 @@ interface ProgressContext {
   progressLogs?: string[]
 }
 
+const WORKFLOW_SANDBOX_TIMEOUT = "60m" as const
+
 // Helper to update workflow progress
 async function updateProgress(
   ctx: ProgressContext | null | undefined,
@@ -882,6 +884,40 @@ async function appendProgressLog(ctx: ProgressContext | null | undefined, messag
   } catch (err) {
     workflowLog(`[Progress] Failed to append log: ${err instanceof Error ? err.message : String(err)}`)
   }
+}
+
+async function getRunningSandboxWithRetry(
+  sandboxId: string,
+  progressContext?: ProgressContext | null,
+  phase?: "observe" | "agent",
+  attempts = 3,
+  retryDelayMs = 2000
+): Promise<Sandbox> {
+  let lastError: unknown
+
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      const sandbox = await Sandbox.get({ sandboxId })
+      if (sandbox.status !== "running") {
+        throw new Error(`Sandbox not running: ${sandbox.status}`)
+      }
+      return sandbox
+    } catch (error) {
+      lastError = error
+      if (attempt >= attempts) {
+        break
+      }
+
+      const phaseLabel = phase === "observe" ? "Observe" : phase === "agent" ? "Agent" : "Sandbox"
+      await appendProgressLog(
+        progressContext,
+        `[${phaseLabel}] Sandbox unavailable, retrying reattach (${attempt}/${attempts - 1})...`
+      )
+      await new Promise((resolve) => setTimeout(resolve, retryDelayMs))
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error(String(lastError))
 }
 
 // ============================================================
@@ -1764,7 +1800,7 @@ export async function initSandboxStep(
       projectDir: projectDir || "",
       devCommand: devAgentDevServerCommand,
       projectEnv: developmentEnv,
-      timeout: "30m",
+      timeout: WORKFLOW_SANDBOX_TIMEOUT,
       debug: true
     })
   } catch (error) {
@@ -2218,10 +2254,7 @@ export async function observeBaselineStep(
 
   let sandbox: Sandbox
   try {
-    sandbox = await Sandbox.get({ sandboxId })
-    if (sandbox.status !== "running") {
-      throw new Error(`Sandbox not running: ${sandbox.status}`)
-    }
+    sandbox = await getRunningSandboxWithRetry(sandboxId, progressContext, "observe")
   } catch (sandboxError) {
     const canFallbackToInitObservation =
       beforeCls !== null || beforeScreenshots.length > 0 || Boolean(initD3kLogs.trim())
@@ -2263,7 +2296,7 @@ export async function observeBaselineStep(
     workflowLog(
       `[Observe] Sandbox ${sandboxId} unavailable (${sandboxError instanceof Error ? sandboxError.message : String(sandboxError)}), creating a new one...`
     )
-    await appendProgressLog(progressContext, "[Observe] Previous sandbox expired, creating a fresh one...")
+    await appendProgressLog(progressContext, "[Observe] Previous sandbox unavailable, creating a fresh one...")
     let freshResult: Awaited<ReturnType<typeof getOrCreateD3kSandbox>>
     try {
       freshResult = await getOrCreateD3kSandbox({
@@ -2278,7 +2311,7 @@ export async function observeBaselineStep(
         sourceLabel,
         projectDir: projectDir || "",
         devCommand: devAgentDevServerCommand,
-        timeout: "30m",
+        timeout: WORKFLOW_SANDBOX_TIMEOUT,
         debug: true,
         onProgress: (message) => appendProgressLog(progressContext, `[Sandbox] ${message}`)
       })
@@ -2696,15 +2729,12 @@ export async function agentFixLoopStep(
   let sandbox: Sandbox
   let recreatedSandbox = false
   try {
-    sandbox = await Sandbox.get({ sandboxId })
-    if (sandbox.status !== "running") {
-      throw new Error(`Sandbox not running: ${sandbox.status}`)
-    }
+    sandbox = await getRunningSandboxWithRetry(sandboxId, progressContext, "agent")
   } catch (sandboxError) {
     workflowLog(
       `[Agent] Sandbox ${sandboxId} unavailable (${sandboxError instanceof Error ? sandboxError.message : String(sandboxError)}), creating a new one...`
     )
-    await appendProgressLog(progressContext, "[Agent] Previous sandbox expired, creating a fresh one...")
+    await appendProgressLog(progressContext, "[Agent] Previous sandbox unavailable, creating a fresh one...")
     let freshResult: Awaited<ReturnType<typeof getOrCreateD3kSandbox>>
     try {
       freshResult = await getOrCreateD3kSandbox({
@@ -2719,7 +2749,7 @@ export async function agentFixLoopStep(
         sourceLabel,
         projectDir: projectDir || "",
         devCommand: devAgentDevServerCommand,
-        timeout: "30m",
+        timeout: WORKFLOW_SANDBOX_TIMEOUT,
         debug: true,
         onProgress: (message) => appendProgressLog(progressContext, `[Sandbox] ${message}`)
       })
