@@ -12,6 +12,7 @@ import type {
 } from "@/lib/dev-agents"
 
 const ASH_RUNTIME_VERSION = "experimental-ash@0.1.0-alpha.29"
+const ASH_ARTIFACT_FORMAT_VERSION = 2
 
 export interface DevAgentAshArtifact {
   framework: "experimental-ash"
@@ -140,6 +141,7 @@ function formatEarlyExitRule(rule?: DevAgentEarlyExitRule): string {
 function createCanonicalSpec(input: DevAgentAshInput) {
   return {
     schemaVersion: 1,
+    artifactFormatVersion: ASH_ARTIFACT_FORMAT_VERSION,
     createdAt: input.createdAt,
     id: input.id,
     name: input.name.trim(),

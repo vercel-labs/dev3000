@@ -1229,7 +1229,16 @@ export async function ensureDevAgentAshArtifactPublished(devAgent: DevAgent): Pr
 export async function ensureDevAgentAshArtifactPrepared(
   devAgent: DevAgent
 ): Promise<{ artifact: DevAgentAshArtifact; state: DevAgentAshArtifactAvailability }> {
-  if (devAgent.ashArtifact?.tarballUrl) {
+  const currentDescriptor = createDevAgentAshArtifactDescriptor(
+    toDevAgentAshInput({
+      ...devAgent,
+      sandboxBrowser: devAgent.sandboxBrowser
+    }),
+    devAgent.ashArtifact?.revision ?? 1,
+    devAgent.ashArtifact?.generatedAt || devAgent.updatedAt || devAgent.createdAt
+  )
+
+  if (devAgent.ashArtifact?.tarballUrl && devAgent.ashArtifact.specHash === currentDescriptor.specHash) {
     return { artifact: devAgent.ashArtifact, state: "existing" }
   }
 
