@@ -2688,7 +2688,7 @@ export async function agentFixLoopStep(
   workflowLog(`[Agent] Reconnecting to sandbox: ${sandboxId}`)
   await updateProgress(
     progressContext,
-    2,
+    3,
     isTurbopackBundleAnalyzer ? "AI agent analyzing bundle issues..." : "AI agent analyzing CLS issues...",
     devUrl
   )
