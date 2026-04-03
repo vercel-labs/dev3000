@@ -2011,8 +2011,8 @@ async function createAndSaveBaseSnapshot(
           `bun add ${CLAUDE_CODE_PACKAGE}`,
           `if ! command -v node >/dev/null 2>&1; then ln -sf "$(command -v bun)" /home/vercel-sandbox/.local/bin/node; fi`,
           `ln -sf "${claudeInstallRoot}/node_modules/.bin/claude" /home/vercel-sandbox/.local/bin/claude`,
-          `npx --yes skills@latest add ${VERCEL_PLUGIN_INSTALL_ARG} --agent claude-code --skill '*' -y`,
-          `npx --yes skills@latest add ${D3K_SKILL_INSTALL_ARG.split("@")[0]} --skill d3k --agent claude-code -y`,
+          `bunx --bun skills@latest add ${VERCEL_PLUGIN_INSTALL_ARG} --agent claude-code --skill '*' -y`,
+          `bunx --bun skills@latest add ${D3K_SKILL_INSTALL_ARG.split("@")[0]} --skill d3k --agent claude-code -y`,
           "command -v claude",
           "claude --version"
         ].join(" && ")
