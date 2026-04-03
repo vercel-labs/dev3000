@@ -1,0 +1,25 @@
+www/app/dev-agents/runs/[id]/report/report-pending.tsx
+  600f23c473a4c63d 19
+www/app/api/cloud/start-fix/route.ts
+  600f23c473a4c63d 289-294,296,300
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.22",
+  "base_commit_sha": "4bc08fa7f99f7d5ea78c4eb1820c48366686b758",
+  "prompts": {
+    "600f23c473a4c63d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d3d3a-9e16-7962-8d2a-8c11ed71d9a3",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh <elsigh@gmail.com>",
+      "messages": [],
+      "total_additions": 9,
+      "total_deletions": 5,
+      "accepted_lines": 9,
+      "overriden_lines": 0
+    }
+  }
+}
