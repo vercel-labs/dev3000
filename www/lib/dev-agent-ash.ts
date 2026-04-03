@@ -83,7 +83,7 @@ export async function publishDevAgentAshArtifactWithStatus(
   input: DevAgentAshInput,
   revision: number
 ): Promise<DevAgentAshArtifactPublishResult> {
-  const source = createDevAgentAshSource(input, revision)
+  const source = await createDevAgentAshSource(input, revision)
   const cachePath = `${ASH_ARTIFACT_CACHE_PREFIX}${source.specHash}.tgz`
 
   let tarballUrl: string
@@ -115,6 +115,7 @@ export async function publishDevAgentAshArtifactWithStatus(
       packageVersion: source.packageVersion,
       sourceLabel: source.sourceLabel,
       systemPrompt: source.systemPrompt,
+      packagedSkills: source.packagedSkills,
       tarballUrl
     },
     publishState

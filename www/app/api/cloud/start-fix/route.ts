@@ -329,6 +329,7 @@ export async function POST(request: Request) {
       devAgentName: devAgent?.name,
       devAgentDescription: devAgent?.description,
       devAgentInstructions: devAgent?.ashArtifact?.systemPrompt || devAgent?.instructions,
+      devAgentAshTarballUrl: devAgent?.ashArtifact?.tarballUrl,
       devAgentRevision: devAgent?.ashArtifact?.revision,
       devAgentSpecHash: devAgent?.ashArtifact?.specHash,
       devAgentExecutionMode: devAgent?.executionMode,

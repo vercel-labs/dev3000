@@ -60,6 +60,7 @@ export interface DevAgentAshArtifact {
   packageVersion: string
   sourceLabel: string
   systemPrompt: string
+  packagedSkills?: string[]
   tarballUrl?: string
 }
 

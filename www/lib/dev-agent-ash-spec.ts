@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto"
+import { readdir, readFile } from "node:fs/promises"
+import path from "node:path"
 import type {
   DevAgentActionStep,
   DevAgentAiAgent,
@@ -20,6 +22,7 @@ export interface DevAgentAshArtifact {
   packageVersion: string
   sourceLabel: string
   systemPrompt: string
+  packagedSkills?: string[]
   tarballUrl?: string
 }
 
@@ -29,6 +32,7 @@ export interface DevAgentAshSource {
   systemPrompt: string
   sourceLabel: string
   specHash: string
+  packagedSkills: string[]
   files: Array<{ path: string; content: string }>
 }
 
@@ -280,7 +284,76 @@ This package is a deterministic build artifact of the stored dev-agent spec. The
 `
 }
 
-export function createDevAgentAshSource(input: DevAgentAshInput, revision: number): DevAgentAshSource {
+async function collectTextFiles(baseDir: string, relativeDir = ""): Promise<Array<{ path: string; content: string }>> {
+  const dir = path.join(baseDir, relativeDir)
+  const entries = await readdir(dir, { withFileTypes: true })
+  const files: Array<{ path: string; content: string }> = []
+
+  for (const entry of entries) {
+    const nextRelative = relativeDir ? path.join(relativeDir, entry.name) : entry.name
+    if (entry.isDirectory()) {
+      files.push(...(await collectTextFiles(baseDir, nextRelative)))
+      continue
+    }
+    const absolutePath = path.join(baseDir, nextRelative)
+    files.push({
+      path: nextRelative.replaceAll("\\", "/"),
+      content: await readFile(absolutePath, "utf8")
+    })
+  }
+
+  return files
+}
+
+async function resolvePackagedSkillFiles(
+  input: DevAgentAshInput
+): Promise<{ packagedSkills: string[]; files: Array<{ path: string; content: string }> }> {
+  const packagedSkills: string[] = []
+  const files: Array<{ path: string; content: string }> = []
+  const cwd = process.cwd()
+  const pluginCacheRoot = path.join(
+    process.env.HOME || "",
+    ".codex/plugins/cache/openai-curated/vercel/f78e3ad49297672a905eb7afb6aa0cef34edc79e/skills"
+  )
+
+  for (const skill of input.skillRefs) {
+    const candidateDirs = [
+      path.join(cwd, ".agents/skills", skill.skillName),
+      path.join(cwd, "..", ".agents/skills", skill.skillName),
+      path.join(pluginCacheRoot, skill.skillName)
+    ]
+
+    let resolvedDir: string | null = null
+    for (const candidate of candidateDirs) {
+      try {
+        const entries = await readdir(candidate)
+        if (entries.length > 0) {
+          resolvedDir = candidate
+          break
+        }
+      } catch {
+        // Try next candidate.
+      }
+    }
+
+    if (!resolvedDir) continue
+
+    const skillFiles = await collectTextFiles(resolvedDir)
+    if (skillFiles.length === 0) continue
+
+    packagedSkills.push(skill.displayName || skill.skillName)
+    files.push(
+      ...skillFiles.map((file) => ({
+        path: `agent/skills/${skill.skillName}/${file.path}`,
+        content: file.content
+      }))
+    )
+  }
+
+  return { packagedSkills, files }
+}
+
+export async function createDevAgentAshSource(input: DevAgentAshInput, revision: number): Promise<DevAgentAshSource> {
   const canonicalSpec = createCanonicalSpec(input)
   const specHash = createHash("sha256").update(JSON.stringify(canonicalSpec)).digest("hex")
   const slug = slugify(input.name) || input.id
@@ -288,6 +361,7 @@ export function createDevAgentAshSource(input: DevAgentAshInput, revision: numbe
   const packageVersion = `0.0.${revision}`
   const systemPrompt = renderSystemPrompt(input)
   const sourceLabel = `${input.name.trim()} v${revision}`
+  const packagedSkillData = await resolvePackagedSkillFiles(input)
   const files = [
     {
       path: "package.json",
@@ -366,7 +440,18 @@ export default defineAgent({
     {
       path: "agent/spec.json",
       content: JSON.stringify(canonicalSpec, null, 2)
-    }
+    },
+    {
+      path: "agent/skills-manifest.json",
+      content: JSON.stringify(
+        {
+          packagedSkills: packagedSkillData.packagedSkills
+        },
+        null,
+        2
+      )
+    },
+    ...packagedSkillData.files
   ]
 
   return {
@@ -375,6 +460,7 @@ export default defineAgent({
     systemPrompt,
     sourceLabel,
     specHash,
+    packagedSkills: packagedSkillData.packagedSkills,
     files
   }
 }
@@ -384,15 +470,21 @@ export function createDevAgentAshArtifactDescriptor(
   revision = 1,
   generatedAt = new Date().toISOString()
 ): DevAgentAshArtifact {
-  const source = createDevAgentAshSource(input, revision)
+  const canonicalSpec = createCanonicalSpec(input)
+  const specHash = createHash("sha256").update(JSON.stringify(canonicalSpec)).digest("hex")
+  const slug = slugify(input.name) || input.id
+  const packageName = `dev-agent-${slug}`
+  const packageVersion = `0.0.${revision}`
+  const sourceLabel = `${input.name.trim()} v${revision}`
+  const systemPrompt = renderSystemPrompt(input)
   return {
     framework: "experimental-ash",
     revision,
-    specHash: source.specHash,
+    specHash,
     generatedAt,
-    packageName: source.packageName,
-    packageVersion: source.packageVersion,
-    sourceLabel: source.sourceLabel,
-    systemPrompt: source.systemPrompt
+    packageName,
+    packageVersion,
+    sourceLabel,
+    systemPrompt
   }
 }

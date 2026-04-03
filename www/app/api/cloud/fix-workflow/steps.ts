@@ -2279,6 +2279,7 @@ export async function observeBaselineStep(
   sourceTarballUrl?: string,
   sourceLabel?: string,
   vercelOidcToken?: string,
+  devAgentAshTarballUrl?: string,
   projectDir?: string,
   devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser",
   devAgentDevServerCommand?: string,
@@ -2377,6 +2378,7 @@ export async function observeBaselineStep(
   }
 
   await installDevAgentSkillsInSandbox(sandbox, projectDir, devAgentSkillRefs, progressContext, {
+    devAgentAshTarballUrl,
     includeD3k: !isTurbopackBundleAnalyzer
   })
 
@@ -2737,6 +2739,7 @@ export async function agentFixLoopStep(
   crawlDepth?: number | "all",
   devAgentName?: string,
   devAgentInstructions?: string,
+  devAgentAshTarballUrl?: string,
   devAgentExecutionMode?: "dev-server" | "preview-pr",
   devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser",
   devAgentAiAgent?: import("@/lib/dev-agents").DevAgentAiAgent,
@@ -2834,6 +2837,7 @@ export async function agentFixLoopStep(
     )
     try {
       await installDevAgentSkillsInSandbox(sandbox, effectiveProjectDir, devAgentSkillRefs, progressContext, {
+        devAgentAshTarballUrl,
         includeD3k: !isTurbopackBundleAnalyzer
       })
     } catch (skillInstallError) {
@@ -3604,14 +3608,66 @@ function buildSkillsInstallShellCommand(installArg: string): string {
   return `npx --yes skills@latest add ${shellEscape(normalizedInstallArg)} --agent ${agentSlug} -y`
 }
 
+async function installPackagedAshSkillsInSandbox(
+  sandbox: Sandbox,
+  tarballUrl: string,
+  progressContext?: ProgressContext | null
+): Promise<{ installed: boolean; skillNames: string[] }> {
+  const result = await runSandboxCommand(sandbox, "sh", [
+    "-c",
+    [
+      "set -e",
+      'TMP_DIR="$(mktemp -d)"',
+      `curl -fsSL ${shellEscape(tarballUrl)} -o "$TMP_DIR/ash.tgz"`,
+      'ROOT_DIR="$(tar -tzf "$TMP_DIR/ash.tgz" | head -1 | cut -d/ -f1)"',
+      'mkdir -p "$TMP_DIR/unpack" "$HOME/.claude/skills"',
+      'tar -xzf "$TMP_DIR/ash.tgz" -C "$TMP_DIR/unpack"',
+      'SKILLS_DIR="$TMP_DIR/unpack/$ROOT_DIR/agent/skills"',
+      'if [ ! -d "$SKILLS_DIR" ]; then echo "__NO_PACKAGED_SKILLS__"; exit 0; fi',
+      'cp -R "$SKILLS_DIR"/. "$HOME/.claude/skills/"',
+      'find "$HOME/.claude/skills" -mindepth 1 -maxdepth 1 -type d -exec basename {} \\; | sort'
+    ].join(" && ")
+  ])
+
+  const output = `${result.stdout}\n${result.stderr}`.trim()
+  if (result.exitCode !== 0) {
+    throw new Error(`Failed to install packaged ASH skills: ${output || "unknown error"}`)
+  }
+
+  if (output.includes("__NO_PACKAGED_SKILLS__")) {
+    await appendProgressLog(progressContext, "[Skills] No packaged ASH skills were found in the agent artifact")
+    return { installed: false, skillNames: [] }
+  }
+
+  const skillNames = output
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) => !line.startsWith("__"))
+
+  if (skillNames.length > 0) {
+    await appendProgressLog(progressContext, `[Skills] Installed packaged ASH skills: ${skillNames.join(", ")}`)
+  }
+
+  return { installed: skillNames.length > 0, skillNames }
+}
+
 async function installDevAgentSkillsInSandbox(
   sandbox: Sandbox,
   projectDir: string | undefined,
   devAgentSkillRefs: DevAgentSkillRef[] | undefined,
   progressContext?: ProgressContext | null,
-  options?: { includeD3k?: boolean }
+  options?: { includeD3k?: boolean; devAgentAshTarballUrl?: string }
 ): Promise<void> {
+  if (options?.devAgentAshTarballUrl) {
+    const packaged = await installPackagedAshSkillsInSandbox(sandbox, options.devAgentAshTarballUrl, progressContext)
+    if (packaged.installed) {
+      return
+    }
+  }
+
   const requestedSkills = [...(devAgentSkillRefs || [])]
+  const shouldAutoInstallPlatformSkills = !options?.devAgentAshTarballUrl
   const hasVercelPlugin = requestedSkills.some((skill) => {
     const identifier = `${skill.id} ${skill.skillName} ${skill.displayName} ${skill.installArg}`.toLowerCase()
     return identifier.includes("vercel-plugin") || identifier.includes("vercel/vercel-plugin")
@@ -3620,7 +3676,7 @@ async function installDevAgentSkillsInSandbox(
     const identifier = `${skill.id} ${skill.skillName} ${skill.displayName} ${skill.installArg}`.toLowerCase()
     return identifier.includes("d3k")
   })
-  if (!hasVercelPlugin) {
+  if (shouldAutoInstallPlatformSkills && !hasVercelPlugin) {
     requestedSkills.unshift({
       id: "vercel-plugin",
       installArg: VERCEL_PLUGIN_INSTALL_ARG,
@@ -3629,7 +3685,7 @@ async function installDevAgentSkillsInSandbox(
       sourceUrl: "https://github.com/vercel/vercel-plugin"
     })
   }
-  if (options?.includeD3k !== false && !hasD3kSkill) {
+  if (shouldAutoInstallPlatformSkills && options?.includeD3k !== false && !hasD3kSkill) {
     requestedSkills.unshift({
       id: "d3k",
       installArg: D3K_SKILL_INSTALL_ARG,

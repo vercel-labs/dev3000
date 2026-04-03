@@ -96,6 +96,7 @@ export async function cloudFixWorkflow(params: {
   devAgentName?: string
   devAgentDescription?: string
   devAgentInstructions?: string
+  devAgentAshTarballUrl?: string
   devAgentRevision?: number
   devAgentSpecHash?: string
   devAgentExecutionMode?: "dev-server" | "preview-pr"
@@ -156,6 +157,7 @@ export async function cloudFixWorkflow(params: {
     devAgentName,
     devAgentDescription,
     devAgentInstructions,
+    devAgentAshTarballUrl,
     devAgentRevision,
     devAgentSpecHash,
     devAgentExecutionMode,
@@ -305,6 +307,7 @@ export async function cloudFixWorkflow(params: {
         sourceTarballUrl,
         sourceLabel,
         vercelOidcToken,
+        devAgentAshTarballUrl,
         projectDir,
         devAgentSandboxBrowser,
         devAgentDevServerCommand,
@@ -433,6 +436,7 @@ export async function cloudFixWorkflow(params: {
         crawlDepth,
         devAgentName,
         devAgentInstructions,
+        devAgentAshTarballUrl,
         devAgentExecutionMode,
         devAgentSandboxBrowser,
         devAgentAiAgent,
@@ -675,6 +679,7 @@ async function observeBaseline(
   sourceTarballUrl?: string,
   sourceLabel?: string,
   vercelOidcToken?: string,
+  devAgentAshTarballUrl?: string,
   projectDir?: string,
   devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser",
   devAgentDevServerCommand?: string,
@@ -707,6 +712,7 @@ async function observeBaseline(
     sourceTarballUrl,
     sourceLabel,
     vercelOidcToken,
+    devAgentAshTarballUrl,
     projectDir,
     devAgentSandboxBrowser,
     devAgentDevServerCommand,
@@ -752,6 +758,7 @@ async function agentFixLoop(
   crawlDepth?: number | "all",
   devAgentName?: string,
   devAgentInstructions?: string,
+  devAgentAshTarballUrl?: string,
   devAgentExecutionMode?: "dev-server" | "preview-pr",
   devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser",
   devAgentAiAgent?: import("@/lib/dev-agents").DevAgentAiAgent,
@@ -800,6 +807,7 @@ async function agentFixLoop(
     crawlDepth,
     devAgentName,
     devAgentInstructions,
+    devAgentAshTarballUrl,
     devAgentExecutionMode,
     devAgentSandboxBrowser,
     devAgentAiAgent,
