@@ -286,14 +286,18 @@ export async function POST(request: Request) {
     console.log(`[Start Fix] Generated runId: ${runId}`)
     console.log(`[Start Fix] userId: ${userId}, projectName: ${projectName}`)
 
+    const ashActionLabel =
+      ashArtifactState === "stored"
+        ? "Storing ASH app"
+        : ashArtifactState === "existing"
+          ? "Using existing ASH app"
+          : "Reusing ASH app"
     const initialAshStep =
-      devAgent?.ashArtifact?.sourceLabel && devAgent?.ashArtifact?.specHash
-        ? `${ashArtifactState === "stored" ? "Storing" : "Reusing"} ASH app...`
-        : undefined
+      devAgent?.ashArtifact?.sourceLabel && devAgent?.ashArtifact?.specHash ? `${ashActionLabel}...` : undefined
     const initialProgressLogs = [
       ...(devAgent?.ashArtifact?.sourceLabel && devAgent?.ashArtifact?.specHash
         ? [
-            `[ASH] ${ashArtifactState === "stored" ? "Storing ASH app" : "Reusing ASH app"}: ${devAgent.ashArtifact.sourceLabel} (${devAgent.ashArtifact.specHash.slice(0, 8)})`
+            `[ASH] ${ashActionLabel}: ${devAgent.ashArtifact.sourceLabel} (${devAgent.ashArtifact.specHash.slice(0, 8)})`
           ]
         : []),
       "[Sandbox] Queued sandbox creation..."

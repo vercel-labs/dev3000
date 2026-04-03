@@ -16,7 +16,7 @@ interface ReportPendingProps {
 }
 
 const STEP_LABELS = [
-  "Preparing ASH app",
+  "Creating or reusing ASH app",
   "Creating sandbox",
   "Capturing baseline",
   "Agent in progress",
