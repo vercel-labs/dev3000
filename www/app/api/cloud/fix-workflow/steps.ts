@@ -787,6 +787,11 @@ interface ProgressContext {
 }
 
 const WORKFLOW_SANDBOX_TIMEOUT = "60m" as const
+const PROGRESS_LOG_DELIMITER = "||"
+
+function buildProgressLogLine(message: string, timestamp = new Date().toISOString()): string {
+  return `${timestamp}${PROGRESS_LOG_DELIMITER}${message}`
+}
 
 // Helper to update workflow progress
 async function updateProgress(
@@ -801,8 +806,7 @@ async function updateProgress(
     ctx.activeStepNumber = stepNumber
     ctx.activeCurrentStep = currentStep
     ctx.sandboxUrl = sandboxUrl ?? ctx.sandboxUrl ?? existingRun?.sandboxUrl
-    const timestampPrefix = new Date().toISOString().slice(11, 19)
-    const nextLogLine = `[${timestampPrefix}] ${currentStep}`
+    const nextLogLine = buildProgressLogLine(currentStep)
     const existingLogs =
       Array.isArray(ctx.progressLogs) && ctx.progressLogs.length > 0
         ? ctx.progressLogs
@@ -843,8 +847,7 @@ async function appendProgressLog(ctx: ProgressContext | null | undefined, messag
   if (!ctx) return
   try {
     const existingRun = (await listWorkflowRuns(ctx.userId)).find((run) => run.id === ctx.runId)
-    const timestampPrefix = new Date().toISOString().slice(11, 19)
-    const nextLogLine = `[${timestampPrefix}] ${message}`
+    const nextLogLine = buildProgressLogLine(message)
     const existingLogs =
       Array.isArray(ctx.progressLogs) && ctx.progressLogs.length > 0
         ? ctx.progressLogs
@@ -4049,6 +4052,67 @@ Use ${skillLoadInstructions} as relevant. Start by measuring the page, identify 
   }
 }
 
+function buildClsTurnPrompts({
+  startPath,
+  devUrl,
+  customPrompt,
+  devAgentInstructions,
+  skillLoadInstructions,
+  beforeCls,
+  beforeGrade
+}: {
+  startPath: string
+  devUrl: string
+  customPrompt?: string
+  devAgentInstructions?: string
+  skillLoadInstructions: string
+  beforeCls: number | null
+  beforeGrade: "good" | "needs-improvement" | "poor" | null
+}): ClaudeTurnPrompt[] {
+  const baselineBlock = `Baseline evidence:
+- CLS: ${beforeCls?.toFixed(4) || "unknown"}
+- Grade: ${beforeGrade || "unknown"}
+- The workflow already captured baseline visuals and will run final verification after your code changes.`
+  const instructionBlock = devAgentInstructions?.trim()
+    ? `\n\nDev agent instructions:\n${devAgentInstructions.trim()}`
+    : ""
+  const runSpecificBlock = customPrompt?.trim() ? `\n\nRun-specific instructions:\n${customPrompt.trim()}` : ""
+
+  return [
+    {
+      label: "Agent analysis",
+      maxTurns: 12,
+      prompt: `Analyze the CLS problem on ${startPath}. Dev URL: ${devUrl}
+
+Use ${skillLoadInstructions} as relevant.
+
+${baselineBlock}${instructionBlock}${runSpecificBlock}
+
+Rules:
+- Do not make code changes in this step.
+- Focus on identifying what shifts, why it shifts, and the highest-confidence fix.
+- Use the provided runtime evidence first; only gather extra browser evidence if needed to resolve ambiguity.
+- End with a concise implementation plan naming the exact file(s) you will edit next and the concrete fix you will make.`
+    },
+    {
+      label: "Agent implementation",
+      maxTurns: 20,
+      prompt: `Implement the highest-confidence CLS fix for ${startPath}. Dev URL: ${devUrl}
+
+Use ${skillLoadInstructions} as relevant.
+
+${baselineBlock}${instructionBlock}${runSpecificBlock}
+
+Requirements:
+- Make concrete code changes when the cause is clear.
+- Prefer the smallest fix that removes the shift at its source.
+- Do not redo the full baseline measurement loop; the workflow runtime will perform final verification after this step.
+- Use targeted smoke validation only when it materially reduces risk.
+- Finish with a concise summary of the files changed and why the CLS should improve.`
+    }
+  ]
+}
+
 function buildClaudeTurnPrompts({
   workflowType,
   startPath,
@@ -4082,7 +4146,19 @@ function buildClaudeTurnPrompts({
     buildClaudeSetupPrompt(devAgentName, startPath, devUrl, skillLoadInstructions, customPrompt)
   ]
 
-  if (workflowType === "turbopack-bundle-analyzer") {
+  if (workflowType === "cls-fix") {
+    prompts.push(
+      ...buildClsTurnPrompts({
+        startPath,
+        devUrl,
+        customPrompt,
+        devAgentInstructions,
+        skillLoadInstructions,
+        beforeCls,
+        beforeGrade
+      })
+    )
+  } else if (workflowType === "turbopack-bundle-analyzer") {
     prompts.push({
       label: "Agent analysis",
       maxTurns: 12,

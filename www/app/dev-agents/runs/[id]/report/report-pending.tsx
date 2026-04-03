@@ -23,6 +23,7 @@ const STEP_LABELS = [
   "Generating report",
   "Finishing up"
 ]
+const PROGRESS_LOG_DELIMITER = "||"
 
 function stripAnsi(value: string): string {
   let result = ""
@@ -55,6 +56,31 @@ function sanitizeDisplayText(value: string): string {
   }
 
   return printable.replace(/\s+/g, " ").trim()
+}
+
+function parseProgressLogLine(value: string): { timestamp: string | null; message: string } {
+  const sanitized = sanitizeDisplayText(value)
+  const delimiterIndex = sanitized.indexOf(PROGRESS_LOG_DELIMITER)
+  if (delimiterIndex > 0) {
+    const timestamp = sanitized.slice(0, delimiterIndex).trim()
+    const message = sanitized.slice(delimiterIndex + PROGRESS_LOG_DELIMITER.length).trim()
+    if (timestamp && message) {
+      return { timestamp, message }
+    }
+  }
+
+  return { timestamp: null, message: sanitized }
+}
+
+function formatProgressTimestamp(value: string | null): string | null {
+  if (!value) return null
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return null
+  return new Intl.DateTimeFormat(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  }).format(parsed)
 }
 
 function normalizeStepNumber(stepNumber: number | null): number | null {
@@ -201,6 +227,11 @@ export function ReportPending({
   const workflowLabel = devAgentName?.trim() || getLegacyWorkflowLabel(workflowType)
   const pendingLabel = getPendingReportLabel(workflowType, devAgentName)
   const pendingReportTitle = `Run Report: ${workflowLabel} Dev Agent`
+  const formattedProgressLogs = progressLogs.map((line) => {
+    const parsed = parseProgressLogLine(line)
+    const formattedTimestamp = formatProgressTimestamp(parsed.timestamp)
+    return formattedTimestamp ? `[${formattedTimestamp}] ${parsed.message}` : parsed.message
+  })
 
   const content = (
     <div className="space-y-6">
@@ -265,7 +296,7 @@ export function ReportPending({
             <textarea
               ref={logsRef}
               readOnly
-              value={progressLogs.join("\n")}
+              value={formattedProgressLogs.join("\n")}
               className="w-full h-28 rounded-md border border-border bg-muted/30 px-3 py-2 text-xs font-mono leading-relaxed resize-none"
             />
           </div>
