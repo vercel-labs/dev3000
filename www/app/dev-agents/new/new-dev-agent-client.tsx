@@ -45,7 +45,7 @@ import {
   getDevAgentModelLabel,
   isSandboxBuiltinSkillRef,
   isVercelPluginSkillRef
-} from "@/lib/dev-agents"
+} from "@/lib/dev-agents-client"
 import { NO_DEV_SERVER_COMMAND } from "@/lib/dev-server-command"
 
 // ── Types ──────────────────────────────────────────────────────────────────

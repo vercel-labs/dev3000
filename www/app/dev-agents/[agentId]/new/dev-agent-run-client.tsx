@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
-import type { DevAgent, DevAgentTeam } from "@/lib/dev-agents"
+import type { DevAgent, DevAgentTeam } from "@/lib/dev-agents-client"
 
 interface UserInfo {
   id: string

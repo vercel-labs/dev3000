@@ -9,7 +9,7 @@ import { useEffect, useState } from "react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import type { DevAgent, MarketplaceAgentStats } from "@/lib/dev-agents"
+import type { DevAgent, MarketplaceAgentStats } from "@/lib/dev-agents-client"
 
 export interface TeamCatalogAgent {
   devAgent: DevAgent
