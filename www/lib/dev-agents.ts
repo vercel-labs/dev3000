@@ -1,4 +1,5 @@
 import { list, put } from "@vercel/blob"
+import { createDevAgentAshArtifactDescriptor } from "@/lib/dev-agent-ash-spec"
 
 const FETCH_TIMEOUT_MS = 6000
 const FETCH_RETRIES = 2
@@ -830,7 +831,7 @@ function normalizeDevAgent(devAgent: StoredDevAgent | Omit<DevAgent, "usageCount
         })
       )
     : []
-  return {
+  const normalizedDevAgent: Omit<DevAgent, "usageCount"> = {
     ...mergedDevAgent,
     id: canonicalDevAgentId,
     instructions: normalizedInstructions,
@@ -841,6 +842,24 @@ function normalizeDevAgent(devAgent: StoredDevAgent | Omit<DevAgent, "usageCount
       sandboxBrowser && isDevAgentSandboxBrowser(sandboxBrowser)
         ? sandboxBrowser
         : getDefaultSandboxBrowser(mergedDevAgent.executionMode)
+  }
+  const synthesizedAshArtifact = createDevAgentAshArtifactDescriptor(
+    toDevAgentAshInput({
+      ...normalizedDevAgent,
+      sandboxBrowser: normalizedDevAgent.sandboxBrowser
+    }),
+    mergedDevAgent.ashArtifact?.revision ?? 1,
+    mergedDevAgent.ashArtifact?.generatedAt || mergedDevAgent.updatedAt || mergedDevAgent.createdAt
+  )
+
+  return {
+    ...normalizedDevAgent,
+    ashArtifact: mergedDevAgent.ashArtifact
+      ? {
+          ...synthesizedAshArtifact,
+          ...mergedDevAgent.ashArtifact
+        }
+      : synthesizedAshArtifact
   }
 }
 
