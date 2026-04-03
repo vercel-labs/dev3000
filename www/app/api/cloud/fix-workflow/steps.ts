@@ -4166,9 +4166,10 @@ function buildClaudeTurnPrompts({
   beforeCls: number | null
   beforeGrade: "good" | "needs-improvement" | "poor" | null
 }): ClaudeTurnPrompt[] {
-  const prompts: ClaudeTurnPrompt[] = [
-    buildClaudeSetupPrompt(devAgentName, startPath, devUrl, skillLoadInstructions, customPrompt)
-  ]
+  const prompts: ClaudeTurnPrompt[] =
+    workflowType === "cls-fix"
+      ? []
+      : [buildClaudeSetupPrompt(devAgentName, startPath, devUrl, skillLoadInstructions, customPrompt)]
 
   if (workflowType === "cls-fix") {
     prompts.push(
@@ -4835,7 +4836,7 @@ async function runAgentWithDiagnoseTool(
 }> {
   const SANDBOX_CWD = projectDir ? `/vercel/sandbox/${projectDir.replace(/^\/+|\/+$/g, "")}` : "/vercel/sandbox"
   const workflowTypeForPrompt = workflowType || "cls-fix"
-  const includeD3kSkill = workflowTypeForPrompt !== "turbopack-bundle-analyzer"
+  const includeD3kSkill = workflowTypeForPrompt !== "turbopack-bundle-analyzer" && workflowTypeForPrompt !== "cls-fix"
   const skillLoadInstructions = buildDevAgentSkillLoadInstructions(devAgentSkillRefs, {
     includeD3k: includeD3kSkill
   })
