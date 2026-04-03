@@ -2,6 +2,7 @@ import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { del, list, put } from "@vercel/blob"
+import type { WebVitals } from "@/types"
 
 export type WorkflowType =
   | "cls-fix"
@@ -39,6 +40,21 @@ export interface WorkflowRun {
   customPrompt?: string // For prompt type: the user's custom instruction
   progressLogs?: string[] // Rolling log lines for live pending UI
   successEvalResult?: boolean | null // Result of the success eval (true/false/null)
+  clsScore?: number | null
+  afterClsScore?: number | null
+  beforeWebVitals?: WebVitals
+  afterWebVitals?: WebVitals
+  verificationStatus?: "improved" | "unchanged" | "degraded" | "error"
+  beforeScreenshots?: Array<{
+    timestamp: number
+    blobUrl: string
+    label?: string
+  }>
+  afterScreenshots?: Array<{
+    timestamp: number
+    blobUrl: string
+    label?: string
+  }>
 }
 
 const LOCAL_WORKFLOW_CACHE_ROOT = path.join(tmpdir(), "dev3000-workflow-runs")

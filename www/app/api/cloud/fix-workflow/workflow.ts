@@ -15,6 +15,20 @@ const workflowLog = console.log
 const TURBOPACK_MIN_COMPRESSED_IMPROVEMENT_BYTES = 50 * 1024
 const TURBOPACK_MIN_COMPRESSED_IMPROVEMENT_PERCENT = 0.2
 
+type WorkflowReportSummary = Pick<
+  import("@/types").WorkflowReport,
+  | "clsScore"
+  | "afterClsScore"
+  | "beforeWebVitals"
+  | "afterWebVitals"
+  | "verificationStatus"
+  | "successEvalResult"
+  | "beforeScreenshots"
+  | "afterScreenshots"
+  | "beforeScreenshotUrl"
+  | "afterScreenshotUrl"
+>
+
 interface InitResult {
   sandboxId: string
   devUrl: string
@@ -992,6 +1006,7 @@ async function saveDoneStatus(
   "use step"
   const { listWorkflowRuns, saveWorkflowRun } = await import("@/lib/workflow-storage")
   const existingRun = (await listWorkflowRuns(progressContext.userId)).find((run) => run.id === progressContext.runId)
+  const reportSummary = await loadWorkflowReportSummary(reportBlobUrl)
   const progressLogs = [...(existingRun?.progressLogs ?? []), ...(progressContext.progressLogs ?? [])]
     .filter((line, index, arr) => Boolean(line) && (index === 0 || arr[index - 1] !== line))
     .slice(-120)
@@ -1021,11 +1036,50 @@ async function saveDoneStatus(
     currentStep: progressContext.activeCurrentStep ?? existingRun?.currentStep ?? "Workflow completed",
     completedAt: new Date().toISOString(),
     reportBlobUrl,
+    successEvalResult: reportSummary?.successEvalResult ?? existingRun?.successEvalResult ?? null,
+    clsScore: reportSummary?.clsScore ?? existingRun?.clsScore ?? null,
+    afterClsScore: reportSummary?.afterClsScore ?? existingRun?.afterClsScore ?? null,
+    beforeWebVitals: reportSummary?.beforeWebVitals ?? existingRun?.beforeWebVitals,
+    afterWebVitals: reportSummary?.afterWebVitals ?? existingRun?.afterWebVitals,
+    verificationStatus: reportSummary?.verificationStatus ?? existingRun?.verificationStatus,
+    beforeScreenshots: reportSummary?.beforeScreenshots ?? existingRun?.beforeScreenshots,
+    afterScreenshots: reportSummary?.afterScreenshots ?? existingRun?.afterScreenshots,
+    beforeScreenshotUrl: reportSummary?.beforeScreenshotUrl ?? existingRun?.beforeScreenshotUrl,
+    afterScreenshotUrl: reportSummary?.afterScreenshotUrl ?? existingRun?.afterScreenshotUrl,
     prUrl: prUrl || undefined,
     prError: prError || undefined,
     sandboxUrl: sandboxUrl || progressContext.sandboxUrl || existingRun?.sandboxUrl || undefined,
     progressLogs: progressLogs.length > 0 ? progressLogs : undefined
   })
+}
+
+async function loadWorkflowReportSummary(reportBlobUrl: string): Promise<WorkflowReportSummary | null> {
+  "use step"
+  try {
+    const response = await fetch(reportBlobUrl, { cache: "no-store" })
+    if (!response.ok) {
+      workflowLog(`[Workflow] Failed to load report summary from ${reportBlobUrl}: ${response.status}`)
+      return null
+    }
+    const report = (await response.json()) as import("@/types").WorkflowReport
+    return {
+      clsScore: report.clsScore,
+      afterClsScore: report.afterClsScore,
+      beforeWebVitals: report.beforeWebVitals,
+      afterWebVitals: report.afterWebVitals,
+      verificationStatus: report.verificationStatus,
+      successEvalResult: report.successEvalResult,
+      beforeScreenshots: report.beforeScreenshots,
+      afterScreenshots: report.afterScreenshots,
+      beforeScreenshotUrl: report.beforeScreenshotUrl,
+      afterScreenshotUrl: report.afterScreenshotUrl
+    }
+  } catch (error) {
+    workflowLog(
+      `[Workflow] Failed to load report summary from ${reportBlobUrl}: ${error instanceof Error ? error.message : String(error)}`
+    )
+    return null
+  }
 }
 
 async function saveFailureStatus(progressContext: ProgressContext, errorMessage: string): Promise<void> {
