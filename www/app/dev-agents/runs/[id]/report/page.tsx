@@ -869,6 +869,13 @@ function ReportContentBody({ run, report }: { run: WorkflowRun; report: Workflow
             })}
           />
           {!isMarketplaceAgent ? <SummaryItem label="Model" value={report.agentAnalysisModel || "unknown"} /> : null}
+          {!isMarketplaceAgent && report.devAgentRevision ? (
+            <SummaryItem
+              label="Agent Version"
+              value={`v${report.devAgentRevision}`}
+              detail={report.devAgentSpecHash ? report.devAgentSpecHash.slice(0, 12) : undefined}
+            />
+          ) : null}
           {hasValidRunTiming && runEndedAt ? (
             <SummaryItem label="Run time" value={formatRunDuration(runEndedAt.getTime() - runStartedAt.getTime())} />
           ) : null}

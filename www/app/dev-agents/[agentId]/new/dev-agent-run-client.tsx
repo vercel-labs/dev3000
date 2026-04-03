@@ -517,6 +517,11 @@ export default function DevAgentRunClient({
 
           {/* Stats */}
           <span className="text-[13px] text-[#888]">{formatExecutionMode(devAgent.executionMode)}</span>
+          {devAgent.ashArtifact?.revision ? (
+            <span className="rounded-md bg-[#1a1a1a] px-2 py-0.5 text-[11px] text-[#666]">
+              v{devAgent.ashArtifact.revision}
+            </span>
+          ) : null}
           {devAgent.sandboxBrowser !== "none" ? (
             <span className="text-[13px] text-[#666]">{devAgent.sandboxBrowser}</span>
           ) : null}

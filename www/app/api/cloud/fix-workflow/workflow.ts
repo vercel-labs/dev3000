@@ -91,6 +91,8 @@ export async function cloudFixWorkflow(params: {
   devAgentName?: string
   devAgentDescription?: string
   devAgentInstructions?: string
+  devAgentRevision?: number
+  devAgentSpecHash?: string
   devAgentExecutionMode?: "dev-server" | "preview-pr"
   devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser"
   devAgentAiAgent?: import("@/lib/dev-agents").DevAgentAiAgent
@@ -146,6 +148,8 @@ export async function cloudFixWorkflow(params: {
     devAgentName,
     devAgentDescription,
     devAgentInstructions,
+    devAgentRevision,
+    devAgentSpecHash,
     devAgentExecutionMode,
     devAgentSandboxBrowser,
     devAgentAiAgent,
@@ -188,6 +192,8 @@ export async function cloudFixWorkflow(params: {
           devAgentId,
           devAgentName,
           devAgentDescription,
+          devAgentRevision,
+          devAgentSpecHash,
           devAgentExecutionMode,
           devAgentSandboxBrowser,
           isMarketplaceAgent
@@ -564,6 +570,8 @@ interface ProgressContext {
   devAgentId?: string
   devAgentName?: string
   devAgentDescription?: string
+  devAgentRevision?: number
+  devAgentSpecHash?: string
   devAgentExecutionMode?: "dev-server" | "preview-pr"
   devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser"
   isMarketplaceAgent?: boolean
@@ -979,6 +987,8 @@ async function saveDoneStatus(
     devAgentId: progressContext.devAgentId,
     devAgentName: progressContext.devAgentName,
     devAgentDescription: progressContext.devAgentDescription,
+    devAgentRevision: progressContext.devAgentRevision,
+    devAgentSpecHash: progressContext.devAgentSpecHash,
     devAgentExecutionMode: progressContext.devAgentExecutionMode,
     devAgentSandboxBrowser: progressContext.devAgentSandboxBrowser,
     stepNumber: Math.max(existingRun?.stepNumber ?? 0, progressContext.activeStepNumber ?? 0, 1),
@@ -1015,6 +1025,8 @@ async function saveFailureStatus(progressContext: ProgressContext, errorMessage:
       devAgentId: progressContext.devAgentId,
       devAgentName: progressContext.devAgentName,
       devAgentDescription: progressContext.devAgentDescription,
+      devAgentRevision: progressContext.devAgentRevision,
+      devAgentSpecHash: progressContext.devAgentSpecHash,
       devAgentExecutionMode: progressContext.devAgentExecutionMode,
       devAgentSandboxBrowser: progressContext.devAgentSandboxBrowser,
       stepNumber: Math.max(existingRun?.stepNumber ?? 0, progressContext.activeStepNumber ?? 0, 1),

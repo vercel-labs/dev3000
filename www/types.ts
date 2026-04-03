@@ -60,6 +60,8 @@ export interface WorkflowReport {
   devAgentId?: string
   devAgentName?: string
   devAgentDescription?: string
+  devAgentRevision?: number
+  devAgentSpecHash?: string
   devAgentExecutionMode?: "dev-server" | "preview-pr"
   devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser"
 

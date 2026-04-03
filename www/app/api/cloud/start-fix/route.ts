@@ -1,6 +1,11 @@
 import { start } from "workflow/api"
 import { resolveDevAgentRunner } from "@/lib/cloud/dev-agent-runner"
-import { type DevAgent, getDevAgent, incrementDevAgentUsage } from "@/lib/dev-agents"
+import {
+  type DevAgent,
+  ensureDevAgentAshArtifactPublished,
+  getDevAgent,
+  incrementDevAgentUsage
+} from "@/lib/dev-agents"
 import { proxyWorkflowJsonRequest, shouldProxyWorkflowRequest } from "@/lib/workflow-api"
 import { clearWorkflowLog, workflowError, workflowLog } from "@/lib/workflow-logger"
 import { saveWorkflowRun, type WorkflowType } from "@/lib/workflow-storage"
@@ -183,6 +188,12 @@ export async function POST(request: Request) {
       if (!devAgent) {
         return Response.json({ success: false, error: "Dev Agent not found." }, { status: 404, headers: corsHeaders })
       }
+      if (!devAgent.ashArtifact?.tarballUrl) {
+        devAgent = {
+          ...devAgent,
+          ashArtifact: await ensureDevAgentAshArtifactPublished(devAgent)
+        }
+      }
       workflowType = devAgent.legacyWorkflowType || "prompt"
     } else if (body.workflowType && validWorkflowTypes.includes(body.workflowType)) {
       workflowType = body.workflowType
@@ -294,7 +305,9 @@ export async function POST(request: Request) {
       devAgentId: devAgent?.id,
       devAgentName: devAgent?.name,
       devAgentDescription: devAgent?.description,
-      devAgentInstructions: devAgent?.instructions,
+      devAgentInstructions: devAgent?.ashArtifact?.systemPrompt || devAgent?.instructions,
+      devAgentRevision: devAgent?.ashArtifact?.revision,
+      devAgentSpecHash: devAgent?.ashArtifact?.specHash,
       devAgentExecutionMode: devAgent?.executionMode,
       devAgentSandboxBrowser: devAgent?.sandboxBrowser,
       devAgentAiAgent: devAgent?.aiAgent,
@@ -337,6 +350,8 @@ export async function POST(request: Request) {
           devAgentId: devAgent?.id,
           devAgentName: devAgent?.name,
           devAgentDescription: devAgent?.description,
+          devAgentRevision: devAgent?.ashArtifact?.revision,
+          devAgentSpecHash: devAgent?.ashArtifact?.specHash,
           devAgentExecutionMode: devAgent?.executionMode,
           devAgentSandboxBrowser: devAgent?.sandboxBrowser,
           currentStep: "Step 1: Initializing sandbox...",
@@ -376,6 +391,8 @@ export async function POST(request: Request) {
           devAgentId: devAgent?.id,
           devAgentName: devAgent?.name,
           devAgentDescription: devAgent?.description,
+          devAgentRevision: devAgent?.ashArtifact?.revision,
+          devAgentSpecHash: devAgent?.ashArtifact?.specHash,
           devAgentExecutionMode: devAgent?.executionMode,
           devAgentSandboxBrowser: devAgent?.sandboxBrowser,
           completedAt: new Date().toISOString(),
@@ -421,6 +438,8 @@ export async function POST(request: Request) {
         devAgentId: devAgent?.id,
         devAgentName: devAgent?.name,
         devAgentDescription: devAgent?.description,
+        devAgentRevision: devAgent?.ashArtifact?.revision,
+        devAgentSpecHash: devAgent?.ashArtifact?.specHash,
         devAgentExecutionMode: devAgent?.executionMode,
         devAgentSandboxBrowser: devAgent?.sandboxBrowser,
         completedAt: new Date().toISOString(),

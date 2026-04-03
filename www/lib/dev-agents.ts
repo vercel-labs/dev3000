@@ -1,4 +1,9 @@
 import { list, put } from "@vercel/blob"
+import {
+  createDevAgentAshArtifactDescriptor,
+  type DevAgentAshArtifact,
+  publishDevAgentAshArtifact
+} from "@/lib/dev-agent-ash"
 
 const FETCH_TIMEOUT_MS = 6000
 const FETCH_RETRIES = 2
@@ -226,6 +231,7 @@ export interface DevAgent {
   earlyExitEval?: string
   earlyExitRule?: DevAgentEarlyExitRule
   earlyExitPlacementIndex?: number
+  ashArtifact?: DevAgentAshArtifact
 }
 
 interface StoredDevAgent extends Omit<DevAgent, "usageCount" | "sandboxBrowser"> {
@@ -727,6 +733,47 @@ function getBuiltinDevAgentDefaults(devAgentId: string): Omit<DevAgent, "usageCo
   return BUILTIN_DEV_AGENTS.find((candidate) => candidate.id === canonicalDevAgentId)
 }
 
+function toDevAgentAshInput(
+  devAgent: Pick<
+    Omit<DevAgent, "usageCount">,
+    | "id"
+    | "name"
+    | "description"
+    | "instructions"
+    | "executionMode"
+    | "sandboxBrowser"
+    | "aiAgent"
+    | "devServerCommand"
+    | "actionSteps"
+    | "skillRefs"
+    | "createdAt"
+    | "successEval"
+    | "earlyExitMode"
+    | "earlyExitEval"
+    | "earlyExitRule"
+    | "earlyExitPlacementIndex"
+  >
+) {
+  return {
+    id: devAgent.id,
+    name: devAgent.name,
+    description: devAgent.description,
+    instructions: devAgent.instructions,
+    executionMode: devAgent.executionMode,
+    sandboxBrowser: devAgent.sandboxBrowser,
+    aiAgent: devAgent.aiAgent,
+    devServerCommand: devAgent.devServerCommand,
+    actionSteps: devAgent.actionSteps,
+    skillRefs: devAgent.skillRefs,
+    createdAt: devAgent.createdAt,
+    successEval: devAgent.successEval,
+    earlyExitMode: devAgent.earlyExitMode,
+    earlyExitEval: devAgent.earlyExitEval,
+    earlyExitRule: devAgent.earlyExitRule,
+    earlyExitPlacementIndex: devAgent.earlyExitPlacementIndex
+  }
+}
+
 function isStructuredActionStepsPlaceholder(instructions: string | undefined): boolean {
   return typeof instructions === "string" && /^\[\d+\s+structured action steps\]$/i.test(instructions.trim())
 }
@@ -776,6 +823,22 @@ function normalizeDevAgent(devAgent: StoredDevAgent | Omit<DevAgent, "usageCount
         })
       )
     : []
+  const normalizedSandboxBrowser =
+    sandboxBrowser && isDevAgentSandboxBrowser(sandboxBrowser)
+      ? sandboxBrowser
+      : getDefaultSandboxBrowser(mergedDevAgent.executionMode)
+  const ashBase = createDevAgentAshArtifactDescriptor(
+    toDevAgentAshInput({
+      ...mergedDevAgent,
+      id: canonicalDevAgentId,
+      instructions: normalizedInstructions,
+      aiAgent,
+      devServerCommand,
+      skillRefs,
+      sandboxBrowser: normalizedSandboxBrowser
+    }),
+    mergedDevAgent.ashArtifact?.revision ?? 1
+  )
   return {
     ...mergedDevAgent,
     id: canonicalDevAgentId,
@@ -783,10 +846,18 @@ function normalizeDevAgent(devAgent: StoredDevAgent | Omit<DevAgent, "usageCount
     aiAgent,
     devServerCommand,
     skillRefs,
-    sandboxBrowser:
-      sandboxBrowser && isDevAgentSandboxBrowser(sandboxBrowser)
-        ? sandboxBrowser
-        : getDefaultSandboxBrowser(mergedDevAgent.executionMode)
+    sandboxBrowser: normalizedSandboxBrowser,
+    ashArtifact: {
+      ...ashBase,
+      ...mergedDevAgent.ashArtifact,
+      framework: "experimental-ash",
+      revision: mergedDevAgent.ashArtifact?.revision ?? ashBase.revision,
+      specHash: mergedDevAgent.ashArtifact?.specHash ?? ashBase.specHash,
+      packageName: mergedDevAgent.ashArtifact?.packageName ?? ashBase.packageName,
+      packageVersion: mergedDevAgent.ashArtifact?.packageVersion ?? ashBase.packageVersion,
+      sourceLabel: mergedDevAgent.ashArtifact?.sourceLabel ?? ashBase.sourceLabel,
+      systemPrompt: mergedDevAgent.ashArtifact?.systemPrompt ?? ashBase.systemPrompt
+    }
   }
 }
 
@@ -899,6 +970,32 @@ export async function createCustomDevAgent(input: {
 }): Promise<DevAgent> {
   const id = generateDevAgentId()
   const now = new Date().toISOString()
+  const normalizedEarlyExitRule = input.earlyExitRule ? parseDevAgentEarlyExitRule(input.earlyExitRule) : undefined
+  const normalizedEarlyExitPlacementIndex =
+    typeof input.earlyExitPlacementIndex === "number" && Number.isInteger(input.earlyExitPlacementIndex)
+      ? Math.max(0, input.earlyExitPlacementIndex)
+      : undefined
+  const ashArtifact = await publishDevAgentAshArtifact(
+    {
+      id,
+      name: input.name.trim(),
+      description: input.description.trim(),
+      instructions: input.instructions.trim(),
+      executionMode: input.executionMode,
+      sandboxBrowser: input.sandboxBrowser,
+      aiAgent: input.aiAgent,
+      devServerCommand: input.devServerCommand?.trim() || undefined,
+      actionSteps: input.actionSteps,
+      skillRefs: input.skillRefs,
+      createdAt: now,
+      successEval: input.successEval?.trim() || undefined,
+      earlyExitMode: input.earlyExitMode,
+      earlyExitEval: input.earlyExitEval?.trim() || undefined,
+      earlyExitRule: normalizedEarlyExitRule,
+      earlyExitPlacementIndex: normalizedEarlyExitPlacementIndex
+    },
+    1
+  )
   const storedDevAgent: StoredDevAgent = {
     id,
     kind: "custom",
@@ -920,11 +1017,9 @@ export async function createCustomDevAgent(input: {
     successEval: input.successEval?.trim() || undefined,
     earlyExitMode: input.earlyExitMode,
     earlyExitEval: input.earlyExitEval?.trim() || undefined,
-    earlyExitRule: input.earlyExitRule ? parseDevAgentEarlyExitRule(input.earlyExitRule) : undefined,
-    earlyExitPlacementIndex:
-      typeof input.earlyExitPlacementIndex === "number" && Number.isInteger(input.earlyExitPlacementIndex)
-        ? Math.max(0, input.earlyExitPlacementIndex)
-        : undefined
+    earlyExitRule: normalizedEarlyExitRule,
+    earlyExitPlacementIndex: normalizedEarlyExitPlacementIndex,
+    ashArtifact
   }
 
   await put(`${CUSTOM_DEV_AGENT_PREFIX}${id}.json`, JSON.stringify(storedDevAgent, null, 2), {
@@ -966,6 +1061,7 @@ export async function updateCustomDevAgent(
     return null
   }
   const builtinDefaults = getBuiltinDevAgentDefaults(canonicalDevAgentId)
+  const nextRevision = (existingDevAgent.ashArtifact?.revision ?? 1) + 1
 
   const updatedDevAgent: StoredDevAgent = {
     ...existingDevAgent,
@@ -994,6 +1090,30 @@ export async function updateCustomDevAgent(
         ? Math.max(0, input.earlyExitPlacementIndex)
         : existingDevAgent.earlyExitPlacementIndex
   }
+  updatedDevAgent.ashArtifact = await publishDevAgentAshArtifact(
+    {
+      id: canonicalDevAgentId,
+      name: updatedDevAgent.name,
+      description: updatedDevAgent.description,
+      instructions: updatedDevAgent.instructions,
+      executionMode: updatedDevAgent.executionMode,
+      sandboxBrowser:
+        updatedDevAgent.sandboxBrowser && isDevAgentSandboxBrowser(updatedDevAgent.sandboxBrowser)
+          ? updatedDevAgent.sandboxBrowser
+          : getDefaultSandboxBrowser(updatedDevAgent.executionMode),
+      aiAgent: updatedDevAgent.aiAgent,
+      devServerCommand: updatedDevAgent.devServerCommand,
+      actionSteps: updatedDevAgent.actionSteps,
+      skillRefs: updatedDevAgent.skillRefs,
+      createdAt: updatedDevAgent.createdAt,
+      successEval: updatedDevAgent.successEval,
+      earlyExitMode: updatedDevAgent.earlyExitMode,
+      earlyExitEval: updatedDevAgent.earlyExitEval,
+      earlyExitRule: updatedDevAgent.earlyExitRule,
+      earlyExitPlacementIndex: updatedDevAgent.earlyExitPlacementIndex
+    },
+    nextRevision
+  )
 
   await put(`${CUSTOM_DEV_AGENT_PREFIX}${canonicalDevAgentId}.json`, JSON.stringify(updatedDevAgent, null, 2), {
     access: "public",
@@ -1023,6 +1143,20 @@ export async function incrementDevAgentUsage(devAgentId: string): Promise<void> 
     addRandomSuffix: false,
     allowOverwrite: true
   })
+}
+
+export async function ensureDevAgentAshArtifactPublished(devAgent: DevAgent): Promise<DevAgentAshArtifact> {
+  if (devAgent.ashArtifact?.tarballUrl) {
+    return devAgent.ashArtifact
+  }
+
+  return publishDevAgentAshArtifact(
+    toDevAgentAshInput({
+      ...devAgent,
+      sandboxBrowser: devAgent.sandboxBrowser
+    }),
+    devAgent.ashArtifact?.revision ?? 1
+  )
 }
 
 export function isDevAgentExecutionMode(value: string): value is DevAgentExecutionMode {

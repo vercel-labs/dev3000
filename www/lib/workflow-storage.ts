@@ -21,6 +21,8 @@ export interface WorkflowRun {
   devAgentId?: string
   devAgentName?: string
   devAgentDescription?: string
+  devAgentRevision?: number
+  devAgentSpecHash?: string
   devAgentExecutionMode?: "dev-server" | "preview-pr"
   devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser"
   currentStep?: string // Current step being executed (for live progress)

@@ -773,6 +773,8 @@ interface ProgressContext {
   devAgentId?: string
   devAgentName?: string
   devAgentDescription?: string
+  devAgentRevision?: number
+  devAgentSpecHash?: string
   devAgentExecutionMode?: "dev-server" | "preview-pr"
   devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser"
   isMarketplaceAgent?: boolean
@@ -2515,6 +2517,8 @@ export async function earlyExitReportStep(
     devAgentId: progressContext?.devAgentId,
     devAgentName: devAgentName || progressContext?.devAgentName,
     devAgentDescription: progressContext?.devAgentDescription,
+    devAgentRevision: progressContext?.devAgentRevision,
+    devAgentSpecHash: progressContext?.devAgentSpecHash,
     devAgentExecutionMode: progressContext?.devAgentExecutionMode,
     devAgentSandboxBrowser: progressContext?.devAgentSandboxBrowser,
     workflowType: (progressContext?.workflowType as WorkflowReport["workflowType"]) || "cls-fix",
@@ -3060,6 +3064,8 @@ Did the agent meet the success criteria? Respond with JSON only.`
     devAgentId: progressContext?.devAgentId,
     devAgentName: devAgentName || progressContext?.devAgentName,
     devAgentDescription: progressContext?.devAgentDescription,
+    devAgentRevision: progressContext?.devAgentRevision,
+    devAgentSpecHash: progressContext?.devAgentSpecHash,
     devAgentExecutionMode: devAgentExecutionMode || progressContext?.devAgentExecutionMode,
     devAgentSandboxBrowser: devAgentSandboxBrowser || progressContext?.devAgentSandboxBrowser,
     workflowType,
@@ -3342,6 +3348,8 @@ Constraints:
     id: reportId,
     projectName,
     timestamp: new Date().toISOString(),
+    devAgentRevision: progressContext?.devAgentRevision,
+    devAgentSpecHash: progressContext?.devAgentSpecHash,
     workflowType: (workflowType as WorkflowType) || "design-guidelines",
     customPrompt: workflowType === "prompt" ? customPrompt : undefined,
     analysisTargetType: "url",
