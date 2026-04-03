@@ -3798,6 +3798,7 @@ function resolveClaudeModelSelection(selectedModel?: import("@/lib/dev-agents").
 }
 
 function buildClaudeSystemPrompt({
+  workflowType,
   devUrl,
   startPath,
   projectDir,
@@ -3805,6 +3806,7 @@ function buildClaudeSystemPrompt({
   selectedModelLabel,
   skillLoadInstructions
 }: {
+  workflowType?: string
   devUrl: string
   startPath: string
   projectDir?: string
@@ -3821,6 +3823,12 @@ function buildClaudeSystemPrompt({
     ? `- Use the installed d3k skill for browser control, diagnostics, and runtime inspection whenever it helps.
 - ${browserGuidance}`
     : `- ${browserGuidance}`
+  const workflowSpecificRules =
+    workflowType === "cls-fix"
+      ? `- For CLS runs, treat the workflow-provided baseline metrics and screenshots as the primary evidence.
+- Stay code-first and avoid repeated browser or diagnose loops unless that evidence looks inconsistent.
+- Once you identify the likely shift source, make the fix immediately and keep validation targeted.`
+      : ""
 
   return `You are Claude Code running inside a Vercel Sandbox.
 
@@ -3835,6 +3843,9 @@ Execution rules:
 - Work directly in the sandbox repo using your normal code-editing and shell abilities.
 ${executionRuntimeLines}
 - Prefer targeted, evidence-driven fixes over broad refactors.
+- Avoid burning turns on repetitive tool use when the runtime already supplied the key evidence.
+- Keep momentum toward concrete code changes.
+${workflowSpecificRules}
 - Validate meaningful changes before you conclude.
 - Summaries should include concrete changes, validation evidence, and remaining risks.`
 }
@@ -4105,7 +4116,7 @@ function buildClsTurnPrompts({
   return [
     {
       label: "Agent implementation",
-      maxTurns: 14,
+      maxTurns: 10,
       prompt: `Fix the CLS problem on ${startPath}. Dev URL: ${devUrl}
 
 Use ${skillLoadInstructions} as relevant.
@@ -4118,6 +4129,8 @@ Requirements:
 - Prefer the smallest fix that removes the shift at its source.
 - Do not redo the full baseline measurement loop; the workflow runtime will perform final verification after this step.
 - Use targeted smoke validation only when it materially reduces risk.
+- Start with code search, not browser loops: look for delayed content, conditional null renders, missing reserved space, missing dimensions, or elements inserted after a timeout.
+- Use browser or diagnose tooling at most once only if the code cause is still unclear after targeted code inspection.
 - Prefer common CLS fixes such as reserving space, adding stable dimensions, or hiding late content without shifting layout.
 - Finish with a concise summary of the files changed and why the CLS should improve.`
     }
@@ -4853,6 +4866,7 @@ async function runAgentWithDiagnoseTool(
   }
 
   const systemPrompt = buildClaudeSystemPrompt({
+    workflowType: workflowTypeForPrompt,
     devUrl,
     startPath,
     projectDir,

@@ -1,4 +1,4 @@
-import { ChevronRight, ExternalLink, ShieldCheck } from "lucide-react"
+import { AlertCircle, ChevronRight, ExternalLink, ShieldCheck } from "lucide-react"
 import type { Metadata } from "next"
 import Image from "next/image"
 import { redirect } from "next/navigation"
@@ -603,6 +603,70 @@ async function WorkflowReportPageData({ params }: { params: Promise<{ id: string
 
   const ownerRouteContext = isOwner ? await getDefaultDevAgentsRouteContext() : null
   const canUseDashboardShell = Boolean(ownerRouteContext?.selectedTeam)
+
+  if (!run.reportBlobUrl && run.status === "failure") {
+    const recentLogs = Array.isArray(run.progressLogs) ? run.progressLogs.slice(-10) : []
+    const failure = (
+      <div className="space-y-6">
+        <div>
+          <div className="text-xs uppercase tracking-wide text-muted-foreground">Run failed</div>
+          <h1 className="mt-2 text-3xl font-bold">Run Report: {run.devAgentName || "Dev Agent"} Dev Agent</h1>
+          {run.projectName ? <p className="mt-1 text-sm text-muted-foreground">Project: {run.projectName}</p> : null}
+        </div>
+
+        <div className="rounded-lg border border-border bg-card p-5">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="mt-0.5 size-5 shrink-0 text-destructive" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <div className="text-sm font-medium text-foreground">
+                This run failed before the final report was generated.
+              </div>
+              <p className="whitespace-pre-wrap break-words text-sm text-muted-foreground">
+                {run.error || "The workflow ended in a failure state."}
+              </p>
+              {run.sandboxUrl ? (
+                <p className="text-xs text-muted-foreground">
+                  Sandbox:{" "}
+                  <a
+                    href={run.sandboxUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-foreground underline decoration-[#333] underline-offset-4 hover:decoration-[#666]"
+                  >
+                    {run.sandboxUrl}
+                  </a>
+                </p>
+              ) : null}
+            </div>
+          </div>
+        </div>
+
+        {recentLogs.length > 0 ? (
+          <div className="rounded-lg border border-border bg-card p-5">
+            <div className="mb-3 text-sm font-medium text-foreground">Latest logs</div>
+            <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded-md border border-border bg-background p-4 text-xs text-muted-foreground">
+              {recentLogs.join("\n")}
+            </pre>
+          </div>
+        ) : null}
+      </div>
+    )
+
+    if (canUseDashboardShell && ownerRouteContext?.selectedTeam) {
+      return (
+        <DevAgentsDashboardShell
+          teams={ownerRouteContext.teams}
+          selectedTeam={ownerRouteContext.selectedTeam}
+          title={run.projectName}
+          subtitle="Run failed"
+        >
+          {failure}
+        </DevAgentsDashboardShell>
+      )
+    }
+
+    return failure
+  }
 
   if (!run.reportBlobUrl) {
     const pending = (
