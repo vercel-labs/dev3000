@@ -3942,9 +3942,6 @@ function buildClsActionStepGuidance(
         lines.push(`${index + 1}. Re-check the relevant visual/metric evidence after your fix before you conclude.`)
         break
       case "send-prompt":
-        if (step.config.prompt?.trim()) {
-          lines.push(`${index + 1}. ${step.config.prompt.trim()}`)
-        }
         break
       default:
         break
@@ -4116,7 +4113,7 @@ function buildClsTurnPrompts({
   return [
     {
       label: "Agent implementation",
-      maxTurns: 10,
+      maxTurns: 6,
       prompt: `Fix the CLS problem on ${startPath}. Dev URL: ${devUrl}
 
 Use ${skillLoadInstructions} as relevant.
@@ -4125,13 +4122,13 @@ ${baselineBlock}${instructionBlock}${runSpecificBlock}
 
 Requirements:
 - Be action-oriented. Diagnose only enough to identify the shift source, then make the fix.
-- Make concrete code changes when the cause is clear.
+- Do not redo baseline measurement, video capture, or repeated browser inspection. The workflow runtime already captured that evidence and will perform final verification.
+- Stay code-first. Start with targeted code search only: look for delayed content, conditional null renders, missing reserved space, missing dimensions, elements inserted after a timeout, or components that expand after hydration.
+- Inspect only a small number of likely files, then edit. Do not spend turns on broad repo exploration.
+- Do not use browser or diagnose tooling unless the cause is still unclear after targeted code inspection.
 - Prefer the smallest fix that removes the shift at its source.
-- Do not redo the full baseline measurement loop; the workflow runtime will perform final verification after this step.
-- Use targeted smoke validation only when it materially reduces risk.
-- Start with code search, not browser loops: look for delayed content, conditional null renders, missing reserved space, missing dimensions, or elements inserted after a timeout.
-- Use browser or diagnose tooling at most once only if the code cause is still unclear after targeted code inspection.
-- Prefer common CLS fixes such as reserving space, adding stable dimensions, or hiding late content without shifting layout.
+- Prefer common CLS fixes such as reserving space, adding stable dimensions, rendering stable placeholders/skeletons, or preventing late content from pushing existing layout.
+- If the likely cause is a late-inserted banner/section, reserve its space or make its initial render layout-stable instead of continuing to explore.
 - Finish with a concise summary of the files changed and why the CLS should improve.`
     }
   ]
@@ -4844,9 +4841,11 @@ async function runAgentWithDiagnoseTool(
   const modelSelection = resolveClaudeModelSelection(devAgentAiAgent)
   const selectedModelLabel = getDevAgentModelLabel(modelSelection.modelId)
   const collapsedClsActionStepGuidance =
-    workflowTypeForPrompt === "cls-fix" && devAgentActionSteps?.length
-      ? buildClsActionStepGuidance(devAgentActionSteps)
-      : null
+    workflowTypeForPrompt === "cls-fix"
+      ? null
+      : devAgentActionSteps?.length
+        ? buildClsActionStepGuidance(devAgentActionSteps)
+        : null
   const effectiveDevAgentInstructions = [devAgentInstructions?.trim(), collapsedClsActionStepGuidance]
     .filter((value): value is string => Boolean(value))
     .join("\n\n")
