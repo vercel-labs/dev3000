@@ -1078,6 +1078,7 @@ chmod 0600 "$HOME/.npmrc" ".npmrc"`
     }
 
     if (!skipsDevServerStartup) {
+      await reportProgress(`Starting ${usesD3kRuntime ? "d3k runtime" : "dev server"}...`)
       if (debug) console.log(`  🚀 Starting dev server with: ${resolvedDevCommand}`)
       if (debug) console.log(`  📂 Working directory: ${sandboxCwd}`)
 
@@ -1104,6 +1105,7 @@ chmod 0600 "$HOME/.npmrc" ".npmrc"`
         console.log(`  ✅ ${usesD3kRuntime ? "d3k runtime" : "custom dev server"} started in detached mode`)
       }
 
+      await reportProgress("Waiting for dev server on port 3000...")
       if (debug) console.log("  ⏳ Waiting for d3k to start...")
       await new Promise((resolve) => setTimeout(resolve, 5000))
 
@@ -1164,12 +1166,17 @@ chmod 0600 "$HOME/.npmrc" ".npmrc"`
 
     const devUrl = skipsDevServerStartup ? "" : sandbox.domain(3000)
     if (!skipsDevServerStartup && debug) console.log(`  ✅ Dev server ready: ${devUrl}`)
+    if (!skipsDevServerStartup) {
+      await reportProgress("Dev server responded on port 3000")
+    }
 
     if (!skipsDevServerStartup && usesD3kRuntime) {
+      await reportProgress("Waiting for d3k browser session...")
       if (debug) console.log("  ⏳ Waiting for d3k to initialize Chrome and populate CDP URL...")
       const cdpUrl = await waitForCdpUrl(sandbox, 30000, debug)
       if (cdpUrl) {
         if (debug) console.log(`  ✅ CDP URL ready: ${cdpUrl}`)
+        await reportProgress("d3k browser session ready")
         if (debug) console.log("  ⏳ Waiting for d3k to complete page navigation...")
         await waitForPageNavigation(sandbox, 30000, debug)
       } else {
@@ -2157,6 +2164,7 @@ chmod 0600 "$HOME/.npmrc" ".npmrc"`
     }
 
     if (!skipsDevServerStartup) {
+      await reportProgress(`Starting ${usesD3kRuntime ? "d3k runtime" : "dev server"}...`)
       const chromiumPath = "/usr/bin/chromium"
       const startupCommand = usesD3kRuntime
         ? buildD3kLaunchCommand(resolvedDevCommand, chromiumPath)
@@ -2171,12 +2179,16 @@ chmod 0600 "$HOME/.npmrc" ".npmrc"`
         detached: true
       })
 
+      await reportProgress("Waiting for dev server on port 3000...")
       await new Promise((resolve) => setTimeout(resolve, 5000))
       await waitForServer(sandbox, 3000, 120000, debug)
 
+      await reportProgress("Dev server responded on port 3000")
       if (usesD3kRuntime) {
+        await reportProgress("Waiting for d3k browser session...")
         const cdpUrl = await waitForCdpUrl(sandbox, 30000, debug)
         if (cdpUrl) {
+          await reportProgress("d3k browser session ready")
           await waitForPageNavigation(sandbox, 30000, debug)
         }
       }
