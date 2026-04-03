@@ -2595,6 +2595,7 @@ export async function earlyExitReportStep(
   devAgentEarlyExitEval?: string,
   devAgentEarlyExitRule?: DevAgentEarlyExitRule
 ): Promise<{
+  sandboxId: string
   reportBlobUrl: string
   reportId: string
   beforeCls: number | null
@@ -2678,6 +2679,7 @@ export async function earlyExitReportStep(
   workflowLog(`[Early Exit] Report saved: ${blob.url}`)
 
   return {
+    sandboxId: observation.sandboxId,
     reportBlobUrl: blob.url,
     reportId,
     beforeCls: observation.beforeCls,
@@ -2727,6 +2729,7 @@ export async function agentFixLoopStep(
   devAgentSuccessEval?: string,
   observation?: ObserveResult
 ): Promise<{
+  sandboxId: string
   reportBlobUrl: string
   reportId: string
   beforeCls: number | null
@@ -3259,6 +3262,7 @@ Did the agent meet the success criteria? Respond with JSON only.`
   }
 
   return {
+    sandboxId: sandbox.sandboxId,
     reportBlobUrl: blob.url,
     reportId,
     beforeCls: effectiveBeforeClsScore,
@@ -3284,6 +3288,7 @@ export async function urlAuditStep(
   fromSnapshot?: boolean,
   snapshotId?: string
 ): Promise<{
+  sandboxId: string
   reportBlobUrl: string
   reportId: string
   beforeCls: number | null
@@ -3495,6 +3500,7 @@ Constraints:
   await updateProgress(progressContext, 4, "URL audit complete. Preparing report...", targetUrl)
 
   return {
+    sandboxId,
     reportBlobUrl: blob.url,
     reportId,
     beforeCls: null,

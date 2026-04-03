@@ -37,6 +37,7 @@ interface InitResult {
 }
 
 interface FixResult {
+  sandboxId: string
   reportBlobUrl: string
   reportId: string
   beforeCls: number | null
@@ -58,6 +59,7 @@ interface V0DevAgentSourceResult {
 }
 
 interface UrlAuditResult {
+  sandboxId: string
   reportBlobUrl: string
   reportId: string
   beforeCls: number | null
@@ -354,7 +356,7 @@ export async function cloudFixWorkflow(params: {
         )
 
         // Cleanup sandbox
-        await cleanupSandbox(initResult.sandboxId)
+        await cleanupSandbox(earlyResult.sandboxId)
 
         // Save final "done" status
         if (progressContext) {
@@ -374,6 +376,8 @@ export async function cloudFixWorkflow(params: {
       }
     }
 
+    let activeSandboxId = observation?.sandboxId ?? initResult.sandboxId
+
     let fixResult: FixResult | UrlAuditResult
     if (analysisTargetType === "url") {
       if (!publicUrl) {
@@ -381,7 +385,7 @@ export async function cloudFixWorkflow(params: {
       }
       workflowLog("[Workflow] Step 2: URL audit analysis...")
       fixResult = await urlAuditLoop(
-        initResult.sandboxId,
+        activeSandboxId,
         initResult.devUrl,
         publicUrl,
         workflowType,
@@ -404,7 +408,7 @@ export async function cloudFixWorkflow(params: {
       )
 
       fixResult = await agentFixLoop(
-        initResult.sandboxId,
+        activeSandboxId,
         initResult.devUrl,
         observation?.beforeCls ?? initResult.beforeCls,
         observation?.beforeGrade ?? initResult.beforeGrade,
@@ -445,6 +449,8 @@ export async function cloudFixWorkflow(params: {
       )
     }
 
+    activeSandboxId = fixResult.sandboxId
+
     workflowLog(`[Workflow] Result: ${fixResult.status}, After CLS: ${fixResult.afterCls}`)
 
     const turbopackPrGate = await evaluateTurbopackPrGate(
@@ -468,7 +474,7 @@ export async function cloudFixWorkflow(params: {
     ) {
       workflowLog("[Workflow] Step 2.5: Capturing before/after screenshots...")
       prScreenshots = await captureScreenshotsForPR(
-        initResult.sandboxId,
+        activeSandboxId,
         productionUrl,
         initResult.devUrl,
         projectName,
@@ -497,7 +503,7 @@ export async function cloudFixWorkflow(params: {
       workflowLog("[Workflow] Step 3: Creating GitHub PR...")
 
       const prStepResult = await createPullRequest(
-        initResult.sandboxId,
+        activeSandboxId,
         githubPat,
         repoOwner,
         repoName,
@@ -539,7 +545,7 @@ export async function cloudFixWorkflow(params: {
     }
 
     // Cleanup sandbox
-    await cleanupSandbox(initResult.sandboxId)
+    await cleanupSandbox(activeSandboxId)
 
     // Save final "done" status (this is crucial since API returns immediately)
     if (progressContext) {
