@@ -240,32 +240,43 @@ export function ReportPending({
         {!hasError && isHydrated && showStatus ? (
           <div className="mb-3 text-xs text-muted-foreground">{statusText}</div>
         ) : null}
-        <div className="space-y-2">
-          {STEP_LABELS.map((label, index) => {
-            const isDone = activeIndex !== null && index < activeIndex
-            const isActive = activeIndex !== null && index === activeIndex
-            return (
+        {isHydrated ? (
+          <div className="space-y-2">
+            {STEP_LABELS.map((label, index) => {
+              const isDone = activeIndex !== null && index < activeIndex
+              const isActive = activeIndex !== null && index === activeIndex
+              return (
+                <div key={label} className="flex items-center gap-3 text-sm">
+                  {isDone ? (
+                    <CheckCircle2 className="h-3.5 w-3.5 text-foreground/80" />
+                  ) : (
+                    <span className={`h-2.5 w-2.5 rounded-full ${isActive ? "bg-blue-500" : "bg-muted"}`} />
+                  )}
+                  <span
+                    className={
+                      isActive && !hasError
+                        ? "text-shimmer font-medium inline-block"
+                        : isDone
+                          ? "text-foreground"
+                          : "text-muted-foreground"
+                    }
+                  >
+                    {label}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {STEP_LABELS.map((label) => (
               <div key={label} className="flex items-center gap-3 text-sm">
-                {isDone ? (
-                  <CheckCircle2 className="h-3.5 w-3.5 text-foreground/80" />
-                ) : (
-                  <span className={`h-2.5 w-2.5 rounded-full ${isActive ? "bg-blue-500" : "bg-muted"}`} />
-                )}
-                <span
-                  className={
-                    isActive && !hasError
-                      ? "text-shimmer font-medium inline-block"
-                      : isDone
-                        ? "text-foreground"
-                        : "text-muted-foreground"
-                  }
-                >
-                  {label}
-                </span>
+                <span className="h-2.5 w-2.5 rounded-full bg-muted" />
+                <Skeleton className="h-4 w-40" />
               </div>
-            )
-          })}
-        </div>
+            ))}
+          </div>
+        )}
         {progressLogs.length > 0 && (
           <div className="mt-4">
             <div className="text-xs font-medium text-muted-foreground mb-2">Live Logs</div>
