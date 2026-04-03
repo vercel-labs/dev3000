@@ -4104,34 +4104,21 @@ function buildClsTurnPrompts({
 
   return [
     {
-      label: "Agent analysis",
-      maxTurns: 12,
-      prompt: `Analyze the CLS problem on ${startPath}. Dev URL: ${devUrl}
-
-Use ${skillLoadInstructions} as relevant.
-
-${baselineBlock}${instructionBlock}${runSpecificBlock}
-
-Rules:
-- Do not make code changes in this step.
-- Focus on identifying what shifts, why it shifts, and the highest-confidence fix.
-- Use the provided runtime evidence first; only gather extra browser evidence if needed to resolve ambiguity.
-- End with a concise implementation plan naming the exact file(s) you will edit next and the concrete fix you will make.`
-    },
-    {
       label: "Agent implementation",
-      maxTurns: 20,
-      prompt: `Implement the highest-confidence CLS fix for ${startPath}. Dev URL: ${devUrl}
+      maxTurns: 14,
+      prompt: `Fix the CLS problem on ${startPath}. Dev URL: ${devUrl}
 
 Use ${skillLoadInstructions} as relevant.
 
 ${baselineBlock}${instructionBlock}${runSpecificBlock}
 
 Requirements:
+- Be action-oriented. Diagnose only enough to identify the shift source, then make the fix.
 - Make concrete code changes when the cause is clear.
 - Prefer the smallest fix that removes the shift at its source.
 - Do not redo the full baseline measurement loop; the workflow runtime will perform final verification after this step.
 - Use targeted smoke validation only when it materially reduces risk.
+- Prefer common CLS fixes such as reserving space, adding stable dimensions, or hiding late content without shifting layout.
 - Finish with a concise summary of the files changed and why the CLS should improve.`
     }
   ]
