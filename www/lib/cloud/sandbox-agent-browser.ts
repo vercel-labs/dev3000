@@ -132,6 +132,7 @@ export class SandboxAgentBrowser {
   private options: Required<Pick<SandboxAgentBrowserOptions, "cwd" | "packageManager" | "debug" | "timeout">> &
     SandboxAgentBrowserOptions
   private isInstalled = false
+  private commandRunner: "agent-browser" | "bunx" | "npx" = "agent-browser"
 
   private constructor(sandbox: Sandbox, options: SandboxAgentBrowserOptions) {
     this.sandbox = sandbox
@@ -166,55 +167,58 @@ export class SandboxAgentBrowser {
   async ensureInstalled(): Promise<void> {
     if (this.isInstalled) return
 
-    this.log("Installing agent-browser...")
-
     const { packageManager, cwd } = this.options
-    const addCmd = "add"
+    const globalBinary = await runCommand(this.sandbox, "sh", [
+      "-c",
+      "export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; command -v agent-browser || true"
+    ])
+
+    if (globalBinary.stdout.trim()) {
+      this.commandRunner = "agent-browser"
+      this.isInstalled = true
+      this.log(`Using existing agent-browser binary at ${globalBinary.stdout.trim()}`)
+      return
+    }
+
+    this.log("Installing agent-browser globally...")
 
     if (packageManager === "bun") {
       await ensureBunInstalled(this.sandbox, this.options.debug)
     }
 
-    const result =
-      packageManager === "bun"
-        ? await runCommand(
-            this.sandbox,
-            "sh",
-            [
-              "-c",
-              `export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; bun ${[addCmd, "agent-browser@latest"]
-                .map(shellEscape)
-                .join(" ")}`
-            ],
-            { cwd }
-          )
-        : await runCommand(this.sandbox, packageManager, [addCmd, "agent-browser@latest"], { cwd })
-
-    if (result.exitCode !== 0) {
-      this.log(`Install stderr: ${result.stderr}`)
-      throw new Error(`Failed to install agent-browser: exit code ${result.exitCode}`)
-    }
-
-    // Run agent-browser install to set up Playwright browsers
-    this.log("Running agent-browser install...")
     const installResult =
       packageManager === "bun"
         ? await runCommand(
             this.sandbox,
             "sh",
-            ["-c", "export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; bunx agent-browser install"],
-            {
-              cwd
-            }
+            ["-c", "export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; bun add -g agent-browser@latest"],
+            { cwd }
           )
-        : await runCommand(this.sandbox, "npx", ["agent-browser", "install"], { cwd })
+        : packageManager === "pnpm"
+          ? await runCommand(this.sandbox, "pnpm", ["i", "-g", "agent-browser@latest"], { cwd })
+          : packageManager === "yarn"
+            ? await runCommand(this.sandbox, "yarn", ["global", "add", "agent-browser@latest"], { cwd })
+            : await runCommand(this.sandbox, "npm", ["i", "-g", "agent-browser@latest"], { cwd })
 
     if (installResult.exitCode !== 0) {
-      this.log(`agent-browser install stderr: ${installResult.stderr}`)
-      // Don't throw - install might partially succeed
+      this.log(`Install stderr: ${installResult.stderr}`)
+      throw new Error(`Failed to install agent-browser: exit code ${installResult.exitCode}`)
+    }
+
+    this.log("Running agent-browser install...")
+    const playwrightInstall = await runCommand(
+      this.sandbox,
+      "sh",
+      ["-c", "export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; agent-browser install"],
+      { cwd }
+    )
+
+    if (playwrightInstall.exitCode !== 0) {
+      this.log(`agent-browser install stderr: ${playwrightInstall.stderr}`)
       this.log("Warning: agent-browser install had issues, continuing anyway")
     }
 
+    this.commandRunner = "agent-browser"
     this.isInstalled = true
     this.log("agent-browser installed successfully")
   }
@@ -245,27 +249,36 @@ export class SandboxAgentBrowser {
   private async exec(command: string[]): Promise<AgentBrowserResult> {
     const args = [...this.buildArgs(), ...command]
     const fullCommand =
-      this.options.packageManager === "bun"
-        ? `bunx agent-browser ${args.join(" ")}`
-        : `npx agent-browser ${args.join(" ")}`
+      this.commandRunner === "agent-browser"
+        ? `agent-browser ${args.join(" ")}`
+        : this.commandRunner === "bunx"
+          ? `bunx agent-browser ${args.join(" ")}`
+          : `npx agent-browser ${args.join(" ")}`
 
     this.log(`Executing: ${fullCommand}`)
 
     const result =
-      this.options.packageManager === "bun"
+      this.commandRunner === "agent-browser"
         ? await runCommand(
             this.sandbox,
             "sh",
-            [
-              "-c",
-              `export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; bunx agent-browser ${args.map(shellEscape).join(" ")}`
-            ],
+            ["-c", `export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; agent-browser ${args.map(shellEscape).join(" ")}`],
             { cwd: this.options.cwd, timeout: this.options.timeout }
           )
-        : await runCommand(this.sandbox, "npx", ["agent-browser", ...args], {
-            cwd: this.options.cwd,
-            timeout: this.options.timeout
-          })
+        : this.commandRunner === "bunx"
+          ? await runCommand(
+              this.sandbox,
+              "sh",
+              [
+                "-c",
+                `export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; bunx agent-browser ${args.map(shellEscape).join(" ")}`
+              ],
+              { cwd: this.options.cwd, timeout: this.options.timeout }
+            )
+          : await runCommand(this.sandbox, "npx", ["agent-browser", ...args], {
+              cwd: this.options.cwd,
+              timeout: this.options.timeout
+            })
 
     this.log(`Exit code: ${result.exitCode}`)
     if (result.stdout) this.log(`stdout: ${result.stdout.substring(0, 500)}`)

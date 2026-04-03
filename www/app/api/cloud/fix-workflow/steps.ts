@@ -737,19 +737,21 @@ async function uploadSandboxScreenshot(
   }
 }
 
-async function captureBaselineScreenshot(
+async function capturePhaseScreenshot(
   sandbox: Sandbox,
   route: string,
   browserMode: CloudBrowserMode,
-  projectName: string
+  projectName: string,
+  kind: string,
+  label: string
 ): Promise<Array<{ timestamp: number; blobUrl: string; label?: string }>> {
-  const screenshotPath = `/tmp/baseline-${Date.now()}.png`
+  const screenshotPath = `/tmp/${kind}-${Date.now()}.png`
   const screenshotResult = await _screenshotBrowser(sandbox, screenshotPath, { fullPage: false }, browserMode)
   if (!screenshotResult.success) {
     return []
   }
 
-  const blobUrl = await uploadSandboxScreenshot(sandbox, screenshotPath, projectName, "baseline", route)
+  const blobUrl = await uploadSandboxScreenshot(sandbox, screenshotPath, projectName, kind, route)
   if (!blobUrl) {
     return []
   }
@@ -758,7 +760,7 @@ async function captureBaselineScreenshot(
     {
       timestamp: Date.now(),
       blobUrl,
-      label: "Baseline"
+      label
     }
   ]
 }
@@ -2288,11 +2290,13 @@ export async function observeBaselineStep(
 
   if (effectiveBeforeScreenshots.length === 0) {
     timer.start("Capture baseline screenshot")
-    effectiveBeforeScreenshots = await captureBaselineScreenshot(
+    effectiveBeforeScreenshots = await capturePhaseScreenshot(
       sandbox,
       startPath,
       cloudBrowserMode,
-      progressContext?.projectName || "workflow"
+      progressContext?.projectName || "workflow",
+      "baseline",
+      "Before"
     )
     timer.end()
     workflowLog(`[Observe] Captured ${effectiveBeforeScreenshots.length} baseline screenshot(s)`)
@@ -2855,6 +2859,22 @@ export async function agentFixLoopStep(
 
     timer.start("Fetch final CLS data")
     finalCls = await fetchClsData(sandbox)
+    if (finalCls.screenshots.length === 0) {
+      timer.start("Capture after screenshot")
+      const afterScreenshots = await capturePhaseScreenshot(
+        sandbox,
+        startPath,
+        cloudBrowserMode,
+        projectName,
+        "after",
+        "After"
+      )
+      if (afterScreenshots.length > 0) {
+        finalCls.screenshots = afterScreenshots
+      }
+      timer.end()
+      workflowLog(`[Agent] Captured ${finalCls.screenshots.length} after screenshot(s)`)
+    }
   }
 
   // Get git diff (exclude package.json which gets modified by sandbox initialization)

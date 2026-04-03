@@ -94,7 +94,7 @@ export class StepTimer {
 // After restoring from base snapshot, we clone the repo and install deps.
 
 const BASE_SNAPSHOT_KEY = "d3k-snapshots/base-snapshot.json"
-const BASE_SNAPSHOT_VERSION = "2026-02-11-bun"
+const BASE_SNAPSHOT_VERSION = "2026-04-03-bun"
 
 /**
  * Metadata stored for the base snapshot
@@ -2165,7 +2165,18 @@ chmod 0600 "$HOME/.npmrc" ".npmrc"`
 
     if (!skipsDevServerStartup) {
       await reportProgress(`Starting ${usesD3kRuntime ? "d3k runtime" : "dev server"}...`)
-      const chromiumPath = "/usr/bin/chromium"
+      let chromiumPath = "/usr/bin/chromium"
+      if (usesD3kRuntime) {
+        try {
+          chromiumPath = await SandboxChrome.getExecutablePath(sandbox, { cwd: sandboxCwd, debug })
+        } catch (error) {
+          if (debug) {
+            console.log(
+              `  ⚠️ Could not resolve Chromium path in snapshot sandbox, using fallback ${chromiumPath}: ${error instanceof Error ? error.message : String(error)}`
+            )
+          }
+        }
+      }
       const startupCommand = usesD3kRuntime
         ? buildD3kLaunchCommand(resolvedDevCommand, chromiumPath)
         : resolvedDevCommand
