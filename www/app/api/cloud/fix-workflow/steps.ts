@@ -1744,7 +1744,7 @@ export async function initSandboxStep(
   const developmentEnv: Record<string, string> = {}
   let developmentEnvLoadFailed = false
   const envFetchTokens = Array.from(
-    new Set([process.env.VERCEL_TOKEN, process.env.VERCEL_OIDC_TOKEN, vercelOidcToken].filter(Boolean) as string[])
+    new Set([vercelOidcToken, process.env.VERCEL_TOKEN, process.env.VERCEL_OIDC_TOKEN].filter(Boolean) as string[])
   )
 
   if (projectId && envFetchTokens.length > 0) {
