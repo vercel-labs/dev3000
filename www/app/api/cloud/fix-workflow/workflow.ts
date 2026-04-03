@@ -984,6 +984,9 @@ async function saveDoneStatus(
   "use step"
   const { listWorkflowRuns, saveWorkflowRun } = await import("@/lib/workflow-storage")
   const existingRun = (await listWorkflowRuns(progressContext.userId)).find((run) => run.id === progressContext.runId)
+  const progressLogs = [...(existingRun?.progressLogs ?? []), ...(progressContext.progressLogs ?? [])]
+    .filter((line, index, arr) => Boolean(line) && (index === 0 || arr[index - 1] !== line))
+    .slice(-120)
   await saveWorkflowRun({
     ...existingRun,
     id: progressContext.runId,
@@ -1013,7 +1016,7 @@ async function saveDoneStatus(
     prUrl: prUrl || undefined,
     prError: prError || undefined,
     sandboxUrl: sandboxUrl || progressContext.sandboxUrl || existingRun?.sandboxUrl || undefined,
-    progressLogs: progressContext.progressLogs ?? existingRun?.progressLogs
+    progressLogs: progressLogs.length > 0 ? progressLogs : undefined
   })
 }
 
@@ -1022,6 +1025,9 @@ async function saveFailureStatus(progressContext: ProgressContext, errorMessage:
   try {
     const { listWorkflowRuns, saveWorkflowRun } = await import("@/lib/workflow-storage")
     const existingRun = (await listWorkflowRuns(progressContext.userId)).find((run) => run.id === progressContext.runId)
+    const progressLogs = [...(existingRun?.progressLogs ?? []), ...(progressContext.progressLogs ?? [])]
+      .filter((line, index, arr) => Boolean(line) && (index === 0 || arr[index - 1] !== line))
+      .slice(-120)
     await saveWorkflowRun({
       ...existingRun,
       id: progressContext.runId,
@@ -1049,7 +1055,7 @@ async function saveFailureStatus(progressContext: ProgressContext, errorMessage:
       completedAt: new Date().toISOString(),
       error: errorMessage,
       sandboxUrl: progressContext.sandboxUrl ?? existingRun?.sandboxUrl,
-      progressLogs: progressContext.progressLogs ?? existingRun?.progressLogs
+      progressLogs: progressLogs.length > 0 ? progressLogs : undefined
     })
     console.log(`[Workflow] Saved failure status for ${progressContext.runId}`)
   } catch (saveErr) {

@@ -1062,13 +1062,16 @@ chmod 0600 "$HOME/.npmrc" ".npmrc"`
         resolvedPackageManager === "bun"
           ? await runCommandWithLogs(sandbox, {
               cmd: "sh",
-              args: ["-c", "export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; bun add -g /vercel/sandbox"],
+              args: [
+                "-c",
+                "export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; bun add -g /vercel/sandbox /vercel/sandbox/packages/d3k-linux-x64"
+              ],
               stdout: debug ? process.stdout : undefined,
               stderr: debug ? process.stderr : undefined
             })
           : await runCommandWithLogs(sandbox, {
               cmd: "pnpm",
-              args: ["i", "-g", "/vercel/sandbox"],
+              args: ["i", "-g", "/vercel/sandbox", "/vercel/sandbox/packages/d3k-linux-x64"],
               stdout: debug ? process.stdout : undefined,
               stderr: debug ? process.stderr : undefined
             })
@@ -1089,13 +1092,16 @@ chmod 0600 "$HOME/.npmrc" ".npmrc"`
           resolvedPackageManager === "bun"
             ? await runCommandWithLogs(sandbox, {
                 cmd: "sh",
-                args: ["-c", "export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; bun add -g dev3000@latest"],
+                args: [
+                  "-c",
+                  "export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; bun add -g dev3000@latest @d3k/linux-x64@latest"
+                ],
                 stdout: debug ? process.stdout : undefined,
                 stderr: debug ? process.stderr : undefined
               })
             : await runCommandWithLogs(sandbox, {
                 cmd: "pnpm",
-                args: ["i", "-g", "dev3000@latest"],
+                args: ["i", "-g", "dev3000@latest", "@d3k/linux-x64@latest"],
                 stdout: debug ? process.stdout : undefined,
                 stderr: debug ? process.stderr : undefined
               })
@@ -1957,7 +1963,7 @@ async function createAndSaveBaseSnapshot(
     // Install d3k globally from the checked-out repo first so sandbox runs use the current commit.
     if (debug) console.log("  📦 Installing d3k globally from repo checkout...")
     await reportProgress("Installing d3k in shared snapshot...")
-    let d3kInstall = await runCmd("pnpm", ["i", "-g", "/vercel/sandbox"])
+    let d3kInstall = await runCmd("pnpm", ["i", "-g", "/vercel/sandbox", "/vercel/sandbox/packages/d3k-linux-x64"])
     let d3kVerify =
       d3kInstall.exitCode === 0
         ? await runCmd("sh", ["-c", "export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; d3k --version"])
@@ -1971,7 +1977,7 @@ async function createAndSaveBaseSnapshot(
           `  ⚠️ Local d3k install failed validation, falling back to npm (dev3000@latest): ${(d3kVerify.stderr || d3kVerify.stdout || d3kInstall.stderr).slice(-400)}`
         )
       }
-      d3kInstall = await runCmd("pnpm", ["i", "-g", "dev3000@latest"])
+      d3kInstall = await runCmd("pnpm", ["i", "-g", "dev3000@latest", "@d3k/linux-x64@latest"])
     }
     if (d3kInstall.exitCode !== 0) {
       throw new Error(`d3k installation failed: ${d3kInstall.stderr}`)

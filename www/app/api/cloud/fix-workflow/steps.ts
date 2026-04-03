@@ -793,6 +793,15 @@ function buildProgressLogLine(message: string, timestamp = new Date().toISOStrin
   return `${timestamp}${PROGRESS_LOG_DELIMITER}${message}`
 }
 
+function mergeProgressLogs(primary: string[] | undefined, secondary: string[] | undefined, limit: number): string[] {
+  const merged: string[] = []
+  for (const line of [...(secondary ?? []), ...(primary ?? [])]) {
+    if (!line || merged[merged.length - 1] === line) continue
+    merged.push(line)
+  }
+  return merged.slice(-limit)
+}
+
 // Helper to update workflow progress
 async function updateProgress(
   ctx: ProgressContext | null | undefined,
@@ -807,12 +816,11 @@ async function updateProgress(
     ctx.activeCurrentStep = currentStep
     ctx.sandboxUrl = sandboxUrl ?? ctx.sandboxUrl ?? existingRun?.sandboxUrl
     const nextLogLine = buildProgressLogLine(currentStep)
-    const existingLogs =
-      Array.isArray(ctx.progressLogs) && ctx.progressLogs.length > 0
-        ? ctx.progressLogs
-        : Array.isArray(existingRun?.progressLogs)
-          ? existingRun.progressLogs
-          : []
+    const existingLogs = mergeProgressLogs(
+      Array.isArray(ctx.progressLogs) ? ctx.progressLogs : undefined,
+      Array.isArray(existingRun?.progressLogs) ? existingRun.progressLogs : undefined,
+      80
+    )
     const progressLogs =
       existingLogs[existingLogs.length - 1] === nextLogLine
         ? existingLogs.slice(-40)
@@ -848,12 +856,11 @@ async function appendProgressLog(ctx: ProgressContext | null | undefined, messag
   try {
     const existingRun = (await listWorkflowRuns(ctx.userId)).find((run) => run.id === ctx.runId)
     const nextLogLine = buildProgressLogLine(message)
-    const existingLogs =
-      Array.isArray(ctx.progressLogs) && ctx.progressLogs.length > 0
-        ? ctx.progressLogs
-        : Array.isArray(existingRun?.progressLogs)
-          ? existingRun.progressLogs
-          : []
+    const existingLogs = mergeProgressLogs(
+      Array.isArray(ctx.progressLogs) ? ctx.progressLogs : undefined,
+      Array.isArray(existingRun?.progressLogs) ? existingRun.progressLogs : undefined,
+      120
+    )
     const progressLogs =
       existingLogs[existingLogs.length - 1] === nextLogLine
         ? existingLogs.slice(-80)
@@ -3190,6 +3197,17 @@ Did the agent meet the success criteria? Respond with JSON only.`
     effectiveAfterClsScore < effectiveBeforeClsScore
   ) {
     verificationStatus = "improved"
+  }
+
+  if (
+    workflowType === "cls-fix" &&
+    hasChanges &&
+    effectiveBeforeClsScore !== null &&
+    effectiveAfterClsScore !== null &&
+    effectiveAfterClsScore < effectiveBeforeClsScore &&
+    (successEvalResult === null || successEvalResult === false)
+  ) {
+    successEvalResult = true
   }
 
   const report: WorkflowReport = {
