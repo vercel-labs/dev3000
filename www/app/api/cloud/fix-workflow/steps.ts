@@ -2223,6 +2223,43 @@ export async function observeBaselineStep(
       throw new Error(`Sandbox not running: ${sandbox.status}`)
     }
   } catch (sandboxError) {
+    const canFallbackToInitObservation =
+      beforeCls !== null || beforeScreenshots.length > 0 || Boolean(initD3kLogs.trim())
+    if (canFallbackToInitObservation) {
+      const timingData = timer.getData()
+      const fallbackBeforeWebVitals: import("@/types").WebVitals = {}
+      if (beforeCls !== null) {
+        fallbackBeforeWebVitals.cls = {
+          value: beforeCls,
+          grade: beforeGrade || gradeClsValue(beforeCls) || "good"
+        }
+      }
+
+      await appendProgressLog(
+        progressContext,
+        "[Observe] Reusing init-step CLS evidence because the initial sandbox could not be reattached"
+      )
+      workflowLog(
+        `[Observe] Sandbox ${sandboxId} unavailable (${sandboxError instanceof Error ? sandboxError.message : String(sandboxError)}); falling back to init-step evidence instead of recreating baseline sandbox`
+      )
+
+      return {
+        sandboxId,
+        devUrl,
+        beforeWebVitals: fallbackBeforeWebVitals,
+        beforeCls,
+        beforeGrade,
+        beforeScreenshots,
+        d3kLogs: initD3kLogs,
+        cloudBrowserMode: resolveCloudBrowserMode(devAgentSandboxBrowser),
+        skillsInstalled: [],
+        timing: {
+          totalMs: timingData.totalMs,
+          steps: timingData.steps.map((s) => ({ name: s.name, durationMs: s.durationMs }))
+        }
+      }
+    }
+
     workflowLog(
       `[Observe] Sandbox ${sandboxId} unavailable (${sandboxError instanceof Error ? sandboxError.message : String(sandboxError)}), creating a new one...`
     )
