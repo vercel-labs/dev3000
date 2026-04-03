@@ -280,6 +280,27 @@ function buildD3kLaunchCommand(command: string, browserPath: string): string {
   return resolved
 }
 
+async function getBrowserBinarySummary(sandbox: Sandbox, browserPath: string): Promise<string> {
+  const result = await sandbox.runCommand({
+    cmd: "sh",
+    args: [
+      "-lc",
+      `BROWSER=${shellQuote(browserPath)}; if [ -x "$BROWSER" ]; then VERSION=$("$BROWSER" --version 2>/dev/null | head -1); if [ -z "$VERSION" ]; then VERSION=unknown; fi; printf 'path=%s exists=yes version=%s' "$BROWSER" "$VERSION"; else printf 'path=%s exists=no' "$BROWSER"; fi`
+    ]
+  })
+
+  let stdout = ""
+  let stderr = ""
+  for await (const log of result.logs()) {
+    if (log.stream === "stdout") stdout += log.data
+    else stderr += log.data
+  }
+  await result.wait()
+
+  const summary = stdout.trim() || stderr.trim()
+  return summary || `path=${browserPath} exists=unknown`
+}
+
 async function detectProjectDevCommand(
   runCommand: (
     cmd: string,
@@ -972,6 +993,7 @@ chmod 0600 "$HOME/.npmrc" ".npmrc"`
       )
       chromiumPath = "/usr/bin/chromium" // fallback
     }
+    await reportProgress(`[Sandbox] Chromium binary: ${await getBrowserBinarySummary(sandbox, chromiumPath)}`)
 
     // Run Chrome diagnostic test using SandboxChrome module
     if (debug) {
@@ -1632,6 +1654,9 @@ export async function createD3kSandboxFromSnapshot(config: D3kSandboxFromSnapsho
       )
       chromiumPath = "/usr/bin/chromium" // fallback
     }
+    if (debug) {
+      console.log(`  🔎 Chromium binary: ${await getBrowserBinarySummary(sandbox, chromiumPath)}`)
+    }
 
     // Start d3k (it should already be installed in the snapshot)
     if (debug) console.log("  🚀 Starting d3k...")
@@ -2185,6 +2210,7 @@ chmod 0600 "$HOME/.npmrc" ".npmrc"`
             )
           }
         }
+        await reportProgress(`[Sandbox] Chromium binary: ${await getBrowserBinarySummary(sandbox, chromiumPath)}`)
       }
       const startupCommand = usesD3kRuntime
         ? buildD3kLaunchCommand(resolvedDevCommand, chromiumPath)
