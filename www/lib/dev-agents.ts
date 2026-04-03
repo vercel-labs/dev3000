@@ -1,5 +1,6 @@
 import { list, put } from "@vercel/blob"
 import { createDevAgentAshArtifactDescriptor } from "@/lib/dev-agent-ash-spec"
+import { NO_DEV_SERVER_COMMAND } from "@/lib/dev-server-command"
 
 const FETCH_TIMEOUT_MS = 6000
 const FETCH_RETRIES = 2
@@ -501,7 +502,7 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
     legacyWorkflowType: "turbopack-bundle-analyzer",
     supportsPullRequest: true,
     aiAgent: "anthropic/claude-opus-4.6",
-    devServerCommand: "d3k",
+    devServerCommand: NO_DEV_SERVER_COMMAND,
     successEval: "Was the total shipped JavaScript measurably reduced?"
   },
   // ── Marketplace agents (demo) ──────────────────────────────────────────
@@ -822,6 +823,17 @@ function normalizeDevAgent(devAgent: StoredDevAgent | Omit<DevAgent, "usageCount
     typeof mergedDevAgent.devServerCommand === "string" && mergedDevAgent.devServerCommand.trim().length > 0
       ? mergedDevAgent.devServerCommand.trim()
       : undefined
+  const normalizedSandboxBrowser =
+    sandboxBrowser && isDevAgentSandboxBrowser(sandboxBrowser)
+      ? sandboxBrowser
+      : getDefaultSandboxBrowser(mergedDevAgent.executionMode)
+  const normalizedDevServerCommand =
+    builtinDefaults &&
+    mergedDevAgent.executionMode === "preview-pr" &&
+    normalizedSandboxBrowser === "none" &&
+    (devServerCommand === "d3k" || devServerCommand === undefined)
+      ? NO_DEV_SERVER_COMMAND
+      : devServerCommand
   const skillRefs = Array.isArray(mergedDevAgent.skillRefs)
     ? mergedDevAgent.skillRefs.map((skillRef) =>
         parseDevAgentSkillRef({
@@ -836,12 +848,9 @@ function normalizeDevAgent(devAgent: StoredDevAgent | Omit<DevAgent, "usageCount
     id: canonicalDevAgentId,
     instructions: normalizedInstructions,
     aiAgent,
-    devServerCommand,
+    devServerCommand: normalizedDevServerCommand,
     skillRefs,
-    sandboxBrowser:
-      sandboxBrowser && isDevAgentSandboxBrowser(sandboxBrowser)
-        ? sandboxBrowser
-        : getDefaultSandboxBrowser(mergedDevAgent.executionMode)
+    sandboxBrowser: normalizedSandboxBrowser
   }
   const synthesizedAshArtifact = createDevAgentAshArtifactDescriptor(
     toDevAgentAshInput({
