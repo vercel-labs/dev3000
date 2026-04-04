@@ -748,10 +748,11 @@ async function capturePhaseScreenshot(
   projectName: string,
   kind: string,
   label: string,
-  targetUrl?: string
+  targetUrl?: string,
+  waitMs = 5000
 ): Promise<Array<{ timestamp: number; blobUrl: string; label?: string }>> {
   const screenshotPath = `/tmp/${kind}-${Date.now()}.png`
-  const screenshotResult = await captureSandboxScreenshot(sandbox, screenshotPath, browserMode, targetUrl)
+  const screenshotResult = await captureSandboxScreenshot(sandbox, screenshotPath, browserMode, targetUrl, waitMs)
   if (!screenshotResult.success) {
     return []
   }
@@ -774,8 +775,18 @@ async function captureSandboxScreenshot(
   sandbox: Sandbox,
   screenshotPath: string,
   browserMode: CloudBrowserMode,
-  targetUrl?: string
+  targetUrl?: string,
+  waitMs = 5000
 ): Promise<{ success: boolean; error?: string }> {
+  if (targetUrl) {
+    const chromiumResult = await captureScreenshotWithSandboxChromium(sandbox, screenshotPath, targetUrl, waitMs)
+    if (chromiumResult.success) {
+      return { success: true }
+    }
+
+    workflowLog(`[Browser] Chromium URL screenshot failed for ${targetUrl}: ${chromiumResult.error || "unknown error"}`)
+  }
+
   const cdpResult = await captureScreenshotViaCDP(sandbox, screenshotPath, targetUrl)
   if (cdpResult.success) {
     return { success: true }
@@ -2448,7 +2459,8 @@ export async function observeBaselineStep(
       progressContext?.projectName || "workflow",
       "baseline",
       "Before",
-      localTargetUrl
+      localTargetUrl,
+      5000
     )
     timer.end()
     workflowLog(`[Observe] Captured ${effectiveBeforeScreenshots.length} baseline screenshot(s)`)
@@ -3026,7 +3038,8 @@ export async function agentFixLoopStep(
         projectName,
         "after",
         "After",
-        localTargetUrl
+        localTargetUrl,
+        8000
       )
       if (afterScreenshots.length > 0) {
         finalCls.screenshots = afterScreenshots
@@ -5348,6 +5361,62 @@ function extractSandboxCdpUrl(value: unknown): string | null {
     }
   }
   return null
+}
+
+async function captureScreenshotWithSandboxChromium(
+  sandbox: Sandbox,
+  screenshotPath: string,
+  targetUrl: string,
+  waitMs: number
+): Promise<{ success: boolean; error?: string }> {
+  const result = await runSandboxCommandWithOptions(sandbox, {
+    cmd: "sh",
+    args: [
+      "-c",
+      `
+set -e
+CHROME_BIN=""
+for candidate in /tmp/chromium chromium chromium-browser google-chrome-stable google-chrome; do
+  if [ -x "$candidate" ]; then
+    CHROME_BIN="$candidate"
+    break
+  fi
+  if command -v "$candidate" >/dev/null 2>&1; then
+    CHROME_BIN="$(command -v "$candidate")"
+    break
+  fi
+done
+
+if [ -z "$CHROME_BIN" ]; then
+  echo "No Chromium binary available" >&2
+  exit 1
+fi
+
+mkdir -p "$(dirname ${JSON.stringify(screenshotPath)})"
+
+"$CHROME_BIN" \
+  --headless=new \
+  --no-sandbox \
+  --disable-gpu \
+  --disable-dev-shm-usage \
+  --hide-scrollbars \
+  --run-all-compositor-stages-before-draw \
+  --window-size=1280,800 \
+  --virtual-time-budget=${Math.max(0, waitMs)} \
+  --screenshot=${JSON.stringify(screenshotPath)} \
+  ${JSON.stringify(targetUrl)}
+      `
+    ]
+  })
+
+  if (result.exitCode !== 0) {
+    return {
+      success: false,
+      error: result.stderr.trim() || result.stdout.trim() || "Chromium screenshot command failed"
+    }
+  }
+
+  return { success: true }
 }
 
 async function captureScreenshotViaCDP(
