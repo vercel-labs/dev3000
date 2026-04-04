@@ -354,7 +354,11 @@ const nextBrowserHomeVersion = new Map<string, number>()
 function resolveCloudBrowserMode(
   devAgentSandboxBrowser: "none" | "agent-browser" | "next-browser" | undefined
 ): CloudBrowserMode {
-  return devAgentSandboxBrowser === "next-browser" ? "next-browser" : "agent-browser"
+  // next-browser is useful for Next-specific inspection, but the workflow's
+  // own automation path relies on generic navigation/eval/screenshot behavior
+  // that agent-browser handles more reliably in sandboxes.
+  void devAgentSandboxBrowser
+  return "agent-browser"
 }
 
 function isRecoverableBrowserError(error: string | undefined): boolean {
