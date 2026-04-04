@@ -701,24 +701,28 @@ async function uploadSandboxScreenshot(
   route: string
 ): Promise<string | null> {
   try {
-    const catResult = await sandbox.runCommand({
-      cmd: "cat",
-      args: [screenshotPath]
+    const base64Result = await sandbox.runCommand({
+      cmd: "base64",
+      args: ["-w", "0", screenshotPath]
     })
 
-    const chunks: Buffer[] = []
-    for await (const log of catResult.logs()) {
+    const chunks: string[] = []
+    for await (const log of base64Result.logs()) {
       if (log.stream === "stdout") {
-        chunks.push(Buffer.from(log.data, "binary"))
+        chunks.push(log.data)
       }
     }
-    await catResult.wait()
+    await base64Result.wait()
 
-    if (catResult.exitCode !== 0 || chunks.length === 0) {
+    if (base64Result.exitCode !== 0 || chunks.length === 0) {
       return null
     }
 
-    const imageBuffer = Buffer.concat(chunks)
+    const imageBuffer = Buffer.from(chunks.join(""), "base64")
+    if (imageBuffer.length === 0) {
+      return null
+    }
+
     const blob = await put(
       `workflow-${sanitizeScreenshotPathSegment(projectName)}-${kind}-${sanitizeScreenshotPathSegment(route)}-${Date.now()}.png`,
       imageBuffer,

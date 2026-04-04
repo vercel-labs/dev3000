@@ -16,6 +16,7 @@ import type { WebVitals, WorkflowReport } from "@/types"
 import { AgentAnalysis } from "./agent-analysis"
 import { CoordinatedPlayers } from "./coordinated-players"
 import { DiffSection } from "./diff-section"
+import { LocalizedTimestamp } from "./localized-timestamp"
 import { ReportPending } from "./report-pending"
 import { ScreenshotPlayer } from "./screenshot-player"
 import { ShareButton } from "./share-button"
@@ -112,10 +113,20 @@ function formatMetricValue(key: MetricKey, value?: number) {
   return key === "cls" ? formatClsValue(value) : formatMs(value)
 }
 
-function formatMetricDelta(key: MetricKey, before: number, after: number) {
-  const delta = after - before
-  const sign = delta > 0 ? "+" : ""
-  return key === "cls" ? `${sign}${delta.toFixed(4)}` : `${sign}${delta.toFixed(0)}ms`
+function formatMetricDelta(_key: MetricKey, before: number, after: number) {
+  if (before === 0) {
+    return after === 0 ? "0%" : "—"
+  }
+
+  const percentChange = ((after - before) / before) * 100
+  const roundedMagnitude = Math.floor(Math.abs(percentChange))
+
+  if (roundedMagnitude === 0) {
+    return "0%"
+  }
+
+  const sign = percentChange > 0 ? "+" : "-"
+  return `${sign}${roundedMagnitude}%`
 }
 
 function formatSeconds(ms?: number) {
@@ -711,21 +722,29 @@ async function WorkflowReportPageData({ params }: { params: Promise<{ id: string
     ? `https://vercel.com/${ownerRouteContext.selectedTeam.slug}/${encodeURIComponent(projectDisplayName)}`
     : null
   const projectSubtitle = (
-    <span>
-      Project:{" "}
-      {vercelProjectHref ? (
-        <a
-          href={vercelProjectHref}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="font-semibold text-foreground hover:underline"
-        >
-          {projectDisplayName}
-        </a>
-      ) : (
-        <span className="font-semibold text-foreground">{projectDisplayName}</span>
-      )}
-    </span>
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+      <span>
+        Project:{" "}
+        {vercelProjectHref ? (
+          <a
+            href={vercelProjectHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-foreground hover:underline"
+          >
+            {projectDisplayName}
+          </a>
+        ) : (
+          <span className="font-semibold text-foreground">{projectDisplayName}</span>
+        )}
+      </span>
+      <span className="text-muted-foreground">
+        Run Date:{" "}
+        <span className="font-medium text-foreground">
+          <LocalizedTimestamp isoString={report.timestamp} />
+        </span>
+      </span>
+    </div>
   )
   const primaryHeading = devAgentHref ? (
     <>
@@ -865,6 +884,20 @@ function ReportContentBody({ run, report }: { run: WorkflowRun; report: Workflow
     !!runEndedAt &&
     !Number.isNaN(runEndedAt.getTime()) &&
     runEndedAt >= runStartedAt
+  const successEvalStyles =
+    report.successEvalResult === true
+      ? {
+          card: "border-emerald-900/70 bg-emerald-950/20",
+          icon: "text-emerald-400",
+          title: "text-emerald-200",
+          body: "text-emerald-100/70"
+        }
+      : {
+          card: "border-red-900/70 bg-red-950/20",
+          icon: "text-red-400",
+          title: "text-red-200",
+          body: "text-red-100/70"
+        }
   const formatRunDuration = (durationMs: number) => {
     const totalSeconds = Math.floor(durationMs / 1000)
     const hours = Math.floor(totalSeconds / 3600)
@@ -879,14 +912,16 @@ function ReportContentBody({ run, report }: { run: WorkflowRun; report: Workflow
       {(report.successEvalResult != null || secondarySummary) && (
         <div className="grid gap-4 md:grid-cols-2">
           {report.successEvalResult != null && (
-            <div className="rounded-lg border border-[#1f1f1f] bg-[#0a0a0a] p-4">
+            <div className={`rounded-lg border p-4 ${successEvalStyles.card}`}>
               <div className="flex items-center gap-2">
-                <ShieldCheck className="size-4 text-[#888]" />
-                <span className="text-sm font-medium text-[#ededed]">
+                <ShieldCheck className={`size-4 ${successEvalStyles.icon}`} />
+                <span className={`text-sm font-medium ${successEvalStyles.title}`}>
                   Success Eval: {report.successEvalResult ? "Pass" : "Fail"}
                 </span>
               </div>
-              {report.successEval ? <p className="mt-1 text-sm text-[#666]">{report.successEval}</p> : null}
+              {report.successEval ? (
+                <p className={`mt-1 text-sm ${successEvalStyles.body}`}>{report.successEval}</p>
+              ) : null}
             </div>
           )}
           {secondarySummary && (
@@ -987,14 +1022,6 @@ function ReportContentBody({ run, report }: { run: WorkflowRun; report: Workflow
 
       <ReportSection title="Run Context" description="Compact run metadata and environment details.">
         <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2 xl:grid-cols-3">
-          <SummaryItem
-            label="Date"
-            value={new Date(report.timestamp).toLocaleDateString("en-US", {
-              month: "short",
-              day: "numeric",
-              year: "numeric"
-            })}
-          />
           {!isMarketplaceAgent ? <SummaryItem label="Model" value={report.agentAnalysisModel || "unknown"} /> : null}
           {!isMarketplaceAgent && report.devAgentRevision ? (
             <SummaryItem
