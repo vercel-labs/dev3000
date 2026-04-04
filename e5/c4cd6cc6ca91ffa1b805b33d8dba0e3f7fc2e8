@@ -1,0 +1,23 @@
+www/app/dev-agents/runs/[id]/report/page.tsx
+  df2cec9259c4ddb4 19,116-129,725-747,887-900,915,917-918,922-924
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "e5c4cd6cc6ca91ffa1b805b33d8dba0e3f7fc2e8",
+  "prompts": {
+    "df2cec9259c4ddb4": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d5912-a26d-7391-9087-08a057e6b912",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 72,
+      "total_deletions": 45,
+      "accepted_lines": 58,
+      "overriden_lines": 0
+    }
+  }
+}
