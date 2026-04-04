@@ -747,10 +747,11 @@ async function capturePhaseScreenshot(
   browserMode: CloudBrowserMode,
   projectName: string,
   kind: string,
-  label: string
+  label: string,
+  targetUrl?: string
 ): Promise<Array<{ timestamp: number; blobUrl: string; label?: string }>> {
   const screenshotPath = `/tmp/${kind}-${Date.now()}.png`
-  const screenshotResult = await _screenshotBrowser(sandbox, screenshotPath, { fullPage: false }, browserMode)
+  const screenshotResult = await captureSandboxScreenshot(sandbox, screenshotPath, browserMode, targetUrl)
   if (!screenshotResult.success) {
     return []
   }
@@ -767,6 +768,32 @@ async function capturePhaseScreenshot(
       label
     }
   ]
+}
+
+async function captureSandboxScreenshot(
+  sandbox: Sandbox,
+  screenshotPath: string,
+  browserMode: CloudBrowserMode,
+  targetUrl?: string
+): Promise<{ success: boolean; error?: string }> {
+  const cdpResult = await captureScreenshotViaCDP(sandbox, screenshotPath, targetUrl)
+  if (cdpResult.success) {
+    return { success: true }
+  }
+
+  workflowLog(
+    `[Browser] CDP screenshot failed${targetUrl ? ` for ${targetUrl}` : ""}: ${cdpResult.error || "unknown error"}`
+  )
+
+  const screenshotResult = await _screenshotBrowser(sandbox, screenshotPath, { fullPage: false }, browserMode)
+  if (!screenshotResult.success) {
+    return {
+      success: false,
+      error: screenshotResult.error || cdpResult.error || "screenshot capture failed"
+    }
+  }
+
+  return { success: true }
 }
 
 // Progress context for updating workflow status
@@ -2420,7 +2447,8 @@ export async function observeBaselineStep(
       cloudBrowserMode,
       progressContext?.projectName || "workflow",
       "baseline",
-      "Before"
+      "Before",
+      localTargetUrl
     )
     timer.end()
     workflowLog(`[Observe] Captured ${effectiveBeforeScreenshots.length} baseline screenshot(s)`)
@@ -2666,7 +2694,7 @@ export async function earlyExitReportStep(
     afterClsScore: effectiveBeforeCls ?? undefined,
     afterClsGrade: effectiveBeforeGrade || undefined,
     afterWebVitals: Object.keys(observation.beforeWebVitals).length > 0 ? observation.beforeWebVitals : undefined,
-    afterScreenshots: observation.beforeScreenshots,
+    afterScreenshots: undefined,
     verificationStatus: "unchanged",
     costUsd: 0,
     agentAnalysis: `## Early Exit\n\n${reason}\n\nBaseline CLS: **${clsDisplay}** (${effectiveBeforeGrade || "n/a"})\nMeasured on \`${startPath}\`.\n\nNo agent changes were made.`,
@@ -2997,7 +3025,8 @@ export async function agentFixLoopStep(
         cloudBrowserMode,
         projectName,
         "after",
-        "After"
+        "After",
+        localTargetUrl
       )
       if (afterScreenshots.length > 0) {
         finalCls.screenshots = afterScreenshots
@@ -5319,6 +5348,201 @@ function extractSandboxCdpUrl(value: unknown): string | null {
     }
   }
   return null
+}
+
+async function captureScreenshotViaCDP(
+  sandbox: Sandbox,
+  screenshotPath: string,
+  targetUrl?: string
+): Promise<{ success: boolean; error?: string }> {
+  const { sessionPath, session } = await readLatestSandboxSession(sandbox)
+  const cdpUrl = extractSandboxCdpUrl(session)
+  if (!cdpUrl) {
+    return {
+      success: false,
+      error: `No sandbox CDP URL available${sessionPath ? ` in ${sessionPath}` : ""}`
+    }
+  }
+
+  const captureScript = `
+import fs from "node:fs"
+
+const cdpUrl = process.env.D3K_CDP_URL
+const outputPath = process.env.D3K_SCREENSHOT_PATH
+const targetUrl = process.env.D3K_TARGET_URL || ""
+
+if (!cdpUrl) throw new Error("Missing D3K_CDP_URL")
+if (!outputPath) throw new Error("Missing D3K_SCREENSHOT_PATH")
+
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+const browser = new WebSocket(cdpUrl)
+let nextId = 0
+const pending = new Map()
+let pageLoadResolver = null
+
+const send = (method, params = {}, sessionId) =>
+  new Promise((resolve, reject) => {
+    const id = ++nextId
+    pending.set(id, { resolve, reject })
+    browser.send(JSON.stringify(sessionId ? { id, method, params, sessionId } : { id, method, params }))
+  })
+
+browser.onmessage = (event) => {
+  const message = JSON.parse(event.data)
+  if (message.method === "Page.loadEventFired" && message.sessionId && pageLoadResolver) {
+    const resolve = pageLoadResolver
+    pageLoadResolver = null
+    resolve()
+    return
+  }
+
+  if (!message.id || !pending.has(message.id)) return
+  const { resolve, reject } = pending.get(message.id)
+  pending.delete(message.id)
+  if (message.error) reject(new Error(JSON.stringify(message.error)))
+  else resolve(message.result)
+}
+
+await new Promise((resolve, reject) => {
+  browser.onopen = resolve
+  browser.onerror = () => reject(new Error("Failed to connect to sandbox CDP"))
+})
+
+let targetId = null
+let sessionId = null
+let createdTarget = false
+
+const cleanup = async () => {
+  try {
+    if (sessionId) {
+      await send("Target.detachFromTarget", { sessionId })
+    }
+  } catch {}
+
+  try {
+    if (createdTarget && targetId) {
+      await send("Target.closeTarget", { targetId })
+    }
+  } catch {}
+
+  browser.close()
+}
+
+const normalizedTargetUrl = targetUrl.replace(/\\/$/, "")
+
+const matchesTargetUrl = (info) => {
+  if (!info || info.type !== "page" || typeof info.url !== "string") return false
+  const normalizedInfoUrl = info.url.replace(/\\/$/, "")
+  if (!normalizedTargetUrl) {
+    return normalizedInfoUrl.startsWith("http://localhost:3000")
+  }
+  return (
+    normalizedInfoUrl === normalizedTargetUrl ||
+    normalizedInfoUrl.startsWith(normalizedTargetUrl) ||
+    normalizedTargetUrl.startsWith(normalizedInfoUrl)
+  )
+}
+
+try {
+  const targetList = await send("Target.getTargets")
+  const targetInfos = Array.isArray(targetList.targetInfos) ? targetList.targetInfos : []
+  const existingTarget = targetInfos.find(matchesTargetUrl) || null
+
+  if (existingTarget?.targetId) {
+    targetId = existingTarget.targetId
+    await send("Target.activateTarget", { targetId })
+  } else {
+    const created = await send("Target.createTarget", { url: targetUrl || "about:blank" })
+    targetId = created.targetId
+    createdTarget = true
+  }
+
+  const attached = await send("Target.attachToTarget", { targetId, flatten: true })
+  sessionId = attached.sessionId
+
+  await send("Page.enable", {}, sessionId)
+  await send("Runtime.enable", {}, sessionId)
+  await send("Page.bringToFront", {}, sessionId)
+
+  if (createdTarget && targetUrl) {
+    pageLoadResolver = () => {}
+    const pageLoaded = new Promise((resolve) => {
+      pageLoadResolver = resolve
+    })
+    await send("Page.navigate", { url: targetUrl }, sessionId)
+    await Promise.race([pageLoaded, delay(10000)])
+  }
+
+  await delay(500)
+  await send(
+    "Runtime.evaluate",
+    {
+      expression: \`
+        JSON.stringify({
+          href: location.href,
+          title: document.title,
+          readyState: document.readyState,
+          bodyTextLength: document.body?.innerText?.trim().length ?? 0,
+          bodyScrollHeight: document.body?.scrollHeight ?? 0
+        })
+      \`,
+      returnByValue: true,
+      awaitPromise: true
+    },
+    sessionId
+  )
+  await delay(250)
+  await send(
+    "Runtime.evaluate",
+    {
+      expression: "new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))",
+      awaitPromise: true,
+      returnByValue: true
+    },
+    sessionId
+  )
+
+  const screenshot = await send(
+    "Page.captureScreenshot",
+    {
+      format: "png",
+      fromSurface: true
+    },
+    sessionId
+  )
+
+  if (!screenshot?.data) {
+    throw new Error("CDP screenshot returned no image data")
+  }
+
+  fs.writeFileSync(outputPath, Buffer.from(screenshot.data, "base64"))
+  console.log(JSON.stringify({ success: true }))
+  await cleanup()
+} catch (error) {
+  await cleanup()
+  console.error(error instanceof Error ? error.message : String(error))
+  process.exit(1)
+}
+`
+
+  const result = await runSandboxCommandWithOptions(sandbox, {
+    cmd: "node",
+    args: ["--input-type=module", "-e", captureScript],
+    env: {
+      D3K_CDP_URL: cdpUrl,
+      D3K_SCREENSHOT_PATH: screenshotPath,
+      ...(targetUrl ? { D3K_TARGET_URL: targetUrl } : {})
+    }
+  })
+
+  if (result.exitCode !== 0) {
+    return {
+      success: false,
+      error: result.stderr.trim() || result.stdout.trim() || "CDP screenshot command failed"
+    }
+  }
+
+  return { success: true }
 }
 
 async function fetchWebVitalsFromDocumentStart(
