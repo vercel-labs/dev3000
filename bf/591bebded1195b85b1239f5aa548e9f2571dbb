@@ -1,0 +1,27 @@
+www/lib/dev-agents.ts
+  7a0ea82f7d7bc893 393-403,498-749
+example-apps/README.md
+  7a0ea82f7d7bc893 3,24-63,86,90-94,115-119,125
+www/WORKFLOW_TESTING_GUIDE.md
+  7a0ea82f7d7bc893 7-8,10,14,22-31,39,67-106,168-172,192-215,230
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "bf591bebded1195b85b1239f5aa548e9f2571dbb",
+  "prompts": {
+    "7a0ea82f7d7bc893": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d59d8-022d-7262-9555-ec96bb973d0c",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 404,
+      "total_deletions": 7,
+      "accepted_lines": 404,
+      "overriden_lines": 0
+    }
+  }
+}
