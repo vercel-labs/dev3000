@@ -106,13 +106,14 @@ export class SandboxNextBrowser {
   private sandbox: Sandbox
   private options: Required<Pick<SandboxNextBrowserOptions, "homeDir" | "cwd" | "packageManager" | "debug" | "timeout">>
   private isInstalled = false
+  private commandRunner: "d3k" | "next-browser" | "bunx" | "npx" = "d3k"
 
   private constructor(sandbox: Sandbox, options: SandboxNextBrowserOptions) {
     this.sandbox = sandbox
     this.options = {
       homeDir: options.homeDir ?? "/tmp/next-browser-home",
       cwd: options.cwd ?? "/vercel/sandbox",
-      packageManager: options.packageManager ?? "pnpm",
+      packageManager: options.packageManager ?? "bun",
       debug: options.debug ?? false,
       timeout: options.timeout ?? 30000
     }
@@ -132,6 +133,51 @@ export class SandboxNextBrowser {
 
   async ensureInstalled(): Promise<void> {
     if (this.isInstalled) return
+
+    const d3kBinary = await runCommand(this.sandbox, "sh", [
+      "-c",
+      "export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; command -v d3k || true"
+    ])
+    if (d3kBinary.stdout.trim()) {
+      const d3kProbe = await runCommand(
+        this.sandbox,
+        "sh",
+        [
+          "-c",
+          [
+            "export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH",
+            `mkdir -p ${shellEscape(this.options.homeDir)}`,
+            `export HOME=${shellEscape(this.options.homeDir)}`,
+            `export USERPROFILE=${shellEscape(this.options.homeDir)}`,
+            `cd ${shellEscape(this.options.cwd)}`,
+            "d3k next-browser --help >/dev/null 2>&1"
+          ].join(" && ")
+        ],
+        { cwd: this.options.cwd, timeout: this.options.timeout }
+      )
+
+      if (d3kProbe.exitCode === 0) {
+        this.commandRunner = "d3k"
+        this.isInstalled = true
+        this.log(`Using bundled next-browser via d3k at ${d3kBinary.stdout.trim()}`)
+        return
+      }
+
+      this.log(
+        `d3k is present but next-browser subcommand probe failed: ${(d3kProbe.stderr || d3kProbe.stdout).trim()}`
+      )
+    }
+
+    const globalBinary = await runCommand(this.sandbox, "sh", [
+      "-c",
+      "export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; command -v next-browser || true"
+    ])
+    if (globalBinary.stdout.trim()) {
+      this.commandRunner = "next-browser"
+      this.isInstalled = true
+      this.log(`Using existing next-browser binary at ${globalBinary.stdout.trim()}`)
+      return
+    }
 
     if (this.options.packageManager === "bun") {
       await ensureBunInstalled(this.sandbox, this.options.debug)
@@ -159,10 +205,20 @@ export class SandboxNextBrowser {
     }
 
     this.isInstalled = true
+    this.commandRunner = this.options.packageManager === "bun" ? "bunx" : "npx"
     this.log("next-browser installed successfully")
   }
 
   private async exec(command: string[]): Promise<NextBrowserResult> {
+    const launchCommand =
+      this.commandRunner === "d3k"
+        ? `d3k next-browser ${command.map(shellEscape).join(" ")}`
+        : this.commandRunner === "next-browser"
+          ? `next-browser ${command.map(shellEscape).join(" ")}`
+          : this.commandRunner === "bunx"
+            ? `bunx next-browser ${command.map(shellEscape).join(" ")}`
+            : `npx next-browser ${command.map(shellEscape).join(" ")}`
+
     const result = await runCommand(
       this.sandbox,
       "sh",
@@ -172,12 +228,9 @@ export class SandboxNextBrowser {
           "export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH",
           `mkdir -p ${shellEscape(this.options.homeDir)}`,
           `export HOME=${shellEscape(this.options.homeDir)}`,
+          `export USERPROFILE=${shellEscape(this.options.homeDir)}`,
           `cd ${shellEscape(this.options.cwd)}`,
-          `${
-            this.options.packageManager === "bun"
-              ? `bunx next-browser ${command.map(shellEscape).join(" ")}`
-              : `npx next-browser ${command.map(shellEscape).join(" ")}`
-          }`
+          launchCommand
         ].join(" && ")
       ],
       { cwd: this.options.cwd, timeout: this.options.timeout }
