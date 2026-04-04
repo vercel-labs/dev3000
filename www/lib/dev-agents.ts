@@ -390,6 +390,17 @@ const systemAuthor: DevAgentAuthor = {
   username: "dev3000"
 }
 
+const REACT_BEST_PRACTICES_SKILL_REFS = [
+  parseDevAgentSkillRef({
+    installArg: D3K_SKILL_INSTALL_ARG,
+    displayName: "d3k"
+  }),
+  parseDevAgentSkillRef({
+    installArg: "vercel-labs/agent-skills@vercel-react-best-practices",
+    sourceUrl: "https://skills.sh/vercel-labs/agent-skills/vercel-react-best-practices"
+  })
+]
+
 const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
   {
     id: "r_c84m2f",
@@ -483,6 +494,259 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
     aiAgent: "anthropic/claude-opus-4.6",
     devServerCommand: "d3k",
     successEval: "Did the targeted optimizations improve or maintain Web Vitals?"
+  },
+  {
+    id: "r_w82af1",
+    kind: "builtin",
+    name: "Eliminate Waterfalls",
+    description:
+      "Find sequential async work in React and Next.js flows, remove unnecessary waiting, and verify the main path is flatter.",
+    instructions:
+      "Focus only on async waterfalls. Capture a baseline, inspect the route and its related server code for sequential awaits or per-item fetch chains, and rewrite only the highest-impact cases. If the initial inspection shows no meaningful waterfall to remove, stop and report that instead of making speculative edits.",
+    executionMode: "preview-pr",
+    sandboxBrowser: "next-browser",
+    actionSteps: [
+      {
+        kind: "send-prompt",
+        config: {
+          prompt:
+            "Capture a baseline with getWebVitals, then inspect the selected route and nearby server code for sequential awaits, nested per-item fetch loops, and async work that starts too late."
+        }
+      },
+      {
+        kind: "send-prompt",
+        config: {
+          prompt:
+            "If no meaningful waterfall exists after the initial code scan, stop early and summarize the evidence instead of making low-confidence changes."
+        }
+      },
+      {
+        kind: "send-prompt",
+        config: {
+          prompt:
+            "Parallelize independent operations with Promise.all or promise pipelining, defer awaits until the value is needed, and flatten any obvious per-item server fetch waterfalls."
+        }
+      },
+      {
+        kind: "send-prompt",
+        config: {
+          prompt:
+            "Verify the route again with getWebVitals and a quick code pass to confirm the main path no longer waits unnecessarily."
+        }
+      }
+    ],
+    skillRefs: REACT_BEST_PRACTICES_SKILL_REFS,
+    author: systemAuthor,
+    createdAt: "2026-04-04T00:00:00.000Z",
+    updatedAt: "2026-04-04T00:00:00.000Z",
+    supportsPathInput: true,
+    supportsPullRequest: true,
+    aiAgent: "anthropic/claude-opus-4.6",
+    devServerCommand: "d3k",
+    successEval:
+      "Were independent async operations parallelized or deferred so the main path no longer waits unnecessarily, with baseline metrics maintained or improved?"
+  },
+  {
+    id: "r_b61dz2",
+    kind: "builtin",
+    name: "Bundle Size Optimizer",
+    description:
+      "Reduce shipped JavaScript by removing oversized client boundaries and deferring low-value code from the initial route bundle.",
+    instructions:
+      "Focus only on initial bundle size. Inspect client boundaries, route-level imports, and obviously heavy client code or static payloads. Prefer moving work to the server, lazy-loading non-critical UI, or conditionally loading code behind user intent. If the initial route is already lean and there is no clear shipped-JS win, stop and report that rather than churning code.",
+    executionMode: "preview-pr",
+    sandboxBrowser: "next-browser",
+    actionSteps: [
+      {
+        kind: "send-prompt",
+        config: {
+          prompt:
+            "Capture a baseline with getWebVitals, then inspect the selected route for top-level client boundaries, heavy imports, large static payloads, and low-value widgets that load before user intent."
+        }
+      },
+      {
+        kind: "send-prompt",
+        config: {
+          prompt:
+            "If there is no clear way to reduce shipped JavaScript on the initial route, stop early and document why instead of making cosmetic refactors."
+        }
+      },
+      {
+        kind: "send-prompt",
+        config: {
+          prompt:
+            "Implement one or two concrete reductions: move code or data to the server, add dynamic imports, or remove oversized client-only imports from the first render path."
+        }
+      },
+      {
+        kind: "send-prompt",
+        config: {
+          prompt:
+            "Re-check the route and verify the shipped-JS direction is improved without breaking the visible flow."
+        }
+      }
+    ],
+    skillRefs: REACT_BEST_PRACTICES_SKILL_REFS,
+    author: systemAuthor,
+    createdAt: "2026-04-04T00:00:00.000Z",
+    updatedAt: "2026-04-04T00:00:00.000Z",
+    supportsPathInput: true,
+    supportsPullRequest: true,
+    aiAgent: "anthropic/claude-opus-4.6",
+    devServerCommand: "d3k",
+    successEval:
+      "Was initial shipped JavaScript measurably reduced by removing, deferring, or server-shifting non-critical client code?"
+  },
+  {
+    id: "r_s93kp4",
+    kind: "builtin",
+    name: "Server-Side Perf Optimizer",
+    description:
+      "Tighten server-rendered routes by deduplicating fetches, reducing request-time work, and shrinking serialized payloads.",
+    instructions:
+      "Focus only on server-side performance. Inspect server components, API routes, and server actions for duplicate fetches, avoidable request-time computation, and oversized client-boundary payloads. Prefer composition, cache(), and narrower props. If the route has no meaningful server-side bottleneck after inspection, stop and summarize that instead of forcing a rewrite.",
+    executionMode: "preview-pr",
+    sandboxBrowser: "next-browser",
+    actionSteps: [
+      {
+        kind: "send-prompt",
+        config: {
+          prompt:
+            "Capture a baseline with getWebVitals, then inspect server components and related data helpers for duplicate fetches, sequential request-time work, and over-serialization into client components."
+        }
+      },
+      {
+        kind: "send-prompt",
+        config: {
+          prompt:
+            "If there is no meaningful server-side bottleneck to reduce, stop early and document the evidence instead of making broad structural changes."
+        }
+      },
+      {
+        kind: "send-prompt",
+        config: {
+          prompt:
+            "Deduplicate server data access, narrow payloads crossing the RSC boundary, and move avoidable request-time work out of the hot path while preserving behavior."
+        }
+      },
+      {
+        kind: "send-prompt",
+        config: {
+          prompt:
+            "Verify that TTFB or LCP direction is maintained or improved and that the route still renders correctly."
+        }
+      }
+    ],
+    skillRefs: REACT_BEST_PRACTICES_SKILL_REFS,
+    author: systemAuthor,
+    createdAt: "2026-04-04T00:00:00.000Z",
+    updatedAt: "2026-04-04T00:00:00.000Z",
+    supportsPathInput: true,
+    supportsPullRequest: true,
+    aiAgent: "anthropic/claude-opus-4.6",
+    devServerCommand: "d3k",
+    successEval:
+      "Were duplicate server fetches, unnecessary serialization, or avoidable request-time work reduced with TTFB/LCP maintained or improved?"
+  },
+  {
+    id: "r_c74hf5",
+    kind: "builtin",
+    name: "Client-Side Fetch Optimizer",
+    description:
+      "Collapse duplicate browser-side requests and subscriptions so client data loading becomes simpler and cheaper.",
+    instructions:
+      "Focus only on browser-side fetching and subscriptions. Inspect client components for duplicate requests to the same endpoint, redundant listeners, and repeated local browser work that should be shared or deduplicated. Prefer SWR-style deduplication or a single shared hook. If there is no real duplication to remove, stop and report that rather than introducing abstractions for their own sake.",
+    executionMode: "preview-pr",
+    sandboxBrowser: "next-browser",
+    actionSteps: [
+      {
+        kind: "send-prompt",
+        config: {
+          prompt:
+            "Capture a baseline with getWebVitals, then inspect client components for repeated fetches to the same resource, duplicated event listeners, and redundant localStorage or browser work."
+        }
+      },
+      {
+        kind: "send-prompt",
+        config: {
+          prompt:
+            "If the client-side data flow is already deduplicated, stop early and summarize the evidence instead of adding unnecessary caching layers."
+        }
+      },
+      {
+        kind: "send-prompt",
+        config: {
+          prompt:
+            "Unify repeated client fetches behind a shared request layer or SWR-style hook, collapse duplicate listeners, and keep the fix tightly scoped to the affected flow."
+        }
+      },
+      {
+        kind: "send-prompt",
+        config: {
+          prompt: "Verify that redundant browser work is gone and that the route still loads and updates correctly."
+        }
+      }
+    ],
+    skillRefs: REACT_BEST_PRACTICES_SKILL_REFS,
+    author: systemAuthor,
+    createdAt: "2026-04-04T00:00:00.000Z",
+    updatedAt: "2026-04-04T00:00:00.000Z",
+    supportsPathInput: true,
+    supportsPullRequest: true,
+    aiAgent: "anthropic/claude-opus-4.6",
+    devServerCommand: "d3k",
+    successEval:
+      "Were duplicate client requests or redundant browser-side subscriptions eliminated, with data loading behavior measurably simpler or more efficient?"
+  },
+  {
+    id: "r_r55mq6",
+    kind: "builtin",
+    name: "Re-render Optimizer",
+    description:
+      "Reduce unnecessary render churn by tightening derived state, render-path computation, and transient client state.",
+    instructions:
+      "Focus only on unnecessary re-renders. Inspect client components for expensive work performed on every render, derived state stored via effects, broad dependencies, and transient values that do not need to live in state. If the route has no meaningful render churn after inspection, stop and report that instead of adding memoization by reflex.",
+    executionMode: "preview-pr",
+    sandboxBrowser: "next-browser",
+    actionSteps: [
+      {
+        kind: "send-prompt",
+        config: {
+          prompt:
+            "Capture a baseline with getWebVitals, then inspect the selected client components for expensive render-path work, effect-driven derived state, and state updates that trigger unnecessary rerenders."
+        }
+      },
+      {
+        kind: "send-prompt",
+        config: {
+          prompt:
+            "If the route has no meaningful rerender pressure, stop early and explain why instead of adding speculative memoization."
+        }
+      },
+      {
+        kind: "send-prompt",
+        config: {
+          prompt:
+            "Move derived state back into render when appropriate, stop rebuilding large values every render, and use more appropriate state or refs for transient values."
+        }
+      },
+      {
+        kind: "send-prompt",
+        config: {
+          prompt: "Verify the route still behaves correctly and that the main render path is simpler and less noisy."
+        }
+      }
+    ],
+    skillRefs: REACT_BEST_PRACTICES_SKILL_REFS,
+    author: systemAuthor,
+    createdAt: "2026-04-04T00:00:00.000Z",
+    updatedAt: "2026-04-04T00:00:00.000Z",
+    supportsPathInput: true,
+    supportsPullRequest: true,
+    aiAgent: "anthropic/claude-opus-4.6",
+    devServerCommand: "d3k",
+    successEval:
+      "Were unnecessary re-renders or expensive render-path computations removed without regressing visible behavior?"
   },
   {
     id: "r_t62v8m",
