@@ -705,24 +705,22 @@ async function uploadSandboxScreenshot(
   route: string
 ): Promise<string | null> {
   try {
-    const base64Result = await sandbox.runCommand({
-      cmd: "base64",
-      args: ["-w", "0", screenshotPath]
-    })
-
-    const chunks: string[] = []
-    for await (const log of base64Result.logs()) {
-      if (log.stream === "stdout") {
-        chunks.push(log.data)
+    const base64Result = await runSandboxCommandWithOptions(
+      sandbox,
+      {
+        cmd: "base64",
+        args: ["-w", "0", screenshotPath]
+      },
+      {
+        timeoutMs: 10000
       }
-    }
-    await base64Result.wait()
+    )
 
-    if (base64Result.exitCode !== 0 || chunks.length === 0) {
+    if (base64Result.exitCode !== 0 || !base64Result.stdout.trim()) {
       return null
     }
 
-    const imageBuffer = Buffer.from(chunks.join(""), "base64")
+    const imageBuffer = Buffer.from(base64Result.stdout, "base64")
     if (imageBuffer.length === 0) {
       return null
     }
@@ -2469,6 +2467,7 @@ export async function observeBaselineStep(
 
   if (effectiveBeforeScreenshots.length === 0) {
     timer.start("Capture baseline screenshot")
+    await appendProgressLog(progressContext, "[Observe] Capturing baseline screenshot...")
     effectiveBeforeScreenshots = await capturePhaseScreenshot(
       sandbox,
       startPath,
@@ -2481,6 +2480,10 @@ export async function observeBaselineStep(
     )
     timer.end()
     workflowLog(`[Observe] Captured ${effectiveBeforeScreenshots.length} baseline screenshot(s)`)
+    await appendProgressLog(
+      progressContext,
+      `[Observe] Baseline screenshot ${effectiveBeforeScreenshots.length > 0 ? "captured" : "failed"}`
+    )
   }
 
   // CLS fallback via d3k logs if CDP didn't capture it
@@ -5304,48 +5307,91 @@ async function readSandboxSkillsInfo(
 async function runSandboxCommand(
   sandbox: Sandbox,
   cmd: string,
-  args: string[]
+  args: string[],
+  options?: { timeoutMs?: number }
 ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-  const result = await sandbox.runCommand({ cmd, args })
-  let stdout = ""
-  let stderr = ""
-  for await (const log of result.logs()) {
-    if (log.stream === "stdout") stdout += log.data
-    else stderr += log.data
-  }
-  await result.wait()
-  return { exitCode: result.exitCode, stdout, stderr }
+  return runSandboxCommandWithOptions(
+    sandbox,
+    {
+      cmd,
+      args
+    },
+    options
+  )
 }
 
 async function runSandboxCommandWithOptions(
   sandbox: Sandbox,
-  options: Parameters<Sandbox["runCommand"]>[0]
+  options: Parameters<Sandbox["runCommand"]>[0],
+  execOptions?: { timeoutMs?: number }
 ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-  const result = await sandbox.runCommand(options)
+  const timeoutMs = execOptions?.timeoutMs
+  const controller = new AbortController()
   let stdout = ""
   let stderr = ""
-  for await (const log of result.logs()) {
-    if (log.stream === "stdout") stdout += log.data
-    else stderr += log.data
+  const timeoutId =
+    typeof timeoutMs === "number" && timeoutMs > 0
+      ? setTimeout(() => {
+          controller.abort()
+        }, timeoutMs)
+      : null
+
+  try {
+    const commandSegments = [
+      ...Object.entries(options.env ?? {}).map(([key, value]) => `export ${key}=${shellEscape(value)}`),
+      options.cwd ? `cd ${shellEscape(options.cwd)}` : null,
+      `exec ${[options.cmd, ...(options.args ?? [])].map(shellEscape).join(" ")}`
+    ]
+      .filter(Boolean)
+      .join(" && ")
+
+    const result = await sandbox.runCommand("sh", ["-lc", commandSegments], {
+      signal: controller.signal
+    })
+
+    for await (const log of result.logs()) {
+      if (log.stream === "stdout") stdout += log.data
+      else stderr += log.data
+    }
+
+    return { exitCode: result.exitCode, stdout, stderr }
+  } catch (error) {
+    if (controller.signal.aborted && typeof timeoutMs === "number" && timeoutMs > 0) {
+      return {
+        exitCode: 124,
+        stdout,
+        stderr: stderr || `Command timed out after ${timeoutMs}ms`
+      }
+    }
+
+    throw error
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId)
+    }
   }
-  await result.wait()
-  return { exitCode: result.exitCode, stdout, stderr }
 }
 
 async function readLatestSandboxSession(
   sandbox: Sandbox
 ): Promise<{ sessionPath: string | null; session: Record<string, unknown> | null }> {
   try {
-    const sessionPathResult = await runSandboxCommand(sandbox, "sh", [
-      "-c",
-      "ls -t /home/vercel-sandbox/.d3k/*/session.json 2>/dev/null | head -1"
-    ])
+    const sessionPathResult = await runSandboxCommand(
+      sandbox,
+      "sh",
+      ["-c", "ls -t /home/vercel-sandbox/.d3k/*/session.json 2>/dev/null | head -1"],
+      {
+        timeoutMs: 5000
+      }
+    )
     const sessionPath = sessionPathResult.stdout.trim().split("\n")[0] || null
     if (!sessionPath) {
       return { sessionPath: null, session: null }
     }
 
-    const sessionResult = await runSandboxCommand(sandbox, "sh", ["-c", `cat "${sessionPath}" 2>/dev/null`])
+    const sessionResult = await runSandboxCommand(sandbox, "sh", ["-c", `cat "${sessionPath}" 2>/dev/null`], {
+      timeoutMs: 5000
+    })
     if (!sessionResult.stdout.trim()) {
       return { sessionPath, session: null }
     }
@@ -5386,11 +5432,13 @@ async function captureScreenshotWithSandboxChromium(
   targetUrl: string,
   waitMs: number
 ): Promise<{ success: boolean; error?: string }> {
-  const result = await runSandboxCommandWithOptions(sandbox, {
-    cmd: "sh",
-    args: [
-      "-c",
-      `
+  const result = await runSandboxCommandWithOptions(
+    sandbox,
+    {
+      cmd: "sh",
+      args: [
+        "-c",
+        `
 set -e
 CHROME_BIN=""
 for candidate in /tmp/chromium chromium chromium-browser google-chrome-stable google-chrome; do
@@ -5423,8 +5471,12 @@ mkdir -p "$(dirname ${JSON.stringify(screenshotPath)})"
   --screenshot=${JSON.stringify(screenshotPath)} \
   ${JSON.stringify(targetUrl)}
       `
-    ]
-  })
+      ]
+    },
+    {
+      timeoutMs: Math.max(waitMs + 15000, 20000)
+    }
+  )
 
   if (result.exitCode !== 0) {
     return {
@@ -5611,15 +5663,21 @@ try {
 }
 `
 
-  const result = await runSandboxCommandWithOptions(sandbox, {
-    cmd: "node",
-    args: ["--input-type=module", "-e", captureScript],
-    env: {
-      D3K_CDP_URL: cdpUrl,
-      D3K_SCREENSHOT_PATH: screenshotPath,
-      ...(targetUrl ? { D3K_TARGET_URL: targetUrl } : {})
+  const result = await runSandboxCommandWithOptions(
+    sandbox,
+    {
+      cmd: "node",
+      args: ["--input-type=module", "-e", captureScript],
+      env: {
+        D3K_CDP_URL: cdpUrl,
+        D3K_SCREENSHOT_PATH: screenshotPath,
+        ...(targetUrl ? { D3K_TARGET_URL: targetUrl } : {})
+      }
+    },
+    {
+      timeoutMs: 20000
     }
-  })
+  )
 
   if (result.exitCode !== 0) {
     return {
