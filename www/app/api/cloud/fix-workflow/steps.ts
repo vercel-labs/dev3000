@@ -998,62 +998,125 @@ async function getRunningSandboxWithRetry(
   credentials?: {
     teamId?: string
     projectId?: string
-    token?: string
+    tokens?: string[]
   }
 ): Promise<Sandbox> {
   let lastError: unknown
   const phaseLabel = phase === "observe" ? "Observe" : phase === "agent" ? "Agent" : "Sandbox"
+  const tokenCandidates =
+    credentials?.tokens && credentials.tokens.length > 0 ? credentials.tokens : [undefined as string | undefined]
 
   for (let attempt = 1; attempt <= attempts; attempt++) {
-    try {
-      const sandbox = await Sandbox.get({
-        sandboxId,
-        teamId: credentials?.teamId,
-        projectId: credentials?.projectId,
-        token: credentials?.token
-      })
-      if (sandbox.status !== "running") {
-        throw new Error(`Sandbox not running: ${sandbox.status}`)
+    for (const token of tokenCandidates) {
+      try {
+        const sandbox = await Sandbox.get({
+          sandboxId,
+          teamId: credentials?.teamId,
+          projectId: credentials?.projectId,
+          token
+        })
+        if (sandbox.status !== "running") {
+          throw new Error(`Sandbox not running: ${sandbox.status}`)
+        }
+        return sandbox
+      } catch (error) {
+        lastError = error
       }
-      return sandbox
-    } catch (error) {
-      lastError = error
-      const apiError = error as {
-        message?: string
-        response?: { status?: number; statusText?: string }
-        sandboxId?: string
-        json?: unknown
-      }
-      const responsePayload =
-        apiError?.json && typeof apiError.json === "object" && "error" in apiError.json
-          ? (apiError.json as { error?: { code?: string; message?: string; sandboxId?: string } }).error
-          : undefined
-      const detail = [
-        responsePayload?.message || apiError?.message || String(error),
-        apiError?.response?.status ? `status=${apiError.response.status}` : null,
-        responsePayload?.code ? `code=${responsePayload.code}` : null,
-        responsePayload?.sandboxId || apiError?.sandboxId
-          ? `sandboxId=${responsePayload?.sandboxId || apiError?.sandboxId}`
-          : null
-      ]
-        .filter(Boolean)
-        .join(" ")
-      workflowLog(`[${phaseLabel}] Sandbox reattach attempt ${attempt}/${attempts} failed: ${detail}`)
-      if (attempt >= attempts) {
-        break
-      }
-
-      await appendProgressLog(
-        progressContext,
-        `[${phaseLabel}] Sandbox unavailable, retrying reattach (${attempt}/${attempts - 1})... ${detail}`.slice(0, 280)
-      )
-      await new Promise((resolve) => setTimeout(resolve, retryDelayMs))
     }
+
+    const apiError = lastError as {
+      message?: string
+      response?: { status?: number; statusText?: string }
+      sandboxId?: string
+      json?: unknown
+    }
+    const responsePayload =
+      apiError?.json && typeof apiError.json === "object" && "error" in apiError.json
+        ? (apiError.json as { error?: { code?: string; message?: string; sandboxId?: string } }).error
+        : undefined
+    const detail = [
+      responsePayload?.message || apiError?.message || String(lastError),
+      apiError?.response?.status ? `status=${apiError.response.status}` : null,
+      responsePayload?.code ? `code=${responsePayload.code}` : null,
+      responsePayload?.sandboxId || apiError?.sandboxId
+        ? `sandboxId=${responsePayload?.sandboxId || apiError?.sandboxId}`
+        : null
+    ]
+      .filter(Boolean)
+      .join(" ")
+    workflowLog(`[${phaseLabel}] Sandbox reattach attempt ${attempt}/${attempts} failed: ${detail}`)
+    if (attempt >= attempts) {
+      break
+    }
+
+    await appendProgressLog(
+      progressContext,
+      `[${phaseLabel}] Sandbox unavailable, retrying reattach (${attempt}/${attempts - 1})... ${detail}`.slice(0, 280)
+    )
+    await new Promise((resolve) => setTimeout(resolve, retryDelayMs))
   }
 
   workflowLog(
     `[${phaseLabel}] Sandbox reattach exhausted after ${attempts} attempt(s): ${lastError instanceof Error ? lastError.message : String(lastError)}`
   )
+  throw lastError instanceof Error ? lastError : new Error(String(lastError))
+}
+
+function getVercelApiTokenCandidates(explicitToken?: string): string[] {
+  return Array.from(
+    new Set([explicitToken, process.env.VERCEL_TOKEN, process.env.VERCEL_OIDC_TOKEN].filter(Boolean) as string[])
+  )
+}
+
+function isVercelAuthFailure(error: unknown): boolean {
+  const apiError = error as {
+    message?: string
+    response?: { status?: number }
+    json?: unknown
+  }
+  const responsePayload =
+    apiError?.json && typeof apiError.json === "object" && "error" in apiError.json
+      ? (apiError.json as { error?: { code?: string; message?: string } }).error
+      : undefined
+  const detail =
+    `${responsePayload?.message || ""} ${responsePayload?.code || ""} ${apiError?.message || ""}`.toLowerCase()
+  return (
+    apiError?.response?.status === 401 ||
+    apiError?.response?.status === 403 ||
+    detail.includes("forbidden") ||
+    detail.includes("invalidtoken")
+  )
+}
+
+async function createSandboxWithTokenFallback(
+  config: Parameters<typeof getOrCreateD3kSandbox>[0],
+  vercelApiTokens: string[],
+  progressContext?: ProgressContext | null,
+  phase?: "init" | "observe" | "agent"
+): Promise<Awaited<ReturnType<typeof getOrCreateD3kSandbox>>> {
+  const phaseLabel = phase === "observe" ? "Observe" : phase === "agent" ? "Agent" : "Sandbox"
+  const tokenCandidates = vercelApiTokens.length > 0 ? vercelApiTokens : [undefined as string | undefined]
+  let lastError: unknown
+
+  for (let index = 0; index < tokenCandidates.length; index++) {
+    const token = tokenCandidates[index]
+    try {
+      return await getOrCreateD3kSandbox({
+        ...config,
+        vercelToken: token
+      })
+    } catch (error) {
+      lastError = error
+      if (!isVercelAuthFailure(error) || index === tokenCandidates.length - 1) {
+        throw error
+      }
+      await appendProgressLog(
+        progressContext,
+        `[${phaseLabel}] Sandbox auth failed with token candidate ${index + 1}/${tokenCandidates.length}; retrying with fallback credential...`
+      )
+    }
+  }
+
   throw lastError instanceof Error ? lastError : new Error(String(lastError))
 }
 
@@ -1830,15 +1893,9 @@ export async function initSandboxStep(
     await updateProgress(progressContext, 1, "Preparing Turbopack analyzer data...")
   }
 
-  if (vercelOidcToken && !process.env.VERCEL_OIDC_TOKEN) {
-    process.env.VERCEL_OIDC_TOKEN = vercelOidcToken
-  }
-
   const developmentEnv: Record<string, string> = {}
   let developmentEnvLoadFailed = false
-  const envFetchTokens = Array.from(
-    new Set([vercelOidcToken, process.env.VERCEL_TOKEN, process.env.VERCEL_OIDC_TOKEN].filter(Boolean) as string[])
-  )
+  const envFetchTokens = getVercelApiTokenCandidates(vercelOidcToken)
 
   if (projectId && envFetchTokens.length > 0) {
     try {
@@ -1921,25 +1978,29 @@ export async function initSandboxStep(
   timer.start("Create sandbox (getOrCreateD3kSandbox)")
   let sandboxResult: Awaited<ReturnType<typeof getOrCreateD3kSandbox>>
   try {
-    sandboxResult = await getOrCreateD3kSandbox({
-      repoUrl,
-      branch,
-      githubPat,
-      projectId,
-      teamId,
-      vercelToken: vercelOidcToken,
-      npmToken: effectiveNpmToken,
-      sourceTarballUrl,
-      sourceLabel,
-      // Turbopack workflows now require CWV verification, so browser/d3k setup cannot be skipped.
-      skipD3kSetup: false,
-      onProgress: (message) => appendProgressLog(progressContext, `[Sandbox] ${message}`),
-      projectDir: projectDir || "",
-      devCommand: devAgentDevServerCommand,
-      projectEnv: developmentEnv,
-      timeout: WORKFLOW_SANDBOX_TIMEOUT,
-      debug: true
-    })
+    sandboxResult = await createSandboxWithTokenFallback(
+      {
+        repoUrl,
+        branch,
+        githubPat,
+        projectId,
+        teamId,
+        npmToken: effectiveNpmToken,
+        sourceTarballUrl,
+        sourceLabel,
+        // Turbopack workflows now require CWV verification, so browser/d3k setup cannot be skipped.
+        skipD3kSetup: false,
+        onProgress: (message) => appendProgressLog(progressContext, `[Sandbox] ${message}`),
+        projectDir: projectDir || "",
+        devCommand: devAgentDevServerCommand,
+        projectEnv: developmentEnv,
+        timeout: WORKFLOW_SANDBOX_TIMEOUT,
+        debug: true
+      },
+      envFetchTokens,
+      progressContext,
+      "init"
+    )
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     if (message.includes("Sandbox git source clone failed")) {
@@ -2382,9 +2443,7 @@ export async function observeBaselineStep(
   const timer = new StepTimer()
   const isTurbopackBundleAnalyzer = progressContext?.workflowType === "turbopack-bundle-analyzer"
 
-  if (vercelOidcToken && !process.env.VERCEL_OIDC_TOKEN) {
-    process.env.VERCEL_OIDC_TOKEN = vercelOidcToken
-  }
+  const vercelApiTokens = getVercelApiTokenCandidates(vercelOidcToken)
 
   timer.start("Reconnect to sandbox")
   workflowLog(`[Observe] Reconnecting to sandbox: ${sandboxId}`)
@@ -2395,7 +2454,7 @@ export async function observeBaselineStep(
     sandbox = await getRunningSandboxWithRetry(sandboxId, progressContext, "observe", 3, 2000, {
       teamId,
       projectId,
-      token: vercelOidcToken
+      tokens: vercelApiTokens
     })
   } catch (sandboxError) {
     const canFallbackToInitObservation =
@@ -2441,22 +2500,26 @@ export async function observeBaselineStep(
     await appendProgressLog(progressContext, "[Observe] Previous sandbox unavailable, creating a fresh one...")
     let freshResult: Awaited<ReturnType<typeof getOrCreateD3kSandbox>>
     try {
-      freshResult = await getOrCreateD3kSandbox({
-        repoUrl,
-        branch: repoBranch,
-        githubPat,
-        projectId,
-        teamId,
-        vercelToken: vercelOidcToken,
-        npmToken,
-        sourceTarballUrl,
-        sourceLabel,
-        projectDir: projectDir || "",
-        devCommand: devAgentDevServerCommand,
-        timeout: WORKFLOW_SANDBOX_TIMEOUT,
-        debug: true,
-        onProgress: (message) => appendProgressLog(progressContext, `[Sandbox] ${message}`)
-      })
+      freshResult = await createSandboxWithTokenFallback(
+        {
+          repoUrl,
+          branch: repoBranch,
+          githubPat,
+          projectId,
+          teamId,
+          npmToken,
+          sourceTarballUrl,
+          sourceLabel,
+          projectDir: projectDir || "",
+          devCommand: devAgentDevServerCommand,
+          timeout: WORKFLOW_SANDBOX_TIMEOUT,
+          debug: true,
+          onProgress: (message) => appendProgressLog(progressContext, `[Sandbox] ${message}`)
+        },
+        vercelApiTokens,
+        progressContext,
+        "observe"
+      )
     } catch (freshSandboxError) {
       await appendProgressLog(
         progressContext,
@@ -2888,9 +2951,7 @@ export async function agentFixLoopStep(
   const timer = new StepTimer()
   const isTurbopackBundleAnalyzer = progressContext?.workflowType === "turbopack-bundle-analyzer"
 
-  if (vercelOidcToken && !process.env.VERCEL_OIDC_TOKEN) {
-    process.env.VERCEL_OIDC_TOKEN = vercelOidcToken
-  }
+  const vercelApiTokens = getVercelApiTokenCandidates(vercelOidcToken)
 
   timer.start("Reconnect to sandbox")
   workflowLog(`[Agent] Reconnecting to sandbox: ${sandboxId}`)
@@ -2907,7 +2968,7 @@ export async function agentFixLoopStep(
     sandbox = await getRunningSandboxWithRetry(sandboxId, progressContext, "agent", 3, 2000, {
       teamId,
       projectId,
-      token: vercelOidcToken
+      tokens: vercelApiTokens
     })
   } catch (sandboxError) {
     workflowLog(
@@ -2916,22 +2977,26 @@ export async function agentFixLoopStep(
     await appendProgressLog(progressContext, "[Agent] Previous sandbox unavailable, creating a fresh one...")
     let freshResult: Awaited<ReturnType<typeof getOrCreateD3kSandbox>>
     try {
-      freshResult = await getOrCreateD3kSandbox({
-        repoUrl,
-        branch: repoBranch,
-        githubPat,
-        projectId,
-        teamId,
-        vercelToken: vercelOidcToken,
-        npmToken,
-        sourceTarballUrl,
-        sourceLabel,
-        projectDir: projectDir || "",
-        devCommand: devAgentDevServerCommand,
-        timeout: WORKFLOW_SANDBOX_TIMEOUT,
-        debug: true,
-        onProgress: (message) => appendProgressLog(progressContext, `[Sandbox] ${message}`)
-      })
+      freshResult = await createSandboxWithTokenFallback(
+        {
+          repoUrl,
+          branch: repoBranch,
+          githubPat,
+          projectId,
+          teamId,
+          npmToken,
+          sourceTarballUrl,
+          sourceLabel,
+          projectDir: projectDir || "",
+          devCommand: devAgentDevServerCommand,
+          timeout: WORKFLOW_SANDBOX_TIMEOUT,
+          debug: true,
+          onProgress: (message) => appendProgressLog(progressContext, `[Sandbox] ${message}`)
+        },
+        vercelApiTokens,
+        progressContext,
+        "agent"
+      )
     } catch (freshSandboxError) {
       await appendProgressLog(
         progressContext,

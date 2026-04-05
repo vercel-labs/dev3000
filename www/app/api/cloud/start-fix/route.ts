@@ -140,10 +140,14 @@ export async function POST(request: Request) {
     clearWorkflowLog()
 
     // Resolve the Vercel API token used by downstream sandbox/project calls inside the workflow.
-    // Do not use the user access token here: sandbox APIs require a real Vercel token/OIDC token,
-    // and the user/session token can be unauthorized or expire mid-workflow.
+    // Prefer an explicit OIDC header when available, otherwise carry the user's access token so
+    // project-scoped operations can still access the selected team/project. Workflow/runtime env
+    // tokens remain available as fallbacks inside the workflow steps.
     const vercelApiToken =
-      request.headers.get("x-vercel-oidc-token") || process.env.VERCEL_OIDC_TOKEN || process.env.VERCEL_TOKEN
+      request.headers.get("x-vercel-oidc-token") ||
+      accessToken ||
+      process.env.VERCEL_OIDC_TOKEN ||
+      process.env.VERCEL_TOKEN
     workflowLog(`[Start Fix] Vercel API token available: ${!!vercelApiToken}`)
 
     const body = await request.json()
