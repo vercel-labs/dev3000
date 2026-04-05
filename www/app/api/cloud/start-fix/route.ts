@@ -139,9 +139,11 @@ export async function POST(request: Request) {
     // Clear workflow log file at start of new workflow
     clearWorkflowLog()
 
-    // Resolve Vercel API token for downstream project API calls inside the workflow.
-    // Prefer request-scoped auth token (fresh user token), then explicit header, then env fallback.
-    const vercelApiToken = accessToken || request.headers.get("x-vercel-oidc-token") || process.env.VERCEL_OIDC_TOKEN
+    // Resolve the Vercel API token used by downstream sandbox/project calls inside the workflow.
+    // Do not use the user access token here: sandbox APIs require a real Vercel token/OIDC token,
+    // and the user/session token can be unauthorized or expire mid-workflow.
+    const vercelApiToken =
+      request.headers.get("x-vercel-oidc-token") || process.env.VERCEL_OIDC_TOKEN || process.env.VERCEL_TOKEN
     workflowLog(`[Start Fix] Vercel API token available: ${!!vercelApiToken}`)
 
     const body = await request.json()

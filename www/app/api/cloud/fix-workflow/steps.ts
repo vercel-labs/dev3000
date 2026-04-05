@@ -4082,6 +4082,20 @@ function buildClaudeActionStepPrompt(
   step: { kind: string; config: Record<string, string> },
   index: number
 ): ClaudeTurnPrompt {
+  const promptText = (step.config.prompt || "").trim()
+  const promptTextLower = promptText.toLowerCase()
+  const inferredSendPromptMaxTurns = promptTextLower.includes("stop early")
+    ? 8
+    : promptTextLower.includes("verify")
+      ? 12
+      : promptTextLower.includes("implement") ||
+          promptTextLower.includes("parallelize") ||
+          promptTextLower.includes("deduplicate") ||
+          promptTextLower.includes("move derived state") ||
+          promptTextLower.includes("unify repeated")
+        ? 24
+        : 16
+
   switch (step.kind) {
     case "browse-to-page":
       return {
@@ -4107,11 +4121,17 @@ function buildClaudeActionStepPrompt(
         maxTurns: 14,
         prompt: `Step ${index + 1}: Go back to step ${step.config.stepNumber || "the prior relevant step"} and repeat from there to verify improvements.`
       }
+    case "send-prompt":
+      return {
+        label: `Step ${index + 1}`,
+        maxTurns: inferredSendPromptMaxTurns,
+        prompt: promptText || `Step ${index + 1}: Continue the workflow.`
+      }
     default:
       return {
         label: `Step ${index + 1}`,
-        maxTurns: 10,
-        prompt: step.config.prompt || `Step ${index + 1}: Continue the workflow.`
+        maxTurns: 12,
+        prompt: promptText || `Step ${index + 1}: Continue the workflow.`
       }
   }
 }
