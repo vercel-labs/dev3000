@@ -1005,22 +1005,34 @@ async function getRunningSandboxWithRetry(
   const phaseLabel = phase === "observe" ? "Observe" : phase === "agent" ? "Agent" : "Sandbox"
   const tokenCandidates =
     credentials?.tokens && credentials.tokens.length > 0 ? credentials.tokens : [undefined as string | undefined]
+  const credentialVariants =
+    credentials?.projectId && credentials.teamId
+      ? [
+          { projectId: credentials.projectId, teamId: credentials.teamId, label: "project-scoped" },
+          { projectId: undefined, teamId: undefined, label: "unscoped" }
+        ]
+      : [{ projectId: credentials?.projectId, teamId: credentials?.teamId, label: "default" }]
 
   for (let attempt = 1; attempt <= attempts; attempt++) {
-    for (const token of tokenCandidates) {
-      try {
-        const sandbox = await Sandbox.get({
-          sandboxId,
-          teamId: credentials?.teamId,
-          projectId: credentials?.projectId,
-          token
-        })
-        if (sandbox.status !== "running") {
-          throw new Error(`Sandbox not running: ${sandbox.status}`)
+    for (const variant of credentialVariants) {
+      for (const token of tokenCandidates) {
+        try {
+          const sandbox = await Sandbox.get({
+            sandboxId,
+            teamId: variant.teamId,
+            projectId: variant.projectId,
+            token
+          })
+          if (sandbox.status !== "running") {
+            throw new Error(`Sandbox not running: ${sandbox.status}`)
+          }
+          return sandbox
+        } catch (error) {
+          lastError = error
+          if (isSandboxProjectBindingFailure(error) && variant.label === "project-scoped") {
+            break
+          }
         }
-        return sandbox
-      } catch (error) {
-        lastError = error
       }
     }
 
@@ -1083,8 +1095,32 @@ function isVercelAuthFailure(error: unknown): boolean {
   return (
     apiError?.response?.status === 401 ||
     apiError?.response?.status === 403 ||
+    detail.includes("status=401") ||
+    detail.includes("status=403") ||
     detail.includes("forbidden") ||
-    detail.includes("invalidtoken")
+    detail.includes("invalidtoken") ||
+    detail.includes("not authorized")
+  )
+}
+
+function isSandboxProjectBindingFailure(error: unknown): boolean {
+  const apiError = error as {
+    message?: string
+    response?: { status?: number }
+    json?: unknown
+  }
+  const responsePayload =
+    apiError?.json && typeof apiError.json === "object" && "error" in apiError.json
+      ? (apiError.json as { error?: { code?: string; message?: string } }).error
+      : undefined
+  const detail =
+    `${responsePayload?.message || ""} ${responsePayload?.code || ""} ${apiError?.message || ""}`.toLowerCase()
+  return (
+    (apiError?.response?.status === 404 ||
+      detail.includes("status=404") ||
+      detail.includes("not_found") ||
+      detail.includes("could not find project")) &&
+    detail.includes("project")
   )
 }
 
@@ -1096,24 +1132,42 @@ async function createSandboxWithTokenFallback(
 ): Promise<Awaited<ReturnType<typeof getOrCreateD3kSandbox>>> {
   const phaseLabel = phase === "observe" ? "Observe" : phase === "agent" ? "Agent" : "Sandbox"
   const tokenCandidates = vercelApiTokens.length > 0 ? vercelApiTokens : [undefined as string | undefined]
+  const configVariants =
+    config.projectId && config.teamId
+      ? [
+          { projectId: config.projectId, teamId: config.teamId, label: "project-scoped" },
+          { projectId: undefined, teamId: undefined, label: "unscoped" }
+        ]
+      : [{ projectId: config.projectId, teamId: config.teamId, label: "default" }]
   let lastError: unknown
 
-  for (let index = 0; index < tokenCandidates.length; index++) {
-    const token = tokenCandidates[index]
-    try {
-      return await getOrCreateD3kSandbox({
-        ...config,
-        vercelToken: token
-      })
-    } catch (error) {
-      lastError = error
-      if (!isVercelAuthFailure(error) || index === tokenCandidates.length - 1) {
-        throw error
+  for (const variant of configVariants) {
+    for (let index = 0; index < tokenCandidates.length; index++) {
+      const token = tokenCandidates[index]
+      try {
+        return await getOrCreateD3kSandbox({
+          ...config,
+          projectId: variant.projectId,
+          teamId: variant.teamId,
+          vercelToken: token
+        })
+      } catch (error) {
+        lastError = error
+        if (isSandboxProjectBindingFailure(error) && variant.label === "project-scoped") {
+          await appendProgressLog(
+            progressContext,
+            `[${phaseLabel}] Project-scoped sandbox binding failed; retrying without project binding...`
+          )
+          break
+        }
+        if (!isVercelAuthFailure(error) || index === tokenCandidates.length - 1) {
+          throw error
+        }
+        await appendProgressLog(
+          progressContext,
+          `[${phaseLabel}] Sandbox auth failed with token candidate ${index + 1}/${tokenCandidates.length}; retrying with fallback credential...`
+        )
       }
-      await appendProgressLog(
-        progressContext,
-        `[${phaseLabel}] Sandbox auth failed with token candidate ${index + 1}/${tokenCandidates.length}; retrying with fallback credential...`
-      )
     }
   }
 
