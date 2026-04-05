@@ -2440,10 +2440,18 @@ export async function observeBaselineStep(
   workflowLog(
     `[Observe] Baseline navigation: success=${beforeNavResult.success}${beforeNavResult.error ? `, error=${beforeNavResult.error}` : ""}`
   )
+  await appendProgressLog(
+    progressContext,
+    `[Observe] Browser open ${beforeNavResult.success ? "succeeded" : "failed"}${beforeNavResult.error ? `: ${beforeNavResult.error}` : ""}`
+  )
   await new Promise((resolve) => setTimeout(resolve, 2000))
   const beforeReloadResult = await reloadBrowser(sandbox, cloudBrowserMode)
   workflowLog(
     `[Observe] Baseline reload: success=${beforeReloadResult.success}${beforeReloadResult.error ? `, error=${beforeReloadResult.error}` : ""}`
+  )
+  await appendProgressLog(
+    progressContext,
+    `[Observe] Browser reload ${beforeReloadResult.success ? "succeeded" : "failed"}${beforeReloadResult.error ? `: ${beforeReloadResult.error}` : ""}`
   )
   await new Promise((resolve) => setTimeout(resolve, 5000))
   timer.end()
@@ -2451,8 +2459,13 @@ export async function observeBaselineStep(
   // Capture "before" Web Vitals via CDP
   timer.start("Capture before Web Vitals")
   workflowLog("[Observe] Capturing before Web Vitals via CDP...")
+  await appendProgressLog(progressContext, "[Observe] Capturing baseline Web Vitals...")
   const { vitals: capturedBeforeWebVitals } = await fetchWebVitalsViaCDP(sandbox, localTargetUrl, cloudBrowserMode)
   workflowLog(`[Observe] Before Web Vitals captured: ${JSON.stringify(capturedBeforeWebVitals)}`)
+  await appendProgressLog(
+    progressContext,
+    `[Observe] Baseline Web Vitals captured: ${JSON.stringify(capturedBeforeWebVitals)}`
+  )
 
   if (effectiveBeforeScreenshots.length === 0) {
     timer.start("Capture baseline screenshot")

@@ -35,28 +35,55 @@ async function runCommand(
   args: string[],
   options?: { cwd?: string; timeout?: number }
 ): Promise<CommandResult> {
-  const result = await sandbox.runCommand({
-    cmd,
-    args,
-    cwd: options?.cwd
-  })
-
+  const timeoutMs = options?.timeout
+  const controller = new AbortController()
   let stdout = ""
   let stderr = ""
-  for await (const log of result.logs()) {
-    if (log.stream === "stdout") {
-      stdout += log.data
-    } else {
-      stderr += log.data
+  const timeoutId =
+    typeof timeoutMs === "number" && timeoutMs > 0
+      ? setTimeout(() => {
+          controller.abort()
+        }, timeoutMs)
+      : null
+
+  try {
+    const commandString = [
+      options?.cwd ? `cd ${shellEscape(options.cwd)}` : null,
+      `exec ${[cmd, ...args].map(shellEscape).join(" ")}`
+    ]
+      .filter(Boolean)
+      .join(" && ")
+
+    const result = await sandbox.runCommand("sh", ["-lc", commandString], {
+      signal: controller.signal
+    })
+
+    for await (const log of result.logs()) {
+      if (log.stream === "stdout") {
+        stdout += log.data
+      } else {
+        stderr += log.data
+      }
     }
-  }
+    return {
+      exitCode: result.exitCode,
+      stdout,
+      stderr
+    }
+  } catch (error) {
+    if (controller.signal.aborted && typeof timeoutMs === "number" && timeoutMs > 0) {
+      return {
+        exitCode: 124,
+        stdout,
+        stderr: stderr || `Command timed out after ${timeoutMs}ms`
+      }
+    }
 
-  await result.wait()
-
-  return {
-    exitCode: result.exitCode,
-    stdout,
-    stderr
+    throw error
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId)
+    }
   }
 }
 
