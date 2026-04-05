@@ -947,6 +947,48 @@ async function appendProgressLog(ctx: ProgressContext | null | undefined, messag
   }
 }
 
+async function persistRunArtifacts(
+  ctx: ProgressContext | null | undefined,
+  updates: {
+    beforeScreenshots?: Array<{ timestamp: number; blobUrl: string; label?: string }>
+    afterScreenshots?: Array<{ timestamp: number; blobUrl: string; label?: string }>
+    beforeWebVitals?: import("@/types").WebVitals
+    afterWebVitals?: import("@/types").WebVitals
+  }
+) {
+  if (!ctx) return
+  try {
+    const existingRun = (await listWorkflowRuns(ctx.userId)).find((run) => run.id === ctx.runId)
+    if (!existingRun) return
+
+    await saveWorkflowRun({
+      ...existingRun,
+      id: ctx.runId,
+      userId: ctx.userId,
+      projectName: ctx.projectName,
+      timestamp: ctx.timestamp,
+      status: existingRun.status === "done" || existingRun.status === "failure" ? existingRun.status : "running",
+      type: (ctx.workflowType as WorkflowType) || existingRun.type || "cls-fix",
+      devAgentId: ctx.devAgentId,
+      devAgentName: ctx.devAgentName,
+      devAgentDescription: ctx.devAgentDescription,
+      devAgentRevision: ctx.devAgentRevision,
+      devAgentSpecHash: ctx.devAgentSpecHash,
+      devAgentExecutionMode: ctx.devAgentExecutionMode,
+      devAgentSandboxBrowser: ctx.devAgentSandboxBrowser,
+      stepNumber: Math.max(existingRun.stepNumber ?? 0, ctx.activeStepNumber ?? 0, 1),
+      currentStep: ctx.activeCurrentStep ?? existingRun.currentStep ?? "Running workflow...",
+      sandboxUrl: ctx.sandboxUrl ?? existingRun.sandboxUrl,
+      beforeScreenshots: updates.beforeScreenshots ?? existingRun.beforeScreenshots,
+      afterScreenshots: updates.afterScreenshots ?? existingRun.afterScreenshots,
+      beforeWebVitals: updates.beforeWebVitals ?? existingRun.beforeWebVitals,
+      afterWebVitals: updates.afterWebVitals ?? existingRun.afterWebVitals
+    })
+  } catch (error) {
+    workflowLog(`[Progress] Failed to persist run artifacts: ${error instanceof Error ? error.message : String(error)}`)
+  }
+}
+
 async function getRunningSandboxWithRetry(
   sandboxId: string,
   progressContext?: ProgressContext | null,
@@ -2471,6 +2513,9 @@ export async function observeBaselineStep(
     progressContext,
     `[Observe] Baseline Web Vitals captured: ${JSON.stringify(capturedBeforeWebVitals)}`
   )
+  await persistRunArtifacts(progressContext, {
+    beforeWebVitals: capturedBeforeWebVitals
+  })
 
   if (effectiveBeforeScreenshots.length === 0) {
     timer.start("Capture baseline screenshot")
@@ -2491,6 +2536,11 @@ export async function observeBaselineStep(
       progressContext,
       `[Observe] Baseline screenshot ${effectiveBeforeScreenshots.length > 0 ? "captured" : "failed"}`
     )
+    if (effectiveBeforeScreenshots.length > 0) {
+      await persistRunArtifacts(progressContext, {
+        beforeScreenshots: effectiveBeforeScreenshots
+      })
+    }
   }
 
   // CLS fallback via d3k logs if CDP didn't capture it
@@ -3070,6 +3120,9 @@ export async function agentFixLoopStep(
       )
       if (afterScreenshots.length > 0) {
         finalCls.screenshots = afterScreenshots
+        await persistRunArtifacts(progressContext, {
+          afterScreenshots
+        })
       }
       timer.end()
       workflowLog(`[Agent] Captured ${finalCls.screenshots.length} after screenshot(s)`)
