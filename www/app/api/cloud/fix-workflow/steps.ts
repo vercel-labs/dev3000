@@ -780,15 +780,6 @@ async function captureSandboxScreenshot(
   targetUrl?: string,
   waitMs = 5000
 ): Promise<{ success: boolean; error?: string }> {
-  if (targetUrl) {
-    const chromiumResult = await captureScreenshotWithSandboxChromium(sandbox, screenshotPath, targetUrl, waitMs)
-    if (chromiumResult.success) {
-      return { success: true }
-    }
-
-    workflowLog(`[Browser] Chromium URL screenshot failed for ${targetUrl}: ${chromiumResult.error || "unknown error"}`)
-  }
-
   const cdpResult = await captureScreenshotViaCDP(sandbox, screenshotPath, targetUrl)
   if (cdpResult.success) {
     return { success: true }
@@ -800,6 +791,22 @@ async function captureSandboxScreenshot(
 
   const screenshotResult = await _screenshotBrowser(sandbox, screenshotPath, { fullPage: false }, browserMode)
   if (!screenshotResult.success) {
+    if (targetUrl) {
+      const chromiumResult = await captureScreenshotWithSandboxChromium(sandbox, screenshotPath, targetUrl, waitMs)
+      if (chromiumResult.success) {
+        return { success: true }
+      }
+
+      workflowLog(
+        `[Browser] Chromium URL screenshot failed for ${targetUrl}: ${chromiumResult.error || "unknown error"}`
+      )
+
+      return {
+        success: false,
+        error: chromiumResult.error || screenshotResult.error || cdpResult.error || "screenshot capture failed"
+      }
+    }
+
     return {
       success: false,
       error: screenshotResult.error || cdpResult.error || "screenshot capture failed"
