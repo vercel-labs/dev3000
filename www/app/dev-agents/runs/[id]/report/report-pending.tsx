@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Skeleton } from "@/components/ui/skeleton"
+import { CoordinatedPlayers } from "./coordinated-players"
+import { ScreenshotPlayer } from "./screenshot-player"
 
 interface ReportPendingProps {
   runId: string
@@ -13,6 +15,12 @@ interface ReportPendingProps {
   projectName?: string
   devAgentName?: string
   embedded?: boolean
+}
+
+interface Screenshot {
+  timestamp: number
+  blobUrl: string
+  label?: string
 }
 
 const STEP_LABELS = [
@@ -124,6 +132,8 @@ export function ReportPending({
   const [sandboxUrl, setSandboxUrl] = useState<string | null>(null)
   const [stepNumber, setStepNumber] = useState<number | null>(null)
   const [progressLogs, setProgressLogs] = useState<string[]>([])
+  const [beforeScreenshots, setBeforeScreenshots] = useState<Screenshot[]>([])
+  const [afterScreenshots, setAfterScreenshots] = useState<Screenshot[]>([])
   const logsRef = useRef<HTMLTextAreaElement | null>(null)
 
   useEffect(() => {
@@ -152,6 +162,8 @@ export function ReportPending({
             stepNumber?: number
             sandboxUrl?: string
             progressLogs?: string[]
+            beforeScreenshots?: Screenshot[]
+            afterScreenshots?: Screenshot[]
           }>
         }
 
@@ -185,6 +197,8 @@ export function ReportPending({
           setProgressLogs(
             Array.isArray(run.progressLogs) ? run.progressLogs.map((line) => sanitizeDisplayText(line)) : []
           )
+          setBeforeScreenshots(Array.isArray(run.beforeScreenshots) ? run.beforeScreenshots : [])
+          setAfterScreenshots(Array.isArray(run.afterScreenshots) ? run.afterScreenshots : [])
         }
       } catch (error) {
         if (!isActive) return
@@ -306,13 +320,44 @@ export function ReportPending({
       <div className="grid gap-4">
         <div>
           <div className="text-sm font-medium text-foreground mb-2">Sandbox Summary</div>
-          <Skeleton className="h-10 w-2/3" />
+          {sandboxUrl ? (
+            <a
+              href={sandboxUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm text-muted-foreground underline underline-offset-4 break-all"
+            >
+              {sandboxUrl}
+            </a>
+          ) : (
+            <Skeleton className="h-10 w-2/3" />
+          )}
         </div>
         <div>
           <div className="text-sm font-medium text-foreground mb-2">Timing Breakdown</div>
           <Skeleton className="h-6 w-1/2" />
         </div>
-        <Skeleton className="h-40 w-full" />
+        {beforeScreenshots.length > 0 || afterScreenshots.length > 0 ? (
+          beforeScreenshots.length > 0 && afterScreenshots.length > 0 ? (
+            <CoordinatedPlayers
+              beforeScreenshots={beforeScreenshots}
+              afterScreenshots={afterScreenshots}
+              fps={2}
+              loopDelayMs={10000}
+            />
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2">
+              {beforeScreenshots.length > 0 ? (
+                <ScreenshotPlayer screenshots={beforeScreenshots} title="Before" autoPlay={true} fps={2} loop={true} />
+              ) : null}
+              {afterScreenshots.length > 0 ? (
+                <ScreenshotPlayer screenshots={afterScreenshots} title="After" autoPlay={true} fps={2} loop={true} />
+              ) : null}
+            </div>
+          )
+        ) : (
+          <Skeleton className="h-40 w-full" />
+        )}
         <div className="grid grid-cols-2 gap-4">
           <Skeleton className="h-24 w-full" />
           <Skeleton className="h-24 w-full" />
