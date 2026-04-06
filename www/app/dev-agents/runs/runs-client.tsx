@@ -68,6 +68,7 @@ export default function DevAgentRunsClient({ userId, initialRuns }: DevAgentRuns
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const lastSelectedIndex = useRef<number | null>(null)
+  const pendingShiftSelection = useRef(false)
 
   const { data: runs = initialRuns, mutate } = useSWR(`/api/dev-agents/runs?userId=${userId}`, fetcher, {
     fallbackData: initialRuns,
@@ -84,10 +85,10 @@ export default function DevAgentRunsClient({ userId, initialRuns }: DevAgentRuns
   )
 
   const handleSelectRow = useCallback(
-    (runId: string, index: number, event: React.MouseEvent) => {
+    (runId: string, index: number, options?: { shiftKey?: boolean }) => {
       setSelectedIds((current) => {
         const next = new Set(current)
-        if (event.shiftKey && lastSelectedIndex.current !== null) {
+        if (options?.shiftKey && lastSelectedIndex.current !== null) {
           const start = Math.min(lastSelectedIndex.current, index)
           const end = Math.max(lastSelectedIndex.current, index)
           for (let itemIndex = start; itemIndex <= end; itemIndex++) {
@@ -186,8 +187,16 @@ export default function DevAgentRunsClient({ userId, initialRuns }: DevAgentRuns
                     <TableCell>
                       <Checkbox
                         checked={selectedIds.has(run.id)}
-                        onCheckedChange={() => handleSelectRow(run.id, index, { shiftKey: false } as React.MouseEvent)}
-                        onClick={(event) => handleSelectRow(run.id, index, event as unknown as React.MouseEvent)}
+                        onPointerDown={(event) => {
+                          pendingShiftSelection.current = event.shiftKey
+                        }}
+                        onCheckedChange={() => {
+                          handleSelectRow(run.id, index, { shiftKey: pendingShiftSelection.current })
+                          pendingShiftSelection.current = false
+                        }}
+                        onKeyDown={(event) => {
+                          pendingShiftSelection.current = event.shiftKey
+                        }}
                         aria-label={`Select ${run.projectName}`}
                       />
                     </TableCell>
