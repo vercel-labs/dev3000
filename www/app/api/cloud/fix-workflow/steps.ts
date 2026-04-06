@@ -784,6 +784,56 @@ async function capturePhaseScreenshot(
 
 const MIN_NON_BLANK_SCREENSHOT_BYTES = 4500
 
+function extractLatestD3kScreenshotPath(logs: string): string | null {
+  const preferredMatches = [
+    ...logs.matchAll(/\[BROWSER\]\s+\[SCREENSHOT\]\s+(\S+(?:page-loaded|navigation-settled)\.png)/g)
+  ]
+  if (preferredMatches.length > 0) {
+    return preferredMatches[preferredMatches.length - 1][1]
+  }
+
+  const cdpMatches = [...logs.matchAll(/\[BROWSER\]\s+\[CDP\]\s+(?:Before|After):\s+(\S+\.png)/g)]
+  if (cdpMatches.length > 0) {
+    return cdpMatches[cdpMatches.length - 1][1]
+  }
+
+  const genericMatches = [...logs.matchAll(/\[BROWSER\]\s+\[SCREENSHOT\]\s+(\S+\.png)/g)]
+    .map((match) => match[1])
+    .filter((path) => !path.endsWith("-error.png"))
+  if (genericMatches.length > 0) {
+    return genericMatches[genericMatches.length - 1]
+  }
+
+  return null
+}
+
+async function captureD3kScreenshotFromLogs(
+  sandbox: Sandbox,
+  logs: string,
+  projectName: string,
+  kind: string,
+  label: string,
+  route: string
+): Promise<Array<{ timestamp: number; blobUrl: string; label?: string }>> {
+  const screenshotPath = extractLatestD3kScreenshotPath(logs)
+  if (!screenshotPath) {
+    return []
+  }
+
+  const blobUrl = await uploadSandboxScreenshot(sandbox, screenshotPath, projectName, kind, route)
+  if (!blobUrl) {
+    return []
+  }
+
+  return [
+    {
+      timestamp: Date.now(),
+      blobUrl,
+      label
+    }
+  ]
+}
+
 async function getSandboxFileSize(sandbox: Sandbox, filePath: string): Promise<number | null> {
   const result = await runSandboxCommandWithOptions(
     sandbox,
@@ -2889,6 +2939,23 @@ export async function observeBaselineStep(
     }
     if (effectiveBeforeScreenshots.length === 0 && baselineClsEvidence.screenshots.length > 0) {
       effectiveBeforeScreenshots = baselineClsEvidence.screenshots
+    }
+    if (effectiveBeforeScreenshots.length === 0) {
+      const d3kFallbackScreenshots = await captureD3kScreenshotFromLogs(
+        sandbox,
+        baselineClsEvidence.d3kLogs || effectiveObservationLogs,
+        progressContext?.projectName || "workflow",
+        "baseline-fallback-d3k",
+        "Before",
+        startPath
+      )
+      if (d3kFallbackScreenshots.length > 0) {
+        effectiveBeforeScreenshots = d3kFallbackScreenshots
+        await persistRunArtifacts(progressContext, {
+          beforeScreenshots: effectiveBeforeScreenshots
+        })
+        await appendProgressLog(progressContext, "[Observe] Baseline screenshot recovered from d3k logs")
+      }
     }
     if (effectiveBeforeScreenshots.length === 0) {
       await appendProgressLog(progressContext, "[Observe] Retrying baseline screenshot after active fallback")
