@@ -24,12 +24,7 @@ export default async function DevAgentRunsPage() {
   }
 
   return (
-    <DevAgentsDashboardShell
-      teams={routeContext.teams}
-      selectedTeam={routeContext.selectedTeam}
-      title="Runs"
-      description="View all of your dev-agent analyses, fixes, and PR-ready runs."
-    >
+    <DevAgentsDashboardShell teams={routeContext.teams} selectedTeam={routeContext.selectedTeam}>
       <DevAgentRunsClient userId={user.id} initialRuns={runs} />
     </DevAgentsDashboardShell>
   )

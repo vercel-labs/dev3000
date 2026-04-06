@@ -141,13 +141,26 @@ export default function DevAgentRunsClient({ userId, initialRuns }: DevAgentRuns
 
   return (
     <div className="space-y-4">
-      {selectedIds.size > 0 ? (
-        <div className="flex justify-end">
-          <Button variant="destructive" size="sm" onClick={() => setIsDeleteDialogOpen(true)}>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div className="space-y-1">
+          <h1 className="text-[24px] font-semibold tracking-[-0.020em] text-[#ededed]">Runs</h1>
+          <div className="max-w-xl text-[14px] leading-[22px] text-[#888]">
+            View all of your dev-agent analyses, fixes, and PR-ready runs.
+          </div>
+        </div>
+        <div className="flex min-h-9 shrink-0 items-start justify-end">
+          <Button
+            variant="destructive"
+            size="sm"
+            className={selectedIds.size > 0 ? "visible" : "invisible pointer-events-none"}
+            onClick={() => setIsDeleteDialogOpen(true)}
+            aria-hidden={selectedIds.size === 0}
+            tabIndex={selectedIds.size > 0 ? 0 : -1}
+          >
             Delete {selectedIds.size} selected
           </Button>
         </div>
-      ) : null}
+      </div>
 
       {runs.length === 0 ? (
         <Card className="border-[#1f1f1f] bg-[#111] p-12 text-center">
