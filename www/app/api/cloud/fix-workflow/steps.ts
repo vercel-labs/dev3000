@@ -2888,6 +2888,31 @@ export async function observeBaselineStep(
     if (effectiveBeforeScreenshots.length === 0 && baselineClsEvidence.screenshots.length > 0) {
       effectiveBeforeScreenshots = baselineClsEvidence.screenshots
     }
+    if (effectiveBeforeScreenshots.length === 0) {
+      await appendProgressLog(progressContext, "[Observe] Retrying baseline screenshot after active fallback")
+      const fallbackBeforeScreenshots = await capturePhaseScreenshot(
+        sandbox,
+        startPath,
+        cloudBrowserMode,
+        progressContext?.projectName || "workflow",
+        "baseline-fallback",
+        "Before",
+        localTargetUrl,
+        10000
+      )
+      if (fallbackBeforeScreenshots.length > 0) {
+        effectiveBeforeScreenshots = fallbackBeforeScreenshots
+        await persistRunArtifacts(progressContext, {
+          beforeScreenshots: effectiveBeforeScreenshots
+        })
+        await appendProgressLog(progressContext, "[Observe] Baseline screenshot captured after active fallback")
+      } else {
+        await appendProgressLog(
+          progressContext,
+          "[Observe] Baseline screenshot still unavailable after active fallback"
+        )
+      }
+    }
     timer.end()
   }
 
