@@ -502,7 +502,7 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
     description:
       "Find sequential async work in React and Next.js flows, remove unnecessary waiting, and verify the main path is flatter.",
     instructions:
-      "Focus only on async waterfalls. Capture a baseline, inspect the route and its related server code for sequential awaits or per-item fetch chains, and rewrite only the highest-impact cases. If the initial inspection shows no meaningful waterfall to remove, stop and report that instead of making speculative edits.",
+      "Focus only on async waterfalls. Use the workflow-provided baseline evidence, inspect the route and its related server code for sequential awaits or per-item fetch chains, and rewrite only the highest-impact cases. If the initial inspection shows no meaningful waterfall to remove, stop and report that instead of making speculative edits.",
     executionMode: "preview-pr",
     sandboxBrowser: "next-browser",
     actionSteps: [
@@ -510,7 +510,7 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
         kind: "send-prompt",
         config: {
           prompt:
-            "Capture a baseline with getWebVitals, then inspect the selected route and nearby server code for sequential awaits, nested per-item fetch loops, and async work that starts too late."
+            "Use the workflow-provided baseline evidence, then inspect the selected route and nearby server code for sequential awaits, nested per-item fetch loops, and async work that starts too late."
         }
       },
       {
@@ -531,7 +531,7 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
         kind: "send-prompt",
         config: {
           prompt:
-            "Verify the route again with getWebVitals and a quick code pass to confirm the main path no longer waits unnecessarily."
+            "Do a quick targeted sanity check and code pass to confirm the main path no longer waits unnecessarily. The workflow runtime will handle final verification."
         }
       }
     ],
@@ -553,7 +553,7 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
     description:
       "Reduce shipped JavaScript by removing oversized client boundaries and deferring low-value code from the initial route bundle.",
     instructions:
-      "Focus only on initial bundle size. Inspect client boundaries, route-level imports, and obviously heavy client code or static payloads. Prefer moving work to the server, lazy-loading non-critical UI, or conditionally loading code behind user intent. If the initial route is already lean and there is no clear shipped-JS win, stop and report that rather than churning code.",
+      "Focus only on initial bundle size. Use the workflow-provided baseline evidence, inspect client boundaries, route-level imports, and obviously heavy client code or static payloads. Prefer moving work to the server, lazy-loading non-critical UI, or conditionally loading code behind user intent. If the initial route is already lean and there is no clear shipped-JS win, stop and report that rather than churning code.",
     executionMode: "preview-pr",
     sandboxBrowser: "next-browser",
     actionSteps: [
@@ -561,7 +561,7 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
         kind: "send-prompt",
         config: {
           prompt:
-            "Capture a baseline with getWebVitals, then inspect the selected route for top-level client boundaries, heavy imports, large static payloads, and low-value widgets that load before user intent."
+            "Use the workflow-provided baseline evidence, then inspect the selected route for top-level client boundaries, heavy imports, large static payloads, and low-value widgets that load before user intent."
         }
       },
       {
@@ -604,7 +604,7 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
     description:
       "Tighten server-rendered routes by deduplicating fetches, reducing request-time work, and shrinking serialized payloads.",
     instructions:
-      "Focus only on server-side performance. Inspect server components, API routes, and server actions for duplicate fetches, avoidable request-time computation, and oversized client-boundary payloads. Prefer composition, cache(), and narrower props. If the route has no meaningful server-side bottleneck after inspection, stop and summarize that instead of forcing a rewrite.",
+      "Focus only on server-side performance. Use the workflow-provided baseline evidence, inspect server components, API routes, and server actions for duplicate fetches, avoidable request-time computation, and oversized client-boundary payloads. Prefer composition, cache(), and narrower props. If the route has no meaningful server-side bottleneck after inspection, stop and summarize that instead of forcing a rewrite.",
     executionMode: "preview-pr",
     sandboxBrowser: "next-browser",
     actionSteps: [
@@ -612,7 +612,7 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
         kind: "send-prompt",
         config: {
           prompt:
-            "Capture a baseline with getWebVitals, then inspect server components and related data helpers for duplicate fetches, sequential request-time work, and over-serialization into client components."
+            "Use the workflow-provided baseline evidence, then inspect server components and related data helpers for duplicate fetches, sequential request-time work, and over-serialization into client components."
         }
       },
       {
@@ -655,7 +655,7 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
     description:
       "Collapse duplicate browser-side requests and subscriptions so client data loading becomes simpler and cheaper.",
     instructions:
-      "Focus only on browser-side fetching and subscriptions. Inspect client components for duplicate requests to the same endpoint, redundant listeners, and repeated local browser work that should be shared or deduplicated. Prefer SWR-style deduplication or a single shared hook. If there is no real duplication to remove, stop and report that rather than introducing abstractions for their own sake.",
+      "Focus only on browser-side fetching and subscriptions. Use the workflow-provided baseline evidence, inspect client components for duplicate requests to the same endpoint, redundant listeners, and repeated local browser work that should be shared or deduplicated. Prefer SWR-style deduplication or a single shared hook. If there is no real duplication to remove, stop and report that rather than introducing abstractions for their own sake.",
     executionMode: "preview-pr",
     sandboxBrowser: "next-browser",
     actionSteps: [
@@ -663,7 +663,7 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
         kind: "send-prompt",
         config: {
           prompt:
-            "Capture a baseline with getWebVitals, then inspect client components for repeated fetches to the same resource, duplicated event listeners, and redundant localStorage or browser work."
+            "Use the workflow-provided baseline evidence, then inspect client components for repeated fetches to the same resource, duplicated event listeners, and redundant localStorage or browser work."
         }
       },
       {
@@ -705,7 +705,7 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
     description:
       "Reduce unnecessary render churn by tightening derived state, render-path computation, and transient client state.",
     instructions:
-      "Focus only on unnecessary re-renders. Inspect client components for expensive work performed on every render, derived state stored via effects, broad dependencies, and transient values that do not need to live in state. If the route has no meaningful render churn after inspection, stop and report that instead of adding memoization by reflex.",
+      "Focus only on unnecessary re-renders. Use the workflow-provided baseline evidence, inspect client components for expensive work performed on every render, derived state stored via effects, broad dependencies, and transient values that do not need to live in state. If the route has no meaningful render churn after inspection, stop and report that instead of adding memoization by reflex.",
     executionMode: "preview-pr",
     sandboxBrowser: "next-browser",
     actionSteps: [
@@ -713,7 +713,7 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
         kind: "send-prompt",
         config: {
           prompt:
-            "Capture a baseline with getWebVitals, then inspect the selected client components for expensive render-path work, effect-driven derived state, and state updates that trigger unnecessary rerenders."
+            "Use the workflow-provided baseline evidence, then inspect the selected client components for expensive render-path work, effect-driven derived state, and state updates that trigger unnecessary rerenders."
         }
       },
       {
