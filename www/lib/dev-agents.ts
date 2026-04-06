@@ -472,7 +472,7 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
     name: "React Performance Review",
     description: "Find expensive React and Next.js patterns, apply fixes, and validate the performance direction.",
     instructions:
-      "Capture a performance baseline, inspect the codebase for expensive React and Next.js patterns, apply targeted optimizations, and verify the impact before finishing.",
+      "Use the workflow-provided baseline evidence, inspect the codebase for expensive React and Next.js patterns, apply targeted optimizations, and verify the impact before finishing.",
     executionMode: "preview-pr",
     sandboxBrowser: "next-browser",
     skillRefs: [
@@ -779,7 +779,7 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
     name: "Request Deduper",
     description: "Find duplicate fetches, collapse redundant requests, and tighten caching behavior across the app.",
     instructions:
-      "Analyze the project for duplicate fetch calls and redundant API requests. Introduce request deduplication via shared caching layers, collapse overlapping routes, and add appropriate Cache-Control headers. Capture before/after metrics to prove improvement.",
+      "Analyze the project for duplicate fetch calls and redundant API requests. Introduce request deduplication via shared caching layers, collapse overlapping routes, and add appropriate Cache-Control headers. Use the workflow runtime's before/after evidence to prove improvement.",
     executionMode: "dev-server",
     sandboxBrowser: "agent-browser",
     skillRefs: [
@@ -848,7 +848,7 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
     name: "Performance Tuner",
     description: "Tune rendering, caching, and loading behavior to reduce regressions in complex production apps.",
     instructions:
-      "Capture performance baselines, identify rendering bottlenecks, tune caching strategies and loading behavior, and verify that regressions are resolved with before/after metrics.",
+      "Use the workflow-provided baseline evidence, identify rendering bottlenecks, tune caching strategies and loading behavior, and verify that regressions are resolved with before/after metrics.",
     executionMode: "dev-server",
     sandboxBrowser: "agent-browser",
     skillRefs: [
@@ -1114,6 +1114,76 @@ function isStructuredActionStepsPlaceholder(instructions: string | undefined): b
   return typeof instructions === "string" && /^\[\d+\s+structured action steps\]$/i.test(instructions.trim())
 }
 
+function normalizeWorkflowAwareInstructions(instructions: string | undefined): string | undefined {
+  if (typeof instructions !== "string") {
+    return instructions
+  }
+
+  return instructions
+    .replace(/\bCapture a performance baseline\b/i, "Use the workflow-provided baseline evidence")
+    .replace(/\bCapture performance baselines\b/i, "Use the workflow-provided baseline evidence")
+    .replace(/\bCapture a baseline\b/i, "Use the workflow-provided baseline evidence")
+    .replace(/\bCapture before\/after metrics\b/i, "Use the workflow runtime's before/after evidence")
+}
+
+function normalizeWorkflowAwarePrompt(prompt: string | undefined): string | undefined {
+  if (typeof prompt !== "string") {
+    return prompt
+  }
+
+  let normalized = prompt.trim()
+  if (!normalized) {
+    return normalized
+  }
+
+  normalized = normalized
+    .replace(
+      /^capture (?:a |the )?(?:performance )?baseline(?:s)?(?: with getwebvitals)?\s*,?\s*then\s*/i,
+      "Use the workflow-provided baseline evidence, then "
+    )
+    .replace(
+      /^capture before\/after metrics(?: to prove improvement)?/i,
+      "Use the workflow runtime's before/after evidence"
+    )
+
+  if (/\bgetwebvitals\b/i.test(normalized) && /\b(verify|re-?check|check again)\b/i.test(normalized)) {
+    normalized = normalized
+      .replace(/\bagain with getwebvitals and\b/i, "again with ")
+      .replace(/\bwith getwebvitals and\b/i, "with ")
+      .replace(/\busing getwebvitals and\b/i, "")
+      .replace(/\busing getwebvitals\b/i, "")
+      .replace(/\bwith getwebvitals\b/i, "")
+      .replace(/\s{2,}/g, " ")
+      .trim()
+
+    if (!/workflow runtime will handle final verification\./i.test(normalized)) {
+      normalized = `${normalized.replace(/[. ]+$/, "")}. The workflow runtime will handle final verification.`
+    }
+  }
+
+  return normalized
+}
+
+function normalizeWorkflowAwareActionSteps(
+  actionSteps: DevAgentActionStep[] | undefined
+): DevAgentActionStep[] | undefined {
+  if (!Array.isArray(actionSteps)) {
+    return actionSteps
+  }
+
+  return actionSteps.map((step) =>
+    step.kind === "send-prompt"
+      ? {
+          ...step,
+          config: {
+            ...step.config,
+            prompt: normalizeWorkflowAwarePrompt(step.config.prompt) || ""
+          }
+        }
+      : step
+  )
+}
+
 function normalizeDevAgent(devAgent: StoredDevAgent | Omit<DevAgent, "usageCount">): Omit<DevAgent, "usageCount"> {
   const canonicalDevAgentId = canonicalizeDevAgentId(devAgent.id)
   const builtinDefaults = getBuiltinDevAgentDefaults(canonicalDevAgentId)
@@ -1136,7 +1206,7 @@ function normalizeDevAgent(devAgent: StoredDevAgent | Omit<DevAgent, "usageCount
   const normalizedInstructions =
     builtinDefaults && isStructuredActionStepsPlaceholder(mergedDevAgent.instructions)
       ? builtinDefaults.instructions
-      : mergedDevAgent.instructions
+      : normalizeWorkflowAwareInstructions(mergedDevAgent.instructions) || mergedDevAgent.instructions
   const sandboxBrowser = mergedDevAgent.sandboxBrowser
   const aiAgent =
     mergedDevAgent.aiAgent === "anthropic/claude-opus-4.6" || mergedDevAgent.aiAgent === "anthropic/claude-sonnet-4.6"
@@ -1174,6 +1244,7 @@ function normalizeDevAgent(devAgent: StoredDevAgent | Omit<DevAgent, "usageCount
     ...mergedDevAgent,
     id: canonicalDevAgentId,
     instructions: normalizedInstructions,
+    actionSteps: normalizeWorkflowAwareActionSteps(mergedDevAgent.actionSteps),
     aiAgent,
     devServerCommand: normalizedDevServerCommand,
     skillRefs,
@@ -1308,6 +1379,8 @@ export async function createCustomDevAgent(input: {
 }): Promise<DevAgent> {
   const id = generateDevAgentId()
   const now = new Date().toISOString()
+  const normalizedInstructions = normalizeWorkflowAwareInstructions(input.instructions)?.trim() || ""
+  const normalizedActionSteps = normalizeWorkflowAwareActionSteps(input.actionSteps)
   const normalizedEarlyExitRule = input.earlyExitRule ? parseDevAgentEarlyExitRule(input.earlyExitRule) : undefined
   const normalizedEarlyExitPlacementIndex =
     typeof input.earlyExitPlacementIndex === "number" && Number.isInteger(input.earlyExitPlacementIndex)
@@ -1319,12 +1392,12 @@ export async function createCustomDevAgent(input: {
       id,
       name: input.name.trim(),
       description: input.description.trim(),
-      instructions: input.instructions.trim(),
+      instructions: normalizedInstructions,
       executionMode: input.executionMode,
       sandboxBrowser: input.sandboxBrowser,
       aiAgent: input.aiAgent,
       devServerCommand: input.devServerCommand?.trim() || undefined,
-      actionSteps: input.actionSteps,
+      actionSteps: normalizedActionSteps,
       skillRefs: input.skillRefs,
       createdAt: now,
       successEval: input.successEval?.trim() || undefined,
@@ -1340,12 +1413,12 @@ export async function createCustomDevAgent(input: {
     kind: "custom",
     name: input.name.trim(),
     description: input.description.trim(),
-    instructions: input.instructions.trim(),
+    instructions: normalizedInstructions,
     executionMode: input.executionMode,
     sandboxBrowser: input.sandboxBrowser,
     aiAgent: input.aiAgent,
     devServerCommand: input.devServerCommand?.trim() || undefined,
-    actionSteps: input.actionSteps,
+    actionSteps: normalizedActionSteps,
     skillRefs: input.skillRefs,
     author: input.author,
     team: input.team,
@@ -1402,17 +1475,19 @@ export async function updateCustomDevAgent(
   const builtinDefaults = getBuiltinDevAgentDefaults(canonicalDevAgentId)
   const nextRevision = (existingDevAgent.ashArtifact?.revision ?? 1) + 1
   const { publishDevAgentAshArtifact } = await import("@/lib/dev-agent-ash")
+  const normalizedInstructions = normalizeWorkflowAwareInstructions(input.instructions)?.trim() || ""
+  const normalizedActionSteps = normalizeWorkflowAwareActionSteps(input.actionSteps)
 
   const updatedDevAgent: StoredDevAgent = {
     ...existingDevAgent,
     name: input.name.trim(),
     description: input.description.trim(),
-    instructions: input.instructions.trim(),
+    instructions: normalizedInstructions,
     executionMode: input.executionMode,
     sandboxBrowser: input.sandboxBrowser,
     aiAgent: input.aiAgent ?? existingDevAgent.aiAgent,
     devServerCommand: input.devServerCommand?.trim() || existingDevAgent.devServerCommand,
-    actionSteps: input.actionSteps,
+    actionSteps: normalizedActionSteps,
     skillRefs: input.skillRefs,
     author: builtinDefaults?.author ?? input.author,
     team: builtinDefaults?.team ?? input.team ?? existingDevAgent.team,

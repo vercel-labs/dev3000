@@ -1296,6 +1296,12 @@ export default function NewDevAgentClient({
 
         {workflowView === "ui" ? (
           <>
+            <div className="rounded-lg border border-border/60 bg-muted/20 px-4 py-3 text-xs text-muted-foreground">
+              The workflow runtime already captures baseline evidence and final verification. Write prompts that use
+              that evidence, inspect code, and make decisions or fixes instead of re-running measurements inside the
+              agent.
+            </div>
+
             {/* Action Steps with insert buttons between them */}
             {actionSteps.map((step, index) => (
               <div key={step.id}>
@@ -1409,6 +1415,10 @@ export default function NewDevAgentClient({
                   <span className="text-sm font-medium text-foreground">Agent Prompts</span>
                   <span className="text-[11px] text-muted-foreground">(separate steps with ---)</span>
                 </div>
+                <p className="mb-3 text-xs text-muted-foreground">
+                  The workflow runtime already captures baseline evidence and final verification. Use these prompts for
+                  inspection, decisions, and code changes rather than repeating measurements.
+                </p>
                 <Textarea
                   value={textModeValue}
                   onChange={(e) => setTextModeValue(e.target.value)}
