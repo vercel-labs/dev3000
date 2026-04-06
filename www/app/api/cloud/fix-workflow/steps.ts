@@ -2951,6 +2951,41 @@ export async function earlyExitReportStep(
   }
 }
 
+function getAgentProgressLabels({ workflowType, devAgentName }: { workflowType?: string; devAgentName?: string }): {
+  analysis: string
+  verification: string
+  report: (details: {
+    beforeCls: number | null
+    afterCls: number | null
+    bundleDeltaCompressedBytes?: number
+  }) => string
+} {
+  if (workflowType === "turbopack-bundle-analyzer") {
+    return {
+      analysis: "AI agent analyzing bundle issues...",
+      verification: "Agent finished, verifying bundle improvements...",
+      report: ({ bundleDeltaCompressedBytes }) =>
+        `Generating report... (bundle delta: ${typeof bundleDeltaCompressedBytes === "number" ? `${Math.round(bundleDeltaCompressedBytes / 1024)}KB` : "n/a"})`
+    }
+  }
+
+  if (workflowType === "cls-fix") {
+    return {
+      analysis: "AI agent analyzing CLS issues...",
+      verification: "Agent finished, verifying CLS improvements...",
+      report: ({ beforeCls, afterCls }) =>
+        `Generating report... (CLS: ${beforeCls?.toFixed(3) || "?"} → ${afterCls?.toFixed(3) || "?"})`
+    }
+  }
+
+  const agentLabel = devAgentName?.trim() || "dev agent"
+  return {
+    analysis: `AI agent running ${agentLabel}...`,
+    verification: "Agent finished, running post-fix verification...",
+    report: () => "Generating report..."
+  }
+}
+
 export async function agentFixLoopStep(
   sandboxId: string,
   devUrl: string,
@@ -3004,17 +3039,16 @@ export async function agentFixLoopStep(
 }> {
   const timer = new StepTimer()
   const isTurbopackBundleAnalyzer = progressContext?.workflowType === "turbopack-bundle-analyzer"
+  const progressLabels = getAgentProgressLabels({
+    workflowType: progressContext?.workflowType,
+    devAgentName
+  })
 
   const vercelApiTokens = getVercelApiTokenCandidates(vercelOidcToken)
 
   timer.start("Reconnect to sandbox")
   workflowLog(`[Agent] Reconnecting to sandbox: ${sandboxId}`)
-  await updateProgress(
-    progressContext,
-    3,
-    isTurbopackBundleAnalyzer ? "AI agent analyzing bundle issues..." : "AI agent analyzing CLS issues...",
-    devUrl
-  )
+  await updateProgress(progressContext, 3, progressLabels.analysis, devUrl)
 
   let sandbox: Sandbox
   let recreatedSandbox = false
@@ -3178,14 +3212,7 @@ export async function agentFixLoopStep(
     bundleBaselineSummary,
     progressContext
   )
-  await updateProgress(
-    progressContext,
-    3,
-    isTurbopackBundleAnalyzer
-      ? "Agent finished, verifying bundle improvements..."
-      : "Agent finished, verifying CLS improvements...",
-    devUrl
-  )
+  await updateProgress(progressContext, 3, progressLabels.verification, devUrl)
 
   let finalCls: {
     clsScore: number | null
@@ -3335,9 +3362,11 @@ export async function agentFixLoopStep(
   await updateProgress(
     progressContext,
     4,
-    isTurbopackBundleAnalyzer
-      ? `Generating report... (bundle delta: ${turbopackBundleComparison ? `${Math.round(turbopackBundleComparison.delta.compressedBytes / 1024)}KB` : "n/a"})`
-      : `Generating report... (CLS: ${effectiveBeforeClsScore?.toFixed(3) || "?"} → ${effectiveAfterClsScore?.toFixed(3) || "?"})`,
+    progressLabels.report({
+      beforeCls: effectiveBeforeClsScore,
+      afterCls: effectiveAfterClsScore,
+      bundleDeltaCompressedBytes: turbopackBundleComparison?.delta.compressedBytes
+    }),
     devUrl
   )
 
@@ -4203,8 +4232,9 @@ function buildClaudeActionStepPrompt(
 ): ClaudeTurnPrompt {
   const promptText = (step.config.prompt || "").trim()
   const promptTextLower = promptText.toLowerCase()
-  const inferredSendPromptMaxTurns = promptTextLower.includes("stop early")
-    ? 8
+  const isStopEarlyPrompt = promptTextLower.includes("stop early")
+  const inferredSendPromptMaxTurns = isStopEarlyPrompt
+    ? 4
     : promptTextLower.includes("verify")
       ? 12
       : promptTextLower.includes("implement") ||
@@ -4244,7 +4274,16 @@ function buildClaudeActionStepPrompt(
       return {
         label: `Step ${index + 1}`,
         maxTurns: inferredSendPromptMaxTurns,
-        prompt: promptText || `Step ${index + 1}: Continue the workflow.`
+        prompt: isStopEarlyPrompt
+          ? `${promptText || `Step ${index + 1}: Continue the workflow.`}
+
+Rules for this decision step:
+- Do not use tools in this step.
+- Do not inspect additional files or pages in this step.
+- Base your answer only on evidence you already gathered in the previous step.
+- If you already found a meaningful issue worth fixing, respond with exactly: CONTINUE: <one sentence>.
+- If no meaningful issue exists, respond with exactly: EARLY_EXIT: <one sentence>.`
+          : promptText || `Step ${index + 1}: Continue the workflow.`
       }
     default:
       return {

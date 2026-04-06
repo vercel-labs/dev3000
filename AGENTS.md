@@ -77,6 +77,22 @@ When changes are pushed to `main`:
    ```bash
    vercel logs <deployment-url>.vercel.sh --scope team_nLlpyC6REAqxydlFKbrMDlud
    ```
+4. Do not stop at the first deployment status check. Keep polling until the specific new deployment for the pushed commit is `Ready` or has clearly failed.
+5. After the deployment is `Ready`, continue the task autonomously:
+   - rerun the relevant browser flow, workflow, or validation against that exact deployment
+   - inspect the result instead of assuming success
+   - keep going until the requested end-to-end behavior is confirmed working or a concrete blocker is identified
+6. If the user asked to "commit/push", "deploy", "keep going", "monitor it", or gave similar autonomy instructions, treat deployment polling and post-deploy verification as part of the same task rather than waiting for another prompt.
+7. While waiting on deployment readiness, keep polling rather than reporting stale status. The default behavior should be:
+   - poll `vercel ls` or `vercel inspect` again after a short delay
+   - once `Ready`, move immediately into the next validation step
+   - if `Error` or `Canceled`, inspect build/runtime logs and continue debugging
+
+Recommended user prompt when autonomous deployment follow-through is desired:
+
+```text
+Commit and push, then keep polling the new Vercel deployment until it is Ready, monitor logs, rerun the relevant test flow against that exact deployment, and continue autonomously until it is actually working or you have a concrete blocker.
+```
 
 ## d3k CLI/TUI Changes
 
