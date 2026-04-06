@@ -773,6 +773,94 @@ async function capturePhaseScreenshot(
   ]
 }
 
+const MIN_NON_BLANK_SCREENSHOT_BYTES = 4500
+
+async function getSandboxFileSize(sandbox: Sandbox, filePath: string): Promise<number | null> {
+  const result = await runSandboxCommandWithOptions(
+    sandbox,
+    {
+      cmd: "sh",
+      args: ["-c", `wc -c < ${JSON.stringify(filePath)}`]
+    },
+    {
+      timeoutMs: 5000
+    }
+  )
+
+  if (result.exitCode !== 0) {
+    return null
+  }
+
+  const parsed = Number.parseInt(result.stdout.trim(), 10)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+async function isLikelyBlankScreenshot(
+  sandbox: Sandbox,
+  screenshotPath: string
+): Promise<{ blank: boolean; fileSize: number | null }> {
+  const fileSize = await getSandboxFileSize(sandbox, screenshotPath)
+  if (fileSize === null) {
+    return { blank: false, fileSize: null }
+  }
+
+  return {
+    blank: fileSize > 0 && fileSize < MIN_NON_BLANK_SCREENSHOT_BYTES,
+    fileSize
+  }
+}
+
+async function captureScreenshotViaBrowserCli(
+  sandbox: Sandbox,
+  screenshotPath: string,
+  browserMode: CloudBrowserMode,
+  targetUrl: string,
+  waitMs: number
+): Promise<{ success: boolean; error?: string }> {
+  const navResult = await navigateBrowser(sandbox, targetUrl, browserMode)
+  if (!navResult.success) {
+    return {
+      success: false,
+      error: navResult.error || `${browserMode} navigation failed`
+    }
+  }
+
+  await new Promise((resolve) => setTimeout(resolve, Math.max(1500, Math.min(waitMs, 6000))))
+
+  const pageDiagnostics = await evaluateInBrowser(
+    sandbox,
+    `JSON.stringify({
+      href: location.href,
+      readyState: document.readyState,
+      title: document.title,
+      bodyTextLength: document.body?.innerText?.trim().length ?? 0,
+      bodyHtmlLength: document.body?.innerHTML?.length ?? 0,
+      bodyScrollHeight: document.body?.scrollHeight ?? 0
+    })`,
+    browserMode
+  )
+
+  const diagnosticsValue = extractWebVitalsResultString(pageDiagnostics)
+  if (diagnosticsValue) {
+    workflowLog(`[Browser] ${browserMode} screenshot page diagnostics: ${diagnosticsValue}`)
+  }
+
+  const screenshotResult = await _screenshotBrowser(sandbox, screenshotPath, { fullPage: false }, browserMode)
+  if (!screenshotResult.success) {
+    return screenshotResult
+  }
+
+  const screenshotHealth = await isLikelyBlankScreenshot(sandbox, screenshotPath)
+  if (screenshotHealth.blank) {
+    return {
+      success: false,
+      error: `blank screenshot detected (${screenshotHealth.fileSize} bytes)`
+    }
+  }
+
+  return { success: true }
+}
+
 async function captureSandboxScreenshot(
   sandbox: Sandbox,
   screenshotPath: string,
@@ -780,9 +868,33 @@ async function captureSandboxScreenshot(
   targetUrl?: string,
   waitMs = 5000
 ): Promise<{ success: boolean; error?: string }> {
+  if (targetUrl) {
+    const browserCliResult = await captureScreenshotViaBrowserCli(
+      sandbox,
+      screenshotPath,
+      browserMode,
+      targetUrl,
+      waitMs
+    )
+    if (browserCliResult.success) {
+      return { success: true }
+    }
+
+    workflowLog(
+      `[Browser] ${browserMode} navigation-aware screenshot failed for ${targetUrl}: ${browserCliResult.error || "unknown error"}`
+    )
+  }
+
   const cdpResult = await captureScreenshotViaCDP(sandbox, screenshotPath, targetUrl)
   if (cdpResult.success) {
-    return { success: true }
+    const screenshotHealth = await isLikelyBlankScreenshot(sandbox, screenshotPath)
+    if (!screenshotHealth.blank) {
+      return { success: true }
+    }
+
+    workflowLog(
+      `[Browser] CDP screenshot was blank${targetUrl ? ` for ${targetUrl}` : ""} (${screenshotHealth.fileSize} bytes)`
+    )
   }
 
   workflowLog(
@@ -810,6 +922,34 @@ async function captureSandboxScreenshot(
     return {
       success: false,
       error: screenshotResult.error || cdpResult.error || "screenshot capture failed"
+    }
+  }
+
+  const screenshotHealth = await isLikelyBlankScreenshot(sandbox, screenshotPath)
+  if (screenshotHealth.blank) {
+    workflowLog(
+      `[Browser] ${browserMode} screenshot was blank${targetUrl ? ` for ${targetUrl}` : ""} (${screenshotHealth.fileSize} bytes)`
+    )
+    if (targetUrl) {
+      const chromiumResult = await captureScreenshotWithSandboxChromium(sandbox, screenshotPath, targetUrl, waitMs)
+      if (chromiumResult.success) {
+        const chromiumHealth = await isLikelyBlankScreenshot(sandbox, screenshotPath)
+        if (!chromiumHealth.blank) {
+          return { success: true }
+        }
+
+        workflowLog(`[Browser] Chromium screenshot was blank for ${targetUrl} (${chromiumHealth.fileSize} bytes)`)
+      }
+
+      return {
+        success: false,
+        error: chromiumResult.error || "screenshot capture failed"
+      }
+    }
+
+    return {
+      success: false,
+      error: `blank screenshot detected (${screenshotHealth.fileSize} bytes)`
     }
   }
 
