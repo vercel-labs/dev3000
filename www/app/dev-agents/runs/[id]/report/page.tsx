@@ -133,6 +133,21 @@ function formatSeconds(ms?: number) {
   return typeof ms === "number" ? `${(ms / 1000).toFixed(1)}s` : "—"
 }
 
+function formatDurationCompact(durationMs?: number | null) {
+  if (typeof durationMs !== "number" || Number.isNaN(durationMs) || durationMs < 0) {
+    return "—"
+  }
+
+  const totalSeconds = Math.floor(durationMs / 1000)
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+
+  if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`
+  if (minutes > 0) return `${minutes}m ${seconds}s`
+  return `${seconds}s`
+}
+
 function formatBytes(bytes?: number) {
   if (typeof bytes !== "number") return "—"
   const absolute = Math.abs(bytes)
@@ -755,6 +770,36 @@ function getOutcomeSummary(report: WorkflowReport, metricRows: MetricRow[]) {
   return null
 }
 
+function getRunDurationStats(
+  runStartedAt: Date,
+  runEndedAt: Date | null,
+  measuredDurationMs?: number
+): {
+  wallClockMs: number | null
+  measuredMs: number | null
+  overheadMs: number | null
+} {
+  const hasValidRunTiming =
+    !Number.isNaN(runStartedAt.getTime()) &&
+    !!runEndedAt &&
+    !Number.isNaN(runEndedAt.getTime()) &&
+    runEndedAt >= runStartedAt
+
+  const wallClockMs = hasValidRunTiming && runEndedAt ? runEndedAt.getTime() - runStartedAt.getTime() : null
+  const measuredMs =
+    typeof measuredDurationMs === "number" && Number.isFinite(measuredDurationMs) && measuredDurationMs >= 0
+      ? measuredDurationMs
+      : null
+  const overheadMs =
+    wallClockMs !== null && measuredMs !== null && wallClockMs >= measuredMs ? wallClockMs - measuredMs : null
+
+  return {
+    wallClockMs,
+    measuredMs,
+    overheadMs
+  }
+}
+
 function skillLink(skill: string) {
   const normalized = skill.trim().toLowerCase()
   if (normalized === "d3k" || normalized.includes("d3k")) {
@@ -1173,6 +1218,7 @@ function ReportContentBody({ run, report }: { run: WorkflowRun; report: Workflow
     !!runEndedAt &&
     !Number.isNaN(runEndedAt.getTime()) &&
     runEndedAt >= runStartedAt
+  const runDurationStats = getRunDurationStats(runStartedAt, runEndedAt, report.timing?.total.totalMs)
   const successEvalStyles =
     report.successEvalResult === true
       ? {
@@ -1187,15 +1233,6 @@ function ReportContentBody({ run, report }: { run: WorkflowRun; report: Workflow
           title: "text-red-200",
           body: "text-red-100/70"
         }
-  const formatRunDuration = (durationMs: number) => {
-    const totalSeconds = Math.floor(durationMs / 1000)
-    const hours = Math.floor(totalSeconds / 3600)
-    const minutes = Math.floor((totalSeconds % 3600) / 60)
-    const seconds = totalSeconds % 60
-    if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`
-    if (minutes > 0) return `${minutes}m ${seconds}s`
-    return `${seconds}s`
-  }
   return (
     <div className="space-y-6">
       {(report.successEvalResult != null || secondarySummary) && (
@@ -1319,8 +1356,24 @@ function ReportContentBody({ run, report }: { run: WorkflowRun; report: Workflow
               detail={report.devAgentSpecHash ? report.devAgentSpecHash.slice(0, 12) : undefined}
             />
           ) : null}
-          {hasValidRunTiming && runEndedAt ? (
-            <SummaryItem label="Run time" value={formatRunDuration(runEndedAt.getTime() - runStartedAt.getTime())} />
+          {runDurationStats.wallClockMs !== null ? (
+            <SummaryItem label="Wall-clock time" value={formatDurationCompact(runDurationStats.wallClockMs)} />
+          ) : null}
+          {runDurationStats.measuredMs !== null ? (
+            <SummaryItem label="Measured work" value={formatDurationCompact(runDurationStats.measuredMs)} />
+          ) : null}
+          {runDurationStats.overheadMs !== null ? (
+            <SummaryItem
+              label="Workflow overhead"
+              value={formatDurationCompact(runDurationStats.overheadMs)}
+              detail="Queueing, orchestration, and uninstrumented waits"
+            />
+          ) : null}
+          {hasValidRunTiming && runEndedAt && runDurationStats.measuredMs === null ? (
+            <SummaryItem
+              label="Wall-clock time"
+              value={formatDurationCompact(runEndedAt.getTime() - runStartedAt.getTime())}
+            />
           ) : null}
           {typeof report.costUsd === "number" && report.costUsd > 0 ? (
             <SummaryItem label="Cost" value={formatUsd(report.costUsd)} />
@@ -1642,9 +1695,22 @@ function ReportContentBody({ run, report }: { run: WorkflowRun; report: Workflow
                           {report.fromSnapshot ? "Snapshot Reused" : "Fresh Sandbox"}
                         </div>
                         <div className="flex flex-wrap items-center gap-4 text-sm">
+                          {runDurationStats.wallClockMs !== null ? (
+                            <span className="text-muted-foreground">
+                              Wall-clock:{" "}
+                              <span className="text-foreground">{formatSeconds(runDurationStats.wallClockMs)}</span>
+                            </span>
+                          ) : null}
                           <span className="text-muted-foreground">
-                            Total: <span className="text-foreground">{formatSeconds(report.timing.total.totalMs)}</span>
+                            Measured work:{" "}
+                            <span className="text-foreground">{formatSeconds(report.timing.total.totalMs)}</span>
                           </span>
+                          {runDurationStats.overheadMs !== null ? (
+                            <span className="text-muted-foreground">
+                              Overhead:{" "}
+                              <span className="font-mono text-xs">{formatSeconds(runDurationStats.overheadMs)}</span>
+                            </span>
+                          ) : null}
                           <span className="text-muted-foreground">
                             Init: <span className="font-mono text-xs">{formatSeconds(report.timing.total.initMs)}</span>
                           </span>
@@ -1660,9 +1726,17 @@ function ReportContentBody({ run, report }: { run: WorkflowRun; report: Workflow
                         </div>
                       </div>
 
+                      {runDurationStats.wallClockMs !== null && runDurationStats.overheadMs !== null ? (
+                        <p className="text-xs text-muted-foreground">
+                          The step breakdown below covers instrumented workflow work only. Wall-clock time can be higher
+                          because of workflow orchestration, retries, network waits, and other currently uninstrumented
+                          spans.
+                        </p>
+                      ) : null}
+
                       <details className="pt-1">
                         <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
-                          View step-by-step timing breakdown
+                          View step-by-step measured timing breakdown
                         </summary>
                         <div className="mt-2 grid gap-4 text-xs md:grid-cols-2">
                           {report.timing.init?.steps && report.timing.init.steps.length > 0 ? (
