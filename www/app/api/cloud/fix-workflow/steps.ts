@@ -754,7 +754,14 @@ async function capturePhaseScreenshot(
   waitMs = 8000
 ): Promise<Array<{ timestamp: number; blobUrl: string; label?: string }>> {
   const screenshotPath = `/tmp/${kind}-${Date.now()}.png`
-  const screenshotResult = await captureSandboxScreenshot(sandbox, screenshotPath, browserMode, targetUrl, waitMs)
+  const screenshotBrowserMode = browserMode === "next-browser" ? "agent-browser" : browserMode
+  const screenshotResult = await captureSandboxScreenshot(
+    sandbox,
+    screenshotPath,
+    screenshotBrowserMode,
+    targetUrl,
+    waitMs
+  )
   if (!screenshotResult.success) {
     return []
   }
@@ -2813,7 +2820,7 @@ export async function observeBaselineStep(
       "baseline",
       "Before",
       localTargetUrl,
-      5000
+      8000
     )
     timer.end()
     workflowLog(`[Observe] Captured ${effectiveBeforeScreenshots.length} baseline screenshot(s)`)
