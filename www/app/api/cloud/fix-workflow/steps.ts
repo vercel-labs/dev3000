@@ -6610,6 +6610,7 @@ async function fetchWebVitalsViaCDP(
 ): Promise<{ vitals: import("@/types").WebVitals; diagnosticLogs: string[] }> {
   const diagnosticLogs: string[] = []
   let documentStartVitals: import("@/types").WebVitals | null = null
+  const desiredSuccessfulSamples = 3
 
   // Helper to log and capture diagnostics
   const diagLog = (msg: string) => {
@@ -6628,8 +6629,40 @@ async function fetchWebVitalsViaCDP(
     return "poor"
   }
 
-  const maxAttempts = 3
+  const maxAttempts = Math.max(desiredSuccessfulSamples + 1, 4)
   let vitals: import("@/types").WebVitals = {}
+  const successfulSamples: import("@/types").WebVitals[] = []
+
+  const aggregateSamples = (samples: import("@/types").WebVitals[]): import("@/types").WebVitals => {
+    const keys: Array<keyof import("@/types").WebVitals> = ["lcp", "fcp", "ttfb", "cls", "inp"]
+    const aggregated: import("@/types").WebVitals = {}
+
+    for (const key of keys) {
+      const values = samples
+        .map((sample) => sample[key]?.value)
+        .filter((value): value is number => typeof value === "number")
+      if (values.length === 0) continue
+
+      const mean = values.reduce((sum, value) => sum + value, 0) / values.length
+      const roundedValue = key === "cls" ? Number(mean.toFixed(4)) : Number(mean.toFixed(0))
+
+      aggregated[key] = {
+        value: roundedValue,
+        grade:
+          key === "cls"
+            ? gradeValue(mean, 0.1, 0.25)
+            : key === "fcp"
+              ? gradeValue(mean, 1800, 3000)
+              : key === "ttfb"
+                ? gradeValue(mean, 800, 1800)
+                : key === "inp"
+                  ? gradeValue(mean, 200, 500)
+                  : gradeValue(mean, 2500, 4000)
+      }
+    }
+
+    return aggregated
+  }
 
   if (targetUrl) {
     const documentStartResult = await fetchWebVitalsFromDocumentStart(sandbox, targetUrl)
@@ -6734,8 +6767,13 @@ async function fetchWebVitalsViaCDP(
           }
 
           if (Object.keys(attemptVitals).length > 0) {
-            vitals = attemptVitals
-            break
+            successfulSamples.push(attemptVitals)
+            diagLog(
+              `[fetchWebVitals] Successful sample ${successfulSamples.length}/${desiredSuccessfulSamples}: ${JSON.stringify(attemptVitals)}`
+            )
+            if (successfulSamples.length >= desiredSuccessfulSamples) {
+              break
+            }
           }
         }
       }
@@ -6746,6 +6784,13 @@ async function fetchWebVitalsViaCDP(
     if (attempt < maxAttempts) {
       await new Promise((resolve) => setTimeout(resolve, 1000))
     }
+  }
+
+  if (successfulSamples.length > 0) {
+    vitals = aggregateSamples(successfulSamples)
+    diagLog(
+      `[fetchWebVitals] Aggregated ${successfulSamples.length} sample${successfulSamples.length === 1 ? "" : "s"} into ${JSON.stringify(vitals)}`
+    )
   }
 
   if (documentStartVitals && Object.keys(documentStartVitals).length > 0) {

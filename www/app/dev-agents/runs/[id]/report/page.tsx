@@ -608,6 +608,17 @@ function describeMetricChange(row: MetricRow): string | null {
   if (!row.before || !row.after) return null
   if (row.before.value === row.after.value) return null
 
+  const beforeGrade = row.before.grade
+  const afterGrade = row.after.grade
+  const absoluteDelta = Math.abs(row.after.value - row.before.value)
+  const sameGrade = beforeGrade && afterGrade ? beforeGrade === afterGrade : false
+
+  if (sameGrade) {
+    if (row.key === "cls" && absoluteDelta < 0.02) return null
+    if (row.key === "inp" && absoluteDelta < 75) return null
+    if ((row.key === "lcp" || row.key === "fcp" || row.key === "ttfb") && absoluteDelta < 100) return null
+  }
+
   const improved = row.after.value < row.before.value
   return `${row.label} ${improved ? "improved" : "regressed"} from ${formatMetricValue(row.key, row.before.value)} to ${formatMetricValue(row.key, row.after.value)}`
 }
