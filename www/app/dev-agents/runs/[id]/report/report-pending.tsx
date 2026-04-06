@@ -4,7 +4,6 @@ import { AlertCircle, CheckCircle2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Skeleton } from "@/components/ui/skeleton"
 import { CoordinatedPlayers } from "./coordinated-players"
 import { ScreenshotPlayer } from "./screenshot-player"
 
@@ -317,28 +316,10 @@ export function ReportPending({
         )}
       </div>
 
-      <div className="grid gap-4">
-        <div>
-          <div className="text-sm font-medium text-foreground mb-2">Sandbox Summary</div>
-          {sandboxUrl ? (
-            <a
-              href={sandboxUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-sm text-muted-foreground underline underline-offset-4 break-all"
-            >
-              {sandboxUrl}
-            </a>
-          ) : (
-            <Skeleton className="h-10 w-2/3" />
-          )}
-        </div>
-        <div>
-          <div className="text-sm font-medium text-foreground mb-2">Timing Breakdown</div>
-          <Skeleton className="h-6 w-1/2" />
-        </div>
-        {beforeScreenshots.length > 0 || afterScreenshots.length > 0 ? (
-          beforeScreenshots.length > 0 && afterScreenshots.length > 0 ? (
+      {beforeScreenshots.length > 0 || afterScreenshots.length > 0 ? (
+        <div className="space-y-3">
+          <div className="text-sm font-medium text-foreground">Screenshots</div>
+          {beforeScreenshots.length > 0 && afterScreenshots.length > 0 ? (
             <CoordinatedPlayers
               beforeScreenshots={beforeScreenshots}
               afterScreenshots={afterScreenshots}
@@ -354,23 +335,9 @@ export function ReportPending({
                 <ScreenshotPlayer screenshots={afterScreenshots} title="After" autoPlay={true} fps={2} loop={true} />
               ) : null}
             </div>
-          )
-        ) : (
-          <Skeleton className="h-40 w-full" />
-        )}
-        <div className="grid grid-cols-2 gap-4">
-          <Skeleton className="h-24 w-full" />
-          <Skeleton className="h-24 w-full" />
+          )}
         </div>
-        <div>
-          <div className="text-sm font-medium text-foreground mb-2">d3k Diagnostic Transcript</div>
-          <Skeleton className="h-32 w-full" />
-        </div>
-        <div>
-          <div className="text-sm font-medium text-foreground mb-2">Agent Analysis</div>
-          <Skeleton className="h-32 w-full" />
-        </div>
-      </div>
+      ) : null}
     </div>
   )
 
