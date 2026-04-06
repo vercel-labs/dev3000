@@ -542,6 +542,44 @@ function joinClauses(clauses: string[]) {
   return `${clauses.slice(0, -1).join("; ")}; and ${clauses[clauses.length - 1]}`
 }
 
+function extractChangedFilesFromDiff(gitDiff?: string): string[] {
+  if (!gitDiff) return []
+
+  const files = new Set<string>()
+
+  for (const line of gitDiff.split("\n")) {
+    const diffMatch = line.match(/^diff --git a\/(.+?) b\/(.+)$/)
+    if (diffMatch?.[2]) {
+      files.add(diffMatch[2])
+      continue
+    }
+
+    const plusMatch = line.match(/^\+\+\+ b\/(.+)$/)
+    if (plusMatch?.[1] && plusMatch[1] !== "/dev/null") {
+      files.add(plusMatch[1])
+    }
+  }
+
+  return Array.from(files)
+}
+
+function formatChangedFileEvidence(changedFiles: string[]) {
+  if (changedFiles.length === 0) return null
+
+  const visibleFiles = changedFiles.slice(0, 3).map((file) => `\`${file}\``)
+  const listedFiles = joinClauses(visibleFiles)
+
+  if (changedFiles.length === 1) {
+    return `The diff changed ${listedFiles}.`
+  }
+
+  if (changedFiles.length <= 3) {
+    return `The diff changed ${changedFiles.length} files: ${listedFiles}.`
+  }
+
+  return `The diff changed ${changedFiles.length} files, including ${listedFiles}.`
+}
+
 function getAgentGoalText(report: WorkflowReport) {
   const source = report.devAgentDescription?.trim() || report.successEval?.trim()
   if (!source) return null
@@ -556,17 +594,23 @@ function getAgentGoalText(report: WorkflowReport) {
   return normalized.charAt(0).toLowerCase() + normalized.slice(1)
 }
 
-function getGoalOutcomeLead(report: WorkflowReport, agentGoal: string) {
+function getGoalOutcomeLead(report: WorkflowReport, agentGoal: string, hasConcreteEvidence: boolean) {
   if (report.successEvalResult === true) {
-    return `This run appears to have accomplished the agent's goal to ${agentGoal}.`
+    return hasConcreteEvidence
+      ? `This run accomplished the agent's goal to ${agentGoal}.`
+      : `This run passed its success evaluation for the agent's goal to ${agentGoal}.`
   }
 
   if (report.successEvalResult === false) {
-    return `This run did not clearly accomplish the agent's goal to ${agentGoal}.`
+    return hasConcreteEvidence
+      ? `This run did not accomplish the agent's goal to ${agentGoal}.`
+      : `This run failed its success evaluation for the agent's goal to ${agentGoal}.`
   }
 
   if (report.verificationStatus === "improved") {
-    return `This run appears to have moved the implementation toward the agent's goal to ${agentGoal}.`
+    return hasConcreteEvidence
+      ? `This run moved the implementation toward the agent's goal to ${agentGoal}.`
+      : `This run recorded improvement against the agent's goal to ${agentGoal}.`
   }
 
   if (report.verificationStatus === "degraded") {
@@ -642,15 +686,22 @@ function getOutcomeSummary(report: WorkflowReport, metricRows: MetricRow[]) {
   const validationLines = extractFinalSummarySectionLines(report.agentAnalysis, "Validation evidence")
   const metricChanges = metricRows.map(describeMetricChange).filter((value): value is string => Boolean(value))
   const agentGoal = getAgentGoalText(report)
+  const changedFiles = extractChangedFilesFromDiff(report.gitDiff)
+  const changedFileEvidence = formatChangedFileEvidence(changedFiles)
 
   if (agentGoal && (changeLines.length > 0 || validationLines.length > 0 || report.successEvalResult != null)) {
-    const summaryParts: string[] = [getGoalOutcomeLead(report, agentGoal)]
+    const hasConcreteEvidence = changeLines.length > 0 || validationLines.length > 0 || changedFiles.length > 0
+    const summaryParts: string[] = [getGoalOutcomeLead(report, agentGoal, hasConcreteEvidence)]
 
     const changeClauses = changeLines.map(toSentenceFragment).filter(Boolean).slice(0, 3)
     if (changeClauses.length > 0) {
       summaryParts.push(`Key changes included ${joinClauses(changeClauses)}.`)
     } else if (summaryLines[0]) {
       summaryParts.push(summaryLines[0])
+    }
+
+    if (changedFileEvidence) {
+      summaryParts.push(changedFileEvidence)
     }
 
     const validationClauses = validationLines.map(toSentenceFragment).filter(Boolean).slice(0, 2)
