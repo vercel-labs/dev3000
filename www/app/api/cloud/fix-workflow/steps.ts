@@ -751,7 +751,7 @@ async function capturePhaseScreenshot(
   kind: string,
   label: string,
   targetUrl?: string,
-  waitMs = 5000
+  waitMs = 8000
 ): Promise<Array<{ timestamp: number; blobUrl: string; label?: string }>> {
   const screenshotPath = `/tmp/${kind}-${Date.now()}.png`
   const screenshotResult = await captureSandboxScreenshot(sandbox, screenshotPath, browserMode, targetUrl, waitMs)
@@ -817,48 +817,58 @@ async function captureScreenshotViaBrowserCli(
   targetUrl: string,
   waitMs: number
 ): Promise<{ success: boolean; error?: string }> {
-  const navResult = await navigateBrowser(sandbox, targetUrl, browserMode)
-  if (!navResult.success) {
-    return {
-      success: false,
-      error: navResult.error || `${browserMode} navigation failed`
+  let lastError = `${browserMode} screenshot failed`
+
+  for (const [attemptIndex, attemptWaitMs] of [waitMs, Math.max(waitMs * 2, 10000)].entries()) {
+    const navResult = await navigateBrowser(sandbox, targetUrl, browserMode)
+    if (!navResult.success) {
+      lastError = navResult.error || `${browserMode} navigation failed`
+      continue
     }
-  }
 
-  await new Promise((resolve) => setTimeout(resolve, Math.max(1500, Math.min(waitMs, 6000))))
+    await new Promise((resolve) => setTimeout(resolve, Math.max(2000, Math.min(attemptWaitMs, 10000))))
 
-  const pageDiagnostics = await evaluateInBrowser(
-    sandbox,
-    `JSON.stringify({
-      href: location.href,
-      readyState: document.readyState,
-      title: document.title,
-      bodyTextLength: document.body?.innerText?.trim().length ?? 0,
-      bodyHtmlLength: document.body?.innerHTML?.length ?? 0,
-      bodyScrollHeight: document.body?.scrollHeight ?? 0
-    })`,
-    browserMode
-  )
+    const pageDiagnostics = await evaluateInBrowser(
+      sandbox,
+      `JSON.stringify({
+        href: location.href,
+        readyState: document.readyState,
+        title: document.title,
+        bodyTextLength: document.body?.innerText?.trim().length ?? 0,
+        bodyHtmlLength: document.body?.innerHTML?.length ?? 0,
+        bodyScrollHeight: document.body?.scrollHeight ?? 0
+      })`,
+      browserMode
+    )
 
-  const diagnosticsValue = extractWebVitalsResultString(pageDiagnostics)
-  if (diagnosticsValue) {
-    workflowLog(`[Browser] ${browserMode} screenshot page diagnostics: ${diagnosticsValue}`)
-  }
-
-  const screenshotResult = await _screenshotBrowser(sandbox, screenshotPath, { fullPage: false }, browserMode)
-  if (!screenshotResult.success) {
-    return screenshotResult
-  }
-
-  const screenshotHealth = await isLikelyBlankScreenshot(sandbox, screenshotPath)
-  if (screenshotHealth.blank) {
-    return {
-      success: false,
-      error: `blank screenshot detected (${screenshotHealth.fileSize} bytes)`
+    const diagnosticsValue = extractWebVitalsResultString(pageDiagnostics)
+    if (diagnosticsValue) {
+      workflowLog(
+        `[Browser] ${browserMode} screenshot page diagnostics (attempt ${attemptIndex + 1}): ${diagnosticsValue}`
+      )
     }
+
+    const screenshotResult = await _screenshotBrowser(sandbox, screenshotPath, { fullPage: false }, browserMode)
+    if (!screenshotResult.success) {
+      lastError = screenshotResult.error || `${browserMode} screenshot failed`
+      continue
+    }
+
+    const screenshotHealth = await isLikelyBlankScreenshot(sandbox, screenshotPath)
+    if (!screenshotHealth.blank) {
+      return { success: true }
+    }
+
+    lastError = `blank screenshot detected (${screenshotHealth.fileSize} bytes)`
+    workflowLog(
+      `[Browser] ${browserMode} screenshot attempt ${attemptIndex + 1} was blank for ${targetUrl} (${screenshotHealth.fileSize} bytes)`
+    )
   }
 
-  return { success: true }
+  return {
+    success: false,
+    error: lastError
+  }
 }
 
 async function captureSandboxScreenshot(
@@ -866,7 +876,7 @@ async function captureSandboxScreenshot(
   screenshotPath: string,
   browserMode: CloudBrowserMode,
   targetUrl?: string,
-  waitMs = 5000
+  waitMs = 8000
 ): Promise<{ success: boolean; error?: string }> {
   if (targetUrl) {
     const browserCliResult = await captureScreenshotViaBrowserCli(
