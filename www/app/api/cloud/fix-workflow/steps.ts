@@ -1224,6 +1224,7 @@ async function getRunningSandboxWithRetry(
 
   for (let attempt = 1; attempt <= attempts; attempt++) {
     for (const variant of credentialVariants) {
+      let sawProjectBindingFailure = false
       for (const token of tokenCandidates) {
         try {
           const sandbox = await Sandbox.get({
@@ -1239,9 +1240,16 @@ async function getRunningSandboxWithRetry(
         } catch (error) {
           lastError = error
           if (isSandboxProjectBindingFailure(error) && variant.label === "project-scoped") {
-            break
+            sawProjectBindingFailure = true
           }
         }
+      }
+
+      if (sawProjectBindingFailure && variant.label === "project-scoped") {
+        await appendProgressLog(
+          progressContext,
+          `[${phaseLabel}] Project-scoped sandbox reattach failed across available credentials; retrying without project binding...`
+        )
       }
     }
 
@@ -1351,6 +1359,7 @@ async function createSandboxWithTokenFallback(
   let lastError: unknown
 
   for (const variant of configVariants) {
+    let sawProjectBindingFailure = false
     for (let index = 0; index < tokenCandidates.length; index++) {
       const token = tokenCandidates[index]
       try {
@@ -1363,11 +1372,8 @@ async function createSandboxWithTokenFallback(
       } catch (error) {
         lastError = error
         if (isSandboxProjectBindingFailure(error) && variant.label === "project-scoped") {
-          await appendProgressLog(
-            progressContext,
-            `[${phaseLabel}] Project-scoped sandbox binding failed; retrying without project binding...`
-          )
-          break
+          sawProjectBindingFailure = true
+          continue
         }
         if (!isVercelAuthFailure(error) || index === tokenCandidates.length - 1) {
           throw error
@@ -1377,6 +1383,13 @@ async function createSandboxWithTokenFallback(
           `[${phaseLabel}] Sandbox auth failed with token candidate ${index + 1}/${tokenCandidates.length}; retrying with fallback credential...`
         )
       }
+    }
+
+    if (sawProjectBindingFailure && variant.label === "project-scoped") {
+      await appendProgressLog(
+        progressContext,
+        `[${phaseLabel}] Project-scoped sandbox binding failed across available credentials; retrying without project binding...`
+      )
     }
   }
 
