@@ -8,6 +8,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
 import chalk from "chalk"
+import { getProjectName } from "../utils/project-name.js"
 
 export interface LogsOptions {
   count?: string // number of lines to show
@@ -76,10 +77,12 @@ function findActiveSessions(): Session[] {
 }
 
 function getLogPath(): string | null {
-  // First check for active sessions
+  // First check for active sessions, preferring the one matching the current directory
   const sessions = findActiveSessions()
   if (sessions.length > 0) {
-    return sessions[0].logFilePath
+    const currentProject = getProjectName()
+    const matchingSession = sessions.find((s) => s.projectName === currentProject)
+    return (matchingSession || sessions[0]).logFilePath
   }
 
   // Fall back to environment variable
