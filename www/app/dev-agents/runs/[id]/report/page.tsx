@@ -556,6 +556,54 @@ function getAgentGoalText(report: WorkflowReport) {
   return normalized.charAt(0).toLowerCase() + normalized.slice(1)
 }
 
+function getGoalOutcomeLead(report: WorkflowReport, agentGoal: string) {
+  if (report.successEvalResult === true) {
+    return `This run appears to have accomplished the agent's goal to ${agentGoal}.`
+  }
+
+  if (report.successEvalResult === false) {
+    return `This run did not clearly accomplish the agent's goal to ${agentGoal}.`
+  }
+
+  if (report.verificationStatus === "improved") {
+    return `This run appears to have moved the implementation toward the agent's goal to ${agentGoal}.`
+  }
+
+  if (report.verificationStatus === "degraded") {
+    return `This run moved away from the agent's goal to ${agentGoal}.`
+  }
+
+  if (report.verificationStatus === "unchanged") {
+    return `This run targeted the agent's goal to ${agentGoal}, but the workflow did not capture a strong before/after verification verdict for that goal.`
+  }
+
+  return `This run targeted the agent's goal to ${agentGoal}.`
+}
+
+function getSuccessMeasureText(report: WorkflowReport) {
+  if (report.successEvalResult === true) {
+    return "It passed the run's success evaluation."
+  }
+
+  if (report.successEvalResult === false) {
+    return "It failed the run's success evaluation."
+  }
+
+  if (report.verificationStatus === "improved") {
+    return "The workflow verification marked the result as improved."
+  }
+
+  if (report.verificationStatus === "degraded") {
+    return "The workflow verification marked the result as degraded."
+  }
+
+  if (report.verificationStatus === "unchanged") {
+    return "The workflow verification was behaviorally stable, but did not record a strong measured improvement for the agent's primary goal."
+  }
+
+  return null
+}
+
 function describeMetricChange(row: MetricRow): string | null {
   if (!row.before || !row.after) return null
   if (row.before.value === row.after.value) return null
@@ -585,7 +633,7 @@ function getOutcomeSummary(report: WorkflowReport, metricRows: MetricRow[]) {
   const agentGoal = getAgentGoalText(report)
 
   if (agentGoal && (changeLines.length > 0 || validationLines.length > 0 || report.successEvalResult != null)) {
-    const summaryParts: string[] = [`The goal of this run was to ${agentGoal}.`]
+    const summaryParts: string[] = [getGoalOutcomeLead(report, agentGoal)]
 
     const changeClauses = changeLines.map(toSentenceFragment).filter(Boolean).slice(0, 3)
     if (changeClauses.length > 0) {
@@ -597,10 +645,11 @@ function getOutcomeSummary(report: WorkflowReport, metricRows: MetricRow[]) {
     const validationClauses = validationLines.map(toSentenceFragment).filter(Boolean).slice(0, 2)
     if (validationClauses.length > 0) {
       summaryParts.push(`Validation confirmed ${joinClauses(validationClauses)}.`)
-    } else if (report.successEvalResult === true) {
-      summaryParts.push("The run passed its success evaluation without introducing visible regressions.")
-    } else if (report.successEvalResult === false) {
-      summaryParts.push("The run did not pass its success evaluation.")
+    }
+
+    const successMeasureText = getSuccessMeasureText(report)
+    if (successMeasureText) {
+      summaryParts.push(successMeasureText)
     }
 
     if (metricChanges.length > 0) {
