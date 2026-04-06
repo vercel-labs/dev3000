@@ -2909,6 +2909,24 @@ export async function observeBaselineStep(
     workflowLog(`[Observe] Adopted d3k CLS fallback: ${effectiveBeforeCls?.toFixed(4)} (${effectiveBeforeGrade})`)
   }
 
+  if (effectiveBeforeScreenshots.length === 0) {
+    const d3kFallbackScreenshots = await captureD3kScreenshotFromLogs(
+      sandbox,
+      baselineClsEvidence.d3kLogs || effectiveObservationLogs,
+      progressContext?.projectName || "workflow",
+      "baseline-d3k",
+      "Before",
+      startPath
+    )
+    if (d3kFallbackScreenshots.length > 0) {
+      effectiveBeforeScreenshots = d3kFallbackScreenshots
+      await persistRunArtifacts(progressContext, {
+        beforeScreenshots: effectiveBeforeScreenshots
+      })
+      await appendProgressLog(progressContext, "[Observe] Baseline screenshot recovered from d3k logs")
+    }
+  }
+
   const needsActiveClsFallback = effectiveBeforeCls === null || effectiveBeforeCls <= 0.02
   if (needsActiveClsFallback) {
     timer.start("Capture before CLS fallback")
