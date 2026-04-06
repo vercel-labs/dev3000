@@ -2592,6 +2592,47 @@ function buildObservationMetricMap(observation: ObserveResult): Record<string, E
   return metrics
 }
 
+function countNonClsWebVitalMetrics(vitals: import("@/types").WebVitals | undefined): number {
+  if (!vitals) return 0
+
+  let count = 0
+  for (const key of ["lcp", "fcp", "ttfb", "inp"] as const) {
+    if (vitals[key]) count += 1
+  }
+
+  return count
+}
+
+function mergeWebVitalsSnapshots(
+  baseline: import("@/types").WebVitals,
+  supplement: import("@/types").WebVitals
+): import("@/types").WebVitals {
+  const merged: import("@/types").WebVitals = {
+    ...baseline,
+    ...supplement
+  }
+
+  const reconciledCls = pickMoreCredibleCls(
+    {
+      value: supplement.cls?.value ?? null,
+      grade: supplement.cls?.grade ?? null
+    },
+    {
+      value: baseline.cls?.value ?? null,
+      grade: baseline.cls?.grade ?? null
+    }
+  )
+
+  if (reconciledCls.value !== null && reconciledCls.grade) {
+    merged.cls = {
+      value: reconciledCls.value,
+      grade: reconciledCls.grade
+    }
+  }
+
+  return merged
+}
+
 function formatMetricValue(value: EarlyExitMetricValue): string {
   return typeof value === "string" ? `"${value}"` : String(value)
 }
@@ -3464,6 +3505,23 @@ export async function agentFixLoopStep(
     beforeWebVitalsDiagnostics = undefined
     beforeClsForVerification = observation.beforeCls
     beforeGradeForVerification = observation.beforeGrade
+    if (countNonClsWebVitalMetrics(capturedBeforeWebVitals) === 0) {
+      timer.start("Supplement before Web Vitals")
+      workflowLog("[Agent] Observation baseline vitals incomplete; recapturing before Web Vitals via CDP...")
+      const supplementedBeforeVitals = await fetchWebVitalsViaCDP(sandbox, localTargetUrl, cloudBrowserMode)
+      beforeWebVitalsDiagnostics = supplementedBeforeVitals.diagnosticLogs
+      const mergedBeforeWebVitals = mergeWebVitalsSnapshots(capturedBeforeWebVitals, supplementedBeforeVitals.vitals)
+      if (countNonClsWebVitalMetrics(mergedBeforeWebVitals) > countNonClsWebVitalMetrics(capturedBeforeWebVitals)) {
+        capturedBeforeWebVitals = mergedBeforeWebVitals
+        await persistRunArtifacts(progressContext, {
+          beforeWebVitals: capturedBeforeWebVitals
+        })
+        workflowLog(`[Agent] Supplemented before Web Vitals: ${JSON.stringify(capturedBeforeWebVitals)}`)
+      } else {
+        workflowLog("[Agent] Before Web Vitals supplement did not add additional metrics")
+      }
+      timer.end()
+    }
   } else {
     // Capture "before" Web Vitals via CDP before the agent makes any changes
     timer.start("Capture before Web Vitals")

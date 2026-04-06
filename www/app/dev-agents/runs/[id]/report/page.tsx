@@ -466,6 +466,78 @@ function getEarlyExitSummary(report: WorkflowReport) {
   }
 }
 
+function extractFinalOutputSummaryLines(agentAnalysis?: string): string[] {
+  if (!agentAnalysis) return []
+
+  const match = agentAnalysis.match(/## Final Output\s+([\s\S]*)$/)
+  const raw = (match?.[1] || "").replace(/```[\s\S]*?```/g, "").trim()
+  if (!raw) return []
+
+  return raw
+    .split("\n")
+    .map((line) =>
+      line
+        .trim()
+        .replace(/^[-*]\s+/, "")
+        .replace(/^\d+\.\s+/, "")
+    )
+    .filter(Boolean)
+    .filter((line) => !line.startsWith("#"))
+    .slice(0, 4)
+}
+
+function describeMetricChange(row: MetricRow): string | null {
+  if (!row.before || !row.after) return null
+  if (row.before.value === row.after.value) return null
+
+  const improved = row.after.value < row.before.value
+  return `${row.label} ${improved ? "improved" : "regressed"} from ${formatMetricValue(row.key, row.before.value)} to ${formatMetricValue(row.key, row.after.value)}`
+}
+
+function getOutcomeSummary(report: WorkflowReport, metricRows: MetricRow[]) {
+  if (report.earlyExitResult?.shouldExit) {
+    return null
+  }
+
+  if (report.workflowType === "turbopack-bundle-analyzer" && report.turbopackBundleComparison) {
+    const compressedDelta = report.turbopackBundleComparison.delta.compressedBytes
+    const rawDelta = report.turbopackBundleComparison.delta.rawBytes
+    return {
+      title: "Outcome Summary",
+      description: `Compressed JS changed by ${formatSignedBytes(compressedDelta)} and raw JS changed by ${formatSignedBytes(rawDelta)} during this run.`
+    }
+  }
+
+  const summaryLines = extractFinalOutputSummaryLines(report.agentAnalysis)
+  const metricChanges = metricRows.map(describeMetricChange).filter((value): value is string => Boolean(value))
+
+  if (metricChanges.length > 0) {
+    return {
+      title: "Outcome Summary",
+      description: `${metricChanges.slice(0, 2).join("; ")}.${summaryLines[0] ? ` ${summaryLines[0]}` : ""}`
+    }
+  }
+
+  if (summaryLines[0] || report.successEvalResult != null) {
+    const fallbackSummary =
+      summaryLines[0] ||
+      (report.successEvalResult
+        ? "This run passed its success evaluation."
+        : "This run did not pass its success evaluation.")
+    const rationale =
+      report.successEvalResult === true
+        ? " No material before/after Web Vitals delta was captured, so this result is based on the code changes and workflow verification rather than Web Vitals alone."
+        : ""
+
+    return {
+      title: "Outcome Summary",
+      description: `${fallbackSummary}${rationale}`
+    }
+  }
+
+  return null
+}
+
 function skillLink(skill: string) {
   const normalized = skill.trim().toLowerCase()
   if (normalized === "d3k" || normalized.includes("d3k")) {
@@ -807,7 +879,7 @@ function ReportContentBody({ run, report }: { run: WorkflowRun; report: Workflow
   const showMetricComparisonTable = hasMetricComparison || (isEarlyExit && metricRows.some((row) => row.before))
   const metricsWithCurrentValues = metricRows.filter((row) => row.current)
   const earlyExitSummary = getEarlyExitSummary(report)
-  const secondarySummary = earlyExitSummary
+  const secondarySummary = earlyExitSummary ?? getOutcomeSummary(report, metricRows)
   const explicitSkills = [...(report.skillsLoaded || []), ...(report.skillsInstalled || [])]
   const inferredSkills: string[] = workflowType === "turbopack-bundle-analyzer" ? [] : ["d3k"]
   if (workflowType === "design-guidelines") inferredSkills.unshift("Vercel Web Design Guidelines")
