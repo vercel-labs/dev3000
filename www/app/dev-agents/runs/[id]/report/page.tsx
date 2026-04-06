@@ -466,24 +466,94 @@ function getEarlyExitSummary(report: WorkflowReport) {
   }
 }
 
-function extractFinalOutputSummaryLines(agentAnalysis?: string): string[] {
-  if (!agentAnalysis) return []
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
 
-  const match = agentAnalysis.match(/## Final Output\s+([\s\S]*)$/)
-  const raw = (match?.[1] || "").replace(/```[\s\S]*?```/g, "").trim()
+function getFinalSummaryMarkdown(agentAnalysis?: string) {
+  if (!agentAnalysis) return ""
+
+  const legacyFinalOutputMatch = agentAnalysis.match(/## Final Output\s+([\s\S]*)$/)
+  if (legacyFinalOutputMatch?.[1]?.trim()) {
+    return legacyFinalOutputMatch[1].trim()
+  }
+
+  const transcriptFinalSummaryMatch = agentAnalysis.match(
+    /### Final summary\s+\*\*User:\*\*[\s\S]*?\*\*Claude:\*\*\n([\s\S]*?)\n\*\*Result JSON:\*\*/i
+  )
+
+  return transcriptFinalSummaryMatch?.[1]?.trim() || ""
+}
+
+function cleanSummaryLine(line: string) {
+  return line
+    .trim()
+    .replace(/^[-*]\s+/, "")
+    .replace(/^\d+\.\s+/, "")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/[—–]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
+function extractFinalOutputSummaryLines(agentAnalysis?: string): string[] {
+  const raw = getFinalSummaryMarkdown(agentAnalysis)
   if (!raw) return []
 
   return raw
+    .replace(/```[\s\S]*?```/g, "")
     .split("\n")
-    .map((line) =>
-      line
-        .trim()
-        .replace(/^[-*]\s+/, "")
-        .replace(/^\d+\.\s+/, "")
-    )
+    .map(cleanSummaryLine)
     .filter(Boolean)
     .filter((line) => !line.startsWith("#"))
-    .slice(0, 4)
+    .slice(0, 6)
+}
+
+function extractFinalSummarySectionLines(agentAnalysis: string | undefined, heading: string): string[] {
+  const finalSummary = getFinalSummaryMarkdown(agentAnalysis)
+  if (!finalSummary) return []
+
+  const match = finalSummary.match(
+    new RegExp(`^###\\s+${escapeRegExp(heading)}[^\\n]*\\n([\\s\\S]*?)(?=\\n###\\s+|$)`, "im")
+  )
+  const raw = match?.[1]?.trim()
+  if (!raw) return []
+
+  return raw
+    .replace(/```[\s\S]*?```/g, "")
+    .split("\n")
+    .map(cleanSummaryLine)
+    .filter(Boolean)
+    .filter((line) => !line.startsWith("|"))
+    .filter((line) => line !== "---")
+}
+
+function toSentenceFragment(text: string) {
+  const normalized = cleanSummaryLine(text).replace(/\.$/, "")
+  if (!normalized) return ""
+  return normalized.charAt(0).toLowerCase() + normalized.slice(1)
+}
+
+function joinClauses(clauses: string[]) {
+  if (clauses.length === 0) return ""
+  if (clauses.length === 1) return clauses[0] || ""
+  if (clauses.length === 2) return `${clauses[0]} and ${clauses[1]}`
+  return `${clauses.slice(0, -1).join("; ")}; and ${clauses[clauses.length - 1]}`
+}
+
+function getAgentGoalText(report: WorkflowReport) {
+  const source = report.devAgentDescription?.trim() || report.successEval?.trim()
+  if (!source) return null
+
+  const normalized = source.replace(/\.$/, "").trim()
+  if (!normalized) return null
+
+  if (/^were\s+/i.test(normalized)) {
+    return normalized.charAt(0).toLowerCase() + normalized.slice(1)
+  }
+
+  return normalized.charAt(0).toLowerCase() + normalized.slice(1)
 }
 
 function describeMetricChange(row: MetricRow): string | null {
@@ -509,7 +579,43 @@ function getOutcomeSummary(report: WorkflowReport, metricRows: MetricRow[]) {
   }
 
   const summaryLines = extractFinalOutputSummaryLines(report.agentAnalysis)
+  const changeLines = extractFinalSummarySectionLines(report.agentAnalysis, "Changes made")
+  const validationLines = extractFinalSummarySectionLines(report.agentAnalysis, "Validation evidence")
   const metricChanges = metricRows.map(describeMetricChange).filter((value): value is string => Boolean(value))
+  const agentGoal = getAgentGoalText(report)
+
+  if (agentGoal && (changeLines.length > 0 || validationLines.length > 0 || report.successEvalResult != null)) {
+    const summaryParts: string[] = [`The goal of this run was to ${agentGoal}.`]
+
+    const changeClauses = changeLines.map(toSentenceFragment).filter(Boolean).slice(0, 3)
+    if (changeClauses.length > 0) {
+      summaryParts.push(`Key changes included ${joinClauses(changeClauses)}.`)
+    } else if (summaryLines[0]) {
+      summaryParts.push(summaryLines[0])
+    }
+
+    const validationClauses = validationLines.map(toSentenceFragment).filter(Boolean).slice(0, 2)
+    if (validationClauses.length > 0) {
+      summaryParts.push(`Validation confirmed ${joinClauses(validationClauses)}.`)
+    } else if (report.successEvalResult === true) {
+      summaryParts.push("The run passed its success evaluation without introducing visible regressions.")
+    } else if (report.successEvalResult === false) {
+      summaryParts.push("The run did not pass its success evaluation.")
+    }
+
+    if (metricChanges.length > 0) {
+      summaryParts.push(
+        `Web Vitals also changed during the run (${metricChanges
+          .slice(0, 2)
+          .join("; ")}), but those deltas are secondary evidence for this agent's goal.`
+      )
+    }
+
+    return {
+      title: "Outcome Summary",
+      description: summaryParts.join(" ")
+    }
+  }
 
   if (metricChanges.length > 0) {
     return {
