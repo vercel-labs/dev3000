@@ -33,16 +33,17 @@ d3k find-component "nav"  # Find React component source
 
 ## Browser Interaction
 
-First run `d3k cdp-port` to get the port number, then use it directly in all browser commands:
+`d3k agent-browser` auto-connects to the active session's browser via CDP:
 
 ```bash
-d3k cdp-port                                          # Returns e.g. 9222
-d3k agent-browser --cdp 9222 open http://localhost:3000/page
-d3k agent-browser --cdp 9222 snapshot -i    # Get element refs (@e1, @e2)
-d3k agent-browser --cdp 9222 click @e2
-d3k agent-browser --cdp 9222 fill @e3 "text"
-d3k agent-browser --cdp 9222 screenshot /tmp/shot.png
+d3k agent-browser open http://localhost:3000/page
+d3k agent-browser snapshot -i    # Get element refs (@e1, @e2)
+d3k agent-browser click @e2
+d3k agent-browser fill @e3 "text"
+d3k agent-browser screenshot /tmp/shot.png
 ```
+
+To target a different browser: `d3k agent-browser connect <port>` first.
 
 ## Browser Tool Choice
 
@@ -56,7 +57,7 @@ Use the browser tool that matches the task:
   - Next.js-specific tool.
   - Best for Next/React introspection: `tree`, `errors`, `logs`, `routes`, `project`, and related Next dev-server diagnostics.
   - It is not a drop-in replacement for `agent-browser`: no accessibility `snapshot`, no ref-based `click`, and no `fill`.
-  - It runs its own daemon/browser flow and does not use `d3k cdp-port`.
+  - It runs its own daemon/browser flow and does not use the d3k session's CDP port.
 
 Practical rule:
 
@@ -66,9 +67,9 @@ Practical rule:
 Examples:
 
 ```bash
-# Same monitored browser session
-d3k agent-browser --cdp 9222 snapshot -i
-d3k agent-browser --cdp 9222 click @e2
+# Same monitored browser session (auto-connected)
+d3k agent-browser snapshot -i
+d3k agent-browser click @e2
 
 # Next.js-specific inspection
 d3k next-browser open http://localhost:3000
@@ -88,23 +89,23 @@ d3k --browser-tool next-browser
 
 1. `d3k errors --context` - See errors and what triggered them
 2. Fix the code
-3. Run `d3k cdp-port` to get the port, then `d3k agent-browser --cdp <port> open <url>` then `click @e1` to replay
+3. `d3k agent-browser open <url>` then `d3k agent-browser click @e1` to replay
 4. `d3k errors` - Verify fix worked
 
 ## Creating PRs with Before/After Screenshots
 
 When creating a PR for visual changes, **always capture before/after screenshots** to show the impact:
 
-1. **Before making changes**, screenshot the production site (run `d3k cdp-port` first to get the port):
+1. **Before making changes**, screenshot the production site:
    ```bash
-   d3k agent-browser --cdp <port> open https://production-url.com/affected-page
-   d3k agent-browser --cdp <port> screenshot /tmp/before.png
+   d3k agent-browser open https://production-url.com/affected-page
+   d3k agent-browser screenshot /tmp/before.png
    ```
 
 2. **After making changes**, screenshot localhost:
    ```bash
-   d3k agent-browser --cdp <port> open http://localhost:3000/affected-page
-   d3k agent-browser --cdp <port> screenshot /tmp/after.png
+   d3k agent-browser open http://localhost:3000/affected-page
+   d3k agent-browser screenshot /tmp/after.png
    ```
 
 3. **Or use the tooling API** to capture multiple routes at once:
