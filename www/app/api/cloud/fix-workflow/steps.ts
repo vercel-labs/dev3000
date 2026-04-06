@@ -1955,6 +1955,7 @@ export async function initSandboxStep(
     try {
       await appendProgressLog(progressContext, "[Sandbox] Loading development environment variables...")
       const params = new URLSearchParams({ target: "development", decrypt: "true", limit: "100" })
+      const envFetchTimeoutMs = 15000
       if (teamId) {
         params.set("teamId", teamId)
       }
@@ -1963,9 +1964,26 @@ export async function initSandboxStep(
       let lastErrorText = ""
 
       for (const token of envFetchTokens) {
-        const response = await fetch(`https://api.vercel.com/v10/projects/${projectId}/env?${params.toString()}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), envFetchTimeoutMs)
+        let response: Response
+        try {
+          response = await fetch(`https://api.vercel.com/v10/projects/${projectId}/env?${params.toString()}`, {
+            headers: { Authorization: `Bearer ${token}` },
+            signal: controller.signal
+          })
+        } catch (error) {
+          lastStatus = null
+          lastErrorText =
+            error instanceof Error && error.name === "AbortError"
+              ? `Timed out after ${envFetchTimeoutMs}ms`
+              : error instanceof Error
+                ? error.message
+                : String(error)
+          continue
+        } finally {
+          clearTimeout(timeoutId)
+        }
 
         if (response.ok) {
           const data = (await response.json()) as {
