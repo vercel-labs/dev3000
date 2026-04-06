@@ -182,15 +182,16 @@ function runLocalBrowserTool(browserTool: LocalBrowserTool, args: string[]) {
       process.exit(result.status ?? 0)
     }
 
-    // Auto-inject --cdp from session if not already provided
-    if (!args.includes("--cdp")) {
+    const binaryPath = findAgentBrowser()
+
+    // Auto-connect to session CDP if user didn't provide --cdp or an explicit connect
+    if (!args.includes("--cdp") && subcommand !== "connect") {
       const cdpPort = getSessionCdpPort()
       if (cdpPort) {
-        args = ["--cdp", cdpPort, ...args]
+        spawnSync(binaryPath, ["connect", cdpPort], { stdio: "pipe", shell: false, env })
       }
     }
 
-    const binaryPath = findAgentBrowser()
     const result = spawnSync(binaryPath, args, {
       stdio: "pipe",
       shell: false,
