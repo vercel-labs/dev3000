@@ -350,6 +350,7 @@ const agentBrowserCache = new Map<string, SandboxAgentBrowser>()
 const agentBrowserProfileVersion = new Map<string, number>()
 const nextBrowserCache = new Map<string, SandboxNextBrowser>()
 const nextBrowserHomeVersion = new Map<string, number>()
+const WORKFLOW_BROWSER_COMMAND_TIMEOUT_MS = 90000
 
 function resolveCloudBrowserMode(
   devAgentSandboxBrowser: "none" | "agent-browser" | "next-browser" | undefined
@@ -381,7 +382,8 @@ async function getAgentBrowser(sandbox: Sandbox, debug = false): Promise<Sandbox
     const profilePath = `/tmp/agent-browser-profile-${cacheKey}-${nextVersion}`
     browser = await SandboxAgentBrowser.create(sandbox, {
       profile: profilePath,
-      debug
+      debug,
+      timeout: WORKFLOW_BROWSER_COMMAND_TIMEOUT_MS
     })
     workflowLog(`[Browser] Created agent-browser profile ${profilePath}`)
     agentBrowserCache.set(cacheKey, browser)
