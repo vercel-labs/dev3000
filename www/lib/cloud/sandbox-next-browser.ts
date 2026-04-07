@@ -306,8 +306,8 @@ export class SandboxNextBrowser {
     return this.exec(nodeId === undefined ? ["tree"] : ["tree", String(nodeId)])
   }
 
-  async screenshot(outputPath: string): Promise<NextBrowserResult> {
-    const screenshotResult = await this.exec(["screenshot"])
+  async screenshot(outputPath: string, options?: { timeout?: number }): Promise<NextBrowserResult> {
+    const screenshotResult = await this.exec(["screenshot"], options?.timeout)
     if (!screenshotResult.success) {
       return screenshotResult
     }

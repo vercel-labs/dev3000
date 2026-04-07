@@ -672,15 +672,18 @@ function extractWebVitalsResultString(evalResult: { success: boolean; result?: u
 async function _screenshotBrowser(
   sandbox: Sandbox,
   outputPath: string,
-  options: { fullPage?: boolean } = {},
+  options: { fullPage?: boolean; timeoutMs?: number } = {},
   browserMode: CloudBrowserMode = "agent-browser",
   debug = false
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const result =
       browserMode === "next-browser"
-        ? await (await getNextBrowser(sandbox, debug)).screenshot(outputPath)
-        : await (await getAgentBrowser(sandbox, debug)).screenshot(outputPath, options)
+        ? await (await getNextBrowser(sandbox, debug)).screenshot(outputPath, { timeout: options.timeoutMs })
+        : await (await getAgentBrowser(sandbox, debug)).screenshot(outputPath, {
+            fullPage: options.fullPage,
+            timeout: options.timeoutMs
+          })
     if (result.success) {
       workflowLog(`[Browser] Screenshot saved to ${outputPath} via ${browserMode}`)
       return { success: true }
@@ -760,14 +763,16 @@ async function capturePhaseScreenshot(
 ): Promise<Array<{ timestamp: number; blobUrl: string; label?: string }>> {
   const screenshotPath = `/tmp/${kind}-${Date.now()}.png`
   const screenshotBrowserMode = browserMode === "next-browser" ? "agent-browser" : browserMode
-  const screenshotResult = await captureSandboxScreenshot(
-    sandbox,
-    screenshotPath,
-    screenshotBrowserMode,
-    targetUrl,
-    waitMs
-  )
+  const screenshotResult = await Promise.race([
+    captureSandboxScreenshot(sandbox, screenshotPath, screenshotBrowserMode, targetUrl, waitMs),
+    new Promise<{ success: false; error: string }>((resolve) =>
+      setTimeout(() => resolve({ success: false, error: "Screenshot capture exceeded outer timeout" }), 35000)
+    )
+  ])
   if (!screenshotResult.success) {
+    workflowLog(
+      `[Browser] ${screenshotBrowserMode} screenshot capture failed${targetUrl ? ` for ${targetUrl}` : ""}: ${screenshotResult.error || "unknown error"}`
+    )
     return []
   }
 
@@ -879,10 +884,11 @@ async function captureScreenshotViaBrowserCli(
   targetUrl: string,
   waitMs: number
 ): Promise<{ success: boolean; error?: string }> {
+  const screenshotCommandTimeoutMs = 8000
   let lastError = `${browserMode} screenshot failed`
 
   for (const [attemptIndex, attemptWaitMs] of [waitMs, Math.max(waitMs * 2, 10000)].entries()) {
-    const navResult = await navigateBrowser(sandbox, targetUrl, browserMode)
+    const navResult = await navigateBrowser(sandbox, targetUrl, browserMode, false, screenshotCommandTimeoutMs)
     if (!navResult.success) {
       lastError = navResult.error || `${browserMode} navigation failed`
       continue
@@ -900,7 +906,9 @@ async function captureScreenshotViaBrowserCli(
         bodyHtmlLength: document.body?.innerHTML?.length ?? 0,
         bodyScrollHeight: document.body?.scrollHeight ?? 0
       })`,
-      browserMode
+      browserMode,
+      false,
+      screenshotCommandTimeoutMs
     )
 
     const diagnosticsValue = extractWebVitalsResultString(pageDiagnostics)
@@ -910,7 +918,12 @@ async function captureScreenshotViaBrowserCli(
       )
     }
 
-    const screenshotResult = await _screenshotBrowser(sandbox, screenshotPath, { fullPage: false }, browserMode)
+    const screenshotResult = await _screenshotBrowser(
+      sandbox,
+      screenshotPath,
+      { fullPage: false, timeoutMs: screenshotCommandTimeoutMs },
+      browserMode
+    )
     if (!screenshotResult.success) {
       lastError = screenshotResult.error || `${browserMode} screenshot failed`
       continue
@@ -973,7 +986,12 @@ async function captureSandboxScreenshot(
     `[Browser] CDP screenshot failed${targetUrl ? ` for ${targetUrl}` : ""}: ${cdpResult.error || "unknown error"}`
   )
 
-  const screenshotResult = await _screenshotBrowser(sandbox, screenshotPath, { fullPage: false }, browserMode)
+  const screenshotResult = await _screenshotBrowser(
+    sandbox,
+    screenshotPath,
+    { fullPage: false, timeoutMs: 8000 },
+    browserMode
+  )
   if (!screenshotResult.success) {
     if (targetUrl) {
       const chromiumResult = await captureScreenshotWithSandboxChromium(sandbox, screenshotPath, targetUrl, waitMs)
