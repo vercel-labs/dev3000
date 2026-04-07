@@ -88,6 +88,28 @@ interface TurbopackPrGateResult {
   reason?: string
 }
 
+function mergeInitAndObservationTiming(
+  initTiming: InitResult["timing"],
+  observation?: import("./steps").ObserveResult | null
+): InitResult["timing"] {
+  if (!observation) {
+    return initTiming
+  }
+
+  return {
+    totalMs: initTiming.totalMs + observation.timing.totalMs,
+    sandboxCreation: initTiming.sandboxCreation,
+    steps: [
+      ...initTiming.steps,
+      ...observation.timing.steps.map((step) => ({
+        name: `Observe: ${step.name}`,
+        durationMs: step.durationMs,
+        startedAt: step.startedAt
+      }))
+    ]
+  }
+}
+
 /**
  * Main workflow - simplified to 2 steps
  */
@@ -331,6 +353,8 @@ export async function cloudFixWorkflow(params: {
       workflowLog(`[Workflow] Observation: CLS=${observation.beforeCls}, grade=${observation.beforeGrade}`)
     }
 
+    const combinedInitTiming = mergeInitAndObservationTiming(initResult.timing, observation)
+
     // ============================================================
     // STEP 1.6: Evaluate early exit (if earlyExitEval is defined)
     // ============================================================
@@ -364,7 +388,7 @@ export async function cloudFixWorkflow(params: {
           devAgentName,
           devAgentSkillRefs,
           progressContext,
-          initResult.timing,
+          combinedInitTiming,
           initResult.fromSnapshot,
           initResult.snapshotId,
           devAgentSuccessEval,
@@ -410,7 +434,7 @@ export async function cloudFixWorkflow(params: {
         projectName,
         reportId,
         progressContext,
-        initResult.timing,
+        combinedInitTiming,
         initResult.fromSnapshot,
         initResult.snapshotId
       )
@@ -459,7 +483,7 @@ export async function cloudFixWorkflow(params: {
         devAgentSkillRefs,
         progressContext,
         // Pass timing and snapshot info from init step
-        initResult.timing,
+        combinedInitTiming,
         initResult.fromSnapshot,
         initResult.snapshotId,
         devAgentSuccessEval,

@@ -2566,7 +2566,7 @@ export interface ObserveResult {
   d3kLogs: string
   cloudBrowserMode: "agent-browser" | "next-browser"
   skillsInstalled: string[]
-  timing: { totalMs: number; steps: Array<{ name: string; durationMs: number }> }
+  timing: { totalMs: number; steps: Array<{ name: string; durationMs: number; startedAt: string }> }
 }
 
 type EarlyExitMetricValue = number | boolean | string
@@ -2824,7 +2824,7 @@ export async function observeBaselineStep(
         skillsInstalled: [],
         timing: {
           totalMs: timingData.totalMs,
-          steps: timingData.steps.map((s) => ({ name: s.name, durationMs: s.durationMs }))
+          steps: timingData.steps.map((s) => ({ name: s.name, durationMs: s.durationMs, startedAt: s.startedAt }))
         }
       }
     }
@@ -2889,7 +2889,7 @@ export async function observeBaselineStep(
     progressContext,
     `[Observe] Browser open ${beforeNavResult.success ? "succeeded" : "failed"}${beforeNavResult.error ? `: ${beforeNavResult.error}` : ""}`
   )
-  await new Promise((resolve) => setTimeout(resolve, 2000))
+  await new Promise((resolve) => setTimeout(resolve, 1000))
   const beforeReloadResult = await reloadBrowser(sandbox, cloudBrowserMode)
   workflowLog(
     `[Observe] Baseline reload: success=${beforeReloadResult.success}${beforeReloadResult.error ? `, error=${beforeReloadResult.error}` : ""}`
@@ -2898,7 +2898,7 @@ export async function observeBaselineStep(
     progressContext,
     `[Observe] Browser reload ${beforeReloadResult.success ? "succeeded" : "failed"}${beforeReloadResult.error ? `: ${beforeReloadResult.error}` : ""}`
   )
-  await new Promise((resolve) => setTimeout(resolve, 5000))
+  await new Promise((resolve) => setTimeout(resolve, 2500))
   timer.end()
 
   // Capture "before" Web Vitals via CDP
@@ -2990,12 +2990,12 @@ export async function observeBaselineStep(
     workflowLog(
       `[Observe] Before CLS fallback navigation: success=${activeBeforeNavResult.success}${activeBeforeNavResult.error ? `, error=${activeBeforeNavResult.error}` : ""}`
     )
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+    await new Promise((resolve) => setTimeout(resolve, 750))
     const activeBeforeReloadResult = await reloadBrowser(sandbox, cloudBrowserMode)
     workflowLog(
       `[Observe] Before CLS fallback reload: success=${activeBeforeReloadResult.success}${activeBeforeReloadResult.error ? `, error=${activeBeforeReloadResult.error}` : ""}`
     )
-    await new Promise((resolve) => setTimeout(resolve, 5000))
+    await new Promise((resolve) => setTimeout(resolve, 3000))
     baselineClsEvidence = await fetchClsData(sandbox)
     effectiveObservationLogs = baselineClsEvidence.d3kLogs || effectiveObservationLogs
     if (baselineClsEvidence.clsScore !== null) {
@@ -3074,7 +3074,7 @@ export async function observeBaselineStep(
     skillsInstalled,
     timing: {
       totalMs: timingData.totalMs,
-      steps: timingData.steps.map((s) => ({ name: s.name, durationMs: s.durationMs }))
+      steps: timingData.steps.map((s) => ({ name: s.name, durationMs: s.durationMs, startedAt: s.startedAt }))
     }
   }
 }
@@ -3599,14 +3599,14 @@ export async function agentFixLoopStep(
     workflowLog(
       `[Agent] Navigate to devUrl result: success=${navResult.success}${navResult.error ? `, error=${navResult.error}` : ""}`
     )
-    await new Promise((resolve) => setTimeout(resolve, 2000))
+    await new Promise((resolve) => setTimeout(resolve, 1000))
 
     const reloadResult = await reloadBrowser(sandbox, cloudBrowserMode)
     workflowLog(
       `[Agent] Page reload result: success=${reloadResult.success}${reloadResult.error ? `, error=${reloadResult.error}` : ""}`
     )
     workflowLog("[Agent] Waiting for CLS to be captured...")
-    await new Promise((resolve) => setTimeout(resolve, 8000))
+    await new Promise((resolve) => setTimeout(resolve, 5000))
 
     timer.start("Fetch final CLS data")
     finalCls = await fetchClsData(sandbox)
@@ -3749,31 +3749,7 @@ export async function agentFixLoopStep(
   workflowLog(`[Agent] After Web Vitals: ${JSON.stringify(afterWebVitals)}`)
 
   // Generate report inline
-  timer.start("Generate and upload report")
-
-  // Get agent timing data before creating the report
-  const agentTimingData = timer.getData()
-
-  // Build timing object for report
-  const initMs = initTiming?.totalMs ?? 0
-  const agentMs = agentTimingData.totalMs
-  const reportTiming: WorkflowReport["timing"] = {
-    total: {
-      initMs,
-      agentMs,
-      totalMs: initMs + agentMs
-    },
-    init: initTiming
-      ? {
-          sandboxCreationMs: initTiming.sandboxCreation.totalMs,
-          fromSnapshot: fromSnapshot ?? false,
-          steps: initTiming.steps.map((s) => ({ name: s.name, durationMs: s.durationMs }))
-        }
-      : undefined,
-    agent: {
-      steps: agentTimingData.steps.map((s) => ({ name: s.name, durationMs: s.durationMs }))
-    }
-  }
+  timer.start("Build report payload")
 
   const { skillsInstalled } = await readSandboxSkillsInfo(sandbox)
 
@@ -3846,7 +3822,7 @@ Did the agent meet the success criteria? Respond with JSON only.`
     successEvalResult = true
   }
 
-  const report: WorkflowReport = {
+  const reportBase: Omit<WorkflowReport, "timing"> = {
     id: reportId,
     projectName,
     timestamp: new Date().toISOString(),
@@ -3909,7 +3885,32 @@ Did the agent meet the success criteria? Respond with JSON only.`
     successEvalResult,
     // Sandbox and timing info
     fromSnapshot: fromSnapshot ?? false,
-    snapshotId,
+    snapshotId
+  }
+
+  const agentTimingData = timer.getData()
+  const initMs = initTiming?.totalMs ?? 0
+  const agentMs = agentTimingData.totalMs
+  const reportTiming: WorkflowReport["timing"] = {
+    total: {
+      initMs,
+      agentMs,
+      totalMs: initMs + agentMs
+    },
+    init: initTiming
+      ? {
+          sandboxCreationMs: initTiming.sandboxCreation.totalMs,
+          fromSnapshot: fromSnapshot ?? false,
+          steps: initTiming.steps.map((s) => ({ name: s.name, durationMs: s.durationMs }))
+        }
+      : undefined,
+    agent: {
+      steps: agentTimingData.steps.map((s) => ({ name: s.name, durationMs: s.durationMs }))
+    }
+  }
+
+  const report: WorkflowReport = {
+    ...reportBase,
     timing: reportTiming
   }
 
@@ -6682,8 +6683,12 @@ async function fetchWebVitalsViaCDP(
     diagnosticLogs.push(...documentStartResult.diagnosticLogs)
     if (documentStartResult.vitals && Object.keys(documentStartResult.vitals).length > 0) {
       documentStartVitals = documentStartResult.vitals
+      successfulSamples.push(documentStartVitals)
       diagLog(
         `[fetchWebVitals] Document-start candidate captured for ${targetUrl}: ${JSON.stringify(documentStartVitals)}`
+      )
+      diagLog(
+        `[fetchWebVitals] Counting document-start candidate as sample ${successfulSamples.length}/${desiredSuccessfulSamples}`
       )
     }
   }
@@ -6700,13 +6705,13 @@ async function fetchWebVitalsViaCDP(
         diagLog(
           `[fetchWebVitals] Navigation result: success=${navResult.success}${navResult.error ? `, error=${navResult.error}` : ""}`
         )
-        await new Promise((resolve) => setTimeout(resolve, 1500))
+        await new Promise((resolve) => setTimeout(resolve, 1000))
 
         const reloadResult = await reloadBrowser(sandbox, browserMode)
         diagLog(
           `[fetchWebVitals] Reload result: success=${reloadResult.success}${reloadResult.error ? `, error=${reloadResult.error}` : ""}`
         )
-        await new Promise((resolve) => setTimeout(resolve, 1500))
+        await new Promise((resolve) => setTimeout(resolve, 1000))
       }
 
       const finalizeLcpScript = `
@@ -6715,10 +6720,10 @@ async function fetchWebVitalsViaCDP(
         'lcp-finalized'
       `
       await evaluateInBrowser(sandbox, finalizeLcpScript, browserMode)
-      await new Promise((resolve) => setTimeout(resolve, 500))
+      await new Promise((resolve) => setTimeout(resolve, 250))
 
       await evaluateInBrowser(sandbox, buildWebVitalsInitScript(), browserMode)
-      await new Promise((resolve) => setTimeout(resolve, 1500))
+      await new Promise((resolve) => setTimeout(resolve, 1000))
 
       const evalResult = await evaluateInBrowser(sandbox, buildWebVitalsReadScript(), browserMode)
       diagLog(`[fetchWebVitals] Eval result: ${JSON.stringify(evalResult).substring(0, 500)}`)
@@ -6734,12 +6739,12 @@ async function fetchWebVitalsViaCDP(
           diagLog(
             `[fetchWebVitals] Reopen navigation result: success=${navResult.success}${navResult.error ? `, error=${navResult.error}` : ""}`
           )
-          await new Promise((resolve) => setTimeout(resolve, 1500))
+          await new Promise((resolve) => setTimeout(resolve, 1000))
           const reloadResult = await reloadBrowser(sandbox, browserMode)
           diagLog(
             `[fetchWebVitals] Reopen reload result: success=${reloadResult.success}${reloadResult.error ? `, error=${reloadResult.error}` : ""}`
           )
-          await new Promise((resolve) => setTimeout(resolve, 1500))
+          await new Promise((resolve) => setTimeout(resolve, 1000))
         }
       }
 
@@ -6795,7 +6800,7 @@ async function fetchWebVitalsViaCDP(
     }
 
     if (attempt < maxAttempts) {
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      await new Promise((resolve) => setTimeout(resolve, 500))
     }
   }
 
