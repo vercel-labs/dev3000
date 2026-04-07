@@ -766,7 +766,7 @@ async function capturePhaseScreenshot(
   const screenshotResult = await Promise.race([
     captureSandboxScreenshot(sandbox, screenshotPath, screenshotBrowserMode, targetUrl, waitMs),
     new Promise<{ success: false; error: string }>((resolve) =>
-      setTimeout(() => resolve({ success: false, error: "Screenshot capture exceeded outer timeout" }), 35000)
+      setTimeout(() => resolve({ success: false, error: "Screenshot capture exceeded outer timeout" }), 20000)
     )
   ])
   if (!screenshotResult.success) {
@@ -884,7 +884,7 @@ async function captureScreenshotViaBrowserCli(
   targetUrl: string,
   waitMs: number
 ): Promise<{ success: boolean; error?: string }> {
-  const screenshotCommandTimeoutMs = 8000
+  const screenshotCommandTimeoutMs = 5000
   let lastError = `${browserMode} screenshot failed`
 
   for (const [attemptIndex, attemptWaitMs] of [waitMs, Math.max(waitMs * 2, 10000)].entries()) {
@@ -3004,15 +3004,27 @@ export async function observeBaselineStep(
 
   const needsActiveClsFallback = effectiveBeforeCls === null || effectiveBeforeCls <= 0.02
   if (needsActiveClsFallback) {
+    const activeFallbackBrowserTimeoutMs = 8000
     timer.start("Capture before CLS fallback")
     workflowLog("[Observe] Capturing active fallback before-CLS via d3k logs...")
     await appendProgressLog(progressContext, "[Observe] Re-measuring baseline CLS via active browser fallback")
-    const activeBeforeNavResult = await navigateBrowser(sandbox, localTargetUrl, cloudBrowserMode)
+    const activeBeforeNavResult = await navigateBrowser(
+      sandbox,
+      localTargetUrl,
+      cloudBrowserMode,
+      false,
+      activeFallbackBrowserTimeoutMs
+    )
     workflowLog(
       `[Observe] Before CLS fallback navigation: success=${activeBeforeNavResult.success}${activeBeforeNavResult.error ? `, error=${activeBeforeNavResult.error}` : ""}`
     )
     await new Promise((resolve) => setTimeout(resolve, 750))
-    const activeBeforeReloadResult = await reloadBrowser(sandbox, cloudBrowserMode)
+    const activeBeforeReloadResult = await reloadBrowser(
+      sandbox,
+      cloudBrowserMode,
+      false,
+      activeFallbackBrowserTimeoutMs
+    )
     workflowLog(
       `[Observe] Before CLS fallback reload: success=${activeBeforeReloadResult.success}${activeBeforeReloadResult.error ? `, error=${activeBeforeReloadResult.error}` : ""}`
     )
@@ -3060,7 +3072,7 @@ export async function observeBaselineStep(
         "baseline-fallback",
         "Before",
         localTargetUrl,
-        10000
+        6000
       )
       if (fallbackBeforeScreenshots.length > 0) {
         effectiveBeforeScreenshots = fallbackBeforeScreenshots
@@ -6462,7 +6474,7 @@ try {
         }
       },
       {
-        timeoutMs: 12000
+        timeoutMs: 7000
       }
     ),
     new Promise<{ exitCode: number; stdout: string; stderr: string }>((resolve) =>
@@ -6473,7 +6485,7 @@ try {
             stdout: "",
             stderr: "Document-start CDP capture exceeded outer timeout"
           }),
-        13000
+        8000
       )
     )
   ])
@@ -6665,8 +6677,8 @@ async function fetchWebVitalsViaCDP(
   const diagnosticLogs: string[] = []
   let documentStartVitals: import("@/types").WebVitals | null = null
   const desiredSuccessfulSamples = 3
-  const overallTimeoutMs = 25000
-  const browserStepTimeoutMs = 6000
+  const overallTimeoutMs = 18000
+  const browserStepTimeoutMs = 4000
   const captureStart = Date.now()
 
   // Helper to log and capture diagnostics
