@@ -415,12 +415,13 @@ async function navigateBrowser(
   sandbox: Sandbox,
   url: string,
   browserMode: CloudBrowserMode = "agent-browser",
-  debug = false
+  debug = false,
+  timeoutMs?: number
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const browser =
       browserMode === "next-browser" ? await getNextBrowser(sandbox, debug) : await getAgentBrowser(sandbox, debug)
-    const result = await browser.open(url)
+    const result = await browser.open(url, timeoutMs ? { timeout: timeoutMs } : undefined)
     if (result.success) {
       workflowLog(`[Browser] Navigated to ${url} via ${browserMode}`)
       return { success: true }
@@ -435,7 +436,7 @@ async function navigateBrowser(
       }
       const retryBrowser =
         browserMode === "next-browser" ? await getNextBrowser(sandbox, debug) : await getAgentBrowser(sandbox, debug)
-      const retryResult = await retryBrowser.open(url)
+      const retryResult = await retryBrowser.open(url, timeoutMs ? { timeout: timeoutMs } : undefined)
       if (retryResult.success) {
         workflowLog(`[Browser] Navigated to ${url} via ${browserMode} (retry)`)
         return { success: true }
@@ -462,12 +463,13 @@ async function navigateBrowser(
 async function reloadBrowser(
   sandbox: Sandbox,
   browserMode: CloudBrowserMode = "agent-browser",
-  debug = false
+  debug = false,
+  timeoutMs?: number
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const browser =
       browserMode === "next-browser" ? await getNextBrowser(sandbox, debug) : await getAgentBrowser(sandbox, debug)
-    const result = await browser.reload()
+    const result = await browser.reload(timeoutMs ? { timeout: timeoutMs } : undefined)
     if (result.success) {
       workflowLog(`[Browser] Page reloaded via ${browserMode}`)
       return { success: true }
@@ -482,7 +484,7 @@ async function reloadBrowser(
       }
       const retryBrowser =
         browserMode === "next-browser" ? await getNextBrowser(sandbox, debug) : await getAgentBrowser(sandbox, debug)
-      const retryResult = await retryBrowser.reload()
+      const retryResult = await retryBrowser.reload(timeoutMs ? { timeout: timeoutMs } : undefined)
       if (retryResult.success) {
         workflowLog(`[Browser] Page reloaded via ${browserMode} (retry)`)
         return { success: true }
@@ -510,12 +512,13 @@ async function evaluateInBrowser(
   sandbox: Sandbox,
   expression: string,
   browserMode: CloudBrowserMode = "agent-browser",
-  debug = false
+  debug = false,
+  timeoutMs?: number
 ): Promise<{ success: boolean; result?: unknown; error?: string }> {
   try {
     const browser =
       browserMode === "next-browser" ? await getNextBrowser(sandbox, debug) : await getAgentBrowser(sandbox, debug)
-    const result = await browser.evaluate(expression)
+    const result = await browser.evaluate(expression, timeoutMs ? { timeout: timeoutMs } : undefined)
     if (result.success) {
       return { success: true, result: result.data }
     }
@@ -528,7 +531,7 @@ async function evaluateInBrowser(
       }
       const retryBrowser =
         browserMode === "next-browser" ? await getNextBrowser(sandbox, debug) : await getAgentBrowser(sandbox, debug)
-      const retryResult = await retryBrowser.evaluate(expression)
+      const retryResult = await retryBrowser.evaluate(expression, timeoutMs ? { timeout: timeoutMs } : undefined)
       if (retryResult.success) {
         return { success: true, result: retryResult.data }
       }
@@ -6400,7 +6403,7 @@ try {
   } else {
     await send("Page.navigate", { url: targetUrl }, sessionId)
   }
-  await delay(7000)
+  await delay(3000)
 
   const evalResult = await send(
     "Runtime.evaluate",
@@ -6429,20 +6432,33 @@ try {
 }
 `
 
-  const result = await runSandboxCommandWithOptions(
-    sandbox,
-    {
-      cmd: "node",
-      args: ["--input-type=module", "-e", measureScript],
-      env: {
-        D3K_CDP_URL: cdpUrl,
-        D3K_TARGET_URL: targetUrl
+  const result = await Promise.race([
+    runSandboxCommandWithOptions(
+      sandbox,
+      {
+        cmd: "node",
+        args: ["--input-type=module", "-e", measureScript],
+        env: {
+          D3K_CDP_URL: cdpUrl,
+          D3K_TARGET_URL: targetUrl
+        }
+      },
+      {
+        timeoutMs: 12000
       }
-    },
-    {
-      timeoutMs: 15000
-    }
-  )
+    ),
+    new Promise<{ exitCode: number; stdout: string; stderr: string }>((resolve) =>
+      setTimeout(
+        () =>
+          resolve({
+            exitCode: 124,
+            stdout: "",
+            stderr: "Document-start CDP capture exceeded outer timeout"
+          }),
+        13000
+      )
+    )
+  ])
 
   if (result.exitCode !== 0 || !result.stdout.trim()) {
     diagLog(
@@ -6632,6 +6648,7 @@ async function fetchWebVitalsViaCDP(
   let documentStartVitals: import("@/types").WebVitals | null = null
   const desiredSuccessfulSamples = 3
   const overallTimeoutMs = 25000
+  const browserStepTimeoutMs = 6000
   const captureStart = Date.now()
 
   // Helper to log and capture diagnostics
@@ -6709,13 +6726,13 @@ async function fetchWebVitalsViaCDP(
 
       if (targetUrl) {
         diagLog(`[fetchWebVitals] Opening ${targetUrl} before capture`)
-        const navResult = await navigateBrowser(sandbox, targetUrl, browserMode)
+        const navResult = await navigateBrowser(sandbox, targetUrl, browserMode, false, browserStepTimeoutMs)
         diagLog(
           `[fetchWebVitals] Navigation result: success=${navResult.success}${navResult.error ? `, error=${navResult.error}` : ""}`
         )
         await new Promise((resolve) => setTimeout(resolve, 1000))
 
-        const reloadResult = await reloadBrowser(sandbox, browserMode)
+        const reloadResult = await reloadBrowser(sandbox, browserMode, false, browserStepTimeoutMs)
         diagLog(
           `[fetchWebVitals] Reload result: success=${reloadResult.success}${reloadResult.error ? `, error=${reloadResult.error}` : ""}`
         )
@@ -6727,13 +6744,19 @@ async function fetchWebVitalsViaCDP(
         document.dispatchEvent(new MouseEvent('click', { bubbles: true }));
         'lcp-finalized'
       `
-      await evaluateInBrowser(sandbox, finalizeLcpScript, browserMode)
+      await evaluateInBrowser(sandbox, finalizeLcpScript, browserMode, false, browserStepTimeoutMs)
       await new Promise((resolve) => setTimeout(resolve, 250))
 
-      await evaluateInBrowser(sandbox, buildWebVitalsInitScript(), browserMode)
+      await evaluateInBrowser(sandbox, buildWebVitalsInitScript(), browserMode, false, browserStepTimeoutMs)
       await new Promise((resolve) => setTimeout(resolve, 1000))
 
-      const evalResult = await evaluateInBrowser(sandbox, buildWebVitalsReadScript(), browserMode)
+      const evalResult = await evaluateInBrowser(
+        sandbox,
+        buildWebVitalsReadScript(),
+        browserMode,
+        false,
+        browserStepTimeoutMs
+      )
       diagLog(`[fetchWebVitals] Eval result: ${JSON.stringify(evalResult).substring(0, 500)}`)
 
       if (!evalResult.success) {
@@ -6743,12 +6766,12 @@ async function fetchWebVitalsViaCDP(
           /Target page, context or browser has been closed|browserType\.launchPersistentContext/i.test(errMessage)
         ) {
           diagLog(`[fetchWebVitals] Browser context closed; reopening ${targetUrl} before retry`)
-          const navResult = await navigateBrowser(sandbox, targetUrl, browserMode)
+          const navResult = await navigateBrowser(sandbox, targetUrl, browserMode, false, browserStepTimeoutMs)
           diagLog(
             `[fetchWebVitals] Reopen navigation result: success=${navResult.success}${navResult.error ? `, error=${navResult.error}` : ""}`
           )
           await new Promise((resolve) => setTimeout(resolve, 1000))
-          const reloadResult = await reloadBrowser(sandbox, browserMode)
+          const reloadResult = await reloadBrowser(sandbox, browserMode, false, browserStepTimeoutMs)
           diagLog(
             `[fetchWebVitals] Reopen reload result: success=${reloadResult.success}${reloadResult.error ? `, error=${reloadResult.error}` : ""}`
           )

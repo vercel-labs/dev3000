@@ -273,7 +273,7 @@ export class SandboxAgentBrowser {
   /**
    * Execute an agent-browser command
    */
-  private async exec(command: string[]): Promise<AgentBrowserResult> {
+  private async exec(command: string[], timeoutOverride?: number): Promise<AgentBrowserResult> {
     const args = [...this.buildArgs(), ...command]
     const fullCommand =
       this.commandRunner === "agent-browser"
@@ -290,7 +290,7 @@ export class SandboxAgentBrowser {
             this.sandbox,
             "sh",
             ["-c", `export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; agent-browser ${args.map(shellEscape).join(" ")}`],
-            { cwd: this.options.cwd, timeout: this.options.timeout }
+            { cwd: this.options.cwd, timeout: timeoutOverride ?? this.options.timeout }
           )
         : this.commandRunner === "bunx"
           ? await runCommand(
@@ -300,11 +300,11 @@ export class SandboxAgentBrowser {
                 "-c",
                 `export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; bunx agent-browser ${args.map(shellEscape).join(" ")}`
               ],
-              { cwd: this.options.cwd, timeout: this.options.timeout }
+              { cwd: this.options.cwd, timeout: timeoutOverride ?? this.options.timeout }
             )
           : await runCommand(this.sandbox, "npx", ["agent-browser", ...args], {
               cwd: this.options.cwd,
-              timeout: this.options.timeout
+              timeout: timeoutOverride ?? this.options.timeout
             })
 
     this.log(`Exit code: ${result.exitCode}`)
@@ -334,8 +334,8 @@ export class SandboxAgentBrowser {
   /**
    * Open a URL in the browser
    */
-  async open(url: string): Promise<AgentBrowserResult> {
-    return this.exec(["open", url])
+  async open(url: string, options?: { timeout?: number }): Promise<AgentBrowserResult> {
+    return this.exec(["open", url], options?.timeout)
   }
 
   /**
@@ -428,19 +428,22 @@ export class SandboxAgentBrowser {
   /**
    * Take a screenshot
    */
-  async screenshot(outputPath: string, options: { fullPage?: boolean } = {}): Promise<AgentBrowserResult> {
+  async screenshot(
+    outputPath: string,
+    options: { fullPage?: boolean; timeout?: number } = {}
+  ): Promise<AgentBrowserResult> {
     const args = ["screenshot", outputPath]
     if (options.fullPage) {
       args.push("--full-page")
     }
-    return this.exec(args)
+    return this.exec(args, options.timeout)
   }
 
   /**
    * Evaluate JavaScript in the browser
    */
-  async evaluate(expression: string): Promise<AgentBrowserResult> {
-    return this.exec(["eval", expression])
+  async evaluate(expression: string, options?: { timeout?: number }): Promise<AgentBrowserResult> {
+    return this.exec(["eval", expression], options?.timeout)
   }
 
   /**
@@ -468,8 +471,8 @@ export class SandboxAgentBrowser {
   /**
    * Reload the page
    */
-  async reload(): Promise<AgentBrowserResult> {
-    return this.exec(["reload"])
+  async reload(options?: { timeout?: number }): Promise<AgentBrowserResult> {
+    return this.exec(["reload"], options?.timeout)
   }
 
   /**

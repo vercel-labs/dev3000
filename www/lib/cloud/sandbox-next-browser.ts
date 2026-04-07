@@ -236,7 +236,7 @@ export class SandboxNextBrowser {
     this.log("next-browser installed successfully")
   }
 
-  private async exec(command: string[]): Promise<NextBrowserResult> {
+  private async exec(command: string[], timeoutOverride?: number): Promise<NextBrowserResult> {
     const launchCommand =
       this.commandRunner === "d3k"
         ? `d3k next-browser ${command.map(shellEscape).join(" ")}`
@@ -260,7 +260,7 @@ export class SandboxNextBrowser {
           launchCommand
         ].join(" && ")
       ],
-      { cwd: this.options.cwd, timeout: this.options.timeout }
+      { cwd: this.options.cwd, timeout: timeoutOverride ?? this.options.timeout }
     )
 
     let data: unknown
@@ -286,20 +286,20 @@ export class SandboxNextBrowser {
     }
   }
 
-  async open(url: string): Promise<NextBrowserResult> {
-    return this.exec(["open", url])
+  async open(url: string, options?: { timeout?: number }): Promise<NextBrowserResult> {
+    return this.exec(["open", url], options?.timeout)
   }
 
-  async goto(url: string): Promise<NextBrowserResult> {
-    return this.exec(["goto", url])
+  async goto(url: string, options?: { timeout?: number }): Promise<NextBrowserResult> {
+    return this.exec(["goto", url], options?.timeout)
   }
 
-  async reload(): Promise<NextBrowserResult> {
-    return this.exec(["reload"])
+  async reload(options?: { timeout?: number }): Promise<NextBrowserResult> {
+    return this.exec(["reload"], options?.timeout)
   }
 
-  async evaluate(expression: string): Promise<NextBrowserResult> {
-    return this.exec(["eval", expression])
+  async evaluate(expression: string, options?: { timeout?: number }): Promise<NextBrowserResult> {
+    return this.exec(["eval", expression], options?.timeout)
   }
 
   async tree(nodeId?: number): Promise<NextBrowserResult> {
