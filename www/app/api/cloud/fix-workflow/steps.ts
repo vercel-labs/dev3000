@@ -6429,14 +6429,20 @@ try {
 }
 `
 
-  const result = await runSandboxCommandWithOptions(sandbox, {
-    cmd: "node",
-    args: ["--input-type=module", "-e", measureScript],
-    env: {
-      D3K_CDP_URL: cdpUrl,
-      D3K_TARGET_URL: targetUrl
+  const result = await runSandboxCommandWithOptions(
+    sandbox,
+    {
+      cmd: "node",
+      args: ["--input-type=module", "-e", measureScript],
+      env: {
+        D3K_CDP_URL: cdpUrl,
+        D3K_TARGET_URL: targetUrl
+      }
+    },
+    {
+      timeoutMs: 15000
     }
-  })
+  )
 
   if (result.exitCode !== 0 || !result.stdout.trim()) {
     diagLog(
@@ -6625,6 +6631,8 @@ async function fetchWebVitalsViaCDP(
   const diagnosticLogs: string[] = []
   let documentStartVitals: import("@/types").WebVitals | null = null
   const desiredSuccessfulSamples = 3
+  const overallTimeoutMs = 25000
+  const captureStart = Date.now()
 
   // Helper to log and capture diagnostics
   const diagLog = (msg: string) => {
@@ -6693,7 +6701,7 @@ async function fetchWebVitalsViaCDP(
     }
   }
 
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+  for (let attempt = 1; attempt <= maxAttempts && Date.now() - captureStart < overallTimeoutMs; attempt++) {
     try {
       diagLog(
         `[fetchWebVitals] Capturing Web Vitals via ${browserMode} evaluate (attempt ${attempt}/${maxAttempts})...`
@@ -6802,6 +6810,10 @@ async function fetchWebVitalsViaCDP(
     if (attempt < maxAttempts) {
       await new Promise((resolve) => setTimeout(resolve, 500))
     }
+  }
+
+  if (Date.now() - captureStart >= overallTimeoutMs) {
+    diagLog(`[fetchWebVitals] Reached overall timeout after ${overallTimeoutMs}ms; using best available evidence`)
   }
 
   if (successfulSamples.length > 0) {
