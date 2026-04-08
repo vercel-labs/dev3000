@@ -3079,6 +3079,17 @@ function countNonClsWebVitalMetrics(vitals: import("@/types").WebVitals | undefi
   return count
 }
 
+function countPostLoadWebVitalMetrics(vitals: import("@/types").WebVitals | undefined): number {
+  if (!vitals) return 0
+
+  let count = 0
+  for (const key of ["lcp", "fcp", "ttfb"] as const) {
+    if (vitals[key]) count += 1
+  }
+
+  return count
+}
+
 function mergeWebVitalsSnapshots(
   baseline: import("@/types").WebVitals,
   supplement: import("@/types").WebVitals
@@ -4102,6 +4113,24 @@ export async function agentFixLoopStep(
     )
     afterWebVitalsResult = afterEvidence.vitals
     afterWebVitalsDiagnostics = afterEvidence.diagnosticLogs
+    if (countPostLoadWebVitalMetrics(afterWebVitalsResult) < 3) {
+      timer.start("Supplement after Web Vitals")
+      workflowLog("[Agent] After Web Vitals incomplete; recapturing non-CLS vitals via CDP...")
+      const supplementedAfterVitals = await fetchWebVitalsViaCDP(sandbox, localTargetUrl, cloudBrowserMode, {
+        desiredSuccessfulSamples: 2,
+        overallTimeoutMs: 10000,
+        browserStepTimeoutMs: 3000
+      })
+      afterWebVitalsDiagnostics = [...afterEvidence.diagnosticLogs, ...supplementedAfterVitals.diagnosticLogs]
+      const mergedAfterWebVitals = mergeWebVitalsSnapshots(afterWebVitalsResult, supplementedAfterVitals.vitals)
+      if (countPostLoadWebVitalMetrics(mergedAfterWebVitals) > countPostLoadWebVitalMetrics(afterWebVitalsResult)) {
+        afterWebVitalsResult = mergedAfterWebVitals
+        workflowLog(`[Agent] Supplemented after Web Vitals: ${JSON.stringify(afterWebVitalsResult)}`)
+      } else {
+        workflowLog("[Agent] After Web Vitals supplement did not add additional post-load metrics")
+      }
+      timer.end()
+    }
     if (finalCls.screenshots.length === 0 && afterEvidence.screenshots.length > 0) {
       finalCls.screenshots = afterEvidence.screenshots
       await persistRunArtifacts(progressContext, {
