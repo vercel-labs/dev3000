@@ -998,6 +998,29 @@ const parseEvalString = (value) => {
   }
 }
 
+const getPageDiagnostics = async () => {
+  const diagnosticsResult = await send(
+    "Runtime.evaluate",
+    {
+      expression: \`
+        JSON.stringify({
+          href: location.href,
+          title: document.title,
+          readyState: document.readyState,
+          bodyTextLength: document.body?.innerText?.trim().length ?? 0,
+          bodyHtmlLength: document.body?.innerHTML?.length ?? 0,
+          bodyScrollHeight: document.body?.scrollHeight ?? 0
+        })
+      \`,
+      returnByValue: true,
+      awaitPromise: true
+    },
+    sessionId
+  ).catch(() => null)
+
+  return parseEvalString(diagnosticsResult?.result?.value)
+}
+
 try {
   const targetList = await send("Target.getTargets")
   const targetInfos = Array.isArray(targetList.targetInfos) ? targetList.targetInfos : []
@@ -1076,14 +1099,19 @@ try {
     sessionId
   )
 
+  let screenshotByteLength = 0
   if (screenshot?.data) {
-    fs.writeFileSync(outputPath, Buffer.from(screenshot.data, "base64"))
+    const buffer = Buffer.from(screenshot.data, "base64")
+    screenshotByteLength = buffer.byteLength
+    fs.writeFileSync(outputPath, buffer)
   }
 
   console.log(
     JSON.stringify({
       rawSamples,
-      screenshotCaptured: Boolean(screenshot?.data)
+      screenshotCaptured: Boolean(screenshot?.data),
+      screenshotByteLength,
+      pageDiagnostics: await getPageDiagnostics()
     })
   )
   await cleanup()
@@ -1135,6 +1163,8 @@ try {
     const parsed = JSON.parse(result.stdout.trim()) as {
       rawSamples?: RawWebVitalsSample[]
       screenshotCaptured?: boolean
+      screenshotByteLength?: number
+      pageDiagnostics?: Record<string, unknown> | null
     }
     const samples = (parsed.rawSamples || [])
       .map((raw) => rawWebVitalsToVitals(raw))
@@ -1143,10 +1173,22 @@ try {
     diagLog(
       `[Evidence] Captured ${samples.length} CDP sample${samples.length === 1 ? "" : "s"} for ${targetUrl}: ${JSON.stringify(vitals)}`
     )
+    if (parsed.pageDiagnostics) {
+      diagLog(`[Evidence] Page diagnostics for ${targetUrl}: ${JSON.stringify(parsed.pageDiagnostics)}`)
+    }
 
     let screenshots: Array<{ timestamp: number; blobUrl: string; label?: string }> = []
     if (parsed.screenshotCaptured) {
-      const blobUrl = await uploadSandboxScreenshot(sandbox, screenshotPath, projectName, kind, route)
+      const screenshotHealth = await isLikelyBlankScreenshot(sandbox, screenshotPath)
+      if (screenshotHealth.blank) {
+        diagLog(
+          `[Evidence] CDP screenshot was blank for ${targetUrl} (${screenshotHealth.fileSize ?? parsed.screenshotByteLength ?? 0} bytes)`
+        )
+      }
+
+      const blobUrl = screenshotHealth.blank
+        ? null
+        : await uploadSandboxScreenshot(sandbox, screenshotPath, projectName, kind, route)
       if (blobUrl) {
         screenshots = [
           {
@@ -1155,7 +1197,13 @@ try {
             label
           }
         ]
+      } else {
+        diagLog(
+          `[Evidence] Screenshot upload failed for ${targetUrl} (${parsed.screenshotByteLength ?? screenshotHealth.fileSize ?? 0} bytes)`
+        )
       }
+    } else {
+      diagLog(`[Evidence] CDP screenshot returned no image data for ${targetUrl}`)
     }
 
     return { vitals, screenshots, diagnosticLogs }
@@ -3295,6 +3343,21 @@ export async function observeBaselineStep(
   if (effectiveBeforeScreenshots.length === 0 && baselineEvidence.screenshots.length > 0) {
     effectiveBeforeScreenshots = baselineEvidence.screenshots
   }
+  if (effectiveBeforeScreenshots.length === 0) {
+    const quickBaselineScreenshots = await capturePhaseScreenshot(
+      sandbox,
+      startPath,
+      cloudBrowserMode,
+      progressContext?.projectName || "workflow",
+      "baseline-quick-fallback",
+      "Before",
+      localTargetUrl,
+      3000
+    )
+    if (quickBaselineScreenshots.length > 0) {
+      effectiveBeforeScreenshots = quickBaselineScreenshots
+    }
+  }
   workflowLog(`[Observe] Before Web Vitals captured: ${JSON.stringify(capturedBeforeWebVitals)}`)
   await appendProgressLog(
     progressContext,
@@ -4021,6 +4084,24 @@ export async function agentFixLoopStep(
       await persistRunArtifacts(progressContext, {
         afterScreenshots: finalCls.screenshots
       })
+    }
+    if (finalCls.screenshots.length === 0) {
+      const quickAfterScreenshots = await capturePhaseScreenshot(
+        sandbox,
+        startPath,
+        cloudBrowserMode,
+        projectName,
+        "after-quick-fallback",
+        "After",
+        localTargetUrl,
+        3000
+      )
+      if (quickAfterScreenshots.length > 0) {
+        finalCls.screenshots = quickAfterScreenshots
+        await persistRunArtifacts(progressContext, {
+          afterScreenshots: finalCls.screenshots
+        })
+      }
     }
     timer.end()
 
