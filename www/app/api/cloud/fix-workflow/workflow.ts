@@ -11,6 +11,8 @@
  * Step 2 (Fix):  Agent iterates with diagnose→fix→verify until done
  */
 
+import type { WorkflowRun } from "@/lib/workflow-storage"
+
 const workflowLog = console.log
 const TURBOPACK_MIN_COMPRESSED_IMPROVEMENT_BYTES = 50 * 1024
 const TURBOPACK_MIN_COMPRESSED_IMPROVEMENT_PERCENT = 0.2
@@ -636,6 +638,7 @@ interface ProgressContext {
   activeCurrentStep?: string
   sandboxUrl?: string
   progressLogs?: string[]
+  runSnapshot?: WorkflowRun
 }
 
 async function initSandbox(

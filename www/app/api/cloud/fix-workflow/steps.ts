@@ -18,7 +18,7 @@ import {
   getDevAgentModelLabel,
   isVercelPluginSkillRef
 } from "@/lib/dev-agents"
-import { listWorkflowRuns, saveWorkflowRun, type WorkflowType } from "@/lib/workflow-storage"
+import { listWorkflowRuns, saveWorkflowRun, type WorkflowRun, type WorkflowType } from "@/lib/workflow-storage"
 import type { TurbopackBundleComparison, TurbopackBundleMetricsSnapshot, WorkflowReport } from "@/types"
 
 const workflowLog = console.log
@@ -1488,6 +1488,7 @@ interface ProgressContext {
   activeCurrentStep?: string
   sandboxUrl?: string
   progressLogs?: string[]
+  runSnapshot?: WorkflowRun
 }
 
 const WORKFLOW_SANDBOX_TIMEOUT = "60m" as const
@@ -1506,6 +1507,18 @@ function mergeProgressLogs(primary: string[] | undefined, secondary: string[] | 
   return merged.slice(-limit)
 }
 
+async function getProgressRunSnapshot(ctx: ProgressContext): Promise<WorkflowRun | undefined> {
+  if (ctx.runSnapshot) {
+    return ctx.runSnapshot
+  }
+
+  const existingRun = (await listWorkflowRuns(ctx.userId)).find((run) => run.id === ctx.runId)
+  if (existingRun) {
+    ctx.runSnapshot = existingRun
+  }
+  return existingRun
+}
+
 // Helper to update workflow progress
 async function updateProgress(
   ctx: ProgressContext | null | undefined,
@@ -1515,7 +1528,7 @@ async function updateProgress(
 ) {
   if (!ctx) return
   try {
-    const existingRun = (await listWorkflowRuns(ctx.userId)).find((run) => run.id === ctx.runId)
+    const existingRun = await getProgressRunSnapshot(ctx)
     ctx.activeStepNumber = stepNumber
     ctx.activeCurrentStep = currentStep
     ctx.sandboxUrl = sandboxUrl ?? ctx.sandboxUrl ?? existingRun?.sandboxUrl
@@ -1530,7 +1543,7 @@ async function updateProgress(
         ? existingLogs.slice(-40)
         : [...existingLogs, nextLogLine].slice(-40)
 
-    await saveWorkflowRun({
+    const nextRun = {
       ...existingRun,
       id: ctx.runId,
       userId: ctx.userId,
@@ -1547,7 +1560,9 @@ async function updateProgress(
       currentStep,
       sandboxUrl: ctx.sandboxUrl,
       progressLogs
-    })
+    } satisfies WorkflowRun
+    await saveWorkflowRun(nextRun)
+    ctx.runSnapshot = nextRun
     ctx.progressLogs = progressLogs
     workflowLog(`[Progress] Updated: Step ${stepNumber} - ${currentStep}`)
   } catch (err) {
@@ -1558,7 +1573,7 @@ async function updateProgress(
 async function appendProgressLog(ctx: ProgressContext | null | undefined, message: string) {
   if (!ctx) return
   try {
-    const existingRun = (await listWorkflowRuns(ctx.userId)).find((run) => run.id === ctx.runId)
+    const existingRun = await getProgressRunSnapshot(ctx)
     const nextLogLine = buildProgressLogLine(message)
     const existingLogs = mergeProgressLogs(
       Array.isArray(ctx.progressLogs) ? ctx.progressLogs : undefined,
@@ -1576,7 +1591,7 @@ async function appendProgressLog(ctx: ProgressContext | null | undefined, messag
       ctx.sandboxUrl = sandboxUrl
     }
 
-    await saveWorkflowRun({
+    const nextRun = {
       ...existingRun,
       id: ctx.runId,
       userId: ctx.userId,
@@ -1593,7 +1608,9 @@ async function appendProgressLog(ctx: ProgressContext | null | undefined, messag
       currentStep,
       sandboxUrl,
       progressLogs
-    })
+    } satisfies WorkflowRun
+    await saveWorkflowRun(nextRun)
+    ctx.runSnapshot = nextRun
     ctx.progressLogs = progressLogs
   } catch (err) {
     workflowLog(`[Progress] Failed to append log: ${err instanceof Error ? err.message : String(err)}`)
@@ -1611,10 +1628,10 @@ async function persistRunArtifacts(
 ) {
   if (!ctx) return
   try {
-    const existingRun = (await listWorkflowRuns(ctx.userId)).find((run) => run.id === ctx.runId)
+    const existingRun = await getProgressRunSnapshot(ctx)
     if (!existingRun) return
 
-    await saveWorkflowRun({
+    const nextRun = {
       ...existingRun,
       id: ctx.runId,
       userId: ctx.userId,
@@ -1636,7 +1653,9 @@ async function persistRunArtifacts(
       afterScreenshots: updates.afterScreenshots ?? existingRun.afterScreenshots,
       beforeWebVitals: updates.beforeWebVitals ?? existingRun.beforeWebVitals,
       afterWebVitals: updates.afterWebVitals ?? existingRun.afterWebVitals
-    })
+    } satisfies WorkflowRun
+    await saveWorkflowRun(nextRun)
+    ctx.runSnapshot = nextRun
   } catch (error) {
     workflowLog(`[Progress] Failed to persist run artifacts: ${error instanceof Error ? error.message : String(error)}`)
   }
