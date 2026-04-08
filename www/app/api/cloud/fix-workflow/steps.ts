@@ -3990,7 +3990,11 @@ export async function agentFixLoopStep(
     if (countNonClsWebVitalMetrics(capturedBeforeWebVitals) === 0) {
       timer.start("Supplement before Web Vitals")
       workflowLog("[Agent] Observation baseline vitals incomplete; recapturing before Web Vitals via CDP...")
-      const supplementedBeforeVitals = await fetchWebVitalsViaCDP(sandbox, localTargetUrl, cloudBrowserMode)
+      const supplementedBeforeVitals = await fetchWebVitalsViaCDP(sandbox, localTargetUrl, cloudBrowserMode, {
+        desiredSuccessfulSamples: 2,
+        overallTimeoutMs: 10000,
+        browserStepTimeoutMs: 3000
+      })
       beforeWebVitalsDiagnostics = supplementedBeforeVitals.diagnosticLogs
       const mergedBeforeWebVitals = mergeWebVitalsSnapshots(capturedBeforeWebVitals, supplementedBeforeVitals.vitals)
       if (countNonClsWebVitalMetrics(mergedBeforeWebVitals) > countNonClsWebVitalMetrics(capturedBeforeWebVitals)) {
@@ -7145,13 +7149,18 @@ async function fetchClsData(sandbox: Sandbox): Promise<{
 async function fetchWebVitalsViaCDP(
   sandbox: Sandbox,
   targetUrl?: string,
-  browserMode: CloudBrowserMode = "agent-browser"
+  browserMode: CloudBrowserMode = "agent-browser",
+  options?: {
+    desiredSuccessfulSamples?: number
+    overallTimeoutMs?: number
+    browserStepTimeoutMs?: number
+  }
 ): Promise<{ vitals: import("@/types").WebVitals; diagnosticLogs: string[] }> {
   const diagnosticLogs: string[] = []
   let documentStartVitals: import("@/types").WebVitals | null = null
-  const desiredSuccessfulSamples = 3
-  const overallTimeoutMs = 18000
-  const browserStepTimeoutMs = 4000
+  const desiredSuccessfulSamples = Math.max(1, options?.desiredSuccessfulSamples ?? 3)
+  const overallTimeoutMs = options?.overallTimeoutMs ?? 18000
+  const browserStepTimeoutMs = options?.browserStepTimeoutMs ?? 4000
   const captureStart = Date.now()
 
   // Helper to log and capture diagnostics
