@@ -510,7 +510,7 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
         kind: "send-prompt",
         config: {
           prompt:
-            "Use the workflow-provided baseline evidence, then inspect the selected route and nearby server code for sequential awaits, nested per-item fetch loops, and async work that starts too late."
+            "Use the workflow-provided baseline evidence, then inspect at most 4 likely route-adjacent files for sequential awaits, nested per-item fetch loops, and async work that starts too late. Identify the single highest-impact waterfall before making any edits."
         }
       },
       {
@@ -561,7 +561,7 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
         kind: "send-prompt",
         config: {
           prompt:
-            "Use the workflow-provided baseline evidence, then inspect the selected route for top-level client boundaries, heavy imports, large static payloads, and low-value widgets that load before user intent."
+            "Use the workflow-provided baseline evidence, then inspect at most 4 likely files on the selected route for top-level client boundaries, heavy imports, large static payloads, and low-value widgets that load before user intent. Pick the single clearest shipped-JS win before editing."
         }
       },
       {
@@ -612,7 +612,7 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
         kind: "send-prompt",
         config: {
           prompt:
-            "Use the workflow-provided baseline evidence, then inspect server components and related data helpers for duplicate fetches, sequential request-time work, and over-serialization into client components."
+            "Use the workflow-provided baseline evidence, then inspect at most 4 likely server-side files for duplicate fetches, sequential request-time work, and over-serialization into client components. Decide on the single highest-impact bottleneck before making edits."
         }
       },
       {
@@ -663,7 +663,7 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
         kind: "send-prompt",
         config: {
           prompt:
-            "Use the workflow-provided baseline evidence, then inspect client components for repeated fetches to the same resource, duplicated event listeners, and redundant localStorage or browser work."
+            "Use the workflow-provided baseline evidence, then inspect at most 4 likely client files for repeated fetches to the same resource, duplicated event listeners, and redundant localStorage or browser work. Pick one concrete duplication problem before editing."
         }
       },
       {
@@ -713,7 +713,7 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
         kind: "send-prompt",
         config: {
           prompt:
-            "Use the workflow-provided baseline evidence, then inspect the selected client components for expensive render-path work, effect-driven derived state, and state updates that trigger unnecessary rerenders."
+            "Use the workflow-provided baseline evidence, then inspect at most 4 likely client files for expensive render-path work, effect-driven derived state, and state updates that trigger unnecessary rerenders. Identify the single clearest render-churn bottleneck before editing."
         }
       },
       {
