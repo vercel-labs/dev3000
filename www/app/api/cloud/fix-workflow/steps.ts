@@ -666,6 +666,84 @@ function extractWebVitalsResultString(evalResult: { success: boolean; result?: u
   return null
 }
 
+type RawWebVitalsSample = {
+  lcp: number | null
+  fcp: number | null
+  ttfb: number | null
+  cls: number | null
+  inp: number | null
+}
+
+function gradeWebVitalValue(
+  metric: keyof import("@/types").WebVitals,
+  value: number
+): "good" | "needs-improvement" | "poor" {
+  if (metric === "cls") {
+    if (value <= 0.1) return "good"
+    if (value <= 0.25) return "needs-improvement"
+    return "poor"
+  }
+
+  if (metric === "fcp") {
+    if (value <= 1800) return "good"
+    if (value <= 3000) return "needs-improvement"
+    return "poor"
+  }
+
+  if (metric === "ttfb") {
+    if (value <= 800) return "good"
+    if (value <= 1800) return "needs-improvement"
+    return "poor"
+  }
+
+  if (metric === "inp") {
+    if (value <= 200) return "good"
+    if (value <= 500) return "needs-improvement"
+    return "poor"
+  }
+
+  if (value <= 2500) return "good"
+  if (value <= 4000) return "needs-improvement"
+  return "poor"
+}
+
+function rawWebVitalsToVitals(raw: RawWebVitalsSample | null | undefined): import("@/types").WebVitals {
+  if (!raw) return {}
+
+  const vitals: import("@/types").WebVitals = {}
+  const metrics: Array<keyof import("@/types").WebVitals> = ["lcp", "fcp", "ttfb", "cls", "inp"]
+  for (const metric of metrics) {
+    const value = raw[metric]
+    if (typeof value !== "number") continue
+    vitals[metric] = {
+      value,
+      grade: gradeWebVitalValue(metric, value)
+    }
+  }
+
+  return vitals
+}
+
+function aggregateWebVitalSamples(samples: import("@/types").WebVitals[]): import("@/types").WebVitals {
+  const keys: Array<keyof import("@/types").WebVitals> = ["lcp", "fcp", "ttfb", "cls", "inp"]
+  const aggregated: import("@/types").WebVitals = {}
+
+  for (const key of keys) {
+    const values = samples
+      .map((sample) => sample[key]?.value)
+      .filter((value): value is number => typeof value === "number")
+    if (values.length === 0) continue
+
+    const mean = values.reduce((sum, value) => sum + value, 0) / values.length
+    aggregated[key] = {
+      value: key === "cls" ? Number(mean.toFixed(4)) : Number(mean.toFixed(0)),
+      grade: gradeWebVitalValue(key, mean)
+    }
+  }
+
+  return aggregated
+}
+
 /**
  * Take a screenshot using the configured browser CLI.
  */
@@ -788,6 +866,303 @@ async function capturePhaseScreenshot(
       label
     }
   ]
+}
+
+async function capturePhaseEvidenceViaCDP(
+  sandbox: Sandbox,
+  route: string,
+  projectName: string,
+  kind: string,
+  label: string,
+  targetUrl: string,
+  options?: {
+    sampleCount?: number
+    navigationTimeoutMs?: number
+    settleMs?: number
+    overallTimeoutMs?: number
+  }
+): Promise<{
+  vitals: import("@/types").WebVitals
+  screenshots: Array<{ timestamp: number; blobUrl: string; label?: string }>
+  diagnosticLogs: string[]
+}> {
+  const diagnosticLogs: string[] = []
+  const diagLog = (message: string) => {
+    workflowLog(message)
+    diagnosticLogs.push(message)
+  }
+
+  const { sessionPath, session } = await readLatestSandboxSession(sandbox)
+  const cdpUrl = extractSandboxCdpUrl(session)
+  if (!cdpUrl) {
+    diagLog(`[Evidence] No sandbox CDP URL available${sessionPath ? ` in ${sessionPath}` : ""}`)
+    return { vitals: {}, screenshots: [], diagnosticLogs }
+  }
+
+  const screenshotPath = `/tmp/${kind}-${Date.now()}.png`
+  const initScript = JSON.stringify(buildWebVitalsInitScript())
+  const readScript = JSON.stringify(buildWebVitalsReadScript())
+  const sampleCount = Math.max(1, options?.sampleCount ?? 3)
+  const navigationTimeoutMs = Math.max(1500, options?.navigationTimeoutMs ?? 4000)
+  const settleMs = Math.max(250, options?.settleMs ?? 750)
+  const overallTimeoutMs = Math.max(5000, options?.overallTimeoutMs ?? 18000)
+
+  const captureScript = `
+import fs from "node:fs"
+
+const cdpUrl = process.env.D3K_CDP_URL
+const targetUrl = process.env.D3K_TARGET_URL
+const outputPath = process.env.D3K_SCREENSHOT_PATH
+const sampleCount = Number.parseInt(process.env.D3K_SAMPLE_COUNT || "3", 10)
+const navigationTimeoutMs = Number.parseInt(process.env.D3K_NAV_TIMEOUT_MS || "4000", 10)
+const settleMs = Number.parseInt(process.env.D3K_SETTLE_MS || "750", 10)
+
+if (!cdpUrl) throw new Error("Missing D3K_CDP_URL")
+if (!targetUrl) throw new Error("Missing D3K_TARGET_URL")
+if (!outputPath) throw new Error("Missing D3K_SCREENSHOT_PATH")
+
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+const browser = new WebSocket(cdpUrl)
+let nextId = 0
+const pending = new Map()
+let pageLoadResolver = null
+
+const send = (method, params = {}, sessionId) =>
+  new Promise((resolve, reject) => {
+    const id = ++nextId
+    pending.set(id, { resolve, reject })
+    browser.send(JSON.stringify(sessionId ? { id, method, params, sessionId } : { id, method, params }))
+  })
+
+browser.onmessage = (event) => {
+  const message = JSON.parse(event.data)
+  if (message.method === "Page.loadEventFired" && message.sessionId && pageLoadResolver) {
+    const resolve = pageLoadResolver
+    pageLoadResolver = null
+    resolve()
+    return
+  }
+
+  if (!message.id || !pending.has(message.id)) return
+  const { resolve, reject } = pending.get(message.id)
+  pending.delete(message.id)
+  if (message.error) reject(new Error(JSON.stringify(message.error)))
+  else resolve(message.result)
+}
+
+await new Promise((resolve, reject) => {
+  browser.onopen = resolve
+  browser.onerror = () => reject(new Error("Failed to connect to sandbox CDP"))
+})
+
+let targetId = null
+let sessionId = null
+let createdTarget = false
+
+const cleanup = async () => {
+  try {
+    if (sessionId) await send("Target.detachFromTarget", { sessionId })
+  } catch {}
+  try {
+    if (createdTarget && targetId) await send("Target.closeTarget", { targetId })
+  } catch {}
+  browser.close()
+}
+
+const normalizedTargetUrl = targetUrl.replace(/\\/$/, "")
+const matchesTargetUrl = (info) => {
+  if (!info || info.type !== "page" || typeof info.url !== "string") return false
+  const normalizedInfoUrl = info.url.replace(/\\/$/, "")
+  return (
+    normalizedInfoUrl === normalizedTargetUrl ||
+    normalizedInfoUrl.startsWith(normalizedTargetUrl) ||
+    normalizedTargetUrl.startsWith(normalizedInfoUrl) ||
+    normalizedInfoUrl.startsWith("http://localhost:3000")
+  )
+}
+
+const waitForLoad = async () => {
+  const loadPromise = new Promise((resolve) => {
+    pageLoadResolver = resolve
+  })
+  await Promise.race([loadPromise, delay(navigationTimeoutMs)])
+  pageLoadResolver = null
+}
+
+const parseEvalString = (value) => {
+  if (typeof value !== "string") return null
+  try {
+    return JSON.parse(value)
+  } catch {
+    return null
+  }
+}
+
+try {
+  const targetList = await send("Target.getTargets")
+  const targetInfos = Array.isArray(targetList.targetInfos) ? targetList.targetInfos : []
+  const existingTarget = targetInfos.find(matchesTargetUrl) || null
+
+  if (existingTarget?.targetId) {
+    targetId = existingTarget.targetId
+    await send("Target.activateTarget", { targetId })
+  } else {
+    const created = await send("Target.createTarget", { url: "about:blank" })
+    targetId = created.targetId
+    createdTarget = true
+  }
+
+  const attached = await send("Target.attachToTarget", { targetId, flatten: true })
+  sessionId = attached.sessionId
+
+  await send("Page.enable", {}, sessionId)
+  await send("Runtime.enable", {}, sessionId)
+  await send("Page.bringToFront", {}, sessionId)
+  await send("Page.addScriptToEvaluateOnNewDocument", { source: ${initScript} }, sessionId)
+
+  const rawSamples = []
+
+  for (let attempt = 0; attempt < sampleCount; attempt++) {
+    if (attempt === 0) {
+      await send("Page.navigate", { url: targetUrl }, sessionId)
+    } else {
+      await send("Page.reload", { ignoreCache: true }, sessionId)
+    }
+
+    await waitForLoad()
+    await delay(settleMs)
+    await send(
+      "Runtime.evaluate",
+      {
+        expression: ${initScript},
+        returnByValue: true,
+        awaitPromise: true
+      },
+      sessionId
+    ).catch(() => null)
+    await send(
+      "Runtime.evaluate",
+      {
+        expression: "document.body?.dispatchEvent(new MouseEvent('click', { bubbles: true })); document.dispatchEvent(new MouseEvent('click', { bubbles: true })); 'lcp-finalized'",
+        returnByValue: true,
+        awaitPromise: true
+      },
+      sessionId
+    ).catch(() => null)
+    await delay(200)
+
+    const evalResult = await send(
+      "Runtime.evaluate",
+      {
+        expression: ${readScript},
+        returnByValue: true,
+        awaitPromise: true
+      },
+      sessionId
+    )
+
+    const parsed = parseEvalString(evalResult?.result?.value)
+    if (parsed) {
+      rawSamples.push(parsed)
+    }
+  }
+
+  const screenshot = await send(
+    "Page.captureScreenshot",
+    {
+      format: "png",
+      fromSurface: true
+    },
+    sessionId
+  )
+
+  if (screenshot?.data) {
+    fs.writeFileSync(outputPath, Buffer.from(screenshot.data, "base64"))
+  }
+
+  console.log(
+    JSON.stringify({
+      rawSamples,
+      screenshotCaptured: Boolean(screenshot?.data)
+    })
+  )
+  await cleanup()
+} catch (error) {
+  await cleanup()
+  console.error(error instanceof Error ? error.message : String(error))
+  process.exit(1)
+}
+`
+
+  const result = await Promise.race([
+    runSandboxCommandWithOptions(
+      sandbox,
+      {
+        cmd: "node",
+        args: ["--input-type=module", "-e", captureScript],
+        env: {
+          D3K_CDP_URL: cdpUrl,
+          D3K_TARGET_URL: targetUrl,
+          D3K_SCREENSHOT_PATH: screenshotPath,
+          D3K_SAMPLE_COUNT: String(sampleCount),
+          D3K_NAV_TIMEOUT_MS: String(navigationTimeoutMs),
+          D3K_SETTLE_MS: String(settleMs)
+        }
+      },
+      {
+        timeoutMs: overallTimeoutMs
+      }
+    ),
+    new Promise<{ exitCode: number; stdout: string; stderr: string }>((resolve) =>
+      setTimeout(
+        () =>
+          resolve({
+            exitCode: 124,
+            stdout: "",
+            stderr: "CDP evidence capture exceeded outer timeout"
+          }),
+        overallTimeoutMs + 1000
+      )
+    )
+  ])
+
+  if (result.exitCode !== 0 || !result.stdout.trim()) {
+    diagLog(`[Evidence] CDP capture failed: ${result.stderr.trim() || result.stdout.trim() || "no output"}`)
+    return { vitals: {}, screenshots: [], diagnosticLogs }
+  }
+
+  try {
+    const parsed = JSON.parse(result.stdout.trim()) as {
+      rawSamples?: RawWebVitalsSample[]
+      screenshotCaptured?: boolean
+    }
+    const samples = (parsed.rawSamples || [])
+      .map((raw) => rawWebVitalsToVitals(raw))
+      .filter((sample) => Object.keys(sample).length > 0)
+    const vitals = samples.length > 0 ? aggregateWebVitalSamples(samples) : {}
+    diagLog(
+      `[Evidence] Captured ${samples.length} CDP sample${samples.length === 1 ? "" : "s"} for ${targetUrl}: ${JSON.stringify(vitals)}`
+    )
+
+    let screenshots: Array<{ timestamp: number; blobUrl: string; label?: string }> = []
+    if (parsed.screenshotCaptured) {
+      const blobUrl = await uploadSandboxScreenshot(sandbox, screenshotPath, projectName, kind, route)
+      if (blobUrl) {
+        screenshots = [
+          {
+            timestamp: Date.now(),
+            blobUrl,
+            label
+          }
+        ]
+      }
+    }
+
+    return { vitals, screenshots, diagnosticLogs }
+  } catch (error) {
+    diagLog(`[Evidence] Failed to parse CDP evidence JSON: ${error instanceof Error ? error.message : String(error)}`)
+    return { vitals: {}, screenshots: [], diagnosticLogs }
+  }
 }
 
 const MIN_NON_BLANK_SCREENSHOT_BYTES = 4500
@@ -2899,34 +3274,27 @@ export async function observeBaselineStep(
   let effectiveBeforeScreenshots = beforeScreenshots
   let effectiveObservationLogs = initD3kLogs
 
-  timer.start("Prime baseline browser")
-  workflowLog(`[Observe] Priming baseline browser at ${localTargetUrl}...`)
-  await appendProgressLog(progressContext, `[Observe] Priming browser at ${localTargetUrl}`)
-  const beforeNavResult = await navigateBrowser(sandbox, localTargetUrl, cloudBrowserMode)
-  workflowLog(
-    `[Observe] Baseline navigation: success=${beforeNavResult.success}${beforeNavResult.error ? `, error=${beforeNavResult.error}` : ""}`
+  timer.start("Capture baseline evidence")
+  workflowLog("[Observe] Capturing baseline evidence via persistent CDP...")
+  await appendProgressLog(progressContext, "[Observe] Capturing baseline evidence...")
+  const baselineEvidence = await capturePhaseEvidenceViaCDP(
+    sandbox,
+    startPath,
+    progressContext?.projectName || "workflow",
+    "baseline",
+    "Before",
+    localTargetUrl,
+    {
+      sampleCount: 3,
+      navigationTimeoutMs: 3500,
+      settleMs: 750,
+      overallTimeoutMs: 18000
+    }
   )
-  await appendProgressLog(
-    progressContext,
-    `[Observe] Browser open ${beforeNavResult.success ? "succeeded" : "failed"}${beforeNavResult.error ? `: ${beforeNavResult.error}` : ""}`
-  )
-  await new Promise((resolve) => setTimeout(resolve, 1000))
-  const beforeReloadResult = await reloadBrowser(sandbox, cloudBrowserMode)
-  workflowLog(
-    `[Observe] Baseline reload: success=${beforeReloadResult.success}${beforeReloadResult.error ? `, error=${beforeReloadResult.error}` : ""}`
-  )
-  await appendProgressLog(
-    progressContext,
-    `[Observe] Browser reload ${beforeReloadResult.success ? "succeeded" : "failed"}${beforeReloadResult.error ? `: ${beforeReloadResult.error}` : ""}`
-  )
-  await new Promise((resolve) => setTimeout(resolve, 2500))
-  timer.end()
-
-  // Capture "before" Web Vitals via CDP
-  timer.start("Capture before Web Vitals")
-  workflowLog("[Observe] Capturing before Web Vitals via CDP...")
-  await appendProgressLog(progressContext, "[Observe] Capturing baseline Web Vitals...")
-  const { vitals: capturedBeforeWebVitals } = await fetchWebVitalsViaCDP(sandbox, localTargetUrl, cloudBrowserMode)
+  const capturedBeforeWebVitals = baselineEvidence.vitals
+  if (effectiveBeforeScreenshots.length === 0 && baselineEvidence.screenshots.length > 0) {
+    effectiveBeforeScreenshots = baselineEvidence.screenshots
+  }
   workflowLog(`[Observe] Before Web Vitals captured: ${JSON.stringify(capturedBeforeWebVitals)}`)
   await appendProgressLog(
     progressContext,
@@ -2935,31 +3303,17 @@ export async function observeBaselineStep(
   await persistRunArtifacts(progressContext, {
     beforeWebVitals: capturedBeforeWebVitals
   })
+  timer.end()
 
-  if (effectiveBeforeScreenshots.length === 0) {
-    timer.start("Capture baseline screenshot")
-    await appendProgressLog(progressContext, "[Observe] Capturing baseline screenshot...")
-    effectiveBeforeScreenshots = await capturePhaseScreenshot(
-      sandbox,
-      startPath,
-      cloudBrowserMode,
-      progressContext?.projectName || "workflow",
-      "baseline",
-      "Before",
-      localTargetUrl,
-      8000
-    )
-    timer.end()
-    workflowLog(`[Observe] Captured ${effectiveBeforeScreenshots.length} baseline screenshot(s)`)
-    await appendProgressLog(
-      progressContext,
-      `[Observe] Baseline screenshot ${effectiveBeforeScreenshots.length > 0 ? "captured" : "failed"}`
-    )
-    if (effectiveBeforeScreenshots.length > 0) {
-      await persistRunArtifacts(progressContext, {
-        beforeScreenshots: effectiveBeforeScreenshots
-      })
-    }
+  workflowLog(`[Observe] Captured ${effectiveBeforeScreenshots.length} baseline screenshot(s)`)
+  await appendProgressLog(
+    progressContext,
+    `[Observe] Baseline screenshot ${effectiveBeforeScreenshots.length > 0 ? "captured" : "failed"}`
+  )
+  if (effectiveBeforeScreenshots.length > 0) {
+    await persistRunArtifacts(progressContext, {
+      beforeScreenshots: effectiveBeforeScreenshots
+    })
   }
 
   // CLS fallback via d3k logs if CDP didn't capture it
@@ -3616,6 +3970,8 @@ export async function agentFixLoopStep(
     screenshots: [],
     d3kLogs: ""
   }
+  let afterWebVitalsResult: import("@/types").WebVitals = {}
+  let afterWebVitalsDiagnostics: string[] | undefined
 
   if (!isTurbopackBundleAnalyzer) {
     // Force a fresh page reload to capture new CLS measurement
@@ -3640,20 +3996,46 @@ export async function agentFixLoopStep(
     )
     workflowLog("[Agent] Waiting for CLS to be captured...")
     await new Promise((resolve) => setTimeout(resolve, 5000))
+    timer.end()
+
+    timer.start("Capture after evidence")
+    workflowLog("[Agent] Capturing after Web Vitals + screenshot via persistent CDP...")
+    const afterEvidence = await capturePhaseEvidenceViaCDP(
+      sandbox,
+      startPath,
+      projectName,
+      "after",
+      "After",
+      localTargetUrl,
+      {
+        sampleCount: 3,
+        navigationTimeoutMs: 3500,
+        settleMs: 750,
+        overallTimeoutMs: 18000
+      }
+    )
+    afterWebVitalsResult = afterEvidence.vitals
+    afterWebVitalsDiagnostics = afterEvidence.diagnosticLogs
+    if (finalCls.screenshots.length === 0 && afterEvidence.screenshots.length > 0) {
+      finalCls.screenshots = afterEvidence.screenshots
+      await persistRunArtifacts(progressContext, {
+        afterScreenshots: finalCls.screenshots
+      })
+    }
+    timer.end()
 
     timer.start("Fetch final CLS data")
     finalCls = await fetchClsData(sandbox)
     if (finalCls.screenshots.length === 0) {
-      timer.start("Capture after screenshot")
       const afterScreenshots = await capturePhaseScreenshot(
         sandbox,
         startPath,
         cloudBrowserMode,
         projectName,
-        "after",
+        "after-fallback",
         "After",
         localTargetUrl,
-        8000
+        6000
       )
       if (afterScreenshots.length > 0) {
         finalCls.screenshots = afterScreenshots
@@ -3661,9 +4043,9 @@ export async function agentFixLoopStep(
           afterScreenshots
         })
       }
-      timer.end()
       workflowLog(`[Agent] Captured ${finalCls.screenshots.length} after screenshot(s)`)
     }
+    timer.end()
   }
 
   // Get git diff (exclude package.json which gets modified by sandbox initialization)
@@ -3719,15 +4101,6 @@ export async function agentFixLoopStep(
       | "url-audit"
       | "turbopack-bundle-analyzer") || "cls-fix"
 
-  let afterWebVitalsResult: import("@/types").WebVitals = {}
-  let afterWebVitalsDiagnostics: string[] | undefined
-  if (!isTurbopackBundleAnalyzer) {
-    timer.start("Fetch after Web Vitals")
-    workflowLog("[Agent] Fetching after Web Vitals via CDP...")
-    const afterVitals = await fetchWebVitalsViaCDP(sandbox, localTargetUrl, cloudBrowserMode)
-    afterWebVitalsResult = afterVitals.vitals
-    afterWebVitalsDiagnostics = afterVitals.diagnosticLogs
-  }
   const effectiveBeforeClsScore = beforeClsForVerification ?? transcriptClsEvidence.beforeCls ?? null
   const effectiveBeforeClsGrade = beforeGradeForVerification ?? gradeClsValue(effectiveBeforeClsScore)
   const effectiveAfterClsScore =
