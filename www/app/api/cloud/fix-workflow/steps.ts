@@ -5102,17 +5102,24 @@ function buildClaudeActionStepPrompt(
   const promptText = (step.config.prompt || "").trim()
   const promptTextLower = promptText.toLowerCase()
   const isStopEarlyPrompt = promptTextLower.includes("stop early")
+  const isWorkflowFinalCheckPrompt =
+    promptTextLower.includes("workflow runtime will handle final verification") ||
+    (promptTextLower.includes("do a quick targeted sanity check") &&
+      (promptTextLower.includes("do not run broad verification commands") ||
+        promptTextLower.includes("base this step on the code changes")))
   const inferredSendPromptMaxTurns = isStopEarlyPrompt
     ? 4
-    : promptTextLower.includes("verify")
-      ? 12
-      : promptTextLower.includes("implement") ||
-          promptTextLower.includes("parallelize") ||
-          promptTextLower.includes("deduplicate") ||
-          promptTextLower.includes("move derived state") ||
-          promptTextLower.includes("unify repeated")
-        ? 24
-        : 16
+    : isWorkflowFinalCheckPrompt
+      ? 4
+      : promptTextLower.includes("verify")
+        ? 12
+        : promptTextLower.includes("implement") ||
+            promptTextLower.includes("parallelize") ||
+            promptTextLower.includes("deduplicate") ||
+            promptTextLower.includes("move derived state") ||
+            promptTextLower.includes("unify repeated")
+          ? 24
+          : 16
 
   switch (step.kind) {
     case "browse-to-page":
@@ -5152,7 +5159,15 @@ Rules for this decision step:
 - Base your answer only on evidence you already gathered in the previous step.
 - If you already found a meaningful issue worth fixing, respond with exactly: CONTINUE: <one sentence>.
 - If no meaningful issue exists, respond with exactly: EARLY_EXIT: <one sentence>.`
-          : promptText || `Step ${index + 1}: Continue the workflow.`
+          : isWorkflowFinalCheckPrompt
+            ? `${promptText || `Step ${index + 1}: Continue the workflow.`}
+
+Rules for this quick verification step:
+- Do not run broad verification commands, new repo-wide searches, or restart investigation.
+- Do not collect new screenshots or manually re-measure final metrics. The workflow runtime handles final verification.
+- Use only the code changes you already made and any lightweight sanity checks you already ran.
+- Keep the response short: 3-6 bullets max.`
+            : promptText || `Step ${index + 1}: Continue the workflow.`
       }
     default:
       return {

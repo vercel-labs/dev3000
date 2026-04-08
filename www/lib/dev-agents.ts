@@ -531,7 +531,7 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
         kind: "send-prompt",
         config: {
           prompt:
-            "Do a quick targeted sanity check and code pass to confirm the main path no longer waits unnecessarily. The workflow runtime will handle final verification."
+            "Do a quick targeted sanity check and code pass to confirm the main path no longer waits unnecessarily. Do not run broad verification commands or restart investigation. Base this step on the code changes and any lightweight checks you already performed. The workflow runtime will handle final verification."
         }
       }
     ],
@@ -582,7 +582,7 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
         kind: "send-prompt",
         config: {
           prompt:
-            "Re-check the route and verify the shipped-JS direction is improved without breaking the visible flow."
+            "Do a quick targeted sanity check that the route still renders correctly and that the shipped-JS direction should improve based on the changes you made. Do not run broad verification commands or restart investigation. Base this step on the code changes and any lightweight checks you already performed. The workflow runtime will handle final verification."
         }
       }
     ],
@@ -633,7 +633,7 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
         kind: "send-prompt",
         config: {
           prompt:
-            "Verify that TTFB or LCP direction is maintained or improved and that the route still renders correctly."
+            "Do a quick targeted sanity check that the route still renders correctly and that TTFB or LCP direction should be maintained or improved based on the changes you made. Do not run broad verification commands or restart investigation. Base this step on the code changes and any lightweight checks you already performed. The workflow runtime will handle final verification."
         }
       }
     ],
@@ -683,7 +683,8 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
       {
         kind: "send-prompt",
         config: {
-          prompt: "Verify that redundant browser work is gone and that the route still loads and updates correctly."
+          prompt:
+            "Do a quick targeted sanity check that the route still loads and updates correctly and that redundant browser work should be reduced based on the changes you made. Do not run broad verification commands or restart investigation. Base this step on the code changes and any lightweight checks you already performed. The workflow runtime will handle final verification."
         }
       }
     ],
@@ -733,7 +734,8 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
       {
         kind: "send-prompt",
         config: {
-          prompt: "Verify the route still behaves correctly and that the main render path is simpler and less noisy."
+          prompt:
+            "Do a quick targeted sanity check that the route still behaves correctly and that the main render path should be simpler and less noisy based on the changes you made. Do not run broad verification commands or restart investigation. Base this step on the code changes and any lightweight checks you already performed. The workflow runtime will handle final verification."
         }
       }
     ],
