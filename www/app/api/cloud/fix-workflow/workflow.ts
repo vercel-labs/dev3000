@@ -641,6 +641,19 @@ interface ProgressContext {
   runSnapshot?: WorkflowRun
 }
 
+async function getProgressRunSnapshot(ctx: ProgressContext): Promise<WorkflowRun | undefined> {
+  if (ctx.runSnapshot) {
+    return ctx.runSnapshot
+  }
+
+  const { listWorkflowRuns } = await import("@/lib/workflow-storage")
+  const existingRun = (await listWorkflowRuns(ctx.userId)).find((run) => run.id === ctx.runId)
+  if (existingRun) {
+    ctx.runSnapshot = existingRun
+  }
+  return existingRun
+}
+
 async function initSandbox(
   repoUrl: string,
   branch: string,
@@ -1031,13 +1044,13 @@ async function saveDoneStatus(
   sandboxUrl?: string | null
 ): Promise<void> {
   "use step"
-  const { listWorkflowRuns, saveWorkflowRun } = await import("@/lib/workflow-storage")
-  const existingRun = (await listWorkflowRuns(progressContext.userId)).find((run) => run.id === progressContext.runId)
+  const { saveWorkflowRun } = await import("@/lib/workflow-storage")
+  const existingRun = await getProgressRunSnapshot(progressContext)
   const reportSummary = await loadWorkflowReportSummary(reportBlobUrl)
   const progressLogs = [...(existingRun?.progressLogs ?? []), ...(progressContext.progressLogs ?? [])]
     .filter((line, index, arr) => Boolean(line) && (index === 0 || arr[index - 1] !== line))
     .slice(-120)
-  await saveWorkflowRun({
+  const nextRun = {
     ...existingRun,
     id: progressContext.runId,
     userId: progressContext.userId,
@@ -1060,7 +1073,7 @@ async function saveDoneStatus(
     devAgentExecutionMode: progressContext.devAgentExecutionMode,
     devAgentSandboxBrowser: progressContext.devAgentSandboxBrowser,
     stepNumber: Math.max(existingRun?.stepNumber ?? 0, progressContext.activeStepNumber ?? 0, 1),
-    currentStep: progressContext.activeCurrentStep ?? existingRun?.currentStep ?? "Workflow completed",
+    currentStep: "Workflow completed",
     completedAt: new Date().toISOString(),
     reportBlobUrl,
     successEvalResult: reportSummary?.successEvalResult ?? existingRun?.successEvalResult ?? null,
@@ -1077,7 +1090,9 @@ async function saveDoneStatus(
     prError: prError || undefined,
     sandboxUrl: sandboxUrl || progressContext.sandboxUrl || existingRun?.sandboxUrl || undefined,
     progressLogs: progressLogs.length > 0 ? progressLogs : undefined
-  })
+  } satisfies WorkflowRun
+  await saveWorkflowRun(nextRun)
+  progressContext.runSnapshot = nextRun
 }
 
 async function loadWorkflowReportSummary(reportBlobUrl: string): Promise<WorkflowReportSummary | null> {
@@ -1112,12 +1127,12 @@ async function loadWorkflowReportSummary(reportBlobUrl: string): Promise<Workflo
 async function saveFailureStatus(progressContext: ProgressContext, errorMessage: string): Promise<void> {
   "use step"
   try {
-    const { listWorkflowRuns, saveWorkflowRun } = await import("@/lib/workflow-storage")
-    const existingRun = (await listWorkflowRuns(progressContext.userId)).find((run) => run.id === progressContext.runId)
+    const { saveWorkflowRun } = await import("@/lib/workflow-storage")
+    const existingRun = await getProgressRunSnapshot(progressContext)
     const progressLogs = [...(existingRun?.progressLogs ?? []), ...(progressContext.progressLogs ?? [])]
       .filter((line, index, arr) => Boolean(line) && (index === 0 || arr[index - 1] !== line))
       .slice(-120)
-    await saveWorkflowRun({
+    const nextRun = {
       ...existingRun,
       id: progressContext.runId,
       userId: progressContext.userId,
@@ -1140,12 +1155,14 @@ async function saveFailureStatus(progressContext: ProgressContext, errorMessage:
       devAgentExecutionMode: progressContext.devAgentExecutionMode,
       devAgentSandboxBrowser: progressContext.devAgentSandboxBrowser,
       stepNumber: Math.max(existingRun?.stepNumber ?? 0, progressContext.activeStepNumber ?? 0, 1),
-      currentStep: progressContext.activeCurrentStep ?? existingRun?.currentStep ?? "Workflow failed",
+      currentStep: "Workflow failed",
       completedAt: new Date().toISOString(),
       error: errorMessage,
       sandboxUrl: progressContext.sandboxUrl ?? existingRun?.sandboxUrl,
       progressLogs: progressLogs.length > 0 ? progressLogs : undefined
-    })
+    } satisfies WorkflowRun
+    await saveWorkflowRun(nextRun)
+    progressContext.runSnapshot = nextRun
     console.log(`[Workflow] Saved failure status for ${progressContext.runId}`)
   } catch (saveErr) {
     console.log(`[Workflow] Failed to save failure status: ${saveErr}`)
