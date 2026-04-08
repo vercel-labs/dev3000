@@ -1,0 +1,172 @@
+{
+  "version": "1.0.0",
+  "steps": {
+    "node_modules/.bun/workflow@4.2.0-beta.72+6e80a15823f2092c/node_modules/workflow/dist/internal/builtins.js": {
+      "__builtin_response_array_buffer": {
+        "stepId": "__builtin_response_array_buffer"
+      },
+      "__builtin_response_json": {
+        "stepId": "__builtin_response_json"
+      },
+      "__builtin_response_text": {
+        "stepId": "__builtin_response_text"
+      }
+    },
+    "app/api/cloud/check-pr/workflow.ts": {
+      "checkPerformanceStep": {
+        "stepId": "step//./app/api/cloud/check-pr/workflow//checkPerformanceStep"
+      },
+      "crawlPreviewPagesStep": {
+        "stepId": "step//./app/api/cloud/check-pr/workflow//crawlPreviewPagesStep"
+      },
+      "generateReportStep": {
+        "stepId": "step//./app/api/cloud/check-pr/workflow//generateReportStep"
+      },
+      "identifyAffectedPagesStep": {
+        "stepId": "step//./app/api/cloud/check-pr/workflow//identifyAffectedPagesStep"
+      },
+      "uploadReportStep": {
+        "stepId": "step//./app/api/cloud/check-pr/workflow//uploadReportStep"
+      },
+      "verifyPRClaimsStep": {
+        "stepId": "step//./app/api/cloud/check-pr/workflow//verifyPRClaimsStep"
+      }
+    },
+    "app/api/cloud/check-pr/steps.ts": {
+      "checkPerformance": {
+        "stepId": "step//./app/api/cloud/check-pr/steps//checkPerformance"
+      },
+      "crawlPreviewPages": {
+        "stepId": "step//./app/api/cloud/check-pr/steps//crawlPreviewPages"
+      },
+      "generateReport": {
+        "stepId": "step//./app/api/cloud/check-pr/steps//generateReport"
+      },
+      "identifyAffectedPages": {
+        "stepId": "step//./app/api/cloud/check-pr/steps//identifyAffectedPages"
+      },
+      "uploadReport": {
+        "stepId": "step//./app/api/cloud/check-pr/steps//uploadReport"
+      },
+      "verifyPRClaims": {
+        "stepId": "step//./app/api/cloud/check-pr/steps//verifyPRClaims"
+      }
+    },
+    "app/api/cloud/fix-workflow/workflow.ts": {
+      "agentFixLoop": {
+        "stepId": "step//./app/api/cloud/fix-workflow/workflow//agentFixLoop"
+      },
+      "captureScreenshotsForPR": {
+        "stepId": "step//./app/api/cloud/fix-workflow/workflow//captureScreenshotsForPR"
+      },
+      "cleanupSandbox": {
+        "stepId": "step//./app/api/cloud/fix-workflow/workflow//cleanupSandbox"
+      },
+      "createPullRequest": {
+        "stepId": "step//./app/api/cloud/fix-workflow/workflow//createPullRequest"
+      },
+      "earlyExitReport": {
+        "stepId": "step//./app/api/cloud/fix-workflow/workflow//earlyExitReport"
+      },
+      "evaluateEarlyExit": {
+        "stepId": "step//./app/api/cloud/fix-workflow/workflow//evaluateEarlyExit"
+      },
+      "evaluateTurbopackPrGate": {
+        "stepId": "step//./app/api/cloud/fix-workflow/workflow//evaluateTurbopackPrGate"
+      },
+      "initSandbox": {
+        "stepId": "step//./app/api/cloud/fix-workflow/workflow//initSandbox"
+      },
+      "loadWorkflowReportSummary": {
+        "stepId": "step//./app/api/cloud/fix-workflow/workflow//loadWorkflowReportSummary"
+      },
+      "observeBaseline": {
+        "stepId": "step//./app/api/cloud/fix-workflow/workflow//observeBaseline"
+      },
+      "preflightGitHubPatRepoAccess": {
+        "stepId": "step//./app/api/cloud/fix-workflow/workflow//preflightGitHubPatRepoAccess"
+      },
+      "prepareV0DevAgentSource": {
+        "stepId": "step//./app/api/cloud/fix-workflow/workflow//prepareV0DevAgentSource"
+      },
+      "saveDoneStatus": {
+        "stepId": "step//./app/api/cloud/fix-workflow/workflow//saveDoneStatus"
+      },
+      "saveFailureStatus": {
+        "stepId": "step//./app/api/cloud/fix-workflow/workflow//saveFailureStatus"
+      },
+      "urlAuditLoop": {
+        "stepId": "step//./app/api/cloud/fix-workflow/workflow//urlAuditLoop"
+      }
+    }
+  },
+  "workflows": {
+    "app/api/cloud/check-pr/workflow.ts": {
+      "cloudCheckPRWorkflow": {
+        "workflowId": "workflow//./app/api/cloud/check-pr/workflow//cloudCheckPRWorkflow",
+        "graph": {
+          "nodes": [
+            {
+              "id": "start",
+              "type": "workflowStart",
+              "data": {
+                "label": "Start: cloudCheckPRWorkflow",
+                "nodeKind": "workflow_start"
+              }
+            },
+            {
+              "id": "end",
+              "type": "workflowEnd",
+              "data": {
+                "label": "Return",
+                "nodeKind": "workflow_end"
+              }
+            }
+          ],
+          "edges": [
+            {
+              "id": "e_start_end",
+              "source": "start",
+              "target": "end",
+              "type": "default"
+            }
+          ]
+        }
+      }
+    },
+    "app/api/cloud/fix-workflow/workflow.ts": {
+      "cloudFixWorkflow": {
+        "workflowId": "workflow//./app/api/cloud/fix-workflow/workflow//cloudFixWorkflow",
+        "graph": {
+          "nodes": [
+            {
+              "id": "start",
+              "type": "workflowStart",
+              "data": {
+                "label": "Start: cloudFixWorkflow",
+                "nodeKind": "workflow_start"
+              }
+            },
+            {
+              "id": "end",
+              "type": "workflowEnd",
+              "data": {
+                "label": "Return",
+                "nodeKind": "workflow_end"
+              }
+            }
+          ],
+          "edges": [
+            {
+              "id": "e_start_end",
+              "source": "start",
+              "target": "end",
+              "type": "default"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "classes": {}
+}
