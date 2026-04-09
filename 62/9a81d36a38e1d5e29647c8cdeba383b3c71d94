@@ -1,0 +1,29 @@
+www/app/api/projects/route.ts
+  7a0ea82f7d7bc893 3-76,97-100,103,111
+www/app/dev-agents/[agentId]/new/dev-agent-run-client.tsx
+  7a0ea82f7d7bc893 184,186,197,221,224,235,256,329,336,367,423,474
+www/app/dev-agents/runs/[id]/report/page.tsx
+  7a0ea82f7d7bc893 983
+www/components/dev-agents/dashboard-shell.tsx
+  7a0ea82f7d7bc893 110-117
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.6",
+  "base_commit_sha": "629a81d36a38e1d5e29647c8cdeba383b3c71d94",
+  "prompts": {
+    "7a0ea82f7d7bc893": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d59d8-022d-7262-9555-ec96bb973d0c",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 101,
+      "total_deletions": 96,
+      "accepted_lines": 101,
+      "overriden_lines": 0
+    }
+  }
+}
