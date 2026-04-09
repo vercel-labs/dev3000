@@ -3,14 +3,14 @@ import type { Route } from "next"
 import Link from "next/link"
 import type React from "react"
 import { TeamSwitcher } from "@/components/dev-agents/team-switcher"
-import { ThemeToggle } from "@/components/theme-toggle"
 import { Button } from "@/components/ui/button"
 import type { VercelTeam } from "@/lib/vercel-teams"
 
 interface DevAgentsDashboardShellProps {
   teams: VercelTeam[]
   selectedTeam: VercelTeam
-  section?: "dev-agents" | "skill-runner"
+  section?: "dev-agents" | "skill-runner" | "admin"
+  showAdminLink?: boolean
   title?: React.ReactNode
   subtitle?: React.ReactNode
   description?: React.ReactNode
@@ -29,6 +29,7 @@ export function DevAgentsDashboardShell({
   teams,
   selectedTeam,
   section = "dev-agents",
+  showAdminLink = false,
   title,
   subtitle,
   description,
@@ -36,8 +37,12 @@ export function DevAgentsDashboardShell({
   children
 }: DevAgentsDashboardShellProps) {
   const sectionHref =
-    section === "skill-runner" ? `/${selectedTeam.slug}/skill-runner` : `/${selectedTeam.slug}/dev-agents`
-  const sectionLabel = section === "skill-runner" ? "Skill Runner" : "Dev Agents"
+    section === "skill-runner"
+      ? `/${selectedTeam.slug}/skill-runner`
+      : section === "admin"
+        ? "/admin"
+        : `/${selectedTeam.slug}/dev-agents`
+  const sectionLabel = section === "skill-runner" ? "Skill Runner" : section === "admin" ? "Admin" : "Dev Agents"
   const sidebarItems: SidebarItem[] = [
     { label: "Overview", href: `/${selectedTeam.slug}`, icon: Home },
     {
@@ -51,7 +56,17 @@ export function DevAgentsDashboardShell({
       href: `/${selectedTeam.slug}/skill-runner`,
       icon: Bot,
       active: section === "skill-runner"
-    }
+    },
+    ...(showAdminLink
+      ? [
+          {
+            label: "Admin",
+            href: "/admin",
+            icon: Settings,
+            active: section === "admin"
+          } satisfies SidebarItem
+        ]
+      : [])
   ]
 
   return (
@@ -108,17 +123,14 @@ export function DevAgentsDashboardShell({
             </div>
 
             {/* Right side actions */}
-            <div className="flex items-center gap-2">
-              <ThemeToggle className="h-8 w-8 rounded-md border-[#333] bg-transparent text-[#888] hover:bg-[#1a1a1a] hover:text-[#ededed]" />
-              <Button
-                asChild
-                variant="ghost"
-                size="sm"
-                className="h-8 rounded-md border border-[#333] bg-transparent px-3 text-[13px] text-[#888] hover:bg-[#1a1a1a] hover:text-[#ededed]"
-              >
-                <Link href="/dev-agents/runs">Runs</Link>
-              </Button>
-            </div>
+            <Button
+              asChild
+              variant="ghost"
+              size="sm"
+              className="h-8 rounded-md border border-[#333] bg-transparent px-3 text-[13px] text-[#888] hover:bg-[#1a1a1a] hover:text-[#ededed]"
+            >
+              <Link href="/dev-agents/runs">Runs</Link>
+            </Button>
           </header>
 
           {/* Page content */}

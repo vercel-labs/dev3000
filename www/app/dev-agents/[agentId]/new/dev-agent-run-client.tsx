@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
 import type { DevAgent, DevAgentTeam } from "@/lib/dev-agents-client"
+import type { SkillRunnerExecutionMode } from "@/lib/skill-runners"
 
 interface UserInfo {
   id: string
@@ -71,6 +72,8 @@ interface DevAgentRunClientProps {
   defaultUseV0DevAgentRunner: boolean
   marketplaceStats?: MarketplaceStats
   runnerKind?: "dev-agent" | "skill-runner"
+  skillRunnerExecutionMode?: SkillRunnerExecutionMode
+  skillRunnerWorkerBaseUrl?: string
 }
 
 const GITHUB_PAT_STORAGE_KEY = "d3k_github_pat"
@@ -116,7 +119,9 @@ export default function DevAgentRunClient({
   user,
   defaultUseV0DevAgentRunner,
   marketplaceStats,
-  runnerKind = "dev-agent"
+  runnerKind = "dev-agent",
+  skillRunnerExecutionMode = "hosted",
+  skillRunnerWorkerBaseUrl
 }: DevAgentRunClientProps) {
   const projectSearchId = useId()
   const startPathId = useId()
@@ -172,6 +177,10 @@ export default function DevAgentRunClient({
     hasGitHubRepoInfo && !defaultUseV0DevAgentRunner && effectiveRepoVisibility === "private_or_unknown"
   const runnerLabel = runnerKind === "skill-runner" ? "skill runner" : "dev agent"
   const runnerTitle = runnerKind === "skill-runner" ? "Skill Runner" : "Dev Agent"
+  const isSelfHostedSkillRunner = runnerKind === "skill-runner" && skillRunnerExecutionMode === "self-hosted"
+  const selfHostedHelperText = skillRunnerWorkerBaseUrl
+    ? `This team is configured for self-hosted skill-runner execution via ${skillRunnerWorkerBaseUrl}. Worker forwarding is not wired into the control plane yet.`
+    : "This team is configured for self-hosted skill-runner execution. Add a worker URL in /admin before enabling team-owned runs."
 
   useEffect(() => {
     const stored = localStorage.getItem(GITHUB_PAT_STORAGE_KEY)
@@ -614,6 +623,14 @@ export default function DevAgentRunClient({
         </div>
       ) : null}
 
+      {isSelfHostedSkillRunner ? (
+        <div className="rounded-lg border border-[#1f1f1f] bg-[#111] px-4 py-3">
+          <div className="text-[11px] uppercase tracking-wider text-[#555]">Execution Mode</div>
+          <div className="mt-1 text-[13px] font-medium text-[#ededed]">Self-hosted</div>
+          <div className="mt-1 text-[13px] leading-[18px] text-[#888]">{selfHostedHelperText}</div>
+        </div>
+      ) : null}
+
       {error && (
         <div className="rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-3 text-[13px] text-red-400">
           {error}
@@ -814,7 +831,7 @@ export default function DevAgentRunClient({
               <div className="flex items-center gap-2 pt-1">
                 <Button
                   onClick={startDevAgentRun}
-                  disabled={isRunning || !selectedProject}
+                  disabled={isRunning || !selectedProject || isSelfHostedSkillRunner}
                   size="sm"
                   className="h-8 rounded-md bg-[#ededed] px-4 text-[13px] font-medium text-[#0a0a0a] hover:bg-white disabled:opacity-40"
                 >
