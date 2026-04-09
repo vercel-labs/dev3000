@@ -35,6 +35,7 @@ export function SkillRunnersCatalog({ teamSlug, runners }: SkillRunnersCatalogPr
   const [searching, setSearching] = useState(false)
   const [mutatingId, setMutatingId] = useState<string | null>(null)
   const [searchError, setSearchError] = useState<string | null>(null)
+  const [retryNonce, setRetryNonce] = useState(0)
   const deferredQuery = useDeferredValue(query)
 
   useEffect(() => {
@@ -65,7 +66,7 @@ export function SkillRunnersCatalog({ teamSlug, runners }: SkillRunnersCatalogPr
     const controller = new AbortController()
     setSearching(true)
     setSearchError(null)
-    void fetch(`/api/skill-runners/search?q=${encodeURIComponent(trimmed)}`, {
+    void fetch(`/api/skill-runners/search?q=${encodeURIComponent(trimmed)}&retry=${retryNonce}`, {
       signal: controller.signal
     })
       .then(async (response) => {
@@ -91,7 +92,7 @@ export function SkillRunnersCatalog({ teamSlug, runners }: SkillRunnersCatalogPr
       })
 
     return () => controller.abort()
-  }, [deferredQuery])
+  }, [deferredQuery, retryNonce])
 
   async function addRunner(selection: SkillsShSearchResult) {
     setMutatingId(selection.canonicalPath)
@@ -163,9 +164,15 @@ export function SkillRunnersCatalog({ teamSlug, runners }: SkillRunnersCatalogPr
               placeholder="Search skills.sh by name"
               className="border-[#333] bg-[#111] text-[#ededed] placeholder:text-[#555]"
             />
-            <div className="flex h-9 min-w-[120px] items-center justify-center rounded-md border border-[#333] bg-[#111] px-3 text-[13px] text-[#888]">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setRetryNonce((value) => value + 1)}
+              disabled={searching || query.trim().length < 2}
+              className="h-9 min-w-[120px] rounded-md border-[#333] bg-[#111] px-3 text-[13px] text-[#888] hover:bg-[#1a1a1a] hover:text-[#ededed]"
+            >
               {searching ? <Spinner className="size-4" /> : <Search className="size-3.5" />}
-            </div>
+            </Button>
           </div>
           {searchError ? (
             <Alert className="border-[#333] bg-[#111] text-[#888]">
@@ -262,13 +269,6 @@ export function SkillRunnersCatalog({ teamSlug, runners }: SkillRunnersCatalogPr
 
               <p className="line-clamp-2 text-[13px] leading-[20px] text-[#888]">{runner.description}</p>
 
-              {runner.validationWarning ? (
-                <Alert className="border-[#333] bg-[#111] text-[#888]">
-                  <AlertCircle className="size-4" />
-                  <AlertDescription>{runner.validationWarning}</AlertDescription>
-                </Alert>
-              ) : null}
-
               <div className="space-y-2 rounded-md border border-[#1f1f1f] bg-[#111] p-3">
                 <div>
                   <div className="text-[11px] uppercase tracking-wider text-[#555]">Success Eval</div>
@@ -276,6 +276,12 @@ export function SkillRunnersCatalog({ teamSlug, runners }: SkillRunnersCatalogPr
                     {runner.successEval?.trim() || "None"}
                   </div>
                 </div>
+                {runner.validationWarning ? (
+                  <div className="flex items-start gap-2 pt-1 text-[12px] leading-[18px] text-[#666]">
+                    <AlertCircle className="mt-0.5 size-3.5 shrink-0" />
+                    <span>{runner.validationWarning}</span>
+                  </div>
+                ) : null}
               </div>
 
               <div className="flex flex-wrap gap-1.5">
