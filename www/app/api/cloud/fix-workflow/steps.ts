@@ -1512,6 +1512,21 @@ function mergeProgressLogs(primary: string[] | undefined, secondary: string[] | 
   return merged.slice(-limit)
 }
 
+function sanitizeEarlyExitReason(reason: string, observation: ObserveResult): string {
+  const normalized = reason.trim()
+  if (!normalized) {
+    return observation.skillsInstalled.length > 0
+      ? "The required skills were installed, but the baseline evidence was insufficient to justify a concrete, non-speculative change."
+      : "Baseline evidence was insufficient to justify a concrete, non-speculative change."
+  }
+
+  if (observation.skillsInstalled.length > 0 && /no skills are installed/i.test(normalized)) {
+    return "The required skills were installed, but the baseline evidence was insufficient to justify a concrete, non-speculative change."
+  }
+
+  return normalized
+}
+
 async function getProgressRunSnapshot(ctx: ProgressContext): Promise<WorkflowRun | undefined> {
   if (ctx.runSnapshot) {
     return ctx.runSnapshot
@@ -3654,7 +3669,7 @@ Does the condition hold based on these metrics? Respond with JSON only.`
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[0])
       const shouldExit = parsed.shouldExit === true
-      const reason = typeof parsed.reason === "string" ? parsed.reason : ""
+      const reason = sanitizeEarlyExitReason(typeof parsed.reason === "string" ? parsed.reason : "", observation)
       workflowLog(`[EarlyExit] Result: shouldExit=${shouldExit}, reason=${reason}`)
       await appendProgressLog(progressContext, `[EarlyExit] Result: shouldExit=${shouldExit} — ${reason}`)
       return { shouldExit, reason }

@@ -1161,16 +1161,23 @@ function ReportContentBody({ run, report }: { run: WorkflowRun; report: Workflow
   const metricsWithCurrentValues = metricRows.filter((row) => row.current)
   const earlyExitSummary = getEarlyExitSummary(report)
   const secondarySummary = earlyExitSummary ?? getOutcomeSummary(report, metricRows)
+  const declaredSkills = (report.devAgentSkills || []).map((skill) => ({
+    label: normalizeSkillLabel(skill.displayName || skill.skillName || skill.id),
+    url: skill.sourceUrl || skillLink(skill.displayName || skill.skillName || skill.id)
+  }))
   const explicitSkills = [...(report.skillsLoaded || []), ...(report.skillsInstalled || [])]
   const inferredSkills: string[] = workflowType === "turbopack-bundle-analyzer" ? [] : ["d3k"]
   if (workflowType === "design-guidelines") inferredSkills.unshift("Vercel Web Design Guidelines")
   if (workflowType === "turbopack-bundle-analyzer") inferredSkills.unshift("analyze-bundle")
   const skillsUsed = Array.from(
     new Map(
-      [...explicitSkills, ...inferredSkills].map((skill) => {
-        const label = normalizeSkillLabel(skill)
-        return [label.toLowerCase(), { label, url: skillLink(skill) }]
-      })
+      [
+        ...declaredSkills,
+        ...[...explicitSkills, ...inferredSkills].map((skill) => {
+          const label = normalizeSkillLabel(skill)
+          return { label, url: skillLink(skill) }
+        })
+      ].map((skill) => [skill.label.toLowerCase(), skill])
     ).values()
   )
   const isMarketplaceAgent = report.isMarketplaceAgent || report.devAgentId?.startsWith("r_mp_") || false
