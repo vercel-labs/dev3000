@@ -1,7 +1,7 @@
 import { start } from "workflow/api"
 import { resolveDevAgentRunner } from "@/lib/cloud/dev-agent-runner"
 import { type DevAgent, ensureDevAgentAshArtifactPrepared, getDevAgent, incrementDevAgentUsage } from "@/lib/dev-agents"
-import { getSkillRunnerForExecution, incrementSkillRunnerUsage } from "@/lib/skill-runners"
+import { getSkillRunnerForExecution, getSkillRunnerTeamSettings, incrementSkillRunnerUsage } from "@/lib/skill-runners"
 import { proxyWorkflowJsonRequest, shouldProxyWorkflowRequest } from "@/lib/workflow-api"
 import { clearWorkflowLog, workflowError, workflowLog } from "@/lib/workflow-logger"
 import { saveWorkflowRun, type WorkflowType } from "@/lib/workflow-storage"
@@ -195,6 +195,24 @@ export async function POST(request: Request) {
         return Response.json(
           { success: false, error: "skillRunnerTeam is required to start a skill runner." },
           { status: 400, headers: corsHeaders }
+        )
+      }
+
+      const teamSettings = await getSkillRunnerTeamSettings({
+        id: team.id,
+        slug: team.slug,
+        name: team.name,
+        isPersonal: Boolean(team.isPersonal)
+      })
+      if (teamSettings.executionMode === "self-hosted") {
+        return Response.json(
+          {
+            success: false,
+            error: teamSettings.workerBaseUrl
+              ? `Self-hosted skill-runner mode is enabled for ${team.name}. Worker execution from the control plane is not wired yet.`
+              : `Self-hosted skill-runner mode is enabled for ${team.name}, but no worker URL is configured yet in /admin.`
+          },
+          { status: 409, headers: corsHeaders }
         )
       }
 
