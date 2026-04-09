@@ -3,8 +3,8 @@
 import { AlertCircle, ExternalLink, Play, Plus, Search, X } from "lucide-react"
 import type { Route } from "next"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
-import { useState } from "react"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
+import { useDeferredValue, useEffect, useState } from "react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -28,41 +28,70 @@ interface SkillRunnersCatalogProps {
 
 export function SkillRunnersCatalog({ teamSlug, runners }: SkillRunnersCatalogProps) {
   const router = useRouter()
-  const [query, setQuery] = useState("")
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const [query, setQuery] = useState(() => searchParams?.get("q") ?? "")
   const [results, setResults] = useState<SkillsShSearchResult[]>([])
   const [searching, setSearching] = useState(false)
   const [mutatingId, setMutatingId] = useState<string | null>(null)
   const [searchError, setSearchError] = useState<string | null>(null)
+  const deferredQuery = useDeferredValue(query)
 
-  async function search() {
+  useEffect(() => {
+    const basePath = pathname || `/${teamSlug}/skill-runner`
+    const current = searchParams?.get("q") ?? ""
+    if (current === query) return
+
+    const nextParams = new URLSearchParams(searchParams?.toString() ?? "")
     const trimmed = query.trim()
+    if (trimmed) {
+      nextParams.set("q", trimmed)
+    } else {
+      nextParams.delete("q")
+    }
+
+    const nextQuery = nextParams.toString()
+    router.replace((nextQuery ? `${basePath}?${nextQuery}` : basePath) as Route)
+  }, [pathname, query, router, searchParams, teamSlug])
+
+  useEffect(() => {
+    const trimmed = deferredQuery.trim()
     if (trimmed.length < 2) {
       setResults([])
       setSearchError(null)
       return
     }
 
+    const controller = new AbortController()
     setSearching(true)
     setSearchError(null)
+    void fetch(`/api/skill-runners/search?q=${encodeURIComponent(trimmed)}`, {
+      signal: controller.signal
+    })
+      .then(async (response) => {
+        const data = (await response.json()) as {
+          success?: boolean
+          error?: string
+          results?: SkillsShSearchResult[]
+        }
+        if (!response.ok || !data.success) {
+          throw new Error(data.error || "Failed to search skills.sh")
+        }
+        setResults(Array.isArray(data.results) ? data.results : [])
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return
+        setSearchError(error instanceof Error ? error.message : String(error))
+        setResults([])
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setSearching(false)
+        }
+      })
 
-    try {
-      const response = await fetch(`/api/skill-runners/search?q=${encodeURIComponent(trimmed)}`)
-      const data = (await response.json()) as {
-        success?: boolean
-        error?: string
-        results?: SkillsShSearchResult[]
-      }
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || "Failed to search skills.sh")
-      }
-      setResults(Array.isArray(data.results) ? data.results : [])
-    } catch (error) {
-      setSearchError(error instanceof Error ? error.message : String(error))
-      setResults([])
-    } finally {
-      setSearching(false)
-    }
-  }
+    return () => controller.abort()
+  }, [deferredQuery])
 
   async function addRunner(selection: SkillsShSearchResult) {
     setMutatingId(selection.canonicalPath)
@@ -133,22 +162,10 @@ export function SkillRunnersCatalog({ teamSlug, runners }: SkillRunnersCatalogPr
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search skills.sh by name"
               className="border-[#333] bg-[#111] text-[#ededed] placeholder:text-[#555]"
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault()
-                  void search()
-                }
-              }}
             />
-            <Button
-              type="button"
-              onClick={() => void search()}
-              disabled={searching}
-              className="h-9 rounded-md bg-[#ededed] px-3 text-[13px] font-medium text-[#0a0a0a] hover:bg-white"
-            >
+            <div className="flex h-9 min-w-[120px] items-center justify-center rounded-md border border-[#333] bg-[#111] px-3 text-[13px] text-[#888]">
               {searching ? <Spinner className="size-4" /> : <Search className="size-3.5" />}
-              Search
-            </Button>
+            </div>
           </div>
           {searchError ? (
             <Alert className="border-[#333] bg-[#111] text-[#888]">
@@ -162,7 +179,18 @@ export function SkillRunnersCatalog({ teamSlug, runners }: SkillRunnersCatalogPr
                 <div key={result.canonicalPath} className="rounded-md border border-[#1f1f1f] bg-[#111] p-3">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="truncate text-[14px] font-medium text-[#ededed]">{result.displayName}</div>
+                      <div className="flex min-w-0 items-center gap-1.5">
+                        <div className="truncate text-[14px] font-medium text-[#ededed]">{result.displayName}</div>
+                        <a
+                          href={result.sourceUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="shrink-0 text-[#555] transition-colors hover:text-[#888]"
+                          aria-label={`Open ${result.displayName} on skills.sh`}
+                        >
+                          <ExternalLink className="size-3.5" />
+                        </a>
+                      </div>
                       <div className="mt-1 truncate text-[12px] text-[#666]">{result.canonicalPath}</div>
                       {result.installsLabel ? (
                         <div className="mt-2 text-[11px] uppercase tracking-wider text-[#555]">

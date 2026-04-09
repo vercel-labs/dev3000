@@ -1,12 +1,6 @@
-import { getCurrentUser } from "@/lib/auth"
 import { searchSkillRunnerCandidates } from "@/lib/skill-runners"
 
 export async function GET(request: Request) {
-  const user = await getCurrentUser()
-  if (!user) {
-    return Response.json({ success: false, error: "Unauthorized", results: [] }, { status: 401 })
-  }
-
   const { searchParams } = new URL(request.url)
   const query = searchParams.get("q")?.trim() || ""
 

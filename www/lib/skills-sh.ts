@@ -3,6 +3,7 @@ import { createHash } from "node:crypto"
 
 const SKILLS_FIND_TIMEOUT_MS = 15000
 const SKILL_FETCH_TIMEOUT_MS = 10000
+const SKILL_SEARCH_METADATA_CACHE_TTL_MS = 10 * 60 * 1000
 
 export interface SkillsShSearchResult {
   id: string
@@ -25,6 +26,14 @@ export interface SkillsShSkillDetails {
   description: string
   upstreamHash: string
 }
+
+interface CachedSkillPageMetadata {
+  canonicalPath: string
+  displayName: string
+  expiresAt: number
+}
+
+const skillPageMetadataCache = new Map<string, CachedSkillPageMetadata>()
 
 function stripAnsi(value: string): string {
   let result = ""
@@ -191,6 +200,34 @@ async function fetchSkillHtml(sourceUrl: string): Promise<string> {
   }
 }
 
+async function getSkillPageMetadata(sourceUrl: string): Promise<{ canonicalPath: string; displayName: string }> {
+  const cached = skillPageMetadataCache.get(sourceUrl)
+  if (cached && cached.expiresAt > Date.now()) {
+    return {
+      canonicalPath: cached.canonicalPath,
+      displayName: cached.displayName
+    }
+  }
+
+  const html = await fetchSkillHtml(sourceUrl)
+  const canonicalMatch = html.match(/<link rel="canonical" href="([^"]+)"/i)
+  const canonicalUrl = canonicalMatch?.[1] || sourceUrl
+  const canonicalPath = getCanonicalPathFromSourceUrl(canonicalUrl)
+  const displayName = extractHeadingTitle(html)
+
+  const nextValue: CachedSkillPageMetadata = {
+    canonicalPath,
+    displayName,
+    expiresAt: Date.now() + SKILL_SEARCH_METADATA_CACHE_TTL_MS
+  }
+  skillPageMetadataCache.set(sourceUrl, nextValue)
+
+  return {
+    canonicalPath,
+    displayName
+  }
+}
+
 function extractMetaDescription(html: string): string {
   const match = html.match(/<meta name="description" content="([^"]*)"/i)
   return decodeHtmlEntities(match?.[1] || "").trim()
@@ -231,7 +268,25 @@ export async function searchSkillsSh(query: string): Promise<SkillsShSearchResul
   }
 
   const output = await runSkillsFind(trimmed)
-  return parseSkillsFindOutput(output)
+  const parsed = parseSkillsFindOutput(output)
+
+  const enriched = await Promise.all(
+    parsed.map(async (result) => {
+      try {
+        const metadata = await getSkillPageMetadata(result.sourceUrl)
+        return {
+          ...result,
+          canonicalPath: metadata.canonicalPath || result.canonicalPath,
+          id: metadata.canonicalPath || result.id,
+          displayName: metadata.displayName || result.displayName
+        }
+      } catch {
+        return result
+      }
+    })
+  )
+
+  return enriched
 }
 
 export async function fetchSkillsShSkillDetails(input: {
