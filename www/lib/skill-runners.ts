@@ -248,10 +248,6 @@ function buildSkillRunnerSuccessEval(displayName: string): string {
   return `Did this run apply ${displayName} to the project in a concrete, reviewable way without regressing visible behavior?`
 }
 
-function buildSkillRunnerEarlyExit(displayName: string): string {
-  return `No meaningful, non-speculative application of ${displayName} was found for this project.`
-}
-
 function buildSkillRef(
   record: Pick<SkillRunnerRecord, "id" | "installArg" | "packageName" | "skillName" | "displayName" | "sourceUrl">
 ): DevAgentSkillRef[] {
@@ -344,8 +340,6 @@ function applyUsageCount(record: SkillRunnerRecord, usageMap: Map<string, number
     supportsPathInput: true,
     supportsPullRequest: true,
     successEval: buildSkillRunnerSuccessEval(record.displayName),
-    earlyExitMode: "text",
-    earlyExitEval: buildSkillRunnerEarlyExit(record.displayName),
     ashArtifact: record.ashArtifact,
     runnerCanonicalPath: record.canonicalPath,
     runnerSourceUrl: record.sourceUrl,
