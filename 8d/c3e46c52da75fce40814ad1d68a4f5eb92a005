@@ -1,0 +1,23 @@
+www/app/dev-agents/runs/[id]/report/report-pending.tsx
+  7a0ea82f7d7bc893 264-267,279,281,283,285-290,295,303,305,312-313,324,329,339,367
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.6",
+  "base_commit_sha": "8dc3e46c52da75fce40814ad1d68a4f5eb92a005",
+  "prompts": {
+    "7a0ea82f7d7bc893": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d59d8-022d-7262-9555-ec96bb973d0c",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 22,
+      "total_deletions": 19,
+      "accepted_lines": 22,
+      "overriden_lines": 0
+    }
+  }
+}
