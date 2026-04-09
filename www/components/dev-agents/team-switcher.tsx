@@ -1,10 +1,10 @@
 "use client"
 
-import { ChevronDown } from "lucide-react"
+import { ChevronDown, LogOut } from "lucide-react"
 import type { Route } from "next"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useEffect } from "react"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { LAST_SELECTED_TEAM_COOKIE_MAX_AGE, LAST_SELECTED_TEAM_COOKIE_NAME } from "@/lib/team-selection"
 import type { VercelTeam } from "@/lib/vercel-teams"
 
@@ -12,6 +12,8 @@ interface TeamSwitcherProps {
   teams: VercelTeam[]
   selectedTeam: VercelTeam
 }
+
+const SIGN_OUT_VALUE = "__sign_out__"
 
 function VercelTriangle({ className }: { className?: string }) {
   return (
@@ -44,10 +46,25 @@ export function TeamSwitcher({ teams, selectedTeam }: TeamSwitcherProps) {
     return query ? `${nextPath}?${query}` : nextPath
   }
 
+  async function signOut() {
+    try {
+      await fetch("/api/auth/signout", {
+        method: "POST"
+      })
+    } finally {
+      router.push("/signin" as Route)
+      router.refresh()
+    }
+  }
+
   return (
     <Select
       value={selectedTeam.slug}
       onValueChange={(nextSlug) => {
+        if (nextSlug === SIGN_OUT_VALUE) {
+          void signOut()
+          return
+        }
         document.cookie = `${LAST_SELECTED_TEAM_COOKIE_NAME}=${encodeURIComponent(nextSlug)}; path=/; max-age=${LAST_SELECTED_TEAM_COOKIE_MAX_AGE}; samesite=lax`
         router.push(buildTeamSwitchHref(nextSlug) as Route)
       }}
@@ -69,6 +86,13 @@ export function TeamSwitcher({ teams, selectedTeam }: TeamSwitcherProps) {
             {team.name}
           </SelectItem>
         ))}
+        <SelectSeparator className="bg-[#222]" />
+        <SelectItem value={SIGN_OUT_VALUE} className="text-[13px] text-[#cfcfcf] focus:bg-[#1a1a1a] focus:text-white">
+          <span className="flex items-center gap-2">
+            <LogOut className="size-3.5" />
+            Sign Out
+          </span>
+        </SelectItem>
       </SelectContent>
     </Select>
   )
