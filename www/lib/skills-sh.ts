@@ -196,9 +196,32 @@ function extractMetaDescription(html: string): string {
   return decodeHtmlEntities(match?.[1] || "").trim()
 }
 
+function extractTwitterDescription(html: string): string {
+  const match = html.match(/<meta name="twitter:description" content="([^"]*)"/i)
+  return decodeHtmlEntities(match?.[1] || "").trim()
+}
+
 function extractHeadingTitle(html: string): string {
   const match = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)
   return stripHtml(match?.[1] || "")
+}
+
+function extractSummaryDescription(html: string): string {
+  const match = html.match(/>Summary<\/div>\s*<div[^>]*>[\s\S]*?<p>([\s\S]*?)<\/p>/i)
+  return stripHtml(match?.[1] || "")
+}
+
+function isGenericSkillDescription(description: string): boolean {
+  const normalized = description.trim().toLowerCase()
+  if (!normalized) {
+    return true
+  }
+
+  return (
+    normalized === "discover and install skills for ai agents." ||
+    normalized.startsWith("install the ") ||
+    normalized.startsWith("discover and install")
+  )
 }
 
 export async function searchSkillsSh(query: string): Promise<SkillsShSearchResult[]> {
@@ -222,8 +245,16 @@ export async function fetchSkillsShSkillDetails(input: {
   const canonicalMatch = html.match(/<link rel="canonical" href="([^"]+)"/i)
   const canonicalUrl = canonicalMatch?.[1] || input.sourceUrl
   const canonicalPath = getCanonicalPathFromSourceUrl(canonicalUrl)
+  const metaDescription = extractMetaDescription(html)
+  const twitterDescription = extractTwitterDescription(html)
+  const summaryDescription = extractSummaryDescription(html)
   const description =
-    extractMetaDescription(html) ||
+    (!isGenericSkillDescription(summaryDescription) && summaryDescription) ||
+    (!isGenericSkillDescription(metaDescription) && metaDescription) ||
+    (!isGenericSkillDescription(twitterDescription) && twitterDescription) ||
+    summaryDescription ||
+    metaDescription ||
+    twitterDescription ||
     `Run the ${input.displayName || titleCaseSkillName(input.skillName)} skill against a project and produce a reviewable PR.`
   const displayName = extractHeadingTitle(html) || input.displayName || titleCaseSkillName(input.skillName)
   const upstreamHash = createHash("sha256")

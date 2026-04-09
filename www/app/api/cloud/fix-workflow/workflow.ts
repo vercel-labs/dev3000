@@ -74,6 +74,24 @@ interface V0DevAgentSourceResult {
   fallbackReason?: string
 }
 
+function dedupeProgressLogs(lines: string[] | undefined, limit: number): string[] | undefined {
+  if (!Array.isArray(lines) || lines.length === 0) {
+    return undefined
+  }
+
+  const deduped: string[] = []
+  const seen = new Set<string>()
+  for (const line of lines) {
+    if (!line || seen.has(line)) {
+      continue
+    }
+    seen.add(line)
+    deduped.push(line)
+  }
+
+  return deduped.slice(-limit)
+}
+
 interface UrlAuditResult {
   sandboxId: string
   reportBlobUrl: string
@@ -1059,9 +1077,10 @@ async function saveDoneStatus(
   const { saveWorkflowRun } = await import("@/lib/workflow-storage")
   const existingRun = await getProgressRunSnapshot(progressContext)
   const reportSummary = await loadWorkflowReportSummary(reportBlobUrl)
-  const progressLogs = [...(existingRun?.progressLogs ?? []), ...(progressContext.progressLogs ?? [])]
-    .filter((line, index, arr) => Boolean(line) && (index === 0 || arr[index - 1] !== line))
-    .slice(-120)
+  const progressLogs = dedupeProgressLogs(
+    [...(existingRun?.progressLogs ?? []), ...(progressContext.progressLogs ?? [])],
+    120
+  )
   const nextRun = {
     ...existingRun,
     id: progressContext.runId,
@@ -1107,7 +1126,7 @@ async function saveDoneStatus(
     prUrl: prUrl || undefined,
     prError: prError || undefined,
     sandboxUrl: sandboxUrl || progressContext.sandboxUrl || existingRun?.sandboxUrl || undefined,
-    progressLogs: progressLogs.length > 0 ? progressLogs : undefined
+    progressLogs
   } satisfies WorkflowRun
   await saveWorkflowRun(nextRun)
   progressContext.runSnapshot = nextRun
@@ -1147,9 +1166,10 @@ async function saveFailureStatus(progressContext: ProgressContext, errorMessage:
   try {
     const { saveWorkflowRun } = await import("@/lib/workflow-storage")
     const existingRun = await getProgressRunSnapshot(progressContext)
-    const progressLogs = [...(existingRun?.progressLogs ?? []), ...(progressContext.progressLogs ?? [])]
-      .filter((line, index, arr) => Boolean(line) && (index === 0 || arr[index - 1] !== line))
-      .slice(-120)
+    const progressLogs = dedupeProgressLogs(
+      [...(existingRun?.progressLogs ?? []), ...(progressContext.progressLogs ?? [])],
+      120
+    )
     const nextRun = {
       ...existingRun,
       id: progressContext.runId,
@@ -1183,7 +1203,7 @@ async function saveFailureStatus(progressContext: ProgressContext, errorMessage:
       completedAt: new Date().toISOString(),
       error: errorMessage,
       sandboxUrl: progressContext.sandboxUrl ?? existingRun?.sandboxUrl,
-      progressLogs: progressLogs.length > 0 ? progressLogs : undefined
+      progressLogs
     } satisfies WorkflowRun
     await saveWorkflowRun(nextRun)
     progressContext.runSnapshot = nextRun

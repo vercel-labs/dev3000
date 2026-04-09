@@ -1503,8 +1503,10 @@ function buildProgressLogLine(message: string, timestamp = new Date().toISOStrin
 
 function mergeProgressLogs(primary: string[] | undefined, secondary: string[] | undefined, limit: number): string[] {
   const merged: string[] = []
+  const seen = new Set<string>()
   for (const line of [...(secondary ?? []), ...(primary ?? [])]) {
-    if (!line || merged[merged.length - 1] === line) continue
+    if (!line || seen.has(line)) continue
+    seen.add(line)
     merged.push(line)
   }
   return merged.slice(-limit)
