@@ -261,12 +261,10 @@ export function ReportPending({
     <div className="space-y-6">
       {!embedded && (
         <div>
-          <div className="text-xs uppercase tracking-wide text-muted-foreground">{pendingLabel}</div>
-          <h1 className="text-3xl font-bold mt-2">{pendingReportTitle}</h1>
-          {projectName ? <p className="mt-1 text-sm text-muted-foreground">Project: {projectName}</p> : null}
-          <p className="text-muted-foreground mt-2">
-            We&apos;re assembling the results and will show them here shortly.
-          </p>
+          <div className="text-xs uppercase tracking-wide text-[#666]">{pendingLabel}</div>
+          <h1 className="mt-2 text-3xl font-bold text-[#ededed]">{pendingReportTitle}</h1>
+          {projectName ? <p className="mt-1 text-sm text-[#888]">Project: {projectName}</p> : null}
+          <p className="mt-2 text-[#888]">We&apos;re assembling the results and will show them here shortly.</p>
         </div>
       )}
 
@@ -278,18 +276,23 @@ export function ReportPending({
       ) : null}
 
       <div
-        className={`bg-card border border-border rounded-lg p-4 ${shouldExpandLogs ? "flex min-h-[calc(100vh-240px)] flex-col" : ""}`}
+        className={`rounded-lg border border-[#1f1f1f] bg-[#111] p-4 ${shouldExpandLogs ? "flex min-h-[calc(100vh-240px)] flex-col" : ""}`}
       >
-        <div className="text-sm font-medium text-foreground mb-3">Progress</div>
+        <div className="mb-3 text-sm font-medium text-[#ededed]">Progress</div>
         {sandboxUrl && !hasError && (
-          <div className="mb-3 text-xs text-muted-foreground">
+          <div className="mb-3 text-xs text-[#888]">
             <span className="font-medium">Sandbox:</span>{" "}
-            <a href={sandboxUrl} target="_blank" rel="noopener noreferrer" className="font-mono hover:underline">
+            <a
+              href={sandboxUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-mono hover:text-[#ededed] hover:underline"
+            >
               {sandboxUrl}
             </a>
           </div>
         )}
-        {!hasError && showStatus ? <div className="mb-3 text-xs text-muted-foreground">{statusText}</div> : null}
+        {!hasError && showStatus ? <div className="mb-3 text-xs text-[#888]">{statusText}</div> : null}
         <div className="space-y-2">
           {STEP_LABELS.map((label, index) => {
             const isDone = activeIndex !== null && index < activeIndex
@@ -297,17 +300,17 @@ export function ReportPending({
             return (
               <div key={label} className="flex items-center gap-3 text-sm">
                 {isDone ? (
-                  <CheckCircle2 className="h-3.5 w-3.5 text-foreground/80" />
+                  <CheckCircle2 className="h-3.5 w-3.5 text-[#cfcfcf]" />
                 ) : (
-                  <span className={`h-2.5 w-2.5 rounded-full ${isActive ? "bg-blue-500" : "bg-muted"}`} />
+                  <span className={`h-2.5 w-2.5 rounded-full ${isActive ? "bg-blue-500" : "bg-[#2a2a2a]"}`} />
                 )}
                 <span
                   className={
                     isActive && !hasError
                       ? "text-shimmer font-medium inline-block"
                       : isDone
-                        ? "text-foreground"
-                        : "text-muted-foreground"
+                        ? "text-[#ededed]"
+                        : "text-[#666]"
                   }
                 >
                   {label}
@@ -318,12 +321,12 @@ export function ReportPending({
         </div>
         {progressLogs.length > 0 && (
           <div className={`mt-4 ${shouldExpandLogs ? "flex min-h-0 flex-1 flex-col" : ""}`}>
-            <div className="text-xs font-medium text-muted-foreground mb-2">Live Logs</div>
+            <div className="mb-2 text-xs font-medium text-[#888]">Live Logs</div>
             <textarea
               ref={logsRef}
               readOnly
               value={formattedProgressLogs.join("\n")}
-              className={`w-full rounded-md border border-border bg-muted/30 px-3 py-2 text-xs font-mono leading-relaxed resize-none ${
+              className={`w-full resize-none rounded-md border border-[#262626] bg-[#0d0d0d] px-3 py-2 font-mono text-xs leading-relaxed text-[#cfcfcf] ${
                 shouldExpandLogs ? "min-h-[320px] flex-1" : "h-28"
               }`}
             />
@@ -333,7 +336,7 @@ export function ReportPending({
 
       {hasScreenshots ? (
         <div className="space-y-3">
-          <div className="text-sm font-medium text-foreground">Screenshots</div>
+          <div className="text-sm font-medium text-[#ededed]">Screenshots</div>
           {beforeScreenshots.length > 0 && afterScreenshots.length > 0 ? (
             <CoordinatedPlayers
               beforeScreenshots={beforeScreenshots}
@@ -361,7 +364,7 @@ export function ReportPending({
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-[#0a0a0a] text-[#ededed]">
       <div className="container mx-auto px-4 py-8 max-w-4xl">{content}</div>
     </div>
   )

@@ -2,10 +2,11 @@ import type { Route } from "next"
 import { notFound, redirect } from "next/navigation"
 import DevAgentRunClient from "@/app/dev-agents/[agentId]/new/dev-agent-run-client"
 import { DevAgentsDashboardShell } from "@/components/dev-agents/dashboard-shell"
+import { isAdminUser } from "@/lib/admin"
 import { getAuthorizePath } from "@/lib/auth-redirect"
 import { isV0DevAgentRunnerEnabled } from "@/lib/cloud/dev-agent-runner"
 import { getDevAgentsRouteContext } from "@/lib/dev-agents-route"
-import { getSkillRunner } from "@/lib/skill-runners"
+import { getSkillRunner, getSkillRunnerTeamSettings } from "@/lib/skill-runners"
 
 export default async function RunSkillRunnerPage({ params }: { params: Promise<{ team: string; runnerId: string }> }) {
   const { team, runnerId } = await params
@@ -23,7 +24,10 @@ export default async function RunSkillRunnerPage({ params }: { params: Promise<{
   }
 
   const selectedTeam = routeContext.selectedTeam
-  const skillRunner = await getSkillRunner(selectedTeam, runnerId)
+  const [skillRunner, teamSettings] = await Promise.all([
+    getSkillRunner(selectedTeam, runnerId),
+    getSkillRunnerTeamSettings(selectedTeam)
+  ])
 
   if (!skillRunner) {
     notFound()
@@ -36,6 +40,7 @@ export default async function RunSkillRunnerPage({ params }: { params: Promise<{
       teams={routeContext.teams}
       selectedTeam={selectedTeam}
       section="skill-runner"
+      showAdminLink={isAdminUser(routeContext.user)}
       title={skillRunner.name}
       description={skillRunner.description}
     >
@@ -46,6 +51,9 @@ export default async function RunSkillRunnerPage({ params }: { params: Promise<{
         user={routeContext.user}
         defaultUseV0DevAgentRunner={isV0DevAgentRunnerEnabled()}
         runnerKind="skill-runner"
+        skillRunnerExecutionMode={teamSettings.executionMode}
+        skillRunnerWorkerBaseUrl={teamSettings.workerBaseUrl}
+        skillRunnerWorkerStatus={teamSettings.workerStatus}
       />
     </DevAgentsDashboardShell>
   )

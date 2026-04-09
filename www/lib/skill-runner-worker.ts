@@ -1,0 +1,265 @@
+import { execFileSync } from "node:child_process"
+import {
+  SKILL_RUNNER_WORKER_MODE_ENV,
+  SKILL_RUNNER_WORKER_PROJECT_NAME,
+  SKILL_RUNNER_WORKER_REPO,
+  SKILL_RUNNER_WORKER_ROOT_DIRECTORY
+} from "@/lib/skill-runner-config"
+import type { VercelTeam } from "@/lib/vercel-teams"
+
+interface VercelProjectLookupResponse {
+  projects?: Array<{
+    id?: string
+    name?: string
+    alias?: string[] | string
+    targets?: {
+      production?: {
+        alias?: string[] | string
+      }
+    }
+    latestDeployments?: Array<{
+      url?: string
+      state?: string
+      readyState?: string
+    }>
+  }>
+}
+
+interface VercelProjectCreateResponse {
+  id?: string
+  name?: string
+}
+
+interface VercelProjectEnvInput {
+  key: string
+  value: string
+  type: "encrypted"
+  target: Array<"production" | "preview" | "development">
+}
+
+export interface SkillRunnerWorkerProject {
+  projectId: string
+  projectName: string
+  workerBaseUrl?: string
+  dashboardUrl: string
+}
+
+function normalizeHost(value: string | undefined): string | undefined {
+  const trimmed = value?.trim()
+  if (!trimmed) return undefined
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+    return trimmed.replace(/\/$/, "")
+  }
+  return `https://${trimmed.replace(/\/$/, "")}`
+}
+
+function pickFirstAlias(value: string[] | string | undefined): string | undefined {
+  if (Array.isArray(value)) return value[0]
+  if (typeof value === "string") return value
+  return undefined
+}
+
+function resolveWorkerBaseUrl(
+  project: NonNullable<VercelProjectLookupResponse["projects"]>[number]
+): string | undefined {
+  const productionAlias = pickFirstAlias(project.targets?.production?.alias)
+  if (productionAlias) return normalizeHost(productionAlias)
+
+  const directAlias = pickFirstAlias(project.alias)
+  if (directAlias) return normalizeHost(directAlias)
+
+  const readyDeployment = project.latestDeployments?.find(
+    (deployment) => deployment.readyState === "READY" || deployment.state === "READY"
+  )
+  if (readyDeployment?.url) return normalizeHost(readyDeployment.url)
+
+  return undefined
+}
+
+function buildDashboardUrl(team: VercelTeam, projectName: string): string {
+  return `https://vercel.com/${encodeURIComponent(team.slug)}/${encodeURIComponent(projectName)}`
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function resolveWorkerGitBranch(): string {
+  if (process.env.VERCEL_GIT_COMMIT_REF?.trim()) {
+    return process.env.VERCEL_GIT_COMMIT_REF.trim()
+  }
+
+  try {
+    const branch = execFileSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"]
+    }).trim()
+    return branch || "main"
+  } catch {
+    return "main"
+  }
+}
+
+function buildWorkerEnvInputs(): VercelProjectEnvInput[] {
+  const envInputs: VercelProjectEnvInput[] = [
+    {
+      key: SKILL_RUNNER_WORKER_MODE_ENV,
+      value: "1",
+      type: "encrypted",
+      target: ["production", "preview", "development"]
+    }
+  ]
+
+  const copiedKeys = [
+    "AI_GATEWAY_API_KEY",
+    "BLOB_READ_WRITE_TOKEN",
+    "NPM_TOKEN",
+    "NODE_AUTH_TOKEN",
+    "V0_API_TOKEN",
+    "V0_API_KEY"
+  ] as const
+
+  for (const key of copiedKeys) {
+    const value = process.env[key]?.trim()
+    if (!value) continue
+    envInputs.push({
+      key,
+      value,
+      type: "encrypted",
+      target: ["production", "preview", "development"]
+    })
+  }
+
+  return envInputs
+}
+
+async function upsertWorkerProjectEnv(
+  accessToken: string,
+  team: VercelTeam,
+  projectId: string,
+  envInputs: VercelProjectEnvInput[]
+): Promise<void> {
+  if (envInputs.length === 0) return
+
+  const apiUrl = new URL(`https://api.vercel.com/v10/projects/${projectId}/env`)
+  apiUrl.searchParams.set("teamId", team.id)
+  apiUrl.searchParams.set("upsert", "true")
+
+  const response = await fetch(apiUrl.toString(), {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(envInputs),
+    cache: "no-store"
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`Failed to configure runner project env vars: ${response.status} ${errorText}`)
+  }
+}
+
+export async function findSkillRunnerWorkerProject(
+  accessToken: string,
+  team: VercelTeam
+): Promise<SkillRunnerWorkerProject | null> {
+  const apiUrl = new URL("https://api.vercel.com/v9/projects")
+  apiUrl.searchParams.set("teamId", team.id)
+  apiUrl.searchParams.set("search", SKILL_RUNNER_WORKER_PROJECT_NAME)
+  apiUrl.searchParams.set("limit", "20")
+
+  const response = await fetch(apiUrl.toString(), {
+    headers: {
+      Authorization: `Bearer ${accessToken}`
+    },
+    cache: "no-store"
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`Failed to validate runner install: ${response.status} ${errorText}`)
+  }
+
+  const data = (await response.json()) as VercelProjectLookupResponse
+  const projects = Array.isArray(data.projects) ? data.projects : []
+  const exactMatch =
+    projects.find((project) => project.name === SKILL_RUNNER_WORKER_PROJECT_NAME) ||
+    projects.find((project) => project.name?.toLowerCase() === SKILL_RUNNER_WORKER_PROJECT_NAME)
+
+  if (!exactMatch?.id || !exactMatch.name) {
+    return null
+  }
+
+  return {
+    projectId: exactMatch.id,
+    projectName: exactMatch.name,
+    workerBaseUrl: resolveWorkerBaseUrl(exactMatch),
+    dashboardUrl: buildDashboardUrl(team, exactMatch.name)
+  }
+}
+
+export async function installSkillRunnerWorkerProject(
+  accessToken: string,
+  team: VercelTeam
+): Promise<SkillRunnerWorkerProject> {
+  const existing = await findSkillRunnerWorkerProject(accessToken, team)
+  if (existing?.workerBaseUrl) {
+    return existing
+  }
+
+  const project = existing ?? (await createWorkerProject(accessToken, team))
+  await upsertWorkerProjectEnv(accessToken, team, project.projectId, buildWorkerEnvInputs())
+
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const resolved = await findSkillRunnerWorkerProject(accessToken, team)
+    if (resolved?.workerBaseUrl) {
+      return resolved
+    }
+    await sleep(3000)
+  }
+
+  return (await findSkillRunnerWorkerProject(accessToken, team)) || project
+}
+
+async function createWorkerProject(accessToken: string, team: VercelTeam): Promise<SkillRunnerWorkerProject> {
+  const apiUrl = new URL("https://api.vercel.com/v11/projects")
+  apiUrl.searchParams.set("teamId", team.id)
+
+  const response = await fetch(apiUrl.toString(), {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      name: SKILL_RUNNER_WORKER_PROJECT_NAME,
+      framework: "nextjs",
+      rootDirectory: SKILL_RUNNER_WORKER_ROOT_DIRECTORY,
+      gitRepository: {
+        type: "github",
+        repo: SKILL_RUNNER_WORKER_REPO,
+        productionBranch: resolveWorkerGitBranch()
+      }
+    }),
+    cache: "no-store"
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`Failed to install runner project: ${response.status} ${errorText}`)
+  }
+
+  const created = (await response.json()) as VercelProjectCreateResponse
+  if (!created.id || !created.name) {
+    throw new Error("Runner project was created but the response was incomplete.")
+  }
+
+  return {
+    projectId: created.id,
+    projectName: created.name,
+    dashboardUrl: buildDashboardUrl(team, created.name)
+  }
+}

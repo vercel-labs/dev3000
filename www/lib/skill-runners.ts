@@ -9,6 +9,7 @@ import type {
   DevAgentTeam
 } from "@/lib/dev-agents"
 import { D3K_SKILL_INSTALL_ARG, ensureDevAgentAshArtifactPrepared } from "@/lib/dev-agents"
+import type { SkillRunnerTeamSettings } from "@/lib/skill-runner-config"
 import type { SkillsShSearchResult } from "@/lib/skills-sh"
 import { fetchSkillsShSkillDetails, searchSkillsSh } from "@/lib/skills-sh"
 
@@ -47,6 +48,7 @@ interface SkillRunnerTeamState {
   teamSlug: string
   hiddenDefaultIds: string[]
   imported: SkillRunnerRecord[]
+  settings: SkillRunnerTeamSettings
   updatedAt: string
 }
 
@@ -298,12 +300,66 @@ function buildEmptyTeamState(team: DevAgentTeam): SkillRunnerTeamState {
     teamSlug: team.slug,
     hiddenDefaultIds: [],
     imported: [],
+    settings: {
+      executionMode: "hosted",
+      workerStatus: "unconfigured"
+    },
     updatedAt: new Date().toISOString()
   }
 }
 
+function normalizeWorkerBaseUrl(value: string | undefined): string | undefined {
+  const trimmed = value?.trim()
+  if (!trimmed) return undefined
+
+  try {
+    const url = new URL(trimmed)
+    if (url.protocol !== "https:") {
+      return undefined
+    }
+    url.pathname = ""
+    url.search = ""
+    url.hash = ""
+    return url.toString().replace(/\/$/, "")
+  } catch {
+    return undefined
+  }
+}
+
+function normalizeTeamState(raw: SkillRunnerTeamState | null, team: DevAgentTeam): SkillRunnerTeamState {
+  const fallback = buildEmptyTeamState(team)
+  if (!raw) return fallback
+
+  const executionMode = raw.settings?.executionMode === "self-hosted" ? "self-hosted" : "hosted"
+  const workerBaseUrl = normalizeWorkerBaseUrl(raw.settings?.workerBaseUrl)
+  const workerProjectId = raw.settings?.workerProjectId?.trim() || undefined
+  const workerStatus =
+    raw.settings?.workerStatus === "provisioning" ||
+    raw.settings?.workerStatus === "ready" ||
+    raw.settings?.workerStatus === "error" ||
+    raw.settings?.workerStatus === "unconfigured"
+      ? raw.settings.workerStatus
+      : workerBaseUrl
+        ? "ready"
+        : "unconfigured"
+
+  return {
+    teamId: raw.teamId || team.id,
+    teamSlug: raw.teamSlug || team.slug,
+    hiddenDefaultIds: Array.isArray(raw.hiddenDefaultIds) ? raw.hiddenDefaultIds : [],
+    imported: Array.isArray(raw.imported) ? raw.imported : [],
+    settings: {
+      executionMode,
+      workerBaseUrl,
+      workerProjectId,
+      workerStatus
+    },
+    updatedAt: raw.updatedAt || fallback.updatedAt
+  }
+}
+
 async function getTeamSkillRunnerState(team: DevAgentTeam): Promise<SkillRunnerTeamState> {
-  return (await readJsonBlob<SkillRunnerTeamState>(getTeamStatePath(team.id))) || buildEmptyTeamState(team)
+  return normalizeTeamState(await readJsonBlob<SkillRunnerTeamState>(getTeamStatePath(team.id)), team)
 }
 
 async function saveTeamSkillRunnerState(state: SkillRunnerTeamState): Promise<void> {
@@ -324,6 +380,60 @@ function formatAvgCost(summary?: SkillRunnerUsageSummary): string | undefined {
     minimumFractionDigits: avg < 1 ? 2 : 2,
     maximumFractionDigits: avg < 1 ? 2 : 2
   }).format(avg)
+}
+
+export async function getSkillRunnerTeamSettings(team: DevAgentTeam): Promise<SkillRunnerTeamSettings> {
+  const state = await getTeamSkillRunnerState(team)
+  return state.settings
+}
+
+export async function updateSkillRunnerTeamSettings(
+  team: DevAgentTeam,
+  input: Partial<SkillRunnerTeamSettings>
+): Promise<SkillRunnerTeamSettings> {
+  const state = await getTeamSkillRunnerState(team)
+
+  const executionMode =
+    input.executionMode === "self-hosted" || input.executionMode === "hosted"
+      ? input.executionMode
+      : state.settings.executionMode
+  const workerBaseUrl =
+    input.workerBaseUrl !== undefined ? normalizeWorkerBaseUrl(input.workerBaseUrl) : state.settings.workerBaseUrl
+  const workerProjectId =
+    input.workerProjectId !== undefined ? input.workerProjectId?.trim() || undefined : state.settings.workerProjectId
+  const workerStatus =
+    input.workerStatus === "provisioning" ||
+    input.workerStatus === "ready" ||
+    input.workerStatus === "error" ||
+    input.workerStatus === "unconfigured"
+      ? input.workerStatus
+      : workerBaseUrl
+        ? state.settings.workerStatus || "ready"
+        : "unconfigured"
+
+  state.settings = {
+    executionMode,
+    workerBaseUrl,
+    workerProjectId,
+    workerStatus
+  }
+  state.updatedAt = new Date().toISOString()
+  await saveTeamSkillRunnerState(state)
+  return state.settings
+}
+
+export async function listSkillRunnerTeamSettings(teams: DevAgentTeam[]): Promise<
+  Array<{
+    team: DevAgentTeam
+    settings: SkillRunnerTeamSettings
+  }>
+> {
+  return Promise.all(
+    teams.map(async (team) => ({
+      team,
+      settings: await getSkillRunnerTeamSettings(team)
+    }))
+  )
 }
 
 function applyUsageCount(record: SkillRunnerRecord, usageMap: Map<string, SkillRunnerUsageSummary>): DevAgent {
