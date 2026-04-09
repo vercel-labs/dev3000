@@ -1,0 +1,23 @@
+www/components/dev-agents/team-switcher.tsx
+  7a0ea82f7d7bc893 3,102-114,116-118
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.6",
+  "base_commit_sha": "7b388bb9d1ec65d9c32c51d78636ab9d602ec693",
+  "prompts": {
+    "7a0ea82f7d7bc893": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d59d8-022d-7262-9555-ec96bb973d0c",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 20,
+      "total_deletions": 16,
+      "accepted_lines": 17,
+      "overriden_lines": 1
+    }
+  }
+}
