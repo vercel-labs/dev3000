@@ -59,7 +59,7 @@ export function DevAgentsDashboardShell({
         {/* Sidebar */}
         <aside className="hidden w-[240px] shrink-0 flex-col border-r border-[#1f1f1f] lg:flex">
           {/* Team switcher header */}
-          <div className="flex h-[60px] items-center border-b border-[#1f1f1f] px-4">
+          <div className="flex h-[60px] items-center border-b border-[#1f1f1f] px-2">
             <TeamSwitcher teams={teams} selectedTeam={selectedTeam} />
           </div>
 

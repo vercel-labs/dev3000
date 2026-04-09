@@ -1,6 +1,6 @@
 "use client"
 
-import { ChevronDown, LogOut } from "lucide-react"
+import { ChevronsUpDown, LogOut } from "lucide-react"
 import type { Route } from "next"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useEffect } from "react"
@@ -98,20 +98,24 @@ export function TeamSwitcher({ teams, selectedTeam }: TeamSwitcherProps) {
         router.push(buildTeamSwitchHref(nextSlug) as Route)
       }}
     >
-      <SelectTrigger className="h-8 w-full gap-2 border-0 bg-transparent px-2 py-0 text-[14px] font-medium text-[#ededed] shadow-none ring-0 hover:text-white focus:ring-0 [&>svg]:hidden">
-        <div className="flex min-w-0 items-center gap-2.5 pl-0.5">
-          <TeamIcon team={selectedTeam} />
-          <div className="flex min-w-0 items-center gap-2">
-            <div className="truncate">{selectedTeam.name}</div>
-            {selectedTeam.planLabel ? (
-              <span
-                className={`rounded-full px-2 py-0.5 text-[11px] font-normal leading-none ${getPlanBadgeClasses(selectedTeam.planLabel)}`}
-              >
-                {selectedTeam.planLabel}
-              </span>
-            ) : null}
+      <SelectTrigger className="group h-11 w-full rounded-xl border border-transparent bg-transparent px-2.5 text-[14px] font-medium text-[#ededed] shadow-none ring-0 transition-colors hover:bg-[#101010] focus:ring-0 focus-visible:ring-0 data-[state=open]:bg-[#101010] dark:bg-transparent dark:hover:bg-[#101010] data-[state=open]:dark:bg-[#101010] [&>svg]:hidden">
+        <div className="flex min-w-0 flex-1 items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <TeamIcon team={selectedTeam} />
+            <div className="flex min-w-0 items-center gap-2">
+              <div className="truncate">{selectedTeam.name}</div>
+              {selectedTeam.planLabel ? (
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[11px] font-normal leading-none ${getPlanBadgeClasses(selectedTeam.planLabel)}`}
+                >
+                  {selectedTeam.planLabel}
+                </span>
+              ) : null}
+            </div>
           </div>
-          <ChevronDown className="size-3.5 text-[#666]" />
+          <span className="flex size-7 shrink-0 items-center justify-center rounded-md text-[#8a8a8a] transition-colors group-hover:text-[#b5b5b5]">
+            <ChevronsUpDown className="size-4" />
+          </span>
         </div>
       </SelectTrigger>
       <SelectContent className="border-[#333] bg-[#0a0a0a]">
