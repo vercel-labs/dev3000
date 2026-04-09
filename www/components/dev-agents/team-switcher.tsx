@@ -69,9 +69,9 @@ export function TeamSwitcher({ teams, selectedTeam }: TeamSwitcherProps) {
         router.push(buildTeamSwitchHref(nextSlug) as Route)
       }}
     >
-      <SelectTrigger className="h-8 w-full gap-2 border-0 bg-transparent p-0 text-[14px] font-medium text-[#ededed] shadow-none ring-0 hover:text-white focus:ring-0 [&>svg]:hidden">
-        <div className="flex items-center gap-2.5">
-          <VercelTriangle className="size-[18px] text-[#ededed]" />
+      <SelectTrigger className="h-8 w-full gap-2 border-0 bg-transparent px-2 py-0 text-[14px] font-medium text-[#ededed] shadow-none ring-0 hover:text-white focus:ring-0 [&>svg]:hidden">
+        <div className="flex items-center gap-2.5 pl-0.5">
+          <VercelTriangle className="size-[14px] text-[#ededed]" />
           <SelectValue placeholder="Select team" />
           <ChevronDown className="size-3.5 text-[#666]" />
         </div>

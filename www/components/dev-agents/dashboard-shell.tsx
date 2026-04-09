@@ -1,4 +1,4 @@
-import { Bot, FolderGit2, Home, type LucideIcon, Settings } from "lucide-react"
+import { Bot, Home, type LucideIcon, Settings } from "lucide-react"
 import type { Route } from "next"
 import Link from "next/link"
 import type React from "react"
@@ -40,11 +40,6 @@ export function DevAgentsDashboardShell({
   const sectionLabel = section === "skill-runner" ? "Skill Runner" : "Dev Agents"
   const sidebarItems: SidebarItem[] = [
     { label: "Overview", href: `/${selectedTeam.slug}`, icon: Home },
-    {
-      label: "Projects",
-      href: `/${selectedTeam.slug}`,
-      icon: FolderGit2
-    },
     {
       label: "Dev Agents",
       href: `/${selectedTeam.slug}/dev-agents`,
