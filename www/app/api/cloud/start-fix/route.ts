@@ -1,6 +1,7 @@
 import { start } from "workflow/api"
 import { resolveDevAgentRunner } from "@/lib/cloud/dev-agent-runner"
 import { type DevAgent, ensureDevAgentAshArtifactPrepared, getDevAgent, incrementDevAgentUsage } from "@/lib/dev-agents"
+import { SKILL_RUNNER_WORKER_MODE_ENV } from "@/lib/skill-runner-config"
 import { getSkillRunnerForExecution, getSkillRunnerTeamSettings, incrementSkillRunnerUsage } from "@/lib/skill-runners"
 import { proxyWorkflowJsonRequest, shouldProxyWorkflowRequest } from "@/lib/workflow-api"
 import { clearWorkflowLog, workflowError, workflowLog } from "@/lib/workflow-logger"
@@ -80,6 +81,70 @@ async function validatePublicUrl(
   } catch (error) {
     return { ok: false, error: `Could not reach URL: ${error instanceof Error ? error.message : String(error)}` }
   }
+}
+
+async function forwardSelfHostedStartRequest({
+  body,
+  request,
+  accessToken,
+  workerBaseUrl
+}: {
+  body: unknown
+  request: Request
+  accessToken: string | undefined
+  workerBaseUrl: string
+}): Promise<Response> {
+  const targetUrl = new URL("/api/cloud/start-fix", workerBaseUrl)
+  const headers = new Headers()
+  headers.set("content-type", "application/json")
+
+  if (accessToken) {
+    headers.set("authorization", `Bearer ${accessToken}`)
+  } else {
+    const authHeader = request.headers.get("authorization")
+    if (authHeader) {
+      headers.set("authorization", authHeader)
+    }
+  }
+
+  const oidcToken = request.headers.get("x-vercel-oidc-token")
+  if (oidcToken) {
+    headers.set("x-vercel-oidc-token", oidcToken)
+  }
+
+  headers.set("x-dev3000-skill-runner-worker-forwarded", "1")
+
+  const upstream = await fetch(targetUrl.toString(), {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+    cache: "no-store"
+  })
+
+  const text = await upstream.text()
+  let parsed: unknown = null
+
+  if (text.length > 0) {
+    try {
+      parsed = JSON.parse(text)
+    } catch {
+      return Response.json(
+        {
+          success: false,
+          error: "Self-hosted worker returned a non-JSON response.",
+          upstreamStatus: upstream.status,
+          upstreamBodyPreview: text.slice(0, 400)
+        },
+        { status: upstream.ok ? 502 : upstream.status, headers: corsHeaders }
+      )
+    }
+  }
+
+  return Response.json(parsed, {
+    status: upstream.status,
+    statusText: upstream.statusText,
+    headers: corsHeaders
+  })
 }
 
 // Handle OPTIONS preflight request
@@ -204,16 +269,33 @@ export async function POST(request: Request) {
         name: team.name,
         isPersonal: Boolean(team.isPersonal)
       })
-      if (teamSettings.executionMode === "self-hosted") {
-        return Response.json(
-          {
-            success: false,
-            error: teamSettings.workerBaseUrl
-              ? `Self-hosted skill-runner mode is enabled for ${team.name}. Worker execution from the control plane is not wired yet.`
-              : `Self-hosted skill-runner mode is enabled for ${team.name}, but no worker URL is configured yet in /admin.`
-          },
-          { status: 409, headers: corsHeaders }
-        )
+      if (teamSettings.executionMode === "self-hosted" && process.env[SKILL_RUNNER_WORKER_MODE_ENV] !== "1") {
+        if (!teamSettings.workerProjectId) {
+          return Response.json(
+            {
+              success: false,
+              error: `Self-hosted skill-runner mode is enabled for ${team.name}, but no runner project is configured yet in /admin.`
+            },
+            { status: 409, headers: corsHeaders }
+          )
+        }
+
+        if (!teamSettings.workerBaseUrl) {
+          return Response.json(
+            {
+              success: false,
+              error: `Self-hosted skill-runner mode is enabled for ${team.name}, but the runner project is still provisioning.`
+            },
+            { status: 409, headers: corsHeaders }
+          )
+        }
+
+        return forwardSelfHostedStartRequest({
+          body,
+          request,
+          accessToken,
+          workerBaseUrl: teamSettings.workerBaseUrl
+        })
       }
 
       const preparedSkillRunner = await getSkillRunnerForExecution(

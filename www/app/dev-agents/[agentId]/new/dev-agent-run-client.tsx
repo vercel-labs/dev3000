@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
 import type { DevAgent, DevAgentTeam } from "@/lib/dev-agents-client"
-import type { SkillRunnerExecutionMode } from "@/lib/skill-runners"
+import type { SkillRunnerExecutionMode, SkillRunnerWorkerStatus } from "@/lib/skill-runner-config"
 
 interface UserInfo {
   id: string
@@ -74,6 +74,7 @@ interface DevAgentRunClientProps {
   runnerKind?: "dev-agent" | "skill-runner"
   skillRunnerExecutionMode?: SkillRunnerExecutionMode
   skillRunnerWorkerBaseUrl?: string
+  skillRunnerWorkerStatus?: SkillRunnerWorkerStatus
 }
 
 const GITHUB_PAT_STORAGE_KEY = "d3k_github_pat"
@@ -121,7 +122,8 @@ export default function DevAgentRunClient({
   marketplaceStats,
   runnerKind = "dev-agent",
   skillRunnerExecutionMode = "hosted",
-  skillRunnerWorkerBaseUrl
+  skillRunnerWorkerBaseUrl,
+  skillRunnerWorkerStatus
 }: DevAgentRunClientProps) {
   const projectSearchId = useId()
   const startPathId = useId()
@@ -178,9 +180,12 @@ export default function DevAgentRunClient({
   const runnerLabel = runnerKind === "skill-runner" ? "skill runner" : "dev agent"
   const runnerTitle = runnerKind === "skill-runner" ? "Skill Runner" : "Dev Agent"
   const isSelfHostedSkillRunner = runnerKind === "skill-runner" && skillRunnerExecutionMode === "self-hosted"
+  const isReadySelfHostedSkillRunner = isSelfHostedSkillRunner && Boolean(skillRunnerWorkerBaseUrl)
   const selfHostedHelperText = skillRunnerWorkerBaseUrl
-    ? `This team is configured for self-hosted skill-runner execution via ${skillRunnerWorkerBaseUrl}. Worker forwarding is not wired into the control plane yet.`
-    : "This team is configured for self-hosted skill-runner execution. Add a worker URL in /admin before enabling team-owned runs."
+    ? `This team is configured for self-hosted skill-runner execution via ${skillRunnerWorkerBaseUrl}. New runs will execute on the team-owned worker.`
+    : skillRunnerWorkerStatus === "provisioning" || skillRunnerWorkerStatus === "ready"
+      ? "This team is configured for self-hosted skill-runner execution. The runner project is still provisioning."
+      : "This team is configured for self-hosted skill-runner execution. Install or validate the runner project in /admin before enabling team-owned runs."
 
   useEffect(() => {
     const stored = localStorage.getItem(GITHUB_PAT_STORAGE_KEY)
@@ -823,7 +828,7 @@ export default function DevAgentRunClient({
               <div className="flex items-center gap-2 pt-1">
                 <Button
                   onClick={startDevAgentRun}
-                  disabled={isRunning || !selectedProject || isSelfHostedSkillRunner}
+                  disabled={isRunning || !selectedProject || (isSelfHostedSkillRunner && !isReadySelfHostedSkillRunner)}
                   size="sm"
                   className="h-8 rounded-md bg-[#ededed] px-4 text-[13px] font-medium text-[#0a0a0a] hover:bg-white disabled:opacity-40"
                 >

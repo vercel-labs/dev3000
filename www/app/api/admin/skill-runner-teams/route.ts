@@ -37,6 +37,21 @@ export async function PATCH(request: Request) {
       ? body.workerStatus
       : undefined
 
+  const currentSettings = await getSkillRunnerTeamSettings(team)
+  const effectiveExecutionMode = executionMode ?? currentSettings.executionMode
+  const effectiveWorkerProjectId =
+    workerProjectId !== undefined ? workerProjectId.trim() || undefined : currentSettings.workerProjectId
+
+  if (effectiveExecutionMode === "self-hosted" && !effectiveWorkerProjectId) {
+    return Response.json(
+      {
+        success: false,
+        error: "Self-hosted mode requires a validated worker project."
+      },
+      { status: 400 }
+    )
+  }
+
   const settings = await updateSkillRunnerTeamSettings(team, {
     executionMode,
     workerBaseUrl,

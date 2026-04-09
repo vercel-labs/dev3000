@@ -53,6 +53,7 @@ export default async function RunSkillRunnerPage({ params }: { params: Promise<{
         runnerKind="skill-runner"
         skillRunnerExecutionMode={teamSettings.executionMode}
         skillRunnerWorkerBaseUrl={teamSettings.workerBaseUrl}
+        skillRunnerWorkerStatus={teamSettings.workerStatus}
       />
     </DevAgentsDashboardShell>
   )

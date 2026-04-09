@@ -9,6 +9,7 @@ import type {
   DevAgentTeam
 } from "@/lib/dev-agents"
 import { D3K_SKILL_INSTALL_ARG, ensureDevAgentAshArtifactPrepared } from "@/lib/dev-agents"
+import type { SkillRunnerTeamSettings } from "@/lib/skill-runner-config"
 import type { SkillsShSearchResult } from "@/lib/skills-sh"
 import { fetchSkillsShSkillDetails, searchSkillsSh } from "@/lib/skills-sh"
 
@@ -17,15 +18,6 @@ const SKILL_RUNNER_STATS_PREFIX = "skill-runners/stats/"
 
 type SkillRunnerValidationQuality = "high" | "variable"
 type SkillRunnerSourceKind = "default" | "imported"
-export type SkillRunnerExecutionMode = "hosted" | "self-hosted"
-export type SkillRunnerWorkerStatus = "unconfigured" | "provisioning" | "ready" | "error"
-
-export interface SkillRunnerTeamSettings {
-  executionMode: SkillRunnerExecutionMode
-  workerBaseUrl?: string
-  workerProjectId?: string
-  workerStatus?: SkillRunnerWorkerStatus
-}
 
 export interface SkillRunnerRecord {
   id: string
