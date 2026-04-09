@@ -3375,10 +3375,16 @@ export async function observeBaselineStep(
     workflowLog(`[Observe] Fresh sandbox created: ${sandbox.sandboxId}`)
   }
 
-  await installDevAgentSkillsInSandbox(sandbox, projectDir, devAgentSkillRefs, progressContext, {
-    devAgentAshTarballUrl,
-    includeD3k: !isTurbopackBundleAnalyzer
-  })
+  const installedSkillNames = await installDevAgentSkillsInSandbox(
+    sandbox,
+    projectDir,
+    devAgentSkillRefs,
+    progressContext,
+    {
+      devAgentAshTarballUrl,
+      includeD3k: !isTurbopackBundleAnalyzer
+    }
+  )
 
   const localTargetUrl = `http://localhost:3000${startPath}`
   const cloudBrowserMode = resolveCloudBrowserMode(devAgentSandboxBrowser)
@@ -3570,7 +3576,9 @@ export async function observeBaselineStep(
     timer.end()
   }
 
-  const { skillsInstalled } = await readSandboxSkillsInfo(sandbox)
+  const { skillsInstalled: sessionInstalledSkills } = await readSandboxSkillsInfo(sandbox)
+  const skillsInstalled =
+    sessionInstalledSkills.length > 0 ? sessionInstalledSkills : installedSkillNames.filter(Boolean)
 
   timer.end()
   const timingData = timer.getData()
@@ -4863,7 +4871,7 @@ async function installDevAgentSkillsInSandbox(
   devAgentSkillRefs: DevAgentSkillRef[] | undefined,
   progressContext?: ProgressContext | null,
   options?: { includeD3k?: boolean; devAgentAshTarballUrl?: string }
-): Promise<void> {
+): Promise<string[]> {
   const normalizeInstalledSkillName = (value?: string): string =>
     (value || "")
       .trim()
@@ -4872,6 +4880,7 @@ async function installDevAgentSkillsInSandbox(
       .replace(/-+/g, "-")
       .replace(/^-+|-+$/g, "")
 
+  const installedSkillNames = new Set<string>()
   const packagedSkillNames = new Set<string>()
   if (options?.devAgentAshTarballUrl) {
     const packaged = await installPackagedAshSkillsInSandbox(sandbox, options.devAgentAshTarballUrl, progressContext)
@@ -4879,6 +4888,7 @@ async function installDevAgentSkillsInSandbox(
       const normalized = normalizeInstalledSkillName(skillName)
       if (normalized) {
         packagedSkillNames.add(normalized)
+        installedSkillNames.add(skillName)
       }
     }
   }
@@ -4912,7 +4922,7 @@ async function installDevAgentSkillsInSandbox(
     })
   }
   if (requestedSkills.length === 0) {
-    return
+    return [...installedSkillNames]
   }
 
   const SANDBOX_CWD = projectDir ? `/vercel/sandbox/${projectDir.replace(/^\/+|\/+$/g, "")}` : "/vercel/sandbox"
@@ -4928,11 +4938,13 @@ async function installDevAgentSkillsInSandbox(
         progressContext,
         `[Skills] ${skill.displayName} already available from packaged ASH skills`
       )
+      installedSkillNames.add(skill.displayName || skill.skillName || skill.id)
       continue
     }
 
     if (skill.installArg !== VERCEL_PLUGIN_INSTALL_ARG && isVercelPluginSkillRef(skill)) {
       await appendProgressLog(progressContext, `[Skills] Using built-in ${skill.displayName} from Vercel plugin`)
+      installedSkillNames.add(skill.displayName || skill.skillName || skill.id)
       continue
     }
 
@@ -4953,7 +4965,10 @@ async function installDevAgentSkillsInSandbox(
     }
 
     await appendProgressLog(progressContext, `[Skills] Installed ${skill.displayName}`)
+    installedSkillNames.add(skill.displayName || skill.skillName || skill.id)
   }
+
+  return [...installedSkillNames]
 }
 
 function buildDevAgentSkillLoadInstructions(
