@@ -245,7 +245,7 @@ function buildSkillRunnerInstructions(displayName: string, description: string, 
 }
 
 function buildSkillRunnerSuccessEval(displayName: string): string {
-  return `Did this run apply ${displayName} to the project in a concrete, reviewable way without regressing visible behavior?`
+  return `Did this run produce a concrete, reviewable improvement using ${displayName} without meaningfully regressing measured performance or visible behavior?`
 }
 
 function buildSkillRef(

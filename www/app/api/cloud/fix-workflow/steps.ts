@@ -3153,6 +3153,53 @@ function mergeWebVitalsSnapshots(
   return merged
 }
 
+function metricGradeRank(grade: "good" | "needs-improvement" | "poor" | undefined): number {
+  switch (grade) {
+    case "good":
+      return 0
+    case "needs-improvement":
+      return 1
+    case "poor":
+      return 2
+    default:
+      return -1
+  }
+}
+
+function isMeaningfulWebVitalRegression(
+  before: import("@/types").WebVitals | undefined,
+  after: import("@/types").WebVitals | undefined
+): boolean {
+  if (!before || !after) {
+    return false
+  }
+
+  for (const key of ["lcp", "fcp", "ttfb", "cls", "inp"] as const) {
+    const beforeMetric = before[key]
+    const afterMetric = after[key]
+    if (!beforeMetric || !afterMetric) {
+      continue
+    }
+
+    if (metricGradeRank(afterMetric.grade) > metricGradeRank(beforeMetric.grade)) {
+      return true
+    }
+
+    const regressionDelta = afterMetric.value - beforeMetric.value
+    if (regressionDelta <= 0) {
+      continue
+    }
+
+    const threshold = key === "cls" ? 0.02 : key === "inp" ? 75 : 100
+
+    if (regressionDelta >= threshold) {
+      return true
+    }
+  }
+
+  return false
+}
+
 function formatMetricValue(value: EarlyExitMetricValue): string {
   return typeof value === "string" ? `"${value}"` : String(value)
 }
@@ -4398,6 +4445,15 @@ Did the agent meet the success criteria? Respond with JSON only.`
     effectiveAfterClsScore !== null &&
     effectiveAfterClsScore < effectiveBeforeClsScore &&
     (successEvalResult === null || successEvalResult === false)
+  ) {
+    successEvalResult = true
+  }
+
+  if (
+    progressContext?.runnerKind === "skill-runner" &&
+    hasChanges &&
+    verificationStatus !== "degraded" &&
+    !isMeaningfulWebVitalRegression(beforeWebVitals, afterWebVitals)
   ) {
     successEvalResult = true
   }
