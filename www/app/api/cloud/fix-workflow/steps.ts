@@ -3749,7 +3749,7 @@ export async function earlyExitReportStep(
     gatewayUsage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
     isMarketplaceAgent: progressContext?.isMarketplaceAgent || undefined,
     successEval: devAgentSuccessEval || undefined,
-    successEvalResult: true,
+    successEvalResult: progressContext?.runnerKind !== "skill-runner",
     earlyExitEval: devAgentEarlyExitEval || undefined,
     earlyExitRule: devAgentEarlyExitRule,
     earlyExitResult: { shouldExit: true, reason },
@@ -4847,10 +4847,22 @@ async function installDevAgentSkillsInSandbox(
   progressContext?: ProgressContext | null,
   options?: { includeD3k?: boolean; devAgentAshTarballUrl?: string }
 ): Promise<void> {
+  const normalizeInstalledSkillName = (value?: string): string =>
+    (value || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-+|-+$/g, "")
+
+  const packagedSkillNames = new Set<string>()
   if (options?.devAgentAshTarballUrl) {
     const packaged = await installPackagedAshSkillsInSandbox(sandbox, options.devAgentAshTarballUrl, progressContext)
-    if (packaged.installed) {
-      return
+    for (const skillName of packaged.skillNames) {
+      const normalized = normalizeInstalledSkillName(skillName)
+      if (normalized) {
+        packagedSkillNames.add(normalized)
+      }
     }
   }
 
@@ -4890,6 +4902,15 @@ async function installDevAgentSkillsInSandbox(
 
   for (const skill of requestedSkills) {
     if (!skill.installArg) {
+      continue
+    }
+
+    const normalizedSkillName = normalizeInstalledSkillName(skill.skillName || skill.displayName || skill.id)
+    if (normalizedSkillName && packagedSkillNames.has(normalizedSkillName)) {
+      await appendProgressLog(
+        progressContext,
+        `[Skills] ${skill.displayName} already available from packaged ASH skills`
+      )
       continue
     }
 
