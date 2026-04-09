@@ -1,0 +1,23 @@
+www/lib/vercel-teams.ts
+  7a0ea82f7d7bc893 49,55-73,166
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.6",
+  "base_commit_sha": "a098fd0db51219bad19b9d5a9e396bef77f1146b",
+  "prompts": {
+    "7a0ea82f7d7bc893": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d59d8-022d-7262-9555-ec96bb973d0c",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 21,
+      "total_deletions": 4,
+      "accepted_lines": 21,
+      "overriden_lines": 0
+    }
+  }
+}
