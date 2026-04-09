@@ -2,7 +2,7 @@
 
 import { ChevronDown } from "lucide-react"
 import type { Route } from "next"
-import { useRouter } from "next/navigation"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useEffect } from "react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { LAST_SELECTED_TEAM_COOKIE_MAX_AGE, LAST_SELECTED_TEAM_COOKIE_NAME } from "@/lib/team-selection"
@@ -23,17 +23,33 @@ function VercelTriangle({ className }: { className?: string }) {
 
 export function TeamSwitcher({ teams, selectedTeam }: TeamSwitcherProps) {
   const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
 
   useEffect(() => {
     document.cookie = `${LAST_SELECTED_TEAM_COOKIE_NAME}=${encodeURIComponent(selectedTeam.slug)}; path=/; max-age=${LAST_SELECTED_TEAM_COOKIE_MAX_AGE}; samesite=lax`
   }, [selectedTeam.slug])
+
+  function buildTeamSwitchHref(nextSlug: string): string {
+    const currentPath = pathname || `/${selectedTeam.slug}/dev-agents`
+    const segments = currentPath.split("/")
+    if (segments.length > 1 && segments[1] === selectedTeam.slug) {
+      segments[1] = nextSlug
+    } else {
+      return `/${nextSlug}/dev-agents`
+    }
+
+    const nextPath = segments.join("/") || `/${nextSlug}/dev-agents`
+    const query = searchParams?.toString()
+    return query ? `${nextPath}?${query}` : nextPath
+  }
 
   return (
     <Select
       value={selectedTeam.slug}
       onValueChange={(nextSlug) => {
         document.cookie = `${LAST_SELECTED_TEAM_COOKIE_NAME}=${encodeURIComponent(nextSlug)}; path=/; max-age=${LAST_SELECTED_TEAM_COOKIE_MAX_AGE}; samesite=lax`
-        router.push(`/${nextSlug}/dev-agents` as Route)
+        router.push(buildTeamSwitchHref(nextSlug) as Route)
       }}
     >
       <SelectTrigger className="h-8 w-full gap-2 border-0 bg-transparent p-0 text-[14px] font-medium text-[#ededed] shadow-none ring-0 hover:text-white focus:ring-0 [&>svg]:hidden">

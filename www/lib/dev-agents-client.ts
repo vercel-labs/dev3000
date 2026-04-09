@@ -1,4 +1,4 @@
-export type DevAgentKind = "builtin" | "custom" | "marketplace"
+export type DevAgentKind = "builtin" | "custom" | "marketplace" | "skill-runner"
 export type DevAgentExecutionMode = "dev-server" | "preview-pr"
 export type DevAgentSandboxBrowser = "none" | "agent-browser" | "next-browser"
 
@@ -101,6 +101,10 @@ export interface DevAgent {
   earlyExitRule?: DevAgentEarlyExitRule
   earlyExitPlacementIndex?: number
   ashArtifact?: DevAgentAshArtifact
+  runnerCanonicalPath?: string
+  runnerSourceUrl?: string
+  runnerSourceKind?: "default" | "imported"
+  validationWarning?: string
 }
 
 export interface MarketplaceAgentStats {

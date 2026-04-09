@@ -1,6 +1,7 @@
 import { start } from "workflow/api"
 import { resolveDevAgentRunner } from "@/lib/cloud/dev-agent-runner"
 import { type DevAgent, ensureDevAgentAshArtifactPrepared, getDevAgent, incrementDevAgentUsage } from "@/lib/dev-agents"
+import { getSkillRunnerForExecution, incrementSkillRunnerUsage } from "@/lib/skill-runners"
 import { proxyWorkflowJsonRequest, shouldProxyWorkflowRequest } from "@/lib/workflow-api"
 import { clearWorkflowLog, workflowError, workflowLog } from "@/lib/workflow-logger"
 import { saveWorkflowRun, type WorkflowType } from "@/lib/workflow-storage"
@@ -100,11 +101,14 @@ export async function POST(request: Request) {
   let runTimestamp: string | undefined
   let workflowType: WorkflowType = "cls-fix"
   let devAgent: DevAgent | null = null
+  let runnerKind: "dev-agent" | "skill-runner" = "dev-agent"
   let ashArtifactState: "existing" | "reused" | "stored" | null = null
   let customPrompt: string | undefined
   let crawlDepth: number | "all" | undefined
   let analysisTargetType: "vercel-project" | "url" = "vercel-project"
   let publicUrl: string | undefined
+  let skillRunnerCanonicalPath: string | undefined
+  let skillRunnerValidationWarning: string | undefined
 
   try {
     // Check for test bypass token (allows testing without browser auth via CLI)
@@ -185,7 +189,34 @@ export async function POST(request: Request) {
       "url-audit",
       "turbopack-bundle-analyzer"
     ]
-    if (typeof body.devAgentId === "string" && body.devAgentId.trim().length > 0) {
+    if (typeof body.skillRunnerId === "string" && body.skillRunnerId.trim().length > 0) {
+      const team = body.skillRunnerTeam
+      if (!team || typeof team.id !== "string" || typeof team.slug !== "string" || typeof team.name !== "string") {
+        return Response.json(
+          { success: false, error: "skillRunnerTeam is required to start a skill runner." },
+          { status: 400, headers: corsHeaders }
+        )
+      }
+
+      const preparedSkillRunner = await getSkillRunnerForExecution(
+        {
+          id: team.id,
+          slug: team.slug,
+          name: team.name,
+          isPersonal: Boolean(team.isPersonal)
+        },
+        body.skillRunnerId.trim()
+      )
+      runnerKind = "skill-runner"
+      devAgent = preparedSkillRunner.devAgent
+      skillRunnerCanonicalPath = preparedSkillRunner.canonicalPath
+      skillRunnerValidationWarning = preparedSkillRunner.validationWarning
+      ashArtifactState = "reused"
+      workflowType = devAgent.legacyWorkflowType || "prompt"
+      workflowLog(
+        `[Start Fix] Reusing ASH app: ${preparedSkillRunner.devAgent.ashArtifact?.sourceLabel || devAgent.name} (${preparedSkillRunner.devAgent.ashArtifact?.specHash?.slice(0, 8) || "unknown"})`
+      )
+    } else if (typeof body.devAgentId === "string" && body.devAgentId.trim().length > 0) {
       devAgent = await getDevAgent(body.devAgentId.trim())
       if (!devAgent) {
         return Response.json({ success: false, error: "Dev Agent not found." }, { status: 404, headers: corsHeaders })
@@ -338,6 +369,9 @@ export async function POST(request: Request) {
       devAgentAshTarballUrl: devAgent?.ashArtifact?.tarballUrl,
       devAgentRevision: devAgent?.ashArtifact?.revision,
       devAgentSpecHash: devAgent?.ashArtifact?.specHash,
+      runnerKind,
+      skillRunnerCanonicalPath,
+      skillRunnerValidationWarning,
       devAgentExecutionMode: devAgent?.executionMode,
       devAgentSandboxBrowser: devAgent?.sandboxBrowser,
       devAgentAiAgent: devAgent?.aiAgent,
@@ -376,6 +410,7 @@ export async function POST(request: Request) {
           projectName,
           timestamp: runTimestamp,
           status: "running",
+          runnerKind,
           type: workflowType,
           devAgentId: devAgent?.id,
           devAgentName: devAgent?.name,
@@ -384,6 +419,8 @@ export async function POST(request: Request) {
           devAgentSpecHash: devAgent?.ashArtifact?.specHash,
           devAgentExecutionMode: devAgent?.executionMode,
           devAgentSandboxBrowser: devAgent?.sandboxBrowser,
+          skillRunnerCanonicalPath,
+          skillRunnerValidationWarning,
           currentStep: initialAshStep || "Creating sandbox environment...",
           stepNumber: devAgent ? 0 : 1,
           progressLogs: initialProgressLogs,
@@ -398,7 +435,9 @@ export async function POST(request: Request) {
     }
 
     if (devAgent?.id) {
-      void incrementDevAgentUsage(devAgent.id).catch((usageError) => {
+      const updateUsage =
+        runnerKind === "skill-runner" ? incrementSkillRunnerUsage(devAgent.id) : incrementDevAgentUsage(devAgent.id)
+      void updateUsage.catch((usageError) => {
         workflowError("[Start Fix] Failed to update devAgent usage count:", usageError)
       })
     }
@@ -418,6 +457,7 @@ export async function POST(request: Request) {
           projectName,
           timestamp: runTimestamp,
           status: "failure",
+          runnerKind,
           type: workflowType,
           devAgentId: devAgent?.id,
           devAgentName: devAgent?.name,
@@ -426,6 +466,8 @@ export async function POST(request: Request) {
           devAgentSpecHash: devAgent?.ashArtifact?.specHash,
           devAgentExecutionMode: devAgent?.executionMode,
           devAgentSandboxBrowser: devAgent?.sandboxBrowser,
+          skillRunnerCanonicalPath,
+          skillRunnerValidationWarning,
           completedAt: new Date().toISOString(),
           error: startError instanceof Error ? startError.message : String(startError),
           customPrompt: workflowType === "prompt" ? customPrompt : undefined
@@ -465,6 +507,7 @@ export async function POST(request: Request) {
         projectName,
         timestamp: runTimestamp,
         status: "failure",
+        runnerKind,
         type: workflowType,
         devAgentId: devAgent?.id,
         devAgentName: devAgent?.name,
@@ -473,6 +516,8 @@ export async function POST(request: Request) {
         devAgentSpecHash: devAgent?.ashArtifact?.specHash,
         devAgentExecutionMode: devAgent?.executionMode,
         devAgentSandboxBrowser: devAgent?.sandboxBrowser,
+        skillRunnerCanonicalPath,
+        skillRunnerValidationWarning,
         completedAt: new Date().toISOString(),
         error: error instanceof Error ? error.message : String(error),
         customPrompt: workflowType === "prompt" ? customPrompt : undefined

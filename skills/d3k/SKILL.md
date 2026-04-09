@@ -1,6 +1,6 @@
 ---
-name: d3k
-description: Bootstrap d3k in standalone AI apps (Codex, Cursor, Claude Code): detect/install dev3000, start d3k as the runtime, and use unified logs plus CDP browser control instead of running npm/bun dev directly.
+name: "d3k"
+description: "Bootstrap d3k in standalone AI apps (Codex, Cursor, Claude Code): detect/install dev3000, start d3k as the runtime, and use unified logs plus CDP browser control instead of running npm/bun dev directly."
 ---
 
 # d3k Standalone Bootstrap

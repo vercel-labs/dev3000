@@ -70,6 +70,7 @@ interface DevAgentRunClientProps {
   user: UserInfo
   defaultUseV0DevAgentRunner: boolean
   marketplaceStats?: MarketplaceStats
+  runnerKind?: "dev-agent" | "skill-runner"
 }
 
 const GITHUB_PAT_STORAGE_KEY = "d3k_github_pat"
@@ -86,21 +87,23 @@ function formatExecutionMode(mode: DevAgent["executionMode"]): string {
   return mode === "dev-server" ? "Dev Server" : "Preview + PR"
 }
 
-function DevAgentCriteriaSummary({ devAgent }: { devAgent: DevAgent }) {
+function DevAgentCriteriaSummary({ devAgent, hideEarlyExit = false }: { devAgent: DevAgent; hideEarlyExit?: boolean }) {
   const successEvalText = devAgent.successEval?.trim() || "None"
   const earlyExitText = devAgent.earlyExitEval?.trim() || "None"
 
   return (
     <div className="border-t border-[#1f1f1f] px-4 py-3">
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className={`grid gap-3 ${hideEarlyExit ? "" : "sm:grid-cols-2"}`}>
         <div>
           <div className="text-[11px] uppercase tracking-wider text-[#555]">Success Eval</div>
           <div className="mt-1 text-[13px] leading-[18px] text-[#888]">{successEvalText}</div>
         </div>
-        <div>
-          <div className="text-[11px] uppercase tracking-wider text-[#555]">Early Exit</div>
-          <div className="mt-1 text-[13px] leading-[18px] text-[#888]">{earlyExitText}</div>
-        </div>
+        {!hideEarlyExit ? (
+          <div>
+            <div className="text-[11px] uppercase tracking-wider text-[#555]">Early Exit</div>
+            <div className="mt-1 text-[13px] leading-[18px] text-[#888]">{earlyExitText}</div>
+          </div>
+        ) : null}
       </div>
     </div>
   )
@@ -112,7 +115,8 @@ export default function DevAgentRunClient({
   team,
   user,
   defaultUseV0DevAgentRunner,
-  marketplaceStats
+  marketplaceStats,
+  runnerKind = "dev-agent"
 }: DevAgentRunClientProps) {
   const projectSearchId = useId()
   const startPathId = useId()
@@ -166,6 +170,8 @@ export default function DevAgentRunClient({
     !defaultUseV0DevAgentRunner && hasGitHubRepoInfo && effectiveRepoVisibility === "private_or_unknown"
   const shouldShowGitHubPatField =
     hasGitHubRepoInfo && !defaultUseV0DevAgentRunner && effectiveRepoVisibility === "private_or_unknown"
+  const runnerLabel = runnerKind === "skill-runner" ? "skill runner" : "dev agent"
+  const runnerTitle = runnerKind === "skill-runner" ? "Skill Runner" : "Dev Agent"
 
   useEffect(() => {
     const stored = localStorage.getItem(GITHUB_PAT_STORAGE_KEY)
@@ -408,11 +414,11 @@ export default function DevAgentRunClient({
       return
     }
     if (devAgent.requiresCustomPrompt && !customPrompt.trim()) {
-      setError("This dev agent requires custom instructions.")
+      setError(`This ${runnerLabel} requires custom instructions.`)
       return
     }
     if (requiresGitHubPatForRepoAccess && !githubPat.trim()) {
-      setError("A GitHub PAT is required for this dev agent and repository.")
+      setError(`A GitHub PAT is required for this ${runnerLabel} and repository.`)
       return
     }
 
@@ -460,7 +466,17 @@ export default function DevAgentRunClient({
       },
       body: JSON.stringify({
         userId: user.id,
-        devAgentId: devAgent.id,
+        devAgentId: runnerKind === "skill-runner" ? undefined : devAgent.id,
+        skillRunnerId: runnerKind === "skill-runner" ? devAgent.id : undefined,
+        skillRunnerTeam:
+          runnerKind === "skill-runner"
+            ? {
+                id: team.id,
+                slug: team.slug,
+                name: team.name,
+                isPersonal: team.isPersonal
+              }
+            : undefined,
         projectName: project.name,
         projectId: project.id,
         teamId: selectedTeam.isPersonal ? undefined : selectedTeam.id,
@@ -487,7 +503,7 @@ export default function DevAgentRunClient({
 
     if (!response.ok || !result.success || !result.runId) {
       setIsRunning(false)
-      setError(result.error || "Failed to start the dev agent run.")
+      setError(result.error || `Failed to start the ${runnerLabel} run.`)
       return
     }
 
@@ -578,8 +594,25 @@ export default function DevAgentRunClient({
           </div>
         )}
 
-        <DevAgentCriteriaSummary devAgent={devAgent} />
+        <DevAgentCriteriaSummary devAgent={devAgent} hideEarlyExit={runnerKind === "skill-runner"} />
       </div>
+
+      {devAgent.runnerCanonicalPath || devAgent.validationWarning ? (
+        <div className="rounded-lg border border-[#1f1f1f] bg-[#111] px-4 py-3">
+          {devAgent.runnerCanonicalPath ? (
+            <div>
+              <div className="text-[11px] uppercase tracking-wider text-[#555]">Source Skill</div>
+              <div className="mt-1 text-[13px] text-[#888]">{devAgent.runnerCanonicalPath}</div>
+            </div>
+          ) : null}
+          {devAgent.validationWarning ? (
+            <div className={devAgent.runnerCanonicalPath ? "mt-3" : undefined}>
+              <div className="text-[11px] uppercase tracking-wider text-[#555]">Validation</div>
+              <div className="mt-1 text-[13px] leading-[18px] text-[#888]">{devAgent.validationWarning}</div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {error && (
         <div className="rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-3 text-[13px] text-red-400">
@@ -657,7 +690,7 @@ export default function DevAgentRunClient({
         <div className="rounded-lg border border-[#1f1f1f] p-5">
           <div className="mb-4">
             <h2 className="text-[14px] font-medium text-[#ededed]">Configuration</h2>
-            <p className="mt-0.5 text-[13px] text-[#888]">Repo-specific inputs for this run.</p>
+            <p className="mt-0.5 text-[13px] text-[#888]">Repo-specific inputs for this {runnerLabel} run.</p>
           </div>
 
           {!selectedProject ? (
@@ -785,7 +818,7 @@ export default function DevAgentRunClient({
                   size="sm"
                   className="h-8 rounded-md bg-[#ededed] px-4 text-[13px] font-medium text-[#0a0a0a] hover:bg-white disabled:opacity-40"
                 >
-                  {isRunning ? "Running…" : "Start Run"}
+                  {isRunning ? `Running ${runnerTitle}…` : "Start Run"}
                 </Button>
               </div>
             </div>

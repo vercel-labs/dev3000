@@ -1,4 +1,5 @@
 import { Bot, FolderGit2, Home, type LucideIcon, Settings } from "lucide-react"
+import type { Route } from "next"
 import Link from "next/link"
 import type React from "react"
 import { TeamSwitcher } from "@/components/dev-agents/team-switcher"
@@ -9,6 +10,7 @@ import type { VercelTeam } from "@/lib/vercel-teams"
 interface DevAgentsDashboardShellProps {
   teams: VercelTeam[]
   selectedTeam: VercelTeam
+  section?: "dev-agents" | "skill-runner"
   title?: React.ReactNode
   subtitle?: React.ReactNode
   description?: React.ReactNode
@@ -26,12 +28,16 @@ interface SidebarItem {
 export function DevAgentsDashboardShell({
   teams,
   selectedTeam,
+  section = "dev-agents",
   title,
   subtitle,
   description,
   actions,
   children
 }: DevAgentsDashboardShellProps) {
+  const sectionHref =
+    section === "skill-runner" ? `/${selectedTeam.slug}/skill-runner` : `/${selectedTeam.slug}/dev-agents`
+  const sectionLabel = section === "skill-runner" ? "Skill Runner" : "Dev Agents"
   const sidebarItems: SidebarItem[] = [
     { label: "Overview", href: `/${selectedTeam.slug}`, icon: Home },
     {
@@ -43,7 +49,13 @@ export function DevAgentsDashboardShell({
       label: "Dev Agents",
       href: `/${selectedTeam.slug}/dev-agents`,
       icon: Bot,
-      active: true
+      active: section === "dev-agents"
+    },
+    {
+      label: "Skill Runner",
+      href: `/${selectedTeam.slug}/skill-runner`,
+      icon: Bot,
+      active: section === "skill-runner"
     }
   ]
 
@@ -95,8 +107,8 @@ export function DevAgentsDashboardShell({
             <div className="flex items-center gap-2 text-[13px]">
               <span className="text-[#888]">{selectedTeam.name}</span>
               <span className="text-[#444]">/</span>
-              <Link href={`/${selectedTeam.slug}/dev-agents`} className="text-[#ededed] hover:underline">
-                Dev Agents
+              <Link href={sectionHref as Route} className="text-[#ededed] hover:underline">
+                {sectionLabel}
               </Link>
             </div>
 

@@ -13,6 +13,7 @@ interface ReportPendingProps {
   workflowType?: string
   projectName?: string
   devAgentName?: string
+  runnerKind?: "dev-agent" | "skill-runner"
   embedded?: boolean
 }
 
@@ -98,7 +99,12 @@ function normalizeStepNumber(stepNumber: number | null): number | null {
   return null
 }
 
-function getPendingReportLabel(workflowType?: string, devAgentName?: string) {
+function getPendingReportLabel(
+  workflowType?: string,
+  devAgentName?: string,
+  runnerKind: "dev-agent" | "skill-runner" = "dev-agent"
+) {
+  if (runnerKind === "skill-runner") return "Skill Run Report"
   if (devAgentName?.trim()) return `${devAgentName.trim()} Dev Agent Report`
   if (workflowType === "turbopack-bundle-analyzer") return "Turbopack Bundle Analyzer Report"
   if (workflowType === "design-guidelines") return "Design Guidelines Report"
@@ -108,7 +114,8 @@ function getPendingReportLabel(workflowType?: string, devAgentName?: string) {
   return "Dev Agent Report"
 }
 
-function getLegacyWorkflowLabel(workflowType?: string) {
+function getLegacyWorkflowLabel(workflowType?: string, runnerKind: "dev-agent" | "skill-runner" = "dev-agent") {
+  if (runnerKind === "skill-runner") return "Skill Runner"
   if (workflowType === "turbopack-bundle-analyzer") return "Turbopack Bundle Analyzer"
   if (workflowType === "design-guidelines") return "Design Guidelines Review"
   if (workflowType === "react-performance") return "React Performance Review"
@@ -123,6 +130,7 @@ export function ReportPending({
   workflowType,
   projectName,
   devAgentName,
+  runnerKind = "dev-agent",
   embedded = false
 }: ReportPendingProps) {
   const router = useRouter()
@@ -237,14 +245,17 @@ export function ReportPending({
   })
   const fallbackActiveIndex = statusMatchIndex >= 0 ? statusMatchIndex : -1
   const activeIndex = fallbackActiveIndex >= 0 ? fallbackActiveIndex : normalizedStepNumber
-  const workflowLabel = devAgentName?.trim() || getLegacyWorkflowLabel(workflowType)
-  const pendingLabel = getPendingReportLabel(workflowType, devAgentName)
-  const pendingReportTitle = `Run Report: ${workflowLabel} Dev Agent`
+  const workflowLabel = devAgentName?.trim() || getLegacyWorkflowLabel(workflowType, runnerKind)
+  const pendingLabel = getPendingReportLabel(workflowType, devAgentName, runnerKind)
+  const pendingReportTitle =
+    runnerKind === "skill-runner" ? `Run Report: ${workflowLabel}` : `Run Report: ${workflowLabel} Dev Agent`
   const formattedProgressLogs = progressLogs.map((line) => {
     const parsed = parseProgressLogLine(line)
     const formattedTimestamp = formatProgressTimestamp(parsed.timestamp)
     return formattedTimestamp ? `[${formattedTimestamp}] ${parsed.message}` : parsed.message
   })
+  const hasScreenshots = beforeScreenshots.length > 0 || afterScreenshots.length > 0
+  const shouldExpandLogs = !hasError && !hasScreenshots && progressLogs.length > 0
 
   const content = (
     <div className="space-y-6">
@@ -266,7 +277,9 @@ export function ReportPending({
         </Alert>
       ) : null}
 
-      <div className="bg-card border border-border rounded-lg p-4">
+      <div
+        className={`bg-card border border-border rounded-lg p-4 ${shouldExpandLogs ? "flex min-h-[calc(100vh-240px)] flex-col" : ""}`}
+      >
         <div className="text-sm font-medium text-foreground mb-3">Progress</div>
         {sandboxUrl && !hasError && (
           <div className="mb-3 text-xs text-muted-foreground">
@@ -304,19 +317,21 @@ export function ReportPending({
           })}
         </div>
         {progressLogs.length > 0 && (
-          <div className="mt-4">
+          <div className={`mt-4 ${shouldExpandLogs ? "flex min-h-0 flex-1 flex-col" : ""}`}>
             <div className="text-xs font-medium text-muted-foreground mb-2">Live Logs</div>
             <textarea
               ref={logsRef}
               readOnly
               value={formattedProgressLogs.join("\n")}
-              className="w-full h-28 rounded-md border border-border bg-muted/30 px-3 py-2 text-xs font-mono leading-relaxed resize-none"
+              className={`w-full rounded-md border border-border bg-muted/30 px-3 py-2 text-xs font-mono leading-relaxed resize-none ${
+                shouldExpandLogs ? "min-h-[320px] flex-1" : "h-28"
+              }`}
             />
           </div>
         )}
       </div>
 
-      {beforeScreenshots.length > 0 || afterScreenshots.length > 0 ? (
+      {hasScreenshots ? (
         <div className="space-y-3">
           <div className="text-sm font-medium text-foreground">Screenshots</div>
           {beforeScreenshots.length > 0 && afterScreenshots.length > 0 ? (

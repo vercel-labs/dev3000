@@ -18,6 +18,7 @@ export interface WorkflowRun {
   projectName: string
   timestamp: string
   status: "running" | "done" | "failure"
+  runnerKind?: "dev-agent" | "skill-runner"
   type?: WorkflowType // Workflow type (cls-fix, prompt, etc.)
   devAgentId?: string
   devAgentName?: string
@@ -26,6 +27,8 @@ export interface WorkflowRun {
   devAgentSpecHash?: string
   devAgentExecutionMode?: "dev-server" | "preview-pr"
   devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser"
+  skillRunnerCanonicalPath?: string
+  skillRunnerValidationWarning?: string
   currentStep?: string // Current step being executed (for live progress)
   stepNumber?: number // 0-4 to show progress (0=sandbox, 1=logs, 2=ai, 3=upload, 4=pr)
   completedAt?: string // ISO timestamp when workflow finished (for duration calc)

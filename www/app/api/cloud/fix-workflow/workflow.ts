@@ -137,6 +137,9 @@ export async function cloudFixWorkflow(params: {
   devAgentAshTarballUrl?: string
   devAgentRevision?: number
   devAgentSpecHash?: string
+  runnerKind?: "dev-agent" | "skill-runner"
+  skillRunnerCanonicalPath?: string
+  skillRunnerValidationWarning?: string
   devAgentExecutionMode?: "dev-server" | "preview-pr"
   devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser"
   devAgentAiAgent?: import("@/lib/dev-agents").DevAgentAiAgent
@@ -198,6 +201,9 @@ export async function cloudFixWorkflow(params: {
     devAgentAshTarballUrl,
     devAgentRevision,
     devAgentSpecHash,
+    runnerKind = "dev-agent",
+    skillRunnerCanonicalPath,
+    skillRunnerValidationWarning,
     devAgentExecutionMode,
     devAgentSandboxBrowser,
     devAgentAiAgent,
@@ -237,11 +243,14 @@ export async function cloudFixWorkflow(params: {
           runId,
           projectName,
           workflowType,
+          runnerKind,
           devAgentId,
           devAgentName,
           devAgentDescription,
           devAgentRevision,
           devAgentSpecHash,
+          skillRunnerCanonicalPath,
+          skillRunnerValidationWarning,
           devAgentExecutionMode,
           devAgentSandboxBrowser,
           isMarketplaceAgent,
@@ -626,11 +635,14 @@ interface ProgressContext {
   runId: string
   projectName: string
   workflowType?: string
+  runnerKind?: "dev-agent" | "skill-runner"
   devAgentId?: string
   devAgentName?: string
   devAgentDescription?: string
   devAgentRevision?: number
   devAgentSpecHash?: string
+  skillRunnerCanonicalPath?: string
+  skillRunnerValidationWarning?: string
   devAgentExecutionMode?: "dev-server" | "preview-pr"
   devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser"
   isMarketplaceAgent?: boolean
@@ -1064,12 +1076,18 @@ async function saveDoneStatus(
         | "design-guidelines"
         | "react-performance"
         | "url-audit"
-        | "turbopack-bundle-analyzer") || "cls-fix",
+        | "turbopack-bundle-analyzer") ||
+      existingRun?.type ||
+      "cls-fix",
+    runnerKind: progressContext.runnerKind ?? existingRun?.runnerKind,
     devAgentId: progressContext.devAgentId,
     devAgentName: progressContext.devAgentName,
     devAgentDescription: progressContext.devAgentDescription,
     devAgentRevision: progressContext.devAgentRevision,
     devAgentSpecHash: progressContext.devAgentSpecHash,
+    skillRunnerCanonicalPath: progressContext.skillRunnerCanonicalPath ?? existingRun?.skillRunnerCanonicalPath,
+    skillRunnerValidationWarning:
+      progressContext.skillRunnerValidationWarning ?? existingRun?.skillRunnerValidationWarning,
     devAgentExecutionMode: progressContext.devAgentExecutionMode,
     devAgentSandboxBrowser: progressContext.devAgentSandboxBrowser,
     stepNumber: Math.max(existingRun?.stepNumber ?? 0, progressContext.activeStepNumber ?? 0, 1),
@@ -1146,12 +1164,18 @@ async function saveFailureStatus(progressContext: ProgressContext, errorMessage:
           | "design-guidelines"
           | "react-performance"
           | "url-audit"
-          | "turbopack-bundle-analyzer") || "cls-fix",
+          | "turbopack-bundle-analyzer") ||
+        existingRun?.type ||
+        "cls-fix",
+      runnerKind: progressContext.runnerKind ?? existingRun?.runnerKind,
       devAgentId: progressContext.devAgentId,
       devAgentName: progressContext.devAgentName,
       devAgentDescription: progressContext.devAgentDescription,
       devAgentRevision: progressContext.devAgentRevision,
       devAgentSpecHash: progressContext.devAgentSpecHash,
+      skillRunnerCanonicalPath: progressContext.skillRunnerCanonicalPath ?? existingRun?.skillRunnerCanonicalPath,
+      skillRunnerValidationWarning:
+        progressContext.skillRunnerValidationWarning ?? existingRun?.skillRunnerValidationWarning,
       devAgentExecutionMode: progressContext.devAgentExecutionMode,
       devAgentSandboxBrowser: progressContext.devAgentSandboxBrowser,
       stepNumber: Math.max(existingRun?.stepNumber ?? 0, progressContext.activeStepNumber ?? 0, 1),

@@ -1476,11 +1476,14 @@ interface ProgressContext {
   runId: string
   projectName: string
   workflowType?: string
+  runnerKind?: "dev-agent" | "skill-runner"
   devAgentId?: string
   devAgentName?: string
   devAgentDescription?: string
   devAgentRevision?: number
   devAgentSpecHash?: string
+  skillRunnerCanonicalPath?: string
+  skillRunnerValidationWarning?: string
   devAgentExecutionMode?: "dev-server" | "preview-pr"
   devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser"
   isMarketplaceAgent?: boolean
@@ -1550,10 +1553,15 @@ async function updateProgress(
       projectName: ctx.projectName,
       timestamp: ctx.timestamp,
       status: "running",
-      type: (ctx.workflowType as WorkflowType) || "cls-fix",
+      type: (ctx.workflowType as WorkflowType) || existingRun?.type || "cls-fix",
+      runnerKind: ctx.runnerKind ?? existingRun?.runnerKind,
       devAgentId: ctx.devAgentId,
       devAgentName: ctx.devAgentName,
       devAgentDescription: ctx.devAgentDescription,
+      devAgentRevision: ctx.devAgentRevision,
+      devAgentSpecHash: ctx.devAgentSpecHash,
+      skillRunnerCanonicalPath: ctx.skillRunnerCanonicalPath ?? existingRun?.skillRunnerCanonicalPath,
+      skillRunnerValidationWarning: ctx.skillRunnerValidationWarning ?? existingRun?.skillRunnerValidationWarning,
       devAgentExecutionMode: ctx.devAgentExecutionMode,
       devAgentSandboxBrowser: ctx.devAgentSandboxBrowser,
       stepNumber,
@@ -1598,10 +1606,15 @@ async function appendProgressLog(ctx: ProgressContext | null | undefined, messag
       projectName: ctx.projectName,
       timestamp: ctx.timestamp,
       status: "running",
-      type: (ctx.workflowType as WorkflowType) || "cls-fix",
+      type: (ctx.workflowType as WorkflowType) || existingRun?.type || "cls-fix",
+      runnerKind: ctx.runnerKind ?? existingRun?.runnerKind,
       devAgentId: ctx.devAgentId,
       devAgentName: ctx.devAgentName,
       devAgentDescription: ctx.devAgentDescription,
+      devAgentRevision: ctx.devAgentRevision,
+      devAgentSpecHash: ctx.devAgentSpecHash,
+      skillRunnerCanonicalPath: ctx.skillRunnerCanonicalPath ?? existingRun?.skillRunnerCanonicalPath,
+      skillRunnerValidationWarning: ctx.skillRunnerValidationWarning ?? existingRun?.skillRunnerValidationWarning,
       devAgentExecutionMode: ctx.devAgentExecutionMode,
       devAgentSandboxBrowser: ctx.devAgentSandboxBrowser,
       stepNumber,
@@ -1639,11 +1652,14 @@ async function persistRunArtifacts(
       timestamp: ctx.timestamp,
       status: existingRun.status === "done" || existingRun.status === "failure" ? existingRun.status : "running",
       type: (ctx.workflowType as WorkflowType) || existingRun.type || "cls-fix",
+      runnerKind: ctx.runnerKind ?? existingRun.runnerKind,
       devAgentId: ctx.devAgentId,
       devAgentName: ctx.devAgentName,
       devAgentDescription: ctx.devAgentDescription,
       devAgentRevision: ctx.devAgentRevision,
       devAgentSpecHash: ctx.devAgentSpecHash,
+      skillRunnerCanonicalPath: ctx.skillRunnerCanonicalPath ?? existingRun.skillRunnerCanonicalPath,
+      skillRunnerValidationWarning: ctx.skillRunnerValidationWarning ?? existingRun.skillRunnerValidationWarning,
       devAgentExecutionMode: ctx.devAgentExecutionMode,
       devAgentSandboxBrowser: ctx.devAgentSandboxBrowser,
       stepNumber: Math.max(existingRun.stepNumber ?? 0, ctx.activeStepNumber ?? 0, 1),

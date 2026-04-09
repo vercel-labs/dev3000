@@ -26,7 +26,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const publicRun = await getPublicWorkflowRun(id)
 
   const title = publicRun ? `${publicRun.projectName} - d3k report` : "d3k report"
-  const description = "AI-powered dev agent report from d3k."
+  const description = "AI-powered skill runner and dev agent report from d3k."
 
   if (!publicRun) {
     return {
@@ -443,6 +443,14 @@ function getWorkflowLabel(report: WorkflowReport, run: WorkflowRun): string {
     default:
       return "Dev Agent"
   }
+}
+
+function getRunnerReportLabel(run: WorkflowRun): string {
+  return run.runnerKind === "skill-runner" ? "Skill Run Report" : "Dev Agent Report"
+}
+
+function formatWorkflowReportTitle(workflowLabel: string, run: WorkflowRun): string {
+  return run.runnerKind === "skill-runner" ? `Run Report: ${workflowLabel}` : `Run Report: ${workflowLabel} Dev Agent`
 }
 
 function getWorkflowDescription(report: WorkflowReport, workflowLabel: string): string {
@@ -882,12 +890,14 @@ function ReportLoading() {
 
 function StandaloneReportFrame({
   title,
+  reportLabel,
   subtitle,
   description,
   actions,
   children
 }: {
   title: ReactNode
+  reportLabel?: ReactNode
   subtitle?: ReactNode
   description?: ReactNode
   actions?: ReactNode
@@ -898,7 +908,7 @@ function StandaloneReportFrame({
       <div className="container mx-auto max-w-5xl px-4 py-8">
         <div className="mb-6 flex items-start justify-between gap-4">
           <div className="min-w-0 space-y-2">
-            <div className="text-[11px] uppercase tracking-wider text-[#555]">Dev Agent Report</div>
+            <div className="text-[11px] uppercase tracking-wider text-[#555]">{reportLabel || "Dev Agent Report"}</div>
           </div>
           <div className="flex items-center gap-3">
             {actions}
@@ -950,12 +960,13 @@ async function WorkflowReportPageData({ params }: { params: Promise<{ id: string
   const canUseDashboardShell = Boolean(ownerRouteContext?.selectedTeam)
 
   if (!run.reportBlobUrl && run.status === "failure") {
+    const workflowLabel = run.devAgentName || (run.runnerKind === "skill-runner" ? "Skill Runner" : "Dev Agent")
     const recentLogs = Array.isArray(run.progressLogs) ? run.progressLogs.slice(-10) : []
     const failure = (
       <div className="space-y-6">
         <div>
           <div className="text-xs uppercase tracking-wide text-muted-foreground">Run failed</div>
-          <h1 className="mt-2 text-3xl font-bold">Run Report: {run.devAgentName || "Dev Agent"} Dev Agent</h1>
+          <h1 className="mt-2 text-3xl font-bold">{formatWorkflowReportTitle(workflowLabel, run)}</h1>
           {run.projectName ? <p className="mt-1 text-sm text-muted-foreground">Project: {run.projectName}</p> : null}
         </div>
 
@@ -1002,6 +1013,7 @@ async function WorkflowReportPageData({ params }: { params: Promise<{ id: string
         <DevAgentsDashboardShell
           teams={ownerRouteContext.teams}
           selectedTeam={ownerRouteContext.selectedTeam}
+          section={run.runnerKind === "skill-runner" ? "skill-runner" : "dev-agents"}
           title={run.projectName}
           subtitle="Run failed"
         >
@@ -1021,6 +1033,7 @@ async function WorkflowReportPageData({ params }: { params: Promise<{ id: string
         workflowType={run.type}
         projectName={run.projectName}
         devAgentName={run.devAgentName}
+        runnerKind={run.runnerKind}
         embedded={canUseDashboardShell}
       />
     )
@@ -1030,6 +1043,7 @@ async function WorkflowReportPageData({ params }: { params: Promise<{ id: string
         <DevAgentsDashboardShell
           teams={ownerRouteContext.teams}
           selectedTeam={ownerRouteContext.selectedTeam}
+          section={run.runnerKind === "skill-runner" ? "skill-runner" : "dev-agents"}
           title={run.projectName}
           subtitle="Run in progress"
         >
@@ -1045,12 +1059,15 @@ async function WorkflowReportPageData({ params }: { params: Promise<{ id: string
   const report = applyDemoRunOverride(id, applyTranscriptClsFallback((await response.json()) as WorkflowReport))
 
   const workflowLabel = getWorkflowLabel(report, run)
+  const reportLabel = getRunnerReportLabel(run)
   const reportDescription = getWorkflowDescription(report, workflowLabel)
   const projectDisplayName = report.projectName || run.projectName
   const devAgentId = report.devAgentId || run.devAgentId
   const devAgentHref =
     ownerRouteContext?.selectedTeam && devAgentId
-      ? `/${ownerRouteContext.selectedTeam.slug}/dev-agents/${devAgentId}`
+      ? run.runnerKind === "skill-runner"
+        ? `/${ownerRouteContext.selectedTeam.slug}/skill-runner/${devAgentId}/new`
+        : `/${ownerRouteContext.selectedTeam.slug}/dev-agents/${devAgentId}`
       : null
   const vercelProjectHref = ownerRouteContext?.selectedTeam
     ? `https://vercel.com/${ownerRouteContext.selectedTeam.slug}/${encodeURIComponent(projectDisplayName)}`
@@ -1084,11 +1101,11 @@ async function WorkflowReportPageData({ params }: { params: Promise<{ id: string
     <>
       Run Report:{" "}
       <a href={devAgentHref} className="underline decoration-[#333] underline-offset-4 hover:decoration-[#666]">
-        {workflowLabel} Dev Agent
+        {run.runnerKind === "skill-runner" ? workflowLabel : `${workflowLabel} Dev Agent`}
       </a>
     </>
   ) : (
-    `Run Report: ${workflowLabel} Dev Agent`
+    formatWorkflowReportTitle(workflowLabel, run)
   )
   const pageActions = (
     <>
@@ -1111,6 +1128,7 @@ async function WorkflowReportPageData({ params }: { params: Promise<{ id: string
       <DevAgentsDashboardShell
         teams={ownerRouteContext.teams}
         selectedTeam={ownerRouteContext.selectedTeam}
+        section={run.runnerKind === "skill-runner" ? "skill-runner" : "dev-agents"}
         title={primaryHeading}
         subtitle={projectSubtitle}
         description={reportDescription}
@@ -1124,6 +1142,7 @@ async function WorkflowReportPageData({ params }: { params: Promise<{ id: string
   return (
     <StandaloneReportFrame
       title={primaryHeading}
+      reportLabel={reportLabel}
       subtitle={projectSubtitle}
       description={reportDescription}
       actions={isOwner || run.prUrl ? pageActions : undefined}
