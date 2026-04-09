@@ -256,6 +256,11 @@ export function SkillRunnersCatalog({ teamSlug, runners }: SkillRunnersCatalogPr
                     {runner.usageCount} runs
                   </span>
                 ) : null}
+                {runner.avgCost ? (
+                  <span className="rounded-md bg-[#1a1a1a] px-2 py-0.5 text-[11px] text-[#888]">
+                    Avg Cost: {runner.avgCost}
+                  </span>
+                ) : null}
               </div>
             </div>
 

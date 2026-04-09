@@ -21,6 +21,7 @@ type WorkflowReportSummary = Pick<
   import("@/types").WorkflowReport,
   | "clsScore"
   | "afterClsScore"
+  | "costUsd"
   | "beforeWebVitals"
   | "afterWebVitals"
   | "verificationStatus"
@@ -1129,6 +1130,16 @@ async function saveDoneStatus(
     progressLogs
   } satisfies WorkflowRun
   await saveWorkflowRun(nextRun)
+  if (progressContext.runnerKind === "skill-runner" && progressContext.devAgentId) {
+    try {
+      const { recordSkillRunnerCompletion } = await import("@/lib/skill-runners")
+      await recordSkillRunnerCompletion(progressContext.devAgentId, reportSummary?.costUsd ?? 0)
+    } catch (error) {
+      workflowLog(
+        `[Workflow] Failed to record skill runner completion stats: ${error instanceof Error ? error.message : String(error)}`
+      )
+    }
+  }
   progressContext.runSnapshot = nextRun
 }
 
@@ -1144,6 +1155,7 @@ async function loadWorkflowReportSummary(reportBlobUrl: string): Promise<Workflo
     return {
       clsScore: report.clsScore,
       afterClsScore: report.afterClsScore,
+      costUsd: report.costUsd,
       beforeWebVitals: report.beforeWebVitals,
       afterWebVitals: report.afterWebVitals,
       verificationStatus: report.verificationStatus,

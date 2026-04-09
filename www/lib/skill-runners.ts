@@ -53,7 +53,15 @@ interface SkillRunnerTeamState {
 interface SkillRunnerUsageStat {
   skillRunnerId: string
   usageCount: number
+  completedRunCount: number
+  totalCostUsd: number
   updatedAt: string
+}
+
+interface SkillRunnerUsageSummary {
+  usageCount: number
+  completedRunCount: number
+  totalCostUsd: number
 }
 
 interface DefaultSkillRunnerSeed {
@@ -111,36 +119,15 @@ const DEFAULT_SKILL_RUNNER_SEEDS: DefaultSkillRunnerSeed[] = [
     validationQuality: "high"
   },
   {
-    id: "sr_systematic-debugging",
-    canonicalPath: "obra/superpowers/systematic-debugging",
-    sourceUrl: "https://skills.sh/obra/superpowers/systematic-debugging",
-    installArg: "obra/superpowers@systematic-debugging",
-    packageName: "obra/superpowers",
-    skillName: "systematic-debugging",
-    displayName: "Systematic Debugging",
-    description: "Find the real bug, fix it with evidence, and keep the resulting PR tightly scoped.",
-    validationQuality: "high"
-  },
-  {
-    id: "sr_webapp-testing",
-    canonicalPath: "anthropics/skills/webapp-testing",
-    sourceUrl: "https://skills.sh/anthropics/skills/webapp-testing",
-    installArg: "anthropics/skills@webapp-testing",
-    packageName: "anthropics/skills",
-    skillName: "webapp-testing",
-    displayName: "Webapp Testing",
-    description: "Add or improve meaningful webapp tests around the highest-value product behavior.",
-    validationQuality: "high"
-  },
-  {
-    id: "sr_test-driven-development",
-    canonicalPath: "obra/superpowers/test-driven-development",
-    sourceUrl: "https://skills.sh/obra/superpowers/test-driven-development",
-    installArg: "obra/superpowers@test-driven-development",
-    packageName: "obra/superpowers",
-    skillName: "test-driven-development",
-    displayName: "Test Driven Development",
-    description: "Drive targeted repo improvements with tests first, then ship the minimal implementation diff.",
+    id: "sr_seo-audit",
+    canonicalPath: "coreyhaines31/marketingskills/seo-audit",
+    sourceUrl: "https://skills.sh/coreyhaines31/marketingskills/seo-audit",
+    installArg: "coreyhaines31/marketingskills@seo-audit",
+    packageName: "coreyhaines31/marketingskills",
+    skillName: "seo-audit",
+    displayName: "SEO Audit",
+    description:
+      "Audit and improve crawlability, indexation, metadata, site speed, and on-page SEO with concrete fixes.",
     validationQuality: "high"
   },
   {
@@ -184,7 +171,7 @@ async function readJsonBlob<T>(pathname: string): Promise<T | null> {
   }
 }
 
-async function listSkillRunnerUsageStats(): Promise<Map<string, number>> {
+async function listSkillRunnerUsageStats(): Promise<Map<string, SkillRunnerUsageSummary>> {
   try {
     const blobs = await list({ prefix: SKILL_RUNNER_STATS_PREFIX })
     const items = await Promise.all(
@@ -197,7 +184,14 @@ async function listSkillRunnerUsageStats(): Promise<Map<string, number>> {
     return new Map(
       items
         .filter((item): item is SkillRunnerUsageStat => item !== null)
-        .map((item) => [item.skillRunnerId, item.usageCount])
+        .map((item) => [
+          item.skillRunnerId,
+          {
+            usageCount: item.usageCount,
+            completedRunCount: item.completedRunCount ?? 0,
+            totalCostUsd: item.totalCostUsd ?? 0
+          }
+        ])
     )
   } catch {
     return new Map()
@@ -320,7 +314,20 @@ async function saveTeamSkillRunnerState(state: SkillRunnerTeamState): Promise<vo
   })
 }
 
-function applyUsageCount(record: SkillRunnerRecord, usageMap: Map<string, number>): DevAgent {
+function formatAvgCost(summary?: SkillRunnerUsageSummary): string | undefined {
+  if (!summary || summary.completedRunCount <= 0 || summary.totalCostUsd <= 0) return undefined
+
+  const avg = summary.totalCostUsd / summary.completedRunCount
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: avg < 1 ? 2 : 2,
+    maximumFractionDigits: avg < 1 ? 2 : 2
+  }).format(avg)
+}
+
+function applyUsageCount(record: SkillRunnerRecord, usageMap: Map<string, SkillRunnerUsageSummary>): DevAgent {
+  const usage = usageMap.get(record.id)
   return {
     id: record.id,
     kind: "skill-runner",
@@ -336,7 +343,8 @@ function applyUsageCount(record: SkillRunnerRecord, usageMap: Map<string, number
     team: record.team,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
-    usageCount: usageMap.get(record.id) ?? 0,
+    usageCount: usage?.usageCount ?? 0,
+    avgCost: formatAvgCost(usage),
     supportsPathInput: true,
     supportsPullRequest: true,
     successEval: buildSkillRunnerSuccessEval(record.displayName),
@@ -435,6 +443,25 @@ export async function incrementSkillRunnerUsage(skillRunnerId: string): Promise<
   const payload: SkillRunnerUsageStat = {
     skillRunnerId,
     usageCount: (current?.usageCount ?? 0) + 1,
+    completedRunCount: current?.completedRunCount ?? 0,
+    totalCostUsd: current?.totalCostUsd ?? 0,
+    updatedAt: new Date().toISOString()
+  }
+
+  await put(`${SKILL_RUNNER_STATS_PREFIX}${skillRunnerId}.json`, JSON.stringify(payload, null, 2), {
+    access: "public",
+    addRandomSuffix: false,
+    allowOverwrite: true
+  })
+}
+
+export async function recordSkillRunnerCompletion(skillRunnerId: string, costUsd: number): Promise<void> {
+  const current = await readJsonBlob<SkillRunnerUsageStat>(`${SKILL_RUNNER_STATS_PREFIX}${skillRunnerId}.json`)
+  const payload: SkillRunnerUsageStat = {
+    skillRunnerId,
+    usageCount: current?.usageCount ?? 0,
+    completedRunCount: (current?.completedRunCount ?? 0) + 1,
+    totalCostUsd: (current?.totalCostUsd ?? 0) + (Number.isFinite(costUsd) && costUsd > 0 ? costUsd : 0),
     updatedAt: new Date().toISOString()
   }
 

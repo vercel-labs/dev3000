@@ -90,6 +90,7 @@ export interface DevAgent {
   createdAt: string
   updatedAt: string
   usageCount: number
+  avgCost?: string
   legacyWorkflowType?: "cls-fix" | "prompt" | "design-guidelines" | "react-performance" | "turbopack-bundle-analyzer"
   supportsPathInput?: boolean
   supportsPullRequest?: boolean
