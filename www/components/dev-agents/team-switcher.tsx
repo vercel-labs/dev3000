@@ -39,6 +39,19 @@ function TeamIcon({ team }: { team: VercelTeam }) {
   return <VercelTriangle className="size-[14px] text-[#ededed]" />
 }
 
+function getPlanBadgeClasses(planLabel: string | undefined): string {
+  switch (planLabel) {
+    case "Enterprise":
+      return "border border-[#4b266b] bg-[#4b266b]/80 text-[#d7a8ff]"
+    case "Pro":
+      return "border border-[#163f7a] bg-[#163f7a]/80 text-[#8cbcff]"
+    case "Hobby":
+      return "border border-[#2f2f2f] bg-[#2a2a2a] text-[#b5b5b5]"
+    default:
+      return "border border-[#2a2a2a] bg-[#1a1a1a] text-[#888]"
+  }
+}
+
 export function TeamSwitcher({ teams, selectedTeam }: TeamSwitcherProps) {
   const router = useRouter()
   const pathname = usePathname()
@@ -91,7 +104,9 @@ export function TeamSwitcher({ teams, selectedTeam }: TeamSwitcherProps) {
           <div className="flex min-w-0 items-center gap-2">
             <div className="truncate">{selectedTeam.name}</div>
             {selectedTeam.planLabel ? (
-              <span className="rounded-full border border-[#2a2a2a] bg-[#1a1a1a] px-2 py-0.5 text-[11px] font-normal text-[#888]">
+              <span
+                className={`rounded-full px-2 py-0.5 text-[11px] font-normal leading-none ${getPlanBadgeClasses(selectedTeam.planLabel)}`}
+              >
                 {selectedTeam.planLabel}
               </span>
             ) : null}
@@ -106,15 +121,16 @@ export function TeamSwitcher({ teams, selectedTeam }: TeamSwitcherProps) {
             value={team.slug}
             className="text-[13px] text-[#ededed] focus:bg-[#1a1a1a] focus:text-[#ededed]"
           >
-            <div className="flex min-w-0 items-center gap-2.5">
+            <div className="flex min-w-0 items-center gap-2.5 pr-6">
               <TeamIcon team={team} />
-              <div className="min-w-0">
-                <div className="truncate">{team.name}</div>
-                <div className="truncate text-[11px] text-[#666]">
-                  {team.sourceLabel || (team.isPersonal ? "Account" : "Team")}
-                  {team.planLabel ? ` · ${team.planLabel}` : ""}
-                </div>
-              </div>
+              <div className="truncate">{team.name}</div>
+              {team.planLabel ? (
+                <span
+                  className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-normal leading-none ${getPlanBadgeClasses(team.planLabel)}`}
+                >
+                  {team.planLabel}
+                </span>
+              ) : null}
             </div>
           </SelectItem>
         ))}

@@ -9,7 +9,6 @@ export interface VercelTeam {
   isPersonal: boolean
   avatarUrl?: string
   planLabel?: string
-  sourceLabel?: string
 }
 
 interface RawVercelTeam {
@@ -47,12 +46,31 @@ function normalizePlanLabel(value: string | undefined, fallback?: string): strin
 }
 
 function pickAvatarUrl(value: {
+  id?: string
   avatar?: string
   avatarUrl?: string
   image?: string
   profileImage?: string
 }): string | undefined {
-  return value.avatarUrl || value.avatar || value.image || value.profileImage || undefined
+  if (value.id) {
+    return `https://vercel.com/api/www/avatar?s=64&teamId=${encodeURIComponent(value.id)}`
+  }
+
+  const direct = value.avatarUrl || value.image || value.profileImage
+  if (direct) {
+    return direct
+  }
+
+  const avatar = value.avatar?.trim()
+  if (!avatar) {
+    return undefined
+  }
+
+  if (avatar.startsWith("http://") || avatar.startsWith("https://")) {
+    return avatar
+  }
+
+  return `https://api.vercel.com/www/avatar/${avatar}`
 }
 
 async function fetchAllTeams(accessToken: string): Promise<RawVercelTeam[]> {
@@ -145,8 +163,7 @@ export async function listCurrentUserTeams(): Promise<VercelTeam[]> {
       name: team.name,
       isPersonal: false,
       avatarUrl: pickAvatarUrl(team),
-      planLabel: normalizePlanLabel(team.plan || team.billing?.plan),
-      sourceLabel: "Team"
+      planLabel: normalizePlanLabel(team.plan || team.billing?.plan)
     })
   }
 
