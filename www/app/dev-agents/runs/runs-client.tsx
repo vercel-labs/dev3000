@@ -63,6 +63,18 @@ function formatDevAgentLabel(run: WorkflowRun): string {
   return run.devAgentName || formatLegacyWorkflowType(run.type)
 }
 
+function formatUsd(value?: number): string {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    return "—"
+  }
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: value < 1 ? 2 : 2,
+    maximumFractionDigits: 2
+  }).format(value)
+}
+
 export default function DevAgentRunsClient({ userId, initialRuns }: DevAgentRunsClientProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
@@ -145,7 +157,7 @@ export default function DevAgentRunsClient({ userId, initialRuns }: DevAgentRuns
         <div className="space-y-1">
           <h1 className="text-[24px] font-semibold tracking-[-0.020em] text-[#ededed]">Runs</h1>
           <div className="max-w-xl text-[14px] leading-[22px] text-[#888]">
-            View all of your dev-agent analyses, fixes, and PR-ready runs.
+            View all of your agent analyses, fixes, and run reports.
           </div>
         </div>
         <div className="flex min-h-9 shrink-0 items-start justify-end">
@@ -165,8 +177,8 @@ export default function DevAgentRunsClient({ userId, initialRuns }: DevAgentRuns
       {runs.length === 0 ? (
         <Card className="border-[#1f1f1f] bg-[#111] p-12 text-center">
           <CardContent>
-            <p className="text-[#888]">No dev agent runs yet.</p>
-            <p className="mt-2 text-sm text-[#666]">Choose a dev agent and run it against a project.</p>
+            <p className="text-[#888]">No runs yet.</p>
+            <p className="mt-2 text-sm text-[#666]">Choose an agent or skill runner and run it against a project.</p>
           </CardContent>
         </Card>
       ) : (
@@ -181,12 +193,12 @@ export default function DevAgentRunsClient({ userId, initialRuns }: DevAgentRuns
                     aria-label="Select all runs"
                   />
                 </TableHead>
-                <TableHead className="text-[#888]">Dev Agent</TableHead>
+                <TableHead className="text-[#888]">Agent</TableHead>
                 <TableHead className="text-[#888]">Project</TableHead>
+                <TableHead className="text-[#888]">Duration</TableHead>
+                <TableHead className="text-[#888]">Cost</TableHead>
                 <TableHead className="text-[#888]">Status</TableHead>
                 <TableHead className="text-[#888]">Created</TableHead>
-                <TableHead className="text-[#888]">Duration</TableHead>
-                <TableHead className="text-[#888]">Mode</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -214,21 +226,16 @@ export default function DevAgentRunsClient({ userId, initialRuns }: DevAgentRuns
                       />
                     </TableCell>
                     <TableCell>
-                      <div className="space-y-1">
-                        <Link
-                          href={`/dev-agents/runs/${run.id}/report` as Route}
-                          className="font-medium text-[#ededed] hover:underline"
-                        >
-                          {formatDevAgentLabel(run)}
-                        </Link>
-                        {run.devAgentExecutionMode ? (
-                          <div className="text-xs text-[#666]">
-                            {run.devAgentExecutionMode === "dev-server" ? "Dev Server" : "Preview + PR"}
-                          </div>
-                        ) : null}
-                      </div>
+                      <Link
+                        href={`/dev-agents/runs/${run.id}/report` as Route}
+                        className="font-medium text-[#ededed] hover:underline"
+                      >
+                        {formatDevAgentLabel(run)}
+                      </Link>
                     </TableCell>
                     <TableCell className="text-[#ededed]">{run.projectName}</TableCell>
+                    <TableCell className="text-[#888]">{duration}</TableCell>
+                    <TableCell className="text-[#888]">{formatUsd(run.costUsd)}</TableCell>
                     <TableCell>
                       <Badge
                         variant={
@@ -239,10 +246,6 @@ export default function DevAgentRunsClient({ userId, initialRuns }: DevAgentRuns
                       </Badge>
                     </TableCell>
                     <TableCell className="text-[#888]">{createdAt.toLocaleString()}</TableCell>
-                    <TableCell className="text-[#888]">{duration}</TableCell>
-                    <TableCell className="text-[#888]">
-                      {run.devAgentExecutionMode === "preview-pr" ? "Preview + PR" : "Dev Server"}
-                    </TableCell>
                   </TableRow>
                 )
               })}

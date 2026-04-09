@@ -1114,6 +1114,7 @@ async function saveDoneStatus(
     currentStep: "Workflow completed",
     completedAt: new Date().toISOString(),
     reportBlobUrl,
+    costUsd: reportSummary?.costUsd ?? existingRun?.costUsd,
     successEvalResult: reportSummary?.successEvalResult ?? existingRun?.successEvalResult ?? null,
     clsScore: reportSummary?.clsScore ?? existingRun?.clsScore ?? null,
     afterClsScore: reportSummary?.afterClsScore ?? existingRun?.afterClsScore ?? null,

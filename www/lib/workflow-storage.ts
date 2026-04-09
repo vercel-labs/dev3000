@@ -2,7 +2,7 @@ import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { del, list, put } from "@vercel/blob"
-import type { WebVitals } from "@/types"
+import type { WebVitals, WorkflowReport } from "@/types"
 
 export type WorkflowType =
   | "cls-fix"
@@ -18,6 +18,7 @@ export interface WorkflowRun {
   projectName: string
   timestamp: string
   status: "running" | "done" | "failure"
+  costUsd?: number
   runnerKind?: "dev-agent" | "skill-runner"
   type?: WorkflowType // Workflow type (cls-fix, prompt, etc.)
   devAgentId?: string
@@ -125,7 +126,23 @@ async function readWorkflowRunBlob(url: string, _pathname: string): Promise<Work
     if (!response.ok) return null
     const contentType = response.headers.get("content-type")
     if (contentType && !contentType.includes("application/json")) return null
-    return (await response.json()) as WorkflowRun
+    const run = (await response.json()) as WorkflowRun
+
+    if ((typeof run.costUsd !== "number" || !Number.isFinite(run.costUsd)) && run.reportBlobUrl) {
+      try {
+        const reportResponse = await fetch(run.reportBlobUrl, { cache: "no-store" })
+        if (reportResponse.ok) {
+          const report = (await reportResponse.json()) as WorkflowReport
+          if (typeof report.costUsd === "number" && Number.isFinite(report.costUsd)) {
+            run.costUsd = report.costUsd
+          }
+        }
+      } catch (error) {
+        console.error(`[Workflow Storage] Failed to backfill cost from report ${run.reportBlobUrl}:`, error)
+      }
+    }
+
+    return run
   } catch (error) {
     console.error(`[Workflow Storage] Failed to fetch ${url}:`, error)
     return null
