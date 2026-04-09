@@ -3,7 +3,6 @@ import type { Route } from "next"
 import Link from "next/link"
 import type React from "react"
 import { TeamSwitcher } from "@/components/dev-agents/team-switcher"
-import { ThemeToggle } from "@/components/theme-toggle"
 import { Button } from "@/components/ui/button"
 import type { VercelTeam } from "@/lib/vercel-teams"
 
@@ -108,17 +107,14 @@ export function DevAgentsDashboardShell({
             </div>
 
             {/* Right side actions */}
-            <div className="flex items-center gap-2">
-              <ThemeToggle className="h-8 w-8 rounded-md border-[#333] bg-transparent text-[#888] hover:bg-[#1a1a1a] hover:text-[#ededed]" />
-              <Button
-                asChild
-                variant="ghost"
-                size="sm"
-                className="h-8 rounded-md border border-[#333] bg-transparent px-3 text-[13px] text-[#888] hover:bg-[#1a1a1a] hover:text-[#ededed]"
-              >
-                <Link href="/dev-agents/runs">Runs</Link>
-              </Button>
-            </div>
+            <Button
+              asChild
+              variant="ghost"
+              size="sm"
+              className="h-8 rounded-md border border-[#333] bg-transparent px-3 text-[13px] text-[#888] hover:bg-[#1a1a1a] hover:text-[#ededed]"
+            >
+              <Link href="/dev-agents/runs">Runs</Link>
+            </Button>
           </header>
 
           {/* Page content */}

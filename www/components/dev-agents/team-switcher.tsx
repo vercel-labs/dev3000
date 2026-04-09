@@ -4,7 +4,8 @@ import { ChevronDown, LogOut } from "lucide-react"
 import type { Route } from "next"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useEffect } from "react"
-import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger } from "@/components/ui/select"
 import { LAST_SELECTED_TEAM_COOKIE_MAX_AGE, LAST_SELECTED_TEAM_COOKIE_NAME } from "@/lib/team-selection"
 import type { VercelTeam } from "@/lib/vercel-teams"
 
@@ -21,6 +22,21 @@ function VercelTriangle({ className }: { className?: string }) {
       <path d="M37.59.25l36.95 64H.64l36.95-64z" />
     </svg>
   )
+}
+
+function TeamIcon({ team }: { team: VercelTeam }) {
+  if (team.avatarUrl) {
+    return (
+      <Avatar className="size-4 border border-[#2a2a2a]">
+        <AvatarImage src={team.avatarUrl} alt={team.name} />
+        <AvatarFallback className="bg-[#1a1a1a] text-[9px] font-medium text-[#999]">
+          {team.name.slice(0, 2).toUpperCase()}
+        </AvatarFallback>
+      </Avatar>
+    )
+  }
+
+  return <VercelTriangle className="size-[14px] text-[#ededed]" />
 }
 
 export function TeamSwitcher({ teams, selectedTeam }: TeamSwitcherProps) {
@@ -70,9 +86,16 @@ export function TeamSwitcher({ teams, selectedTeam }: TeamSwitcherProps) {
       }}
     >
       <SelectTrigger className="h-8 w-full gap-2 border-0 bg-transparent px-2 py-0 text-[14px] font-medium text-[#ededed] shadow-none ring-0 hover:text-white focus:ring-0 [&>svg]:hidden">
-        <div className="flex items-center gap-2.5 pl-0.5">
-          <VercelTriangle className="size-[14px] text-[#ededed]" />
-          <SelectValue placeholder="Select team" />
+        <div className="flex min-w-0 items-center gap-2.5 pl-0.5">
+          <TeamIcon team={selectedTeam} />
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="truncate">{selectedTeam.name}</div>
+            {selectedTeam.planLabel ? (
+              <span className="rounded-full border border-[#2a2a2a] bg-[#1a1a1a] px-2 py-0.5 text-[11px] font-normal text-[#888]">
+                {selectedTeam.planLabel}
+              </span>
+            ) : null}
+          </div>
           <ChevronDown className="size-3.5 text-[#666]" />
         </div>
       </SelectTrigger>
@@ -83,7 +106,16 @@ export function TeamSwitcher({ teams, selectedTeam }: TeamSwitcherProps) {
             value={team.slug}
             className="text-[13px] text-[#ededed] focus:bg-[#1a1a1a] focus:text-[#ededed]"
           >
-            {team.name}
+            <div className="flex min-w-0 items-center gap-2.5">
+              <TeamIcon team={team} />
+              <div className="min-w-0">
+                <div className="truncate">{team.name}</div>
+                <div className="truncate text-[11px] text-[#666]">
+                  {team.sourceLabel || (team.isPersonal ? "Account" : "Team")}
+                  {team.planLabel ? ` · ${team.planLabel}` : ""}
+                </div>
+              </div>
+            </div>
           </SelectItem>
         ))}
         <SelectSeparator className="bg-[#222]" />

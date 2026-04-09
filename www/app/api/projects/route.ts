@@ -1,5 +1,79 @@
 import { cookies } from "next/headers"
 
+interface VercelProjectsResponse {
+  projects?: Array<{
+    id?: string
+    name?: string
+    framework?: string
+    rootDirectory?: string
+    link?: unknown
+    latestDeployments?: Array<{
+      id?: string
+      url?: string
+      state?: string
+      readyState?: string
+      createdAt?: number
+      gitSource?: {
+        type?: string
+        repoId?: number
+        ref?: string
+        sha?: string
+        message?: string
+      }
+      meta?: {
+        githubOrg?: string
+        githubRepo?: string
+      }
+    }>
+  }>
+  pagination?: {
+    next?: number
+  }
+}
+
+async function fetchAllProjects(accessToken: string, options: { teamId?: string | null; search?: string | null }) {
+  const projects: NonNullable<VercelProjectsResponse["projects"]> = []
+  let until: string | null = null
+
+  for (let page = 0; page < 20; page++) {
+    const apiUrl = new URL("https://api.vercel.com/v9/projects")
+    if (options.teamId) {
+      apiUrl.searchParams.set("teamId", options.teamId)
+    }
+    if (options.search) {
+      apiUrl.searchParams.set("search", options.search)
+    }
+    apiUrl.searchParams.set("limit", "100")
+    if (until) {
+      apiUrl.searchParams.set("until", until)
+    }
+
+    const response = await fetch(apiUrl.toString(), {
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      }
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(`Failed to fetch projects: ${response.status} ${errorText}`)
+    }
+
+    const data = (await response.json()) as VercelProjectsResponse
+    const pageProjects = Array.isArray(data.projects) ? data.projects : []
+    projects.push(...pageProjects)
+
+    const nextCursor = data.pagination?.next
+    if (!nextCursor || pageProjects.length === 0) {
+      break
+    }
+
+    until = String(nextCursor)
+  }
+
+  return projects
+}
+
 /**
  * API Route to fetch Vercel projects for a team/account
  *
@@ -20,66 +94,13 @@ export async function GET(request: Request) {
     const teamId = url.searchParams.get("teamId")
     const search = url.searchParams.get("search")
 
-    // Build the API URL with optional teamId parameter
-    const apiUrl = new URL("https://api.vercel.com/v9/projects")
-    if (teamId) {
-      apiUrl.searchParams.set("teamId", teamId)
-    }
-    if (search) {
-      apiUrl.searchParams.set("search", search)
-    }
-    apiUrl.searchParams.set("limit", "50")
-
-    // Fetch projects from Vercel API
-    // console.log("Fetching projects from Vercel API:", apiUrl.toString())
-    const response = await fetch(apiUrl.toString(), {
-      headers: {
-        Authorization: `Bearer ${accessToken}`
-      }
-    })
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error("Failed to fetch projects:", response.status, errorText)
-      return Response.json(
-        { error: `Failed to fetch projects: ${response.status} ${errorText}` },
-        { status: response.status }
-      )
-    }
-
-    const data = (await response.json()) as {
-      projects?: Array<{
-        id?: string
-        name?: string
-        framework?: string
-        rootDirectory?: string
-        link?: unknown
-        latestDeployments?: Array<{
-          id?: string
-          url?: string
-          state?: string
-          readyState?: string
-          createdAt?: number
-          gitSource?: {
-            type?: string
-            repoId?: number
-            ref?: string
-            sha?: string
-            message?: string
-          }
-          meta?: {
-            githubOrg?: string
-            githubRepo?: string
-          }
-        }>
-      }>
-    }
-    // Verbose logging commented out - was flooding d3k logs
-    // console.log("Projects API response:", JSON.stringify(data, null, 2))
-    console.log(`[Projects API] Fetched ${data.projects?.length || 0} projects`)
+    const fetchedProjects = await fetchAllProjects(accessToken, { teamId, search })
+    console.log(
+      `[Projects API] Fetched ${fetchedProjects.length} projects${teamId ? ` for team ${teamId}` : " for personal account"}`
+    )
 
     // Handle case where no projects exist
-    if (!data.projects || data.projects.length === 0) {
+    if (fetchedProjects.length === 0) {
       return Response.json({
         success: true,
         projects: []
@@ -87,7 +108,7 @@ export async function GET(request: Request) {
     }
 
     // Format projects data
-    const projects = (data.projects ?? []).map((project) => ({
+    const projects = fetchedProjects.map((project) => ({
       id: project.id,
       name: project.name,
       framework: project.framework,

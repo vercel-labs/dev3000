@@ -7,12 +7,23 @@ export interface VercelTeam {
   slug: string
   name: string
   isPersonal: boolean
+  avatarUrl?: string
+  planLabel?: string
+  sourceLabel?: string
 }
 
 interface RawVercelTeam {
   id?: string
   slug?: string
   name?: string
+  avatar?: string
+  avatarUrl?: string
+  image?: string
+  profileImage?: string
+  plan?: string
+  billing?: {
+    plan?: string
+  }
 }
 
 interface TeamsResponse {
@@ -20,6 +31,28 @@ interface TeamsResponse {
   pagination?: {
     next?: number
   }
+}
+
+function normalizePlanLabel(value: string | undefined, fallback?: string): string | undefined {
+  const normalized = value?.trim().toLowerCase()
+  if (!normalized) {
+    return fallback
+  }
+
+  if (normalized === "hobby") return "Hobby"
+  if (normalized === "pro") return "Pro"
+  if (normalized === "enterprise") return "Enterprise"
+
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1)
+}
+
+function pickAvatarUrl(value: {
+  avatar?: string
+  avatarUrl?: string
+  image?: string
+  profileImage?: string
+}): string | undefined {
+  return value.avatarUrl || value.avatar || value.image || value.profileImage || undefined
 }
 
 async function fetchAllTeams(accessToken: string): Promise<RawVercelTeam[]> {
@@ -83,12 +116,9 @@ export async function listCurrentUserTeams(): Promise<VercelTeam[]> {
     fetchAllTeams(accessToken)
   ])
 
-  let userData: { user?: { id?: string; username?: string; name?: string } } | null = null
   if (userResult.status === "fulfilled") {
     if (userResult.value.ok) {
-      userData = (await userResult.value.json()) as {
-        user?: { id?: string; username?: string; name?: string }
-      }
+      await userResult.value.json()
     } else {
       const errorText = await userResult.value.text()
       console.error(`[Vercel Teams] Failed to fetch user: ${userResult.value.status} ${errorText}`)
@@ -107,22 +137,16 @@ export async function listCurrentUserTeams(): Promise<VercelTeam[]> {
 
   const teams: VercelTeam[] = []
 
-  if (userData?.user?.id && userData.user?.username) {
-    teams.push({
-      id: userData.user.id,
-      slug: userData.user.username,
-      name: userData.user.name || userData.user.username,
-      isPersonal: true
-    })
-  }
-
   for (const team of fetchedTeams) {
     if (!team.id || !team.slug || !team.name) continue
     teams.push({
       id: team.id,
       slug: team.slug,
       name: team.name,
-      isPersonal: false
+      isPersonal: false,
+      avatarUrl: pickAvatarUrl(team),
+      planLabel: normalizePlanLabel(team.plan || team.billing?.plan),
+      sourceLabel: "Team"
     })
   }
 

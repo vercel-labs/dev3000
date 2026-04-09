@@ -181,9 +181,9 @@ export default function DevAgentRunClient({
   }, [])
 
   const selectedTeamId = selectedTeam?.id
-  const selectedTeamIsPersonal = selectedTeam?.isPersonal
+  const selectedTeamScope = selectedTeam?.isPersonal ? selectedTeam?.slug : selectedTeam?.id
   useEffect(() => {
-    if (!selectedTeamId) {
+    if (!selectedTeamId || !selectedTeamScope) {
       setProjects([])
       setSelectedProjectFallback(null)
       setSelectedProjectId("")
@@ -194,10 +194,7 @@ export default function DevAgentRunClient({
     setProjectsLoading(true)
     setError(null)
 
-    const params = new URLSearchParams()
-    if (!selectedTeamIsPersonal) {
-      params.set("teamId", selectedTeamId)
-    }
+    const params = new URLSearchParams({ teamId: selectedTeamScope })
 
     void fetch(params.toString() ? `/api/projects?${params.toString()}` : "/api/projects", {
       signal: controller.signal
@@ -221,10 +218,10 @@ export default function DevAgentRunClient({
       })
 
     return () => controller.abort()
-  }, [selectedTeamId, selectedTeamIsPersonal])
+  }, [selectedTeamId, selectedTeamScope])
 
   useEffect(() => {
-    if (!selectedProjectId || !selectedTeamId) {
+    if (!selectedProjectId || !selectedTeamScope) {
       setSelectedProjectFallback(null)
       return
     }
@@ -235,7 +232,7 @@ export default function DevAgentRunClient({
     }
 
     const controller = new AbortController()
-    const params = selectedTeamIsPersonal ? "" : `?teamId=${encodeURIComponent(selectedTeamId)}`
+    const params = `?teamId=${encodeURIComponent(selectedTeamScope)}`
 
     void fetch(`/api/projects/${selectedProjectId}${params}`, {
       signal: controller.signal
@@ -256,7 +253,7 @@ export default function DevAgentRunClient({
       })
 
     return () => controller.abort()
-  }, [projects, selectedProjectId, selectedTeamId, selectedTeamIsPersonal])
+  }, [projects, selectedProjectId, selectedTeamScope])
 
   // Batch-fetch repo visibility for all projects with GitHub links
   useEffect(() => {
@@ -329,17 +326,14 @@ export default function DevAgentRunClient({
 
   const selectedProjectIdStable = selectedProject?.id
   useEffect(() => {
-    if (!selectedProjectIdStable || !selectedTeamId) {
+    if (!selectedProjectIdStable || !selectedTeamScope) {
       setAvailableBranches([])
       return
     }
 
     const controller = new AbortController()
     setBranchesLoading(true)
-    const params = new URLSearchParams({ projectId: selectedProjectIdStable })
-    if (!selectedTeamIsPersonal) {
-      params.set("teamId", selectedTeamId)
-    }
+    const params = new URLSearchParams({ projectId: selectedProjectIdStable, teamId: selectedTeamScope })
 
     void fetch(`/api/projects/branches?${params.toString()}`, {
       signal: controller.signal
@@ -370,7 +364,7 @@ export default function DevAgentRunClient({
       })
 
     return () => controller.abort()
-  }, [baseBranch, selectedProjectIdStable, selectedTeamId, selectedTeamIsPersonal])
+  }, [baseBranch, selectedProjectIdStable, selectedTeamScope])
 
   useEffect(() => {
     if (!selectedRepoOwner || !selectedRepoName) {
@@ -426,9 +420,7 @@ export default function DevAgentRunClient({
     setIsRunning(true)
 
     const projectResponse = await fetch(
-      selectedTeam.isPersonal
-        ? `/api/projects/${selectedProject.id}`
-        : `/api/projects/${selectedProject.id}?teamId=${encodeURIComponent(selectedTeam.id)}`
+      `/api/projects/${selectedProject.id}?teamId=${encodeURIComponent(selectedTeamScope || selectedTeam.id)}`
     )
     const projectData = await projectResponse.json()
     const project = (projectData.success ? projectData.project : selectedProject) as Project
@@ -479,7 +471,7 @@ export default function DevAgentRunClient({
             : undefined,
         projectName: project.name,
         projectId: project.id,
-        teamId: selectedTeam.isPersonal ? undefined : selectedTeam.id,
+        teamId: selectedTeamScope,
         projectDir: projectDirectory.trim() || project.rootDirectory?.trim() || undefined,
         repoUrl: repoOwner && repoName ? `https://github.com/${repoOwner}/${repoName}` : undefined,
         repoOwner,

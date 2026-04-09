@@ -4,7 +4,6 @@ import Image from "next/image"
 import { redirect } from "next/navigation"
 import { type ReactNode, Suspense } from "react"
 import { DevAgentsDashboardShell } from "@/components/dev-agents/dashboard-shell"
-import { ThemeToggle } from "@/components/theme-toggle"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { getCurrentUser } from "@/lib/auth"
@@ -981,10 +980,7 @@ function StandaloneReportFrame({
           <div className="min-w-0 space-y-2">
             <div className="text-[11px] uppercase tracking-wider text-[#555]">{reportLabel || "Dev Agent Report"}</div>
           </div>
-          <div className="flex items-center gap-3">
-            {actions}
-            <ThemeToggle />
-          </div>
+          <div className="flex items-center gap-3">{actions}</div>
         </div>
         <div className="mb-6">
           <h1 className="text-3xl font-bold">{title}</h1>
