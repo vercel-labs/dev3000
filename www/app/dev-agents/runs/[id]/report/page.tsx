@@ -1,4 +1,4 @@
-import { AlertCircle, ChevronRight, ExternalLink, ShieldCheck } from "lucide-react"
+import { AlertCircle, CheckCircle2, ExternalLink, ShieldCheck } from "lucide-react"
 import type { Metadata } from "next"
 import Image from "next/image"
 import { redirect } from "next/navigation"
@@ -13,7 +13,6 @@ import { getDefaultDevAgentsRouteContext } from "@/lib/dev-agents-route"
 import type { WorkflowRun } from "@/lib/workflow-storage"
 import { getPublicWorkflowRun, getWorkflowRun } from "@/lib/workflow-storage"
 import type { WebVitals, WorkflowReport } from "@/types"
-import { AgentAnalysis } from "./agent-analysis"
 import { CoordinatedPlayers } from "./coordinated-players"
 import { DiffSection } from "./diff-section"
 import { LocalizedTimestamp } from "./localized-timestamp"
@@ -101,6 +100,15 @@ const METRIC_DEFINITIONS: MetricDefinition[] = [
   { key: "cls", label: "CLS", description: "Cumulative Layout Shift" }
 ]
 
+const REPORT_STEP_LABELS = [
+  "Creating or reusing ASH app",
+  "Creating sandbox",
+  "Capturing baseline",
+  "Agent in progress",
+  "Generating report",
+  "Finishing up"
+]
+
 function formatMs(value?: number) {
   return typeof value === "number" ? `${value.toFixed(0)}ms` : "—"
 }
@@ -127,10 +135,6 @@ function formatMetricDelta(_key: MetricKey, before: number, after: number) {
 
   const sign = percentChange > 0 ? "+" : "-"
   return `${sign}${roundedMagnitude}%`
-}
-
-function formatSeconds(ms?: number) {
-  return typeof ms === "number" ? `${(ms / 1000).toFixed(1)}s` : "—"
 }
 
 function formatDurationCompact(durationMs?: number | null) {
@@ -180,6 +184,73 @@ function formatUsd(value?: number) {
 function formatGrade(grade?: MetricSnapshot["grade"]) {
   if (!grade) return null
   return grade === "needs-improvement" ? "Needs improvement" : grade[0].toUpperCase() + grade.slice(1)
+}
+
+function stripAnsi(value: string): string {
+  let result = ""
+
+  for (let index = 0; index < value.length; index++) {
+    const charCode = value.charCodeAt(index)
+    if (charCode === 27 && value[index + 1] === "[") {
+      while (index < value.length && value[index] !== "m") {
+        index++
+      }
+      continue
+    }
+    result += value[index]
+  }
+
+  return result
+}
+
+function sanitizeDisplayText(value: string): string {
+  const stripped = stripAnsi(value)
+  let printable = ""
+
+  for (let index = 0; index < stripped.length; index++) {
+    const charCode = stripped.charCodeAt(index)
+    const isDisallowedControl =
+      (charCode >= 0 && charCode <= 8) || (charCode >= 11 && charCode <= 31) || (charCode >= 127 && charCode <= 159)
+    if (!isDisallowedControl) {
+      printable += stripped[index]
+    }
+  }
+
+  return printable.replace(/\s+/g, " ").trim()
+}
+
+const PROGRESS_LOG_DELIMITER = "||"
+
+function parseProgressLogLine(value: string): { timestamp: string | null; message: string } {
+  const sanitized = sanitizeDisplayText(value)
+  const delimiterIndex = sanitized.indexOf(PROGRESS_LOG_DELIMITER)
+  if (delimiterIndex > 0) {
+    const timestamp = sanitized.slice(0, delimiterIndex).trim()
+    const message = sanitized.slice(delimiterIndex + PROGRESS_LOG_DELIMITER.length).trim()
+    if (timestamp && message) {
+      return { timestamp, message }
+    }
+  }
+
+  return { timestamp: null, message: sanitized }
+}
+
+function formatProgressTimestamp(value: string | null): string | null {
+  if (!value) return null
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return null
+  return new Intl.DateTimeFormat(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  }).format(parsed)
+}
+
+function normalizeStepNumber(stepNumber: number | null | undefined): number | null {
+  if (typeof stepNumber !== "number") return null
+  if (stepNumber >= 0 && stepNumber < REPORT_STEP_LABELS.length) return stepNumber
+  if (stepNumber === REPORT_STEP_LABELS.length) return REPORT_STEP_LABELS.length - 1
+  return null
 }
 
 function gradeClsValue(value: number): "good" | "needs-improvement" | "poor" {
@@ -1181,6 +1252,14 @@ function ReportContentBody({ run, report }: { run: WorkflowRun; report: Workflow
     ).values()
   )
   const isMarketplaceAgent = report.isMarketplaceAgent || report.devAgentId?.startsWith("r_mp_") || false
+  const normalizedStepNumber = normalizeStepNumber(run.stepNumber)
+  const progressLogs = Array.isArray(run.progressLogs)
+    ? run.progressLogs.map((line) => {
+        const parsed = parseProgressLogLine(line)
+        const formattedTimestamp = formatProgressTimestamp(parsed.timestamp)
+        return formattedTimestamp ? `[${formattedTimestamp}] ${parsed.message}` : parsed.message
+      })
+    : []
   const bundleComparison = report.turbopackBundleComparison
   const bundleRouteDeltas = bundleComparison
     ? Array.from(
@@ -1639,184 +1718,55 @@ function ReportContentBody({ run, report }: { run: WorkflowRun; report: Workflow
         </ReportSection>
       ) : null}
 
-      {!isMarketplaceAgent && report.agentAnalysis ? (
-        <ReportSection title="Analysis" description="Internal agent output and diagnostics for this run.">
+      {progressLogs.length > 0 || run.sandboxUrl || typeof normalizedStepNumber === "number" || run.currentStep ? (
+        <ReportSection title="Progress" description="Workflow step context and logs preserved from the running report.">
           <details className="group">
             <summary className="inline-flex cursor-pointer items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
-              <span className="inline-flex items-center gap-2 font-medium">
-                <ChevronRight className="h-4 w-4 transition-transform group-open:rotate-90" />
-                Show analysis
-              </span>
+              <span className="inline-flex items-center gap-2 font-medium">Show progress</span>
             </summary>
-            <div className="mt-4 space-y-6">
-              <AgentAnalysis content={report.agentAnalysis} />
-              {report.timing || report.initD3kLogs || report.d3kLogs || report.afterD3kLogs ? (
-                <div className="space-y-4 rounded-lg border border-border bg-muted/20 p-4">
-                  {(report.sandboxDevUrl ||
-                    report.targetUrl ||
-                    report.repoUrl ||
-                    report.repoBranch ||
-                    report.projectDir) && (
-                    <div className="text-xs text-muted-foreground">
-                      <ul className="flex flex-wrap gap-x-6 gap-y-1">
-                        {report.sandboxDevUrl ? (
-                          <li>
-                            <span>{report.analysisTargetType === "url" ? "Sandbox: " : "Dev: "}</span>
-                            <a
-                              href={report.sandboxDevUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="font-mono hover:underline"
-                            >
-                              {report.sandboxDevUrl}
-                            </a>
-                          </li>
-                        ) : null}
-                        {report.targetUrl ? (
-                          <li>
-                            <span>Target: </span>
-                            <a
-                              href={report.targetUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="font-mono hover:underline"
-                            >
-                              {report.targetUrl}
-                            </a>
-                          </li>
-                        ) : null}
-                        {report.repoUrl ? (
-                          <li>
-                            <span>Repo: </span>
-                            <a
-                              href={report.repoUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="font-mono hover:underline"
-                            >
-                              {report.repoUrl}
-                            </a>
-                          </li>
-                        ) : null}
-                        {report.repoBranch ? (
-                          <li>
-                            <span>Ref: </span>
-                            <span className="font-mono">{report.repoBranch}</span>
-                          </li>
-                        ) : null}
-                        {report.projectDir ? (
-                          <li>
-                            <span>Dir: </span>
-                            <span className="font-mono">{report.projectDir}</span>
-                          </li>
-                        ) : null}
-                      </ul>
-                    </div>
-                  )}
+            <div className="mt-4 space-y-4">
+              {run.sandboxUrl ? (
+                <div className="text-xs text-muted-foreground">
+                  <span className="font-medium">Sandbox:</span>{" "}
+                  <a
+                    href={run.sandboxUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-mono hover:underline"
+                  >
+                    {run.sandboxUrl}
+                  </a>
+                </div>
+              ) : null}
 
-                  {report.timing ? (
-                    <>
-                      <div className="flex flex-wrap items-center gap-4">
-                        <div className="rounded-full border border-[#333] bg-[#111] px-2.5 py-1 text-xs text-[#888]">
-                          {report.fromSnapshot ? "Snapshot Reused" : "Fresh Sandbox"}
-                        </div>
-                        <div className="flex flex-wrap items-center gap-4 text-sm">
-                          {runDurationStats.wallClockMs !== null ? (
-                            <span className="text-muted-foreground">
-                              Wall-clock:{" "}
-                              <span className="text-foreground">{formatSeconds(runDurationStats.wallClockMs)}</span>
-                            </span>
-                          ) : null}
-                          <span className="text-muted-foreground">
-                            Measured work:{" "}
-                            <span className="text-foreground">{formatSeconds(report.timing.total.totalMs)}</span>
-                          </span>
-                          {runDurationStats.overheadMs !== null ? (
-                            <span className="text-muted-foreground">
-                              Overhead:{" "}
-                              <span className="font-mono text-xs">{formatSeconds(runDurationStats.overheadMs)}</span>
-                            </span>
-                          ) : null}
-                          <span className="text-muted-foreground">
-                            Init: <span className="font-mono text-xs">{formatSeconds(report.timing.total.initMs)}</span>
-                          </span>
-                          <span className="text-muted-foreground">
-                            Agent:{" "}
-                            <span className="font-mono text-xs">{formatSeconds(report.timing.total.agentMs)}</span>
-                          </span>
-                          {report.timing.total.prMs ? (
-                            <span className="text-muted-foreground">
-                              PR: <span className="font-mono text-xs">{formatSeconds(report.timing.total.prMs)}</span>
-                            </span>
-                          ) : null}
-                        </div>
+              {typeof normalizedStepNumber === "number" ? (
+                <div className="space-y-2">
+                  {REPORT_STEP_LABELS.map((label, index) => {
+                    const isDone = index <= normalizedStepNumber
+                    return (
+                      <div key={label} className="flex items-center gap-3 text-sm">
+                        {isDone ? (
+                          <CheckCircle2 className="h-3.5 w-3.5 text-foreground/80" />
+                        ) : (
+                          <span className="h-2.5 w-2.5 rounded-full bg-muted" />
+                        )}
+                        <span className={isDone ? "text-foreground" : "text-muted-foreground"}>{label}</span>
                       </div>
+                    )
+                  })}
+                </div>
+              ) : null}
 
-                      {runDurationStats.wallClockMs !== null && runDurationStats.overheadMs !== null ? (
-                        <p className="text-xs text-muted-foreground">
-                          The step breakdown below covers instrumented workflow work only. Wall-clock time can be higher
-                          because of workflow orchestration, retries, network waits, and other currently uninstrumented
-                          spans.
-                        </p>
-                      ) : null}
+              {run.currentStep ? <div className="text-xs text-muted-foreground">{run.currentStep}</div> : null}
 
-                      <details className="pt-1">
-                        <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
-                          View step-by-step measured timing breakdown
-                        </summary>
-                        <div className="mt-2 grid gap-4 text-xs md:grid-cols-2">
-                          {report.timing.init?.steps && report.timing.init.steps.length > 0 ? (
-                            <div>
-                              <div className="mb-1 font-medium text-muted-foreground">Init Steps</div>
-                              <ul className="space-y-0.5 font-mono">
-                                {report.timing.init.steps.map((step) => (
-                                  <li key={`init-${step.name}`} className="flex justify-between">
-                                    <span className="mr-2 truncate">{step.name}</span>
-                                    <span className="text-muted-foreground">{formatSeconds(step.durationMs)}</span>
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          ) : null}
-                          {report.timing.agent?.steps && report.timing.agent.steps.length > 0 ? (
-                            <div>
-                              <div className="mb-1 font-medium text-muted-foreground">Agent Steps</div>
-                              <ul className="space-y-0.5 font-mono">
-                                {report.timing.agent.steps.map((step) => (
-                                  <li key={`agent-${step.name}`} className="flex justify-between">
-                                    <span className="mr-2 truncate">{step.name}</span>
-                                    <span className="text-muted-foreground">{formatSeconds(step.durationMs)}</span>
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          ) : null}
-                        </div>
-                      </details>
-                    </>
-                  ) : null}
-
-                  {report.initD3kLogs || report.d3kLogs ? (
-                    <details>
-                      <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
-                        Init logs
-                      </summary>
-                      <pre className="mt-2 max-h-96 overflow-x-auto overflow-y-auto whitespace-pre-wrap rounded bg-muted/50 p-4 font-mono text-xs">
-                        {report.initD3kLogs || report.d3kLogs}
-                      </pre>
-                    </details>
-                  ) : null}
-
-                  {report.afterD3kLogs ? (
-                    <details>
-                      <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
-                        After logs
-                      </summary>
-                      <pre className="mt-2 max-h-96 overflow-x-auto overflow-y-auto whitespace-pre-wrap rounded bg-muted/50 p-4 font-mono text-xs">
-                        {report.afterD3kLogs}
-                      </pre>
-                    </details>
-                  ) : null}
+              {progressLogs.length > 0 ? (
+                <div>
+                  <div className="mb-2 text-xs font-medium text-muted-foreground">Logs</div>
+                  <textarea
+                    readOnly
+                    value={progressLogs.join("\n")}
+                    className="h-72 w-full resize-none rounded-md border border-border bg-muted/30 px-3 py-2 text-xs font-mono leading-relaxed"
+                  />
                 </div>
               ) : null}
             </div>
