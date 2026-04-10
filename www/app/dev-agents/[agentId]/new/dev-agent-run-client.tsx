@@ -1,17 +1,29 @@
 "use client"
 
-import { ArrowRight, ExternalLink, Search } from "lucide-react"
+import { AlertCircle, ArrowRight, CheckCircle2, ExternalLink, Loader2, Search } from "lucide-react"
 import { usePathname, useSearchParams } from "next/navigation"
 import { useEffect, useId, useMemo, useState } from "react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
 import type { DevAgent, DevAgentTeam } from "@/lib/dev-agents-client"
-import type { SkillRunnerExecutionMode, SkillRunnerWorkerStatus } from "@/lib/skill-runner-config"
+import {
+  SKILL_RUNNER_WORKER_PROJECT_NAME,
+  type SkillRunnerExecutionMode,
+  type SkillRunnerWorkerStatus
+} from "@/lib/skill-runner-config"
 
 interface UserInfo {
   id: string
@@ -75,6 +87,24 @@ interface DevAgentRunClientProps {
   skillRunnerExecutionMode?: SkillRunnerExecutionMode
   skillRunnerWorkerBaseUrl?: string
   skillRunnerWorkerStatus?: SkillRunnerWorkerStatus
+}
+
+interface RunnerValidationResult {
+  installed: boolean
+  expectedProjectName: string
+  message?: string
+  project?: {
+    projectId: string
+    projectName: string
+    workerBaseUrl?: string
+    dashboardUrl?: string
+  }
+  settings?: {
+    executionMode?: SkillRunnerExecutionMode
+    workerBaseUrl?: string
+    workerProjectId?: string
+    workerStatus?: SkillRunnerWorkerStatus
+  }
 }
 
 const GITHUB_PAT_STORAGE_KEY = "d3k_github_pat"
@@ -149,6 +179,15 @@ export default function DevAgentRunClient({
   const [repoVisibility, setRepoVisibility] = useState<RepoVisibility>("unknown")
   const [error, setError] = useState<string | null>(null)
   const [isRunning, setIsRunning] = useState(false)
+  const [localSkillRunnerExecutionMode, setLocalSkillRunnerExecutionMode] =
+    useState<SkillRunnerExecutionMode>(skillRunnerExecutionMode)
+  const [localSkillRunnerWorkerBaseUrl, setLocalSkillRunnerWorkerBaseUrl] = useState(skillRunnerWorkerBaseUrl)
+  const [localSkillRunnerWorkerStatus, setLocalSkillRunnerWorkerStatus] = useState(skillRunnerWorkerStatus)
+  const [isWorkerSetupOpen, setIsWorkerSetupOpen] = useState(false)
+  const [isCheckingWorker, setIsCheckingWorker] = useState(false)
+  const [isInstallingWorker, setIsInstallingWorker] = useState(false)
+  const [workerSetupError, setWorkerSetupError] = useState<string | null>(null)
+  const [workerSetupResult, setWorkerSetupResult] = useState<RunnerValidationResult | null>(null)
 
   const [repoVisibilities, setRepoVisibilities] = useState<Map<string, RepoVisibility>>(new Map())
 
@@ -179,13 +218,81 @@ export default function DevAgentRunClient({
     hasGitHubRepoInfo && !defaultUseV0DevAgentRunner && effectiveRepoVisibility === "private_or_unknown"
   const runnerLabel = runnerKind === "skill-runner" ? "skill runner" : "dev agent"
   const runnerTitle = runnerKind === "skill-runner" ? "Skill Runner" : "Dev Agent"
-  const isSelfHostedSkillRunner = runnerKind === "skill-runner" && skillRunnerExecutionMode === "self-hosted"
-  const isReadySelfHostedSkillRunner = isSelfHostedSkillRunner && Boolean(skillRunnerWorkerBaseUrl)
-  const selfHostedHelperText = skillRunnerWorkerBaseUrl
-    ? `This team is configured for self-hosted skill-runner execution via ${skillRunnerWorkerBaseUrl}. New runs will execute on the team-owned worker.`
-    : skillRunnerWorkerStatus === "provisioning" || skillRunnerWorkerStatus === "ready"
+  const isSelfHostedSkillRunner = runnerKind === "skill-runner" && localSkillRunnerExecutionMode === "self-hosted"
+  const isReadySelfHostedSkillRunner = isSelfHostedSkillRunner && Boolean(localSkillRunnerWorkerBaseUrl)
+  const selfHostedHelperText = localSkillRunnerWorkerBaseUrl
+    ? `This team is configured for self-hosted skill-runner execution via ${localSkillRunnerWorkerBaseUrl}. New runs will execute on the team-owned worker.`
+    : localSkillRunnerWorkerStatus === "provisioning" || localSkillRunnerWorkerStatus === "ready"
       ? "This team is configured for self-hosted skill-runner execution. The runner project is still provisioning."
-      : "This team is configured for self-hosted skill-runner execution. Install or validate the runner project in /admin before enabling team-owned runs."
+      : "This team is configured for self-hosted skill-runner execution. Click Start Run to install the team-owned runner."
+
+  useEffect(() => {
+    setLocalSkillRunnerExecutionMode(skillRunnerExecutionMode)
+  }, [skillRunnerExecutionMode])
+
+  useEffect(() => {
+    setLocalSkillRunnerWorkerBaseUrl(skillRunnerWorkerBaseUrl)
+  }, [skillRunnerWorkerBaseUrl])
+
+  useEffect(() => {
+    setLocalSkillRunnerWorkerStatus(skillRunnerWorkerStatus)
+  }, [skillRunnerWorkerStatus])
+
+  function applyWorkerSetup(result: RunnerValidationResult) {
+    setWorkerSetupResult(result)
+    setLocalSkillRunnerExecutionMode(result.settings?.executionMode || "self-hosted")
+    setLocalSkillRunnerWorkerBaseUrl(result.project?.workerBaseUrl || "")
+    setLocalSkillRunnerWorkerStatus(
+      result.settings?.workerStatus || (result.project?.workerBaseUrl ? "ready" : "provisioning")
+    )
+  }
+
+  async function validateWorkerInstallation() {
+    setIsCheckingWorker(true)
+    setWorkerSetupError(null)
+    try {
+      const params = new URLSearchParams({ team: team.id })
+      const response = await fetch(`/api/skill-runner-teams/worker?${params.toString()}`)
+      const data = (await response.json()) as
+        | ({ success: true } & RunnerValidationResult)
+        | { success: false; error?: string }
+      if (!response.ok || !data.success) {
+        throw new Error(("error" in data && data.error) || "Failed to validate runner installation.")
+      }
+      applyWorkerSetup(data)
+    } catch (workerError) {
+      setWorkerSetupError(
+        workerError instanceof Error ? workerError.message : "Failed to validate runner installation."
+      )
+    } finally {
+      setIsCheckingWorker(false)
+    }
+  }
+
+  async function installWorkerProject() {
+    setIsInstallingWorker(true)
+    setWorkerSetupError(null)
+    try {
+      const response = await fetch("/api/skill-runner-teams/worker", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ team: team.id })
+      })
+      const data = (await response.json()) as
+        | ({ success: true } & RunnerValidationResult)
+        | { success: false; error?: string }
+      if (!response.ok || !data.success) {
+        throw new Error(("error" in data && data.error) || "Failed to install runner project.")
+      }
+      applyWorkerSetup(data)
+    } catch (workerError) {
+      setWorkerSetupError(workerError instanceof Error ? workerError.message : "Failed to install runner project.")
+    } finally {
+      setIsInstallingWorker(false)
+    }
+  }
 
   useEffect(() => {
     const stored = localStorage.getItem(GITHUB_PAT_STORAGE_KEY)
@@ -312,13 +419,6 @@ export default function DevAgentRunClient({
   }, [allProjects])
 
   useEffect(() => {
-    const projectParam = searchParams?.get("project")
-    if (projectParam && projects.some((project) => project.id === projectParam) && selectedProjectId !== projectParam) {
-      setSelectedProjectId(projectParam)
-    }
-  }, [projects, searchParams, selectedProjectId])
-
-  useEffect(() => {
     const params = new URLSearchParams(window.location.search)
 
     if (selectedProjectId) {
@@ -427,6 +527,13 @@ export default function DevAgentRunClient({
     }
     if (requiresGitHubPatForRepoAccess && !githubPat.trim()) {
       setError(`A GitHub PAT is required for this ${runnerLabel} and repository.`)
+      return
+    }
+
+    if (isSelfHostedSkillRunner && !isReadySelfHostedSkillRunner) {
+      setError(null)
+      setWorkerSetupError(null)
+      setIsWorkerSetupOpen(true)
       return
     }
 
@@ -828,7 +935,7 @@ export default function DevAgentRunClient({
               <div className="flex items-center gap-2 pt-1">
                 <Button
                   onClick={startDevAgentRun}
-                  disabled={isRunning || !selectedProject || (isSelfHostedSkillRunner && !isReadySelfHostedSkillRunner)}
+                  disabled={isRunning || !selectedProject}
                   size="sm"
                   className="h-8 rounded-md bg-[#ededed] px-4 text-[13px] font-medium text-[#0a0a0a] hover:bg-white disabled:opacity-40"
                 >
@@ -839,6 +946,144 @@ export default function DevAgentRunClient({
           )}
         </div>
       </div>
+
+      <Dialog open={isWorkerSetupOpen} onOpenChange={setIsWorkerSetupOpen}>
+        <DialogContent className="border-[#1f1f1f] bg-[#111] text-[#ededed] sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle className="text-[28px] font-semibold tracking-[-0.02em] text-[#ededed]">
+              Set Up Team Runner
+            </DialogTitle>
+            <DialogDescription className="text-[#888]">
+              Before {team.name} can run this skill runner in self-hosted mode, it needs a team-owned{" "}
+              <span className="font-mono text-[#cfcfcf]">{SKILL_RUNNER_WORKER_PROJECT_NAME}</span> project.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 text-[13px] text-[#888]">
+            <div className="space-y-2 rounded-lg border border-[#1f1f1f] bg-[#0d0d0d] px-4 py-4">
+              <div className="text-[11px] uppercase tracking-[0.14em] text-[#666]">Team</div>
+              <div className="text-[15px] text-[#ededed]">{team.name}</div>
+              <div className="leading-[20px] text-[#777]">
+                We can look for an existing runner project in this team or install it for you automatically.
+              </div>
+            </div>
+
+            {workerSetupError ? (
+              <div className="flex items-start gap-2 rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-3 text-red-400">
+                <AlertCircle className="mt-0.5 size-4 shrink-0" />
+                <div>{workerSetupError}</div>
+              </div>
+            ) : null}
+
+            {workerSetupResult ? (
+              workerSetupResult.installed && workerSetupResult.project ? (
+                <div className="rounded-lg border border-[#1f1f1f] bg-[#0d0d0d] px-4 py-4">
+                  <div className="flex items-start gap-3">
+                    <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-[#ededed]" />
+                    <div>
+                      <div className="text-[15px] font-medium text-[#ededed]">Runner project ready</div>
+                      <div className="mt-2 space-y-1 text-[13px]">
+                        <div className="text-[#888]">{workerSetupResult.project.projectName}</div>
+                        <div className="text-[#666]">Project ID: {workerSetupResult.project.projectId}</div>
+                        <div className="text-[#666]">
+                          Worker URL: {workerSetupResult.project.workerBaseUrl || "No URL detected yet"}
+                        </div>
+                      </div>
+                      {workerSetupResult.project.dashboardUrl ? (
+                        <a
+                          href={workerSetupResult.project.dashboardUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-3 inline-flex text-[12px] text-[#ededed] underline decoration-[#333] underline-offset-4 hover:decoration-[#666]"
+                        >
+                          Open project in Vercel
+                        </a>
+                      ) : null}
+                      {!workerSetupResult.project.workerBaseUrl ? (
+                        <div className="mt-3 flex items-start gap-2 text-[12px] leading-[18px] text-[#888]">
+                          <Loader2 className="mt-[2px] size-3 shrink-0 animate-spin text-[#666]" />
+                          <span>The project exists, but the deployment URL is still provisioning.</span>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-[#1f1f1f] bg-[#0d0d0d] px-4 py-4">
+                  <div className="flex items-start gap-3">
+                    <AlertCircle className="mt-0.5 size-4 shrink-0 text-[#888]" />
+                    <div>
+                      <div className="text-[15px] font-medium text-[#ededed]">Runner project not found</div>
+                      <div className="mt-1 leading-[20px] text-[#888]">
+                        {workerSetupResult.message ||
+                          `No ${workerSetupResult.expectedProjectName} project was found for this team.`}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )
+            ) : null}
+          </div>
+
+          <DialogFooter className="flex-col gap-3 sm:flex-col">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => void validateWorkerInstallation()}
+                disabled={isCheckingWorker || isInstallingWorker}
+                className="h-9 rounded-md border border-[#333] bg-transparent px-4 text-[13px] text-[#ededed] hover:bg-[#1a1a1a]"
+              >
+                {isCheckingWorker ? (
+                  <span className="inline-flex items-center gap-2">
+                    <Loader2 className="size-3.5 animate-spin" />
+                    Checking…
+                  </span>
+                ) : (
+                  "Check Existing Project"
+                )}
+              </Button>
+              {!workerSetupResult?.installed ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => void installWorkerProject()}
+                  disabled={isCheckingWorker || isInstallingWorker}
+                  className="h-9 rounded-md border border-[#333] bg-transparent px-4 text-[13px] text-[#ededed] hover:bg-[#1a1a1a]"
+                >
+                  {isInstallingWorker ? (
+                    <span className="inline-flex items-center gap-2">
+                      <Loader2 className="size-3.5 animate-spin" />
+                      Installing…
+                    </span>
+                  ) : (
+                    "Install Runner Project"
+                  )}
+                </Button>
+              ) : null}
+            </div>
+
+            <div className="flex items-center justify-between gap-3">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setIsWorkerSetupOpen(false)}
+                className="h-9 rounded-md px-0 text-[13px] text-[#777] hover:bg-transparent hover:text-[#ededed]"
+              >
+                Not now
+              </Button>
+              <Button
+                type="button"
+                onClick={() => setIsWorkerSetupOpen(false)}
+                disabled={!workerSetupResult?.installed || !workerSetupResult.project?.workerBaseUrl}
+                className="h-9 rounded-md bg-[#ededed] px-4 text-[13px] font-medium text-[#0a0a0a] hover:bg-white disabled:opacity-40"
+              >
+                Continue
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

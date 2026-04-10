@@ -52,7 +52,6 @@ export function SkillRunnerTeamSettingsPanel({ items }: SkillRunnerTeamSettingsP
   const [validationTeamId, setValidationTeamId] = useState<string | null>(null)
   const [isValidationOpen, setIsValidationOpen] = useState(false)
   const [isValidating, setIsValidating] = useState(false)
-  const [isInstalling, setIsInstalling] = useState(false)
   const [validationResult, setValidationResult] = useState<RunnerValidationResult | null>(null)
   const [validationError, setValidationError] = useState<string | null>(null)
 
@@ -69,6 +68,49 @@ export function SkillRunnerTeamSettingsPanel({ items }: SkillRunnerTeamSettingsP
   const validationTeam = validationTeamId
     ? (items.find((item) => item.team.id === validationTeamId)?.team ?? null)
     : null
+
+  async function persistTeamSettings(teamId: string, nextSettings?: SkillRunnerTeamSettings) {
+    setSavingTeamId(teamId)
+    setError(null)
+
+    try {
+      const settings = nextSettings ?? state[teamId]
+      const team = items.find((item) => item.team.id === teamId)?.team
+      if (!team) {
+        throw new Error("Team not found")
+      }
+
+      const response = await fetch("/api/admin/skill-runner-teams", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          team: team.id,
+          executionMode: settings.executionMode,
+          workerBaseUrl: settings.workerBaseUrl || "",
+          workerProjectId: settings.workerProjectId || "",
+          workerStatus: settings.workerStatus || "unconfigured"
+        })
+      })
+      const data = await response.json()
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Failed to save team settings.")
+      }
+
+      setState((current) => ({
+        ...current,
+        [teamId]: data.settings as SkillRunnerTeamSettings
+      }))
+
+      return data.settings as SkillRunnerTeamSettings
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "Failed to save team settings.")
+      throw saveError
+    } finally {
+      setSavingTeamId(null)
+    }
+  }
 
   function openSelfHostedValidation(teamId: string) {
     setValidationTeamId(teamId)
@@ -108,56 +150,34 @@ export function SkillRunnerTeamSettingsPanel({ items }: SkillRunnerTeamSettingsP
     }
   }
 
-  async function installRunnerProject(teamId: string) {
-    setIsInstalling(true)
-    setValidationError(null)
-
-    try {
-      const team = items.find((item) => item.team.id === teamId)?.team
-      if (!team) {
-        throw new Error("Team not found")
-      }
-
-      const response = await fetch("/api/admin/skill-runner-teams/install", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ team: team.id })
-      })
-      const data = (await response.json()) as
-        | ({ success: true } & RunnerValidationResult)
-        | { success: false; error?: string }
-
-      if (!response.ok || !data.success) {
-        throw new Error(("error" in data && data.error) || "Failed to install runner project.")
-      }
-
-      setValidationResult(data)
-    } catch (installError) {
-      setValidationError(installError instanceof Error ? installError.message : "Failed to install runner project.")
-    } finally {
-      setIsInstalling(false)
-    }
-  }
-
-  function enableSelfHostedForValidatedTeam() {
-    if (
-      !validationTeamId ||
-      !validationResult?.installed ||
-      !validationResult.project ||
-      !validationResult.project.workerBaseUrl
-    ) {
+  async function enableSelfHostedForValidatedTeam() {
+    if (!validationTeamId) {
       return
     }
 
-    updateTeam(validationTeamId, {
-      executionMode: "self-hosted",
-      workerProjectId: validationResult.project.projectId,
-      workerBaseUrl: validationResult.project.workerBaseUrl || "",
-      workerStatus: validationResult.project.workerBaseUrl ? "ready" : "provisioning"
-    })
-    setIsValidationOpen(false)
+    const nextSettings: SkillRunnerTeamSettings =
+      validationResult?.installed && validationResult.project
+        ? {
+            executionMode: "self-hosted",
+            workerProjectId: validationResult.project.projectId,
+            workerBaseUrl: validationResult.project.workerBaseUrl || "",
+            workerStatus: validationResult.project.workerBaseUrl ? "ready" : "provisioning"
+          }
+        : {
+            executionMode: "self-hosted",
+            workerProjectId: "",
+            workerBaseUrl: "",
+            workerStatus: "unconfigured"
+          }
+
+    updateTeam(validationTeamId, nextSettings)
+
+    try {
+      await persistTeamSettings(validationTeamId, nextSettings)
+      setIsValidationOpen(false)
+    } catch {
+      // persistTeamSettings already surfaces the error
+    }
   }
 
   function cancelValidation() {
@@ -168,42 +188,7 @@ export function SkillRunnerTeamSettingsPanel({ items }: SkillRunnerTeamSettingsP
   }
 
   async function saveTeam(teamId: string) {
-    setSavingTeamId(teamId)
-    setError(null)
-    try {
-      const settings = state[teamId]
-      const team = items.find((item) => item.team.id === teamId)?.team
-      if (!team) {
-        throw new Error("Team not found")
-      }
-
-      const response = await fetch("/api/admin/skill-runner-teams", {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          team: team.id,
-          executionMode: settings.executionMode,
-          workerBaseUrl: settings.workerBaseUrl || "",
-          workerProjectId: settings.workerProjectId || "",
-          workerStatus: settings.workerStatus || "unconfigured"
-        })
-      })
-      const data = await response.json()
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || "Failed to save team settings.")
-      }
-
-      setState((current) => ({
-        ...current,
-        [teamId]: data.settings as SkillRunnerTeamSettings
-      }))
-    } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Failed to save team settings.")
-    } finally {
-      setSavingTeamId(null)
-    }
+    await persistTeamSettings(teamId)
   }
 
   return (
@@ -249,7 +234,12 @@ export function SkillRunnerTeamSettingsPanel({ items }: SkillRunnerTeamSettingsP
                         openSelfHostedValidation(team.id)
                         return
                       }
-                      updateTeam(team.id, { executionMode: value as SkillRunnerExecutionMode })
+                      const nextSettings: SkillRunnerTeamSettings = {
+                        ...settings,
+                        executionMode: value as SkillRunnerExecutionMode
+                      }
+                      updateTeam(team.id, nextSettings)
+                      void persistTeamSettings(team.id, nextSettings)
                     }}
                   >
                     <SelectTrigger className="h-9 border-[#1f1f1f] bg-transparent text-[13px] text-[#ededed]">
@@ -342,21 +332,25 @@ export function SkillRunnerTeamSettingsPanel({ items }: SkillRunnerTeamSettingsP
       >
         <DialogContent className="border-[#1f1f1f] bg-[#111] text-[#ededed] sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle className="text-[#ededed]">Validate Self-hosted Runner</DialogTitle>
+            <DialogTitle className="text-[28px] font-semibold tracking-[-0.02em] text-[#ededed]">
+              Set Up Self-hosted Runner
+            </DialogTitle>
             <DialogDescription className="text-[#888]">
               {validationTeam
-                ? `Before ${validationTeam.name} can use self-hosted mode, it needs a team-owned ${"`"}${SKILL_RUNNER_WORKER_PROJECT_NAME}${"`"} project.`
-                : `Validate that the team-owned ${SKILL_RUNNER_WORKER_PROJECT_NAME} project is installed before enabling self-hosted mode.`}
+                ? `Validate the team-owned ${"`"}${SKILL_RUNNER_WORKER_PROJECT_NAME}${"`"} project for ${validationTeam.name}, then enable self-hosted execution.`
+                : `Validate the team-owned ${SKILL_RUNNER_WORKER_PROJECT_NAME} project before enabling self-hosted mode.`}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 text-[13px] text-[#888]">
-            <div className="rounded-lg border border-[#1f1f1f] bg-[#0d0d0d] px-4 py-3 leading-[20px]">
-              Expected project name:{" "}
-              <span className="font-mono text-[#cfcfcf]">{SKILL_RUNNER_WORKER_PROJECT_NAME}</span>
-              <div className="mt-1 text-[#666]">
-                We can detect an existing runner project or create it for you in this team, then auto-configure the
-                worker settings.
+            <div className="space-y-2 rounded-lg border border-[#1f1f1f] bg-[#0d0d0d] px-4 py-4">
+              <div className="text-[11px] uppercase tracking-[0.14em] text-[#666]">Runner Project</div>
+              <div className="text-[15px] text-[#ededed]">
+                <span className="font-mono">{SKILL_RUNNER_WORKER_PROJECT_NAME}</span>
+              </div>
+              <div className="leading-[20px] text-[#777]">
+                Admin can validate existing worker state here. Team members install the runner from the skill-runner run
+                flow in their own team context.
               </div>
             </div>
 
@@ -369,43 +363,51 @@ export function SkillRunnerTeamSettingsPanel({ items }: SkillRunnerTeamSettingsP
 
             {validationResult ? (
               validationResult.installed && validationResult.project ? (
-                <div className="rounded-lg border border-[#1f1f1f] bg-[#0d0d0d] px-4 py-3">
-                  <div className="flex items-start gap-2 text-[#cfcfcf]">
-                    <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-[#cfcfcf]" />
+                <div className="rounded-lg border border-[#1f1f1f] bg-[#0d0d0d] px-4 py-4">
+                  <div className="flex items-start gap-3 text-[#cfcfcf]">
+                    <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-[#ededed]" />
                     <div>
-                      <div className="font-medium text-[#ededed]">Runner project detected</div>
-                      <div className="mt-1 text-[#888]">{validationResult.project.projectName}</div>
-                      <div className="mt-1 text-[#666]">Project ID: {validationResult.project.projectId}</div>
-                      <div className="mt-1 text-[#666]">
-                        Worker URL: {validationResult.project.workerBaseUrl || "No URL detected yet"}
+                      <div className="text-[15px] font-medium text-[#ededed]">Runner project ready</div>
+                      <div className="mt-2 space-y-1 text-[13px]">
+                        <div className="text-[#888]">{validationResult.project.projectName}</div>
+                        <div className="text-[#666]">Project ID: {validationResult.project.projectId}</div>
+                        <div className="text-[#666]">
+                          Worker URL: {validationResult.project.workerBaseUrl || "No URL detected yet"}
+                        </div>
                       </div>
                       {validationResult.project.dashboardUrl ? (
                         <a
                           href={validationResult.project.dashboardUrl}
                           target="_blank"
                           rel="noreferrer"
-                          className="mt-2 inline-flex text-[12px] text-[#ededed] underline decoration-[#333] underline-offset-4 hover:decoration-[#666]"
+                          className="mt-3 inline-flex text-[12px] text-[#ededed] underline decoration-[#333] underline-offset-4 hover:decoration-[#666]"
                         >
                           Open project in Vercel
                         </a>
                       ) : null}
                       {!validationResult.project.workerBaseUrl ? (
-                        <div className="mt-2 text-[12px] text-amber-400">
-                          The project exists, but no stable worker URL was detected yet. You can still enable
-                          self-hosted mode in provisioning state.
+                        <div className="mt-3 flex items-start gap-2 text-[12px] leading-[18px] text-[#888]">
+                          <Loader2 className="mt-[2px] size-3 shrink-0 animate-spin text-[#666]" />
+                          <span>The project exists, but the deployment URL is still provisioning.</span>
                         </div>
-                      ) : null}
+                      ) : (
+                        <div className="mt-3 text-[12px] leading-[18px] text-[#666]">
+                          Self-hosted mode can be enabled now.
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
               ) : (
-                <div className="flex items-start gap-2 rounded-lg border border-[#1f1f1f] bg-[#0d0d0d] px-4 py-3">
-                  <AlertCircle className="mt-0.5 size-4 shrink-0 text-[#888]" />
-                  <div>
-                    <div className="font-medium text-[#ededed]">Runner project not found</div>
-                    <div className="mt-1 text-[#888]">
-                      {validationResult.message ||
-                        `No ${validationResult.expectedProjectName} project was found for this team.`}
+                <div className="rounded-lg border border-[#1f1f1f] bg-[#0d0d0d] px-4 py-4">
+                  <div className="flex items-start gap-3">
+                    <AlertCircle className="mt-0.5 size-4 shrink-0 text-[#888]" />
+                    <div>
+                      <div className="text-[15px] font-medium text-[#ededed]">Runner project not found</div>
+                      <div className="mt-1 leading-[20px] text-[#888]">
+                        {validationResult.message ||
+                          `No ${validationResult.expectedProjectName} project was found for this team.`}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -413,57 +415,43 @@ export function SkillRunnerTeamSettingsPanel({ items }: SkillRunnerTeamSettingsP
             ) : null}
           </div>
 
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={cancelValidation}
-              className="h-8 rounded-md border border-[#333] bg-transparent px-4 text-[13px] text-[#888] hover:bg-[#1a1a1a] hover:text-[#ededed]"
-            >
-              Keep Hosted
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => (validationTeamId ? void validateRunnerInstallation(validationTeamId) : undefined)}
-              disabled={isValidating || isInstalling || !validationTeamId}
-              className="h-8 rounded-md border border-[#333] bg-transparent px-4 text-[13px] text-[#ededed] hover:bg-[#1a1a1a]"
-            >
-              {isValidating ? (
-                <span className="inline-flex items-center gap-2">
-                  <Loader2 className="size-3.5 animate-spin" />
-                  Validating…
-                </span>
-              ) : (
-                "Validate Installation"
-              )}
-            </Button>
-            {!validationResult?.installed ? (
+          <DialogFooter className="flex-col gap-3 sm:flex-col">
+            <div className="flex flex-wrap items-center gap-2">
               <Button
                 type="button"
                 variant="ghost"
-                onClick={() => (validationTeamId ? void installRunnerProject(validationTeamId) : undefined)}
-                disabled={isValidating || isInstalling || !validationTeamId}
-                className="h-8 rounded-md border border-[#333] bg-transparent px-4 text-[13px] text-[#ededed] hover:bg-[#1a1a1a]"
+                onClick={() => (validationTeamId ? void validateRunnerInstallation(validationTeamId) : undefined)}
+                disabled={isValidating || !validationTeamId}
+                className="h-9 rounded-md border border-[#333] bg-transparent px-4 text-[13px] text-[#ededed] hover:bg-[#1a1a1a]"
               >
-                {isInstalling ? (
+                {isValidating ? (
                   <span className="inline-flex items-center gap-2">
                     <Loader2 className="size-3.5 animate-spin" />
-                    Installing…
+                    Checking…
                   </span>
                 ) : (
-                  "Install Runner Project"
+                  "Check Existing Project"
                 )}
               </Button>
-            ) : null}
-            <Button
-              type="button"
-              onClick={enableSelfHostedForValidatedTeam}
-              disabled={!validationResult?.installed || !validationResult.project}
-              className="h-8 rounded-md bg-[#ededed] px-4 text-[13px] font-medium text-[#0a0a0a] hover:bg-white disabled:opacity-40"
-            >
-              Enable Self-hosted
-            </Button>
+            </div>
+
+            <div className="flex items-center justify-between gap-3">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={cancelValidation}
+                className="h-9 rounded-md px-0 text-[13px] text-[#777] hover:bg-transparent hover:text-[#ededed]"
+              >
+                Keep Hosted
+              </Button>
+              <Button
+                type="button"
+                onClick={enableSelfHostedForValidatedTeam}
+                className="h-9 rounded-md bg-[#ededed] px-4 text-[13px] font-medium text-[#0a0a0a] hover:bg-white disabled:opacity-40"
+              >
+                Enable Self-hosted
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
