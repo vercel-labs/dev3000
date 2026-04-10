@@ -19,10 +19,10 @@ This file is the source of truth for agent guidance in this repo. `CLAUDE.md` is
   ```
 - Drive the monitored browser with:
   ```bash
-  CDP_PORT="$(d3k cdp-port)"
-  d3k agent-browser --cdp "$CDP_PORT" snapshot -i
-  d3k agent-browser --cdp "$CDP_PORT" click @e2
+  d3k agent-browser snapshot -i
+  d3k agent-browser click @e2
   ```
+  The session's CDP port is auto-connected. To target a different session: `d3k agent-browser connect <port>` first.
 
 ## Local UI, Production Workflows
 

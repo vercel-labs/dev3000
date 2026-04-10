@@ -6,63 +6,17 @@
  */
 
 import { spawnSync } from "node:child_process"
-import { existsSync, readdirSync, readFileSync } from "node:fs"
-import { homedir } from "node:os"
-import { join } from "node:path"
 import chalk from "chalk"
+import { findCurrentSession } from "../utils/session.js"
 
 export interface CrawlOptions {
   depth?: string // 1, 2, 3, or "all"
   limit?: string // max links per page
 }
 
-interface Session {
-  projectName: string
-  appPort: string
-  publicUrl?: string | null
-  cdpUrl?: string
-}
-
-function findActiveSessions(): Session[] {
-  const sessionDir = join(homedir(), ".d3k")
-  if (!existsSync(sessionDir)) {
-    return []
-  }
-
-  try {
-    const entries = readdirSync(sessionDir, { withFileTypes: true })
-    const sessions: Session[] = []
-
-    for (const entry of entries) {
-      if (entry.isDirectory()) {
-        const sessionFile = join(sessionDir, entry.name, "session.json")
-        if (existsSync(sessionFile)) {
-          try {
-            const content = JSON.parse(readFileSync(sessionFile, "utf-8"))
-            if (content.pid) {
-              try {
-                process.kill(content.pid, 0)
-                sessions.push(content)
-              } catch {
-                // Process not running
-              }
-            }
-          } catch {
-            // Skip invalid files
-          }
-        }
-      }
-    }
-
-    return sessions
-  } catch {
-    return []
-  }
-}
-
 function runAgentBrowser(args: string[]): { success: boolean; output: string } {
   try {
-    const result = spawnSync("d3k", ["agent-browser", "--cdp", "9222", ...args], {
+    const result = spawnSync("d3k", ["agent-browser", ...args], {
       encoding: "utf-8",
       timeout: 30000
     })
@@ -81,15 +35,13 @@ export async function crawlApp(options: CrawlOptions): Promise<void> {
   const maxDepth = options.depth === "all" ? 10 : parseInt(options.depth || "1", 10)
   const limitPerPage = parseInt(options.limit || "3", 10)
 
-  const sessions = findActiveSessions()
+  const session = findCurrentSession()
 
-  if (sessions.length === 0) {
+  if (!session) {
     console.log(chalk.red("❌ No active d3k sessions found."))
     console.log(chalk.gray("Make sure d3k is running first."))
     process.exit(1)
   }
-
-  const session = sessions[0]
   const appPort = session.appPort || "3000"
   const baseUrl = session.publicUrl || `http://localhost:${appPort}`
 
