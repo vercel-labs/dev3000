@@ -11,7 +11,9 @@ import type {
   DevAgentSkillRef
 } from "@/lib/dev-agents"
 
-const ASH_RUNTIME_VERSION = "experimental-ash@0.1.0-alpha.29"
+const ASH_PACKAGE_NAME = "experimental-ash"
+const ASH_PACKAGE_VERSION = "0.2.0-alpha.8"
+const ASH_RUNTIME_VERSION = `${ASH_PACKAGE_NAME}@${ASH_PACKAGE_VERSION}`
 const ASH_ARTIFACT_FORMAT_VERSION = 2
 
 export interface DevAgentAshArtifact {
@@ -142,6 +144,7 @@ function createCanonicalSpec(input: DevAgentAshInput) {
   return {
     schemaVersion: 1,
     artifactFormatVersion: ASH_ARTIFACT_FORMAT_VERSION,
+    ashRuntimeVersion: ASH_RUNTIME_VERSION,
     createdAt: input.createdAt,
     id: input.id,
     name: input.name.trim(),
@@ -379,7 +382,7 @@ export async function createDevAgentAshSource(input: DevAgentAshInput, revision:
             typecheck: "tsgo"
           },
           dependencies: {
-            "experimental-ash": "^0.1.0-alpha.29",
+            [ASH_PACKAGE_NAME]: ASH_PACKAGE_VERSION,
             zod: "^4.3.6"
           },
           devDependencies: {
