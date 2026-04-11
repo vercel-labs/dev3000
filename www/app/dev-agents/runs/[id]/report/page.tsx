@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { getCurrentUser } from "@/lib/auth"
 import { getSignInPath } from "@/lib/auth-redirect"
+import { readBlobJson } from "@/lib/blob-store"
 import { getDefaultDevAgentsRouteContext } from "@/lib/dev-agents-route"
 import type { WorkflowRun } from "@/lib/workflow-storage"
 import { getPublicWorkflowRun, getWorkflowRun } from "@/lib/workflow-storage"
@@ -1122,8 +1123,41 @@ async function WorkflowReportPageData({ params }: { params: Promise<{ id: string
     return pending
   }
 
-  const response = await fetch(run.reportBlobUrl, { cache: "no-store" })
-  const report = applyDemoRunOverride(id, applyTranscriptClsFallback((await response.json()) as WorkflowReport))
+  const reportJson = await readBlobJson<WorkflowReport>(run.reportBlobUrl)
+  if (!reportJson) {
+    const reportLoadFailure = (
+      <div className="space-y-4">
+        <div className="rounded-lg border border-border bg-card p-5">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="mt-0.5 size-5 shrink-0 text-destructive" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <div className="text-sm font-medium text-foreground">The final report could not be loaded.</div>
+              <p className="text-sm text-muted-foreground">
+                The run completed, but its stored report is unavailable from the current Blob store.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+
+    if (canUseDashboardShell && ownerRouteContext?.selectedTeam) {
+      return (
+        <DevAgentsDashboardShell
+          teams={ownerRouteContext.teams}
+          selectedTeam={ownerRouteContext.selectedTeam}
+          section={run.runnerKind === "skill-runner" ? "skill-runner" : "dev-agents"}
+          title={run.projectName}
+          subtitle="Report unavailable"
+        >
+          {reportLoadFailure}
+        </DevAgentsDashboardShell>
+      )
+    }
+
+    return reportLoadFailure
+  }
+  const report = applyDemoRunOverride(id, applyTranscriptClsFallback(reportJson))
 
   const workflowLabel = getWorkflowLabel(report, run)
   const reportLabel = getRunnerReportLabel(run)

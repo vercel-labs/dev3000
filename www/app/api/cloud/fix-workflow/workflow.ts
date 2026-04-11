@@ -11,6 +11,7 @@
  * Step 2 (Fix):  Agent iterates with diagnose→fix→verify until done
  */
 
+import { readBlobJson } from "@/lib/blob-store"
 import type { WorkflowRun } from "@/lib/workflow-storage"
 
 const workflowLog = console.log
@@ -1152,12 +1153,11 @@ async function saveDoneStatus(
 async function loadWorkflowReportSummary(reportBlobUrl: string): Promise<WorkflowReportSummary | null> {
   "use step"
   try {
-    const response = await fetch(reportBlobUrl, { cache: "no-store" })
-    if (!response.ok) {
-      workflowLog(`[Workflow] Failed to load report summary from ${reportBlobUrl}: ${response.status}`)
+    const report = await readBlobJson<import("@/types").WorkflowReport>(reportBlobUrl)
+    if (!report) {
+      workflowLog(`[Workflow] Failed to load report summary from ${reportBlobUrl}`)
       return null
     }
-    const report = (await response.json()) as import("@/types").WorkflowReport
     return {
       clsScore: report.clsScore,
       afterClsScore: report.afterClsScore,

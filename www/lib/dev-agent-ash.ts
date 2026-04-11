@@ -1,5 +1,6 @@
 import { gzipSync } from "node:zlib"
-import { head, put } from "@vercel/blob"
+import { head } from "@vercel/blob"
+import { buildBlobProxyUrl, putBlobAndBuildUrl } from "@/lib/blob-store"
 import type { DevAgentAshArtifact, DevAgentAshInput } from "@/lib/dev-agent-ash-spec"
 import { createDevAgentAshSource } from "@/lib/dev-agent-ash-spec"
 
@@ -91,18 +92,18 @@ export async function publishDevAgentAshArtifactWithStatus(
 
   try {
     const cachedBlob = await head(cachePath)
-    tarballUrl = cachedBlob.url
+    tarballUrl = buildBlobProxyUrl(cachedBlob.pathname, { absolute: true })
     publishState = "reused"
   } catch {
     const tarballBuffer = createTarGzBuffer(source.packageName, source.files)
     tarballUrl = (
-      await put(cachePath, tarballBuffer, {
-        access: "public",
+      await putBlobAndBuildUrl(cachePath, tarballBuffer, {
         addRandomSuffix: false,
         allowOverwrite: true,
-        contentType: "application/gzip"
+        contentType: "application/gzip",
+        absoluteUrl: true
       })
-    ).url
+    ).appUrl
   }
 
   return {

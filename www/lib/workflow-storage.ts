@@ -1,7 +1,8 @@
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
-import { del, list, put } from "@vercel/blob"
+import { list } from "@vercel/blob"
+import { deleteBlobByPathOrUrl, putBlobAndBuildUrl, readBlobJson } from "@/lib/blob-store"
 import type { WebVitals, WorkflowReport } from "@/types"
 
 export type WorkflowType =
@@ -120,22 +121,16 @@ async function deleteLocalWorkflowRun(run: Pick<WorkflowRun, "userId" | "timesta
   await rm(filePath, { force: true })
 }
 
-async function readWorkflowRunBlob(url: string, _pathname: string): Promise<WorkflowRun | null> {
+async function readWorkflowRunBlob(pathOrUrl: string): Promise<WorkflowRun | null> {
   try {
-    const response = await fetch(url, { cache: "no-store" })
-    if (!response.ok) return null
-    const contentType = response.headers.get("content-type")
-    if (contentType && !contentType.includes("application/json")) return null
-    const run = (await response.json()) as WorkflowRun
+    const run = await readBlobJson<WorkflowRun>(pathOrUrl)
+    if (!run) return null
 
     if ((typeof run.costUsd !== "number" || !Number.isFinite(run.costUsd)) && run.reportBlobUrl) {
       try {
-        const reportResponse = await fetch(run.reportBlobUrl, { cache: "no-store" })
-        if (reportResponse.ok) {
-          const report = (await reportResponse.json()) as WorkflowReport
-          if (typeof report.costUsd === "number" && Number.isFinite(report.costUsd)) {
-            run.costUsd = report.costUsd
-          }
+        const report = await readBlobJson<WorkflowReport>(run.reportBlobUrl)
+        if (report && typeof report.costUsd === "number" && Number.isFinite(report.costUsd)) {
+          run.costUsd = report.costUsd
         }
       } catch (error) {
         console.error(`[Workflow Storage] Failed to backfill cost from report ${run.reportBlobUrl}:`, error)
@@ -144,7 +139,7 @@ async function readWorkflowRunBlob(url: string, _pathname: string): Promise<Work
 
     return run
   } catch (error) {
-    console.error(`[Workflow Storage] Failed to fetch ${url}:`, error)
+    console.error(`[Workflow Storage] Failed to fetch ${pathOrUrl}:`, error)
     return null
   }
 }
@@ -157,14 +152,15 @@ export async function saveWorkflowRun(run: WorkflowRun): Promise<string> {
   const path = `workflows/${run.userId}/${run.timestamp}-${run.projectName}.json`
   await saveLocalWorkflowRun(run)
 
-  const blob = await put(path, JSON.stringify(run, null, 2), {
-    access: "public",
+  const blob = await putBlobAndBuildUrl(path, JSON.stringify(run, null, 2), {
     addRandomSuffix: false,
-    allowOverwrite: true
+    allowOverwrite: true,
+    contentType: "application/json",
+    absoluteUrl: true
   })
 
-  console.log(`[Workflow Storage] Saved run to: ${blob.url}`)
-  return blob.url
+  console.log(`[Workflow Storage] Saved run to: ${blob.appUrl}`)
+  return blob.appUrl
 }
 
 /**
@@ -195,7 +191,7 @@ export async function listWorkflowRuns(userId: string): Promise<WorkflowRun[]> {
   }
 
   // Fetch and parse each blob
-  const runs = await Promise.all(blobs.map(async (blob) => readWorkflowRunBlob(blob.url, blob.pathname)))
+  const runs = await Promise.all(blobs.map(async (blob) => readWorkflowRunBlob(blob.pathname)))
 
   // Filter out failed fetches and sort by timestamp
   return runs
@@ -231,7 +227,7 @@ export async function getPublicWorkflowRun(runId: string): Promise<WorkflowRun |
 
     // Search through current page of blobs to find the matching run ID
     for (const blob of pageResult.blobs) {
-      const run = await readWorkflowRunBlob(blob.url, blob.pathname)
+      const run = await readWorkflowRunBlob(blob.pathname)
       if (run?.id === runId && run.isPublic) {
         return run
       }
@@ -315,34 +311,34 @@ export async function deleteWorkflowRuns(
   let deleted = 0
 
   for (const run of runsToDelete) {
-    const urlsToDelete: string[] = []
+    const pathsToDelete: string[] = []
 
     // Collect all blob URLs associated with this run
     // The workflow run JSON file
     const runPath = `workflows/${userId}/${run.timestamp}-${run.projectName}.json`
     const { blobs } = await list({ prefix: runPath })
     for (const blob of blobs) {
-      urlsToDelete.push(blob.url)
+      pathsToDelete.push(blob.pathname)
     }
 
     // Screenshots
     if (run.beforeScreenshotUrl) {
-      urlsToDelete.push(run.beforeScreenshotUrl)
+      pathsToDelete.push(run.beforeScreenshotUrl)
     }
     if (run.afterScreenshotUrl) {
-      urlsToDelete.push(run.afterScreenshotUrl)
+      pathsToDelete.push(run.afterScreenshotUrl)
     }
 
     // Report blob
     if (run.reportBlobUrl) {
-      urlsToDelete.push(run.reportBlobUrl)
+      pathsToDelete.push(run.reportBlobUrl)
     }
 
-    // Delete all collected URLs
+    // Delete all collected paths/URLs
     try {
-      if (urlsToDelete.length > 0) {
-        await del(urlsToDelete)
-        console.log(`[Workflow Storage] Deleted ${urlsToDelete.length} blobs for run ${run.id}`)
+      if (pathsToDelete.length > 0) {
+        await Promise.all(pathsToDelete.map((item) => deleteBlobByPathOrUrl(item)))
+        console.log(`[Workflow Storage] Deleted ${pathsToDelete.length} blobs for run ${run.id}`)
       }
       await deleteLocalWorkflowRun(run)
       deleted++

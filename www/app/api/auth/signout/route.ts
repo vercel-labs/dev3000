@@ -1,6 +1,7 @@
 import { cookies } from "next/headers"
+import { NextResponse } from "next/server"
 
-export async function POST() {
+async function revokeAndClearAuth(): Promise<number> {
   const cookieStore = await cookies()
   const accessToken = cookieStore.get("access_token")?.value
   let status = 200
@@ -39,5 +40,16 @@ export async function POST() {
   cookieStore.set("oauth_code_verifier", "", { maxAge: 0 })
   cookieStore.set("oauth_return_to", "", { maxAge: 0 })
 
+  return status
+}
+
+export async function POST() {
+  const status = await revokeAndClearAuth()
+
   return Response.json({}, { status })
+}
+
+export async function GET(request: Request) {
+  await revokeAndClearAuth()
+  return NextResponse.redirect(new URL("/signin", request.url))
 }

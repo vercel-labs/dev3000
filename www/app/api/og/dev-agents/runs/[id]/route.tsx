@@ -1,5 +1,6 @@
 import { ImageResponse } from "next/og"
 import type { CSSProperties } from "react"
+import { readBlobJson } from "@/lib/blob-store"
 import { getPublicWorkflowRun } from "@/lib/workflow-storage"
 import type { WorkflowReport } from "@/types"
 
@@ -12,12 +13,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       return new Response("Not found", { status: 404 })
     }
 
-    const reportResponse = await fetch(run.reportBlobUrl, { cache: "no-store" })
-    if (!reportResponse.ok) {
+    const report = await readBlobJson<WorkflowReport>(run.reportBlobUrl)
+    if (!report) {
       return new Response("Report not found", { status: 404 })
     }
-
-    const report: WorkflowReport = await reportResponse.json()
     const bundle = report.turbopackBundleComparison
 
     const formatBytes = (bytes?: number) => {

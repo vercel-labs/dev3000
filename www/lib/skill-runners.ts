@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto"
-import { list, put } from "@vercel/blob"
+import { get, list, put } from "@vercel/blob"
 import type {
   DevAgent,
   DevAgentActionStep,
@@ -165,9 +165,15 @@ async function readJsonBlob<T>(pathname: string): Promise<T | null> {
     const blobs = await list({ prefix: pathname, limit: 1 })
     const blob = blobs.blobs.find((entry) => entry.pathname === pathname)
     if (!blob) return null
-    const response = await fetch(blob.url, { cache: "no-store" })
-    if (!response.ok) return null
-    return (await response.json()) as T
+
+    const publicResponse = await fetch(blob.url, { cache: "no-store" })
+    if (publicResponse.ok) {
+      return (await publicResponse.json()) as T
+    }
+
+    const privateBlob = await get(pathname, { access: "private" })
+    if (!privateBlob || privateBlob.statusCode !== 200) return null
+    return (await new Response(privateBlob.stream).json()) as T
   } catch {
     return null
   }
@@ -178,9 +184,14 @@ async function listSkillRunnerUsageStats(): Promise<Map<string, SkillRunnerUsage
     const blobs = await list({ prefix: SKILL_RUNNER_STATS_PREFIX })
     const items = await Promise.all(
       blobs.blobs.map(async (blob) => {
-        const response = await fetch(blob.url, { cache: "no-store" })
-        if (!response.ok) return null
-        return (await response.json()) as SkillRunnerUsageStat
+        const publicResponse = await fetch(blob.url, { cache: "no-store" })
+        if (publicResponse.ok) {
+          return (await publicResponse.json()) as SkillRunnerUsageStat
+        }
+
+        const privateBlob = await get(blob.pathname, { access: "private" })
+        if (!privateBlob || privateBlob.statusCode !== 200) return null
+        return (await new Response(privateBlob.stream).json()) as SkillRunnerUsageStat
       })
     )
     return new Map(
@@ -364,7 +375,7 @@ async function getTeamSkillRunnerState(team: DevAgentTeam): Promise<SkillRunnerT
 
 async function saveTeamSkillRunnerState(state: SkillRunnerTeamState): Promise<void> {
   await put(getTeamStatePath(state.teamId), JSON.stringify(state, null, 2), {
-    access: "public",
+    access: "private",
     addRandomSuffix: false,
     allowOverwrite: true
   })
@@ -559,7 +570,7 @@ export async function incrementSkillRunnerUsage(skillRunnerId: string): Promise<
   }
 
   await put(`${SKILL_RUNNER_STATS_PREFIX}${skillRunnerId}.json`, JSON.stringify(payload, null, 2), {
-    access: "public",
+    access: "private",
     addRandomSuffix: false,
     allowOverwrite: true
   })
@@ -576,7 +587,7 @@ export async function recordSkillRunnerCompletion(skillRunnerId: string, costUsd
   }
 
   await put(`${SKILL_RUNNER_STATS_PREFIX}${skillRunnerId}.json`, JSON.stringify(payload, null, 2), {
-    access: "public",
+    access: "private",
     addRandomSuffix: false,
     allowOverwrite: true
   })

@@ -3,8 +3,8 @@
  * Separated into their own module to avoid workflow bundler issues
  */
 
-import { put } from "@vercel/blob"
 import { createGateway, generateText } from "ai"
+import { putBlobAndBuildUrl } from "@/lib/blob-store"
 
 /**
  * Step 1: Identify affected pages based on changed files
@@ -477,15 +477,15 @@ export async function uploadReport(report: string, repoOwner: string, repoName: 
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-")
   const filename = `pr-check-${repoOwner}-${repoName}-pr${prNumber}-${timestamp}.md`
 
-  const blob = await put(filename, report, {
-    access: "public",
-    contentType: "text/markdown"
+  const blob = await putBlobAndBuildUrl(filename, report, {
+    contentType: "text/markdown",
+    absoluteUrl: true
   })
 
-  console.log(`[Step 6] Report uploaded: ${blob.url}`)
+  console.log(`[Step 6] Report uploaded: ${blob.appUrl}`)
 
   return {
-    blobUrl: blob.url,
+    blobUrl: blob.appUrl,
     filename
   }
 }

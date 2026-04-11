@@ -1,6 +1,6 @@
-import { head, put } from "@vercel/blob"
 import { Sandbox, Snapshot } from "@vercel/sandbox"
 import ms, { type StringValue } from "ms"
+import { putBlobAndBuildUrl, readBlobJson } from "@/lib/blob-store"
 import {
   inferDevServerCommandFromPackageJson,
   NO_DEV_SERVER_COMMAND,
@@ -126,18 +126,17 @@ export async function saveBaseSnapshotId(snapshotId: string, debug = false): Pro
     console.log(`  💾 Saving base snapshot ID to blob store: ${BASE_SNAPSHOT_KEY}`)
   }
 
-  const blob = await put(BASE_SNAPSHOT_KEY, JSON.stringify(metadata, null, 2), {
-    access: "public",
+  const blob = await putBlobAndBuildUrl(BASE_SNAPSHOT_KEY, JSON.stringify(metadata, null, 2), {
     contentType: "application/json",
     addRandomSuffix: false,
     allowOverwrite: true
   })
 
   if (debug) {
-    console.log(`  ✅ Base snapshot ID saved: ${blob.url}`)
+    console.log(`  ✅ Base snapshot ID saved: ${blob.appUrl}`)
   }
 
-  return blob.url
+  return blob.appUrl
 }
 
 /**
@@ -149,19 +148,11 @@ export async function loadBaseSnapshotId(debug = false): Promise<BaseSnapshotMet
   }
 
   try {
-    const blobInfo = await head(BASE_SNAPSHOT_KEY)
-    if (!blobInfo) {
+    const metadata = await readBlobJson<BaseSnapshotMetadata>(BASE_SNAPSHOT_KEY)
+    if (!metadata) {
       if (debug) console.log("  ℹ️ No base snapshot found in blob store")
       return null
     }
-
-    const response = await fetch(blobInfo.url)
-    if (!response.ok) {
-      if (debug) console.log(`  ⚠️ Failed to fetch base snapshot metadata: ${response.status}`)
-      return null
-    }
-
-    const metadata = (await response.json()) as BaseSnapshotMetadata
 
     if (debug) {
       console.log(`  ✅ Found base snapshot: ${metadata.snapshotId}`)

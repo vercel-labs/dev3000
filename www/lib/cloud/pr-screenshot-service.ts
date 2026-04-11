@@ -5,8 +5,8 @@
  * affected by changes, uploads them to blob storage for embedding in PR body.
  */
 
-import { put } from "@vercel/blob"
 import type { Sandbox } from "@vercel/sandbox"
+import { putBlobAndBuildUrl } from "@/lib/blob-store"
 import { SandboxAgentBrowser } from "./sandbox-agent-browser"
 
 const log = (msg: string) => console.log(`[PRScreenshots] ${msg}`)
@@ -174,12 +174,12 @@ async function uploadScreenshotToBlob(
 
     // Upload to blob storage
     const blobName = `pr-${projectName}-${type}-${sanitizeRoute(route)}-${Date.now()}.png`
-    const blob = await put(blobName, imageBuffer, {
-      access: "public",
-      contentType: "image/png"
+    const blob = await putBlobAndBuildUrl(blobName, imageBuffer, {
+      contentType: "image/png",
+      absoluteUrl: true
     })
 
-    return blob.url
+    return blob.appUrl
   } catch (err) {
     log(`Failed to upload screenshot: ${err instanceof Error ? err.message : String(err)}`)
     return null

@@ -1,9 +1,7 @@
-import { list, put } from "@vercel/blob"
+import { list } from "@vercel/blob"
+import { putBlobAndBuildUrl, readBlobJson as readStoredBlobJson } from "@/lib/blob-store"
 import { createDevAgentAshArtifactDescriptor } from "@/lib/dev-agent-ash-spec"
 import { NO_DEV_SERVER_COMMAND } from "@/lib/dev-server-command"
-
-const FETCH_TIMEOUT_MS = 6000
-const FETCH_RETRIES = 2
 
 const CUSTOM_DEV_AGENT_PREFIX = "dev-agents/custom/"
 const DEV_AGENT_STATS_PREFIX = "dev-agents/stats/"
@@ -259,34 +257,6 @@ interface DevAgentUsageStat {
   devAgentId: string
   usageCount: number
   updatedAt: string
-}
-
-async function fetchJsonWithRetry(fetchUrl: string): Promise<Response> {
-  let lastError: unknown
-
-  for (let attempt = 0; attempt <= FETCH_RETRIES; attempt++) {
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
-    try {
-      const response = await fetch(fetchUrl, {
-        headers: {
-          Accept: "application/json"
-        },
-        cache: "no-store",
-        signal: controller.signal
-      })
-      clearTimeout(timeout)
-      return response
-    } catch (error) {
-      clearTimeout(timeout)
-      lastError = error
-      if (attempt < FETCH_RETRIES) {
-        await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)))
-      }
-    }
-  }
-
-  throw lastError
 }
 
 function slugify(input: string): string {
@@ -1010,23 +980,7 @@ export const MARKETPLACE_AGENT_ORDER = [
 
 async function readJsonBlob<T>(pathname: string): Promise<T | null> {
   try {
-    const { blobs } = await list({ prefix: pathname })
-    const blob = blobs.find((item) => item.pathname === pathname)
-    if (!blob) {
-      return null
-    }
-
-    const response = await fetchJsonWithRetry(blob.url)
-    if (!response.ok) {
-      return null
-    }
-
-    const contentType = response.headers.get("content-type")
-    if (contentType && !contentType.includes("application/json")) {
-      return null
-    }
-
-    return (await response.json()) as T
+    return await readStoredBlobJson<T>(pathname)
   } catch (error) {
     console.error(`[Dev Agents] Failed to read blob ${pathname}:`, error)
     return null
@@ -1039,15 +993,7 @@ async function listJsonBlobs<T>(prefix: string): Promise<T[]> {
     const parsed: Array<T | null> = await Promise.all(
       blobs.map(async (blob) => {
         try {
-          const response = await fetchJsonWithRetry(blob.url)
-          if (!response.ok) {
-            return null
-          }
-          const contentType = response.headers.get("content-type")
-          if (contentType && !contentType.includes("application/json")) {
-            return null
-          }
-          return (await response.json()) as T
+          return await readStoredBlobJson<T>(blob.pathname)
         } catch (error) {
           console.error(`[Dev Agents] Failed to fetch ${blob.pathname}:`, error)
           return null
@@ -1441,10 +1387,10 @@ export async function createCustomDevAgent(input: {
     ashArtifact
   }
 
-  await put(`${CUSTOM_DEV_AGENT_PREFIX}${id}.json`, JSON.stringify(storedDevAgent, null, 2), {
-    access: "public",
+  await putBlobAndBuildUrl(`${CUSTOM_DEV_AGENT_PREFIX}${id}.json`, JSON.stringify(storedDevAgent, null, 2), {
     addRandomSuffix: false,
-    allowOverwrite: true
+    allowOverwrite: true,
+    contentType: "application/json"
   })
 
   return {
@@ -1537,11 +1483,15 @@ export async function updateCustomDevAgent(
     nextRevision
   )
 
-  await put(`${CUSTOM_DEV_AGENT_PREFIX}${canonicalDevAgentId}.json`, JSON.stringify(updatedDevAgent, null, 2), {
-    access: "public",
-    addRandomSuffix: false,
-    allowOverwrite: true
-  })
+  await putBlobAndBuildUrl(
+    `${CUSTOM_DEV_AGENT_PREFIX}${canonicalDevAgentId}.json`,
+    JSON.stringify(updatedDevAgent, null, 2),
+    {
+      addRandomSuffix: false,
+      allowOverwrite: true,
+      contentType: "application/json"
+    }
+  )
 
   const usageMap = await listDevAgentUsageStats()
   return {
@@ -1560,10 +1510,10 @@ export async function incrementDevAgentUsage(devAgentId: string): Promise<void> 
     updatedAt: new Date().toISOString()
   }
 
-  await put(`${DEV_AGENT_STATS_PREFIX}${canonicalDevAgentId}.json`, JSON.stringify(payload, null, 2), {
-    access: "public",
+  await putBlobAndBuildUrl(`${DEV_AGENT_STATS_PREFIX}${canonicalDevAgentId}.json`, JSON.stringify(payload, null, 2), {
     addRandomSuffix: false,
-    allowOverwrite: true
+    allowOverwrite: true,
+    contentType: "application/json"
   })
 }
 

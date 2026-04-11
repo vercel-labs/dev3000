@@ -1,12 +1,13 @@
 import Link from "next/link"
 
-export default function AuthErrorPage({
+export default async function AuthErrorPage({
   searchParams
 }: {
-  searchParams: { error?: string; error_description?: string }
+  searchParams: Promise<{ error?: string; error_description?: string }>
 }) {
-  const error = searchParams.error || "unknown_error"
-  const description = searchParams.error_description || "An unknown error occurred during authentication"
+  const resolvedSearchParams = await searchParams
+  const error = resolvedSearchParams.error || "unknown_error"
+  const description = resolvedSearchParams.error_description || "An unknown error occurred during authentication"
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50">

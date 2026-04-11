@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { promisify } from "node:util"
-import { put } from "@vercel/blob"
+import { putBlobAndBuildUrl } from "@/lib/blob-store"
 
 const execFileAsync = promisify(execFile)
 
@@ -245,13 +245,13 @@ export async function prepareV0SourceEntry(options: {
     await execFileAsync("tar", ["-czf", tarballPath, "-C", outputDir, "."])
     const tarballBuffer = await readFile(tarballPath)
     const tarballUrl = (
-      await put(`v0-source-${options.reportId}.tgz`, tarballBuffer, {
-        access: "public",
+      await putBlobAndBuildUrl(`v0-source-${options.reportId}.tgz`, tarballBuffer, {
         addRandomSuffix: false,
         allowOverwrite: true,
-        contentType: "application/gzip"
+        contentType: "application/gzip",
+        absoluteUrl: true
       })
-    ).url
+    ).appUrl
 
     return {
       tarballUrl,
