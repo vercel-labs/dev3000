@@ -1,0 +1,29 @@
+www/app/api/cloud/start-fix/route.ts
+  7a0ea82f7d7bc893 242-243,245-252,256-259,506
+www/app/api/cloud/fix-workflow/steps.ts
+  7a0ea82f7d7bc893 2642,2758-2759,2764-2767,2793
+www/app/api/cloud/fix-workflow/workflow.ts
+  7a0ea82f7d7bc893 191,245,346,702,722
+www/app/dev-agents/[agentId]/new/dev-agent-run-client.tsx
+  7a0ea82f7d7bc893 3,16,111,113-129,196,233-239,241-244,324-344,348-380,606,637-646,687-688,999-1029,1031-1079
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.8",
+  "base_commit_sha": "20570a6bcb462c5168eb4fed17283ef3f052fd13",
+  "prompts": {
+    "7a0ea82f7d7bc893": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d59d8-022d-7262-9555-ec96bb973d0c",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 227,
+      "total_deletions": 56,
+      "accepted_lines": 210,
+      "overriden_lines": 0
+    }
+  }
+}
