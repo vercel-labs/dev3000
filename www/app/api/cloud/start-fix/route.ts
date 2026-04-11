@@ -239,12 +239,24 @@ export async function POST(request: Request) {
       productionUrl,
       projectDir,
       projectId,
-      teamId
+      teamId,
+      projectEnv
     } = body
+    const normalizedProjectEnv =
+      projectEnv && typeof projectEnv === "object"
+        ? Object.fromEntries(
+            Object.entries(projectEnv as Record<string, unknown>)
+              .map(([key, value]) => [key.trim(), typeof value === "string" ? value.trim() : ""])
+              .filter(([key, value]) => key.length > 0 && value.length > 0)
+          )
+        : undefined
     const resolvedNpmToken =
       typeof npmToken === "string" && npmToken.trim().length > 0
         ? npmToken.trim()
-        : process.env.NPM_TOKEN || process.env.NODE_AUTH_TOKEN
+        : normalizedProjectEnv?.NPM_TOKEN ||
+          normalizedProjectEnv?.NODE_AUTH_TOKEN ||
+          process.env.NPM_TOKEN ||
+          process.env.NODE_AUTH_TOKEN
     // Validate workflowType is a valid WorkflowType
     const validWorkflowTypes: WorkflowType[] = [
       "cls-fix",
@@ -491,6 +503,7 @@ export async function POST(request: Request) {
       // PR creation params
       githubPat,
       npmToken: resolvedNpmToken,
+      projectEnv: normalizedProjectEnv,
       submitPullRequest: submitPullRequest !== false,
       repoOwner,
       repoName,

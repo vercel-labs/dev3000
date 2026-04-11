@@ -37,6 +37,8 @@ interface VercelProjectEnvInput {
   target: Array<"production" | "preview" | "development">
 }
 
+const ALLOWED_WORKER_ENV_KEYS = [SKILL_RUNNER_WORKER_MODE_ENV, "AI_GATEWAY_API_KEY", "BLOB_READ_WRITE_TOKEN"] as const
+
 export interface SkillRunnerWorkerProject {
   projectId: string
   projectName: string
@@ -111,16 +113,8 @@ function buildWorkerEnvInputs(): VercelProjectEnvInput[] {
     }
   ]
 
-  const copiedKeys = [
-    "AI_GATEWAY_API_KEY",
-    "BLOB_READ_WRITE_TOKEN",
-    "NPM_TOKEN",
-    "NODE_AUTH_TOKEN",
-    "V0_API_TOKEN",
-    "V0_API_KEY"
-  ] as const
-
-  for (const key of copiedKeys) {
+  for (const key of ALLOWED_WORKER_ENV_KEYS) {
+    if (key === SKILL_RUNNER_WORKER_MODE_ENV) continue
     const value = process.env[key]?.trim()
     if (!value) continue
     envInputs.push({
@@ -137,12 +131,22 @@ function buildWorkerEnvInputs(): VercelProjectEnvInput[] {
 async function upsertWorkerProjectEnv(
   accessToken: string,
   team: VercelTeam,
-  projectId: string,
+  project: SkillRunnerWorkerProject,
   envInputs: VercelProjectEnvInput[]
 ): Promise<void> {
   if (envInputs.length === 0) return
+  if (project.projectName !== SKILL_RUNNER_WORKER_PROJECT_NAME) {
+    throw new Error(`Refusing to write env vars to unexpected project: ${project.projectName}`)
+  }
 
-  const apiUrl = new URL(`https://api.vercel.com/v10/projects/${projectId}/env`)
+  const disallowedEnvKeys = envInputs
+    .map((envInput) => envInput.key)
+    .filter((key) => !ALLOWED_WORKER_ENV_KEYS.includes(key as (typeof ALLOWED_WORKER_ENV_KEYS)[number]))
+  if (disallowedEnvKeys.length > 0) {
+    throw new Error(`Refusing to write disallowed runner env vars: ${disallowedEnvKeys.join(", ")}`)
+  }
+
+  const apiUrl = new URL(`https://api.vercel.com/v10/projects/${project.projectId}/env`)
   apiUrl.searchParams.set("teamId", team.id)
   apiUrl.searchParams.set("upsert", "true")
 
@@ -211,7 +215,7 @@ export async function installSkillRunnerWorkerProject(
   }
 
   const project = existing ?? (await createWorkerProject(accessToken, team))
-  await upsertWorkerProjectEnv(accessToken, team, project.projectId, buildWorkerEnvInputs())
+  await upsertWorkerProjectEnv(accessToken, team, project, buildWorkerEnvInputs())
 
   for (let attempt = 0; attempt < 20; attempt += 1) {
     const resolved = await findSkillRunnerWorkerProject(accessToken, team)

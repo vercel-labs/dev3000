@@ -1,6 +1,6 @@
 "use client"
 
-import { AlertCircle, ArrowRight, CheckCircle2, ExternalLink, Loader2, Search } from "lucide-react"
+import { AlertCircle, ArrowRight, CheckCircle2, ExternalLink, Loader2, Plus, Search, X } from "lucide-react"
 import { usePathname, useSearchParams } from "next/navigation"
 import { useEffect, useId, useMemo, useState } from "react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -13,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -107,7 +108,25 @@ interface RunnerValidationResult {
   }
 }
 
-const GITHUB_PAT_STORAGE_KEY = "d3k_github_pat"
+const RUNNER_ENV_VARS_STORAGE_KEY = "d3k_runner_env_vars"
+
+type RunnerEnvVarKind = "github-pat" | "npm-token" | "custom"
+
+interface RunnerEnvVar {
+  id: string
+  kind: RunnerEnvVarKind
+  name: string
+  value: string
+}
+
+function createRunnerEnvVar(kind: RunnerEnvVarKind): RunnerEnvVar {
+  return {
+    id: crypto.randomUUID(),
+    kind,
+    name: kind === "github-pat" ? "GITHUB_PAT" : kind === "npm-token" ? "NPM_TOKEN" : "",
+    value: ""
+  }
+}
 
 function VercelTriangle({ className }: { className?: string }) {
   return (
@@ -159,7 +178,6 @@ export default function DevAgentRunClient({
   const startPathId = useId()
   const projectDirectoryId = useId()
   const customPromptId = useId()
-  const githubPatId = useId()
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const [projects, setProjects] = useState<Project[]>([])
@@ -175,7 +193,7 @@ export default function DevAgentRunClient({
   const [startPath, setStartPath] = useState("/")
   const [projectDirectory, setProjectDirectory] = useState("")
   const [customPrompt, setCustomPrompt] = useState("")
-  const [githubPat, setGithubPat] = useState("")
+  const [runnerEnvVars, setRunnerEnvVars] = useState<RunnerEnvVar[]>([])
   const [repoVisibility, setRepoVisibility] = useState<RepoVisibility>("unknown")
   const [error, setError] = useState<string | null>(null)
   const [isRunning, setIsRunning] = useState(false)
@@ -212,10 +230,18 @@ export default function DevAgentRunClient({
   const selectedRepoName = selectedProject?.link?.repo || selectedProject?.latestDeployments[0]?.meta?.githubRepo
   const hasGitHubRepoInfo = Boolean(selectedRepoOwner && selectedRepoName)
   const effectiveRepoVisibility = selectedProjectListVisibility ?? repoVisibility
+  const githubPatEnvVar = runnerEnvVars.find(
+    (envVar) => envVar.kind === "github-pat" || envVar.name.trim().toUpperCase() === "GITHUB_PAT"
+  )
+  const npmTokenEnvVar = runnerEnvVars.find((envVar) => {
+    const normalizedName = envVar.name.trim().toUpperCase()
+    return envVar.kind === "npm-token" || normalizedName === "NPM_TOKEN" || normalizedName === "NODE_AUTH_TOKEN"
+  })
   const requiresGitHubPatForRepoAccess =
-    !defaultUseV0DevAgentRunner && hasGitHubRepoInfo && effectiveRepoVisibility === "private_or_unknown"
-  const shouldShowGitHubPatField =
-    hasGitHubRepoInfo && !defaultUseV0DevAgentRunner && effectiveRepoVisibility === "private_or_unknown"
+    !defaultUseV0DevAgentRunner &&
+    hasGitHubRepoInfo &&
+    effectiveRepoVisibility === "private_or_unknown" &&
+    !githubPatEnvVar?.value.trim()
   const runnerLabel = runnerKind === "skill-runner" ? "skill runner" : "dev agent"
   const runnerTitle = runnerKind === "skill-runner" ? "Skill Runner" : "Dev Agent"
   const isSelfHostedSkillRunner = runnerKind === "skill-runner" && localSkillRunnerExecutionMode === "self-hosted"
@@ -295,11 +321,63 @@ export default function DevAgentRunClient({
   }
 
   useEffect(() => {
-    const stored = localStorage.getItem(GITHUB_PAT_STORAGE_KEY)
-    if (stored) {
-      setGithubPat(stored)
+    try {
+      const raw = localStorage.getItem(RUNNER_ENV_VARS_STORAGE_KEY)
+      if (!raw) return
+      const parsed = JSON.parse(raw) as Array<Partial<RunnerEnvVar>>
+      if (!Array.isArray(parsed)) return
+      const restored = parsed
+        .map((envVar) => ({
+          id: typeof envVar.id === "string" && envVar.id ? envVar.id : crypto.randomUUID(),
+          kind:
+            envVar.kind === "github-pat" || envVar.kind === "npm-token" || envVar.kind === "custom"
+              ? envVar.kind
+              : "custom",
+          name: typeof envVar.name === "string" ? envVar.name : "",
+          value: typeof envVar.value === "string" ? envVar.value : ""
+        }))
+        .filter((envVar) => envVar.name.trim() || envVar.value.trim())
+      if (restored.length > 0) {
+        setRunnerEnvVars(restored)
+      }
+    } catch {
+      localStorage.removeItem(RUNNER_ENV_VARS_STORAGE_KEY)
     }
   }, [])
+
+  useEffect(() => {
+    if (runnerEnvVars.length === 0) {
+      localStorage.removeItem(RUNNER_ENV_VARS_STORAGE_KEY)
+      return
+    }
+    localStorage.setItem(RUNNER_ENV_VARS_STORAGE_KEY, JSON.stringify(runnerEnvVars))
+  }, [runnerEnvVars])
+
+  function addRunnerEnvVar(kind: RunnerEnvVarKind) {
+    setRunnerEnvVars((current) => {
+      if (kind !== "custom" && current.some((envVar) => envVar.kind === kind)) {
+        return current
+      }
+      return [...current, createRunnerEnvVar(kind)]
+    })
+  }
+
+  function updateRunnerEnvVar(id: string, patch: Partial<Pick<RunnerEnvVar, "name" | "value">>) {
+    setRunnerEnvVars((current) =>
+      current.map((envVar) =>
+        envVar.id === id
+          ? {
+              ...envVar,
+              ...patch
+            }
+          : envVar
+      )
+    )
+  }
+
+  function removeRunnerEnvVar(id: string) {
+    setRunnerEnvVars((current) => current.filter((envVar) => envVar.id !== id))
+  }
 
   const selectedTeamId = selectedTeam?.id
   const selectedTeamScope = selectedTeam?.isPersonal ? selectedTeam?.slug : selectedTeam?.id
@@ -525,7 +603,7 @@ export default function DevAgentRunClient({
       setError(`This ${runnerLabel} requires custom instructions.`)
       return
     }
-    if (requiresGitHubPatForRepoAccess && !githubPat.trim()) {
+    if (requiresGitHubPatForRepoAccess) {
       setError(`A GitHub PAT is required for this ${runnerLabel} and repository.`)
       return
     }
@@ -556,11 +634,16 @@ export default function DevAgentRunClient({
     const repoOwner = project.link?.org || latestDeployment.meta?.githubOrg
     const repoName = project.link?.repo || latestDeployment.meta?.githubRepo
     const gitRef = latestDeployment.gitSource?.ref || baseBranch || latestDeployment.gitSource?.sha || "main"
-    const effectiveGithubPat = shouldShowGitHubPatField ? githubPat.trim() : ""
-
-    if (effectiveGithubPat) {
-      localStorage.setItem(GITHUB_PAT_STORAGE_KEY, effectiveGithubPat)
-    }
+    const sanitizedEnvVars = runnerEnvVars
+      .map((envVar) => ({
+        ...envVar,
+        name: envVar.name.trim(),
+        value: envVar.value.trim()
+      }))
+      .filter((envVar) => envVar.name && envVar.value)
+    const effectiveGithubPat = githubPatEnvVar?.value.trim() || ""
+    const effectiveNpmToken = npmTokenEnvVar?.value.trim() || ""
+    const projectEnv = Object.fromEntries(sanitizedEnvVars.map((envVar) => [envVar.name, envVar.value]))
 
     const tokenResponse = await fetch("/api/auth/token")
     const tokenData = await tokenResponse.json()
@@ -601,6 +684,8 @@ export default function DevAgentRunClient({
         baseBranch,
         startPath: devAgent.supportsPathInput && startPath.trim() ? startPath.trim() : undefined,
         githubPat: effectiveGithubPat || undefined,
+        npmToken: effectiveNpmToken || undefined,
+        projectEnv: Object.keys(projectEnv).length > 0 ? projectEnv : undefined,
         submitPullRequest: true,
         customPrompt: devAgent.requiresCustomPrompt ? customPrompt.trim() : undefined,
         productionUrl: latestDeployment.url ? `https://${latestDeployment.url}` : undefined,
@@ -911,26 +996,87 @@ export default function DevAgentRunClient({
                 </div>
               )}
 
-              {shouldShowGitHubPatField && (
-                <div className="space-y-1.5">
-                  <Label htmlFor={githubPatId} className="text-[13px] text-[#888]">
-                    GitHub PAT
-                    {requiresGitHubPatForRepoAccess ? <span className="ml-1 text-red-400">*</span> : null}
-                  </Label>
-                  <Input
-                    id={githubPatId}
-                    type="password"
-                    value={githubPat}
-                    onChange={(event) => setGithubPat(event.target.value)}
-                    placeholder="ghp_..."
-                    className="h-9 border-[#1f1f1f] bg-transparent text-[13px] text-[#ededed]"
-                  />
-                  <p className="text-[11px] text-[#555]">
-                    Visibility: {effectiveRepoVisibility.replaceAll("_", " ")}
-                    {requiresGitHubPatForRepoAccess ? " · Required for private repos." : ""}
-                  </p>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <Label className="text-[13px] text-[#888]">Runner Env Vars</Label>
+                    <p className="mt-0.5 text-[11px] text-[#555]">
+                      Add secrets for private repos, private npm access, or custom runner needs.
+                    </p>
+                  </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 rounded-md border border-[#1f1f1f] bg-transparent px-2.5 text-[#888] hover:bg-[#1a1a1a] hover:text-[#ededed]"
+                      >
+                        <Plus className="size-3.5" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-48 border-[#333] bg-[#0a0a0a]">
+                      <DropdownMenuItem onClick={() => addRunnerEnvVar("github-pat")} className="text-[13px]">
+                        GITHUB_PAT
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => addRunnerEnvVar("npm-token")} className="text-[13px]">
+                        NPM_TOKEN
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => addRunnerEnvVar("custom")} className="text-[13px]">
+                        CUSTOM
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
-              )}
+
+                {runnerEnvVars.length > 0 ? (
+                  <div className="space-y-2">
+                    {runnerEnvVars.map((envVar) => {
+                      const isGitHubPatEnv =
+                        envVar.kind === "github-pat" || envVar.name.trim().toUpperCase() === "GITHUB_PAT"
+                      const helperText = isGitHubPatEnv
+                        ? `Visibility: ${effectiveRepoVisibility.replaceAll("_", " ")}${requiresGitHubPatForRepoAccess ? " · Required for private repos and PR creation." : ""}`
+                        : envVar.kind === "npm-token"
+                          ? "Used for installing packages from private npm registries."
+                          : "Passed through to the runner sandbox for this run."
+
+                      return (
+                        <div key={envVar.id} className="rounded-md border border-[#1f1f1f] bg-[#111] p-3">
+                          <div className="grid gap-2 sm:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)_auto]">
+                            <Input
+                              value={envVar.name}
+                              onChange={(event) => updateRunnerEnvVar(envVar.id, { name: event.target.value })}
+                              placeholder="Name"
+                              className="h-9 border-[#1f1f1f] bg-transparent text-[13px] text-[#ededed] placeholder:text-[#555]"
+                            />
+                            <Input
+                              type="password"
+                              value={envVar.value}
+                              onChange={(event) => updateRunnerEnvVar(envVar.id, { value: event.target.value })}
+                              placeholder="Value"
+                              className="h-9 border-[#1f1f1f] bg-transparent text-[13px] text-[#ededed] placeholder:text-[#555]"
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => removeRunnerEnvVar(envVar.id)}
+                              className="h-9 w-9 rounded-md border border-[#1f1f1f] bg-transparent text-[#666] hover:bg-[#1a1a1a] hover:text-[#ededed]"
+                            >
+                              <X className="size-3.5" />
+                            </Button>
+                          </div>
+                          <p className="mt-2 text-[11px] text-[#555]">{helperText}</p>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <div className="rounded-md border border-dashed border-[#1f1f1f] bg-[#111] px-3 py-3 text-[12px] text-[#666]">
+                    No extra runner env vars added.
+                  </div>
+                )}
+              </div>
 
               <div className="flex items-center gap-2 pt-1">
                 <Button

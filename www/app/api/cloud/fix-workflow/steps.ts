@@ -2639,6 +2639,7 @@ export async function initSandboxStep(
   _startPath: string,
   githubPat?: string,
   npmToken?: string,
+  projectEnvInput?: Record<string, string>,
   vercelOidcToken?: string,
   devAgentDevServerCommand?: string,
   progressContext?: ProgressContext | null,
@@ -2754,10 +2755,16 @@ export async function initSandboxStep(
 
   const effectiveNpmToken =
     npmToken ||
+    projectEnvInput?.NPM_TOKEN ||
+    projectEnvInput?.NODE_AUTH_TOKEN ||
     developmentEnv.NPM_TOKEN ||
     developmentEnv.NODE_AUTH_TOKEN ||
     process.env.NPM_TOKEN ||
     process.env.NODE_AUTH_TOKEN
+  const mergedProjectEnv = {
+    ...developmentEnv,
+    ...(projectEnvInput || {})
+  }
   await appendProgressLog(
     progressContext,
     `[Sandbox] npm auth token ${effectiveNpmToken ? "detected" : "not detected"} for dependency install`
@@ -2783,7 +2790,7 @@ export async function initSandboxStep(
         onProgress: (message) => appendProgressLog(progressContext, `[Sandbox] ${message}`),
         projectDir: projectDir || "",
         devCommand: devAgentDevServerCommand,
-        projectEnv: developmentEnv,
+        projectEnv: mergedProjectEnv,
         timeout: WORKFLOW_SANDBOX_TIMEOUT,
         debug: true
       },

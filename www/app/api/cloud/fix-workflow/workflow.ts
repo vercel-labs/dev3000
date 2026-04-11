@@ -188,6 +188,7 @@ export async function cloudFixWorkflow(params: {
   // PR creation params
   githubPat?: string
   npmToken?: string
+  projectEnv?: Record<string, string>
   submitPullRequest?: boolean
   repoOwner?: string
   repoName?: string
@@ -241,6 +242,7 @@ export async function cloudFixWorkflow(params: {
     crawlDepth,
     githubPat,
     npmToken,
+    projectEnv,
     submitPullRequest = true,
     repoOwner,
     repoName,
@@ -341,6 +343,7 @@ export async function cloudFixWorkflow(params: {
       startPath,
       githubPat,
       npmToken,
+      projectEnv,
       vercelOidcToken,
       devAgentDevServerCommand,
       progressContext,
@@ -696,6 +699,7 @@ async function initSandbox(
   startPath: string,
   githubPat?: string,
   npmToken?: string,
+  projectEnv?: Record<string, string>,
   vercelOidcToken?: string,
   devAgentDevServerCommand?: string,
   progressContext?: ProgressContext | null,
@@ -715,6 +719,7 @@ async function initSandbox(
     startPath,
     githubPat,
     npmToken,
+    projectEnv,
     vercelOidcToken,
     devAgentDevServerCommand,
     progressContext,
