@@ -1,0 +1,42 @@
+www/app/api/skill-runner-teams/worker/route.ts
+  7a0ea82f7d7bc893 18,23
+www/proxy.ts
+  7a0ea82f7d7bc893 14-20,95
+www/lib/skill-runner-worker.ts
+  7a0ea82f7d7bc893 21,25,30-32,82-84,102,117-122,289-322,425,432-435,452-487
+www/app/dev-agents/[agentId]/new/dev-agent-run-client.tsx
+  7a0ea82f7d7bc893 260-267,291,312,318-320,703-709,1081-1085,1119-1120,1164-1167,1204,1210,1212,1223-1248
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.8",
+  "base_commit_sha": "fb8c13b0b20987c1c0253dd79d3dd7229d801d9a",
+  "prompts": {
+    "7a0ea82f7d7bc893": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d59d8-022d-7262-9555-ec96bb973d0c",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 1572,
+      "total_deletions": 1488,
+      "accepted_lines": 168,
+      "overriden_lines": 0
+    },
+    "99ca025371e68d9d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d87d1-243a-7931-bf03-4625a7dea51f",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 925,
+      "overriden_lines": 0
+    }
+  }
+}
