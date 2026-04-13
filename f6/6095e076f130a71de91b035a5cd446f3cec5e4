@@ -1,0 +1,62 @@
+www/lib/changelog.ts
+  99ca025371e68d9d 13-24
+src/cli.ts
+  99ca025371e68d9d 357,380-382,934-938,989,1217,1223-1224,1333
+www/app/api/cloud/start-fix/route.ts
+  99ca025371e68d9d 305-314
+src/cdp-monitor.test.ts
+  99ca025371e68d9d 2,53-61
+www/app/api/cloud/fix-workflow/steps.ts
+  99ca025371e68d9d 10-11,3692,4400,4682,6147-6148,6171,6182
+www/app/api/skill-runner-teams/worker/route.ts
+  99ca025371e68d9d 17-25,56
+www/lib/skill-runner-worker.ts
+  99ca025371e68d9d 40-64,66-69,76,115-126,151,159,161-208,211-266,269-272,313-330,332-340,374,380-381,390,396,400
+www/lib/ai-gateway.ts
+  99ca025371e68d9d 1-29
+www/components/admin/skill-runner-team-settings.tsx
+  99ca025371e68d9d 43,165-169,375-379,402-413
+www/app/api/cloud/check-pr/steps.ts
+  99ca025371e68d9d 6-7,55,175
+www/app/dev-agents/[agentId]/new/dev-agent-run-client.tsx
+  99ca025371e68d9d 102,249-258,277-278,329-331,1139-1143,1166-1177,1218,1229,1231-1232,1252-1256
+src/dev-environment.ts
+  99ca025371e68d9d 162,2117,2162
+CHANGELOG.md
+  99ca025371e68d9d 7-16,38
+src/cdp-monitor.ts
+  99ca025371e68d9d 86-99,233,244,257,477,948,1529,1539-1545
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.8",
+  "base_commit_sha": "f66095e076f130a71de91b035a5cd446f3cec5e4",
+  "prompts": {
+    "7a0ea82f7d7bc893": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d59d8-022d-7262-9555-ec96bb973d0c",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 1,
+      "overriden_lines": 0
+    },
+    "99ca025371e68d9d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d87d1-243a-7931-bf03-4625a7dea51f",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 1330,
+      "total_deletions": 74,
+      "accepted_lines": 1330,
+      "overriden_lines": 0
+    }
+  }
+}
