@@ -1,0 +1,42 @@
+package.json
+  99ca025371e68d9d 3,80-82
+packages/d3k-darwin-arm64/package.json
+  99ca025371e68d9d 3
+packages/d3k-linux-x64/package.json
+  99ca025371e68d9d 3
+packages/d3k-windows-x64/package.json
+  99ca025371e68d9d 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.8",
+  "base_commit_sha": "bd3d477cc17def4a6f6b70ae5c71749e327360d1",
+  "prompts": {
+    "7a0ea82f7d7bc893": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d59d8-022d-7262-9555-ec96bb973d0c",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 1,
+      "overriden_lines": 0
+    },
+    "99ca025371e68d9d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d87d1-243a-7931-bf03-4625a7dea51f",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 7,
+      "total_deletions": 7,
+      "accepted_lines": 932,
+      "overriden_lines": 0
+    }
+  }
+}
