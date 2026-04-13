@@ -56,6 +56,7 @@ interface VercelProjectEnvListResponse {
 
 interface VercelBlobStoreListResponse {
   stores?: Array<{
+    access?: "public" | "private"
     id?: string
     name?: string
     projectsMetadata?: Array<{
@@ -276,6 +277,19 @@ async function removeProjectEnvVar(
   projectId: string,
   envId: string
 ): Promise<void> {
+  const unlinkUrl = new URL(`https://api.vercel.com/v1/env/${envId}/unlink/${projectId}`)
+  unlinkUrl.searchParams.set("teamId", team.id)
+
+  const unlinkResponse = await fetch(unlinkUrl.toString(), {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${accessToken}`
+    },
+    cache: "no-store"
+  })
+
+  if (unlinkResponse.ok || unlinkResponse.status === 404) return
+
   const apiUrl = new URL(`https://api.vercel.com/v9/projects/${projectId}/env/${envId}`)
   apiUrl.searchParams.set("teamId", team.id)
 
@@ -432,7 +446,7 @@ async function getWorkerProjectMissingEnvKeys(
   const desiredStoreName = buildWorkerBlobStoreName(team)
   const stores = await listTeamBlobStores(accessToken, team)
   const blobStore = stores.find((store) => store.id === blobStoreId)
-  if (!blobStore || blobStore.name !== desiredStoreName) {
+  if (!blobStore || blobStore.name !== desiredStoreName || blobStore.access !== "private") {
     return ["BLOB_READ_WRITE_TOKEN"]
   }
 
