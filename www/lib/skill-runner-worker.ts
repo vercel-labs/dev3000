@@ -44,8 +44,13 @@ interface VercelProjectEnvInput {
 
 interface VercelProjectEnvListResponse {
   envs?: Array<{
+    id?: string
     key?: string
     target?: Array<"production" | "preview" | "development">
+    contentHint?: {
+      type?: string
+      storeId?: string
+    }
   }>
 }
 
@@ -137,7 +142,7 @@ function sanitizeBlobStoreNameSegment(value: string): string {
 
 function buildWorkerBlobStoreName(team: VercelTeam): string {
   const suffix = sanitizeBlobStoreNameSegment(team.slug).slice(0, 32)
-  return `d3k-skill-runner-${suffix}`.slice(0, 63)
+  return `d3k-skill-runner-${suffix}-private`.slice(0, 63)
 }
 
 async function sleep(ms: number): Promise<void> {
@@ -203,6 +208,7 @@ async function createTeamBlobStore(accessToken: string, team: VercelTeam, name: 
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
+      access: "private",
       name,
       region: SELF_HOSTED_BLOB_STORE_REGION
     }),
@@ -264,25 +270,70 @@ async function connectBlobStoreToProject(
   throw new Error(`Failed to connect Blob store to runner project: ${response.status} ${errorText}`)
 }
 
+async function removeProjectEnvVar(
+  accessToken: string,
+  team: VercelTeam,
+  projectId: string,
+  envId: string
+): Promise<void> {
+  const apiUrl = new URL(`https://api.vercel.com/v9/projects/${projectId}/env/${envId}`)
+  apiUrl.searchParams.set("teamId", team.id)
+
+  const response = await fetch(apiUrl.toString(), {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${accessToken}`
+    },
+    cache: "no-store"
+  })
+
+  if (response.ok || response.status === 404) return
+
+  const errorText = await response.text()
+  throw new Error(`Failed to remove stale worker env var: ${response.status} ${errorText}`)
+}
+
+async function listProjectEnvVars(accessToken: string, team: VercelTeam, projectId: string) {
+  const apiUrl = new URL(`https://api.vercel.com/v10/projects/${projectId}/env`)
+  apiUrl.searchParams.set("teamId", team.id)
+
+  const response = await fetch(apiUrl.toString(), {
+    headers: {
+      Authorization: `Bearer ${accessToken}`
+    },
+    cache: "no-store"
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`Failed to inspect runner project env vars: ${response.status} ${errorText}`)
+  }
+
+  const data = (await response.json()) as VercelProjectEnvListResponse
+  return Array.isArray(data.envs) ? data.envs : []
+}
+
+async function removeWorkerBlobEnvBindings(accessToken: string, team: VercelTeam, projectId: string): Promise<void> {
+  const envVars = await listProjectEnvVars(accessToken, team, projectId)
+  const blobEnvVars = envVars.filter((envItem) => envItem.key?.trim() === "BLOB_READ_WRITE_TOKEN" && envItem.id?.trim())
+
+  for (const envVar of blobEnvVars) {
+    const envId = envVar.id?.trim()
+    if (!envId) continue
+    await removeProjectEnvVar(accessToken, team, projectId, envId)
+  }
+}
+
 async function ensureWorkerBlobStore(
   accessToken: string,
   team: VercelTeam,
   project: SkillRunnerWorkerProject
 ): Promise<void> {
   const stores = await listTeamBlobStores(accessToken, team)
-  const connectedStore = stores.find(
-    (store) =>
-      Array.isArray(store.projectsMetadata) &&
-      store.projectsMetadata.some((metadata) => metadata.projectId === project.projectId)
-  )
-  if (connectedStore?.id) {
-    await connectBlobStoreToProject(accessToken, team, connectedStore.id, project.projectId)
-    return
-  }
-
   const desiredStoreName = buildWorkerBlobStoreName(team)
   const existingStore = stores.find((store) => store.name === desiredStoreName)
   const storeId = existingStore?.id || (await createTeamBlobStore(accessToken, team, desiredStoreName))
+  await removeWorkerBlobEnvBindings(accessToken, team, project.projectId)
   await connectBlobStoreToProject(accessToken, team, storeId, project.projectId)
 }
 
@@ -365,29 +416,27 @@ async function getWorkerProjectMissingEnvKeys(
   team: VercelTeam,
   projectId: string
 ): Promise<string[]> {
-  const apiUrl = new URL(`https://api.vercel.com/v10/projects/${projectId}/env`)
-  apiUrl.searchParams.set("teamId", team.id)
-
-  const response = await fetch(apiUrl.toString(), {
-    headers: {
-      Authorization: `Bearer ${accessToken}`
-    },
-    cache: "no-store"
-  })
-
-  if (!response.ok) {
-    const errorText = await response.text()
-    throw new Error(`Failed to inspect runner project env vars: ${response.status} ${errorText}`)
+  const envVars = await listProjectEnvVars(accessToken, team, projectId)
+  const envKeys = new Set(envVars.map((envItem) => envItem.key?.trim()).filter((key): key is string => Boolean(key)))
+  const missing = REQUIRED_SELF_HOSTED_WORKER_ENV_KEYS.filter((key) => !envKeys.has(key))
+  if (missing.length > 0) {
+    return missing
   }
 
-  const data = (await response.json()) as VercelProjectEnvListResponse
-  const envKeys = new Set(
-    (Array.isArray(data.envs) ? data.envs : [])
-      .map((envItem) => envItem.key?.trim())
-      .filter((key): key is string => Boolean(key))
-  )
+  const blobEnvVar = envVars.find((envItem) => envItem.key?.trim() === "BLOB_READ_WRITE_TOKEN")
+  const blobStoreId = blobEnvVar?.contentHint?.storeId?.trim()
+  if (!blobStoreId) {
+    return ["BLOB_READ_WRITE_TOKEN"]
+  }
 
-  return REQUIRED_SELF_HOSTED_WORKER_ENV_KEYS.filter((key) => !envKeys.has(key))
+  const desiredStoreName = buildWorkerBlobStoreName(team)
+  const stores = await listTeamBlobStores(accessToken, team)
+  const blobStore = stores.find((store) => store.id === blobStoreId)
+  if (!blobStore || blobStore.name !== desiredStoreName) {
+    return ["BLOB_READ_WRITE_TOKEN"]
+  }
+
+  return []
 }
 
 export async function findSkillRunnerWorkerProject(
