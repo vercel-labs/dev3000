@@ -37,13 +37,43 @@ interface VercelProjectEnvInput {
   target: Array<"production" | "preview" | "development">
 }
 
-const ALLOWED_WORKER_ENV_KEYS = [SKILL_RUNNER_WORKER_MODE_ENV, "AI_GATEWAY_API_KEY", "BLOB_READ_WRITE_TOKEN"] as const
+interface VercelProjectEnvListResponse {
+  envs?: Array<{
+    key?: string
+    target?: Array<"production" | "preview" | "development">
+  }>
+}
+
+interface VercelBlobStoreListResponse {
+  stores?: Array<{
+    id?: string
+    name?: string
+    projectsMetadata?: Array<{
+      projectId?: string
+      name?: string
+      environmentVariables?: string[]
+    }>
+  }>
+}
+
+interface VercelBlobStoreCreateResponse {
+  store?: {
+    id?: string
+    name?: string
+  }
+}
+
+const ALLOWED_WORKER_ENV_KEYS = [SKILL_RUNNER_WORKER_MODE_ENV] as const
+const REQUIRED_SELF_HOSTED_WORKER_ENV_KEYS = ["BLOB_READ_WRITE_TOKEN"] as const
+const SELF_HOSTED_BLOB_STORE_REGION = "iad1"
+const SELF_HOSTED_BLOB_ENVIRONMENTS = ["production", "preview", "development"] as const
 
 export interface SkillRunnerWorkerProject {
   projectId: string
   projectName: string
   workerBaseUrl?: string
   dashboardUrl: string
+  missingEnvKeys?: string[]
 }
 
 function normalizeHost(value: string | undefined): string | undefined {
@@ -82,6 +112,20 @@ function buildDashboardUrl(team: VercelTeam, projectName: string): string {
   return `https://vercel.com/${encodeURIComponent(team.slug)}/${encodeURIComponent(projectName)}`
 }
 
+function sanitizeBlobStoreNameSegment(value: string): string {
+  const sanitized = value
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-{2,}/g, "-")
+  return sanitized || "team"
+}
+
+function buildWorkerBlobStoreName(team: VercelTeam): string {
+  const suffix = sanitizeBlobStoreNameSegment(team.slug).slice(0, 32)
+  return `d3k-skill-runner-${suffix}`.slice(0, 63)
+}
+
 async function sleep(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms))
 }
@@ -104,7 +148,7 @@ function resolveWorkerGitBranch(): string {
 }
 
 function buildWorkerEnvInputs(): VercelProjectEnvInput[] {
-  const envInputs: VercelProjectEnvInput[] = [
+  return [
     {
       key: SKILL_RUNNER_WORKER_MODE_ENV,
       value: "1",
@@ -112,20 +156,120 @@ function buildWorkerEnvInputs(): VercelProjectEnvInput[] {
       target: ["production", "preview", "development"]
     }
   ]
+}
 
-  for (const key of ALLOWED_WORKER_ENV_KEYS) {
-    if (key === SKILL_RUNNER_WORKER_MODE_ENV) continue
-    const value = process.env[key]?.trim()
-    if (!value) continue
-    envInputs.push({
-      key,
-      value,
-      type: "encrypted",
-      target: ["production", "preview", "development"]
-    })
+async function listTeamBlobStores(accessToken: string, team: VercelTeam) {
+  const apiUrl = new URL("https://api.vercel.com/v1/storage/stores")
+  apiUrl.searchParams.set("teamId", team.id)
+
+  const response = await fetch(apiUrl.toString(), {
+    headers: {
+      Authorization: `Bearer ${accessToken}`
+    },
+    cache: "no-store"
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`Failed to list Blob stores: ${response.status} ${errorText}`)
   }
 
-  return envInputs
+  const data = (await response.json()) as VercelBlobStoreListResponse
+  return Array.isArray(data.stores) ? data.stores : []
+}
+
+async function createTeamBlobStore(accessToken: string, team: VercelTeam, name: string): Promise<string> {
+  const apiUrl = new URL("https://api.vercel.com/v1/storage/stores/blob")
+  apiUrl.searchParams.set("teamId", team.id)
+
+  const response = await fetch(apiUrl.toString(), {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      name,
+      region: SELF_HOSTED_BLOB_STORE_REGION
+    }),
+    cache: "no-store"
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    if (response.status === 409) {
+      const existingStore = (await listTeamBlobStores(accessToken, team)).find(
+        (store) => store.name === name && store.id
+      )
+      if (existingStore?.id) {
+        return existingStore.id
+      }
+    }
+    throw new Error(`Failed to create Blob store: ${response.status} ${errorText}`)
+  }
+
+  const data = (await response.json()) as VercelBlobStoreCreateResponse
+  const storeId = data.store?.id?.trim()
+  if (!storeId) {
+    throw new Error("Blob store creation succeeded but no store id was returned.")
+  }
+
+  return storeId
+}
+
+async function connectBlobStoreToProject(
+  accessToken: string,
+  team: VercelTeam,
+  storeId: string,
+  projectId: string
+): Promise<void> {
+  const apiUrl = new URL(`https://api.vercel.com/v1/storage/stores/${storeId}/connections`)
+  apiUrl.searchParams.set("teamId", team.id)
+
+  const response = await fetch(apiUrl.toString(), {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      envVarEnvironments: SELF_HOSTED_BLOB_ENVIRONMENTS,
+      projectId,
+      type: "integration"
+    }),
+    cache: "no-store"
+  })
+
+  if (response.ok) return
+
+  const errorText = await response.text()
+  if (response.status === 409 || /already connected|already exists|duplicate/i.test(errorText)) {
+    return
+  }
+
+  throw new Error(`Failed to connect Blob store to runner project: ${response.status} ${errorText}`)
+}
+
+async function ensureWorkerBlobStore(
+  accessToken: string,
+  team: VercelTeam,
+  project: SkillRunnerWorkerProject
+): Promise<void> {
+  const stores = await listTeamBlobStores(accessToken, team)
+  const connectedStore = stores.find(
+    (store) =>
+      Array.isArray(store.projectsMetadata) &&
+      store.projectsMetadata.some((metadata) => metadata.projectId === project.projectId)
+  )
+  if (connectedStore?.id) {
+    await connectBlobStoreToProject(accessToken, team, connectedStore.id, project.projectId)
+    return
+  }
+
+  const desiredStoreName = buildWorkerBlobStoreName(team)
+  const existingStore = stores.find((store) => store.name === desiredStoreName)
+  const storeId = existingStore?.id || (await createTeamBlobStore(accessToken, team, desiredStoreName))
+  await connectBlobStoreToProject(accessToken, team, storeId, project.projectId)
 }
 
 async function upsertWorkerProjectEnv(
@@ -166,6 +310,36 @@ async function upsertWorkerProjectEnv(
   }
 }
 
+async function getWorkerProjectMissingEnvKeys(
+  accessToken: string,
+  team: VercelTeam,
+  projectId: string
+): Promise<string[]> {
+  const apiUrl = new URL(`https://api.vercel.com/v10/projects/${projectId}/env`)
+  apiUrl.searchParams.set("teamId", team.id)
+
+  const response = await fetch(apiUrl.toString(), {
+    headers: {
+      Authorization: `Bearer ${accessToken}`
+    },
+    cache: "no-store"
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`Failed to inspect runner project env vars: ${response.status} ${errorText}`)
+  }
+
+  const data = (await response.json()) as VercelProjectEnvListResponse
+  const envKeys = new Set(
+    (Array.isArray(data.envs) ? data.envs : [])
+      .map((envItem) => envItem.key?.trim())
+      .filter((key): key is string => Boolean(key))
+  )
+
+  return REQUIRED_SELF_HOSTED_WORKER_ENV_KEYS.filter((key) => !envKeys.has(key))
+}
+
 export async function findSkillRunnerWorkerProject(
   accessToken: string,
   team: VercelTeam
@@ -197,11 +371,14 @@ export async function findSkillRunnerWorkerProject(
     return null
   }
 
+  const missingEnvKeys = await getWorkerProjectMissingEnvKeys(accessToken, team, exactMatch.id)
+
   return {
     projectId: exactMatch.id,
     projectName: exactMatch.name,
     workerBaseUrl: resolveWorkerBaseUrl(exactMatch),
-    dashboardUrl: buildDashboardUrl(team, exactMatch.name)
+    dashboardUrl: buildDashboardUrl(team, exactMatch.name),
+    missingEnvKeys
   }
 }
 
@@ -210,16 +387,17 @@ export async function installSkillRunnerWorkerProject(
   team: VercelTeam
 ): Promise<SkillRunnerWorkerProject> {
   const existing = await findSkillRunnerWorkerProject(accessToken, team)
-  if (existing?.workerBaseUrl) {
+  if (existing?.workerBaseUrl && (!existing.missingEnvKeys || existing.missingEnvKeys.length === 0)) {
     return existing
   }
 
   const project = existing ?? (await createWorkerProject(accessToken, team))
   await upsertWorkerProjectEnv(accessToken, team, project, buildWorkerEnvInputs())
+  await ensureWorkerBlobStore(accessToken, team, project)
 
   for (let attempt = 0; attempt < 20; attempt += 1) {
     const resolved = await findSkillRunnerWorkerProject(accessToken, team)
-    if (resolved?.workerBaseUrl) {
+    if (resolved?.workerBaseUrl && (!resolved.missingEnvKeys || resolved.missingEnvKeys.length === 0)) {
       return resolved
     }
     await sleep(3000)

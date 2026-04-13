@@ -302,6 +302,16 @@ export async function POST(request: Request) {
           )
         }
 
+        if (teamSettings.workerStatus && teamSettings.workerStatus !== "ready") {
+          return Response.json(
+            {
+              success: false,
+              error: `Self-hosted skill-runner mode is enabled for ${team.name}, but the runner project still needs its team-owned Blob setup repaired.`
+            },
+            { status: 409, headers: corsHeaders }
+          )
+        }
+
         return forwardSelfHostedStartRequest({
           body,
           request,

@@ -83,6 +83,20 @@ const EMBEDDED_LOADING_HTML = `<!DOCTYPE html>
 </body>
 </html>`
 
+const DEFAULT_CDP_COMMAND_TIMEOUT_MS = 10000
+const DEFAULT_NAVIGATION_TIMEOUT_MS = 60000
+
+export function getLoadingHtmlCandidates(currentDir: string, execPath: string = process.execPath): string[] {
+  const candidates = [join(currentDir, "src/loading.html"), join(currentDir, "loading.html")]
+
+  const packageRoot = dirname(dirname(execPath))
+  candidates.push(join(packageRoot, "src/loading.html"))
+  candidates.push(join(packageRoot, "loading.html"))
+  candidates.push(join(process.cwd(), "src/loading.html"))
+
+  return candidates
+}
+
 function isD3kLoadingPageUrl(url: string | undefined): boolean {
   if (!url?.startsWith("file://")) {
     return false
@@ -216,6 +230,7 @@ export class CDPMonitor {
   private reactTrackingEnabled: boolean = false
   private lastReactSnapshotLogTime: number = 0
   private pendingCommands = new Map<number, PendingCDPRequest>()
+  private navigationTimeoutMs: number = DEFAULT_NAVIGATION_TIMEOUT_MS
 
   constructor(
     profileDir: string,
@@ -226,6 +241,7 @@ export class CDPMonitor {
     pluginReactScan: boolean = false,
     appServerPort?: string,
     initialAppUrl?: string,
+    navigationTimeoutMs: number = DEFAULT_NAVIGATION_TIMEOUT_MS,
     debugPort?: number,
     headless: boolean = false,
     framework?: "nextjs" | "svelte" | "other"
@@ -238,6 +254,7 @@ export class CDPMonitor {
     this.browserPath = browserPath
     this.pluginReactScan = pluginReactScan
     this.initialAppUrl = initialAppUrl
+    this.navigationTimeoutMs = navigationTimeoutMs
     this.headless = headless
     this.framework = framework
     this.reactTrackingEnabled = framework === "nextjs"
@@ -457,11 +474,7 @@ export class CDPMonitor {
     let loadingHtml: string
 
     try {
-      const loadingHtmlCandidates = [
-        join(currentDir, "src/loading.html"),
-        join(currentDir, "loading.html"),
-        join(process.cwd(), "src/loading.html")
-      ]
+      const loadingHtmlCandidates = getLoadingHtmlCandidates(currentDir)
       const loadingHtmlPath = loadingHtmlCandidates.find((path) => existsSync(path))
       if (!loadingHtmlPath) {
         throw new Error("No loading.html found in expected locations")
@@ -932,7 +945,7 @@ export class CDPMonitor {
   private async sendCDPCommand(
     method: string,
     params: Record<string, unknown> = {},
-    timeoutMs: number = 10000
+    timeoutMs: number = DEFAULT_CDP_COMMAND_TIMEOUT_MS
   ): Promise<Record<string, unknown>> {
     if (!this.connection) {
       throw new Error("No CDP connection available")
@@ -1513,7 +1526,7 @@ export class CDPMonitor {
     }
   }
 
-  async navigateToUrl(url: string): Promise<void> {
+  async navigateToUrl(url: string, timeoutMs: number = this.navigationTimeoutMs): Promise<void> {
     if (!this.connection) {
       throw new Error("No CDP connection available")
     }
@@ -1523,9 +1536,13 @@ export class CDPMonitor {
 
     // Navigate to the app
     try {
-      const result = await this.sendCDPCommand("Page.navigate", {
-        url
-      })
+      const result = await this.sendCDPCommand(
+        "Page.navigate",
+        {
+          url
+        },
+        timeoutMs
+      )
 
       const navigationTime = Date.now() - navigationStartTime
       this.debugLog(`Navigation command sent successfully (${navigationTime}ms)`)

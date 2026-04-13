@@ -354,6 +354,7 @@ interface ForwardedOptions {
   script?: string
   command?: string
   startupTimeout?: string
+  browserNavigationTimeout?: string
   profileDir?: string
   browserTool?: LocalBrowserTool
   browser?: string
@@ -376,6 +377,9 @@ function buildD3kCommandWithOptions(options: ForwardedOptions): string {
   if (options.script) args.push(`--script ${options.script}`)
   if (options.command) args.push(`--command "${options.command.replace(/"/g, '\\"')}"`)
   if (options.startupTimeout) args.push(`--startup-timeout ${options.startupTimeout}`)
+  if (options.browserNavigationTimeout) {
+    args.push(`--browser-navigation-timeout ${options.browserNavigationTimeout}`)
+  }
   if (options.profileDir) args.push(`--profile-dir "${options.profileDir}"`)
   if (options.browserTool) args.push(`--browser-tool ${options.browserTool}`)
   if (options.browser) args.push(`--browser "${options.browser}"`)
@@ -927,6 +931,11 @@ program
   .option("-s, --script <script>", "Script to run (e.g. dev, main.py) - auto-detected by project type")
   .option("-c, --command <command>", "Custom command to run (overrides auto-detection and --script)")
   .option("--startup-timeout <seconds>", "Seconds to wait for your app server to become reachable", "30")
+  .option(
+    "--browser-navigation-timeout <seconds>",
+    "Seconds to wait for browser-initiated page navigation commands",
+    "60"
+  )
   .option("--profile-dir <dir>", "Chrome profile directory")
   .option(
     "--browser-tool <tool>",
@@ -977,6 +986,7 @@ program
         script: options.script,
         command: options.command,
         startupTimeout: options.startupTimeout,
+        browserNavigationTimeout: options.browserNavigationTimeout,
         profileDir: options.profileDir,
         browserTool: options.browserTool,
         browser: browserOption,
@@ -1204,9 +1214,14 @@ program
     const script = options.script || projectConfig.defaultScript
     const userSetPort = options.port !== undefined
     const startupTimeoutSeconds = Number.parseInt(options.startupTimeout, 10)
+    const browserNavigationTimeoutSeconds = Number.parseInt(options.browserNavigationTimeout, 10)
     const browserTool: LocalBrowserTool = options.browserTool === "next-browser" ? "next-browser" : "agent-browser"
     if (Number.isNaN(startupTimeoutSeconds) || startupTimeoutSeconds <= 0) {
       console.error(chalk.red("\n❌ --startup-timeout must be a positive integer (seconds).\n"))
+      process.exit(1)
+    }
+    if (Number.isNaN(browserNavigationTimeoutSeconds) || browserNavigationTimeoutSeconds <= 0) {
+      console.error(chalk.red("\n❌ --browser-navigation-timeout must be a positive integer (seconds).\n"))
       process.exit(1)
     }
     // Generate server command based on custom command or project type
@@ -1315,6 +1330,7 @@ program
         serversOnly: options.serversOnly,
         commandName,
         startupTimeoutSeconds,
+        browserNavigationTimeoutSeconds,
         tail: options.tail,
         tui: options.tui && !options.debug, // TUI is default unless --no-tui or --debug is specified
         portless: options.portless === true,

@@ -4,6 +4,16 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.174] - 2026-04-13
+
+**Feature Release**
+
+- Add a browser navigation timeout flag to help slow page loads finish cleanly.
+- Load the packaged browser loading page from installed binaries more reliably.
+- Share AI Gateway setup and allow cloud workflows to authenticate with an API key or Vercel OIDC.
+- Auto-provision team-owned Blob storage for self-hosted skill-runner projects and detect partial setup.
+- Show runner provisioning and repair state in the admin and run setup flows.
+
 ## [0.0.173] - 2026-03-16
 
 **Feature Release**
@@ -25,7 +35,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 **Feature Release**
 
 - Fix browser startup and log pane selection
-- Build recipes workflow prototype
+- Build devAgents workflow prototype
 - Add canary build timestamps
 - Bundle portless and prefer stable local app URLs
 - Update runtime dependencies and compatibility

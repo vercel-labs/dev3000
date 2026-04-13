@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { type CDPTargetInfo, selectCDPTarget } from "./cdp-monitor"
+import { type CDPTargetInfo, getLoadingHtmlCandidates, selectCDPTarget } from "./cdp-monitor"
 
 describe("selectCDPTarget", () => {
   it("prefers the current app target when Chrome exposes multiple pages", () => {
@@ -48,5 +48,16 @@ describe("selectCDPTarget", () => {
         initialAppUrl: "http://localhost:3001/"
       })
     ).toThrow(/CDP target mismatch/)
+  })
+})
+
+describe("getLoadingHtmlCandidates", () => {
+  it("includes the installed package src/loading.html next to the compiled binary", () => {
+    const candidates = getLoadingHtmlCandidates(
+      "/snapshot/dev3000/dist",
+      "/Users/test/.bun/install/global/node_modules/@d3k/darwin-arm64/bin/dev3000"
+    )
+
+    expect(candidates).toContain("/Users/test/.bun/install/global/node_modules/@d3k/darwin-arm64/src/loading.html")
   })
 })

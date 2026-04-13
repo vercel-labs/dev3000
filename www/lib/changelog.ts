@@ -10,6 +10,19 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.174",
+    date: "2026-04-13",
+    type: "minor",
+    highlights: [
+      "Add a browser navigation timeout flag to help slow page loads finish cleanly.",
+      "Load the packaged browser loading page from installed binaries more reliably.",
+      "Share AI Gateway setup and allow cloud workflows to authenticate with an API key or Vercel OIDC.",
+      "Auto-provision team-owned Blob storage for self-hosted skill-runner projects and detect partial setup.",
+      "Show runner provisioning and repair state in the admin and run setup flows."
+    ]
+  },
+
+  {
     version: "0.0.173",
     date: "2026-03-16",
     type: "minor",

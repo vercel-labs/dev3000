@@ -3,7 +3,8 @@
  * Separated into their own module to avoid workflow bundler issues
  */
 
-import { createGateway, generateText } from "ai"
+import { generateText } from "ai"
+import { createVercelGateway } from "@/lib/ai-gateway"
 import { putBlobAndBuildUrl } from "@/lib/blob-store"
 
 /**
@@ -51,10 +52,7 @@ export async function identifyAffectedPages(changedFiles: string[], prBody: stri
   if (prBody && prBody.length > 10) {
     console.log("[Step 1] Analyzing PR description for mentioned pages...")
 
-    const gateway = createGateway({
-      apiKey: process.env.AI_GATEWAY_API_KEY,
-      baseURL: "https://ai-gateway.vercel.sh/v1/ai"
-    })
+    const gateway = createVercelGateway()
 
     const model = gateway("openai/gpt-5.2")
 
@@ -174,10 +172,7 @@ export async function verifyPRClaims(prTitle: string, prBody: string, crawlResul
 
   console.log("[Step 3] Verifying PR claims against actual behavior...")
 
-  const gateway = createGateway({
-    apiKey: process.env.AI_GATEWAY_API_KEY,
-    baseURL: "https://ai-gateway.vercel.sh/v1/ai"
-  })
+  const gateway = createVercelGateway()
 
   const model = gateway("openai/gpt-5.2")
 

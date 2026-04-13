@@ -40,6 +40,7 @@ interface RunnerValidationResult {
     projectName: string
     workerBaseUrl?: string
     dashboardUrl?: string
+    missingEnvKeys?: string[]
   }
 }
 
@@ -161,7 +162,11 @@ export function SkillRunnerTeamSettingsPanel({ items }: SkillRunnerTeamSettingsP
             executionMode: "self-hosted",
             workerProjectId: validationResult.project.projectId,
             workerBaseUrl: validationResult.project.workerBaseUrl || "",
-            workerStatus: validationResult.project.workerBaseUrl ? "ready" : "provisioning"
+            workerStatus: !validationResult.project.workerBaseUrl
+              ? "provisioning"
+              : validationResult.project.missingEnvKeys?.length
+                ? "error"
+                : "ready"
           }
         : {
             executionMode: "self-hosted",
@@ -367,7 +372,11 @@ export function SkillRunnerTeamSettingsPanel({ items }: SkillRunnerTeamSettingsP
                   <div className="flex items-start gap-3 text-[#cfcfcf]">
                     <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-[#ededed]" />
                     <div>
-                      <div className="text-[15px] font-medium text-[#ededed]">Runner project ready</div>
+                      <div className="text-[15px] font-medium text-[#ededed]">
+                        {validationResult.project.missingEnvKeys?.length
+                          ? "Runner project needs configuration"
+                          : "Runner project ready"}
+                      </div>
                       <div className="mt-2 space-y-1 text-[13px]">
                         <div className="text-[#888]">{validationResult.project.projectName}</div>
                         <div className="text-[#666]">Project ID: {validationResult.project.projectId}</div>
@@ -389,6 +398,19 @@ export function SkillRunnerTeamSettingsPanel({ items }: SkillRunnerTeamSettingsP
                         <div className="mt-3 flex items-start gap-2 text-[12px] leading-[18px] text-[#888]">
                           <Loader2 className="mt-[2px] size-3 shrink-0 animate-spin text-[#666]" />
                           <span>The project exists, but the deployment URL is still provisioning.</span>
+                        </div>
+                      ) : validationResult.project.missingEnvKeys?.length ? (
+                        <div className="mt-3 space-y-2 text-[12px] leading-[18px] text-[#888]">
+                          <div>
+                            The team-owned runner is still missing these required env vars:{" "}
+                            <span className="font-mono text-[#ededed]">
+                              {validationResult.project.missingEnvKeys.join(", ")}
+                            </span>
+                          </div>
+                          <div className="text-[#666]">
+                            Self-hosted mode should use team-owned Blob setup. Retry provisioning to repair any partial
+                            install.
+                          </div>
                         </div>
                       ) : (
                         <div className="mt-3 text-[12px] leading-[18px] text-[#666]">

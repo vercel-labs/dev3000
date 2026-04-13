@@ -159,6 +159,7 @@ interface DevEnvironmentOptions {
   port: string
   serverCommand: string
   startupTimeoutSeconds: number
+  browserNavigationTimeoutSeconds: number
   profileDir: string
   browserTool: "agent-browser" | "next-browser"
   logFile: string
@@ -2113,6 +2114,7 @@ export class DevEnvironment {
       this.options.pluginReactScan,
       this.options.port, // App server port to monitor
       this.preferredAppUrl,
+      this.options.browserNavigationTimeoutSeconds * 1000,
       this.options.debugPort, // Chrome debug port
       this.options.headless, // Headless mode for serverless/CI environments
       this.options.framework // Framework hint for optional React DevTools launch args
@@ -2157,10 +2159,7 @@ export class DevEnvironment {
       this.writeCurrentSessionInfo(projectName)
       this.debugLog(`Updated session info with CDP URL: ${cdpUrl}, Chrome PIDs: [${chromePids.join(", ")}]`)
       this.logger.log("browser", `[CDP] Session info written with cdpUrl: ${cdpUrl ? "available" : "null"}`)
-
-      // Navigate to the app
-      await this.cdpMonitor.navigateToUrl(this.preferredAppUrl)
-      this.logger.log("browser", `[CDP] Navigated to ${this.preferredAppUrl}`)
+      this.logger.log("browser", `[CDP] Loading page will hand off to ${this.preferredAppUrl}`)
     } catch (error) {
       // Log error and throw to trigger graceful shutdown
       this.logger.log("browser", `[CDP] Failed to start CDP monitoring: ${error}`)

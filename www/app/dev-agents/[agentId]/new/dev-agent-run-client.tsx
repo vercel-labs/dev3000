@@ -99,6 +99,7 @@ interface RunnerValidationResult {
     projectName: string
     workerBaseUrl?: string
     dashboardUrl?: string
+    missingEnvKeys?: string[]
   }
   settings?: {
     executionMode?: SkillRunnerExecutionMode
@@ -245,12 +246,16 @@ export default function DevAgentRunClient({
   const runnerLabel = runnerKind === "skill-runner" ? "skill runner" : "dev agent"
   const runnerTitle = runnerKind === "skill-runner" ? "Skill Runner" : "Dev Agent"
   const isSelfHostedSkillRunner = runnerKind === "skill-runner" && localSkillRunnerExecutionMode === "self-hosted"
-  const isReadySelfHostedSkillRunner = isSelfHostedSkillRunner && Boolean(localSkillRunnerWorkerBaseUrl)
-  const selfHostedHelperText = localSkillRunnerWorkerBaseUrl
-    ? `This team is configured for self-hosted skill-runner execution via ${localSkillRunnerWorkerBaseUrl}. New runs will execute on the team-owned worker.`
-    : localSkillRunnerWorkerStatus === "provisioning" || localSkillRunnerWorkerStatus === "ready"
-      ? "This team is configured for self-hosted skill-runner execution. The runner project is still provisioning."
-      : "This team is configured for self-hosted skill-runner execution. Click Start Run to install the team-owned runner."
+  const isReadySelfHostedSkillRunner =
+    isSelfHostedSkillRunner && Boolean(localSkillRunnerWorkerBaseUrl) && localSkillRunnerWorkerStatus === "ready"
+  const selfHostedHelperText =
+    localSkillRunnerWorkerStatus === "error"
+      ? "This team is configured for self-hosted skill-runner execution, but the team-owned runner still needs its Blob connection repaired."
+      : localSkillRunnerWorkerBaseUrl
+        ? `This team is configured for self-hosted skill-runner execution via ${localSkillRunnerWorkerBaseUrl}. New runs will execute on the team-owned worker.`
+        : localSkillRunnerWorkerStatus === "provisioning"
+          ? "This team is configured for self-hosted skill-runner execution. The runner project is still provisioning."
+          : "This team is configured for self-hosted skill-runner execution. Click Start Run to install the team-owned runner."
 
   useEffect(() => {
     setLocalSkillRunnerExecutionMode(skillRunnerExecutionMode)
@@ -269,7 +274,8 @@ export default function DevAgentRunClient({
     setLocalSkillRunnerExecutionMode(result.settings?.executionMode || "self-hosted")
     setLocalSkillRunnerWorkerBaseUrl(result.project?.workerBaseUrl || "")
     setLocalSkillRunnerWorkerStatus(
-      result.settings?.workerStatus || (result.project?.workerBaseUrl ? "ready" : "provisioning")
+      result.settings?.workerStatus ||
+        (!result.project?.workerBaseUrl ? "provisioning" : result.project?.missingEnvKeys?.length ? "error" : "ready")
     )
   }
 
@@ -319,6 +325,9 @@ export default function DevAgentRunClient({
       setIsInstallingWorker(false)
     }
   }
+
+  const canRetryWorkerSetup =
+    !workerSetupResult?.installed || Boolean(workerSetupResult.project?.missingEnvKeys?.length)
 
   useEffect(() => {
     try {
@@ -1127,7 +1136,11 @@ export default function DevAgentRunClient({
                   <div className="flex items-start gap-3">
                     <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-[#ededed]" />
                     <div>
-                      <div className="text-[15px] font-medium text-[#ededed]">Runner project ready</div>
+                      <div className="text-[15px] font-medium text-[#ededed]">
+                        {workerSetupResult.project.missingEnvKeys?.length
+                          ? "Runner project needs configuration"
+                          : "Runner project ready"}
+                      </div>
                       <div className="mt-2 space-y-1 text-[13px]">
                         <div className="text-[#888]">{workerSetupResult.project.projectName}</div>
                         <div className="text-[#666]">Project ID: {workerSetupResult.project.projectId}</div>
@@ -1149,6 +1162,19 @@ export default function DevAgentRunClient({
                         <div className="mt-3 flex items-start gap-2 text-[12px] leading-[18px] text-[#888]">
                           <Loader2 className="mt-[2px] size-3 shrink-0 animate-spin text-[#666]" />
                           <span>The project exists, but the deployment URL is still provisioning.</span>
+                        </div>
+                      ) : workerSetupResult.project.missingEnvKeys?.length ? (
+                        <div className="mt-3 space-y-2 text-[12px] leading-[18px] text-[#888]">
+                          <div>
+                            The team-owned runner is still missing these required env vars:{" "}
+                            <span className="font-mono text-[#ededed]">
+                              {workerSetupResult.project.missingEnvKeys.join(", ")}
+                            </span>
+                          </div>
+                          <div className="text-[#666]">
+                            Blob setup should complete automatically for this team-owned runner. Retry setup to repair
+                            any partial install.
+                          </div>
                         </div>
                       ) : null}
                     </div>
@@ -1189,7 +1215,7 @@ export default function DevAgentRunClient({
                   "Check Existing Project"
                 )}
               </Button>
-              {!workerSetupResult?.installed ? (
+              {canRetryWorkerSetup ? (
                 <Button
                   type="button"
                   variant="ghost"
@@ -1200,8 +1226,10 @@ export default function DevAgentRunClient({
                   {isInstallingWorker ? (
                     <span className="inline-flex items-center gap-2">
                       <Loader2 className="size-3.5 animate-spin" />
-                      Installing…
+                      {workerSetupResult?.installed ? "Repairing…" : "Installing…"}
                     </span>
+                  ) : workerSetupResult?.installed ? (
+                    "Retry Setup"
                   ) : (
                     "Install Runner Project"
                   )}
@@ -1221,7 +1249,11 @@ export default function DevAgentRunClient({
               <Button
                 type="button"
                 onClick={() => setIsWorkerSetupOpen(false)}
-                disabled={!workerSetupResult?.installed || !workerSetupResult.project?.workerBaseUrl}
+                disabled={
+                  !workerSetupResult?.installed ||
+                  !workerSetupResult.project?.workerBaseUrl ||
+                  Boolean(workerSetupResult.project?.missingEnvKeys?.length)
+                }
                 className="h-9 rounded-md bg-[#ededed] px-4 text-[13px] font-medium text-[#0a0a0a] hover:bg-white disabled:opacity-40"
               >
                 Continue

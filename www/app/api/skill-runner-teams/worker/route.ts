@@ -14,6 +14,15 @@ function unauthorized() {
   return Response.json({ success: false, error: "Unauthorized" }, { status: 401 })
 }
 
+function getWorkerStatus(
+  project: { workerBaseUrl?: string; missingEnvKeys?: string[] } | null
+): "unconfigured" | "provisioning" | "ready" | "error" {
+  if (!project) return "unconfigured"
+  if (!project.workerBaseUrl) return "provisioning"
+  if (project.missingEnvKeys && project.missingEnvKeys.length > 0) return "error"
+  return "ready"
+}
+
 async function persistWorkerProject(teamParam: string | null, accessToken: string, install: boolean) {
   const team = await resolveApiTeam(teamParam)
   if (!team) {
@@ -44,7 +53,7 @@ async function persistWorkerProject(teamParam: string | null, accessToken: strin
     executionMode: "self-hosted",
     workerProjectId: project.projectId,
     workerBaseUrl: project.workerBaseUrl || "",
-    workerStatus: project.workerBaseUrl ? "ready" : "provisioning"
+    workerStatus: getWorkerStatus(project)
   })
 
   return Response.json({
