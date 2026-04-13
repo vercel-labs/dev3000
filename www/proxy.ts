@@ -11,6 +11,13 @@ interface RefreshTokenResponse {
 }
 
 export async function proxy(request: NextRequest) {
+  const pathname = request.nextUrl.pathname
+
+  // Auth endpoints need direct access to the raw OAuth cookies without refresh interception.
+  if (pathname.startsWith("/api/auth")) {
+    return NextResponse.next()
+  }
+
   const accessToken = request.cookies.get("access_token")?.value
   const refreshToken = request.cookies.get("refresh_token")?.value
 
@@ -81,13 +88,10 @@ export const config = {
   matcher: [
     /*
      * Match all request paths except for the ones starting with:
-     * - api (API routes)
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
-     * - signin (auth page)
-     * - auth (auth callbacks)
      */
-    "/((?!api|_next/static|_next/image|favicon|signin|auth).*)"
+    "/((?!_next/static|_next/image|favicon.ico).*)"
   ]
 }

@@ -18,12 +18,17 @@ interface VercelProjectLookupResponse {
       }
     }
     latestDeployments?: Array<{
+      id?: string
       url?: string
       state?: string
       readyState?: string
+      createdAt?: number
     }>
   }>
 }
+
+type VercelProjectLookupProject = NonNullable<VercelProjectLookupResponse["projects"]>[number]
+type VercelProjectLookupDeployment = NonNullable<VercelProjectLookupProject["latestDeployments"]>[number]
 
 interface VercelProjectCreateResponse {
   id?: string
@@ -74,6 +79,9 @@ export interface SkillRunnerWorkerProject {
   workerBaseUrl?: string
   dashboardUrl: string
   missingEnvKeys?: string[]
+  latestDeploymentId?: string
+  latestDeploymentReadyState?: string
+  latestDeploymentCreatedAt?: number
 }
 
 function normalizeHost(value: string | undefined): string | undefined {
@@ -91,9 +99,7 @@ function pickFirstAlias(value: string[] | string | undefined): string | undefine
   return undefined
 }
 
-function resolveWorkerBaseUrl(
-  project: NonNullable<VercelProjectLookupResponse["projects"]>[number]
-): string | undefined {
+function resolveWorkerBaseUrl(project: VercelProjectLookupProject): string | undefined {
   const productionAlias = pickFirstAlias(project.targets?.production?.alias)
   if (productionAlias) return normalizeHost(productionAlias)
 
@@ -106,6 +112,14 @@ function resolveWorkerBaseUrl(
   if (readyDeployment?.url) return normalizeHost(readyDeployment.url)
 
   return undefined
+}
+
+function resolveLatestDeployment(project: VercelProjectLookupProject): VercelProjectLookupDeployment | undefined {
+  if (!Array.isArray(project.latestDeployments) || project.latestDeployments.length === 0) {
+    return undefined
+  }
+
+  return [...project.latestDeployments].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))[0]
 }
 
 function buildDashboardUrl(team: VercelTeam, projectName: string): string {
@@ -272,6 +286,42 @@ async function ensureWorkerBlobStore(
   await connectBlobStoreToProject(accessToken, team, storeId, project.projectId)
 }
 
+async function redeployWorkerProject(
+  accessToken: string,
+  team: VercelTeam,
+  project: SkillRunnerWorkerProject
+): Promise<string | null> {
+  if (!project.latestDeploymentId) {
+    return null
+  }
+
+  const apiUrl = new URL("https://api.vercel.com/v13/deployments")
+  apiUrl.searchParams.set("teamId", team.id)
+  apiUrl.searchParams.set("forceNew", "1")
+
+  const response = await fetch(apiUrl.toString(), {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      deploymentId: project.latestDeploymentId,
+      project: project.projectId,
+      target: "production"
+    }),
+    cache: "no-store"
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`Failed to redeploy runner project: ${response.status} ${errorText}`)
+  }
+
+  const data = (await response.json()) as { id?: string }
+  return data.id?.trim() || null
+}
+
 async function upsertWorkerProjectEnv(
   accessToken: string,
   team: VercelTeam,
@@ -372,13 +422,17 @@ export async function findSkillRunnerWorkerProject(
   }
 
   const missingEnvKeys = await getWorkerProjectMissingEnvKeys(accessToken, team, exactMatch.id)
+  const latestDeployment = resolveLatestDeployment(exactMatch)
 
   return {
     projectId: exactMatch.id,
     projectName: exactMatch.name,
     workerBaseUrl: resolveWorkerBaseUrl(exactMatch),
     dashboardUrl: buildDashboardUrl(team, exactMatch.name),
-    missingEnvKeys
+    missingEnvKeys,
+    latestDeploymentId: latestDeployment?.id,
+    latestDeploymentReadyState: latestDeployment?.readyState || latestDeployment?.state,
+    latestDeploymentCreatedAt: latestDeployment?.createdAt
   }
 }
 
@@ -394,6 +448,43 @@ export async function installSkillRunnerWorkerProject(
   const project = existing ?? (await createWorkerProject(accessToken, team))
   await upsertWorkerProjectEnv(accessToken, team, project, buildWorkerEnvInputs())
   await ensureWorkerBlobStore(accessToken, team, project)
+
+  let deploymentId = project.latestDeploymentId || null
+  if (!deploymentId) {
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const resolved = await findSkillRunnerWorkerProject(accessToken, team)
+      if (resolved?.latestDeploymentId) {
+        deploymentId = resolved.latestDeploymentId
+        break
+      }
+      await sleep(3000)
+    }
+  }
+
+  if (deploymentId) {
+    const redeployProject = {
+      ...project,
+      latestDeploymentId: deploymentId
+    }
+    const redeployedId = await redeployWorkerProject(accessToken, team, redeployProject)
+
+    if (redeployedId) {
+      for (let attempt = 0; attempt < 30; attempt += 1) {
+        const resolved = await findSkillRunnerWorkerProject(accessToken, team)
+        if (
+          resolved?.workerBaseUrl &&
+          (!resolved.missingEnvKeys || resolved.missingEnvKeys.length === 0) &&
+          resolved.latestDeploymentId === redeployedId &&
+          resolved.latestDeploymentReadyState === "READY"
+        ) {
+          return resolved
+        }
+        await sleep(3000)
+      }
+
+      return (await findSkillRunnerWorkerProject(accessToken, team)) || project
+    }
+  }
 
   for (let attempt = 0; attempt < 20; attempt += 1) {
     const resolved = await findSkillRunnerWorkerProject(accessToken, team)

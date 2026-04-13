@@ -257,6 +257,14 @@ export default function DevAgentRunClient({
           ? "This team is configured for self-hosted skill-runner execution. The runner project is still provisioning."
           : "This team is configured for self-hosted skill-runner execution. Click Start Run to install the team-owned runner."
 
+  function normalizeSelfHostedStartError(message: string): string {
+    if (/BLOB_READ_WRITE_TOKEN|Vercel Blob: No token found/i.test(message)) {
+      return "The team-owned runner still needs a fresh deployment with its Blob connection. Retry runner setup to repair it."
+    }
+
+    return message
+  }
+
   useEffect(() => {
     setLocalSkillRunnerExecutionMode(skillRunnerExecutionMode)
   }, [skillRunnerExecutionMode])
@@ -279,29 +287,8 @@ export default function DevAgentRunClient({
     )
   }
 
-  async function validateWorkerInstallation() {
-    setIsCheckingWorker(true)
-    setWorkerSetupError(null)
-    try {
-      const params = new URLSearchParams({ team: team.id })
-      const response = await fetch(`/api/skill-runner-teams/worker?${params.toString()}`)
-      const data = (await response.json()) as
-        | ({ success: true } & RunnerValidationResult)
-        | { success: false; error?: string }
-      if (!response.ok || !data.success) {
-        throw new Error(("error" in data && data.error) || "Failed to validate runner installation.")
-      }
-      applyWorkerSetup(data)
-    } catch (workerError) {
-      setWorkerSetupError(
-        workerError instanceof Error ? workerError.message : "Failed to validate runner installation."
-      )
-    } finally {
-      setIsCheckingWorker(false)
-    }
-  }
-
   async function installWorkerProject() {
+    setIsCheckingWorker(true)
     setIsInstallingWorker(true)
     setWorkerSetupError(null)
     try {
@@ -322,12 +309,15 @@ export default function DevAgentRunClient({
     } catch (workerError) {
       setWorkerSetupError(workerError instanceof Error ? workerError.message : "Failed to install runner project.")
     } finally {
+      setIsCheckingWorker(false)
       setIsInstallingWorker(false)
     }
   }
 
   const canRetryWorkerSetup =
-    !workerSetupResult?.installed || Boolean(workerSetupResult.project?.missingEnvKeys?.length)
+    localSkillRunnerWorkerStatus === "error" ||
+    !workerSetupResult?.installed ||
+    Boolean(workerSetupResult.project?.missingEnvKeys?.length)
 
   useEffect(() => {
     try {
@@ -710,6 +700,13 @@ export default function DevAgentRunClient({
 
     if (!response.ok || !result.success || !result.runId) {
       setIsRunning(false)
+      if (isSelfHostedSkillRunner && result.error) {
+        setLocalSkillRunnerWorkerStatus("error")
+        setWorkerSetupError(normalizeSelfHostedStartError(result.error))
+        setIsWorkerSetupOpen(true)
+        setError(null)
+        return
+      }
       setError(result.error || `Failed to start the ${runnerLabel} run.`)
       return
     }
@@ -828,12 +825,6 @@ export default function DevAgentRunClient({
           <div className="mt-1 text-[13px] leading-[18px] text-[#888]">{selfHostedHelperText}</div>
         </div>
       ) : null}
-
-      {error && (
-        <div className="rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-3 text-[13px] text-red-400">
-          {error}
-        </div>
-      )}
 
       <div className="grid gap-5 lg:grid-cols-2">
         {/* Project selection */}
@@ -1087,6 +1078,12 @@ export default function DevAgentRunClient({
                 )}
               </div>
 
+              {error ? (
+                <div className="rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-3 text-[13px] text-red-400">
+                  {error}
+                </div>
+              ) : null}
+
               <div className="flex items-center gap-2 pt-1">
                 <Button
                   onClick={startDevAgentRun}
@@ -1119,7 +1116,8 @@ export default function DevAgentRunClient({
               <div className="text-[11px] uppercase tracking-[0.14em] text-[#666]">Team</div>
               <div className="text-[15px] text-[#ededed]">{team.name}</div>
               <div className="leading-[20px] text-[#777]">
-                We can look for an existing runner project in this team or install it for you automatically.
+                Install the team-owned runner in this team. If anything was partially set up before, this will repair it
+                automatically.
               </div>
             </div>
 
@@ -1163,6 +1161,11 @@ export default function DevAgentRunClient({
                           <Loader2 className="mt-[2px] size-3 shrink-0 animate-spin text-[#666]" />
                           <span>The project exists, but the deployment URL is still provisioning.</span>
                         </div>
+                      ) : localSkillRunnerWorkerStatus === "provisioning" ? (
+                        <div className="mt-3 flex items-start gap-2 text-[12px] leading-[18px] text-[#888]">
+                          <Loader2 className="mt-[2px] size-3 shrink-0 animate-spin text-[#666]" />
+                          <span>The runner project is redeploying with its new Blob connection.</span>
+                        </div>
                       ) : workerSetupResult.project.missingEnvKeys?.length ? (
                         <div className="mt-3 space-y-2 text-[12px] leading-[18px] text-[#888]">
                           <div>
@@ -1198,32 +1201,15 @@ export default function DevAgentRunClient({
           </div>
 
           <DialogFooter className="flex-col gap-3 sm:flex-col">
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => void validateWorkerInstallation()}
-                disabled={isCheckingWorker || isInstallingWorker}
-                className="h-9 rounded-md border border-[#333] bg-transparent px-4 text-[13px] text-[#ededed] hover:bg-[#1a1a1a]"
-              >
-                {isCheckingWorker ? (
-                  <span className="inline-flex items-center gap-2">
-                    <Loader2 className="size-3.5 animate-spin" />
-                    Checking…
-                  </span>
-                ) : (
-                  "Check Existing Project"
-                )}
-              </Button>
+            <div className="flex justify-start">
               {canRetryWorkerSetup ? (
                 <Button
                   type="button"
-                  variant="ghost"
                   onClick={() => void installWorkerProject()}
                   disabled={isCheckingWorker || isInstallingWorker}
-                  className="h-9 rounded-md border border-[#333] bg-transparent px-4 text-[13px] text-[#ededed] hover:bg-[#1a1a1a]"
+                  className="h-9 rounded-md bg-[#ededed] px-4 text-[13px] font-medium text-[#0a0a0a] hover:bg-white disabled:opacity-40"
                 >
-                  {isInstallingWorker ? (
+                  {isInstallingWorker || isCheckingWorker ? (
                     <span className="inline-flex items-center gap-2">
                       <Loader2 className="size-3.5 animate-spin" />
                       {workerSetupResult?.installed ? "Repairing…" : "Installing…"}
@@ -1234,30 +1220,32 @@ export default function DevAgentRunClient({
                     "Install Runner Project"
                   )}
                 </Button>
-              ) : null}
-            </div>
-
-            <div className="flex items-center justify-between gap-3">
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => setIsWorkerSetupOpen(false)}
-                className="h-9 rounded-md px-0 text-[13px] text-[#777] hover:bg-transparent hover:text-[#ededed]"
-              >
-                Not now
-              </Button>
-              <Button
-                type="button"
-                onClick={() => setIsWorkerSetupOpen(false)}
-                disabled={
-                  !workerSetupResult?.installed ||
-                  !workerSetupResult.project?.workerBaseUrl ||
-                  Boolean(workerSetupResult.project?.missingEnvKeys?.length)
-                }
-                className="h-9 rounded-md bg-[#ededed] px-4 text-[13px] font-medium text-[#0a0a0a] hover:bg-white disabled:opacity-40"
-              >
-                Continue
-              </Button>
+              ) : localSkillRunnerWorkerStatus === "provisioning" ? (
+                <Button
+                  type="button"
+                  disabled
+                  className="h-9 rounded-md bg-[#ededed] px-4 text-[13px] font-medium text-[#0a0a0a] opacity-60"
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <Loader2 className="size-3.5 animate-spin" />
+                    Finishing Setup…
+                  </span>
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  onClick={() => setIsWorkerSetupOpen(false)}
+                  disabled={
+                    !workerSetupResult?.installed ||
+                    !workerSetupResult.project?.workerBaseUrl ||
+                    Boolean(workerSetupResult.project?.missingEnvKeys?.length) ||
+                    localSkillRunnerWorkerStatus !== "ready"
+                  }
+                  className="h-9 rounded-md bg-[#ededed] px-4 text-[13px] font-medium text-[#0a0a0a] hover:bg-white disabled:opacity-40"
+                >
+                  Continue
+                </Button>
+              )}
             </div>
           </DialogFooter>
         </DialogContent>

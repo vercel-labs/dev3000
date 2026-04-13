@@ -15,11 +15,12 @@ function unauthorized() {
 }
 
 function getWorkerStatus(
-  project: { workerBaseUrl?: string; missingEnvKeys?: string[] } | null
+  project: { workerBaseUrl?: string; missingEnvKeys?: string[]; latestDeploymentReadyState?: string } | null
 ): "unconfigured" | "provisioning" | "ready" | "error" {
   if (!project) return "unconfigured"
   if (!project.workerBaseUrl) return "provisioning"
   if (project.missingEnvKeys && project.missingEnvKeys.length > 0) return "error"
+  if (project.latestDeploymentReadyState && project.latestDeploymentReadyState !== "READY") return "provisioning"
   return "ready"
 }
 
