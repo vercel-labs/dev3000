@@ -19,7 +19,13 @@ import {
   getDevAgentModelLabel,
   isVercelPluginSkillRef
 } from "@/lib/dev-agents"
-import { listWorkflowRuns, saveWorkflowRun, type WorkflowRun, type WorkflowType } from "@/lib/workflow-storage"
+import {
+  listWorkflowRuns,
+  persistWorkflowRun,
+  type WorkflowRun,
+  type WorkflowRunMirrorTarget,
+  type WorkflowType
+} from "@/lib/workflow-storage"
 import type { TurbopackBundleComparison, TurbopackBundleMetricsSnapshot, WorkflowReport } from "@/types"
 
 const workflowLog = console.log
@@ -1488,6 +1494,7 @@ interface ProgressContext {
   devAgentExecutionMode?: "dev-server" | "preview-pr"
   devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser"
   isMarketplaceAgent?: boolean
+  controlPlaneMirrorTarget?: WorkflowRunMirrorTarget
   activeStepNumber?: number
   activeCurrentStep?: string
   sandboxUrl?: string
@@ -1587,7 +1594,7 @@ async function updateProgress(
       sandboxUrl: ctx.sandboxUrl,
       progressLogs
     } satisfies WorkflowRun
-    await saveWorkflowRun(nextRun)
+    await persistWorkflowRun(nextRun, { mirrorTarget: ctx.controlPlaneMirrorTarget })
     ctx.runSnapshot = nextRun
     ctx.progressLogs = progressLogs
     workflowLog(`[Progress] Updated: Step ${stepNumber} - ${currentStep}`)
@@ -1640,7 +1647,7 @@ async function appendProgressLog(ctx: ProgressContext | null | undefined, messag
       sandboxUrl,
       progressLogs
     } satisfies WorkflowRun
-    await saveWorkflowRun(nextRun)
+    await persistWorkflowRun(nextRun, { mirrorTarget: ctx.controlPlaneMirrorTarget })
     ctx.runSnapshot = nextRun
     ctx.progressLogs = progressLogs
   } catch (err) {
@@ -1688,7 +1695,7 @@ async function persistRunArtifacts(
       beforeWebVitals: updates.beforeWebVitals ?? existingRun.beforeWebVitals,
       afterWebVitals: updates.afterWebVitals ?? existingRun.afterWebVitals
     } satisfies WorkflowRun
-    await saveWorkflowRun(nextRun)
+    await persistWorkflowRun(nextRun, { mirrorTarget: ctx.controlPlaneMirrorTarget })
     ctx.runSnapshot = nextRun
   } catch (error) {
     workflowLog(`[Progress] Failed to persist run artifacts: ${error instanceof Error ? error.message : String(error)}`)

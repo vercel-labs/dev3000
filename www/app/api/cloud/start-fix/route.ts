@@ -5,7 +5,7 @@ import { SKILL_RUNNER_WORKER_MODE_ENV } from "@/lib/skill-runner-config"
 import { getSkillRunnerForExecution, getSkillRunnerTeamSettings, incrementSkillRunnerUsage } from "@/lib/skill-runners"
 import { proxyWorkflowJsonRequest, shouldProxyWorkflowRequest } from "@/lib/workflow-api"
 import { clearWorkflowLog, workflowError, workflowLog } from "@/lib/workflow-logger"
-import { saveWorkflowRun, type WorkflowType } from "@/lib/workflow-storage"
+import { persistWorkflowRun, type WorkflowRunMirrorTarget, type WorkflowType } from "@/lib/workflow-storage"
 import { cloudFixWorkflow } from "../fix-workflow/workflow"
 
 /**
@@ -174,6 +174,8 @@ export async function POST(request: Request) {
   let publicUrl: string | undefined
   let skillRunnerCanonicalPath: string | undefined
   let skillRunnerValidationWarning: string | undefined
+  let selfHostedWorkerBaseUrl: string | undefined
+  let workflowMirrorTarget: WorkflowRunMirrorTarget | null = null
 
   try {
     // Check for test bypass token (allows testing without browser auth via CLI)
@@ -281,6 +283,25 @@ export async function POST(request: Request) {
         name: team.name,
         isPersonal: Boolean(team.isPersonal)
       })
+      const preparedSkillRunner = await getSkillRunnerForExecution(
+        {
+          id: team.id,
+          slug: team.slug,
+          name: team.name,
+          isPersonal: Boolean(team.isPersonal)
+        },
+        body.skillRunnerId.trim()
+      )
+      runnerKind = "skill-runner"
+      devAgent = preparedSkillRunner.devAgent
+      skillRunnerCanonicalPath = preparedSkillRunner.canonicalPath
+      skillRunnerValidationWarning = preparedSkillRunner.validationWarning
+      ashArtifactState = "reused"
+      workflowType = devAgent.legacyWorkflowType || "prompt"
+      workflowLog(
+        `[Start Fix] Reusing ASH app: ${preparedSkillRunner.devAgent.ashArtifact?.sourceLabel || devAgent.name} (${preparedSkillRunner.devAgent.ashArtifact?.specHash?.slice(0, 8) || "unknown"})`
+      )
+
       if (teamSettings.executionMode === "self-hosted" && process.env[SKILL_RUNNER_WORKER_MODE_ENV] !== "1") {
         if (!teamSettings.workerProjectId) {
           return Response.json(
@@ -312,32 +333,8 @@ export async function POST(request: Request) {
           )
         }
 
-        return forwardSelfHostedStartRequest({
-          body,
-          request,
-          accessToken,
-          workerBaseUrl: teamSettings.workerBaseUrl
-        })
+        selfHostedWorkerBaseUrl = teamSettings.workerBaseUrl
       }
-
-      const preparedSkillRunner = await getSkillRunnerForExecution(
-        {
-          id: team.id,
-          slug: team.slug,
-          name: team.name,
-          isPersonal: Boolean(team.isPersonal)
-        },
-        body.skillRunnerId.trim()
-      )
-      runnerKind = "skill-runner"
-      devAgent = preparedSkillRunner.devAgent
-      skillRunnerCanonicalPath = preparedSkillRunner.canonicalPath
-      skillRunnerValidationWarning = preparedSkillRunner.validationWarning
-      ashArtifactState = "reused"
-      workflowType = devAgent.legacyWorkflowType || "prompt"
-      workflowLog(
-        `[Start Fix] Reusing ASH app: ${preparedSkillRunner.devAgent.ashArtifact?.sourceLabel || devAgent.name} (${preparedSkillRunner.devAgent.ashArtifact?.specHash?.slice(0, 8) || "unknown"})`
-      )
     } else if (typeof body.devAgentId === "string" && body.devAgentId.trim().length > 0) {
       devAgent = await getDevAgent(body.devAgentId.trim())
       if (!devAgent) {
@@ -437,10 +434,19 @@ export async function POST(request: Request) {
       )
     }
 
+    const providedRunId = typeof body.runId === "string" && body.runId.trim().length > 0 ? body.runId.trim() : undefined
+    const providedTimestamp =
+      typeof body.timestamp === "string" && body.timestamp.trim().length > 0 ? body.timestamp.trim() : undefined
+
     // Generate runId BEFORE starting workflow (following workflow-builder-template pattern)
-    // The SDK's start() doesn't reliably return an id, so we generate our own
-    runId = `d3k_${crypto.randomUUID()}`
-    runTimestamp = new Date().toISOString()
+    // The SDK's start() doesn't reliably return an id, so we generate our own.
+    // Self-hosted workers may receive a control-plane-generated runId/timestamp and must reuse them.
+    runId = providedRunId || `d3k_${crypto.randomUUID()}`
+    runTimestamp = providedTimestamp || new Date().toISOString()
+
+    if (!runId || !runTimestamp) {
+      throw new Error("Failed to initialize workflow run metadata")
+    }
 
     console.log(`[Start Fix] Generated runId: ${runId}`)
     console.log(`[Start Fix] userId: ${userId}, projectName: ${projectName}`)
@@ -520,35 +526,54 @@ export async function POST(request: Request) {
       baseBranch: baseBranch || "main",
       // For before/after screenshots in PR
       productionUrl,
-      useV0DevAgentRunner
+      useV0DevAgentRunner,
+      controlPlaneBaseUrl:
+        request.headers.get("x-dev3000-skill-runner-worker-forwarded") === "1"
+          ? typeof body.controlPlaneBaseUrl === "string"
+            ? body.controlPlaneBaseUrl
+            : undefined
+          : undefined,
+      controlPlaneAccessToken:
+        request.headers.get("x-dev3000-skill-runner-worker-forwarded") === "1" ? accessToken : undefined
     }
+
+    workflowMirrorTarget =
+      workflowParams.controlPlaneBaseUrl && workflowParams.controlPlaneAccessToken
+        ? {
+            apiBaseUrl: workflowParams.controlPlaneBaseUrl,
+            accessToken: workflowParams.controlPlaneAccessToken
+          }
+        : null
 
     // Save workflow run metadata BEFORE returning — the client navigates to the report
     // page immediately, so the run must exist in blob storage when the page loads.
     if (userId && projectName) {
       try {
-        await saveWorkflowRun({
-          id: runId,
-          userId,
-          projectName,
-          timestamp: runTimestamp,
-          status: "running",
-          runnerKind,
-          type: workflowType,
-          devAgentId: devAgent?.id,
-          devAgentName: devAgent?.name,
-          devAgentDescription: devAgent?.description,
-          devAgentRevision: devAgent?.ashArtifact?.revision,
-          devAgentSpecHash: devAgent?.ashArtifact?.specHash,
-          devAgentExecutionMode: devAgent?.executionMode,
-          devAgentSandboxBrowser: devAgent?.sandboxBrowser,
-          skillRunnerCanonicalPath,
-          skillRunnerValidationWarning,
-          currentStep: initialAshStep || "Creating sandbox environment...",
-          stepNumber: devAgent ? 0 : 1,
-          progressLogs: initialProgressLogs,
-          customPrompt: workflowType === "prompt" ? customPrompt : undefined
-        })
+        await persistWorkflowRun(
+          {
+            id: runId,
+            userId,
+            projectName,
+            timestamp: runTimestamp,
+            status: "running",
+            runnerKind,
+            type: workflowType,
+            devAgentId: devAgent?.id,
+            devAgentName: devAgent?.name,
+            devAgentDescription: devAgent?.description,
+            devAgentRevision: devAgent?.ashArtifact?.revision,
+            devAgentSpecHash: devAgent?.ashArtifact?.specHash,
+            devAgentExecutionMode: devAgent?.executionMode,
+            devAgentSandboxBrowser: devAgent?.sandboxBrowser,
+            skillRunnerCanonicalPath,
+            skillRunnerValidationWarning,
+            currentStep: initialAshStep || "Creating sandbox environment...",
+            stepNumber: devAgent ? 0 : 1,
+            progressLogs: initialProgressLogs,
+            customPrompt: workflowType === "prompt" ? customPrompt : undefined
+          },
+          { mirrorTarget: workflowMirrorTarget }
+        )
         workflowLog(`[Start Fix] Saved workflow run metadata (running): ${runId}`)
       } catch (saveError) {
         workflowError("[Start Fix] ERROR saving workflow metadata:", saveError)
@@ -565,6 +590,26 @@ export async function POST(request: Request) {
       })
     }
 
+    if (selfHostedWorkerBaseUrl) {
+      const forwardedBody =
+        body && typeof body === "object"
+          ? {
+              ...(body as Record<string, unknown>),
+              runId,
+              timestamp: runTimestamp,
+              workflowType,
+              controlPlaneBaseUrl: new URL(request.url).origin
+            }
+          : body
+
+      return forwardSelfHostedStartRequest({
+        body: forwardedBody,
+        request,
+        accessToken,
+        workerBaseUrl: selfHostedWorkerBaseUrl
+      })
+    }
+
     // Enqueue the workflow before returning so the request cannot finish first
     // and leave the run stuck in its initial "running" placeholder state.
     try {
@@ -574,27 +619,30 @@ export async function POST(request: Request) {
       workflowError("[Start Fix] Failed to enqueue workflow:", startError)
 
       if (userId && projectName && runId && runTimestamp) {
-        await saveWorkflowRun({
-          id: runId,
-          userId,
-          projectName,
-          timestamp: runTimestamp,
-          status: "failure",
-          runnerKind,
-          type: workflowType,
-          devAgentId: devAgent?.id,
-          devAgentName: devAgent?.name,
-          devAgentDescription: devAgent?.description,
-          devAgentRevision: devAgent?.ashArtifact?.revision,
-          devAgentSpecHash: devAgent?.ashArtifact?.specHash,
-          devAgentExecutionMode: devAgent?.executionMode,
-          devAgentSandboxBrowser: devAgent?.sandboxBrowser,
-          skillRunnerCanonicalPath,
-          skillRunnerValidationWarning,
-          completedAt: new Date().toISOString(),
-          error: startError instanceof Error ? startError.message : String(startError),
-          customPrompt: workflowType === "prompt" ? customPrompt : undefined
-        }).catch((err) => workflowError("[Start Fix] Failed to save startup failure metadata:", err))
+        await persistWorkflowRun(
+          {
+            id: runId,
+            userId,
+            projectName,
+            timestamp: runTimestamp,
+            status: "failure",
+            runnerKind,
+            type: workflowType,
+            devAgentId: devAgent?.id,
+            devAgentName: devAgent?.name,
+            devAgentDescription: devAgent?.description,
+            devAgentRevision: devAgent?.ashArtifact?.revision,
+            devAgentSpecHash: devAgent?.ashArtifact?.specHash,
+            devAgentExecutionMode: devAgent?.executionMode,
+            devAgentSandboxBrowser: devAgent?.sandboxBrowser,
+            skillRunnerCanonicalPath,
+            skillRunnerValidationWarning,
+            completedAt: new Date().toISOString(),
+            error: startError instanceof Error ? startError.message : String(startError),
+            customPrompt: workflowType === "prompt" ? customPrompt : undefined
+          },
+          { mirrorTarget: workflowMirrorTarget }
+        ).catch((err) => workflowError("[Start Fix] Failed to save startup failure metadata:", err))
       }
 
       throw startError
@@ -624,27 +672,30 @@ export async function POST(request: Request) {
 
     // Update workflow run metadata with failure status (use same timestamp to overwrite)
     if (userId && projectName && runId && runTimestamp) {
-      await saveWorkflowRun({
-        id: runId,
-        userId,
-        projectName,
-        timestamp: runTimestamp,
-        status: "failure",
-        runnerKind,
-        type: workflowType,
-        devAgentId: devAgent?.id,
-        devAgentName: devAgent?.name,
-        devAgentDescription: devAgent?.description,
-        devAgentRevision: devAgent?.ashArtifact?.revision,
-        devAgentSpecHash: devAgent?.ashArtifact?.specHash,
-        devAgentExecutionMode: devAgent?.executionMode,
-        devAgentSandboxBrowser: devAgent?.sandboxBrowser,
-        skillRunnerCanonicalPath,
-        skillRunnerValidationWarning,
-        completedAt: new Date().toISOString(),
-        error: error instanceof Error ? error.message : String(error),
-        customPrompt: workflowType === "prompt" ? customPrompt : undefined
-      }).catch((err) => workflowError("[Start Fix] Failed to save error metadata:", err))
+      await persistWorkflowRun(
+        {
+          id: runId,
+          userId,
+          projectName,
+          timestamp: runTimestamp,
+          status: "failure",
+          runnerKind,
+          type: workflowType,
+          devAgentId: devAgent?.id,
+          devAgentName: devAgent?.name,
+          devAgentDescription: devAgent?.description,
+          devAgentRevision: devAgent?.ashArtifact?.revision,
+          devAgentSpecHash: devAgent?.ashArtifact?.specHash,
+          devAgentExecutionMode: devAgent?.executionMode,
+          devAgentSandboxBrowser: devAgent?.sandboxBrowser,
+          skillRunnerCanonicalPath,
+          skillRunnerValidationWarning,
+          completedAt: new Date().toISOString(),
+          error: error instanceof Error ? error.message : String(error),
+          customPrompt: workflowType === "prompt" ? customPrompt : undefined
+        },
+        { mirrorTarget: workflowMirrorTarget }
+      ).catch((err) => workflowError("[Start Fix] Failed to save error metadata:", err))
       workflowLog(`[Start Fix] Updated workflow run metadata to failure: ${runId}`)
     }
 

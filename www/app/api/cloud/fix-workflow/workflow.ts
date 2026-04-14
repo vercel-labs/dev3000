@@ -12,7 +12,7 @@
  */
 
 import { readBlobJson } from "@/lib/blob-store"
-import type { WorkflowRun } from "@/lib/workflow-storage"
+import { persistWorkflowRun, type WorkflowRun, type WorkflowRunMirrorTarget } from "@/lib/workflow-storage"
 
 const workflowLog = console.log
 const TURBOPACK_MIN_COMPRESSED_IMPROVEMENT_BYTES = 50 * 1024
@@ -197,6 +197,8 @@ export async function cloudFixWorkflow(params: {
   // For before/after screenshots in PR
   productionUrl?: string
   useV0DevAgentRunner?: boolean
+  controlPlaneBaseUrl?: string
+  controlPlaneAccessToken?: string
 }) {
   "use workflow"
 
@@ -249,7 +251,9 @@ export async function cloudFixWorkflow(params: {
     repoName,
     baseBranch = "main",
     productionUrl,
-    useV0DevAgentRunner = false
+    useV0DevAgentRunner = false,
+    controlPlaneBaseUrl,
+    controlPlaneAccessToken
   } = params
   // Use runId if provided (from start-fix route), otherwise generate one
   // The reportId is used for blob naming and tracking
@@ -276,6 +280,13 @@ export async function cloudFixWorkflow(params: {
           devAgentExecutionMode,
           devAgentSandboxBrowser,
           isMarketplaceAgent,
+          controlPlaneMirrorTarget:
+            controlPlaneBaseUrl && controlPlaneAccessToken
+              ? {
+                  apiBaseUrl: controlPlaneBaseUrl,
+                  accessToken: controlPlaneAccessToken
+                }
+              : undefined,
           activeStepNumber: initialStepNumber,
           activeCurrentStep: initialCurrentStep,
           progressLogs: initialProgressLogs
@@ -669,6 +680,7 @@ interface ProgressContext {
   devAgentExecutionMode?: "dev-server" | "preview-pr"
   devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser"
   isMarketplaceAgent?: boolean
+  controlPlaneMirrorTarget?: WorkflowRunMirrorTarget
   activeStepNumber?: number
   activeCurrentStep?: string
   sandboxUrl?: string
@@ -1081,7 +1093,6 @@ async function saveDoneStatus(
   sandboxUrl?: string | null
 ): Promise<void> {
   "use step"
-  const { saveWorkflowRun } = await import("@/lib/workflow-storage")
   const existingRun = await getProgressRunSnapshot(progressContext)
   const reportSummary = await loadWorkflowReportSummary(reportBlobUrl)
   const progressLogs = dedupeProgressLogs(
@@ -1136,7 +1147,7 @@ async function saveDoneStatus(
     sandboxUrl: sandboxUrl || progressContext.sandboxUrl || existingRun?.sandboxUrl || undefined,
     progressLogs
   } satisfies WorkflowRun
-  await saveWorkflowRun(nextRun)
+  await persistWorkflowRun(nextRun, { mirrorTarget: progressContext.controlPlaneMirrorTarget })
   if (progressContext.runnerKind === "skill-runner" && progressContext.devAgentId) {
     try {
       const { recordSkillRunnerCompletion } = await import("@/lib/skill-runners")
@@ -1182,7 +1193,6 @@ async function loadWorkflowReportSummary(reportBlobUrl: string): Promise<Workflo
 async function saveFailureStatus(progressContext: ProgressContext, errorMessage: string): Promise<void> {
   "use step"
   try {
-    const { saveWorkflowRun } = await import("@/lib/workflow-storage")
     const existingRun = await getProgressRunSnapshot(progressContext)
     const progressLogs = dedupeProgressLogs(
       [...(existingRun?.progressLogs ?? []), ...(progressContext.progressLogs ?? [])],
@@ -1223,7 +1233,7 @@ async function saveFailureStatus(progressContext: ProgressContext, errorMessage:
       sandboxUrl: progressContext.sandboxUrl ?? existingRun?.sandboxUrl,
       progressLogs
     } satisfies WorkflowRun
-    await saveWorkflowRun(nextRun)
+    await persistWorkflowRun(nextRun, { mirrorTarget: progressContext.controlPlaneMirrorTarget })
     progressContext.runSnapshot = nextRun
     console.log(`[Workflow] Saved failure status for ${progressContext.runId}`)
   } catch (saveErr) {

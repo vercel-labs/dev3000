@@ -62,6 +62,11 @@ export interface WorkflowRun {
   }>
 }
 
+export interface WorkflowRunMirrorTarget {
+  apiBaseUrl: string
+  accessToken: string
+}
+
 const LOCAL_WORKFLOW_CACHE_ROOT = path.join(tmpdir(), "dev3000-workflow-runs")
 
 function isLocalWorkflowCacheEnabled(): boolean {
@@ -161,6 +166,55 @@ export async function saveWorkflowRun(run: WorkflowRun): Promise<string> {
 
   console.log(`[Workflow Storage] Saved run to: ${blob.appUrl}`)
   return blob.appUrl
+}
+
+function normalizeMirrorApiBaseUrl(input: string): string | null {
+  const trimmed = input.trim()
+  if (!trimmed) return null
+
+  try {
+    return new URL(trimmed).origin
+  } catch {
+    return null
+  }
+}
+
+export async function mirrorWorkflowRun(run: WorkflowRun, mirrorTarget: WorkflowRunMirrorTarget): Promise<void> {
+  const apiBaseUrl = normalizeMirrorApiBaseUrl(mirrorTarget.apiBaseUrl)
+  const accessToken = mirrorTarget.accessToken.trim()
+
+  if (!apiBaseUrl || !accessToken) {
+    throw new Error("Missing workflow mirror target configuration")
+  }
+
+  const response = await fetch(new URL("/api/internal/workflow-runs", apiBaseUrl), {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${accessToken}`,
+      "x-dev3000-workflow-mirror": "1"
+    },
+    body: JSON.stringify({ run }),
+    cache: "no-store"
+  })
+
+  if (!response.ok) {
+    const body = await response.text()
+    throw new Error(`Workflow mirror failed with HTTP ${response.status}: ${body.slice(0, 400)}`)
+  }
+}
+
+export async function persistWorkflowRun(
+  run: WorkflowRun,
+  options?: { mirrorTarget?: WorkflowRunMirrorTarget | null }
+): Promise<string> {
+  const appUrl = await saveWorkflowRun(run)
+
+  if (options?.mirrorTarget) {
+    await mirrorWorkflowRun(run, options.mirrorTarget)
+  }
+
+  return appUrl
 }
 
 /**
