@@ -1,0 +1,46 @@
+www/app/dev-agents/[agentId]/new/dev-agent-run-client.tsx
+  7a0ea82f7d7bc893 717-721,1242
+package.json
+  7a0ea82f7d7bc893 48
+www/lib/dev-agent-ash-spec.ts
+  7a0ea82f7d7bc893 15
+www/lib/skill-runner-worker.ts
+  7a0ea82f7d7bc893 47,51,65-67,75-81,286-326,396-411,424,450,507-509,514-519,522-525,529,533-540,576-582
+www/package.json
+  7a0ea82f7d7bc893 45,48,78
+www/app/api/cloud/fix-workflow/steps.ts
+  7a0ea82f7d7bc893 5904,5930-5932,5953-5955,6004-6005,6041-6088,6096-6098,6102,6106-6107,6112,6117-6132,6140,6143,6224,6226,6256,6271
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.8",
+  "base_commit_sha": "b297be9b160bb98de1e1af7bdaeea33c2a628a28",
+  "prompts": {
+    "7a0ea82f7d7bc893": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d59d8-022d-7262-9555-ec96bb973d0c",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 371,
+      "total_deletions": 198,
+      "accepted_lines": 290,
+      "overriden_lines": 0
+    },
+    "99ca025371e68d9d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d87d1-243a-7931-bf03-4625a7dea51f",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 925,
+      "overriden_lines": 0
+    }
+  }
+}
