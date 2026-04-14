@@ -5901,7 +5901,7 @@ async function ensureClaudeCodeInstalledInSandbox(
   progressContext?: ProgressContext | null
 ): Promise<void> {
   const claudeInstallRoot = "/home/vercel-sandbox/.claude-code"
-  const localClaudeBin = `${claudeInstallRoot}/node_modules/.bin`
+  const localClaudeCli = `${claudeInstallRoot}/node_modules/@anthropic-ai/claude-code/cli.js`
   const pathEnv = buildClaudeSandboxPathEnv()
   const ensureNodeShim = `if ! command -v node >/dev/null 2>&1; then ln -sf "$(command -v bun)" /home/vercel-sandbox/.local/bin/node; fi`
   const whichResult = await runSandboxCommandWithOptions(sandbox, {
@@ -5927,7 +5927,9 @@ async function ensureClaudeCodeInstalledInSandbox(
             `if [ ! -f package.json ]; then printf '%s' '{"name":"claude-code-runtime","private":true}' > package.json; fi`,
             `bun add ${CLAUDE_CODE_PACKAGE}`,
             ensureNodeShim,
-            `ln -sf "${localClaudeBin}/claude" /home/vercel-sandbox/.local/bin/claude`
+            `test -f "${localClaudeCli}"`,
+            `chmod +x "${localClaudeCli}"`,
+            `ln -sf "${localClaudeCli}" /home/vercel-sandbox/.local/bin/claude`
           ].join(" && ")
         ],
         env: {
@@ -5948,7 +5950,9 @@ async function ensureClaudeCodeInstalledInSandbox(
             `if [ ! -f package.json ]; then printf '%s' '{"name":"claude-code-runtime","private":true}' > package.json; fi`,
             `npm install ${CLAUDE_CODE_PACKAGE}`,
             ensureNodeShim,
-            `ln -sf "${localClaudeBin}/claude" /home/vercel-sandbox/.local/bin/claude`
+            `test -f "${localClaudeCli}"`,
+            `chmod +x "${localClaudeCli}"`,
+            `ln -sf "${localClaudeCli}" /home/vercel-sandbox/.local/bin/claude`
           ].join(" && ")
         ],
         env: {
@@ -5997,8 +6001,8 @@ async function ensureClaudeCodeInstalledInSandbox(
 
   const verifyResult = await runSandboxCommandWithOptions(sandbox, {
     cmd: "sh",
-    args: ["-c", "command -v claude || true"],
-    env: { PATH: pathEnv }
+    args: ["-c", `command -v claude || [ -x "${localClaudeCli}" ] && printf '%s\n' "${localClaudeCli}" || true`],
+    env: { PATH: pathEnv, HOME: "/home/vercel-sandbox" }
   })
   if (!verifyResult.stdout.trim()) {
     await appendProgressLog(
@@ -6034,31 +6038,98 @@ function buildClaudeSandboxPathEnv(): string {
   return "/home/vercel-sandbox/.claude-code/node_modules/.bin:/home/vercel-sandbox/.bun/bin:/home/vercel-sandbox/.local/bin:/usr/local/bin:/usr/bin:/bin"
 }
 
+type ClaudeSandboxInvocation =
+  | {
+      cmd: "claude"
+      argsPrefix: []
+      description: string
+    }
+  | {
+      cmd: "node"
+      argsPrefix: [string]
+      description: string
+    }
+
+async function resolveClaudeSandboxInvocation(sandbox: Sandbox, pathEnv: string): Promise<ClaudeSandboxInvocation> {
+  const localClaudeCli = "/home/vercel-sandbox/.claude-code/node_modules/@anthropic-ai/claude-code/cli.js"
+  const localSymlink = "/home/vercel-sandbox/.local/bin/claude"
+  const verifyResult = await runSandboxCommandWithOptions(sandbox, {
+    cmd: "sh",
+    args: [
+      "-c",
+      [
+        "if command -v claude >/dev/null 2>&1; then",
+        "  printf 'which:%s\\n' \"$(command -v claude)\"",
+        `elif [ -x "${localClaudeCli}" ]; then`,
+        `  printf 'cli:%s\\n' "${localClaudeCli}"`,
+        `elif [ -x "${localSymlink}" ]; then`,
+        `  printf 'which:%s\\n' "${localSymlink}"`,
+        "fi"
+      ].join(" ")
+    ],
+    env: { PATH: pathEnv, HOME: "/home/vercel-sandbox" }
+  })
+
+  const line = verifyResult.stdout.trim()
+  if (line.startsWith("which:")) {
+    return {
+      cmd: "claude",
+      argsPrefix: [],
+      description: line.slice("which:".length)
+    }
+  }
+  if (line.startsWith("cli:")) {
+    return {
+      cmd: "node",
+      argsPrefix: [line.slice("cli:".length)],
+      description: line.slice("cli:".length)
+    }
+  }
+  throw new Error("Claude Code CLI is unavailable inside the sandbox after installation.")
+}
+
 async function logClaudeCliDiagnostics(
   sandbox: Sandbox,
   pathEnv: string,
   progressContext?: ProgressContext | null
 ): Promise<void> {
-  const [whichResult, versionResult, nodeWhichResult, nodeVersionResult] = await Promise.all([
+  const localClaudeCli = "/home/vercel-sandbox/.claude-code/node_modules/@anthropic-ai/claude-code/cli.js"
+  const localSymlink = "/home/vercel-sandbox/.local/bin/claude"
+  const [whichResult, versionResult, nodeWhichResult, nodeVersionResult, fileResult] = await Promise.all([
     runSandboxCommandWithOptions(sandbox, {
       cmd: "sh",
       args: ["-c", "command -v claude || true"],
-      env: { PATH: pathEnv }
+      env: { PATH: pathEnv, HOME: "/home/vercel-sandbox" }
     }),
     runSandboxCommandWithOptions(sandbox, {
       cmd: "sh",
-      args: ["-c", "claude --version || true"],
-      env: { PATH: pathEnv }
+      args: ["-c", `claude --version || [ -x "${localClaudeCli}" ] && node "${localClaudeCli}" --version || true`],
+      env: { PATH: pathEnv, HOME: "/home/vercel-sandbox" }
     }),
     runSandboxCommandWithOptions(sandbox, {
       cmd: "sh",
       args: ["-c", "command -v node || true"],
-      env: { PATH: pathEnv }
+      env: { PATH: pathEnv, HOME: "/home/vercel-sandbox" }
     }),
     runSandboxCommandWithOptions(sandbox, {
       cmd: "sh",
       args: ["-c", "node --version || true"],
-      env: { PATH: pathEnv }
+      env: { PATH: pathEnv, HOME: "/home/vercel-sandbox" }
+    }),
+    runSandboxCommandWithOptions(sandbox, {
+      cmd: "sh",
+      args: [
+        "-c",
+        [
+          `printf 'cli=%s exists=' "${localClaudeCli}"`,
+          `[ -e "${localClaudeCli}" ] && printf yes || printf no`,
+          `printf ' exec='`,
+          `[ -x "${localClaudeCli}" ] && printf yes || printf no`,
+          `printf ' symlink='`,
+          `[ -L "${localSymlink}" ] && readlink "${localSymlink}" || printf '<missing>'`
+        ].join(" && ")
+      ],
+      env: { PATH: pathEnv, HOME: "/home/vercel-sandbox" }
     })
   ])
 
@@ -6066,9 +6137,10 @@ async function logClaudeCliDiagnostics(
   const claudeVersion = formatClaudeOutputPreview(versionResult.stdout || versionResult.stderr, 120)
   const nodePath = nodeWhichResult.stdout.trim() || "<missing>"
   const nodeVersion = formatClaudeOutputPreview(nodeVersionResult.stdout || nodeVersionResult.stderr, 120)
+  const fileStatus = formatClaudeOutputPreview(fileResult.stdout || fileResult.stderr, 160)
   await appendProgressLog(
     progressContext,
-    `[Claude] CLI path=${claudePath} version=${claudeVersion} node=${nodePath} nodeVersion=${nodeVersion}`
+    `[Claude] CLI path=${claudePath} version=${claudeVersion} node=${nodePath} nodeVersion=${nodeVersion} files=${fileStatus}`
   )
 }
 
@@ -6149,7 +6221,9 @@ async function runClaudeTurnInSandbox(
 
   const modelSelection = resolveClaudeModelSelection(options.modelId)
   const pathEnv = buildClaudeSandboxPathEnv()
+  const invocation = await resolveClaudeSandboxInvocation(sandbox, pathEnv)
   const args = [
+    ...invocation.argsPrefix,
     ...(options.sessionId ? ["--resume", options.sessionId] : []),
     "-p",
     prompt.prompt,
@@ -6179,7 +6253,7 @@ async function runClaudeTurnInSandbox(
   await logClaudeCliDiagnostics(sandbox, pathEnv, options.progressContext)
   await appendProgressLog(
     options.progressContext,
-    `[Claude] Running ${prompt.label} (model=${modelSelection.cliModel}, resume=${options.sessionId ? "yes" : "no"}, authToken=present:${gatewayAuthSource}, apiKey=empty, baseUrl=${claudeEnv.ANTHROPIC_BASE_URL}, extraEnv=${Object.keys(modelSelection.extraEnv).join(",") || "none"})`
+    `[Claude] Running ${prompt.label} (model=${modelSelection.cliModel}, resume=${options.sessionId ? "yes" : "no"}, authToken=present:${gatewayAuthSource}, apiKey=empty, baseUrl=${claudeEnv.ANTHROPIC_BASE_URL}, cli=${invocation.description}, extraEnv=${Object.keys(modelSelection.extraEnv).join(",") || "none"})`
   )
 
   const startedAt = Date.now()
@@ -6194,7 +6268,7 @@ async function runClaudeTurnInSandbox(
   let result: Awaited<ReturnType<typeof runSandboxCommandWithOptions>>
   try {
     result = await runSandboxCommandWithOptions(sandbox, {
-      cmd: "claude",
+      cmd: invocation.cmd,
       args,
       cwd,
       env: claudeEnv

@@ -714,6 +714,11 @@ export default function DevAgentRunClient({
     window.location.href = `/dev-agents/runs/${result.runId}/report`
   }
 
+  async function continueAfterWorkerSetup() {
+    setIsWorkerSetupOpen(false)
+    await startDevAgentRun()
+  }
+
   return (
     <div className="flex max-w-5xl flex-col gap-5">
       {/* Agent info bar */}
@@ -1234,7 +1239,7 @@ export default function DevAgentRunClient({
               ) : (
                 <Button
                   type="button"
-                  onClick={() => setIsWorkerSetupOpen(false)}
+                  onClick={() => void continueAfterWorkerSetup()}
                   disabled={
                     !workerSetupResult?.installed ||
                     !workerSetupResult.project?.workerBaseUrl ||

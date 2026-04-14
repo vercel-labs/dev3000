@@ -45,7 +45,7 @@
     "@biomejs/biome": "2.4.6",
     "@opentui/core": "0.1.86",
     "@vercel/next-browser": "0.1.6",
-    "@vercel/sandbox": "1.9.0",
+    "@vercel/sandbox": "1.9.3",
     "agent-browser": "0.24.0",
     "ai": "6.0.116",
     "chalk": "^5.3.0",

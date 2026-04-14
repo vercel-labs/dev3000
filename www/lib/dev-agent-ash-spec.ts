@@ -12,7 +12,7 @@ import type {
 } from "@/lib/dev-agents"
 
 const ASH_PACKAGE_NAME = "experimental-ash"
-const ASH_PACKAGE_VERSION = "0.2.0-alpha.8"
+const ASH_PACKAGE_VERSION = "0.2.0-alpha.22"
 const ASH_RUNTIME_VERSION = `${ASH_PACKAGE_NAME}@${ASH_PACKAGE_VERSION}`
 const ASH_ARTIFACT_FORMAT_VERSION = 2
 

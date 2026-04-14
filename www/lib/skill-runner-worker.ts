@@ -44,9 +44,11 @@ interface VercelProjectEnvInput {
 
 interface VercelProjectEnvListResponse {
   envs?: Array<{
+    createdAt?: number
     id?: string
     key?: string
     target?: Array<"production" | "preview" | "development">
+    updatedAt?: number
     contentHint?: {
       type?: string
       storeId?: string
@@ -60,10 +62,20 @@ interface VercelBlobStoreListResponse {
     id?: string
     name?: string
     projectsMetadata?: Array<{
+      envVarPrefix?: string
+      environments?: Array<"production" | "preview" | "development">
+      latestDeployment?: string
       projectId?: string
       name?: string
       environmentVariables?: string[]
     }>
+  }>
+}
+
+interface VercelBlobStoreConnectionsResponse {
+  connections?: Array<{
+    id?: string
+    projectId?: string
   }>
 }
 
@@ -271,6 +283,49 @@ async function connectBlobStoreToProject(
   throw new Error(`Failed to connect Blob store to runner project: ${response.status} ${errorText}`)
 }
 
+async function listBlobStoreConnections(accessToken: string, team: VercelTeam, storeId: string) {
+  const apiUrl = new URL(`https://api.vercel.com/v1/storage/stores/${storeId}/connections`)
+  apiUrl.searchParams.set("teamId", team.id)
+
+  const response = await fetch(apiUrl.toString(), {
+    headers: {
+      Authorization: `Bearer ${accessToken}`
+    },
+    cache: "no-store"
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`Failed to inspect Blob store connections: ${response.status} ${errorText}`)
+  }
+
+  const data = (await response.json()) as VercelBlobStoreConnectionsResponse
+  return Array.isArray(data.connections) ? data.connections : []
+}
+
+async function disconnectBlobStoreConnection(
+  accessToken: string,
+  team: VercelTeam,
+  storeId: string,
+  connectionId: string
+): Promise<void> {
+  const apiUrl = new URL(`https://api.vercel.com/v1/storage/stores/${storeId}/connections/${connectionId}`)
+  apiUrl.searchParams.set("teamId", team.id)
+
+  const response = await fetch(apiUrl.toString(), {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${accessToken}`
+    },
+    cache: "no-store"
+  })
+
+  if (response.ok || response.status === 404) return
+
+  const errorText = await response.text()
+  throw new Error(`Failed to disconnect Blob store from runner project: ${response.status} ${errorText}`)
+}
+
 async function removeProjectEnvVar(
   accessToken: string,
   team: VercelTeam,
@@ -338,6 +393,25 @@ async function removeWorkerBlobEnvBindings(accessToken: string, team: VercelTeam
   }
 }
 
+async function disconnectWorkerBlobStoreConnections(
+  accessToken: string,
+  team: VercelTeam,
+  projectId: string,
+  stores: Awaited<ReturnType<typeof listTeamBlobStores>>
+): Promise<void> {
+  for (const store of stores) {
+    const storeId = store.id?.trim()
+    if (!storeId) continue
+
+    const connections = await listBlobStoreConnections(accessToken, team, storeId)
+    for (const connection of connections) {
+      const connectionId = connection.id?.trim()
+      if (!connectionId || connection.projectId !== projectId) continue
+      await disconnectBlobStoreConnection(accessToken, team, storeId, connectionId)
+    }
+  }
+}
+
 async function ensureWorkerBlobStore(
   accessToken: string,
   team: VercelTeam,
@@ -347,6 +421,7 @@ async function ensureWorkerBlobStore(
   const desiredStoreName = buildWorkerBlobStoreName(team)
   const existingStore = stores.find((store) => store.name === desiredStoreName)
   const storeId = existingStore?.id || (await createTeamBlobStore(accessToken, team, desiredStoreName))
+  await disconnectWorkerBlobStoreConnections(accessToken, team, project.projectId, stores)
   await removeWorkerBlobEnvBindings(accessToken, team, project.projectId)
   await connectBlobStoreToProject(accessToken, team, storeId, project.projectId)
 }
@@ -372,6 +447,7 @@ async function redeployWorkerProject(
     },
     body: JSON.stringify({
       deploymentId: project.latestDeploymentId,
+      name: project.projectName,
       project: project.projectId,
       target: "production"
     }),
@@ -428,26 +504,38 @@ async function upsertWorkerProjectEnv(
 async function getWorkerProjectMissingEnvKeys(
   accessToken: string,
   team: VercelTeam,
-  projectId: string
+  projectId: string,
+  latestDeploymentId?: string,
+  latestDeploymentCreatedAt?: number
 ): Promise<string[]> {
   const envVars = await listProjectEnvVars(accessToken, team, projectId)
   const envKeys = new Set(envVars.map((envItem) => envItem.key?.trim()).filter((key): key is string => Boolean(key)))
   const missing = REQUIRED_SELF_HOSTED_WORKER_ENV_KEYS.filter((key) => !envKeys.has(key))
-  if (missing.length > 0) {
-    return missing
-  }
-
-  const blobEnvVar = envVars.find((envItem) => envItem.key?.trim() === "BLOB_READ_WRITE_TOKEN")
-  const blobStoreId = blobEnvVar?.contentHint?.storeId?.trim()
-  if (!blobStoreId) {
-    return ["BLOB_READ_WRITE_TOKEN"]
-  }
-
   const desiredStoreName = buildWorkerBlobStoreName(team)
   const stores = await listTeamBlobStores(accessToken, team)
-  const blobStore = stores.find((store) => store.id === blobStoreId)
-  if (!blobStore || blobStore.name !== desiredStoreName || blobStore.access !== "private") {
+  const blobStore = stores.find((store) => store.name === desiredStoreName && store.access === "private")
+  const storeConnection = blobStore?.projectsMetadata?.find((metadata) => metadata.projectId === projectId)
+  if (!blobStore || !storeConnection) {
     return ["BLOB_READ_WRITE_TOKEN"]
+  }
+
+  const hasExpectedEnvironments = SELF_HOSTED_BLOB_ENVIRONMENTS.every((environment) =>
+    storeConnection.environments?.includes(environment)
+  )
+  if (!hasExpectedEnvironments) {
+    return ["BLOB_READ_WRITE_TOKEN"]
+  }
+
+  if (!latestDeploymentId || storeConnection.latestDeployment !== latestDeploymentId) {
+    return ["BLOB_READ_WRITE_TOKEN"]
+  }
+
+  if (missing.length === 0) {
+    const blobEnvVar = envVars.find((envItem) => envItem.key?.trim() === "BLOB_READ_WRITE_TOKEN")
+    const blobEnvUpdatedAt = blobEnvVar?.updatedAt || blobEnvVar?.createdAt || 0
+    if (blobEnvUpdatedAt > 0 && latestDeploymentCreatedAt && latestDeploymentCreatedAt < blobEnvUpdatedAt) {
+      return ["BLOB_READ_WRITE_TOKEN"]
+    }
   }
 
   return []
@@ -484,8 +572,14 @@ export async function findSkillRunnerWorkerProject(
     return null
   }
 
-  const missingEnvKeys = await getWorkerProjectMissingEnvKeys(accessToken, team, exactMatch.id)
   const latestDeployment = resolveLatestDeployment(exactMatch)
+  const missingEnvKeys = await getWorkerProjectMissingEnvKeys(
+    accessToken,
+    team,
+    exactMatch.id,
+    latestDeployment?.id,
+    latestDeployment?.createdAt
+  )
 
   return {
     projectId: exactMatch.id,
