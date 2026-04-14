@@ -5945,7 +5945,7 @@ async function ensureClaudeCodeInstalledInSandbox(
     '    ln -sf "$(command -v bun)" /home/vercel-sandbox/.local/bin/node',
     "  fi",
     "fi"
-  ].join(" ")
+  ].join("\n")
   const existingClaudePath = await resolveInstalledClaudePath()
   if (existingClaudePath) {
     return
