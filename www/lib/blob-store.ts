@@ -12,8 +12,25 @@ const PUBLIC_BLOB_PREFIXES = [
   "dev-agents/ash/cache/"
 ] as const
 
+function normalizeAbsoluteBaseUrl(value?: string | null): string | null {
+  const trimmed = value?.trim()
+  if (!trimmed) return null
+
+  try {
+    return new URL(trimmed.startsWith("http://") || trimmed.startsWith("https://") ? trimmed : `https://${trimmed}`)
+      .origin
+  } catch {
+    return null
+  }
+}
+
 function getBlobProxyBaseUrl() {
-  return process.env.NEXT_PUBLIC_SITE_URL || DEV3000_URL
+  return (
+    normalizeAbsoluteBaseUrl(process.env.NEXT_PUBLIC_SITE_URL) ||
+    normalizeAbsoluteBaseUrl(process.env.VERCEL_PROJECT_PRODUCTION_URL) ||
+    normalizeAbsoluteBaseUrl(process.env.VERCEL_URL) ||
+    DEV3000_URL
+  )
 }
 
 export function isPublicBlobPathname(pathname: string): boolean {
