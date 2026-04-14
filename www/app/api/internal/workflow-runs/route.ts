@@ -1,5 +1,5 @@
 import { getCurrentUserFromRequest } from "@/lib/auth"
-import { saveWorkflowRun, type WorkflowRun } from "@/lib/workflow-storage"
+import { getWorkflowMirrorSecret, saveWorkflowRun, type WorkflowRun } from "@/lib/workflow-storage"
 
 export const maxDuration = 60
 
@@ -16,16 +16,24 @@ function isWorkflowRun(value: unknown): value is WorkflowRun {
 }
 
 export async function POST(request: Request) {
-  const user = await getCurrentUserFromRequest(request)
-  if (!user) {
-    return Response.json({ success: false, error: "Not authenticated" }, { status: 401 })
-  }
-
   const body = await request.json().catch(() => null)
   const run = body && typeof body === "object" ? (body as { run?: unknown }).run : undefined
 
   if (!isWorkflowRun(run)) {
     return Response.json({ success: false, error: "Invalid workflow run payload" }, { status: 400 })
+  }
+
+  const configuredMirrorSecret = getWorkflowMirrorSecret()
+  const providedMirrorSecret = request.headers.get("x-dev3000-workflow-mirror-secret")?.trim()
+
+  if (configuredMirrorSecret && providedMirrorSecret === configuredMirrorSecret) {
+    await saveWorkflowRun(run)
+    return Response.json({ success: true })
+  }
+
+  const user = await getCurrentUserFromRequest(request)
+  if (!user) {
+    return Response.json({ success: false, error: "Not authenticated" }, { status: 401 })
   }
 
   if (run.userId !== user.id) {

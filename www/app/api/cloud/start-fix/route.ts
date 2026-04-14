@@ -5,7 +5,12 @@ import { SKILL_RUNNER_WORKER_MODE_ENV } from "@/lib/skill-runner-config"
 import { getSkillRunnerForExecution, getSkillRunnerTeamSettings, incrementSkillRunnerUsage } from "@/lib/skill-runners"
 import { proxyWorkflowJsonRequest, shouldProxyWorkflowRequest } from "@/lib/workflow-api"
 import { clearWorkflowLog, workflowError, workflowLog } from "@/lib/workflow-logger"
-import { persistWorkflowRun, type WorkflowRunMirrorTarget, type WorkflowType } from "@/lib/workflow-storage"
+import {
+  getWorkflowMirrorSecret,
+  persistWorkflowRun,
+  type WorkflowRunMirrorTarget,
+  type WorkflowType
+} from "@/lib/workflow-storage"
 import { cloudFixWorkflow } from "../fix-workflow/workflow"
 
 /**
@@ -534,14 +539,22 @@ export async function POST(request: Request) {
             : undefined
           : undefined,
       controlPlaneAccessToken:
-        request.headers.get("x-dev3000-skill-runner-worker-forwarded") === "1" ? accessToken : undefined
+        request.headers.get("x-dev3000-skill-runner-worker-forwarded") === "1" ? accessToken : undefined,
+      controlPlaneMirrorSecret:
+        request.headers.get("x-dev3000-skill-runner-worker-forwarded") === "1"
+          ? typeof body.controlPlaneMirrorSecret === "string"
+            ? body.controlPlaneMirrorSecret
+            : undefined
+          : undefined
     }
 
     workflowMirrorTarget =
-      workflowParams.controlPlaneBaseUrl && workflowParams.controlPlaneAccessToken
+      workflowParams.controlPlaneBaseUrl &&
+      (workflowParams.controlPlaneMirrorSecret || workflowParams.controlPlaneAccessToken)
         ? {
             apiBaseUrl: workflowParams.controlPlaneBaseUrl,
-            accessToken: workflowParams.controlPlaneAccessToken
+            accessToken: workflowParams.controlPlaneAccessToken,
+            internalSecret: workflowParams.controlPlaneMirrorSecret
           }
         : null
 
@@ -591,6 +604,7 @@ export async function POST(request: Request) {
     }
 
     if (selfHostedWorkerBaseUrl) {
+      const workflowMirrorSecret = getWorkflowMirrorSecret()
       const forwardedBody =
         body && typeof body === "object"
           ? {
@@ -598,7 +612,8 @@ export async function POST(request: Request) {
               runId,
               timestamp: runTimestamp,
               workflowType,
-              controlPlaneBaseUrl: new URL(request.url).origin
+              controlPlaneBaseUrl: new URL(request.url).origin,
+              controlPlaneMirrorSecret: workflowMirrorSecret
             }
           : body
 

@@ -199,6 +199,7 @@ export async function cloudFixWorkflow(params: {
   useV0DevAgentRunner?: boolean
   controlPlaneBaseUrl?: string
   controlPlaneAccessToken?: string
+  controlPlaneMirrorSecret?: string
 }) {
   "use workflow"
 
@@ -253,7 +254,8 @@ export async function cloudFixWorkflow(params: {
     productionUrl,
     useV0DevAgentRunner = false,
     controlPlaneBaseUrl,
-    controlPlaneAccessToken
+    controlPlaneAccessToken,
+    controlPlaneMirrorSecret
   } = params
   // Use runId if provided (from start-fix route), otherwise generate one
   // The reportId is used for blob naming and tracking
@@ -281,10 +283,11 @@ export async function cloudFixWorkflow(params: {
           devAgentSandboxBrowser,
           isMarketplaceAgent,
           controlPlaneMirrorTarget:
-            controlPlaneBaseUrl && controlPlaneAccessToken
+            controlPlaneBaseUrl && (controlPlaneMirrorSecret || controlPlaneAccessToken)
               ? {
                   apiBaseUrl: controlPlaneBaseUrl,
-                  accessToken: controlPlaneAccessToken
+                  accessToken: controlPlaneAccessToken,
+                  internalSecret: controlPlaneMirrorSecret
                 }
               : undefined,
           activeStepNumber: initialStepNumber,

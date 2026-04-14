@@ -64,7 +64,14 @@ export interface WorkflowRun {
 
 export interface WorkflowRunMirrorTarget {
   apiBaseUrl: string
-  accessToken: string
+  accessToken?: string
+  internalSecret?: string
+}
+
+export function getWorkflowMirrorSecret(): string | null {
+  const secret = process.env.WORKFLOW_MIRROR_SECRET || process.env.WORKFLOW_TEST_BYPASS_TOKEN
+  const trimmed = secret?.trim()
+  return trimmed ? trimmed : null
 }
 
 const LOCAL_WORKFLOW_CACHE_ROOT = path.join(tmpdir(), "dev3000-workflow-runs")
@@ -181,19 +188,27 @@ function normalizeMirrorApiBaseUrl(input: string): string | null {
 
 export async function mirrorWorkflowRun(run: WorkflowRun, mirrorTarget: WorkflowRunMirrorTarget): Promise<void> {
   const apiBaseUrl = normalizeMirrorApiBaseUrl(mirrorTarget.apiBaseUrl)
-  const accessToken = mirrorTarget.accessToken.trim()
+  const accessToken = mirrorTarget.accessToken?.trim()
+  const internalSecret = mirrorTarget.internalSecret?.trim()
 
-  if (!apiBaseUrl || !accessToken) {
+  if (!apiBaseUrl || (!accessToken && !internalSecret)) {
     throw new Error("Missing workflow mirror target configuration")
+  }
+
+  const headers: HeadersInit = {
+    "content-type": "application/json",
+    "x-dev3000-workflow-mirror": "1"
+  }
+
+  if (internalSecret) {
+    headers["x-dev3000-workflow-mirror-secret"] = internalSecret
+  } else if (accessToken) {
+    headers.authorization = `Bearer ${accessToken}`
   }
 
   const response = await fetch(new URL("/api/internal/workflow-runs", apiBaseUrl), {
     method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${accessToken}`,
-      "x-dev3000-workflow-mirror": "1"
-    },
+    headers,
     body: JSON.stringify({ run }),
     cache: "no-store"
   })
