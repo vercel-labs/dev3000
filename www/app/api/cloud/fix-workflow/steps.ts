@@ -6066,7 +6066,7 @@ async function resolveClaudeSandboxInvocation(sandbox: Sandbox, pathEnv: string)
   const verifyResult = await runSandboxCommandWithOptions(sandbox, {
     cmd: "sh",
     args: [
-      "-c",
+      "-lc",
       [
         "if command -v claude >/dev/null 2>&1; then",
         "  printf 'which:%s\\n' \"$(command -v claude)\"",
@@ -6075,7 +6075,7 @@ async function resolveClaudeSandboxInvocation(sandbox: Sandbox, pathEnv: string)
         `elif [ -x "${localSymlink}" ]; then`,
         `  printf 'which:%s\\n' "${localSymlink}"`,
         "fi"
-      ].join(" ")
+      ].join("\n")
     ],
     env: { PATH: pathEnv, HOME: "/home/vercel-sandbox" }
   })
@@ -6093,6 +6093,21 @@ async function resolveClaudeSandboxInvocation(sandbox: Sandbox, pathEnv: string)
       cmd: "node",
       argsPrefix: [line.slice("cli:".length)],
       description: line.slice("cli:".length)
+    }
+  }
+  if (verifyResult.exitCode === 0 && line.length === 0) {
+    const fallbackResult = await runSandboxCommandWithOptions(sandbox, {
+      cmd: "sh",
+      args: ["-lc", `test -x "${localClaudeCli}" && printf 'cli:%s\\n' "${localClaudeCli}" || true`],
+      env: { PATH: pathEnv, HOME: "/home/vercel-sandbox" }
+    })
+    const fallbackLine = fallbackResult.stdout.trim()
+    if (fallbackLine.startsWith("cli:")) {
+      return {
+        cmd: "node",
+        argsPrefix: [fallbackLine.slice("cli:".length)],
+        description: fallbackLine.slice("cli:".length)
+      }
     }
   }
   throw new Error("Claude Code CLI is unavailable inside the sandbox after installation.")
