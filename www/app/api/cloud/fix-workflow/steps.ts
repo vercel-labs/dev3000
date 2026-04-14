@@ -2641,6 +2641,8 @@ export async function initSandboxStep(
   projectDir: string | undefined,
   projectId: string | undefined,
   teamId: string | undefined,
+  sandboxProjectId: string | undefined,
+  sandboxTeamId: string | undefined,
   projectName: string,
   reportId: string,
   _startPath: string,
@@ -2787,8 +2789,8 @@ export async function initSandboxStep(
         repoUrl,
         branch,
         githubPat,
-        projectId,
-        teamId,
+        projectId: sandboxProjectId,
+        teamId: sandboxTeamId,
         npmToken: effectiveNpmToken,
         sourceTarballUrl,
         sourceLabel,
@@ -3329,8 +3331,10 @@ export async function observeBaselineStep(
   startPath: string,
   repoUrl: string,
   repoBranch: string,
-  projectId: string | undefined,
-  teamId: string | undefined,
+  _projectId: string | undefined,
+  _teamId: string | undefined,
+  sandboxProjectId: string | undefined,
+  sandboxTeamId: string | undefined,
   githubPat?: string,
   npmToken?: string,
   sourceTarballUrl?: string,
@@ -3355,8 +3359,8 @@ export async function observeBaselineStep(
   let sandbox: Sandbox
   try {
     sandbox = await getRunningSandboxWithRetry(sandboxId, progressContext, "observe", 3, 2000, {
-      teamId,
-      projectId,
+      teamId: sandboxTeamId,
+      projectId: sandboxProjectId,
       tokens: vercelApiTokens
     })
   } catch (sandboxError) {
@@ -3408,8 +3412,8 @@ export async function observeBaselineStep(
           repoUrl,
           branch: repoBranch,
           githubPat,
-          projectId,
-          teamId,
+          projectId: sandboxProjectId,
+          teamId: sandboxTeamId,
           npmToken,
           sourceTarballUrl,
           sourceLabel,
@@ -3919,8 +3923,10 @@ export async function agentFixLoopStep(
   startPath: string,
   repoUrl: string,
   repoBranch: string,
-  projectId: string | undefined,
-  teamId: string | undefined,
+  _projectId: string | undefined,
+  _teamId: string | undefined,
+  sandboxProjectId: string | undefined,
+  sandboxTeamId: string | undefined,
   githubPat?: string,
   npmToken?: string,
   sourceTarballUrl?: string,
@@ -3975,8 +3981,8 @@ export async function agentFixLoopStep(
   let recreatedSandbox = false
   try {
     sandbox = await getRunningSandboxWithRetry(sandboxId, progressContext, "agent", 3, 2000, {
-      teamId,
-      projectId,
+      teamId: sandboxTeamId,
+      projectId: sandboxProjectId,
       tokens: vercelApiTokens
     })
   } catch (sandboxError) {
@@ -3991,8 +3997,8 @@ export async function agentFixLoopStep(
           repoUrl,
           branch: repoBranch,
           githubPat,
-          projectId,
-          teamId,
+          projectId: sandboxProjectId,
+          teamId: sandboxTeamId,
           npmToken,
           sourceTarballUrl,
           sourceLabel,

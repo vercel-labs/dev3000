@@ -12,6 +12,7 @@
  */
 
 import { readBlobJson } from "@/lib/blob-store"
+import { SKILL_RUNNER_WORKER_MODE_ENV } from "@/lib/skill-runner-config"
 import { persistWorkflowRun, type WorkflowRun, type WorkflowRunMirrorTarget } from "@/lib/workflow-storage"
 
 const workflowLog = console.log
@@ -261,6 +262,13 @@ export async function cloudFixWorkflow(params: {
   // The reportId is used for blob naming and tracking
   const reportId = runId || crypto.randomUUID()
   const isTurbopackBundleAnalyzer = workflowType === "turbopack-bundle-analyzer"
+  const isSelfHostedWorker = process.env[SKILL_RUNNER_WORKER_MODE_ENV] === "1"
+  const sandboxProjectId =
+    isSelfHostedWorker && process.env.VERCEL_PROJECT_ID ? process.env.VERCEL_PROJECT_ID : projectId
+  const sandboxTeamId =
+    isSelfHostedWorker && (process.env.VERCEL_ORG_ID || process.env.VERCEL_TEAM_ID)
+      ? process.env.VERCEL_ORG_ID || process.env.VERCEL_TEAM_ID
+      : teamId
 
   // Progress context for step updates
   const progressContext =
@@ -353,6 +361,8 @@ export async function cloudFixWorkflow(params: {
       projectDir,
       projectId,
       teamId,
+      sandboxProjectId,
+      sandboxTeamId,
       projectName,
       reportId,
       startPath,
@@ -386,6 +396,8 @@ export async function cloudFixWorkflow(params: {
         repoBranch,
         projectId,
         teamId,
+        sandboxProjectId,
+        sandboxTeamId,
         githubPat,
         npmToken,
         sourceTarballUrl,
@@ -512,6 +524,8 @@ export async function cloudFixWorkflow(params: {
         repoBranch,
         projectId,
         teamId,
+        sandboxProjectId,
+        sandboxTeamId,
         githubPat,
         npmToken,
         sourceTarballUrl,
@@ -712,6 +726,8 @@ async function initSandbox(
   projectDir: string | undefined,
   projectId: string | undefined,
   teamId: string | undefined,
+  sandboxProjectId: string | undefined,
+  sandboxTeamId: string | undefined,
   projectName: string,
   reportId: string,
   startPath: string,
@@ -732,6 +748,8 @@ async function initSandbox(
     projectDir,
     projectId,
     teamId,
+    sandboxProjectId,
+    sandboxTeamId,
     projectName,
     reportId,
     startPath,
@@ -782,6 +800,8 @@ async function observeBaseline(
   repoBranch: string,
   projectId: string | undefined,
   teamId: string | undefined,
+  sandboxProjectId: string | undefined,
+  sandboxTeamId: string | undefined,
   githubPat?: string,
   npmToken?: string,
   sourceTarballUrl?: string,
@@ -815,6 +835,8 @@ async function observeBaseline(
     repoBranch,
     projectId,
     teamId,
+    sandboxProjectId,
+    sandboxTeamId,
     githubPat,
     npmToken,
     sourceTarballUrl,
@@ -855,6 +877,8 @@ async function agentFixLoop(
   repoBranch: string,
   projectId: string | undefined,
   teamId: string | undefined,
+  sandboxProjectId: string | undefined,
+  sandboxTeamId: string | undefined,
   githubPat?: string,
   npmToken?: string,
   sourceTarballUrl?: string,
@@ -904,6 +928,8 @@ async function agentFixLoop(
     repoBranch,
     projectId,
     teamId,
+    sandboxProjectId,
+    sandboxTeamId,
     githubPat,
     npmToken,
     sourceTarballUrl,
