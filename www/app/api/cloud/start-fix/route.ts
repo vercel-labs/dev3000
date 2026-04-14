@@ -32,6 +32,41 @@ const corsHeaders = {
   "Access-Control-Allow-Credentials": "true"
 }
 
+type StartFixRequestBody = {
+  [key: string]: unknown
+  baseBranch?: string
+  bypassToken?: string
+  crawlDepth?: number | "all"
+  customPrompt?: string
+  devUrl?: string
+  forwardedAccessToken?: string
+  githubPat?: string
+  npmToken?: string
+  productionUrl?: string
+  projectDir?: string
+  projectEnv?: Record<string, unknown>
+  projectId?: string
+  publicUrl?: string
+  projectName?: string
+  repoBranch?: string
+  repoName?: string
+  repoOwner?: string
+  repoUrl?: string
+  skillRunnerId?: string
+  skillRunnerTeam?: {
+    id?: string
+    slug?: string
+    name?: string
+    isPersonal?: boolean
+  }
+  startPath?: string
+  submitPullRequest?: boolean
+  teamId?: string
+  userId?: string
+  useV0DevAgentRunner?: boolean
+  workflowType?: WorkflowType
+}
+
 function isPrivateOrLocalHost(hostname: string): boolean {
   const normalized = hostname.toLowerCase()
   if (normalized === "localhost" || normalized === "127.0.0.1" || normalized === "::1") return true
@@ -94,7 +129,7 @@ async function forwardSelfHostedStartRequest({
   accessToken,
   workerBaseUrl
 }: {
-  body: unknown
+  body: Record<string, unknown>
   request: Request
   accessToken: string | undefined
   workerBaseUrl: string
@@ -118,11 +153,12 @@ async function forwardSelfHostedStartRequest({
   }
 
   headers.set("x-dev3000-skill-runner-worker-forwarded", "1")
+  const forwardedBody = accessToken ? { ...body, forwardedAccessToken: accessToken } : body
 
   const upstream = await fetch(targetUrl.toString(), {
     method: "POST",
     headers,
-    body: JSON.stringify(body),
+    body: JSON.stringify(forwardedBody),
     cache: "no-store"
   })
 
@@ -215,18 +251,25 @@ export async function POST(request: Request) {
     // Clear workflow log file at start of new workflow
     clearWorkflowLog()
 
+    const body = (await request.json()) as StartFixRequestBody
+    const forwardedAccessToken =
+      request.headers.get("x-dev3000-skill-runner-worker-forwarded") === "1" &&
+      typeof body.forwardedAccessToken === "string" &&
+      body.forwardedAccessToken.trim().length > 0
+        ? body.forwardedAccessToken.trim()
+        : undefined
+
     // Resolve the Vercel API token used by downstream sandbox/project calls inside the workflow.
-    // Prefer an explicit OIDC header when available, otherwise carry the user's access token so
-    // project-scoped operations can still access the selected team/project. Workflow/runtime env
-    // tokens remain available as fallbacks inside the workflow steps.
+    // In self-hosted mode, prefer the end-user access token over any ambient Vercel runtime token
+    // so project-scoped APIs (project envs, deployments) stay authorized for the selected team.
     const vercelApiToken =
-      request.headers.get("x-vercel-oidc-token") ||
       accessToken ||
+      forwardedAccessToken ||
+      request.headers.get("x-vercel-oidc-token") ||
       process.env.VERCEL_OIDC_TOKEN ||
       process.env.VERCEL_TOKEN
     workflowLog(`[Start Fix] Vercel API token available: ${!!vercelApiToken}`)
 
-    const body = await request.json()
     const devAgentRunner = resolveDevAgentRunner(
       typeof body.useV0DevAgentRunner === "boolean" ? body.useV0DevAgentRunner : undefined
     )
