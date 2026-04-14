@@ -1386,10 +1386,15 @@ async function waitForServer(sandbox: Sandbox, port: number, timeoutMs: number, 
 
       // Consider server ready if:
       // - 2xx (ok)
+      // - 3xx (redirect - app/auth/protection is responding)
       // - 404 (server responding but route not found)
-      // - 308 (redirect - sandbox protection)
       // - 401 (auth required - sandbox protection)
-      if (response.ok || response.status === 404 || response.status === 308 || response.status === 401) {
+      if (
+        response.ok ||
+        (response.status >= 300 && response.status < 400) ||
+        response.status === 404 ||
+        response.status === 401
+      ) {
         if (debug) console.log(`  ✅ Port ${port} is ready (status ${response.status})`)
         return
       }
@@ -2010,6 +2015,7 @@ async function createAndSaveBaseSnapshot(
       HOME: "/home/vercel-sandbox"
     }
     const claudeInstallRoot = "/home/vercel-sandbox/.claude-code"
+    const localClaudeCli = `${claudeInstallRoot}/node_modules/@anthropic-ai/claude-code/cli.js`
     const sharedRuntimeInstall = await runCmd(
       "sh",
       [
@@ -2021,11 +2027,13 @@ async function createAndSaveBaseSnapshot(
           `if [ ! -f package.json ]; then printf '%s' '{"name":"claude-code-runtime","private":true}' > package.json; fi`,
           `bun add ${CLAUDE_CODE_PACKAGE}`,
           `if ! command -v node >/dev/null 2>&1; then ln -sf "$(command -v bun)" /home/vercel-sandbox/.local/bin/node; fi`,
-          `ln -sf "${claudeInstallRoot}/node_modules/.bin/claude" /home/vercel-sandbox/.local/bin/claude`,
+          `test -f "${localClaudeCli}"`,
+          `chmod +x "${localClaudeCli}"`,
+          `ln -sf "${localClaudeCli}" /home/vercel-sandbox/.local/bin/claude`,
           `bunx --bun skills@latest add ${VERCEL_PLUGIN_INSTALL_ARG} --agent claude-code --skill '*' -y`,
           `bunx --bun skills@latest add ${D3K_SKILL_INSTALL_ARG.split("@")[0]} --skill d3k --agent claude-code -y`,
           "command -v claude",
-          "claude --version"
+          `node "${localClaudeCli}" --version`
         ].join(" && ")
       ],
       { env: sharedHomeEnv }
