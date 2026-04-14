@@ -2295,10 +2295,13 @@ chmod 0600 "$HOME/.npmrc" ".npmrc"`
       )
     }
     await reportProgress("Project dependencies installed")
+    await reportProgress("[Sandbox] Dependency install complete; evaluating pre-start hooks")
 
     if (preStartCommands.length > 0) {
+      await reportProgress(`[Sandbox] Running ${preStartCommands.length} pre-start command(s)...`)
       for (const preStartCommand of preStartCommands) {
         const resolvedPreStartCommand = preStartCommand.replace(/\$\{packageManager\}/g, resolvedPackageManager)
+        await reportProgress(`[Sandbox] Pre-start command: ${resolvedPreStartCommand}`)
         const preStartResult = await runCommandWithLogs({
           cmd: "sh",
           args: [
@@ -2312,6 +2315,7 @@ chmod 0600 "$HOME/.npmrc" ".npmrc"`
           throw new Error(`Pre-start command failed (${resolvedPreStartCommand}): ${preStartResult.stderr}`)
         }
       }
+      await reportProgress("[Sandbox] Pre-start commands finished")
     }
 
     if (preStartBackgroundCommand) {
@@ -2319,6 +2323,7 @@ chmod 0600 "$HOME/.npmrc" ".npmrc"`
         /\$\{packageManager\}/g,
         resolvedPackageManager
       )
+      await reportProgress(`[Sandbox] Launching pre-start background command: ${resolvedPreStartBackgroundCommand}`)
       await sandbox.runCommand({
         cmd: "sh",
         args: [
@@ -2328,7 +2333,9 @@ chmod 0600 "$HOME/.npmrc" ".npmrc"`
         detached: true
       })
       if (preStartWaitPort) {
+        await reportProgress(`[Sandbox] Waiting for pre-start background port ${preStartWaitPort}...`)
         await waitForServer(sandbox, preStartWaitPort, 120000, debug)
+        await reportProgress(`[Sandbox] Pre-start background port ${preStartWaitPort} is ready`)
       }
     }
 
@@ -2346,6 +2353,7 @@ chmod 0600 "$HOME/.npmrc" ".npmrc"`
     }
 
     if (!skipsDevServerStartup) {
+      await reportProgress(`[Sandbox] Resolved dev command: ${resolvedDevCommand}`)
       await reportProgress(`Starting ${usesD3kRuntime ? "d3k runtime" : "dev server"}...`)
       let chromiumPath = "/usr/bin/chromium"
       if (usesD3kRuntime) {
