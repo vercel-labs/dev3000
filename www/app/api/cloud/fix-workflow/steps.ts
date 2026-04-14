@@ -6019,10 +6019,25 @@ async function ensureClaudeCodeInstalledInSandbox(
 
   const verifyResult = await runSandboxCommandWithOptions(sandbox, {
     cmd: "sh",
-    args: ["-c", `command -v claude || [ -x "${localClaudeCli}" ] && printf '%s\n' "${localClaudeCli}" || true`],
+    args: [
+      "-lc",
+      [
+        "if command -v claude >/dev/null 2>&1; then",
+        "  command -v claude",
+        `elif [ -x "${localClaudeCli}" ]; then`,
+        `  printf '%s\\n' "${localClaudeCli}"`,
+        `elif [ -x "/home/vercel-sandbox/.local/bin/claude" ]; then`,
+        `  printf '%s\\n' "/home/vercel-sandbox/.local/bin/claude"`,
+        "fi"
+      ].join("\n")
+    ],
     env: { PATH: pathEnv, HOME: "/home/vercel-sandbox" }
   })
-  if (!verifyResult.stdout.trim()) {
+  const resolvedClaudePath = verifyResult.stdout
+    .split("\n")
+    .map((line) => line.trim())
+    .find(Boolean)
+  if (!resolvedClaudePath) {
     await appendProgressLog(
       progressContext,
       `[Claude] Claude Code CLI missing from PATH after install stdout=${formatClaudeOutputPreview(verifyResult.stdout)} stderr=${formatClaudeOutputPreview(verifyResult.stderr)}`
@@ -6032,10 +6047,15 @@ async function ensureClaudeCodeInstalledInSandbox(
 
   const nodeResult = await runSandboxCommandWithOptions(sandbox, {
     cmd: "sh",
-    args: ["-c", `${ensureNodeShim} && command -v node || true`],
+    args: ["-lc", `${ensureNodeShim} && { command -v node || command -v nodejs || true; }`],
     env: { PATH: pathEnv, HOME: "/home/vercel-sandbox" }
   })
-  if (!nodeResult.stdout.trim()) {
+  if (
+    !nodeResult.stdout
+      .split("\n")
+      .map((line) => line.trim())
+      .find(Boolean)
+  ) {
     await appendProgressLog(
       progressContext,
       `[Claude] Node missing from PATH after install stdout=${formatClaudeOutputPreview(nodeResult.stdout)} stderr=${formatClaudeOutputPreview(nodeResult.stderr)}`
@@ -6063,7 +6083,7 @@ type ClaudeSandboxInvocation =
       description: string
     }
   | {
-      cmd: "node"
+      cmd: "node" | "nodejs"
       argsPrefix: [string]
       description: string
     }
@@ -6071,6 +6091,18 @@ type ClaudeSandboxInvocation =
 async function resolveClaudeSandboxInvocation(sandbox: Sandbox, pathEnv: string): Promise<ClaudeSandboxInvocation> {
   const localClaudeCli = "/home/vercel-sandbox/.claude-code/node_modules/@anthropic-ai/claude-code/cli.js"
   const localSymlink = "/home/vercel-sandbox/.local/bin/claude"
+  const resolveNodeCommand = async (): Promise<"node" | "nodejs"> => {
+    const nodeCommandResult = await runSandboxCommandWithOptions(sandbox, {
+      cmd: "sh",
+      args: ["-lc", "command -v node || command -v nodejs || true"],
+      env: { PATH: pathEnv, HOME: "/home/vercel-sandbox" }
+    })
+    const resolved = nodeCommandResult.stdout
+      .split("\n")
+      .map((entry) => entry.trim())
+      .find(Boolean)
+    return resolved?.includes("nodejs") ? "nodejs" : "node"
+  }
   const verifyResult = await runSandboxCommandWithOptions(sandbox, {
     cmd: "sh",
     args: [
@@ -6097,10 +6129,11 @@ async function resolveClaudeSandboxInvocation(sandbox: Sandbox, pathEnv: string)
     }
   }
   if (line.startsWith("cli:")) {
+    const cliPath = line.slice("cli:".length)
     return {
-      cmd: "node",
-      argsPrefix: [line.slice("cli:".length)],
-      description: line.slice("cli:".length)
+      cmd: await resolveNodeCommand(),
+      argsPrefix: [cliPath],
+      description: cliPath
     }
   }
   if (verifyResult.exitCode === 0 && line.length === 0) {
@@ -6111,10 +6144,11 @@ async function resolveClaudeSandboxInvocation(sandbox: Sandbox, pathEnv: string)
     })
     const fallbackLine = fallbackResult.stdout.trim()
     if (fallbackLine.startsWith("cli:")) {
+      const cliPath = fallbackLine.slice("cli:".length)
       return {
-        cmd: "node",
-        argsPrefix: [fallbackLine.slice("cli:".length)],
-        description: fallbackLine.slice("cli:".length)
+        cmd: await resolveNodeCommand(),
+        argsPrefix: [cliPath],
+        description: cliPath
       }
     }
   }
