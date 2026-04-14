@@ -6269,6 +6269,7 @@ async function runClaudeTurnInSandbox(
     PATH: pathEnv,
     ANTHROPIC_BASE_URL: "https://ai-gateway.vercel.sh",
     ANTHROPIC_AUTH_TOKEN: gatewayAuthToken,
+    AI_GATEWAY_API_KEY: gatewayAuthToken,
     ANTHROPIC_API_KEY: "",
     // Claude Code can send experimental beta headers that Anthropic-format
     // gateways backed by Bedrock/Vertex may reject with 400s.
@@ -6279,7 +6280,7 @@ async function runClaudeTurnInSandbox(
   await logClaudeCliDiagnostics(sandbox, pathEnv, options.progressContext)
   await appendProgressLog(
     options.progressContext,
-    `[Claude] Running ${prompt.label} (model=${modelSelection.cliModel}, resume=${options.sessionId ? "yes" : "no"}, authToken=present:${gatewayAuthSource}, apiKey=empty, baseUrl=${claudeEnv.ANTHROPIC_BASE_URL}, cli=${invocation.description}, extraEnv=${Object.keys(modelSelection.extraEnv).join(",") || "none"})`
+    `[Claude] Running ${prompt.label} (model=${modelSelection.cliModel}, resume=${options.sessionId ? "yes" : "no"}, authToken=present:${gatewayAuthSource}, aiGatewayApiKey=present:${gatewayAuthSource}, baseUrl=${claudeEnv.ANTHROPIC_BASE_URL}, cli=${invocation.description}, extraEnv=${Object.keys(modelSelection.extraEnv).join(",") || "none"})`
   )
 
   const startedAt = Date.now()
