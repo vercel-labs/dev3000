@@ -416,6 +416,7 @@ export async function cloudFixWorkflow(params: {
         devAgentEarlyExitEval,
         devAgentEarlyExitRule,
         observation,
+        vercelOidcToken,
         progressContext
       )
 
@@ -481,6 +482,7 @@ export async function cloudFixWorkflow(params: {
         customPrompt,
         projectName,
         reportId,
+        vercelOidcToken,
         progressContext,
         combinedInitTiming,
         initResult.fromSnapshot,
@@ -831,11 +833,12 @@ async function evaluateEarlyExit(
   earlyExitEval: string | undefined,
   earlyExitRule: import("@/lib/dev-agents").DevAgentEarlyExitRule | undefined,
   observation: import("./steps").ObserveResult,
+  vercelOidcToken?: string,
   progressContext?: ProgressContext | null
 ): Promise<EarlyExitResult> {
   "use step"
   const { evaluateEarlyExitStep } = await import("./steps")
-  return evaluateEarlyExitStep(earlyExitEval, earlyExitRule, observation, progressContext)
+  return evaluateEarlyExitStep(earlyExitEval, earlyExitRule, observation, vercelOidcToken, progressContext)
 }
 
 async function agentFixLoop(
@@ -990,6 +993,7 @@ async function urlAuditLoop(
   customPrompt: string | undefined,
   projectName: string,
   reportId: string,
+  vercelOidcToken?: string,
   progressContext?: ProgressContext | null,
   initTiming?: InitResult["timing"],
   fromSnapshot?: boolean,
@@ -1005,6 +1009,7 @@ async function urlAuditLoop(
     customPrompt,
     projectName,
     reportId,
+    vercelOidcToken,
     progressContext,
     initTiming,
     fromSnapshot,
