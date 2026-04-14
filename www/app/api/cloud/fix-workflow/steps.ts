@@ -5938,12 +5938,13 @@ async function ensureClaudeCodeInstalledInSandbox(
     )
   }
   const ensureNodeShim = [
-    "if ! command -v node >/dev/null 2>&1; then",
-    "  if command -v nodejs >/dev/null 2>&1; then",
-    '    ln -sf "$(command -v nodejs)" /home/vercel-sandbox/.local/bin/node',
-    "  else",
-    '    ln -sf "$(command -v bun)" /home/vercel-sandbox/.local/bin/node',
-    "  fi",
+    'mkdir -p "/home/vercel-sandbox/.local/bin"',
+    "if command -v nodejs >/dev/null 2>&1; then",
+    '  ln -sf "$(command -v nodejs)" /home/vercel-sandbox/.local/bin/node',
+    "elif command -v node >/dev/null 2>&1; then",
+    '  ln -sf "$(command -v node)" /home/vercel-sandbox/.local/bin/node',
+    "elif command -v bun >/dev/null 2>&1; then",
+    '  ln -sf "$(command -v bun)" /home/vercel-sandbox/.local/bin/node',
     "fi"
   ].join("\n")
   const existingClaudePath = await resolveInstalledClaudePath()
@@ -6115,7 +6116,7 @@ async function resolveClaudeSandboxInvocation(sandbox: Sandbox, pathEnv: string)
   const resolveNodeCommand = async (): Promise<"node" | "nodejs"> => {
     const nodeCommandResult = await runSandboxCommandWithOptions(sandbox, {
       cmd: "sh",
-      args: ["-lc", "command -v node || command -v nodejs || true"],
+      args: ["-lc", "command -v nodejs || command -v node || true"],
       env: { PATH: pathEnv, HOME: "/home/vercel-sandbox" }
     })
     const resolved = nodeCommandResult.stdout
@@ -6186,7 +6187,7 @@ async function logClaudeCliDiagnostics(
   const resolveNodeCommand = async (): Promise<"node" | "nodejs"> => {
     const nodeCommandResult = await runSandboxCommandWithOptions(sandbox, {
       cmd: "sh",
-      args: ["-c", "command -v node || command -v nodejs || true"],
+      args: ["-c", "command -v nodejs || command -v node || true"],
       env: { PATH: pathEnv, HOME: "/home/vercel-sandbox" }
     })
     const resolved = nodeCommandResult.stdout
@@ -6212,7 +6213,7 @@ async function logClaudeCliDiagnostics(
     }),
     runSandboxCommandWithOptions(sandbox, {
       cmd: "sh",
-      args: ["-c", "command -v node || command -v nodejs || true"],
+      args: ["-c", "command -v nodejs || command -v node || true"],
       env: { PATH: pathEnv, HOME: "/home/vercel-sandbox" }
     }),
     runSandboxCommandWithOptions(sandbox, {
