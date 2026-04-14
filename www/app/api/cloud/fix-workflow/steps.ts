@@ -5938,14 +5938,24 @@ async function ensureClaudeCodeInstalledInSandbox(
     )
   }
   const ensureNodeShim = [
+    'SYSTEM_PATH="/usr/local/bin:/usr/bin:/bin"',
     'mkdir -p "/home/vercel-sandbox/.local/bin"',
-    "if command -v nodejs >/dev/null 2>&1; then",
-    '  ln -sf "$(command -v nodejs)" /home/vercel-sandbox/.local/bin/node',
-    "elif command -v node >/dev/null 2>&1; then",
-    '  ln -sf "$(command -v node)" /home/vercel-sandbox/.local/bin/node',
-    "elif command -v bun >/dev/null 2>&1; then",
-    '  ln -sf "$(command -v bun)" /home/vercel-sandbox/.local/bin/node',
-    "fi"
+    'REAL_NODE=""',
+    "if [ -x /usr/bin/nodejs ]; then",
+    '  REAL_NODE="/usr/bin/nodejs"',
+    "elif [ -x /usr/bin/node ]; then",
+    '  REAL_NODE="/usr/bin/node"',
+    'elif PATH="$SYSTEM_PATH" command -v nodejs >/dev/null 2>&1; then',
+    '  REAL_NODE="$(PATH="$SYSTEM_PATH" command -v nodejs)"',
+    'elif PATH="$SYSTEM_PATH" command -v node >/dev/null 2>&1; then',
+    '  REAL_NODE="$(PATH="$SYSTEM_PATH" command -v node)"',
+    "fi",
+    'if [ -z "$REAL_NODE" ]; then',
+    '  echo "missing-real-node" >&2',
+    "  exit 1",
+    "fi",
+    'ln -sf "$REAL_NODE" /home/vercel-sandbox/.local/bin/node',
+    "test -x /home/vercel-sandbox/.local/bin/node"
   ].join("\n")
   const existingClaudePath = await resolveInstalledClaudePath()
   if (existingClaudePath) {
@@ -6069,14 +6079,17 @@ async function ensureClaudeCodeInstalledInSandbox(
 
   const nodeResult = await runSandboxCommandWithOptions(sandbox, {
     cmd: "sh",
-    args: ["-lc", `${ensureNodeShim} && { command -v node || command -v nodejs || true; }`],
+    args: [
+      "-lc",
+      `${ensureNodeShim} && printf 'node=%s\\n' "$(readlink -f /home/vercel-sandbox/.local/bin/node 2>/dev/null || true)" && PATH="/home/vercel-sandbox/.local/bin:/usr/local/bin:/usr/bin:/bin" command -v node || true`
+    ],
     env: { PATH: pathEnv, HOME: "/home/vercel-sandbox" }
   })
   if (
     !nodeResult.stdout
       .split("\n")
       .map((line) => line.trim())
-      .find(Boolean)
+      .find((line) => line.startsWith("/") || line.startsWith("node=/"))
   ) {
     await appendProgressLog(
       progressContext,
