@@ -6153,10 +6153,10 @@ async function resolveClaudeSandboxInvocation(sandbox: Sandbox, pathEnv: string)
     args: [
       "-lc",
       [
-        "if command -v claude >/dev/null 2>&1; then",
-        "  printf 'which:%s\\n' \"$(command -v claude)\"",
-        `elif [ -f "${localClaudeCli}" ]; then`,
+        `if [ -f "${localClaudeCli}" ]; then`,
         `  printf 'cli:%s\\n' "${localClaudeCli}"`,
+        "elif command -v claude >/dev/null 2>&1; then",
+        "  printf 'which:%s\\n' \"$(command -v claude)\"",
         `elif [ -e "${localSymlink}" ]; then`,
         `  printf 'which:%s\\n' "${localSymlink}"`,
         "fi"
@@ -6387,7 +6387,7 @@ async function runClaudeTurnInSandbox(
   await logClaudeCliDiagnostics(sandbox, pathEnv, options.progressContext)
   await appendProgressLog(
     options.progressContext,
-    `[Claude] Running ${prompt.label} (model=${modelSelection.cliModel}, resume=${options.sessionId ? "yes" : "no"}, authToken=present:${gatewayAuthSource}, aiGatewayApiKey=present:${gatewayAuthSource}, baseUrl=${claudeEnv.ANTHROPIC_BASE_URL}, cli=${invocation.description}, extraEnv=${Object.keys(modelSelection.extraEnv).join(",") || "none"})`
+    `[Claude] Running ${prompt.label} (model=${modelSelection.cliModel}, resume=${options.sessionId ? "yes" : "no"}, authToken=present:${gatewayAuthSource}, aiGatewayApiKey=present:${gatewayAuthSource}, baseUrl=${claudeEnv.ANTHROPIC_BASE_URL}, cmd=${invocation.cmd}, cli=${invocation.description}, extraEnv=${Object.keys(modelSelection.extraEnv).join(",") || "none"})`
   )
 
   const startedAt = Date.now()
