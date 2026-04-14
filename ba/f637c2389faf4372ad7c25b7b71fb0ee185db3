@@ -1,0 +1,38 @@
+www/app/api/cloud/fix-workflow/steps.ts
+  7a0ea82f7d7bc893 2644-2645,2792-2793,3334-3337,3362-3363,3415-3416,3926-3929,3984-3985,4000-4001
+www/app/api/cloud/fix-workflow/workflow.ts
+  7a0ea82f7d7bc893 15,265-271,364-365,399-400,527-528,729-730,751-752,803-804,838-839,880-881,931-932
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.8",
+  "base_commit_sha": "baf637c2389faf4372ad7c25b7b71fb0ee185db3",
+  "prompts": {
+    "7a0ea82f7d7bc893": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d59d8-022d-7262-9555-ec96bb973d0c",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 46,
+      "total_deletions": 14,
+      "accepted_lines": 47,
+      "overriden_lines": 0
+    },
+    "99ca025371e68d9d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d87d1-243a-7931-bf03-4625a7dea51f",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 925,
+      "overriden_lines": 0
+    }
+  }
+}
