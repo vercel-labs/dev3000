@@ -338,22 +338,7 @@ async function detectProjectDevCommand(
   packageManager: SupportedPackageManager,
   debug = false
 ): Promise<string | undefined> {
-  const result = await runCommand(
-    "node",
-    [
-      "-e",
-      `try {
-        const pkg = require("./package.json");
-        process.stdout.write(JSON.stringify({
-          packageManager: typeof pkg.packageManager === "string" ? pkg.packageManager : undefined,
-          scripts: pkg.scripts && typeof pkg.scripts === "object" ? pkg.scripts : undefined
-        }));
-      } catch {
-        process.stdout.write("");
-      }`
-    ],
-    cwd
-  )
+  const result = await runCommand("sh", ["-lc", "test -f package.json && cat package.json || true"], cwd)
 
   if (result.exitCode !== 0 || !result.stdout.trim()) {
     if (debug) {
@@ -363,7 +348,14 @@ async function detectProjectDevCommand(
   }
 
   try {
-    const packageJson = JSON.parse(result.stdout) as { packageManager?: string; scripts?: Record<string, string> }
+    const rawPackageJson = JSON.parse(result.stdout) as { packageManager?: unknown; scripts?: unknown }
+    const packageJson = {
+      packageManager: typeof rawPackageJson.packageManager === "string" ? rawPackageJson.packageManager : undefined,
+      scripts:
+        rawPackageJson.scripts && typeof rawPackageJson.scripts === "object"
+          ? (rawPackageJson.scripts as Record<string, string>)
+          : undefined
+    }
     return inferDevServerCommandFromPackageJson(packageJson, packageManager)
   } catch (error) {
     if (debug) {
