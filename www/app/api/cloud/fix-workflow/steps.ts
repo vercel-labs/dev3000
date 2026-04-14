@@ -5949,9 +5949,11 @@ async function ensureClaudeCodeInstalledInSandbox(
     '  REAL_NODE="$(PATH="$SYSTEM_PATH" command -v nodejs)"',
     'elif PATH="$SYSTEM_PATH" command -v node >/dev/null 2>&1; then',
     '  REAL_NODE="$(PATH="$SYSTEM_PATH" command -v node)"',
+    "elif command -v bun >/dev/null 2>&1; then",
+    '  REAL_NODE="$(command -v bun)"',
     "fi",
     'if [ -z "$REAL_NODE" ]; then',
-    '  echo "missing-real-node" >&2',
+    '  echo "missing-runtime" >&2',
     "  exit 1",
     "fi",
     'ln -sf "$REAL_NODE" /home/vercel-sandbox/.local/bin/node',
@@ -6095,7 +6097,7 @@ async function ensureClaudeCodeInstalledInSandbox(
       progressContext,
       `[Claude] Node missing from PATH after install stdout=${formatClaudeOutputPreview(nodeResult.stdout)} stderr=${formatClaudeOutputPreview(nodeResult.stderr)}`
     )
-    throw new Error("Claude Code CLI installed but `node` is still not on PATH inside the sandbox.")
+    throw new Error("Claude Code CLI installed but no JavaScript runtime is available inside the sandbox.")
   }
 
   await appendProgressLog(progressContext, `[Claude] Claude Code CLI ready (${resolvedClaudePath})`)
@@ -6118,7 +6120,7 @@ type ClaudeSandboxInvocation =
       description: string
     }
   | {
-      cmd: "node" | "nodejs"
+      cmd: "node" | "nodejs" | "bun"
       argsPrefix: [string]
       description: string
     }
@@ -6126,17 +6128,19 @@ type ClaudeSandboxInvocation =
 async function resolveClaudeSandboxInvocation(sandbox: Sandbox, pathEnv: string): Promise<ClaudeSandboxInvocation> {
   const localClaudeCli = "/home/vercel-sandbox/.claude-code/node_modules/@anthropic-ai/claude-code/cli.js"
   const localSymlink = "/home/vercel-sandbox/.local/bin/claude"
-  const resolveNodeCommand = async (): Promise<"node" | "nodejs"> => {
+  const resolveNodeCommand = async (): Promise<"node" | "nodejs" | "bun"> => {
     const nodeCommandResult = await runSandboxCommandWithOptions(sandbox, {
       cmd: "sh",
-      args: ["-lc", "command -v nodejs || command -v node || true"],
+      args: ["-lc", "command -v nodejs || command -v node || command -v bun || true"],
       env: { PATH: pathEnv, HOME: "/home/vercel-sandbox" }
     })
     const resolved = nodeCommandResult.stdout
       .split("\n")
       .map((entry) => entry.trim())
       .find(Boolean)
-    return resolved?.includes("nodejs") ? "nodejs" : "node"
+    if (resolved?.includes("nodejs")) return "nodejs"
+    if (resolved?.includes("bun")) return "bun"
+    return "node"
   }
   const verifyResult = await runSandboxCommandWithOptions(sandbox, {
     cmd: "sh",
@@ -6197,17 +6201,19 @@ async function logClaudeCliDiagnostics(
 ): Promise<void> {
   const localClaudeCli = "/home/vercel-sandbox/.claude-code/node_modules/@anthropic-ai/claude-code/cli.js"
   const localSymlink = "/home/vercel-sandbox/.local/bin/claude"
-  const resolveNodeCommand = async (): Promise<"node" | "nodejs"> => {
+  const resolveNodeCommand = async (): Promise<"node" | "nodejs" | "bun"> => {
     const nodeCommandResult = await runSandboxCommandWithOptions(sandbox, {
       cmd: "sh",
-      args: ["-c", "command -v nodejs || command -v node || true"],
+      args: ["-c", "command -v nodejs || command -v node || command -v bun || true"],
       env: { PATH: pathEnv, HOME: "/home/vercel-sandbox" }
     })
     const resolved = nodeCommandResult.stdout
       .split("\n")
       .map((entry) => entry.trim())
       .find(Boolean)
-    return resolved?.includes("nodejs") ? "nodejs" : "node"
+    if (resolved?.includes("nodejs")) return "nodejs"
+    if (resolved?.includes("bun")) return "bun"
+    return "node"
   }
   const nodeCommand = await resolveNodeCommand()
   const [whichResult, versionResult, nodeWhichResult, nodeVersionResult, fileResult] = await Promise.all([
@@ -6226,7 +6232,7 @@ async function logClaudeCliDiagnostics(
     }),
     runSandboxCommandWithOptions(sandbox, {
       cmd: "sh",
-      args: ["-c", "command -v nodejs || command -v node || true"],
+      args: ["-c", "command -v nodejs || command -v node || command -v bun || true"],
       env: { PATH: pathEnv, HOME: "/home/vercel-sandbox" }
     }),
     runSandboxCommandWithOptions(sandbox, {
