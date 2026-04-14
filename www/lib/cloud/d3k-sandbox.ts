@@ -2016,6 +2016,15 @@ async function createAndSaveBaseSnapshot(
     }
     const claudeInstallRoot = "/home/vercel-sandbox/.claude-code"
     const localClaudeCli = `${claudeInstallRoot}/node_modules/@anthropic-ai/claude-code/cli.js`
+    const ensureNodeShim = [
+      "if ! command -v node >/dev/null 2>&1; then",
+      "  if command -v nodejs >/dev/null 2>&1; then",
+      '    ln -sf "$(command -v nodejs)" /home/vercel-sandbox/.local/bin/node',
+      "  else",
+      '    ln -sf "$(command -v bun)" /home/vercel-sandbox/.local/bin/node',
+      "  fi",
+      "fi"
+    ].join(" ")
     const sharedRuntimeInstall = await runCmd(
       "sh",
       [
@@ -2026,7 +2035,7 @@ async function createAndSaveBaseSnapshot(
           `cd "${claudeInstallRoot}"`,
           `if [ ! -f package.json ]; then printf '%s' '{"name":"claude-code-runtime","private":true}' > package.json; fi`,
           `bun add ${CLAUDE_CODE_PACKAGE}`,
-          `if ! command -v node >/dev/null 2>&1; then ln -sf "$(command -v bun)" /home/vercel-sandbox/.local/bin/node; fi`,
+          ensureNodeShim,
           `test -f "${localClaudeCli}"`,
           `chmod +x "${localClaudeCli}"`,
           `ln -sf "${localClaudeCli}" /home/vercel-sandbox/.local/bin/claude`,

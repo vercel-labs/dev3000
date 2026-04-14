@@ -5913,7 +5913,15 @@ async function ensureClaudeCodeInstalledInSandbox(
   const claudeInstallRoot = "/home/vercel-sandbox/.claude-code"
   const localClaudeCli = `${claudeInstallRoot}/node_modules/@anthropic-ai/claude-code/cli.js`
   const pathEnv = buildClaudeSandboxPathEnv()
-  const ensureNodeShim = `if ! command -v node >/dev/null 2>&1; then ln -sf "$(command -v bun)" /home/vercel-sandbox/.local/bin/node; fi`
+  const ensureNodeShim = [
+    "if ! command -v node >/dev/null 2>&1; then",
+    "  if command -v nodejs >/dev/null 2>&1; then",
+    '    ln -sf "$(command -v nodejs)" /home/vercel-sandbox/.local/bin/node',
+    "  else",
+    '    ln -sf "$(command -v bun)" /home/vercel-sandbox/.local/bin/node',
+    "  fi",
+    "fi"
+  ].join(" ")
   const whichResult = await runSandboxCommandWithOptions(sandbox, {
     cmd: "sh",
     args: ["-c", "command -v claude || true"],
