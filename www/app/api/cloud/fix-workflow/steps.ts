@@ -6126,7 +6126,7 @@ type ClaudeSandboxInvocation =
       description: string
     }
   | {
-      cmd: "node" | "nodejs" | "bun"
+      cmd: string
       argsPrefix: [string]
       description: string
     }
@@ -6134,19 +6134,20 @@ type ClaudeSandboxInvocation =
 async function resolveClaudeSandboxInvocation(sandbox: Sandbox, pathEnv: string): Promise<ClaudeSandboxInvocation> {
   const localClaudeCli = "/home/vercel-sandbox/.claude-code/node_modules/@anthropic-ai/claude-code/cli.js"
   const localSymlink = "/home/vercel-sandbox/.local/bin/claude"
-  const resolveNodeCommand = async (): Promise<"node" | "nodejs" | "bun"> => {
+  const resolveNodeCommand = async (): Promise<string> => {
     const nodeCommandResult = await runSandboxCommandWithOptions(sandbox, {
       cmd: "sh",
-      args: ["-lc", "command -v nodejs || command -v node || command -v bun || true"],
-      env: { PATH: pathEnv, HOME: "/home/vercel-sandbox" }
+      args: [
+        "-lc",
+        'SYSTEM_PATH="/usr/local/bin:/usr/bin:/bin"; PATH="$SYSTEM_PATH" command -v nodejs || PATH="$SYSTEM_PATH" command -v node || PATH="$SYSTEM_PATH" command -v bun || true'
+      ],
+      env: { HOME: "/home/vercel-sandbox" }
     })
     const resolved = nodeCommandResult.stdout
       .split("\n")
       .map((entry) => entry.trim())
       .find(Boolean)
-    if (resolved?.includes("nodejs")) return "nodejs"
-    if (resolved?.includes("bun")) return "bun"
-    return "node"
+    return resolved || "bun"
   }
   const verifyResult = await runSandboxCommandWithOptions(sandbox, {
     cmd: "sh",
@@ -6207,19 +6208,20 @@ async function logClaudeCliDiagnostics(
 ): Promise<void> {
   const localClaudeCli = "/home/vercel-sandbox/.claude-code/node_modules/@anthropic-ai/claude-code/cli.js"
   const localSymlink = "/home/vercel-sandbox/.local/bin/claude"
-  const resolveNodeCommand = async (): Promise<"node" | "nodejs" | "bun"> => {
+  const resolveNodeCommand = async (): Promise<string> => {
     const nodeCommandResult = await runSandboxCommandWithOptions(sandbox, {
       cmd: "sh",
-      args: ["-c", "command -v nodejs || command -v node || command -v bun || true"],
-      env: { PATH: pathEnv, HOME: "/home/vercel-sandbox" }
+      args: [
+        "-lc",
+        'SYSTEM_PATH="/usr/local/bin:/usr/bin:/bin"; PATH="$SYSTEM_PATH" command -v nodejs || PATH="$SYSTEM_PATH" command -v node || PATH="$SYSTEM_PATH" command -v bun || true'
+      ],
+      env: { HOME: "/home/vercel-sandbox" }
     })
     const resolved = nodeCommandResult.stdout
       .split("\n")
       .map((entry) => entry.trim())
       .find(Boolean)
-    if (resolved?.includes("nodejs")) return "nodejs"
-    if (resolved?.includes("bun")) return "bun"
-    return "node"
+    return resolved || "bun"
   }
   const nodeCommand = await resolveNodeCommand()
   const [whichResult, versionResult, nodeWhichResult, nodeVersionResult, fileResult] = await Promise.all([
@@ -6238,8 +6240,11 @@ async function logClaudeCliDiagnostics(
     }),
     runSandboxCommandWithOptions(sandbox, {
       cmd: "sh",
-      args: ["-c", "command -v nodejs || command -v node || command -v bun || true"],
-      env: { PATH: pathEnv, HOME: "/home/vercel-sandbox" }
+      args: [
+        "-lc",
+        'SYSTEM_PATH="/usr/local/bin:/usr/bin:/bin"; PATH="$SYSTEM_PATH" command -v nodejs || PATH="$SYSTEM_PATH" command -v node || PATH="$SYSTEM_PATH" command -v bun || true'
+      ],
+      env: { HOME: "/home/vercel-sandbox" }
     }),
     runSandboxCommandWithOptions(sandbox, {
       cmd: nodeCommand,
