@@ -67,6 +67,15 @@ type StartFixRequestBody = {
   workflowType?: WorkflowType
 }
 
+type WorkflowAuthSource =
+  | "worker-runtime-oidc"
+  | "worker-header-oidc"
+  | "user-access-token"
+  | "forwarded-user-token"
+  | "control-plane-runtime-oidc"
+  | "control-plane-vercel-token"
+  | "missing"
+
 function isPrivateOrLocalHost(hostname: string): boolean {
   const normalized = hostname.toLowerCase()
   if (normalized === "localhost" || normalized === "127.0.0.1" || normalized === "::1") return true
@@ -260,23 +269,32 @@ export async function POST(request: Request) {
         : undefined
 
     const isSelfHostedWorker = process.env[SKILL_RUNNER_WORKER_MODE_ENV] === "1"
+    const runtimeOidcToken = process.env.VERCEL_OIDC_TOKEN?.trim() || undefined
+    const headerOidcToken = request.headers.get("x-vercel-oidc-token")?.trim() || undefined
+    const fallbackVercelToken = process.env.VERCEL_TOKEN?.trim() || undefined
 
     // Resolve the Vercel API token used by downstream sandbox/project calls inside the workflow.
     // Hosted control-plane requests should prefer the signed-in user's token.
     // Self-hosted worker requests should prefer the worker runtime identity so
     // AI Gateway and project-scoped APIs bill and authorize against the team-owned runner.
     const vercelApiToken = isSelfHostedWorker
-      ? process.env.VERCEL_OIDC_TOKEN ||
-        request.headers.get("x-vercel-oidc-token") ||
-        accessToken ||
-        forwardedAccessToken ||
-        process.env.VERCEL_TOKEN
-      : accessToken ||
-        forwardedAccessToken ||
-        request.headers.get("x-vercel-oidc-token") ||
-        process.env.VERCEL_OIDC_TOKEN ||
-        process.env.VERCEL_TOKEN
+      ? runtimeOidcToken || headerOidcToken || accessToken || forwardedAccessToken || fallbackVercelToken
+      : accessToken || forwardedAccessToken || headerOidcToken || runtimeOidcToken || fallbackVercelToken
+    const vercelApiTokenSource: WorkflowAuthSource = !vercelApiToken
+      ? "missing"
+      : isSelfHostedWorker && runtimeOidcToken && vercelApiToken === runtimeOidcToken
+        ? "worker-runtime-oidc"
+        : isSelfHostedWorker && headerOidcToken && vercelApiToken === headerOidcToken
+          ? "worker-header-oidc"
+          : accessToken && vercelApiToken === accessToken
+            ? "user-access-token"
+            : forwardedAccessToken && vercelApiToken === forwardedAccessToken
+              ? "forwarded-user-token"
+              : runtimeOidcToken && vercelApiToken === runtimeOidcToken
+                ? "control-plane-runtime-oidc"
+                : "control-plane-vercel-token"
     workflowLog(`[Start Fix] Vercel API token available: ${!!vercelApiToken}`)
+    workflowLog(`[Start Fix] Vercel API token source: ${vercelApiTokenSource}`)
 
     const devAgentRunner = resolveDevAgentRunner(
       typeof body.useV0DevAgentRunner === "boolean" ? body.useV0DevAgentRunner : undefined
@@ -458,6 +476,7 @@ export async function POST(request: Request) {
     workflowLog(`[Start Fix] NPM token: ${resolvedNpmToken ? "provided" : "not provided"}`)
     workflowLog(`[Start Fix] Submit PR: ${submitPullRequest === false ? "no" : "yes"}`)
     workflowLog(`[Start Fix] Dev Agent runner: ${devAgentRunner}`)
+    workflowLog(`[Start Fix] Workflow auth source: ${vercelApiTokenSource}`)
     if (repoUrl) {
       workflowLog(`[Start Fix] Will create sandbox from: ${repoUrl}`)
       workflowLog(`[Start Fix] Branch: ${repoBranch || "main"}`)
@@ -539,6 +558,7 @@ export async function POST(request: Request) {
       teamId: analysisTargetType === "url" ? undefined : teamId,
       projectName,
       vercelOidcToken: vercelApiToken,
+      vercelAuthSource: vercelApiTokenSource,
       runId, // Pass runId to workflow for tracking
       userId, // For progress updates
       timestamp: runTimestamp, // For progress updates

@@ -3675,6 +3675,7 @@ export async function evaluateEarlyExitStep(
   earlyExitRule: DevAgentEarlyExitRule | undefined,
   observation: ObserveResult,
   vercelOidcToken?: string,
+  _vercelAuthSource?: string,
   progressContext?: ProgressContext | null
 ): Promise<{ shouldExit: boolean; reason: string }> {
   if (!earlyExitRule && !earlyExitEval?.trim()) {
@@ -3932,6 +3933,7 @@ export async function agentFixLoopStep(
   sourceTarballUrl?: string,
   sourceLabel?: string,
   vercelOidcToken?: string,
+  vercelAuthSource?: string,
   projectDir?: string,
   repoOwner?: string,
   repoName?: string,
@@ -4159,6 +4161,7 @@ export async function agentFixLoopStep(
     devAgentSkillRefs,
     bundleBaselineSummary,
     vercelOidcToken,
+    vercelAuthSource,
     progressContext
   )
   await updateProgress(progressContext, 3, progressLabels.verification, devUrl)
@@ -4609,6 +4612,7 @@ export async function urlAuditStep(
   projectName: string,
   reportId: string,
   vercelOidcToken?: string,
+  _vercelAuthSource?: string,
   progressContext?: ProgressContext | null,
   initTiming?: InitStepTiming,
   fromSnapshot?: boolean,
@@ -6348,11 +6352,12 @@ async function runClaudeTurnInSandbox(
     systemPrompt?: string
     modelId?: import("@/lib/dev-agents").DevAgentAiAgent
     gatewayAuthToken?: string
+    gatewayAuthSourceLabel?: string
     progressContext?: ProgressContext | null
   }
 ): Promise<ClaudeTurnResult> {
   const gatewayAuthToken = requireAiGatewayAuthToken(options.gatewayAuthToken)
-  const gatewayAuthSource = getAiGatewayAuthSource(options.gatewayAuthToken)
+  const gatewayAuthSource = options.gatewayAuthSourceLabel || getAiGatewayAuthSource(options.gatewayAuthToken)
 
   const modelSelection = resolveClaudeModelSelection(options.modelId)
   const pathEnv = buildClaudeSandboxPathEnv()
@@ -6475,6 +6480,7 @@ async function runAgentWithDiagnoseTool(
   devAgentSkillRefs?: DevAgentSkillRef[],
   bundleBaselineSummary?: string,
   vercelOidcToken?: string,
+  vercelAuthSource?: string,
   progressContext?: ProgressContext | null
 ): Promise<{
   transcript: string
@@ -6514,6 +6520,10 @@ async function runAgentWithDiagnoseTool(
     workflowTypeForPrompt === "cls-fix" || workflowTypeForPrompt === "turbopack-bundle-analyzer"
       ? undefined
       : devAgentActionSteps
+
+  if (vercelAuthSource) {
+    await appendProgressLog(progressContext, `[Claude] Gateway auth source: ${vercelAuthSource}`)
+  }
 
   await appendProgressLog(progressContext, "[Claude] Ensuring Claude Code CLI is available...")
   try {
@@ -6579,6 +6589,7 @@ async function runAgentWithDiagnoseTool(
         systemPrompt: currentSessionId ? undefined : systemPrompt,
         modelId: modelSelection.modelId,
         gatewayAuthToken: vercelOidcToken,
+        gatewayAuthSourceLabel: vercelAuthSource,
         progressContext
       })
     } catch (error) {
