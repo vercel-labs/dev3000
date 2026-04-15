@@ -5944,7 +5944,7 @@ async function ensureClaudeCodeInstalledInSandbox(
     )
   }
   const ensureNodeShim = [
-    'SYSTEM_PATH="/usr/local/bin:/usr/bin:/bin"',
+    'SYSTEM_PATH="/home/vercel-sandbox/.bun/bin:/home/vercel-sandbox/.local/bin:/usr/local/bin:/usr/bin:/bin"',
     'mkdir -p "/home/vercel-sandbox/.local/bin"',
     'REAL_NODE=""',
     "if [ -x /usr/bin/nodejs ]; then",
@@ -6132,7 +6132,7 @@ async function resolveClaudeSandboxInvocation(sandbox: Sandbox, pathEnv: string)
       cmd: "sh",
       args: [
         "-lc",
-        'SYSTEM_PATH="/usr/local/bin:/usr/bin:/bin"; PATH="$SYSTEM_PATH" command -v nodejs || PATH="$SYSTEM_PATH" command -v node || PATH="$SYSTEM_PATH" command -v bun || true'
+        `PATH="${pathEnv}" command -v nodejs || PATH="${pathEnv}" command -v node || PATH="${pathEnv}" command -v bun || true`
       ],
       env: { HOME: "/home/vercel-sandbox" }
     })
@@ -6210,7 +6210,7 @@ async function logClaudeCliDiagnostics(
       cmd: "sh",
       args: [
         "-lc",
-        'SYSTEM_PATH="/usr/local/bin:/usr/bin:/bin"; PATH="$SYSTEM_PATH" command -v nodejs || PATH="$SYSTEM_PATH" command -v node || PATH="$SYSTEM_PATH" command -v bun || true'
+        `PATH="${pathEnv}" command -v nodejs || PATH="${pathEnv}" command -v node || PATH="${pathEnv}" command -v bun || true`
       ],
       env: { HOME: "/home/vercel-sandbox" }
     })
@@ -6239,7 +6239,7 @@ async function logClaudeCliDiagnostics(
       cmd: "sh",
       args: [
         "-lc",
-        'SYSTEM_PATH="/usr/local/bin:/usr/bin:/bin"; PATH="$SYSTEM_PATH" command -v nodejs || PATH="$SYSTEM_PATH" command -v node || PATH="$SYSTEM_PATH" command -v bun || true'
+        `PATH="${pathEnv}" command -v nodejs || PATH="${pathEnv}" command -v node || PATH="${pathEnv}" command -v bun || true`
       ],
       env: { HOME: "/home/vercel-sandbox" }
     }),
