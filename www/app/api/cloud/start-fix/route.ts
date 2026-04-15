@@ -259,15 +259,23 @@ export async function POST(request: Request) {
         ? body.forwardedAccessToken.trim()
         : undefined
 
+    const isSelfHostedWorker = process.env[SKILL_RUNNER_WORKER_MODE_ENV] === "1"
+
     // Resolve the Vercel API token used by downstream sandbox/project calls inside the workflow.
-    // In self-hosted mode, prefer the end-user access token over any ambient Vercel runtime token
-    // so project-scoped APIs (project envs, deployments) stay authorized for the selected team.
-    const vercelApiToken =
-      accessToken ||
-      forwardedAccessToken ||
-      request.headers.get("x-vercel-oidc-token") ||
-      process.env.VERCEL_OIDC_TOKEN ||
-      process.env.VERCEL_TOKEN
+    // Hosted control-plane requests should prefer the signed-in user's token.
+    // Self-hosted worker requests should prefer the worker runtime identity so
+    // AI Gateway and project-scoped APIs bill and authorize against the team-owned runner.
+    const vercelApiToken = isSelfHostedWorker
+      ? process.env.VERCEL_OIDC_TOKEN ||
+        request.headers.get("x-vercel-oidc-token") ||
+        accessToken ||
+        forwardedAccessToken ||
+        process.env.VERCEL_TOKEN
+      : accessToken ||
+        forwardedAccessToken ||
+        request.headers.get("x-vercel-oidc-token") ||
+        process.env.VERCEL_OIDC_TOKEN ||
+        process.env.VERCEL_TOKEN
     workflowLog(`[Start Fix] Vercel API token available: ${!!vercelApiToken}`)
 
     const devAgentRunner = resolveDevAgentRunner(

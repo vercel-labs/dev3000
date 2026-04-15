@@ -5956,13 +5956,16 @@ async function ensureClaudeCodeInstalledInSandbox(
     'elif PATH="$SYSTEM_PATH" command -v node >/dev/null 2>&1; then',
     '  REAL_NODE="$(PATH="$SYSTEM_PATH" command -v node)"',
     "fi",
-    'if [ -z "$REAL_NODE" ]; then',
+    'if [ -n "$REAL_NODE" ]; then',
+    '  ln -sf "$REAL_NODE" /home/vercel-sandbox/.local/bin/node',
+    '  ln -sf "$REAL_NODE" /home/vercel-sandbox/.local/bin/nodejs',
+    "  test -x /home/vercel-sandbox/.local/bin/node",
+    'elif PATH="$SYSTEM_PATH" command -v bun >/dev/null 2>&1; then',
+    "  true",
+    "else",
     '  echo "missing-runtime" >&2',
     "  exit 1",
-    "fi",
-    'ln -sf "$REAL_NODE" /home/vercel-sandbox/.local/bin/node',
-    'ln -sf "$REAL_NODE" /home/vercel-sandbox/.local/bin/nodejs',
-    "test -x /home/vercel-sandbox/.local/bin/node"
+    "fi"
   ].join("\n")
   const existingClaudePath = await resolveInstalledClaudePath()
   if (existingClaudePath) {
@@ -6084,28 +6087,19 @@ async function ensureClaudeCodeInstalledInSandbox(
     throw new Error("Claude Code CLI installed but could not be resolved inside the sandbox.")
   }
 
-  const nodeResult = await runSandboxCommandWithOptions(sandbox, {
-    cmd: "sh",
-    args: [
-      "-lc",
-      `${ensureNodeShim} && printf 'node=%s\\n' "$(readlink -f /home/vercel-sandbox/.local/bin/node 2>/dev/null || true)" && PATH="/home/vercel-sandbox/.local/bin:/usr/local/bin:/usr/bin:/bin" command -v node || true`
-    ],
-    env: { PATH: pathEnv, HOME: "/home/vercel-sandbox" }
-  })
-  if (
-    !nodeResult.stdout
-      .split("\n")
-      .map((line) => line.trim())
-      .find((line) => line.startsWith("/") || line.startsWith("node=/"))
-  ) {
+  try {
+    const invocation = await resolveClaudeSandboxInvocation(sandbox, pathEnv)
     await appendProgressLog(
       progressContext,
-      `[Claude] Node missing from PATH after install stdout=${formatClaudeOutputPreview(nodeResult.stdout)} stderr=${formatClaudeOutputPreview(nodeResult.stderr)}`
+      `[Claude] Claude Code CLI ready (${resolvedClaudePath}; runtime=${invocation.cmd})`
+    )
+  } catch (error) {
+    await appendProgressLog(
+      progressContext,
+      `[Claude] Runtime missing after install: ${error instanceof Error ? error.message : String(error)}`
     )
     throw new Error("Claude Code CLI installed but no JavaScript runtime is available inside the sandbox.")
   }
-
-  await appendProgressLog(progressContext, `[Claude] Claude Code CLI ready (${resolvedClaudePath})`)
 }
 
 function formatClaudeOutputPreview(raw: string | undefined, maxLength = 240): string {
@@ -6138,7 +6132,7 @@ async function resolveClaudeSandboxInvocation(sandbox: Sandbox, pathEnv: string)
       cmd: "sh",
       args: [
         "-lc",
-        'SYSTEM_PATH="/usr/local/bin:/usr/bin:/bin"; PATH="$SYSTEM_PATH" command -v nodejs || PATH="$SYSTEM_PATH" command -v node || true'
+        'SYSTEM_PATH="/usr/local/bin:/usr/bin:/bin"; PATH="$SYSTEM_PATH" command -v nodejs || PATH="$SYSTEM_PATH" command -v node || PATH="$SYSTEM_PATH" command -v bun || true'
       ],
       env: { HOME: "/home/vercel-sandbox" }
     })
@@ -6171,10 +6165,11 @@ async function resolveClaudeSandboxInvocation(sandbox: Sandbox, pathEnv: string)
   const line = verifyResult.stdout.trim()
   if (line.startsWith("cli:")) {
     const cliPath = line.slice("cli:".length)
+    const runtimeCommand = await resolveNodeCommand()
     return {
-      cmd: await resolveNodeCommand(),
+      cmd: runtimeCommand,
       argsPrefix: [cliPath],
-      description: cliPath
+      description: runtimeCommand === "bun" ? `${cliPath} via bun` : cliPath
     }
   }
   if (line.startsWith("which:")) {
