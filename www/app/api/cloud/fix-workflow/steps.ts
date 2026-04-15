@@ -5955,14 +5955,13 @@ async function ensureClaudeCodeInstalledInSandbox(
     '  REAL_NODE="$(PATH="$SYSTEM_PATH" command -v nodejs)"',
     'elif PATH="$SYSTEM_PATH" command -v node >/dev/null 2>&1; then',
     '  REAL_NODE="$(PATH="$SYSTEM_PATH" command -v node)"',
-    "elif command -v bun >/dev/null 2>&1; then",
-    '  REAL_NODE="$(command -v bun)"',
     "fi",
     'if [ -z "$REAL_NODE" ]; then',
     '  echo "missing-runtime" >&2',
     "  exit 1",
     "fi",
     'ln -sf "$REAL_NODE" /home/vercel-sandbox/.local/bin/node',
+    'ln -sf "$REAL_NODE" /home/vercel-sandbox/.local/bin/nodejs',
     "test -x /home/vercel-sandbox/.local/bin/node"
   ].join("\n")
   const existingClaudePath = await resolveInstalledClaudePath()
@@ -6139,7 +6138,7 @@ async function resolveClaudeSandboxInvocation(sandbox: Sandbox, pathEnv: string)
       cmd: "sh",
       args: [
         "-lc",
-        'SYSTEM_PATH="/usr/local/bin:/usr/bin:/bin"; PATH="$SYSTEM_PATH" command -v nodejs || PATH="$SYSTEM_PATH" command -v node || PATH="$SYSTEM_PATH" command -v bun || true'
+        'SYSTEM_PATH="/usr/local/bin:/usr/bin:/bin"; PATH="$SYSTEM_PATH" command -v nodejs || PATH="$SYSTEM_PATH" command -v node || true'
       ],
       env: { HOME: "/home/vercel-sandbox" }
     })
@@ -6147,7 +6146,10 @@ async function resolveClaudeSandboxInvocation(sandbox: Sandbox, pathEnv: string)
       .split("\n")
       .map((entry) => entry.trim())
       .find(Boolean)
-    return resolved || "bun"
+    if (!resolved) {
+      throw new Error("No supported Node.js runtime is available for Claude Code inside the sandbox.")
+    }
+    return resolved
   }
   const verifyResult = await runSandboxCommandWithOptions(sandbox, {
     cmd: "sh",
@@ -6167,19 +6169,19 @@ async function resolveClaudeSandboxInvocation(sandbox: Sandbox, pathEnv: string)
   })
 
   const line = verifyResult.stdout.trim()
-  if (line.startsWith("which:")) {
-    return {
-      cmd: "claude",
-      argsPrefix: [],
-      description: line.slice("which:".length)
-    }
-  }
   if (line.startsWith("cli:")) {
     const cliPath = line.slice("cli:".length)
     return {
       cmd: await resolveNodeCommand(),
       argsPrefix: [cliPath],
       description: cliPath
+    }
+  }
+  if (line.startsWith("which:")) {
+    return {
+      cmd: "claude",
+      argsPrefix: [],
+      description: line.slice("which:".length)
     }
   }
   if (verifyResult.exitCode === 0 && line.length === 0) {
