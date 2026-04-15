@@ -69,7 +69,7 @@ type StartFixRequestBody = {
 
 type WorkflowAuthSource =
   | "worker-runtime-oidc"
-  | "worker-header-oidc"
+  | "worker-platform-header-oidc"
   | "user-access-token"
   | "forwarded-user-token"
   | "control-plane-runtime-oidc"
@@ -268,28 +268,40 @@ export async function POST(request: Request) {
     const headerOidcToken = request.headers.get("x-vercel-oidc-token")?.trim() || undefined
     const fallbackVercelToken = process.env.VERCEL_TOKEN?.trim() || undefined
 
-    // Resolve the Vercel API token used by downstream sandbox/project calls inside the workflow.
+    // Resolve the token used by downstream Vercel project/sandbox APIs inside the workflow.
     // Hosted control-plane requests should prefer the signed-in user's token.
-    // Self-hosted worker requests should prefer the worker runtime identity so
-    // AI Gateway and project-scoped APIs bill and authorize against the team-owned runner.
+    // Self-hosted worker requests still need a user-scoped/project-scoped token for APIs like
+    // reading target project env vars; worker OIDC is reserved for AI Gateway auth below.
     const vercelApiToken = isSelfHostedWorker
-      ? runtimeOidcToken || headerOidcToken || accessToken || forwardedAccessToken || fallbackVercelToken
+      ? forwardedAccessToken || accessToken || fallbackVercelToken
       : accessToken || forwardedAccessToken || headerOidcToken || runtimeOidcToken || fallbackVercelToken
     const vercelApiTokenSource: WorkflowAuthSource = !vercelApiToken
       ? "missing"
-      : isSelfHostedWorker && runtimeOidcToken && vercelApiToken === runtimeOidcToken
+      : accessToken && vercelApiToken === accessToken
+        ? "user-access-token"
+        : forwardedAccessToken && vercelApiToken === forwardedAccessToken
+          ? "forwarded-user-token"
+          : runtimeOidcToken && vercelApiToken === runtimeOidcToken
+            ? "control-plane-runtime-oidc"
+            : "control-plane-vercel-token"
+    const gatewayAuthToken = isSelfHostedWorker ? runtimeOidcToken || headerOidcToken || undefined : vercelApiToken
+    const gatewayAuthSource: WorkflowAuthSource = !gatewayAuthToken
+      ? "missing"
+      : isSelfHostedWorker && runtimeOidcToken && gatewayAuthToken === runtimeOidcToken
         ? "worker-runtime-oidc"
-        : isSelfHostedWorker && headerOidcToken && vercelApiToken === headerOidcToken
-          ? "worker-header-oidc"
-          : accessToken && vercelApiToken === accessToken
+        : isSelfHostedWorker && headerOidcToken && gatewayAuthToken === headerOidcToken
+          ? "worker-platform-header-oidc"
+          : accessToken && gatewayAuthToken === accessToken
             ? "user-access-token"
-            : forwardedAccessToken && vercelApiToken === forwardedAccessToken
+            : forwardedAccessToken && gatewayAuthToken === forwardedAccessToken
               ? "forwarded-user-token"
-              : runtimeOidcToken && vercelApiToken === runtimeOidcToken
+              : runtimeOidcToken && gatewayAuthToken === runtimeOidcToken
                 ? "control-plane-runtime-oidc"
                 : "control-plane-vercel-token"
     workflowLog(`[Start Fix] Vercel API token available: ${!!vercelApiToken}`)
     workflowLog(`[Start Fix] Vercel API token source: ${vercelApiTokenSource}`)
+    workflowLog(`[Start Fix] AI Gateway token available: ${!!gatewayAuthToken}`)
+    workflowLog(`[Start Fix] AI Gateway token source: ${gatewayAuthSource}`)
 
     const devAgentRunner = resolveDevAgentRunner(
       typeof body.useV0DevAgentRunner === "boolean" ? body.useV0DevAgentRunner : undefined
@@ -554,6 +566,8 @@ export async function POST(request: Request) {
       projectName,
       vercelOidcToken: vercelApiToken,
       vercelAuthSource: vercelApiTokenSource,
+      gatewayAuthToken,
+      gatewayAuthSource,
       runId, // Pass runId to workflow for tracking
       userId, // For progress updates
       timestamp: runTimestamp, // For progress updates

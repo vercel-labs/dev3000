@@ -3674,8 +3674,8 @@ export async function evaluateEarlyExitStep(
   earlyExitEval: string | undefined,
   earlyExitRule: DevAgentEarlyExitRule | undefined,
   observation: ObserveResult,
-  vercelOidcToken?: string,
-  _vercelAuthSource?: string,
+  gatewayAuthToken?: string,
+  _gatewayAuthSource?: string,
   progressContext?: ProgressContext | null
 ): Promise<{ shouldExit: boolean; reason: string }> {
   if (!earlyExitRule && !earlyExitEval?.trim()) {
@@ -3702,7 +3702,7 @@ export async function evaluateEarlyExitStep(
     workflowLog(`[EarlyExit] Evaluating condition: "${earlyExitEval}"`)
     await appendProgressLog(progressContext, `[EarlyExit] Evaluating: "${earlyExitEval}"`)
 
-    const gateway = createVercelGateway(vercelOidcToken)
+    const gateway = createVercelGateway(gatewayAuthToken)
 
     const metricsContext = [
       `CLS score: ${observation.beforeCls !== null ? observation.beforeCls.toFixed(4) : "unavailable"}`,
@@ -3933,7 +3933,9 @@ export async function agentFixLoopStep(
   sourceTarballUrl?: string,
   sourceLabel?: string,
   vercelOidcToken?: string,
-  vercelAuthSource?: string,
+  _vercelAuthSource?: string,
+  gatewayAuthToken?: string,
+  gatewayAuthSource?: string,
   projectDir?: string,
   repoOwner?: string,
   repoName?: string,
@@ -4160,8 +4162,8 @@ export async function agentFixLoopStep(
     devAgentActionSteps,
     devAgentSkillRefs,
     bundleBaselineSummary,
-    vercelOidcToken,
-    vercelAuthSource,
+    gatewayAuthToken,
+    gatewayAuthSource,
     progressContext
   )
   await updateProgress(progressContext, 3, progressLabels.verification, devUrl)
@@ -4415,7 +4417,7 @@ export async function agentFixLoopStep(
     try {
       timer.start("Success eval")
       workflowLog(`[Agent] Running success eval with ${SUCCESS_EVAL_MODEL}`)
-      const evalGateway = createVercelGateway(vercelOidcToken)
+      const evalGateway = createVercelGateway(gatewayAuthToken)
       const evalResult = await generateText({
         model: evalGateway(SUCCESS_EVAL_MODEL),
         system:
@@ -4611,8 +4613,8 @@ export async function urlAuditStep(
   customPrompt: string | undefined,
   projectName: string,
   reportId: string,
-  vercelOidcToken?: string,
-  _vercelAuthSource?: string,
+  gatewayAuthToken?: string,
+  _gatewayAuthSource?: string,
   progressContext?: ProgressContext | null,
   initTiming?: InitStepTiming,
   fromSnapshot?: boolean,
@@ -4699,7 +4701,7 @@ export async function urlAuditStep(
   }
 
   timer.start("Generate audit analysis")
-  const gateway = createVercelGateway(vercelOidcToken)
+  const gateway = createVercelGateway(gatewayAuthToken)
 
   const analysisResponse = await generateText({
     model: gateway("openai/gpt-5.4"),
@@ -6479,8 +6481,8 @@ async function runAgentWithDiagnoseTool(
   devAgentActionSteps?: Array<{ kind: string; config: Record<string, string> }>,
   devAgentSkillRefs?: DevAgentSkillRef[],
   bundleBaselineSummary?: string,
-  vercelOidcToken?: string,
-  vercelAuthSource?: string,
+  gatewayAuthToken?: string,
+  gatewayAuthSource?: string,
   progressContext?: ProgressContext | null
 ): Promise<{
   transcript: string
@@ -6521,8 +6523,8 @@ async function runAgentWithDiagnoseTool(
       ? undefined
       : devAgentActionSteps
 
-  if (vercelAuthSource) {
-    await appendProgressLog(progressContext, `[Claude] Gateway auth source: ${vercelAuthSource}`)
+  if (gatewayAuthSource) {
+    await appendProgressLog(progressContext, `[Claude] Gateway auth source: ${gatewayAuthSource}`)
   }
 
   await appendProgressLog(progressContext, "[Claude] Ensuring Claude Code CLI is available...")
@@ -6588,8 +6590,8 @@ async function runAgentWithDiagnoseTool(
         sessionId: currentSessionId,
         systemPrompt: currentSessionId ? undefined : systemPrompt,
         modelId: modelSelection.modelId,
-        gatewayAuthToken: vercelOidcToken,
-        gatewayAuthSourceLabel: vercelAuthSource,
+        gatewayAuthToken,
+        gatewayAuthSourceLabel: gatewayAuthSource,
         progressContext
       })
     } catch (error) {
