@@ -156,11 +156,6 @@ async function forwardSelfHostedStartRequest({
     }
   }
 
-  const oidcToken = request.headers.get("x-vercel-oidc-token")
-  if (oidcToken) {
-    headers.set("x-vercel-oidc-token", oidcToken)
-  }
-
   headers.set("x-dev3000-skill-runner-worker-forwarded", "1")
   const forwardedBody = accessToken ? { ...body, forwardedAccessToken: accessToken } : body
 
