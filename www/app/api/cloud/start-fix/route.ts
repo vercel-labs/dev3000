@@ -1,8 +1,16 @@
 import { start } from "workflow/api"
+import { getCurrentUserFromRequest } from "@/lib/auth"
 import { resolveDevAgentRunner } from "@/lib/cloud/dev-agent-runner"
 import { type DevAgent, ensureDevAgentAshArtifactPrepared, getDevAgent, incrementDevAgentUsage } from "@/lib/dev-agents"
 import { SKILL_RUNNER_WORKER_MODE_ENV } from "@/lib/skill-runner-config"
 import { getSkillRunnerForExecution, getSkillRunnerTeamSettings, incrementSkillRunnerUsage } from "@/lib/skill-runners"
+import {
+  buildIdentityProps,
+  buildTelemetryEvent,
+  emitTelemetryEvent,
+  type TeamIdentity,
+  type UserIdentity
+} from "@/lib/telemetry"
 import { proxyWorkflowJsonRequest, shouldProxyWorkflowRequest } from "@/lib/workflow-api"
 import { clearWorkflowLog, workflowError, workflowLog } from "@/lib/workflow-logger"
 import {
@@ -221,6 +229,10 @@ export async function POST(request: Request) {
   let skillRunnerValidationWarning: string | undefined
   let selfHostedWorkerBaseUrl: string | undefined
   let workflowMirrorTarget: WorkflowRunMirrorTarget | null = null
+  let skillRunnerTelemetryContext: {
+    team: TeamIdentity
+    executionMode: "hosted" | "self-hosted"
+  } | null = null
 
   try {
     // Check for test bypass token (allows testing without browser auth via CLI)
@@ -364,6 +376,15 @@ export async function POST(request: Request) {
         name: team.name,
         isPersonal: Boolean(team.isPersonal)
       })
+      skillRunnerTelemetryContext = {
+        team: {
+          id: team.id,
+          slug: team.slug,
+          name: team.name,
+          isPersonal: Boolean(team.isPersonal)
+        },
+        executionMode: teamSettings.executionMode
+      }
       const preparedSkillRunner = await getSkillRunnerForExecution(
         {
           id: team.id,
@@ -550,6 +571,9 @@ export async function POST(request: Request) {
       "[Sandbox] Queued sandbox creation..."
     ]
 
+    const currentUserForTelemetry =
+      runnerKind === "skill-runner" ? await getCurrentUserFromRequest(request).catch(() => null) : null
+
     // V2 workflow params - simplified "local-style" architecture
     const workflowParams = {
       repoUrl:
@@ -625,7 +649,14 @@ export async function POST(request: Request) {
           ? typeof body.controlPlaneMirrorSecret === "string"
             ? body.controlPlaneMirrorSecret
             : undefined
-          : undefined
+          : undefined,
+      skillRunnerTelemetryUserName: currentUserForTelemetry?.name || currentUserForTelemetry?.username || undefined,
+      skillRunnerTelemetryUserHandle: currentUserForTelemetry?.username || undefined,
+      skillRunnerTelemetryTeamId: skillRunnerTelemetryContext?.team.id,
+      skillRunnerTelemetryTeamSlug: skillRunnerTelemetryContext?.team.slug,
+      skillRunnerTelemetryTeamName: skillRunnerTelemetryContext?.team.name,
+      skillRunnerTelemetryTeamIsPersonal: skillRunnerTelemetryContext?.team.isPersonal,
+      skillRunnerTelemetryExecutionMode: skillRunnerTelemetryContext?.executionMode
     }
 
     workflowMirrorTarget =
@@ -681,6 +712,34 @@ export async function POST(request: Request) {
       void updateUsage.catch((usageError) => {
         workflowError("[Start Fix] Failed to update devAgent usage count:", usageError)
       })
+    }
+
+    if (
+      !isSelfHostedWorker &&
+      runnerKind === "skill-runner" &&
+      skillRunnerTelemetryContext &&
+      userId &&
+      runId &&
+      devAgent
+    ) {
+      const requestUser = await getCurrentUserFromRequest(request).catch(() => null)
+      const identityUser: UserIdentity = requestUser
+        ? { id: requestUser.id, name: requestUser.name || requestUser.username, username: requestUser.username }
+        : { id: userId, name: userId, username: userId }
+      void emitTelemetryEvent(
+        buildTelemetryEvent({
+          eventType: "skill_run_started",
+          ...buildIdentityProps(
+            identityUser,
+            skillRunnerTelemetryContext.team,
+            skillRunnerTelemetryContext.executionMode
+          ),
+          runId,
+          skillRunnerId: devAgent.id,
+          skillName: devAgent.name,
+          skillCanonicalPath: skillRunnerCanonicalPath
+        })
+      ).catch(() => {})
     }
 
     if (selfHostedWorkerBaseUrl) {

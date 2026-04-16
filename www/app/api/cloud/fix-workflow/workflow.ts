@@ -13,6 +13,12 @@
 
 import { readBlobJson } from "@/lib/blob-store"
 import { SKILL_RUNNER_WORKER_MODE_ENV } from "@/lib/skill-runner-config"
+import {
+  buildTelemetryEvent,
+  classifyFailure,
+  emitTelemetryEvent,
+  relayTelemetryEventToControlPlane
+} from "@/lib/telemetry"
 import { persistWorkflowRun, type WorkflowRun, type WorkflowRunMirrorTarget } from "@/lib/workflow-storage"
 
 const workflowLog = console.log
@@ -204,6 +210,13 @@ export async function cloudFixWorkflow(params: {
   controlPlaneBaseUrl?: string
   controlPlaneAccessToken?: string
   controlPlaneMirrorSecret?: string
+  skillRunnerTelemetryUserName?: string
+  skillRunnerTelemetryUserHandle?: string
+  skillRunnerTelemetryTeamId?: string
+  skillRunnerTelemetryTeamSlug?: string
+  skillRunnerTelemetryTeamName?: string
+  skillRunnerTelemetryTeamIsPersonal?: boolean
+  skillRunnerTelemetryExecutionMode?: "hosted" | "self-hosted"
 }) {
   "use workflow"
 
@@ -262,7 +275,14 @@ export async function cloudFixWorkflow(params: {
     useV0DevAgentRunner = false,
     controlPlaneBaseUrl,
     controlPlaneAccessToken,
-    controlPlaneMirrorSecret
+    controlPlaneMirrorSecret,
+    skillRunnerTelemetryUserName,
+    skillRunnerTelemetryUserHandle,
+    skillRunnerTelemetryTeamId,
+    skillRunnerTelemetryTeamSlug,
+    skillRunnerTelemetryTeamName,
+    skillRunnerTelemetryTeamIsPersonal,
+    skillRunnerTelemetryExecutionMode
   } = params
   // Use runId if provided (from start-fix route), otherwise generate one
   // The reportId is used for blob naming and tracking
@@ -306,7 +326,23 @@ export async function cloudFixWorkflow(params: {
               : undefined,
           activeStepNumber: initialStepNumber,
           activeCurrentStep: initialCurrentStep,
-          progressLogs: initialProgressLogs
+          progressLogs: initialProgressLogs,
+          skillRunnerTelemetry:
+            runnerKind === "skill-runner" &&
+            skillRunnerTelemetryTeamId &&
+            skillRunnerTelemetryTeamSlug &&
+            skillRunnerTelemetryTeamName &&
+            skillRunnerTelemetryExecutionMode
+              ? {
+                  userName: skillRunnerTelemetryUserName || userId,
+                  userHandle: skillRunnerTelemetryUserHandle || userId,
+                  teamId: skillRunnerTelemetryTeamId,
+                  teamSlug: skillRunnerTelemetryTeamSlug,
+                  teamName: skillRunnerTelemetryTeamName,
+                  teamIsPersonal: Boolean(skillRunnerTelemetryTeamIsPersonal),
+                  executionMode: skillRunnerTelemetryExecutionMode
+                }
+              : undefined
         }
       : null
 
@@ -718,6 +754,15 @@ interface ProgressContext {
   sandboxUrl?: string
   progressLogs?: string[]
   runSnapshot?: WorkflowRun
+  skillRunnerTelemetry?: {
+    userName: string
+    userHandle: string
+    teamId: string
+    teamSlug: string
+    teamName: string
+    teamIsPersonal: boolean
+    executionMode: "hosted" | "self-hosted"
+  }
 }
 
 async function getProgressRunSnapshot(ctx: ProgressContext): Promise<WorkflowRun | undefined> {
@@ -1220,6 +1265,33 @@ async function saveDoneStatus(
         `[Workflow] Failed to record skill runner completion stats: ${error instanceof Error ? error.message : String(error)}`
       )
     }
+    const telemetry = progressContext.skillRunnerTelemetry
+    if (telemetry) {
+      const durationMs = Math.max(0, Date.parse(nextRun.completedAt || "") - Date.parse(progressContext.timestamp))
+      const event = buildTelemetryEvent({
+        eventType: "skill_run_completed",
+        userId: progressContext.userId,
+        userName: telemetry.userName,
+        userHandle: telemetry.userHandle,
+        teamId: telemetry.teamId,
+        teamName: telemetry.teamName,
+        teamSlug: telemetry.teamSlug,
+        teamIsPersonal: telemetry.teamIsPersonal,
+        executionMode: telemetry.executionMode,
+        runId: progressContext.runId,
+        skillRunnerId: progressContext.devAgentId,
+        skillName: progressContext.devAgentName,
+        skillCanonicalPath: progressContext.skillRunnerCanonicalPath,
+        costUsd: reportSummary?.costUsd ?? undefined,
+        durationMs: Number.isFinite(durationMs) ? durationMs : undefined,
+        successEvalResult: reportSummary?.successEvalResult ?? null
+      })
+      if (progressContext.controlPlaneMirrorTarget) {
+        void relayTelemetryEventToControlPlane(event, progressContext.controlPlaneMirrorTarget).catch(() => {})
+      } else {
+        void emitTelemetryEvent(event).catch(() => {})
+      }
+    }
   }
   progressContext.runSnapshot = nextRun
 }
@@ -1299,6 +1371,34 @@ async function saveFailureStatus(progressContext: ProgressContext, errorMessage:
     await persistWorkflowRun(nextRun, { mirrorTarget: progressContext.controlPlaneMirrorTarget })
     progressContext.runSnapshot = nextRun
     console.log(`[Workflow] Saved failure status for ${progressContext.runId}`)
+    if (progressContext.runnerKind === "skill-runner" && progressContext.devAgentId) {
+      const telemetry = progressContext.skillRunnerTelemetry
+      if (telemetry) {
+        const durationMs = Math.max(0, Date.parse(nextRun.completedAt || "") - Date.parse(progressContext.timestamp))
+        const event = buildTelemetryEvent({
+          eventType: "skill_run_failed",
+          userId: progressContext.userId,
+          userName: telemetry.userName,
+          userHandle: telemetry.userHandle,
+          teamId: telemetry.teamId,
+          teamName: telemetry.teamName,
+          teamSlug: telemetry.teamSlug,
+          teamIsPersonal: telemetry.teamIsPersonal,
+          executionMode: telemetry.executionMode,
+          runId: progressContext.runId,
+          skillRunnerId: progressContext.devAgentId,
+          skillName: progressContext.devAgentName,
+          skillCanonicalPath: progressContext.skillRunnerCanonicalPath,
+          durationMs: Number.isFinite(durationMs) ? durationMs : undefined,
+          failureCategory: classifyFailure(errorMessage, null)
+        })
+        if (progressContext.controlPlaneMirrorTarget) {
+          void relayTelemetryEventToControlPlane(event, progressContext.controlPlaneMirrorTarget).catch(() => {})
+        } else {
+          void emitTelemetryEvent(event).catch(() => {})
+        }
+      }
+    }
   } catch (saveErr) {
     console.log(`[Workflow] Failed to save failure status: ${saveErr}`)
   }

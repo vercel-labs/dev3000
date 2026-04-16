@@ -305,6 +305,12 @@ function stableImportedRunnerId(teamId: string, canonicalPath: string): string {
   return `sr_imp_${createHash("sha256").update(`${teamId}:${canonicalPath}`).digest("hex").slice(0, 12)}`
 }
 
+const HOSTED_TEAM_SLUGS = new Set(["vercel", "vercel-labs"])
+
+export function getDefaultExecutionMode(team: { slug: string }): "hosted" | "self-hosted" {
+  return HOSTED_TEAM_SLUGS.has(team.slug) ? "hosted" : "self-hosted"
+}
+
 function buildEmptyTeamState(team: DevAgentTeam): SkillRunnerTeamState {
   return {
     teamId: team.id,
@@ -312,7 +318,7 @@ function buildEmptyTeamState(team: DevAgentTeam): SkillRunnerTeamState {
     hiddenDefaultIds: [],
     imported: [],
     settings: {
-      executionMode: "hosted",
+      executionMode: getDefaultExecutionMode(team),
       workerStatus: "unconfigured"
     },
     updatedAt: new Date().toISOString()
@@ -341,7 +347,12 @@ function normalizeTeamState(raw: SkillRunnerTeamState | null, team: DevAgentTeam
   const fallback = buildEmptyTeamState(team)
   if (!raw) return fallback
 
-  const executionMode = raw.settings?.executionMode === "self-hosted" ? "self-hosted" : "hosted"
+  const executionMode =
+    raw.settings?.executionMode === "self-hosted"
+      ? "self-hosted"
+      : raw.settings?.executionMode === "hosted"
+        ? "hosted"
+        : getDefaultExecutionMode(team)
   const workerBaseUrl = normalizeWorkerBaseUrl(raw.settings?.workerBaseUrl)
   const workerProjectId = raw.settings?.workerProjectId?.trim() || undefined
   const workerStatus =

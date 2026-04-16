@@ -1,3 +1,4 @@
+import Link from "next/link"
 import { notFound, redirect } from "next/navigation"
 import { SkillRunnerTeamSettingsPanel } from "@/components/admin/skill-runner-team-settings"
 import { DevAgentsDashboardShell } from "@/components/dev-agents/dashboard-shell"
@@ -40,6 +41,14 @@ export default async function AdminPage() {
       title="Admin"
       description="Manage per-team skill-runner hosting mode and worker configuration."
     >
+      <div className="mb-5 flex items-center gap-3 text-[13px]">
+        <Link
+          href="/admin/runs"
+          className="rounded-md border border-[#1f1f1f] bg-[#111] px-3 py-1.5 text-[#ededed] hover:bg-[#1a1a1a]"
+        >
+          All Runs →
+        </Link>
+      </div>
       <SkillRunnerTeamSettingsPanel items={items} />
     </DevAgentsDashboardShell>
   )
