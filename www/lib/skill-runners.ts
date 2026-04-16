@@ -171,7 +171,7 @@ async function readJsonBlob<T>(pathname: string): Promise<T | null> {
       return (await publicResponse.json()) as T
     }
 
-    const privateBlob = await get(pathname, { access: "private" })
+    const privateBlob = await get(pathname, { access: "private", useCache: false })
     if (!privateBlob || privateBlob.statusCode !== 200) return null
     return (await new Response(privateBlob.stream).json()) as T
   } catch {

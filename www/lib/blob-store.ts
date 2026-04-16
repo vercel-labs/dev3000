@@ -78,7 +78,7 @@ export async function readBlobResponse(pathOrUrl: string): Promise<Response | nu
     }
 
     const pathname = resolveBlobPathname(pathOrUrl)
-    const blob = await get(pathname, { access: "private" })
+    const blob = await get(pathname, { access: "private", useCache: false })
     if (!blob || blob.statusCode !== 200) {
       return null
     }
