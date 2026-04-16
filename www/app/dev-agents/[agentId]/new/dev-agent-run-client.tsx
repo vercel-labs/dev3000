@@ -20,11 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
 import type { DevAgent, DevAgentTeam } from "@/lib/dev-agents-client"
-import {
-  SKILL_RUNNER_WORKER_PROJECT_NAME,
-  type SkillRunnerExecutionMode,
-  type SkillRunnerWorkerStatus
-} from "@/lib/skill-runner-config"
+import type { SkillRunnerExecutionMode, SkillRunnerWorkerStatus } from "@/lib/skill-runner-config"
 
 interface UserInfo {
   id: string
@@ -248,18 +244,26 @@ export default function DevAgentRunClient({
   const isSelfHostedSkillRunner = runnerKind === "skill-runner" && localSkillRunnerExecutionMode === "self-hosted"
   const isReadySelfHostedSkillRunner =
     isSelfHostedSkillRunner && Boolean(localSkillRunnerWorkerBaseUrl) && localSkillRunnerWorkerStatus === "ready"
-  const selfHostedHelperText =
-    localSkillRunnerWorkerStatus === "error"
-      ? "This team is configured for self-hosted skill-runner execution, but the team-owned runner still needs its Blob connection repaired."
-      : localSkillRunnerWorkerBaseUrl
-        ? `This team is configured for self-hosted skill-runner execution via ${localSkillRunnerWorkerBaseUrl}. New runs will execute on the team-owned worker.`
-        : localSkillRunnerWorkerStatus === "provisioning"
-          ? "This team is configured for self-hosted skill-runner execution. The runner project is still provisioning."
-          : "This team is configured for self-hosted skill-runner execution. Click Start Run to install the team-owned runner."
 
   function normalizeSelfHostedStartError(message: string): string {
     if (/BLOB_READ_WRITE_TOKEN|Vercel Blob: No token found/i.test(message)) {
-      return "The team-owned runner still needs a fresh deployment with its Blob connection. Retry runner setup to repair it."
+      return "The team runner still needs a fresh deployment with its Blob connection. Retry setup to repair it."
+    }
+
+    if (/Self-hosted worker returned a non-JSON response/i.test(message)) {
+      return "The team runner returned an unexpected response. Retry setup to repair it."
+    }
+
+    if (/no runner project is configured/i.test(message)) {
+      return "This team still needs its runner project. Finish setup to continue."
+    }
+
+    if (/runner project is still provisioning/i.test(message)) {
+      return "The team runner is still provisioning. Try again in a moment."
+    }
+
+    if (/runner project still needs its team-owned Blob setup repaired/i.test(message)) {
+      return "The team runner still needs repair before it can start runs."
     }
 
     return message
@@ -823,14 +827,6 @@ export default function DevAgentRunClient({
         </div>
       ) : null}
 
-      {isSelfHostedSkillRunner ? (
-        <div className="rounded-lg border border-[#1f1f1f] bg-[#111] px-4 py-3">
-          <div className="text-[11px] uppercase tracking-wider text-[#555]">Execution Mode</div>
-          <div className="mt-1 text-[13px] font-medium text-[#ededed]">Self-hosted</div>
-          <div className="mt-1 text-[13px] leading-[18px] text-[#888]">{selfHostedHelperText}</div>
-        </div>
-      ) : null}
-
       <div className="grid gap-5 lg:grid-cols-2">
         {/* Project selection */}
         <div className="rounded-lg border border-[#1f1f1f] p-5">
@@ -1111,8 +1107,7 @@ export default function DevAgentRunClient({
               Set Up Team Runner
             </DialogTitle>
             <DialogDescription className="text-[#888]">
-              Before {team.name} can run this skill runner in self-hosted mode, it needs a team-owned{" "}
-              <span className="font-mono text-[#cfcfcf]">{SKILL_RUNNER_WORKER_PROJECT_NAME}</span> project.
+              Before {team.name} can run this skill runner, it needs a team runner project.
             </DialogDescription>
           </DialogHeader>
 
@@ -1121,7 +1116,7 @@ export default function DevAgentRunClient({
               <div className="text-[11px] uppercase tracking-[0.14em] text-[#666]">Team</div>
               <div className="text-[15px] text-[#ededed]">{team.name}</div>
               <div className="leading-[20px] text-[#777]">
-                Install the team-owned runner in this team. If anything was partially set up before, this will repair it
+                Set up the runner project for this team. If anything was partially set up before, this will repair it
                 automatically.
               </div>
             </div>
@@ -1174,14 +1169,14 @@ export default function DevAgentRunClient({
                       ) : workerSetupResult.project.missingEnvKeys?.length ? (
                         <div className="mt-3 space-y-2 text-[12px] leading-[18px] text-[#888]">
                           <div>
-                            The team-owned runner is still missing these required env vars:{" "}
+                            This runner is still missing these required env vars:{" "}
                             <span className="font-mono text-[#ededed]">
                               {workerSetupResult.project.missingEnvKeys.join(", ")}
                             </span>
                           </div>
                           <div className="text-[#666]">
-                            Blob setup should complete automatically for this team-owned runner. Retry setup to repair
-                            any partial install.
+                            Blob setup should complete automatically for this runner. Retry setup to repair any partial
+                            install.
                           </div>
                         </div>
                       ) : null}

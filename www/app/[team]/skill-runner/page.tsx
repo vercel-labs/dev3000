@@ -5,7 +5,7 @@ import { SkillRunnersCatalog } from "@/components/skill-runners/skill-runners-ca
 import { isAdminUser } from "@/lib/admin"
 import { getAuthorizePath } from "@/lib/auth-redirect"
 import { getDevAgentsRouteContext } from "@/lib/dev-agents-route"
-import { getSkillRunnerTeamSettings, listSkillRunners } from "@/lib/skill-runners"
+import { listSkillRunners } from "@/lib/skill-runners"
 
 export default async function SkillRunnerPage({ params }: { params: Promise<{ team: string }> }) {
   const { team } = await params
@@ -23,15 +23,7 @@ export default async function SkillRunnerPage({ params }: { params: Promise<{ te
   }
 
   const selectedTeam = routeContext.selectedTeam
-  const [runners, teamSettings] = await Promise.all([
-    listSkillRunners(selectedTeam),
-    getSkillRunnerTeamSettings(selectedTeam)
-  ])
-  const modeLabel = teamSettings.executionMode === "self-hosted" ? "Self-hosted mode" : "Hosted mode"
-  const modeDescription =
-    teamSettings.executionMode === "self-hosted"
-      ? "This team is configured for team-owned runner execution."
-      : "This team is currently running skill runners on dev3000-www."
+  const runners = await listSkillRunners(selectedTeam)
 
   return (
     <DevAgentsDashboardShell
@@ -40,8 +32,7 @@ export default async function SkillRunnerPage({ params }: { params: Promise<{ te
       section="skill-runner"
       showAdminLink={isAdminUser(routeContext.user)}
       title="Skill Runner"
-      subtitle={modeLabel}
-      description={`Run high-confidence skills against a project and get a PR, with imported skills listed first. ${modeDescription}`}
+      description="Run high-confidence skills against a project and get a PR, with imported skills listed first."
     >
       <SkillRunnersCatalog teamSlug={selectedTeam.slug} runners={runners} />
     </DevAgentsDashboardShell>
