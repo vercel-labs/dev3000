@@ -1,0 +1,40 @@
+www/app/[team]/skill-runner/page.tsx
+  99ca025371e68d9d 8,26,35
+.agents/skills/d3k/SKILL.md
+  99ca025371e68d9d 36,39-44,47-84,91,98,100-101,106-107
+www/app/dev-agents/[agentId]/new/dev-agent-run-client.tsx
+  99ca025371e68d9d 23,250,253-266,1110,1119,1172,1178-1179
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.8",
+  "base_commit_sha": "b4da9d88bd71d1e7c2c8b2d890965a4b545c27d5",
+  "prompts": {
+    "7a0ea82f7d7bc893": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d59d8-022d-7262-9555-ec96bb973d0c",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 1,
+      "overriden_lines": 0
+    },
+    "99ca025371e68d9d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d87d1-243a-7931-bf03-4625a7dea51f",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 79,
+      "total_deletions": 52,
+      "accepted_lines": 1004,
+      "overriden_lines": 0
+    }
+  }
+}
