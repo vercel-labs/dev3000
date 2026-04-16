@@ -1,0 +1,71 @@
+www/app/api/cloud/fix-workflow/workflow.ts
+  fdf2591dab1159c2 16-21,213-219,278-285,329-345,757-765,1268-1294,1374-1401
+www/lib/telemetry.ts
+  fdf2591dab1159c2 1-186
+www/lib/telemetry-storage.ts
+  fdf2591dab1159c2 1-101
+www/app/api/admin/telemetry-events/route.ts
+  fdf2591dab1159c2 1-48
+www/app/api/skill-runner-teams/worker/route.ts
+  fdf2591dab1159c2 4-13,25-41,52-60,66-78,91-101,110,115,118-153,176-179,203,205-208,210-222,226
+www/lib/skill-runners.ts
+  fdf2591dab1159c2 308-313,321,350-355
+www/app/admin/runs/runs-client.tsx
+  fdf2591dab1159c2 1-512
+www/app/api/admin/skill-runner-teams/validate/route.ts
+  fdf2591dab1159c2 5-6,36-45,49-56,65-74
+www/app/admin/runs/page.tsx
+  fdf2591dab1159c2 1-42
+www/app/api/internal/telemetry-events/route.ts
+  fdf2591dab1159c2 1-113
+www/app/api/cloud/start-fix/route.ts
+  fdf2591dab1159c2 2,7-13,232-235,379-387,574-576,652-659,717-744
+www/app/admin/page.tsx
+  fdf2591dab1159c2 1,44-51
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.0",
+  "base_commit_sha": "10e9f742911a4c8d728f8f5590bff2dac89e4656",
+  "prompts": {
+    "7a0ea82f7d7bc893": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d59d8-022d-7262-9555-ec96bb973d0c",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 1,
+      "overriden_lines": 0
+    },
+    "99ca025371e68d9d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d87d1-243a-7931-bf03-4625a7dea51f",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 925,
+      "overriden_lines": 0
+    },
+    "fdf2591dab1159c2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c36eb137-eb28-440c-b437-52023e8cea64",
+        "model": "claude-opus-4-7"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 1382,
+      "total_deletions": 60,
+      "accepted_lines": 1339,
+      "overriden_lines": 0
+    }
+  }
+}
