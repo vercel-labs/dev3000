@@ -30,6 +30,48 @@ export interface DevAgentSkillRef {
   sourceUrl?: string
 }
 
+export interface DevAgentAshCompiledSpec {
+  schemaVersion: number
+  artifactFormatVersion: number
+  ashRuntimeVersion: string
+  createdAt: string
+  id: string
+  name: string
+  description: string
+  instructions: string
+  executionMode: DevAgentExecutionMode
+  sandboxBrowser: DevAgentSandboxBrowser
+  aiAgent: DevAgentAiAgent
+  devServerCommand: string
+  actionSteps: Array<{
+    kind: DevAgentActionStep["kind"]
+    config: Record<string, string>
+  }>
+  skillRefs: Array<{
+    id: string
+    installArg: string
+    packageName: string
+    skillName: string
+    displayName: string
+    sourceUrl: string
+  }>
+  successEval: string
+  earlyExitMode: DevAgentEarlyExitMode | null
+  earlyExitEval: string
+  earlyExitRule: {
+    metricType: DevAgentEarlyExitMetricType
+    metricKey: string
+    label: string
+    valueType: DevAgentEarlyExitValueType
+    operator: DevAgentEarlyExitOperator
+    valueNumber: number | null
+    secondaryValueNumber: number | null
+    valueBoolean: boolean | null
+    valueString: string
+  } | null
+  earlyExitPlacementIndex: number | null
+}
+
 export interface DevAgentAshArtifact {
   framework: "experimental-ash"
   revision: number
@@ -39,6 +81,8 @@ export interface DevAgentAshArtifact {
   packageVersion: string
   sourceLabel: string
   systemPrompt: string
+  packagedSkills?: string[]
+  compiledSpec?: DevAgentAshCompiledSpec
   tarballUrl?: string
 }
 

@@ -12,6 +12,7 @@
  */
 
 import { readBlobJson } from "@/lib/blob-store"
+import type { DevAgentAshCompiledSpec, DevAgentEarlyExitRule, DevAgentSkillRef } from "@/lib/dev-agents"
 import { SKILL_RUNNER_WORKER_MODE_ENV } from "@/lib/skill-runner-config"
 import {
   buildTelemetryEvent,
@@ -81,6 +82,23 @@ interface V0DevAgentSourceResult {
   tarballUrl?: string
   sourceLabel?: string
   fallbackReason?: string
+}
+
+function normalizeCompiledEarlyExitRule(
+  rule: DevAgentAshCompiledSpec["earlyExitRule"] | DevAgentEarlyExitRule | undefined
+): DevAgentEarlyExitRule | undefined {
+  if (!rule) return undefined
+  return {
+    metricType: rule.metricType,
+    metricKey: rule.metricKey,
+    label: rule.label || undefined,
+    valueType: rule.valueType,
+    operator: rule.operator,
+    valueNumber: rule.valueNumber ?? undefined,
+    secondaryValueNumber: rule.secondaryValueNumber ?? undefined,
+    valueBoolean: rule.valueBoolean ?? undefined,
+    valueString: rule.valueString || undefined
+  }
 }
 
 function dedupeProgressLogs(lines: string[] | undefined, limit: number): string[] | undefined {
@@ -164,6 +182,7 @@ export async function cloudFixWorkflow(params: {
   devAgentName?: string
   devAgentDescription?: string
   devAgentInstructions?: string
+  devAgentCompiledSpec?: DevAgentAshCompiledSpec
   devAgentAshTarballUrl?: string
   devAgentRevision?: number
   devAgentSpecHash?: string
@@ -179,18 +198,11 @@ export async function cloudFixWorkflow(params: {
     kind: string
     config: Record<string, string>
   }>
-  devAgentSkillRefs?: Array<{
-    id: string
-    installArg: string
-    packageName?: string
-    skillName: string
-    displayName: string
-    sourceUrl?: string
-  }>
+  devAgentSkillRefs?: DevAgentSkillRef[]
   devAgentSuccessEval?: string
   devAgentEarlyExitMode?: "structured" | "text"
   devAgentEarlyExitEval?: string
-  devAgentEarlyExitRule?: import("@/lib/dev-agents").DevAgentEarlyExitRule
+  devAgentEarlyExitRule?: DevAgentEarlyExitRule
   analysisTargetType?: "vercel-project" | "url"
   publicUrl?: string
   startPath?: string // Page path to analyze (e.g., "/about")
@@ -242,6 +254,7 @@ export async function cloudFixWorkflow(params: {
     devAgentName,
     devAgentDescription,
     devAgentInstructions,
+    devAgentCompiledSpec,
     devAgentAshTarballUrl,
     devAgentRevision,
     devAgentSpecHash,
@@ -284,6 +297,20 @@ export async function cloudFixWorkflow(params: {
     skillRunnerTelemetryTeamIsPersonal,
     skillRunnerTelemetryExecutionMode
   } = params
+  const effectiveDevAgentInstructions = devAgentCompiledSpec?.instructions || devAgentInstructions
+  const effectiveDevAgentExecutionMode = devAgentCompiledSpec?.executionMode ?? devAgentExecutionMode
+  const effectiveDevAgentSandboxBrowser = devAgentCompiledSpec?.sandboxBrowser ?? devAgentSandboxBrowser
+  const effectiveDevAgentAiAgent = devAgentCompiledSpec?.aiAgent ?? devAgentAiAgent
+  const effectiveDevAgentDevServerCommand = devAgentCompiledSpec?.devServerCommand || devAgentDevServerCommand
+  const effectiveDevAgentActionSteps = devAgentCompiledSpec?.actionSteps ?? devAgentActionSteps
+  const effectiveDevAgentSkillRefs = devAgentCompiledSpec?.skillRefs ?? devAgentSkillRefs
+  const effectiveDevAgentSuccessEval = devAgentCompiledSpec?.successEval || devAgentSuccessEval
+  const effectiveDevAgentEarlyExitMode = devAgentCompiledSpec?.earlyExitMode ?? devAgentEarlyExitMode
+  const effectiveDevAgentEarlyExitEval = devAgentCompiledSpec?.earlyExitEval || devAgentEarlyExitEval
+  const effectiveDevAgentEarlyExitRule =
+    devAgentCompiledSpec?.earlyExitRule === null
+      ? undefined
+      : normalizeCompiledEarlyExitRule(devAgentCompiledSpec?.earlyExitRule ?? devAgentEarlyExitRule)
   // Use runId if provided (from start-fix route), otherwise generate one
   // The reportId is used for blob naming and tracking
   const reportId = runId || crypto.randomUUID()
@@ -313,8 +340,8 @@ export async function cloudFixWorkflow(params: {
           devAgentSpecHash,
           skillRunnerCanonicalPath,
           skillRunnerValidationWarning,
-          devAgentExecutionMode,
-          devAgentSandboxBrowser,
+          devAgentExecutionMode: effectiveDevAgentExecutionMode,
+          devAgentSandboxBrowser: effectiveDevAgentSandboxBrowser,
           isMarketplaceAgent,
           controlPlaneMirrorTarget:
             controlPlaneBaseUrl && (controlPlaneMirrorSecret || controlPlaneAccessToken)
@@ -449,9 +476,9 @@ export async function cloudFixWorkflow(params: {
         vercelOidcToken,
         devAgentAshTarballUrl,
         projectDir,
-        devAgentSandboxBrowser,
-        devAgentDevServerCommand,
-        devAgentSkillRefs,
+        effectiveDevAgentSandboxBrowser,
+        effectiveDevAgentDevServerCommand,
+        effectiveDevAgentSkillRefs,
         progressContext
       )
       workflowLog(`[Workflow] Observation: CLS=${observation.beforeCls}, grade=${observation.beforeGrade}`)
@@ -465,12 +492,14 @@ export async function cloudFixWorkflow(params: {
     if (
       !isTurbopackBundleAnalyzer &&
       observation &&
-      (devAgentEarlyExitMode === "structured" ? devAgentEarlyExitRule : devAgentEarlyExitEval)
+      (effectiveDevAgentEarlyExitMode === "structured"
+        ? effectiveDevAgentEarlyExitRule
+        : effectiveDevAgentEarlyExitEval)
     ) {
       workflowLog("[Workflow] Step 1.6: Evaluating early exit condition...")
       const earlyExitResult = await evaluateEarlyExit(
-        devAgentEarlyExitEval,
-        devAgentEarlyExitRule,
+        effectiveDevAgentEarlyExitEval,
+        effectiveDevAgentEarlyExitRule,
         observation,
         gatewayAuthToken,
         gatewayAuthSource,
@@ -492,14 +521,14 @@ export async function cloudFixWorkflow(params: {
           repoOwner,
           repoName,
           devAgentName,
-          devAgentSkillRefs,
+          effectiveDevAgentSkillRefs,
           progressContext,
           combinedInitTiming,
           initResult.fromSnapshot,
           initResult.snapshotId,
-          devAgentSuccessEval,
-          devAgentEarlyExitEval,
-          devAgentEarlyExitRule
+          effectiveDevAgentSuccessEval,
+          effectiveDevAgentEarlyExitEval,
+          effectiveDevAgentEarlyExitRule
         )
 
         // Cleanup sandbox
@@ -586,20 +615,20 @@ export async function cloudFixWorkflow(params: {
         customPrompt,
         crawlDepth,
         devAgentName,
-        devAgentInstructions,
+        effectiveDevAgentInstructions,
         devAgentAshTarballUrl,
-        devAgentExecutionMode,
-        devAgentSandboxBrowser,
-        devAgentAiAgent,
-        devAgentDevServerCommand,
-        devAgentActionSteps,
-        devAgentSkillRefs,
+        effectiveDevAgentExecutionMode,
+        effectiveDevAgentSandboxBrowser,
+        effectiveDevAgentAiAgent,
+        effectiveDevAgentDevServerCommand,
+        effectiveDevAgentActionSteps,
+        effectiveDevAgentSkillRefs,
         progressContext,
         // Pass timing and snapshot info from init step
         combinedInitTiming,
         initResult.fromSnapshot,
         initResult.snapshotId,
-        devAgentSuccessEval,
+        effectiveDevAgentSuccessEval,
         observation
       )
     }

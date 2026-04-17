@@ -117,6 +117,7 @@ export async function publishDevAgentAshArtifactWithStatus(
       sourceLabel: source.sourceLabel,
       systemPrompt: source.systemPrompt,
       packagedSkills: source.packagedSkills,
+      compiledSpec: source.compiledSpec,
       tarballUrl
     },
     publishState

@@ -573,6 +573,29 @@ export async function POST(request: Request) {
 
     const currentUserForTelemetry =
       runnerKind === "skill-runner" ? await getCurrentUserFromRequest(request).catch(() => null) : null
+    const compiledAshSpec = devAgent?.ashArtifact?.compiledSpec
+    const effectiveDevAgentExecutionMode = compiledAshSpec?.executionMode ?? devAgent?.executionMode
+    const effectiveDevAgentSandboxBrowser = compiledAshSpec?.sandboxBrowser ?? devAgent?.sandboxBrowser
+    const effectiveDevAgentAiAgent = compiledAshSpec?.aiAgent ?? devAgent?.aiAgent
+    const effectiveDevAgentDevServerCommand = compiledAshSpec?.devServerCommand || devAgent?.devServerCommand
+    const effectiveDevAgentActionSteps = compiledAshSpec?.actionSteps ?? devAgent?.actionSteps
+    const effectiveDevAgentSkillRefs = compiledAshSpec?.skillRefs ?? devAgent?.skillRefs
+    const effectiveDevAgentSuccessEval = compiledAshSpec?.successEval || devAgent?.successEval
+    const effectiveDevAgentEarlyExitMode = compiledAshSpec?.earlyExitMode ?? devAgent?.earlyExitMode
+    const effectiveDevAgentEarlyExitEval = compiledAshSpec?.earlyExitEval || devAgent?.earlyExitEval
+    const effectiveDevAgentEarlyExitRule = compiledAshSpec?.earlyExitRule
+      ? {
+          metricType: compiledAshSpec.earlyExitRule.metricType,
+          metricKey: compiledAshSpec.earlyExitRule.metricKey,
+          label: compiledAshSpec.earlyExitRule.label || undefined,
+          valueType: compiledAshSpec.earlyExitRule.valueType,
+          operator: compiledAshSpec.earlyExitRule.operator,
+          valueNumber: compiledAshSpec.earlyExitRule.valueNumber ?? undefined,
+          secondaryValueNumber: compiledAshSpec.earlyExitRule.secondaryValueNumber ?? undefined,
+          valueBoolean: compiledAshSpec.earlyExitRule.valueBoolean ?? undefined,
+          valueString: compiledAshSpec.earlyExitRule.valueString || undefined
+        }
+      : devAgent?.earlyExitRule
 
     // V2 workflow params - simplified "local-style" architecture
     const workflowParams = {
@@ -603,23 +626,24 @@ export async function POST(request: Request) {
       devAgentName: devAgent?.name,
       devAgentDescription: devAgent?.description,
       devAgentInstructions: devAgent?.ashArtifact?.systemPrompt || devAgent?.instructions,
+      devAgentCompiledSpec: compiledAshSpec,
       devAgentAshTarballUrl: devAgent?.ashArtifact?.tarballUrl,
       devAgentRevision: devAgent?.ashArtifact?.revision,
       devAgentSpecHash: devAgent?.ashArtifact?.specHash,
       runnerKind,
       skillRunnerCanonicalPath,
       skillRunnerValidationWarning,
-      devAgentExecutionMode: devAgent?.executionMode,
-      devAgentSandboxBrowser: devAgent?.sandboxBrowser,
-      devAgentAiAgent: devAgent?.aiAgent,
-      devAgentDevServerCommand: devAgent?.devServerCommand,
+      devAgentExecutionMode: effectiveDevAgentExecutionMode,
+      devAgentSandboxBrowser: effectiveDevAgentSandboxBrowser,
+      devAgentAiAgent: effectiveDevAgentAiAgent,
+      devAgentDevServerCommand: effectiveDevAgentDevServerCommand,
       isMarketplaceAgent: devAgent?.kind === "marketplace",
-      devAgentActionSteps: devAgent?.actionSteps,
-      devAgentSkillRefs: devAgent?.skillRefs,
-      devAgentSuccessEval: devAgent?.successEval,
-      devAgentEarlyExitMode: devAgent?.earlyExitMode,
-      devAgentEarlyExitEval: devAgent?.earlyExitEval,
-      devAgentEarlyExitRule: devAgent?.earlyExitRule,
+      devAgentActionSteps: effectiveDevAgentActionSteps,
+      devAgentSkillRefs: effectiveDevAgentSkillRefs,
+      devAgentSuccessEval: effectiveDevAgentSuccessEval,
+      devAgentEarlyExitMode: effectiveDevAgentEarlyExitMode,
+      devAgentEarlyExitEval: effectiveDevAgentEarlyExitEval,
+      devAgentEarlyExitRule: effectiveDevAgentEarlyExitRule,
       analysisTargetType,
       publicUrl,
       startPath: startPath || "/", // Page path to analyze (e.g., "/about")

@@ -32,6 +32,10 @@ const workflowLog = console.log
 const TURBOPACK_MIN_NEXT_VERSION = "16.1.0"
 const SUCCESS_EVAL_MODEL = "openai/gpt-5.4"
 const CLAUDE_CODE_PACKAGE = "@anthropic-ai/claude-code"
+const ASH_RUNTIME_PORT = 3100
+const ASH_RUNTIME_USERNAME = "dev3000"
+const ASH_RUNTIME_ROOT = "/home/vercel-sandbox/.dev3000/ash-apps"
+const ASH_RUNTIME_LOG_DIR = "/home/vercel-sandbox/.d3k/logs"
 const D3K_SKILL_INSTALL_ARG = "vercel-labs/dev3000@d3k"
 const VERCEL_PLUGIN_INSTALL_ARG = "vercel/vercel-plugin"
 const ANALYZE_TO_NDJSON_SCRIPT = `#!/usr/bin/env node
@@ -4161,6 +4165,7 @@ export async function agentFixLoopStep(
     devAgentAiAgent,
     devAgentActionSteps,
     devAgentSkillRefs,
+    devAgentAshTarballUrl,
     bundleBaselineSummary,
     gatewayAuthToken,
     gatewayAuthSource,
@@ -4855,7 +4860,7 @@ function shellEscape(value: string): string {
 
 function getInstalledSkillNames(
   devAgentSkillRefs: DevAgentSkillRef[] | undefined,
-  options?: { includeD3k?: boolean }
+  options?: { includeD3k?: boolean; includeAshRunbook?: boolean }
 ): string[] {
   const names = new Set<string>()
   if (options?.includeD3k !== false) {
@@ -4939,6 +4944,432 @@ async function installPackagedAshSkillsInSandbox(
   }
 
   return { installed: skillNames.length > 0, skillNames }
+}
+
+function buildAshRuntimePassword(runId: string, specHash?: string): string {
+  return Buffer.from(`${runId}:${specHash || "no-spec"}:dev3000-ash-runtime`, "utf8").toString("base64url")
+}
+
+function buildAshRuntimeAppRoot(specHash?: string): string {
+  const safeKey = (specHash || "default").replace(/[^a-zA-Z0-9_-]/g, "-")
+  return `${ASH_RUNTIME_ROOT}/${safeKey}`
+}
+
+function buildAshRuntimeAuthorizationHeader(password: string): string {
+  return `Basic ${Buffer.from(`${ASH_RUNTIME_USERNAME}:${password}`, "utf8").toString("base64")}`
+}
+
+async function installPackagedAshAppInSandbox(
+  sandbox: Sandbox,
+  tarballUrl: string,
+  specHash: string | undefined,
+  progressContext?: ProgressContext | null
+): Promise<{ appRoot: string }> {
+  const appRoot = buildAshRuntimeAppRoot(specHash)
+  const result = await runSandboxCommand(
+    sandbox,
+    "sh",
+    [
+      "-c",
+      [
+        "set -e",
+        `APP_ROOT=${shellEscape(appRoot)}`,
+        'if [ -d "$APP_ROOT/node_modules" ] && [ -f "$APP_ROOT/agent/agent.ts" ] && [ -f "$APP_ROOT/.output/server/index.mjs" ]; then printf "%s" "$APP_ROOT"; exit 0; fi',
+        'TMP_DIR="$(mktemp -d)"',
+        `curl -fsSL ${shellEscape(tarballUrl)} -o "$TMP_DIR/ash.tgz"`,
+        'ROOT_DIR="$(tar -tzf "$TMP_DIR/ash.tgz" | head -1 | cut -d/ -f1)"',
+        `mkdir -p ${shellEscape(ASH_RUNTIME_ROOT)}`,
+        'rm -rf "$TMP_DIR/unpack" "$APP_ROOT.tmp"',
+        'mkdir -p "$TMP_DIR/unpack"',
+        'tar -xzf "$TMP_DIR/ash.tgz" -C "$TMP_DIR/unpack"',
+        'mv "$TMP_DIR/unpack/$ROOT_DIR" "$APP_ROOT.tmp"',
+        'rm -rf "$APP_ROOT"',
+        'mv "$APP_ROOT.tmp" "$APP_ROOT"',
+        "export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH",
+        "export DEV3000_ASH_RUNTIME_PASSWORD=build-only",
+        'cd "$APP_ROOT"',
+        "bun install --silent",
+        "./node_modules/.bin/ash build",
+        'printf "%s" "$APP_ROOT"'
+      ].join(" && ")
+    ],
+    { timeoutMs: 180000 }
+  )
+
+  const output = `${result.stdout}\n${result.stderr}`.trim()
+  if (result.exitCode !== 0) {
+    throw new Error(`Failed to install packaged ASH app: ${output || "unknown error"}`)
+  }
+
+  await appendProgressLog(progressContext, `[ASH] Installed packaged app at ${appRoot}`)
+  return { appRoot }
+}
+
+async function waitForAshRuntimeReady(
+  baseUrl: string,
+  authorization: string,
+  progressContext?: ProgressContext | null
+): Promise<void> {
+  const deadline = Date.now() + 120000
+
+  while (Date.now() < deadline) {
+    try {
+      const response = await fetch(`${baseUrl}/.well-known/ash/v1/health`, {
+        headers: { authorization, "cache-control": "no-store" }
+      })
+      if (response.ok) {
+        await appendProgressLog(progressContext, `[ASH] Runtime healthy at ${baseUrl}`)
+        return
+      }
+    } catch {
+      // Keep polling.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 2000))
+  }
+
+  throw new Error(`Timed out waiting for packaged ASH runtime at ${baseUrl}`)
+}
+
+async function ensurePackagedAshRuntimeInSandbox(
+  sandbox: Sandbox,
+  tarballUrl: string,
+  specHash: string | undefined,
+  projectRoot: string,
+  gatewayAuthToken: string | undefined,
+  progressContext?: ProgressContext | null
+): Promise<{ authorization: string; baseUrl: string }> {
+  const { appRoot } = await installPackagedAshAppInSandbox(sandbox, tarballUrl, specHash, progressContext)
+  const runtimePassword = buildAshRuntimePassword(progressContext?.runId || crypto.randomUUID(), specHash)
+  const authorization = buildAshRuntimeAuthorizationHeader(runtimePassword)
+  const baseUrl = sandbox.domain(ASH_RUNTIME_PORT)
+  const logPath = `${ASH_RUNTIME_LOG_DIR}/ash-runtime.log`
+
+  await appendProgressLog(progressContext, `[ASH] Starting built runtime on port ${ASH_RUNTIME_PORT}...`)
+  await sandbox.runCommand({
+    cmd: "sh",
+    args: [
+      "-c",
+      [
+        `mkdir -p ${ASH_RUNTIME_LOG_DIR}`,
+        "export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH",
+        'NODE_RUNTIME="$(command -v nodejs || command -v node || command -v bun || true)"',
+        'if [ -z "$NODE_RUNTIME" ]; then echo "No Node.js runtime available for ASH." >&2; exit 1; fi',
+        `export DEV3000_ASH_RUNTIME_USERNAME=${shellEscape(ASH_RUNTIME_USERNAME)}`,
+        `export DEV3000_ASH_RUNTIME_PASSWORD=${shellEscape(runtimePassword)}`,
+        `export DEV3000_PROJECT_ROOT=${shellEscape(projectRoot)}`,
+        gatewayAuthToken ? `export VERCEL_OIDC_TOKEN=${shellEscape(gatewayAuthToken)}` : null,
+        `export PORT=${ASH_RUNTIME_PORT}`,
+        "export HOST=0.0.0.0",
+        `cd ${shellEscape(appRoot)}`,
+        `pkill -f ${shellEscape(`${appRoot}/.output/server/index.mjs`)} >/dev/null 2>&1 || true`,
+        `$NODE_RUNTIME ./.output/server/index.mjs > ${logPath} 2>&1`
+      ]
+        .filter(Boolean)
+        .join(" && ")
+    ],
+    detached: true
+  })
+
+  await waitForAshRuntimeReady(baseUrl, authorization, progressContext)
+  return { authorization, baseUrl }
+}
+
+function buildAshExecutionPrompt({
+  workflowType,
+  startPath,
+  devUrl,
+  customPrompt,
+  crawlDepth,
+  devAgentName,
+  devAgentInstructions,
+  devAgentExecutionMode,
+  devAgentSandboxBrowser,
+  devAgentActionSteps,
+  skillLoadInstructions,
+  bundleBaselineSummary,
+  beforeCls,
+  beforeGrade
+}: {
+  workflowType: string
+  startPath: string
+  devUrl: string
+  customPrompt?: string
+  crawlDepth?: number | "all"
+  devAgentName?: string
+  devAgentInstructions?: string
+  devAgentExecutionMode?: "dev-server" | "preview-pr"
+  devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser"
+  devAgentActionSteps?: Array<{ kind: string; config: Record<string, string> }>
+  skillLoadInstructions: string
+  bundleBaselineSummary?: string
+  beforeCls: number | null
+  beforeGrade: "good" | "needs-improvement" | "poor" | null
+}): string {
+  const mainTaskPrompt = buildClaudeMainTaskPrompt({
+    workflowType,
+    startPath,
+    devUrl,
+    customPrompt,
+    crawlDepth,
+    devAgentName,
+    devAgentInstructions,
+    devAgentExecutionMode,
+    skillLoadInstructions,
+    bundleBaselineSummary,
+    beforeCls,
+    beforeGrade
+  }).prompt
+
+  const actionStepGuidance =
+    devAgentActionSteps && devAgentActionSteps.length > 0
+      ? `\n\nWorkflow action steps:\n${devAgentActionSteps
+          .map((step, index) => buildClaudeActionStepPrompt(step, index).prompt)
+          .join("\n\n")}`
+      : ""
+
+  return `${mainTaskPrompt}${actionStepGuidance}
+
+ASH runtime execution rules:
+- Load the \`dev3000-agent-runbook\` skill first.
+- If other packaged skills are relevant, load them too.
+- The real project checkout is available at \`/workspace/repo\`. Make code edits there.
+- The live app is available at ${devUrl || "http://localhost:3000"}.
+- Preferred browser mode: ${devAgentSandboxBrowser || "none"}.
+- When you need browser validation, you may use the \`bash\` tool to run installed browser CLIs such as \`agent-browser\` or \`next-browser\` against localhost URLs.
+- Prefer direct code changes and targeted validation over broad exploration.
+- Finish with a concise final summary covering files changed, validation evidence, and any remaining issues.`
+}
+
+async function streamAshRuntimeTurn(
+  baseUrl: string,
+  authorization: string,
+  prompt: string,
+  progressContext?: ProgressContext | null
+): Promise<{
+  rawEvents: string[]
+  resultText: string
+  usage: {
+    promptTokens: number
+    completionTokens: number
+    cacheReadTokens: number
+    cacheCreationTokens: number
+    totalTokens: number
+  }
+}> {
+  const messageResponse = await fetch(`${baseUrl}/.well-known/ash/v1/message`, {
+    method: "POST",
+    headers: {
+      authorization,
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({ message: prompt })
+  })
+
+  const messagePayloadText = await messageResponse.text()
+  if (!messageResponse.ok) {
+    throw new Error(`ASH runtime rejected start message (${messageResponse.status}): ${messagePayloadText}`)
+  }
+
+  const messagePayload = JSON.parse(messagePayloadText) as { ok?: boolean; sessionId?: string }
+  const sessionId = messagePayload.sessionId
+  if (!sessionId) {
+    throw new Error("ASH runtime did not return a session id.")
+  }
+
+  const streamResponse = await fetch(`${baseUrl}/.well-known/ash/v1/sessions/${encodeURIComponent(sessionId)}/stream`, {
+    headers: { authorization, "cache-control": "no-store" }
+  })
+  if (!streamResponse.ok || !streamResponse.body) {
+    const bodyText = await streamResponse.text()
+    throw new Error(`ASH runtime stream failed (${streamResponse.status}): ${bodyText}`)
+  }
+
+  const decoder = new TextDecoder()
+  const reader = streamResponse.body.getReader()
+  let buffer = ""
+  let resultText = ""
+  let promptTokens = 0
+  let completionTokens = 0
+  let cacheReadTokens = 0
+  let cacheCreationTokens = 0
+  const rawEvents: string[] = []
+  let terminalError: string | null = null
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) {
+        break
+      }
+
+      buffer += decoder.decode(value, { stream: true })
+      while (true) {
+        const newlineIndex = buffer.indexOf("\n")
+        if (newlineIndex === -1) break
+        const line = buffer.slice(0, newlineIndex).trim()
+        buffer = buffer.slice(newlineIndex + 1)
+        if (!line) continue
+        rawEvents.push(line)
+
+        const event = JSON.parse(line) as {
+          type: string
+          data?: Record<string, unknown>
+        }
+
+        if (event.type === "message.completed") {
+          const message = typeof event.data?.message === "string" ? event.data.message.trim() : ""
+          if (message) {
+            resultText = message
+            await appendProgressLog(progressContext, `[ASH] Assistant message completed: ${message.slice(0, 160)}`)
+          }
+        }
+
+        if (event.type === "step.completed") {
+          const usage = event.data?.usage as
+            | {
+                inputTokens?: number
+                outputTokens?: number
+                cacheReadTokens?: number
+                cacheWriteTokens?: number
+              }
+            | undefined
+          promptTokens += usage?.inputTokens ?? 0
+          completionTokens += usage?.outputTokens ?? 0
+          cacheReadTokens += usage?.cacheReadTokens ?? 0
+          cacheCreationTokens += usage?.cacheWriteTokens ?? 0
+        }
+
+        if (event.type === "input.requested") {
+          terminalError = "ASH runtime requested human input, which the workflow host does not support yet."
+          break
+        }
+
+        if (event.type === "step.failed" || event.type === "turn.failed" || event.type === "session.failed") {
+          terminalError =
+            typeof event.data?.message === "string" ? event.data.message : `ASH runtime failed during ${event.type}`
+          break
+        }
+
+        if (event.type === "session.waiting" || event.type === "session.completed") {
+          break
+        }
+      }
+
+      if (terminalError || rawEvents.some((line) => /"type":"session\.(waiting|completed)"/.test(line))) {
+        break
+      }
+    }
+  } finally {
+    await reader.cancel().catch(() => {})
+  }
+
+  if (terminalError) {
+    throw new Error(terminalError)
+  }
+
+  return {
+    rawEvents,
+    resultText,
+    usage: {
+      promptTokens,
+      completionTokens,
+      cacheReadTokens,
+      cacheCreationTokens,
+      totalTokens: promptTokens + completionTokens + cacheReadTokens + cacheCreationTokens
+    }
+  }
+}
+
+async function runAshAgentInSandbox(
+  sandbox: Sandbox,
+  devUrl: string,
+  beforeCls: number | null,
+  beforeGrade: "good" | "needs-improvement" | "poor" | null,
+  startPath: string,
+  projectDir?: string,
+  customPrompt?: string,
+  workflowType?: string,
+  crawlDepth?: number | "all",
+  devAgentName?: string,
+  devAgentInstructions?: string,
+  devAgentExecutionMode?: "dev-server" | "preview-pr",
+  devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser",
+  devAgentAiAgent?: import("@/lib/dev-agents").DevAgentAiAgent,
+  devAgentActionSteps?: Array<{ kind: string; config: Record<string, string> }>,
+  devAgentSkillRefs?: DevAgentSkillRef[],
+  devAgentAshTarballUrl?: string,
+  bundleBaselineSummary?: string,
+  gatewayAuthToken?: string,
+  gatewayAuthSource?: string,
+  progressContext?: ProgressContext | null
+): Promise<{
+  transcript: string
+  summary: string
+  systemPrompt: string
+  modelId: string
+  skillsLoaded: string[]
+  usage: {
+    promptTokens: number
+    completionTokens: number
+    cacheReadTokens: number
+    cacheCreationTokens: number
+    totalTokens: number
+  }
+  costUsd: number
+}> {
+  if (!devAgentAshTarballUrl) {
+    throw new Error("ASH runtime execution requires a packaged ASH tarball.")
+  }
+
+  const effectiveProjectRoot = projectDir
+    ? `/vercel/sandbox/${projectDir.replace(/^\/+|\/+$/g, "")}`
+    : "/vercel/sandbox"
+  const { authorization, baseUrl } = await ensurePackagedAshRuntimeInSandbox(
+    sandbox,
+    devAgentAshTarballUrl,
+    progressContext?.devAgentSpecHash,
+    effectiveProjectRoot,
+    gatewayAuthToken,
+    progressContext
+  )
+
+  const prompt = buildAshExecutionPrompt({
+    workflowType: workflowType || "cls-fix",
+    startPath,
+    devUrl,
+    customPrompt,
+    crawlDepth,
+    devAgentName,
+    devAgentInstructions,
+    devAgentExecutionMode,
+    devAgentSandboxBrowser,
+    devAgentActionSteps,
+    skillLoadInstructions: buildDevAgentSkillLoadInstructions(devAgentSkillRefs, {
+      includeD3k: workflowType !== "turbopack-bundle-analyzer" && workflowType !== "cls-fix",
+      includeAshRunbook: true
+    }),
+    bundleBaselineSummary,
+    beforeCls,
+    beforeGrade
+  })
+
+  await appendProgressLog(
+    progressContext,
+    `[ASH] Using packaged runtime for ${devAgentName || "dev agent"} (${gatewayAuthSource || "unknown auth"})`
+  )
+  const result = await streamAshRuntimeTurn(baseUrl, authorization, prompt, progressContext)
+  return {
+    transcript: result.rawEvents.join("\n"),
+    summary: result.resultText,
+    systemPrompt: "[ASH runtime]",
+    modelId: devAgentAiAgent || "ash-runtime",
+    skillsLoaded: getInstalledSkillNames(devAgentSkillRefs, {
+      includeD3k: workflowType !== "turbopack-bundle-analyzer" && workflowType !== "cls-fix",
+      includeAshRunbook: true
+    }),
+    usage: result.usage,
+    costUsd: 0
+  }
 }
 
 async function installDevAgentSkillsInSandbox(
@@ -5049,9 +5480,12 @@ async function installDevAgentSkillsInSandbox(
 
 function buildDevAgentSkillLoadInstructions(
   devAgentSkillRefs: DevAgentSkillRef[] | undefined,
-  options?: { includeD3k?: boolean }
+  options?: { includeD3k?: boolean; includeAshRunbook?: boolean }
 ): string {
   const skillNames = getInstalledSkillNames(devAgentSkillRefs, options)
+  if (options?.includeAshRunbook) {
+    skillNames.unshift("dev3000-agent-runbook")
+  }
   if (skillNames.length === 1) {
     return `the installed ${skillNames[0]} skill`
   }
@@ -6480,6 +6914,7 @@ async function runAgentWithDiagnoseTool(
   devAgentAiAgent?: import("@/lib/dev-agents").DevAgentAiAgent,
   devAgentActionSteps?: Array<{ kind: string; config: Record<string, string> }>,
   devAgentSkillRefs?: DevAgentSkillRef[],
+  devAgentAshTarballUrl?: string,
   bundleBaselineSummary?: string,
   gatewayAuthToken?: string,
   gatewayAuthSource?: string,
@@ -6503,7 +6938,8 @@ async function runAgentWithDiagnoseTool(
   const workflowTypeForPrompt = workflowType || "cls-fix"
   const includeD3kSkill = workflowTypeForPrompt !== "turbopack-bundle-analyzer" && workflowTypeForPrompt !== "cls-fix"
   const skillLoadInstructions = buildDevAgentSkillLoadInstructions(devAgentSkillRefs, {
-    includeD3k: includeD3kSkill
+    includeD3k: includeD3kSkill,
+    includeAshRunbook: Boolean(devAgentAshTarballUrl)
   })
   const browserGuidance = buildDevAgentSandboxBrowserGuidance(devAgentSandboxBrowser)
   const modelSelection = resolveClaudeModelSelection(devAgentAiAgent)
@@ -6525,6 +6961,44 @@ async function runAgentWithDiagnoseTool(
 
   if (gatewayAuthSource) {
     await appendProgressLog(progressContext, `[Claude] Gateway auth source: ${gatewayAuthSource}`)
+  }
+
+  if (
+    devAgentAshTarballUrl &&
+    workflowTypeForPrompt !== "cls-fix" &&
+    workflowTypeForPrompt !== "turbopack-bundle-analyzer"
+  ) {
+    try {
+      await appendProgressLog(progressContext, "[ASH] Executing packaged ASH runtime path...")
+      return await runAshAgentInSandbox(
+        sandbox,
+        devUrl,
+        beforeCls,
+        beforeGrade,
+        startPath,
+        projectDir,
+        customPrompt,
+        workflowType,
+        crawlDepth,
+        devAgentName,
+        devAgentInstructions,
+        devAgentExecutionMode,
+        devAgentSandboxBrowser,
+        devAgentAiAgent,
+        devAgentActionSteps,
+        devAgentSkillRefs,
+        devAgentAshTarballUrl,
+        bundleBaselineSummary,
+        gatewayAuthToken,
+        gatewayAuthSource,
+        progressContext
+      )
+    } catch (ashRuntimeError) {
+      await appendProgressLog(
+        progressContext,
+        `[ASH] Runtime path failed, falling back to Claude CLI: ${ashRuntimeError instanceof Error ? ashRuntimeError.message : String(ashRuntimeError)}`
+      )
+    }
   }
 
   await appendProgressLog(progressContext, "[Claude] Ensuring Claude Code CLI is available...")

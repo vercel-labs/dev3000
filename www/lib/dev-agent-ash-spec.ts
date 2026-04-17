@@ -4,6 +4,7 @@ import path from "node:path"
 import type {
   DevAgentActionStep,
   DevAgentAiAgent,
+  DevAgentAshCompiledSpec,
   DevAgentEarlyExitMode,
   DevAgentEarlyExitRule,
   DevAgentExecutionMode,
@@ -12,9 +13,9 @@ import type {
 } from "@/lib/dev-agents"
 
 const ASH_PACKAGE_NAME = "experimental-ash"
-const ASH_PACKAGE_VERSION = "0.2.0-alpha.22"
+const ASH_PACKAGE_VERSION = "0.3.0-alpha.5"
 const ASH_RUNTIME_VERSION = `${ASH_PACKAGE_NAME}@${ASH_PACKAGE_VERSION}`
-const ASH_ARTIFACT_FORMAT_VERSION = 2
+const ASH_ARTIFACT_FORMAT_VERSION = 3
 
 export interface DevAgentAshArtifact {
   framework: "experimental-ash"
@@ -26,6 +27,7 @@ export interface DevAgentAshArtifact {
   sourceLabel: string
   systemPrompt: string
   packagedSkills?: string[]
+  compiledSpec?: DevAgentAshCompiledSpec
   tarballUrl?: string
 }
 
@@ -36,6 +38,7 @@ export interface DevAgentAshSource {
   sourceLabel: string
   specHash: string
   packagedSkills: string[]
+  compiledSpec: DevAgentAshCompiledSpec
   files: Array<{ path: string; content: string }>
 }
 
@@ -140,7 +143,7 @@ function formatEarlyExitRule(rule?: DevAgentEarlyExitRule): string {
   return `${metricLabel} ${rule.operator} "${rule.valueString ?? ""}".`
 }
 
-function createCanonicalSpec(input: DevAgentAshInput) {
+function createCanonicalSpec(input: DevAgentAshInput): DevAgentAshCompiledSpec {
   return {
     schemaVersion: 1,
     artifactFormatVersion: ASH_ARTIFACT_FORMAT_VERSION,
@@ -184,6 +187,178 @@ function createCanonicalSpec(input: DevAgentAshInput) {
       : null,
     earlyExitPlacementIndex: typeof input.earlyExitPlacementIndex === "number" ? input.earlyExitPlacementIndex : null
   }
+}
+
+function renderExecutionRunbookSkill(input: DevAgentAshInput): string {
+  const normalizedInstructions = normalizeMultiline(input.instructions)
+  const actionPlan = input.actionSteps?.length
+    ? input.actionSteps.map((step, index) => formatActionStep(step, index)).join("\n")
+    : "No explicit action-step choreography is configured. Fall back to the primary instructions."
+
+  const successEval = normalizeMultiline(input.successEval) || "No explicit success eval is configured."
+  const earlyExitEval = normalizeMultiline(input.earlyExitEval) || "No text-mode early-exit eval is configured."
+
+  return `---
+name: dev3000-agent-runbook
+description: Generated execution runbook for the ${input.name.trim()} dev3000 agent. Load this before starting the main task.
+---
+
+# Objective
+
+${input.description.trim()}
+
+## Primary Instructions
+
+${normalizedInstructions || "No freeform instructions were provided. Follow the configured action plan and evaluation criteria."}
+
+## Action Plan
+
+${actionPlan}
+
+## Success Evaluation
+
+${successEval}
+
+## Early Exit
+
+- Mode: ${input.earlyExitMode || "none"}
+- Structured rule: ${formatEarlyExitRule(input.earlyExitRule)}
+- Text eval: ${earlyExitEval}
+`
+}
+
+function renderAshRuntimeMessageChannel(): string {
+  return `import { httpBasic } from "experimental-ash/channels/auth";
+import { httpRoute } from "experimental-ash/channels/http";
+
+const username = process.env.DEV3000_ASH_RUNTIME_USERNAME || "dev3000";
+const password = process.env.DEV3000_ASH_RUNTIME_PASSWORD;
+
+if (!password) {
+  throw new Error("DEV3000_ASH_RUNTIME_PASSWORD is required for the generated Ash runtime route.");
+}
+
+export default httpRoute({
+  auth: httpBasic({
+    username,
+    password,
+  }),
+});
+`
+}
+
+function renderAshRuntimeStreamChannel(): string {
+  return `import { httpBasic } from "experimental-ash/channels/auth";
+import { httpRunStreamRoute } from "experimental-ash/channels/http";
+
+const username = process.env.DEV3000_ASH_RUNTIME_USERNAME || "dev3000";
+const password = process.env.DEV3000_ASH_RUNTIME_PASSWORD;
+
+if (!password) {
+  throw new Error("DEV3000_ASH_RUNTIME_PASSWORD is required for the generated Ash runtime route.");
+}
+
+export default httpRunStreamRoute({
+  auth: httpBasic({
+    username,
+    password,
+  }),
+});
+`
+}
+
+function renderGeneratedSandboxDefinition(): string {
+  return `import { defineSandbox } from "experimental-ash/sandboxes";
+import { defaultSandbox } from "experimental-ash/sandboxes/defaults";
+
+const projectRoot = process.env.DEV3000_PROJECT_ROOT?.trim();
+
+export default defineSandbox({
+  ...defaultSandbox,
+  async onSession({ sandbox }) {
+    const fallbackOnSession = defaultSandbox.onSession;
+    if (typeof fallbackOnSession === "function") {
+      await fallbackOnSession({ sandbox });
+    }
+
+    if (!projectRoot) {
+      return;
+    }
+
+    const repoLinkPath = sandbox.resolvePath("repo");
+    const escapedProjectRoot = JSON.stringify(projectRoot);
+    const escapedRepoLinkPath = JSON.stringify(repoLinkPath);
+
+    await sandbox.runCommand(
+      [
+        "mkdir -p /workspace",
+        "if [ -L " + escapedRepoLinkPath + " ] || [ -e " + escapedRepoLinkPath + " ]; then rm -rf " + escapedRepoLinkPath + "; fi",
+        "ln -s " + escapedProjectRoot + " " + escapedRepoLinkPath,
+      ].join(" && "),
+    );
+  },
+});
+`
+}
+
+function renderGeneratedWorkspaceReadme(): string {
+  return `# dev3000 Generated Workspace
+
+- The live project is available at \`/workspace/repo\`.
+- Packaged skills are available under \`/workspace/skills\`.
+- When editing the application code, operate inside \`/workspace/repo\` so changes land in the real project checkout.
+`
+}
+
+function renderGeneratedAgentDefinition(input: DevAgentAshInput): string {
+  const preferredModel = escapeTypeScriptString(formatAiAgent(input.aiAgent))
+
+  return `import { createGateway } from "ai";
+import { defineAgent } from "experimental-ash";
+
+const preferredModel = "${preferredModel}";
+const explicitOidcToken = process.env.VERCEL_OIDC_TOKEN?.trim() || "";
+const explicitApiKey = process.env.AI_GATEWAY_API_KEY?.trim() || "";
+
+const gateway = explicitOidcToken
+  ? createGateway({
+      apiKey: explicitOidcToken,
+      headers: {
+        "ai-gateway-auth-method": "oidc",
+      },
+    })
+  : explicitApiKey
+    ? createGateway({
+        apiKey: explicitApiKey,
+      })
+    : createGateway();
+
+const runtimeModel = gateway.languageModel(preferredModel);
+const [provider = "gateway", ...modelIdParts] = preferredModel.split("/");
+const resolvedModelId = modelIdParts.length > 0 ? modelIdParts.join("/") : preferredModel;
+const model = Object.create(runtimeModel);
+
+Object.defineProperties(model, {
+  provider: {
+    value: provider,
+    enumerable: true,
+  },
+  modelId: {
+    value: resolvedModelId,
+    enumerable: true,
+  },
+});
+
+export default defineAgent({
+  name: "${escapeTypeScriptString(input.name.trim())}",
+  model,
+  metadata: {
+    dev3000AgentId: "${escapeTypeScriptString(input.id)}",
+    dev3000ExecutionMode: "${escapeTypeScriptString(formatExecutionMode(input.executionMode))}",
+    dev3000SandboxBrowser: "${escapeTypeScriptString(formatSandboxBrowser(input.sandboxBrowser))}",
+  },
+});
+`
 }
 
 function renderSystemPrompt(input: DevAgentAshInput): string {
@@ -367,6 +542,7 @@ export async function createDevAgentAshSource(input: DevAgentAshInput, revision:
   const systemPrompt = renderSystemPrompt(input)
   const sourceLabel = `${input.name.trim()} v${revision}`
   const packagedSkillData = await resolvePackagedSkillFiles(input)
+  const packagedSkills = [...packagedSkillData.packagedSkills, "dev3000-agent-runbook"]
   const files = [
     {
       path: "package.json",
@@ -382,6 +558,7 @@ export async function createDevAgentAshSource(input: DevAgentAshInput, revision:
             typecheck: "tsgo"
           },
           dependencies: {
+            ai: "^6.0.159",
             [ASH_PACKAGE_NAME]: ASH_PACKAGE_VERSION,
             zod: "^4.3.6"
           },
@@ -418,13 +595,7 @@ export async function createDevAgentAshSource(input: DevAgentAshInput, revision:
     },
     {
       path: "agent/agent.ts",
-      content: `import { defineAgent } from "experimental-ash";
-
-export default defineAgent({
-  id: "${escapeTypeScriptString(input.id)}",
-  model: "${escapeTypeScriptString(formatAiAgent(input.aiAgent))}",
-});
-`
+      content: renderGeneratedAgentDefinition(input)
     },
     {
       path: "agent/system.md",
@@ -443,6 +614,22 @@ export default defineAgent({
       content: renderSkillsLayer(input)
     },
     {
+      path: "agent/channels/.well-known/ash/v1/message.ts",
+      content: renderAshRuntimeMessageChannel()
+    },
+    {
+      path: "agent/channels/.well-known/ash/v1/sessions/[sessionId]/stream.ts",
+      content: renderAshRuntimeStreamChannel()
+    },
+    {
+      path: "agent/sandbox/sandbox.ts",
+      content: renderGeneratedSandboxDefinition()
+    },
+    {
+      path: "agent/sandbox/workspace/README.md",
+      content: renderGeneratedWorkspaceReadme()
+    },
+    {
       path: "agent/spec.json",
       content: JSON.stringify(canonicalSpec, null, 2)
     },
@@ -450,11 +637,15 @@ export default defineAgent({
       path: "agent/skills-manifest.json",
       content: JSON.stringify(
         {
-          packagedSkills: packagedSkillData.packagedSkills
+          packagedSkills
         },
         null,
         2
       )
+    },
+    {
+      path: "agent/skills/dev3000-agent-runbook/SKILL.md",
+      content: renderExecutionRunbookSkill(input)
     },
     ...packagedSkillData.files
   ]
@@ -465,7 +656,8 @@ export default defineAgent({
     systemPrompt,
     sourceLabel,
     specHash,
-    packagedSkills: packagedSkillData.packagedSkills,
+    packagedSkills,
+    compiledSpec: canonicalSpec,
     files
   }
 }
@@ -490,6 +682,7 @@ export function createDevAgentAshArtifactDescriptor(
     packageName,
     packageVersion,
     sourceLabel,
-    systemPrompt
+    systemPrompt,
+    compiledSpec: canonicalSpec
   }
 }
