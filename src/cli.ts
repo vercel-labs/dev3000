@@ -143,6 +143,21 @@ function getProjectBrowserToolPreference(): LocalBrowserTool {
   }
 }
 
+function getSessionCdpPort(): string | null {
+  const sessionFile = join(getProjectDir(), "session.json")
+  if (!existsSync(sessionFile)) return null
+  try {
+    const content = JSON.parse(readFileSync(sessionFile, "utf-8"))
+    if (content.cdpUrl) {
+      const match = content.cdpUrl.match(/:(\d+)/)
+      if (match) return match[1]
+    }
+  } catch {
+    // ignore
+  }
+  return null
+}
+
 function runLocalBrowserTool(browserTool: LocalBrowserTool, args: string[]) {
   const env = { ...process.env }
   ensureCommandPath(env)
@@ -168,6 +183,15 @@ function runLocalBrowserTool(browserTool: LocalBrowserTool, args: string[]) {
     }
 
     const binaryPath = findAgentBrowser()
+
+    // Auto-connect to session CDP if user didn't provide --cdp or an explicit connect
+    if (!args.includes("--cdp") && subcommand !== "connect") {
+      const cdpPort = getSessionCdpPort()
+      if (cdpPort) {
+        spawnSync(binaryPath, ["connect", cdpPort], { stdio: "pipe", shell: false, env })
+      }
+    }
+
     const result = spawnSync(binaryPath, args, {
       stdio: "pipe",
       shell: false,
@@ -1575,39 +1599,8 @@ program
 program
   .command("cdp-port")
   .description("Output the CDP port for the current d3k session (for use in scripts)")
-  .action(async () => {
-    const sessionDir = join(homedir(), ".d3k")
-    const projectDir = getProjectDir()
-    const projectName = projectDir.split("/").pop() || "unknown"
-
-    // Try to find session.json in ~/.d3k/{project-name}/
-    const entries = existsSync(sessionDir)
-      ? await import("fs").then((fs) => fs.readdirSync(sessionDir, { withFileTypes: true }))
-      : []
-
-    for (const entry of entries) {
-      if (entry.isDirectory() && entry.name.startsWith(projectName.substring(0, 20))) {
-        const sessionFile = join(sessionDir, entry.name, "session.json")
-        if (existsSync(sessionFile)) {
-          try {
-            const content = JSON.parse(readFileSync(sessionFile, "utf-8"))
-            if (content.cdpUrl) {
-              // Extract port from URL like "ws://localhost:9223/devtools/browser/..."
-              const match = content.cdpUrl.match(/:(\d+)/)
-              if (match) {
-                console.log(match[1])
-                process.exit(0)
-              }
-            }
-          } catch {
-            // Continue searching
-          }
-        }
-      }
-    }
-
-    // Default to 9222 if no session found
-    console.log("9222")
+  .action(() => {
+    console.log(getSessionCdpPort() || "9222")
   })
 
 program.parse()
