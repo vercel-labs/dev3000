@@ -7,6 +7,31 @@ import {
 } from "@/lib/skill-runner-config"
 import type { VercelTeam } from "@/lib/vercel-teams"
 
+export type SkillRunnerWorkerSetupErrorCode = "github_integration_required" | "unknown"
+
+export interface SkillRunnerWorkerSetupRequirement {
+  code: SkillRunnerWorkerSetupErrorCode
+  actionLabel?: string
+  actionUrl?: string
+  repo?: string
+}
+
+export class SkillRunnerWorkerSetupError extends Error {
+  readonly code: SkillRunnerWorkerSetupErrorCode
+  readonly actionLabel?: string
+  readonly actionUrl?: string
+  readonly repo?: string
+
+  constructor(message: string, requirement?: SkillRunnerWorkerSetupRequirement) {
+    super(message)
+    this.name = "SkillRunnerWorkerSetupError"
+    this.code = requirement?.code || "unknown"
+    this.actionLabel = requirement?.actionLabel
+    this.actionUrl = requirement?.actionUrl
+    this.repo = requirement?.repo
+  }
+}
+
 interface VercelProjectLookupResponse {
   projects?: Array<{
     id?: string
@@ -33,6 +58,16 @@ type VercelProjectLookupDeployment = NonNullable<VercelProjectLookupProject["lat
 interface VercelProjectCreateResponse {
   id?: string
   name?: string
+}
+
+interface VercelApiErrorPayload {
+  error?: {
+    code?: string
+    message?: string
+    action?: string
+    link?: string
+    repo?: string
+  }
 }
 
 interface VercelProjectEnvInput {
@@ -156,6 +191,40 @@ function sanitizeBlobStoreNameSegment(value: string): string {
 function buildWorkerBlobStoreName(team: VercelTeam): string {
   const suffix = sanitizeBlobStoreNameSegment(team.slug).slice(0, 32)
   return `d3k-skill-runner-${suffix}-private`.slice(0, 63)
+}
+
+function parseVercelApiErrorPayload(value: string): VercelApiErrorPayload | null {
+  try {
+    return JSON.parse(value) as VercelApiErrorPayload
+  } catch {
+    return null
+  }
+}
+
+function buildWorkerProjectCreateError(status: number, errorText: string): Error {
+  const payload = parseVercelApiErrorPayload(errorText)
+  const vercelError = payload?.error
+  const message = vercelError?.message?.trim()
+  const action = vercelError?.action?.trim()
+  const actionUrl = vercelError?.link?.trim()
+  const repo = vercelError?.repo?.trim()
+
+  if (
+    status === 400 &&
+    ((action && /install github app/i.test(action)) || (message && /github integration/i.test(message)))
+  ) {
+    return new SkillRunnerWorkerSetupError(
+      message || "This team must install the Vercel GitHub integration before the runner project can be created.",
+      {
+        code: "github_integration_required",
+        actionLabel: "Install GitHub Integration",
+        actionUrl,
+        repo
+      }
+    )
+  }
+
+  return new Error(`Failed to install runner project: ${status} ${errorText}`)
 }
 
 async function sleep(ms: number): Promise<void> {
@@ -679,7 +748,7 @@ async function createWorkerProject(accessToken: string, team: VercelTeam): Promi
 
   if (!response.ok) {
     const errorText = await response.text()
-    throw new Error(`Failed to install runner project: ${response.status} ${errorText}`)
+    throw buildWorkerProjectCreateError(response.status, errorText)
   }
 
   const created = (await response.json()) as VercelProjectCreateResponse

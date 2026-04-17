@@ -1,6 +1,10 @@
 import { getCurrentUser, getValidAccessToken } from "@/lib/auth"
 import { SKILL_RUNNER_WORKER_PROJECT_NAME } from "@/lib/skill-runner-config"
-import { findSkillRunnerWorkerProject, installSkillRunnerWorkerProject } from "@/lib/skill-runner-worker"
+import {
+  findSkillRunnerWorkerProject,
+  installSkillRunnerWorkerProject,
+  SkillRunnerWorkerSetupError
+} from "@/lib/skill-runner-worker"
 import { getSkillRunnerTeamSettings, updateSkillRunnerTeamSettings } from "@/lib/skill-runners"
 import {
   buildIdentityProps,
@@ -223,7 +227,11 @@ export async function POST(request: Request) {
     return Response.json(
       {
         success: false,
-        error: message
+        error: message,
+        code: error instanceof SkillRunnerWorkerSetupError ? error.code : undefined,
+        actionLabel: error instanceof SkillRunnerWorkerSetupError ? error.actionLabel : undefined,
+        actionUrl: error instanceof SkillRunnerWorkerSetupError ? error.actionUrl : undefined,
+        repo: error instanceof SkillRunnerWorkerSetupError ? error.repo : undefined
       },
       { status: 500 }
     )

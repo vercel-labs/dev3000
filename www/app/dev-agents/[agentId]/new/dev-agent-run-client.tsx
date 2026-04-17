@@ -105,6 +105,16 @@ interface RunnerValidationResult {
   }
 }
 
+type WorkerSetupErrorCode = "github_integration_required" | "unknown"
+
+interface WorkerSetupErrorState {
+  message: string
+  code?: WorkerSetupErrorCode
+  actionLabel?: string
+  actionUrl?: string
+  repo?: string
+}
+
 const RUNNER_ENV_VARS_STORAGE_KEY = "d3k_runner_env_vars"
 
 type RunnerEnvVarKind = "github-pat" | "npm-token" | "custom"
@@ -201,8 +211,9 @@ export default function DevAgentRunClient({
   const [isWorkerSetupOpen, setIsWorkerSetupOpen] = useState(false)
   const [isCheckingWorker, setIsCheckingWorker] = useState(false)
   const [isInstallingWorker, setIsInstallingWorker] = useState(false)
-  const [workerSetupError, setWorkerSetupError] = useState<string | null>(null)
+  const [workerSetupError, setWorkerSetupError] = useState<WorkerSetupErrorState | null>(null)
   const [workerSetupResult, setWorkerSetupResult] = useState<RunnerValidationResult | null>(null)
+  const [didOpenWorkerSetupAction, setDidOpenWorkerSetupAction] = useState(false)
 
   const [repoVisibilities, setRepoVisibilities] = useState<Map<string, RepoVisibility>>(new Map())
 
@@ -269,6 +280,11 @@ export default function DevAgentRunClient({
     return message
   }
 
+  function openWorkerSetupAction(url: string) {
+    setDidOpenWorkerSetupAction(true)
+    window.open(url, "_blank", "noopener,noreferrer")
+  }
+
   useEffect(() => {
     setLocalSkillRunnerExecutionMode(skillRunnerExecutionMode)
   }, [skillRunnerExecutionMode])
@@ -295,6 +311,7 @@ export default function DevAgentRunClient({
     setIsCheckingWorker(true)
     setIsInstallingWorker(true)
     setWorkerSetupError(null)
+    setDidOpenWorkerSetupAction(false)
     try {
       const response = await fetch("/api/skill-runner-teams/worker", {
         method: "POST",
@@ -305,13 +322,29 @@ export default function DevAgentRunClient({
       })
       const data = (await response.json()) as
         | ({ success: true } & RunnerValidationResult)
-        | { success: false; error?: string }
+        | {
+            success: false
+            error?: string
+            code?: WorkerSetupErrorCode
+            actionLabel?: string
+            actionUrl?: string
+            repo?: string
+          }
       if (!response.ok || !data.success) {
-        throw new Error(("error" in data && data.error) || "Failed to install runner project.")
+        setWorkerSetupError({
+          message: ("error" in data && data.error) || "Failed to install runner project.",
+          code: "code" in data ? data.code : undefined,
+          actionLabel: "actionLabel" in data ? data.actionLabel : undefined,
+          actionUrl: "actionUrl" in data ? data.actionUrl : undefined,
+          repo: "repo" in data ? data.repo : undefined
+        })
+        return
       }
       applyWorkerSetup(data)
     } catch (workerError) {
-      setWorkerSetupError(workerError instanceof Error ? workerError.message : "Failed to install runner project.")
+      setWorkerSetupError({
+        message: workerError instanceof Error ? workerError.message : "Failed to install runner project."
+      })
     } finally {
       setIsCheckingWorker(false)
       setIsInstallingWorker(false)
@@ -706,7 +739,9 @@ export default function DevAgentRunClient({
       setIsRunning(false)
       if (isSelfHostedSkillRunner && result.error) {
         setLocalSkillRunnerWorkerStatus("error")
-        setWorkerSetupError(normalizeSelfHostedStartError(result.error))
+        setWorkerSetupError({
+          message: normalizeSelfHostedStartError(result.error)
+        })
         setIsWorkerSetupOpen(true)
         setError(null)
         return
@@ -722,6 +757,10 @@ export default function DevAgentRunClient({
     setIsWorkerSetupOpen(false)
     await startDevAgentRun()
   }
+
+  const workerSetupNeedsGithubIntegration =
+    workerSetupError?.code === "github_integration_required" && Boolean(workerSetupError.actionUrl)
+  const workerSetupActionUrl = workerSetupError?.actionUrl || null
 
   return (
     <div className="flex max-w-5xl flex-col gap-5">
@@ -1124,7 +1163,15 @@ export default function DevAgentRunClient({
             {workerSetupError ? (
               <div className="flex items-start gap-2 rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-3 text-red-400">
                 <AlertCircle className="mt-0.5 size-4 shrink-0" />
-                <div>{workerSetupError}</div>
+                <div className="space-y-2">
+                  <div>{workerSetupError.message}</div>
+                  {workerSetupNeedsGithubIntegration ? (
+                    <div className="text-[12px] leading-[18px] text-red-300/90">
+                      Install the Vercel GitHub app for the <span className="font-medium">{team.name}</span> team, then
+                      come back and retry runner setup.
+                    </div>
+                  ) : null}
+                </div>
               </div>
             ) : null}
 
@@ -1202,7 +1249,15 @@ export default function DevAgentRunClient({
 
           <DialogFooter className="flex-col gap-3 sm:flex-col">
             <div className="flex justify-start">
-              {canRetryWorkerSetup ? (
+              {workerSetupNeedsGithubIntegration && !didOpenWorkerSetupAction && workerSetupActionUrl ? (
+                <Button
+                  type="button"
+                  onClick={() => openWorkerSetupAction(workerSetupActionUrl)}
+                  className="h-9 rounded-md bg-[#ededed] px-4 text-[13px] font-medium text-[#0a0a0a] hover:bg-white"
+                >
+                  {workerSetupError.actionLabel || "Install GitHub Integration"}
+                </Button>
+              ) : canRetryWorkerSetup ? (
                 <Button
                   type="button"
                   onClick={() => void installWorkerProject()}
@@ -1214,6 +1269,8 @@ export default function DevAgentRunClient({
                       <Loader2 className="size-3.5 animate-spin" />
                       {workerSetupResult?.installed ? "Repairing…" : "Installing…"}
                     </span>
+                  ) : workerSetupNeedsGithubIntegration && didOpenWorkerSetupAction ? (
+                    "Retry Setup"
                   ) : workerSetupResult?.installed ? (
                     "Retry Setup"
                   ) : (
