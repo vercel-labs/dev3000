@@ -5,24 +5,14 @@
  * Returns a prioritized list of issues that need to be fixed.
  */
 
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
-import { homedir } from "node:os"
-import { join } from "node:path"
+import { existsSync, readFileSync } from "node:fs"
 import chalk from "chalk"
+import { findCurrentSession } from "../utils/session.js"
 
 export interface FixOptions {
   focus?: string // build, runtime, network, ui, all
   time?: string // minutes to look back
   json?: boolean
-}
-
-interface Session {
-  projectName: string
-  startTime: string
-  logFilePath: string
-  sessionFile: string
-  pid: number
-  lastModified: Date
 }
 
 interface CategorizedErrors {
@@ -31,73 +21,6 @@ interface CategorizedErrors {
   buildErrors: string[]
   networkErrors: string[]
   warnings: string[]
-}
-
-function findActiveSessions(): Session[] {
-  const sessionDir = join(homedir(), ".d3k")
-  if (!existsSync(sessionDir)) {
-    return []
-  }
-
-  try {
-    const entries = readdirSync(sessionDir, { withFileTypes: true })
-    const sessionFiles: string[] = []
-
-    for (const entry of entries) {
-      if (entry.isDirectory()) {
-        const sessionFile = join(sessionDir, entry.name, "session.json")
-        if (existsSync(sessionFile)) {
-          sessionFiles.push(sessionFile)
-        }
-      }
-    }
-
-    const sessions = sessionFiles
-      .map((filePath) => {
-        try {
-          const content = JSON.parse(readFileSync(filePath, "utf-8"))
-          const stat = statSync(filePath)
-          return {
-            ...content,
-            sessionFile: filePath,
-            lastModified: stat.mtime
-          }
-        } catch {
-          return null
-        }
-      })
-      .filter((session): session is Session => {
-        if (!session || !session.pid) return false
-        try {
-          process.kill(session.pid, 0)
-          return true
-        } catch {
-          return false
-        }
-      })
-      .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime())
-
-    return sessions
-  } catch {
-    return []
-  }
-}
-
-function getLogPath(projectName?: string): string | null {
-  if (projectName) {
-    const sessions = findActiveSessions()
-    const session = sessions.find((s) => s.projectName === projectName)
-    if (session) {
-      return session.logFilePath
-    }
-  }
-
-  const envPath = process.env.LOG_FILE_PATH
-  if (envPath) {
-    return envPath
-  }
-
-  return null
 }
 
 function findInteractionsBeforeError(errorLine: string, allLines: string[]): string[] {
@@ -122,9 +45,9 @@ export async function fixMyApp(options: FixOptions): Promise<void> {
   const timeRangeMinutes = parseInt(options.time || "10", 10)
   const outputJson = options.json || false
 
-  const sessions = findActiveSessions()
+  const session = findCurrentSession()
 
-  if (sessions.length === 0) {
+  if (!session) {
     if (outputJson) {
       console.log(JSON.stringify({ error: "No active d3k sessions found" }))
     } else {
@@ -134,12 +57,10 @@ export async function fixMyApp(options: FixOptions): Promise<void> {
     process.exit(1)
   }
 
-  // Auto-select if only one session
-  const session = sessions[0]
   let logPath: string | null = session.logFilePath
 
   if (!logPath) {
-    logPath = getLogPath(session.projectName)
+    logPath = process.env.LOG_FILE_PATH || null
   }
 
   if (!logPath) {
