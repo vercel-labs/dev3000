@@ -8,6 +8,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
 import chalk from "chalk"
+import { findCurrentSession } from "../utils/session.js"
 
 export interface LogsOptions {
   count?: string // number of lines to show
@@ -16,70 +17,11 @@ export interface LogsOptions {
   json?: boolean
 }
 
-interface Session {
-  projectName: string
-  startTime: string
-  logFilePath: string
-  sessionFile: string
-  pid: number
-  lastModified: Date
-}
-
-function findActiveSessions(): Session[] {
-  const sessionDir = join(homedir(), ".d3k")
-  if (!existsSync(sessionDir)) {
-    return []
-  }
-
-  try {
-    const entries = readdirSync(sessionDir, { withFileTypes: true })
-    const sessionFiles: string[] = []
-
-    for (const entry of entries) {
-      if (entry.isDirectory()) {
-        const sessionFile = join(sessionDir, entry.name, "session.json")
-        if (existsSync(sessionFile)) {
-          sessionFiles.push(sessionFile)
-        }
-      }
-    }
-
-    const sessions = sessionFiles
-      .map((filePath) => {
-        try {
-          const content = JSON.parse(readFileSync(filePath, "utf-8"))
-          const stat = statSync(filePath)
-          return {
-            ...content,
-            sessionFile: filePath,
-            lastModified: stat.mtime
-          }
-        } catch {
-          return null
-        }
-      })
-      .filter((session): session is Session => {
-        if (!session || !session.pid) return false
-        try {
-          process.kill(session.pid, 0)
-          return true
-        } catch {
-          return false
-        }
-      })
-      .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime())
-
-    return sessions
-  } catch {
-    return []
-  }
-}
-
 function getLogPath(): string | null {
-  // First check for active sessions
-  const sessions = findActiveSessions()
-  if (sessions.length > 0) {
-    return sessions[0].logFilePath
+  // First check for active sessions, preferring the one matching the current directory
+  const session = findCurrentSession()
+  if (session) {
+    return session.logFilePath
   }
 
   // Fall back to environment variable
