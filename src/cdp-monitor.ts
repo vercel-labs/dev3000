@@ -597,6 +597,8 @@ export class CDPMonitor {
             "google-chrome",
             "chrome",
             "chromium",
+            "brave",
+            "brave-browser",
             "/Applications/Arc.app/Contents/MacOS/Arc",
             "/Applications/Comet.app/Contents/MacOS/Comet",
             "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"
