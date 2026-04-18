@@ -2009,29 +2009,6 @@ async function createAndSaveBaseSnapshot(
     }
     const claudeInstallRoot = "/home/vercel-sandbox/.claude-code"
     const localClaudeExecutable = `${claudeInstallRoot}/node_modules/.bin/claude`
-    const ensureNodeShim = await runCmd(
-      "sh",
-      [
-        "-lc",
-        [
-          "mkdir -p /home/vercel-sandbox/.local/bin",
-          "if ! command -v node >/dev/null 2>&1; then",
-          "  if command -v nodejs >/dev/null 2>&1; then",
-          '    ln -sf "$(command -v nodejs)" /home/vercel-sandbox/.local/bin/node',
-          "  elif [ -x /usr/bin/nodejs ]; then",
-          "    ln -sf /usr/bin/nodejs /home/vercel-sandbox/.local/bin/node",
-          "  fi",
-          "fi",
-          "command -v node >/dev/null 2>&1"
-        ].join("\n")
-      ],
-      { env: sharedHomeEnv }
-    )
-    if (ensureNodeShim.exitCode !== 0) {
-      throw new Error(
-        `shared Claude runtime node shim failed: stdout=${ensureNodeShim.stdout || "<empty>"} stderr=${ensureNodeShim.stderr || "<empty>"}`
-      )
-    }
     const sharedRuntimePrep = await runCmd(
       "sh",
       [
@@ -2051,13 +2028,22 @@ async function createAndSaveBaseSnapshot(
       )
     }
 
-    const sharedRuntimeInstall = await runCmd("pnpm", ["add", CLAUDE_CODE_PACKAGE], {
+    const sharedRuntimeInstall = await runCmd("bun", ["add", CLAUDE_CODE_PACKAGE], {
       cwd: claudeInstallRoot,
       env: sharedHomeEnv
     })
     if (sharedRuntimeInstall.exitCode !== 0) {
       throw new Error(
         `shared Claude package install failed: stdout=${sharedRuntimeInstall.stdout || "<empty>"} stderr=${sharedRuntimeInstall.stderr || "<empty>"}`
+      )
+    }
+    const sharedRuntimeTrust = await runCmd("bun", ["pm", "trust", "--all"], {
+      cwd: claudeInstallRoot,
+      env: sharedHomeEnv
+    })
+    if (sharedRuntimeTrust.exitCode !== 0) {
+      throw new Error(
+        `shared Claude package trust failed: stdout=${sharedRuntimeTrust.stdout || "<empty>"} stderr=${sharedRuntimeTrust.stderr || "<empty>"}`
       )
     }
 
