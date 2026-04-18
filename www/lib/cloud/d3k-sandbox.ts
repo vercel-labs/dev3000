@@ -2009,7 +2009,7 @@ async function createAndSaveBaseSnapshot(
     }
     const claudeInstallRoot = "/home/vercel-sandbox/.claude-code"
     const localClaudeExecutable = `${claudeInstallRoot}/node_modules/.bin/claude`
-    const sharedRuntimeInstall = await runCmd(
+    const sharedRuntimePrep = await runCmd(
       "sh",
       [
         "-lc",
@@ -2017,8 +2017,32 @@ async function createAndSaveBaseSnapshot(
           "mkdir -p /home/vercel-sandbox/.local/bin",
           `mkdir -p "${claudeInstallRoot}"`,
           `cd "${claudeInstallRoot}"`,
-          `bun -e 'const fs=require("fs"); if (!fs.existsSync("package.json")) fs.writeFileSync("package.json", JSON.stringify({ name: "claude-code-runtime", private: true }))'`,
-          `pnpm add ${CLAUDE_CODE_PACKAGE}`,
+          `bun -e 'const fs=require("fs"); if (!fs.existsSync("package.json")) fs.writeFileSync("package.json", JSON.stringify({ name: "claude-code-runtime", private: true }))'`
+        ].join(" && ")
+      ],
+      { env: sharedHomeEnv }
+    )
+    if (sharedRuntimePrep.exitCode !== 0) {
+      throw new Error(
+        `shared Claude runtime prep failed: stdout=${sharedRuntimePrep.stdout || "<empty>"} stderr=${sharedRuntimePrep.stderr || "<empty>"}`
+      )
+    }
+
+    const sharedRuntimeInstall = await runCmd("pnpm", ["add", CLAUDE_CODE_PACKAGE], {
+      cwd: claudeInstallRoot,
+      env: sharedHomeEnv
+    })
+    if (sharedRuntimeInstall.exitCode !== 0) {
+      throw new Error(
+        `shared Claude package install failed: stdout=${sharedRuntimeInstall.stdout || "<empty>"} stderr=${sharedRuntimeInstall.stderr || "<empty>"}`
+      )
+    }
+
+    const sharedRuntimeFinalize = await runCmd(
+      "sh",
+      [
+        "-lc",
+        [
           `test -x "${localClaudeExecutable}"`,
           `ln -sf "${localClaudeExecutable}" /home/vercel-sandbox/.local/bin/claude`,
           `bunx --bun skills@latest add ${VERCEL_PLUGIN_INSTALL_ARG} --agent claude-code --skill '*' -y`,
@@ -2029,9 +2053,9 @@ async function createAndSaveBaseSnapshot(
       ],
       { env: sharedHomeEnv }
     )
-    if (sharedRuntimeInstall.exitCode !== 0) {
+    if (sharedRuntimeFinalize.exitCode !== 0) {
       throw new Error(
-        `shared Claude agent runtime installation failed: stdout=${sharedRuntimeInstall.stdout || "<empty>"} stderr=${sharedRuntimeInstall.stderr || "<empty>"}`
+        `shared Claude runtime finalization failed: stdout=${sharedRuntimeFinalize.stdout || "<empty>"} stderr=${sharedRuntimeFinalize.stderr || "<empty>"}`
       )
     }
     if (debug) console.log("  ✅ Shared Claude agent runtime installed")
