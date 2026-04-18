@@ -2018,7 +2018,7 @@ async function createAndSaveBaseSnapshot(
           `mkdir -p "${claudeInstallRoot}"`,
           `cd "${claudeInstallRoot}"`,
           `bun -e 'const fs=require("fs"); if (!fs.existsSync("package.json")) fs.writeFileSync("package.json", JSON.stringify({ name: "claude-code-runtime", private: true }))'`,
-          `bun add ${CLAUDE_CODE_PACKAGE}`,
+          `npm install --no-fund --no-audit ${CLAUDE_CODE_PACKAGE}`,
           `test -x "${localClaudeExecutable}"`,
           `ln -sf "${localClaudeExecutable}" /home/vercel-sandbox/.local/bin/claude`,
           `bunx --bun skills@latest add ${VERCEL_PLUGIN_INSTALL_ARG} --agent claude-code --skill '*' -y`,
@@ -2031,7 +2031,7 @@ async function createAndSaveBaseSnapshot(
     )
     if (sharedRuntimeInstall.exitCode !== 0) {
       throw new Error(
-        `shared Claude agent runtime installation failed: ${sharedRuntimeInstall.stderr || sharedRuntimeInstall.stdout}`
+        `shared Claude agent runtime installation failed: stdout=${sharedRuntimeInstall.stdout || "<empty>"} stderr=${sharedRuntimeInstall.stderr || "<empty>"}`
       )
     }
     if (debug) console.log("  ✅ Shared Claude agent runtime installed")
