@@ -2024,7 +2024,7 @@ fi`
           "mkdir -p /home/vercel-sandbox/.local/bin",
           `mkdir -p "${claudeInstallRoot}"`,
           `cd "${claudeInstallRoot}"`,
-          `node -e 'const fs=require("fs"); if (!fs.existsSync("package.json")) fs.writeFileSync("package.json", JSON.stringify({ name: "claude-code-runtime", private: true }))'`,
+          `bun -e 'const fs=require("fs"); if (!fs.existsSync("package.json")) fs.writeFileSync("package.json", JSON.stringify({ name: "claude-code-runtime", private: true }))'`,
           `bun add ${CLAUDE_CODE_PACKAGE}`,
           ensureNodeShim,
           `test -f "${localClaudeCli}"`,
