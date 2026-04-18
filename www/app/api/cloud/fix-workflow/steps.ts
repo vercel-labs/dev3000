@@ -6611,7 +6611,7 @@ async function ensureClaudeCodeInstalledInSandbox(
   progressContext?: ProgressContext | null
 ): Promise<void> {
   const claudeInstallRoot = "/home/vercel-sandbox/.claude-code"
-  const localClaudeCli = `${claudeInstallRoot}/node_modules/@anthropic-ai/claude-code/cli.js`
+  const localClaudeExecutable = `${claudeInstallRoot}/node_modules/.bin/claude`
   const pathEnv = buildClaudeSandboxPathEnv()
   const resolveInstalledClaudePath = async (): Promise<string | null> => {
     const result = await runSandboxCommandWithOptions(sandbox, {
@@ -6621,8 +6621,8 @@ async function ensureClaudeCodeInstalledInSandbox(
         [
           "if command -v claude >/dev/null 2>&1; then",
           "  command -v claude",
-          `elif [ -f "${localClaudeCli}" ]; then`,
-          `  printf '%s\\n' "${localClaudeCli}"`,
+          `elif [ -x "${localClaudeExecutable}" ]; then`,
+          `  printf '%s\\n' "${localClaudeExecutable}"`,
           `elif [ -e "/home/vercel-sandbox/.local/bin/claude" ]; then`,
           `  printf '%s\\n' "/home/vercel-sandbox/.local/bin/claude"`,
           "fi"
@@ -6637,30 +6637,6 @@ async function ensureClaudeCodeInstalledInSandbox(
         .find(Boolean) || null
     )
   }
-  const ensureNodeShim = [
-    'SYSTEM_PATH="/home/vercel-sandbox/.bun/bin:/home/vercel-sandbox/.local/bin:/usr/local/bin:/usr/bin:/bin"',
-    'mkdir -p "/home/vercel-sandbox/.local/bin"',
-    'REAL_NODE=""',
-    "if [ -x /usr/bin/nodejs ]; then",
-    '  REAL_NODE="/usr/bin/nodejs"',
-    "elif [ -x /usr/bin/node ]; then",
-    '  REAL_NODE="/usr/bin/node"',
-    'elif PATH="$SYSTEM_PATH" command -v nodejs >/dev/null 2>&1; then',
-    '  REAL_NODE="$(PATH="$SYSTEM_PATH" command -v nodejs)"',
-    'elif PATH="$SYSTEM_PATH" command -v node >/dev/null 2>&1; then',
-    '  REAL_NODE="$(PATH="$SYSTEM_PATH" command -v node)"',
-    "fi",
-    'if [ -n "$REAL_NODE" ]; then',
-    '  ln -sf "$REAL_NODE" /home/vercel-sandbox/.local/bin/node',
-    '  ln -sf "$REAL_NODE" /home/vercel-sandbox/.local/bin/nodejs',
-    "  test -x /home/vercel-sandbox/.local/bin/node",
-    'elif PATH="$SYSTEM_PATH" command -v bun >/dev/null 2>&1; then',
-    "  true",
-    "else",
-    '  echo "missing-runtime" >&2',
-    "  exit 1",
-    "fi"
-  ].join("\n")
   const existingClaudePath = await resolveInstalledClaudePath()
   if (existingClaudePath) {
     return
@@ -6679,10 +6655,8 @@ async function ensureClaudeCodeInstalledInSandbox(
             `cd "${claudeInstallRoot}"`,
             `if [ ! -f package.json ]; then printf '%s' '{"name":"claude-code-runtime","private":true}' > package.json; fi`,
             `bun add ${CLAUDE_CODE_PACKAGE}`,
-            ensureNodeShim,
-            `test -f "${localClaudeCli}"`,
-            `chmod +x "${localClaudeCli}"`,
-            `ln -sf "${localClaudeCli}" /home/vercel-sandbox/.local/bin/claude`
+            `test -x "${localClaudeExecutable}"`,
+            `ln -sf "${localClaudeExecutable}" /home/vercel-sandbox/.local/bin/claude`
           ].join(" && ")
         ],
         env: {
@@ -6702,10 +6676,8 @@ async function ensureClaudeCodeInstalledInSandbox(
             `cd "${claudeInstallRoot}"`,
             `if [ ! -f package.json ]; then printf '%s' '{"name":"claude-code-runtime","private":true}' > package.json; fi`,
             `npm install ${CLAUDE_CODE_PACKAGE}`,
-            ensureNodeShim,
-            `test -f "${localClaudeCli}"`,
-            `chmod +x "${localClaudeCli}"`,
-            `ln -sf "${localClaudeCli}" /home/vercel-sandbox/.local/bin/claude`
+            `test -x "${localClaudeExecutable}"`,
+            `ln -sf "${localClaudeExecutable}" /home/vercel-sandbox/.local/bin/claude`
           ].join(" && ")
         ],
         env: {
@@ -6766,8 +6738,8 @@ async function ensureClaudeCodeInstalledInSandbox(
       args: [
         "-lc",
         [
-          `printf 'cli_exists='; [ -e "${localClaudeCli}" ] && printf yes || printf no`,
-          `printf ' cli_exec='; [ -x "${localClaudeCli}" ] && printf yes || printf no`,
+          `printf 'cli_exists='; [ -e "${localClaudeExecutable}" ] && printf yes || printf no`,
+          `printf ' cli_exec='; [ -x "${localClaudeExecutable}" ] && printf yes || printf no`,
           `printf ' symlink_exists='; [ -e "/home/vercel-sandbox/.local/bin/claude" ] && printf yes || printf no`,
           `printf ' symlink_target='; if [ -L "/home/vercel-sandbox/.local/bin/claude" ]; then readlink "/home/vercel-sandbox/.local/bin/claude"; else printf '<none>'; fi`
         ].join(" ; ")
@@ -6785,14 +6757,14 @@ async function ensureClaudeCodeInstalledInSandbox(
     const invocation = await resolveClaudeSandboxInvocation(sandbox, pathEnv)
     await appendProgressLog(
       progressContext,
-      `[Claude] Claude Code CLI ready (${resolvedClaudePath}; runtime=${invocation.cmd})`
+      `[Claude] Claude Code CLI ready (${resolvedClaudePath}; cmd=${invocation.cmd})`
     )
   } catch (error) {
     await appendProgressLog(
       progressContext,
-      `[Claude] Runtime missing after install: ${error instanceof Error ? error.message : String(error)}`
+      `[Claude] Runtime resolution failed after install: ${error instanceof Error ? error.message : String(error)}`
     )
-    throw new Error("Claude Code CLI installed but no JavaScript runtime is available inside the sandbox.")
+    throw new Error("Claude Code CLI installed but could not be invoked inside the sandbox.")
   }
 }
 
@@ -6806,46 +6778,22 @@ function buildClaudeSandboxPathEnv(): string {
   return "/home/vercel-sandbox/.claude-code/node_modules/.bin:/home/vercel-sandbox/.bun/bin:/home/vercel-sandbox/.local/bin:/usr/local/bin:/usr/bin:/bin"
 }
 
-type ClaudeSandboxInvocation =
-  | {
-      cmd: "claude"
-      argsPrefix: []
-      description: string
-    }
-  | {
-      cmd: string
-      argsPrefix: [string]
-      description: string
-    }
+type ClaudeSandboxInvocation = {
+  cmd: string
+  argsPrefix: string[]
+  description: string
+}
 
 async function resolveClaudeSandboxInvocation(sandbox: Sandbox, pathEnv: string): Promise<ClaudeSandboxInvocation> {
-  const localClaudeCli = "/home/vercel-sandbox/.claude-code/node_modules/@anthropic-ai/claude-code/cli.js"
+  const localClaudeExecutable = "/home/vercel-sandbox/.claude-code/node_modules/.bin/claude"
   const localSymlink = "/home/vercel-sandbox/.local/bin/claude"
-  const resolveNodeCommand = async (): Promise<string> => {
-    const nodeCommandResult = await runSandboxCommandWithOptions(sandbox, {
-      cmd: "sh",
-      args: [
-        "-lc",
-        `PATH="${pathEnv}" command -v nodejs || PATH="${pathEnv}" command -v node || PATH="${pathEnv}" command -v bun || true`
-      ],
-      env: { HOME: "/home/vercel-sandbox" }
-    })
-    const resolved = nodeCommandResult.stdout
-      .split("\n")
-      .map((entry) => entry.trim())
-      .find(Boolean)
-    if (!resolved) {
-      throw new Error("No supported Node.js runtime is available for Claude Code inside the sandbox.")
-    }
-    return resolved
-  }
   const verifyResult = await runSandboxCommandWithOptions(sandbox, {
     cmd: "sh",
     args: [
       "-lc",
       [
-        `if [ -f "${localClaudeCli}" ]; then`,
-        `  printf 'cli:%s\\n' "${localClaudeCli}"`,
+        `if [ -x "${localClaudeExecutable}" ]; then`,
+        `  printf 'local:%s\\n' "${localClaudeExecutable}"`,
         "elif command -v claude >/dev/null 2>&1; then",
         "  printf 'which:%s\\n' \"$(command -v claude)\"",
         `elif [ -e "${localSymlink}" ]; then`,
@@ -6857,13 +6805,12 @@ async function resolveClaudeSandboxInvocation(sandbox: Sandbox, pathEnv: string)
   })
 
   const line = verifyResult.stdout.trim()
-  if (line.startsWith("cli:")) {
-    const cliPath = line.slice("cli:".length)
-    const runtimeCommand = await resolveNodeCommand()
+  if (line.startsWith("local:")) {
+    const cliPath = line.slice("local:".length)
     return {
-      cmd: runtimeCommand,
-      argsPrefix: [cliPath],
-      description: runtimeCommand === "bun" ? `${cliPath} via bun` : cliPath
+      cmd: cliPath,
+      argsPrefix: [],
+      description: cliPath
     }
   }
   if (line.startsWith("which:")) {
@@ -6876,15 +6823,15 @@ async function resolveClaudeSandboxInvocation(sandbox: Sandbox, pathEnv: string)
   if (verifyResult.exitCode === 0 && line.length === 0) {
     const fallbackResult = await runSandboxCommandWithOptions(sandbox, {
       cmd: "sh",
-      args: ["-lc", `test -f "${localClaudeCli}" && printf 'cli:%s\\n' "${localClaudeCli}" || true`],
+      args: ["-lc", `test -x "${localClaudeExecutable}" && printf 'local:%s\\n' "${localClaudeExecutable}" || true`],
       env: { PATH: pathEnv, HOME: "/home/vercel-sandbox" }
     })
     const fallbackLine = fallbackResult.stdout.trim()
-    if (fallbackLine.startsWith("cli:")) {
-      const cliPath = fallbackLine.slice("cli:".length)
+    if (fallbackLine.startsWith("local:")) {
+      const cliPath = fallbackLine.slice("local:".length)
       return {
-        cmd: await resolveNodeCommand(),
-        argsPrefix: [cliPath],
+        cmd: cliPath,
+        argsPrefix: [],
         description: cliPath
       }
     }
@@ -6897,25 +6844,9 @@ async function logClaudeCliDiagnostics(
   pathEnv: string,
   progressContext?: ProgressContext | null
 ): Promise<void> {
-  const localClaudeCli = "/home/vercel-sandbox/.claude-code/node_modules/@anthropic-ai/claude-code/cli.js"
+  const localClaudeExecutable = "/home/vercel-sandbox/.claude-code/node_modules/.bin/claude"
   const localSymlink = "/home/vercel-sandbox/.local/bin/claude"
-  const resolveNodeCommand = async (): Promise<string> => {
-    const nodeCommandResult = await runSandboxCommandWithOptions(sandbox, {
-      cmd: "sh",
-      args: [
-        "-lc",
-        `PATH="${pathEnv}" command -v nodejs || PATH="${pathEnv}" command -v node || PATH="${pathEnv}" command -v bun || true`
-      ],
-      env: { HOME: "/home/vercel-sandbox" }
-    })
-    const resolved = nodeCommandResult.stdout
-      .split("\n")
-      .map((entry) => entry.trim())
-      .find(Boolean)
-    return resolved || "bun"
-  }
-  const nodeCommand = await resolveNodeCommand()
-  const [whichResult, versionResult, nodeWhichResult, nodeVersionResult, fileResult] = await Promise.all([
+  const [whichResult, versionResult, runtimeWhichResult, runtimeVersionResult, fileResult] = await Promise.all([
     runSandboxCommandWithOptions(sandbox, {
       cmd: "sh",
       args: ["-c", "command -v claude || true"],
@@ -6925,7 +6856,7 @@ async function logClaudeCliDiagnostics(
       cmd: "sh",
       args: [
         "-c",
-        `claude --version || [ -f "${localClaudeCli}" ] && ${nodeCommand} "${localClaudeCli}" --version || true`
+        `claude --version || [ -x "${localClaudeExecutable}" ] && "${localClaudeExecutable}" --version || true`
       ],
       env: { PATH: pathEnv, HOME: "/home/vercel-sandbox" }
     }),
@@ -6938,8 +6869,11 @@ async function logClaudeCliDiagnostics(
       env: { HOME: "/home/vercel-sandbox" }
     }),
     runSandboxCommandWithOptions(sandbox, {
-      cmd: nodeCommand,
-      args: ["--version"],
+      cmd: "sh",
+      args: [
+        "-lc",
+        'RUNTIME=$(PATH="$PATH" command -v nodejs || PATH="$PATH" command -v node || PATH="$PATH" command -v bun || true); [ -n "$RUNTIME" ] && "$RUNTIME" --version || true'
+      ],
       env: { PATH: pathEnv, HOME: "/home/vercel-sandbox" }
     }),
     runSandboxCommandWithOptions(sandbox, {
@@ -6947,12 +6881,12 @@ async function logClaudeCliDiagnostics(
       args: [
         "-c",
         [
-          `printf 'cli=%s exists=' "${localClaudeCli}"`,
-          `[ -e "${localClaudeCli}" ] && printf yes || printf no`,
+          `printf 'cli=%s exists=' "${localClaudeExecutable}"`,
+          `[ -e "${localClaudeExecutable}" ] && printf yes || printf no`,
           `printf ' file='`,
-          `[ -f "${localClaudeCli}" ] && printf yes || printf no`,
+          `[ -f "${localClaudeExecutable}" ] && printf yes || printf no`,
           `printf ' exec='`,
-          `[ -x "${localClaudeCli}" ] && printf yes || printf no`,
+          `[ -x "${localClaudeExecutable}" ] && printf yes || printf no`,
           `printf ' symlink='`,
           `[ -L "${localSymlink}" ] && readlink "${localSymlink}" || printf '<missing>'`
         ].join(" && ")
@@ -6963,8 +6897,8 @@ async function logClaudeCliDiagnostics(
 
   const claudePath = whichResult.stdout.trim() || "<missing>"
   const claudeVersion = formatClaudeOutputPreview(versionResult.stdout || versionResult.stderr, 120)
-  const nodePath = nodeWhichResult.stdout.trim() || "<missing>"
-  const nodeVersion = formatClaudeOutputPreview(nodeVersionResult.stdout || nodeVersionResult.stderr, 120)
+  const nodePath = runtimeWhichResult.stdout.trim() || "<missing>"
+  const nodeVersion = formatClaudeOutputPreview(runtimeVersionResult.stdout || runtimeVersionResult.stderr, 120)
   const fileStatus = formatClaudeOutputPreview(fileResult.stdout || fileResult.stderr, 160)
   await appendProgressLog(
     progressContext,

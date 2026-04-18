@@ -2008,14 +2008,7 @@ async function createAndSaveBaseSnapshot(
       HOME: "/home/vercel-sandbox"
     }
     const claudeInstallRoot = "/home/vercel-sandbox/.claude-code"
-    const localClaudeCli = `${claudeInstallRoot}/node_modules/@anthropic-ai/claude-code/cli.js`
-    const ensureNodeShim = `if ! command -v node >/dev/null 2>&1; then
-  if command -v nodejs >/dev/null 2>&1; then
-    ln -sf "$(command -v nodejs)" /home/vercel-sandbox/.local/bin/node
-  else
-    ln -sf "$(command -v bun)" /home/vercel-sandbox/.local/bin/node
-  fi
-fi`
+    const localClaudeExecutable = `${claudeInstallRoot}/node_modules/.bin/claude`
     const sharedRuntimeInstall = await runCmd(
       "sh",
       [
@@ -2026,14 +2019,12 @@ fi`
           `cd "${claudeInstallRoot}"`,
           `bun -e 'const fs=require("fs"); if (!fs.existsSync("package.json")) fs.writeFileSync("package.json", JSON.stringify({ name: "claude-code-runtime", private: true }))'`,
           `bun add ${CLAUDE_CODE_PACKAGE}`,
-          ensureNodeShim,
-          `test -f "${localClaudeCli}"`,
-          `chmod +x "${localClaudeCli}"`,
-          `ln -sf "${localClaudeCli}" /home/vercel-sandbox/.local/bin/claude`,
+          `test -x "${localClaudeExecutable}"`,
+          `ln -sf "${localClaudeExecutable}" /home/vercel-sandbox/.local/bin/claude`,
           `bunx --bun skills@latest add ${VERCEL_PLUGIN_INSTALL_ARG} --agent claude-code --skill '*' -y`,
           `bunx --bun skills@latest add ${D3K_SKILL_INSTALL_ARG.split("@")[0]} --skill d3k --agent claude-code -y`,
           "command -v claude",
-          `node "${localClaudeCli}" --version`
+          "claude --version"
         ].join(" && ")
       ],
       { env: sharedHomeEnv }
