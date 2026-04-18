@@ -2037,14 +2037,13 @@ async function createAndSaveBaseSnapshot(
         `shared Claude package install failed: stdout=${sharedRuntimeInstall.stdout || "<empty>"} stderr=${sharedRuntimeInstall.stderr || "<empty>"}`
       )
     }
-    const sharedRuntimeTrust = await runCmd(
-      "sh",
-      ["-lc", `cd "${claudeInstallRoot}" && bun pm trust ${CLAUDE_CODE_PACKAGE}`],
-      { env: sharedHomeEnv }
-    )
-    if (sharedRuntimeTrust.exitCode !== 0) {
+    const sharedRuntimePostinstall = await runCmd("bun", ["./node_modules/@anthropic-ai/claude-code/install.cjs"], {
+      cwd: claudeInstallRoot,
+      env: sharedHomeEnv
+    })
+    if (sharedRuntimePostinstall.exitCode !== 0) {
       throw new Error(
-        `shared Claude package trust failed: stdout=${sharedRuntimeTrust.stdout || "<empty>"} stderr=${sharedRuntimeTrust.stderr || "<empty>"}`
+        `shared Claude package postinstall failed: stdout=${sharedRuntimePostinstall.stdout || "<empty>"} stderr=${sharedRuntimePostinstall.stderr || "<empty>"}`
       )
     }
 
