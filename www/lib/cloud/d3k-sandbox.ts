@@ -2017,7 +2017,7 @@ async function createAndSaveBaseSnapshot(
       '    ln -sf "$(command -v bun)" /home/vercel-sandbox/.local/bin/node',
       "  fi",
       "fi"
-    ].join(" ")
+    ].join("; ")
     const sharedRuntimeInstall = await runCmd(
       "sh",
       [
