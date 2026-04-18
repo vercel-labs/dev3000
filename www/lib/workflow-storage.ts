@@ -69,7 +69,7 @@ export interface WorkflowRunMirrorTarget {
 }
 
 export function getWorkflowMirrorSecret(): string | null {
-  const secret = process.env.WORKFLOW_MIRROR_SECRET || process.env.WORKFLOW_TEST_BYPASS_TOKEN
+  const secret = process.env.WORKFLOW_MIRROR_SECRET
   const trimmed = secret?.trim()
   return trimmed ? trimmed : null
 }

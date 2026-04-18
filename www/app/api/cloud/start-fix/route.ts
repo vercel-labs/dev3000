@@ -235,11 +235,6 @@ export async function POST(request: Request) {
   } | null = null
 
   try {
-    // Check for test bypass token (allows testing without browser auth via CLI)
-    const testBypassToken = request.headers.get("x-test-bypass-token")
-    const isTestMode =
-      testBypassToken === process.env.WORKFLOW_TEST_BYPASS_TOKEN && process.env.WORKFLOW_TEST_BYPASS_TOKEN
-
     // Get user's access token from cookies or Authorization header
     const { cookies: getCookies } = await import("next/headers")
     const cookieStore = await getCookies()
@@ -253,15 +248,11 @@ export async function POST(request: Request) {
       }
     }
 
-    if (!accessToken && !isTestMode) {
+    if (!accessToken) {
       return Response.json(
         { success: false, error: "Not authenticated. Please sign in to use workflows." },
         { status: 401, headers: corsHeaders }
       )
-    }
-
-    if (isTestMode) {
-      workflowLog("[Start Fix] Running in TEST MODE with bypass token")
     }
 
     // Clear workflow log file at start of new workflow
@@ -468,7 +459,7 @@ export async function POST(request: Request) {
     publicUrl = typeof body.publicUrl === "string" ? body.publicUrl : undefined
     customPrompt = typeof body.customPrompt === "string" ? body.customPrompt : undefined
     crawlDepth = typeof body.crawlDepth === "number" || body.crawlDepth === "all" ? body.crawlDepth : undefined
-    userId = body.userId || (isTestMode ? "test-user" : undefined)
+    userId = body.userId
     projectName = body.projectName
 
     if (devAgent?.requiresCustomPrompt && !customPrompt?.trim()) {

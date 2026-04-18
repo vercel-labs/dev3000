@@ -41,22 +41,17 @@ Team ID (vercel-labs): `team_nO2mCG4W8IxPIeKoSsqwAxxB`
 
 2. You are signed in at `http://localhost:3000/workflows`.
 
-3. You have the bypass token:
-   ```bash
-   grep WORKFLOW_TEST_BYPASS_TOKEN /Users/elsigh/src/vercel-labs/dev3000/www/.env.local | cut -d'"' -f2
-   ```
-
 ## How To Run A Workflow (By Type)
 
 Pick a workflow type from the table, then construct the URL using the project ID:
 
 ```
-http://localhost:3000/workflows/new?type=<TYPE>&team=team_nO2mCG4W8IxPIeKoSsqwAxxB&project=<PROJECT_ID>&bypass=<TOKEN>
+http://localhost:3000/workflows/new?type=<TYPE>&team=team_nO2mCG4W8IxPIeKoSsqwAxxB&project=<PROJECT_ID>
 ```
 
 Example (design-guidelines):
 ```
-http://localhost:3000/workflows/new?type=design-guidelines&team=team_nO2mCG4W8IxPIeKoSsqwAxxB&project=prj_1Fu7YXCrKlgt5WUDVSRoKxHD7Y3u&bypass=<TOKEN>
+http://localhost:3000/workflows/new?type=design-guidelines&team=team_nO2mCG4W8IxPIeKoSsqwAxxB&project=prj_1Fu7YXCrKlgt5WUDVSRoKxHD7Y3u
 ```
 
 Then:
@@ -111,17 +106,17 @@ These print a ready-to-open URL for each workflow type.
 
 ```bash
 # design-guidelines
-TOKEN=$(grep WORKFLOW_TEST_BYPASS_TOKEN /Users/elsigh/src/vercel-labs/dev3000/www/.env.local | cut -d'\"' -f2) && echo "http://localhost:3000/workflows/new?type=design-guidelines&team=team_nO2mCG4W8IxPIeKoSsqwAxxB&project=prj_1Fu7YXCrKlgt5WUDVSRoKxHD7Y3u&bypass=$TOKEN"
+echo "http://localhost:3000/workflows/new?type=design-guidelines&team=team_nO2mCG4W8IxPIeKoSsqwAxxB&project=prj_1Fu7YXCrKlgt5WUDVSRoKxHD7Y3u"
 ```
 
 ```bash
 # react-performance
-TOKEN=$(grep WORKFLOW_TEST_BYPASS_TOKEN /Users/elsigh/src/vercel-labs/dev3000/www/.env.local | cut -d'\"' -f2) && echo "http://localhost:3000/workflows/new?type=react-performance&team=team_nO2mCG4W8IxPIeKoSsqwAxxB&project=prj_mysQRnCoGuDcQ6JRgXxYxOHxegVV&bypass=$TOKEN"
+echo "http://localhost:3000/workflows/new?type=react-performance&team=team_nO2mCG4W8IxPIeKoSsqwAxxB&project=prj_mysQRnCoGuDcQ6JRgXxYxOHxegVV"
 ```
 
 ```bash
 # cls-fix
-TOKEN=$(grep WORKFLOW_TEST_BYPASS_TOKEN /Users/elsigh/src/vercel-labs/dev3000/www/.env.local | cut -d'\"' -f2) && echo "http://localhost:3000/workflows/new?type=cls-fix&team=team_nO2mCG4W8IxPIeKoSsqwAxxB&project=prj_VbZqjqTxeLP0deOdr82ZMGeYOi6c&bypass=$TOKEN"
+echo "http://localhost:3000/workflows/new?type=cls-fix&team=team_nO2mCG4W8IxPIeKoSsqwAxxB&project=prj_VbZqjqTxeLP0deOdr82ZMGeYOi6c"
 ```
 
 ## Monitoring (Always Do This First)

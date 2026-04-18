@@ -526,7 +526,7 @@ export const changelog: Release[] = [
       "Fix Next.js port argument passing - remove -- separator",
       "Pass port argument to dev server when -p is specified",
       "Fix log file selector not showing previous logs",
-      "Replace hardcoded bypass token with env var reference in guide"
+      "Clean up workflow testing guide auth instructions"
     ]
   },
 
