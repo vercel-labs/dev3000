@@ -1380,12 +1380,13 @@ async function waitForServer(sandbox: Sandbox, port: number, timeoutMs: number, 
       // - 2xx (ok)
       // - 3xx (redirect - app/auth/protection is responding)
       // - 404 (server responding but route not found)
-      // - 401 (auth required - sandbox protection)
+      // - 401/403 (auth/protection challenge is responding)
       if (
         response.ok ||
         (response.status >= 300 && response.status < 400) ||
         response.status === 404 ||
-        response.status === 401
+        response.status === 401 ||
+        response.status === 403
       ) {
         if (debug) console.log(`  ✅ Port ${port} is ready (status ${response.status})`)
         return
@@ -2025,7 +2026,7 @@ async function createAndSaveBaseSnapshot(
           "mkdir -p /home/vercel-sandbox/.local/bin",
           `mkdir -p "${claudeInstallRoot}"`,
           `cd "${claudeInstallRoot}"`,
-          `if [ ! -f package.json ]; then printf '%s' '{"name":"claude-code-runtime","private":true}' > package.json; fi`,
+          `node -e 'const fs=require("fs"); if (!fs.existsSync("package.json")) fs.writeFileSync("package.json", JSON.stringify({ name: "claude-code-runtime", private: true }))'`,
           `bun add ${CLAUDE_CODE_PACKAGE}`,
           ensureNodeShim,
           `test -f "${localClaudeCli}"`,
