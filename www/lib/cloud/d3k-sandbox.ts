@@ -2037,10 +2037,11 @@ async function createAndSaveBaseSnapshot(
         `shared Claude package install failed: stdout=${sharedRuntimeInstall.stdout || "<empty>"} stderr=${sharedRuntimeInstall.stderr || "<empty>"}`
       )
     }
-    const sharedRuntimeTrust = await runCmd("bun", ["pm", "trust", "--all"], {
-      cwd: claudeInstallRoot,
-      env: sharedHomeEnv
-    })
+    const sharedRuntimeTrust = await runCmd(
+      "sh",
+      ["-lc", `cd "${claudeInstallRoot}" && bun pm trust ${CLAUDE_CODE_PACKAGE}`],
+      { env: sharedHomeEnv }
+    )
     if (sharedRuntimeTrust.exitCode !== 0) {
       throw new Error(
         `shared Claude package trust failed: stdout=${sharedRuntimeTrust.stdout || "<empty>"} stderr=${sharedRuntimeTrust.stderr || "<empty>"}`
