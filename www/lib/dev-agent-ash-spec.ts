@@ -15,7 +15,7 @@ import type {
 const ASH_PACKAGE_NAME = "experimental-ash"
 const ASH_PACKAGE_VERSION = "0.3.0-alpha.5"
 const ASH_RUNTIME_VERSION = `${ASH_PACKAGE_NAME}@${ASH_PACKAGE_VERSION}`
-const ASH_ARTIFACT_FORMAT_VERSION = 3
+const ASH_ARTIFACT_FORMAT_VERSION = 4
 
 export interface DevAgentAshArtifact {
   framework: "experimental-ash"
@@ -243,6 +243,79 @@ export default httpRoute({
     username,
     password,
   }),
+});
+`
+}
+
+function renderAshRuntimeTaskChannel(): string {
+  return `import { defineRoute } from "experimental-ash/channels";
+import { createUnauthorizedResponse, verifyHttpBasic } from "experimental-ash/channels/auth";
+
+const username = process.env.DEV3000_ASH_RUNTIME_USERNAME || "dev3000";
+const password = process.env.DEV3000_ASH_RUNTIME_PASSWORD;
+
+if (!password) {
+  throw new Error("DEV3000_ASH_RUNTIME_PASSWORD is required for the generated Ash runtime route.");
+}
+
+export default defineRoute({
+  adapter: { kind: "http" },
+  async fetch(request, ctx) {
+    const auth = verifyHttpBasic(request.headers.get("authorization"), {
+      username,
+      password,
+    });
+
+    if (!auth.ok) {
+      return createUnauthorizedResponse({
+        challenges: [{ scheme: "Basic", parameters: { realm: "ash-task" } }],
+      });
+    }
+
+    let payload: unknown;
+    try {
+      payload = await request.json();
+    } catch {
+      return Response.json({ error: "Invalid JSON body.", ok: false }, { status: 400 });
+    }
+
+    if (payload === null || typeof payload !== "object") {
+      return Response.json({ error: "Expected a JSON object.", ok: false }, { status: 400 });
+    }
+
+    const message =
+      typeof (payload as { message?: unknown }).message === "string"
+        ? (payload as { message: string }).message.trim()
+        : "";
+
+    if (!message) {
+      return Response.json({ error: "Missing or empty 'message' field.", ok: false }, { status: 400 });
+    }
+
+    const continuationToken = \`http-task:\${crypto.randomUUID()}\`;
+    const handle = await ctx.agent.run({
+      adapter: { kind: "http" },
+      auth: auth.sessionAuth,
+      continuationToken,
+      input: { message },
+      mode: "task",
+    });
+
+    return Response.json(
+      {
+        continuationToken: handle.continuationToken,
+        ok: true,
+        sessionId: handle.sessionId,
+        streamPath: \`/.well-known/ash/v1/sessions/\${encodeURIComponent(handle.sessionId)}/stream\`,
+      },
+      {
+        headers: {
+          "cache-control": "no-store",
+        },
+        status: 202,
+      },
+    );
+  },
 });
 `
 }
@@ -616,6 +689,10 @@ export async function createDevAgentAshSource(input: DevAgentAshInput, revision:
     {
       path: "agent/channels/.well-known/ash/v1/message.ts",
       content: renderAshRuntimeMessageChannel()
+    },
+    {
+      path: "agent/channels/.well-known/ash/v1/task.ts",
+      content: renderAshRuntimeTaskChannel()
     },
     {
       path: "agent/channels/.well-known/ash/v1/sessions/[sessionId]/stream.ts",

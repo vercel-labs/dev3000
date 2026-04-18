@@ -1254,15 +1254,17 @@ function normalizeDevAgent(devAgent: StoredDevAgent | Omit<DevAgent, "usageCount
     mergedDevAgent.ashArtifact?.revision ?? 1,
     mergedDevAgent.ashArtifact?.generatedAt || mergedDevAgent.updatedAt || mergedDevAgent.createdAt
   )
+  const normalizedAshArtifact =
+    mergedDevAgent.ashArtifact?.tarballUrl && mergedDevAgent.ashArtifact.specHash === synthesizedAshArtifact.specHash
+      ? {
+          ...synthesizedAshArtifact,
+          tarballUrl: mergedDevAgent.ashArtifact.tarballUrl
+        }
+      : synthesizedAshArtifact
 
   return {
     ...normalizedDevAgent,
-    ashArtifact: mergedDevAgent.ashArtifact
-      ? {
-          ...synthesizedAshArtifact,
-          ...mergedDevAgent.ashArtifact
-        }
-      : synthesizedAshArtifact
+    ashArtifact: normalizedAshArtifact
   }
 }
 

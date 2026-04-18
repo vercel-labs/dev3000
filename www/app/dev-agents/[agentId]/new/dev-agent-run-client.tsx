@@ -105,7 +105,7 @@ interface RunnerValidationResult {
   }
 }
 
-type WorkerSetupErrorCode = "github_integration_required" | "unknown"
+type WorkerSetupErrorCode = "github_integration_required" | "initial_deployment_missing" | "unknown"
 
 interface WorkerSetupErrorState {
   message: string
@@ -758,8 +758,7 @@ export default function DevAgentRunClient({
     await startDevAgentRun()
   }
 
-  const workerSetupNeedsGithubIntegration =
-    workerSetupError?.code === "github_integration_required" && Boolean(workerSetupError.actionUrl)
+  const workerSetupNeedsAction = Boolean(workerSetupError?.actionUrl)
   const workerSetupActionUrl = workerSetupError?.actionUrl || null
 
   return (
@@ -1165,10 +1164,21 @@ export default function DevAgentRunClient({
                 <AlertCircle className="mt-0.5 size-4 shrink-0" />
                 <div className="space-y-2">
                   <div>{workerSetupError.message}</div>
-                  {workerSetupNeedsGithubIntegration ? (
+                  {workerSetupNeedsAction ? (
                     <div className="text-[12px] leading-[18px] text-red-300/90">
-                      Install the Vercel GitHub app for the <span className="font-medium">{team.name}</span> team, then
-                      come back and retry runner setup.
+                      {workerSetupError.code === "github_integration_required" ? (
+                        <>
+                          Install the Vercel GitHub app for the <span className="font-medium">{team.name}</span> team,
+                          then come back and retry runner setup.
+                        </>
+                      ) : workerSetupError.code === "initial_deployment_missing" ? (
+                        <>
+                          The runner project exists, but its source repo still is not deployable for this team. Open the
+                          project, fix repo access, then come back and retry setup.
+                        </>
+                      ) : (
+                        <>Open the runner setup surface, fix the prerequisite, then come back and retry setup.</>
+                      )}
                     </div>
                   ) : null}
                 </div>
@@ -1249,13 +1259,13 @@ export default function DevAgentRunClient({
 
           <DialogFooter className="flex-col gap-3 sm:flex-col">
             <div className="flex justify-start">
-              {workerSetupNeedsGithubIntegration && !didOpenWorkerSetupAction && workerSetupActionUrl ? (
+              {workerSetupNeedsAction && !didOpenWorkerSetupAction && workerSetupActionUrl ? (
                 <Button
                   type="button"
                   onClick={() => openWorkerSetupAction(workerSetupActionUrl)}
                   className="h-9 rounded-md bg-[#ededed] px-4 text-[13px] font-medium text-[#0a0a0a] hover:bg-white"
                 >
-                  {workerSetupError.actionLabel || "Install GitHub Integration"}
+                  {workerSetupError?.actionLabel || "Open Setup"}
                 </Button>
               ) : canRetryWorkerSetup ? (
                 <Button
@@ -1269,7 +1279,7 @@ export default function DevAgentRunClient({
                       <Loader2 className="size-3.5 animate-spin" />
                       {workerSetupResult?.installed ? "Repairing…" : "Installing…"}
                     </span>
-                  ) : workerSetupNeedsGithubIntegration && didOpenWorkerSetupAction ? (
+                  ) : workerSetupNeedsAction && didOpenWorkerSetupAction ? (
                     "Retry Setup"
                   ) : workerSetupResult?.installed ? (
                     "Retry Setup"

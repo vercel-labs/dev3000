@@ -7,7 +7,7 @@ import {
 } from "@/lib/skill-runner-config"
 import type { VercelTeam } from "@/lib/vercel-teams"
 
-export type SkillRunnerWorkerSetupErrorCode = "github_integration_required" | "unknown"
+export type SkillRunnerWorkerSetupErrorCode = "github_integration_required" | "initial_deployment_missing" | "unknown"
 
 export interface SkillRunnerWorkerSetupRequirement {
   code: SkillRunnerWorkerSetupErrorCode
@@ -125,6 +125,8 @@ const ALLOWED_WORKER_ENV_KEYS = [SKILL_RUNNER_WORKER_MODE_ENV] as const
 const REQUIRED_SELF_HOSTED_WORKER_ENV_KEYS = ["BLOB_READ_WRITE_TOKEN"] as const
 const SELF_HOSTED_BLOB_STORE_REGION = "iad1"
 const SELF_HOSTED_BLOB_ENVIRONMENTS = ["production", "preview", "development"] as const
+const INITIAL_DEPLOYMENT_POLL_ATTEMPTS = 8
+const INITIAL_DEPLOYMENT_POLL_INTERVAL_MS = 3000
 
 export interface SkillRunnerWorkerProject {
   projectId: string
@@ -225,6 +227,18 @@ function buildWorkerProjectCreateError(status: number, errorText: string): Error
   }
 
   return new Error(`Failed to install runner project: ${status} ${errorText}`)
+}
+
+function buildMissingInitialDeploymentError(project: SkillRunnerWorkerProject): SkillRunnerWorkerSetupError {
+  return new SkillRunnerWorkerSetupError(
+    `The runner project was created, but Vercel never started its first deployment. This usually means the team's Git integration cannot access ${SKILL_RUNNER_WORKER_REPO}. Open the runner project, review its source-repo access, then retry setup.`,
+    {
+      code: "initial_deployment_missing",
+      actionLabel: "Open Runner Project",
+      actionUrl: project.dashboardUrl,
+      repo: SKILL_RUNNER_WORKER_REPO
+    }
+  )
 }
 
 async function sleep(ms: number): Promise<void> {
@@ -677,39 +691,41 @@ export async function installSkillRunnerWorkerProject(
 
   let deploymentId = project.latestDeploymentId || null
   if (!deploymentId) {
-    for (let attempt = 0; attempt < 20; attempt += 1) {
+    for (let attempt = 0; attempt < INITIAL_DEPLOYMENT_POLL_ATTEMPTS; attempt += 1) {
       const resolved = await findSkillRunnerWorkerProject(accessToken, team)
       if (resolved?.latestDeploymentId) {
         deploymentId = resolved.latestDeploymentId
         break
       }
-      await sleep(3000)
+      await sleep(INITIAL_DEPLOYMENT_POLL_INTERVAL_MS)
     }
   }
 
-  if (deploymentId) {
-    const redeployProject = {
-      ...project,
-      latestDeploymentId: deploymentId
-    }
-    const redeployedId = await redeployWorkerProject(accessToken, team, redeployProject)
+  if (!deploymentId) {
+    throw buildMissingInitialDeploymentError(project)
+  }
 
-    if (redeployedId) {
-      for (let attempt = 0; attempt < 30; attempt += 1) {
-        const resolved = await findSkillRunnerWorkerProject(accessToken, team)
-        if (
-          resolved?.workerBaseUrl &&
-          (!resolved.missingEnvKeys || resolved.missingEnvKeys.length === 0) &&
-          resolved.latestDeploymentId === redeployedId &&
-          resolved.latestDeploymentReadyState === "READY"
-        ) {
-          return resolved
-        }
-        await sleep(3000)
+  const redeployProject = {
+    ...project,
+    latestDeploymentId: deploymentId
+  }
+  const redeployedId = await redeployWorkerProject(accessToken, team, redeployProject)
+
+  if (redeployedId) {
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      const resolved = await findSkillRunnerWorkerProject(accessToken, team)
+      if (
+        resolved?.workerBaseUrl &&
+        (!resolved.missingEnvKeys || resolved.missingEnvKeys.length === 0) &&
+        resolved.latestDeploymentId === redeployedId &&
+        resolved.latestDeploymentReadyState === "READY"
+      ) {
+        return resolved
       }
-
-      return (await findSkillRunnerWorkerProject(accessToken, team)) || project
+      await sleep(3000)
     }
+
+    return (await findSkillRunnerWorkerProject(accessToken, team)) || project
   }
 
   for (let attempt = 0; attempt < 20; attempt += 1) {

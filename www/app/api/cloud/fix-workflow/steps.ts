@@ -36,6 +36,7 @@ const ASH_RUNTIME_PORT = 3100
 const ASH_RUNTIME_USERNAME = "dev3000"
 const ASH_RUNTIME_ROOT = "/home/vercel-sandbox/.dev3000/ash-apps"
 const ASH_RUNTIME_LOG_DIR = "/home/vercel-sandbox/.d3k/logs"
+const ASH_TASK_ROUTE_PATH = "/.well-known/ash/v1/task"
 const D3K_SKILL_INSTALL_ARG = "vercel-labs/dev3000@d3k"
 const VERCEL_PLUGIN_INSTALL_ARG = "vercel/vercel-plugin"
 const ANALYZE_TO_NDJSON_SCRIPT = `#!/usr/bin/env node
@@ -5094,17 +5095,15 @@ function buildAshRuntimePromptPrefix({
 - Prefer direct code changes and targeted validation over broad exploration.`
 }
 
-async function streamAshRuntimeTurn(
+async function readAshRuntimeSessionStream(
   baseUrl: string,
   authorization: string,
-  prompt: string,
-  continuationToken: string | undefined,
+  sessionId: string,
+  streamPath?: string,
   progressContext?: ProgressContext | null
 ): Promise<{
-  continuationToken?: string
   rawEvents: string[]
   resultText: string
-  sessionId: string
   terminalState: "waiting" | "completed"
   usage: {
     promptTokens: number
@@ -5114,37 +5113,11 @@ async function streamAshRuntimeTurn(
     totalTokens: number
   }
 }> {
-  const messageRequestBody = continuationToken ? { continuationToken, message: prompt } : { message: prompt }
-
-  const messageResponse = await fetch(`${baseUrl}/.well-known/ash/v1/message`, {
-    method: "POST",
-    headers: {
-      authorization,
-      "content-type": "application/json"
-    },
-    body: JSON.stringify(messageRequestBody)
-  })
-
-  const messagePayloadText = await messageResponse.text()
-  if (!messageResponse.ok) {
-    throw new Error(`ASH runtime rejected start message (${messageResponse.status}): ${messagePayloadText}`)
-  }
-
-  const messagePayload = JSON.parse(messagePayloadText) as {
-    continuationToken?: string
-    ok?: boolean
-    sessionId?: string
-  }
-  const sessionId = messagePayload.sessionId
-  if (!sessionId) {
-    throw new Error("ASH runtime did not return a session id.")
-  }
-  const nextContinuationToken =
-    typeof messagePayload.continuationToken === "string" && messagePayload.continuationToken.trim().length > 0
-      ? messagePayload.continuationToken.trim()
-      : continuationToken
-
-  const streamResponse = await fetch(`${baseUrl}/.well-known/ash/v1/sessions/${encodeURIComponent(sessionId)}/stream`, {
+  const resolvedStreamPath =
+    typeof streamPath === "string" && streamPath.trim().length > 0
+      ? streamPath.trim()
+      : `/.well-known/ash/v1/sessions/${encodeURIComponent(sessionId)}/stream`
+  const streamResponse = await fetch(`${baseUrl}${resolvedStreamPath}`, {
     headers: { authorization, "cache-control": "no-store" }
   })
   if (!streamResponse.ok || !streamResponse.body) {
@@ -5156,6 +5129,8 @@ async function streamAshRuntimeTurn(
   const reader = streamResponse.body.getReader()
   let buffer = ""
   let resultText = ""
+  let lastCompletedMessage = ""
+  let finalCompletedMessage = ""
   let promptTokens = 0
   let completionTokens = 0
   let cacheReadTokens = 0
@@ -5163,6 +5138,7 @@ async function streamAshRuntimeTurn(
   const rawEvents: string[] = []
   let terminalError: string | null = null
   let terminalState: "waiting" | "completed" = "completed"
+  let reachedTurnBoundary = false
 
   try {
     while (true) {
@@ -5188,8 +5164,14 @@ async function streamAshRuntimeTurn(
         if (event.type === "message.completed") {
           const message = typeof event.data?.message === "string" ? event.data.message.trim() : ""
           if (message) {
-            resultText = message
-            await appendProgressLog(progressContext, `[ASH] Assistant message completed: ${message.slice(0, 160)}`)
+            lastCompletedMessage = message
+            if (event.data?.finishReason !== "tool-calls") {
+              finalCompletedMessage = message
+            }
+            await appendProgressLog(
+              progressContext,
+              `[ASH] Assistant message completed (${String(event.data?.finishReason || "unknown")}): ${message.slice(0, 160)}`
+            )
           }
         }
 
@@ -5221,16 +5203,18 @@ async function streamAshRuntimeTurn(
 
         if (event.type === "session.waiting") {
           terminalState = "waiting"
+          reachedTurnBoundary = true
           break
         }
 
         if (event.type === "session.completed") {
           terminalState = "completed"
+          reachedTurnBoundary = true
           break
         }
       }
 
-      if (terminalError || rawEvents.some((line) => /"type":"session\.(waiting|completed)"/.test(line))) {
+      if (terminalError || reachedTurnBoundary) {
         break
       }
     }
@@ -5242,11 +5226,11 @@ async function streamAshRuntimeTurn(
     throw new Error(terminalError)
   }
 
+  resultText = finalCompletedMessage || lastCompletedMessage
+
   return {
-    continuationToken: nextContinuationToken,
     rawEvents,
     resultText,
-    sessionId,
     terminalState,
     usage: {
       promptTokens,
@@ -5255,6 +5239,64 @@ async function streamAshRuntimeTurn(
       cacheCreationTokens,
       totalTokens: promptTokens + completionTokens + cacheReadTokens + cacheCreationTokens
     }
+  }
+}
+
+async function streamAshRuntimeTask(
+  baseUrl: string,
+  authorization: string,
+  prompt: string,
+  progressContext?: ProgressContext | null
+): Promise<{
+  rawEvents: string[]
+  resultText: string
+  sessionId: string
+  terminalState: "waiting" | "completed"
+  usage: {
+    promptTokens: number
+    completionTokens: number
+    cacheReadTokens: number
+    cacheCreationTokens: number
+    totalTokens: number
+  }
+}> {
+  const taskResponse = await fetch(`${baseUrl}${ASH_TASK_ROUTE_PATH}`, {
+    method: "POST",
+    headers: {
+      authorization,
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({ message: prompt })
+  })
+
+  const taskPayloadText = await taskResponse.text()
+  if (!taskResponse.ok) {
+    throw new Error(`ASH runtime rejected task start (${taskResponse.status}): ${taskPayloadText}`)
+  }
+
+  const taskPayload = JSON.parse(taskPayloadText) as {
+    ok?: boolean
+    sessionId?: string
+    streamPath?: string
+  }
+  const sessionId = taskPayload.sessionId
+  if (!sessionId) {
+    throw new Error("ASH runtime task route did not return a session id.")
+  }
+  const streamResult = await readAshRuntimeSessionStream(
+    baseUrl,
+    authorization,
+    sessionId,
+    taskPayload.streamPath,
+    progressContext
+  )
+
+  return {
+    rawEvents: streamResult.rawEvents,
+    resultText: streamResult.resultText,
+    sessionId,
+    terminalState: streamResult.terminalState,
+    usage: streamResult.usage
   }
 }
 
@@ -5318,17 +5360,22 @@ async function runAshAgentInSandbox(
   })
   const clsCodeHints =
     workflowTypeForPrompt === "cls-fix" ? await gatherClsCodeHints(sandbox, effectiveProjectRoot) : null
-  const prompts = buildAshTurnPrompts({
+  const { effectiveInstructions, effectiveActionSteps } = buildEffectiveDevAgentPromptConfig({
+    workflowType: workflowTypeForPrompt,
+    devAgentInstructions,
+    devAgentActionSteps
+  })
+  const taskPrompt = buildAshTaskPrompt({
     workflowType: workflowTypeForPrompt,
     startPath,
     devUrl,
     customPrompt,
     crawlDepth,
     devAgentName,
-    devAgentInstructions,
+    devAgentInstructions: effectiveInstructions,
     devAgentExecutionMode,
     devAgentSandboxBrowser,
-    devAgentActionSteps,
+    devAgentActionSteps: effectiveActionSteps,
     skillLoadInstructions,
     bundleBaselineSummary,
     beforeCls,
@@ -5343,71 +5390,40 @@ async function runAshAgentInSandbox(
   const transcript: string[] = []
   transcript.push("## ASH Runtime Session")
   transcript.push("")
+  await appendProgressLog(progressContext, `[ASH] Task run: ${taskPrompt.prompt.slice(0, 120)}`)
+  const result = await streamAshRuntimeTask(baseUrl, authorization, taskPrompt.prompt, progressContext)
 
-  let currentContinuationToken: string | undefined
-  let finalSummary = ""
-  let totalPromptTokens = 0
-  let totalCompletionTokens = 0
-  let totalCacheReadTokens = 0
-  let totalCacheCreationTokens = 0
-
-  for (let index = 0; index < prompts.length; index++) {
-    const prompt = prompts[index]
-    await appendProgressLog(progressContext, `[ASH] ${prompt.label}: ${prompt.prompt.slice(0, 120)}`)
-    const result = await streamAshRuntimeTurn(
-      baseUrl,
-      authorization,
-      prompt.prompt,
-      currentContinuationToken,
-      progressContext
-    )
-    currentContinuationToken = result.continuationToken
-    finalSummary = result.resultText || finalSummary
-    totalPromptTokens += result.usage.promptTokens
-    totalCompletionTokens += result.usage.completionTokens
-    totalCacheReadTokens += result.usage.cacheReadTokens
-    totalCacheCreationTokens += result.usage.cacheCreationTokens
-
-    transcript.push(`### ${prompt.label}`)
-    transcript.push("")
-    transcript.push("**User:**")
-    transcript.push("```")
-    transcript.push(prompt.prompt)
-    transcript.push("```")
-    transcript.push("")
-    transcript.push("**ASH Runtime:**")
-    transcript.push(result.resultText || "(no textual result)")
-    transcript.push("")
-    transcript.push(`**Session:** ${result.sessionId}`)
-    transcript.push(`**Terminal State:** ${result.terminalState}`)
-    transcript.push("")
-    transcript.push("**Stream Events:**")
-    transcript.push("```ndjson")
-    transcript.push(result.rawEvents.join("\n"))
-    transcript.push("```")
-    transcript.push("")
-
-    if (result.terminalState === "completed" && index < prompts.length - 1) {
-      await appendProgressLog(
-        progressContext,
-        `[ASH] Session completed after ${prompt.label}; skipping ${prompts.length - index - 1} follow-up prompt(s)`
-      )
-      break
-    }
-  }
+  transcript.push(`### ${taskPrompt.label}`)
+  transcript.push("")
+  transcript.push("**User:**")
+  transcript.push("```")
+  transcript.push(taskPrompt.prompt)
+  transcript.push("```")
+  transcript.push("")
+  transcript.push("**ASH Runtime:**")
+  transcript.push(result.resultText || "(no textual result)")
+  transcript.push("")
+  transcript.push(`**Session:** ${result.sessionId}`)
+  transcript.push(`**Terminal State:** ${result.terminalState}`)
+  transcript.push("")
+  transcript.push("**Stream Events:**")
+  transcript.push("```ndjson")
+  transcript.push(result.rawEvents.join("\n"))
+  transcript.push("```")
+  transcript.push("")
 
   return {
     transcript: transcript.join("\n"),
-    summary: finalSummary,
+    summary: result.resultText,
     systemPrompt: "[ASH runtime]",
     modelId: devAgentAiAgent || "ash-runtime",
     skillsLoaded: getInstalledSkillNames(devAgentSkillRefs, { includeD3k: includeD3kSkill, includeAshRunbook: true }),
     usage: {
-      promptTokens: totalPromptTokens,
-      completionTokens: totalCompletionTokens,
-      cacheReadTokens: totalCacheReadTokens,
-      cacheCreationTokens: totalCacheCreationTokens,
-      totalTokens: totalPromptTokens + totalCompletionTokens + totalCacheReadTokens + totalCacheCreationTokens
+      promptTokens: result.usage.promptTokens,
+      completionTokens: result.usage.completionTokens,
+      cacheReadTokens: result.usage.cacheReadTokens,
+      cacheCreationTokens: result.usage.cacheCreationTokens,
+      totalTokens: result.usage.totalTokens
     },
     costUsd: 0
   }
@@ -5866,6 +5882,93 @@ function buildClsActionStepGuidance(
   return `Workflow editor guidance:\n${lines.join("\n")}`
 }
 
+function getWorkflowExecutionMaxTurns(workflowType: string): number {
+  return workflowType === "cls-fix" ? 30 : workflowType === "turbopack-bundle-analyzer" ? 25 : 18
+}
+
+function buildWorkflowValidationHint(
+  executionMode?: "dev-server" | "preview-pr",
+  runtime: "claude" | "ash" = "claude"
+) {
+  if (executionMode === "preview-pr") {
+    return runtime === "ash"
+      ? "Prepare preview/PR-ready changes and use lightweight validation before you conclude."
+      : "Work from the codebase and preview validation, then prepare PR-ready changes."
+  }
+
+  return runtime === "ash"
+    ? "Validate meaningful changes with runtime evidence before you conclude."
+    : "Use d3k logs, browser evidence, and runtime signals to validate each meaningful fix before you finish."
+}
+
+function buildAuthoredInstructionBlock({
+  devAgentInstructions,
+  customPrompt
+}: {
+  devAgentInstructions?: string
+  customPrompt?: string
+}): string | null {
+  const block = [devAgentInstructions?.trim(), customPrompt?.trim()]
+    .filter((value): value is string => Boolean(value))
+    .join("\n\n")
+
+  return block || null
+}
+
+function buildWorkflowSpecificExecutionGuidance({
+  workflowType,
+  startPath,
+  crawlDepth,
+  bundleBaselineSummary,
+  beforeCls,
+  beforeGrade,
+  codeHints
+}: {
+  workflowType: string
+  startPath: string
+  crawlDepth?: number | "all"
+  bundleBaselineSummary?: string
+  beforeCls: number | null
+  beforeGrade: "good" | "needs-improvement" | "poor" | null
+  codeHints?: string
+}): string {
+  if (workflowType === "cls-fix") {
+    return [
+      `Baseline CLS: ${beforeCls?.toFixed(4) || "unknown"}`,
+      `Baseline grade: ${beforeGrade || "unknown"}`,
+      "The workflow already captured baseline visuals/metrics and will perform final verification after your code changes.",
+      "Stay code-first and do not redo baseline measurement or repeated browser inspection unless the runtime evidence looks inconsistent.",
+      codeHints?.trim() ? `Suspicious code hints:\n${codeHints.trim()}` : null
+    ]
+      .filter(Boolean)
+      .join("\n")
+  }
+
+  if (workflowType === "turbopack-bundle-analyzer") {
+    return [
+      "Focus only on generated Turbopack NDJSON artifacts and the minimal set of source files needed for the fix.",
+      "Do not rerun build or analyzer commands manually; the workflow runtime will handle post-change analyzer verification.",
+      bundleBaselineSummary ? `Workflow-provided bundle baseline:\n${bundleBaselineSummary}` : null
+    ]
+      .filter(Boolean)
+      .join("\n")
+  }
+
+  if (workflowType === "design-guidelines") {
+    return `Prioritize the highest-impact design guideline issues on ${startPath}. ${
+      crawlDepth && crawlDepth !== 1
+        ? `Audit multiple relevant pages up to depth ${crawlDepth} only when that materially improves the result.`
+        : "Focus on the current page and nearby shared UI."
+    }`
+  }
+
+  if (workflowType === "react-performance") {
+    return "Focus on the highest-impact React/Next.js performance issue and verify the concrete improvement with available runtime evidence."
+  }
+
+  return "Prefer targeted, evidence-driven fixes over broad refactors."
+}
+
 function buildClaudeMainTaskPrompt({
   workflowType,
   startPath,
@@ -5893,11 +5996,8 @@ function buildClaudeMainTaskPrompt({
   beforeCls: number | null
   beforeGrade: "good" | "needs-improvement" | "poor" | null
 }): ClaudeTurnPrompt {
-  const mainTaskMaxTurns = workflowType === "cls-fix" ? 30 : workflowType === "turbopack-bundle-analyzer" ? 25 : 18
-  const validationHint =
-    devAgentExecutionMode === "preview-pr"
-      ? "Work from the codebase and preview validation, then prepare PR-ready changes."
-      : "Use d3k logs, browser evidence, and runtime signals to validate each meaningful fix before you finish."
+  const mainTaskMaxTurns = getWorkflowExecutionMaxTurns(workflowType)
+  const validationHint = buildWorkflowValidationHint(devAgentExecutionMode, "claude")
 
   if (devAgentInstructions?.trim()) {
     const clsRuntimeEvidenceBlock =
@@ -6189,7 +6289,7 @@ ${bundleBaselineSummary ? `Workflow-provided bundle baseline:\n${bundleBaselineS
   return prompts
 }
 
-function buildAshTurnPrompts({
+function buildAshTaskPrompt({
   workflowType,
   startPath,
   devUrl,
@@ -6221,42 +6321,85 @@ function buildAshTurnPrompts({
   beforeCls: number | null
   beforeGrade: "good" | "needs-improvement" | "poor" | null
   codeHints?: string
-}): ClaudeTurnPrompt[] {
-  const prompts = buildClaudeTurnPrompts({
-    workflowType,
-    startPath,
-    devUrl,
-    customPrompt,
-    crawlDepth,
-    devAgentName,
-    devAgentInstructions,
-    devAgentExecutionMode,
-    devAgentActionSteps,
-    skillLoadInstructions,
-    bundleBaselineSummary,
-    beforeCls,
-    beforeGrade,
-    codeHints
-  })
-
-  if (prompts.length === 0) {
-    return prompts
-  }
-
+}): ClaudeTurnPrompt {
   const runtimePrefix = buildAshRuntimePromptPrefix({
     devUrl,
     devAgentSandboxBrowser,
     skillLoadInstructions
   })
+  const validationHint = buildWorkflowValidationHint(devAgentExecutionMode, "ash")
+  const actionPlanHint =
+    devAgentActionSteps && devAgentActionSteps.length > 0
+      ? "Follow the numbered action plan from `dev3000-agent-runbook` as the primary source of truth."
+      : "Follow the objective and evaluation rules from `dev3000-agent-runbook` as the primary source of truth."
+  const workflowSpecificInstructions = buildWorkflowSpecificExecutionGuidance({
+    workflowType,
+    startPath,
+    crawlDepth,
+    bundleBaselineSummary,
+    beforeCls,
+    beforeGrade,
+    codeHints
+  })
+  const authoredInstructionBlock = buildAuthoredInstructionBlock({ devAgentInstructions, customPrompt })
 
-  return prompts.map((prompt, index) =>
-    index === 0
-      ? {
-          ...prompt,
-          prompt: `${runtimePrefix}\n\n${prompt.prompt}`
-        }
-      : prompt
-  )
+  return {
+    label: "ASH task run",
+    maxTurns: getWorkflowExecutionMaxTurns(workflowType),
+    prompt: `${runtimePrefix}
+
+Execute the ${devAgentName || "dev agent"} workflow on ${startPath}.
+
+Primary rule:
+- ${actionPlanHint}
+
+Runtime context:
+- Start path: ${startPath}
+- Dev URL: ${devUrl || "(dev server intentionally skipped)"}
+- Preferred browser mode: ${devAgentSandboxBrowser || "none"}
+- ${validationHint}
+
+Workflow-specific guidance:
+${workflowSpecificInstructions}
+
+${authoredInstructionBlock ? `Authored run instructions:\n${authoredInstructionBlock}\n\n` : ""}Execution rules:
+- Work directly in \`/workspace/repo\` so changes land in the real project checkout.
+- Prefer direct code changes and targeted validation over broad exploration.
+- Keep momentum toward concrete implementation.
+- Finish with a concise summary of what changed, the validation evidence you gathered, and any remaining issues.`
+  }
+}
+
+function buildEffectiveDevAgentPromptConfig({
+  workflowType,
+  devAgentInstructions,
+  devAgentActionSteps
+}: {
+  workflowType: string
+  devAgentInstructions?: string
+  devAgentActionSteps?: Array<{ kind: string; config: Record<string, string> }>
+}): {
+  effectiveInstructions?: string
+  effectiveActionSteps?: Array<{ kind: string; config: Record<string, string> }>
+} {
+  const collapsedClsActionStepGuidance =
+    workflowType === "cls-fix"
+      ? null
+      : devAgentActionSteps?.length
+        ? buildClsActionStepGuidance(devAgentActionSteps)
+        : null
+
+  const effectiveInstructions = [devAgentInstructions?.trim(), collapsedClsActionStepGuidance]
+    .filter((value): value is string => Boolean(value))
+    .join("\n\n")
+
+  const effectiveActionSteps =
+    workflowType === "cls-fix" || workflowType === "turbopack-bundle-analyzer" ? undefined : devAgentActionSteps
+
+  return {
+    effectiveInstructions: effectiveInstructions || undefined,
+    effectiveActionSteps
+  }
 }
 
 function parseClsValue(rawValue?: string): number | null {
@@ -7056,29 +7199,18 @@ async function runAgentWithDiagnoseTool(
   const modelSelection = resolveClaudeModelSelection(devAgentAiAgent)
   const selectedModelLabel = getDevAgentModelLabel(modelSelection.modelId)
   const clsCodeHints = workflowTypeForPrompt === "cls-fix" ? await gatherClsCodeHints(sandbox, SANDBOX_CWD) : null
-  const collapsedClsActionStepGuidance =
-    workflowTypeForPrompt === "cls-fix"
-      ? null
-      : devAgentActionSteps?.length
-        ? buildClsActionStepGuidance(devAgentActionSteps)
-        : null
-  const effectiveDevAgentInstructions = [devAgentInstructions?.trim(), collapsedClsActionStepGuidance]
-    .filter((value): value is string => Boolean(value))
-    .join("\n\n")
-  const effectiveActionSteps =
-    workflowTypeForPrompt === "cls-fix" || workflowTypeForPrompt === "turbopack-bundle-analyzer"
-      ? undefined
-      : devAgentActionSteps
+  const { effectiveInstructions: effectiveDevAgentInstructions, effectiveActionSteps } =
+    buildEffectiveDevAgentPromptConfig({
+      workflowType: workflowTypeForPrompt,
+      devAgentInstructions,
+      devAgentActionSteps
+    })
 
   if (gatewayAuthSource) {
     await appendProgressLog(progressContext, `[Claude] Gateway auth source: ${gatewayAuthSource}`)
   }
 
-  if (
-    devAgentAshTarballUrl &&
-    workflowTypeForPrompt !== "cls-fix" &&
-    workflowTypeForPrompt !== "turbopack-bundle-analyzer"
-  ) {
+  if (devAgentAshTarballUrl) {
     try {
       await appendProgressLog(progressContext, "[ASH] Executing packaged ASH runtime path...")
       return await runAshAgentInSandbox(
@@ -7092,11 +7224,11 @@ async function runAgentWithDiagnoseTool(
         workflowType,
         crawlDepth,
         devAgentName,
-        devAgentInstructions,
+        effectiveDevAgentInstructions,
         devAgentExecutionMode,
         devAgentSandboxBrowser,
         devAgentAiAgent,
-        devAgentActionSteps,
+        effectiveActionSteps,
         devAgentSkillRefs,
         devAgentAshTarballUrl,
         bundleBaselineSummary,

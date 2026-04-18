@@ -24,6 +24,7 @@ export type FailureCategory =
   | "deployment_failed"
   | "env_missing"
   | "github_integration_required"
+  | "repo_access_required"
   | "auth_expired"
   | "unknown"
 
@@ -182,6 +183,13 @@ export function classifyFailure(
   if (/deployment.*fail|failed deployment/i.test(text)) return "deployment_failed"
   if (/missing.*env|required.*env|env.*missing/i.test(text)) return "env_missing"
   if (/github integration|install github app|github app/i.test(text)) return "github_integration_required"
+  if (
+    /first deployment.*never started|source-repo access|git integration cannot access|cannot access vercel-labs\/dev3000/i.test(
+      text
+    )
+  ) {
+    return "repo_access_required"
+  }
   if (/auth.*(expired|invalid)|token.*expired|401|403/i.test(text)) return "auth_expired"
   if (/vercel api|api\.vercel\.com/i.test(text)) return "vercel_api_error"
   return "unknown"
