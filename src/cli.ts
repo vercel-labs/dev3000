@@ -975,6 +975,7 @@ program
 
     // Load user config early so it can be used for --with-agent and agent selection flows
     const userConfig = loadUserConfig()
+    const agentDetection = detectAIAgent()
 
     // Apply browser default from user config if not explicitly provided via CLI
     const browserOption = options.browser || userConfig.browser
@@ -1003,7 +1004,29 @@ program
     const insideTmux = !!process.env.TMUX
     let selectedAgent: { name: string; command: string } | null = null
     let didPromptAgentSelection = false
-    let skillsAgentId: string | null = options.agentName ? getSkillsAgentId(options.agentName) : null
+    let skillsAgentId: string | null = options.agentName
+      ? getSkillsAgentId(options.agentName)
+      : agentDetection.agentId || null
+
+    if (agentDetection.isAgent) {
+      if (options.tui !== false) {
+        if (options.debug) {
+          console.log(
+            `[DEBUG] AI agent detected: ${agentDetection.agentName} (${agentDetection.reason}), auto-disabling TUI`
+          )
+        }
+        options.tui = false
+      }
+
+      if (agentDetection.agentId && options.skills !== false && !options.autoSkills) {
+        if (options.debug) {
+          console.log(
+            `[DEBUG] AI agent detected: ${agentDetection.agentName} (${agentDetection.reason}), auto-enabling project skill installs`
+          )
+        }
+        options.autoSkills = true
+      }
+    }
 
     if (process.stdin.isTTY && options.agent !== false && options.tui !== false && !options.debug && !insideTmux) {
       // Clear the terminal so d3k UI starts at the top of the screen
@@ -1176,7 +1199,7 @@ program
     }
 
     if (options.autoSkills && options.skills !== false && !skillsAgentId) {
-      skillsAgentId = "codex"
+      skillsAgentId = agentDetection.agentId || "codex"
     }
 
     // Detect project type and configuration
@@ -1195,18 +1218,6 @@ program
       console.error(chalk.gray("  • Use --command to run a custom command:\n"))
       console.error(chalk.yellow(`    d3k --command "node server.js" -p 3000\n`))
       process.exit(1)
-    }
-
-    // Detect if running under an AI agent and auto-disable TUI
-    const agentDetection = detectAIAgent()
-    if (agentDetection.isAgent && options.tui !== false) {
-      if (options.debug) {
-        console.log(
-          `[DEBUG] AI agent detected: ${agentDetection.agentName} (${agentDetection.reason}), auto-disabling TUI`
-        )
-      }
-      // Override TUI setting to false when agent is detected
-      options.tui = false
     }
 
     // Use defaults from project detection if not explicitly provided

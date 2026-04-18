@@ -8,6 +8,7 @@
 export interface AgentDetectionResult {
   isAgent: boolean
   agentName?: string
+  agentId?: string
   reason?: string
 }
 
@@ -20,7 +21,17 @@ export function detectAIAgent(): AgentDetectionResult {
     return {
       isAgent: true,
       agentName: "Claude Code",
+      agentId: "claude-code",
       reason: "CLAUDECODE environment variable detected"
+    }
+  }
+
+  if (process.env.CODEX_CI === "1" || process.env.CODEX_THREAD_ID || process.env.CODEX_MANAGED_BY_BUN === "1") {
+    return {
+      isAgent: true,
+      agentName: "Codex",
+      agentId: "codex",
+      reason: "CODEX_* environment variable detected"
     }
   }
 
@@ -29,6 +40,7 @@ export function detectAIAgent(): AgentDetectionResult {
     return {
       isAgent: true,
       agentName: "Cline",
+      agentId: "cline",
       reason: "CLINE environment variable detected"
     }
   }
@@ -47,6 +59,7 @@ export function detectAIAgent(): AgentDetectionResult {
     return {
       isAgent: true,
       agentName: "Cursor AI",
+      agentId: "cursor",
       reason: "CURSOR environment variable detected"
     }
   }

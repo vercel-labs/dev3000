@@ -10,6 +10,9 @@ describe("detectAIAgent", () => {
     const cleanEnv = { ...originalEnv }
     delete cleanEnv.CLAUDECODE
     delete cleanEnv.CLAUDE_CODE_ENTRYPOINT
+    delete cleanEnv.CODEX_CI
+    delete cleanEnv.CODEX_THREAD_ID
+    delete cleanEnv.CODEX_MANAGED_BY_BUN
     delete cleanEnv.CLINE
     delete cleanEnv.CLINE_MODE
     delete cleanEnv.GITHUB_COPILOT
@@ -48,6 +51,22 @@ describe("detectAIAgent", () => {
     const result = detectAIAgent()
     expect(result.isAgent).toBe(true)
     expect(result.agentName).toBe("Cline")
+  })
+
+  it("should detect Codex via CODEX_CI", () => {
+    process.env.CODEX_CI = "1"
+    const result = detectAIAgent()
+    expect(result.isAgent).toBe(true)
+    expect(result.agentName).toBe("Codex")
+    expect(result.agentId).toBe("codex")
+  })
+
+  it("should detect Codex via CODEX_THREAD_ID", () => {
+    process.env.CODEX_THREAD_ID = "thread_123"
+    const result = detectAIAgent()
+    expect(result.isAgent).toBe(true)
+    expect(result.agentName).toBe("Codex")
+    expect(result.agentId).toBe("codex")
   })
 
   it("should detect GitHub Copilot", () => {
