@@ -2018,7 +2018,7 @@ async function createAndSaveBaseSnapshot(
           `mkdir -p "${claudeInstallRoot}"`,
           `cd "${claudeInstallRoot}"`,
           `bun -e 'const fs=require("fs"); if (!fs.existsSync("package.json")) fs.writeFileSync("package.json", JSON.stringify({ name: "claude-code-runtime", private: true }))'`,
-          `npm install --no-fund --no-audit ${CLAUDE_CODE_PACKAGE}`,
+          `pnpm add ${CLAUDE_CODE_PACKAGE}`,
           `test -x "${localClaudeExecutable}"`,
           `ln -sf "${localClaudeExecutable}" /home/vercel-sandbox/.local/bin/claude`,
           `bunx --bun skills@latest add ${VERCEL_PLUGIN_INSTALL_ARG} --agent claude-code --skill '*' -y`,

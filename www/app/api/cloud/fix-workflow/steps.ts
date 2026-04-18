@@ -6645,7 +6645,7 @@ async function ensureClaudeCodeInstalledInSandbox(
   await appendProgressLog(progressContext, "[Claude] Installing Claude Code CLI in sandbox...")
   const installAttempts = [
     {
-      label: "npm-local",
+      label: "pnpm-local",
       options: {
         cmd: "sh",
         args: [
@@ -6654,7 +6654,7 @@ async function ensureClaudeCodeInstalledInSandbox(
             `mkdir -p "${claudeInstallRoot}" /home/vercel-sandbox/.local/bin`,
             `cd "${claudeInstallRoot}"`,
             `if [ ! -f package.json ]; then printf '%s' '{"name":"claude-code-runtime","private":true}' > package.json; fi`,
-            `npm install --no-fund --no-audit ${CLAUDE_CODE_PACKAGE}`,
+            `pnpm add ${CLAUDE_CODE_PACKAGE}`,
             `test -x "${localClaudeExecutable}"`,
             `ln -sf "${localClaudeExecutable}" /home/vercel-sandbox/.local/bin/claude`
           ].join(" && ")
