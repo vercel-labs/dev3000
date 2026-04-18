@@ -1905,7 +1905,14 @@ async function createAndSaveBaseSnapshot(
     args: string[],
     opts?: { cwd?: string; env?: Record<string, string> }
   ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-    const result = await baseSandbox.runCommand({ cmd, args, cwd: opts?.cwd, env: opts?.env })
+    let result: Awaited<ReturnType<Sandbox["runCommand"]>>
+    const commandLabel = `${cmd} ${args.join(" ")}`.trim()
+    try {
+      result = await baseSandbox.runCommand({ cmd, args, cwd: opts?.cwd, env: opts?.env })
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      throw new Error(`shared snapshot command start failed: ${commandLabel}\nerror=${errorMessage}`)
+    }
     let stdout = ""
     let stderr = ""
     for await (const log of result.logs()) {
@@ -1920,7 +1927,6 @@ async function createAndSaveBaseSnapshot(
     try {
       await result.wait()
     } catch (error) {
-      const commandLabel = `${cmd} ${args.join(" ")}`.trim()
       const errorMessage = error instanceof Error ? error.message : String(error)
       throw new Error(
         `shared snapshot command failed: ${commandLabel}\n` +
@@ -2020,6 +2026,7 @@ async function createAndSaveBaseSnapshot(
     }
     const claudeInstallRoot = "/home/vercel-sandbox/.claude-code"
     const localClaudeExecutable = `${claudeInstallRoot}/node_modules/.bin/claude`
+    await reportProgress("Preparing shared Claude runtime directory...")
     const sharedRuntimePrep = await runCmd(
       "sh",
       [
@@ -2039,6 +2046,7 @@ async function createAndSaveBaseSnapshot(
       )
     }
 
+    await reportProgress("Installing Claude package in shared snapshot...")
     const sharedRuntimeInstall = await runCmd("bun", ["add", CLAUDE_CODE_PACKAGE], {
       cwd: claudeInstallRoot,
       env: sharedHomeEnv
