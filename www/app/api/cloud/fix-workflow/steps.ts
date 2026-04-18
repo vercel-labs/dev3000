@@ -6613,6 +6613,15 @@ async function ensureClaudeCodeInstalledInSandbox(
   const claudeInstallRoot = "/home/vercel-sandbox/.claude-code"
   const localClaudeExecutable = `${claudeInstallRoot}/node_modules/.bin/claude`
   const pathEnv = buildClaudeSandboxPathEnv()
+  const ensureRealNodeShim = [
+    'mkdir -p "/home/vercel-sandbox/.local/bin"',
+    "if ! command -v node >/dev/null 2>&1; then",
+    "  if command -v nodejs >/dev/null 2>&1; then",
+    '    ln -sf "$(command -v nodejs)" /home/vercel-sandbox/.local/bin/node',
+    "  fi",
+    "fi",
+    "command -v node >/dev/null 2>&1"
+  ].join("\n")
   const resolveInstalledClaudePath = async (): Promise<string | null> => {
     const result = await runSandboxCommandWithOptions(sandbox, {
       cmd: "sh",
@@ -6654,6 +6663,7 @@ async function ensureClaudeCodeInstalledInSandbox(
             `mkdir -p "${claudeInstallRoot}" /home/vercel-sandbox/.local/bin`,
             `cd "${claudeInstallRoot}"`,
             `if [ ! -f package.json ]; then printf '%s' '{"name":"claude-code-runtime","private":true}' > package.json; fi`,
+            ensureRealNodeShim,
             `pnpm add ${CLAUDE_CODE_PACKAGE}`,
             `test -x "${localClaudeExecutable}"`,
             `ln -sf "${localClaudeExecutable}" /home/vercel-sandbox/.local/bin/claude`
@@ -6675,6 +6685,7 @@ async function ensureClaudeCodeInstalledInSandbox(
             `mkdir -p "${claudeInstallRoot}" /home/vercel-sandbox/.local/bin`,
             `cd "${claudeInstallRoot}"`,
             `if [ ! -f package.json ]; then printf '%s' '{"name":"claude-code-runtime","private":true}' > package.json; fi`,
+            ensureRealNodeShim,
             `bun add ${CLAUDE_CODE_PACKAGE}`,
             `bun pm trust --all`,
             `test -x "${localClaudeExecutable}"`,
