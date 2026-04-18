@@ -1917,7 +1917,18 @@ async function createAndSaveBaseSnapshot(
         if (debug) console.debug(log.data)
       }
     }
-    await result.wait()
+    try {
+      await result.wait()
+    } catch (error) {
+      const commandLabel = `${cmd} ${args.join(" ")}`.trim()
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      throw new Error(
+        `shared snapshot command failed: ${commandLabel}\n` +
+          `error=${errorMessage}\n` +
+          `stdout=${stdout || "<empty>"}\n` +
+          `stderr=${stderr || "<empty>"}`
+      )
+    }
     return { exitCode: result.exitCode, stdout, stderr }
   }
 
@@ -2037,6 +2048,7 @@ async function createAndSaveBaseSnapshot(
         `shared Claude package install failed: stdout=${sharedRuntimeInstall.stdout || "<empty>"} stderr=${sharedRuntimeInstall.stderr || "<empty>"}`
       )
     }
+    await reportProgress("Running Claude postinstall in shared snapshot...")
     const sharedRuntimePostinstall = await runCmd("bun", ["./node_modules/@anthropic-ai/claude-code/install.cjs"], {
       cwd: claudeInstallRoot,
       env: sharedHomeEnv
@@ -2047,24 +2059,55 @@ async function createAndSaveBaseSnapshot(
       )
     }
 
-    const sharedRuntimeFinalize = await runCmd(
+    await reportProgress("Linking Claude CLI in shared snapshot...")
+    const sharedRuntimeLink = await runCmd(
       "sh",
       [
         "-lc",
         [
           `test -x "${localClaudeExecutable}"`,
-          `ln -sf "${localClaudeExecutable}" /home/vercel-sandbox/.local/bin/claude`,
-          `bunx --bun skills@latest add ${VERCEL_PLUGIN_INSTALL_ARG} --agent claude-code --skill '*' -y`,
-          `bunx --bun skills@latest add ${D3K_SKILL_INSTALL_ARG.split("@")[0]} --skill d3k --agent claude-code -y`,
-          "command -v claude",
-          "claude --version"
+          `ln -sf "${localClaudeExecutable}" /home/vercel-sandbox/.local/bin/claude`
         ].join(" && ")
       ],
       { env: sharedHomeEnv }
     )
-    if (sharedRuntimeFinalize.exitCode !== 0) {
+    if (sharedRuntimeLink.exitCode !== 0) {
       throw new Error(
-        `shared Claude runtime finalization failed: stdout=${sharedRuntimeFinalize.stdout || "<empty>"} stderr=${sharedRuntimeFinalize.stderr || "<empty>"}`
+        `shared Claude runtime link failed: stdout=${sharedRuntimeLink.stdout || "<empty>"} stderr=${sharedRuntimeLink.stderr || "<empty>"}`
+      )
+    }
+
+    await reportProgress("Installing shared Vercel skills in shared snapshot...")
+    const sharedRuntimeVercelSkills = await runCmd(
+      "sh",
+      ["-lc", `bunx --bun skills@latest add ${VERCEL_PLUGIN_INSTALL_ARG} --agent claude-code --skill '*' -y`],
+      { env: sharedHomeEnv }
+    )
+    if (sharedRuntimeVercelSkills.exitCode !== 0) {
+      throw new Error(
+        `shared Claude Vercel skills install failed: stdout=${sharedRuntimeVercelSkills.stdout || "<empty>"} stderr=${sharedRuntimeVercelSkills.stderr || "<empty>"}`
+      )
+    }
+
+    await reportProgress("Installing shared d3k skill in shared snapshot...")
+    const sharedRuntimeD3kSkill = await runCmd(
+      "sh",
+      ["-lc", `bunx --bun skills@latest add ${D3K_SKILL_INSTALL_ARG.split("@")[0]} --skill d3k --agent claude-code -y`],
+      { env: sharedHomeEnv }
+    )
+    if (sharedRuntimeD3kSkill.exitCode !== 0) {
+      throw new Error(
+        `shared Claude d3k skill install failed: stdout=${sharedRuntimeD3kSkill.stdout || "<empty>"} stderr=${sharedRuntimeD3kSkill.stderr || "<empty>"}`
+      )
+    }
+
+    await reportProgress("Verifying shared Claude runtime...")
+    const sharedRuntimeVerify = await runCmd("sh", ["-lc", "command -v claude && claude --version"], {
+      env: sharedHomeEnv
+    })
+    if (sharedRuntimeVerify.exitCode !== 0) {
+      throw new Error(
+        `shared Claude runtime verification failed: stdout=${sharedRuntimeVerify.stdout || "<empty>"} stderr=${sharedRuntimeVerify.stderr || "<empty>"}`
       )
     }
     if (debug) console.log("  ✅ Shared Claude agent runtime installed")

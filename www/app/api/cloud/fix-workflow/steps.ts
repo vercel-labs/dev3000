@@ -5760,89 +5760,6 @@ Setup-step rules:
   }
 }
 
-function buildClaudeActionStepPrompt(
-  step: { kind: string; config: Record<string, string> },
-  index: number
-): ClaudeTurnPrompt {
-  const promptText = (step.config.prompt || "").trim()
-  const promptTextLower = promptText.toLowerCase()
-  const isStopEarlyPrompt = promptTextLower.includes("stop early")
-  const isWorkflowFinalCheckPrompt =
-    promptTextLower.includes("workflow runtime will handle final verification") ||
-    (promptTextLower.includes("do a quick targeted sanity check") &&
-      (promptTextLower.includes("do not run broad verification commands") ||
-        promptTextLower.includes("base this step on the code changes")))
-  const inferredSendPromptMaxTurns = isStopEarlyPrompt
-    ? 4
-    : isWorkflowFinalCheckPrompt
-      ? 4
-      : promptTextLower.includes("verify")
-        ? 12
-        : promptTextLower.includes("implement") ||
-            promptTextLower.includes("parallelize") ||
-            promptTextLower.includes("deduplicate") ||
-            promptTextLower.includes("move derived state") ||
-            promptTextLower.includes("unify repeated")
-          ? 24
-          : 16
-
-  switch (step.kind) {
-    case "browse-to-page":
-      return {
-        label: `Step ${index + 1}`,
-        maxTurns: 14,
-        prompt: `Step ${index + 1}: Browse to ${step.config.url || "http://localhost:3000/"} in the sandbox app and inspect what you see.`
-      }
-    case "capture-cwv":
-      return {
-        label: `Step ${index + 1}`,
-        maxTurns: 14,
-        prompt: `Step ${index + 1}: Capture the current Core Web Vitals for the page and explain the results.`
-      }
-    case "capture-loading-frames":
-      return {
-        label: `Step ${index + 1}`,
-        maxTurns: 14,
-        prompt: `Step ${index + 1}: Capture the page loading sequence and describe how the page renders over time.`
-      }
-    case "go-back-to-step":
-      return {
-        label: `Step ${index + 1}`,
-        maxTurns: 14,
-        prompt: `Step ${index + 1}: Go back to step ${step.config.stepNumber || "the prior relevant step"} and repeat from there to verify improvements.`
-      }
-    case "send-prompt":
-      return {
-        label: `Step ${index + 1}`,
-        maxTurns: inferredSendPromptMaxTurns,
-        prompt: isStopEarlyPrompt
-          ? `${promptText || `Step ${index + 1}: Continue the workflow.`}
-
-Rules for this decision step:
-- Do not use tools in this step.
-- Do not inspect additional files or pages in this step.
-- Base your answer only on evidence you already gathered in the previous step.
-- If you already found a meaningful issue worth fixing, respond with exactly: CONTINUE: <one sentence>.
-- If no meaningful issue exists, respond with exactly: EARLY_EXIT: <one sentence>.`
-          : isWorkflowFinalCheckPrompt
-            ? `${promptText || `Step ${index + 1}: Continue the workflow.`}
-
-Rules for this quick verification step:
-- Do not run broad verification commands, new repo-wide searches, or restart investigation.
-- Do not collect new screenshots or manually re-measure final metrics. The workflow runtime handles final verification.
-- Use only the code changes you already made and any lightweight sanity checks you already ran.
-- Keep the response short: 3-6 bullets max.`
-            : promptText || `Step ${index + 1}: Continue the workflow.`
-      }
-    default:
-      return {
-        label: `Step ${index + 1}`,
-        maxTurns: 12,
-        prompt: promptText || `Step ${index + 1}: Continue the workflow.`
-      }
-  }
-}
-
 function buildClsActionStepGuidance(
   actionSteps: Array<{ kind: string; config: Record<string, string> }>
 ): string | null {
@@ -5969,6 +5886,36 @@ function buildWorkflowSpecificExecutionGuidance({
   return "Prefer targeted, evidence-driven fixes over broad refactors."
 }
 
+function buildExecutionPlanHint({
+  hasPackagedRunbook,
+  devAgentActionSteps
+}: {
+  hasPackagedRunbook?: boolean
+  devAgentActionSteps?: Array<{ kind: string; config: Record<string, string> }>
+}): string {
+  if (hasPackagedRunbook) {
+    return devAgentActionSteps && devAgentActionSteps.length > 0
+      ? "Follow the numbered action plan from `dev3000-agent-runbook` as the primary source of truth."
+      : "Follow the objective and evaluation rules from `dev3000-agent-runbook` as the primary source of truth."
+  }
+
+  if (devAgentActionSteps && devAgentActionSteps.length > 0) {
+    return "Follow the authored dev-agent instructions and action plan as the primary source of truth."
+  }
+
+  return "Follow the authored dev-agent objective and workflow-specific guidance as the primary source of truth."
+}
+
+function buildClaudeExecutionRules(): string[] {
+  return [
+    "Work directly in the sandbox repo using your normal code-editing and shell abilities.",
+    "Prefer targeted, evidence-driven fixes over broad refactors.",
+    "Avoid burning turns on repetitive tool use when the runtime already supplied the key evidence.",
+    "Keep momentum toward concrete code changes.",
+    "Finish with a concise summary of what changed, the validation evidence you gathered, and any remaining issues."
+  ]
+}
+
 function buildClaudeMainTaskPrompt({
   workflowType,
   startPath,
@@ -5978,10 +5925,14 @@ function buildClaudeMainTaskPrompt({
   devAgentName,
   devAgentInstructions,
   devAgentExecutionMode,
+  devAgentSandboxBrowser,
+  devAgentActionSteps,
   skillLoadInstructions,
   bundleBaselineSummary,
   beforeCls,
-  beforeGrade
+  beforeGrade,
+  codeHints,
+  hasPackagedRunbook
 }: {
   workflowType: string
   startPath: string
@@ -5991,161 +5942,51 @@ function buildClaudeMainTaskPrompt({
   devAgentName?: string
   devAgentInstructions?: string
   devAgentExecutionMode?: "dev-server" | "preview-pr"
+  devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser"
+  devAgentActionSteps?: Array<{ kind: string; config: Record<string, string> }>
   skillLoadInstructions: string
   bundleBaselineSummary?: string
   beforeCls: number | null
   beforeGrade: "good" | "needs-improvement" | "poor" | null
+  codeHints?: string
+  hasPackagedRunbook?: boolean
 }): ClaudeTurnPrompt {
-  const mainTaskMaxTurns = getWorkflowExecutionMaxTurns(workflowType)
   const validationHint = buildWorkflowValidationHint(devAgentExecutionMode, "claude")
-
-  if (devAgentInstructions?.trim()) {
-    const clsRuntimeEvidenceBlock =
-      workflowType === "cls-fix"
-        ? `\n\nRuntime-provided evidence:
-- Baseline CLS: ${beforeCls?.toFixed(4) || "unknown"}
-- Baseline grade: ${beforeGrade || "unknown"}
-- The workflow already captured baseline visuals/metrics and will perform final verification after your code changes.
-- Focus your turns on identifying the shift source and fixing code rather than redoing deterministic measurement steps unless the provided evidence seems inconsistent.`
-        : ""
-
-    return {
-      label: "Agent main task",
-      maxTurns: mainTaskMaxTurns,
-      prompt: `Run the "${devAgentName || "custom"}" dev agent on ${startPath}. Dev URL: ${devUrl}
-
-Use ${skillLoadInstructions} as relevant to this task.
-
-Dev agent instructions:
-${devAgentInstructions.trim()}${clsRuntimeEvidenceBlock}${customPrompt?.trim() ? `\n\nRun-specific instructions:\n${customPrompt.trim()}` : ""}
-
-Validation:
-- ${validationHint}
-- Prefer targeted changes over broad refactors.
-- Summarize the concrete improvements you made and the evidence you gathered.`
-    }
-  }
-
-  if (workflowType === "design-guidelines") {
-    return {
-      label: "Agent main task",
-      maxTurns: 18,
-      prompt: `Evaluate and fix design guideline violations on ${startPath}. Dev URL: ${devUrl}
-
-Use ${skillLoadInstructions} as relevant. ${
-        crawlDepth && crawlDepth !== 1
-          ? `Audit multiple pages discovered from the site up to depth ${crawlDepth} when that materially improves the result.`
-          : "Focus on the current page and nearby shared UI."
-      }
-
-Prioritize high-impact issues, implement real fixes, and verify that the app still works after your changes.`
-    }
-  }
-
-  if (workflowType === "react-performance") {
-    return {
-      label: "Agent main task",
-      maxTurns: 18,
-      prompt: `Analyze and optimize React/Next.js performance on ${startPath}. Dev URL: ${devUrl}
-
-Use ${skillLoadInstructions} as relevant. Capture a baseline, inspect the code for the highest-impact issues, implement targeted fixes, and verify the effect with runtime evidence.`
-    }
-  }
-
-  if (workflowType === "turbopack-bundle-analyzer") {
-    return {
-      label: "Agent main task",
-      maxTurns: 25,
-      prompt: `Analyze the generated Turbopack bundle NDJSON artifacts for this project and make only bundle-size/performance improvements.
-
-Use ${skillLoadInstructions} as relevant.
-
-Focus on:
-- .next/diagnostics/analyze/ndjson/
-- highest-impact shipped-JS problems
-- code changes that reduce shipped JavaScript
-- minimal smoke checks only
-
-${bundleBaselineSummary ? `Workflow-provided bundle baseline:\n${bundleBaselineSummary}\n\n` : ""}
-
-Do not manually rerun analyzer build commands. The workflow runtime handles the post-change analyzer rerun.`
-    }
-  }
-
-  if (customPrompt?.trim()) {
-    return {
-      label: "Agent main task",
-      maxTurns: mainTaskMaxTurns,
-      prompt: `${customPrompt.trim()}
-
-Use ${skillLoadInstructions} as relevant. Validate meaningful changes before you finish.`
-    }
-  }
+  const workflowSpecificInstructions = buildWorkflowSpecificExecutionGuidance({
+    workflowType,
+    startPath,
+    crawlDepth,
+    bundleBaselineSummary,
+    beforeCls,
+    beforeGrade,
+    codeHints
+  })
+  const authoredInstructionBlock = buildAuthoredInstructionBlock({ devAgentInstructions, customPrompt })
+  const executionPlanHint = buildExecutionPlanHint({ hasPackagedRunbook, devAgentActionSteps })
 
   return {
     label: "Agent main task",
-    maxTurns: mainTaskMaxTurns,
-    prompt: `Fix the CLS issues on ${startPath}. Dev URL: ${devUrl}
+    maxTurns: getWorkflowExecutionMaxTurns(workflowType),
+    prompt: `Execute the ${devAgentName || "dev agent"} workflow on ${startPath}.
 
-Baseline:
-- CLS: ${beforeCls?.toFixed(4) || "unknown"}
-- Grade: ${beforeGrade || "unknown"}
+Primary rule:
+- ${executionPlanHint}
 
-Use ${skillLoadInstructions} as relevant. Start by measuring the page, identify what is shifting, implement a real fix, and verify the result before you finish.`
+Runtime context:
+- Start path: ${startPath}
+- Dev URL: ${devUrl || "(dev server intentionally skipped)"}
+- Preferred browser mode: ${devAgentSandboxBrowser || "none"}
+- Installed skills: ${skillLoadInstructions}
+- ${validationHint}
+
+Workflow-specific guidance:
+${workflowSpecificInstructions}
+
+${authoredInstructionBlock ? `Authored run instructions:\n${authoredInstructionBlock}\n\n` : ""}Execution rules:
+${buildClaudeExecutionRules()
+  .map((rule) => `- ${rule}`)
+  .join("\n")}`
   }
-}
-
-function buildClsTurnPrompts({
-  startPath,
-  devUrl,
-  customPrompt,
-  devAgentInstructions,
-  skillLoadInstructions,
-  beforeCls,
-  beforeGrade,
-  codeHints
-}: {
-  startPath: string
-  devUrl: string
-  customPrompt?: string
-  devAgentInstructions?: string
-  skillLoadInstructions: string
-  beforeCls: number | null
-  beforeGrade: "good" | "needs-improvement" | "poor" | null
-  codeHints?: string
-}): ClaudeTurnPrompt[] {
-  const baselineBlock = `Baseline evidence:
-- CLS: ${beforeCls?.toFixed(4) || "unknown"}
-- Grade: ${beforeGrade || "unknown"}
-- The workflow already captured baseline visuals and will run final verification after your code changes.`
-  const codeHintBlock = codeHints?.trim() ? `\n\nWorkflow-provided suspicious code hints:\n${codeHints.trim()}` : ""
-  const instructionBlock = devAgentInstructions?.trim()
-    ? `\n\nDev agent instructions:\n${devAgentInstructions.trim()}`
-    : ""
-  const runSpecificBlock = customPrompt?.trim() ? `\n\nRun-specific instructions:\n${customPrompt.trim()}` : ""
-
-  return [
-    {
-      label: "Agent implementation",
-      maxTurns: 6,
-      prompt: `Fix the CLS problem on ${startPath}. Dev URL: ${devUrl}
-
-Use ${skillLoadInstructions} as relevant.
-
-${baselineBlock}${codeHintBlock}${instructionBlock}${runSpecificBlock}
-
-Requirements:
-- Be action-oriented. Diagnose only enough to identify the shift source, then make the fix.
-- Do not redo baseline measurement, video capture, or repeated browser inspection. The workflow runtime already captured that evidence and will perform final verification.
-- Stay code-first. Start with targeted code search only: look for delayed content, conditional null renders, missing reserved space, missing dimensions, elements inserted after a timeout, or components that expand after hydration.
-- Inspect only a small number of likely files, then edit. Do not spend turns on broad repo exploration.
-- Do not use browser or diagnose tooling unless the cause is still unclear after targeted code inspection.
-- Prefer the smallest fix that removes the shift at its source.
-- Prefer common CLS fixes such as reserving space, adding stable dimensions, rendering stable placeholders/skeletons, or preventing late content from pushing existing layout.
-- If the likely cause is a late-inserted banner/section, reserve its space or make its initial render layout-stable instead of continuing to explore.
-- Finish with a concise summary of the files changed and why the CLS should improve.`
-    }
-  ]
 }
 
 async function gatherClsCodeHints(sandbox: Sandbox, cwd: string): Promise<string | null> {
@@ -6193,7 +6034,9 @@ function buildClaudeTurnPrompts({
   bundleBaselineSummary,
   beforeCls,
   beforeGrade,
-  codeHints
+  codeHints,
+  devAgentSandboxBrowser,
+  hasPackagedRunbook
 }: {
   workflowType: string
   startPath: string
@@ -6209,75 +6052,30 @@ function buildClaudeTurnPrompts({
   beforeCls: number | null
   beforeGrade: "good" | "needs-improvement" | "poor" | null
   codeHints?: string
+  devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser"
+  hasPackagedRunbook?: boolean
 }): ClaudeTurnPrompt[] {
-  const prompts: ClaudeTurnPrompt[] =
-    workflowType === "cls-fix"
-      ? []
-      : [buildClaudeSetupPrompt(devAgentName, startPath, devUrl, skillLoadInstructions, customPrompt)]
-
-  if (workflowType === "cls-fix") {
-    prompts.push(
-      ...buildClsTurnPrompts({
-        startPath,
-        devUrl,
-        customPrompt,
-        devAgentInstructions,
-        skillLoadInstructions,
-        beforeCls,
-        beforeGrade,
-        codeHints
-      })
-    )
-  } else if (workflowType === "turbopack-bundle-analyzer") {
-    prompts.push({
-      label: "Agent analysis",
-      maxTurns: 12,
-      prompt: `Use only the generated Turbopack NDJSON artifacts to identify the single highest-impact shipped-JS optimization opportunity.
-
-Use ${skillLoadInstructions} as relevant.
-
-${bundleBaselineSummary ? `Workflow-provided bundle baseline:\n${bundleBaselineSummary}\n\n` : ""}Rules:
-- Do not use browser tools.
-- Do not rerun next build or analyzer commands.
-- Do not make code changes in this step.
-- Read the NDJSON artifacts and the relevant source files only.
-- End with a short implementation plan that names the exact file(s) you will edit next and the concrete change you will make.`
+  const prompts: ClaudeTurnPrompt[] = [
+    buildClaudeSetupPrompt(devAgentName, startPath, devUrl, skillLoadInstructions, customPrompt),
+    buildClaudeMainTaskPrompt({
+      workflowType,
+      startPath,
+      devUrl,
+      customPrompt,
+      crawlDepth,
+      devAgentName,
+      devAgentInstructions,
+      devAgentExecutionMode,
+      devAgentSandboxBrowser,
+      devAgentActionSteps,
+      skillLoadInstructions,
+      bundleBaselineSummary,
+      beforeCls,
+      beforeGrade,
+      codeHints,
+      hasPackagedRunbook
     })
-    prompts.push({
-      label: "Agent implementation",
-      maxTurns: 14,
-      prompt: `Implement the highest-confidence bundle reduction identified in the previous step.
-
-Use ${skillLoadInstructions} as relevant.
-
-${bundleBaselineSummary ? `Workflow-provided bundle baseline:\n${bundleBaselineSummary}\n\n` : ""}Requirements:
-- You must make a concrete code change when the root cause is clear.
-- Prioritize moving oversized data or logic out of the client bundle.
-- Keep the fix tightly scoped. Prefer editing 1-4 files.
-- Do not rerun analyzer build commands; the workflow runtime will do that after this step.
-- Use only minimal smoke validation such as lint/typecheck or a targeted sanity check if needed.
-- Finish with a concise summary of the files changed and the expected bundle impact.`
-    })
-  } else if (devAgentActionSteps && devAgentActionSteps.length > 0) {
-    prompts.push(...devAgentActionSteps.map((step, index) => buildClaudeActionStepPrompt(step, index)))
-  } else {
-    prompts.push(
-      buildClaudeMainTaskPrompt({
-        workflowType,
-        startPath,
-        devUrl,
-        customPrompt,
-        crawlDepth,
-        devAgentName,
-        devAgentInstructions,
-        devAgentExecutionMode,
-        skillLoadInstructions,
-        bundleBaselineSummary,
-        beforeCls,
-        beforeGrade
-      })
-    )
-  }
+  ]
 
   prompts.push({
     label: "Final summary",
@@ -6327,46 +6125,29 @@ function buildAshTaskPrompt({
     devAgentSandboxBrowser,
     skillLoadInstructions
   })
-  const validationHint = buildWorkflowValidationHint(devAgentExecutionMode, "ash")
-  const actionPlanHint =
-    devAgentActionSteps && devAgentActionSteps.length > 0
-      ? "Follow the numbered action plan from `dev3000-agent-runbook` as the primary source of truth."
-      : "Follow the objective and evaluation rules from `dev3000-agent-runbook` as the primary source of truth."
-  const workflowSpecificInstructions = buildWorkflowSpecificExecutionGuidance({
+  const sharedPrompt = buildClaudeMainTaskPrompt({
     workflowType,
     startPath,
+    devUrl,
+    customPrompt,
     crawlDepth,
+    devAgentName,
+    devAgentInstructions,
+    devAgentExecutionMode,
+    devAgentSandboxBrowser,
+    devAgentActionSteps,
+    skillLoadInstructions,
     bundleBaselineSummary,
     beforeCls,
     beforeGrade,
-    codeHints
+    codeHints,
+    hasPackagedRunbook: true
   })
-  const authoredInstructionBlock = buildAuthoredInstructionBlock({ devAgentInstructions, customPrompt })
 
   return {
+    ...sharedPrompt,
     label: "ASH task run",
-    maxTurns: getWorkflowExecutionMaxTurns(workflowType),
-    prompt: `${runtimePrefix}
-
-Execute the ${devAgentName || "dev agent"} workflow on ${startPath}.
-
-Primary rule:
-- ${actionPlanHint}
-
-Runtime context:
-- Start path: ${startPath}
-- Dev URL: ${devUrl || "(dev server intentionally skipped)"}
-- Preferred browser mode: ${devAgentSandboxBrowser || "none"}
-- ${validationHint}
-
-Workflow-specific guidance:
-${workflowSpecificInstructions}
-
-${authoredInstructionBlock ? `Authored run instructions:\n${authoredInstructionBlock}\n\n` : ""}Execution rules:
-- Work directly in \`/workspace/repo\` so changes land in the real project checkout.
-- Prefer direct code changes and targeted validation over broad exploration.
-- Keep momentum toward concrete implementation.
-- Finish with a concise summary of what changed, the validation evidence you gathered, and any remaining issues.`
+    prompt: `${runtimePrefix}\n\n${sharedPrompt.prompt}`
   }
 }
 
@@ -7224,7 +7005,9 @@ async function runAgentWithDiagnoseTool(
     bundleBaselineSummary,
     beforeCls,
     beforeGrade,
-    codeHints: clsCodeHints ?? undefined
+    codeHints: clsCodeHints ?? undefined,
+    devAgentSandboxBrowser,
+    hasPackagedRunbook: Boolean(devAgentAshTarballUrl)
   })
 
   const transcript: string[] = []
