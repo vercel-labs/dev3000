@@ -6393,6 +6393,9 @@ async function ensureClaudeCodeInstalledInSandbox(
 ): Promise<void> {
   const claudeInstallRoot = "/home/vercel-sandbox/.claude-code"
   const localClaudeExecutable = `${claudeInstallRoot}/node_modules/.bin/claude`
+  const localClaudePackageDir = `${claudeInstallRoot}/node_modules/@anthropic-ai/claude-code`
+  const localClaudeCliJs = `${localClaudePackageDir}/cli.js`
+  const localClaudeInstallScript = `${localClaudePackageDir}/install.cjs`
   const pathEnv = buildClaudeSandboxPathEnv()
   const ensureRealNodeShim = [
     'mkdir -p "/home/vercel-sandbox/.local/bin"',
@@ -6413,6 +6416,8 @@ async function ensureClaudeCodeInstalledInSandbox(
           "  command -v claude",
           `elif [ -x "${localClaudeExecutable}" ]; then`,
           `  printf '%s\\n' "${localClaudeExecutable}"`,
+          `elif [ -f "${localClaudeCliJs}" ]; then`,
+          `  printf '%s\\n' "${localClaudeCliJs}"`,
           `elif [ -e "/home/vercel-sandbox/.local/bin/claude" ]; then`,
           `  printf '%s\\n' "/home/vercel-sandbox/.local/bin/claude"`,
           "fi"
@@ -6435,29 +6440,7 @@ async function ensureClaudeCodeInstalledInSandbox(
   await appendProgressLog(progressContext, "[Claude] Installing Claude Code CLI in sandbox...")
   const installAttempts = [
     {
-      label: "pnpm-local",
-      options: {
-        cmd: "sh",
-        args: [
-          "-lc",
-          [
-            `mkdir -p "${claudeInstallRoot}" /home/vercel-sandbox/.local/bin`,
-            `cd "${claudeInstallRoot}"`,
-            `if [ ! -f package.json ]; then printf '%s' '{"name":"claude-code-runtime","private":true}' > package.json; fi`,
-            ensureRealNodeShim,
-            `pnpm add ${CLAUDE_CODE_PACKAGE}`,
-            `test -x "${localClaudeExecutable}"`,
-            `ln -sf "${localClaudeExecutable}" /home/vercel-sandbox/.local/bin/claude`
-          ].join(" && ")
-        ],
-        env: {
-          PATH: pathEnv,
-          HOME: "/home/vercel-sandbox"
-        }
-      }
-    },
-    {
-      label: "bun-local-trusted",
+      label: "bun-local-postinstall",
       options: {
         cmd: "sh",
         args: [
@@ -6468,9 +6451,32 @@ async function ensureClaudeCodeInstalledInSandbox(
             `if [ ! -f package.json ]; then printf '%s' '{"name":"claude-code-runtime","private":true}' > package.json; fi`,
             ensureRealNodeShim,
             `bun add ${CLAUDE_CODE_PACKAGE}`,
-            `bun pm trust --all`,
-            `test -x "${localClaudeExecutable}"`,
-            `ln -sf "${localClaudeExecutable}" /home/vercel-sandbox/.local/bin/claude`
+            `if [ -f "${localClaudeInstallScript}" ]; then bun "${localClaudeInstallScript}"; fi`,
+            `if [ -x "${localClaudeExecutable}" ]; then ln -sf "${localClaudeExecutable}" /home/vercel-sandbox/.local/bin/claude; fi`,
+            `test -x "${localClaudeExecutable}" || test -f "${localClaudeCliJs}"`
+          ].join(" && ")
+        ],
+        env: {
+          PATH: pathEnv,
+          HOME: "/home/vercel-sandbox"
+        }
+      }
+    },
+    {
+      label: "pnpm-local-postinstall",
+      options: {
+        cmd: "sh",
+        args: [
+          "-lc",
+          [
+            `mkdir -p "${claudeInstallRoot}" /home/vercel-sandbox/.local/bin`,
+            `cd "${claudeInstallRoot}"`,
+            `if [ ! -f package.json ]; then printf '%s' '{"name":"claude-code-runtime","private":true}' > package.json; fi`,
+            ensureRealNodeShim,
+            `pnpm add ${CLAUDE_CODE_PACKAGE}`,
+            `if [ -f "${localClaudeInstallScript}" ]; then if command -v nodejs >/dev/null 2>&1; then nodejs "${localClaudeInstallScript}"; else node "${localClaudeInstallScript}"; fi; fi`,
+            `if [ -x "${localClaudeExecutable}" ]; then ln -sf "${localClaudeExecutable}" /home/vercel-sandbox/.local/bin/claude; fi`,
+            `test -x "${localClaudeExecutable}" || test -f "${localClaudeCliJs}"`
           ].join(" && ")
         ],
         env: {
@@ -6533,6 +6539,8 @@ async function ensureClaudeCodeInstalledInSandbox(
         [
           `printf 'cli_exists='; [ -e "${localClaudeExecutable}" ] && printf yes || printf no`,
           `printf ' cli_exec='; [ -x "${localClaudeExecutable}" ] && printf yes || printf no`,
+          `printf ' cli_js_exists='; [ -f "${localClaudeCliJs}" ] && printf yes || printf no`,
+          `printf ' install_cjs_exists='; [ -f "${localClaudeInstallScript}" ] && printf yes || printf no`,
           `printf ' symlink_exists='; [ -e "/home/vercel-sandbox/.local/bin/claude" ] && printf yes || printf no`,
           `printf ' symlink_target='; if [ -L "/home/vercel-sandbox/.local/bin/claude" ]; then readlink "/home/vercel-sandbox/.local/bin/claude"; else printf '<none>'; fi`
         ].join(" ; ")
@@ -6579,6 +6587,7 @@ type ClaudeSandboxInvocation = {
 
 async function resolveClaudeSandboxInvocation(sandbox: Sandbox, pathEnv: string): Promise<ClaudeSandboxInvocation> {
   const localClaudeExecutable = "/home/vercel-sandbox/.claude-code/node_modules/.bin/claude"
+  const localClaudeCliJs = "/home/vercel-sandbox/.claude-code/node_modules/@anthropic-ai/claude-code/cli.js"
   const localSymlink = "/home/vercel-sandbox/.local/bin/claude"
   const verifyResult = await runSandboxCommandWithOptions(sandbox, {
     cmd: "sh",
@@ -6587,6 +6596,8 @@ async function resolveClaudeSandboxInvocation(sandbox: Sandbox, pathEnv: string)
       [
         `if [ -x "${localClaudeExecutable}" ]; then`,
         `  printf 'local:%s\\n' "${localClaudeExecutable}"`,
+        `elif [ -f "${localClaudeCliJs}" ]; then`,
+        `  printf 'cli-js:%s\\n' "${localClaudeCliJs}"`,
         "elif command -v claude >/dev/null 2>&1; then",
         "  printf 'which:%s\\n' \"$(command -v claude)\"",
         `elif [ -e "${localSymlink}" ]; then`,
@@ -6613,10 +6624,54 @@ async function resolveClaudeSandboxInvocation(sandbox: Sandbox, pathEnv: string)
       description: line.slice("which:".length)
     }
   }
+  if (line.startsWith("cli-js:")) {
+    const cliPath = line.slice("cli-js:".length)
+    const runtimeResult = await runSandboxCommandWithOptions(sandbox, {
+      cmd: "sh",
+      args: [
+        "-lc",
+        [
+          "if command -v nodejs >/dev/null 2>&1; then",
+          "  printf 'nodejs:%s\\n' \"$(command -v nodejs)\"",
+          "elif command -v node >/dev/null 2>&1; then",
+          "  printf 'node:%s\\n' \"$(command -v node)\"",
+          "elif command -v bun >/dev/null 2>&1; then",
+          "  printf 'bun:%s\\n' \"$(command -v bun)\"",
+          "fi"
+        ].join("\n")
+      ],
+      env: { PATH: pathEnv, HOME: "/home/vercel-sandbox" }
+    })
+    const runtimeLine = runtimeResult.stdout.trim()
+    if (runtimeLine.startsWith("nodejs:")) {
+      return {
+        cmd: "nodejs",
+        argsPrefix: [cliPath],
+        description: `${runtimeLine.slice("nodejs:".length)} ${cliPath}`
+      }
+    }
+    if (runtimeLine.startsWith("node:")) {
+      return {
+        cmd: "node",
+        argsPrefix: [cliPath],
+        description: `${runtimeLine.slice("node:".length)} ${cliPath}`
+      }
+    }
+    if (runtimeLine.startsWith("bun:")) {
+      return {
+        cmd: "bun",
+        argsPrefix: [cliPath],
+        description: `${runtimeLine.slice("bun:".length)} ${cliPath}`
+      }
+    }
+  }
   if (verifyResult.exitCode === 0 && line.length === 0) {
     const fallbackResult = await runSandboxCommandWithOptions(sandbox, {
       cmd: "sh",
-      args: ["-lc", `test -x "${localClaudeExecutable}" && printf 'local:%s\\n' "${localClaudeExecutable}" || true`],
+      args: [
+        "-lc",
+        `if test -x "${localClaudeExecutable}"; then printf 'local:%s\\n' "${localClaudeExecutable}"; elif test -f "${localClaudeCliJs}"; then printf 'cli-js:%s\\n' "${localClaudeCliJs}"; fi`
+      ],
       env: { PATH: pathEnv, HOME: "/home/vercel-sandbox" }
     })
     const fallbackLine = fallbackResult.stdout.trim()
@@ -6626,6 +6681,14 @@ async function resolveClaudeSandboxInvocation(sandbox: Sandbox, pathEnv: string)
         cmd: cliPath,
         argsPrefix: [],
         description: cliPath
+      }
+    }
+    if (fallbackLine.startsWith("cli-js:")) {
+      const cliPath = fallbackLine.slice("cli-js:".length)
+      return {
+        cmd: "nodejs",
+        argsPrefix: [cliPath],
+        description: `nodejs ${cliPath}`
       }
     }
   }
