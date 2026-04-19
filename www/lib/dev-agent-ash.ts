@@ -31,13 +31,30 @@ function encodeTarOctal(value: number, length: number): Buffer {
   return buffer
 }
 
-function createTarHeader(pathname: string, size: number, mtime: number): Buffer {
-  if (pathname.length > 100) {
-    throw new Error(`ASH artifact path is too long for tar header: ${pathname}`)
+function splitTarPath(pathname: string): { name: string; prefix: string } {
+  const pathnameBytes = Buffer.byteLength(pathname, "utf8")
+  if (pathnameBytes <= 100) {
+    return { name: pathname, prefix: "" }
   }
 
+  const segments = pathname.split("/")
+  for (let index = segments.length - 1; index > 0; index--) {
+    const prefix = segments.slice(0, index).join("/")
+    const name = segments.slice(index).join("/")
+
+    if (Buffer.byteLength(name, "utf8") <= 100 && Buffer.byteLength(prefix, "utf8") <= 155) {
+      return { name, prefix }
+    }
+  }
+
+  throw new Error(`ASH artifact path is too long for tar header: ${pathname}`)
+}
+
+function createTarHeader(pathname: string, size: number, mtime: number): Buffer {
+  const { name, prefix } = splitTarPath(pathname)
+
   const header = Buffer.alloc(TAR_BLOCK_SIZE, 0)
-  encodeTarString(pathname, 100).copy(header, 0)
+  encodeTarString(name, 100).copy(header, 0)
   encodeTarOctal(0o644, 8).copy(header, 100)
   encodeTarOctal(0, 8).copy(header, 108)
   encodeTarOctal(0, 8).copy(header, 116)
@@ -47,6 +64,9 @@ function createTarHeader(pathname: string, size: number, mtime: number): Buffer 
   header[156] = "0".charCodeAt(0)
   encodeTarString("ustar", 6).copy(header, 257)
   encodeTarString("00", 2).copy(header, 263)
+  if (prefix) {
+    encodeTarString(prefix, 155).copy(header, 345)
+  }
 
   let checksum = 0
   for (const byte of header) checksum += byte
