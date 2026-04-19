@@ -5007,28 +5007,33 @@ async function installPackagedAshAppInSandbox(
 }
 
 async function waitForAshRuntimeReady(
-  baseUrl: string,
+  sandbox: Sandbox,
+  port: number,
   authorization: string,
   progressContext?: ProgressContext | null
-): Promise<void> {
+): Promise<string> {
   const deadline = Date.now() + 120000
+  let lastRouteError: string | null = null
 
   while (Date.now() < deadline) {
     try {
+      const baseUrl = sandbox.domain(port)
       const response = await fetch(`${baseUrl}/.well-known/ash/v1/health`, {
         headers: { authorization, "cache-control": "no-store" }
       })
       if (response.ok) {
         await appendProgressLog(progressContext, `[ASH] Runtime healthy at ${baseUrl}`)
-        return
+        return baseUrl
       }
-    } catch {
-      // Keep polling.
+    } catch (error) {
+      lastRouteError = error instanceof Error ? error.message : String(error)
     }
     await new Promise((resolve) => setTimeout(resolve, 2000))
   }
 
-  throw new Error(`Timed out waiting for packaged ASH runtime at ${baseUrl}`)
+  throw new Error(
+    `Timed out waiting for packaged ASH runtime on port ${port}${lastRouteError ? ` (${lastRouteError})` : ""}`
+  )
 }
 
 async function ensurePackagedAshRuntimeInSandbox(
@@ -5042,7 +5047,6 @@ async function ensurePackagedAshRuntimeInSandbox(
   const { appRoot } = await installPackagedAshAppInSandbox(sandbox, tarballUrl, specHash, progressContext)
   const runtimePassword = buildAshRuntimePassword(progressContext?.runId || crypto.randomUUID(), specHash)
   const authorization = buildAshRuntimeAuthorizationHeader(runtimePassword)
-  const baseUrl = sandbox.domain(ASH_RUNTIME_PORT)
   const logPath = `${ASH_RUNTIME_LOG_DIR}/ash-runtime.log`
 
   await appendProgressLog(progressContext, `[ASH] Starting built runtime on port ${ASH_RUNTIME_PORT}...`)
@@ -5071,7 +5075,7 @@ async function ensurePackagedAshRuntimeInSandbox(
     detached: true
   })
 
-  await waitForAshRuntimeReady(baseUrl, authorization, progressContext)
+  const baseUrl = await waitForAshRuntimeReady(sandbox, ASH_RUNTIME_PORT, authorization, progressContext)
   return { authorization, baseUrl }
 }
 
