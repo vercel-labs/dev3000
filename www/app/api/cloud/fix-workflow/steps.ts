@@ -5676,6 +5676,7 @@ type ClaudeTurnResult = {
   costUsd: number
   durationMs: number
   numTurns: number
+  needsContinuation?: boolean
   usage: {
     promptTokens: number
     completionTokens: number
@@ -5830,12 +5831,12 @@ function buildClsActionStepGuidance(
 }
 
 function getWorkflowExecutionMaxTurns(workflowType: string): number {
-  if (workflowType === "cls-fix") return 30
-  if (workflowType === "turbopack-bundle-analyzer") return 25
-  if (workflowType === "react-performance") return 40
-  if (workflowType === "design-guidelines") return 32
-  if (workflowType === "prompt") return 28
-  return 24
+  if (workflowType === "cls-fix") return 12
+  if (workflowType === "turbopack-bundle-analyzer") return 10
+  if (workflowType === "react-performance") return 12
+  if (workflowType === "design-guidelines") return 12
+  if (workflowType === "prompt") return 10
+  return 10
 }
 
 function buildWorkflowValidationHint(
@@ -5949,6 +5950,16 @@ function buildClaudeExecutionRules(): string[] {
     "Keep momentum toward concrete code changes.",
     "Finish with a concise summary of what changed, the validation evidence you gathered, and any remaining issues."
   ]
+}
+
+function buildClaudeContinuationPrompt(label: string): string {
+  return `Continue the same ${label.toLowerCase()} from where you left off.
+
+Rules:
+- Do not restart the workflow from scratch.
+- Keep the existing session context and continue making forward progress.
+- If the task is complete, provide the final concise summary now.
+- If more work is needed, continue directly on the highest-impact next step.`
 }
 
 function buildClaudeMainTaskPrompt({
@@ -6897,7 +6908,10 @@ function parseClaudeJsonResult(raw: string): {
   total_cost_usd?: number
   duration_ms?: number
   num_turns?: number
+  subtype?: string
+  terminal_reason?: string
   is_error?: boolean
+  errors?: string[]
   usage?: {
     input_tokens?: number
     output_tokens?: number
@@ -6917,7 +6931,10 @@ function parseClaudeJsonResult(raw: string): {
       total_cost_usd?: number
       duration_ms?: number
       num_turns?: number
+      subtype?: string
+      terminal_reason?: string
       is_error?: boolean
+      errors?: string[]
       usage?: {
         input_tokens?: number
         output_tokens?: number
@@ -6938,7 +6955,10 @@ function parseClaudeJsonResult(raw: string): {
           total_cost_usd?: number
           duration_ms?: number
           num_turns?: number
+          subtype?: string
+          terminal_reason?: string
           is_error?: boolean
+          errors?: string[]
           usage?: {
             input_tokens?: number
             output_tokens?: number
@@ -7027,7 +7047,43 @@ async function runClaudeTurnInSandbox(
     clearInterval(heartbeat)
   }
 
+  const parsedOutput = result.stdout.trim() ? parseClaudeJsonResult(result.stdout) : null
+
   if (result.exitCode !== 0) {
+    if (
+      parsedOutput?.is_error &&
+      (parsedOutput.subtype === "error_max_turns" || parsedOutput.terminal_reason === "max_turns") &&
+      (parsedOutput.session_id || options.sessionId)
+    ) {
+      const sessionId = parsedOutput.session_id || options.sessionId
+      if (!sessionId) {
+        throw new Error(`Claude exceeded max turns during ${prompt.label} but did not return a session id.`)
+      }
+      await appendProgressLog(
+        options.progressContext,
+        `[Claude] ${prompt.label} hit max turns after ${parsedOutput.num_turns ?? prompt.maxTurns} turns; resuming the same session`
+      )
+      return {
+        sessionId,
+        resultText: typeof parsedOutput.result === "string" ? parsedOutput.result.trim() : "",
+        rawJson: result.stdout.trim(),
+        costUsd: typeof parsedOutput.total_cost_usd === "number" ? parsedOutput.total_cost_usd : 0,
+        durationMs: typeof parsedOutput.duration_ms === "number" ? parsedOutput.duration_ms : 0,
+        numTurns: typeof parsedOutput.num_turns === "number" ? parsedOutput.num_turns : prompt.maxTurns,
+        needsContinuation: true,
+        usage: {
+          promptTokens: parsedOutput.usage?.input_tokens ?? 0,
+          completionTokens: parsedOutput.usage?.output_tokens ?? 0,
+          cacheReadTokens: parsedOutput.usage?.cache_read_input_tokens ?? 0,
+          cacheCreationTokens: parsedOutput.usage?.cache_creation_input_tokens ?? 0,
+          totalTokens:
+            (parsedOutput.usage?.input_tokens ?? 0) +
+            (parsedOutput.usage?.output_tokens ?? 0) +
+            (parsedOutput.usage?.cache_read_input_tokens ?? 0) +
+            (parsedOutput.usage?.cache_creation_input_tokens ?? 0)
+        }
+      }
+    }
     await appendProgressLog(
       options.progressContext,
       `[Claude] ${prompt.label} failed exit=${result.exitCode} stdout=${formatClaudeOutputPreview(result.stdout)} stderr=${formatClaudeOutputPreview(result.stderr)}`
@@ -7035,7 +7091,7 @@ async function runClaudeTurnInSandbox(
     throw new Error(`Claude turn failed (${prompt.label}): ${result.stderr || result.stdout || "unknown error"}`)
   }
 
-  const parsed = parseClaudeJsonResult(result.stdout)
+  const parsed = parsedOutput ?? parseClaudeJsonResult(result.stdout)
   if (parsed.is_error) {
     await appendProgressLog(
       options.progressContext,
@@ -7220,48 +7276,68 @@ async function runAgentWithDiagnoseTool(
   let totalCacheCreationTokens = 0
 
   for (let index = 0; index < turnPrompts.length; index++) {
-    const turnPrompt = turnPrompts[index]
-    await appendProgressLog(progressContext, `[Claude] ${turnPrompt.label}: ${turnPrompt.prompt.slice(0, 120)}`)
-    let turnResult: ClaudeTurnResult
-    try {
-      turnResult = await runClaudeTurnInSandbox(sandbox, SANDBOX_CWD, turnPrompt, {
-        sessionId: currentSessionId,
-        systemPrompt: currentSessionId ? undefined : systemPrompt,
-        modelId: modelSelection.modelId,
-        gatewayAuthToken,
-        gatewayAuthSourceLabel: gatewayAuthSource,
-        progressContext
-      })
-    } catch (error) {
-      await appendProgressLog(
-        progressContext,
-        `[Claude] ${turnPrompt.label} threw before completion: ${error instanceof Error ? error.message : String(error)}`
-      )
-      throw error
-    }
-    currentSessionId = turnResult.sessionId
-    finalSummary = turnResult.resultText || finalSummary
-    totalCostUsd += turnResult.costUsd
-    totalPromptTokens += turnResult.usage.promptTokens
-    totalCompletionTokens += turnResult.usage.completionTokens
-    totalCacheReadTokens += turnResult.usage.cacheReadTokens
-    totalCacheCreationTokens += turnResult.usage.cacheCreationTokens
+    const baseTurnPrompt = turnPrompts[index]
+    let turnPrompt = baseTurnPrompt
+    let continuationCount = 0
 
-    transcript.push(`### ${turnPrompt.label}`)
-    transcript.push("")
-    transcript.push("**User:**")
-    transcript.push("```")
-    transcript.push(turnPrompt.prompt)
-    transcript.push("```")
-    transcript.push("")
-    transcript.push("**Claude:**")
-    transcript.push(turnResult.resultText || "(no textual result)")
-    transcript.push("")
-    transcript.push("**Result JSON:**")
-    transcript.push("```json")
-    transcript.push(turnResult.rawJson)
-    transcript.push("```")
-    transcript.push("")
+    while (true) {
+      await appendProgressLog(progressContext, `[Claude] ${turnPrompt.label}: ${turnPrompt.prompt.slice(0, 120)}`)
+      let turnResult: ClaudeTurnResult
+      try {
+        turnResult = await runClaudeTurnInSandbox(sandbox, SANDBOX_CWD, turnPrompt, {
+          sessionId: currentSessionId,
+          systemPrompt: currentSessionId ? undefined : systemPrompt,
+          modelId: modelSelection.modelId,
+          gatewayAuthToken,
+          gatewayAuthSourceLabel: gatewayAuthSource,
+          progressContext
+        })
+      } catch (error) {
+        await appendProgressLog(
+          progressContext,
+          `[Claude] ${turnPrompt.label} threw before completion: ${error instanceof Error ? error.message : String(error)}`
+        )
+        throw error
+      }
+      currentSessionId = turnResult.sessionId
+      finalSummary = turnResult.resultText || finalSummary
+      totalCostUsd += turnResult.costUsd
+      totalPromptTokens += turnResult.usage.promptTokens
+      totalCompletionTokens += turnResult.usage.completionTokens
+      totalCacheReadTokens += turnResult.usage.cacheReadTokens
+      totalCacheCreationTokens += turnResult.usage.cacheCreationTokens
+
+      transcript.push(`### ${turnPrompt.label}`)
+      transcript.push("")
+      transcript.push("**User:**")
+      transcript.push("```")
+      transcript.push(turnPrompt.prompt)
+      transcript.push("```")
+      transcript.push("")
+      transcript.push("**Claude:**")
+      transcript.push(turnResult.resultText || "(no textual result)")
+      transcript.push("")
+      transcript.push("**Result JSON:**")
+      transcript.push("```json")
+      transcript.push(turnResult.rawJson)
+      transcript.push("```")
+      transcript.push("")
+
+      if (!turnResult.needsContinuation) {
+        break
+      }
+
+      continuationCount += 1
+      if (continuationCount >= 6) {
+        throw new Error(`Claude exceeded the continuation limit during ${baseTurnPrompt.label}.`)
+      }
+
+      turnPrompt = {
+        ...baseTurnPrompt,
+        label: `${baseTurnPrompt.label} continuation ${continuationCount}`,
+        prompt: buildClaudeContinuationPrompt(baseTurnPrompt.label)
+      }
+    }
   }
 
   return {
