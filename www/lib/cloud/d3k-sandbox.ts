@@ -2021,7 +2021,16 @@ async function createAndSaveBaseSnapshot(
     if (debug) console.log("  📦 Installing shared Claude agent runtime...")
     await reportProgress("Installing Claude Code and shared skills in shared snapshot...")
     const sharedHomeEnv = {
-      PATH: "/home/vercel-sandbox/.bun/bin:/home/vercel-sandbox/.local/bin:/usr/local/bin:/usr/bin:/bin",
+      PATH: [
+        "/home/vercel-sandbox/.bun/bin",
+        "/home/vercel-sandbox/.local/bin",
+        "/vercel/runtimes/node24/bin",
+        "/vercel/runtimes/node22/bin",
+        "/vercel/runtimes/nodejs/bin",
+        "/usr/local/bin",
+        "/usr/bin",
+        "/bin"
+      ].join(":"),
       HOME: "/home/vercel-sandbox"
     }
     const claudeInstallRoot = "/home/vercel-sandbox/.claude-code"
@@ -2035,7 +2044,7 @@ async function createAndSaveBaseSnapshot(
           "mkdir -p /home/vercel-sandbox/.local/bin",
           `mkdir -p "${claudeInstallRoot}"`,
           `cd "${claudeInstallRoot}"`,
-          `bun -e 'const fs=require("fs"); if (!fs.existsSync("package.json")) fs.writeFileSync("package.json", JSON.stringify({ name: "claude-code-runtime", private: true }))'`
+          `if [ ! -f package.json ]; then printf '%s' '{"name":"claude-code-runtime","private":true}' > package.json; fi`
         ].join(" && ")
       ],
       { env: sharedHomeEnv }
@@ -2047,20 +2056,25 @@ async function createAndSaveBaseSnapshot(
     }
 
     await reportProgress("Installing Claude package in shared snapshot...")
-    const sharedRuntimeInstall = await runCmd("bun", ["add", CLAUDE_CODE_PACKAGE], {
-      cwd: claudeInstallRoot,
-      env: sharedHomeEnv
-    })
+    const sharedRuntimeInstall = await runCmd(
+      "sh",
+      ["-lc", `export PATH="${sharedHomeEnv.PATH}" && cd "${claudeInstallRoot}" && bun add ${CLAUDE_CODE_PACKAGE}`],
+      { env: sharedHomeEnv }
+    )
     if (sharedRuntimeInstall.exitCode !== 0) {
       throw new Error(
         `shared Claude package install failed: stdout=${sharedRuntimeInstall.stdout || "<empty>"} stderr=${sharedRuntimeInstall.stderr || "<empty>"}`
       )
     }
     await reportProgress("Running Claude postinstall in shared snapshot...")
-    const sharedRuntimePostinstall = await runCmd("bun", ["./node_modules/@anthropic-ai/claude-code/install.cjs"], {
-      cwd: claudeInstallRoot,
-      env: sharedHomeEnv
-    })
+    const sharedRuntimePostinstall = await runCmd(
+      "sh",
+      [
+        "-lc",
+        `export PATH="${sharedHomeEnv.PATH}" && cd "${claudeInstallRoot}" && if command -v nodejs >/dev/null 2>&1; then nodejs "./node_modules/@anthropic-ai/claude-code/install.cjs"; else node "./node_modules/@anthropic-ai/claude-code/install.cjs"; fi`
+      ],
+      { env: sharedHomeEnv }
+    )
     if (sharedRuntimePostinstall.exitCode !== 0) {
       throw new Error(
         `shared Claude package postinstall failed: stdout=${sharedRuntimePostinstall.stdout || "<empty>"} stderr=${sharedRuntimePostinstall.stderr || "<empty>"}`
