@@ -1,0 +1,36 @@
+www/app/api/cloud/fix-workflow/steps.ts
+  7a0ea82f7d7bc893 6430-6433,6475-6497,6499-6541,6543-6546,6548-6549,6551,6553-6612,6614,6616-6621,6624-6630,6632-6635,6638
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.0",
+  "base_commit_sha": "858dc0e0d7bda91522fb167f38ca589e25364763",
+  "prompts": {
+    "7a0ea82f7d7bc893": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d59d8-022d-7262-9555-ec96bb973d0c",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 156,
+      "total_deletions": 72,
+      "accepted_lines": 157,
+      "overriden_lines": 0
+    },
+    "99ca025371e68d9d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d87d1-243a-7931-bf03-4625a7dea51f",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 925,
+      "overriden_lines": 0
+    }
+  }
+}
