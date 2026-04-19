@@ -5010,7 +5010,8 @@ async function waitForAshRuntimeReady(
   sandbox: Sandbox,
   port: number,
   authorization: string,
-  progressContext?: ProgressContext | null
+  progressContext?: ProgressContext | null,
+  logPath?: string
 ): Promise<string> {
   const deadline = Date.now() + 120000
   let lastRouteError: string | null = null
@@ -5031,8 +5032,24 @@ async function waitForAshRuntimeReady(
     await new Promise((resolve) => setTimeout(resolve, 2000))
   }
 
+  let runtimeLogPreview = ""
+  if (logPath) {
+    try {
+      const logResult = await runSandboxCommandWithOptions(sandbox, {
+        cmd: "sh",
+        args: ["-lc", `[ -f "${logPath}" ] && tail -n 80 "${logPath}" || true`]
+      })
+      runtimeLogPreview = formatClaudeOutputPreview(logResult.stdout || logResult.stderr, 1200)
+      if (runtimeLogPreview && runtimeLogPreview !== "<empty>") {
+        await appendProgressLog(progressContext, `[ASH] Runtime log before timeout: ${runtimeLogPreview}`)
+      }
+    } catch (error) {
+      runtimeLogPreview = `failed to read log: ${error instanceof Error ? error.message : String(error)}`
+    }
+  }
+
   throw new Error(
-    `Timed out waiting for packaged ASH runtime on port ${port}${lastRouteError ? ` (${lastRouteError})` : ""}`
+    `Timed out waiting for packaged ASH runtime on port ${port}${lastRouteError ? ` (${lastRouteError})` : ""}${runtimeLogPreview ? ` log=${runtimeLogPreview}` : ""}`
   )
 }
 
@@ -5057,6 +5074,9 @@ async function ensurePackagedAshRuntimeInSandbox(
       [
         `mkdir -p ${ASH_RUNTIME_LOG_DIR}`,
         "export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH",
+        'mkdir -p "$HOME/.local/bin"',
+        'if ! command -v node >/dev/null 2>&1 && command -v nodejs >/dev/null 2>&1; then ln -sf "$(command -v nodejs)" "$HOME/.local/bin/node"; fi',
+        "export PATH=$HOME/.local/bin:$PATH",
         'NODE_RUNTIME="$(command -v nodejs || command -v node || command -v bun || true)"',
         'if [ -z "$NODE_RUNTIME" ]; then echo "No Node.js runtime available for ASH." >&2; exit 1; fi',
         `export DEV3000_ASH_RUNTIME_USERNAME=${shellEscape(ASH_RUNTIME_USERNAME)}`,
@@ -5065,6 +5085,9 @@ async function ensurePackagedAshRuntimeInSandbox(
         gatewayAuthToken ? `export VERCEL_OIDC_TOKEN=${shellEscape(gatewayAuthToken)}` : null,
         `export PORT=${ASH_RUNTIME_PORT}`,
         "export HOST=0.0.0.0",
+        "export HOSTNAME=0.0.0.0",
+        `export NITRO_PORT=${ASH_RUNTIME_PORT}`,
+        "export NITRO_HOST=0.0.0.0",
         `cd ${shellEscape(appRoot)}`,
         `pkill -f ${shellEscape(`${appRoot}/.output/server/index.mjs`)} >/dev/null 2>&1 || true`,
         `$NODE_RUNTIME ./.output/server/index.mjs > ${logPath} 2>&1`
@@ -5075,7 +5098,7 @@ async function ensurePackagedAshRuntimeInSandbox(
     detached: true
   })
 
-  const baseUrl = await waitForAshRuntimeReady(sandbox, ASH_RUNTIME_PORT, authorization, progressContext)
+  const baseUrl = await waitForAshRuntimeReady(sandbox, ASH_RUNTIME_PORT, authorization, progressContext, logPath)
   return { authorization, baseUrl }
 }
 
