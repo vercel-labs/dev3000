@@ -1,0 +1,52 @@
+www/lib/skill-runners.ts
+  7a0ea82f7d7bc893 361,430
+www/app/api/skill-runner-worker/version/route.ts
+  7a0ea82f7d7bc893 1-53
+www/app/dev-agents/[agentId]/new/dev-agent-run-client.tsx
+  7a0ea82f7d7bc893 99-101,283-286,313-319,368,371-372,1212-1214,1222-1229,1251-1257,1316-1317,1343
+www/lib/skill-runner-config.ts
+  7a0ea82f7d7bc893 5,8-15
+www/components/admin/skill-runner-team-settings.tsx
+  7a0ea82f7d7bc893 44-46,172-174,278,384-386,394-401,431-435
+www/lib/skill-runner-worker.ts
+  7a0ea82f7d7bc893 3,7-9,66-78,156-172,297-428,823-840,848-853,858,863-871,880-884
+www/app/api/admin/skill-runner-teams/route.ts
+  7a0ea82f7d7bc893 36
+www/app/api/cloud/start-fix/route.ts
+  7a0ea82f7d7bc893 7-16,409-415,426-452,462-472,482
+www/app/api/skill-runner-teams/worker/route.ts
+  7a0ea82f7d7bc893 6,105
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.0",
+  "base_commit_sha": "97d692a1dfbd79c3382a00c0cf0e0d2b4a22d2d5",
+  "prompts": {
+    "7a0ea82f7d7bc893": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d59d8-022d-7262-9555-ec96bb973d0c",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 2254,
+      "total_deletions": 1888,
+      "accepted_lines": 393,
+      "overriden_lines": 0
+    },
+    "99ca025371e68d9d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d87d1-243a-7931-bf03-4625a7dea51f",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 925,
+      "overriden_lines": 0
+    }
+  }
+}
