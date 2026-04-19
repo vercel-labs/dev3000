@@ -5090,7 +5090,10 @@ async function ensurePackagedAshRuntimeInSandbox(
         "export NITRO_HOST=0.0.0.0",
         `cd ${shellEscape(appRoot)}`,
         `pkill -f ${shellEscape(`${appRoot}/.output/server/index.mjs`)} >/dev/null 2>&1 || true`,
-        `$NODE_RUNTIME ./.output/server/index.mjs > ${logPath} 2>&1`
+        `: > ${logPath}`,
+        `printf 'runtime=%s\\npwd=%s\\nport=%s\\n' "$NODE_RUNTIME" "$(pwd)" "${ASH_RUNTIME_PORT}" >> ${logPath}`,
+        `ls -l ./.output/server/index.mjs >> ${logPath} 2>&1 || true`,
+        `exec "$NODE_RUNTIME" ./.output/server/index.mjs >> ${logPath} 2>&1`
       ]
         .filter(Boolean)
         .join(" && ")
