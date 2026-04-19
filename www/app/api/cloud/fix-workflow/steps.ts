@@ -6483,7 +6483,7 @@ async function ensureClaudeCodeInstalledInSandbox(
         `mkdir -p "${claudeInstallRoot}"`,
         `cd "${claudeInstallRoot}"`,
         ensureRealNodeShim,
-        `bun -e 'const fs=require("fs"); if (!fs.existsSync("package.json")) fs.writeFileSync("package.json", JSON.stringify({ name: "claude-code-runtime", private: true }))'`
+        `if [ ! -f package.json ]; then printf '%s' '{"name":"claude-code-runtime","private":true}' > package.json; fi`
       ].join(" && ")
     ],
     env: sharedHomeEnv
