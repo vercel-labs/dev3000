@@ -7327,6 +7327,14 @@ async function runAgentWithDiagnoseTool(
         break
       }
 
+      if (baseTurnPrompt.label !== "Agent main task") {
+        await appendProgressLog(
+          progressContext,
+          `[Claude] ${baseTurnPrompt.label} reached the chunk limit; proceeding without further setup continuations`
+        )
+        break
+      }
+
       continuationCount += 1
       if (continuationCount >= 6) {
         throw new Error(`Claude exceeded the continuation limit during ${baseTurnPrompt.label}.`)
