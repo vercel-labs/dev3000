@@ -5830,7 +5830,12 @@ function buildClsActionStepGuidance(
 }
 
 function getWorkflowExecutionMaxTurns(workflowType: string): number {
-  return workflowType === "cls-fix" ? 30 : workflowType === "turbopack-bundle-analyzer" ? 25 : 18
+  if (workflowType === "cls-fix") return 30
+  if (workflowType === "turbopack-bundle-analyzer") return 25
+  if (workflowType === "react-performance") return 40
+  if (workflowType === "design-guidelines") return 32
+  if (workflowType === "prompt") return 28
+  return 24
 }
 
 function buildWorkflowValidationHint(
