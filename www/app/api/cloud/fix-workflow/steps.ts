@@ -6427,6 +6427,10 @@ async function ensureClaudeCodeInstalledInSandbox(
   const localClaudeCliJs = `${localClaudePackageDir}/cli.js`
   const localClaudeInstallScript = `${localClaudePackageDir}/install.cjs`
   const pathEnv = buildClaudeSandboxPathEnv()
+  const sharedHomeEnv = {
+    PATH: pathEnv,
+    HOME: "/home/vercel-sandbox"
+  }
   const ensureRealNodeShim = [
     'mkdir -p "/home/vercel-sandbox/.local/bin"',
     "if ! command -v node >/dev/null 2>&1; then",
@@ -6468,90 +6472,170 @@ async function ensureClaudeCodeInstalledInSandbox(
   }
 
   await appendProgressLog(progressContext, "[Claude] Installing Claude Code CLI in sandbox...")
-  const installAttempts = [
-    {
-      label: "bun-local-postinstall",
-      options: {
-        cmd: "sh",
-        args: [
-          "-lc",
-          [
-            `mkdir -p "${claudeInstallRoot}" /home/vercel-sandbox/.local/bin`,
-            `cd "${claudeInstallRoot}"`,
-            `if [ ! -f package.json ]; then printf '%s' '{"name":"claude-code-runtime","private":true}' > package.json; fi`,
-            ensureRealNodeShim,
-            `bun add ${CLAUDE_CODE_PACKAGE}`,
-            `if [ -f "${localClaudeInstallScript}" ]; then bun "${localClaudeInstallScript}"; fi`,
-            `if [ -x "${localClaudeExecutable}" ]; then ln -sf "${localClaudeExecutable}" /home/vercel-sandbox/.local/bin/claude; fi`,
-            `test -x "${localClaudeExecutable}" || test -f "${localClaudeCliJs}"`
-          ].join(" && ")
-        ],
-        env: {
-          PATH: pathEnv,
-          HOME: "/home/vercel-sandbox"
-        }
-      }
-    },
-    {
-      label: "pnpm-local-postinstall",
-      options: {
-        cmd: "sh",
-        args: [
-          "-lc",
-          [
-            `mkdir -p "${claudeInstallRoot}" /home/vercel-sandbox/.local/bin`,
-            `cd "${claudeInstallRoot}"`,
-            `if [ ! -f package.json ]; then printf '%s' '{"name":"claude-code-runtime","private":true}' > package.json; fi`,
-            ensureRealNodeShim,
-            `pnpm add ${CLAUDE_CODE_PACKAGE}`,
-            `if [ -f "${localClaudeInstallScript}" ]; then if command -v nodejs >/dev/null 2>&1; then nodejs "${localClaudeInstallScript}"; else node "${localClaudeInstallScript}"; fi; fi`,
-            `if [ -x "${localClaudeExecutable}" ]; then ln -sf "${localClaudeExecutable}" /home/vercel-sandbox/.local/bin/claude; fi`,
-            `test -x "${localClaudeExecutable}" || test -f "${localClaudeCliJs}"`
-          ].join(" && ")
-        ],
-        env: {
-          PATH: pathEnv,
-          HOME: "/home/vercel-sandbox"
-        }
-      }
-    },
-    {
-      label: "bun-global",
-      options: {
-        cmd: "bun",
-        args: ["add", "-g", CLAUDE_CODE_PACKAGE],
-        env: {
-          PATH: pathEnv,
-          HOME: "/home/vercel-sandbox"
-        }
-      }
-    }
-  ] satisfies Array<{
-    label: string
-    options: Parameters<Sandbox["runCommand"]>[0]
-  }>
-
   let installResult: { exitCode: number; stdout: string; stderr: string } | null = null
   const installErrors: string[] = []
-
-  for (const attempt of installAttempts) {
+  const prepResult = await runSandboxCommandWithOptions(sandbox, {
+    cmd: "sh",
+    args: [
+      "-lc",
+      [
+        'mkdir -p "/home/vercel-sandbox/.local/bin"',
+        `mkdir -p "${claudeInstallRoot}"`,
+        `cd "${claudeInstallRoot}"`,
+        ensureRealNodeShim,
+        `bun -e 'const fs=require("fs"); if (!fs.existsSync("package.json")) fs.writeFileSync("package.json", JSON.stringify({ name: "claude-code-runtime", private: true }))'`
+      ].join(" && ")
+    ],
+    env: sharedHomeEnv
+  })
+  if (prepResult.exitCode !== 0) {
+    installErrors.push(
+      `bun-prep: exit=${prepResult.exitCode} stdout=${formatClaudeOutputPreview(prepResult.stdout)} stderr=${formatClaudeOutputPreview(prepResult.stderr)}`
+    )
+  } else {
     try {
-      installResult = await runSandboxCommandWithOptions(sandbox, attempt.options)
-      if (installResult.exitCode === 0) {
+      const bunInstallResult = await runSandboxCommandWithOptions(sandbox, {
+        cmd: "bun",
+        args: ["add", CLAUDE_CODE_PACKAGE],
+        cwd: claudeInstallRoot,
+        env: sharedHomeEnv
+      })
+      if (bunInstallResult.exitCode === 0) {
+        const bunPostinstallResult = await runSandboxCommandWithOptions(sandbox, {
+          cmd: "bun",
+          args: ["./node_modules/@anthropic-ai/claude-code/install.cjs"],
+          cwd: claudeInstallRoot,
+          env: sharedHomeEnv
+        })
+        if (bunPostinstallResult.exitCode === 0) {
+          const linkResult = await runSandboxCommandWithOptions(sandbox, {
+            cmd: "sh",
+            args: [
+              "-lc",
+              [
+                `test -x "${localClaudeExecutable}"`,
+                `ln -sf "${localClaudeExecutable}" /home/vercel-sandbox/.local/bin/claude`
+              ].join(" && ")
+            ],
+            env: sharedHomeEnv
+          })
+          if (linkResult.exitCode === 0) {
+            const resolvedPath = await resolveInstalledClaudePath()
+            if (resolvedPath) {
+              installResult = {
+                exitCode: 0,
+                stdout: `resolved=${resolvedPath}`,
+                stderr: ""
+              }
+            } else {
+              installErrors.push("bun-local-postinstall: install exited 0 but Claude executable was still unresolved")
+            }
+          } else {
+            installErrors.push(
+              `bun-local-link: exit=${linkResult.exitCode} stdout=${formatClaudeOutputPreview(linkResult.stdout)} stderr=${formatClaudeOutputPreview(linkResult.stderr)}`
+            )
+          }
+        } else {
+          installErrors.push(
+            `bun-local-postinstall: exit=${bunPostinstallResult.exitCode} stdout=${formatClaudeOutputPreview(bunPostinstallResult.stdout)} stderr=${formatClaudeOutputPreview(bunPostinstallResult.stderr)}`
+          )
+        }
+      } else {
+        installErrors.push(
+          `bun-local-add: exit=${bunInstallResult.exitCode} stdout=${formatClaudeOutputPreview(bunInstallResult.stdout)} stderr=${formatClaudeOutputPreview(bunInstallResult.stderr)}`
+        )
+      }
+    } catch (error) {
+      installErrors.push(`bun-local-postinstall: threw=${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
+  if (!installResult) {
+    try {
+      const pnpmInstallResult = await runSandboxCommandWithOptions(sandbox, {
+        cmd: "pnpm",
+        args: ["add", CLAUDE_CODE_PACKAGE],
+        cwd: claudeInstallRoot,
+        env: sharedHomeEnv
+      })
+      if (pnpmInstallResult.exitCode === 0) {
+        const pnpmPostinstallResult = await runSandboxCommandWithOptions(sandbox, {
+          cmd: "sh",
+          args: [
+            "-lc",
+            `if command -v nodejs >/dev/null 2>&1; then nodejs "${localClaudeInstallScript}"; else node "${localClaudeInstallScript}"; fi`
+          ],
+          cwd: claudeInstallRoot,
+          env: sharedHomeEnv
+        })
+        if (pnpmPostinstallResult.exitCode === 0) {
+          const linkResult = await runSandboxCommandWithOptions(sandbox, {
+            cmd: "sh",
+            args: [
+              "-lc",
+              [
+                `test -x "${localClaudeExecutable}"`,
+                `ln -sf "${localClaudeExecutable}" /home/vercel-sandbox/.local/bin/claude`
+              ].join(" && ")
+            ],
+            env: sharedHomeEnv
+          })
+          if (linkResult.exitCode === 0) {
+            const resolvedPath = await resolveInstalledClaudePath()
+            if (resolvedPath) {
+              installResult = {
+                exitCode: 0,
+                stdout: `resolved=${resolvedPath}`,
+                stderr: ""
+              }
+            } else {
+              installErrors.push("pnpm-local-postinstall: install exited 0 but Claude executable was still unresolved")
+            }
+          } else {
+            installErrors.push(
+              `pnpm-local-link: exit=${linkResult.exitCode} stdout=${formatClaudeOutputPreview(linkResult.stdout)} stderr=${formatClaudeOutputPreview(linkResult.stderr)}`
+            )
+          }
+        } else {
+          installErrors.push(
+            `pnpm-local-postinstall: exit=${pnpmPostinstallResult.exitCode} stdout=${formatClaudeOutputPreview(pnpmPostinstallResult.stdout)} stderr=${formatClaudeOutputPreview(pnpmPostinstallResult.stderr)}`
+          )
+        }
+      } else {
+        installErrors.push(
+          `pnpm-local-add: exit=${pnpmInstallResult.exitCode} stdout=${formatClaudeOutputPreview(pnpmInstallResult.stdout)} stderr=${formatClaudeOutputPreview(pnpmInstallResult.stderr)}`
+        )
+      }
+    } catch (error) {
+      installErrors.push(`pnpm-local-postinstall: threw=${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
+  if (!installResult) {
+    try {
+      const globalResult = await runSandboxCommandWithOptions(sandbox, {
+        cmd: "bun",
+        args: ["add", "-g", CLAUDE_CODE_PACKAGE],
+        env: sharedHomeEnv
+      })
+      if (globalResult.exitCode === 0) {
         const resolvedPath = await resolveInstalledClaudePath()
         if (resolvedPath) {
-          installResult.stdout = `${installResult.stdout}\nresolved=${resolvedPath}`.trim()
-          break
+          installResult = {
+            exitCode: 0,
+            stdout: `resolved=${resolvedPath}`,
+            stderr: ""
+          }
+        } else {
+          installErrors.push("bun-global: install exited 0 but Claude executable was still unresolved")
         }
-        installErrors.push(`${attempt.label}: install exited 0 but Claude executable was still unresolved`)
-        installResult = null
-        continue
+      } else {
+        installErrors.push(
+          `bun-global: exit=${globalResult.exitCode} stdout=${formatClaudeOutputPreview(globalResult.stdout)} stderr=${formatClaudeOutputPreview(globalResult.stderr)}`
+        )
       }
-      installErrors.push(
-        `${attempt.label}: exit=${installResult.exitCode} stdout=${formatClaudeOutputPreview(installResult.stdout)} stderr=${formatClaudeOutputPreview(installResult.stderr)}`
-      )
     } catch (error) {
-      installErrors.push(`${attempt.label}: threw=${error instanceof Error ? error.message : String(error)}`)
+      installErrors.push(`bun-global: threw=${error instanceof Error ? error.message : String(error)}`)
     }
   }
 
