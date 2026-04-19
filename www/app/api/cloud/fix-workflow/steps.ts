@@ -6690,7 +6690,17 @@ function formatClaudeOutputPreview(raw: string | undefined, maxLength = 240): st
 }
 
 function buildClaudeSandboxPathEnv(): string {
-  return "/home/vercel-sandbox/.claude-code/node_modules/.bin:/home/vercel-sandbox/.bun/bin:/home/vercel-sandbox/.local/bin:/usr/local/bin:/usr/bin:/bin"
+  return [
+    "/home/vercel-sandbox/.claude-code/node_modules/.bin",
+    "/home/vercel-sandbox/.bun/bin",
+    "/home/vercel-sandbox/.local/bin",
+    "/vercel/runtimes/node24/bin",
+    "/vercel/runtimes/node22/bin",
+    "/vercel/runtimes/nodejs/bin",
+    "/usr/local/bin",
+    "/usr/bin",
+    "/bin"
+  ].join(":")
 }
 
 type ClaudeSandboxInvocation = {
