@@ -1,0 +1,49 @@
+src/dev-environment.ts
+  71722f7d7d8af665 1399
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.0",
+  "base_commit_sha": "51ed9bb6c0ce01cdbcb2c9bc9fa67679d8d26f30",
+  "prompts": {
+    "71722f7d7d8af665": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d9f46-fdb9-7af2-8d86-69e9fb487761",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 1,
+      "total_deletions": 268,
+      "accepted_lines": 1,
+      "overriden_lines": 0
+    },
+    "7a0ea82f7d7bc893": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d59d8-022d-7262-9555-ec96bb973d0c",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 1,
+      "overriden_lines": 0
+    },
+    "99ca025371e68d9d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019d87d1-243a-7931-bf03-4625a7dea51f",
+        "model": "gpt-5.4"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 925,
+      "overriden_lines": 0
+    }
+  }
+}
