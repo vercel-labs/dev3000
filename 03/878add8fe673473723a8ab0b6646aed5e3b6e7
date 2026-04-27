@@ -1,0 +1,25 @@
+www/app/api/cloud/start-fix/route.ts
+  e1a49c70da9fbdfd 80-84,120-149,401,425-430,432-459,876-884
+www/lib/skill-runner-worker.ts
+  e1a49c70da9fbdfd 699-700,922-923
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "03878add8fe673473723a8ab0b6646aed5e3b6e7",
+  "prompts": {
+    "e1a49c70da9fbdfd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019dcf82-2e6a-7892-beef-7f57a43a18b6",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 83,
+      "total_deletions": 20,
+      "accepted_lines": 83,
+      "overriden_lines": 0
+    }
+  }
+}
