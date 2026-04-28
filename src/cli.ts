@@ -253,7 +253,7 @@ import { Command } from "commander"
 import { accessSync, appendFileSync, chmodSync, constants, copyFileSync, existsSync, mkdirSync, readFileSync } from "fs"
 import { homedir } from "os"
 import { detect } from "package-manager-detector"
-import { dirname, join } from "path"
+import { dirname, join, resolve } from "path"
 import { fileURLToPath } from "url"
 import { cloudCheckPR } from "./commands/cloud-check-pr.js"
 import { cloudFix } from "./commands/cloud-fix.js"
@@ -938,6 +938,12 @@ program
   )
   .option("--profile-dir <dir>", "Chrome profile directory")
   .option(
+    "--data-dir <dir>",
+    "Override the per-project data directory (default: ~/.d3k/<project>/). Holds session.json, logs, screenshots, and the Chrome profile."
+  )
+  .option("--log-file <path>", "Override the consolidated log file path (default: <data-dir>/logs/<timestamp>.log)")
+  .option("--screenshots-dir <dir>", "Override the screenshots directory (default: <data-dir>/screenshots)")
+  .option(
     "--browser-tool <tool>",
     "Preferred local browser CLI: 'agent-browser' (default) or 'next-browser'",
     "agent-browser"
@@ -970,6 +976,12 @@ program
   .option("--agent-name <name>", "Selected agent name (internal)")
   .option("--no-agent", "Skip agent selection prompt and run d3k standalone")
   .action(async (options) => {
+    // Apply --data-dir as early as possible so any subsequent call to
+    // getProjectDir() (incl. profile dir, screenshots, session file) sees it.
+    if (options.dataDir) {
+      process.env.D3K_DATA_DIR = resolve(options.dataDir)
+    }
+
     const projectName = getProjectDisplayName()
     setTerminalTitle(projectName)
 
@@ -1314,8 +1326,8 @@ program
     const executablePath = process.argv[1]
     const commandName = executablePath.endsWith("/d3k") || executablePath.includes("/d3k") ? "d3k" : "dev3000"
     try {
-      // Create persistent log file
-      const logFile = createPersistentLogFile()
+      // Create persistent log file (honors --log-file when provided)
+      const logFile = createPersistentLogFile(options.logFile)
 
       // Use a per-project Chrome profile by default so concurrent d3k sessions
       // don't fight over the same browser state. Honor explicit overrides.
@@ -1350,7 +1362,8 @@ program
         agentName: options.agentName || undefined,
         skillsAgentId: skillsAgentId || undefined,
         autoSkills: options.skills !== false ? options.autoSkills || false : false,
-        installSkills: options.skills !== false
+        installSkills: options.skills !== false,
+        screenshotsDir: options.screenshotsDir
       })
     } catch (error) {
       console.error(chalk.red("❌ Failed to start development environment:"), error)

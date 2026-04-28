@@ -123,8 +123,15 @@ export function getProjectDisplayName(cwd: string = process.cwd()): string {
  * Get the d3k data directory for a project
  * All project-specific files are stored here: logs, chrome profile, skills, session info
  * Structure: ~/.d3k/{projectName}/
+ *
+ * Honors the D3K_DATA_DIR environment variable as a full override of the
+ * computed project directory (set by the --data-dir CLI flag).
  */
 export function getProjectDir(cwd: string = process.cwd()): string {
+  const override = process.env.D3K_DATA_DIR
+  if (override && override.length > 0) {
+    return override
+  }
   const projectName = getProjectName(cwd)
   return join(homedir(), ".d3k", projectName)
 }
