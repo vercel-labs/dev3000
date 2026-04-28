@@ -557,13 +557,20 @@ export class CDPMonitor {
    */
   private async killExistingChromeWithProfile(): Promise<void> {
     try {
-      // Find Chrome processes using this profile directory
+      // Build a set of PIDs that must never be killed: this Node process and
+      // its parent. d3k's own argv contains the profile path (via --profile-dir),
+      // which previously caused a substring match here and made d3k SIGTERM itself.
+      const selfPids = new Set<number>()
+      if (typeof process.pid === "number") selfPids.add(process.pid)
+      if (typeof process.ppid === "number") selfPids.add(process.ppid)
+
+      // Find Chrome processes using this profile directory. We only match the
+      // canonical `--user-data-dir=<profile>` form Chrome consumes; matching the
+      // bare path was too loose and caught unrelated processes (incl. d3k itself).
       const processes = await this.listProcesses()
       const pids = processes
-        .filter(
-          (proc) =>
-            proc.command.includes(`--user-data-dir=${this.profileDir}`) || proc.command.includes(this.profileDir)
-        )
+        .filter((proc) => !selfPids.has(proc.pid))
+        .filter((proc) => proc.command.includes(`--user-data-dir=${this.profileDir}`))
         .map((proc) => proc.pid)
         .filter((pid) => pid !== this.browser?.pid)
 
