@@ -705,7 +705,7 @@ describe("writeSessionInfo", () => {
         undefined,
         undefined,
         undefined,
-        "next-browser"
+        "agent-browser"
       )
     }
 

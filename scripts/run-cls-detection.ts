@@ -36,16 +36,21 @@ interface WorkflowResult {
 
 async function getRecentProjects(teamSlug?: string, limit = 5): Promise<Project[]> {
   // Use Vercel CLI to get projects
-  const { execSync } = await import("child_process")
+  const { spawnSync } = await import("child_process")
 
   try {
     // Fetch projects using Vercel CLI
-    const command = teamSlug ? `vc project ls --scope ${teamSlug}` : "vc project ls"
+    const args = teamSlug ? ["project", "ls", "--scope", teamSlug] : ["project", "ls"]
 
-    console.log(`Running: ${command}`)
-    const output = execSync(`${command} 2>&1`, {
-      encoding: "utf-8"
+    console.log(`Running: vc ${args.join(" ")}`)
+    const result = spawnSync("vc", args, {
+      encoding: "utf-8",
+      shell: false
     })
+    const output = `${result.stdout || ""}${result.stderr || ""}`
+    if (result.status !== 0) {
+      throw new Error(output || `vc exited with status ${result.status}`)
+    }
 
     // Parse the table output from vc project ls
     // Format: Project Name | Latest Production URL | Updated | Node Version

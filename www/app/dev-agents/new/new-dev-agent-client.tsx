@@ -138,7 +138,7 @@ const BUILTIN_EARLY_EXIT_METRICS = [
   { value: "inp_grade", label: "INP Grade", description: "good / needs-improvement / poor" },
   { value: "skills_installed_count", label: "Installed Skills Count", description: "Number of sandbox skills" },
   { value: "has_skills_installed", label: "Has Installed Skills", description: "true / false" },
-  { value: "cloud_browser_mode", label: "Cloud Browser Mode", description: "agent-browser / next-browser" }
+  { value: "cloud_browser_mode", label: "Cloud Browser Mode", description: "agent-browser" }
 ] as const
 
 const NUMERIC_OPERATORS: DevAgentEarlyExitOperator[] = ["<", "<=", ">", ">=", "===", "!==", "between"]

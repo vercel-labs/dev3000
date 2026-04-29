@@ -28,7 +28,7 @@ export interface WorkflowRun {
   devAgentRevision?: number
   devAgentSpecHash?: string
   devAgentExecutionMode?: "dev-server" | "preview-pr"
-  devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser"
+  devAgentSandboxBrowser?: "none" | "agent-browser"
   skillRunnerCanonicalPath?: string
   skillRunnerValidationWarning?: string
   currentStep?: string // Current step being executed (for live progress)

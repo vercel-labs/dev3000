@@ -12,7 +12,6 @@ import { createVercelGateway, getAiGatewayAuthSource, requireAiGatewayAuthToken 
 import { putBlobAndBuildUrl, readBlobJson } from "@/lib/blob-store"
 import { getOrCreateD3kSandbox, type SandboxTimingData, StepTimer } from "@/lib/cloud/d3k-sandbox"
 import { SandboxAgentBrowser } from "@/lib/cloud/sandbox-agent-browser"
-import { SandboxNextBrowser } from "@/lib/cloud/sandbox-next-browser"
 import {
   type DevAgentEarlyExitRule,
   type DevAgentSkillRef,
@@ -355,21 +354,14 @@ function isSemverAtLeast(found: ParsedSemver, minimum: ParsedSemver): boolean {
   return found.patch >= minimum.patch
 }
 
-type CloudBrowserMode = "agent-browser" | "next-browser"
+type CloudBrowserMode = "agent-browser"
 
 // Cache for agent-browser instance per sandbox
 const agentBrowserCache = new Map<string, SandboxAgentBrowser>()
 const agentBrowserProfileVersion = new Map<string, number>()
-const nextBrowserCache = new Map<string, SandboxNextBrowser>()
-const nextBrowserHomeVersion = new Map<string, number>()
 const WORKFLOW_BROWSER_COMMAND_TIMEOUT_MS = 90000
 
-function resolveCloudBrowserMode(
-  devAgentSandboxBrowser: "none" | "agent-browser" | "next-browser" | undefined
-): CloudBrowserMode {
-  // next-browser is useful for Next-specific inspection, but the workflow's
-  // own automation path relies on generic navigation/eval/screenshot behavior
-  // that agent-browser handles more reliably in sandboxes.
+function resolveCloudBrowserMode(devAgentSandboxBrowser: "none" | "agent-browser" | undefined): CloudBrowserMode {
   void devAgentSandboxBrowser
   return "agent-browser"
 }
@@ -403,23 +395,6 @@ async function getAgentBrowser(sandbox: Sandbox, debug = false): Promise<Sandbox
   return browser
 }
 
-async function getNextBrowser(sandbox: Sandbox, debug = false): Promise<SandboxNextBrowser> {
-  const cacheKey = sandbox.sandboxId
-  let browser = nextBrowserCache.get(cacheKey)
-  if (!browser) {
-    const nextVersion = (nextBrowserHomeVersion.get(cacheKey) || 0) + 1
-    nextBrowserHomeVersion.set(cacheKey, nextVersion)
-    const homeDir = `/tmp/next-browser-home-${cacheKey}-${nextVersion}`
-    browser = await SandboxNextBrowser.create(sandbox, {
-      homeDir,
-      debug
-    })
-    workflowLog(`[Browser] Created next-browser home ${homeDir}`)
-    nextBrowserCache.set(cacheKey, browser)
-  }
-  return browser
-}
-
 /**
  * Navigate browser to URL using the configured browser CLI.
  */
@@ -431,8 +406,7 @@ async function navigateBrowser(
   timeoutMs?: number
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const browser =
-      browserMode === "next-browser" ? await getNextBrowser(sandbox, debug) : await getAgentBrowser(sandbox, debug)
+    const browser = await getAgentBrowser(sandbox, debug)
     const result = await browser.open(url, timeoutMs ? { timeout: timeoutMs } : undefined)
     if (result.success) {
       workflowLog(`[Browser] Navigated to ${url} via ${browserMode}`)
@@ -441,13 +415,8 @@ async function navigateBrowser(
     workflowLog(`[Browser] ${browserMode} navigation failed: ${result.error}`)
     if (isRecoverableBrowserError(result.error)) {
       workflowLog(`[Browser] Resetting cached ${browserMode} instance after recoverable navigation failure`)
-      if (browserMode === "next-browser") {
-        nextBrowserCache.delete(sandbox.sandboxId)
-      } else {
-        agentBrowserCache.delete(sandbox.sandboxId)
-      }
-      const retryBrowser =
-        browserMode === "next-browser" ? await getNextBrowser(sandbox, debug) : await getAgentBrowser(sandbox, debug)
+      agentBrowserCache.delete(sandbox.sandboxId)
+      const retryBrowser = await getAgentBrowser(sandbox, debug)
       const retryResult = await retryBrowser.open(url, timeoutMs ? { timeout: timeoutMs } : undefined)
       if (retryResult.success) {
         workflowLog(`[Browser] Navigated to ${url} via ${browserMode} (retry)`)
@@ -458,11 +427,7 @@ async function navigateBrowser(
   } catch (error) {
     workflowLog(`[Browser] ${browserMode} error: ${error instanceof Error ? error.message : String(error)}`)
     if (isRecoverableBrowserError(error instanceof Error ? error.message : String(error))) {
-      if (browserMode === "next-browser") {
-        nextBrowserCache.delete(sandbox.sandboxId)
-      } else {
-        agentBrowserCache.delete(sandbox.sandboxId)
-      }
+      agentBrowserCache.delete(sandbox.sandboxId)
     }
   }
 
@@ -479,8 +444,7 @@ async function reloadBrowser(
   timeoutMs?: number
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const browser =
-      browserMode === "next-browser" ? await getNextBrowser(sandbox, debug) : await getAgentBrowser(sandbox, debug)
+    const browser = await getAgentBrowser(sandbox, debug)
     const result = await browser.reload(timeoutMs ? { timeout: timeoutMs } : undefined)
     if (result.success) {
       workflowLog(`[Browser] Page reloaded via ${browserMode}`)
@@ -489,13 +453,8 @@ async function reloadBrowser(
     workflowLog(`[Browser] ${browserMode} reload failed: ${result.error}`)
     if (isRecoverableBrowserError(result.error)) {
       workflowLog(`[Browser] Resetting cached ${browserMode} instance after recoverable reload failure`)
-      if (browserMode === "next-browser") {
-        nextBrowserCache.delete(sandbox.sandboxId)
-      } else {
-        agentBrowserCache.delete(sandbox.sandboxId)
-      }
-      const retryBrowser =
-        browserMode === "next-browser" ? await getNextBrowser(sandbox, debug) : await getAgentBrowser(sandbox, debug)
+      agentBrowserCache.delete(sandbox.sandboxId)
+      const retryBrowser = await getAgentBrowser(sandbox, debug)
       const retryResult = await retryBrowser.reload(timeoutMs ? { timeout: timeoutMs } : undefined)
       if (retryResult.success) {
         workflowLog(`[Browser] Page reloaded via ${browserMode} (retry)`)
@@ -506,11 +465,7 @@ async function reloadBrowser(
   } catch (error) {
     workflowLog(`[Browser] ${browserMode} error: ${error instanceof Error ? error.message : String(error)}`)
     if (isRecoverableBrowserError(error instanceof Error ? error.message : String(error))) {
-      if (browserMode === "next-browser") {
-        nextBrowserCache.delete(sandbox.sandboxId)
-      } else {
-        agentBrowserCache.delete(sandbox.sandboxId)
-      }
+      agentBrowserCache.delete(sandbox.sandboxId)
     }
   }
 
@@ -528,21 +483,15 @@ async function evaluateInBrowser(
   timeoutMs?: number
 ): Promise<{ success: boolean; result?: unknown; error?: string }> {
   try {
-    const browser =
-      browserMode === "next-browser" ? await getNextBrowser(sandbox, debug) : await getAgentBrowser(sandbox, debug)
+    const browser = await getAgentBrowser(sandbox, debug)
     const result = await browser.evaluate(expression, timeoutMs ? { timeout: timeoutMs } : undefined)
     if (result.success) {
       return { success: true, result: result.data }
     }
     if (isRecoverableBrowserError(result.error)) {
       workflowLog(`[Browser] Resetting cached ${browserMode} instance after recoverable evaluate failure`)
-      if (browserMode === "next-browser") {
-        nextBrowserCache.delete(sandbox.sandboxId)
-      } else {
-        agentBrowserCache.delete(sandbox.sandboxId)
-      }
-      const retryBrowser =
-        browserMode === "next-browser" ? await getNextBrowser(sandbox, debug) : await getAgentBrowser(sandbox, debug)
+      agentBrowserCache.delete(sandbox.sandboxId)
+      const retryBrowser = await getAgentBrowser(sandbox, debug)
       const retryResult = await retryBrowser.evaluate(expression, timeoutMs ? { timeout: timeoutMs } : undefined)
       if (retryResult.success) {
         return { success: true, result: retryResult.data }
@@ -552,11 +501,7 @@ async function evaluateInBrowser(
     return { success: false, error: result.error }
   } catch (error) {
     if (isRecoverableBrowserError(error instanceof Error ? error.message : String(error))) {
-      if (browserMode === "next-browser") {
-        nextBrowserCache.delete(sandbox.sandboxId)
-      } else {
-        agentBrowserCache.delete(sandbox.sandboxId)
-      }
+      agentBrowserCache.delete(sandbox.sandboxId)
     }
     return { success: false, error: error instanceof Error ? error.message : String(error) }
   }
@@ -767,13 +712,10 @@ async function _screenshotBrowser(
   debug = false
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const result =
-      browserMode === "next-browser"
-        ? await (await getNextBrowser(sandbox, debug)).screenshot(outputPath, { timeout: options.timeoutMs })
-        : await (await getAgentBrowser(sandbox, debug)).screenshot(outputPath, {
-            fullPage: options.fullPage,
-            timeout: options.timeoutMs
-          })
+    const result = await (await getAgentBrowser(sandbox, debug)).screenshot(outputPath, {
+      fullPage: options.fullPage,
+      timeout: options.timeoutMs
+    })
     if (result.success) {
       workflowLog(`[Browser] Screenshot saved to ${outputPath} via ${browserMode}`)
       return { success: true }
@@ -852,16 +794,15 @@ async function capturePhaseScreenshot(
   waitMs = 8000
 ): Promise<Array<{ timestamp: number; blobUrl: string; label?: string }>> {
   const screenshotPath = `/tmp/${kind}-${Date.now()}.png`
-  const screenshotBrowserMode = browserMode === "next-browser" ? "agent-browser" : browserMode
   const screenshotResult = await Promise.race([
-    captureSandboxScreenshot(sandbox, screenshotPath, screenshotBrowserMode, targetUrl, waitMs),
+    captureSandboxScreenshot(sandbox, screenshotPath, browserMode, targetUrl, waitMs),
     new Promise<{ success: false; error: string }>((resolve) =>
       setTimeout(() => resolve({ success: false, error: "Screenshot capture exceeded outer timeout" }), 20000)
     )
   ])
   if (!screenshotResult.success) {
     workflowLog(
-      `[Browser] ${screenshotBrowserMode} screenshot capture failed${targetUrl ? ` for ${targetUrl}` : ""}: ${screenshotResult.error || "unknown error"}`
+      `[Browser] ${browserMode} screenshot capture failed${targetUrl ? ` for ${targetUrl}` : ""}: ${screenshotResult.error || "unknown error"}`
     )
     return []
   }
@@ -1497,7 +1438,7 @@ interface ProgressContext {
   skillRunnerCanonicalPath?: string
   skillRunnerValidationWarning?: string
   devAgentExecutionMode?: "dev-server" | "preview-pr"
-  devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser"
+  devAgentSandboxBrowser?: "none" | "agent-browser"
   isMarketplaceAgent?: boolean
   controlPlaneMirrorTarget?: WorkflowRunMirrorTarget
   activeStepNumber?: number
@@ -3081,7 +3022,7 @@ export interface ObserveResult {
   beforeGrade: "good" | "needs-improvement" | "poor" | null
   beforeScreenshots: Array<{ timestamp: number; blobUrl: string; label?: string }>
   d3kLogs: string
-  cloudBrowserMode: "agent-browser" | "next-browser"
+  cloudBrowserMode: "agent-browser"
   skillsInstalled: string[]
   timing: { totalMs: number; steps: Array<{ name: string; durationMs: number; startedAt: string }> }
 }
@@ -3347,7 +3288,7 @@ export async function observeBaselineStep(
   vercelOidcToken?: string,
   devAgentAshTarballUrl?: string,
   projectDir?: string,
-  devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser",
+  devAgentSandboxBrowser?: "none" | "agent-browser",
   devAgentDevServerCommand?: string,
   devAgentSkillRefs?: DevAgentSkillRef[],
   progressContext?: ProgressContext | null
@@ -3950,7 +3891,7 @@ export async function agentFixLoopStep(
   devAgentInstructions?: string,
   devAgentAshTarballUrl?: string,
   devAgentExecutionMode?: "dev-server" | "preview-pr",
-  devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser",
+  devAgentSandboxBrowser?: "none" | "agent-browser",
   devAgentAiAgent?: import("@/lib/dev-agents").DevAgentAiAgent,
   devAgentDevServerCommand?: string,
   devAgentActionSteps?: Array<{ kind: string; config: Record<string, string> }>,
@@ -5111,7 +5052,7 @@ function buildAshRuntimePromptPrefix({
   skillLoadInstructions
 }: {
   devUrl: string
-  devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser"
+  devAgentSandboxBrowser?: "none" | "agent-browser"
   skillLoadInstructions: string
 }): string {
   return `ASH runtime notes:
@@ -5121,7 +5062,7 @@ function buildAshRuntimePromptPrefix({
 - The live app is available at ${devUrl || "http://localhost:3000"}.
 - Preferred browser mode: ${devAgentSandboxBrowser || "none"}.
 - Installed skills are available via the ASH artifact and session runtime: ${skillLoadInstructions}.
-- When browser validation helps, you may use installed browser CLIs such as \`agent-browser\` or \`next-browser\` against localhost URLs.
+- When browser validation helps, you may use the installed \`agent-browser\` CLI against localhost URLs.
 - Prefer direct code changes and targeted validation over broad exploration.`
 }
 
@@ -5343,7 +5284,7 @@ async function runAshAgentInSandbox(
   devAgentName?: string,
   devAgentInstructions?: string,
   devAgentExecutionMode?: "dev-server" | "preview-pr",
-  devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser",
+  devAgentSandboxBrowser?: "none" | "agent-browser",
   devAgentAiAgent?: import("@/lib/dev-agents").DevAgentAiAgent,
   devAgentActionSteps?: Array<{ kind: string; config: Record<string, string> }>,
   devAgentSkillRefs?: DevAgentSkillRef[],
@@ -5579,14 +5520,9 @@ function buildDevAgentSkillLoadInstructions(
   return `the installed skills: ${skillNames.join(", ")}`
 }
 
-function buildDevAgentSandboxBrowserGuidance(
-  devAgentSandboxBrowser: "none" | "agent-browser" | "next-browser" | undefined
-): string {
+function buildDevAgentSandboxBrowserGuidance(devAgentSandboxBrowser: "none" | "agent-browser" | undefined): string {
   if (devAgentSandboxBrowser === "none") {
     return "Browser mode: none. Stay code-first and use browser tools only if they are necessary for final verification."
-  }
-  if (devAgentSandboxBrowser === "next-browser") {
-    return "Browser mode: next-browser. Prioritize preview-style browser validation and use browser tools when they materially improve evidence."
   }
   return "Browser mode: agent-browser. Use the sandbox browser tools directly for capture, inspection, and validation."
 }
@@ -5988,7 +5924,7 @@ function buildClaudeMainTaskPrompt({
   devAgentName?: string
   devAgentInstructions?: string
   devAgentExecutionMode?: "dev-server" | "preview-pr"
-  devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser"
+  devAgentSandboxBrowser?: "none" | "agent-browser"
   devAgentActionSteps?: Array<{ kind: string; config: Record<string, string> }>
   skillLoadInstructions: string
   bundleBaselineSummary?: string
@@ -6098,7 +6034,7 @@ function buildClaudeTurnPrompts({
   beforeCls: number | null
   beforeGrade: "good" | "needs-improvement" | "poor" | null
   codeHints?: string
-  devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser"
+  devAgentSandboxBrowser?: "none" | "agent-browser"
   hasPackagedRunbook?: boolean
 }): ClaudeTurnPrompt[] {
   const prompts: ClaudeTurnPrompt[] = [
@@ -6158,7 +6094,7 @@ function buildAshTaskPrompt({
   devAgentName?: string
   devAgentInstructions?: string
   devAgentExecutionMode?: "dev-server" | "preview-pr"
-  devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser"
+  devAgentSandboxBrowser?: "none" | "agent-browser"
   devAgentActionSteps?: Array<{ kind: string; config: Record<string, string> }>
   skillLoadInstructions: string
   bundleBaselineSummary?: string
@@ -7139,7 +7075,7 @@ async function runAgentWithDiagnoseTool(
   devAgentName?: string,
   devAgentInstructions?: string,
   devAgentExecutionMode?: "dev-server" | "preview-pr",
-  devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser",
+  devAgentSandboxBrowser?: "none" | "agent-browser",
   devAgentAiAgent?: import("@/lib/dev-agents").DevAgentAiAgent,
   devAgentActionSteps?: Array<{ kind: string; config: Record<string, string> }>,
   devAgentSkillRefs?: DevAgentSkillRef[],

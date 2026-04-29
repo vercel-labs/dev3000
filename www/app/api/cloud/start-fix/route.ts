@@ -77,6 +77,11 @@ type StartFixRequestBody = {
     name?: string
     isPersonal?: boolean
   }
+  resolvedSkillRunner?: {
+    devAgent?: DevAgent
+    canonicalPath?: string
+    validationWarning?: string
+  }
   startPath?: string
   submitPullRequest?: boolean
   teamId?: string
@@ -110,6 +115,36 @@ function isPrivateOrLocalHost(hostname: string): boolean {
   }
 
   return false
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value))
+}
+
+function parseForwardedSkillRunner(
+  value: unknown,
+  expectedSkillRunnerId: string
+): { devAgent: DevAgent; canonicalPath?: string; validationWarning?: string } | null {
+  if (!isRecord(value)) return null
+
+  const devAgent = value.devAgent
+  if (!isRecord(devAgent)) return null
+  if (devAgent.kind !== "skill-runner") return null
+  if (devAgent.id !== expectedSkillRunnerId) return null
+  if (typeof devAgent.name !== "string" || typeof devAgent.description !== "string") return null
+  if (typeof devAgent.instructions !== "string") return null
+  if (!Array.isArray(devAgent.skillRefs)) return null
+
+  const ashArtifact = devAgent.ashArtifact
+  if (!isRecord(ashArtifact) || typeof ashArtifact.tarballUrl !== "string" || !ashArtifact.tarballUrl.trim()) {
+    return null
+  }
+
+  return {
+    devAgent: devAgent as unknown as DevAgent,
+    canonicalPath: typeof value.canonicalPath === "string" ? value.canonicalPath : undefined,
+    validationWarning: typeof value.validationWarning === "string" ? value.validationWarning : undefined
+  }
 }
 
 async function validatePublicUrl(
@@ -363,6 +398,7 @@ export async function POST(request: Request) {
       "turbopack-bundle-analyzer"
     ]
     if (typeof body.skillRunnerId === "string" && body.skillRunnerId.trim().length > 0) {
+      const requestedSkillRunnerId = body.skillRunnerId.trim()
       const team = body.skillRunnerTeam
       if (!team || typeof team.id !== "string" || typeof team.slug !== "string" || typeof team.name !== "string") {
         return Response.json(
@@ -386,24 +422,41 @@ export async function POST(request: Request) {
         },
         executionMode: teamSettings.executionMode
       }
-      const preparedSkillRunner = await getSkillRunnerForExecution(
-        {
-          id: team.id,
-          slug: team.slug,
-          name: team.name,
-          isPersonal: Boolean(team.isPersonal)
-        },
-        body.skillRunnerId.trim()
-      )
+
+      const forwardedSkillRunner =
+        isSelfHostedWorker && request.headers.get("x-dev3000-skill-runner-worker-forwarded") === "1"
+          ? parseForwardedSkillRunner(body.resolvedSkillRunner, requestedSkillRunnerId)
+          : null
+
       runnerKind = "skill-runner"
-      devAgent = preparedSkillRunner.devAgent
-      skillRunnerCanonicalPath = preparedSkillRunner.canonicalPath
-      skillRunnerValidationWarning = preparedSkillRunner.validationWarning
-      ashArtifactState = "reused"
-      workflowType = devAgent.legacyWorkflowType || "prompt"
-      workflowLog(
-        `[Start Fix] Reusing ASH app: ${preparedSkillRunner.devAgent.ashArtifact?.sourceLabel || devAgent.name} (${preparedSkillRunner.devAgent.ashArtifact?.specHash?.slice(0, 8) || "unknown"})`
-      )
+      if (forwardedSkillRunner) {
+        devAgent = forwardedSkillRunner.devAgent
+        skillRunnerCanonicalPath = forwardedSkillRunner.canonicalPath
+        skillRunnerValidationWarning = forwardedSkillRunner.validationWarning
+        ashArtifactState = "reused"
+        workflowType = devAgent.legacyWorkflowType || "prompt"
+        workflowLog(
+          `[Start Fix] Using forwarded skill runner ASH app: ${devAgent.ashArtifact?.sourceLabel || devAgent.name} (${devAgent.ashArtifact?.specHash?.slice(0, 8) || "unknown"})`
+        )
+      } else {
+        const preparedSkillRunner = await getSkillRunnerForExecution(
+          {
+            id: team.id,
+            slug: team.slug,
+            name: team.name,
+            isPersonal: Boolean(team.isPersonal)
+          },
+          requestedSkillRunnerId
+        )
+        devAgent = preparedSkillRunner.devAgent
+        skillRunnerCanonicalPath = preparedSkillRunner.canonicalPath
+        skillRunnerValidationWarning = preparedSkillRunner.validationWarning
+        ashArtifactState = "reused"
+        workflowType = devAgent.legacyWorkflowType || "prompt"
+        workflowLog(
+          `[Start Fix] Reusing ASH app: ${preparedSkillRunner.devAgent.ashArtifact?.sourceLabel || devAgent.name} (${preparedSkillRunner.devAgent.ashArtifact?.specHash?.slice(0, 8) || "unknown"})`
+        )
+      }
 
       if (teamSettings.executionMode === "self-hosted" && process.env[SKILL_RUNNER_WORKER_MODE_ENV] !== "1") {
         const runnerTeamIdentity = {
@@ -820,7 +873,15 @@ export async function POST(request: Request) {
               timestamp: runTimestamp,
               workflowType,
               controlPlaneBaseUrl: new URL(request.url).origin,
-              controlPlaneMirrorSecret: workflowMirrorSecret
+              controlPlaneMirrorSecret: workflowMirrorSecret,
+              resolvedSkillRunner:
+                runnerKind === "skill-runner" && devAgent
+                  ? {
+                      devAgent,
+                      canonicalPath: skillRunnerCanonicalPath,
+                      validationWarning: skillRunnerValidationWarning
+                    }
+                  : undefined
             }
           : body
 

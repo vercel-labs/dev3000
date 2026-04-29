@@ -7,7 +7,6 @@
       "dependencies": {
         "@biomejs/biome": "2.4.6",
         "@opentui/core": "0.1.86",
-        "@vercel/next-browser": "0.1.6",
         "@vercel/sandbox": "1.9.3",
         "agent-browser": "0.24.0",
         "ai": "6.0.116",
@@ -458,8 +457,6 @@
 
     "@next/env": ["@next/env@16.2.1-canary.5", "", {}, "sha512-aPZ47D4Rfq3gGYscSShwYMYKuH4ZyjdLaTcoV2x15i+GgXBXSc5bVWwu9q9LYZGjT/xWTBGzwd+AsNlge/QtXg=="],
 
-    "@next/playwright": ["@next/playwright@16.2.0-canary.80", "", { "peerDependencies": { "@playwright/test": ">=1.0.0" }, "optionalPeers": ["@playwright/test"] }, "sha512-dU0ArRa86on/ntA/r5YkWaJr6hJ8Dq3AbWvSWETlBTinXMk5gKZH04jUYMzYXK0kyAQQKWg/hcEjDwGTkOnSqw=="],
-
     "@next/swc-darwin-arm64": ["@next/swc-darwin-arm64@16.2.1-canary.5", "", { "os": "darwin", "cpu": "arm64" }, "sha512-DBVVu+ByU7Hps/L//G13CL4txUuoPB0a2botxjr1q5+DQx7czUQdFf7H6p9iHNhX04KwY5YFBFR1O0HmMnm/Jg=="],
 
     "@next/swc-darwin-x64": ["@next/swc-darwin-x64@16.2.1-canary.5", "", { "os": "darwin", "cpu": "x64" }, "sha512-LlnU1ii4AFg5FHVB+uysCiADc/gX6CKTEkU9z8gmQlRNxEg6wSyLJ0q07js0c2MZzArGUvbIdyn4mFzc2PfRWA=="],
@@ -899,8 +896,6 @@
     "@vercel/cli-auth": ["@vercel/cli-auth@0.0.1", "", { "dependencies": { "async-listen": "3.0.0", "open": "8.4.0", "xdg-app-paths": "5", "zod": "4.1.11" } }, "sha512-CnqiuMlZ4pjs2LCPYiR6aLKPPd3Xb8SBI1Y7eotXKgpx6qgrGNY+E7EIyUt5ErGHJGIrCZyGG5WEo4bHtVmz2Q=="],
 
     "@vercel/functions": ["@vercel/functions@3.4.3", "", { "dependencies": { "@vercel/oidc": "3.2.0" }, "peerDependencies": { "@aws-sdk/credential-provider-web-identity": "*" }, "optionalPeers": ["@aws-sdk/credential-provider-web-identity"] }, "sha512-kA14KIUVgAY6VXbhZ5jjY+s0883cV3cZqIU3WhrSRxuJ9KvxatMjtmzl0K23HK59oOUjYl7HaE/eYMmhmqpZzw=="],
-
-    "@vercel/next-browser": ["@vercel/next-browser@0.1.6", "", { "dependencies": { "@next/playwright": "16.2.0-canary.80", "playwright": "^1.50.0", "source-map-js": "^1.2.1" }, "bin": { "next-browser": "dist/cli.js" } }, "sha512-8uOQP7YvbUKG6vBhl5nR1GjdiguKCLFEsRjZ1MtB9gm7lS/EUPYxwWvNwYoORdx5GvBvDxzRbagZqmC6rTQpgw=="],
 
     "@vercel/oidc": ["@vercel/oidc@3.2.0", "", {}, "sha512-UycprH3T6n3jH0k44NHMa7pnFHGu/N05MjojYr+Mc6I7obkoLIJujSWwin1pCvdy/eOxrI/l3uDLQsmcrOb4ug=="],
 
@@ -1822,10 +1817,6 @@
 
     "planck": ["planck@1.4.2", "", { "peerDependencies": { "stage-js": "^1.0.0-alpha.12" } }, "sha512-mNbhnV3g8X2rwGxzcesjmN8BDA6qfXgQxXVMkWau9MCRlQY0RLNEkyHlVp6yFy/X6qrzAXyNONCnZ1cGDLrNew=="],
 
-    "playwright": ["playwright@1.58.2", "", { "dependencies": { "playwright-core": "1.58.2" }, "optionalDependencies": { "fsevents": "2.3.2" }, "bin": { "playwright": "cli.js" } }, "sha512-vA30H8Nvkq/cPBnNw4Q8TWz1EJyqgpuinBcHET0YVJVFldr8JDNiU9LaWAE1KqSkRYazuaBhTpB5ZzShOezQ6A=="],
-
-    "playwright-core": ["playwright-core@1.58.2", "", { "bin": { "playwright-core": "cli.js" } }, "sha512-yZkEtftgwS8CsfYo7nm0KE8jsvm6i/PTgVtB8DL726wNf6H2IMsDuxCpJj59KDaxCtSnrWan2AeDqM7JBaultg=="],
-
     "pngjs": ["pngjs@7.0.0", "", {}, "sha512-LKWqWJRhstyYo9pGvgor/ivk2w94eSjE3RGVuzLGlr3NmD8bf7RcYGze1mNdEHRP6TRP6rMuDHk5t44hnTRyow=="],
 
     "portless": ["portless@0.5.2", "", { "dependencies": { "chalk": "^5.3.0" }, "os": [ "linux", "darwin", ], "bin": { "portless": "dist/cli.js" } }, "sha512-LnJvnFUduG4QSIDqc4og9WCLRA6L0+btA96nn6icY6cxyEAR44cnWaIxVzmw7y74KQ+R7zJM1HpenankphympA=="],
@@ -2483,8 +2474,6 @@
     "parse-entities/@types/unist": ["@types/unist@2.0.11", "", {}, "sha512-CmBKiL6NNo/OqgmMn95Fk9Whlp2mtvIv+KNpQKN2F4SjvrEesubTRWGYSg+BnWZOnlCaSTU1sMpsBOzgbYhnsA=="],
 
     "pixelmatch/pngjs": ["pngjs@6.0.0", "", {}, "sha512-TRzzuFRRmEoSW/p1KVAmiOgPco2Irlah+bGFCeNfJXxxYGwSw7YwAOAcd7X28K/m5bjBWKsC29KyoMfHbypayg=="],
-
-    "playwright/fsevents": ["fsevents@2.3.2", "", { "os": "darwin" }, "sha512-xiqMQR4xAeHTuB9uWm+fFRcIOgKBMiOBP+eXiyT7jsgVCq1bkVygt00oASowB7EdtpOHaaPgKt812P9ab+DDKA=="],
 
     "react-devtools-core/ws": ["ws@7.5.10", "", { "peerDependencies": { "bufferutil": "^4.0.1", "utf-8-validate": "^5.0.2" }, "optionalPeers": ["bufferutil", "utf-8-validate"] }, "sha512-+dbF1tHwZpXcbOJdVOkzLDxZP1ailvSxM6ZweXTegylPny803bFhA+vqBYw4s31NSAk4S2Qz+AKXK9a4wkdjcQ=="],
 

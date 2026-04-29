@@ -696,7 +696,8 @@ async function redeployWorkerProject(
       deploymentId: project.latestDeploymentId,
       name: project.projectName,
       project: project.projectId,
-      target: "production"
+      target: "production",
+      withLatestCommit: true
     }),
     cache: "no-store"
   })
@@ -918,7 +919,8 @@ export async function installSkillRunnerWorkerProject(
         resolved?.workerBaseUrl &&
         (!resolved.missingEnvKeys || resolved.missingEnvKeys.length === 0) &&
         resolved.latestDeploymentId === redeployedId &&
-        resolved.latestDeploymentReadyState === "READY"
+        resolved.latestDeploymentReadyState === "READY" &&
+        resolved.shellVersionStatus !== "outdated"
       ) {
         return resolved
       }

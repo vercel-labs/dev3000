@@ -3,14 +3,7 @@ import { DEV3000_URL } from "@/lib/constants"
 
 type BlobPutBody = Parameters<typeof put>[1]
 
-const PUBLIC_BLOB_PREFIXES = [
-  "report-",
-  "workflow-",
-  "pr-",
-  "pr-check-",
-  "v0-source-",
-  "dev-agents/ash/cache/"
-] as const
+const PUBLIC_BLOB_PREFIXES = ["report-", "workflow-", "pr-", "v0-source-", "dev-agents/ash/cache/"] as const
 
 function normalizeAbsoluteBaseUrl(value?: string | null): string | null {
   const trimmed = value?.trim()

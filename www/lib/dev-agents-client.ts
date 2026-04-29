@@ -1,6 +1,6 @@
 export type DevAgentKind = "builtin" | "custom" | "marketplace" | "skill-runner"
 export type DevAgentExecutionMode = "dev-server" | "preview-pr"
-export type DevAgentSandboxBrowser = "none" | "agent-browser" | "next-browser"
+export type DevAgentSandboxBrowser = "none" | "agent-browser"
 
 export interface DevAgentAuthor {
   id: string

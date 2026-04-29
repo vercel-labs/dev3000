@@ -19,7 +19,7 @@ const BUILTIN_DEV_AGENT_ID_ALIASES = {
 
 export type DevAgentKind = "builtin" | "custom" | "marketplace" | "skill-runner"
 export type DevAgentExecutionMode = "dev-server" | "preview-pr"
-export type DevAgentSandboxBrowser = "none" | "agent-browser" | "next-browser"
+export type DevAgentSandboxBrowser = "none" | "agent-browser"
 
 export interface DevAgentAuthor {
   id: string
@@ -462,7 +462,7 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
     instructions:
       "Review the selected project against the loaded design guidance, fix the highest-value issues, and validate that the experience is improved before finalizing.",
     executionMode: "preview-pr",
-    sandboxBrowser: "next-browser",
+    sandboxBrowser: "agent-browser",
     skillRefs: [
       parseDevAgentSkillRef({
         installArg: D3K_SKILL_INSTALL_ARG,
@@ -492,7 +492,7 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
     instructions:
       "Use the workflow-provided baseline evidence, inspect the codebase for expensive React and Next.js patterns, apply targeted optimizations, and verify the impact before finishing.",
     executionMode: "preview-pr",
-    sandboxBrowser: "next-browser",
+    sandboxBrowser: "agent-browser",
     skillRefs: [
       parseDevAgentSkillRef({
         installArg: D3K_SKILL_INSTALL_ARG,
@@ -522,7 +522,7 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
     instructions:
       "Focus only on async waterfalls. Use the workflow-provided baseline evidence, inspect the route and its related server code for sequential awaits or per-item fetch chains, and rewrite only the highest-impact cases. If the initial inspection shows no meaningful waterfall to remove, stop and report that instead of making speculative edits.",
     executionMode: "preview-pr",
-    sandboxBrowser: "next-browser",
+    sandboxBrowser: "agent-browser",
     actionSteps: [
       {
         kind: "send-prompt",
@@ -573,7 +573,7 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
     instructions:
       "Focus only on initial bundle size. Use the workflow-provided baseline evidence, inspect client boundaries, route-level imports, and obviously heavy client code or static payloads. Prefer moving work to the server, lazy-loading non-critical UI, or conditionally loading code behind user intent. If the initial route is already lean and there is no clear shipped-JS win, stop and report that rather than churning code.",
     executionMode: "preview-pr",
-    sandboxBrowser: "next-browser",
+    sandboxBrowser: "agent-browser",
     actionSteps: [
       {
         kind: "send-prompt",
@@ -624,7 +624,7 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
     instructions:
       "Focus only on server-side performance. Use the workflow-provided baseline evidence, inspect server components, API routes, and server actions for duplicate fetches, avoidable request-time computation, and oversized client-boundary payloads. Prefer composition, cache(), and narrower props. If the route has no meaningful server-side bottleneck after inspection, stop and summarize that instead of forcing a rewrite.",
     executionMode: "preview-pr",
-    sandboxBrowser: "next-browser",
+    sandboxBrowser: "agent-browser",
     actionSteps: [
       {
         kind: "send-prompt",
@@ -675,7 +675,7 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
     instructions:
       "Focus only on browser-side fetching and subscriptions. Use the workflow-provided baseline evidence, inspect client components for duplicate requests to the same endpoint, redundant listeners, and repeated local browser work that should be shared or deduplicated. Prefer SWR-style deduplication or a single shared hook. If there is no real duplication to remove, stop and report that rather than introducing abstractions for their own sake.",
     executionMode: "preview-pr",
-    sandboxBrowser: "next-browser",
+    sandboxBrowser: "agent-browser",
     actionSteps: [
       {
         kind: "send-prompt",
@@ -726,7 +726,7 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
     instructions:
       "Focus only on unnecessary re-renders. Use the workflow-provided baseline evidence, inspect client components for expensive work performed on every render, derived state stored via effects, broad dependencies, and transient values that do not need to live in state. If the route has no meaningful render churn after inspection, stop and report that instead of adding memoization by reflex.",
     executionMode: "preview-pr",
-    sandboxBrowser: "next-browser",
+    sandboxBrowser: "agent-browser",
     actionSteps: [
       {
         kind: "send-prompt",
@@ -826,7 +826,7 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
     instructions:
       "Inspect the project's customized shadcn components and supporting UI primitives. Identify safe upgrades such as API cleanup, accessibility fixes, composition improvements, styling consistency, and low-risk modernization. Only update components when the change is clearly compatible with the existing codebase and design language. Preserve intentional customizations, avoid broad rewrites, and verify the UI still behaves correctly before finishing.",
     executionMode: "preview-pr",
-    sandboxBrowser: "next-browser",
+    sandboxBrowser: "agent-browser",
     skillRefs: [
       parseDevAgentSkillRef({
         installArg: `${VERCEL_PLUGIN_INSTALL_ARG}@shadcn`,
@@ -896,7 +896,7 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
     instructions:
       "Analyze navigation patterns and page transitions, refactor hard navigations into client-side transitions, add prefetching and streaming where beneficial, and verify the SPA-like experience preserves Next.js features.",
     executionMode: "preview-pr",
-    sandboxBrowser: "next-browser",
+    sandboxBrowser: "agent-browser",
     skillRefs: [
       parseDevAgentSkillRef({
         installArg: D3K_SKILL_INSTALL_ARG,
@@ -1057,7 +1057,8 @@ async function listDevAgentUsageStats(): Promise<Map<string, number>> {
 }
 
 function getDefaultSandboxBrowser(executionMode: DevAgentExecutionMode): DevAgentSandboxBrowser {
-  return executionMode === "preview-pr" ? "next-browser" : "agent-browser"
+  void executionMode
+  return "agent-browser"
 }
 
 function getBuiltinDevAgentDefaults(devAgentId: string): Omit<DevAgent, "usageCount"> | undefined {
@@ -1603,7 +1604,7 @@ export function isDevAgentExecutionMode(value: string): value is DevAgentExecuti
 }
 
 export function isDevAgentSandboxBrowser(value: string): value is DevAgentSandboxBrowser {
-  return value === "none" || value === "agent-browser" || value === "next-browser"
+  return value === "none" || value === "agent-browser"
 }
 
 export function canEditDevAgent(devAgent: DevAgent, user: DevAgentEditor): boolean {

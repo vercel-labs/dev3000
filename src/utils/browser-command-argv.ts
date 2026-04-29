@@ -1,4 +1,4 @@
-type BrowserCommand = "agent-browser" | "next-browser" | "browser"
+type BrowserCommand = "agent-browser"
 
 const ROOT_OPTIONS_WITH_VALUES = new Set([
   "-p",
@@ -39,7 +39,7 @@ export function getBrowserCommandInvocation(argv: string[]): BrowserCommandInvoc
       continue
     }
 
-    if (arg === "agent-browser" || arg === "next-browser" || arg === "browser") {
+    if (arg === "agent-browser") {
       return {
         browserCommand: arg,
         args: argv.slice(index + 1)

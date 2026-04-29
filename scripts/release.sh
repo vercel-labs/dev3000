@@ -106,55 +106,7 @@ node -e "
 "
 
 # Build compiled binaries for all platforms (AFTER version bump so version is correct)
-echo "🔨 Building compiled binaries..."
-bun run scripts/build-binaries.ts
-
-# Copy built binaries to platform packages
-echo "📁 Copying binaries to platform packages..."
-
-# darwin-arm64
-DARWIN_ARM64_PKG_DIR="packages/d3k-darwin-arm64"
-DARWIN_ARM64_DIST_DIR="dist-bin/d3k-darwin-arm64"
-rm -rf "$DARWIN_ARM64_PKG_DIR/bin" "$DARWIN_ARM64_PKG_DIR/skills" "$DARWIN_ARM64_PKG_DIR/src"
-cp -r "$DARWIN_ARM64_DIST_DIR/bin" "$DARWIN_ARM64_PKG_DIR/"
-cp -r "$DARWIN_ARM64_DIST_DIR/skills" "$DARWIN_ARM64_PKG_DIR/"
-cp -r "$DARWIN_ARM64_DIST_DIR/src" "$DARWIN_ARM64_PKG_DIR/"
-
-# linux-x64
-LINUX_X64_PKG_DIR="packages/d3k-linux-x64"
-LINUX_X64_DIST_DIR="dist-bin/d3k-linux-x64"
-rm -rf "$LINUX_X64_PKG_DIR/bin" "$LINUX_X64_PKG_DIR/skills" "$LINUX_X64_PKG_DIR/src"
-cp -r "$LINUX_X64_DIST_DIR/bin" "$LINUX_X64_PKG_DIR/"
-cp -r "$LINUX_X64_DIST_DIR/skills" "$LINUX_X64_PKG_DIR/"
-cp -r "$LINUX_X64_DIST_DIR/src" "$LINUX_X64_PKG_DIR/"
-
-# windows-x64
-WINDOWS_X64_PKG_DIR="packages/d3k-windows-x64"
-WINDOWS_X64_DIST_DIR="dist-bin/d3k-windows-x64"
-rm -rf "$WINDOWS_X64_PKG_DIR/bin" "$WINDOWS_X64_PKG_DIR/skills" "$WINDOWS_X64_PKG_DIR/src"
-cp -r "$WINDOWS_X64_DIST_DIR/bin" "$WINDOWS_X64_PKG_DIR/"
-cp -r "$WINDOWS_X64_DIST_DIR/skills" "$WINDOWS_X64_PKG_DIR/"
-cp -r "$WINDOWS_X64_DIST_DIR/src" "$WINDOWS_X64_PKG_DIR/"
-
-echo "✅ Binaries ready for publishing"
-
-# Smoke test: verify compiled binary can start
-echo "🧪 Running compiled binary smoke test..."
-BINARY_PATH="$DARWIN_ARM64_PKG_DIR/bin/dev3000"
-if [ -x "$BINARY_PATH" ]; then
-    # Test --version flag
-    if "$BINARY_PATH" --version > /dev/null 2>&1; then
-        echo "✅ Binary smoke test passed (--version works)"
-    else
-        echo "❌ Binary smoke test FAILED: --version returned error"
-        echo "   This usually means a module failed to bundle correctly."
-        echo "   Check that all imports use static paths that bun can analyze."
-        exit 1
-    fi
-else
-    echo "❌ Binary not found or not executable: $BINARY_PATH"
-    exit 1
-fi
+./scripts/prepare-platform-packages.sh
 
 # Function to cleanup existing tags
 cleanup_existing_tag() {
@@ -244,5 +196,5 @@ echo "⬆️ Pushing tag to origin..."
 git push origin "$TAG_NAME"
 
 echo "🎉 Release v$NEXT_VERSION completed successfully!"
-echo "📦 Ready for publishing!"
-echo "🔄 To publish to npm and bump to next canary version, run: ./scripts/publish.sh"
+echo "📦 Release commit and tag pushed."
+echo "🤖 The GitHub release workflow will publish to npm, create the GitHub release, and bump main back to the next canary version."

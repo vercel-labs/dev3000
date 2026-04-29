@@ -43,15 +43,13 @@ This file is the source of truth for agent guidance in this repo. `CLAUDE.md` is
 
 - Use `agent-browser` by default.
 - Use `agent-browser` when you need to drive the exact headed browser session d3k is already monitoring via CDP.
-- Use `next-browser` only for Next.js-specific inspection such as `tree`, `errors`, `logs`, or `routes`.
-- Do not treat `next-browser` as a drop-in replacement for `agent-browser`.
 
 ## Development Rules
 
 - Package manager: `bun` only.
 - Never disable Turbopack in favor of webpack.
-- Do not run `./scripts/publish.sh`.
-- When the user asks to release, you may run `./scripts/release.sh`, then tell the user to run `./scripts/publish.sh`.
+- When the user asks to release, you may run `./scripts/release.sh`.
+- `./scripts/release.sh` prepares and pushes the stable release commit/tag; the GitHub release workflow publishes to npm via Trusted Publishing and then bumps `main` back to the next canary version.
 
 ## Validation
 

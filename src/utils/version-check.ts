@@ -1,6 +1,6 @@
 import { execSync, spawnSync } from "child_process"
 import { randomUUID } from "crypto"
-import { existsSync, readFileSync, writeFileSync } from "fs"
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs"
 import { homedir, platform } from "os"
 import { dirname, join } from "path"
 import { fileURLToPath } from "url"
@@ -124,7 +124,7 @@ function writeCachedVersion(version: string): void {
     const cachePath = getCacheFilePath()
     const cacheDir = dirname(cachePath)
     if (!existsSync(cacheDir)) {
-      execSync(`mkdir -p "${cacheDir}"`, { stdio: "ignore" })
+      mkdirSync(cacheDir, { recursive: true })
     }
     const cached: CachedVersionInfo = {
       latestVersion: version,

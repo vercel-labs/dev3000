@@ -1,113 +1,211 @@
-name: Prepare Release
+name: Release
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
-    inputs:
-      release_type:
-        description: 'Release type'
-        required: true
-        default: 'patch'
-        type: choice
-        options:
-          - patch
-          - minor
-          - major
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  id-token: write
 
 jobs:
-  test:
-    name: Pre-release Checks
-    runs-on: macos-latest
+  check-release:
+    name: Check for release candidate
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.check.outputs.should_release }}
+      version: ${{ steps.check.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Compare version to npm
+        id: check
+        run: |
+          LOCAL_VERSION=$(node -p "require('./package.json').version")
+          echo "Local version: $LOCAL_VERSION"
+          echo "version=$LOCAL_VERSION" >> "$GITHUB_OUTPUT"
+
+          if [[ "$LOCAL_VERSION" == *"-canary" ]]; then
+            echo "Canary version detected, skipping release"
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          NPM_VERSION=$(npm view dev3000 version 2>/dev/null || echo "0.0.0")
+          echo "Registry version: $NPM_VERSION"
+
+          if [ "$LOCAL_VERSION" != "$NPM_VERSION" ]; then
+            echo "Version changed: $NPM_VERSION -> $LOCAL_VERSION"
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Version unchanged, skipping release"
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  publish:
+    name: Publish release
+    needs: check-release
+    if: needs.check-release.outputs.should_release == 'true'
+    runs-on: macos-latest
+    env:
+      RELEASE_VERSION: ${{ needs.check-release.outputs.version }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      - uses: oven-sh/setup-bun@v2
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
+
+      - name: Configure Git
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
       - name: Run release checks
         run: ./scripts/test-release.sh
-  
-  prepare-release:
-    name: Prepare Release
-    needs: test
-    runs-on: macos-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
-      
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
 
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-      
-      - name: Configure Git
+      - name: Build release binaries
+        run: ./scripts/prepare-platform-packages.sh
+
+      - name: Publish @d3k/darwin-arm64 to npm
+        run: npm publish --provenance --access public
+        working-directory: packages/d3k-darwin-arm64
+
+      - name: Publish @d3k/linux-x64 to npm
+        run: npm publish --provenance --access public
+        working-directory: packages/d3k-linux-x64
+
+      - name: Publish @d3k/windows-x64 to npm
+        run: npm publish --provenance --access public
+        working-directory: packages/d3k-windows-x64
+
+      - name: Publish dev3000 to npm
+        run: npm publish --provenance --access public
+
+      - name: Extract changelog entry
         run: |
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-      
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-      
-      - name: Run release script
-        run: ./scripts/release.sh
-      
-      - name: Build and pack
-        run: bun pm pack
-      
-      - name: Upload release artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-package
-          path: dev3000-*.tgz
-      
-      - name: Get version
-        id: version
-        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
-      
-      - name: Create release instructions
+          awk -v version="$RELEASE_VERSION" '
+            $0 ~ "^## \\[" version "\\]" {found=1; next}
+            found && /^## \[/ {exit}
+            found {print}
+          ' CHANGELOG.md > /tmp/release-notes.md
+
+          LINES=$(wc -l < /tmp/release-notes.md | tr -d ' ')
+          if [ "$LINES" -lt 2 ]; then
+            echo "Error: no release notes found for $RELEASE_VERSION in CHANGELOG.md"
+            exit 1
+          fi
+
+      - name: Create GitHub release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          cat > release-instructions.md << EOF
-          # Release Instructions for v${{ steps.version.outputs.version }}
-          
-          All tests have passed! To complete the release:
-          
-          1. Pull the latest changes:
-             \`\`\`bash
-             git pull origin main --tags
-             \`\`\`
-          
-          2. Download the release artifact from this workflow run
-          
-          3. Publish to npm (requires 2FA):
-             \`\`\`bash
-             npm publish dev3000-${{ steps.version.outputs.version }}.tgz
-             \`\`\`
-          
-          4. Create GitHub release:
-             - Go to https://github.com/vercel-labs/dev3000/releases/new
-             - Choose tag: v${{ steps.version.outputs.version }}
-             - Release title: v${{ steps.version.outputs.version }}
-             - Copy changelog entries from CHANGELOG.md
-             - Publish release
-          EOF
-      
-      - name: Display instructions
-        run: cat release-instructions.md
-      
-      - name: Upload instructions
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-instructions
-          path: release-instructions.md
+          TAG="v$RELEASE_VERSION"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "GitHub release $TAG already exists, skipping"
+          else
+            gh release create "$TAG" \
+              --title "$TAG" \
+              --notes-file /tmp/release-notes.md
+          fi
+
+      - name: Calculate next canary version
+        run: |
+          NEXT_CANARY_VERSION=$(node -e "
+            const version = process.env.RELEASE_VERSION;
+            const semver = version.split('.');
+            semver[2] = String(Number.parseInt(semver[2], 10) + 1);
+            console.log(semver.join('.') + '-canary');
+          ")
+
+          echo "Next canary version: $NEXT_CANARY_VERSION"
+          echo "NEXT_CANARY_VERSION=$NEXT_CANARY_VERSION" >> "$GITHUB_ENV"
+
+      - name: Bump main back to next canary
+        run: |
+          npm version "$NEXT_CANARY_VERSION" --no-git-tag-version
+
+          node -e "
+            const fs = require('fs');
+            const nextVersion = process.env.NEXT_CANARY_VERSION;
+            const packagePaths = [
+              'packages/d3k-darwin-arm64/package.json',
+              'packages/d3k-linux-x64/package.json',
+              'packages/d3k-windows-x64/package.json'
+            ];
+
+            for (const pkgPath of packagePaths) {
+              const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+              pkg.version = nextVersion;
+              fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\\n');
+            }
+
+            const rootPkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+            rootPkg.optionalDependencies = rootPkg.optionalDependencies || {};
+            rootPkg.optionalDependencies['@d3k/darwin-arm64'] = nextVersion;
+            rootPkg.optionalDependencies['@d3k/linux-x64'] = nextVersion;
+            rootPkg.optionalDependencies['@d3k/windows-x64'] = nextVersion;
+            fs.writeFileSync('package.json', JSON.stringify(rootPkg, null, 2) + '\\n');
+          "
+
+          node -e "
+            const fs = require('fs');
+            const nextVersion = process.env.NEXT_CANARY_VERSION;
+            let lockfile = fs.readFileSync('bun.lock', 'utf8');
+
+            lockfile = lockfile.replace(
+              /('@d3k\/darwin-arm64':\\n\\s+specifier: )[^\\n]+(\\n\\s+version: )[^\\n]+/,
+              '\\$1' + nextVersion + '\\$2' + nextVersion
+            );
+            lockfile = lockfile.replace(/'@d3k\/darwin-arm64@[^']+'/g, '\'@d3k/darwin-arm64@' + nextVersion + '\'');
+
+            lockfile = lockfile.replace(
+              /('@d3k\/linux-x64':\\n\\s+specifier: )[^\\n]+(\\n\\s+version: )[^\\n]+/,
+              '\\$1' + nextVersion + '\\$2' + nextVersion
+            );
+            lockfile = lockfile.replace(/'@d3k\/linux-x64@[^']+'/g, '\'@d3k/linux-x64@' + nextVersion + '\'');
+
+            lockfile = lockfile.replace(
+              /('@d3k\/windows-x64':\\n\\s+specifier: )[^\\n]+(\\n\\s+version: )[^\\n]+/,
+              '\\$1' + nextVersion + '\\$2' + nextVersion
+            );
+            lockfile = lockfile.replace(/'@d3k\/windows-x64@[^']+'/g, '\'@d3k/windows-x64@' + nextVersion + '\'');
+
+            fs.writeFileSync('bun.lock', lockfile);
+          "
+
+      - name: Commit and push next canary
+        run: |
+          git add package.json packages/d3k-darwin-arm64/package.json packages/d3k-linux-x64/package.json packages/d3k-windows-x64/package.json bun.lock
+          git commit -m "Bump to v$NEXT_CANARY_VERSION for local development"
+          git push origin HEAD:main

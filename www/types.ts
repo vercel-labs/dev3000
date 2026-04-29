@@ -63,7 +63,7 @@ export interface WorkflowReport {
   devAgentRevision?: number
   devAgentSpecHash?: string
   devAgentExecutionMode?: "dev-server" | "preview-pr"
-  devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser"
+  devAgentSandboxBrowser?: "none" | "agent-browser"
 
   // Workflow type and prompts
   workflowType?:

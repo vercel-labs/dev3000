@@ -1,4 +1,4 @@
-import { execSync } from "child_process"
+import { spawnSync } from "child_process"
 
 export interface AgentSubOption {
   label: string
@@ -53,8 +53,8 @@ export const KNOWN_AGENTS: KnownAgent[] = [
 
 export function checkBinaryExists(binary: string): boolean {
   try {
-    execSync(`which ${binary}`, { stdio: "ignore" })
-    return true
+    const result = spawnSync("which", [binary], { stdio: "ignore", shell: false })
+    return result.status === 0
   } catch {
     return false
   }

@@ -190,7 +190,7 @@ export async function cloudFixWorkflow(params: {
   skillRunnerCanonicalPath?: string
   skillRunnerValidationWarning?: string
   devAgentExecutionMode?: "dev-server" | "preview-pr"
-  devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser"
+  devAgentSandboxBrowser?: "none" | "agent-browser"
   devAgentAiAgent?: import("@/lib/dev-agents").DevAgentAiAgent
   devAgentDevServerCommand?: string
   isMarketplaceAgent?: boolean
@@ -775,7 +775,7 @@ interface ProgressContext {
   skillRunnerCanonicalPath?: string
   skillRunnerValidationWarning?: string
   devAgentExecutionMode?: "dev-server" | "preview-pr"
-  devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser"
+  devAgentSandboxBrowser?: "none" | "agent-browser"
   isMarketplaceAgent?: boolean
   controlPlaneMirrorTarget?: WorkflowRunMirrorTarget
   activeStepNumber?: number
@@ -896,7 +896,7 @@ async function observeBaseline(
   vercelOidcToken?: string,
   devAgentAshTarballUrl?: string,
   projectDir?: string,
-  devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser",
+  devAgentSandboxBrowser?: "none" | "agent-browser",
   devAgentDevServerCommand?: string,
   devAgentSkillRefs?: Array<{
     id: string
@@ -991,7 +991,7 @@ async function agentFixLoop(
   devAgentInstructions?: string,
   devAgentAshTarballUrl?: string,
   devAgentExecutionMode?: "dev-server" | "preview-pr",
-  devAgentSandboxBrowser?: "none" | "agent-browser" | "next-browser",
+  devAgentSandboxBrowser?: "none" | "agent-browser",
   devAgentAiAgent?: import("@/lib/dev-agents").DevAgentAiAgent,
   devAgentDevServerCommand?: string,
   devAgentActionSteps?: Array<{ kind: string; config: Record<string, string> }>,

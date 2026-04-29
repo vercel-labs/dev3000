@@ -5,7 +5,7 @@
  * Uses the CLI approach for reliability and to leverage agent-browser's daemon architecture.
  */
 
-import { execSync, spawn } from "child_process"
+import { spawn, spawnSync } from "child_process"
 import { accessSync, chmodSync, constants, existsSync, mkdirSync } from "fs"
 import { homedir } from "os"
 import { dirname, join } from "path"
@@ -528,8 +528,11 @@ export function isAgentBrowserAvailable(): boolean {
   try {
     const agentBrowserPath = getAgentBrowserPath()
     // agent-browser doesn't have --version, just check if the binary exists and responds to --help
-    execSync(`"${agentBrowserPath}" --help`, { stdio: "pipe" })
-    return true
+    const result = spawnSync(agentBrowserPath, ["--help"], {
+      stdio: "pipe",
+      shell: false
+    })
+    return result.status === 0
   } catch {
     return false
   }

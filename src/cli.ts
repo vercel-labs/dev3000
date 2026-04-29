@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-type LocalBrowserTool = "agent-browser" | "next-browser"
+type LocalBrowserTool = "agent-browser"
 
 function getRunnablePath(searchPath: string): string | null {
   if (!existsSync(searchPath)) {
@@ -81,137 +81,34 @@ function findAgentBrowser(): string {
   return "agent-browser"
 }
 
-function findNextBrowserCli(): string | null {
-  if (process.env.NEXT_BROWSER_PATH) {
-    const runnablePath = getRunnablePath(process.env.NEXT_BROWSER_PATH)
-    if (runnablePath) {
-      return runnablePath
-    }
-  }
-
-  const cwd = process.cwd()
-  const home = homedir()
-  const searchPaths = [
-    join(
-      home,
-      ".bun",
-      "install",
-      "global",
-      "node_modules",
-      "dev3000",
-      "node_modules",
-      "@vercel",
-      "next-browser",
-      "dist",
-      "cli.js"
-    ),
-    join(home, ".bun", "install", "global", "node_modules", "@vercel", "next-browser", "dist", "cli.js"),
-    join(cwd, "node_modules", "@vercel", "next-browser", "dist", "cli.js"),
-    join(cwd, "..", "node_modules", "@vercel", "next-browser", "dist", "cli.js")
-  ]
-
-  const globalNodeModules = [
-    join("/usr", "local", "lib", "node_modules"),
-    join("/opt", "homebrew", "lib", "node_modules")
-  ]
-  for (const root of globalNodeModules) {
-    searchPaths.push(join(root, "dev3000", "node_modules", "@vercel", "next-browser", "dist", "cli.js"))
-    searchPaths.push(join(root, "@vercel", "next-browser", "dist", "cli.js"))
-  }
-
-  for (const searchPath of searchPaths) {
-    if (existsSync(searchPath)) {
-      return searchPath
-    }
-  }
-
-  return null
-}
-
-function getProjectBrowserToolPreference(): LocalBrowserTool {
-  try {
-    const sessionFile = join(getProjectDir(), "session.json")
-    if (!existsSync(sessionFile)) {
-      return "agent-browser"
-    }
-    const sessionInfo = JSON.parse(readFileSync(sessionFile, "utf8")) as {
-      preferredBrowserTool?: LocalBrowserTool
-    }
-    return sessionInfo.preferredBrowserTool === "next-browser" ? "next-browser" : "agent-browser"
-  } catch {
-    return "agent-browser"
-  }
-}
-
-function runLocalBrowserTool(browserTool: LocalBrowserTool, args: string[]) {
+function runLocalBrowserTool(args: string[]) {
   const env = { ...process.env }
   ensureCommandPath(env)
 
-  if (browserTool === "agent-browser") {
-    const subcommandIndex = args.findIndex(
-      (arg: string) => !arg.startsWith("-") && !arg.startsWith("@") && arg !== "9222"
-    )
-    const subcommand = subcommandIndex >= 0 ? args[subcommandIndex] : null
+  const subcommandIndex = args.findIndex(
+    (arg: string) => !arg.startsWith("-") && !arg.startsWith("@") && arg !== "9222"
+  )
+  const subcommand = subcommandIndex >= 0 ? args[subcommandIndex] : null
 
-    if (subcommand === "errors") {
-      console.log("\x1b[33m💡 Tip: Using `d3k errors` instead (shows browser + server errors)\x1b[0m\n")
-      const d3kBin = process.argv[1]
-      const result = spawnSync(d3kBin, ["errors"], { stdio: "inherit", shell: false })
-      process.exit(result.status ?? 0)
-    }
-
-    if (subcommand === "console") {
-      console.log("\x1b[33m💡 Tip: Using `d3k logs` instead (shows browser + server logs)\x1b[0m\n")
-      const d3kBin = process.argv[1]
-      const result = spawnSync(d3kBin, ["logs", "--type", "browser"], { stdio: "inherit", shell: false })
-      process.exit(result.status ?? 0)
-    }
-
-    const binaryPath = findAgentBrowser()
-    const result = spawnSync(binaryPath, args, {
-      stdio: "pipe",
-      shell: false,
-      env
-    })
-
-    if (result.stdout?.length > 0) {
-      process.stdout.write(result.stdout)
-    }
-    if (result.stderr?.length > 0) {
-      process.stderr.write(result.stderr)
-    }
-    if (result.error) {
-      console.error(`\nError spawning agent-browser: ${result.error.message}`)
-      console.error(`Binary path: ${binaryPath}`)
-      process.exit(1)
-    }
-
-    process.exit(result.status ?? 1)
+  if (subcommand === "errors") {
+    console.log("\x1b[33m💡 Tip: Using `d3k errors` instead (shows browser + server errors)\x1b[0m\n")
+    const d3kBin = process.argv[1]
+    const result = spawnSync(d3kBin, ["errors"], { stdio: "inherit", shell: false })
+    process.exit(result.status ?? 0)
   }
 
-  const nodeVersionCheck = spawnSync("node", ["-e", "process.stdout.write(process.versions.node)"], {
-    encoding: "utf-8",
+  if (subcommand === "console") {
+    console.log("\x1b[33m💡 Tip: Using `d3k logs` instead (shows browser + server logs)\x1b[0m\n")
+    const d3kBin = process.argv[1]
+    const result = spawnSync(d3kBin, ["logs", "--type", "browser"], { stdio: "inherit", shell: false })
+    process.exit(result.status ?? 0)
+  }
+
+  const binaryPath = findAgentBrowser()
+  const result = spawnSync(binaryPath, args, {
+    stdio: "pipe",
     env,
     shell: false
-  })
-  const nodeVersion = nodeVersionCheck.stdout?.trim()
-  const nodeMajor = nodeVersion ? Number.parseInt(nodeVersion.split(".")[0] || "0", 10) : 0
-  if (nodeVersionCheck.status !== 0 || Number.isNaN(nodeMajor) || nodeMajor < 20) {
-    console.error("\nnext-browser requires a system Node.js runtime >= 20.")
-    console.error("Install Node 20+ or keep using agent-browser for local d3k sessions.")
-    process.exit(1)
-  }
-
-  const cliPath = findNextBrowserCli()
-  const nextBrowserHome = join(getProjectDir(), "next-browser-home")
-  mkdirSync(nextBrowserHome, { recursive: true })
-  env.HOME = nextBrowserHome
-  env.USERPROFILE = nextBrowserHome
-
-  const result = spawnSync(cliPath ? "node" : "next-browser", cliPath ? [cliPath, ...args] : args, {
-    stdio: "pipe",
-    shell: false,
-    env
   })
 
   if (result.stdout?.length > 0) {
@@ -221,10 +118,8 @@ function runLocalBrowserTool(browserTool: LocalBrowserTool, args: string[]) {
     process.stderr.write(result.stderr)
   }
   if (result.error) {
-    console.error(`\nError spawning next-browser: ${result.error.message}`)
-    if (cliPath) {
-      console.error(`CLI path: ${cliPath}`)
-    }
+    console.error(`\nError spawning agent-browser: ${result.error.message}`)
+    console.error(`Binary path: ${binaryPath}`)
     process.exit(1)
   }
 
@@ -236,15 +131,7 @@ import { getBrowserCommandInvocation } from "./utils/browser-command-argv.js"
 const browserCommandInvocation = getBrowserCommandInvocation(process.argv.slice(2))
 
 if (browserCommandInvocation && (process.argv[1]?.includes("d3k") || process.argv[1]?.includes("dev3000"))) {
-  const { browserCommand, args } = browserCommandInvocation
-  const browserTool =
-    browserCommand === "browser"
-      ? getProjectBrowserToolPreference()
-      : browserCommand === "next-browser"
-        ? "next-browser"
-        : "agent-browser"
-
-  runLocalBrowserTool(browserTool, args)
+  runLocalBrowserTool(browserCommandInvocation.args)
 }
 
 import chalk from "chalk"
@@ -255,8 +142,6 @@ import { homedir } from "os"
 import { detect } from "package-manager-detector"
 import { dirname, join, resolve } from "path"
 import { fileURLToPath } from "url"
-import { cloudCheckPR } from "./commands/cloud-check-pr.js"
-import { cloudFix } from "./commands/cloud-fix.js"
 import { createPersistentLogFile, findAvailablePort, startDevEnvironment } from "./dev-environment.js"
 import { getBundledSkillsPath, getSkill, getSkillsInfo, listAvailableSkills } from "./skills/index.js"
 import { detectAIAgent } from "./utils/agent-detection.js"
@@ -365,29 +250,69 @@ interface ForwardedOptions {
   agentName?: string
 }
 
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`
+}
+
+function validatePortOption(port: string): string {
+  if (!/^\d+$/.test(port)) {
+    throw new Error("--port must be a numeric port number.")
+  }
+  const parsed = Number.parseInt(port, 10)
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535) {
+    throw new Error("--port must be between 1 and 65535.")
+  }
+  return String(parsed)
+}
+
+function validatePositiveIntegerOption(name: string, value: string): string {
+  if (!/^\d+$/.test(value)) {
+    throw new Error(`${name} must be a positive integer.`)
+  }
+  const parsed = Number.parseInt(value, 10)
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error(`${name} must be a positive integer.`)
+  }
+  return String(parsed)
+}
+
+function validateScriptOption(script: string): string {
+  if (!/^[A-Za-z0-9._:/-]+$/.test(script)) {
+    throw new Error("--script may only contain letters, numbers, dots, slashes, colons, underscores, and hyphens.")
+  }
+  return script
+}
+
+function validateDateTimeOption(value: string): "local" | "utc" {
+  if (value !== "local" && value !== "utc") {
+    throw new Error("--date-time must be either 'local' or 'utc'.")
+  }
+  return value
+}
+
 /**
  * Build the d3k command string with forwarded options.
  */
 function buildD3kCommandWithOptions(options: ForwardedOptions): string {
   const d3kBase = process.argv[1].endsWith("d3k") ? "d3k" : "dev3000"
-  const args: string[] = [d3kBase]
+  const args: string[] = [shellQuote(d3kBase)]
 
   // Forward options that were explicitly set
-  if (options.port) args.push(`--port ${options.port}`)
-  if (options.script) args.push(`--script ${options.script}`)
-  if (options.command) args.push(`--command "${options.command.replace(/"/g, '\\"')}"`)
-  if (options.startupTimeout) args.push(`--startup-timeout ${options.startupTimeout}`)
+  if (options.port) args.push("--port", shellQuote(options.port))
+  if (options.script) args.push("--script", shellQuote(options.script))
+  if (options.command) args.push("--command", shellQuote(options.command))
+  if (options.startupTimeout) args.push("--startup-timeout", shellQuote(options.startupTimeout))
   if (options.browserNavigationTimeout) {
-    args.push(`--browser-navigation-timeout ${options.browserNavigationTimeout}`)
+    args.push("--browser-navigation-timeout", shellQuote(options.browserNavigationTimeout))
   }
-  if (options.profileDir) args.push(`--profile-dir "${options.profileDir}"`)
-  if (options.browserTool) args.push(`--browser-tool ${options.browserTool}`)
-  if (options.browser) args.push(`--browser "${options.browser}"`)
+  if (options.profileDir) args.push("--profile-dir", shellQuote(options.profileDir))
+  if (options.browserTool) args.push("--browser-tool", shellQuote(options.browserTool))
+  if (options.browser) args.push("--browser", shellQuote(options.browser))
   if (options.serversOnly) args.push("--servers-only")
   if (options.headless) args.push("--headless")
-  if (options.dateTime) args.push(`--date-time ${options.dateTime}`)
+  if (options.dateTime) args.push("--date-time", shellQuote(options.dateTime))
   if (options.pluginReactScan) args.push("--plugin-react-scan")
-  if (options.agentName) args.push(`--agent-name ${options.agentName}`)
+  if (options.agentName) args.push("--agent-name", shellQuote(options.agentName))
 
   return args.join(" ")
 }
@@ -948,6 +873,7 @@ program
     "Preferred local browser CLI: 'agent-browser' (default) or 'next-browser'",
     "agent-browser"
   )
+  .option("--browser-tool <tool>", "Preferred local browser CLI: 'agent-browser'", "agent-browser")
   .option(
     "--browser <path>",
     "Full path to browser executable (e.g. for Arc: '/Applications/Arc.app/Contents/MacOS/Arc')"
@@ -984,6 +910,29 @@ program
 
     const projectName = getProjectDisplayName()
     setTerminalTitle(projectName)
+
+    try {
+      if (options.port) {
+        options.port = validatePortOption(options.port)
+      }
+      if (options.script) {
+        options.script = validateScriptOption(options.script)
+      }
+      options.startupTimeout = validatePositiveIntegerOption("--startup-timeout", options.startupTimeout)
+      options.browserNavigationTimeout = validatePositiveIntegerOption(
+        "--browser-navigation-timeout",
+        options.browserNavigationTimeout
+      )
+      if (options.browserTool && options.browserTool !== "agent-browser") {
+        throw new Error("--browser-tool must be 'agent-browser'.")
+      }
+      options.browserTool = "agent-browser"
+      options.dateTime = validateDateTimeOption(options.dateTime || "local")
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      console.error(chalk.red(`\n❌ ${message}\n`))
+      process.exit(1)
+    }
 
     // Load user config early so it can be used for --with-agent and agent selection flows
     const userConfig = loadUserConfig()
@@ -1197,6 +1146,7 @@ program
           script: options.script,
           command: options.command,
           startupTimeout: options.startupTimeout,
+          browserNavigationTimeout: options.browserNavigationTimeout,
           profileDir: options.profileDir,
           browserTool: options.browserTool,
           browser: browserOption,
@@ -1238,7 +1188,7 @@ program
     const userSetPort = options.port !== undefined
     const startupTimeoutSeconds = Number.parseInt(options.startupTimeout, 10)
     const browserNavigationTimeoutSeconds = Number.parseInt(options.browserNavigationTimeout, 10)
-    const browserTool: LocalBrowserTool = options.browserTool === "next-browser" ? "next-browser" : "agent-browser"
+    const browserTool: LocalBrowserTool = "agent-browser"
     if (Number.isNaN(startupTimeoutSeconds) || startupTimeoutSeconds <= 0) {
       console.error(chalk.red("\n❌ --startup-timeout must be a positive integer (seconds).\n"))
       process.exit(1)
@@ -1371,42 +1321,6 @@ program
     }
   })
 
-// Cloud commands
-const cloud = program.command("cloud").description("Cloud-based tools using Vercel Sandbox")
-
-// Cloud fix command
-cloud
-  .command("fix")
-  .description("Start a cloud fix workflow for the current project")
-  .option("--repo <url>", "Repository URL (e.g. https://github.com/user/repo)")
-  .option("--branch <name>", "Git branch to test")
-  .option("--project-dir <dir>", "Project directory within repo (e.g. 'www')")
-  .option("--debug", "Enable debug logging")
-  .action(async (options) => {
-    try {
-      await cloudFix(options)
-    } catch (error) {
-      console.error(chalk.red("❌ Cloud fix failed:"), error)
-      process.exit(1)
-    }
-  })
-
-// Cloud check-pr command
-cloud
-  .command("check-pr [pr-number]")
-  .description("Verify a PR's changes work as expected using Vercel preview deployment")
-  .option("--repo <url>", "Repository URL (optional, auto-detected from git)")
-  .option("--url <preview-url>", "Preview deployment URL (optional, auto-detected from Vercel)")
-  .option("--debug", "Enable debug logging")
-  .action(async (prNumber, options) => {
-    try {
-      await cloudCheckPR({ ...options, prNumber })
-    } catch (error) {
-      console.error(chalk.red("❌ Cloud check-pr failed:"), error)
-      process.exit(1)
-    }
-  })
-
 // Upgrade command
 program
   .command("upgrade")
@@ -1458,16 +1372,6 @@ program
 program
   .command("agent-browser [args...]")
   .description("Run the bundled agent-browser CLI (e.g., d3k agent-browser screenshot /tmp/foo.png)")
-  .allowUnknownOption(true)
-
-program
-  .command("next-browser [args...]")
-  .description("Run the bundled next-browser CLI (e.g., d3k next-browser open http://localhost:3000)")
-  .allowUnknownOption(true)
-
-program
-  .command("browser [args...]")
-  .description("Run the preferred local browser CLI for this session")
   .allowUnknownOption(true)
 
 // Skill command - get skill content for use in prompts/workflows
@@ -1576,15 +1480,6 @@ program
   .action(async (options) => {
     const { crawlApp } = await import("./commands/crawl.js")
     await crawlApp(options)
-  })
-
-// Find-component command - map DOM to React source
-program
-  .command("find-component <selector>")
-  .description("Find React component source for a DOM selector")
-  .action(async (selector) => {
-    const { findComponent } = await import("./commands/find-component.js")
-    await findComponent(selector)
   })
 
 program

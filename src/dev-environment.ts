@@ -161,7 +161,7 @@ interface DevEnvironmentOptions {
   startupTimeoutSeconds: number
   browserNavigationTimeoutSeconds: number
   profileDir: string
-  browserTool: "agent-browser" | "next-browser"
+  browserTool: "agent-browser"
   logFile: string
   debug?: boolean
   serversOnly?: boolean
@@ -226,6 +226,74 @@ function isInSandbox(): boolean {
     existsSync("/.dockerenv") ||
     existsSync("/run/.containerenv")
   )
+}
+
+function parsePortNumber(port: string): number | null {
+  if (!/^\d+$/.test(port)) {
+    return null
+  }
+  const parsed = Number.parseInt(port, 10)
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535) {
+    return null
+  }
+  return parsed
+}
+
+function escapeRegexForPkill(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
+function killPortProcessesSync(port: string, debugLog: (message: string) => void): void {
+  if (isInSandbox()) {
+    debugLog(`Skipping synchronous port kill in sandbox environment`)
+    return
+  }
+
+  const parsedPort = parsePortNumber(port)
+  if (parsedPort === null) {
+    debugLog(`Skipping synchronous port kill for invalid port: ${port}`)
+    return
+  }
+
+  try {
+    const result = spawnSync("lsof", ["-ti", `:${parsedPort}`], {
+      stdio: ["ignore", "pipe", "pipe"],
+      encoding: "utf8",
+      timeout: 5000
+    })
+    const pidStrings = result.stdout
+      .split(/\s+/)
+      .map((value) => value.trim())
+      .filter((value) => /^\d+$/.test(value))
+
+    for (const pidString of pidStrings) {
+      try {
+        process.kill(Number.parseInt(pidString, 10), "SIGKILL")
+      } catch (error) {
+        debugLog(`Failed to synchronously kill PID ${pidString} on port ${parsedPort}: ${error}`)
+      }
+    }
+
+    debugLog(`Synchronous kill for port ${parsedPort} found ${pidStrings.length} process(es)`)
+  } catch (error) {
+    debugLog(`Synchronous kill error for port ${parsedPort}: ${error}`)
+  }
+}
+
+function pkillByPattern(pattern: string, debugLog: (message: string) => void): void {
+  if (isInSandbox()) {
+    debugLog(`Skipping pkill in sandbox environment`)
+    return
+  }
+
+  try {
+    spawnSync("pkill", ["-f", pattern], {
+      stdio: "ignore",
+      timeout: 5000
+    })
+  } catch (error) {
+    debugLog(`pkill failed for pattern ${pattern}: ${error}`)
+  }
 }
 
 /**
@@ -717,7 +785,7 @@ export function writeSessionInfo(
   serverPid?: number,
   skillsInstalled?: string[],
   skillsAgentId?: string | null,
-  preferredBrowserTool?: "agent-browser" | "next-browser",
+  preferredBrowserTool?: "agent-browser",
   agentName?: string | null
 ): void {
   const projectDir = getProjectDir()
@@ -1108,10 +1176,7 @@ export class DevEnvironment {
     // Best-effort synchronous cleanup (mirrors SIGHUP handler).
     const port = this.options.port
     this.debugLog(`Synchronous kill for port ${port}`)
-    spawnSync("sh", ["-c", `lsof -ti:${port} | xargs kill -9 2>/dev/null`], {
-      stdio: "pipe",
-      timeout: 5000
-    })
+    killPortProcessesSync(port, this.debugLog.bind(this))
 
     const projectName = getProjectName()
     const sessionInfo = getSessionInfo(projectName)
@@ -1194,10 +1259,7 @@ export class DevEnvironment {
           // This ensures cleanup happens even if the event loop gets interrupted
           const port = this.options.port
           this.debugLog(`Synchronous kill for port ${port}`)
-          spawnSync("sh", ["-c", `lsof -ti:${port} | xargs kill -9 2>/dev/null`], {
-            stdio: "pipe",
-            timeout: 5000
-          })
+          killPortProcessesSync(port, this.debugLog.bind(this))
 
           const projectName = getProjectName()
           const chromePids = getSessionChromePids(projectName)
@@ -1417,7 +1479,7 @@ export class DevEnvironment {
       console.log(chalk.cyan(`Logs: ${this.options.logFile}`))
       console.log(chalk.cyan("☝️ Give this to an AI to auto debug and fix your app\n"))
       console.log(chalk.cyan(`🌐 Your App: ${this.preferredAppUrl}`))
-      console.log(chalk.cyan(`🔧 CLI Tools: d3k fix, d3k crawl, d3k find-component`))
+      console.log(chalk.cyan(`🔧 CLI Tools: d3k fix, d3k crawl`))
       if (this.options.serversOnly) {
         console.log(chalk.cyan("🖥️  Servers-only mode - browser monitoring disabled"))
       }
@@ -2256,7 +2318,7 @@ export class DevEnvironment {
         console.log(chalk.gray(`ℹ️ Skipping ${name} port kill in sandbox environment`))
         return
       }
-      if (!/^\d+$/.test(port)) {
+      if (parsePortNumber(port) === null) {
         this.debugLog(`Skipping ${name} port kill for invalid port: ${port}`)
         return
       }
@@ -2366,10 +2428,7 @@ export class DevEnvironment {
       // This ensures cleanup happens even if the event loop gets interrupted
       const port = this.options.port
       this.debugLog(`Synchronous kill for port ${port}`)
-      spawnSync("sh", ["-c", `lsof -ti:${port} | xargs kill -9 2>/dev/null`], {
-        stdio: "pipe",
-        timeout: 5000
-      })
+      killPortProcessesSync(port, this.debugLog.bind(this))
 
       const projectName = getProjectName()
       const sessionInfo = getSessionInfo(projectName)
@@ -2431,10 +2490,7 @@ export class DevEnvironment {
       // CRITICAL: Kill port processes SYNCHRONOUSLY first, before anything else
       const port = this.options.port
       this.debugLog(`Synchronous kill for port ${port}`)
-      spawnSync("sh", ["-c", `lsof -ti:${port} | xargs kill -9 2>/dev/null`], {
-        stdio: "pipe",
-        timeout: 5000
-      })
+      killPortProcessesSync(port, this.debugLog.bind(this))
 
       const projectName = getProjectName()
       const sessionInfo = getSessionInfo(projectName)
@@ -2613,7 +2669,7 @@ export class DevEnvironment {
         this.debugLog(`Skipping ${name} port kill in sandbox environment`)
         return
       }
-      if (!/^\d+$/.test(port)) {
+      if (parsePortNumber(port) === null) {
         this.debugLog(`Skipping ${name} port kill for invalid port: ${port}`)
         return
       }
@@ -2679,12 +2735,7 @@ export class DevEnvironment {
     // Primary: Synchronous kill - most reliable, ensures completion
     // NOTE: We always try this, even if lsof might not exist - errors are caught
     try {
-      const { spawnSync } = await import("child_process")
-      const result = spawnSync("sh", ["-c", `lsof -ti:${this.options.port} | xargs kill -9 2>/dev/null`], {
-        stdio: "pipe",
-        timeout: 5000
-      })
-      this.debugLog(`Synchronous kill for port ${this.options.port} exit code: ${result.status}`)
+      killPortProcessesSync(this.options.port, this.debugLog.bind(this))
     } catch (error) {
       this.debugLog(`Synchronous kill error: ${error}`)
     }
@@ -2716,16 +2767,18 @@ export class DevEnvironment {
 
     // Double-check: try to kill any remaining processes on the app port
     try {
-      const { spawnSync } = await import("child_process")
-      // Kill by port pattern
-      spawnSync("sh", ["-c", `pkill -f ":${this.options.port}"`], { stdio: "ignore" })
-      this.debugLog(`Sent pkill signal for port ${this.options.port}`)
+      const parsedPort = parsePortNumber(this.options.port)
+      if (parsedPort !== null) {
+        pkillByPattern(`:${parsedPort}`, this.debugLog.bind(this))
+        this.debugLog(`Sent pkill signal for port ${parsedPort}`)
+      }
 
       // Specifically kill any remaining next dev processes in the current directory
       // This catches cases where the shell wrapper exited but next-server survived
       const cwd = process.cwd()
-      spawnSync("sh", ["-c", `pkill -f "next dev.*${cwd}"`], { stdio: "ignore" })
-      spawnSync("sh", ["-c", `pkill -f "next-server.*${cwd}"`], { stdio: "ignore" })
+      const escapedCwd = escapeRegexForPkill(cwd)
+      pkillByPattern(`next dev.*${escapedCwd}`, this.debugLog.bind(this))
+      pkillByPattern(`next-server.*${escapedCwd}`, this.debugLog.bind(this))
       this.debugLog(`Sent pkill signal for next processes in ${cwd}`)
 
       // Kill server process and its children using the saved PID (from before session file was deleted)
@@ -2734,10 +2787,7 @@ export class DevEnvironment {
       }
 
       // Final synchronous lsof kill - most reliable method
-      const result = spawnSync("sh", ["-c", `lsof -ti:${this.options.port} | xargs kill -9 2>/dev/null`], {
-        stdio: "pipe"
-      })
-      this.debugLog(`Final lsof kill exit code: ${result.status}`)
+      killPortProcessesSync(this.options.port, this.debugLog.bind(this))
     } catch {
       // Ignore pkill errors
     }

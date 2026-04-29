@@ -469,7 +469,7 @@ function applyUsageCount(record: SkillRunnerRecord, usageMap: Map<string, SkillR
     description: record.description,
     instructions: buildSkillRunnerInstructions(record.displayName, record.description, record.canonicalPath),
     executionMode: "preview-pr",
-    sandboxBrowser: "next-browser",
+    sandboxBrowser: "agent-browser",
     aiAgent: "anthropic/claude-opus-4.6",
     actionSteps: buildGenericActionSteps(record.displayName),
     skillRefs: buildSkillRef(record),
