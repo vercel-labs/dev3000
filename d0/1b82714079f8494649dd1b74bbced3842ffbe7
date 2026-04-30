@@ -1,0 +1,23 @@
+www/scripts/patch-workflow-vercel-config.mjs
+  a6a7b7091a791dc9 4-7,24,26
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "d01b82714079f8494649dd1b74bbced3842ffbe7",
+  "prompts": {
+    "a6a7b7091a791dc9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ddb8c-76f3-7691-8f65-bb14ae2c76fc",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 52,
+      "total_deletions": 59,
+      "accepted_lines": 6,
+      "overriden_lines": 0
+    }
+  }
+}
