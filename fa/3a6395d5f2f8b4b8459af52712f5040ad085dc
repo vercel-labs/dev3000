@@ -1,0 +1,23 @@
+www/app/api/cloud/start-fix/route.ts
+  a6a7b7091a791dc9 170,175-176,181-186,247-261
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "fa3a6395d5f2f8b4b8459af52712f5040ad085dc",
+  "prompts": {
+    "a6a7b7091a791dc9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ddb8c-76f3-7691-8f65-bb14ae2c76fc",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 25,
+      "total_deletions": 17,
+      "accepted_lines": 59,
+      "overriden_lines": 0
+    }
+  }
+}
