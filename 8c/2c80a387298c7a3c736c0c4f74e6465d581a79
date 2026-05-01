@@ -1,0 +1,41 @@
+src/commands/fix.ts
+  79556b2b2125a54e 8,10,48,50,60
+src/cli.ts
+  79556b2b2125a54e 84-105,130-143,188,1524-1525
+src/commands/crawl.ts
+  79556b2b2125a54e 10,19,38,40
+src/commands/logs.ts
+  79556b2b2125a54e 11,21-23
+src/commands/errors.ts
+  79556b2b2125a54e 12,22-24
+src/skills/d3k/internal-skill.md
+  79556b2b2125a54e 34,37-41,44-45,96-97,110,117,119-120,125-126
+AGENTS.md
+  79556b2b2125a54e 22-23,25
+src/utils/session.test.ts
+  79556b2b2125a54e 1-76
+src/utils/session.ts
+  79556b2b2125a54e 1-85
+skills/d3k/SKILL.md
+  79556b2b2125a54e 95-98,101-102,115,126-127
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "8c2c80a387298c7a3c736c0c4f74e6465d581a79",
+  "prompts": {
+    "79556b2b2125a54e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ddb66-b34b-7b73-91fa-be11e4fa6cc4",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 245,
+      "total_deletions": 325,
+      "accepted_lines": 374,
+      "overriden_lines": 0
+    }
+  }
+}
