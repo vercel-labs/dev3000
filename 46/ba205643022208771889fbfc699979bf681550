@@ -1,0 +1,29 @@
+www/lib/cloud/sandbox-chrome.ts
+  a6a7b7091a791dc9 142-143,151-154,160-170
+www/app/api/cloud/fix-workflow/steps.ts
+  a6a7b7091a791dc9 4904-4928,4936,4938-4965,5042,5045,5068,5070-5071
+www/lib/cloud/d3k-sandbox.ts
+  a6a7b7091a791dc9 101,581-584,595-598,608-618,1967-1968,1971-1974,1979-1989
+www/lib/cloud/sandbox-agent-browser.ts
+  a6a7b7091a791dc9 132-133,141-144,150-160
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "46ba205643022208771889fbfc699979bf681550",
+  "prompts": {
+    "a6a7b7091a791dc9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ddb8c-76f3-7691-8f65-bb14ae2c76fc",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 150,
+      "total_deletions": 70,
+      "accepted_lines": 149,
+      "overriden_lines": 0
+    }
+  }
+}
