@@ -1,0 +1,25 @@
+www/lib/dev-agent-ash-spec.ts
+  a6a7b7091a791dc9 18,344-349,352-354,359,381-401,403-424,426-429,431-433,435-437,439-571,587,594-613,617-631,633-634,636,638-641,644
+www/app/api/cloud/fix-workflow/steps.ts
+  a6a7b7091a791dc9 4991
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "8ad721beab6e09d8f5adb3e1f387f0f32b573b75",
+  "prompts": {
+    "a6a7b7091a791dc9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ddb8c-76f3-7691-8f65-bb14ae2c76fc",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 243,
+      "total_deletions": 44,
+      "accepted_lines": 277,
+      "overriden_lines": 0
+    }
+  }
+}
