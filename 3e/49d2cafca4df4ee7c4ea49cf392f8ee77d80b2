@@ -1,0 +1,25 @@
+www/lib/dev-agents.ts
+  a6a7b7091a791dc9 120-121
+www/lib/skill-runners.ts
+  a6a7b7091a791dc9 145-146,148,333,613,616-617
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "3e49d2cafca4df4ee7c4ea49cf392f8ee77d80b2",
+  "prompts": {
+    "a6a7b7091a791dc9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ddb8c-76f3-7691-8f65-bb14ae2c76fc",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 20,
+      "total_deletions": 22,
+      "accepted_lines": 43,
+      "overriden_lines": 0
+    }
+  }
+}
