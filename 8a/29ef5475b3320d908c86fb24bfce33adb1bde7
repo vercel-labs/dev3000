@@ -1,0 +1,31 @@
+www/app/api/cloud/fix-workflow/steps.ts
+  a6a7b7091a791dc9 3892,4420-4423,4427-4429,4532-4533,9216
+www/app/dev-agents/runs/[id]/report/page.tsx
+  a6a7b7091a791dc9 1,16,547,587-651,849,852-854,1245-1249,1298-1305,1342,1351-1357,1460,1475,1477,1482,1485,1677-1679
+www/types.ts
+  a6a7b7091a791dc9 139-140
+www/lib/dev-agents.ts
+  a6a7b7091a791dc9 433,436,464,469
+.agents/skills/deepsec/SKILL.md
+  a6a7b7091a791dc9 3,15,43,45,47,51
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "8a29ef5475b3320d908c86fb24bfce33adb1bde7",
+  "prompts": {
+    "a6a7b7091a791dc9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ddb8c-76f3-7691-8f65-bb14ae2c76fc",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 3823,
+      "total_deletions": 3721,
+      "accepted_lines": 161,
+      "overriden_lines": 0
+    }
+  }
+}
