@@ -1,0 +1,23 @@
+www/app/api/og/skill-runner/[runnerId]/route.tsx
+  a6a7b7091a791dc9 80,83,191
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "5bb9da3f90aaa976a76925d8b4b1fe9c01e1df65",
+  "prompts": {
+    "a6a7b7091a791dc9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ddb8c-76f3-7691-8f65-bb14ae2c76fc",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 3,
+      "total_deletions": 5,
+      "accepted_lines": 37,
+      "overriden_lines": 0
+    }
+  }
+}
