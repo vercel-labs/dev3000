@@ -1,0 +1,23 @@
+www/lib/cloud/d3k-sandbox.ts
+  a6a7b7091a791dc9 2436-2438
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "c083a35bfe67706612961a1b0e3c19b0e8193c56",
+  "prompts": {
+    "a6a7b7091a791dc9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ddb8c-76f3-7691-8f65-bb14ae2c76fc",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 2797,
+      "total_deletions": 2796,
+      "accepted_lines": 37,
+      "overriden_lines": 0
+    }
+  }
+}
