@@ -1,0 +1,25 @@
+www/app/api/cloud/start-fix/route.ts
+  a6a7b7091a791dc9 9,685,687,697,707,717,727
+www/app/dev-agents/[agentId]/new/dev-agent-run-client.tsx
+  a6a7b7091a791dc9 23-27,163-166,241-248,250-251,495-500,513,538-544,554,720
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "6d521c04c22f1a8abb50565c327894d9c1855f04",
+  "prompts": {
+    "a6a7b7091a791dc9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ddb8c-76f3-7691-8f65-bb14ae2c76fc",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 42,
+      "total_deletions": 62,
+      "accepted_lines": 68,
+      "overriden_lines": 0
+    }
+  }
+}
