@@ -1,0 +1,45 @@
+www/app/dev-agents/runs/[id]/report/page.tsx
+  a6a7b7091a791dc9 12,35-37,40-41,1181-1182,1186,1190,1197-1198,1202,1206-1207,1224,1229,1232-1236,1238-1240,1297,1328,1364,1453,1461,1485
+www/app/dev-agents/[agentId]/new/dev-agent-run-client.tsx
+  a6a7b7091a791dc9 792-795
+www/app/dev-agents/runs/page.tsx
+  a6a7b7091a791dc9 6,10-16,21,23,26,29-32,43-44,52-56
+www/app/[team]/skill-runner/runs/page.tsx
+  a6a7b7091a791dc9 1,3-5
+www/app/api/cloud/fix-workflow/steps.ts
+  a6a7b7091a791dc9 11-16,3665,3692,4438,4637,4724,4876-4913,5179,5209,5853,7499,7509
+www/app/dev-agents/runs/runs-client.tsx
+  a6a7b7091a791dc9 25,74-76,129,284-287
+www/lib/ai-gateway.ts
+  a6a7b7091a791dc9 6-13,35-59,61-63
+www/app/[team]/dev-agents/runs/page.tsx
+  a6a7b7091a791dc9 1,3-5
+www/app/[team]/skill-runner/runs/[runId]/report/page.tsx
+  a6a7b7091a791dc9 1,8-10
+www/lib/vercel-teams.ts
+  a6a7b7091a791dc9 248-250,256-260,277-278
+www/app/api/cloud/start-fix/route.ts
+  a6a7b7091a791dc9 546,566-568
+www/app/[team]/dev-agents/runs/[runId]/report/page.tsx
+  a6a7b7091a791dc9 1,3,8-10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "1151c1c1089c6320baa7a01b474f1f8a5f892daa",
+  "prompts": {
+    "a6a7b7091a791dc9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ddb8c-76f3-7691-8f65-bb14ae2c76fc",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 2374,
+      "total_deletions": 2262,
+      "accepted_lines": 223,
+      "overriden_lines": 0
+    }
+  }
+}
