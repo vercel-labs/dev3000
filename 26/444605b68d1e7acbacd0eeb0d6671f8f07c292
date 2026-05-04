@@ -1,0 +1,53 @@
+www/app/dev-agents/runs/[id]/report/page.tsx
+  a6a7b7091a791dc9 510-511,545-546,782-788,1281-1282,1285
+vitest.config.ts
+  a6a7b7091a791dc9 1-7
+www/next.config.ts
+  a6a7b7091a791dc9 20-22
+www/app/[team]/dev-agents/page.tsx
+  a6a7b7091a791dc9 17-18
+www/types.ts
+  a6a7b7091a791dc9 76
+www/lib/dev-agents-client.ts
+  a6a7b7091a791dc9 138-144
+www/lib/dev-agents.ts
+  a6a7b7091a791dc9 14,18-19,120-121,282-288,432-471,845-868
+.agents/skills/deepsec/SKILL.md
+  a6a7b7091a791dc9 1-53
+.gitignore
+  a6a7b7091a791dc9 15-22,40
+www/app/api/cloud/start-fix/route.ts
+  a6a7b7091a791dc9 102,510,544-548,553-561,625-626
+www/lib/workflow-storage.ts
+  a6a7b7091a791dc9 15
+www/.gitignore
+  a6a7b7091a791dc9 33
+www/tsconfig.json
+  a6a7b7091a791dc9 26
+www/app/api/cloud/fix-workflow/workflow.ts
+  a6a7b7091a791dc9 318-319,458,495,587-589,660,1258-1259,1385-1386
+www/lib/skill-runners.ts
+  a6a7b7091a791dc9 11-20,22,30,51,91,135-146,304-331,352-353,518-549,578-613,742,749-751
+www/app/api/cloud/fix-workflow/steps.ts
+  a6a7b7091a791dc9 2622,2749-2750,2860-2888,3332,3403,3432,3889-3896,3905-3912,3971-3972,4011,4047,4101,4187,4336-4339,4351-4352,4365-4371,4393,4399,5158-5162,5195,5809-5812,6270,6342-6351,6878-6881,7606-7609,9026-9032,9093-9103,9142-9144,9195-9197,9205-9210
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "26444605b68d1e7acbacd0eeb0d6671f8f07c292",
+  "prompts": {
+    "a6a7b7091a791dc9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ddb8c-76f3-7691-8f65-bb14ae2c76fc",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 465,
+      "total_deletions": 59,
+      "accepted_lines": 499,
+      "overriden_lines": 0
+    }
+  }
+}
