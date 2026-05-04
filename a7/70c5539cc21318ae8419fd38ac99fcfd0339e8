@@ -1,0 +1,29 @@
+www/app/[team]/skill-runner/[runnerId]/new/page.tsx
+  a6a7b7091a791dc9 11-12,85,102
+www/app/[team]/dev-agents/[agentId]/new/page.tsx
+  a6a7b7091a791dc9 9-10,41,57
+www/lib/workflow-run-stats.ts
+  a6a7b7091a791dc9 1-46
+www/app/dev-agents/[agentId]/new/dev-agent-run-client.tsx
+  a6a7b7091a791dc9 76-80,88,188,265-266,866-876
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "a770c5539cc21318ae8419fd38ac99fcfd0339e8",
+  "prompts": {
+    "a6a7b7091a791dc9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ddb8c-76f3-7691-8f65-bb14ae2c76fc",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 74,
+      "total_deletions": 4,
+      "accepted_lines": 108,
+      "overriden_lines": 0
+    }
+  }
+}
