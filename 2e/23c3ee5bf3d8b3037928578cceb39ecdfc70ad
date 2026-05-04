@@ -1,0 +1,33 @@
+www/components/dev-agents/dashboard-shell.tsx
+  a6a7b7091a791dc9 1,50,52-57
+www/app/api/cloud/fix-workflow/steps.ts
+  a6a7b7091a791dc9 4045,4978,4982,4992-5001,5127,5148,5166,5194,5374-5377,5474,5477,5792,5905,7675,7680,7707
+www/app/api/cloud/start-fix/route.ts
+  a6a7b7091a791dc9 3,1100,1122-1197,1199-1216
+www/lib/skill-runners.ts
+  a6a7b7091a791dc9 111-121
+www/lib/vercel-teams.ts
+  a6a7b7091a791dc9 204-205,209-211,215-216,227-232
+www/app/dev-agents/[agentId]/new/dev-agent-run-client.tsx
+  a6a7b7091a791dc9 1194
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "2e23c3ee5bf3d8b3037928578cceb39ecdfc70ad",
+  "prompts": {
+    "a6a7b7091a791dc9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ddb8c-76f3-7691-8f65-bb14ae2c76fc",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 11474,
+      "total_deletions": 11399,
+      "accepted_lines": 194,
+      "overriden_lines": 0
+    }
+  }
+}
