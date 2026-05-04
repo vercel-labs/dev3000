@@ -1,0 +1,23 @@
+www/app/dev-agents/runs/[id]/report/page.tsx
+  a6a7b7091a791dc9 666-684,1060-1085,1323,1330,1380,1424-1428,1439-1443,1770-1774,1776,1779-1780
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "9c733dacb8881afa5555aba35ac46f5589f7ccc7",
+  "prompts": {
+    "a6a7b7091a791dc9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ddb8c-76f3-7691-8f65-bb14ae2c76fc",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 66,
+      "total_deletions": 8,
+      "accepted_lines": 100,
+      "overriden_lines": 0
+    }
+  }
+}
