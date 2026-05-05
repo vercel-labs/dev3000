@@ -1,0 +1,35 @@
+www/app/api/cloud/start-fix/route.ts
+  a6a7b7091a791dc9 8,509,695
+www/lib/skill-runners.ts
+  a6a7b7091a791dc9 22,411-412,476-478
+www/lib/skill-runner-config.ts
+  a6a7b7091a791dc9 5-8
+www/lib/skill-runner-runtime.ts
+  a6a7b7091a791dc9 1-33
+www/lib/skill-runner-worker.ts
+  a6a7b7091a791dc9 77-78,143,662-675,845-848,884,1014-1017
+www/app/api/skill-runner-worker/version/route.ts
+  a6a7b7091a791dc9 2-3,38,43
+www/app/api/cloud/fix-workflow/workflow.ts
+  a6a7b7091a791dc9 16,321
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "55bb5c72f15531fc58c5d2b9d5c6657058275b7e",
+  "prompts": {
+    "a6a7b7091a791dc9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ddb8c-76f3-7691-8f65-bb14ae2c76fc",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 78,
+      "total_deletions": 93,
+      "accepted_lines": 104,
+      "overriden_lines": 0
+    }
+  }
+}
