@@ -1,0 +1,31 @@
+www/proxy.ts
+  a6a7b7091a791dc9 34-39,83-84,91,96-108
+www/lib/skill-runner-worker.ts
+  a6a7b7091a791dc9 102,471,480
+www/app/api/auth/authorize/route.ts
+  a6a7b7091a791dc9 31
+www/app/api/auth/refresh/route.ts
+  a6a7b7091a791dc9 1-90
+www/app/api/auth/token/route.ts
+  a6a7b7091a791dc9 1-2,5-13,22-32,37-85
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "cd5d4dee5c9b3f6590517829be999e34836b300a",
+  "prompts": {
+    "a6a7b7091a791dc9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ddb8c-76f3-7691-8f65-bb14ae2c76fc",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 190,
+      "total_deletions": 8,
+      "accepted_lines": 216,
+      "overriden_lines": 0
+    }
+  }
+}
