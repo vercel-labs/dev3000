@@ -1,0 +1,25 @@
+www/app/api/cloud/fix-workflow/steps.ts
+  a6a7b7091a791dc9 5238,5977-5985
+www/lib/dev-agent-ash-spec.ts
+  a6a7b7091a791dc9 18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "2f8058005b64ab356954a7cf4e70669abf5f0c1b",
+  "prompts": {
+    "a6a7b7091a791dc9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ddb8c-76f3-7691-8f65-bb14ae2c76fc",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 11,
+      "total_deletions": 27,
+      "accepted_lines": 37,
+      "overriden_lines": 0
+    }
+  }
+}
