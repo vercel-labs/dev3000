@@ -1,0 +1,29 @@
+www/app/dev-agents/runs/[id]/report/agent-analysis.tsx
+  a6a7b7091a791dc9 251,254
+www/app/dev-agents/[agentId]/new/dev-agent-run-client.tsx
+  a6a7b7091a791dc9 167-196,270,272-274,277,283,294-296,529,542,568,571-575,588-597,605-606,612,614-615,771-779,1026-1028
+www/lib/skill-runners.ts
+  a6a7b7091a791dc9 372-375,377,416,422-423,487,491-492
+www/app/api/cloud/start-fix/route.ts
+  a6a7b7091a791dc9 811-820
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "a9ccb838689cd2435bdb08b325e7075e5a4aa742",
+  "prompts": {
+    "a6a7b7091a791dc9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ddb8c-76f3-7691-8f65-bb14ae2c76fc",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 1572,
+      "total_deletions": 1503,
+      "accepted_lines": 123,
+      "overriden_lines": 0
+    }
+  }
+}
