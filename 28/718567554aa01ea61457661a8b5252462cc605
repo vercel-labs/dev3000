@@ -1,0 +1,25 @@
+www/app/api/cloud/start-fix/route.ts
+  a6a7b7091a791dc9 56-57,265
+www/app/api/cloud/fix-workflow/steps.ts
+  a6a7b7091a791dc9 51-52,5069-5131,5927,5934,5961-5963,5990,6083-6087,6478-6483,6599-6614,8495-8501,8503,8533-8534,8615-8616
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "28718567554aa01ea61457661a8b5252462cc605",
+  "prompts": {
+    "a6a7b7091a791dc9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ddb8c-76f3-7691-8f65-bb14ae2c76fc",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 113,
+      "total_deletions": 6,
+      "accepted_lines": 558,
+      "overriden_lines": 0
+    }
+  }
+}
