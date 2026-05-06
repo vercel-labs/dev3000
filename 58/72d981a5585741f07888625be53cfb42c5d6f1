@@ -1,0 +1,28 @@
+www/app/dev-agents/runs/[id]/report/page.tsx
+  a6a7b7091a791dc9 885
+www/app/api/cloud/fix-workflow/steps.ts
+  a6a7b7091a791dc9 4092-4114
+www/lib/skill-runner-worker.ts
+  a6a7b7091a791dc9 38-44,252-264,664-666,886-892,1019,1021-1024,1031,1110-1112,1114-1140,1144-1147,1150,1153-1160
+www/app/dev-agents/[agentId]/new/dev-agent-run-client.tsx
+  a6a7b7091a791dc9 265,335,339,351,394-420,454,456-460,772,786,789,894,911,913,1304,1317,1321,1324,1333-1334,1428,1472
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "5872d981a5585741f07888625be53cfb42c5d6f1",
+  "prompts": {
+    "a6a7b7091a791dc9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ddb8c-76f3-7691-8f65-bb14ae2c76fc",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>",
+      "total_additions": 154,
+      "total_deletions": 55,
+      "accepted_lines": 599,
+      "overriden_lines": 0
+    }
+  }
+}
