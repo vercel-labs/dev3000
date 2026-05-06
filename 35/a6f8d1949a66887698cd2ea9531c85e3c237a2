@@ -1,0 +1,33 @@
+www/app/dev-agents/[agentId]/new/dev-agent-run-client.tsx
+  s_a6a7b7091a791d::t_2aee59d279e78c 1356-1357,1360
+  s_a6a7b7091a791d::t_0d06bbd83666ef 164
+  s_a6a7b7091a791d::t_44b58144078481 165-168
+www/lib/skill-runner-shell-source.ts
+  s_a6a7b7091a791d::t_bdf7429958f432 135-163,172-218,257-258,263-264,269-275
+  s_a6a7b7091a791d::t_eb321661e3c40d 164-171
+www/app/api/cloud/start-fix/route.ts
+  s_a6a7b7091a791d::t_37463ce4c0b573 45-46
+www/lib/skill-runner-worker.ts
+  s_a6a7b7091a791d::t_4a3b236ea0f908 357
+  s_a6a7b7091a791d::t_9f5bd619f9d1b5 229-242,264-273,908,1010,1028-1029,1031,1058-1064,1066-1069,1180-1211,1214-1219,1222,1227
+  s_a6a7b7091a791d::t_02c2e97168a9ae 152-154,243-263,802,805,835-836
+  s_a6a7b7091a791d::t_6314d0aca14466 525-529
+  s_a6a7b7091a791d::t_881aee6d0ebeb8 1144-1152
+  s_a6a7b7091a791d::t_384c052af77de6 1143
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "35a6f8d1949a66887698cd2ea9531c85e3c237a2",
+  "prompts": {},
+  "sessions": {
+    "s_a6a7b7091a791d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ddb8c-76f3-7691-8f65-bb14ae2c76fc",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>"
+    }
+  }
+}
