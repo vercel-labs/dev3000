@@ -1,0 +1,27 @@
+.agents/skills/deepsec/SKILL.md
+  a6a7b7091a791dc9 29
+www/app/api/cloud/fix-workflow/steps.ts
+  a6a7b7091a791dc9 7219
+www/lib/dev-agents.ts
+  a6a7b7091a791dc9 436,450
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "36e28f32f47af71a5fa72d3626384b06f2da59e6",
+  "prompts": {
+    "a6a7b7091a791dc9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ddb8c-76f3-7691-8f65-bb14ae2c76fc",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh",
+      "messages": [],
+      "total_additions": 4,
+      "total_deletions": 4,
+      "accepted_lines": 449,
+      "overriden_lines": 0
+    }
+  }
+}
