@@ -153,6 +153,15 @@ export async function getVercelApiAccessToken(): Promise<string | null> {
   return getLocalVercelCliAccessToken() || accessToken
 }
 
+export async function getVercelApiAccessTokenFromRequest(request: Request): Promise<string | null> {
+  const authHeader = request.headers.get("authorization")
+  if (authHeader?.startsWith("Bearer ")) {
+    return authHeader.slice("Bearer ".length)
+  }
+
+  return getVercelApiAccessToken()
+}
+
 export async function getCurrentUserFromRequest(request: Request): Promise<UserInfo | null> {
   const authHeader = request.headers.get("authorization")
   if (authHeader?.startsWith("Bearer ")) {

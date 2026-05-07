@@ -1,4 +1,4 @@
-import { getCurrentUser, getVercelApiAccessToken } from "@/lib/auth"
+import { getCurrentUserFromRequest, getVercelApiAccessTokenFromRequest } from "@/lib/auth"
 import { SKILL_RUNNER_WORKER_PROJECT_NAME } from "@/lib/skill-runner-config"
 import {
   findSkillRunnerWorkerProject,
@@ -15,11 +15,11 @@ import {
   type TeamIdentity,
   type UserIdentity
 } from "@/lib/telemetry"
-import { resolveTeamFromParam, type VercelTeam } from "@/lib/vercel-teams"
+import { resolveTeamFromParamWithAccessToken, type VercelTeam } from "@/lib/vercel-teams"
 
-async function resolveApiTeam(teamParam: string | null) {
+async function resolveApiTeam(teamParam: string | null, accessToken: string) {
   if (!teamParam) return null
-  const { selectedTeam } = await resolveTeamFromParam(teamParam)
+  const { selectedTeam } = await resolveTeamFromParamWithAccessToken(teamParam, accessToken)
   return selectedTeam
 }
 
@@ -53,7 +53,7 @@ async function persistWorkerProject(
     mode: "install" | "validate"
   }
 ) {
-  const team = await resolveApiTeam(teamParam)
+  const team = await resolveApiTeam(teamParam, accessToken)
   if (!team) {
     return Response.json({ success: false, error: "Team not found" }, { status: 404 })
   }
@@ -156,12 +156,12 @@ async function persistWorkerProject(
 }
 
 export async function GET(request: Request) {
-  const user = await getCurrentUser()
+  const user = await getCurrentUserFromRequest(request)
   if (!user) {
     return unauthorized()
   }
 
-  const accessToken = await getVercelApiAccessToken()
+  const accessToken = await getVercelApiAccessTokenFromRequest(request)
   if (!accessToken) {
     return Response.json({ success: false, error: "Not authenticated" }, { status: 401 })
   }
@@ -184,12 +184,12 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const user = await getCurrentUser()
+  const user = await getCurrentUserFromRequest(request)
   if (!user) {
     return unauthorized()
   }
 
-  const accessToken = await getVercelApiAccessToken()
+  const accessToken = await getVercelApiAccessTokenFromRequest(request)
   if (!accessToken) {
     return Response.json({ success: false, error: "Not authenticated" }, { status: 401 })
   }
@@ -203,7 +203,7 @@ export async function POST(request: Request) {
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to install runner project."
-    const team = await resolveApiTeam(typeof body.team === "string" ? body.team : null)
+    const team = await resolveApiTeam(typeof body.team === "string" ? body.team : null, accessToken)
     if (team) {
       const teamIdentity = toTeamIdentity(team)
       const settings = await getSkillRunnerTeamSettings(teamIdentity).catch(() => null)

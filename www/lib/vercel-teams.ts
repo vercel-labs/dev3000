@@ -161,12 +161,7 @@ function normalizePersonalTeam(user: RawVercelUser | undefined): VercelTeam | nu
   }
 }
 
-export async function listCurrentUserTeams(): Promise<VercelTeam[]> {
-  const accessToken = await getVercelApiAccessToken()
-  if (!accessToken) {
-    return []
-  }
-
+export async function listTeamsForAccessToken(accessToken: string): Promise<VercelTeam[]> {
   // Fetch user info and teams in parallel, but degrade gracefully if the
   // Vercel API flakes so report pages still render.
   const [userResult, teamsResult] = await Promise.allSettled([
@@ -241,6 +236,15 @@ export async function listCurrentUserTeams(): Promise<VercelTeam[]> {
   return teams
 }
 
+export async function listCurrentUserTeams(): Promise<VercelTeam[]> {
+  const accessToken = await getVercelApiAccessToken()
+  if (!accessToken) {
+    return []
+  }
+
+  return listTeamsForAccessToken(accessToken)
+}
+
 export async function getPreferredTeam(teams: VercelTeam[]): Promise<VercelTeam | null> {
   if (teams.length === 0) {
     return null
@@ -276,6 +280,27 @@ export async function resolveTeamFromParam(teamParam: string): Promise<{
   teams: VercelTeam[]
 }> {
   const teams = await listCurrentUserTeams()
+  return resolveTeamFromList(teamParam, teams)
+}
+
+export async function resolveTeamFromParamWithAccessToken(
+  teamParam: string,
+  accessToken: string
+): Promise<{
+  selectedTeam: VercelTeam | null
+  teams: VercelTeam[]
+}> {
+  const teams = await listTeamsForAccessToken(accessToken)
+  return resolveTeamFromList(teamParam, teams)
+}
+
+function resolveTeamFromList(
+  teamParam: string,
+  teams: VercelTeam[]
+): {
+  selectedTeam: VercelTeam | null
+  teams: VercelTeam[]
+} {
   const normalizedTeamParam = teamParam.trim().toLowerCase()
   const selectedTeam =
     teams.find((team) => team.id.toLowerCase() === normalizedTeamParam) ||

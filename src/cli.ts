@@ -178,6 +178,7 @@ import { homedir } from "os"
 import { detect } from "package-manager-detector"
 import { dirname, join, resolve } from "path"
 import { fileURLToPath } from "url"
+import { runRemoteSkillCommand, shouldUseRemoteSkillRunner } from "./commands/skill-runner.js"
 import { createPersistentLogFile, findAvailablePort, startDevEnvironment } from "./dev-environment.js"
 import { getBundledD3kSkillPath, getSkill, getSkillsInfo, listAvailableSkills } from "./skills/index.js"
 import { detectAIAgent } from "./utils/agent-detection.js"
@@ -1407,7 +1408,30 @@ program
   .description("Get skill content or list available skills")
   .option("-l, --list", "List all available skills")
   .option("-v, --verbose", "Show detailed skill information")
-  .action((name, options) => {
+  .option("--team <team>", "Vercel team slug or ID for a hosted skill run")
+  .option("--project <project>", "Vercel project name or ID for a hosted skill run")
+  .option("--branch <branch>", "Git branch or ref to scan")
+  .option("--project-dir <dir>", "Project root directory inside the repository")
+  .option("--base-url <url>", "dev3000 base URL")
+  .option("--wait", "Wait for the run to finish")
+  .option("--json", "Print machine-readable JSON")
+  .option("--no-install", "Do not install or repair the team skill runner project before starting")
+  .action(async (name, options) => {
+    if (shouldUseRemoteSkillRunner(options)) {
+      try {
+        await runRemoteSkillCommand(name, options)
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        if (options.json) {
+          console.log(JSON.stringify({ success: false, error: message }, null, 2))
+        } else {
+          console.error(chalk.red(`Error: ${message}`))
+        }
+        process.exit(1)
+      }
+      return
+    }
+
     // List skills if --list flag or no name provided
     if (options.list || !name) {
       if (options.verbose) {
