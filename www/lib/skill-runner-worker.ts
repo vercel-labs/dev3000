@@ -11,7 +11,11 @@ import {
 import { resolveSkillRunnerShellSource, uploadSkillRunnerShellSourceFiles } from "@/lib/skill-runner-shell-source"
 import type { VercelTeam } from "@/lib/vercel-teams"
 
-export type SkillRunnerWorkerSetupErrorCode = "github_integration_required" | "initial_deployment_missing" | "unknown"
+export type SkillRunnerWorkerSetupErrorCode =
+  | "github_integration_required"
+  | "initial_deployment_missing"
+  | "blob_store_limit_reached"
+  | "unknown"
 
 export interface SkillRunnerWorkerSetupRequirement {
   code: SkillRunnerWorkerSetupErrorCode
@@ -40,6 +44,13 @@ class VercelProjectNotFoundError extends Error {
   constructor(message: string) {
     super(message)
     this.name = "VercelProjectNotFoundError"
+  }
+}
+
+class BlobStoreLimitReachedError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = "BlobStoreLimitReachedError"
   }
 }
 
@@ -147,6 +158,9 @@ interface VercelBlobStoreCreateResponse {
     name?: string
   }
 }
+
+type VercelBlobStore = NonNullable<VercelBlobStoreListResponse["stores"]>[number]
+type VercelBlobStoreProjectMetadata = NonNullable<VercelBlobStore["projectsMetadata"]>[number]
 
 const LEGACY_WORKER_METADATA_ENV_KEYS = new Set(["SKILL_RUNNER_WORKER_MODE", "SKILL_RUNNER_WORKER_SHELL_VERSION"])
 const REQUIRED_SELF_HOSTED_WORKER_ENV_KEYS = ["BLOB_READ_WRITE_TOKEN"] as const
@@ -299,6 +313,10 @@ function buildWorkerBlobStoreName(team: VercelTeam): string {
   return `d3k-skill-runner-${suffix}-private`.slice(0, 63)
 }
 
+function buildTeamBlobStoresUrl(team: VercelTeam): string {
+  return `https://vercel.com/${team.slug}/~/stores/blob`
+}
+
 function parseVercelApiErrorPayload(value: string): VercelApiErrorPayload | null {
   try {
     return JSON.parse(value) as VercelApiErrorPayload
@@ -318,6 +336,73 @@ function isProjectNotFoundApiResponse(status: number, errorText: string): boolea
   const code = payload?.error?.code?.trim().toLowerCase()
   const message = payload?.error?.message?.trim()
   return code === "not_found" && (!message || /project not found/i.test(message))
+}
+
+function isMaxBlobStoreCountApiResponse(status: number, errorText: string): boolean {
+  if (status !== 400 && status !== 403) return false
+
+  const payload = parseVercelApiErrorPayload(errorText)
+  const code = payload?.error?.code?.trim().toLowerCase()
+  const message = payload?.error?.message?.trim()
+  return (
+    code === "max_store_count_reached" || /max(?:imum)? .*blob stores|cannot create more/i.test(message || errorText)
+  )
+}
+
+function buildBlobStoreLimitError(team: VercelTeam): SkillRunnerWorkerSetupError {
+  return new SkillRunnerWorkerSetupError(
+    `${team.name} already has the maximum number of Vercel Blob stores. Delete an unused Blob store, then retry runner setup.`,
+    {
+      code: "blob_store_limit_reached",
+      actionLabel: "Open Blob Stores",
+      actionUrl: buildTeamBlobStoresUrl(team)
+    }
+  )
+}
+
+function getStoreProjectConnection(
+  store: VercelBlobStore | undefined,
+  projectId: string
+): VercelBlobStoreProjectMetadata | undefined {
+  return store?.projectsMetadata?.find((metadata) => metadata.projectId === projectId)
+}
+
+function findWorkerConnectedBlobStore(
+  stores: VercelBlobStore[],
+  projectId: string,
+  preferredStoreName: string
+): { store: VercelBlobStore; connection: VercelBlobStoreProjectMetadata } | null {
+  const connectedPrivateStores = stores
+    .filter((store) => store.id && store.access === "private")
+    .map((store) => ({ store, connection: getStoreProjectConnection(store, projectId) }))
+    .filter((entry): entry is { store: VercelBlobStore; connection: VercelBlobStoreProjectMetadata } =>
+      Boolean(entry.connection)
+    )
+
+  return (
+    connectedPrivateStores.find((entry) => entry.store.name === preferredStoreName) ||
+    connectedPrivateStores.find((entry) => entry.store.name?.startsWith(`${SKILL_RUNNER_WORKER_PROJECT_NAME}-`)) ||
+    connectedPrivateStores[0] ||
+    null
+  )
+}
+
+function findReusablePrivateBlobStore(stores: VercelBlobStore[], preferredStoreName: string): VercelBlobStore | null {
+  return (
+    stores.find((store) => store.id && store.access === "private" && store.name === preferredStoreName) ||
+    stores.find(
+      (store) =>
+        store.id &&
+        store.access === "private" &&
+        store.name?.startsWith(`${SKILL_RUNNER_WORKER_PROJECT_NAME}-`) &&
+        (!store.projectsMetadata || store.projectsMetadata.length === 0)
+    ) ||
+    stores.find(
+      (store) =>
+        store.id && store.access === "private" && (!store.projectsMetadata || store.projectsMetadata.length === 0)
+    ) ||
+    null
+  )
 }
 
 function buildWorkerProjectCreateError(status: number, errorText: string): Error {
@@ -587,6 +672,9 @@ async function createTeamBlobStore(accessToken: string, team: VercelTeam, name: 
         return existingStore.id
       }
     }
+    if (isMaxBlobStoreCountApiResponse(response.status, errorText)) {
+      throw new BlobStoreLimitReachedError(errorText)
+    }
     throw new Error(`Failed to create Blob store: ${response.status} ${errorText}`)
   }
 
@@ -786,7 +874,23 @@ async function ensureWorkerBlobStore(
   const stores = await listTeamBlobStores(accessToken, team)
   const desiredStoreName = buildWorkerBlobStoreName(team)
   const existingStore = stores.find((store) => store.name === desiredStoreName)
-  const storeId = existingStore?.id || (await createTeamBlobStore(accessToken, team, desiredStoreName))
+  let storeId = existingStore?.id
+  if (!storeId) {
+    try {
+      storeId = await createTeamBlobStore(accessToken, team, desiredStoreName)
+    } catch (error) {
+      if (!(error instanceof BlobStoreLimitReachedError)) {
+        throw error
+      }
+
+      const reusableStore = findReusablePrivateBlobStore(stores, desiredStoreName)
+      if (!reusableStore?.id) {
+        throw buildBlobStoreLimitError(team)
+      }
+      storeId = reusableStore.id
+    }
+  }
+
   await disconnectWorkerBlobStoreConnections(accessToken, team, project.projectId, stores)
   await removeWorkerBlobEnvBindings(accessToken, team, project.projectId)
   await connectBlobStoreToProject(accessToken, team, storeId, project.projectId)
@@ -884,11 +988,11 @@ async function getWorkerProjectMissingEnvKeys(
   const missing = REQUIRED_SELF_HOSTED_WORKER_ENV_KEYS.filter((key) => !envKeys.has(key))
   const desiredStoreName = buildWorkerBlobStoreName(team)
   const stores = await listTeamBlobStores(accessToken, team)
-  const blobStore = stores.find((store) => store.name === desiredStoreName && store.access === "private")
-  const storeConnection = blobStore?.projectsMetadata?.find((metadata) => metadata.projectId === projectId)
-  if (!blobStore || !storeConnection) {
+  const workerBlobStoreConnection = findWorkerConnectedBlobStore(stores, projectId, desiredStoreName)
+  if (!workerBlobStoreConnection) {
     return ["BLOB_READ_WRITE_TOKEN"]
   }
+  const storeConnection = workerBlobStoreConnection.connection
 
   const hasExpectedEnvironments = SELF_HOSTED_BLOB_ENVIRONMENTS.every((environment) =>
     storeConnection.environments?.includes(environment)

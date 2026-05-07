@@ -175,7 +175,9 @@ export function classifyFailure(
 
   if (/ECONNREFUSED|ENOTFOUND|EAI_AGAIN|fetch failed/i.test(text)) return "worker_unreachable"
   if (/non-JSON response|HTTP\s*5\d\d|5\d\d\s/i.test(text)) return "worker_5xx"
-  if (/BLOB_READ_WRITE_TOKEN|Vercel Blob: No token found/i.test(text)) return "blob_setup_missing"
+  if (/BLOB_READ_WRITE_TOKEN|Vercel Blob: No token found|max_store_count_reached|Blob store limit/i.test(text)) {
+    return "blob_setup_missing"
+  }
   if (/rate limit|AI\s*Gateway|ai[_-]?provider|Anthropic|OpenAI/i.test(text)) return "ai_provider_error"
   if (/timed out|deadline|TIMEOUT/i.test(text)) return "timeout"
   if (/cancel|abort/i.test(text)) return "user_cancelled"

@@ -118,7 +118,11 @@ interface RunnerValidationResult {
   }
 }
 
-type WorkerSetupErrorCode = "github_integration_required" | "initial_deployment_missing" | "unknown"
+type WorkerSetupErrorCode =
+  | "github_integration_required"
+  | "initial_deployment_missing"
+  | "blob_store_limit_reached"
+  | "unknown"
 
 interface WorkerSetupErrorState {
   message: string
@@ -1355,6 +1359,11 @@ export default function DevAgentRunClient({
                         <>
                           The runner project exists, but its latest deployment did not finish successfully. Open the
                           project, review the deployment error, then come back and retry setup.
+                        </>
+                      ) : workerSetupError.code === "blob_store_limit_reached" ? (
+                        <>
+                          This team has reached its Blob store limit. Delete an unused Blob store, then come back and
+                          retry runner setup.
                         </>
                       ) : (
                         <>Open Vercel Projects, remove any stale runner project if it appears, then retry setup.</>
