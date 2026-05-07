@@ -229,6 +229,7 @@ export interface D3kSandboxConfig {
   projectEnv?: Record<string, string>
   timeout?: StringValue
   skipD3kSetup?: boolean
+  skipProjectDependencyInstall?: boolean
   onProgress?: (message: string) => void | Promise<void>
   projectDir?: string
   framework?: string
@@ -525,6 +526,7 @@ export async function createD3kSandbox(config: D3kSandboxConfig): Promise<D3kSan
     projectEnv = {},
     timeout = DEFAULT_SANDBOX_TIMEOUT,
     skipD3kSetup = false,
+    skipProjectDependencyInstall = false,
     onProgress,
     projectDir = "",
     framework = "Next.js",
@@ -978,51 +980,56 @@ chmod 0600 "$HOME/.npmrc" ".npmrc"`
       }
     }
 
-    // Install project dependencies
-    if (debug) console.log("  📦 Installing project dependencies...")
-    await reportProgress("Installing project dependencies...")
-    let installResult: { exitCode: number; stdout: string; stderr: string }
-    try {
-      const installCommand =
-        resolvedPackageManager === "bun"
-          ? "bun install"
-          : resolvedPackageManager === "pnpm"
-            ? normalizedProjectDir
-              ? `corepack pnpm -C ${sandboxCwd} install --filter .`
-              : "corepack pnpm install"
-            : resolvedPackageManager === "yarn"
-              ? "corepack yarn install"
-              : "npm install"
+    if (skipProjectDependencyInstall) {
+      if (debug) console.log("  ⏩ Skipping project dependency install")
+      await reportProgress("Skipping target app dependency install for code-only scan")
+    } else {
+      // Install project dependencies
+      if (debug) console.log("  📦 Installing project dependencies...")
+      await reportProgress("Installing project dependencies...")
+      let installResult: { exitCode: number; stdout: string; stderr: string }
+      try {
+        const installCommand =
+          resolvedPackageManager === "bun"
+            ? "bun install"
+            : resolvedPackageManager === "pnpm"
+              ? normalizedProjectDir
+                ? `corepack pnpm -C ${sandboxCwd} install --filter .`
+                : "corepack pnpm install"
+              : resolvedPackageManager === "yarn"
+                ? "corepack yarn install"
+                : "npm install"
 
-      const nodePrefix = requiredNodeMajor
-        ? `if [ -x "$HOME/.fnm/fnm" ]; then FNM_BIN="$HOME/.fnm/fnm"; elif [ -x "$HOME/.local/share/fnm/fnm" ]; then FNM_BIN="$HOME/.local/share/fnm/fnm"; fi; if [ -n "\${FNM_BIN:-}" ]; then export PATH="$(dirname "$FNM_BIN"):$PATH"; eval "$("$FNM_BIN" env --shell bash)"; "$FNM_BIN" use ${requiredNodeMajor} >/dev/null 2>&1 || true; fi;`
-        : ""
+        const nodePrefix = requiredNodeMajor
+          ? `if [ -x "$HOME/.fnm/fnm" ]; then FNM_BIN="$HOME/.fnm/fnm"; elif [ -x "$HOME/.local/share/fnm/fnm" ]; then FNM_BIN="$HOME/.local/share/fnm/fnm"; fi; if [ -n "\${FNM_BIN:-}" ]; then export PATH="$(dirname "$FNM_BIN"):$PATH"; eval "$("$FNM_BIN" env --shell bash)"; "$FNM_BIN" use ${requiredNodeMajor} >/dev/null 2>&1 || true; fi;`
+          : ""
 
-      installResult = await runCommandWithLogs(sandbox, {
-        cmd: "bash",
-        args: ["-lc", `${nodePrefix} export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; ${installCommand}`],
-        cwd: sandboxCwd,
-        env: resolvedNpmToken ? { NPM_TOKEN: resolvedNpmToken, NODE_AUTH_TOKEN: resolvedNpmToken } : undefined,
-        stdout: debug ? process.stdout : undefined,
-        stderr: debug ? process.stderr : undefined
-      })
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      await reportProgress(`Dependency install command error: ${message.slice(0, 240)}`)
-      throw error
+        installResult = await runCommandWithLogs(sandbox, {
+          cmd: "bash",
+          args: ["-lc", `${nodePrefix} export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; ${installCommand}`],
+          cwd: sandboxCwd,
+          env: resolvedNpmToken ? { NPM_TOKEN: resolvedNpmToken, NODE_AUTH_TOKEN: resolvedNpmToken } : undefined,
+          stdout: debug ? process.stdout : undefined,
+          stderr: debug ? process.stderr : undefined
+        })
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        await reportProgress(`Dependency install command error: ${message.slice(0, 240)}`)
+        throw error
+      }
+
+      if (installResult.exitCode !== 0) {
+        const stderrTail = installResult.stderr.slice(-1000)
+        const stdoutTail = installResult.stdout.slice(-500)
+        await reportProgress(`Dependency install failed (exit ${installResult.exitCode})`)
+        throw new Error(
+          `Project dependency installation failed with exit code ${installResult.exitCode}\nStderr: ${stderrTail || "(empty)"}\nStdout: ${stdoutTail || "(empty)"}`
+        )
+      }
+
+      if (debug) console.log("  ✅ Project dependencies installed")
+      await reportProgress("Project dependencies installed")
     }
-
-    if (installResult.exitCode !== 0) {
-      const stderrTail = installResult.stderr.slice(-1000)
-      const stdoutTail = installResult.stdout.slice(-500)
-      await reportProgress(`Dependency install failed (exit ${installResult.exitCode})`)
-      throw new Error(
-        `Project dependency installation failed with exit code ${installResult.exitCode}\nStderr: ${stderrTail || "(empty)"}\nStdout: ${stdoutTail || "(empty)"}`
-      )
-    }
-
-    if (debug) console.log("  ✅ Project dependencies installed")
-    await reportProgress("Project dependencies installed")
 
     if (skipD3kSetup) {
       if (debug) console.log("  ⏩ Analyzer-only mode: skipping d3k/chrome installation and startup")
@@ -2363,6 +2370,7 @@ async function createD3kSandboxFromBaseSnapshot(
     projectEnv = {},
     timeout = DEFAULT_SANDBOX_TIMEOUT,
     skipD3kSetup = false,
+    skipProjectDependencyInstall = false,
     onProgress,
     projectDir = "",
     packageManager,
@@ -2536,35 +2544,39 @@ chmod 0600 "$HOME/.npmrc" ".npmrc"`
       }
     }
 
-    await reportProgress("Installing project dependencies...")
-    const installCommand =
-      resolvedPackageManager === "bun"
-        ? "bun install"
-        : resolvedPackageManager === "pnpm"
-          ? normalizedProjectDir
-            ? `corepack pnpm -C ${sandboxCwd} install --filter .`
-            : "corepack pnpm install"
-          : resolvedPackageManager === "yarn"
-            ? "corepack yarn install"
-            : "npm install"
+    if (skipProjectDependencyInstall) {
+      await reportProgress("Skipping target app dependency install for code-only scan")
+    } else {
+      await reportProgress("Installing project dependencies...")
+      const installCommand =
+        resolvedPackageManager === "bun"
+          ? "bun install"
+          : resolvedPackageManager === "pnpm"
+            ? normalizedProjectDir
+              ? `corepack pnpm -C ${sandboxCwd} install --filter .`
+              : "corepack pnpm install"
+            : resolvedPackageManager === "yarn"
+              ? "corepack yarn install"
+              : "npm install"
 
-    const installResult = await runCommandWithLogs({
-      cmd: "bash",
-      args: ["-lc", `export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; ${installCommand}`],
-      cwd: sandboxCwd,
-      env: resolvedNpmToken ? { NPM_TOKEN: resolvedNpmToken, NODE_AUTH_TOKEN: resolvedNpmToken } : undefined,
-      stdout: debug ? process.stdout : undefined,
-      stderr: debug ? process.stderr : undefined
-    })
-    if (installResult.exitCode !== 0) {
-      const stderrTail = installResult.stderr.slice(-1000)
-      const stdoutTail = installResult.stdout.slice(-500)
-      throw new Error(
-        `Project dependency installation failed with exit code ${installResult.exitCode}\nStderr: ${stderrTail || "(empty)"}\nStdout: ${stdoutTail || "(empty)"}`
-      )
+      const installResult = await runCommandWithLogs({
+        cmd: "bash",
+        args: ["-lc", `export PATH=$HOME/.bun/bin:/usr/local/bin:$PATH; ${installCommand}`],
+        cwd: sandboxCwd,
+        env: resolvedNpmToken ? { NPM_TOKEN: resolvedNpmToken, NODE_AUTH_TOKEN: resolvedNpmToken } : undefined,
+        stdout: debug ? process.stdout : undefined,
+        stderr: debug ? process.stderr : undefined
+      })
+      if (installResult.exitCode !== 0) {
+        const stderrTail = installResult.stderr.slice(-1000)
+        const stdoutTail = installResult.stdout.slice(-500)
+        throw new Error(
+          `Project dependency installation failed with exit code ${installResult.exitCode}\nStderr: ${stderrTail || "(empty)"}\nStdout: ${stdoutTail || "(empty)"}`
+        )
+      }
+      await reportProgress("Project dependencies installed")
     }
-    await reportProgress("Project dependencies installed")
-    await reportProgress("[Sandbox] Dependency install complete; evaluating pre-start hooks")
+    await reportProgress("[Sandbox] Project setup complete; evaluating pre-start hooks")
 
     if (preStartCommands.length > 0) {
       await reportProgress(`[Sandbox] Running ${preStartCommands.length} pre-start command(s)...`)

@@ -2824,6 +2824,7 @@ export async function initSandboxStep(
         sourceLabel,
         // Turbopack workflows require CWV verification, so browser/d3k setup cannot be skipped there.
         skipD3kSetup: isDeepsecSecurityScan,
+        skipProjectDependencyInstall: isDeepsecSecurityScan,
         onProgress: (message) => appendProgressLog(progressContext, `[Sandbox] ${message}`),
         projectDir: projectDir || "",
         devCommand: devAgentDevServerCommand,
@@ -3406,6 +3407,7 @@ export async function observeBaselineStep(
 ): Promise<ObserveResult> {
   const timer = new StepTimer()
   const isCodeOnlyWorkflow = isCodeOnlyWorkflowType(progressContext?.workflowType)
+  const skipProjectDependencyInstall = isDeepsecSecurityScanWorkflow(progressContext?.workflowType)
 
   const vercelApiTokens = getVercelApiTokenCandidates(vercelOidcToken)
 
@@ -3477,6 +3479,7 @@ export async function observeBaselineStep(
           projectDir: projectDir || "",
           devCommand: devAgentDevServerCommand,
           skipD3kSetup: isCodeOnlyWorkflow,
+          skipProjectDependencyInstall,
           timeout: WORKFLOW_SANDBOX_TIMEOUT,
           debug: true,
           onProgress: (message) => appendProgressLog(progressContext, `[Sandbox] ${message}`)
@@ -4668,6 +4671,7 @@ async function reconnectDeepSecSandbox(
         projectDir: params.projectDir || "",
         devCommand: params.devAgentDevServerCommand,
         skipD3kSetup: true,
+        skipProjectDependencyInstall: true,
         timeout: WORKFLOW_SANDBOX_TIMEOUT,
         debug: true,
         onProgress: (message) => appendProgressLog(params.progressContext, `[Sandbox] ${message}`)
@@ -5348,6 +5352,7 @@ export async function agentFixLoopStep(
           projectDir: projectDir || "",
           devCommand: devAgentDevServerCommand,
           skipD3kSetup: isDeepsecSecurityScan,
+          skipProjectDependencyInstall: isDeepsecSecurityScan,
           timeout: WORKFLOW_SANDBOX_TIMEOUT,
           debug: true,
           onProgress: (message) => appendProgressLog(progressContext, `[Sandbox] ${message}`)
