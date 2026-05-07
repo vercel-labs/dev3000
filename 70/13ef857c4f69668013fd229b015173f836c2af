@@ -1,0 +1,19 @@
+src/commands/skill-runner.ts
+  s_a6a7b7091a791d::t_613c9157f4eea8 206-207,475,481
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "7013ef857c4f69668013fd229b015173f836c2af",
+  "prompts": {},
+  "sessions": {
+    "s_a6a7b7091a791d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ddb8c-76f3-7691-8f65-bb14ae2c76fc",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>"
+    }
+  }
+}
