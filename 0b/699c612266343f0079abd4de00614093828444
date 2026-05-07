@@ -1,0 +1,22 @@
+www/lib/cloud/d3k-sandbox.ts
+  s_a6a7b7091a791d::t_b1ad072996fc76 2579
+  s_a6a7b7091a791d::t_d085531bab6356 232,529,983-1019,1021-1028,1030-1031,2373,2547-2560,2562-2577
+www/app/api/cloud/fix-workflow/steps.ts
+  s_a6a7b7091a791d::t_a8fe86c19140d8 2827,3410,3482,4674,5355
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "0b699c612266343f0079abd4de00614093828444",
+  "prompts": {},
+  "sessions": {
+    "s_a6a7b7091a791d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ddb8c-76f3-7691-8f65-bb14ae2c76fc",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>"
+    }
+  }
+}
