@@ -1408,8 +1408,8 @@ program
   .description("Get skill content or list available skills")
   .option("-l, --list", "List all available skills")
   .option("-v, --verbose", "Show detailed skill information")
-  .option("--team <team>", "Vercel team slug or ID for a hosted skill run")
-  .option("--project <project>", "Vercel project name or ID for a hosted skill run")
+  .option("--team <team>", "Override the inferred Vercel team slug or ID for a hosted skill run")
+  .option("--project <project>", "Override the inferred Vercel project name or ID for a hosted skill run")
   .option("--branch <branch>", "Git branch or ref to scan")
   .option("--project-dir <dir>", "Project root directory inside the repository")
   .option("--base-url <url>", "dev3000 base URL")
@@ -1417,7 +1417,7 @@ program
   .option("--json", "Print machine-readable JSON")
   .option("--no-install", "Do not install or repair the team skill runner project before starting")
   .action(async (name, options) => {
-    if (shouldUseRemoteSkillRunner(options)) {
+    if (shouldUseRemoteSkillRunner(name, options)) {
       try {
         await runRemoteSkillCommand(name, options)
       } catch (error) {

@@ -1,7 +1,7 @@
 import chalk from "chalk"
-import { readFileSync } from "fs"
+import { existsSync, readFileSync } from "fs"
 import { homedir } from "os"
-import { join } from "path"
+import { dirname, join, resolve } from "path"
 
 interface RemoteSkillOptions {
   team?: string
@@ -17,6 +17,12 @@ interface RemoteSkillOptions {
 interface VercelCliAuth {
   token?: string
   expiresAt?: number
+}
+
+interface VercelProjectLink {
+  orgId?: string
+  projectId?: string
+  path: string
 }
 
 interface VercelUser {
@@ -112,10 +118,22 @@ interface WorkflowRun {
 }
 
 const DEFAULT_DEV3000_BASE_URL = "https://dev3000.ai"
-const REMOTE_SKILL_OPTIONS = ["team", "project", "branch", "projectDir", "baseUrl", "wait"]
+const REMOTE_SKILL_OPTIONS = ["team", "project", "branch", "projectDir", "baseUrl", "wait", "json"]
 
-export function shouldUseRemoteSkillRunner(options: RemoteSkillOptions): boolean {
-  return REMOTE_SKILL_OPTIONS.some((option) => Boolean(options[option as keyof RemoteSkillOptions]))
+export function shouldUseRemoteSkillRunner(name: string | undefined, options: RemoteSkillOptions): boolean {
+  if (name !== "deepsec") {
+    return false
+  }
+
+  const hasExplicitRunOption =
+    REMOTE_SKILL_OPTIONS.some((option) => Boolean(options[option as keyof RemoteSkillOptions])) ||
+    options.install === false
+
+  try {
+    return hasExplicitRunOption || Boolean(findLinkedVercelProject())
+  } catch {
+    return true
+  }
 }
 
 export async function runRemoteSkillCommand(name: string | undefined, options: RemoteSkillOptions): Promise<void> {
@@ -127,10 +145,13 @@ export async function runRemoteSkillCommand(name: string | undefined, options: R
     throw new Error("Remote skill runs currently support `deepsec` only.")
   }
 
-  const teamInput = options.team?.trim()
-  const projectInput = options.project?.trim()
+  const linkedProject = findLinkedVercelProject()
+  const teamInput = options.team?.trim() || linkedProject?.orgId
+  const projectInput = options.project?.trim() || linkedProject?.projectId
   if (!teamInput || !projectInput) {
-    throw new Error("Both --team and --project are required to start a skill run.")
+    throw new Error(
+      "Could not infer the Vercel team/project. Run from a directory linked with `vercel link`, or pass `--team` and `--project`."
+    )
   }
 
   const token = resolveVercelAccessToken()
@@ -142,6 +163,9 @@ export async function runRemoteSkillCommand(name: string | undefined, options: R
 
   const baseUrl = normalizeBaseUrl(options.baseUrl || process.env.D3K_CLOUD_URL || DEFAULT_DEV3000_BASE_URL)
   log(options, `Starting ${chalk.bold("DeepSec Security Scan")} on ${chalk.bold(projectInput)}...`)
+  if (linkedProject && (!options.team || !options.project)) {
+    log(options, `${chalk.green("✓")} Inferred Vercel project link from ${linkedProject.path}`)
+  }
 
   const [user, teams] = await Promise.all([fetchVercelUser(token), fetchVercelTeams(token)])
   const team = resolveTeam(teamInput, user, teams)
@@ -260,6 +284,37 @@ function resolveVercelAccessToken(): string | null {
   }
 
   return null
+}
+
+function findLinkedVercelProject(startDirectory = process.cwd()): VercelProjectLink | null {
+  let currentDirectory = resolve(startDirectory)
+
+  for (;;) {
+    const candidate = join(currentDirectory, ".vercel", "project.json")
+    if (existsSync(candidate)) {
+      try {
+        const parsed = JSON.parse(readFileSync(candidate, "utf8")) as Record<string, unknown>
+        const orgId = stringValue(parsed.orgId)
+        const projectId = stringValue(parsed.projectId)
+        if (orgId || projectId) {
+          return { orgId, projectId, path: candidate }
+        }
+      } catch (error) {
+        throw new Error(
+          `Could not read ${candidate}. Re-run \`vercel link\` or fix the invalid project.json. ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        )
+      }
+    }
+
+    const parentDirectory = dirname(currentDirectory)
+    if (parentDirectory === currentDirectory) {
+      return null
+    }
+
+    currentDirectory = parentDirectory
+  }
 }
 
 async function fetchVercelUser(token: string): Promise<VercelUser> {
@@ -587,6 +642,21 @@ function formatFetchError(url: string, status: number, data: unknown): string {
       ? stringValue((error as Record<string, unknown>).message)
       : stringValue(error) ||
         (typeof data === "object" && data !== null ? stringValue((data as Record<string, unknown>).message) : "")
+
+  let hostname = ""
+  try {
+    hostname = new URL(url).hostname
+  } catch {
+    hostname = ""
+  }
+
+  if (hostname === "api.vercel.com" && status === 401) {
+    return "Vercel authentication failed. Run `vercel login`, or set VERCEL_TOKEN to a token that can access the target team."
+  }
+
+  if (hostname === "api.vercel.com" && status === 403) {
+    return `Vercel API access was denied${message ? `: ${message}` : "."} Re-authenticate with \`vercel login\`; for SAML teams, re-authenticate that scope in the Vercel CLI, then retry.`
+  }
 
   return `${url} failed (${status})${message ? `: ${message}` : ""}`
 }
