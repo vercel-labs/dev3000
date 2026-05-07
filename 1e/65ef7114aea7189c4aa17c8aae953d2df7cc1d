@@ -1,0 +1,29 @@
+www/app/api/cloud/start-fix/route.ts
+  s_a6a7b7091a791d::t_4165b262c48eac 741-750
+www/app/api/skill-runner-teams/worker/route.ts
+  s_a6a7b7091a791d::t_dcf21a3f2f21f8 75-76
+www/app/api/admin/skill-runner-teams/install/route.ts
+  s_a6a7b7091a791d::t_9467ce6d8b34ec 5,36-42
+www/app/api/admin/skill-runner-teams/validate/route.ts
+  s_a6a7b7091a791d::t_98d24a1a349993 47
+www/lib/skill-runner-worker.ts
+  s_a6a7b7091a791d::t_d913433cef7246 1122-1123,1125,1138,1145,1169,1192,1196,1203,1206-1234,1237-1240,1242,1244-1249,1251-1252,1256
+  s_a6a7b7091a791d::t_70d9c926bb13b6 1038,1041,1043,1068-1069,1071-1080,1090,1101-1102,1105-1110
+  s_a6a7b7091a791d::t_e9f847b9e60e08 2,239,244-250,273,281-285
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "1e65ef7114aea7189c4aa17c8aae953d2df7cc1d",
+  "prompts": {},
+  "sessions": {
+    "s_a6a7b7091a791d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ddb8c-76f3-7691-8f65-bb14ae2c76fc",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>"
+    }
+  }
+}
