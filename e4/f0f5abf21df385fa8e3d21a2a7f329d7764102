@@ -1,0 +1,29 @@
+www/components/dev-agents/dashboard-shell.tsx
+  s_a6a7b7091a791d::t_f79f85e08a14cb 18,39,115-125
+www/app/api/projects/[projectId]/route.ts
+  s_a6a7b7091a791d::t_ba9bc5de24038e 46-47,74-75
+www/app/dev-agents/[agentId]/new/dev-agent-run-client.tsx
+  s_a6a7b7091a791d::t_ec13b9cfe8d28a 194-195
+  s_a6a7b7091a791d::t_6e72ad0b4495d1 330,343-346,697,700,733
+  s_a6a7b7091a791d::t_8d40969f6571e0 41-42,71-72,159-193,196-202
+www/app/dev-agents/runs/[id]/report/page.tsx
+  s_a6a7b7091a791d::t_f3dbcc99f6ac81 1577,1609,1646,1744
+www/app/api/projects/route.ts
+  s_a6a7b7091a791d::t_89110c7122ae04 9-10,117-118
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "e4f0f5abf21df385fa8e3d21a2a7f329d7764102",
+  "prompts": {},
+  "sessions": {
+    "s_a6a7b7091a791d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ddb8c-76f3-7691-8f65-bb14ae2c76fc",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>"
+    }
+  }
+}
