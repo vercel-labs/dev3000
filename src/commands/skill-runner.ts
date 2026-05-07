@@ -189,10 +189,6 @@ export async function runRemoteSkillCommand(name: string | undefined, options: R
   log(options, `${chalk.green("✓")} Team: ${team.name} (${team.slug})`)
   log(options, `${chalk.green("✓")} Project: ${project.name} (${githubRepo.owner}/${githubRepo.repo})`)
 
-  if (options.install !== false) {
-    await ensureWorkerInstalled(baseUrl, token, team, options)
-  }
-
   let startResult = await startSkillRun({
     baseUrl,
     token,
@@ -207,8 +203,8 @@ export async function runRemoteSkillCommand(name: string | undefined, options: R
   })
 
   if (startResult.code === "runner_setup_required" && options.install !== false) {
-    log(options, "Runner setup is required; installing the team skill runner project...")
-    await ensureWorkerInstalled(baseUrl, token, team, options)
+    log(options, "Team skill runner project needs setup; installing...")
+    await installWorkerProject(baseUrl, token, team, options)
     startResult = await startSkillRun({
       baseUrl,
       token,
@@ -476,13 +472,13 @@ function getProjectGitHubRepo(project: VercelProject): { owner: string; repo: st
   return metaOwner && metaRepo ? { owner: metaOwner, repo: metaRepo } : null
 }
 
-async function ensureWorkerInstalled(
+async function installWorkerProject(
   baseUrl: string,
   token: string,
   team: VercelTeam,
   options: RemoteSkillOptions
 ): Promise<void> {
-  log(options, "Ensuring team skill runner project is installed...")
+  log(options, "Installing team skill runner project...")
   const response = await fetchJsonResponse<WorkerInstallResponse>(`${baseUrl}/api/skill-runner-teams/worker`, {
     method: "POST",
     headers: {
