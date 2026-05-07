@@ -1,0 +1,28 @@
+www/app/api/cloud/fix-workflow/steps.ts
+  s_a6a7b7091a791d::t_f97532edc158c6 4944,4946-4947,5000,5008,5041,5043-5044
+  s_a6a7b7091a791d::t_0b4851e7412fb1 5123,5126-5130,5196,5213
+  s_a6a7b7091a791d::t_682c70ae218fde 5124-5125
+  s_a6a7b7091a791d::t_25ee699583c144 4210-4211
+  s_a6a7b7091a791d::t_63c58816d4b7f7 4866-4879,4886-4887,4908,4914,4918-4923
+  s_a6a7b7091a791d::t_fa19c0f2209d71 27-30
+www/lib/workflow-report-summary.ts
+  s_a6a7b7091a791d::t_9e9c563da329d2 92-106
+  s_a6a7b7091a791d::t_2796554eb7936b 161-164
+  s_a6a7b7091a791d::t_3cbb6678f82305 91,107-159,170-172
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "6ff7c51506d2fe1e44da0f85872db14883524588",
+  "prompts": {},
+  "sessions": {
+    "s_a6a7b7091a791d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ddb8c-76f3-7691-8f65-bb14ae2c76fc",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>"
+    }
+  }
+}
