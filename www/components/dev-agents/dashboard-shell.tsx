@@ -15,6 +15,7 @@ interface DevAgentsDashboardShellProps {
   subtitle?: React.ReactNode
   description?: React.ReactNode
   actions?: React.ReactNode
+  showTopBreadcrumb?: boolean
   children: React.ReactNode
 }
 
@@ -35,6 +36,7 @@ export function DevAgentsDashboardShell({
   subtitle,
   description,
   actions,
+  showTopBreadcrumb = true,
   children
 }: DevAgentsDashboardShellProps) {
   const effectiveRunsHref = runsHref || (section === "skill-runner" ? "/skill-runner/runs" : "/dev-agents/runs")
@@ -110,13 +112,17 @@ export function DevAgentsDashboardShell({
           {/* Top bar */}
           <header className="flex h-[60px] shrink-0 items-center justify-between border-b border-[#1f1f1f] px-6">
             {/* Breadcrumbs */}
-            <div className="flex items-center gap-2 text-[13px]">
-              <span className="text-[#888]">{selectedTeam.name}</span>
-              <span className="text-[#444]">/</span>
-              <Link href={sectionHref as Route} className="text-[#ededed] hover:underline">
-                {sectionLabel}
-              </Link>
-            </div>
+            {showTopBreadcrumb ? (
+              <div className="flex items-center gap-2 text-[13px]">
+                <span className="text-[#888]">{selectedTeam.name}</span>
+                <span className="text-[#444]">/</span>
+                <Link href={sectionHref as Route} className="text-[#ededed] hover:underline">
+                  {sectionLabel}
+                </Link>
+              </div>
+            ) : (
+              <div />
+            )}
 
             <div />
           </header>

@@ -38,6 +38,8 @@ interface Project {
   name: string
   framework: string | null
   rootDirectory?: string | null
+  createdAt?: number | string | null
+  updatedAt?: number | string | null
   link: {
     type: string
     repo: string
@@ -65,6 +67,8 @@ interface Project {
 }
 
 type RepoVisibility = "unknown" | "checking" | "public" | "private_or_unknown"
+
+const PROJECT_NAME_COLLATOR = new Intl.Collator("en", { sensitivity: "base" })
 
 interface MarketplaceStats {
   projectRuns: string
@@ -150,6 +154,52 @@ function createRunnerEnvVar(kind: RunnerEnvVarKind): RunnerEnvVar {
     name: kind === "github-pat" ? "GITHUB_PAT" : kind === "npm-token" ? "NPM_TOKEN" : "",
     value: ""
   }
+}
+
+function toTimestampMs(value: number | string | null | undefined): number {
+  if (typeof value === "number") {
+    if (!Number.isFinite(value) || value <= 0) return 0
+    return value < 10_000_000_000 ? value * 1000 : value
+  }
+
+  if (typeof value !== "string") return 0
+
+  const trimmed = value.trim()
+  if (!trimmed) return 0
+  const numericValue = Number(trimmed)
+  if (Number.isFinite(numericValue)) {
+    return toTimestampMs(numericValue)
+  }
+
+  const parsed = Date.parse(trimmed)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+function getProjectLastActivityMs(project: Project): number {
+  const latestDeploymentActivity = project.latestDeployments.reduce(
+    (latest, deployment) => Math.max(latest, toTimestampMs(deployment.createdAt)),
+    0
+  )
+  return Math.max(toTimestampMs(project.updatedAt), latestDeploymentActivity, toTimestampMs(project.createdAt))
+}
+
+function getProjectVisibilityRank(project: Project, repoVisibilities: Map<string, RepoVisibility>): number {
+  const visibility = repoVisibilities.get(project.id)
+  if (visibility === "public") return 0
+  return 1
+}
+
+function sortProjectsForPicker(projects: Project[], repoVisibilities: Map<string, RepoVisibility>): Project[] {
+  return [...projects].sort((a, b) => {
+    const visibilityDelta =
+      getProjectVisibilityRank(a, repoVisibilities) - getProjectVisibilityRank(b, repoVisibilities)
+    if (visibilityDelta !== 0) return visibilityDelta
+
+    const activityDelta = getProjectLastActivityMs(b) - getProjectLastActivityMs(a)
+    if (activityDelta !== 0) return activityDelta
+
+    return PROJECT_NAME_COLLATOR.compare(a.name, b.name)
+  })
 }
 
 function VercelTriangle({ className }: { className?: string }) {
@@ -277,7 +327,7 @@ export default function DevAgentRunClient({
 
   const selectedTeam = team
   const requiresGitHubBackedProject = devAgent.legacyWorkflowType === "deepsec-security-scan"
-  const allProjects = useMemo(() => {
+  const selectableProjects = useMemo(() => {
     const selectableProjects = projects.filter((project) =>
       isSelectableProject(project, { runnerKind, requiresGitHubBackedProject })
     )
@@ -290,6 +340,10 @@ export default function DevAgentRunClient({
     }
     return [selectedProjectFallback, ...selectableProjects]
   }, [projects, requiresGitHubBackedProject, runnerKind, selectedProjectFallback])
+  const allProjects = useMemo(
+    () => sortProjectsForPicker(selectableProjects, repoVisibilities),
+    [repoVisibilities, selectableProjects]
+  )
   const filteredProjects = useMemo(() => {
     const query = projectSearch.trim().toLowerCase()
     if (!query) return allProjects
@@ -640,13 +694,12 @@ export default function DevAgentRunClient({
 
   // Batch-fetch repo visibility for all projects with GitHub links
   useEffect(() => {
-    if (allProjects.length === 0) return
+    if (selectableProjects.length === 0) return
 
     const controller = new AbortController()
-    const projectsWithGithub = allProjects
+    const projectsWithGithub = selectableProjects
       .map((project) => ({ project, repo: getProjectGitHubRepo(project) }))
       .filter((entry): entry is { project: Project; repo: { owner: string; repo: string } } => Boolean(entry.repo))
-      .slice(0, 20) // cap to avoid rate limits
 
     if (projectsWithGithub.length === 0) return
 
@@ -677,7 +730,7 @@ export default function DevAgentRunClient({
     })
 
     return () => controller.abort()
-  }, [allProjects])
+  }, [selectableProjects])
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)

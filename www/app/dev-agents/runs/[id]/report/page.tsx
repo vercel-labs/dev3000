@@ -1574,6 +1574,7 @@ async function WorkflowReportPageData({
           selectedTeam={ownerRouteContext.selectedTeam}
           section="runs"
           runsHref={runsPath}
+          showTopBreadcrumb={false}
           title={run.projectName}
           subtitle="Run failed"
         >
@@ -1605,6 +1606,7 @@ async function WorkflowReportPageData({
           selectedTeam={ownerRouteContext.selectedTeam}
           section="runs"
           runsHref={runsPath}
+          showTopBreadcrumb={false}
           title={run.projectName}
           subtitle="Run in progress"
         >
@@ -1641,6 +1643,7 @@ async function WorkflowReportPageData({
           selectedTeam={ownerRouteContext.selectedTeam}
           section="runs"
           runsHref={runsPath}
+          showTopBreadcrumb={false}
           title={run.projectName}
           subtitle="Report unavailable"
         >
@@ -1738,6 +1741,7 @@ async function WorkflowReportPageData({
         selectedTeam={ownerRouteContext.selectedTeam}
         section="runs"
         runsHref={runsPath}
+        showTopBreadcrumb={false}
         title={primaryHeading}
         subtitle={projectSubtitle}
         description={reportDescription}
