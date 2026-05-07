@@ -1,0 +1,30 @@
+src/cli.ts
+  s_a6a7b7091a791d::t_58ef04d09aa2eb 1415
+  s_a6a7b7091a791d::t_5a44adb836d197 181
+  s_a6a7b7091a791d::t_f4fdbe53ae68a3 1411-1414,1416-1434
+www/lib/auth.ts
+  s_a6a7b7091a791d::t_1a8eb98e3f134b 156-164
+www/app/api/skill-runner-teams/worker/route.ts
+  s_a6a7b7091a791d::t_04f088ed9f05f2 1,18,20,22,56,159,164,187,192,206
+www/lib/vercel-teams.ts
+  s_a6a7b7091a791d::t_68da39a6cce28a 164,239-247,283-303
+src/commands/skill-runner.ts
+  s_a6a7b7091a791d::t_0ba0be5251e400 1-157,160-520,522-634
+  s_a6a7b7091a791d::t_b6ff8222a93ecc 158-159,521
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "9a1bb633aaf0756c8fabdc2aa82a07dadc34d2ee",
+  "prompts": {},
+  "sessions": {
+    "s_a6a7b7091a791d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ddb8c-76f3-7691-8f65-bb14ae2c76fc",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>"
+    }
+  }
+}
