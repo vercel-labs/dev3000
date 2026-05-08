@@ -1309,7 +1309,6 @@ function getRunDurationStats(
 ): {
   wallClockMs: number | null
   measuredMs: number | null
-  overheadMs: number | null
 } {
   const hasValidRunTiming =
     !Number.isNaN(runStartedAt.getTime()) &&
@@ -1322,13 +1321,9 @@ function getRunDurationStats(
     typeof measuredDurationMs === "number" && Number.isFinite(measuredDurationMs) && measuredDurationMs >= 0
       ? measuredDurationMs
       : null
-  const overheadMs =
-    wallClockMs !== null && measuredMs !== null && wallClockMs >= measuredMs ? wallClockMs - measuredMs : null
-
   return {
     wallClockMs,
-    measuredMs,
-    overheadMs
+    measuredMs
   }
 }
 
@@ -1797,6 +1792,25 @@ function ReportContentBody({ run, report, runsHref }: { run: WorkflowRun; report
       : typeof report.costUsd === "number" && report.costUsd > 0
         ? undefined
         : "No cost data recorded for this run"
+  const tokenCountFormatter = Intl.NumberFormat("en-US")
+  const tokenDetail = report.gatewayUsage
+    ? [
+        typeof report.gatewayUsage.promptTokens === "number" && report.gatewayUsage.promptTokens > 0
+          ? `prompt ${tokenCountFormatter.format(report.gatewayUsage.promptTokens)}`
+          : null,
+        typeof report.gatewayUsage.completionTokens === "number" && report.gatewayUsage.completionTokens > 0
+          ? `completion ${tokenCountFormatter.format(report.gatewayUsage.completionTokens)}`
+          : null,
+        typeof report.gatewayUsage.cacheReadTokens === "number" && report.gatewayUsage.cacheReadTokens > 0
+          ? `cache read ${tokenCountFormatter.format(report.gatewayUsage.cacheReadTokens)}`
+          : null,
+        typeof report.gatewayUsage.cacheCreationTokens === "number" && report.gatewayUsage.cacheCreationTokens > 0
+          ? `cache write ${tokenCountFormatter.format(report.gatewayUsage.cacheCreationTokens)}`
+          : null
+      ]
+        .filter(Boolean)
+        .join(" · ") || undefined
+    : undefined
   const modelValue = generatedReportScanScope.model || report.agentAnalysisModel || "unknown"
   const modelDetail = generatedReportScanScope.model ? "From generated DeepSec report" : undefined
   const effectiveSuccessEvalResult =
@@ -1900,12 +1914,8 @@ function ReportContentBody({ run, report, runsHref }: { run: WorkflowRun; report
     : undefined
   const runStartedAt = new Date(run.timestamp)
   const runEndedAt = run.completedAt ? new Date(run.completedAt) : null
-  const hasValidRunTiming =
-    !Number.isNaN(runStartedAt.getTime()) &&
-    !!runEndedAt &&
-    !Number.isNaN(runEndedAt.getTime()) &&
-    runEndedAt >= runStartedAt
   const runDurationStats = getRunDurationStats(runStartedAt, runEndedAt, report.timing?.total.totalMs)
+  const displayedDurationMs = runDurationStats.wallClockMs ?? runDurationStats.measuredMs
   const successEvalStyles =
     effectiveSuccessEvalResult === true
       ? {
@@ -2056,6 +2066,13 @@ function ReportContentBody({ run, report, runsHref }: { run: WorkflowRun; report
       <ReportSection title="Run Context" description="Compact run metadata and environment details.">
         <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2 xl:grid-cols-3">
           <SummaryItem label="Cost" value={costValue} detail={costDetail} />
+          {report.gatewayUsage?.totalTokens ? (
+            <SummaryItem
+              label="Tokens"
+              value={tokenCountFormatter.format(report.gatewayUsage.totalTokens)}
+              detail={tokenDetail}
+            />
+          ) : null}
           {!isMarketplaceAgent ? <SummaryItem label="Model" value={modelValue} detail={modelDetail} /> : null}
           {generatedReportScanScope.filesScanned ? (
             <SummaryItem label="Files scanned" value={generatedReportScanScope.filesScanned} />
@@ -2073,24 +2090,8 @@ function ReportContentBody({ run, report, runsHref }: { run: WorkflowRun; report
               detail={report.devAgentSpecHash ? report.devAgentSpecHash.slice(0, 12) : undefined}
             />
           ) : null}
-          {runDurationStats.wallClockMs !== null ? (
-            <SummaryItem label="Wall-clock time" value={formatDurationCompact(runDurationStats.wallClockMs)} />
-          ) : null}
-          {runDurationStats.measuredMs !== null ? (
-            <SummaryItem label="Measured work" value={formatDurationCompact(runDurationStats.measuredMs)} />
-          ) : null}
-          {runDurationStats.overheadMs !== null ? (
-            <SummaryItem
-              label="Workflow overhead"
-              value={formatDurationCompact(runDurationStats.overheadMs)}
-              detail="Queueing, orchestration, and uninstrumented waits"
-            />
-          ) : null}
-          {hasValidRunTiming && runEndedAt && runDurationStats.measuredMs === null ? (
-            <SummaryItem
-              label="Wall-clock time"
-              value={formatDurationCompact(runEndedAt.getTime() - runStartedAt.getTime())}
-            />
+          {displayedDurationMs !== null ? (
+            <SummaryItem label="Duration" value={formatDurationCompact(displayedDurationMs)} />
           ) : null}
           {report.targetUrl ? (
             <SummaryItem label="Target URL" value={report.targetUrl} mono href={report.targetUrl} />
@@ -2099,31 +2100,6 @@ function ReportContentBody({ run, report, runsHref }: { run: WorkflowRun; report
           {report.repoBranch ? <SummaryItem label="Branch" value={report.repoBranch} mono /> : null}
           {report.projectDir ? <SummaryItem label="Directory" value={report.projectDir} mono /> : null}
           {report.startPath ? <SummaryItem label="Path" value={report.startPath} mono /> : null}
-          {report.gatewayUsage?.totalTokens ? (
-            <SummaryItem
-              label="Tokens"
-              value={Intl.NumberFormat("en-US").format(report.gatewayUsage.totalTokens)}
-              detail={
-                [
-                  typeof report.gatewayUsage.promptTokens === "number"
-                    ? `prompt ${Intl.NumberFormat("en-US").format(report.gatewayUsage.promptTokens)}`
-                    : null,
-                  typeof report.gatewayUsage.completionTokens === "number"
-                    ? `completion ${Intl.NumberFormat("en-US").format(report.gatewayUsage.completionTokens)}`
-                    : null,
-                  typeof report.gatewayUsage.cacheReadTokens === "number" && report.gatewayUsage.cacheReadTokens > 0
-                    ? `cache read ${Intl.NumberFormat("en-US").format(report.gatewayUsage.cacheReadTokens)}`
-                    : null,
-                  typeof report.gatewayUsage.cacheCreationTokens === "number" &&
-                  report.gatewayUsage.cacheCreationTokens > 0
-                    ? `cache write ${Intl.NumberFormat("en-US").format(report.gatewayUsage.cacheCreationTokens)}`
-                    : null
-                ]
-                  .filter(Boolean)
-                  .join(" · ") || undefined
-              }
-            />
-          ) : null}
           {!isMarketplaceAgent && skillsUsed.length > 0 ? (
             <div className="sm:col-span-2 xl:col-span-3">
               <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Skills</div>

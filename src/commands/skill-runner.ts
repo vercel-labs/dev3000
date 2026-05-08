@@ -1,5 +1,6 @@
 import chalk from "chalk"
 import { existsSync, readFileSync } from "fs"
+import ora, { type Ora } from "ora"
 import { homedir } from "os"
 import { dirname, join, resolve } from "path"
 
@@ -189,22 +190,9 @@ export async function runRemoteSkillCommand(name: string | undefined, options: R
   log(options, `${chalk.green("✓")} Team: ${team.name} (${team.slug})`)
   log(options, `${chalk.green("✓")} Project: ${project.name} (${githubRepo.owner}/${githubRepo.repo})`)
 
-  let startResult = await startSkillRun({
-    baseUrl,
-    token,
-    user,
-    team,
-    teamScope,
-    project,
-    githubRepo,
-    branch,
-    projectDir,
-    productionUrl
-  })
-
-  if (startResult.code === "runner_setup_required" && options.install !== false) {
-    log(options, "Team skill runner project needs setup; installing...")
-    await installWorkerProject(baseUrl, token, team, options)
+  const startRunSpinner = startSpinner(options, "Starting run...")
+  let startResult: StartSkillRunResponse
+  try {
     startResult = await startSkillRun({
       baseUrl,
       token,
@@ -217,6 +205,42 @@ export async function runRemoteSkillCommand(name: string | undefined, options: R
       projectDir,
       productionUrl
     })
+  } catch (error) {
+    startRunSpinner?.fail("Failed to start run")
+    throw error
+  }
+
+  if (startResult.code === "runner_setup_required" && options.install !== false) {
+    startRunSpinner?.stop()
+    log(options, "Team skill runner project needs setup; installing...")
+    await installWorkerProject(baseUrl, token, team, options)
+    const retryStartRunSpinner = startSpinner(options, "Starting run...")
+    try {
+      startResult = await startSkillRun({
+        baseUrl,
+        token,
+        user,
+        team,
+        teamScope,
+        project,
+        githubRepo,
+        branch,
+        projectDir,
+        productionUrl
+      })
+    } catch (error) {
+      retryStartRunSpinner?.fail("Failed to start run")
+      throw error
+    }
+    if (startResult.success && startResult.runId) {
+      retryStartRunSpinner?.stop()
+    } else {
+      retryStartRunSpinner?.fail("Failed to start run")
+    }
+  } else if (startResult.success && startResult.runId) {
+    startRunSpinner?.stop()
+  } else {
+    startRunSpinner?.fail("Failed to start run")
   }
 
   if (!startResult.success || !startResult.runId) {
@@ -697,4 +721,16 @@ function log(options: RemoteSkillOptions, message: string): void {
   if (!options.json) {
     console.log(message)
   }
+}
+
+function startSpinner(options: RemoteSkillOptions, message: string): Ora | null {
+  if (options.json || !process.stderr.isTTY) {
+    return null
+  }
+
+  return ora({
+    text: message,
+    spinner: "dots",
+    stream: process.stderr
+  }).start()
 }
