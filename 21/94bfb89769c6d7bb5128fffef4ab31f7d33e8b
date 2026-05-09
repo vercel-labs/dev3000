@@ -1,0 +1,19 @@
+www/package.json
+  s_79556b2b2125a5::t_6e444aa5439294 11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "2194bfb89769c6d7bb5128fffef4ab31f7d33e8b",
+  "prompts": {},
+  "sessions": {
+    "s_79556b2b2125a5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ddb66-b34b-7b73-91fa-be11e4fa6cc4",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>"
+    }
+  }
+}
