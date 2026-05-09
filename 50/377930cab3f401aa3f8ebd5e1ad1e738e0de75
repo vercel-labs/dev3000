@@ -1,0 +1,52 @@
+example-apps/turbopack-bundle-analyzer/next.config.ts
+  s_79556b2b2125a5::t_084723608b401a 1,5-7
+example-apps/design-guidelines/next.config.ts
+  s_79556b2b2125a5::t_084723608b401a 1,5-7
+example-apps/eliminate-waterfalls/package.json
+  s_79556b2b2125a5::t_b14c869c59ad62 12-14,22
+  s_79556b2b2125a5::t_356b87dae29305 34
+example-apps/react-performance/package.json
+  s_79556b2b2125a5::t_b14c869c59ad62 12-14,22
+  s_79556b2b2125a5::t_356b87dae29305 34
+example-apps/re-render-optimizer/package.json
+  s_79556b2b2125a5::t_b14c869c59ad62 12-14,22
+  s_79556b2b2125a5::t_356b87dae29305 34
+example-apps/design-guidelines/package.json
+  s_79556b2b2125a5::t_356b87dae29305 34
+  s_79556b2b2125a5::t_b14c869c59ad62 12-14,22
+example-apps/bundle-size-optimizer/package.json
+  s_79556b2b2125a5::t_b14c869c59ad62 12-14,22
+  s_79556b2b2125a5::t_356b87dae29305 34
+example-apps/client-side-fetch-optimizer/package.json
+  s_79556b2b2125a5::t_b14c869c59ad62 12-14,22
+  s_79556b2b2125a5::t_356b87dae29305 34
+example-apps/turbopack-bundle-analyzer/package.json
+  s_79556b2b2125a5::t_b14c869c59ad62 12-14,22
+  s_79556b2b2125a5::t_356b87dae29305 34
+example-apps/cls-fix/next.config.ts
+  s_79556b2b2125a5::t_084723608b401a 1,5-7
+example-apps/react-performance/next.config.ts
+  s_79556b2b2125a5::t_084723608b401a 1,5-7
+example-apps/cls-fix/package.json
+  s_79556b2b2125a5::t_b14c869c59ad62 12-14,22
+  s_79556b2b2125a5::t_356b87dae29305 34
+example-apps/server-side-perf-optimizer/package.json
+  s_79556b2b2125a5::t_b14c869c59ad62 12-14,22
+  s_79556b2b2125a5::t_356b87dae29305 34
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "50377930cab3f401aa3f8ebd5e1ad1e738e0de75",
+  "prompts": {},
+  "sessions": {
+    "s_79556b2b2125a5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ddb66-b34b-7b73-91fa-be11e4fa6cc4",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>"
+    }
+  }
+}
