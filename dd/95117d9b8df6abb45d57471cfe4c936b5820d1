@@ -1,0 +1,30 @@
+package.json
+  a6a7b7091a791dc9 60,66
+src/cdp-monitor.test.ts
+  a6a7b7091a791dc9 1-12,74-148
+src/dev-environment.ts
+  a6a7b7091a791dc9 2343,2348,2355-2364,2431
+src/cdp-monitor.ts
+  a6a7b7091a791dc9 2,88-195,705-708,766,2291-2374,2380,2382-2383,2388-2395,2398-2413,2415-2423
+src/dev-environment.test.ts
+  a6a7b7091a791dc9 993-998,1002,1006
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.1",
+  "base_commit_sha": "dd95117d9b8df6abb45d57471cfe4c936b5820d1",
+  "prompts": {
+    "a6a7b7091a791dc9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ddb8c-76f3-7691-8f65-bb14ae2c76fc",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>",
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 445,
+      "overriden_lines": 0
+    }
+  }
+}
