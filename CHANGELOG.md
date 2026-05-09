@@ -4,6 +4,16 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.175] - 2026-05-09
+
+**Patch Release**
+
+- Fix Chrome shutdown and trim dependencies
+- Improve skill runner CLI and report metadata
+- Sort skill runner projects by visibility and activity
+- Handle Blob store limits during runner setup
+- Skip app dependency install for DeepSec sandboxes
+
 ## [0.0.174] - 2026-04-13
 
 **Feature Release**
@@ -406,7 +416,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Fix Next.js port argument passing - remove -- separator
 - Pass port argument to dev server when -p is specified
 - Fix log file selector not showing previous logs
-- Replace hardcoded bypass token with env var reference in guide
+- Clean up workflow testing guide auth instructions
 
 ## [0.0.123] - 2025-12-09
 

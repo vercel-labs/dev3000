@@ -10,6 +10,19 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.175",
+    date: "2026-05-09",
+    type: "patch",
+    highlights: [
+      "Fix Chrome shutdown and trim dependencies",
+      "Improve skill runner CLI and report metadata",
+      "Sort skill runner projects by visibility and activity",
+      "Handle Blob store limits during runner setup",
+      "Skip app dependency install for DeepSec sandboxes"
+    ]
+  },
+
+  {
     version: "0.0.174",
     date: "2026-04-13",
     type: "minor",
