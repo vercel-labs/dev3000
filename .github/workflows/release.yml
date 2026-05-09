@@ -193,31 +193,35 @@ jobs:
             fs.writeFileSync('package.json', JSON.stringify(rootPkg, null, 2) + '\\n');
           "
 
-          node -e "
-            const fs = require('fs');
+          node <<'NODE'
+            const fs = require("fs");
             const nextVersion = process.env.NEXT_CANARY_VERSION;
-            let lockfile = fs.readFileSync('bun.lock', 'utf8');
+            const platformPackages = [
+              "@d3k/darwin-arm64",
+              "@d3k/linux-x64",
+              "@d3k/windows-x64"
+            ];
+            const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            let lockfile = fs.readFileSync("bun.lock", "utf8");
 
-            lockfile = lockfile.replace(
-              /('@d3k\/darwin-arm64':\\n\\s+specifier: )[^\\n]+(\\n\\s+version: )[^\\n]+/,
-              '\\$1' + nextVersion + '\\$2' + nextVersion
-            );
-            lockfile = lockfile.replace(/'@d3k\/darwin-arm64@[^']+'/g, '\'@d3k/darwin-arm64@' + nextVersion + '\'');
+            for (const packageName of platformPackages) {
+              const escapedPackageName = escapeRegExp(packageName);
+              lockfile = lockfile.replace(
+                new RegExp(`("${escapedPackageName}":\\s*")[^"]+(")`, "g"),
+                `$1${nextVersion}$2`
+              );
+              lockfile = lockfile.replace(
+                new RegExp(`('${escapedPackageName}':\\n\\s+specifier: )[^\\n]+(\\n\\s+version: )[^\\n]+`),
+                `$1${nextVersion}$2${nextVersion}`
+              );
+              lockfile = lockfile.replace(
+                new RegExp(`'${escapedPackageName}@[^']+'`, "g"),
+                `'${packageName}@${nextVersion}'`
+              );
+            }
 
-            lockfile = lockfile.replace(
-              /('@d3k\/linux-x64':\\n\\s+specifier: )[^\\n]+(\\n\\s+version: )[^\\n]+/,
-              '\\$1' + nextVersion + '\\$2' + nextVersion
-            );
-            lockfile = lockfile.replace(/'@d3k\/linux-x64@[^']+'/g, '\'@d3k/linux-x64@' + nextVersion + '\'');
-
-            lockfile = lockfile.replace(
-              /('@d3k\/windows-x64':\\n\\s+specifier: )[^\\n]+(\\n\\s+version: )[^\\n]+/,
-              '\\$1' + nextVersion + '\\$2' + nextVersion
-            );
-            lockfile = lockfile.replace(/'@d3k\/windows-x64@[^']+'/g, '\'@d3k/windows-x64@' + nextVersion + '\'');
-
-            fs.writeFileSync('bun.lock', lockfile);
-          "
+            fs.writeFileSync("bun.lock", lockfile);
+          NODE
 
       - name: Commit and push next canary
         run: |
