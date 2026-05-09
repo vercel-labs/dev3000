@@ -1,5 +1,5 @@
 import { type ChildProcess, spawn } from "child_process"
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "fs"
+import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "fs"
 import { tmpdir } from "os"
 import { dirname, join } from "path"
 import { fileURLToPath } from "url"
@@ -85,6 +85,114 @@ const EMBEDDED_LOADING_HTML = `<!DOCTYPE html>
 
 const DEFAULT_CDP_COMMAND_TIMEOUT_MS = 10000
 const DEFAULT_NAVIGATION_TIMEOUT_MS = 60000
+export const CHROME_CRASH_RESTORE_SUPPRESSION_FLAGS = [
+  "--disable-session-crashed-bubble",
+  "--disable-restore-session-state",
+  "--hide-crash-restore-bubble"
+]
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+function patchChromePreferences(data: Record<string, unknown>): boolean {
+  let changed = false
+  const profile = isRecord(data.profile) ? data.profile : {}
+  if (data.profile !== profile) {
+    data.profile = profile
+    changed = true
+  }
+
+  if (profile.exit_type !== "Normal") {
+    profile.exit_type = "Normal"
+    changed = true
+  }
+  if (profile.exited_cleanly !== true) {
+    profile.exited_cleanly = true
+    changed = true
+  }
+
+  return changed
+}
+
+function patchChromeLocalState(data: Record<string, unknown>): boolean {
+  let changed = false
+
+  if (data.exit_type === "Crashed") {
+    data.exit_type = "Normal"
+    changed = true
+  }
+  if (data.exited_cleanly === false) {
+    data.exited_cleanly = true
+    changed = true
+  }
+
+  if (isRecord(data.profile)) {
+    if (data.profile.exit_type === "Crashed") {
+      data.profile.exit_type = "Normal"
+      changed = true
+    }
+    if (data.profile.exited_cleanly === false) {
+      data.profile.exited_cleanly = true
+      changed = true
+    }
+  }
+
+  return changed
+}
+
+function patchJsonFile(filePath: string, patch: (data: Record<string, unknown>) => boolean): boolean {
+  if (!existsSync(filePath)) {
+    return false
+  }
+
+  try {
+    const data = JSON.parse(readFileSync(filePath, "utf-8"))
+    if (!isRecord(data) || !patch(data)) {
+      return false
+    }
+    writeFileSync(filePath, JSON.stringify(data))
+    return true
+  } catch {
+    return false
+  }
+}
+
+function getChromePreferencesFiles(profileDir: string): string[] {
+  const files = new Set<string>([join(profileDir, "Default", "Preferences")])
+
+  if (!existsSync(profileDir)) {
+    return Array.from(files)
+  }
+
+  try {
+    for (const entry of readdirSync(profileDir, { withFileTypes: true })) {
+      if (entry.isDirectory() && (entry.name === "Default" || entry.name.startsWith("Profile "))) {
+        files.add(join(profileDir, entry.name, "Preferences"))
+      }
+    }
+  } catch {
+    // Ignore unreadable profile directories.
+  }
+
+  return Array.from(files)
+}
+
+export function resetChromeCrashRestoreState(profileDir: string): number {
+  let changedFiles = 0
+
+  for (const preferencesFile of getChromePreferencesFiles(profileDir)) {
+    if (patchJsonFile(preferencesFile, patchChromePreferences)) {
+      changedFiles++
+    }
+  }
+
+  if (patchJsonFile(join(profileDir, "Local State"), patchChromeLocalState)) {
+    changedFiles++
+  }
+
+  return changedFiles
+}
 
 export function getLoadingHtmlCandidates(currentDir: string, execPath: string = process.execPath): string[] {
   const candidates = [join(currentDir, "src/loading.html"), join(currentDir, "loading.html")]
@@ -594,6 +702,10 @@ export class CDPMonitor {
   private async launchChrome(): Promise<void> {
     // Kill any existing Chrome using this profile to prevent CDP conflicts
     await this.killExistingChromeWithProfile()
+    const resetProfileFiles = resetChromeCrashRestoreState(this.profileDir)
+    if (resetProfileFiles > 0) {
+      this.debugLog(`Reset Chrome crash restore state in ${resetProfileFiles} profile file(s)`)
+    }
 
     return new Promise((resolve, reject) => {
       // Use custom browser path if provided, otherwise try different Chrome executables based on platform
@@ -651,8 +763,7 @@ export class CDPMonitor {
           "--disable-sync",
           "--metrics-recording-only",
           "--disable-default-apps",
-          "--disable-session-crashed-bubble",
-          "--disable-restore-session-state"
+          ...CHROME_CRASH_RESTORE_SUPPRESSION_FLAGS
         ]
 
         if (shouldEnableReactDevTools && reactDevToolsExtensionPath) {
@@ -2177,54 +2288,139 @@ export class CDPMonitor {
     })
   }
 
+  private async sendBrowserCloseCommand(): Promise<void> {
+    try {
+      await this.sendCDPCommand("Browser.close", {}, 3000)
+      this.debugLog("Sent Browser.close command")
+      return
+    } catch (error) {
+      this.debugLog(`Browser.close on page target failed: ${error}`)
+    }
+
+    const versionResponse = await fetch(`http://localhost:${this.debugPort}/json/version`, {
+      signal: AbortSignal.timeout(1000)
+    })
+    if (!versionResponse.ok) {
+      throw new Error(`Failed to get browser CDP endpoint: HTTP ${versionResponse.status}`)
+    }
+
+    const version = (await versionResponse.json()) as { webSocketDebuggerUrl?: string }
+    if (!version.webSocketDebuggerUrl) {
+      throw new Error("Browser CDP endpoint did not include webSocketDebuggerUrl")
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      const ws = new WebSocket(version.webSocketDebuggerUrl as string)
+      let commandSent = false
+      let settled = false
+
+      const settle = (callback: () => void) => {
+        if (settled) return
+        settled = true
+        clearTimeout(timeout)
+        try {
+          ws.close()
+        } catch {
+          // Ignore close errors.
+        }
+        callback()
+      }
+
+      const timeout = setTimeout(() => {
+        settle(() => reject(new Error("Browser.close command timed out")))
+      }, 3000)
+
+      ws.on("open", () => {
+        commandSent = true
+        ws.send(JSON.stringify({ id: 1, method: "Browser.close", params: {} }), (error) => {
+          if (error) {
+            settle(() => reject(error))
+          }
+        })
+      })
+
+      ws.on("message", (data) => {
+        try {
+          const message = JSON.parse(data.toString()) as { id?: number; error?: { message?: string } }
+          if (message.id !== 1) {
+            return
+          }
+          const responseError = message.error
+          if (responseError) {
+            settle(() => reject(new Error(responseError.message || "Browser.close failed")))
+            return
+          }
+          settle(resolve)
+        } catch (error) {
+          settle(() => reject(error instanceof Error ? error : new Error(String(error))))
+        }
+      })
+
+      ws.on("error", (error) => {
+        settle(() => reject(error))
+      })
+
+      ws.on("close", () => {
+        if (commandSent) {
+          settle(resolve)
+        } else {
+          settle(() => reject(new Error("Browser CDP websocket closed before Browser.close was sent")))
+        }
+      })
+    })
+
+    this.debugLog("Sent Browser.close command via browser CDP endpoint")
+  }
+
   async shutdown(): Promise<void> {
     this.isShuttingDown = true
     let browserClosedCleanly = false
 
     // Ask the browser process to exit first so Chrome doesn't think it crashed.
-    if (this.connection?.sessionId) {
+    if (this.connection) {
       try {
-        await this.sendCDPCommand("Browser.close")
-        this.debugLog("Sent Browser.close command")
-        browserClosedCleanly = await this.waitForBrowserExit(2000)
+        await this.sendBrowserCloseCommand()
+        browserClosedCleanly = await this.waitForBrowserExit(5000)
       } catch (_e) {
         this.debugLog("Browser.close failed, trying page/tab close fallback")
       }
 
-      try {
-        // Try to close the page
-        await this.sendCDPCommand("Page.close")
-        this.debugLog("Sent Page.close command")
-        await new Promise((resolve) => setTimeout(resolve, 100))
-      } catch (_e) {
-        this.debugLog("Page.close failed, trying Target.closeTarget")
-      }
-
-      try {
-        // Get the list of targets to find our specific tab
-        const targets = (await this.sendCDPCommand("Target.getTargets")) as {
-          targetInfos: Array<{ targetId: string; type: string }>
-        }
-        this.debugLog(`Found ${targets.targetInfos?.length || 0} targets`)
-
-        // Find our page target
-        const pageTarget = targets.targetInfos?.find((t) => t.type === "page")
-        if (pageTarget) {
-          this.debugLog(`Closing page target: ${pageTarget.targetId}`)
-          await this.sendCDPCommand("Target.closeTarget", {
-            targetId: pageTarget.targetId
-          })
-          this.debugLog("Closed Chrome tab via CDP")
-        }
-
-        // Give it more time for the tab to close
-        await new Promise((resolve) => setTimeout(resolve, 1000))
-      } catch (_e) {
-        this.debugLog("Failed to close tab via CDP, will force close Chrome")
-      }
-
       if (!browserClosedCleanly) {
-        browserClosedCleanly = await this.waitForBrowserExit(1500)
+        try {
+          // Try to close the page
+          await this.sendCDPCommand("Page.close")
+          this.debugLog("Sent Page.close command")
+          await new Promise((resolve) => setTimeout(resolve, 100))
+        } catch (_e) {
+          this.debugLog("Page.close failed, trying Target.closeTarget")
+        }
+
+        try {
+          // Get the list of targets to find our specific tab
+          const targets = (await this.sendCDPCommand("Target.getTargets")) as {
+            targetInfos: Array<{ targetId: string; type: string }>
+          }
+          this.debugLog(`Found ${targets.targetInfos?.length || 0} targets`)
+
+          // Find our page target
+          const pageTarget = targets.targetInfos?.find((t) => t.type === "page")
+          if (pageTarget) {
+            this.debugLog(`Closing page target: ${pageTarget.targetId}`)
+            await this.sendCDPCommand("Target.closeTarget", {
+              targetId: pageTarget.targetId
+            })
+            this.debugLog("Closed Chrome tab via CDP")
+          }
+
+          // Give it more time for the tab to close
+          await new Promise((resolve) => setTimeout(resolve, 1000))
+        } catch (_e) {
+          this.debugLog("Failed to close tab via CDP, will force close Chrome")
+        }
+
+        if (!browserClosedCleanly) {
+          browserClosedCleanly = await this.waitForBrowserExit(1500)
+        }
       }
     }
 

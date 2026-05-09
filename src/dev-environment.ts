@@ -1254,21 +1254,6 @@ export class DevEnvironment {
           this.debugLog(`Synchronous kill for port ${port}`)
           killPortProcessesSync(port, this.debugLog.bind(this))
 
-          const projectName = getProjectName()
-          const chromePids = getSessionChromePids(projectName)
-          if (chromePids.length > 0) {
-            this.debugLog(`Synchronous kill for Chrome PIDs: [${chromePids.join(", ")}]`)
-            for (const pid of chromePids) {
-              try {
-                process.kill(pid, "SIGTERM")
-                process.kill(pid, 0)
-                process.kill(pid, "SIGKILL")
-              } catch {
-                // Ignore - process may already be dead
-              }
-            }
-          }
-
           // Now do the rest of cleanup async
           this.tui?.updateStatus("Shutting down...")
           this.handleShutdown()
@@ -2354,23 +2339,27 @@ export class DevEnvironment {
     console.log(chalk.cyan("🔄 Killing app server..."))
     await killPortProcess(this.options.port, "your app server")
 
-    // Kill server process and its children using the saved PID (from before session file was deleted)
-    if (sessionInfo?.serverPid) {
-      this.killServerPidIfOwned(sessionInfo.serverPid, sessionInfo.cwd, "graceful shutdown")
-    }
-
-    // Always kill tracked Chrome processes, even if cdpMonitor is unavailable.
-    this.killTrackedChromePids(sessionInfo?.chromePids ?? [], "graceful shutdown")
-
     // Shutdown CDP monitor if it was started
+    let chromeShutdownHandled = false
     if (this.cdpMonitor) {
       try {
         console.log(chalk.cyan("🔄 Closing CDP monitor..."))
         await this.cdpMonitor.shutdown()
+        chromeShutdownHandled = true
         console.log(chalk.green("✅ CDP monitor closed"))
       } catch (_error) {
         console.log(chalk.gray("⚠️ CDP monitor shutdown failed"))
       }
+    }
+
+    if (!chromeShutdownHandled) {
+      // Safety net when CDP was unavailable: terminate only Chrome processes from this d3k session.
+      this.killTrackedChromePids(sessionInfo?.chromePids ?? [], "graceful shutdown")
+    }
+
+    // Kill server process and its children using the saved PID (from before session file was deleted)
+    if (sessionInfo?.serverPid) {
+      this.killServerPidIfOwned(sessionInfo.serverPid, sessionInfo.cwd, "graceful shutdown")
     }
 
     console.log(chalk.red(`❌ ${this.options.commandName} exited due to server failure`))
@@ -2425,20 +2414,6 @@ export class DevEnvironment {
 
       const projectName = getProjectName()
       const sessionInfo = getSessionInfo(projectName)
-      const chromePids = sessionInfo?.chromePids ?? []
-      if (chromePids.length > 0) {
-        this.debugLog(`Synchronous kill for Chrome PIDs: [${chromePids.join(", ")}]`)
-        for (const pid of chromePids) {
-          try {
-            process.kill(pid, "SIGTERM")
-            process.kill(pid, 0)
-            process.kill(pid, "SIGKILL")
-          } catch {
-            // Ignore - process may already be dead
-          }
-        }
-      }
-
       if (sessionInfo?.serverPid) {
         this.killServerPidIfOwned(sessionInfo.serverPid, sessionInfo.cwd, "SIGINT")
       }
@@ -2453,7 +2428,7 @@ export class DevEnvironment {
       const forceExitTimeout = setTimeout(() => {
         this.debugLog("Shutdown timeout reached, forcing exit")
         process.exit(1)
-      }, 5000) // 5 second timeout
+      }, 10000) // Give Chrome enough time to record a clean profile exit.
 
       // Call async cleanup in a non-blocking way
       this.handleShutdown()
@@ -2487,20 +2462,6 @@ export class DevEnvironment {
 
       const projectName = getProjectName()
       const sessionInfo = getSessionInfo(projectName)
-      const chromePids = sessionInfo?.chromePids ?? []
-      if (chromePids.length > 0) {
-        this.debugLog(`Synchronous kill for Chrome PIDs: [${chromePids.join(", ")}]`)
-        for (const pid of chromePids) {
-          try {
-            process.kill(pid, "SIGTERM")
-            process.kill(pid, 0)
-            process.kill(pid, "SIGKILL")
-          } catch {
-            // Ignore - process may already be dead
-          }
-        }
-      }
-
       if (sessionInfo?.serverPid) {
         this.killServerPidIfOwned(sessionInfo.serverPid, sessionInfo.cwd, "SIGTERM")
       }

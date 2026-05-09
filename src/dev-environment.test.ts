@@ -990,15 +990,20 @@ describe("Process cleanup documentation", () => {
     //    - Its Chrome PIDs (chromePids array in session.json)
     //    - Its PID file (dev3000-{project}.pid in tmpdir)
     //
-    // 2. On shutdown (SIGINT or SIGHUP):
+    // 2. On normal shutdown (SIGINT/SIGTERM/TUI):
+    //    a) Close Chrome via CDP first so the profile exits cleanly
+    //    b) Fall back to killing Chrome instances WE spawned only if CDP shutdown fails
+    //    c) Kill dev server processes on our port
+    //
+    // 3. On emergency shutdown (SIGHUP):
     //    a) Kill dev server processes on our port
     //    b) Kill Chrome instances WE spawned (from chromePids)
     //
-    // 3. Multiple d3k instances can run simultaneously:
+    // 4. Multiple d3k instances can run simultaneously:
     //    - Each has its own session.json in ~/.d3k/{project}/
     //    - Each has its own PID file in tmpdir
     //
-    // 4. SIGHUP (tmux) requires SYNCHRONOUS cleanup:
+    // 5. SIGHUP (tmux) requires SYNCHRONOUS cleanup:
     //    - tmux may kill us immediately after sending SIGHUP
     //    - We use spawnSync for critical cleanup
     //    - Chrome PIDs are read from session.json BEFORE deleting it
