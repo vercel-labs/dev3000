@@ -8,7 +8,7 @@
     "lint": "biome check . --vcs-use-ignore-file=true",
     "start": "next start",
     "typegen": "next typegen",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
     "@hookform/resolvers": "5.2.2",
