@@ -1,0 +1,23 @@
+src/cli.ts
+  s_a6a7b7091a791d::t_1e50b939a7cc6d 186-191
+src/utils/cli-options.test.ts
+  s_a6a7b7091a791d::t_1e50b939a7cc6d 1-46
+src/utils/cli-options.ts
+  s_a6a7b7091a791d::t_1e50b939a7cc6d 1-38
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "de1358d7da7edae7a482c5d50e7a7b7a0fb0b575",
+  "prompts": {},
+  "sessions": {
+    "s_a6a7b7091a791d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ddb8c-76f3-7691-8f65-bb14ae2c76fc",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>"
+    }
+  }
+}
