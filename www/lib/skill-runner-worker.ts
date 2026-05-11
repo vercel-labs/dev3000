@@ -1,5 +1,4 @@
 import { execFileSync } from "node:child_process"
-import { randomUUID } from "node:crypto"
 import {
   SKILL_RUNNER_RUNTIME_MANIFEST_VERSION,
   SKILL_RUNNER_WORKER_PROJECT_NAME,
@@ -171,7 +170,7 @@ const SELF_HOSTED_BLOB_STORE_REGION = "iad1"
 const SELF_HOSTED_BLOB_ENVIRONMENTS = ["production", "preview", "development"] as const
 const INITIAL_DEPLOYMENT_POLL_ATTEMPTS = 8
 const INITIAL_DEPLOYMENT_POLL_INTERVAL_MS = 3000
-const PROJECT_ENV_LIST_NOT_FOUND_ATTEMPTS = 6
+const PROJECT_ENV_LIST_NOT_FOUND_ATTEMPTS = 12
 const PROJECT_ENV_LIST_NOT_FOUND_INTERVAL_MS = 1000
 
 export interface SkillRunnerWorkerProject {
@@ -257,11 +256,8 @@ function buildLegacyFallbackWorkerProjectName(team: VercelTeam): string {
   return `${SKILL_RUNNER_WORKER_PROJECT_NAME}-${suffix}`.slice(0, 100).replace(/-$/g, "")
 }
 
-function buildFreshWorkerProjectName(team: VercelTeam): string {
-  const suffix = normalizeProjectName(team.slug || team.id.replace(/^team_/, "")) || "team"
-  const unique = randomUUID().replace(/-/g, "").slice(0, 8)
-  const base = `${SKILL_RUNNER_WORKER_PROJECT_NAME}-${suffix}`.slice(0, 91).replace(/-$/g, "")
-  return `${base}-${unique}`
+function buildWorkerProjectCreateName(): string {
+  return SKILL_RUNNER_WORKER_PROJECT_NAME
 }
 
 function isHobbyWorkerTeam(team: VercelTeam): boolean {
@@ -295,10 +291,12 @@ function getWorkerProjectNames(team: VercelTeam): string[] {
 function isSkillRunnerWorkerProjectName(name: string | undefined, team: VercelTeam): boolean {
   const normalizedName = normalizeProjectName(name || "")
   const legacyNames = getWorkerProjectNames(team)
-  return (
-    legacyNames.some((projectName) => normalizedName === projectName) ||
-    normalizedName.startsWith(`${SKILL_RUNNER_WORKER_PROJECT_NAME}-`)
-  )
+  return legacyNames.some((projectName) => normalizedName === projectName)
+}
+
+function isGeneratedLegacySkillRunnerWorkerProjectName(name: string | undefined): boolean {
+  const normalizedName = normalizeProjectName(name || "")
+  return normalizedName.startsWith(`${SKILL_RUNNER_WORKER_PROJECT_NAME}-`)
 }
 
 function sanitizeBlobStoreNameSegment(value: string): string {
@@ -698,28 +696,44 @@ async function connectBlobStoreToProject(
   const apiUrl = new URL(`https://api.vercel.com/v1/storage/stores/${storeId}/connections`)
   apiUrl.searchParams.set("teamId", team.id)
 
-  const response = await fetch(apiUrl.toString(), {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      envVarEnvironments: SELF_HOSTED_BLOB_ENVIRONMENTS,
-      projectId,
-      type: "integration"
-    }),
-    cache: "no-store"
-  })
+  for (let attempt = 0; attempt < PROJECT_ENV_LIST_NOT_FOUND_ATTEMPTS; attempt += 1) {
+    const response = await fetch(apiUrl.toString(), {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        envVarEnvironments: SELF_HOSTED_BLOB_ENVIRONMENTS,
+        projectId,
+        type: "integration"
+      }),
+      cache: "no-store"
+    })
 
-  if (response.ok) return
+    if (response.ok) return
 
-  const errorText = await response.text()
-  if (response.status === 409 || /already connected|already exists|duplicate/i.test(errorText)) {
-    return
+    const errorText = await response.text()
+    if (response.status === 409 || /already connected|already exists|duplicate/i.test(errorText)) {
+      return
+    }
+
+    if (isProjectNotFoundApiResponse(response.status, errorText)) {
+      if (attempt < PROJECT_ENV_LIST_NOT_FOUND_ATTEMPTS - 1) {
+        await sleep(PROJECT_ENV_LIST_NOT_FOUND_INTERVAL_MS)
+        continue
+      }
+      throw new VercelProjectNotFoundError(
+        "Vercel reported that the runner project no longer exists while dev3000 was connecting Blob storage."
+      )
+    }
+
+    throw new Error(`Failed to connect Blob store to runner project: ${response.status} ${errorText}`)
   }
 
-  throw new Error(`Failed to connect Blob store to runner project: ${response.status} ${errorText}`)
+  throw new VercelProjectNotFoundError(
+    "Vercel reported that the runner project no longer exists while dev3000 was connecting Blob storage."
+  )
 }
 
 async function listBlobStoreConnections(accessToken: string, team: VercelTeam, storeId: string) {
@@ -883,7 +897,10 @@ async function disconnectWorkerBlobStoreConnections(
 async function ensureWorkerBlobStore(
   accessToken: string,
   team: VercelTeam,
-  project: SkillRunnerWorkerProject
+  project: SkillRunnerWorkerProject,
+  options: {
+    skipExistingCleanup?: boolean
+  } = {}
 ): Promise<void> {
   const stores = await listTeamBlobStores(accessToken, team)
   const desiredStoreName = buildWorkerBlobStoreName(team)
@@ -905,8 +922,10 @@ async function ensureWorkerBlobStore(
     }
   }
 
-  await disconnectWorkerBlobStoreConnections(accessToken, team, project.projectId, stores)
-  await removeWorkerBlobEnvBindings(accessToken, team, project.projectId)
+  if (!options.skipExistingCleanup) {
+    await disconnectWorkerBlobStoreConnections(accessToken, team, project.projectId, stores)
+    await removeWorkerBlobEnvBindings(accessToken, team, project.projectId)
+  }
   await connectBlobStoreToProject(accessToken, team, storeId, project.projectId)
 }
 
@@ -1033,9 +1052,16 @@ async function getWorkerProjectMissingEnvKeys(
 async function resolveSkillRunnerWorkerProjectFromLookupProject(
   accessToken: string,
   team: VercelTeam,
-  project: VercelProjectLookupProject
+  project: VercelProjectLookupProject,
+  options: {
+    allowGeneratedLegacyName?: boolean
+  } = {}
 ): Promise<SkillRunnerWorkerProject | null> {
-  if (!project.id || typeof project.name !== "string" || !isSkillRunnerWorkerProjectName(project.name, team)) {
+  const hasAcceptedProjectName =
+    isSkillRunnerWorkerProjectName(project.name, team) ||
+    (options.allowGeneratedLegacyName && isGeneratedLegacySkillRunnerWorkerProjectName(project.name))
+
+  if (!project.id || typeof project.name !== "string" || !hasAcceptedProjectName) {
     return null
   }
 
@@ -1156,7 +1182,10 @@ async function findSkillRunnerWorkerProjectFromProjectList(
 async function getSkillRunnerWorkerProjectByIdOrName(
   accessToken: string,
   team: VercelTeam,
-  idOrName: string
+  idOrName: string,
+  options: {
+    allowGeneratedLegacyName?: boolean
+  } = {}
 ): Promise<SkillRunnerWorkerProject | null> {
   const apiUrl = new URL(`https://api.vercel.com/v9/projects/${encodeURIComponent(idOrName)}`)
   apiUrl.searchParams.set("teamId", team.id)
@@ -1178,7 +1207,7 @@ async function getSkillRunnerWorkerProjectByIdOrName(
   }
 
   const project = (await response.json()) as VercelProjectLookupProject
-  return resolveSkillRunnerWorkerProjectFromLookupProject(accessToken, team, project)
+  return resolveSkillRunnerWorkerProjectFromLookupProject(accessToken, team, project, options)
 }
 
 export async function findSkillRunnerWorkerProject(
@@ -1191,7 +1220,10 @@ export async function findSkillRunnerWorkerProject(
     const preferredProject = await getSkillRunnerWorkerProjectByIdOrName(
       accessToken,
       team,
-      normalizedPreferredProjectId
+      normalizedPreferredProjectId,
+      {
+        allowGeneratedLegacyName: true
+      }
     )
     if (preferredProject) return preferredProject
   }
@@ -1262,18 +1294,33 @@ export async function installSkillRunnerWorkerProject(
     return existing
   }
 
-  let project = existing ?? (await createWorkerProject(accessToken, team, preferredProjectId))
-  await ensureWorkerBlobStore(accessToken, team, project).catch(async (error: unknown) => {
+  let project = existing
+  let createdProject = false
+  if (!project) {
+    const createResult = await createWorkerProject(accessToken, team, preferredProjectId)
+    project = createResult.project
+    createdProject = createResult.created
+  }
+
+  await ensureWorkerBlobStore(accessToken, team, project, {
+    skipExistingCleanup: createdProject
+  }).catch((error: unknown) => {
     if (!isVercelProjectNotFoundError(error)) {
       throw error
     }
-    project = await createWorkerProject(accessToken, team, preferredProjectId)
-    await ensureWorkerBlobStore(accessToken, team, project)
+    throw new SkillRunnerWorkerSetupError(
+      "Vercel reported that the runner project no longer exists while dev3000 was preparing its Blob storage. Open Vercel Projects, remove any partial d3k-skill-runner projects, then retry setup.",
+      {
+        code: "unknown",
+        actionLabel: "Open Vercel Projects",
+        actionUrl: `https://vercel.com/${team.slug}`
+      }
+    )
   })
 
   let deploymentId = project.latestDeploymentId || null
   let createdInitialDeployment = false
-  if (!deploymentId) {
+  if (!deploymentId && !createdProject) {
     for (let attempt = 0; attempt < INITIAL_DEPLOYMENT_POLL_ATTEMPTS; attempt += 1) {
       const resolved = await findSkillRunnerWorkerProject(accessToken, team, project.projectId)
       if (resolved?.latestDeploymentId) {
@@ -1340,57 +1387,56 @@ async function createWorkerProject(
   accessToken: string,
   team: VercelTeam,
   preferredProjectId?: string
-): Promise<SkillRunnerWorkerProject> {
-  for (let attempt = 0; attempt < 6; attempt += 1) {
-    const projectName = buildFreshWorkerProjectName(team)
-    const apiUrl = new URL("https://api.vercel.com/v11/projects")
-    apiUrl.searchParams.set("teamId", team.id)
+): Promise<{ project: SkillRunnerWorkerProject; created: boolean }> {
+  const projectName = buildWorkerProjectCreateName()
+  const apiUrl = new URL("https://api.vercel.com/v11/projects")
+  apiUrl.searchParams.set("teamId", team.id)
 
-    const response = await fetch(apiUrl.toString(), {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        name: projectName,
-        framework: "nextjs",
-        rootDirectory: SKILL_RUNNER_WORKER_ROOT_DIRECTORY,
-        skipGitConnectDuringLink: true
-      }),
-      cache: "no-store"
-    })
+  const response = await fetch(apiUrl.toString(), {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      name: projectName,
+      framework: "nextjs",
+      rootDirectory: SKILL_RUNNER_WORKER_ROOT_DIRECTORY,
+      skipGitConnectDuringLink: true
+    }),
+    cache: "no-store"
+  })
 
-    if (response.ok) {
-      const created = (await response.json()) as VercelProjectCreateResponse
-      if (!created.id || !created.name) {
-        throw new Error("Runner project was created but the response was incomplete.")
-      }
+  if (response.ok) {
+    const created = (await response.json()) as VercelProjectCreateResponse
+    if (!created.id || !created.name) {
+      throw new Error("Runner project was created but the response was incomplete.")
+    }
 
-      return {
+    return {
+      project: {
         projectId: created.id,
         projectName: created.name,
         dashboardUrl: buildDashboardUrl(team, created.name)
-      }
+      },
+      created: true
     }
-
-    const errorText = await response.text()
-    if (response.status === 409 || /already exists|conflict/i.test(errorText)) {
-      const existing = await findExistingWorkerProjectAfterCreateConflict(accessToken, team, preferredProjectId)
-      if (existing) return existing
-      await sleep(1000)
-      continue
-    }
-
-    throw buildWorkerProjectCreateError(response.status, errorText)
   }
 
-  throw new SkillRunnerWorkerSetupError(
-    `Vercel could not create a fresh ${SKILL_RUNNER_WORKER_PROJECT_NAME} project for ${team.name}. Open Vercel Projects, delete any stale runner projects if they appear, then retry setup.`,
-    {
-      code: "unknown",
-      actionLabel: "Open Vercel Projects",
-      actionUrl: `https://vercel.com/${team.slug}`
-    }
-  )
+  const errorText = await response.text()
+  if (response.status === 409 || /already exists|conflict/i.test(errorText)) {
+    const existing = await findExistingWorkerProjectAfterCreateConflict(accessToken, team, preferredProjectId)
+    if (existing) return { project: existing, created: false }
+
+    throw new SkillRunnerWorkerSetupError(
+      `Vercel says ${SKILL_RUNNER_WORKER_PROJECT_NAME} already exists or is reserved for ${team.name}, but dev3000 could not inspect a live runner project. Open Vercel Projects, remove any partial d3k-skill-runner projects, then retry setup.`,
+      {
+        code: "unknown",
+        actionLabel: "Open Vercel Projects",
+        actionUrl: `https://vercel.com/${team.slug}`
+      }
+    )
+  }
+
+  throw buildWorkerProjectCreateError(response.status, errorText)
 }
