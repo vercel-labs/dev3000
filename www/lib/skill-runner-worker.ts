@@ -171,6 +171,8 @@ const SELF_HOSTED_BLOB_STORE_REGION = "iad1"
 const SELF_HOSTED_BLOB_ENVIRONMENTS = ["production", "preview", "development"] as const
 const INITIAL_DEPLOYMENT_POLL_ATTEMPTS = 8
 const INITIAL_DEPLOYMENT_POLL_INTERVAL_MS = 3000
+const PROJECT_ENV_LIST_NOT_FOUND_ATTEMPTS = 6
+const PROJECT_ENV_LIST_NOT_FOUND_INTERVAL_MS = 1000
 
 export interface SkillRunnerWorkerProject {
   projectId: string
@@ -803,23 +805,35 @@ async function listProjectEnvVars(accessToken: string, team: VercelTeam, project
   const apiUrl = new URL(`https://api.vercel.com/v10/projects/${projectId}/env`)
   apiUrl.searchParams.set("teamId", team.id)
 
-  const response = await fetch(apiUrl.toString(), {
-    headers: {
-      Authorization: `Bearer ${accessToken}`
-    },
-    cache: "no-store"
-  })
+  for (let attempt = 0; attempt < PROJECT_ENV_LIST_NOT_FOUND_ATTEMPTS; attempt += 1) {
+    const response = await fetch(apiUrl.toString(), {
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      },
+      cache: "no-store"
+    })
 
-  if (!response.ok) {
-    const errorText = await response.text()
-    if (isProjectNotFoundApiResponse(response.status, errorText)) {
-      throw new VercelProjectNotFoundError(`Runner project disappeared while inspecting env vars: ${errorText}`)
+    if (response.ok) {
+      const data = (await response.json()) as VercelProjectEnvListResponse
+      return Array.isArray(data.envs) ? data.envs : []
     }
-    throw new Error(`Failed to inspect runner project env vars: ${response.status} ${errorText}`)
+
+    const errorText = await response.text()
+    if (!isProjectNotFoundApiResponse(response.status, errorText)) {
+      throw new Error(`Failed to inspect runner project env vars: ${response.status} ${errorText}`)
+    }
+
+    if (attempt < PROJECT_ENV_LIST_NOT_FOUND_ATTEMPTS - 1) {
+      await sleep(PROJECT_ENV_LIST_NOT_FOUND_INTERVAL_MS)
+      continue
+    }
+
+    throw new VercelProjectNotFoundError(
+      "Vercel reported that the runner project no longer exists while dev3000 was inspecting its environment variables."
+    )
   }
 
-  const data = (await response.json()) as VercelProjectEnvListResponse
-  return Array.isArray(data.envs) ? data.envs : []
+  return []
 }
 
 async function removeWorkerBlobEnvBindings(accessToken: string, team: VercelTeam, projectId: string): Promise<void> {
@@ -1226,9 +1240,18 @@ export async function installSkillRunnerWorkerProject(
   team: VercelTeam,
   preferredProjectId?: string
 ): Promise<SkillRunnerWorkerProject> {
-  const existing = await findSkillRunnerWorkerProject(accessToken, team, preferredProjectId)
+  let existing = await findSkillRunnerWorkerProject(accessToken, team, preferredProjectId).catch((error: unknown) => {
+    if (isVercelProjectNotFoundError(error)) return null
+    throw error
+  })
   if (existing) {
-    await removeWorkerMetadataEnvVars(accessToken, team, existing.projectId)
+    await removeWorkerMetadataEnvVars(accessToken, team, existing.projectId).catch((error: unknown) => {
+      if (isVercelProjectNotFoundError(error)) {
+        existing = null
+        return
+      }
+      throw error
+    })
   }
 
   if (
@@ -1239,8 +1262,14 @@ export async function installSkillRunnerWorkerProject(
     return existing
   }
 
-  const project = existing ?? (await createWorkerProject(accessToken, team, preferredProjectId))
-  await ensureWorkerBlobStore(accessToken, team, project)
+  let project = existing ?? (await createWorkerProject(accessToken, team, preferredProjectId))
+  await ensureWorkerBlobStore(accessToken, team, project).catch(async (error: unknown) => {
+    if (!isVercelProjectNotFoundError(error)) {
+      throw error
+    }
+    project = await createWorkerProject(accessToken, team, preferredProjectId)
+    await ensureWorkerBlobStore(accessToken, team, project)
+  })
 
   let deploymentId = project.latestDeploymentId || null
   let createdInitialDeployment = false
