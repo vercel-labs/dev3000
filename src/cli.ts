@@ -183,6 +183,12 @@ import { createPersistentLogFile, findAvailablePort, startDevEnvironment } from 
 import { getBundledD3kSkillPath, getSkill, getSkillsInfo, listAvailableSkills } from "./skills/index.js"
 import { detectAIAgent } from "./utils/agent-detection.js"
 import { getAvailableAgents, getSkillsAgentId } from "./utils/agent-selection.js"
+import {
+  validateDateTimeOption,
+  validatePortOption,
+  validatePositiveIntegerOption,
+  validateScriptOption
+} from "./utils/cli-options.js"
 import { ensureD3kHomeDir } from "./utils/d3k-dir.js"
 import { readProjectAgentName } from "./utils/project-metadata.js"
 import { getProjectDir, getProjectDisplayName } from "./utils/project-name.js"
@@ -290,42 +296,6 @@ interface ForwardedOptions {
 
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`
-}
-
-function validatePortOption(port: string): string {
-  if (!/^\d+$/.test(port)) {
-    throw new Error("--port must be a numeric port number.")
-  }
-  const parsed = Number.parseInt(port, 10)
-  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535) {
-    throw new Error("--port must be between 1 and 65535.")
-  }
-  return String(parsed)
-}
-
-function validatePositiveIntegerOption(name: string, value: string): string {
-  if (!/^\d+$/.test(value)) {
-    throw new Error(`${name} must be a positive integer.`)
-  }
-  const parsed = Number.parseInt(value, 10)
-  if (!Number.isInteger(parsed) || parsed <= 0) {
-    throw new Error(`${name} must be a positive integer.`)
-  }
-  return String(parsed)
-}
-
-function validateScriptOption(script: string): string {
-  if (!/^[A-Za-z0-9._:/-]+$/.test(script)) {
-    throw new Error("--script may only contain letters, numbers, dots, slashes, colons, underscores, and hyphens.")
-  }
-  return script
-}
-
-function validateDateTimeOption(value: string): "local" | "utc" {
-  if (value !== "local" && value !== "utc") {
-    throw new Error("--date-time must be either 'local' or 'utc'.")
-  }
-  return value
 }
 
 /**
