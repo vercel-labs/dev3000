@@ -1,0 +1,24 @@
+www/lib/skill-runner-worker.ts
+  s_a6a7b7091a791d::t_c01d100a2fba98 734-736
+  s_a6a7b7091a791d::t_121dd2d21b7dec 1297-1304,1390,1417,1421-1422,1429
+  s_a6a7b7091a791d::t_bcdbf5baf99316 259,900-903,925-928,1391
+  s_a6a7b7091a791d::t_a869f44405be10 260,294-299,1055-1058,1060-1064,1185-1188,1210,1223-1226,1305-1307,1311-1318,1323,1392-1393,1395-1408,1410-1414,1416,1424,1426-1428,1431-1438,1441
+  s_a6a7b7091a791d::t_b6918f8b26046c 699-712,714,716-731
+  s_a6a7b7091a791d::t_83243eae941b94 173
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "813202a467539ee9925c6c324b101e6f54e85660",
+  "prompts": {},
+  "sessions": {
+    "s_a6a7b7091a791d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ddb8c-76f3-7691-8f65-bb14ae2c76fc",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>"
+    }
+  }
+}
