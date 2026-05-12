@@ -1373,7 +1373,11 @@ export default function DevAgentRunClient({
                   size="sm"
                   className="h-8 rounded-md bg-[#ededed] px-4 text-[13px] font-medium text-[#0a0a0a] hover:bg-white disabled:opacity-40"
                 >
-                  {isRunning ? "Starting run..." : "Start Run"}
+                  {isRunning && isSelfHostedSkillRunner && localSkillRunnerWorkerStatus === "outdated"
+                    ? "Updating runner..."
+                    : isRunning
+                      ? "Starting run..."
+                      : "Start Run"}
                 </Button>
               </div>
             </div>

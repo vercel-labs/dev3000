@@ -8,6 +8,7 @@ import { type DevAgent, ensureDevAgentAshArtifactPrepared, getDevAgent, incremen
 import { isSelfHostedSkillRunnerRuntime } from "@/lib/skill-runner-runtime"
 import {
   findSkillRunnerWorkerProject,
+  installSkillRunnerWorkerProject,
   resolveSkillRunnerWorkerStatus,
   type SkillRunnerWorkerProject
 } from "@/lib/skill-runner-worker"
@@ -737,15 +738,16 @@ export async function POST(request: Request) {
 
       if (teamSettings.executionMode === "self-hosted" && !isSelfHostedWorker) {
         let workerProject: SkillRunnerWorkerProject | null = null
+        const skillRunnerTeamIdentity = {
+          id: team.id,
+          slug: team.slug,
+          name: team.name,
+          isPersonal: Boolean(team.isPersonal)
+        }
         try {
           workerProject = await findSkillRunnerWorkerProject(
             accessToken,
-            {
-              id: team.id,
-              slug: team.slug,
-              name: team.name,
-              isPersonal: Boolean(team.isPersonal)
-            },
+            skillRunnerTeamIdentity,
             teamSettings.workerProjectId
           )
         } catch (workerValidationError) {
@@ -758,23 +760,34 @@ export async function POST(request: Request) {
           )
         }
 
-        const liveWorkerStatus = resolveSkillRunnerWorkerStatus(workerProject)
+        let liveWorkerStatus = resolveSkillRunnerWorkerStatus(workerProject)
+
+        if (liveWorkerStatus === "outdated" && workerProject) {
+          workflowLog("[Start Fix] Team skill runner is outdated; updating runner shell before starting run...")
+          try {
+            workerProject = await installSkillRunnerWorkerProject(
+              accessToken,
+              skillRunnerTeamIdentity,
+              workerProject.projectId
+            )
+            liveWorkerStatus = resolveSkillRunnerWorkerStatus(workerProject)
+            workflowLog(`[Start Fix] Team skill runner update finished with status: ${liveWorkerStatus}`)
+          } catch (workerUpdateError) {
+            workflowError("[Start Fix] Failed to update self-hosted skill runner before forwarding:", workerUpdateError)
+            return runnerSetupRequiredResponse(
+              `The ${team.name} runner project needs an update before it can start runs, but dev3000 could not update it automatically. Open runner setup and retry.`
+            )
+          }
+        }
+
         const liveWorkerProjectId = workerProject?.projectId || ""
         const liveWorkerBaseUrl = workerProject?.workerBaseUrl || ""
-        await updateSkillRunnerTeamSettings(
-          {
-            id: team.id,
-            slug: team.slug,
-            name: team.name,
-            isPersonal: Boolean(team.isPersonal)
-          },
-          {
-            executionMode: "self-hosted",
-            workerProjectId: liveWorkerProjectId,
-            workerBaseUrl: liveWorkerBaseUrl,
-            workerStatus: liveWorkerStatus
-          }
-        )
+        await updateSkillRunnerTeamSettings(skillRunnerTeamIdentity, {
+          executionMode: "self-hosted",
+          workerProjectId: liveWorkerProjectId,
+          workerBaseUrl: liveWorkerBaseUrl,
+          workerStatus: liveWorkerStatus
+        })
 
         if (!workerProject || !liveWorkerProjectId || !liveWorkerBaseUrl) {
           return runnerSetupRequiredResponse(
