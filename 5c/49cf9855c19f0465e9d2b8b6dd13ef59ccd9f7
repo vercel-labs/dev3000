@@ -1,0 +1,19 @@
+www/proxy.ts
+  s_a6a7b7091a791d::t_a54a328ac97771 21,79,81,121-130
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "5c49cf9855c19f0465e9d2b8b6dd13ef59ccd9f7",
+  "prompts": {},
+  "sessions": {
+    "s_a6a7b7091a791d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ddb8c-76f3-7691-8f65-bb14ae2c76fc",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>"
+    }
+  }
+}
