@@ -8,6 +8,7 @@ const RUNNER_SHELL_EXCLUDED_FILES = [
   /\.tsbuildinfo$/,
   /^www\/\.env/,
   /^www\/(?:\.next|\.vercel|node_modules|\.swc)\//,
+  /^www\/public\//,
   /^www\/(?:WORKFLOW_TESTING_GUIDE|d3k-skill-runner-team-impl)\.md$/
 ]
 const RUNNER_SHELL_UPLOAD_CONCURRENCY = 8

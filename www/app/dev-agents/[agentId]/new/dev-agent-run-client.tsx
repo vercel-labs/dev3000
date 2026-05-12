@@ -1400,6 +1400,10 @@ export default function DevAgentRunClient({
                 This creates a small runner project in this team. Skill runs execute there so compute, AI Gateway usage,
                 deployments, and runtime logs belong to the team running the scan.
               </div>
+              <div className="leading-[20px] text-[#777]">
+                If Vercel asks for project access, choose all projects in this team. Single-project grants cannot
+                include the new runner project.
+              </div>
             </div>
 
             {workerSetupError ? (

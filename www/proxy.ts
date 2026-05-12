@@ -1,5 +1,10 @@
 import type { NextRequest } from "next/server"
 import { NextResponse } from "next/server"
+import {
+  HOSTED_SKILL_RUNNER_TEAM_IDS,
+  HOSTED_SKILL_RUNNER_TEAM_SLUGS,
+  SKILL_RUNNER_WORKER_PROJECT_NAME
+} from "@/lib/skill-runner-config"
 
 interface RefreshTokenResponse {
   access_token: string
@@ -12,6 +17,15 @@ interface RefreshTokenResponse {
 
 export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname
+
+  if (isSelfHostedSkillRunnerRuntime() && !isAllowedSelfHostedSkillRunnerRequest(request)) {
+    return new NextResponse("Not Found", {
+      status: 404,
+      headers: {
+        "Cache-Control": "no-store, max-age=0"
+      }
+    })
+  }
 
   // Auth endpoints need direct access to the raw OAuth cookies without refresh interception.
   if (pathname.startsWith("/api/auth")) {
@@ -60,6 +74,90 @@ export async function proxy(request: NextRequest) {
     maxAge: 60 * 60 * 24 * 30 // 30 days
   })
   return response
+}
+
+function isSelfHostedSkillRunnerRuntime(): boolean {
+  const ownerIdentifier = getCurrentVercelOwnerIdentifier()
+  if (!ownerIdentifier) return process.env.VERCEL === "1" && isSkillRunnerWorkerProjectRuntime()
+
+  return (
+    !HOSTED_SKILL_RUNNER_TEAM_IDS.includes(ownerIdentifier as (typeof HOSTED_SKILL_RUNNER_TEAM_IDS)[number]) &&
+    !HOSTED_SKILL_RUNNER_TEAM_SLUGS.includes(ownerIdentifier as (typeof HOSTED_SKILL_RUNNER_TEAM_SLUGS)[number])
+  )
+}
+
+function getCurrentVercelOwnerIdentifier(): string | undefined {
+  const systemTeamId = process.env.VERCEL_ORG_ID?.trim() || process.env.VERCEL_TEAM_ID?.trim()
+  if (systemTeamId) return systemTeamId
+
+  const oidcOwner = decodeJwtPayload(process.env.VERCEL_OIDC_TOKEN)?.owner
+  return typeof oidcOwner === "string" && oidcOwner.trim() ? oidcOwner.trim() : undefined
+}
+
+function decodeJwtPayload(token: string | undefined): Record<string, unknown> | null {
+  const [, payload] = token?.split(".") || []
+  if (!payload) return null
+
+  const decoded = decodeBase64Url(payload)
+  if (!decoded) return null
+
+  try {
+    return JSON.parse(decoded) as Record<string, unknown>
+  } catch {
+    return null
+  }
+}
+
+function decodeBase64Url(value: string): string | null {
+  try {
+    const normalized = value.replace(/-/g, "+").replace(/_/g, "/")
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=")
+    return atob(padded)
+  } catch {
+    return null
+  }
+}
+
+function isSkillRunnerWorkerProjectRuntime(): boolean {
+  return [process.env.VERCEL_PROJECT_PRODUCTION_URL, process.env.VERCEL_URL, process.env.NEXT_PUBLIC_VERCEL_URL].some(
+    (value) => {
+      const host = normalizeHost(value)
+      return Boolean(host?.split(".")[0]?.startsWith(SKILL_RUNNER_WORKER_PROJECT_NAME))
+    }
+  )
+}
+
+function normalizeHost(value: string | undefined): string | null {
+  const trimmed = value?.trim()
+  if (!trimmed) return null
+
+  try {
+    return new URL(trimmed.startsWith("http") ? trimmed : `https://${trimmed}`).host
+  } catch {
+    return trimmed.split("/")[0] || null
+  }
+}
+
+function isAllowedSelfHostedSkillRunnerRequest(request: NextRequest): boolean {
+  const pathname = request.nextUrl.pathname
+
+  if (pathname === "/api/skill-runner-worker/version") {
+    return request.method === "GET" || request.method === "HEAD"
+  }
+
+  if (pathname === "/api/cloud/start-fix") {
+    return request.method === "POST" || request.method === "OPTIONS"
+  }
+
+  if (pathname.startsWith("/api/cloud/fix-workflow")) {
+    return true
+  }
+
+  if (pathname.startsWith("/.well-known/workflow/")) {
+    return request.method === "GET" || request.method === "HEAD"
+  }
+
+  return false
 }
 
 async function attemptRefresh(refreshToken: string): Promise<RefreshTokenResponse | null> {
