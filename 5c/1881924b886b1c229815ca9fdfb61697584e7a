@@ -1,0 +1,28 @@
+www/lib/skill-runner-worker.ts
+  s_a6a7b7091a791d::t_6be06b1dfd6548 370,373-374,1385-1398,1410
+  s_a6a7b7091a791d::t_8f918813424662 17,115,281-282,341-356,368-369,371-372,663-667,692,707-741,785-788,967,970-972,986-1001,1003-1020
+  s_a6a7b7091a791d::t_ff1731b7e8ee35 1146,1148,1271,1293
+  s_a6a7b7091a791d::t_a7834ad9556ec8 1306
+www/lib/skills-sh.ts
+  s_a6a7b7091a791d::t_627dc84b62f52d 149
+  s_a6a7b7091a791d::t_6ef28e42446ff5 3,6,36-42,44-45,48-49,87-90,92-94,96-97,100,103-104,128-148,150-170,238
+www/app/dev-agents/[agentId]/new/dev-agent-run-client.tsx
+  s_a6a7b7091a791d::t_730d84a62cb040 129,426-430
+  s_a6a7b7091a791d::t_5fcdcf75c432bf 1427-1431
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "5c1881924b886b1c229815ca9fdfb61697584e7a",
+  "prompts": {},
+  "sessions": {
+    "s_a6a7b7091a791d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ddb8c-76f3-7691-8f65-bb14ae2c76fc",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>"
+    }
+  }
+}
