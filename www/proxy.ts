@@ -18,7 +18,7 @@ interface RefreshTokenResponse {
 export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname
 
-  if (isSelfHostedSkillRunnerRuntime() && !isAllowedSelfHostedSkillRunnerRequest(request)) {
+  if (isSelfHostedSkillRunnerRuntime(request) && !isAllowedSelfHostedSkillRunnerRequest(request)) {
     return new NextResponse("Not Found", {
       status: 404,
       headers: {
@@ -76,9 +76,9 @@ export async function proxy(request: NextRequest) {
   return response
 }
 
-function isSelfHostedSkillRunnerRuntime(): boolean {
+function isSelfHostedSkillRunnerRuntime(request: NextRequest): boolean {
   const ownerIdentifier = getCurrentVercelOwnerIdentifier()
-  if (!ownerIdentifier) return process.env.VERCEL === "1" && isSkillRunnerWorkerProjectRuntime()
+  if (!ownerIdentifier) return process.env.VERCEL === "1" && isSkillRunnerWorkerProjectRuntime(request)
 
   return (
     !HOSTED_SKILL_RUNNER_TEAM_IDS.includes(ownerIdentifier as (typeof HOSTED_SKILL_RUNNER_TEAM_IDS)[number]) &&
@@ -118,13 +118,16 @@ function decodeBase64Url(value: string): string | null {
   }
 }
 
-function isSkillRunnerWorkerProjectRuntime(): boolean {
-  return [process.env.VERCEL_PROJECT_PRODUCTION_URL, process.env.VERCEL_URL, process.env.NEXT_PUBLIC_VERCEL_URL].some(
-    (value) => {
-      const host = normalizeHost(value)
-      return Boolean(host?.split(".")[0]?.startsWith(SKILL_RUNNER_WORKER_PROJECT_NAME))
-    }
-  )
+function isSkillRunnerWorkerProjectRuntime(request: NextRequest): boolean {
+  return [
+    request.nextUrl.host,
+    process.env.VERCEL_PROJECT_PRODUCTION_URL,
+    process.env.VERCEL_URL,
+    process.env.NEXT_PUBLIC_VERCEL_URL
+  ].some((value) => {
+    const host = normalizeHost(value)
+    return Boolean(host?.split(".")[0]?.startsWith(SKILL_RUNNER_WORKER_PROJECT_NAME))
+  })
 }
 
 function normalizeHost(value: string | undefined): string | null {
