@@ -1,0 +1,22 @@
+www/app/api/cloud/start-fix/route.ts
+  s_a6a7b7091a791d::t_a001da4ff7839f 11,741-746,763-782,785-790
+  s_a6a7b7091a791d::t_0886c7713bc140 750
+www/app/dev-agents/[agentId]/new/dev-agent-run-client.tsx
+  s_a6a7b7091a791d::t_405cc35a1b036f 1376-1380
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.4",
+  "base_commit_sha": "769119533a9a541d9ca83f4d5205f9a155d98a65",
+  "prompts": {},
+  "sessions": {
+    "s_a6a7b7091a791d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ddb8c-76f3-7691-8f65-bb14ae2c76fc",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>"
+    }
+  }
+}
