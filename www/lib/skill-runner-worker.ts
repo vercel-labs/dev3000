@@ -14,6 +14,7 @@ export type SkillRunnerWorkerSetupErrorCode =
   | "github_integration_required"
   | "initial_deployment_missing"
   | "blob_store_limit_reached"
+  | "project_scope_required"
   | "project_env_vars_forbidden"
   | "unknown"
 
@@ -354,6 +355,22 @@ function isProjectEnvVarsForbiddenApiResponse(status: number, errorText: string)
   )
 }
 
+function isProjectScopeRequiredApiResponse(status: number, errorText: string): boolean {
+  if (status !== 403) return false
+
+  const payload = parseVercelApiErrorPayload(errorText)
+  const code = payload?.error?.code?.trim().toLowerCase()
+  const message = payload?.error?.message?.trim()
+  const resource = payload?.error?.resource?.trim().toLowerCase()
+  return (
+    code === "forbidden" &&
+    (resource === "project" ||
+      resource === "projects" ||
+      resource === "projectenvvars" ||
+      /project|environment variable|env var|permission/i.test(message || errorText))
+  )
+}
+
 function buildBlobStoreLimitError(team: VercelTeam): SkillRunnerWorkerSetupError {
   return new SkillRunnerWorkerSetupError(
     `${team.name} already has the maximum number of Vercel Blob stores. Delete an unused Blob store, then retry runner setup.`,
@@ -365,11 +382,11 @@ function buildBlobStoreLimitError(team: VercelTeam): SkillRunnerWorkerSetupError
   )
 }
 
-function buildProjectEnvVarsForbiddenError(team: VercelTeam): SkillRunnerWorkerSetupError {
+function buildProjectScopeRequiredError(team: VercelTeam): SkillRunnerWorkerSetupError {
   return new SkillRunnerWorkerSetupError(
-    `dev3000 can create the runner project in ${team.name}, but this Sign in with Vercel grant cannot create environment variables on the new runner project. Reconnect Vercel and choose access to all projects in this team so the newly-created runner project is included, then retry setup.`,
+    `dev3000 needs Vercel access to all projects in ${team.name} to create and configure the new d3k-skill-runner project. Reconnect Vercel and choose all projects in this team, then retry setup.`,
     {
-      code: "project_env_vars_forbidden",
+      code: "project_scope_required",
       actionLabel: "Reconnect Vercel",
       actionUrl: `/api/auth/authorize?next=${encodeURIComponent(`/${team.slug}/skill-runner`)}`
     }
@@ -782,8 +799,11 @@ async function connectBlobStoreToProject(
       )
     }
 
-    if (isProjectEnvVarsForbiddenApiResponse(response.status, errorText)) {
-      throw buildProjectEnvVarsForbiddenError(team)
+    if (
+      isProjectEnvVarsForbiddenApiResponse(response.status, errorText) ||
+      isProjectScopeRequiredApiResponse(response.status, errorText)
+    ) {
+      throw buildProjectScopeRequiredError(team)
     }
 
     throw new Error(`Failed to connect Blob store to runner project: ${response.status} ${errorText}`)
@@ -891,6 +911,13 @@ async function listProjectEnvVars(accessToken: string, team: VercelTeam, project
     }
 
     const errorText = await response.text()
+    if (
+      isProjectEnvVarsForbiddenApiResponse(response.status, errorText) ||
+      isProjectScopeRequiredApiResponse(response.status, errorText)
+    ) {
+      throw buildProjectScopeRequiredError(team)
+    }
+
     if (!isProjectNotFoundApiResponse(response.status, errorText)) {
       throw new Error(`Failed to inspect runner project env vars: ${response.status} ${errorText}`)
     }
@@ -906,6 +933,46 @@ async function listProjectEnvVars(accessToken: string, team: VercelTeam, project
   }
 
   return []
+}
+
+async function assertWorkerProjectIncludedInOauthGrant(
+  accessToken: string,
+  team: VercelTeam,
+  projectId: string
+): Promise<void> {
+  const apiUrl = new URL(`https://api.vercel.com/v9/projects/${encodeURIComponent(projectId)}`)
+  apiUrl.searchParams.set("teamId", team.id)
+
+  for (let attempt = 0; attempt < PROJECT_ENV_LIST_NOT_FOUND_ATTEMPTS; attempt += 1) {
+    const response = await fetch(apiUrl.toString(), {
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      },
+      cache: "no-store"
+    })
+
+    if (response.ok) {
+      await listProjectEnvVars(accessToken, team, projectId)
+      return
+    }
+
+    const errorText = await response.text()
+    if (isProjectScopeRequiredApiResponse(response.status, errorText)) {
+      throw buildProjectScopeRequiredError(team)
+    }
+
+    if (isProjectNotFoundApiResponse(response.status, errorText)) {
+      if (attempt < PROJECT_ENV_LIST_NOT_FOUND_ATTEMPTS - 1) {
+        await sleep(PROJECT_ENV_LIST_NOT_FOUND_INTERVAL_MS)
+        continue
+      }
+      throw new VercelProjectNotFoundError(
+        "Vercel reported that the runner project no longer exists while dev3000 was verifying project access."
+      )
+    }
+
+    throw new Error(`Failed to verify runner project access: ${response.status} ${errorText}`)
+  }
 }
 
 async function removeWorkerBlobEnvBindings(accessToken: string, team: VercelTeam, projectId: string): Promise<void> {
@@ -1286,6 +1353,9 @@ async function getSkillRunnerWorkerProjectByIdOrName(
 
   if (!response.ok) {
     const errorText = await response.text()
+    if (isProjectScopeRequiredApiResponse(response.status, errorText)) {
+      throw buildProjectScopeRequiredError(team)
+    }
     throw new Error(`Failed to inspect existing runner project: ${response.status} ${errorText}`)
   }
 
@@ -1383,6 +1453,9 @@ export async function installSkillRunnerWorkerProject(
   }
 
   try {
+    if (createdProject) {
+      await assertWorkerProjectIncludedInOauthGrant(accessToken, team, project.projectId)
+    }
     await ensureWorkerBlobStore(accessToken, team, project, {
       skipExistingCleanup: createdProject
     })
@@ -1520,11 +1593,11 @@ async function createWorkerProject(
     if (existing) return { project: existing, created: false }
 
     throw new SkillRunnerWorkerSetupError(
-      `Vercel says ${SKILL_RUNNER_WORKER_PROJECT_NAME} already exists or is reserved for ${team.name}, but dev3000 could not inspect a live runner project. Open Vercel Projects, remove any partial d3k-skill-runner projects, then retry setup.`,
+      `Vercel says ${SKILL_RUNNER_WORKER_PROJECT_NAME} already exists for ${team.name}, but this Sign in with Vercel grant cannot inspect it. Reconnect Vercel and choose all projects in this team, then retry setup.`,
       {
-        code: "unknown",
-        actionLabel: "Open Vercel Projects",
-        actionUrl: `https://vercel.com/${team.slug}`
+        code: "project_scope_required",
+        actionLabel: "Reconnect Vercel",
+        actionUrl: `/api/auth/authorize?next=${encodeURIComponent(`/${team.slug}/skill-runner`)}`
       }
     )
   }

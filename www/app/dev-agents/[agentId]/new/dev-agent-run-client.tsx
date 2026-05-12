@@ -126,6 +126,7 @@ type WorkerSetupErrorCode =
   | "github_integration_required"
   | "initial_deployment_missing"
   | "blob_store_limit_reached"
+  | "project_scope_required"
   | "project_env_vars_forbidden"
   | "unknown"
 
@@ -1405,8 +1406,8 @@ export default function DevAgentRunClient({
                 deployments, and runtime logs belong to the team running the scan.
               </div>
               <div className="leading-[20px] text-[#777]">
-                If Vercel asks for project access, choose all projects in this team. Single-project grants cannot
-                include the new runner project.
+                For first-time setup, choose all projects in this team when Vercel asks for project access.
+                Single-project grants cannot include the new runner project.
               </div>
             </div>
 
@@ -1432,10 +1433,11 @@ export default function DevAgentRunClient({
                           This team has reached its Blob store limit. Delete an unused Blob store, then come back and
                           retry runner setup.
                         </>
-                      ) : workerSetupError.code === "project_env_vars_forbidden" ? (
+                      ) : workerSetupError.code === "project_scope_required" ||
+                        workerSetupError.code === "project_env_vars_forbidden" ? (
                         <>
                           Reconnect Vercel and choose all projects for <span className="font-medium">{team.name}</span>{" "}
-                          so dev3000 can configure the new runner project.
+                          so dev3000 can create, configure, and update the team runner project.
                         </>
                       ) : (
                         <>Open Vercel Projects, remove any stale runner project if it appears, then retry setup.</>
