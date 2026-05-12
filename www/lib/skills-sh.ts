@@ -1,9 +1,9 @@
-import { spawn } from "node:child_process"
 import { createHash } from "node:crypto"
 
-const SKILLS_FIND_TIMEOUT_MS = 15000
+const SKILLS_SEARCH_TIMEOUT_MS = 10000
 const SKILL_FETCH_TIMEOUT_MS = 10000
 const SKILL_SEARCH_METADATA_CACHE_TTL_MS = 10 * 60 * 1000
+const SKILLS_SEARCH_API_URL = "https://skills.sh/api/search"
 
 export interface SkillsShSearchResult {
   id: string
@@ -33,24 +33,19 @@ interface CachedSkillPageMetadata {
   expiresAt: number
 }
 
-const skillPageMetadataCache = new Map<string, CachedSkillPageMetadata>()
-
-function stripAnsi(value: string): string {
-  let result = ""
-
-  for (let index = 0; index < value.length; index++) {
-    const charCode = value.charCodeAt(index)
-    if (charCode === 27 && value[index + 1] === "[") {
-      while (index < value.length && value[index] !== "m") {
-        index++
-      }
-      continue
-    }
-    result += value[index]
-  }
-
-  return result
+interface SkillsSearchApiSkill {
+  id: string
+  skillId: string
+  name: string
+  installs?: number
+  source?: string
 }
+
+interface SkillsSearchApiResponse {
+  skills?: SkillsSearchApiSkill[]
+}
+
+const skillPageMetadataCache = new Map<string, CachedSkillPageMetadata>()
 
 function decodeHtmlEntities(value: string): string {
   return value
@@ -89,94 +84,24 @@ function getCanonicalPathFromSourceUrl(sourceUrl: string): string {
   }
 }
 
-function normalizeHashSource(value: string): string {
-  return value.replace(/\s+/g, " ").trim()
-}
-
-function parseSkillsFindOutput(stdout: string): SkillsShSearchResult[] {
-  const lines = stripAnsi(stdout)
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-
-  const results: SkillsShSearchResult[] = []
-
-  for (let index = 0; index < lines.length; index++) {
-    const line = lines[index]
-    if (!line.includes("@") || line.startsWith("Usage:") || line.startsWith("Install with")) {
-      continue
-    }
-
-    const match = line.match(/^([^\s]+)\s+(.+ installs)$/)
-    if (!match) {
-      continue
-    }
-
-    const installArg = match[1]
-    const packageAndSkill = installArg.split("@")
-    if (packageAndSkill.length < 2) {
-      continue
-    }
-
-    const skillName = packageAndSkill[packageAndSkill.length - 1]
-    const packageName = packageAndSkill.slice(0, -1).join("@")
-    const nextLine = lines[index + 1]
-    const sourceUrl = nextLine?.startsWith("└ ") ? nextLine.replace(/^└\s+/, "") : undefined
-    if (!sourceUrl) {
-      continue
-    }
-
-    const canonicalPath = getCanonicalPathFromSourceUrl(sourceUrl)
-    results.push({
-      id: canonicalPath,
-      canonicalPath,
-      installArg,
-      packageName,
-      skillName,
-      displayName: titleCaseSkillName(skillName),
-      sourceUrl,
-      installsLabel: match[2]
-    })
+function formatInstallsLabel(count: number | undefined): string | undefined {
+  if (!count || count <= 0) {
+    return undefined
   }
 
-  return results
+  if (count >= 1_000_000) {
+    return `${(count / 1_000_000).toFixed(1).replace(/\.0$/, "")}M installs`
+  }
+
+  if (count >= 1_000) {
+    return `${(count / 1_000).toFixed(1).replace(/\.0$/, "")}K installs`
+  }
+
+  return `${count} install${count === 1 ? "" : "s"}`
 }
 
-async function runSkillsFind(query: string): Promise<string> {
-  return await new Promise((resolve, reject) => {
-    const child = spawn("npx", ["--yes", "skills@latest", "find", query], {
-      env: process.env
-    })
-
-    let stdout = ""
-    let stderr = ""
-    const timeout = setTimeout(() => {
-      child.kill("SIGTERM")
-      reject(new Error("skills find timed out"))
-    }, SKILLS_FIND_TIMEOUT_MS)
-
-    child.stdout.on("data", (chunk) => {
-      stdout += chunk.toString()
-    })
-
-    child.stderr.on("data", (chunk) => {
-      stderr += chunk.toString()
-    })
-
-    child.on("error", (error) => {
-      clearTimeout(timeout)
-      reject(error)
-    })
-
-    child.on("close", (code) => {
-      clearTimeout(timeout)
-      if (code !== 0 && !stdout) {
-        reject(new Error(stderr || `skills find exited with code ${code}`))
-        return
-      }
-      resolve(stdout || stderr)
-    })
-  })
+function normalizeHashSource(value: string): string {
+  return value.replace(/\s+/g, " ").trim()
 }
 
 async function fetchSkillHtml(sourceUrl: string): Promise<string> {
@@ -195,6 +120,49 @@ async function fetchSkillHtml(sourceUrl: string): Promise<string> {
     }
 
     return await response.text()
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+async function searchSkillsApi(query: string): Promise<SkillsShSearchResult[]> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), SKILLS_SEARCH_TIMEOUT_MS)
+
+  try {
+    const url = new URL(SKILLS_SEARCH_API_URL)
+    url.searchParams.set("q", query)
+    url.searchParams.set("limit", "10")
+
+    const response = await fetch(url, {
+      cache: "no-store",
+      signal: controller.signal
+    })
+
+    if (!response.ok) {
+      throw new Error(`skills.sh search failed (${response.status})`)
+    }
+
+    const data = (await response.json()) as SkillsSearchApiResponse
+    return (data.skills || [])
+      .filter((skill) => skill.id && skill.skillId && skill.source)
+      .sort((a, b) => (b.installs || 0) - (a.installs || 0))
+      .map((skill) => {
+        const canonicalPath = skill.id.replace(/^\/+/, "").replace(/\/+$/, "")
+        const skillName = skill.skillId || skill.name
+        const packageName = skill.source
+
+        return {
+          id: canonicalPath,
+          canonicalPath,
+          installArg: `${packageName}@${skillName}`,
+          packageName,
+          skillName,
+          displayName: titleCaseSkillName(skill.name || skillName),
+          sourceUrl: `https://skills.sh/${canonicalPath}`,
+          installsLabel: formatInstallsLabel(skill.installs)
+        }
+      })
   } finally {
     clearTimeout(timeout)
   }
@@ -267,8 +235,7 @@ export async function searchSkillsSh(query: string): Promise<SkillsShSearchResul
     return []
   }
 
-  const output = await runSkillsFind(trimmed)
-  const parsed = parseSkillsFindOutput(output)
+  const parsed = await searchSkillsApi(trimmed)
 
   const enriched = await Promise.all(
     parsed.map(async (result) => {

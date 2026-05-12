@@ -14,6 +14,7 @@ export type SkillRunnerWorkerSetupErrorCode =
   | "github_integration_required"
   | "initial_deployment_missing"
   | "blob_store_limit_reached"
+  | "project_env_vars_forbidden"
   | "unknown"
 
 export interface SkillRunnerWorkerSetupRequirement {
@@ -111,6 +112,7 @@ interface VercelApiErrorPayload {
     action?: string
     link?: string
     repo?: string
+    resource?: string
   }
 }
 
@@ -251,11 +253,6 @@ function normalizeProjectName(value: string): string {
     .replace(/^-|-$/g, "")
 }
 
-function buildLegacyFallbackWorkerProjectName(team: VercelTeam): string {
-  const suffix = normalizeProjectName(team.slug || team.id.replace(/^team_/, "")) || "team"
-  return `${SKILL_RUNNER_WORKER_PROJECT_NAME}-${suffix}`.slice(0, 100).replace(/-$/g, "")
-}
-
 function buildWorkerProjectCreateName(): string {
   return SKILL_RUNNER_WORKER_PROJECT_NAME
 }
@@ -281,22 +278,14 @@ function resolveWorkerDurationConfig(team: VercelTeam): {
   }
 }
 
-function getWorkerProjectNames(team: VercelTeam): string[] {
-  const fallbackName = buildLegacyFallbackWorkerProjectName(team)
-  return fallbackName === SKILL_RUNNER_WORKER_PROJECT_NAME
-    ? [SKILL_RUNNER_WORKER_PROJECT_NAME]
-    : [SKILL_RUNNER_WORKER_PROJECT_NAME, fallbackName]
+function getWorkerProjectNames(_team: VercelTeam): string[] {
+  return [SKILL_RUNNER_WORKER_PROJECT_NAME]
 }
 
 function isSkillRunnerWorkerProjectName(name: string | undefined, team: VercelTeam): boolean {
   const normalizedName = normalizeProjectName(name || "")
   const legacyNames = getWorkerProjectNames(team)
   return legacyNames.some((projectName) => normalizedName === projectName)
-}
-
-function isGeneratedLegacySkillRunnerWorkerProjectName(name: string | undefined): boolean {
-  const normalizedName = normalizeProjectName(name || "")
-  return normalizedName.startsWith(`${SKILL_RUNNER_WORKER_PROJECT_NAME}-`)
 }
 
 function sanitizeBlobStoreNameSegment(value: string): string {
@@ -349,6 +338,22 @@ function isMaxBlobStoreCountApiResponse(status: number, errorText: string): bool
   )
 }
 
+function isProjectEnvVarsForbiddenApiResponse(status: number, errorText: string): boolean {
+  if (status !== 403) return false
+
+  const payload = parseVercelApiErrorPayload(errorText)
+  const code = payload?.error?.code?.trim().toLowerCase()
+  const message = payload?.error?.message?.trim()
+  const action = payload?.error?.action?.trim().toLowerCase()
+  const resource = payload?.error?.resource?.trim().toLowerCase()
+  return (
+    code === "forbidden" &&
+    (resource === "projectenvvars" ||
+      action === "create" ||
+      /project environment variable|project env var|environment variable/i.test(message || errorText))
+  )
+}
+
 function buildBlobStoreLimitError(team: VercelTeam): SkillRunnerWorkerSetupError {
   return new SkillRunnerWorkerSetupError(
     `${team.name} already has the maximum number of Vercel Blob stores. Delete an unused Blob store, then retry runner setup.`,
@@ -356,6 +361,17 @@ function buildBlobStoreLimitError(team: VercelTeam): SkillRunnerWorkerSetupError
       code: "blob_store_limit_reached",
       actionLabel: "Open Blob Stores",
       actionUrl: buildTeamBlobStoresUrl(team)
+    }
+  )
+}
+
+function buildProjectEnvVarsForbiddenError(team: VercelTeam): SkillRunnerWorkerSetupError {
+  return new SkillRunnerWorkerSetupError(
+    `dev3000 can create the runner project in ${team.name}, but this Sign in with Vercel grant cannot create environment variables on the new runner project. Reconnect Vercel and choose access to all projects in this team so the newly-created runner project is included, then retry setup.`,
+    {
+      code: "project_env_vars_forbidden",
+      actionLabel: "Reconnect Vercel",
+      actionUrl: `/api/auth/authorize?next=${encodeURIComponent(`/${team.slug}/skill-runner`)}`
     }
   )
 }
@@ -644,7 +660,11 @@ async function listTeamBlobStores(accessToken: string, team: VercelTeam) {
   return Array.isArray(data.stores) ? data.stores : []
 }
 
-async function createTeamBlobStore(accessToken: string, team: VercelTeam, name: string): Promise<string> {
+async function createTeamBlobStore(
+  accessToken: string,
+  team: VercelTeam,
+  name: string
+): Promise<{ storeId: string; created: boolean }> {
   const apiUrl = new URL("https://api.vercel.com/v1/storage/stores/blob")
   apiUrl.searchParams.set("teamId", team.id)
 
@@ -669,7 +689,7 @@ async function createTeamBlobStore(accessToken: string, team: VercelTeam, name: 
         (store) => store.name === name && store.id
       )
       if (existingStore?.id) {
-        return existingStore.id
+        return { storeId: existingStore.id, created: false }
       }
     }
     if (isMaxBlobStoreCountApiResponse(response.status, errorText)) {
@@ -684,7 +704,41 @@ async function createTeamBlobStore(accessToken: string, team: VercelTeam, name: 
     throw new Error("Blob store creation succeeded but no store id was returned.")
   }
 
-  return storeId
+  return { storeId, created: true }
+}
+
+async function deleteTeamBlobStore(accessToken: string, team: VercelTeam, storeId: string): Promise<void> {
+  const baseParams = new URLSearchParams({ teamId: team.id })
+
+  const connectionsUrl = new URL(`https://api.vercel.com/v1/storage/stores/${storeId}/connections`)
+  connectionsUrl.search = baseParams.toString()
+  const deleteConnectionsResponse = await fetch(connectionsUrl.toString(), {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${accessToken}`
+    },
+    cache: "no-store"
+  })
+
+  if (!deleteConnectionsResponse.ok && deleteConnectionsResponse.status !== 404) {
+    const errorText = await deleteConnectionsResponse.text()
+    throw new Error(`Failed to disconnect created Blob store: ${deleteConnectionsResponse.status} ${errorText}`)
+  }
+
+  const storeUrl = new URL(`https://api.vercel.com/v1/storage/stores/blob/${storeId}`)
+  storeUrl.search = baseParams.toString()
+  const deleteStoreResponse = await fetch(storeUrl.toString(), {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${accessToken}`
+    },
+    cache: "no-store"
+  })
+
+  if (!deleteStoreResponse.ok && deleteStoreResponse.status !== 404) {
+    const errorText = await deleteStoreResponse.text()
+    throw new Error(`Failed to delete created Blob store: ${deleteStoreResponse.status} ${errorText}`)
+  }
 }
 
 async function connectBlobStoreToProject(
@@ -726,6 +780,10 @@ async function connectBlobStoreToProject(
       throw new VercelProjectNotFoundError(
         "Vercel reported that the runner project no longer exists while dev3000 was connecting Blob storage."
       )
+    }
+
+    if (isProjectEnvVarsForbiddenApiResponse(response.status, errorText)) {
+      throw buildProjectEnvVarsForbiddenError(team)
     }
 
     throw new Error(`Failed to connect Blob store to runner project: ${response.status} ${errorText}`)
@@ -906,9 +964,12 @@ async function ensureWorkerBlobStore(
   const desiredStoreName = buildWorkerBlobStoreName(team)
   const existingStore = stores.find((store) => store.name === desiredStoreName)
   let storeId = existingStore?.id
+  let createdStoreId: string | undefined
   if (!storeId) {
     try {
-      storeId = await createTeamBlobStore(accessToken, team, desiredStoreName)
+      const createdStore = await createTeamBlobStore(accessToken, team, desiredStoreName)
+      storeId = createdStore.storeId
+      createdStoreId = createdStore.created ? createdStore.storeId : undefined
     } catch (error) {
       if (!(error instanceof BlobStoreLimitReachedError)) {
         throw error
@@ -922,11 +983,41 @@ async function ensureWorkerBlobStore(
     }
   }
 
-  if (!options.skipExistingCleanup) {
-    await disconnectWorkerBlobStoreConnections(accessToken, team, project.projectId, stores)
-    await removeWorkerBlobEnvBindings(accessToken, team, project.projectId)
+  try {
+    if (!options.skipExistingCleanup) {
+      await disconnectWorkerBlobStoreConnections(accessToken, team, project.projectId, stores)
+      await removeWorkerBlobEnvBindings(accessToken, team, project.projectId)
+    }
+    await connectBlobStoreToProject(accessToken, team, storeId, project.projectId)
+  } catch (error) {
+    if (createdStoreId) {
+      await deleteTeamBlobStore(accessToken, team, createdStoreId).catch((cleanupError: unknown) => {
+        console.warn(
+          "[Skill Runner Worker] Failed to clean up Blob store after setup failure:",
+          cleanupError instanceof Error ? cleanupError.message : String(cleanupError)
+        )
+      })
+    }
+    throw error
   }
-  await connectBlobStoreToProject(accessToken, team, storeId, project.projectId)
+}
+
+async function deleteWorkerProject(accessToken: string, team: VercelTeam, projectId: string): Promise<void> {
+  const apiUrl = new URL(`https://api.vercel.com/v9/projects/${encodeURIComponent(projectId)}`)
+  apiUrl.searchParams.set("teamId", team.id)
+
+  const response = await fetch(apiUrl.toString(), {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${accessToken}`
+    },
+    cache: "no-store"
+  })
+
+  if (response.ok || response.status === 404) return
+
+  const errorText = await response.text()
+  throw new Error(`Failed to delete created runner project: ${response.status} ${errorText}`)
 }
 
 async function redeployWorkerProject(
@@ -1052,14 +1143,9 @@ async function getWorkerProjectMissingEnvKeys(
 async function resolveSkillRunnerWorkerProjectFromLookupProject(
   accessToken: string,
   team: VercelTeam,
-  project: VercelProjectLookupProject,
-  options: {
-    allowGeneratedLegacyName?: boolean
-  } = {}
+  project: VercelProjectLookupProject
 ): Promise<SkillRunnerWorkerProject | null> {
-  const hasAcceptedProjectName =
-    isSkillRunnerWorkerProjectName(project.name, team) ||
-    (options.allowGeneratedLegacyName && isGeneratedLegacySkillRunnerWorkerProjectName(project.name))
+  const hasAcceptedProjectName = isSkillRunnerWorkerProjectName(project.name, team)
 
   if (!project.id || typeof project.name !== "string" || !hasAcceptedProjectName) {
     return null
@@ -1182,10 +1268,7 @@ async function findSkillRunnerWorkerProjectFromProjectList(
 async function getSkillRunnerWorkerProjectByIdOrName(
   accessToken: string,
   team: VercelTeam,
-  idOrName: string,
-  options: {
-    allowGeneratedLegacyName?: boolean
-  } = {}
+  idOrName: string
 ): Promise<SkillRunnerWorkerProject | null> {
   const apiUrl = new URL(`https://api.vercel.com/v9/projects/${encodeURIComponent(idOrName)}`)
   apiUrl.searchParams.set("teamId", team.id)
@@ -1207,7 +1290,7 @@ async function getSkillRunnerWorkerProjectByIdOrName(
   }
 
   const project = (await response.json()) as VercelProjectLookupProject
-  return resolveSkillRunnerWorkerProjectFromLookupProject(accessToken, team, project, options)
+  return resolveSkillRunnerWorkerProjectFromLookupProject(accessToken, team, project)
 }
 
 export async function findSkillRunnerWorkerProject(
@@ -1220,10 +1303,7 @@ export async function findSkillRunnerWorkerProject(
     const preferredProject = await getSkillRunnerWorkerProjectByIdOrName(
       accessToken,
       team,
-      normalizedPreferredProjectId,
-      {
-        allowGeneratedLegacyName: true
-      }
+      normalizedPreferredProjectId
     )
     if (preferredProject) return preferredProject
   }
@@ -1302,9 +1382,20 @@ export async function installSkillRunnerWorkerProject(
     createdProject = createResult.created
   }
 
-  await ensureWorkerBlobStore(accessToken, team, project, {
-    skipExistingCleanup: createdProject
-  }).catch((error: unknown) => {
+  try {
+    await ensureWorkerBlobStore(accessToken, team, project, {
+      skipExistingCleanup: createdProject
+    })
+  } catch (error: unknown) {
+    if (createdProject) {
+      await deleteWorkerProject(accessToken, team, project.projectId).catch((cleanupError: unknown) => {
+        console.warn(
+          "[Skill Runner Worker] Failed to clean up runner project after setup failure:",
+          cleanupError instanceof Error ? cleanupError.message : String(cleanupError)
+        )
+      })
+    }
+
     if (!isVercelProjectNotFoundError(error)) {
       throw error
     }
@@ -1316,7 +1407,7 @@ export async function installSkillRunnerWorkerProject(
         actionUrl: `https://vercel.com/${team.slug}`
       }
     )
-  })
+  }
 
   let deploymentId = project.latestDeploymentId || null
   let createdInitialDeployment = false

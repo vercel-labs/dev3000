@@ -126,6 +126,7 @@ type WorkerSetupErrorCode =
   | "github_integration_required"
   | "initial_deployment_missing"
   | "blob_store_limit_reached"
+  | "project_env_vars_forbidden"
   | "unknown"
 
 interface WorkerSetupErrorState {
@@ -422,6 +423,11 @@ export default function DevAgentRunClient({
 
   function openWorkerSetupAction(url: string) {
     setDidOpenWorkerSetupAction(true)
+    const target = url.startsWith("/") ? url : undefined
+    if (target) {
+      window.location.href = target
+      return
+    }
     window.open(url, "_blank", "noopener,noreferrer")
   }
 
@@ -1417,6 +1423,11 @@ export default function DevAgentRunClient({
                         <>
                           This team has reached its Blob store limit. Delete an unused Blob store, then come back and
                           retry runner setup.
+                        </>
+                      ) : workerSetupError.code === "project_env_vars_forbidden" ? (
+                        <>
+                          Reconnect Vercel and choose all projects for <span className="font-medium">{team.name}</span>{" "}
+                          so dev3000 can configure the new runner project.
                         </>
                       ) : (
                         <>Open Vercel Projects, remove any stale runner project if it appears, then retry setup.</>
