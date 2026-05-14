@@ -326,6 +326,7 @@ export default function DevAgentRunClient({
   const [didOpenWorkerSetupAction, setDidOpenWorkerSetupAction] = useState(false)
   const [shouldStartAfterWorkerSetup, setShouldStartAfterWorkerSetup] = useState(false)
   const [shareCopied, setShareCopied] = useState(false)
+  const [didClearStoredRunnerEnvVars, setDidClearStoredRunnerEnvVars] = useState(false)
 
   const [repoVisibilities, setRepoVisibilities] = useState<Map<string, RepoVisibility>>(new Map())
 
@@ -549,7 +550,9 @@ export default function DevAgentRunClient({
     workerSetupResult.project?.shellVersionStatus === "outdated"
 
   useEffect(() => {
+    const hadStoredRunnerEnvVars = localStorage.getItem(RUNNER_ENV_VARS_STORAGE_KEY) !== null
     localStorage.removeItem(RUNNER_ENV_VARS_STORAGE_KEY)
+    setDidClearStoredRunnerEnvVars(hadStoredRunnerEnvVars)
   }, [])
 
   function addRunnerEnvVar(kind: RunnerEnvVarKind) {
@@ -1272,7 +1275,8 @@ export default function DevAgentRunClient({
                   <div>
                     <Label className="text-[13px] text-[#888]">Runner Env Vars</Label>
                     <p className="mt-0.5 text-[11px] text-[#555]">
-                      Add secrets for private repos, private npm access, or custom runner needs.
+                      Add secrets for private repos, private npm access, or custom runner needs. Values are sent for
+                      this run only and are not saved in the browser.
                     </p>
                   </div>
                   <DropdownMenu>
@@ -1299,6 +1303,13 @@ export default function DevAgentRunClient({
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
+
+                {didClearStoredRunnerEnvVars ? (
+                  <div className="rounded-md border border-[#2a2a2a] bg-[#111] px-3 py-2 text-[12px] leading-[18px] text-[#888]">
+                    Previously saved runner env vars were removed from browser storage. Paste the value again before
+                    starting this run.
+                  </div>
+                ) : null}
 
                 {runnerEnvVars.length > 0 ? (
                   <div className="space-y-2">
