@@ -1,4 +1,5 @@
 import type { WorkflowReport } from "@/types"
+import { redactSensitiveReportText } from "./report-redaction"
 
 export function getFinalSummaryMarkdown(agentAnalysis?: string) {
   if (!agentAnalysis) return ""
@@ -58,13 +59,34 @@ export function extractAshFinalMessage(agentAnalysis?: string): string {
 
 export function getGeneratedReportMarkdown(report: WorkflowReport): string {
   const storedReport = report.generatedReportMarkdown?.trim()
-  if (storedReport) return storedReport
+  if (storedReport) return redactSensitiveReportText(storedReport)
 
   if (report.workflowType === "deepsec-security-scan") {
-    return extractAshFinalMessage(report.agentAnalysis) || getFinalSummaryMarkdown(report.agentAnalysis)
+    return redactSensitiveReportText(
+      extractAshFinalMessage(report.agentAnalysis) || getFinalSummaryMarkdown(report.agentAnalysis)
+    )
   }
 
   return ""
+}
+
+export function isSuccessfulDeepSecGeneratedReportMarkdown(markdown: string | undefined): boolean {
+  const content = markdown?.trim()
+  if (!content) return false
+
+  const normalized = content.toLowerCase()
+  return ![
+    "claude code native binary not found",
+    "no actual vulnerability analysis occurred",
+    "processing failure",
+    "processing pass failed",
+    "ai investigation degraded",
+    "manual fallback report",
+    "static review could not be completed",
+    "other-review-blocked",
+    "bwrap: no permissions to create a new namespace",
+    "no security conclusion can be drawn"
+  ].some((failureSignal) => normalized.includes(failureSignal))
 }
 
 export function getGeneratedReportCostUsd(markdown: string): number | null {

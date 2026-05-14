@@ -13,7 +13,8 @@ import { getDefaultDevAgentsRouteContext, getDevAgentsRouteContext } from "@/lib
 import {
   getFinalSummaryMarkdown,
   getGeneratedReportCostUsd,
-  getGeneratedReportMarkdown
+  getGeneratedReportMarkdown,
+  isSuccessfulDeepSecGeneratedReportMarkdown
 } from "@/lib/workflow-report-summary"
 import type { WorkflowRun } from "@/lib/workflow-storage"
 import { getPublicWorkflowRun, getWorkflowRun } from "@/lib/workflow-storage"
@@ -1814,10 +1815,12 @@ function ReportContentBody({ run, report, runsHref }: { run: WorkflowRun; report
   const modelValue = generatedReportScanScope.model || report.agentAnalysisModel || "unknown"
   const modelDetail = generatedReportScanScope.model ? "From generated DeepSec report" : undefined
   const effectiveSuccessEvalResult =
-    workflowType === "deepsec-security-scan" && generatedReportMarkdown ? true : report.successEvalResult
+    workflowType === "deepsec-security-scan" && generatedReportMarkdown
+      ? isSuccessfulDeepSecGeneratedReportMarkdown(generatedReportMarkdown)
+      : report.successEvalResult
   const successEvalText =
     workflowType === "deepsec-security-scan"
-      ? "Was a DeepSec report generated and made available for download?"
+      ? "Was a usable DeepSec report generated and made available for download?"
       : report.successEval
   const metricRows = buildMetricRows(report)
   const isEarlyExit = Boolean(report.earlyExitResult?.shouldExit)

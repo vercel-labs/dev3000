@@ -139,6 +139,7 @@ interface WorkerSetupErrorState {
 }
 
 const RUNNER_ENV_VARS_STORAGE_KEY = "d3k_runner_env_vars"
+const GITHUB_FINE_GRAINED_PAT_URL = "https://github.com/settings/personal-access-tokens/new"
 
 type RunnerEnvVarKind = "github-pat" | "npm-token" | "custom"
 
@@ -212,8 +213,9 @@ function VercelTriangle({ className }: { className?: string }) {
   )
 }
 
-function formatExecutionMode(mode: DevAgent["executionMode"]): string {
-  return mode === "dev-server" ? "Dev Server" : "Preview + PR"
+function formatExecutionMode(mode: DevAgent["executionMode"], supportsPullRequest?: boolean): string {
+  if (mode === "dev-server") return "Dev Server"
+  return supportsPullRequest ? "Preview + PR" : "Report"
 }
 
 function isSkillRunnerWorkerProject(project: Pick<Project, "name">): boolean {
@@ -364,6 +366,7 @@ export default function DevAgentRunClient({
   const githubPatEnvVar = runnerEnvVars.find(
     (envVar) => envVar.kind === "github-pat" || envVar.name.trim().toUpperCase() === "GITHUB_PAT"
   )
+  const hasGitHubPatEnvVar = Boolean(githubPatEnvVar)
   const npmTokenEnvVar = runnerEnvVars.find((envVar) => {
     const normalizedName = envVar.name.trim().toUpperCase()
     return envVar.kind === "npm-token" || normalizedName === "NPM_TOKEN" || normalizedName === "NODE_AUTH_TOKEN"
@@ -373,6 +376,7 @@ export default function DevAgentRunClient({
     hasGitHubRepoInfo &&
     effectiveRepoVisibility === "private_or_unknown" &&
     !githubPatEnvVar?.value.trim()
+  const runMayCreatePullRequest = Boolean(devAgent.supportsPullRequest)
   const runnerLabel = runnerKind === "skill-runner" ? "skill runner" : "dev agent"
   const displayedRunCount = runStats?.runCount ?? devAgent.usageCount
   const displayedAvgCost = runStats?.avgCost ?? devAgent.avgCost
@@ -545,37 +549,8 @@ export default function DevAgentRunClient({
     workerSetupResult.project?.shellVersionStatus === "outdated"
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(RUNNER_ENV_VARS_STORAGE_KEY)
-      if (!raw) return
-      const parsed = JSON.parse(raw) as Array<Partial<RunnerEnvVar>>
-      if (!Array.isArray(parsed)) return
-      const restored = parsed
-        .map((envVar) => ({
-          id: typeof envVar.id === "string" && envVar.id ? envVar.id : crypto.randomUUID(),
-          kind:
-            envVar.kind === "github-pat" || envVar.kind === "npm-token" || envVar.kind === "custom"
-              ? envVar.kind
-              : "custom",
-          name: typeof envVar.name === "string" ? envVar.name : "",
-          value: typeof envVar.value === "string" ? envVar.value : ""
-        }))
-        .filter((envVar) => envVar.name.trim() || envVar.value.trim())
-      if (restored.length > 0) {
-        setRunnerEnvVars(restored)
-      }
-    } catch {
-      localStorage.removeItem(RUNNER_ENV_VARS_STORAGE_KEY)
-    }
+    localStorage.removeItem(RUNNER_ENV_VARS_STORAGE_KEY)
   }, [])
-
-  useEffect(() => {
-    if (runnerEnvVars.length === 0) {
-      localStorage.removeItem(RUNNER_ENV_VARS_STORAGE_KEY)
-      return
-    }
-    localStorage.setItem(RUNNER_ENV_VARS_STORAGE_KEY, JSON.stringify(runnerEnvVars))
-  }, [runnerEnvVars])
 
   function addRunnerEnvVar(kind: RunnerEnvVarKind) {
     setRunnerEnvVars((current) => {
@@ -602,6 +577,17 @@ export default function DevAgentRunClient({
   function removeRunnerEnvVar(id: string) {
     setRunnerEnvVars((current) => current.filter((envVar) => envVar.id !== id))
   }
+
+  useEffect(() => {
+    if (!requiresGitHubPatForRepoAccess || hasGitHubPatEnvVar) return
+
+    setRunnerEnvVars((current) => {
+      if (current.some((envVar) => envVar.kind === "github-pat" || envVar.name.trim().toUpperCase() === "GITHUB_PAT")) {
+        return current
+      }
+      return [...current, createRunnerEnvVar("github-pat")]
+    })
+  }, [hasGitHubPatEnvVar, requiresGitHubPatForRepoAccess])
 
   const selectedTeamId = selectedTeam?.id
   const selectedTeamScope = selectedTeam?.isPersonal ? selectedTeam?.slug : selectedTeam?.id
@@ -933,7 +919,7 @@ export default function DevAgentRunClient({
         githubPat: effectiveGithubPat || undefined,
         npmToken: effectiveNpmToken || undefined,
         projectEnv: Object.keys(projectEnv).length > 0 ? projectEnv : undefined,
-        submitPullRequest: true,
+        submitPullRequest: runMayCreatePullRequest,
         customPrompt: devAgent.requiresCustomPrompt ? customPrompt.trim() : undefined,
         productionUrl: latestDeployment.url ? `https://${latestDeployment.url}` : undefined,
         useV0DevAgentRunner: defaultUseV0DevAgentRunner
@@ -1009,7 +995,9 @@ export default function DevAgentRunClient({
           <span className="text-[#333]">|</span>
 
           {/* Stats */}
-          <span className="text-[13px] text-[#888]">{formatExecutionMode(devAgent.executionMode)}</span>
+          <span className="text-[13px] text-[#888]">
+            {formatExecutionMode(devAgent.executionMode, devAgent.supportsPullRequest)}
+          </span>
           {devAgent.ashArtifact?.revision ? (
             <span className="rounded-md bg-[#1a1a1a] px-2 py-0.5 text-[11px] text-[#666]">
               v{devAgent.ashArtifact.revision}
@@ -1317,8 +1305,15 @@ export default function DevAgentRunClient({
                     {runnerEnvVars.map((envVar) => {
                       const isGitHubPatEnv =
                         envVar.kind === "github-pat" || envVar.name.trim().toUpperCase() === "GITHUB_PAT"
+                      const githubPatRequiredReason = requiresGitHubPatForRepoAccess
+                        ? runMayCreatePullRequest
+                          ? " · Required for private repo access and PR creation."
+                          : " · Required for private repo access."
+                        : runMayCreatePullRequest
+                          ? " · Needed only when this run should create a PR."
+                          : ""
                       const helperText = isGitHubPatEnv
-                        ? `Visibility: ${effectiveRepoVisibility.replaceAll("_", " ")}${requiresGitHubPatForRepoAccess ? " · Required for private repos and PR creation." : ""}`
+                        ? `Visibility: ${effectiveRepoVisibility.replaceAll("_", " ")}${githubPatRequiredReason}`
                         : envVar.kind === "npm-token"
                           ? "Used for installing packages from private npm registries."
                           : "Passed through to the runner sandbox for this run."
@@ -1350,6 +1345,33 @@ export default function DevAgentRunClient({
                             </Button>
                           </div>
                           <p className="mt-2 text-[11px] text-[#555]">{helperText}</p>
+                          {isGitHubPatEnv ? (
+                            <div className="mt-2 space-y-1.5 border-t border-[#1f1f1f] pt-2 text-[11px] leading-[17px] text-[#666]">
+                              {runMayCreatePullRequest ? (
+                                <p>
+                                  Fine-grained token: select this repository, then grant{" "}
+                                  <span className="text-[#888]">Contents: Read and write</span> and{" "}
+                                  <span className="text-[#888]">Pull requests: Read and write</span>. Write access lets
+                                  d3k push a branch and open a pull request.
+                                </p>
+                              ) : (
+                                <p>
+                                  Fine-grained token: select this repository, then grant{" "}
+                                  <span className="text-[#888]">Contents: Read-only</span>. Metadata read is included by
+                                  GitHub.
+                                </p>
+                              )}
+                              <a
+                                href={GITHUB_FINE_GRAINED_PAT_URL}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 text-[#aaa] underline decoration-[#444] underline-offset-4 hover:text-[#ededed]"
+                              >
+                                Create a GitHub fine-grained PAT
+                                <ExternalLink className="size-3" />
+                              </a>
+                            </div>
+                          ) : null}
                         </div>
                       )
                     })}

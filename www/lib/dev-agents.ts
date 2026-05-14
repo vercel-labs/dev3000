@@ -861,7 +861,7 @@ const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
     createdAt: "2026-05-04T00:00:00.000Z",
     updatedAt: "2026-05-04T00:00:00.000Z",
     legacyWorkflowType: "deepsec-security-scan",
-    supportsPullRequest: true,
+    supportsPullRequest: false,
     aiAgent: "anthropic/claude-opus-4.6",
     devServerCommand: NO_DEV_SERVER_COMMAND,
     successEval: DEEPSEC_DEV_AGENT_SUCCESS_EVAL

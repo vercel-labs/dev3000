@@ -30,8 +30,9 @@ interface DevAgentsCatalogProps {
   marketplaceAgents: MarketplaceCatalogAgent[]
 }
 
-function formatExecutionMode(mode: "dev-server" | "preview-pr"): string {
-  return mode === "dev-server" ? "Dev Server" : "Preview + PR"
+function formatExecutionMode(mode: "dev-server" | "preview-pr", supportsPullRequest?: boolean): string {
+  if (mode === "dev-server") return "Dev Server"
+  return supportsPullRequest ? "Preview + PR" : "Report"
 }
 
 function VercelTriangle({ className }: { className?: string }) {
@@ -153,7 +154,7 @@ function TeamAgentCard({ teamBasePath, agent }: { teamBasePath: string; agent: T
         {/* Tags */}
         <div className="flex flex-wrap gap-1.5">
           <span className="rounded-md bg-[#1a1a1a] px-2 py-0.5 text-[11px] text-[#888]">
-            {formatExecutionMode(devAgent.executionMode)}
+            {formatExecutionMode(devAgent.executionMode, devAgent.supportsPullRequest)}
           </span>
           {devAgent.sandboxBrowser !== "none" ? (
             <span className="rounded-md bg-[#1a1a1a] px-2 py-0.5 text-[11px] text-[#888]">

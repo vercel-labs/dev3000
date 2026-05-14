@@ -23,10 +23,12 @@ import {
   getDevAgentModelLabel,
   isVercelPluginSkillRef
 } from "@/lib/dev-agents"
+import { redactSensitiveReportText } from "@/lib/report-redaction"
 import {
   getDeepSecTranscriptUsage,
   getGeneratedReportCostUsd,
-  getGeneratedReportTotalTokens
+  getGeneratedReportTotalTokens,
+  isSuccessfulDeepSecGeneratedReportMarkdown
 } from "@/lib/workflow-report-summary"
 import {
   listWorkflowRuns,
@@ -4146,7 +4148,7 @@ process.stdout.write(JSON.stringify(null))
 
   try {
     const parsed = JSON.parse(result.stdout.trim() || "null") as DeepSecGeneratedReport | null
-    const markdown = parsed?.markdown?.trim()
+    const markdown = redactSensitiveReportText(parsed?.markdown?.trim() || "")
     if (!markdown) {
       await appendProgressLog(progressContext, "[DeepSec] No generated markdown report found")
       return null
@@ -4168,18 +4170,7 @@ process.stdout.write(JSON.stringify(null))
 }
 
 function isSuccessfulDeepSecGeneratedReport(markdown: string | undefined): boolean {
-  const content = markdown?.trim()
-  if (!content) return false
-
-  const normalized = content.toLowerCase()
-  return ![
-    "claude code native binary not found",
-    "no actual vulnerability analysis occurred",
-    "processing failure",
-    "processing pass failed",
-    "ai investigation degraded",
-    "manual fallback report"
-  ].some((failureSignal) => normalized.includes(failureSignal))
+  return isSuccessfulDeepSecGeneratedReportMarkdown(markdown)
 }
 
 export type DeepSecCommandTranscriptEntry = {
@@ -4227,6 +4218,7 @@ function buildDeepSecEnv(gatewayAuthToken: string, gatewayAuthSource: string): R
     ...buildSandboxToolchainEnv(),
     ...buildClaudeAiGatewayEnv(gatewayAuthToken, gatewayAuthSource),
     ...(isOidcAiGatewayAuthSource(gatewayAuthSource) ? {} : { AI_GATEWAY_API_KEY: gatewayAuthToken }),
+    DEEPSEC_INSIDE_SANDBOX: "1",
     OPENAI_API_KEY: gatewayAuthToken,
     OPENAI_BASE_URL: "https://ai-gateway.vercel.sh/v1",
     CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: "1"

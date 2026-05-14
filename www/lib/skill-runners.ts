@@ -540,7 +540,7 @@ function applyUsageCount(record: SkillRunnerRecord, usageMap: Map<string, SkillR
       avgCost: formatAvgCost(usage),
       legacyWorkflowType: "deepsec-security-scan",
       supportsPathInput: false,
-      supportsPullRequest: true,
+      supportsPullRequest: false,
       successEval: DEEPSEC_DEV_AGENT_SUCCESS_EVAL,
       ashArtifact: record.ashArtifact,
       runnerCanonicalPath: record.canonicalPath,
