@@ -1,0 +1,42 @@
+www/lib/report-redaction.ts
+  s_a6a7b7091a791d::t_b30efe795c0a56 1-6
+www/app/api/cloud/fix-workflow/steps.ts
+  s_a6a7b7091a791d::t_dced5ee0e1cd0d 4151,4173
+  s_a6a7b7091a791d::t_514bc6e6be01f8 26
+  s_a6a7b7091a791d::t_1b5e10905a2173 30-31,4221
+www/lib/dev-agents.ts
+  s_a6a7b7091a791d::t_459045a04229bb 864
+www/lib/workflow-report-summary.ts
+  s_a6a7b7091a791d::t_e05e8947cd2552 65-67
+  s_a6a7b7091a791d::t_e0a7489d807992 2,62,73-89
+www/lib/skill-runners.ts
+  s_a6a7b7091a791d::t_c23dc72ca8af85 543
+www/components/dev-agents/dev-agents-catalog.tsx
+  s_a6a7b7091a791d::t_fe7154e0229d54 33-35,157
+www/app/dev-agents/[agentId]/new/dev-agent-run-client.tsx
+  s_a6a7b7091a791d::t_beb4e18f95fe0c 216-218,998-1000
+  s_a6a7b7091a791d::t_8732dedf1e4148 379,922,1308-1314,1316,1350-1359,1362-1363
+  s_a6a7b7091a791d::t_3849ede247a8b2 552
+  s_a6a7b7091a791d::t_c07d85e0d6e155 1348-1349,1364-1374
+  s_a6a7b7091a791d::t_b9168e3d5b16ee 1360-1361
+  s_a6a7b7091a791d::t_333bd0f2d4c2ef 142,369,581-590
+www/app/dev-agents/runs/[id]/report/page.tsx
+  s_a6a7b7091a791d::t_f836ead9da0942 1823
+  s_a6a7b7091a791d::t_4cfbd03f37ff21 16-17,1818-1820
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.8",
+  "base_commit_sha": "9751418055fdeb25f307baf2acb3eb7e6ae26580",
+  "prompts": {},
+  "sessions": {
+    "s_a6a7b7091a791d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ddb8c-76f3-7691-8f65-bb14ae2c76fc",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>"
+    }
+  }
+}
