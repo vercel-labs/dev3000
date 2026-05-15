@@ -62,6 +62,7 @@ const DEEPSEC_COMMAND_TIMEOUT_MS = 5 * 60 * 1000
 const DEEPSEC_PROCESS_INNER_COMMAND = "corepack pnpm deepsec process --limit 25 --concurrency 2 --batch-size 3"
 const DEEPSEC_PROCESS_COMMAND = `cd .deepsec && ${DEEPSEC_PROCESS_INNER_COMMAND}`
 const DEEPSEC_PROCESS_AUTH_RESTART_LIMIT = 4
+const DEEPSEC_PROCESS_FAILURE_RESTART_LIMIT = 2
 const D3K_SKILL_INSTALL_ARG = "vercel-labs/dev3000@d3k"
 const VERCEL_PLUGIN_INSTALL_ARG = "vercel/vercel-plugin"
 const ANALYZE_TO_NDJSON_SCRIPT = `#!/usr/bin/env node
@@ -4201,6 +4202,7 @@ export interface DeepSecProcessState {
   startedAt: string
   pid: string | null
   authRestartCount?: number
+  processFailureRestartCount?: number
   costUsd?: number
   totalTokens?: number
 }
@@ -4228,6 +4230,16 @@ function buildDeepSecEnv(gatewayAuthToken: string, gatewayAuthSource: string): R
 function isDeepSecAiGatewayAuthFailure(output: string): boolean {
   return /AI Gateway|Failed to authenticate|Authentication failed|Invalid OIDC token|invalid[^\n]*oidc|AI_GATEWAY_API_KEY|VERCEL_OIDC_TOKEN|(^|[^\d])401([^\d]|$)|(^|[^\d])403([^\d]|$)/i.test(
     output
+  )
+}
+
+function isRetryableDeepSecProcessFailure(output: string): boolean {
+  const normalized = output.toLowerCase()
+  return (
+    /\berrored batches:\s*[1-9]/i.test(output) ||
+    /\b[1-9]\s+batch\(es\)\s+errored\b/i.test(output) ||
+    normalized.includes("exiting 1 (agent failure, not a clean review)") ||
+    normalized.includes("files in those batches were marked status=error and will be retried on the next run")
   )
 }
 
@@ -4812,7 +4824,8 @@ export async function deepSecStartProcessStep(
     transcriptEntries,
     startedAt: new Date(startedAtMs).toISOString(),
     pid,
-    authRestartCount: 0
+    authRestartCount: 0,
+    processFailureRestartCount: 0
   }
 }
 
@@ -5007,6 +5020,67 @@ process.stdout.write(JSON.stringify({
           {
             ...processEntry,
             label: `Process candidates (auth expired, attempt ${nextAuthRestartCount})`
+          },
+          {
+            command: DEEPSEC_PROCESS_COMMAND,
+            durationMs: Date.now() - restartStartedAtMs,
+            exitCode: 0,
+            label: "Process candidates",
+            stderr: restartedProcess.stderr,
+            stdout: restartedProcess.stdout
+          }
+        ]
+      }
+    }
+
+    const processFailureRestartCount = processState.processFailureRestartCount ?? 0
+    const canRestartForRetryableProcessFailure =
+      isRetryableDeepSecProcessFailure(failureOutput) &&
+      processFailureRestartCount < DEEPSEC_PROCESS_FAILURE_RESTART_LIMIT
+
+    if (canRestartForRetryableProcessFailure) {
+      const nextProcessFailureRestartCount = processFailureRestartCount + 1
+      const restartStartedAtMs = Date.now()
+      await appendProgressLog(
+        params.progressContext,
+        `[DeepSec] Process candidates had retryable errored batches; restarting DeepSec process (${nextProcessFailureRestartCount}/${DEEPSEC_PROCESS_FAILURE_RESTART_LIMIT})`
+      )
+      const resolvedGatewayAuth = await resolveFreshAiGatewayAuth({
+        gatewayAuthSource: authSource,
+        gatewayAuthToken: params.gatewayAuthToken,
+        progressContext: params.progressContext
+      })
+      const token = requireAiGatewayAuthToken(resolvedGatewayAuth.token)
+      const refreshedAuthSource = resolvedGatewayAuth.source || getAiGatewayAuthSource(resolvedGatewayAuth.token)
+      const restartedProcess = await startDeepSecProcessInSandbox({
+        env: buildDeepSecEnv(token, refreshedAuthSource),
+        processStateDir: processState.processStateDir,
+        projectRoot: getSandboxProjectRoot(processState.projectDir),
+        sandbox
+      })
+      await appendProgressLog(
+        params.progressContext,
+        `[DeepSec] Process candidates restarted for errored batches${
+          restartedProcess.pid ? ` (pid=${restartedProcess.pid})` : ""
+        }`
+      )
+      return {
+        ...processState,
+        costUsd: (processState.costUsd ?? 0) + observedCostUsd || undefined,
+        done: false,
+        elapsedSeconds: 0,
+        exitCode: null,
+        lastStderr: "",
+        lastStdout: "",
+        pid: restartedProcess.pid,
+        processFailureRestartCount: nextProcessFailureRestartCount,
+        startedAt: new Date(restartStartedAtMs).toISOString(),
+        totalTokens: (processState.totalTokens ?? 0) + observedTotalTokens || undefined,
+        transcriptEntries: [
+          ...processState.transcriptEntries.filter((entry) => entry.label !== "Process candidates"),
+          {
+            ...processEntry,
+            label: `Process candidates (errored batch retry ${nextProcessFailureRestartCount})`
           },
           {
             command: DEEPSEC_PROCESS_COMMAND,
