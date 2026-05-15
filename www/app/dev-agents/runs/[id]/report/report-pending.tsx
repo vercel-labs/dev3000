@@ -4,6 +4,7 @@ import { AlertCircle, CheckCircle2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { formatRunFailure, sanitizeRunFailureText } from "@/lib/run-failure-display"
 import { CoordinatedPlayers } from "./coordinated-players"
 import { ScreenshotPlayer } from "./screenshot-player"
 
@@ -186,7 +187,15 @@ export function ReportPending({
         if (run.status === "failure") {
           if (isActive) {
             setHasError(true)
-            setStatus(sanitizeDisplayText(run.error || "Failed to generate report."))
+            setStatus(sanitizeRunFailureText(run.error || "Failed to generate report."))
+            setStepNumber(typeof run.stepNumber === "number" ? run.stepNumber : null)
+            setSandboxUrl(run.sandboxUrl || null)
+            setProgressLogs(
+              Array.isArray(run.progressLogs) ? run.progressLogs.map((line) => sanitizeDisplayText(line)) : []
+            )
+            setBeforeScreenshots(Array.isArray(run.beforeScreenshots) ? run.beforeScreenshots : [])
+            setAfterScreenshots(Array.isArray(run.afterScreenshots) ? run.afterScreenshots : [])
+            router.refresh()
           }
           return
         }
@@ -233,6 +242,7 @@ export function ReportPending({
   const activeStepLabel = typeof normalizedStepNumber === "number" ? STEP_LABELS[normalizedStepNumber] : null
   const showStatus = !activeStepLabel || status.trim() !== activeStepLabel
   const statusText = showStatus ? status : "In progress..."
+  const failure = hasError ? formatRunFailure(statusText) : null
   const normalizeStatus = (value: string) =>
     value
       .toLowerCase()
@@ -264,14 +274,40 @@ export function ReportPending({
           <div className="text-xs uppercase tracking-wide text-[#666]">{pendingLabel}</div>
           <h1 className="mt-2 text-3xl font-bold text-[#ededed]">{pendingReportTitle}</h1>
           {projectName ? <p className="mt-1 text-sm text-[#888]">Project: {projectName}</p> : null}
-          <p className="mt-2 text-[#888]">We&apos;re assembling the results and will show them here shortly.</p>
+          <p className="mt-2 text-[#888]">
+            {hasError
+              ? "This run stopped before a final report was generated."
+              : "We're assembling the results and will show them here shortly."}
+          </p>
         </div>
       )}
 
-      {hasError ? (
-        <Alert variant="destructive">
+      {failure ? (
+        <Alert variant="destructive" className="border-red-500/25 bg-red-500/5">
           <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{statusText}</AlertDescription>
+          <AlertDescription className="space-y-3">
+            <div className="font-medium text-red-300">{failure.summary}</div>
+            {failure.stats.length > 0 || failure.workflowStep ? (
+              <div className="flex flex-wrap gap-2 text-xs text-red-300/80">
+                {failure.workflowStep ? (
+                  <span className="rounded border border-red-500/20 px-2 py-1">Step: {failure.workflowStep}</span>
+                ) : null}
+                {failure.stats.map((item) => (
+                  <span key={item} className="rounded border border-red-500/20 px-2 py-1">
+                    {item}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+            <details className="group">
+              <summary className="cursor-pointer text-xs text-red-300/80 underline decoration-red-500/30 underline-offset-4">
+                Show raw error
+              </summary>
+              <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap break-words rounded border border-red-500/15 bg-black/30 p-3 text-xs leading-relaxed text-red-200/80">
+                {failure.details}
+              </pre>
+            </details>
+          </AlertDescription>
         </Alert>
       ) : null}
 
@@ -296,10 +332,13 @@ export function ReportPending({
         <div className="space-y-2">
           {STEP_LABELS.map((label, index) => {
             const isDone = activeIndex !== null && index < activeIndex
-            const isActive = activeIndex !== null && index === activeIndex
+            const isFailedStep = hasError && activeIndex !== null && index === activeIndex
+            const isActive = !hasError && activeIndex !== null && index === activeIndex
             return (
               <div key={label} className="flex items-center gap-3 text-sm">
-                {isDone ? (
+                {isFailedStep ? (
+                  <AlertCircle className="h-3.5 w-3.5 text-red-400" />
+                ) : isDone ? (
                   <CheckCircle2 className="h-3.5 w-3.5 text-[#cfcfcf]" />
                 ) : (
                   <span className={`h-2.5 w-2.5 rounded-full ${isActive ? "bg-blue-500" : "bg-[#2a2a2a]"}`} />
@@ -308,12 +347,14 @@ export function ReportPending({
                   className={
                     isActive && !hasError
                       ? "text-shimmer font-medium inline-block"
-                      : isDone
-                        ? "text-[#ededed]"
-                        : "text-[#666]"
+                      : isFailedStep
+                        ? "font-medium text-red-300"
+                        : isDone
+                          ? "text-[#ededed]"
+                          : "text-[#666]"
                   }
                 >
-                  {label}
+                  {isFailedStep ? `Failed during ${label.toLowerCase()}` : label}
                 </span>
               </div>
             )

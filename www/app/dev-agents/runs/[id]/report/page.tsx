@@ -10,6 +10,7 @@ import { getCurrentUser } from "@/lib/auth"
 import { getSignInPath } from "@/lib/auth-redirect"
 import { readBlobJson } from "@/lib/blob-store"
 import { getDefaultDevAgentsRouteContext, getDevAgentsRouteContext } from "@/lib/dev-agents-route"
+import { formatRunFailure } from "@/lib/run-failure-display"
 import {
   getFinalSummaryMarkdown,
   getGeneratedReportCostUsd,
@@ -1517,6 +1518,7 @@ async function WorkflowReportPageData({
   if (!run.reportBlobUrl && run.status === "failure") {
     const workflowLabel = run.devAgentName || (run.runnerKind === "skill-runner" ? "Skill Runner" : "Dev Agent")
     const recentLogs = Array.isArray(run.progressLogs) ? run.progressLogs.slice(-10) : []
+    const failureDetails = formatRunFailure(run.error)
     const failure = (
       <div className="space-y-6">
         <div>
@@ -1532,9 +1534,29 @@ async function WorkflowReportPageData({
               <div className="text-sm font-medium text-foreground">
                 This run failed before the final report was generated.
               </div>
-              <p className="whitespace-pre-wrap break-words text-sm text-muted-foreground">
-                {run.error || "The workflow ended in a failure state."}
-              </p>
+              <p className="text-sm leading-6 text-muted-foreground">{failureDetails.summary}</p>
+              {failureDetails.stats.length > 0 || failureDetails.workflowStep ? (
+                <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                  {failureDetails.workflowStep ? (
+                    <span className="rounded border border-border bg-background px-2 py-1">
+                      Step: {failureDetails.workflowStep}
+                    </span>
+                  ) : null}
+                  {failureDetails.stats.map((item) => (
+                    <span key={item} className="rounded border border-border bg-background px-2 py-1">
+                      {item}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+              <details className="pt-1">
+                <summary className="cursor-pointer text-xs text-muted-foreground underline decoration-[#333] underline-offset-4 hover:text-foreground hover:decoration-[#666]">
+                  Show raw error
+                </summary>
+                <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-md border border-border bg-background p-4 text-xs leading-relaxed text-muted-foreground">
+                  {failureDetails.details}
+                </pre>
+              </details>
               {run.sandboxUrl ? (
                 <p className="text-xs text-muted-foreground">
                   Sandbox:{" "}
