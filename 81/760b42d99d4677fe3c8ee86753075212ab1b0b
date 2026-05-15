@@ -1,0 +1,24 @@
+www/app/dev-agents/runs/[id]/report/page.tsx
+  s_a6a7b7091a791d::t_f9771a2b6dd4f4 13,1521,1537-1559
+www/lib/run-failure-display.ts
+  s_a6a7b7091a791d::t_a8f10bf7acd3dd 1-111
+www/app/dev-agents/runs/[id]/report/report-pending.tsx
+  s_a6a7b7091a791d::t_64143f96f17290 353-354
+  s_a6a7b7091a791d::t_7cf3219ecd2fff 7,190-198,245,277-281,285-286,288-310,335-336,339-341,350-352,357
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.8",
+  "base_commit_sha": "81760b42d99d4677fe3c8ee86753075212ab1b0b",
+  "prompts": {},
+  "sessions": {
+    "s_a6a7b7091a791d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ddb8c-76f3-7691-8f65-bb14ae2c76fc",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>"
+    }
+  }
+}
