@@ -27,6 +27,9 @@ export async function proxy(request: NextRequest) {
     })
   }
 
+  const flagOverridesResponse = getFlagOverridesResponse(request)
+  if (flagOverridesResponse) return flagOverridesResponse
+
   // Auth endpoints need direct access to the raw OAuth cookies without refresh interception.
   if (pathname.startsWith("/api/auth")) {
     return NextResponse.next()
@@ -72,6 +75,27 @@ export async function proxy(request: NextRequest) {
     sameSite: "lax",
     path: "/",
     maxAge: 60 * 60 * 24 * 30 // 30 days
+  })
+  return response
+}
+
+function getFlagOverridesResponse(request: NextRequest): NextResponse | null {
+  const overrideToken =
+    request.nextUrl.searchParams.get("__vercel_flags") || request.nextUrl.searchParams.get("vercelFlagOverrides")
+
+  if (!overrideToken) return null
+
+  const redirectUrl = request.nextUrl.clone()
+  redirectUrl.searchParams.delete("__vercel_flags")
+  redirectUrl.searchParams.delete("vercelFlagOverrides")
+
+  const response = NextResponse.redirect(redirectUrl)
+  response.cookies.set("vercel-flag-overrides", overrideToken, {
+    httpOnly: false,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: 60 * 60 * 24 * 365
   })
   return response
 }
