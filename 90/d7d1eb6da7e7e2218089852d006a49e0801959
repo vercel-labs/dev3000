@@ -1,0 +1,34 @@
+www/package.json
+  s_a6a7b7091a791d::t_8c68ae8de9be2c 14
+www/app/[team]/page.tsx
+  s_a6a7b7091a791d::t_d7656a53983171 5,22
+  s_a6a7b7091a791d::t_c021801b0006d7 23
+bun.lock
+  ai_agent 42,279-280,893-894,1533-1534,2359
+www/lib/feature-flags.ts
+  s_a6a7b7091a791d::t_5ef3f7e75f190c 1-3,5-10,12-14,24-35,48-50,72-116
+  s_a6a7b7091a791d::t_f5263f4e4627b8 4,36-46,64-71
+  s_a6a7b7091a791d::t_2fe7035ec2b22e 11
+  s_a6a7b7091a791d::t_3a2b929dde88d6 15-23,47,51-63
+www/components/dev-agents/dashboard-shell.tsx
+  s_a6a7b7091a791d::t_add79f27392e3e 1,30,62-71
+  s_a6a7b7091a791d::t_7eceb99f4594c1 6,43
+www/app/.well-known/vercel/flags/route.ts
+  s_a6a7b7091a791d::t_c57e508a1af94d 2,5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.8",
+  "base_commit_sha": "90d7d1eb6da7e7e2218089852d006a49e0801959",
+  "prompts": {},
+  "sessions": {
+    "s_a6a7b7091a791d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ddb8c-76f3-7691-8f65-bb14ae2c76fc",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>"
+    }
+  }
+}
