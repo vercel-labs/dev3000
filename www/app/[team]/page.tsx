@@ -2,6 +2,7 @@ import type { Route } from "next"
 import { notFound, redirect } from "next/navigation"
 import { getAuthorizePath } from "@/lib/auth-redirect"
 import { getDevAgentsRouteContext } from "@/lib/dev-agents-route"
+import { isDevAgentsEnabled } from "@/lib/feature-flags"
 
 export default async function TeamProjectsPage({ params }: { params: Promise<{ team: string }> }) {
   const { team } = await params
@@ -18,5 +19,6 @@ export default async function TeamProjectsPage({ params }: { params: Promise<{ t
     notFound()
   }
 
-  redirect(`/${routeContext.selectedTeam.slug}/dev-agents` as Route)
+  const devAgentsEnabled = await isDevAgentsEnabled(routeContext.selectedTeam)
+  redirect(`/${routeContext.selectedTeam.slug}/${devAgentsEnabled ? "dev-agents" : "skill-runner"}` as Route)
 }

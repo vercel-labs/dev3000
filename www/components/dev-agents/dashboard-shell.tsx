@@ -1,8 +1,9 @@
-import { Bot, History, type LucideIcon, Settings } from "lucide-react"
+import { Bot, History, type LucideIcon, Settings, Sparkles } from "lucide-react"
 import type { Route } from "next"
 import Link from "next/link"
 import type React from "react"
 import { TeamSwitcher } from "@/components/dev-agents/team-switcher"
+import { isDevAgentsEnabled } from "@/lib/feature-flags"
 import type { VercelTeam } from "@/lib/vercel-teams"
 
 interface DevAgentsDashboardShellProps {
@@ -26,7 +27,7 @@ interface SidebarItem {
   active?: boolean
 }
 
-export function DevAgentsDashboardShell({
+export async function DevAgentsDashboardShell({
   teams,
   selectedTeam,
   section = "dev-agents",
@@ -39,6 +40,7 @@ export function DevAgentsDashboardShell({
   showTopBreadcrumb = true,
   children
 }: DevAgentsDashboardShellProps) {
+  const showDevAgentsLink = await isDevAgentsEnabled(selectedTeam)
   const effectiveRunsHref = runsHref || (section === "skill-runner" ? "/skill-runner/runs" : "/dev-agents/runs")
   const sectionHref =
     section === "skill-runner"
@@ -57,6 +59,16 @@ export function DevAgentsDashboardShell({
       icon: Bot,
       active: section === "skill-runner"
     },
+    ...(showDevAgentsLink
+      ? [
+          {
+            label: "Dev Agents",
+            href: `/${selectedTeam.slug}/dev-agents`,
+            icon: Sparkles,
+            active: section === "dev-agents"
+          } satisfies SidebarItem
+        ]
+      : []),
     {
       label: "Runs",
       href: effectiveRunsHref,
