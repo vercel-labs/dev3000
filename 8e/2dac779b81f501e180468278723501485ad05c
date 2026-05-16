@@ -1,0 +1,37 @@
+www/app/api/auth/authorize/route.ts
+  s_5da4393566ec36::t_d8c68266001487 18,35-37
+www/components/dev-agents/dashboard-shell.tsx
+  s_5da4393566ec36::t_827a5053db2e06 119
+  s_5da4393566ec36::t_23294a0cb0da22 5,40-42,48
+  s_5da4393566ec36::t_7163e1c277e87b 6,9,27-34,39,44,46-47,80,84,92,94,100,108,110,131-137
+  s_5da4393566ec36::t_00b4f7efcd8a78 35-38,43,49-53,126
+  s_5da4393566ec36::t_039775e437caee 45
+  s_5da4393566ec36::t_be64244eea6dc0 7-8
+www/components/dev-agents/mobile-dashboard-navigation.tsx
+  s_5da4393566ec36::t_7f35a70d35bdca 74
+  s_5da4393566ec36::t_530ec87b70803e 1-73,75-113
+www/lib/auth-redirect.ts
+  s_5da4393566ec36::t_307fd173a62168 5-8,17,22-25,29,34-36
+www/components/dev-agents/team-switcher.tsx
+  s_5da4393566ec36::t_7ac76335651d4b 9,85
+www/app/signin/page.tsx
+  s_5da4393566ec36::t_585705103c7660 10,14-16,18,22,36
+www/app/api/auth/signout/route.ts
+  s_5da4393566ec36::t_9ce5d36d136a5f 3,68
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.8",
+  "base_commit_sha": "8e2dac779b81f501e180468278723501485ad05c",
+  "prompts": {},
+  "sessions": {
+    "s_5da4393566ec36": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e3207-b24c-7e90-bd42-71198956a1ad",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>"
+    }
+  }
+}
