@@ -15,6 +15,7 @@ export async function GET(req: NextRequest) {
   const code_verifier = generateSecureRandomString(43)
   const code_challenge = crypto.createHash("sha256").update(code_verifier).digest("base64url")
   const returnTo = sanitizeAuthRedirectPath(req.nextUrl.searchParams.get("next"))
+  const prompt = req.nextUrl.searchParams.get("prompt")
   const secure = process.env.NODE_ENV === "production"
 
   const queryParams = new URLSearchParams({
@@ -30,6 +31,10 @@ export async function GET(req: NextRequest) {
     scope:
       "openid email profile offline_access user team project project.write deployment deployment.write project-env-vars global-project-env-vars"
   })
+
+  if (prompt === "consent") {
+    queryParams.set("prompt", "consent")
+  }
 
   const authorizationUrl = `https://vercel.com/oauth/authorize?${queryParams.toString()}`
   const response = NextResponse.redirect(authorizationUrl)

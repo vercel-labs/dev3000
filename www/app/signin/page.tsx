@@ -7,15 +7,19 @@ import { getAuthorizePath, sanitizeAuthRedirectPath } from "@/lib/auth-redirect"
 export default async function SignInPage({
   searchParams
 }: {
-  searchParams: Promise<{ next?: string | string[] | undefined }>
+  searchParams: Promise<{ next?: string | string[] | undefined; prompt?: string | string[] | undefined }>
 }) {
   const resolvedSearchParams = await searchParams
   const nextParam = Array.isArray(resolvedSearchParams.next) ? resolvedSearchParams.next[0] : resolvedSearchParams.next
+  const promptParam = Array.isArray(resolvedSearchParams.prompt)
+    ? resolvedSearchParams.prompt[0]
+    : resolvedSearchParams.prompt
   const returnTo = sanitizeAuthRedirectPath(nextParam)
+  const shouldPromptForConsent = promptParam === "consent"
   const user = await getCurrentUser()
 
   // If already signed in, redirect to the requested destination
-  if (user) {
+  if (user && !shouldPromptForConsent) {
     redirect(returnTo as Route)
   }
 
@@ -29,7 +33,7 @@ export default async function SignInPage({
 
         <div className="mt-8">
           <Link
-            href={getAuthorizePath(returnTo)}
+            href={getAuthorizePath(returnTo, shouldPromptForConsent ? { prompt: "consent" } : undefined)}
             prefetch={false}
             className="flex w-full justify-center rounded-md bg-black px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-gray-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black"
           >

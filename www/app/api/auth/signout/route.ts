@@ -1,5 +1,6 @@
 import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
+import { getSignInPath } from "@/lib/auth-redirect"
 
 const AUTH_COOKIE_NAMES = [
   "access_token",
@@ -64,7 +65,7 @@ export async function POST() {
 
 export async function GET(request: Request) {
   await revokeAuthToken()
-  const response = NextResponse.redirect(new URL("/signin", request.url))
+  const response = NextResponse.redirect(new URL(getSignInPath(undefined, { prompt: "consent" }), request.url))
   clearAuthCookies(response)
 
   return response

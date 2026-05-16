@@ -6,6 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useEffect } from "react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger } from "@/components/ui/select"
+import { getSignInPath } from "@/lib/auth-redirect"
 import { LAST_SELECTED_TEAM_COOKIE_MAX_AGE, LAST_SELECTED_TEAM_COOKIE_NAME } from "@/lib/team-selection"
 import type { VercelTeam } from "@/lib/vercel-teams"
 
@@ -81,7 +82,7 @@ export function TeamSwitcher({ teams, selectedTeam }: TeamSwitcherProps) {
         method: "POST"
       })
     } finally {
-      router.push("/signin" as Route)
+      router.push(getSignInPath(undefined, { prompt: "consent" }) as Route)
       router.refresh()
     }
   }
