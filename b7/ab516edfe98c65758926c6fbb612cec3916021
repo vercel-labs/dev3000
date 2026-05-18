@@ -1,0 +1,34 @@
+src/cdp-monitor.ts
+  s_0df0ec5b78ef21::t_d205bdc5107b9b 336,356-357,370
+  s_0df0ec5b78ef21::t_84a43022c2644c 918-919,928,939
+  s_0df0ec5b78ef21::t_7be3d69e9bdda7 1014-1022
+  s_0df0ec5b78ef21::t_9216854a1a531b 525-532,548-552
+  s_0df0ec5b78ef21::t_a1a86e8192c27c 2409-2421
+  s_0df0ec5b78ef21::t_5dcb94cf020d97 498-505
+src/dev-environment.ts
+  s_0df0ec5b78ef21::t_4be0bfca857f80 170-171,959,2183-2184,2198-2203
+  s_0df0ec5b78ef21::t_938365b793601a 1235,1315,1364,1844
+  s_0df0ec5b78ef21::t_0c71e9f9002f0e 2220
+  s_0df0ec5b78ef21::t_bfef462747a84e 1805
+src/cli.ts
+  s_0df0ec5b78ef21::t_2c2350781c76d7 290-291,321-322
+  s_0df0ec5b78ef21::t_cd1b11caf81677 1302-1303
+  s_0df0ec5b78ef21::t_2f518a56ac3bc3 885-886
+  s_0df0ec5b78ef21::t_e0cf0b86942a01 959-960,1159-1160
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.9",
+  "base_commit_sha": "b7ab516edfe98c65758926c6fbb612cec3916021",
+  "prompts": {},
+  "sessions": {
+    "s_0df0ec5b78ef21": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e317a-e8cc-78b3-bf09-da77ed197e4a",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>"
+    }
+  }
+}
