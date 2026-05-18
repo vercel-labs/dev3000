@@ -333,6 +333,7 @@ export class CDPMonitor {
   private onWindowClosedCallback: (() => void) | null = null // Callback for when window is manually closed
   private appServerPort?: string // Port of the user's app server to monitor
   private initialAppUrl?: string // App URL that the loading page should hand off to
+  private externalCdpBase?: string // Existing CDP HTTP endpoint to connect to instead of launching Chrome
   private headless: boolean = false // Run Chrome in headless mode
   private framework?: "nextjs" | "svelte" | "other" // Framework hint from project detection
   private reactTrackingEnabled: boolean = false
@@ -352,7 +353,8 @@ export class CDPMonitor {
     navigationTimeoutMs: number = DEFAULT_NAVIGATION_TIMEOUT_MS,
     debugPort?: number,
     headless: boolean = false,
-    framework?: "nextjs" | "svelte" | "other"
+    framework?: "nextjs" | "svelte" | "other",
+    externalCdpBase?: string
   ) {
     this.profileDir = profileDir
     this.screenshotDir = screenshotDir
@@ -365,6 +367,7 @@ export class CDPMonitor {
     this.navigationTimeoutMs = navigationTimeoutMs
     this.headless = headless
     this.framework = framework
+    this.externalCdpBase = externalCdpBase?.replace(/\/$/, "")
     this.reactTrackingEnabled = framework === "nextjs"
     // Use custom debug port if provided, otherwise use default 9222
     if (debugPort) {
@@ -492,6 +495,14 @@ export class CDPMonitor {
       const hostname = urlObj.hostname
       const port = urlObj.port || (urlObj.protocol === "https:" ? "443" : "80")
 
+      if (this.initialAppUrl) {
+        const initial = new URL(this.initialAppUrl)
+        const initialPort = initial.port || (initial.protocol === "https:" ? "443" : "80")
+        if (urlObj.protocol === initial.protocol && hostname === initial.hostname && port === initialPort) {
+          return true
+        }
+      }
+
       // Only monitor localhost/127.0.0.1 (the user's local dev server)
       const isLocalhost = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "0.0.0.0"
       if (!isLocalhost) {
@@ -511,10 +522,14 @@ export class CDPMonitor {
   }
 
   async start(): Promise<void> {
-    // Launch Chrome with CDP enabled
-    this.debugLog("Starting Chrome launch process")
-    await this.launchChrome()
-    this.debugLog("Chrome launch completed")
+    if (this.externalCdpBase) {
+      this.debugLog(`Using external CDP endpoint: ${this.externalCdpBase}`)
+    } else {
+      // Launch Chrome with CDP enabled
+      this.debugLog("Starting Chrome launch process")
+      await this.launchChrome()
+      this.debugLog("Chrome launch completed")
+    }
 
     // Connect to Chrome DevTools Protocol
     this.debugLog("Starting CDP connection")
@@ -530,6 +545,11 @@ export class CDPMonitor {
     this.debugLog("Setting up CDP event handlers")
     this.setupEventHandlers()
     this.debugLog("CDP event handlers setup completed")
+
+    if (this.externalCdpBase && this.initialAppUrl) {
+      this.debugLog(`Navigating external browser to ${this.initialAppUrl}`)
+      await this.navigateToUrl(this.initialAppUrl)
+    }
   }
 
   getCdpUrl(): string | null {
@@ -895,7 +915,8 @@ export class CDPMonitor {
   }
 
   private async connectToCDP(): Promise<void> {
-    this.debugLog(`Attempting to connect to CDP on port ${this.debugPort}`)
+    const cdpBase = this.externalCdpBase || `http://localhost:${this.debugPort}`
+    this.debugLog(`Attempting to connect to CDP at ${cdpBase}`)
 
     // Retry connection with exponential backoff
     let retryCount = 0
@@ -904,7 +925,7 @@ export class CDPMonitor {
     while (retryCount < maxRetries) {
       try {
         // Get the WebSocket URL from Chrome's debug endpoint
-        const targetsResponse = await fetch(`http://localhost:${this.debugPort}/json`)
+        const targetsResponse = await fetch(`${cdpBase}/json`)
         let targets = (await targetsResponse.json()) as CDPTargetInfo[]
 
         this.debugLog(
@@ -915,7 +936,7 @@ export class CDPMonitor {
 
         if (targets.length === 0) {
           this.debugLog("No debuggable targets found; creating a blank page target")
-          const newTargetResponse = await fetch(`http://localhost:${this.debugPort}/json/new?about:blank`, {
+          const newTargetResponse = await fetch(`${cdpBase}/json/new?about:blank`, {
             method: "PUT"
           })
           if (newTargetResponse.ok) {
@@ -990,6 +1011,15 @@ export class CDPMonitor {
               // Use a small delay to distinguish between temporary reconnects and permanent failures
               setTimeout(() => {
                 if (!this.isShuttingDown && this.onWindowClosedCallback) {
+                  if (this.externalCdpBase) {
+                    this.debugLog("External CDP connection lost - attempting recovery")
+                    this.logger("browser", "[CDP] Attempting to recover external CDP connection")
+                    this.attemptReconnect().catch((err) => {
+                      this.logger("browser", `[CDP] Reconnection failed: ${err.message}`)
+                    })
+                    return
+                  }
+
                   // Check if Chrome process is still alive
                   if (!this.browser || this.browser.killed || !this.browser.pid) {
                     this.debugLog("Chrome process is dead and CDP connection lost, triggering d3k shutdown")
@@ -2375,6 +2405,19 @@ export class CDPMonitor {
   async shutdown(): Promise<void> {
     this.isShuttingDown = true
     let browserClosedCleanly = false
+
+    if (this.externalCdpBase) {
+      if (this.connection) {
+        try {
+          this.connection.ws.close()
+        } catch (_e) {
+          // Ignore close errors
+        }
+        this.connection = null
+      }
+      this.chromePids.clear()
+      return
+    }
 
     // Ask the browser process to exit first so Chrome doesn't think it crashed.
     if (this.connection) {
