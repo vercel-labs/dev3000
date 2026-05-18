@@ -167,6 +167,8 @@ interface DevEnvironmentOptions {
   serversOnly?: boolean
   commandName: string
   browser?: string
+  appUrl?: string // Override the URL opened by the monitored browser
+  externalCdpBase?: string // Existing CDP HTTP endpoint used instead of launching Chrome
   defaultPort?: string // Default port from project type detection
   framework?: "nextjs" | "svelte" | "other" // Framework type from project detection
   userSetPort?: boolean // Whether user explicitly set the port
@@ -954,7 +956,7 @@ export class DevEnvironment {
   }
 
   private get preferredAppUrl(): string {
-    return this.publicAppUrl || this.localhostAppUrl
+    return this.options.appUrl || this.publicAppUrl || this.localhostAppUrl
   }
 
   constructor(options: DevEnvironmentOptions) {
@@ -1230,7 +1232,7 @@ export class DevEnvironment {
       // Start TUI interface with initial status and updated port
       this.tui = new DevTUI({
         appPort: this.options.port, // This may have been updated by checkPortsAvailable
-        appUrl: this.publicAppUrl,
+        appUrl: this.options.appUrl || this.publicAppUrl,
         logFile: this.options.logFile,
         commandName: this.options.commandName,
         serversOnly: this.options.serversOnly,
@@ -1310,7 +1312,7 @@ export class DevEnvironment {
 
       // Update the app port in TUI (may have changed during port check)
       this.tui.updateAppPort(this.options.port)
-      this.tui.updateAppUrl(this.publicAppUrl)
+      this.tui.updateAppUrl(this.options.appUrl || this.publicAppUrl)
 
       // Show port change message if needed
       if (this.portChangeMessage) {
@@ -1359,7 +1361,7 @@ export class DevEnvironment {
       // Update TUI with confirmed port (may have changed during server startup)
       this.tui.updateAppPort(this.options.port)
       this.syncPortlessAlias()
-      this.tui.updateAppUrl(this.publicAppUrl)
+      this.tui.updateAppUrl(this.options.appUrl || this.publicAppUrl)
 
       // Legacy tools server removed - using CLI commands instead
       // await this.waitForMcpServer()
@@ -1800,7 +1802,7 @@ export class DevEnvironment {
       projectName,
       this.options.logFile,
       this.options.port,
-      this.publicAppUrl,
+      this.options.appUrl || this.publicAppUrl,
       cdpUrl,
       chromePids,
       this.options.serverCommand,
@@ -1839,7 +1841,7 @@ export class DevEnvironment {
       // Update TUI header with new port
       if (this.tui) {
         this.tui.updateAppPort(detectedPort)
-        this.tui.updateAppUrl(this.publicAppUrl)
+        this.tui.updateAppUrl(this.options.appUrl || this.publicAppUrl)
       }
 
       // Navigate browser to new port if CDP monitor is active
@@ -2178,7 +2180,8 @@ export class DevEnvironment {
       this.options.browserNavigationTimeoutSeconds * 1000,
       this.options.debugPort, // Chrome debug port
       this.options.headless, // Headless mode for serverless/CI environments
-      this.options.framework // Framework hint for optional React DevTools launch args
+      this.options.framework, // Framework hint for optional React DevTools launch args
+      this.options.externalCdpBase
     )
 
     try {
@@ -2192,7 +2195,12 @@ export class DevEnvironment {
 
       // Start CDP monitoring
       await this.cdpMonitor.start()
-      this.logger.log("browser", "[CDP] Chrome launched with DevTools Protocol monitoring")
+      this.logger.log(
+        "browser",
+        this.options.externalCdpBase
+          ? "[CDP] Connected to external DevTools Protocol endpoint"
+          : "[CDP] Chrome launched with DevTools Protocol monitoring"
+      )
 
       // Update session info with CDP URL and Chrome PIDs now that we have them
       const projectName = getProjectName()
@@ -2209,7 +2217,7 @@ export class DevEnvironment {
           },
           this.options.port.toString(),
           this.options.debug,
-          this.publicAppUrl
+          this.options.appUrl || this.publicAppUrl
         )
         await this.screencastManager.start()
         // this.logger.log("browser", "[Screencast] Auto-capture enabled for navigation events")

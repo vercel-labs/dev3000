@@ -287,6 +287,8 @@ interface ForwardedOptions {
   profileDir?: string
   browserTool?: LocalBrowserTool
   browser?: string
+  appUrl?: string
+  externalCdpBase?: string
   serversOnly?: boolean
   headless?: boolean
   dateTime?: string
@@ -316,6 +318,8 @@ function buildD3kCommandWithOptions(options: ForwardedOptions): string {
   if (options.profileDir) args.push("--profile-dir", shellQuote(options.profileDir))
   if (options.browserTool) args.push("--browser-tool", shellQuote(options.browserTool))
   if (options.browser) args.push("--browser", shellQuote(options.browser))
+  if (options.appUrl) args.push("--app-url", shellQuote(options.appUrl))
+  if (options.externalCdpBase) args.push("--external-cdp-base", shellQuote(options.externalCdpBase))
   if (options.serversOnly) args.push("--servers-only")
   if (options.headless) args.push("--headless")
   if (options.dateTime) args.push("--date-time", shellQuote(options.dateTime))
@@ -878,6 +882,8 @@ program
     "--browser <path>",
     "Full path to browser executable (e.g. for Arc: '/Applications/Arc.app/Contents/MacOS/Arc')"
   )
+  .option("--app-url <url>", "URL to open in the monitored browser instead of the local app URL")
+  .option("--external-cdp-base <url>", "Existing CDP HTTP endpoint to connect to instead of launching Chrome")
   .option("--servers-only", "Run servers only, skip browser launch")
   .option("--debug", "Enable debug logging to console (automatically disables TUI)")
   .option("-t, --tail", "Output consolidated logfile to terminal (like tail -f)")
@@ -950,6 +956,8 @@ program
         profileDir: options.profileDir,
         browserTool: options.browserTool,
         browser: browserOption,
+        appUrl: options.appUrl,
+        externalCdpBase: options.externalCdpBase,
         serversOnly: options.serversOnly,
         headless: options.headless,
         dateTime: options.dateTime,
@@ -1148,6 +1156,8 @@ program
           profileDir: options.profileDir,
           browserTool: options.browserTool,
           browser: browserOption,
+          appUrl: options.appUrl,
+          externalCdpBase: options.externalCdpBase,
           serversOnly: options.serversOnly,
           headless: options.headless,
           dateTime: options.dateTime,
@@ -1289,6 +1299,8 @@ program
         ...options,
         browser: browserOption,
         browserTool,
+        appUrl: options.appUrl,
+        externalCdpBase: options.externalCdpBase,
         port,
         debugPort: Number.parseInt(debugPort, 10),
         defaultPort: projectConfig.defaultPort,
