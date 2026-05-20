@@ -1,0 +1,47 @@
+example-apps/bundle-size-optimizer/bunfig.toml
+  s_0df0ec5b78ef21::t_9a121db487ba13 1-14
+example-apps/eliminate-waterfalls/bunfig.toml
+  s_0df0ec5b78ef21::t_9a121db487ba13 1-14
+bunfig.toml
+  s_0df0ec5b78ef21::t_9a121db487ba13 1-14
+example-apps/cls-fix/bunfig.toml
+  s_0df0ec5b78ef21::t_9a121db487ba13 1-14
+example-apps/design-guidelines/bunfig.toml
+  s_0df0ec5b78ef21::t_9a121db487ba13 1-14
+www/bunfig.toml
+  s_0df0ec5b78ef21::t_9a121db487ba13 1-14
+packages/d3k-darwin-arm64/bunfig.toml
+  s_0df0ec5b78ef21::t_9a121db487ba13 1-14
+test-tui/bunfig.toml
+  s_0df0ec5b78ef21::t_9a121db487ba13 1-14
+example-apps/server-side-perf-optimizer/bunfig.toml
+  s_0df0ec5b78ef21::t_9a121db487ba13 1-14
+packages/d3k-linux-x64/bunfig.toml
+  s_0df0ec5b78ef21::t_9a121db487ba13 1-14
+packages/d3k-windows-x64/bunfig.toml
+  s_0df0ec5b78ef21::t_9a121db487ba13 1-14
+example-apps/turbopack-bundle-analyzer/bunfig.toml
+  s_0df0ec5b78ef21::t_9a121db487ba13 1-14
+example-apps/react-performance/bunfig.toml
+  s_0df0ec5b78ef21::t_9a121db487ba13 1-14
+example-apps/re-render-optimizer/bunfig.toml
+  s_0df0ec5b78ef21::t_9a121db487ba13 1-14
+example-apps/client-side-fetch-optimizer/bunfig.toml
+  s_0df0ec5b78ef21::t_9a121db487ba13 1-14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.11",
+  "base_commit_sha": "7a976c7c21503529f78231c8165d904018b73352",
+  "prompts": {},
+  "sessions": {
+    "s_0df0ec5b78ef21": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e317a-e8cc-78b3-bf09-da77ed197e4a",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>"
+    }
+  }
+}
