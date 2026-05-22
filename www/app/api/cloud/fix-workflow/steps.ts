@@ -25,6 +25,11 @@ import {
 } from "@/lib/dev-agents"
 import { redactSensitiveReportText } from "@/lib/report-redaction"
 import {
+  buildVercelCliSandboxEnv,
+  buildVercelProjectJsonContent,
+  type VercelCliSandboxContext
+} from "@/lib/vercel-cli-sandbox-context"
+import {
   getDeepSecTranscriptUsage,
   getGeneratedReportCostUsd,
   getGeneratedReportTotalTokens,
@@ -5548,6 +5553,14 @@ export async function agentFixLoopStep(
     sandboxTeamId,
     teamId: _teamId
   })
+  const vercelCliContext =
+    progressContext?.runnerKind === "skill-runner" || isVercelOptimizeAudit
+      ? {
+          projectId: _projectId,
+          teamId: _teamId,
+          token: vercelApiTokens[0]
+        }
+      : undefined
 
   timer.start("Reconnect to sandbox")
   workflowLog(`[Agent] Reconnecting to sandbox: ${sandboxId}`)
@@ -5606,6 +5619,7 @@ export async function agentFixLoopStep(
   const effectiveProjectDir = isTurbopackBundleAnalyzer
     ? await resolveSandboxProjectDir(sandbox, projectDir, projectName, progressContext)
     : projectDir
+  await prepareVercelCliContextInSandbox(sandbox, effectiveProjectDir, vercelCliContext, progressContext)
 
   // Observation step only guarantees skills were installed in the previous sandbox.
   // If we had to recreate the sandbox for the agent step, reinstall them.
@@ -5736,6 +5750,7 @@ export async function agentFixLoopStep(
     bundleBaselineSummary,
     gatewayAuthToken,
     gatewayAuthSource,
+    vercelCliContext,
     progressContext
   )
   await updateProgress(progressContext, 3, progressLabels.verification, devUrl)
@@ -6455,6 +6470,56 @@ function shellEscape(value: string): string {
   return `'${value.replaceAll("'", `'\\''`)}'`
 }
 
+function getSandboxProjectCwd(projectDir?: string): string {
+  const normalizedProjectDir = projectDir?.replace(/^\/+|\/+$/g, "")
+  return normalizedProjectDir ? `/vercel/sandbox/${normalizedProjectDir}` : "/vercel/sandbox"
+}
+
+async function prepareVercelCliContextInSandbox(
+  sandbox: Sandbox,
+  projectDir: string | undefined,
+  context: VercelCliSandboxContext | undefined,
+  progressContext?: ProgressContext | null
+): Promise<void> {
+  const cliEnv = buildVercelCliSandboxEnv(context)
+  const projectJsonContent = buildVercelProjectJsonContent(context)
+  if (!projectJsonContent && Object.keys(cliEnv).length === 0) {
+    return
+  }
+
+  if (projectJsonContent) {
+    const result = await runSandboxCommandWithOptions(sandbox, {
+      cmd: "node",
+      args: [
+        "-e",
+        [
+          'const fs = require("fs");',
+          'const content = process.env.DEV3000_VERCEL_PROJECT_JSON || "";',
+          "if (!content) process.exit(0);",
+          'fs.mkdirSync(".vercel", { recursive: true });',
+          'fs.writeFileSync(".vercel/project.json", content);',
+          'console.log("wrote .vercel/project.json");'
+        ].join("")
+      ],
+      cwd: getSandboxProjectCwd(projectDir),
+      env: {
+        DEV3000_VERCEL_PROJECT_JSON: projectJsonContent
+      }
+    })
+
+    if (result.exitCode !== 0) {
+      throw new Error(
+        `Failed to prepare Vercel CLI project context: ${result.stderr || result.stdout || "unknown error"}`
+      )
+    }
+  }
+
+  await appendProgressLog(
+    progressContext,
+    `[Sandbox] Vercel CLI context prepared (project link=${projectJsonContent ? "yes" : "no"}, auth=${cliEnv.VERCEL_TOKEN ? "available" : "missing"})`
+  )
+}
+
 function buildAiGatewayShellExports(gatewayAuthToken: string | undefined, gatewayAuthSource: string | undefined) {
   if (!gatewayAuthToken) return []
 
@@ -6849,6 +6914,7 @@ async function ensurePackagedAshRuntimeInSandbox(
   projectRoot: string,
   gatewayAuthToken: string | undefined,
   gatewayAuthSource: string | undefined,
+  vercelCliContext?: VercelCliSandboxContext,
   progressContext?: ProgressContext | null
 ): Promise<{ authorization: string; baseUrl: string; logPath: string; workflowDataDir: string }> {
   const { appRoot } = await installPackagedAshAppInSandbox(sandbox, tarballUrl, specHash, progressContext)
@@ -6871,7 +6937,7 @@ async function ensurePackagedAshRuntimeInSandbox(
         "export PATH=$HOME/.local/bin:$PATH",
         'NODE_RUNTIME="$(command -v node || command -v nodejs || true)"',
         'if [ -z "$NODE_RUNTIME" ]; then echo "No Node.js runtime available for ASH." >&2; exit 1; fi',
-        "unset VERCEL VERCEL_DEPLOYMENT_ID VERCEL_PROJECT_ID VERCEL_URL VERCEL_ENV VERCEL_TARGET_ENV",
+        "unset VERCEL VERCEL_DEPLOYMENT_ID VERCEL_URL VERCEL_ENV VERCEL_TARGET_ENV",
         "export WORKFLOW_TARGET_WORLD=local",
         `export WORKFLOW_LOCAL_BASE_URL=http://127.0.0.1:${ASH_RUNTIME_PORT}`,
         `export WORKFLOW_LOCAL_DATA_DIR=${shellEscape(workflowDataDir)}`,
@@ -6896,7 +6962,10 @@ async function ensurePackagedAshRuntimeInSandbox(
         .join("\n")
     ],
     detached: true,
-    env: buildSandboxToolchainEnv()
+    env: {
+      ...buildSandboxToolchainEnv(),
+      ...buildVercelCliSandboxEnv(vercelCliContext)
+    }
   })
 
   const baseUrl = await waitForAshRuntimeReady(sandbox, ASH_RUNTIME_PORT, authorization, progressContext, logPath)
@@ -6970,7 +7039,7 @@ function redactAshDiagnosticSecrets(value: string): string {
     .replace(/\b(Basic)\s+[A-Za-z0-9._~+/=-]+/gi, "$1 [redacted]")
     .replace(/\b(authorization|Authorization)\s*[:=]\s*[^\s]+/g, "$1=[redacted]")
     .replace(
-      /\b(VERCEL_OIDC_TOKEN|AI_GATEWAY_API_KEY|ANTHROPIC_AUTH_TOKEN|ANTHROPIC_API_KEY|OPENAI_API_KEY)\s*[:=]\s*[^\s]+/g,
+      /\b(VERCEL_TOKEN|VERCEL_OIDC_TOKEN|AI_GATEWAY_API_KEY|ANTHROPIC_AUTH_TOKEN|ANTHROPIC_API_KEY|OPENAI_API_KEY)\s*[:=]\s*[^\s]+/g,
       "$1=[redacted]"
     )
 }
@@ -8063,6 +8132,7 @@ async function runAshAgentInSandbox(
   bundleBaselineSummary?: string,
   gatewayAuthToken?: string,
   gatewayAuthSource?: string,
+  vercelCliContext?: VercelCliSandboxContext,
   progressContext?: ProgressContext | null
 ): Promise<{
   transcript: string
@@ -8093,6 +8163,7 @@ async function runAshAgentInSandbox(
     effectiveProjectRoot,
     gatewayAuthToken,
     gatewayAuthSource,
+    vercelCliContext,
     progressContext
   )
   const workflowTypeForPrompt = workflowType || "cls-fix"
@@ -8651,6 +8722,7 @@ function buildWorkflowSpecificExecutionGuidance({
     return [
       "This is a code-only Vercel Optimize workflow. Do not start a dev server or use browser/Web Vitals tooling.",
       "Use the installed `vercel-optimize` skill and its scripts as the source of truth.",
+      "The workflow host preconfigures non-interactive Vercel CLI auth and `.vercel/project.json` when the user grants access; attempt the skill scripts before asking for `vercel login` in the ephemeral sandbox.",
       "Run observability collection before reading source files. Read source only after deterministic gates point to a route, file, or project setting.",
       "Use a fresh `.vercel-optimize/` run directory for JSON artifacts and write the final customer-facing markdown to `.vercel-optimize/report.md`.",
       "If Vercel CLI auth, project linkage, permissions, or Observability Plus requirements block the audit, write an explicit blocker report instead of producing speculative recommendations.",
@@ -9891,6 +9963,7 @@ async function runAgentWithDiagnoseTool(
   bundleBaselineSummary?: string,
   gatewayAuthToken?: string,
   gatewayAuthSource?: string,
+  vercelCliContext?: VercelCliSandboxContext,
   progressContext?: ProgressContext | null
 ): Promise<{
   transcript: string
@@ -9974,6 +10047,7 @@ async function runAgentWithDiagnoseTool(
         bundleBaselineSummary,
         effectiveGatewayAuthToken,
         effectiveGatewayAuthSource,
+        vercelCliContext,
         progressContext
       )
     } catch (ashRuntimeError) {

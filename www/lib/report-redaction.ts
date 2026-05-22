@@ -3,4 +3,8 @@ export function redactSensitiveReportText(value: string): string {
     .replace(/https?:\/\/x-access-token:[^@\s)]+@github\.com\//gi, "https://github.com/")
     .replace(/https?:\/\/[^:\s/@)]+:[^@\s)]+@github\.com\//gi, "https://github.com/")
     .replace(/\bgithub_pat_[A-Za-z0-9_]+/g, "github_pat_[redacted]")
+    .replace(
+      /\b(VERCEL_TOKEN|VERCEL_OIDC_TOKEN|AI_GATEWAY_API_KEY|ANTHROPIC_AUTH_TOKEN|ANTHROPIC_API_KEY|OPENAI_API_KEY)\s*[:=]\s*["']?[^"'\s`]+/g,
+      "$1=[redacted]"
+    )
 }
