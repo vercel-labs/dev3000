@@ -1,0 +1,36 @@
+www/app/api/cloud/fix-workflow/steps.ts
+  s_5da4393566ec36::t_062973eb661766 9966,10050
+  s_5da4393566ec36::t_117b0c827aec1f 7042
+  s_5da4393566ec36::t_007fa5ce74e64a 6917,6940,6965-6968
+  s_5da4393566ec36::t_9ab35baf1c92c3 6473-6497,6499-6522
+  s_5da4393566ec36::t_28419230637017 6498
+  s_5da4393566ec36::t_6ff95c3460453f 8135,8166
+  s_5da4393566ec36::t_3d3883de93dd79 28-31
+  s_5da4393566ec36::t_96daa9d2c0305e 5556-5563,5622,5753
+  s_5da4393566ec36::t_b82b3336373661 8725
+www/lib/vercel-cli-sandbox-context.ts
+  s_5da4393566ec36::t_ce7cc92f274c81 1-11,13-52
+  s_5da4393566ec36::t_28419230637017 12
+www/lib/report-redaction.ts
+  s_5da4393566ec36::t_b287e6be95f816 6-9
+www/lib/vercel-cli-sandbox-context.test.ts
+  s_5da4393566ec36::t_16c8a07214353f 1-53
+www/lib/report-redaction.test.ts
+  s_5da4393566ec36::t_c68625480339c4 1-18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.0",
+  "base_commit_sha": "f9b1c8a5351be726bc1893a68a1c96f2da2cfe9c",
+  "prompts": {},
+  "sessions": {
+    "s_5da4393566ec36": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e3207-b24c-7e90-bd42-71198956a1ad",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>"
+    }
+  }
+}
