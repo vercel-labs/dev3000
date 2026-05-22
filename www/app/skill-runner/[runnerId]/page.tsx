@@ -12,13 +12,53 @@ function getSharePath(runnerId: string): Route {
   return `/skill-runner/${runnerId}` as Route
 }
 
+function getShareContent(executionProfile?: string) {
+  if (executionProfile === "deepsec") {
+    return {
+      description: "Run a DeepSec security scan against your Vercel project and get a focused, downloadable report.",
+      terminal: [
+        ["$", "deepsec scan"],
+        ["scope", "auth, api, env, actions"],
+        ["output", "downloadable report"]
+      ],
+      badge: "Security scan",
+      title: "Prioritized findings from project context",
+      body: "Designed for teams that want a readable report before deciding what to fix."
+    }
+  }
+
+  if (executionProfile === "vercel-optimize") {
+    return {
+      description:
+        "Run an observability-first Vercel cost and performance audit and get a ranked, downloadable report.",
+      terminal: [
+        ["$", "vercel optimize"],
+        ["signals", "metrics, usage, config"],
+        ["output", "downloadable report"]
+      ],
+      badge: "Optimization audit",
+      title: "Ranked recommendations from production signals",
+      body: "Built for teams that want data-backed cost and performance work before changing code."
+    }
+  }
+
+  return {
+    description: "Run a high-confidence AI skill against a Vercel project from dev3000.",
+    terminal: [
+      ["$", "skill run"],
+      ["scope", "project context"],
+      ["output", "run report"]
+    ],
+    badge: "Skill runner",
+    title: "Project-specific analysis from a selected skill",
+    body: "Designed for teams that want a repeatable run before deciding what to ship."
+  }
+}
+
 function getSkillRunnerMetadata(runnerId: string, url: string): Metadata {
   const profile = getDefaultSkillRunnerOpenGraphProfile(runnerId)
   const skillName = profile?.name || "Skill Runner"
-  const description =
-    profile?.executionProfile === "deepsec"
-      ? "Run a DeepSec security scan against your Vercel project and get a focused, downloadable report."
-      : profile?.description || "Run a high-confidence AI skill against a Vercel project from dev3000."
+  const description = profile ? getShareContent(profile.executionProfile).description : getShareContent().description
   const imageUrl = `/api/og/skill-runner/${encodeURIComponent(runnerId)}`
 
   return {
@@ -65,6 +105,7 @@ export default async function ShareableSkillRunnerPage({ params }: { params: Pro
 
   await connection()
   const sharePath = getSharePath(runnerId)
+  const shareContent = getShareContent(profile.executionProfile)
   const user = await getCurrentUser()
   if (!user) {
     return (
@@ -97,24 +138,18 @@ export default async function ShareableSkillRunnerPage({ params }: { params: Pro
 
             <div className="rounded-lg border border-[#262626] bg-[#0b0b0b] p-5">
               <div className="font-mono text-[13px] leading-6 text-[#aaa]">
-                <div>
-                  <span className="text-[#666]">$</span> deepsec scan
-                </div>
-                <div>
-                  <span className="text-[#666]">scope</span> auth, api, env, actions
-                </div>
-                <div>
-                  <span className="text-[#666]">output</span> downloadable report
-                </div>
+                {shareContent.terminal.map(([label, value]) => (
+                  <div key={label}>
+                    <span className="text-[#666]">{label}</span> {value}
+                  </div>
+                ))}
               </div>
               <div className="mt-5 rounded-md border border-[#333] bg-[#111] p-4">
                 <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#d5b16b]">
-                  Security scan
+                  {shareContent.badge}
                 </div>
-                <div className="text-[18px] font-medium text-[#f5f5f5]">Prioritized findings from project context</div>
-                <p className="mt-2 text-[14px] leading-5 text-[#888]">
-                  Designed for teams that want a readable report before deciding what to fix.
-                </p>
+                <div className="text-[18px] font-medium text-[#f5f5f5]">{shareContent.title}</div>
+                <p className="mt-2 text-[14px] leading-5 text-[#888]">{shareContent.body}</p>
               </div>
             </div>
           </section>

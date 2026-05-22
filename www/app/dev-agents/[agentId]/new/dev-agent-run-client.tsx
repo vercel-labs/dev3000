@@ -110,6 +110,7 @@ interface RunnerValidationResult {
     workerBaseUrl?: string
     dashboardUrl?: string
     missingEnvKeys?: string[]
+    latestDeploymentReadyState?: string
     shellVersionStatus?: "current" | "outdated" | "unknown"
     desiredWorkerGitSha?: string
     workerShellVersion?: string
@@ -125,6 +126,7 @@ interface RunnerValidationResult {
 type WorkerSetupErrorCode =
   | "github_integration_required"
   | "initial_deployment_missing"
+  | "initial_deployment_failed"
   | "blob_store_limit_reached"
   | "project_scope_required"
   | "project_env_vars_forbidden"
@@ -135,6 +137,9 @@ interface WorkerSetupErrorState {
   code?: WorkerSetupErrorCode
   actionLabel?: string
   actionUrl?: string
+  deploymentUrl?: string
+  details?: string
+  projectName?: string
   repo?: string
 }
 
@@ -331,7 +336,8 @@ export default function DevAgentRunClient({
   const [repoVisibilities, setRepoVisibilities] = useState<Map<string, RepoVisibility>>(new Map())
 
   const selectedTeam = team
-  const requiresGitHubBackedProject = devAgent.legacyWorkflowType === "deepsec-security-scan"
+  const requiresGitHubBackedProject =
+    devAgent.legacyWorkflowType === "deepsec-security-scan" || devAgent.legacyWorkflowType === "vercel-optimize-audit"
   const selectableProjects = useMemo(() => {
     const selectableProjects = projects.filter((project) =>
       isSelectableProject(project, { runnerKind, requiresGitHubBackedProject })
@@ -386,6 +392,8 @@ export default function DevAgentRunClient({
   const isSelfHostedSkillRunner = runnerKind === "skill-runner" && localSkillRunnerExecutionMode === "self-hosted"
   const isReadySelfHostedSkillRunner =
     isSelfHostedSkillRunner && Boolean(localSkillRunnerWorkerBaseUrl) && localSkillRunnerWorkerStatus === "ready"
+  const githubBackedProjectLabel =
+    devAgent.legacyWorkflowType === "vercel-optimize-audit" ? "Vercel Optimize" : "DeepSec"
 
   async function copyShareLink() {
     if (!sharePath) return
@@ -427,6 +435,14 @@ export default function DevAgentRunClient({
     return message
   }
 
+  function isWorkerSetupStartError(code: string | undefined, message: string | undefined): boolean {
+    if (code === "runner_setup_required") return true
+    if (!message) return false
+    return /BLOB_READ_WRITE_TOKEN|Vercel Blob: No token found|Self-hosted worker returned a non-JSON response|no runner project is configured|runner project is still provisioning|runner project still needs its team-owned Blob setup repaired|runner is out of date|runner project is updating to the latest shell version/i.test(
+      message
+    )
+  }
+
   function openWorkerSetupAction(url: string) {
     setDidOpenWorkerSetupAction(true)
     const target = url.startsWith("/") ? url : undefined
@@ -449,37 +465,38 @@ export default function DevAgentRunClient({
     setLocalSkillRunnerWorkerStatus(skillRunnerWorkerStatus)
   }, [skillRunnerWorkerStatus])
 
+  function isFailedWorkerDeploymentState(state: string | undefined): boolean {
+    const normalized = state?.trim().toUpperCase()
+    return normalized === "ERROR" || normalized === "FAILED" || normalized === "CANCELED"
+  }
+
+  function resolveWorkerSetupStatus(result: RunnerValidationResult): SkillRunnerWorkerStatus {
+    if (result.settings?.workerStatus) return result.settings.workerStatus
+    if (!result.project?.workerBaseUrl) return "provisioning"
+    if (result.project.missingEnvKeys?.length) return "error"
+    if (isFailedWorkerDeploymentState(result.project.latestDeploymentReadyState)) return "error"
+    if (result.project.latestDeploymentReadyState && result.project.latestDeploymentReadyState !== "READY") {
+      return "provisioning"
+    }
+    if (result.project.shellVersionStatus === "outdated") return "outdated"
+    return "ready"
+  }
+
   function applyWorkerSetup(result: RunnerValidationResult) {
     setWorkerSetupResult(result)
     setLocalSkillRunnerExecutionMode(result.settings?.executionMode || "self-hosted")
     setLocalSkillRunnerWorkerBaseUrl(result.project?.workerBaseUrl || "")
-    setLocalSkillRunnerWorkerStatus(
-      result.settings?.workerStatus ||
-        (!result.project?.workerBaseUrl
-          ? "provisioning"
-          : result.project?.missingEnvKeys?.length
-            ? "error"
-            : result.project?.shellVersionStatus === "outdated"
-              ? "outdated"
-              : "ready")
-    )
+    setLocalSkillRunnerWorkerStatus(resolveWorkerSetupStatus(result))
   }
 
   function isReadyWorkerSetupResult(result: RunnerValidationResult) {
-    const workerStatus =
-      result.settings?.workerStatus ||
-      (!result.project?.workerBaseUrl
-        ? "provisioning"
-        : result.project?.missingEnvKeys?.length
-          ? "error"
-          : result.project?.shellVersionStatus === "outdated"
-            ? "outdated"
-            : "ready")
+    const workerStatus = resolveWorkerSetupStatus(result)
 
     return (
       result.installed &&
       Boolean(result.project?.workerBaseUrl) &&
       !result.project?.missingEnvKeys?.length &&
+      result.project?.latestDeploymentReadyState === "READY" &&
       result.project?.shellVersionStatus !== "outdated" &&
       workerStatus === "ready"
     )
@@ -513,6 +530,9 @@ export default function DevAgentRunClient({
             code?: WorkerSetupErrorCode
             actionLabel?: string
             actionUrl?: string
+            deploymentUrl?: string
+            details?: string
+            projectName?: string
             repo?: string
           }
       if (!response.ok || !data.success) {
@@ -521,6 +541,9 @@ export default function DevAgentRunClient({
           code: "code" in data ? data.code : undefined,
           actionLabel: "actionLabel" in data ? data.actionLabel : undefined,
           actionUrl: "actionUrl" in data ? data.actionUrl : undefined,
+          deploymentUrl: "deploymentUrl" in data ? data.deploymentUrl : undefined,
+          details: "details" in data ? data.details : undefined,
+          projectName: "projectName" in data ? data.projectName : undefined,
           repo: "repo" in data ? data.repo : undefined
         })
         return
@@ -863,7 +886,9 @@ export default function DevAgentRunClient({
     const projectGitHubRepo = getProjectGitHubRepo(project)
     if (requiresGitHubBackedProject && !projectGitHubRepo) {
       setIsRunning(false)
-      setError("DeepSec requires a GitHub-backed Vercel project. Select a project connected to a GitHub repository.")
+      setError(
+        `${githubBackedProjectLabel} requires a GitHub-backed Vercel project. Select a project connected to a GitHub repository.`
+      )
       return
     }
 
@@ -941,7 +966,8 @@ export default function DevAgentRunClient({
       if (
         runnerKind === "skill-runner" &&
         result.error &&
-        (isSelfHostedSkillRunner || result.code === "runner_setup_required")
+        isSelfHostedSkillRunner &&
+        isWorkerSetupStartError(result.code, result.error)
       ) {
         setLocalSkillRunnerExecutionMode("self-hosted")
         setLocalSkillRunnerWorkerStatus("error")
@@ -970,7 +996,53 @@ export default function DevAgentRunClient({
     await startDevAgentRun({ assumeWorkerReady: true })
   }
 
-  const workerSetupNeedsAction = Boolean(workerSetupError?.actionUrl)
+  function getWorkerSetupErrorTitle(setupError: WorkerSetupErrorState): string {
+    if (setupError.code === "github_integration_required") return "GitHub integration required"
+    if (setupError.code === "initial_deployment_failed") return "Runner deployment failed"
+    if (setupError.code === "initial_deployment_missing") return "Deployment could not start"
+    if (setupError.code === "blob_store_limit_reached") return "Blob store limit reached"
+    if (setupError.code === "project_scope_required" || setupError.code === "project_env_vars_forbidden") {
+      return "Vercel access needs updating"
+    }
+    return "Runner setup failed"
+  }
+
+  function getWorkerSetupErrorGuidance(setupError: WorkerSetupErrorState) {
+    if (setupError.code === "github_integration_required") {
+      return (
+        <>
+          Install the Vercel GitHub app for the <span className="font-medium">{team.name}</span> team, then come back
+          and retry runner setup.
+        </>
+      )
+    }
+
+    if (setupError.code === "initial_deployment_failed") {
+      return <>Retry setup to redeploy the same runner project automatically. Open the logs for build details.</>
+    }
+
+    if (setupError.code === "initial_deployment_missing") {
+      return <>Open Vercel setup or the runner project, update access if needed, then retry setup.</>
+    }
+
+    if (setupError.code === "blob_store_limit_reached") {
+      return <>Delete an unused Blob store for this team, then come back and retry runner setup.</>
+    }
+
+    if (setupError.code === "project_scope_required" || setupError.code === "project_env_vars_forbidden") {
+      return (
+        <>
+          Reconnect Vercel and choose all projects for <span className="font-medium">{team.name}</span> so dev3000 can
+          create, configure, and update the team runner project.
+        </>
+      )
+    }
+
+    return <>Retry setup. dev3000 will reuse and repair the existing runner project when possible.</>
+  }
+
+  const workerSetupRepairableDeploymentError = workerSetupError?.code === "initial_deployment_failed"
+  const workerSetupNeedsAction = Boolean(workerSetupError?.actionUrl && !workerSetupRepairableDeploymentError)
   const workerSetupActionUrl = workerSetupError?.actionUrl || null
 
   return (
@@ -1447,36 +1519,35 @@ export default function DevAgentRunClient({
             {workerSetupError ? (
               <div className="flex items-start gap-2 rounded-lg border border-red-500/20 bg-red-500/5 px-4 py-3 text-red-400">
                 <AlertCircle className="mt-0.5 size-4 shrink-0" />
-                <div className="space-y-2">
+                <div className="space-y-2 leading-[20px]">
+                  <div className="font-medium text-red-300">{getWorkerSetupErrorTitle(workerSetupError)}</div>
                   <div>{workerSetupError.message}</div>
-                  {workerSetupNeedsAction ? (
-                    <div className="text-[12px] leading-[18px] text-red-300/90">
-                      {workerSetupError.code === "github_integration_required" ? (
-                        <>
-                          Install the Vercel GitHub app for the <span className="font-medium">{team.name}</span> team,
-                          then come back and retry runner setup.
-                        </>
-                      ) : workerSetupError.code === "initial_deployment_missing" ? (
-                        <>
-                          The runner project exists, but its latest deployment did not finish successfully. Open the
-                          project, review the deployment error, then come back and retry setup.
-                        </>
-                      ) : workerSetupError.code === "blob_store_limit_reached" ? (
-                        <>
-                          This team has reached its Blob store limit. Delete an unused Blob store, then come back and
-                          retry runner setup.
-                        </>
-                      ) : workerSetupError.code === "project_scope_required" ||
-                        workerSetupError.code === "project_env_vars_forbidden" ? (
-                        <>
-                          Reconnect Vercel and choose all projects for <span className="font-medium">{team.name}</span>{" "}
-                          so dev3000 can create, configure, and update the team runner project.
-                        </>
-                      ) : (
-                        <>Open Vercel Projects, remove any stale runner project if it appears, then retry setup.</>
-                      )}
+                  {workerSetupError.projectName ? (
+                    <div className="text-[12px] leading-[18px] text-red-200/80">
+                      Runner project: <span className="font-mono">{workerSetupError.projectName}</span>
                     </div>
                   ) : null}
+                  {workerSetupError.details ? (
+                    <pre className="max-h-32 overflow-auto rounded-md border border-red-500/20 bg-[#0d0d0d] p-2 font-mono text-[11px] leading-[16px] whitespace-pre-wrap text-red-200/90">
+                      {workerSetupError.details}
+                    </pre>
+                  ) : null}
+                  <div className="text-[12px] leading-[18px] text-red-300/90">
+                    {getWorkerSetupErrorGuidance(workerSetupError)}
+                    {workerSetupError.deploymentUrl ? (
+                      <div className="mt-1 break-all text-red-200/70">{workerSetupError.deploymentUrl}</div>
+                    ) : null}
+                    {workerSetupRepairableDeploymentError && workerSetupError.actionUrl ? (
+                      <a
+                        href={workerSetupError.actionUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-1 inline-flex text-red-200 underline decoration-red-300/30 underline-offset-4 hover:decoration-red-200"
+                      >
+                        {workerSetupError.actionLabel || "Open deployment logs"}
+                      </a>
+                    ) : null}
+                  </div>
                 </div>
               </div>
             ) : null}
@@ -1589,8 +1660,14 @@ export default function DevAgentRunClient({
                   {isInstallingWorker || isCheckingWorker ? (
                     <span className="inline-flex items-center gap-2">
                       <Loader2 className="size-3.5 animate-spin" />
-                      {workerSetupResult?.installed ? "Configuring…" : "Installing…"}
+                      {workerSetupRepairableDeploymentError
+                        ? "Repairing…"
+                        : workerSetupResult?.installed
+                          ? "Configuring…"
+                          : "Installing…"}
                     </span>
+                  ) : workerSetupRepairableDeploymentError ? (
+                    "Repair Runner Project"
                   ) : workerSetupNeedsAction && didOpenWorkerSetupAction ? (
                     "Retry Setup"
                   ) : workerSetupResult?.project?.shellVersionStatus === "outdated" ? (

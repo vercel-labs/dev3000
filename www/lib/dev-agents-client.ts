@@ -142,6 +142,7 @@ export interface DevAgent {
     | "react-performance"
     | "turbopack-bundle-analyzer"
     | "deepsec-security-scan"
+    | "vercel-optimize-audit"
   supportsPathInput?: boolean
   supportsPullRequest?: boolean
   supportsCrawlDepth?: boolean

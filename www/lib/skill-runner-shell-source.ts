@@ -8,18 +8,17 @@ const RUNNER_SHELL_EXCLUDED_FILES = [
   /\.tsbuildinfo$/,
   /^www\/\.env/,
   /^www\/(?:\.next|\.vercel|node_modules|\.swc)\//,
-  /^www\/public\//,
   /^www\/(?:WORKFLOW_TESTING_GUIDE|d3k-skill-runner-team-impl)\.md$/
 ]
 const RUNNER_SHELL_UPLOAD_CONCURRENCY = 8
 
-interface GitHubTreeEntry {
+export interface SkillRunnerShellTreeEntry {
   path?: string
   type?: string
 }
 
 interface GitHubTreeResponse {
-  tree?: GitHubTreeEntry[]
+  tree?: SkillRunnerShellTreeEntry[]
   truncated?: boolean
 }
 
@@ -40,7 +39,7 @@ export interface VercelUploadedDeploymentFile {
   size: number
 }
 
-function isRunnerShellFile(file: string): boolean {
+export function isRunnerShellFile(file: string): boolean {
   if (RUNNER_SHELL_ROOT_FILES.has(file)) return true
   if (!file.startsWith(`${SKILL_RUNNER_WORKER_ROOT_DIRECTORY}/`)) return false
   return !RUNNER_SHELL_EXCLUDED_FILES.some((pattern) => pattern.test(file))
@@ -73,14 +72,15 @@ async function fetchGitHubTree(commit: string): Promise<GitHubTreeResponse> {
   return (await response.json()) as GitHubTreeResponse
 }
 
-export async function resolveSkillRunnerShellSource(commit: string, version = commit): Promise<SkillRunnerShellSource> {
-  const tree = await fetchGitHubTree(commit)
-  if (tree.truncated) {
-    throw new Error(`Runner shell source tree for ${commit} was truncated by GitHub.`)
-  }
-
-  const files = (tree.tree || [])
-    .filter((entry): entry is Required<Pick<GitHubTreeEntry, "path" | "type">> => Boolean(entry.path && entry.type))
+export function resolveSkillRunnerShellSourceFromTree(
+  tree: SkillRunnerShellTreeEntry[],
+  commit: string,
+  version = commit
+): SkillRunnerShellSource {
+  const files = tree
+    .filter((entry): entry is Required<Pick<SkillRunnerShellTreeEntry, "path" | "type">> =>
+      Boolean(entry.path && entry.type)
+    )
     .filter((entry) => entry.type === "blob" && isRunnerShellFile(entry.path))
     .map((entry) => ({
       path: entry.path,
@@ -97,6 +97,15 @@ export async function resolveSkillRunnerShellSource(commit: string, version = co
     commit,
     files
   }
+}
+
+export async function resolveSkillRunnerShellSource(commit: string, version = commit): Promise<SkillRunnerShellSource> {
+  const tree = await fetchGitHubTree(commit)
+  if (tree.truncated) {
+    throw new Error(`Runner shell source tree for ${commit} was truncated by GitHub.`)
+  }
+
+  return resolveSkillRunnerShellSourceFromTree(tree.tree || [], commit, version)
 }
 
 async function mapWithConcurrency<T, U>(

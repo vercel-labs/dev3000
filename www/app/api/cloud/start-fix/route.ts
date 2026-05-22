@@ -25,6 +25,10 @@ import {
   type TeamIdentity,
   type UserIdentity
 } from "@/lib/telemetry"
+import {
+  extractAutomationProtectionBypassToken,
+  type VercelProtectionBypassResponse
+} from "@/lib/vercel-protection-bypass"
 import { proxyWorkflowJsonRequest, shouldProxyWorkflowRequest } from "@/lib/workflow-api"
 import { clearWorkflowLog, workflowError, workflowLog } from "@/lib/workflow-logger"
 import {
@@ -412,16 +416,26 @@ async function forwardSelfHostedStartRequest({
   body,
   request,
   accessToken,
+  bypassToken,
   workerBaseUrl
 }: {
   body: Record<string, unknown>
   request: Request
   accessToken: string | undefined
+  bypassToken?: string
   workerBaseUrl: string
 }): Promise<Response> {
   const targetUrl = new URL("/api/cloud/start-fix", workerBaseUrl)
+  if (bypassToken) {
+    targetUrl.searchParams.set("x-vercel-set-bypass-cookie", "true")
+    targetUrl.searchParams.set("x-vercel-protection-bypass", bypassToken)
+  }
+
   const headers = new Headers()
   headers.set("content-type", "application/json")
+  if (bypassToken) {
+    headers.set("x-vercel-protection-bypass", bypassToken)
+  }
 
   if (accessToken) {
     headers.set("authorization", `Bearer ${accessToken}`)
@@ -466,6 +480,38 @@ async function forwardSelfHostedStartRequest({
     statusText: upstream.statusText,
     headers: corsHeaders
   })
+}
+
+async function generateWorkerProtectionBypassToken({
+  accessToken,
+  projectId,
+  teamId
+}: {
+  accessToken: string
+  projectId: string
+  teamId: string
+}): Promise<string | undefined> {
+  const apiUrl = new URL(`https://api.vercel.com/v1/projects/${encodeURIComponent(projectId)}/protection-bypass`)
+  apiUrl.searchParams.set("teamId", teamId)
+
+  const response = await fetch(apiUrl.toString(), {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json"
+    },
+    body: "{}",
+    cache: "no-store"
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    workflowError("[Start Fix] Failed to generate worker protection bypass token:", errorText)
+    return undefined
+  }
+
+  const data = (await response.json()) as VercelProtectionBypassResponse
+  return extractAutomationProtectionBypassToken(data)
 }
 
 // Handle OPTIONS preflight request
@@ -673,7 +719,8 @@ export async function POST(request: Request) {
       "react-performance",
       "url-audit",
       "turbopack-bundle-analyzer",
-      "deepsec-security-scan"
+      "deepsec-security-scan",
+      "vercel-optimize-audit"
     ]
     if (typeof body.skillRunnerId === "string" && body.skillRunnerId.trim().length > 0) {
       const requestedSkillRunnerId = body.skillRunnerId.trim()
@@ -725,7 +772,23 @@ export async function POST(request: Request) {
             isPersonal: Boolean(team.isPersonal)
           },
           requestedSkillRunnerId
-        )
+        ).catch((error: unknown) => {
+          if (error instanceof Error && /skill runner not found/i.test(error.message)) {
+            return null
+          }
+          throw error
+        })
+        if (!preparedSkillRunner) {
+          return Response.json(
+            {
+              success: false,
+              code: "skill_runner_not_found",
+              error:
+                "This skill runner is no longer available for this team. Refresh the skill runner catalog and try again."
+            },
+            { status: 404, headers: corsHeaders }
+          )
+        }
         devAgent = preparedSkillRunner.devAgent
         skillRunnerCanonicalPath = preparedSkillRunner.canonicalPath
         skillRunnerValidationWarning = preparedSkillRunner.validationWarning
@@ -899,11 +962,16 @@ export async function POST(request: Request) {
       workflowLog(`[Start Fix] Production URL: ${productionUrl}`)
     }
 
-    if (workflowType === "deepsec-security-scan" && analysisTargetType !== "url" && !repoUrl) {
+    if (
+      (workflowType === "deepsec-security-scan" || workflowType === "vercel-optimize-audit") &&
+      analysisTargetType !== "url" &&
+      !repoUrl
+    ) {
+      const workflowLabel = workflowType === "vercel-optimize-audit" ? "Vercel Optimize" : "DeepSec"
       return Response.json(
         {
           success: false,
-          error: "DeepSec requires a GitHub-backed Vercel project. Select a project connected to a GitHub repository."
+          error: `${workflowLabel} requires a GitHub-backed Vercel project. Select a project connected to a GitHub repository.`
         },
         { status: 400, headers: corsHeaders }
       )
@@ -1197,6 +1265,17 @@ export async function POST(request: Request) {
             body: forwardedBody,
             request,
             accessToken,
+            bypassToken:
+              accessToken && selfHostedWorkerProjectId && selfHostedWorkerTeamId
+                ? await generateWorkerProtectionBypassToken({
+                    accessToken,
+                    projectId: selfHostedWorkerProjectId,
+                    teamId: selfHostedWorkerTeamId
+                  }).catch((error: unknown) => {
+                    workflowError("[Start Fix] Failed to prepare worker protection bypass:", error)
+                    return undefined
+                  })
+                : undefined,
             workerBaseUrl
           })
           const workerResult = (await workerResponse.json().catch(() => null)) as {

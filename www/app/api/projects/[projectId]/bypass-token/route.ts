@@ -1,4 +1,8 @@
 import { getVercelApiAccessToken } from "@/lib/auth"
+import {
+  extractAutomationProtectionBypassToken,
+  type VercelProtectionBypassResponse
+} from "@/lib/vercel-protection-bypass"
 
 export async function POST(request: Request, { params }: { params: Promise<{ projectId: string }> }) {
   try {
@@ -21,9 +25,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ pro
           Authorization: `Bearer ${accessToken}`,
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({
-          generate: true
-        })
+        body: "{}"
       }
     )
 
@@ -33,11 +35,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ pro
       return Response.json({ error: "Failed to generate bypass token", details: error }, { status: response.status })
     }
 
-    const data = await response.json()
+    const data = (await response.json()) as VercelProtectionBypassResponse
 
     return Response.json({
       success: true,
-      token: data.secret
+      token: extractAutomationProtectionBypassToken(data)
     })
   } catch (error) {
     console.error("Error generating bypass token:", error)

@@ -15,7 +15,13 @@ import {
   DEEPSEC_DEV_AGENT_INSTRUCTIONS,
   DEEPSEC_DEV_AGENT_SUCCESS_EVAL,
   DEEPSEC_SKILL_INSTALL_ARG,
-  ensureDevAgentAshArtifactPrepared
+  ensureDevAgentAshArtifactPrepared,
+  VERCEL_OPTIMIZE_DEV_AGENT_ACTION_STEPS,
+  VERCEL_OPTIMIZE_DEV_AGENT_DESCRIPTION,
+  VERCEL_OPTIMIZE_DEV_AGENT_INSTRUCTIONS,
+  VERCEL_OPTIMIZE_DEV_AGENT_SUCCESS_EVAL,
+  VERCEL_OPTIMIZE_SKILL_INSTALL_ARG,
+  VERCEL_OPTIMIZE_SKILL_SOURCE_URL
 } from "@/lib/dev-agents"
 import { NO_DEV_SERVER_COMMAND } from "@/lib/dev-server-command"
 import type { SkillRunnerTeamSettings } from "@/lib/skill-runner-config"
@@ -28,7 +34,7 @@ const SKILL_RUNNER_STATS_PREFIX = "skill-runners/stats/"
 
 type SkillRunnerValidationQuality = "high" | "variable"
 type SkillRunnerSourceKind = "default" | "imported"
-type SkillRunnerExecutionProfile = "generic" | "deepsec"
+type SkillRunnerExecutionProfile = "generic" | "deepsec" | "vercel-optimize"
 
 export interface SkillRunnerRecord {
   id: string
@@ -119,6 +125,18 @@ const DEFAULT_SKILL_RUNNER_SEEDS: DefaultSkillRunnerSeed[] = [
     description: DEEPSEC_DEV_AGENT_DESCRIPTION,
     validationQuality: "high",
     executionProfile: "deepsec"
+  },
+  {
+    id: "vercel-optimize",
+    canonicalPath: "vercel-labs/agent-skills/vercel-optimize",
+    sourceUrl: VERCEL_OPTIMIZE_SKILL_SOURCE_URL,
+    installArg: VERCEL_OPTIMIZE_SKILL_INSTALL_ARG,
+    packageName: "vercel-labs/agent-skills",
+    skillName: "vercel-optimize",
+    displayName: "Vercel Optimize",
+    description: VERCEL_OPTIMIZE_DEV_AGENT_DESCRIPTION,
+    validationQuality: "high",
+    executionProfile: "vercel-optimize"
   },
   {
     id: "sr_vercel-react-best-practices",
@@ -325,6 +343,21 @@ function buildDeepsecSkillRef(
   ]
 }
 
+function buildSingleSkillRef(
+  record: Pick<SkillRunnerRecord, "id" | "installArg" | "packageName" | "skillName" | "displayName" | "sourceUrl">
+): DevAgentSkillRef[] {
+  return [
+    {
+      id: record.id,
+      installArg: record.installArg,
+      packageName: record.packageName,
+      skillName: record.skillName,
+      displayName: record.displayName,
+      sourceUrl: record.sourceUrl
+    }
+  ]
+}
+
 function getExecutionProfile(
   record: Pick<SkillRunnerRecord, "executionProfile" | "installArg" | "packageName" | "skillName">
 ): SkillRunnerExecutionProfile {
@@ -335,6 +368,12 @@ function getExecutionProfile(
     (record.packageName === "vercel-labs/dev3000" && record.skillName === "deepsec")
   ) {
     return "deepsec"
+  }
+  if (
+    record.installArg === VERCEL_OPTIMIZE_SKILL_INSTALL_ARG ||
+    (record.packageName === "vercel-labs/agent-skills" && record.skillName === "vercel-optimize")
+  ) {
+    return "vercel-optimize"
   }
   return "generic"
 }
@@ -518,8 +557,9 @@ export async function listSkillRunnerTeamSettings(teams: DevAgentTeam[]): Promis
 
 function applyUsageCount(record: SkillRunnerRecord, usageMap: Map<string, SkillRunnerUsageSummary>): DevAgent {
   const usage = usageMap.get(record.id)
+  const executionProfile = getExecutionProfile(record)
 
-  if (getExecutionProfile(record) === "deepsec") {
+  if (executionProfile === "deepsec") {
     return {
       id: record.id,
       kind: "skill-runner",
@@ -542,6 +582,37 @@ function applyUsageCount(record: SkillRunnerRecord, usageMap: Map<string, SkillR
       supportsPathInput: false,
       supportsPullRequest: false,
       successEval: DEEPSEC_DEV_AGENT_SUCCESS_EVAL,
+      ashArtifact: record.ashArtifact,
+      runnerCanonicalPath: record.canonicalPath,
+      runnerSourceUrl: record.sourceUrl,
+      runnerSourceKind: record.sourceKind,
+      validationWarning: record.validationWarning
+    }
+  }
+
+  if (executionProfile === "vercel-optimize") {
+    return {
+      id: record.id,
+      kind: "skill-runner",
+      name: record.displayName,
+      description: record.description,
+      instructions: `${VERCEL_OPTIMIZE_DEV_AGENT_INSTRUCTIONS}\n\nUpstream skill: ${record.canonicalPath}`,
+      executionMode: "preview-pr",
+      sandboxBrowser: "none",
+      aiAgent: "anthropic/claude-opus-4.6",
+      devServerCommand: NO_DEV_SERVER_COMMAND,
+      actionSteps: VERCEL_OPTIMIZE_DEV_AGENT_ACTION_STEPS,
+      skillRefs: buildSingleSkillRef(record),
+      author: record.author,
+      team: record.team,
+      createdAt: record.createdAt,
+      updatedAt: record.updatedAt,
+      usageCount: usage?.usageCount ?? 0,
+      avgCost: formatAvgCost(usage),
+      legacyWorkflowType: "vercel-optimize-audit",
+      supportsPathInput: false,
+      supportsPullRequest: false,
+      successEval: VERCEL_OPTIMIZE_DEV_AGENT_SUCCESS_EVAL,
       ashArtifact: record.ashArtifact,
       runnerCanonicalPath: record.canonicalPath,
       runnerSourceUrl: record.sourceUrl,
@@ -604,7 +675,7 @@ function buildFallbackDefaultSkillRunnerDetails(seed: DefaultSkillRunnerSeed): S
 }
 
 async function fetchDefaultSkillRunnerDetails(seed: DefaultSkillRunnerSeed): Promise<SkillsShSkillDetails> {
-  if (seed.executionProfile === "deepsec") {
+  if (seed.executionProfile === "deepsec" || seed.executionProfile === "vercel-optimize") {
     return buildFallbackDefaultSkillRunnerDetails(seed)
   }
 
@@ -759,8 +830,8 @@ export async function getSkillRunnerForExecution(
           {
             ...defaultSeed,
             sourceUrl: details.sourceUrl,
-            displayName: defaultSeed.executionProfile === "deepsec" ? defaultSeed.displayName : details.displayName,
-            description: defaultSeed.executionProfile === "deepsec" ? defaultSeed.description : details.description,
+            displayName: defaultSeed.executionProfile ? defaultSeed.displayName : details.displayName,
+            description: defaultSeed.executionProfile ? defaultSeed.description : details.description,
             executionProfile: defaultSeed.executionProfile
           },
           team

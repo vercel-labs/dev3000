@@ -13,6 +13,7 @@ import type { VercelTeam } from "@/lib/vercel-teams"
 export type SkillRunnerWorkerSetupErrorCode =
   | "github_integration_required"
   | "initial_deployment_missing"
+  | "initial_deployment_failed"
   | "blob_store_limit_reached"
   | "project_scope_required"
   | "project_env_vars_forbidden"
@@ -22,6 +23,9 @@ export interface SkillRunnerWorkerSetupRequirement {
   code: SkillRunnerWorkerSetupErrorCode
   actionLabel?: string
   actionUrl?: string
+  deploymentUrl?: string
+  details?: string
+  projectName?: string
   repo?: string
 }
 
@@ -29,6 +33,9 @@ export class SkillRunnerWorkerSetupError extends Error {
   readonly code: SkillRunnerWorkerSetupErrorCode
   readonly actionLabel?: string
   readonly actionUrl?: string
+  readonly deploymentUrl?: string
+  readonly details?: string
+  readonly projectName?: string
   readonly repo?: string
 
   constructor(message: string, requirement?: SkillRunnerWorkerSetupRequirement) {
@@ -37,6 +44,9 @@ export class SkillRunnerWorkerSetupError extends Error {
     this.code = requirement?.code || "unknown"
     this.actionLabel = requirement?.actionLabel
     this.actionUrl = requirement?.actionUrl
+    this.deploymentUrl = requirement?.deploymentUrl
+    this.details = requirement?.details
+    this.projectName = requirement?.projectName
     this.repo = requirement?.repo
   }
 }
@@ -183,6 +193,7 @@ export interface SkillRunnerWorkerProject {
   dashboardUrl: string
   missingEnvKeys?: string[]
   latestDeploymentId?: string
+  latestDeploymentUrl?: string
   latestDeploymentReadyState?: string
   latestDeploymentCreatedAt?: number
   latestDeploymentGitSha?: string
@@ -484,13 +495,14 @@ function buildInitialDeploymentCreateError(
   ) {
     return new SkillRunnerWorkerSetupError(
       message ||
-        "The runner project exists, but Vercel could not start its deployment. Open the runner project, review the deployment error, then retry setup.",
+        `The runner project "${project.projectName}" exists, but Vercel could not start its deployment. Retry setup to redeploy it automatically.`,
       {
         code: /install github app|github integration/i.test(searchableText)
           ? "github_integration_required"
           : "initial_deployment_missing",
         actionLabel: actionUrl ? "Open Vercel Setup" : "Open Runner Project",
         actionUrl: actionUrl || project.dashboardUrl,
+        projectName: project.projectName,
         repo: repo || SKILL_RUNNER_WORKER_REPO
       }
     )
@@ -591,6 +603,85 @@ async function getDeploymentDetails(
   return (await response.json()) as VercelDeploymentDetailsResponse
 }
 
+interface VercelDeploymentEventLine {
+  text?: string
+}
+
+const ANSI_ESCAPE_PATTERN = new RegExp(`${String.fromCharCode(27)}\\[[0-?]*[ -/]*[@-~]`, "g")
+
+function cleanDeploymentLogLine(value: string): string {
+  return value
+    .replace(ANSI_ESCAPE_PATTERN, "")
+    .replace(/\[now-builder-debug\]\s*/g, "")
+    .trim()
+}
+
+function summarizeDeploymentFailureLines(lines: string[]): string | undefined {
+  const important = lines
+    .map(cleanDeploymentLogLine)
+    .filter(Boolean)
+    .filter((line) =>
+      /Build error occurred|Module not found|Can't resolve|Type error|Failed to compile|Cannot find module|ENOENT|SyntaxError|ReferenceError|error: script|Command ".*" exited with/i.test(
+        line
+      )
+    )
+
+  const deduped: string[] = []
+  for (const line of important) {
+    if (!deduped.includes(line)) {
+      deduped.push(line)
+    }
+    if (deduped.length >= 5) break
+  }
+
+  return deduped.length > 0 ? deduped.join("\n") : undefined
+}
+
+async function getDeploymentFailureSummary(
+  accessToken: string,
+  team: VercelTeam,
+  deploymentId: string
+): Promise<string | undefined> {
+  const apiUrl = new URL(`https://api.vercel.com/v3/now/deployments/${encodeURIComponent(deploymentId)}/events`)
+  apiUrl.searchParams.set("teamId", team.id)
+  apiUrl.searchParams.set("direction", "forward")
+  apiUrl.searchParams.set("follow", "")
+  apiUrl.searchParams.set("format", "lines")
+  apiUrl.searchParams.set("limit", "200")
+
+  const response = await fetch(apiUrl.toString(), {
+    headers: {
+      Authorization: `Bearer ${accessToken}`
+    },
+    cache: "no-store"
+  })
+
+  if (!response.ok) {
+    return undefined
+  }
+
+  const body = await response.text()
+  const lines = body
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      try {
+        const event = JSON.parse(line) as VercelDeploymentEventLine
+        return event.text || ""
+      } catch {
+        return ""
+      }
+    })
+
+  return summarizeDeploymentFailureLines(lines)
+}
+
+function buildDeploymentLogsUrl(deploymentUrl: string | undefined): string | undefined {
+  const normalized = normalizeHost(deploymentUrl)
+  return normalized ? `${normalized}/_logs` : undefined
+}
+
 async function fetchWorkerVersionPayload(workerBaseUrl: string): Promise<SkillRunnerWorkerVersionPayload | null> {
   try {
     const response = await fetch(new URL("/api/skill-runner-worker/version", workerBaseUrl).toString(), {
@@ -647,6 +738,7 @@ export function resolveSkillRunnerWorkerStatus(
   if (!project) return "unconfigured"
   if (!project.workerBaseUrl) return "provisioning"
   if (project.missingEnvKeys && project.missingEnvKeys.length > 0) return "error"
+  if (isFailedDeploymentState(project.latestDeploymentReadyState)) return "error"
   if (project.latestDeploymentReadyState && project.latestDeploymentReadyState !== "READY") return "provisioning"
   if (project.shellVersionStatus === "outdated") return "outdated"
   return "ready"
@@ -1236,6 +1328,7 @@ async function resolveSkillRunnerWorkerProjectFromLookupProject(
   )
   const latestDeploymentGitBranch =
     latestDeploymentDetails?.meta?.githubCommitRef?.trim() || latestDeploymentDetails?.meta?.gitCommitRef?.trim()
+  const latestDeploymentUrl = normalizeHost(latestDeployment?.url)
   const workerBaseUrl = resolveWorkerBaseUrl(project)
   const workerVersion =
     workerBaseUrl && (latestDeployment?.readyState === "READY" || latestDeployment?.state === "READY")
@@ -1268,6 +1361,7 @@ async function resolveSkillRunnerWorkerProjectFromLookupProject(
     dashboardUrl: buildDashboardUrl(team, projectName),
     missingEnvKeys,
     latestDeploymentId: latestDeployment?.id,
+    latestDeploymentUrl,
     latestDeploymentReadyState: latestDeployment?.readyState || latestDeployment?.state,
     latestDeploymentCreatedAt: latestDeployment?.createdAt,
     latestDeploymentGitSha,
@@ -1439,6 +1533,7 @@ export async function installSkillRunnerWorkerProject(
   if (
     existing?.workerBaseUrl &&
     (!existing.missingEnvKeys || existing.missingEnvKeys.length === 0) &&
+    existing.latestDeploymentReadyState === "READY" &&
     existing.shellVersionStatus !== "outdated"
   ) {
     return existing
@@ -1473,11 +1568,12 @@ export async function installSkillRunnerWorkerProject(
       throw error
     }
     throw new SkillRunnerWorkerSetupError(
-      "Vercel reported that the runner project no longer exists while dev3000 was preparing its Blob storage. Open Vercel Projects, remove any partial d3k-skill-runner projects, then retry setup.",
+      `Vercel reported that the runner project "${project.projectName}" no longer exists while dev3000 was preparing its Blob storage. Retry setup so dev3000 can recreate the runner project.`,
       {
         code: "unknown",
         actionLabel: "Open Vercel Projects",
-        actionUrl: `https://vercel.com/${team.slug}`
+        actionUrl: `https://vercel.com/${team.slug}`,
+        projectName: project.projectName
       }
     )
   }
@@ -1512,12 +1608,19 @@ export async function installSkillRunnerWorkerProject(
     for (let attempt = 0; attempt < 30; attempt += 1) {
       const resolved = await findSkillRunnerWorkerProject(accessToken, team, project.projectId)
       if (resolved && isFailedDeploymentState(resolved.latestDeploymentReadyState)) {
+        const details = resolved.latestDeploymentId
+          ? await getDeploymentFailureSummary(accessToken, team, resolved.latestDeploymentId).catch(() => undefined)
+          : undefined
+        const deploymentLogsUrl = buildDeploymentLogsUrl(resolved.latestDeploymentUrl)
         throw new SkillRunnerWorkerSetupError(
-          "The runner project was created, but its first deployment failed in Vercel. Open the runner project, review the deployment error, then retry setup.",
+          `Vercel build failed before the runner project "${resolved.projectName}" became ready.`,
           {
-            code: "initial_deployment_missing",
-            actionLabel: "Open Runner Project",
-            actionUrl: resolved.dashboardUrl
+            code: "initial_deployment_failed",
+            actionLabel: deploymentLogsUrl ? "Open Failed Deployment Logs" : "Open Runner Project",
+            actionUrl: deploymentLogsUrl || resolved.dashboardUrl,
+            deploymentUrl: resolved.latestDeploymentUrl,
+            details,
+            projectName: resolved.projectName
           }
         )
       }

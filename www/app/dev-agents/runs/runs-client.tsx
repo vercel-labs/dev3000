@@ -62,6 +62,8 @@ function formatLegacyWorkflowType(type?: string): string {
       return "URL Audit"
     case "turbopack-bundle-analyzer":
       return "Turbopack Bundle Analyzer"
+    case "vercel-optimize-audit":
+      return "Vercel Optimize"
     default:
       return "Dev Agent Run"
   }

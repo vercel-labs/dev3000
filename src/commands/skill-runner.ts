@@ -502,17 +502,32 @@ async function installWorkerProject(
   team: VercelTeam,
   options: RemoteSkillOptions
 ): Promise<void> {
-  log(options, "Installing team skill runner project...")
-  const response = await fetchJsonResponse<WorkerInstallResponse>(`${baseUrl}/api/skill-runner-teams/worker`, {
-    method: "POST",
-    headers: {
-      ...authorizationHeaders(token),
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({ team: team.id })
-  })
+  const installSpinner = startSpinner(options, "Installing team skill runner project...")
+  if (!installSpinner) {
+    log(options, "Installing team skill runner project...")
+  }
+
+  let response: {
+    ok: boolean
+    status: number
+    data: WorkerInstallResponse
+  }
+  try {
+    response = await fetchJsonResponse<WorkerInstallResponse>(`${baseUrl}/api/skill-runner-teams/worker`, {
+      method: "POST",
+      headers: {
+        ...authorizationHeaders(token),
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ team: team.id })
+    })
+  } catch (error) {
+    installSpinner?.fail("Failed to install team skill runner project")
+    throw error
+  }
 
   if (!response.ok || !response.data?.success) {
+    installSpinner?.fail("Failed to install team skill runner project")
     throw new Error(response.data?.error || `Failed to install runner project (${response.status}).`)
   }
 
@@ -529,10 +544,15 @@ async function installWorkerProject(
     const message =
       response.data.message ||
       `Runner project is not ready yet${workerStatus ? ` (status: ${workerStatus})` : ""}. Open the report link after setup completes, then retry.`
+    installSpinner?.fail("Team skill runner project is not ready")
     throw new Error(message)
   }
 
-  log(options, `${chalk.green("✓")} Team skill runner project is ready`)
+  if (installSpinner) {
+    installSpinner.succeed("Team skill runner project is ready")
+  } else {
+    log(options, `${chalk.green("✓")} Team skill runner project is ready`)
+  }
 }
 
 async function startSkillRun(input: {

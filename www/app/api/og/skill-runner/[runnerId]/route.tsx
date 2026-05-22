@@ -2,15 +2,53 @@ import { ImageResponse } from "next/og"
 import type { CSSProperties } from "react"
 import { getDefaultSkillRunnerOpenGraphProfile } from "@/lib/skill-runners"
 
+function getOgContent(executionProfile?: string, fallbackDescription?: string) {
+  if (executionProfile === "deepsec") {
+    return {
+      subtitle: "Find security issues in your Vercel project before they reach production.",
+      eyebrow: "DeepSec Security Scan",
+      pills: ["Auth", "Secrets", "APIs"],
+      cta: "Run the scan",
+      footer: "Get a focused security report",
+      command: "deepsec scan",
+      badge: "Security report",
+      title: "Prioritized findings for your Vercel project",
+      body: "Generated from project context and ready to download."
+    }
+  }
+
+  if (executionProfile === "vercel-optimize") {
+    return {
+      subtitle: "Audit Vercel cost and performance with production observability signals.",
+      eyebrow: "Vercel Optimize",
+      pills: ["Metrics", "Usage", "Config"],
+      cta: "Run the audit",
+      footer: "Get a ranked optimization report",
+      command: "vercel optimize",
+      badge: "Optimization report",
+      title: "Data-backed recommendations for your Vercel project",
+      body: "Generated from metrics, usage, project config, and targeted source inspection."
+    }
+  }
+
+  return {
+    subtitle: fallbackDescription || "Run a high-confidence AI skill against your Vercel project.",
+    eyebrow: "Skill runner",
+    pills: ["Project", "Skill", "Report"],
+    cta: "Run the skill",
+    footer: "Get a focused run report",
+    command: "skill run",
+    badge: "Skill report",
+    title: "Project-specific analysis from a selected skill",
+    body: "Generated from your project context and ready to review."
+  }
+}
+
 export async function GET(_request: Request, { params }: { params: Promise<{ runnerId: string }> }) {
   const { runnerId } = await params
   const profile = getDefaultSkillRunnerOpenGraphProfile(runnerId)
-  const isDeepsec = profile?.executionProfile === "deepsec"
   const title = profile?.name || "Skill Runner"
-  const subtitle = isDeepsec
-    ? "Find security issues in your Vercel project before they reach production."
-    : profile?.description || "Run a high-confidence AI skill against your Vercel project."
-  const eyebrow = isDeepsec ? "DeepSec Security Scan" : "Skill runner"
+  const content = getOgContent(profile?.executionProfile, profile?.description)
 
   return new ImageResponse(
     <div
@@ -46,19 +84,21 @@ export async function GET(_request: Request, { params }: { params: Promise<{ run
         }}
       >
         <div style={copyColumnStyle}>
-          <div style={eyebrowStyle}>{eyebrow}</div>
+          <div style={eyebrowStyle}>{content.eyebrow}</div>
           <div style={titleStyle}>{title}</div>
-          <div style={subtitleStyle}>{subtitle}</div>
+          <div style={subtitleStyle}>{content.subtitle}</div>
           <div style={summaryRowStyle}>
-            <span style={summaryPillStyle}>Auth</span>
-            <span style={summaryPillStyle}>Secrets</span>
-            <span style={summaryPillStyle}>APIs</span>
+            {content.pills.map((pill) => (
+              <span key={pill} style={summaryPillStyle}>
+                {pill}
+              </span>
+            ))}
           </div>
         </div>
 
         <div style={footerStyle}>
-          <div style={ctaStyle}>Run the scan</div>
-          <div style={brandStyle}>Get a focused security report</div>
+          <div style={ctaStyle}>{content.cta}</div>
+          <div style={brandStyle}>{content.footer}</div>
         </div>
       </main>
 
@@ -69,12 +109,12 @@ export async function GET(_request: Request, { params }: { params: Promise<{ run
           <span style={dotStyle} />
         </div>
         <div style={codeLineStyle}>
-          <span style={mutedCodeStyle}>$</span> deepsec scan
+          <span style={mutedCodeStyle}>$</span> {content.command}
         </div>
         <div style={findingCardStyle}>
-          <div style={severityStyle}>Security report</div>
-          <div style={findingTitleStyle}>Prioritized findings for your Vercel project</div>
-          <div style={findingBodyStyle}>Generated from project context and ready to download.</div>
+          <div style={severityStyle}>{content.badge}</div>
+          <div style={findingTitleStyle}>{content.title}</div>
+          <div style={findingBodyStyle}>{content.body}</div>
         </div>
       </div>
     </div>,

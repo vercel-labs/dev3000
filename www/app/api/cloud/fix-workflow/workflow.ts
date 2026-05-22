@@ -322,7 +322,8 @@ export async function cloudFixWorkflow(params: {
   const reportId = runId || crypto.randomUUID()
   const isTurbopackBundleAnalyzer = workflowType === "turbopack-bundle-analyzer"
   const isDeepsecSecurityScan = workflowType === "deepsec-security-scan"
-  const skipsBrowserObservation = isTurbopackBundleAnalyzer || isDeepsecSecurityScan
+  const isVercelOptimizeAudit = workflowType === "vercel-optimize-audit"
+  const skipsBrowserObservation = isTurbopackBundleAnalyzer || isDeepsecSecurityScan || isVercelOptimizeAudit
   const isSelfHostedWorker = isSelfHostedSkillRunnerRuntime()
   const sandboxProjectId = isSelfHostedWorker
     ? providedSandboxProjectId || process.env.VERCEL_PROJECT_ID || projectId

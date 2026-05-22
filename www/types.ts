@@ -74,6 +74,7 @@ export interface WorkflowReport {
     | "url-audit"
     | "turbopack-bundle-analyzer"
     | "deepsec-security-scan"
+    | "vercel-optimize-audit"
   customPrompt?: string // User's original prompt (for prompt workflows)
   systemPrompt?: string // The full system prompt used by the agent
   devAgentInstructions?: string

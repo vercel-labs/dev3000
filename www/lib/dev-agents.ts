@@ -119,6 +119,8 @@ export const D3K_SKILL_INSTALL_ARG = "vercel-labs/dev3000@d3k"
 export const ANALYZE_BUNDLE_SKILL_INSTALL_ARG = "vercel-labs/dev3000@analyze-bundle"
 export const DEEPSEC_SKILL_INSTALL_ARG = "vercel-labs/deepsec@deepsec"
 export const DEEPSEC_SKILL_SOURCE_URL = "https://github.com/vercel-labs/deepsec/tree/main/packages/deepsec"
+export const VERCEL_OPTIMIZE_SKILL_INSTALL_ARG = "vercel-labs/agent-skills@vercel-optimize"
+export const VERCEL_OPTIMIZE_SKILL_SOURCE_URL = "https://skills.sh/vercel-labs/agent-skills/vercel-optimize"
 export const VERCEL_PLUGIN_INSTALL_ARG = "vercel/vercel-plugin"
 const LEGACY_D3K_SKILL_INSTALL_ARGS = new Set([
   "https://github.com/vercel-labs/dev3000/tree/main/skills/d3k",
@@ -286,6 +288,7 @@ export interface DevAgent {
     | "react-performance"
     | "turbopack-bundle-analyzer"
     | "deepsec-security-scan"
+    | "vercel-optimize-audit"
   supportsPathInput?: boolean
   supportsPullRequest?: boolean
   supportsCrawlDepth?: boolean
@@ -467,6 +470,46 @@ export const DEEPSEC_DEV_AGENT_ACTION_STEPS: DevAgentActionStep[] = [
 ]
 
 export const DEEPSEC_DEV_AGENT_SUCCESS_EVAL = "Was a DeepSec report generated and made available for download?"
+
+export const VERCEL_OPTIMIZE_DEV_AGENT_DESCRIPTION =
+  "Run an observability-first Vercel cost and performance audit, then generate a ranked downloadable report."
+
+export const VERCEL_OPTIMIZE_DEV_AGENT_INSTRUCTIONS =
+  "Run Vercel Optimize against the selected Vercel project checkout without starting a dev server or browser. Use the installed vercel-optimize skill as the source of truth. This is a report-only run: do not make application code changes, do not prepare a pull request, and do not produce speculative recommendations. Run the skill's observability-first collection and deterministic gating before source inspection, preserve run artifacts under `.vercel-optimize/`, and always write the customer-facing markdown report to `.vercel-optimize/report.md`. Because dev3000 skill runs are non-interactive, use the skill's conservative default when it names one, such as the default candidate budget. If the runtime cannot spawn sub-agents, investigate the default candidate set inline one at a time and note that execution mode in the report. If Vercel CLI auth, project linkage, permissions, or Observability Plus requirements block a proper audit, stop and write `.vercel-optimize/report.md` as an explicit blocker report with the concrete next step instead of silently falling back to scanner-only mode."
+
+export const VERCEL_OPTIMIZE_DEV_AGENT_ACTION_STEPS: DevAgentActionStep[] = [
+  {
+    kind: "send-prompt",
+    config: {
+      prompt:
+        "Read the installed vercel-optimize SKILL.md and identify the target app directory. Create `.vercel-optimize/` and a fresh run directory for intermediate JSON artifacts."
+    }
+  },
+  {
+    kind: "send-prompt",
+    config: {
+      prompt:
+        "Confirm the Vercel CLI is usable at v53 or newer and that the target app directory is linked or otherwise resolvable through the workflow-provided project context. If auth, scope, project linkage, or permissions are blocked, write a clear blocker report to `.vercel-optimize/report.md` and stop."
+    }
+  },
+  {
+    kind: "send-prompt",
+    config: {
+      prompt:
+        "Run the vercel-optimize collection, codebase scan, merge, gate, investigation, verification, and render-report flow from the installed skill scripts. Keep all generated JSON and markdown artifacts inside `.vercel-optimize/`."
+    }
+  },
+  {
+    kind: "send-prompt",
+    config: {
+      prompt:
+        "Verify `.vercel-optimize/report.md` exists, is customer-facing markdown, has no raw tokens or secrets, and includes either ranked optimization recommendations or the explicit blocker that prevented the audit."
+    }
+  }
+]
+
+export const VERCEL_OPTIMIZE_DEV_AGENT_SUCCESS_EVAL =
+  "Was a Vercel Optimize audit report or explicit blocker report generated and made available for download?"
 
 const BUILTIN_DEV_AGENTS: Array<Omit<DevAgent, "usageCount">> = [
   {

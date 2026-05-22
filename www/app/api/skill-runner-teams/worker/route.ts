@@ -222,6 +222,9 @@ export async function POST(request: Request) {
         code: error instanceof SkillRunnerWorkerSetupError ? error.code : undefined,
         actionLabel: error instanceof SkillRunnerWorkerSetupError ? error.actionLabel : undefined,
         actionUrl: error instanceof SkillRunnerWorkerSetupError ? error.actionUrl : undefined,
+        deploymentUrl: error instanceof SkillRunnerWorkerSetupError ? error.deploymentUrl : undefined,
+        details: error instanceof SkillRunnerWorkerSetupError ? error.details : undefined,
+        projectName: error instanceof SkillRunnerWorkerSetupError ? error.projectName : undefined,
         repo: error instanceof SkillRunnerWorkerSetupError ? error.repo : undefined
       },
       { status: 500 }

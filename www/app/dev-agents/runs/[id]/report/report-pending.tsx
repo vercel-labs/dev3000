@@ -111,6 +111,7 @@ function getPendingReportLabel(
   if (workflowType === "design-guidelines") return "Design Guidelines Report"
   if (workflowType === "react-performance") return "React Performance Report"
   if (workflowType === "url-audit") return "URL Audit Report"
+  if (workflowType === "vercel-optimize-audit") return "Vercel Optimize Report"
   if (workflowType === "prompt") return "Custom Prompt Report"
   return "Dev Agent Report"
 }
@@ -121,6 +122,7 @@ function getLegacyWorkflowLabel(workflowType?: string, runnerKind: "dev-agent" |
   if (workflowType === "design-guidelines") return "Design Guidelines Review"
   if (workflowType === "react-performance") return "React Performance Review"
   if (workflowType === "url-audit") return "URL Audit"
+  if (workflowType === "vercel-optimize-audit") return "Vercel Optimize"
   if (workflowType === "prompt") return "Custom Prompt"
   return "Dev Agent"
 }

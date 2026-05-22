@@ -14,6 +14,7 @@ export type WorkflowType =
   | "url-audit"
   | "turbopack-bundle-analyzer"
   | "deepsec-security-scan"
+  | "vercel-optimize-audit"
 
 export interface WorkflowRun {
   id: string

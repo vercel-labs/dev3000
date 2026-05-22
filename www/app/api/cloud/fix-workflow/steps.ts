@@ -2699,11 +2699,14 @@ export async function initSandboxStep(
   const timer = new StepTimer()
   const isTurbopackBundleAnalyzer = progressContext?.workflowType === "turbopack-bundle-analyzer"
   const isDeepsecSecurityScan = isDeepsecSecurityScanWorkflow(progressContext?.workflowType)
+  const isVercelOptimizeAudit = isVercelOptimizeAuditWorkflow(progressContext?.workflowType)
 
   workflowLog(`[Init] Creating sandbox for ${projectName}...`)
   await updateProgress(progressContext, 1, "Creating sandbox environment...")
   if (isTurbopackBundleAnalyzer) {
     await updateProgress(progressContext, 1, "Preparing Turbopack analyzer data...")
+  } else if (isVercelOptimizeAudit) {
+    await updateProgress(progressContext, 1, "Preparing Vercel Optimize audit sandbox...")
   }
 
   const developmentEnv: Record<string, string> = {}
@@ -2825,9 +2828,9 @@ export async function initSandboxStep(
         npmToken: effectiveNpmToken,
         sourceTarballUrl,
         sourceLabel,
-        // Turbopack workflows require CWV verification, so browser/d3k setup cannot be skipped there.
-        skipD3kSetup: isDeepsecSecurityScan,
-        skipProjectDependencyInstall: isDeepsecSecurityScan,
+        // Turbopack workflows require analyzer setup, so browser/d3k setup cannot be skipped there.
+        skipD3kSetup: isDeepsecSecurityScan || isVercelOptimizeAudit,
+        skipProjectDependencyInstall: isDeepsecSecurityScan || isVercelOptimizeAudit,
         onProgress: (message) => appendProgressLog(progressContext, `[Sandbox] ${message}`),
         projectDir: projectDir || "",
         devCommand: devAgentDevServerCommand,
@@ -2937,8 +2940,13 @@ export async function initSandboxStep(
     }
   }
 
-  if (isDeepsecSecurityScan) {
-    await updateProgress(progressContext, 1, "Sandbox ready for DeepSec scan", sandboxResult.devUrl)
+  if (isDeepsecSecurityScan || isVercelOptimizeAudit) {
+    await updateProgress(
+      progressContext,
+      1,
+      isVercelOptimizeAudit ? "Sandbox ready for Vercel Optimize audit" : "Sandbox ready for DeepSec scan",
+      sandboxResult.devUrl
+    )
     timer.end()
     const timingData = timer.getData()
     workflowLog(`[Init] ⏱️ TIMING BREAKDOWN (total: ${(timingData.totalMs / 1000).toFixed(1)}s)`)
@@ -3410,7 +3418,9 @@ export async function observeBaselineStep(
 ): Promise<ObserveResult> {
   const timer = new StepTimer()
   const isCodeOnlyWorkflow = isCodeOnlyWorkflowType(progressContext?.workflowType)
-  const skipProjectDependencyInstall = isDeepsecSecurityScanWorkflow(progressContext?.workflowType)
+  const skipProjectDependencyInstall =
+    isDeepsecSecurityScanWorkflow(progressContext?.workflowType) ||
+    isVercelOptimizeAuditWorkflow(progressContext?.workflowType)
 
   const vercelApiTokens = getVercelApiTokenCandidates(vercelOidcToken)
 
@@ -3976,6 +3986,14 @@ function getAgentProgressLabels({ workflowType, devAgentName }: { workflowType?:
     }
   }
 
+  if (isVercelOptimizeAuditWorkflow(workflowType)) {
+    return {
+      analysis: "AI agent running Vercel Optimize audit...",
+      verification: "Vercel Optimize finished, checking generated report...",
+      report: () => "Generating Vercel Optimize report..."
+    }
+  }
+
   const agentLabel = devAgentName?.trim() || "dev agent"
   return {
     analysis: `AI agent running ${agentLabel}...`,
@@ -3988,13 +4006,29 @@ function isDeepsecSecurityScanWorkflow(workflowType?: string): boolean {
   return workflowType === "deepsec-security-scan"
 }
 
-function isCodeOnlyWorkflowType(workflowType?: string): boolean {
-  return workflowType === "turbopack-bundle-analyzer" || isDeepsecSecurityScanWorkflow(workflowType)
+function isVercelOptimizeAuditWorkflow(workflowType?: string): boolean {
+  return workflowType === "vercel-optimize-audit"
 }
 
-type DeepSecGeneratedReport = {
+function isCodeOnlyWorkflowType(workflowType?: string): boolean {
+  return (
+    workflowType === "turbopack-bundle-analyzer" ||
+    isDeepsecSecurityScanWorkflow(workflowType) ||
+    isVercelOptimizeAuditWorkflow(workflowType)
+  )
+}
+
+type GeneratedMarkdownReport = {
   markdown: string
   path: string
+}
+
+function getCodeOnlyD3kLogsMessage(workflowType?: string): string {
+  if (isDeepsecSecurityScanWorkflow(workflowType)) return "(DeepSec workflow does not use d3k browser verification)"
+  if (isVercelOptimizeAuditWorkflow(workflowType)) {
+    return "(Vercel Optimize workflow does not use d3k browser verification)"
+  }
+  return "(bundle analyzer workflow does not use d3k browser verification)"
 }
 
 function getSandboxProjectRoot(projectDir?: string): string {
@@ -4006,7 +4040,7 @@ async function readDeepSecGeneratedReportMarkdown(
   sandbox: Sandbox,
   projectDir?: string,
   progressContext?: ProgressContext | null
-): Promise<DeepSecGeneratedReport | null> {
+): Promise<GeneratedMarkdownReport | null> {
   const projectRoot = getSandboxProjectRoot(projectDir)
   const script = `
 const fs = require("node:fs")
@@ -4148,7 +4182,7 @@ process.stdout.write(JSON.stringify(null))
   }
 
   try {
-    const parsed = JSON.parse(result.stdout.trim() || "null") as DeepSecGeneratedReport | null
+    const parsed = JSON.parse(result.stdout.trim() || "null") as GeneratedMarkdownReport | null
     const markdown = redactSensitiveReportText(parsed?.markdown?.trim() || "")
     if (!markdown) {
       await appendProgressLog(progressContext, "[DeepSec] No generated markdown report found")
@@ -4172,6 +4206,134 @@ process.stdout.write(JSON.stringify(null))
 
 function isSuccessfulDeepSecGeneratedReport(markdown: string | undefined): boolean {
   return isSuccessfulDeepSecGeneratedReportMarkdown(markdown)
+}
+
+async function readVercelOptimizeGeneratedReportMarkdown(
+  sandbox: Sandbox,
+  projectDir?: string,
+  progressContext?: ProgressContext | null
+): Promise<GeneratedMarkdownReport | null> {
+  const projectRoot = getSandboxProjectRoot(projectDir)
+  const script = `
+const fs = require("node:fs")
+const path = require("node:path")
+
+const root = ${JSON.stringify(projectRoot)}
+
+function isReadableMarkdown(filePath) {
+  try {
+    const stat = fs.statSync(filePath)
+    return stat.isFile() && stat.size > 0
+  } catch {
+    return false
+  }
+}
+
+function readCandidate(filePath) {
+  if (!isReadableMarkdown(filePath)) return null
+  const markdown = fs.readFileSync(filePath, "utf8").trim()
+  if (!markdown) return null
+  return {
+    markdown,
+    path: path.relative(root, filePath) || filePath,
+  }
+}
+
+function walkMarkdownFiles(dir, depth = 0) {
+  if (depth > 6) return []
+  let entries
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true })
+  } catch {
+    return []
+  }
+
+  const files = []
+  for (const entry of entries) {
+    if (entry.name === "node_modules" || entry.name === ".git") continue
+    const abs = path.join(dir, entry.name)
+    if (entry.isDirectory()) {
+      files.push(...walkMarkdownFiles(abs, depth + 1))
+    } else if (entry.isFile() && entry.name.toLowerCase().endsWith(".md") && isReadableMarkdown(abs)) {
+      files.push(abs)
+    }
+  }
+  return files
+}
+
+const optimizeDir = path.join(root, ".vercel-optimize")
+const directCandidates = [
+  path.join(optimizeDir, "report.md"),
+  path.join(optimizeDir, "REPORT.md"),
+  path.join(optimizeDir, "summary.md"),
+  path.join(optimizeDir, "SUMMARY.md"),
+  path.join(optimizeDir, "vercel-optimization-report.md"),
+  path.join(root, "vercel-optimization-report.md"),
+]
+
+for (const candidate of directCandidates) {
+  const report = readCandidate(candidate)
+  if (report) {
+    process.stdout.write(JSON.stringify(report))
+    process.exit(0)
+  }
+}
+
+const markdownFiles = walkMarkdownFiles(optimizeDir).sort((a, b) => a.localeCompare(b))
+const preferredNested = markdownFiles.find((filePath) => /(^|\\/)(report|summary|index)\\.md$/i.test(filePath))
+
+if (preferredNested) {
+  const report = readCandidate(preferredNested)
+  if (report) {
+    process.stdout.write(JSON.stringify(report))
+    process.exit(0)
+  }
+}
+
+process.stdout.write(JSON.stringify(null))
+`
+
+  const result = await runSandboxCommandWithOptions(
+    sandbox,
+    {
+      cmd: "node",
+      args: ["-e", script],
+      env: buildSandboxToolchainEnv()
+    },
+    { timeoutMs: 15000 }
+  )
+
+  if (result.exitCode !== 0) {
+    await appendProgressLog(
+      progressContext,
+      `[Vercel Optimize] Failed to read generated report: ${formatClaudeOutputPreview(result.stderr || result.stdout, 360)}`
+    )
+    return null
+  }
+
+  try {
+    const parsed = JSON.parse(result.stdout.trim() || "null") as GeneratedMarkdownReport | null
+    const markdown = redactSensitiveReportText(parsed?.markdown?.trim() || "")
+    if (!markdown) {
+      await appendProgressLog(progressContext, "[Vercel Optimize] No generated markdown report found")
+      return null
+    }
+
+    const report = {
+      markdown,
+      path: parsed?.path || ".vercel-optimize/report.md"
+    }
+    await appendProgressLog(progressContext, `[Vercel Optimize] Generated report found: ${report.path}`)
+    return report
+  } catch (error) {
+    await appendProgressLog(
+      progressContext,
+      `[Vercel Optimize] Could not parse generated report lookup: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    )
+    return null
+  }
 }
 
 export type DeepSecCommandTranscriptEntry = {
@@ -5372,6 +5534,7 @@ export async function agentFixLoopStep(
   const timer = new StepTimer()
   const isTurbopackBundleAnalyzer = progressContext?.workflowType === "turbopack-bundle-analyzer"
   const isDeepsecSecurityScan = isDeepsecSecurityScanWorkflow(progressContext?.workflowType)
+  const isVercelOptimizeAudit = isVercelOptimizeAuditWorkflow(progressContext?.workflowType)
   const isCodeOnlyWorkflow = isCodeOnlyWorkflowType(progressContext?.workflowType)
   const progressLabels = getAgentProgressLabels({
     workflowType: progressContext?.workflowType,
@@ -5417,8 +5580,8 @@ export async function agentFixLoopStep(
           sourceLabel,
           projectDir: projectDir || "",
           devCommand: devAgentDevServerCommand,
-          skipD3kSetup: isDeepsecSecurityScan,
-          skipProjectDependencyInstall: isDeepsecSecurityScan,
+          skipD3kSetup: isDeepsecSecurityScan || isVercelOptimizeAudit,
+          skipProjectDependencyInstall: isDeepsecSecurityScan || isVercelOptimizeAudit,
           timeout: WORKFLOW_SANDBOX_TIMEOUT,
           debug: true,
           onProgress: (message) => appendProgressLog(progressContext, `[Sandbox] ${message}`)
@@ -5741,9 +5904,7 @@ export async function agentFixLoopStep(
   }
 
   const afterD3kLogs = isCodeOnlyWorkflow
-    ? isDeepsecSecurityScan
-      ? "(DeepSec workflow does not use d3k browser verification)"
-      : "(bundle analyzer workflow does not use d3k browser verification)"
+    ? getCodeOnlyD3kLogsMessage(progressContext?.workflowType)
     : finalCls.d3kLogs.replace(initD3kLogs, "").trim() || "(no new logs)"
   const combinedD3kLogs = `=== Step 1: Init (before agent) ===\n${initD3kLogs}\n\n=== Step 2: After agent fix ===\n${afterD3kLogs}`
 
@@ -5756,7 +5917,8 @@ export async function agentFixLoopStep(
       | "react-performance"
       | "url-audit"
       | "turbopack-bundle-analyzer"
-      | "deepsec-security-scan") || "cls-fix"
+      | "deepsec-security-scan"
+      | "vercel-optimize-audit") || "cls-fix"
 
   const effectiveBeforeClsScore = beforeClsForVerification ?? transcriptClsEvidence.beforeCls ?? null
   const effectiveBeforeClsGrade = beforeGradeForVerification ?? gradeClsValue(effectiveBeforeClsScore)
@@ -5769,7 +5931,7 @@ export async function agentFixLoopStep(
         hasChanges,
         bundleComparison: turbopackBundleComparison
       })
-    : isDeepsecSecurityScan
+    : isDeepsecSecurityScan || isVercelOptimizeAudit
       ? determineCodeOnlyStatus({ hasChanges })
       : determineClsStatus({
           hasChanges,
@@ -5828,15 +5990,23 @@ export async function agentFixLoopStep(
     workflowType === "deepsec-security-scan"
       ? await readDeepSecGeneratedReportMarkdown(sandbox, effectiveProjectDir, progressContext)
       : null
+  const vercelOptimizeGeneratedReport =
+    workflowType === "vercel-optimize-audit"
+      ? await readVercelOptimizeGeneratedReportMarkdown(sandbox, effectiveProjectDir, progressContext)
+      : null
   const generatedReportMarkdown =
     workflowType === "deepsec-security-scan"
       ? deepsecGeneratedReport?.markdown || agentResult.summary.trim() || undefined
-      : undefined
+      : workflowType === "vercel-optimize-audit"
+        ? vercelOptimizeGeneratedReport?.markdown || agentResult.summary.trim() || undefined
+        : undefined
 
   // ── Success Eval ──────────────────────────────────────────────────────
   let successEvalResult: boolean | null = null
   if (workflowType === "deepsec-security-scan") {
     successEvalResult = isSuccessfulDeepSecGeneratedReport(generatedReportMarkdown)
+  } else if (workflowType === "vercel-optimize-audit") {
+    successEvalResult = Boolean(generatedReportMarkdown?.trim())
   } else if (devAgentSuccessEval?.trim()) {
     try {
       timer.start("Success eval")
@@ -5896,6 +6066,7 @@ Did the agent meet the success criteria? Respond with JSON only.`
 
   if (
     progressContext?.runnerKind === "skill-runner" &&
+    !isCodeOnlyWorkflow &&
     hasChanges &&
     verificationStatus !== "degraded" &&
     !isMeaningfulWebVitalRegression(beforeWebVitals, afterWebVitals)
@@ -5941,7 +6112,12 @@ Did the agent meet the success criteria? Respond with JSON only.`
     agentAnalysis: agentResult.transcript,
     agentAnalysisModel: agentResult.modelId,
     generatedReportMarkdown,
-    generatedReportFilename: workflowType === "deepsec-security-scan" ? `${reportId}-deepsec-report.md` : undefined,
+    generatedReportFilename:
+      workflowType === "deepsec-security-scan"
+        ? `${reportId}-deepsec-report.md`
+        : workflowType === "vercel-optimize-audit"
+          ? `${reportId}-vercel-optimize-report.md`
+          : undefined,
     skillsInstalled: skillsInstalled.length > 0 ? skillsInstalled : undefined,
     skillsLoaded: agentResult.skillsLoaded.length > 0 ? agentResult.skillsLoaded : undefined,
     turbopackBundleComparison,
@@ -6941,7 +7117,7 @@ function buildAshRuntimePromptPrefix({
   return `ASH runtime notes:
 - Load the \`dev3000-agent-runbook\` skill first.
 - If other packaged skills are relevant, load them too.
-- The real project checkout is available at \`/workspace/repo\`. Make code edits there.
+- The real project checkout is available at \`/workspace/repo\`. Use it for inspection and any workflow-permitted file writes.
 - The live app is available at ${devUrl || "http://localhost:3000"}.
 - Preferred browser mode: ${devAgentSandboxBrowser || "none"}.
 - Installed skills are available via the ASH artifact and session runtime: ${skillLoadInstructions}.
@@ -7923,6 +8099,7 @@ async function runAshAgentInSandbox(
   const includeD3kSkill =
     workflowTypeForPrompt !== "turbopack-bundle-analyzer" &&
     workflowTypeForPrompt !== "deepsec-security-scan" &&
+    workflowTypeForPrompt !== "vercel-optimize-audit" &&
     workflowTypeForPrompt !== "cls-fix"
   const skillLoadInstructions = buildDevAgentSkillLoadInstructions(devAgentSkillRefs, {
     includeD3k: includeD3kSkill,
@@ -8378,13 +8555,22 @@ function getWorkflowExecutionMaxTurns(workflowType: string): number {
   if (workflowType === "design-guidelines") return 12
   if (workflowType === "prompt") return 10
   if (workflowType === "deepsec-security-scan") return 16
+  if (workflowType === "vercel-optimize-audit") return 18
   return 10
 }
 
 function buildWorkflowValidationHint(
   executionMode?: "dev-server" | "preview-pr",
-  runtime: "claude" | "ash" = "claude"
+  runtime: "claude" | "ash" = "claude",
+  workflowType?: string
 ) {
+  if (isDeepsecSecurityScanWorkflow(workflowType)) {
+    return "Generate a downloadable DeepSec report and do not prepare PR-ready changes."
+  }
+  if (isVercelOptimizeAuditWorkflow(workflowType)) {
+    return "Generate a downloadable Vercel Optimize report and do not prepare PR-ready changes."
+  }
+
   if (executionMode === "preview-pr") {
     return runtime === "ash"
       ? "Prepare preview/PR-ready changes and use lightweight validation before you conclude."
@@ -8458,6 +8644,17 @@ function buildWorkflowSpecificExecutionGuidance({
       "Use the default bounded processing pass unless the user explicitly requested a full scan.",
       "If DeepSec processing fails, stop and report the failure instead of generating a fallback report.",
       "Export markdown findings or create a no-findings README only after DeepSec processing succeeds."
+    ].join("\n")
+  }
+
+  if (workflowType === "vercel-optimize-audit") {
+    return [
+      "This is a code-only Vercel Optimize workflow. Do not start a dev server or use browser/Web Vitals tooling.",
+      "Use the installed `vercel-optimize` skill and its scripts as the source of truth.",
+      "Run observability collection before reading source files. Read source only after deterministic gates point to a route, file, or project setting.",
+      "Use a fresh `.vercel-optimize/` run directory for JSON artifacts and write the final customer-facing markdown to `.vercel-optimize/report.md`.",
+      "If Vercel CLI auth, project linkage, permissions, or Observability Plus requirements block the audit, write an explicit blocker report instead of producing speculative recommendations.",
+      "Do not make application code changes or prepare a pull request."
     ].join("\n")
   }
 
@@ -8551,7 +8748,7 @@ function buildClaudeMainTaskPrompt({
   codeHints?: string
   hasPackagedRunbook?: boolean
 }): ClaudeTurnPrompt {
-  const validationHint = buildWorkflowValidationHint(devAgentExecutionMode, "claude")
+  const validationHint = buildWorkflowValidationHint(devAgentExecutionMode, "claude", workflowType)
   const workflowSpecificInstructions = buildWorkflowSpecificExecutionGuidance({
     workflowType,
     startPath,
@@ -9715,6 +9912,7 @@ async function runAgentWithDiagnoseTool(
   const includeD3kSkill =
     workflowTypeForPrompt !== "turbopack-bundle-analyzer" &&
     workflowTypeForPrompt !== "deepsec-security-scan" &&
+    workflowTypeForPrompt !== "vercel-optimize-audit" &&
     workflowTypeForPrompt !== "cls-fix"
   const skillLoadInstructions = buildDevAgentSkillLoadInstructions(devAgentSkillRefs, {
     includeD3k: includeD3kSkill,

@@ -532,6 +532,8 @@ function getWorkflowLabel(report: WorkflowReport, run: WorkflowRun): string {
       return "Turbopack Bundle Analyzer"
     case "deepsec-security-scan":
       return "DeepSec Security Scan"
+    case "vercel-optimize-audit":
+      return "Vercel Optimize"
     case "url-audit":
       return "URL Audit"
     case "cls-fix":
@@ -567,6 +569,8 @@ function getWorkflowDescription(report: WorkflowReport, workflowLabel: string): 
       return "Bundle analysis with before/after metrics and optimization guidance."
     case "deepsec-security-scan":
       return "DeepSec security scan with project context and a generated report."
+    case "vercel-optimize-audit":
+      return "Observability-first Vercel cost and performance audit with a generated report."
     case "url-audit":
       return "Read-only UX and performance analysis of the target URL."
     case "prompt":
@@ -1020,7 +1024,12 @@ function getGeneratedReportFilename(report: WorkflowReport, run: WorkflowRun): s
   if (storedFilename) return storedFilename
 
   const projectName = report.projectName || run.projectName || "project"
-  const suffix = report.workflowType === "deepsec-security-scan" ? "deepsec-report" : "run-report"
+  const suffix =
+    report.workflowType === "deepsec-security-scan"
+      ? "deepsec-report"
+      : report.workflowType === "vercel-optimize-audit"
+        ? "vercel-optimize-report"
+        : "run-report"
   return `${slugifyFilenamePart(projectName)}-${suffix}.md`
 }
 
@@ -1227,6 +1236,16 @@ function getOutcomeSummary(report: WorkflowReport, metricRows: MetricRow[]) {
       description: hasGeneratedReport
         ? "DeepSec generated a code-only scan report. Review it below or download it."
         : "DeepSec completed a code-only scan flow. Review the run details below."
+    }
+  }
+
+  if (report.workflowType === "vercel-optimize-audit") {
+    const hasGeneratedReport = getGeneratedReportMarkdown(report).length > 0
+    return {
+      title: "Outcome Summary",
+      description: hasGeneratedReport
+        ? "Vercel Optimize generated a cost and performance report. Review it below or download it."
+        : "Vercel Optimize completed a code-only audit flow. Review the run details below."
     }
   }
 
@@ -1839,7 +1858,9 @@ function ReportContentBody({ run, report, runsHref }: { run: WorkflowRun; report
   const successEvalText =
     workflowType === "deepsec-security-scan"
       ? "Was a usable DeepSec report generated and made available for download?"
-      : report.successEval
+      : workflowType === "vercel-optimize-audit"
+        ? "Was a Vercel Optimize audit report or explicit blocker report generated and made available for download?"
+        : report.successEval
   const metricRows = buildMetricRows(report)
   const isEarlyExit = Boolean(report.earlyExitResult?.shouldExit)
   const hasMetricComparison = metricRows.some((row) => row.before && row.after)
@@ -1853,10 +1874,15 @@ function ReportContentBody({ run, report, runsHref }: { run: WorkflowRun; report
   }))
   const explicitSkills = [...(report.skillsLoaded || []), ...(report.skillsInstalled || [])]
   const inferredSkills: string[] =
-    workflowType === "turbopack-bundle-analyzer" || workflowType === "deepsec-security-scan" ? [] : ["d3k"]
+    workflowType === "turbopack-bundle-analyzer" ||
+    workflowType === "deepsec-security-scan" ||
+    workflowType === "vercel-optimize-audit"
+      ? []
+      : ["d3k"]
   if (workflowType === "design-guidelines") inferredSkills.unshift("Vercel Web Design Guidelines")
   if (workflowType === "turbopack-bundle-analyzer") inferredSkills.unshift("analyze-bundle")
   if (workflowType === "deepsec-security-scan") inferredSkills.unshift("deepsec")
+  if (workflowType === "vercel-optimize-audit") inferredSkills.unshift("vercel-optimize")
   const skillsUsed = Array.from(
     new Map(
       [
@@ -2062,9 +2088,9 @@ function ReportContentBody({ run, report, runsHref }: { run: WorkflowRun; report
         </ReportSection>
       ) : null}
 
-      {workflowType === "deepsec-security-scan" && generatedReportMarkdown ? (
+      {generatedReportMarkdown ? (
         <GeneratedReportSection>
-          {deepSecFindings.length > 0 ? (
+          {workflowType === "deepsec-security-scan" && deepSecFindings.length > 0 ? (
             <DeepSecFindingsTable findings={deepSecFindings} />
           ) : (
             <AgentAnalysis
