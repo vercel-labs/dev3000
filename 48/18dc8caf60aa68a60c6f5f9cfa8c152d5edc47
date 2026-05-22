@@ -1,0 +1,102 @@
+www/app/api/skill-runner-teams/worker/route.ts
+  s_5da4393566ec36::t_f2df49a21092ce 225-226
+  s_5da4393566ec36::t_bb2527dd2e7688 227
+www/app/api/cloud/fix-workflow/workflow.ts
+  s_5da4393566ec36::t_563f045821ae66 325-326
+www/app/api/og/skill-runner/[runnerId]/route.tsx
+  s_5da4393566ec36::t_47abc43297e921 5-46,51,87,89,91-95,100-101,112,115-117
+www/lib/skill-runner-shell-source.ts
+  s_5da4393566ec36::t_5ab23b70717ed7 15,21,42,75-83,102-108
+www/lib/vercel-protection-bypass.test.ts
+  s_5da4393566ec36::t_83e6876a824d8e 1-23
+www/app/dev-agents/[agentId]/new/dev-agent-run-client.tsx
+  s_5da4393566ec36::t_f2df49a21092ce 129,140-141,533-534,544-545,999-1000,1002-1020,1022-1024,1026-1040,1042-1043,1522-1523,1530-1538,1549-1550
+  s_5da4393566ec36::t_7b923831c85fc2 468-484,489,493
+  s_5da4393566ec36::t_c99334c5a49d7e 340
+  s_5da4393566ec36::t_2b70068f6994f3 395-396,438-445,889-891,969-970
+  s_5da4393566ec36::t_a11501e99cc476 142,535,546,1001,1021,1041,1045
+  s_5da4393566ec36::t_b32e4735cd74c5 1525-1527,1539-1548
+  s_5da4393566ec36::t_be04ba9fb83079 339
+  s_5da4393566ec36::t_40967531f1bd64 1025,1044
+  s_5da4393566ec36::t_a2da068719927f 1663-1667,1669-1670
+  s_5da4393566ec36::t_9bad23a9ecfc32 113,499
+www/lib/skill-runner-shell-source.test.ts
+  s_5da4393566ec36::t_a812e051262575 41
+  s_5da4393566ec36::t_c4a90536dd0261 1-40,42-100
+www/lib/skill-runner-worker.ts
+  s_5da4393566ec36::t_fe7155d211950d 610
+  s_5da4393566ec36::t_3317276bfd3f4f 28,38,49,498,505,1571,1575-1576,1616,1622-1623
+  s_5da4393566ec36::t_f2df49a21092ce 16,26-27,36-37,47-48,196,606-609,612-613,615-684,1331,1364,1611-1614
+  s_5da4393566ec36::t_ffc29e5bcb1c6a 611,614
+  s_5da4393566ec36::t_9bad23a9ecfc32 741,1536
+  s_5da4393566ec36::t_e50c37cad4aba7 1618-1621
+www/lib/skill-runners.ts
+  s_5da4393566ec36::t_c99334c5a49d7e 18,24
+  s_5da4393566ec36::t_f3f766b198257b 19-23,37,129-140,346-360,372-377,560,562,593-623,678,833-834
+www/lib/dev-agents.ts
+  s_5da4393566ec36::t_b92ec5bfb65917 478
+  s_5da4393566ec36::t_c35040e1aac3f1 122-123,291,474-477,479-512
+www/app/api/cloud/start-fix/route.ts
+  s_5da4393566ec36::t_7c4195aa672891 1268-1278
+  s_5da4393566ec36::t_9306474db2ba9f 503
+  s_5da4393566ec36::t_be04ba9fb83079 722-723,965-970,974
+  s_5da4393566ec36::t_2b70068f6994f3 775-785,788-791
+  s_5da4393566ec36::t_69050ffd7273b3 419,425,429-433,436-438,485-502,504-512
+  s_5da4393566ec36::t_d62a3068c22d15 28-31,513-514
+  s_5da4393566ec36::t_0c333f8ff0adf9 786-787
+www/app/api/projects/[projectId]/bypass-token/route.ts
+  s_5da4393566ec36::t_d62a3068c22d15 2-5,38,42
+  s_5da4393566ec36::t_1a46b51b83c074 28
+www/app/dev-agents/runs/[id]/report/report-pending.tsx
+  s_5da4393566ec36::t_ed67c733dee2db 114,125
+www/lib/skill-runner-worker.test.ts
+  s_5da4393566ec36::t_a1ff598e005a35 1-38
+www/app/dev-agents/runs/runs-client.tsx
+  s_5da4393566ec36::t_ed67c733dee2db 65-66
+www/app/skill-runner/[runnerId]/page.tsx
+  s_5da4393566ec36::t_9f4e651cf7a371 15-57,61,108,141-145,149,151-152
+www/app/dev-agents/runs/[id]/report/page.tsx
+  s_5da4393566ec36::t_34a3ec2d6ee036 535-536,572-573,1027-1032,1242-1248
+  s_5da4393566ec36::t_78ce12cd6f7e61 1861-1862,1877-1881,1885,2091,2093
+  s_5da4393566ec36::t_c99334c5a49d7e 1863
+vitest.config.ts
+  s_5da4393566ec36::t_4eb9f17b85ab56 2,5-9
+www/lib/workflow-storage.ts
+  s_5da4393566ec36::t_c5c8ea6e53a117 17
+www/types.ts
+  s_5da4393566ec36::t_c5c8ea6e53a117 77
+www/lib/vercel-protection-bypass.ts
+  s_5da4393566ec36::t_d62a3068c22d15 1-20
+src/commands/skill-runner.ts
+  s_5da4393566ec36::t_a06e8b7be7c40c 505-527,530,547,551-555
+www/app/api/cloud/fix-workflow/steps.ts
+  s_5da4393566ec36::t_12cc2039a5f338 8558,8650-8657
+  s_5da4393566ec36::t_43fe04f49a1f60 3989-3996,4009-4012,4014-4018,4021,4026-4033,4043,4185,4211-4336
+  s_5da4393566ec36::t_776702a1fcbee2 8564-8565,8567-8573,8751
+  s_5da4393566ec36::t_a61f3fa46efb46 6069
+  s_5da4393566ec36::t_f31f7c1887dc8b 5537,5583-5584,5907,5920-5921,5934
+  s_5da4393566ec36::t_26a56854c09f98 3421-3423
+  s_5da4393566ec36::t_29aa55816ad301 8102,9915
+  s_5da4393566ec36::t_d52dc0e0c10e1d 5993-5996,6000-6001,6008-6009,6115-6120
+  s_5da4393566ec36::t_c99334c5a49d7e 6002
+  s_5da4393566ec36::t_ea026e2ccebbec 2702,2708-2709,2831-2833,2943-2949
+  s_5da4393566ec36::t_021d87aaf352c9 7120
+www/lib/dev-agents-client.ts
+  s_5da4393566ec36::t_c5c8ea6e53a117 145
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.0",
+  "base_commit_sha": "4818dc8caf60aa68a60c6f5f9cfa8c152d5edc47",
+  "prompts": {},
+  "sessions": {
+    "s_5da4393566ec36": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e3207-b24c-7e90-bd42-71198956a1ad",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>"
+    }
+  }
+}
