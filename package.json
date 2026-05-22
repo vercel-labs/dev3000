@@ -30,7 +30,8 @@
     "_prepare": "husky",
     "release": "./scripts/release.sh",
     "canary": "./scripts/canary.sh",
-    "build:binaries": "bun run scripts/build-binaries.ts"
+    "build:binaries": "bun run scripts/build-binaries.ts",
+    "smoke:skill-runner-install": "bun run scripts/smoke-skill-runner-install.ts"
   },
   "keywords": [
     "nextjs",

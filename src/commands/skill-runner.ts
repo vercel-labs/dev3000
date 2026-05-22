@@ -122,28 +122,29 @@ const DEFAULT_DEV3000_BASE_URL = "https://dev3000.ai"
 const REMOTE_SKILL_OPTIONS = ["team", "project", "branch", "projectDir", "baseUrl", "wait", "json"]
 
 export function shouldUseRemoteSkillRunner(name: string | undefined, options: RemoteSkillOptions): boolean {
-  if (name !== "deepsec") {
-    return false
-  }
+  if (!name?.trim()) return false
 
   const hasExplicitRunOption =
     REMOTE_SKILL_OPTIONS.some((option) => Boolean(options[option as keyof RemoteSkillOptions])) ||
     options.install === false
 
+  if (hasExplicitRunOption) {
+    return true
+  }
+
   try {
-    return hasExplicitRunOption || Boolean(findLinkedVercelProject())
+    return Boolean(findLinkedVercelProject())
   } catch {
     return true
   }
 }
 
 export async function runRemoteSkillCommand(name: string | undefined, options: RemoteSkillOptions): Promise<void> {
-  if (!name) {
-    throw new Error("A skill name is required. Example: d3k skill deepsec --team elsigh-pro --project commonerband")
-  }
-
-  if (name !== "deepsec") {
-    throw new Error("Remote skill runs currently support `deepsec` only.")
+  const skillRunnerId = name?.trim()
+  if (!skillRunnerId) {
+    throw new Error(
+      "A skill name is required. Example: d3k skill vercel-optimize --team elsigh-pro --project cranio-mom"
+    )
   }
 
   const linkedProject = findLinkedVercelProject()
@@ -163,7 +164,7 @@ export async function runRemoteSkillCommand(name: string | undefined, options: R
   }
 
   const baseUrl = normalizeBaseUrl(options.baseUrl || process.env.D3K_CLOUD_URL || DEFAULT_DEV3000_BASE_URL)
-  log(options, `Starting ${chalk.bold("DeepSec Security Scan")} on ${chalk.bold(projectInput)}...`)
+  log(options, `Starting ${chalk.bold(skillRunnerId)} on ${chalk.bold(projectInput)}...`)
   if (linkedProject && (!options.team || !options.project)) {
     log(options, `${chalk.green("✓")} Inferred Vercel project link from ${linkedProject.path}`)
   }
@@ -175,7 +176,7 @@ export async function runRemoteSkillCommand(name: string | undefined, options: R
 
   if (!githubRepo) {
     throw new Error(
-      `Project ${project.name} is not connected to a GitHub repository. DeepSec requires a GitHub-backed Vercel project.`
+      `Project ${project.name} is not connected to a GitHub repository. Remote skill runs require a GitHub-backed Vercel project.`
     )
   }
 
@@ -197,6 +198,7 @@ export async function runRemoteSkillCommand(name: string | undefined, options: R
       baseUrl,
       token,
       user,
+      skillRunnerId,
       team,
       teamScope,
       project,
@@ -220,6 +222,7 @@ export async function runRemoteSkillCommand(name: string | undefined, options: R
         baseUrl,
         token,
         user,
+        skillRunnerId,
         team,
         teamScope,
         project,
@@ -251,6 +254,7 @@ export async function runRemoteSkillCommand(name: string | undefined, options: R
   const reportUrl = `${reportBasePath}/${encodeURIComponent(startResult.runId)}/report`
   const output = {
     success: true,
+    skill: skillRunnerId,
     runId: startResult.runId,
     reportUrl,
     team: team.slug,
@@ -559,6 +563,7 @@ async function startSkillRun(input: {
   baseUrl: string
   token: string
   user: VercelUser
+  skillRunnerId: string
   team: VercelTeam
   teamScope: string
   project: VercelProject
@@ -575,7 +580,7 @@ async function startSkillRun(input: {
     },
     body: JSON.stringify({
       userId: input.user.id,
-      skillRunnerId: "deepsec",
+      skillRunnerId: input.skillRunnerId,
       skillRunnerTeam: {
         id: input.team.id,
         slug: input.team.slug,

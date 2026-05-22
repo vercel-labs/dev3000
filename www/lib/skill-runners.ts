@@ -407,6 +407,152 @@ function stableImportedRunnerId(teamId: string, canonicalPath: string): string {
   return `sr_imp_${createHash("sha256").update(`${teamId}:${canonicalPath}`).digest("hex").slice(0, 12)}`
 }
 
+function normalizeSkillRunnerLookup(value: string): string {
+  return value
+    .trim()
+    .replace(/^https?:\/\/(?:www\.)?skills\.sh\//i, "")
+    .replace(/^\/+|\/+$/g, "")
+    .toLowerCase()
+}
+
+function slugifySkillRunnerLookup(value: string): string {
+  const segment = normalizeSkillRunnerLookup(value).split("/").pop() || ""
+  return segment.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")
+}
+
+function skillRunnerLookupMatches(
+  lookup: string,
+  runner: Pick<
+    SkillRunnerRecord | DefaultSkillRunnerSeed,
+    "id" | "canonicalPath" | "displayName" | "installArg" | "skillName"
+  >
+): boolean {
+  const normalizedLookup = normalizeSkillRunnerLookup(lookup)
+  const canonicalPath = normalizeSkillRunnerLookup(runner.canonicalPath)
+  return (
+    normalizedLookup === normalizeSkillRunnerLookup(runner.id) ||
+    normalizedLookup === normalizeSkillRunnerLookup(runner.skillName) ||
+    normalizedLookup === normalizeSkillRunnerLookup(runner.installArg) ||
+    normalizedLookup === canonicalPath ||
+    normalizedLookup === canonicalPath.split("/").pop() ||
+    normalizedLookup === slugifySkillRunnerLookup(runner.displayName)
+  )
+}
+
+function findDefaultSeedByLookup(lookup: string) {
+  return DEFAULT_SKILL_RUNNER_SEEDS.find((seed) => skillRunnerLookupMatches(lookup, seed))
+}
+
+function buildSkillsShSelectionFromLookup(lookup: string): SkillsShSearchResult | null {
+  const normalizedLookup = normalizeSkillRunnerLookup(lookup)
+  const installArgMatch = normalizedLookup.match(/^([^@\s]+\/[^@\s]+)@([^@\s/]+)$/)
+  if (installArgMatch) {
+    const [, packageName, skillName] = installArgMatch
+    const canonicalPath = `${packageName}/${skillName}`
+    return {
+      id: canonicalPath,
+      canonicalPath,
+      installArg: `${packageName}@${skillName}`,
+      packageName,
+      skillName,
+      displayName: skillName,
+      sourceUrl: `https://skills.sh/${canonicalPath}`
+    }
+  }
+
+  const canonicalSegments = normalizedLookup.split("/").filter(Boolean)
+  if (canonicalSegments.length >= 3) {
+    const skillName = canonicalSegments.at(-1)
+    if (!skillName) return null
+    const packageName = canonicalSegments.slice(0, -1).join("/")
+    const canonicalPath = `${packageName}/${skillName}`
+    return {
+      id: canonicalPath,
+      canonicalPath,
+      installArg: `${packageName}@${skillName}`,
+      packageName,
+      skillName,
+      displayName: skillName,
+      sourceUrl: `https://skills.sh/${canonicalPath}`
+    }
+  }
+
+  return null
+}
+
+function skillsShCandidateMatchesLookup(lookup: string, candidate: SkillsShSearchResult): boolean {
+  return skillRunnerLookupMatches(lookup, {
+    id: candidate.id,
+    canonicalPath: candidate.canonicalPath,
+    displayName: candidate.displayName,
+    installArg: candidate.installArg,
+    skillName: candidate.skillName
+  })
+}
+
+async function findExactSkillsShSelection(lookup: string): Promise<SkillsShSearchResult | null> {
+  const directSelection = buildSkillsShSelectionFromLookup(lookup)
+  if (directSelection) return directSelection
+
+  const matches = (await searchSkillsSh(lookup)).filter((candidate) =>
+    skillsShCandidateMatchesLookup(lookup, candidate)
+  )
+  const unique = new Map(matches.map((candidate) => [normalizeSkillRunnerLookup(candidate.canonicalPath), candidate]))
+  if (unique.size === 1) {
+    return [...unique.values()][0]
+  }
+
+  return null
+}
+
+async function importSkillRunnerForTeamState(
+  state: SkillRunnerTeamState,
+  team: DevAgentTeam,
+  selection: SkillsShSearchResult
+): Promise<SkillRunnerRecord> {
+  const details = await fetchSkillsShSkillDetails(selection)
+  const defaultSeed = findDefaultSeedByCanonicalPath(details.canonicalPath)
+
+  if (defaultSeed) {
+    state.hiddenDefaultIds = state.hiddenDefaultIds.filter((id) => id !== defaultSeed.id)
+    state.updatedAt = new Date().toISOString()
+    await saveTeamSkillRunnerState(state)
+    return toSkillRunnerRecord(defaultSeed, team)
+  }
+
+  const existing = state.imported.find((runner) => runner.canonicalPath === details.canonicalPath)
+  if (existing) {
+    return { ...existing, team }
+  }
+
+  const now = new Date().toISOString()
+  const record: SkillRunnerRecord = {
+    id: stableImportedRunnerId(team.id, details.canonicalPath),
+    kind: "skill-runner",
+    sourceKind: "imported",
+    canonicalPath: details.canonicalPath,
+    sourceUrl: details.sourceUrl,
+    installArg: details.installArg,
+    packageName: details.packageName,
+    skillName: details.skillName,
+    displayName: details.displayName,
+    description: details.description,
+    validationQuality: "variable",
+    validationWarning: "Validation quality may vary for this imported skill.",
+    author: SYSTEM_AUTHOR,
+    team,
+    createdAt: now,
+    updatedAt: now,
+    upstreamHash: details.upstreamHash,
+    upstreamFetchedAt: now
+  }
+
+  state.imported = [record, ...state.imported]
+  state.updatedAt = now
+  await saveTeamSkillRunnerState(state)
+  return record
+}
+
 export function getDefaultExecutionMode(_team: { slug: string }): "self-hosted" {
   return "self-hosted"
 }
@@ -720,46 +866,7 @@ export async function searchSkillRunnerCandidates(query: string): Promise<Skills
 
 export async function importSkillRunnerForTeam(team: DevAgentTeam, selection: SkillsShSearchResult): Promise<DevAgent> {
   const state = await getTeamSkillRunnerState(team)
-  const details = await fetchSkillsShSkillDetails(selection)
-  const defaultSeed = findDefaultSeedByCanonicalPath(details.canonicalPath)
-
-  if (defaultSeed) {
-    state.hiddenDefaultIds = state.hiddenDefaultIds.filter((id) => id !== defaultSeed.id)
-    state.updatedAt = new Date().toISOString()
-    await saveTeamSkillRunnerState(state)
-    return applyUsageCount(toSkillRunnerRecord(defaultSeed, team), await listSkillRunnerUsageStats())
-  }
-
-  const existing = state.imported.find((runner) => runner.canonicalPath === details.canonicalPath)
-  if (existing) {
-    return applyUsageCount({ ...existing, team }, await listSkillRunnerUsageStats())
-  }
-
-  const now = new Date().toISOString()
-  const record: SkillRunnerRecord = {
-    id: stableImportedRunnerId(team.id, details.canonicalPath),
-    kind: "skill-runner",
-    sourceKind: "imported",
-    canonicalPath: details.canonicalPath,
-    sourceUrl: details.sourceUrl,
-    installArg: details.installArg,
-    packageName: details.packageName,
-    skillName: details.skillName,
-    displayName: details.displayName,
-    description: details.description,
-    validationQuality: "variable",
-    validationWarning: "Validation quality may vary for this imported skill.",
-    author: SYSTEM_AUTHOR,
-    team,
-    createdAt: now,
-    updatedAt: now,
-    upstreamHash: details.upstreamHash,
-    upstreamFetchedAt: now
-  }
-
-  state.imported = [record, ...state.imported]
-  state.updatedAt = now
-  await saveTeamSkillRunnerState(state)
+  const record = await importSkillRunnerForTeamState(state, team, selection)
   return applyUsageCount(record, await listSkillRunnerUsageStats())
 }
 
@@ -820,7 +927,7 @@ export async function getSkillRunnerForExecution(
   canonicalPath: string
 }> {
   const state = await getTeamSkillRunnerState(team)
-  const defaultSeed = DEFAULT_SKILL_RUNNER_SEEDS.find((seed) => seed.id === runnerId)
+  const defaultSeed = findDefaultSeedByLookup(runnerId)
 
   if (defaultSeed) {
     const details = await fetchDefaultSkillRunnerDetails(defaultSeed)
@@ -853,8 +960,28 @@ export async function getSkillRunnerForExecution(
     }
   }
 
-  const existingIndex = state.imported.findIndex((runner) => runner.id === runnerId)
+  let existingIndex = state.imported.findIndex((runner) => skillRunnerLookupMatches(runnerId, runner))
   if (existingIndex === -1) {
+    const selection = await findExactSkillsShSelection(runnerId)
+    if (!selection) {
+      throw new Error("Skill runner not found")
+    }
+
+    await importSkillRunnerForTeamState(state, team, selection)
+    existingIndex = state.imported.findIndex((runner) => skillRunnerLookupMatches(runnerId, runner))
+    if (existingIndex === -1) {
+      const importedIndex = state.imported.findIndex((runner) =>
+        skillRunnerLookupMatches(selection.canonicalPath, runner)
+      )
+      existingIndex = importedIndex
+    }
+  }
+
+  if (existingIndex === -1) {
+    const defaultSelection = findDefaultSeedByLookup(runnerId)
+    if (defaultSelection) {
+      return getSkillRunnerForExecution(team, defaultSelection.id)
+    }
     throw new Error("Skill runner not found")
   }
 
