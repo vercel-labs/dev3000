@@ -1,0 +1,37 @@
+src/commands/skill-runner.ts
+  s_5da4393566ec36::t_ea51b6ac60524f 125,134,143-144,167,179,201,225,257,566,583
+  s_5da4393566ec36::t_c5e49a71d70d10 131-132,136
+  s_5da4393566ec36::t_b66c4cc2ae7555 145-147
+scripts/smoke-skill-runner-install.ts
+  s_5da4393566ec36::t_78c0881eb4afc2 1-152,157,162-241
+  s_5da4393566ec36::t_162415a7550372 153-156,158-161
+package.json
+  s_5da4393566ec36::t_eaec6b91ab8348 33-34
+www/lib/skill-runners.ts
+  s_5da4393566ec36::t_d26e8a7c54cc12 410-418,421-424,429-464,467-496,500-555
+  s_5da4393566ec36::t_22fa9da322e25a 869
+  s_5da4393566ec36::t_ece87ccd39cb00 930,963,965-984
+  s_5da4393566ec36::t_1e12146aaeaf13 419-420
+  s_5da4393566ec36::t_ddab9612c33672 425-428,465-466,497-499
+src/commands/skill-runner.test.ts
+  s_5da4393566ec36::t_5085eb59f7216c 18
+  s_5da4393566ec36::t_9766cafd055468 1-3,19-26
+  s_5da4393566ec36::t_885ebc37a2ccb0 4
+  s_5da4393566ec36::t_84dfe568884d3d 5-17,27-37
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.0",
+  "base_commit_sha": "4fe9f07083fb53fecd4350ef565f0d108879faa9",
+  "prompts": {},
+  "sessions": {
+    "s_5da4393566ec36": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e3207-b24c-7e90-bd42-71198956a1ad",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>"
+    }
+  }
+}
