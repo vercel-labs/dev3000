@@ -11,6 +11,9 @@ const RUNNER_SHELL_EXCLUDED_FILES = [
   /^www\/(?:WORKFLOW_TESTING_GUIDE|d3k-skill-runner-team-impl)\.md$/
 ]
 const RUNNER_SHELL_UPLOAD_CONCURRENCY = 8
+const RUNNER_NEXT_CONFIG_PREVIEW_COMMENTS_PATCH =
+  '// Self-hosted runner shells disable Preview Comments to avoid Vercel adapter/Next ctx.projectDir skew.\nprocess.env.VERCEL_PREVIEW_COMMENTS_ENABLED = "0"\n'
+const RUNNER_NEXT_CONFIG_PATH = `${SKILL_RUNNER_WORKER_ROOT_DIRECTORY}/next.config.ts`
 
 export interface SkillRunnerShellTreeEntry {
   path?: string
@@ -160,6 +163,19 @@ function patchWorkflowConfigJson(content: string, maxDurationSeconds: number): s
   }
 }
 
+function patchRunnerNextConfig(content: string): string {
+  if (content.includes("VERCEL_PREVIEW_COMMENTS_ENABLED")) {
+    return content
+  }
+
+  const importBlockMatch = content.match(/^(?:import[^\n]*\n)+/)
+  if (!importBlockMatch) {
+    return `${RUNNER_NEXT_CONFIG_PREVIEW_COMMENTS_PATCH}\n${content}`
+  }
+
+  return content.replace(importBlockMatch[0], `${importBlockMatch[0]}\n${RUNNER_NEXT_CONFIG_PREVIEW_COMMENTS_PATCH}`)
+}
+
 function patchRunnerShellTextFile({
   content,
   file,
@@ -171,6 +187,10 @@ function patchRunnerShellTextFile({
   maxFunctionDurationSeconds?: number
   maxWorkflowStepDurationSeconds?: number
 }): string {
+  if (file.path === RUNNER_NEXT_CONFIG_PATH) {
+    return patchRunnerNextConfig(content)
+  }
+
   if (
     maxFunctionDurationSeconds &&
     file.path === `${SKILL_RUNNER_WORKER_ROOT_DIRECTORY}/app/api/cloud/start-fix/route.ts`
@@ -209,7 +229,7 @@ function patchRunnerShellFile({
   maxFunctionDurationSeconds?: number
   maxWorkflowStepDurationSeconds?: number
 }): Uint8Array {
-  if (!maxFunctionDurationSeconds && !maxWorkflowStepDurationSeconds) {
+  if (!maxFunctionDurationSeconds && !maxWorkflowStepDurationSeconds && file.path !== RUNNER_NEXT_CONFIG_PATH) {
     return bytes
   }
 

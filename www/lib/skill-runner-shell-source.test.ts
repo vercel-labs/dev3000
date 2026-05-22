@@ -2,11 +2,12 @@ import { execFileSync } from "node:child_process"
 import { existsSync, readFileSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import {
   isRunnerShellFile,
   resolveSkillRunnerShellSourceFromTree,
-  type SkillRunnerShellTreeEntry
+  type SkillRunnerShellTreeEntry,
+  uploadSkillRunnerShellSourceFiles
 } from "./skill-runner-shell-source"
 
 const wwwRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
@@ -60,6 +61,10 @@ function listRelativeImports(file: string): string[] {
 }
 
 describe("skill runner shell source manifest", () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
   it("includes public assets used by the deployable shell", () => {
     expect(isRunnerShellFile("www/public/hero-app.png")).toBe(true)
     expect(isRunnerShellFile("www/public/hero-terminal.png")).toBe(true)
@@ -96,5 +101,46 @@ describe("skill runner shell source manifest", () => {
     expect(shellFiles).toContain("www/app/page.tsx")
     expect(shellFiles).toContain("www/public/hero-app.png")
     expect(shellFiles).toContain("www/public/hero-terminal.png")
+  })
+
+  it("patches uploaded runner next config to avoid Preview Comments adapter skew", async () => {
+    const uploadedBodies: string[] = []
+    const nextConfig = 'import { withWorkflow } from "workflow/next"\n\nexport default withWorkflow({})\n'
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+        const url = String(input)
+        if (url === "https://example.test/www/next.config.ts") {
+          return new Response(nextConfig)
+        }
+
+        if (url.startsWith("https://api.vercel.com/v2/files")) {
+          uploadedBodies.push(new TextDecoder().decode(init?.body as ArrayBuffer))
+          return new Response(null, { status: 200 })
+        }
+
+        return new Response("unexpected URL", { status: 500 })
+      })
+    )
+
+    await uploadSkillRunnerShellSourceFiles({
+      accessToken: "test-token",
+      source: {
+        commit: "test-commit",
+        files: [
+          {
+            contentUrl: "https://example.test/www/next.config.ts",
+            path: "www/next.config.ts"
+          }
+        ],
+        version: "test-version"
+      },
+      teamId: "team_test"
+    })
+
+    expect(uploadedBodies).toHaveLength(1)
+    expect(uploadedBodies[0]).toContain('process.env.VERCEL_PREVIEW_COMMENTS_ENABLED = "0"')
+    expect(uploadedBodies[0]).toContain('import { withWorkflow } from "workflow/next"')
   })
 })
