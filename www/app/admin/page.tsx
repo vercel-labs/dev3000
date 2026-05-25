@@ -37,7 +37,6 @@ export default async function AdminPage() {
       teams={routeContext.teams}
       selectedTeam={selectedTeam}
       section="admin"
-      showAdminLink
       title="Admin"
       description="Manage per-team skill-runner hosting mode and worker configuration."
     >

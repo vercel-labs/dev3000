@@ -32,7 +32,6 @@ export default async function AdminRunsPage() {
       teams={routeContext.teams}
       selectedTeam={selectedTeam}
       section="admin"
-      showAdminLink
       title="All Runs"
       description="Skill-runner install and run events across every team that's self-hosted or hosted."
     >

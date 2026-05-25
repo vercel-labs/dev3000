@@ -2,7 +2,6 @@ import type { Metadata, Route } from "next"
 import { notFound, redirect } from "next/navigation"
 import DevAgentRunClient from "@/app/dev-agents/[agentId]/new/dev-agent-run-client"
 import { DevAgentsDashboardShell } from "@/components/dev-agents/dashboard-shell"
-import { isAdminUser } from "@/lib/admin"
 import { getAuthorizePath } from "@/lib/auth-redirect"
 import { isV0DevAgentRunnerEnabled } from "@/lib/cloud/dev-agent-runner"
 import { DEV3000_URL } from "@/lib/constants"
@@ -86,7 +85,6 @@ export default async function RunSkillRunnerPage({ params }: { params: Promise<{
       teams={routeContext.teams}
       selectedTeam={selectedTeam}
       section="skill-runner"
-      showAdminLink={isAdminUser(routeContext.user)}
       title={skillRunner.name}
       description={skillRunner.description}
     >

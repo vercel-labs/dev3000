@@ -16,7 +16,6 @@ interface DevAgentsDashboardShellProps {
   selectedTeam: VercelTeam
   section?: "dev-agents" | "skill-runner" | "runs" | "admin"
   runsHref?: string
-  showAdminLink?: boolean
   title?: React.ReactNode
   subtitle?: React.ReactNode
   description?: React.ReactNode
@@ -58,7 +57,6 @@ export async function DevAgentsDashboardShell({
   selectedTeam,
   section = "dev-agents",
   runsHref,
-  showAdminLink = false,
   title,
   subtitle,
   description,
@@ -99,17 +97,7 @@ export async function DevAgentsDashboardShell({
       href: effectiveRunsHref,
       icon: "history",
       active: section === "runs"
-    },
-    ...(showAdminLink
-      ? [
-          {
-            label: "Admin",
-            href: "/admin",
-            icon: "settings",
-            active: section === "admin"
-          } satisfies DashboardSidebarItem
-        ]
-      : [])
+    }
   ]
 
   return (
