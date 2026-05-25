@@ -1,8 +1,64 @@
 "use client"
 
+import { ComarkClient } from "@comark/react"
+import security from "@comark/react/plugins/security"
+import { textContent, visit } from "@comark/react/utils"
 import { ChevronDown, ChevronRight } from "lucide-react"
-import { type ReactNode, useMemo, useState } from "react"
-import { type Components, type ControlsConfig, Streamdown } from "streamdown"
+import { type ComponentProps, type ReactNode, useMemo, useState } from "react"
+import { cn } from "@/lib/utils"
+
+type ComarkVisitNode = Parameters<Parameters<typeof visit>[2]>[0]
+type ComarkElementNode = [string, Record<string, unknown>, ...ComarkVisitNode[]]
+type ComarkTree = Parameters<typeof visit>[0]
+
+const SAFE_REPORT_HTML_TAGS = new Set(["br"])
+const DROP_REPORT_HTML_TAGS = new Set(["iframe", "object", "script", "style"])
+const COMARK_OPTIONS = { html: true } as const
+const COMARK_PLUGINS = [
+  {
+    name: "safe-report-html",
+    post(state: { tree: ComarkTree }) {
+      visit(state.tree, isHtmlElementNode, (node) => {
+        if (!isHtmlElementNode(node)) {
+          return
+        }
+
+        const tag = node[0].toLowerCase()
+
+        if (SAFE_REPORT_HTML_TAGS.has(tag)) {
+          return node
+        }
+
+        if (DROP_REPORT_HTML_TAGS.has(tag)) {
+          return false
+        }
+
+        return textContent(node)
+      })
+    }
+  },
+  security({
+    allowedProtocols: ["http", "https", "mailto", "tel"],
+    allowDataImages: false,
+    blockedTags: ["iframe", "object", "script", "style"]
+  })
+]
+
+function isHtmlElementNode(node: ComarkVisitNode): node is ComarkElementNode {
+  if (!Array.isArray(node) || typeof node[0] !== "string") {
+    return false
+  }
+
+  const attributes = node[1]
+  const metadata = attributes?.$
+
+  return (
+    typeof metadata === "object" &&
+    metadata !== null &&
+    "html" in metadata &&
+    (metadata as { html?: unknown }).html === 1
+  )
+}
 
 interface ParsedStep {
   stepNumber: number
@@ -62,6 +118,158 @@ function hasMarkdownTableHeaderColumn(
   }
 
   return false
+}
+
+function MarkdownLink({ children, href, rel, target, ...props }: ComponentProps<"a">) {
+  if (!href) {
+    return (
+      <a className={cn("wrap-anywhere font-medium text-primary underline", props.className)} {...props}>
+        {children}
+      </a>
+    )
+  }
+
+  const isInternalHref = href.startsWith("#") || href.startsWith("/")
+
+  return (
+    <a
+      className={cn("wrap-anywhere font-medium text-primary underline", props.className)}
+      href={href}
+      rel={isInternalHref ? rel : (rel ?? "noopener noreferrer")}
+      target={isInternalHref ? target : (target ?? "_blank")}
+      {...props}
+    >
+      {children}
+    </a>
+  )
+}
+
+function Heading1({ children, className, ...props }: ComponentProps<"h1">) {
+  return (
+    <h1 className={cn("mt-6 mb-2 font-semibold text-3xl", className)} {...props}>
+      {children}
+    </h1>
+  )
+}
+
+function Heading2({ children, className, ...props }: ComponentProps<"h2">) {
+  return (
+    <h2 className={cn("mt-6 mb-2 font-semibold text-2xl", className)} {...props}>
+      {children}
+    </h2>
+  )
+}
+
+function Heading3({ children, className, ...props }: ComponentProps<"h3">) {
+  return (
+    <h3 className={cn("mt-6 mb-2 font-semibold text-xl", className)} {...props}>
+      {children}
+    </h3>
+  )
+}
+
+function Heading4({ children, className, ...props }: ComponentProps<"h4">) {
+  return (
+    <h4 className={cn("mt-6 mb-2 font-semibold text-lg", className)} {...props}>
+      {children}
+    </h4>
+  )
+}
+
+function Heading5({ children, className, ...props }: ComponentProps<"h5">) {
+  return (
+    <h5 className={cn("mt-6 mb-2 font-semibold text-base", className)} {...props}>
+      {children}
+    </h5>
+  )
+}
+
+function Heading6({ children, className, ...props }: ComponentProps<"h6">) {
+  return (
+    <h6 className={cn("mt-6 mb-2 font-semibold text-sm", className)} {...props}>
+      {children}
+    </h6>
+  )
+}
+
+function PlainPre({ children, className: _className, ...props }: ComponentProps<"pre">) {
+  return (
+    <pre
+      className="overflow-x-auto rounded-md border border-border bg-transparent px-4 py-3 font-mono text-sm leading-relaxed"
+      {...props}
+    >
+      {children}
+    </pre>
+  )
+}
+
+function PlainTable({ children, className, ...props }: ComponentProps<"table">) {
+  return (
+    <div className="my-4 overflow-x-hidden rounded-md border border-border bg-background">
+      <table className={cn("w-full divide-y divide-border", className)} {...props}>
+        {children}
+      </table>
+    </div>
+  )
+}
+
+function TableHead({ children, className, ...props }: ComponentProps<"thead">) {
+  return (
+    <thead className={cn("bg-muted/80", className)} {...props}>
+      {children}
+    </thead>
+  )
+}
+
+function TableBody({ children, className, ...props }: ComponentProps<"tbody">) {
+  return (
+    <tbody className={cn("divide-y divide-border", className)} {...props}>
+      {children}
+    </tbody>
+  )
+}
+
+function TableRow({ children, className, ...props }: ComponentProps<"tr">) {
+  return (
+    <tr className={cn("border-border", className)} {...props}>
+      {children}
+    </tr>
+  )
+}
+
+function TableHeaderCell({ children, className, ...props }: ComponentProps<"th">) {
+  return (
+    <th className={cn("whitespace-nowrap px-4 py-2 text-left font-semibold text-sm", className)} {...props}>
+      {children}
+    </th>
+  )
+}
+
+function TableCell({ children, className, ...props }: ComponentProps<"td">) {
+  return (
+    <td className={cn("px-4 py-2 text-sm", className)} {...props}>
+      {children}
+    </td>
+  )
+}
+
+function Blockquote({ children, className, ...props }: ComponentProps<"blockquote">) {
+  return (
+    <blockquote
+      className={cn("my-4 border-muted-foreground/30 border-l-4 pl-4 text-muted-foreground italic", className)}
+      {...props}
+    >
+      {children}
+    </blockquote>
+  )
+}
+
+function InlineCode({ children, className, ...props }: ComponentProps<"code">) {
+  return (
+    <code className={cn("rounded bg-muted px-1.5 py-0.5 font-mono text-sm", className)} {...props}>
+      {children}
+    </code>
+  )
 }
 
 function getStableKey(value: string): string {
@@ -213,7 +421,6 @@ function getStepPhase(step: ParsedStep): TranscriptPhase {
 
 export function AgentAnalysis({
   content,
-  controls,
   nowrapTableColumn,
   plainCodeBlocks = false,
   plainTables = false,
@@ -221,7 +428,7 @@ export function AgentAnalysis({
   topAlignTables = false
 }: {
   content: string
-  controls?: ControlsConfig
+  controls?: unknown
   nowrapTableColumn?: number
   plainCodeBlocks?: boolean
   plainTables?: boolean
@@ -266,46 +473,25 @@ export function AgentAnalysis({
   ]
     .filter(Boolean)
     .join(" ")
-  const markdownComponents = useMemo<Components | undefined>(() => {
-    if (!plainCodeBlocks && !plainTables) return undefined
-
-    const components: Components = {}
-
-    if (plainCodeBlocks) {
-      components.code = function PlainCode({ children, className, node: _node, ...props }) {
-        const isBlock = "data-block" in props
-
-        if (!isBlock) {
-          return (
-            <code className={className} {...props}>
-              {children}
-            </code>
-          )
-        }
-
-        return (
-          <pre className="overflow-x-auto rounded-md border border-border bg-transparent px-4 py-3 font-mono text-sm leading-relaxed">
-            <code>{children}</code>
-          </pre>
-        )
-      }
+  const markdownComponents = useMemo(() => {
+    return {
+      a: MarkdownLink,
+      blockquote: Blockquote,
+      code: InlineCode,
+      h1: Heading1,
+      h2: Heading2,
+      h3: Heading3,
+      h4: Heading4,
+      h5: Heading5,
+      h6: Heading6,
+      tbody: TableBody,
+      td: TableCell,
+      th: TableHeaderCell,
+      thead: TableHead,
+      tr: TableRow,
+      ...(plainCodeBlocks ? { pre: PlainPre } : {}),
+      ...(plainTables ? { table: PlainTable } : {})
     }
-
-    if (plainTables) {
-      components.table = function PlainTable({ children, className, node: _node, ...props }) {
-        const tableClassName = ["w-full divide-y divide-border", className].filter(Boolean).join(" ")
-
-        return (
-          <div className="my-4 overflow-x-hidden rounded-md border border-border bg-background">
-            <table className={tableClassName} data-streamdown="table" {...props}>
-              {children}
-            </table>
-          </div>
-        )
-      }
-    }
-
-    return components
   }, [plainCodeBlocks, plainTables])
 
   const groupedSteps = useMemo(() => {
@@ -332,9 +518,13 @@ export function AgentAnalysis({
   if (!parsed.finalOutput && parsed.steps.length === 0) {
     return (
       <div className={analysisClassName}>
-        <Streamdown components={markdownComponents} controls={controls} mode="static">
-          {normalizedRawContent}
-        </Streamdown>
+        <ComarkClient
+          className="space-y-4 whitespace-normal *:first:mt-0 *:last:mb-0"
+          components={markdownComponents}
+          markdown={normalizedRawContent}
+          options={COMARK_OPTIONS}
+          plugins={COMARK_PLUGINS}
+        />
       </div>
     )
   }
@@ -344,9 +534,13 @@ export function AgentAnalysis({
       {/* Final Output - shown prominently at the top (with Git Diff section stripped) */}
       {cleanedFinalOutput && (
         <div className={analysisClassName}>
-          <Streamdown components={markdownComponents} controls={controls} mode="static">
-            {cleanedFinalOutput}
-          </Streamdown>
+          <ComarkClient
+            className="space-y-4 whitespace-normal *:first:mt-0 *:last:mb-0"
+            components={markdownComponents}
+            markdown={cleanedFinalOutput}
+            options={COMARK_OPTIONS}
+            plugins={COMARK_PLUGINS}
+          />
         </div>
       )}
 
@@ -375,9 +569,13 @@ export function AgentAnalysis({
                           <div>
                             <div className="text-xs font-medium text-muted-foreground mb-1">Assistant</div>
                             <div className={analysisClassName}>
-                              <Streamdown components={markdownComponents} controls={controls} mode="static">
-                                {normalizeReportMarkdown(step.assistantText)}
-                              </Streamdown>
+                              <ComarkClient
+                                className="space-y-4 whitespace-normal *:first:mt-0 *:last:mb-0"
+                                components={markdownComponents}
+                                markdown={normalizeReportMarkdown(step.assistantText)}
+                                options={COMARK_OPTIONS}
+                                plugins={COMARK_PLUGINS}
+                              />
                             </div>
                           </div>
                         )}
