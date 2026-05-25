@@ -1,0 +1,34 @@
+bun.lock
+  ai_agent 42,215-216,867-868,871-872,1015-1016,1151-1152,1241-1248,1273,1423-1424,1487,1513-1514,1563-1564,1579,1587,1737-1738,1987-1988,2329
+www/app/dev-agents/runs/[id]/report/agent-analysis.tsx
+  s_5da4393566ec36::t_c73ee70765e93c 8,125-129,136,144-191,209,213-271
+  s_5da4393566ec36::t_f3051e351423d9 5,10-16,18-21,26-39,46-61
+  s_5da4393566ec36::t_55536dbc348a93 521-527,537-543
+  s_5da4393566ec36::t_02180854ed6cc6 3-4,7,9,17,40-45
+  s_5da4393566ec36::t_e55dd424a6f4cd 476
+  s_5da4393566ec36::t_c701eac87a8546 22-25
+  s_5da4393566ec36::t_de9e8d9f3a6146 123-124,130-135,137-143,192-194
+  s_5da4393566ec36::t_0d508293a7eee7 195-208,210-212,272-274
+  s_5da4393566ec36::t_4131c194a52f18 431
+  s_5da4393566ec36::t_882b62024df280 477-478,492-493
+  s_5da4393566ec36::t_bf98d30a3eee4a 479-491
+  s_5da4393566ec36::t_4a99ac41f24941 572-578
+www/package.json
+  s_5da4393566ec36::t_dae78843e1d32f 14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.1",
+  "base_commit_sha": "0ab045cc5492b364afd7ba9949c5078b74dcf73a",
+  "prompts": {},
+  "sessions": {
+    "s_5da4393566ec36": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e3207-b24c-7e90-bd42-71198956a1ad",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>"
+    }
+  }
+}
