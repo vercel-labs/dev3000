@@ -13,6 +13,7 @@ interface RemoteSkillOptions {
   wait?: boolean
   json?: boolean
   install?: boolean
+  yes?: boolean
 }
 
 interface VercelCliAuth {
@@ -107,6 +108,28 @@ interface WorkerInstallResponse {
   }
 }
 
+interface SkillRunnerResolveResponse {
+  success?: boolean
+  error?: string
+  exactMatch?: {
+    id: string
+    name: string
+    canonicalPath?: string
+    sourceUrl?: string
+  } | null
+  candidates?: SkillRunnerCandidate[]
+}
+
+interface SkillRunnerCandidate {
+  canonicalPath: string
+  installArg: string
+  packageName?: string
+  skillName: string
+  displayName: string
+  sourceUrl: string
+  installsLabel?: string
+}
+
 interface WorkflowRun {
   id?: string
   status?: string
@@ -119,7 +142,7 @@ interface WorkflowRun {
 }
 
 const DEFAULT_DEV3000_BASE_URL = "https://dev3000.ai"
-const REMOTE_SKILL_OPTIONS = ["team", "project", "branch", "projectDir", "baseUrl", "wait", "json"]
+const REMOTE_SKILL_OPTIONS = ["team", "project", "branch", "projectDir", "baseUrl", "wait", "json", "yes"]
 
 export function shouldUseRemoteSkillRunner(name: string | undefined, options: RemoteSkillOptions): boolean {
   if (!name?.trim()) return false
@@ -140,8 +163,8 @@ export function shouldUseRemoteSkillRunner(name: string | undefined, options: Re
 }
 
 export async function runRemoteSkillCommand(name: string | undefined, options: RemoteSkillOptions): Promise<void> {
-  const skillRunnerId = name?.trim()
-  if (!skillRunnerId) {
+  const requestedSkillRunnerId = name?.trim()
+  if (!requestedSkillRunnerId) {
     throw new Error(
       "A skill name is required. Example: d3k skill vercel-optimize --team elsigh-pro --project cranio-mom"
     )
@@ -164,7 +187,7 @@ export async function runRemoteSkillCommand(name: string | undefined, options: R
   }
 
   const baseUrl = normalizeBaseUrl(options.baseUrl || process.env.D3K_CLOUD_URL || DEFAULT_DEV3000_BASE_URL)
-  log(options, `Starting ${chalk.bold(skillRunnerId)} on ${chalk.bold(projectInput)}...`)
+  log(options, `Preparing ${chalk.bold(requestedSkillRunnerId)} on ${chalk.bold(projectInput)}...`)
   if (linkedProject && (!options.team || !options.project)) {
     log(options, `${chalk.green("✓")} Inferred Vercel project link from ${linkedProject.path}`)
   }
@@ -190,6 +213,15 @@ export async function runRemoteSkillCommand(name: string | undefined, options: R
 
   log(options, `${chalk.green("✓")} Team: ${team.name} (${team.slug})`)
   log(options, `${chalk.green("✓")} Project: ${project.name} (${githubRepo.owner}/${githubRepo.repo})`)
+
+  const skillRunnerId = await resolveSkillRunnerSelection({
+    baseUrl,
+    token,
+    team,
+    requestedSkillRunnerId,
+    options
+  })
+  log(options, `${chalk.green("✓")} Skill: ${skillRunnerId}`)
 
   const startRunSpinner = startSpinner(options, "Starting run...")
   let startResult: StartSkillRunResponse
@@ -498,6 +530,135 @@ function getProjectGitHubRepo(project: VercelProject): { owner: string; repo: st
   const metaOwner = deploymentWithGitHubMeta?.meta?.githubOrg?.trim()
   const metaRepo = deploymentWithGitHubMeta?.meta?.githubRepo?.trim()
   return metaOwner && metaRepo ? { owner: metaOwner, repo: metaRepo } : null
+}
+
+async function resolveSkillRunnerSelection(input: {
+  baseUrl: string
+  token: string
+  team: VercelTeam
+  requestedSkillRunnerId: string
+  options: RemoteSkillOptions
+}): Promise<string> {
+  const url = new URL(`${input.baseUrl}/api/skill-runners/resolve`)
+  url.searchParams.set("team", input.team.id)
+  url.searchParams.set("q", input.requestedSkillRunnerId)
+
+  const response = await fetchJsonResponse<SkillRunnerResolveResponse>(url.toString(), {
+    headers: authorizationHeaders(input.token)
+  })
+
+  if (!response.ok || !response.data.success) {
+    throw new Error(response.data.error || `Failed to resolve skill runner (${response.status}).`)
+  }
+
+  if (response.data.exactMatch?.id) {
+    return response.data.exactMatch.id
+  }
+
+  const candidates = response.data.candidates || []
+  if (candidates.length === 0) {
+    throw new Error(
+      `No existing skill runner or skills.sh match found for "${input.requestedSkillRunnerId}". Try the full skills.sh path, for example owner/repo/skill-name.`
+    )
+  }
+
+  const selected = await confirmSkillRunnerCandidate(input.requestedSkillRunnerId, candidates, input.options)
+  return selected.canonicalPath
+}
+
+async function confirmSkillRunnerCandidate(
+  requestedSkillRunnerId: string,
+  candidates: SkillRunnerCandidate[],
+  options: RemoteSkillOptions
+): Promise<SkillRunnerCandidate> {
+  if (options.yes) {
+    if (candidates.length === 1) {
+      const [candidate] = candidates
+      log(options, `${chalk.green("✓")} Matched skills.sh skill: ${candidate.displayName} (${candidate.sourceUrl})`)
+      return candidate
+    }
+
+    throw new Error(formatSkillRunnerCandidateRequiredMessage(requestedSkillRunnerId, candidates))
+  }
+
+  if (options.json || !process.stdin.isTTY || !process.stdout.isTTY) {
+    throw new Error(formatSkillRunnerCandidateRequiredMessage(requestedSkillRunnerId, candidates))
+  }
+
+  if (candidates.length === 1) {
+    const [candidate] = candidates
+    console.log(`\n${chalk.bold("Found a skills.sh match for")} ${chalk.cyan(requestedSkillRunnerId)}:`)
+    printSkillRunnerCandidate(candidate)
+    const answer = await promptLine("Run this skill? [y/N] ")
+    if (isYesAnswer(answer)) {
+      return candidate
+    }
+    throw new Error("Cancelled skill run.")
+  }
+
+  console.log(`\n${chalk.bold("Found multiple skills.sh matches for")} ${chalk.cyan(requestedSkillRunnerId)}:`)
+  candidates.forEach((candidate, index) => {
+    printSkillRunnerCandidate(candidate, index + 1)
+  })
+
+  for (;;) {
+    const answer = await promptLine(`Select a skill to run [1-${candidates.length}] or q: `)
+    if (/^(q|quit|cancel)$/i.test(answer)) {
+      throw new Error("Cancelled skill run.")
+    }
+
+    const selectedIndex = Number(answer)
+    if (Number.isInteger(selectedIndex) && selectedIndex >= 1 && selectedIndex <= candidates.length) {
+      return candidates[selectedIndex - 1]
+    }
+
+    console.log(chalk.yellow(`Enter a number from 1 to ${candidates.length}, or q to cancel.`))
+  }
+}
+
+function printSkillRunnerCandidate(candidate: SkillRunnerCandidate, index?: number): void {
+  const prefix = typeof index === "number" ? `${index}. ` : "  "
+  console.log(`${prefix}${chalk.bold(candidate.displayName)}`)
+  console.log(`   ${chalk.gray(candidate.sourceUrl)}`)
+  console.log(`   ${chalk.gray(`install: ${candidate.installArg}`)}`)
+  if (candidate.installsLabel) {
+    console.log(`   ${chalk.gray(candidate.installsLabel)}`)
+  }
+}
+
+function formatSkillRunnerCandidateRequiredMessage(
+  requestedSkillRunnerId: string,
+  candidates: SkillRunnerCandidate[]
+): string {
+  const choices = candidates
+    .slice(0, 5)
+    .map((candidate) => `${candidate.displayName} (${candidate.sourceUrl})`)
+    .join("; ")
+  const suffix =
+    candidates.length === 1
+      ? "Re-run with the full skill path or pass --yes to accept this single match."
+      : "Re-run with the full skill path for the skill you want."
+  return `Skill "${requestedSkillRunnerId}" does not exactly match an existing team skill runner. Candidate${
+    candidates.length === 1 ? "" : "s"
+  }: ${choices}. ${suffix}`
+}
+
+async function promptLine(question: string): Promise<string> {
+  const { createInterface } = await import("readline/promises")
+  const readline = createInterface({
+    input: process.stdin,
+    output: process.stdout
+  })
+
+  try {
+    return (await readline.question(question)).trim()
+  } finally {
+    readline.close()
+  }
+}
+
+function isYesAnswer(value: string): boolean {
+  return /^(y|yes)$/i.test(value.trim())
 }
 
 async function installWorkerProject(

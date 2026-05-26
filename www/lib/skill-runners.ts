@@ -864,6 +864,90 @@ export async function searchSkillRunnerCandidates(query: string): Promise<Skills
   return searchSkillsSh(query)
 }
 
+export interface SkillRunnerExistingMatch {
+  id: string
+  name: string
+  canonicalPath?: string
+  sourceUrl?: string
+}
+
+export interface SkillRunnerLookupResolution {
+  exactMatch: SkillRunnerExistingMatch | null
+  candidates: SkillsShSearchResult[]
+}
+
+function normalizedSkillRunnerCandidatesForDevAgent(runner: DevAgent): string[] {
+  return [
+    runner.id,
+    runner.name,
+    slugifySkillRunnerLookup(runner.name),
+    runner.runnerCanonicalPath,
+    runner.runnerSourceUrl,
+    ...runner.skillRefs
+      .filter((skillRef) => skillRef.id !== "d3k")
+      .flatMap((skillRef) => [
+        skillRef.id,
+        skillRef.installArg,
+        skillRef.packageName && skillRef.skillName ? `${skillRef.packageName}@${skillRef.skillName}` : undefined,
+        skillRef.packageName && skillRef.skillName ? `${skillRef.packageName}/${skillRef.skillName}` : undefined,
+        skillRef.skillName,
+        skillRef.displayName,
+        skillRef.displayName ? slugifySkillRunnerLookup(skillRef.displayName) : undefined,
+        skillRef.sourceUrl
+      ])
+  ].filter((value): value is string => Boolean(value?.trim()))
+}
+
+function devAgentExactlyMatchesSkillRunnerLookup(lookup: string, runner: DevAgent): boolean {
+  const normalizedLookup = normalizeSkillRunnerLookup(lookup)
+  return normalizedSkillRunnerCandidatesForDevAgent(runner).some(
+    (candidate) => normalizeSkillRunnerLookup(candidate) === normalizedLookup
+  )
+}
+
+function dedupeSkillRunnerCandidates(candidates: SkillsShSearchResult[]): SkillsShSearchResult[] {
+  const seen = new Set<string>()
+  const deduped: SkillsShSearchResult[] = []
+
+  for (const candidate of candidates) {
+    const key = normalizeSkillRunnerLookup(candidate.canonicalPath)
+    if (!key || seen.has(key)) continue
+    seen.add(key)
+    deduped.push(candidate)
+  }
+
+  return deduped
+}
+
+export async function resolveSkillRunnerLookupForCli(
+  team: DevAgentTeam,
+  lookup: string
+): Promise<SkillRunnerLookupResolution> {
+  const trimmed = lookup.trim()
+  const runners = await listSkillRunners(team)
+  const exactRunner = runners.find((runner) => devAgentExactlyMatchesSkillRunnerLookup(trimmed, runner))
+  if (exactRunner) {
+    return {
+      exactMatch: {
+        id: exactRunner.id,
+        name: exactRunner.name,
+        canonicalPath: exactRunner.runnerCanonicalPath,
+        sourceUrl: exactRunner.runnerSourceUrl
+      },
+      candidates: []
+    }
+  }
+
+  const directSelection = buildSkillsShSelectionFromLookup(trimmed)
+  const searchResults = await searchSkillsSh(trimmed)
+  const candidates = dedupeSkillRunnerCandidates(directSelection ? [directSelection, ...searchResults] : searchResults)
+
+  return {
+    exactMatch: null,
+    candidates
+  }
+}
+
 export async function importSkillRunnerForTeam(team: DevAgentTeam, selection: SkillsShSearchResult): Promise<DevAgent> {
   const state = await getTeamSkillRunnerState(team)
   const record = await importSkillRunnerForTeamState(state, team, selection)
