@@ -51,6 +51,16 @@ export function formatRunFailure(value?: string | null): RunFailureDisplay {
   const retryCount = fatalMatch?.[2]
   const cause = fatalMatch?.[3]?.trim() || details
 
+  if (/AI Gateway authentication failed|Authentication failed|AI Gateway[^\n]*401|401 Unauthorized/i.test(cause)) {
+    return {
+      summary: "The runner could not authenticate to AI Gateway, so no analysis report was generated.",
+      details,
+      workflowStep,
+      retryCount,
+      stats: ["Root cause: AI Gateway 401 Unauthorized"]
+    }
+  }
+
   const deepSecStats = cause.match(
     /Processing complete\.\s*Run:\s*([^\s]+)\s*Analyses:\s*(\d+)\s*Findings:\s*(\d+)\s*Errored batches:\s*(\d+)/i
   )
@@ -84,16 +94,6 @@ export function formatRunFailure(value?: string | null): RunFailureDisplay {
   if (/Unexpected end of JSON input/i.test(cause)) {
     return {
       summary: "The analysis runner returned an incomplete JSON response.",
-      details,
-      workflowStep,
-      retryCount,
-      stats: []
-    }
-  }
-
-  if (/AI Gateway authentication failed|Authentication failed/i.test(cause)) {
-    return {
-      summary: "AI Gateway authentication failed before the run could complete.",
       details,
       workflowStep,
       retryCount,

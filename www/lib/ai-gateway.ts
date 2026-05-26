@@ -13,14 +13,14 @@ export type WorkflowGatewayAuthSource =
   | "control-plane-ai-gateway-api-key"
 
 export function getAiGatewayAuthToken(explicitToken?: string | null): string | null {
-  const token = explicitToken?.trim() || process.env.AI_GATEWAY_API_KEY?.trim() || process.env.VERCEL_OIDC_TOKEN?.trim()
+  const token = explicitToken?.trim() || process.env.VERCEL_OIDC_TOKEN?.trim() || process.env.AI_GATEWAY_API_KEY?.trim()
   return token || null
 }
 
 export function getAiGatewayAuthSource(explicitToken?: string | null): AiGatewayAuthSource {
   if (explicitToken?.trim()) return "explicit"
-  if (process.env.AI_GATEWAY_API_KEY?.trim()) return "api-key"
   if (process.env.VERCEL_OIDC_TOKEN?.trim()) return "oidc"
+  if (process.env.AI_GATEWAY_API_KEY?.trim()) return "api-key"
   return "missing"
 }
 

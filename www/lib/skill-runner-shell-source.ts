@@ -20,6 +20,7 @@ const RUNNER_SHELL_EXACT_FILES = new Set([
   "www/lib/dev-agents.ts",
   "www/lib/dev-server-command.ts",
   "www/lib/file-to-route.ts",
+  "www/lib/oidc-token-binding.ts",
   "www/lib/report-redaction.ts",
   "www/lib/skill-runner-config.ts",
   "www/lib/skill-runner-runtime.ts",

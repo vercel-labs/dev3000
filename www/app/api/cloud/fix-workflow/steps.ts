@@ -4948,7 +4948,7 @@ export async function deepSecStartProcessStep(
   const startedAtMs = Date.now()
 
   await updateProgress(params.progressContext, 3, "Processing DeepSec candidates...", params.devUrl)
-  await appendProgressLog(params.progressContext, "[Agent] AI Gateway connected")
+  await appendProgressLog(params.progressContext, `[Agent] AI Gateway credentials configured (${authSource})`)
   await appendProgressLog(params.progressContext, "[DeepSec] Process candidates...")
 
   let startedProcess: Awaited<ReturnType<typeof startDeepSecProcessInSandbox>>
@@ -10010,7 +10010,10 @@ async function runAgentWithDiagnoseTool(
   const effectiveGatewayAuthSource = resolvedGatewayAuth.source
 
   if (effectiveGatewayAuthSource) {
-    await appendProgressLog(progressContext, "[Agent] AI Gateway connected")
+    await appendProgressLog(
+      progressContext,
+      `[Agent] AI Gateway credentials configured (${effectiveGatewayAuthSource})`
+    )
   }
 
   if (workflowTypeForPrompt === "deepsec-security-scan") {

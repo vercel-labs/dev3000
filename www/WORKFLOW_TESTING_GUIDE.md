@@ -1,227 +1,215 @@
-# Workflow Testing Guide (Example Apps)
+# Workflow And Skill Runner Testing Guide
 
-This guide is the single source of truth for end-to-end workflow testing against the example apps deployed from this repo.
+This guide is the source of truth for production-backed workflow testing in `www/`. Localhost is only a UI shell; workflow execution, runner installation, Vercel Sandbox activity, and workflow state all run in production.
 
 ## Quick Summary
 
-- There are nine example apps in `example-apps/`.
-- Each app is deployed as its own Vercel project in the **Vercel Labs** team.
-- Testing a workflow type means running a workflow against the matching example project.
-- Testing a built-in dev agent means opening the agent run page and selecting the matching example project.
-- The goal is to verify that the workflow produces a real code diff and a transcript that demonstrates the skill-driven behavior.
-- These tests are **technology validation**: the diff only needs to be well-targeted and plausible, not perfect or necessarily merged.
+- Use the skill-runner installer smoke suite for runner project install, cleanup, and auto-update validation.
+- It is safe to run installer smoke tests against Lindsey's personal Hobby team with `--team elsigh`.
+- Use the public production alias `https://dev3000.ai` for smoke tests unless you explicitly know how to bypass deployment protection on a generated Vercel deployment URL.
+- Use the Vercel Labs scope `team_nO2mCG4W8IxPIeKoSsqwAxxB` for `dev3000-www` deployment checks and logs.
+- Keep the old example-app workflow checks as manual product validation, not as the primary installer safety net.
 
-## Legacy Workflow Matrix (Use These)
+## Skill Runner Installer Smoke Suite
 
-| Workflow Type | Vercel Project | Project ID | Production URL | Expected Skills |
-| --- | --- | --- | --- | --- |
-| `design-guidelines` | `dev3000-example-design-guidelines` | `prj_1Fu7YXCrKlgt5WUDVSRoKxHD7Y3u` | https://dev3000-example-design-guidelines.vercel.sh | `d3k`, `vercel-design-guidelines` |
-| `react-performance` | `dev3000-example-react-performance` | `prj_mysQRnCoGuDcQ6JRgXxYxOHxegVV` | https://dev3000-example-react-performance.vercel.sh | `d3k`, `vercel-react-best-practices` |
-| `cls-fix` | `dev3000-example-cls-fix` | `prj_VbZqjqTxeLP0deOdr82ZMGeYOi6c` | https://dev3000-example-cls-fix.vercel.sh | `d3k` |
+Run this whenever code touches runner installation, runner shell source selection, auto-update behavior, Blob store setup, team settings, or CLI skill-runner startup.
 
-## New Dev Agent Matrix (Use These)
+The full suite performs:
 
-| Dev Agent | Agent ID | Vercel Project | Project ID | Expected Alias | Expected Skills |
-| --- | --- | --- | --- | --- | --- |
-| `Eliminate Waterfalls` | `r_w82af1` | `dev3000-example-eliminate-waterfalls` | `prj_AxU6mzLRdA5ybWic5z3Da1CyKaPS` | https://dev3000-example-eliminate-waterfalls.vercel.sh | `d3k`, `vercel-react-best-practices` |
-| `Bundle Size Optimizer` | `r_b61dz2` | `dev3000-example-bundle-size-optimizer` | `prj_wuyTJEQHcV0sXzYxDFyZ1ERbWqk0` | https://dev3000-example-bundle-size-optimizer.vercel.sh | `d3k`, `vercel-react-best-practices` |
-| `Server-Side Perf Optimizer` | `r_s93kp4` | `dev3000-example-server-side-perf-optimizer` | `prj_DnBCcs8vKPBT42KroqThrTTyitTf` | https://dev3000-example-server-side-perf-optimizer.vercel.sh | `d3k`, `vercel-react-best-practices` |
-| `Client-Side Fetch Optimizer` | `r_c74hf5` | `dev3000-example-client-side-fetch-optimizer` | `prj_hULq61haAPN6HPYuuo1Rd3FkMNBt` | https://dev3000-example-client-side-fetch-optimizer.vercel.sh | `d3k`, `vercel-react-best-practices` |
-| `Re-render Optimizer` | `r_r55mq6` | `dev3000-example-re-render-optimizer` | `prj_9iEiLckS3Hg8AGvFgkQ06zQ1fi6h` | https://dev3000-example-re-render-optimizer.vercel.sh | `d3k`, `vercel-react-best-practices` |
+1. Initial cleanup of any stale `d3k-skill-runner` project and runner Blob stores.
+2. Fresh install of the team runner project.
+3. Validation that the existing runner is ready and reused.
+4. Cleanup after the fresh install.
+5. Auto-update test by deploying a stale runner shell and verifying setup repairs it.
+6. Final cleanup.
 
-Team ID (vercel-labs): `team_nO2mCG4W8IxPIeKoSsqwAxxB`
+### Preconditions
 
-## Preconditions
+- You are logged in with Vercel CLI:
+  ```bash
+  vercel whoami
+  ```
+- Your token can access the target team. The script uses `VERCEL_TOKEN` first, then local Vercel CLI auth.
+- For `dev3000-www` deployment inspection, use the Vercel Labs team scope:
+  ```bash
+  vercel ls --scope team_nO2mCG4W8IxPIeKoSsqwAxxB | head -10
+  ```
 
-1. Local dev server running:
-   ```bash
-   cd /Users/elsigh/src/vercel-labs/dev3000/www
-   d3k --no-agent --no-tui -t
-   ```
+### Safe Personal Team
 
-2. You are signed in at `http://localhost:3000/workflows`.
+Use Lindsey's personal Hobby team for destructive smoke testing:
 
-## How To Run A Workflow (By Type)
-
-Pick a workflow type from the table, then construct the URL using the project ID:
-
+```bash
+bun run smoke:skill-runner-install -- --team elsigh --suite --json
 ```
+
+This team is intentionally safe for creating and deleting `d3k-skill-runner` projects and private Blob stores. The suite should leave it clean. Verify with:
+
+```bash
+bun run smoke:skill-runner-install -- --team elsigh --cleanup-only --json
+```
+
+The cleanup result should include:
+
+- `"cleaned": true`
+- `"remainingProjects": []`
+- `"remainingBlobStores": []`
+- `"resetStatus": 200`
+- `"resetInstalled": false`
+
+### Common Commands
+
+Validate existing runner without installing:
+
+```bash
+bun run smoke:skill-runner-install -- --team elsigh --validate-only --json
+```
+
+Test clean first-install experience and clean up after:
+
+```bash
+bun run smoke:skill-runner-install -- --team elsigh --fresh-install --cleanup-after --json
+```
+
+Test only auto-update repair and clean up after:
+
+```bash
+bun run smoke:skill-runner-install -- --team elsigh --auto-update --cleanup-after --json
+```
+
+Run the full suite against a non-default base URL:
+
+```bash
+bun run smoke:skill-runner-install -- --team elsigh --base-url https://dev3000.ai --suite --json
+```
+
+Generated `*.labs.vercel.dev` deployment URLs may be protected by Vercel Authentication. The smoke script does plain HTTP requests and does not automatically use `vercel curl` or a protection bypass cookie, so prefer `https://dev3000.ai` after the production alias has moved to the deployment you want to test.
+
+## Post-Push Deployment Check
+
+After pushing `main`, wait for the new `dev3000-www` production deployment to become `Ready`:
+
+```bash
+vercel ls --scope team_nO2mCG4W8IxPIeKoSsqwAxxB | head -10
+```
+
+Inspect the latest deployment to confirm `https://dev3000.ai` is aliased to it:
+
+```bash
+vercel inspect <deployment-url> --scope team_nO2mCG4W8IxPIeKoSsqwAxxB
+```
+
+Stream logs with the same Vercel Labs scope:
+
+```bash
+vercel logs <deployment-url> --scope team_nO2mCG4W8IxPIeKoSsqwAxxB
+```
+
+If `vercel inspect` or `vercel logs` reports a SAML re-auth error, check the scope first. `dev3000-www` is under `vercel-labs` (`team_nO2mCG4W8IxPIeKoSsqwAxxB`), not the stricter `vercel` org scope.
+
+## Manual Workflow Smoke Tests
+
+Use these only when validating workflow or dev-agent behavior against the example apps. They are not a substitute for the installer smoke suite.
+
+Team ID for Vercel Labs example apps: `team_nO2mCG4W8IxPIeKoSsqwAxxB`
+
+### Example App Matrix
+
+| Workflow Or Agent | Route ID | Vercel Project | Project ID | Expected Alias | Expected Skills |
+| --- | --- | --- | --- | --- | --- |
+| `design-guidelines` workflow | `design-guidelines` | `dev3000-example-design-guidelines` | `prj_1Fu7YXCrKlgt5WUDVSRoKxHD7Y3u` | https://dev3000-example-design-guidelines.vercel.sh | `d3k`, `vercel-design-guidelines` |
+| `react-performance` workflow | `react-performance` | `dev3000-example-react-performance` | `prj_mysQRnCoGuDcQ6JRgXxYxOHxegVV` | https://dev3000-example-react-performance.vercel.sh | `d3k`, `vercel-react-best-practices` |
+| `cls-fix` workflow | `cls-fix` | `dev3000-example-cls-fix` | `prj_VbZqjqTxeLP0deOdr82ZMGeYOi6c` | https://dev3000-example-cls-fix.vercel.sh | `d3k` |
+| `Eliminate Waterfalls` dev agent | `r_w82af1` | `dev3000-example-eliminate-waterfalls` | `prj_AxU6mzLRdA5ybWic5z3Da1CyKaPS` | https://dev3000-example-eliminate-waterfalls.vercel.sh | `d3k`, `vercel-react-best-practices` |
+| `Bundle Size Optimizer` dev agent | `r_b61dz2` | `dev3000-example-bundle-size-optimizer` | `prj_wuyTJEQHcV0sXzYxDFyZ1ERbWqk0` | https://dev3000-example-bundle-size-optimizer.vercel.sh | `d3k`, `vercel-react-best-practices` |
+| `Server-Side Perf Optimizer` dev agent | `r_s93kp4` | `dev3000-example-server-side-perf-optimizer` | `prj_DnBCcs8vKPBT42KroqThrTTyitTf` | https://dev3000-example-server-side-perf-optimizer.vercel.sh | `d3k`, `vercel-react-best-practices` |
+| `Client-Side Fetch Optimizer` dev agent | `r_c74hf5` | `dev3000-example-client-side-fetch-optimizer` | `prj_hULq61haAPN6HPYuuo1Rd3FkMNBt` | https://dev3000-example-client-side-fetch-optimizer.vercel.sh | `d3k`, `vercel-react-best-practices` |
+| `Re-render Optimizer` dev agent | `r_r55mq6` | `dev3000-example-re-render-optimizer` | `prj_9iEiLckS3Hg8AGvFgkQ06zQ1fi6h` | https://dev3000-example-re-render-optimizer.vercel.sh | `d3k`, `vercel-react-best-practices` |
+
+### Local UI Setup
+
+Start the local UI with `d3k`, not `bun run dev`:
+
+```bash
+cd /Users/elsigh/src/vercel-labs/dev3000/www
+d3k --no-agent --no-tui -t
+```
+
+Sign in at:
+
+```text
+http://localhost:3000
+```
+
+Workflow execution still runs in production. Localhost only starts or views runs through production-backed APIs.
+
+### Run A Legacy Workflow
+
+Construct the URL:
+
+```text
 http://localhost:3000/workflows/new?type=<TYPE>&team=team_nO2mCG4W8IxPIeKoSsqwAxxB&project=<PROJECT_ID>
 ```
 
-Example (design-guidelines):
+Examples:
+
+```bash
+echo "http://localhost:3000/workflows/new?type=design-guidelines&team=team_nO2mCG4W8IxPIeKoSsqwAxxB&project=prj_1Fu7YXCrKlgt5WUDVSRoKxHD7Y3u"
+echo "http://localhost:3000/workflows/new?type=react-performance&team=team_nO2mCG4W8IxPIeKoSsqwAxxB&project=prj_mysQRnCoGuDcQ6JRgXxYxOHxegVV"
+echo "http://localhost:3000/workflows/new?type=cls-fix&team=team_nO2mCG4W8IxPIeKoSsqwAxxB&project=prj_VbZqjqTxeLP0deOdr82ZMGeYOi6c"
 ```
-http://localhost:3000/workflows/new?type=design-guidelines&team=team_nO2mCG4W8IxPIeKoSsqwAxxB&project=prj_1Fu7YXCrKlgt5WUDVSRoKxHD7Y3u
-```
 
-Then:
-1. Wait for the modal to load (teams/projects/branches).
-2. Click **Start Workflow**.
-3. The workflow runs on production, not locally.
+Then wait for teams/projects/branches to load and click **Start Workflow**.
 
-## How To Run A Built-In Dev Agent
+### Run A Built-In Dev Agent
 
-Use the dev-agent route directly:
+Use:
 
-```
+```text
 http://localhost:3000/vercel-labs/dev-agents/<AGENT_ID>/new?project=<PROJECT_ID>
 ```
 
 Examples:
 
 ```bash
-# Eliminate Waterfalls
 echo "http://localhost:3000/vercel-labs/dev-agents/r_w82af1/new?project=prj_AxU6mzLRdA5ybWic5z3Da1CyKaPS"
-```
-
-```bash
-# Bundle Size Optimizer
 echo "http://localhost:3000/vercel-labs/dev-agents/r_b61dz2/new?project=prj_wuyTJEQHcV0sXzYxDFyZ1ERbWqk0"
-```
-
-```bash
-# Server-Side Perf Optimizer
 echo "http://localhost:3000/vercel-labs/dev-agents/r_s93kp4/new?project=prj_DnBCcs8vKPBT42KroqThrTTyitTf"
-```
-
-```bash
-# Client-Side Fetch Optimizer
 echo "http://localhost:3000/vercel-labs/dev-agents/r_c74hf5/new?project=prj_hULq61haAPN6HPYuuo1Rd3FkMNBt"
-```
-
-```bash
-# Re-render Optimizer
 echo "http://localhost:3000/vercel-labs/dev-agents/r_r55mq6/new?project=prj_9iEiLckS3Hg8AGvFgkQ06zQ1fi6h"
 ```
 
-Then:
-1. Wait for the dev-agent run page to load the linked project.
-2. Confirm the project directory matches the example app.
-3. Click **Run Agent**.
-4. The run executes in production, not locally.
+Confirm the project directory matches the example app, then click **Run Agent**.
 
-## One-Line Commands (Copy/Paste)
+## Manual Report Validation
 
-These print a ready-to-open URL for each workflow type.
+For workflow or dev-agent manual tests, validate both the transcript and the diff. The goal is not a perfect fix; it is to confirm the cloud run used real project context, browser or sandbox tools, the expected skills, and produced a coherent targeted diff.
 
-```bash
-# design-guidelines
-echo "http://localhost:3000/workflows/new?type=design-guidelines&team=team_nO2mCG4W8IxPIeKoSsqwAxxB&project=prj_1Fu7YXCrKlgt5WUDVSRoKxHD7Y3u"
-```
+Transcript should show:
 
-```bash
-# react-performance
-echo "http://localhost:3000/workflows/new?type=react-performance&team=team_nO2mCG4W8IxPIeKoSsqwAxxB&project=prj_mysQRnCoGuDcQ6JRgXxYxOHxegVV"
-```
+- `d3k` usage and relevant skill loading.
+- Concrete project observations, not boilerplate.
+- Browser, sandbox, bundle, or code inspection where appropriate.
+- Verification or an explicit reason verification was not possible.
 
-```bash
-# cls-fix
-echo "http://localhost:3000/workflows/new?type=cls-fix&team=team_nO2mCG4W8IxPIeKoSsqwAxxB&project=prj_VbZqjqTxeLP0deOdr82ZMGeYOi6c"
-```
+Diff should show:
 
-## Monitoring (Always Do This First)
+- A targeted code change aligned with the selected workflow or agent.
+- No broad unrelated refactor.
+- No cosmetic-only edits unless the workflow is explicitly visual/design-oriented.
+- A plausible explanation in the report tying the diff to the observed issue.
 
-Start production log monitoring **before** clicking Start Workflow:
+Open reports from:
 
-```bash
-# Get latest www deployment
-DEPLOYMENT=$(vercel ls dev3000-www --scope team_nO2mCG4W8IxPIeKoSsqwAxxB | grep https | head -1 | awk '{print $2}')
-
-# Stream logs in real-time
-vercel logs $DEPLOYMENT --scope team_nO2mCG4W8IxPIeKoSsqwAxxB
-```
-
-Key log markers:
-- `[Workflow] Starting cloud fix workflow...`
-- `[Agent] Starting AI agent with d3k sandbox tools...`
-- `[Agent] Completed in X step(s)`
-- `[Agent] Tool usage: {...}`
-
-## What To Validate (Required)
-
-You must validate both **transcript** and **diff** in the workflow report.
-
-### Purpose Of These Tests
-
-The goal is not to perfect the example apps; it is to confirm the cloud workflow:
-
-- Loads a real page in a sandbox and uses browser automation.
-- Uses the specified skill(s) and d3k tooling in the transcript.
-- Produces a **reasonable, targeted diff** that aligns with the skill and the observed issue.
-- Verifies the change and records a readable transcript.
-
-If the workflow reaches a sensible fix path and produces a coherent diff + transcript, it counts as a success.
-If the diff is unrelated, superficial, or the transcript lacks real tool/skill usage, it fails.
-
-### Transcript Validation
-
-Confirm the transcript shows skill usage and real reasoning, not boilerplate.
-
-- `design-guidelines` should load `d3k` and `vercel-design-guidelines` and mention contrast, spacing, hierarchy.
-- `react-performance` should load `d3k` and `vercel-react-best-practices` and mention waterfalls, memoization, or heavy renders.
-- `cls-fix` should load `d3k`, run `diagnose`, and identify a shift source.
-- `Eliminate Waterfalls` should mention sequential awaits, per-item fetch chains, or promise parallelization.
-- `Bundle Size Optimizer` should mention client boundaries, shipped JS, large imports, or dynamic loading.
-- `Server-Side Perf Optimizer` should mention duplicate server fetches, serialization, or request-time work.
-- `Client-Side Fetch Optimizer` should mention duplicate browser requests, shared hooks, SWR, or listener deduplication.
-- `Re-render Optimizer` should mention derived state, expensive rerenders, or transient state moving to refs.
-
-### Diff Validation (Expected Fixes)
-
-The diff should show real code changes that fix the issue (not cosmetic edits only):
-
-- `design-guidelines`:
-  - Improved contrast (text colors darkened)
-  - Adjusted typography scale and spacing
-  - Better CTA hierarchy (buttons and alignment)
-
-- `react-performance`:
-  - Parallelized server data fetching (`Promise.all`)
-  - Reduced expensive client recomputation (memoization or derived data moved)
-  - Avoided rebuilding large arrays every render
-
-- `cls-fix`:
-  - Reserve space for late banner
-  - Stable media dimensions (avoid layout shift)
-
-- `Eliminate Waterfalls`:
-  - Parallelized independent server work
-  - Flattened sequential per-item fetches
-  - Deferred awaits until values were actually needed
-
-- `Bundle Size Optimizer`:
-  - Reduced initial client bundle scope
-  - Deferred or dynamically imported low-value heavy UI
-  - Moved static data or logic out of the first client render path
-
-- `Server-Side Perf Optimizer`:
-  - Deduplicated repeated server fetches
-  - Narrowed client props to smaller serialized payloads
-  - Removed or deferred avoidable request-time computation
-
-- `Client-Side Fetch Optimizer`:
-  - Collapsed duplicate client fetches behind shared logic
-  - Reduced duplicate browser listeners
-  - Simplified browser-side caching or local storage access
-
-- `Re-render Optimizer`:
-  - Stopped rebuilding large arrays every render
-  - Removed effect-driven derived state
-  - Reduced unnecessary state updates from transient events
-
-If transcript or diff do not align with the expected fixes, the workflow test fails.
-
-## Finding The Report
-
-After completion, open:
-```
+```text
 http://localhost:3000/workflows
 ```
-Click the latest run and open the report. Validate transcript + diff there.
+
+or the relevant team route under `/dev-agents/runs` or `/skill-runner/runs`.
 
 ## Notes
 
-- These example deployments always track `main` and auto-deploy on push.
-- The five new dev-agent projects are connected to Git and root-directory scoped; if they have no deployment yet, push `main` or trigger a manual deploy once to materialize the first alias.
-- The workflow is executed in production (Vercel), not locally.
-- Only production logs are authoritative.
+- Example deployments track `main` and auto-deploy on push.
+- The smoke suite is destructive by design; use `--team elsigh` unless you intentionally need another team.
+- If a smoke suite fails, inspect the JSON. It should still run final cleanup. Always follow with `--cleanup-only --json`.
+- If generated deployment URLs are protected, wait for the public production alias or use an explicit Vercel deployment protection bypass flow outside the smoke script.

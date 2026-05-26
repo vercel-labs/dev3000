@@ -5,6 +5,7 @@ import { type StartOptions, start } from "workflow/api"
 import { getCurrentUserFromRequest } from "@/lib/auth"
 import { resolveDevAgentRunner } from "@/lib/cloud/dev-agent-runner"
 import { type DevAgent, ensureDevAgentAshArtifactPrepared, getDevAgent, incrementDevAgentUsage } from "@/lib/dev-agents"
+import { describeOidcClaimsForLog, getOidcSandboxBinding, isOidcTokenBoundToProject } from "@/lib/oidc-token-binding"
 import { isSelfHostedSkillRunnerRuntime } from "@/lib/skill-runner-runtime"
 import {
   findSkillRunnerWorkerProject,
@@ -139,45 +140,6 @@ function describeErrorForLog(error: unknown, depth = 0): Record<string, unknown>
   }
 }
 
-function decodeJwtPayload(token: string): Record<string, unknown> | null {
-  const [, payload] = token.split(".")
-  if (!payload) return null
-
-  try {
-    return JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as Record<string, unknown>
-  } catch {
-    return null
-  }
-}
-
-function getOidcSandboxBinding(token: string | undefined): { projectId?: string; teamId?: string } {
-  if (!token) return {}
-  const payload = decodeJwtPayload(token)
-  const projectId = typeof payload?.project_id === "string" ? payload.project_id.trim() || undefined : undefined
-  const teamId = typeof payload?.owner_id === "string" ? payload.owner_id.trim() || undefined : undefined
-  return { projectId, teamId }
-}
-
-function describeOidcClaimsForLog(token: string | undefined): Record<string, unknown> | null {
-  if (!token) return null
-  const payload = decodeJwtPayload(token)
-  if (!payload) return null
-
-  return {
-    iss: payload.iss,
-    aud: payload.aud,
-    sub: payload.sub,
-    ownerId: payload.owner_id,
-    projectId: payload.project_id,
-    owner: payload.owner,
-    project: payload.project,
-    environment: payload.environment,
-    deployment: payload.deployment,
-    exp: payload.exp,
-    iat: payload.iat
-  }
-}
-
 function createSelfHostedWorkflowStartOptions({
   isSelfHostedWorker,
   workflowWorldToken
@@ -224,6 +186,60 @@ function runnerSetupRequiredResponse(error: string) {
     },
     { status: 409, headers: corsHeaders }
   )
+}
+
+function getSelfHostedRuntimeOidcBinding() {
+  return {
+    projectId: process.env.VERCEL_PROJECT_ID?.trim() || undefined,
+    teamId: (process.env.VERCEL_ORG_ID || process.env.VERCEL_TEAM_ID)?.trim() || undefined
+  }
+}
+
+function isUsableSelfHostedOidcToken(token: string | undefined): token is string {
+  return isOidcTokenBoundToProject(token, getSelfHostedRuntimeOidcBinding())
+}
+
+function warnAboutRejectedRuntimeOidcToken(context: string, source: WorkflowAuthSource, token: string | undefined) {
+  console.warn(`[Start Fix] Ignoring ${context} OIDC token with mismatched project binding`, {
+    source,
+    expected: getSelfHostedRuntimeOidcBinding(),
+    claims: describeOidcClaimsForLog(token)
+  })
+}
+
+function warnAboutRejectedSelfHostedOidcToken(source: WorkflowAuthSource, token: string | undefined) {
+  warnAboutRejectedRuntimeOidcToken("self-hosted", source, token)
+}
+
+async function resolveControlPlaneRuntimeOidcToken(runtimeOidcToken: string | undefined): Promise<string | undefined> {
+  if (runtimeOidcToken) {
+    try {
+      const token = (await getVercelOidcToken({ expirationBufferMs: WORKER_OIDC_EXPIRATION_BUFFER_MS })).trim()
+      if (isUsableSelfHostedOidcToken(token)) {
+        console.log("[Start Fix] Resolved control-plane OIDC token", {
+          source: "control-plane-runtime-oidc",
+          claims: describeOidcClaimsForLog(token)
+        })
+        return token
+      }
+      if (token) {
+        warnAboutRejectedRuntimeOidcToken("control-plane", "control-plane-runtime-oidc", token)
+      }
+    } catch (error) {
+      console.warn("[Start Fix] Failed to resolve control-plane OIDC token", describeErrorForLog(error))
+    }
+
+    if (isUsableSelfHostedOidcToken(runtimeOidcToken)) {
+      console.log("[Start Fix] Resolved control-plane OIDC token", {
+        source: "control-plane-runtime-oidc",
+        claims: describeOidcClaimsForLog(runtimeOidcToken)
+      })
+      return runtimeOidcToken
+    }
+    warnAboutRejectedRuntimeOidcToken("control-plane", "control-plane-runtime-oidc", runtimeOidcToken)
+  }
+
+  return undefined
 }
 
 async function refreshSelfHostedProjectOidcToken({
@@ -281,30 +297,38 @@ async function resolveSelfHostedWorkerOidcToken({
 
   try {
     const token = (await getVercelOidcToken({ expirationBufferMs: WORKER_OIDC_EXPIRATION_BUFFER_MS })).trim()
-    if (token) {
+    if (isUsableSelfHostedOidcToken(token)) {
       console.log("[Start Fix] Resolved worker OIDC token", {
         source: "worker-oidc-helper",
         claims: describeOidcClaimsForLog(token)
       })
       return { source: "worker-oidc-helper", token }
     }
+    warnAboutRejectedSelfHostedOidcToken("worker-oidc-helper", token)
   } catch (error) {
     console.warn("[Start Fix] Failed to resolve worker OIDC token", describeErrorForLog(error))
   }
 
-  if (headerOidcToken) {
+  if (isUsableSelfHostedOidcToken(headerOidcToken)) {
     console.log("[Start Fix] Resolved worker OIDC token", {
       source: "worker-platform-header-oidc",
       claims: describeOidcClaimsForLog(headerOidcToken)
     })
     return { source: "worker-platform-header-oidc", token: headerOidcToken }
   }
-  if (runtimeOidcToken) {
+  if (headerOidcToken) {
+    warnAboutRejectedSelfHostedOidcToken("worker-platform-header-oidc", headerOidcToken)
+  }
+
+  if (isUsableSelfHostedOidcToken(runtimeOidcToken)) {
     console.log("[Start Fix] Resolved worker OIDC token", {
       source: "worker-runtime-oidc",
       claims: describeOidcClaimsForLog(runtimeOidcToken)
     })
     return { source: "worker-runtime-oidc", token: runtimeOidcToken }
+  }
+  if (runtimeOidcToken) {
+    warnAboutRejectedSelfHostedOidcToken("worker-runtime-oidc", runtimeOidcToken)
   }
 
   try {
@@ -312,12 +336,16 @@ async function resolveSelfHostedWorkerOidcToken({
       isSelfHostedWorker,
       projectRefreshToken
     })
-    if (token) {
+    if (isUsableSelfHostedOidcToken(token)) {
+      process.env.VERCEL_OIDC_TOKEN = token
       console.log("[Start Fix] Resolved worker OIDC token", {
         source: "worker-project-oidc-refresh",
         claims: describeOidcClaimsForLog(token)
       })
       return { source: "worker-project-oidc-refresh", token }
+    }
+    if (token) {
+      warnAboutRejectedSelfHostedOidcToken("worker-project-oidc-refresh", token)
     }
   } catch (error) {
     console.warn("[Start Fix] Failed to refresh worker project OIDC token", describeErrorForLog(error))
@@ -609,6 +637,9 @@ export async function POST(request: Request) {
       projectRefreshToken: selfHostedProjectOidcRefreshToken,
       runtimeOidcToken
     })
+    const controlPlaneOidcToken = isSelfHostedWorker
+      ? undefined
+      : await resolveControlPlaneRuntimeOidcToken(runtimeOidcToken)
     const workerOidcBinding = getOidcSandboxBinding(workerOidcAuth.token)
 
     // Resolve the token used by downstream Vercel project/sandbox APIs inside the workflow.
@@ -635,21 +666,23 @@ export async function POST(request: Request) {
         : "control-plane-vercel-token"
     // Keep AI Gateway billing aligned with the execution host: hosted runs use
     // the control-plane project, self-hosted skill-runners use the worker project.
-    const hostedGatewayAuthToken = controlPlaneAiGatewayApiKey || runtimeOidcToken
+    const hostedGatewayAuthToken = controlPlaneOidcToken || controlPlaneAiGatewayApiKey
     const gatewayAuthToken = isSelfHostedWorker ? workerOidcAuth.token : hostedGatewayAuthToken
     const gatewayAuthSource: WorkflowAuthSource = !gatewayAuthToken
       ? "missing"
       : isSelfHostedWorker && workerOidcAuth.token && gatewayAuthToken === workerOidcAuth.token
         ? workerOidcAuth.source
-        : !isSelfHostedWorker && controlPlaneAiGatewayApiKey && gatewayAuthToken === controlPlaneAiGatewayApiKey
-          ? "control-plane-ai-gateway-api-key"
-          : accessToken && gatewayAuthToken === accessToken
-            ? "user-access-token"
-            : forwardedAccessToken && gatewayAuthToken === forwardedAccessToken
-              ? "forwarded-user-token"
-              : runtimeOidcToken && gatewayAuthToken === runtimeOidcToken
-                ? "control-plane-runtime-oidc"
-                : "control-plane-vercel-token"
+        : !isSelfHostedWorker && controlPlaneOidcToken && gatewayAuthToken === controlPlaneOidcToken
+          ? "control-plane-runtime-oidc"
+          : !isSelfHostedWorker && controlPlaneAiGatewayApiKey && gatewayAuthToken === controlPlaneAiGatewayApiKey
+            ? "control-plane-ai-gateway-api-key"
+            : accessToken && gatewayAuthToken === accessToken
+              ? "user-access-token"
+              : forwardedAccessToken && gatewayAuthToken === forwardedAccessToken
+                ? "forwarded-user-token"
+                : runtimeOidcToken && gatewayAuthToken === runtimeOidcToken
+                  ? "control-plane-runtime-oidc"
+                  : "control-plane-vercel-token"
     if (isSelfHostedWorker && !workflowWorldToken) {
       throw new Error(
         "Self-hosted runner cannot start Workflow without a Vercel OIDC token. Enable Secure Backend Access with OIDC Federation on the runner project."
@@ -1367,48 +1400,46 @@ export async function POST(request: Request) {
       )
     }
 
-    // Enqueue the workflow before returning so the request cannot finish first
-    // and leave the run stuck in its initial "running" placeholder state.
-    try {
-      const workflowStartOptions = createSelfHostedWorkflowStartOptions({
-        isSelfHostedWorker,
-        workflowWorldToken
-      })
-      await start(cloudFixWorkflow, [workflowParams], workflowStartOptions)
-      workflowLog(`[Start Fix] Workflow enqueued with runId: ${runId}`)
-    } catch (startError) {
-      workflowError("[Start Fix] Failed to enqueue workflow:", startError)
-      console.error("[Start Fix] Failed to enqueue workflow", describeErrorForLog(startError))
+    after(async () => {
+      try {
+        const workflowStartOptions = createSelfHostedWorkflowStartOptions({
+          isSelfHostedWorker,
+          workflowWorldToken
+        })
+        await start(cloudFixWorkflow, [workflowParams], workflowStartOptions)
+        workflowLog(`[Start Fix] Workflow enqueued with runId: ${runId}`)
+      } catch (startError) {
+        workflowError("[Start Fix] Failed to enqueue workflow:", startError)
+        console.error("[Start Fix] Failed to enqueue workflow", describeErrorForLog(startError))
 
-      if (userId && projectName && runId && runTimestamp) {
-        await persistWorkflowRun(
-          {
-            id: runId,
-            userId,
-            projectName,
-            timestamp: runTimestamp,
-            status: "failure",
-            runnerKind,
-            type: workflowType,
-            devAgentId: devAgent?.id,
-            devAgentName: devAgent?.name,
-            devAgentDescription: devAgent?.description,
-            devAgentRevision: devAgent?.ashArtifact?.revision,
-            devAgentSpecHash: devAgent?.ashArtifact?.specHash,
-            devAgentExecutionMode: devAgent?.executionMode,
-            devAgentSandboxBrowser: devAgent?.sandboxBrowser,
-            skillRunnerCanonicalPath,
-            skillRunnerValidationWarning,
-            completedAt: new Date().toISOString(),
-            error: startError instanceof Error ? startError.message : String(startError),
-            customPrompt: workflowType === "prompt" ? customPrompt : undefined
-          },
-          { mirrorTarget: workflowMirrorTarget }
-        ).catch((err) => workflowError("[Start Fix] Failed to save startup failure metadata:", err))
+        if (userId && projectName && runId && runTimestamp) {
+          await persistWorkflowRun(
+            {
+              id: runId,
+              userId,
+              projectName,
+              timestamp: runTimestamp,
+              status: "failure",
+              runnerKind,
+              type: workflowType,
+              devAgentId: devAgent?.id,
+              devAgentName: devAgent?.name,
+              devAgentDescription: devAgent?.description,
+              devAgentRevision: devAgent?.ashArtifact?.revision,
+              devAgentSpecHash: devAgent?.ashArtifact?.specHash,
+              devAgentExecutionMode: devAgent?.executionMode,
+              devAgentSandboxBrowser: devAgent?.sandboxBrowser,
+              skillRunnerCanonicalPath,
+              skillRunnerValidationWarning,
+              completedAt: new Date().toISOString(),
+              error: startError instanceof Error ? startError.message : String(startError),
+              customPrompt: workflowType === "prompt" ? customPrompt : undefined
+            },
+            { mirrorTarget: workflowMirrorTarget }
+          ).catch((err) => workflowError("[Start Fix] Failed to save startup failure metadata:", err))
+        }
       }
-
-      throw startError
-    }
+    })
 
     // Return immediately - client can navigate to report and poll.
     workflowLog(`[Start Fix] Returning immediately with runId: ${runId}`)
