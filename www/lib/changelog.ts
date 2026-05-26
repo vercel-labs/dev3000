@@ -10,6 +10,19 @@ export interface Release {
 // Changelog data structure - this will be updated by the release script
 export const changelog: Release[] = [
   {
+    version: "0.0.176",
+    date: "2026-05-26",
+    type: "minor",
+    highlights: [
+      "Confirm skills.sh matches in CLI",
+      "Remove admin link from skill runner nav",
+      "Add skill runner install smoke suite",
+      "Use Comark for report markdown",
+      "Fix skill runner build adapter skew"
+    ]
+  },
+
+  {
     version: "0.0.175",
     date: "2026-05-09",
     type: "patch",

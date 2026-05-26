@@ -4,6 +4,16 @@ All notable changes to dev3000 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.0.176] - 2026-05-26
+
+**Feature Release**
+
+- Confirm skills.sh matches in CLI
+- Remove admin link from skill runner nav
+- Add skill runner install smoke suite
+- Use Comark for report markdown
+- Fix skill runner build adapter skew
+
 ## [0.0.175] - 2026-05-09
 
 **Patch Release**
