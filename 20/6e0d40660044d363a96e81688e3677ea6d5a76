@@ -1,0 +1,73 @@
+www/lib/skill-runner-shell-source.ts
+  s_5da4393566ec36::t_687f81f01fe355 4-10,13-46,52-53,95-96,232-315,327-334,377
+  s_5da4393566ec36::t_4dd1fb37a4ee9c 47,378
+  s_5da4393566ec36::t_eaf120de03f6af 11-12,54,59-63,78,106-109,141-142
+  s_5da4393566ec36::t_f35e87fc85ef43 55-58
+src/cli.ts
+  s_5da4393566ec36::t_396f13cb3e2e00 1400
+www/app/api/skill-runner-teams/worker/route.ts
+  s_5da4393566ec36::t_8f4138423af785 31-95,266-272
+  s_5da4393566ec36::t_cc083587d4d286 7,292
+  s_5da4393566ec36::t_ee185ee3a79883 120-121,142
+www/lib/dev-agent-ash-spec.test.ts
+  s_5da4393566ec36::t_e002c2b42e8be6 1-24
+www/app/skill-runner-worker-layout.tsx
+  s_5da4393566ec36::t_78d630a10cc3a7 1-15
+www/app/skill-runner-worker-home.tsx
+  s_5da4393566ec36::t_52480f9ce36218 9,20-21
+  s_5da4393566ec36::t_78d630a10cc3a7 1-8,10-19,22-41
+src/commands/skill-runner.ts
+  s_5da4393566ec36::t_65b7e1285bda70 767
+  s_5da4393566ec36::t_f9ca4b18435518 91,699
+  s_5da4393566ec36::t_3c70df9025f3ee 111-125
+  s_5da4393566ec36::t_f524595d258394 683-698,758,761-763,777-781
+  s_5da4393566ec36::t_8eacd4a55cc94a 268,786
+  s_5da4393566ec36::t_3cac93e58016bc 770-772
+  s_5da4393566ec36::t_7971bb3d181d11 838,840-842,877-993
+  s_5da4393566ec36::t_a0d11b40438eda 700-757,759-760,764-766,768-769,773-776,782-785,787-826
+  s_5da4393566ec36::t_1d02b7a03a4389 241-244
+www/app/api/cloud/start-fix/route.ts
+  s_5da4393566ec36::t_e1d89c8ea8668e 802
+www/lib/skill-runner-worker.ts
+  s_5da4393566ec36::t_1e7252c313adad 209,211-218,227-236
+  s_5da4393566ec36::t_b0750568664133 1554-1555,1557-1561,1567-1570,1586-1589,1596-1599,1603-1606,1611-1614,1617-1620,1624-1627,1666,1676,1680-1685,1711-1714,1724-1729,1732-1735
+  s_5da4393566ec36::t_8fee25a5cf89c3 210
+  s_5da4393566ec36::t_248b4b28e59077 1206-1208,1210,1216-1218,1220-1223,1231-1234,1241-1243
+www/lib/skill-runner-runtime.test.ts
+  s_5da4393566ec36::t_b349fc2f35bb1b 1-58
+src/commands/skill-runner.test.ts
+  s_5da4393566ec36::t_77a77c39f479f5 6,100-108
+  s_5da4393566ec36::t_1a1e7a8dc4e5ab 38-99
+www/lib/dev-agent-ash-spec.ts
+  s_5da4393566ec36::t_265ea99e810826 115-123,953,1065
+scripts/build-skill-runner-shell-artifact.ts
+  s_5da4393566ec36::t_07e6896fe2679e 14-20,23-57,123-124
+  s_5da4393566ec36::t_69a68416d80d32 21-22,58-61,125-128,141
+  s_5da4393566ec36::t_00c82d75ccbee8 115
+www/lib/skill-runner-shell-source.test.ts
+  s_5da4393566ec36::t_fc086c3698e1a4 170-171,193-214,216-218
+  s_5da4393566ec36::t_b38044d8bbcfb7 172-175,177-188,190-191
+  s_5da4393566ec36::t_42b7f93200cc97 20
+  s_5da4393566ec36::t_eb60b0d330719a 76-77,96-99,101-102,104,122-124
+  s_5da4393566ec36::t_df8ed164a6e3ae 17,42-44,57-58,69-75,78-84,89,112,116-120,125-128,131,133-167,220,222,224-226,234-253
+  s_5da4393566ec36::t_0e54d68f7f64b4 221,223,227-233
+www/lib/skill-runner-runtime.ts
+  s_5da4393566ec36::t_41ac21b1abd2ee 48-53
+  s_5da4393566ec36::t_76ea209fb38448 1-5,43,46-47,54-64
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.1",
+  "base_commit_sha": "206e0d40660044d363a96e81688e3677ea6d5a76",
+  "prompts": {},
+  "sessions": {
+    "s_5da4393566ec36": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e3207-b24c-7e90-bd42-71198956a1ad",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>"
+    }
+  }
+}
