@@ -112,6 +112,15 @@ export default disableTool();
 `
 }
 
+function getDisabledAutomationToolFiles() {
+  return [
+    {
+      path: "agent/tools/todo.ts",
+      content: renderDisabledFrameworkTool()
+    }
+  ]
+}
+
 function formatActionStep(step: DevAgentActionStep, index: number): string {
   const configEntries = Object.entries(step.config || {}).filter(([, value]) => value?.trim())
   const configSuffix =
@@ -941,6 +950,7 @@ export async function createDevAgentAshSource(input: DevAgentAshInput, revision:
         }
       ]
     : []
+  const disabledAutomationTools = getDisabledAutomationToolFiles()
   const files = [
     {
       path: "package.json",
@@ -1052,6 +1062,7 @@ export async function createDevAgentAshSource(input: DevAgentAshInput, revision:
       path: "agent/skills/dev3000-agent-runbook/SKILL.md",
       content: renderExecutionRunbookSkill(input)
     },
+    ...disabledAutomationTools,
     ...disabledFrameworkTools,
     ...packagedSkillData.files
   ]

@@ -88,7 +88,7 @@ interface StartSkillRunResponse {
   runId?: string
 }
 
-interface WorkerInstallResponse {
+export interface WorkerInstallResponse {
   success?: boolean
   installed?: boolean
   error?: string
@@ -107,6 +107,21 @@ interface WorkerInstallResponse {
     workerProjectId?: string
   }
 }
+
+interface WorkerInstallStreamProgress {
+  type: "progress"
+  phase?: string
+  message?: string
+  elapsedMs?: number
+}
+
+interface WorkerInstallStreamResult {
+  type: "result" | "error"
+  status?: number
+  data?: WorkerInstallResponse
+}
+
+type WorkerInstallStreamEvent = WorkerInstallStreamProgress | WorkerInstallStreamResult
 
 interface SkillRunnerResolveResponse {
   success?: boolean
@@ -223,6 +238,10 @@ export async function runRemoteSkillCommand(name: string | undefined, options: R
   })
   log(options, `${chalk.green("✓")} Skill: ${skillRunnerId}`)
 
+  if (options.install !== false) {
+    await ensureWorkerProjectReady(baseUrl, token, team, options)
+  }
+
   const startRunSpinner = startSpinner(options, "Starting run...")
   let startResult: StartSkillRunResponse
   try {
@@ -246,7 +265,7 @@ export async function runRemoteSkillCommand(name: string | undefined, options: R
 
   if (startResult.code === "runner_setup_required" && options.install !== false) {
     startRunSpinner?.stop()
-    log(options, "Team skill runner project needs setup; installing...")
+    await confirmWorkerProjectInstall(team, "Team skill runner project needs setup before this run can start.", options)
     await installWorkerProject(baseUrl, token, team, options)
     const retryStartRunSpinner = startSpinner(options, "Starting run...")
     try {
@@ -661,6 +680,150 @@ function isYesAnswer(value: string): boolean {
   return /^(y|yes)$/i.test(value.trim())
 }
 
+function isNoAnswer(value: string): boolean {
+  return /^(n|no)$/i.test(value.trim())
+}
+
+function isDefaultYesAnswer(value: string): boolean {
+  const trimmed = value.trim()
+  return trimmed.length === 0 || isYesAnswer(trimmed)
+}
+
+export function getWorkerProjectSetupExplanation(teamName: string): string[] {
+  return [
+    `d3k-skill-runner creates a small runner project in ${teamName}. Skill runs execute there so compute, AI Gateway usage, deployments, and runtime logs belong to the team running the scan.`,
+    "For first-time setup, choose all projects in this team when Vercel asks for project access. Single-project grants cannot include the new runner project."
+  ]
+}
+
+export interface WorkerReadiness {
+  ready: boolean
+  message: string
+}
+
+export function getWorkerProjectReadiness(response: WorkerInstallResponse): WorkerReadiness {
+  const workerStatus = response.settings?.workerStatus
+  const project = response.project
+  const workerBaseUrl = project?.workerBaseUrl || response.settings?.workerBaseUrl
+
+  if (!response.installed) {
+    return {
+      ready: false,
+      message: response.message || "Team skill runner project is not installed yet."
+    }
+  }
+
+  if (project?.missingEnvKeys?.length) {
+    return {
+      ready: false,
+      message: `Team skill runner project is missing required environment variables: ${project.missingEnvKeys.join(", ")}.`
+    }
+  }
+
+  if (project?.shellVersionStatus === "outdated" || workerStatus === "outdated") {
+    return {
+      ready: false,
+      message: "Team skill runner project needs an update before this run can start."
+    }
+  }
+
+  if (!workerBaseUrl || workerStatus === "provisioning") {
+    return {
+      ready: false,
+      message: "Team skill runner project exists, but its deployment is not ready yet."
+    }
+  }
+
+  if (workerStatus === "error") {
+    return {
+      ready: false,
+      message: "Team skill runner project exists, but its latest deployment failed."
+    }
+  }
+
+  return {
+    ready: workerStatus === "ready",
+    message:
+      workerStatus === "ready"
+        ? "Team skill runner project is ready."
+        : `Team skill runner project is not ready yet${workerStatus ? ` (status: ${workerStatus})` : ""}.`
+  }
+}
+
+async function confirmWorkerProjectInstall(
+  team: VercelTeam,
+  reason: string,
+  options: RemoteSkillOptions
+): Promise<void> {
+  const explanation = getWorkerProjectSetupExplanation(team.name)
+  if (options.yes) {
+    log(options, `${chalk.yellow("!")} ${reason}`)
+    for (const line of explanation) {
+      log(options, chalk.gray(line))
+    }
+    return
+  }
+
+  const message = `Install or repair d3k-skill-runner in ${team.name} now?`
+
+  if (options.json || !process.stdin.isTTY || !process.stdout.isTTY) {
+    throw new Error(
+      `${reason}\n${explanation.join("\n")}\n${message} Re-run with --yes to approve runner project setup.`
+    )
+  }
+
+  console.log(`\n${chalk.bold("Team skill runner setup required")}`)
+  console.log(reason)
+  for (const line of explanation) {
+    console.log(chalk.gray(line))
+  }
+  const answer = await promptLine(`Install or repair d3k-skill-runner in ${team.name}? [Y/n] `)
+  if (isNoAnswer(answer) || !isDefaultYesAnswer(answer)) {
+    throw new Error("Cancelled skill run.")
+  }
+}
+
+async function validateWorkerProject(baseUrl: string, token: string, team: VercelTeam): Promise<WorkerInstallResponse> {
+  const url = new URL(`${baseUrl}/api/skill-runner-teams/worker`)
+  url.searchParams.set("team", team.id)
+  const response = await fetchJsonResponse<WorkerInstallResponse>(url.toString(), {
+    headers: authorizationHeaders(token)
+  })
+
+  if (!response.ok || !response.data?.success) {
+    throw new Error(response.data?.error || `Failed to validate runner project (${response.status}).`)
+  }
+
+  return response.data
+}
+
+async function ensureWorkerProjectReady(
+  baseUrl: string,
+  token: string,
+  team: VercelTeam,
+  options: RemoteSkillOptions
+): Promise<void> {
+  const validationSpinner = startSpinner(options, "Checking team skill runner project...")
+  let validation: WorkerInstallResponse
+  try {
+    validation = await validateWorkerProject(baseUrl, token, team)
+  } catch (error) {
+    validationSpinner?.fail("Failed to check team skill runner project")
+    throw error
+  }
+
+  const readiness = getWorkerProjectReadiness(validation)
+  if (readiness.ready) {
+    validationSpinner?.stop()
+    log(options, `${chalk.green("✓")} Team skill runner project is ready`)
+    return
+  }
+
+  validationSpinner?.stop()
+  await confirmWorkerProjectInstall(team, readiness.message, options)
+  await installWorkerProject(baseUrl, token, team, options)
+}
+
 async function installWorkerProject(
   baseUrl: string,
   token: string,
@@ -672,20 +835,11 @@ async function installWorkerProject(
     log(options, "Installing team skill runner project...")
   }
 
-  let response: {
-    ok: boolean
-    status: number
-    data: WorkerInstallResponse
-  }
+  let response: { ok: boolean; status: number; data: WorkerInstallResponse }
   try {
-    response = await fetchJsonResponse<WorkerInstallResponse>(`${baseUrl}/api/skill-runner-teams/worker`, {
-      method: "POST",
-      headers: {
-        ...authorizationHeaders(token),
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ team: team.id })
-    })
+    response = options.json
+      ? await installWorkerProjectJson(baseUrl, token, team)
+      : await installWorkerProjectStream(baseUrl, token, team, options, installSpinner)
   } catch (error) {
     installSpinner?.fail("Failed to install team skill runner project")
     throw error
@@ -718,6 +872,125 @@ async function installWorkerProject(
   } else {
     log(options, `${chalk.green("✓")} Team skill runner project is ready`)
   }
+}
+
+async function installWorkerProjectJson(
+  baseUrl: string,
+  token: string,
+  team: VercelTeam
+): Promise<{ ok: boolean; status: number; data: WorkerInstallResponse }> {
+  return fetchJsonResponse<WorkerInstallResponse>(`${baseUrl}/api/skill-runner-teams/worker`, {
+    method: "POST",
+    headers: {
+      ...authorizationHeaders(token),
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ team: team.id })
+  })
+}
+
+async function installWorkerProjectStream(
+  baseUrl: string,
+  token: string,
+  team: VercelTeam,
+  options: RemoteSkillOptions,
+  installSpinner: Ora | null
+): Promise<{ ok: boolean; status: number; data: WorkerInstallResponse }> {
+  const response = await fetch(`${baseUrl}/api/skill-runner-teams/worker?stream=1`, {
+    method: "POST",
+    headers: {
+      ...authorizationHeaders(token),
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ team: team.id })
+  })
+
+  if (!response.body || !response.headers.get("content-type")?.includes("application/x-ndjson")) {
+    const text = await response.text()
+    let data: WorkerInstallResponse
+    try {
+      data = text.trim() ? (JSON.parse(text) as WorkerInstallResponse) : {}
+    } catch {
+      data = {
+        success: false,
+        error: `Runner install returned an unexpected response (${response.status}): ${text.slice(0, 300)}`
+      }
+    }
+    return {
+      ok: response.ok,
+      status: response.status,
+      data
+    }
+  }
+
+  const decoder = new TextDecoder()
+  const reader = response.body.getReader()
+  let buffer = ""
+  let finalResponse: { ok: boolean; status: number; data: WorkerInstallResponse } | null = null
+
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (value) {
+      buffer += decoder.decode(value, { stream: !done })
+      const lines = buffer.split("\n")
+      buffer = lines.pop() || ""
+      for (const line of lines) {
+        const event = parseWorkerInstallStreamEvent(line)
+        if (!event) continue
+        if (event.type === "progress") {
+          const message = event.message?.trim()
+          if (message) {
+            if (installSpinner) {
+              installSpinner.text = message
+            } else {
+              log(options, message)
+            }
+          }
+          continue
+        }
+        finalResponse = {
+          ok: event.type === "result" && response.ok,
+          status: event.status || response.status,
+          data: event.data || {}
+        }
+      }
+    }
+    if (done) break
+  }
+
+  const trailingEvent = parseWorkerInstallStreamEvent(buffer)
+  if (trailingEvent?.type === "result" || trailingEvent?.type === "error") {
+    finalResponse = {
+      ok: trailingEvent.type === "result" && response.ok,
+      status: trailingEvent.status || response.status,
+      data: trailingEvent.data || {}
+    }
+  }
+
+  return (
+    finalResponse || {
+      ok: false,
+      status: response.status,
+      data: {
+        success: false,
+        error: "Runner install stream ended before returning a result."
+      }
+    }
+  )
+}
+
+function parseWorkerInstallStreamEvent(line: string): WorkerInstallStreamEvent | null {
+  const trimmed = line.trim()
+  if (!trimmed) return null
+  try {
+    const parsed = JSON.parse(trimmed) as Partial<WorkerInstallStreamEvent>
+    if (parsed.type === "progress" || parsed.type === "result" || parsed.type === "error") {
+      return parsed as WorkerInstallStreamEvent
+    }
+  } catch {
+    return null
+  }
+  return null
 }
 
 async function startSkillRun(input: {

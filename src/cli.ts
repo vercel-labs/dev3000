@@ -1397,7 +1397,7 @@ program
   .option("--base-url <url>", "dev3000 base URL")
   .option("--wait", "Wait for the run to finish")
   .option("--json", "Print machine-readable JSON")
-  .option("-y, --yes", "Accept a single skills.sh match without prompting")
+  .option("-y, --yes", "Accept a single skills.sh match and approve runner project setup without prompting")
   .option("--no-install", "Do not install or repair the team skill runner project before starting")
   .action(async (name, options) => {
     if (shouldUseRemoteSkillRunner(name, options)) {

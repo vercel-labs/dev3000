@@ -4,6 +4,7 @@ import {
   findSkillRunnerWorkerProject,
   installSkillRunnerWorkerProject,
   resolveSkillRunnerWorkerStatus,
+  type SkillRunnerWorkerInstallProgress,
   SkillRunnerWorkerSetupError
 } from "@/lib/skill-runner-worker"
 import { getSkillRunnerTeamSettings, updateSkillRunnerTeamSettings } from "@/lib/skill-runners"
@@ -25,6 +26,71 @@ async function resolveApiTeam(teamParam: string | null, accessToken: string) {
 
 function unauthorized() {
   return Response.json({ success: false, error: "Unauthorized" }, { status: 401 })
+}
+
+function formatSetupErrorPayload(error: unknown, fallbackMessage: string) {
+  const message = error instanceof Error ? error.message : fallbackMessage
+  return {
+    success: false,
+    error: message,
+    code: error instanceof SkillRunnerWorkerSetupError ? error.code : undefined,
+    actionLabel: error instanceof SkillRunnerWorkerSetupError ? error.actionLabel : undefined,
+    actionUrl: error instanceof SkillRunnerWorkerSetupError ? error.actionUrl : undefined,
+    deploymentUrl: error instanceof SkillRunnerWorkerSetupError ? error.deploymentUrl : undefined,
+    details: error instanceof SkillRunnerWorkerSetupError ? error.details : undefined,
+    projectName: error instanceof SkillRunnerWorkerSetupError ? error.projectName : undefined,
+    repo: error instanceof SkillRunnerWorkerSetupError ? error.repo : undefined
+  }
+}
+
+function streamWorkerInstall(
+  teamParam: string | null,
+  accessToken: string,
+  emit: {
+    user: UserIdentity
+    mode: "install"
+  }
+) {
+  const encoder = new TextEncoder()
+
+  return new Response(
+    new ReadableStream({
+      async start(controller) {
+        const send = (payload: Record<string, unknown>) => {
+          controller.enqueue(encoder.encode(`${JSON.stringify(payload)}\n`))
+        }
+
+        try {
+          const response = await persistWorkerProject(teamParam, accessToken, true, emit, (progress) => {
+            send({
+              type: "progress",
+              ...progress
+            })
+          })
+          const data = await response.json()
+          send({
+            type: response.ok ? "result" : "error",
+            status: response.status,
+            data
+          })
+        } catch (error) {
+          send({
+            type: "error",
+            status: 500,
+            data: formatSetupErrorPayload(error, "Failed to install runner project.")
+          })
+        } finally {
+          controller.close()
+        }
+      }
+    }),
+    {
+      headers: {
+        "Cache-Control": "no-store, max-age=0",
+        "Content-Type": "application/x-ndjson"
+      }
+    }
+  )
 }
 
 function toTeamIdentity(team: VercelTeam): TeamIdentity {
@@ -51,7 +117,8 @@ async function persistWorkerProject(
   emit?: {
     user: UserIdentity
     mode: "install" | "validate"
-  }
+  },
+  onProgress?: (progress: SkillRunnerWorkerInstallProgress) => void | Promise<void>
 ) {
   const team = await resolveApiTeam(teamParam, accessToken)
   if (!team) {
@@ -72,7 +139,7 @@ async function persistWorkerProject(
   }
 
   const project = install
-    ? await installSkillRunnerWorkerProject(accessToken, team, currentSettings?.workerProjectId)
+    ? await installSkillRunnerWorkerProject(accessToken, team, currentSettings?.workerProjectId, { onProgress })
     : await findSkillRunnerWorkerProject(accessToken, team, currentSettings?.workerProjectId)
 
   if (!project) {
@@ -196,6 +263,13 @@ export async function POST(request: Request) {
 
   const body = await request.json()
   const identity = toUserIdentity(user)
+  if (new URL(request.url).searchParams.get("stream") === "1") {
+    return streamWorkerInstall(typeof body.team === "string" ? body.team : null, accessToken, {
+      user: identity,
+      mode: "install"
+    })
+  }
+
   try {
     return await persistWorkerProject(typeof body.team === "string" ? body.team : null, accessToken, true, {
       user: identity,
@@ -215,19 +289,6 @@ export async function POST(request: Request) {
         })
       ).catch(() => {})
     }
-    return Response.json(
-      {
-        success: false,
-        error: message,
-        code: error instanceof SkillRunnerWorkerSetupError ? error.code : undefined,
-        actionLabel: error instanceof SkillRunnerWorkerSetupError ? error.actionLabel : undefined,
-        actionUrl: error instanceof SkillRunnerWorkerSetupError ? error.actionUrl : undefined,
-        deploymentUrl: error instanceof SkillRunnerWorkerSetupError ? error.deploymentUrl : undefined,
-        details: error instanceof SkillRunnerWorkerSetupError ? error.details : undefined,
-        projectName: error instanceof SkillRunnerWorkerSetupError ? error.projectName : undefined,
-        repo: error instanceof SkillRunnerWorkerSetupError ? error.repo : undefined
-      },
-      { status: 500 }
-    )
+    return Response.json(formatSetupErrorPayload(error, message), { status: 500 })
   }
 }

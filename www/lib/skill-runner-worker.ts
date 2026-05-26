@@ -206,6 +206,16 @@ export interface SkillRunnerWorkerProject {
   shellVersionStatus?: "current" | "outdated" | "unknown"
 }
 
+export interface SkillRunnerWorkerInstallProgress {
+  phase: "validate" | "project" | "blob" | "source" | "upload" | "deploy" | "build" | "ready"
+  message: string
+  elapsedMs?: number
+}
+
+export interface SkillRunnerWorkerInstallOptions {
+  onProgress?: (progress: SkillRunnerWorkerInstallProgress) => void | Promise<void>
+}
+
 let desiredWorkerVersionCache:
   | {
       branch: string
@@ -213,6 +223,17 @@ let desiredWorkerVersionCache:
       checkedAt: number
     }
   | undefined
+
+async function emitInstallProgress(
+  options: SkillRunnerWorkerInstallOptions | undefined,
+  startTime: number,
+  progress: Omit<SkillRunnerWorkerInstallProgress, "elapsedMs">
+): Promise<void> {
+  await options?.onProgress?.({
+    ...progress,
+    elapsedMs: Date.now() - startTime
+  })
+}
 
 function normalizeHost(value: string | undefined): string | undefined {
   const trimmed = value?.trim()
@@ -1182,16 +1203,24 @@ async function deleteWorkerProject(accessToken: string, team: VercelTeam, projec
 async function redeployWorkerProject(
   accessToken: string,
   team: VercelTeam,
-  project: SkillRunnerWorkerProject
+  project: SkillRunnerWorkerProject,
+  options?: SkillRunnerWorkerInstallOptions,
+  startTime = Date.now()
 ): Promise<string | null> {
-  return createInitialWorkerDeployment(accessToken, team, project)
+  return createInitialWorkerDeployment(accessToken, team, project, options, startTime)
 }
 
 async function createInitialWorkerDeployment(
   accessToken: string,
   team: VercelTeam,
-  project: SkillRunnerWorkerProject
+  project: SkillRunnerWorkerProject,
+  options?: SkillRunnerWorkerInstallOptions,
+  startTime = Date.now()
 ): Promise<string> {
+  await emitInstallProgress(options, startTime, {
+    phase: "source",
+    message: "Resolving runner shell source..."
+  })
   const workerShellVersion = project.desiredWorkerGitSha || (await resolveDesiredWorkerGitSha(resolveWorkerGitBranch()))
   if (!workerShellVersion) {
     throw new Error("Could not resolve the desired runner shell source version.")
@@ -1199,11 +1228,19 @@ async function createInitialWorkerDeployment(
 
   const source = await resolveSkillRunnerShellSource(workerShellVersion, workerShellVersion)
   const durationConfig = resolveWorkerDurationConfig(team)
+  await emitInstallProgress(options, startTime, {
+    phase: "upload",
+    message: `Uploading runner shell (${source.files.length} files)...`
+  })
   const files = await uploadSkillRunnerShellSourceFiles({
     accessToken,
     ...durationConfig,
     source,
     teamId: team.id
+  })
+  await emitInstallProgress(options, startTime, {
+    phase: "deploy",
+    message: "Starting Vercel deployment for runner project..."
   })
   const apiUrl = new URL("https://api.vercel.com/v13/deployments")
   apiUrl.searchParams.set("teamId", team.id)
@@ -1514,13 +1551,23 @@ async function findExistingWorkerProjectAfterCreateConflict(
 export async function installSkillRunnerWorkerProject(
   accessToken: string,
   team: VercelTeam,
-  preferredProjectId?: string
+  preferredProjectId?: string,
+  options?: SkillRunnerWorkerInstallOptions
 ): Promise<SkillRunnerWorkerProject> {
+  const startTime = Date.now()
+  await emitInstallProgress(options, startTime, {
+    phase: "validate",
+    message: "Checking for an existing d3k-skill-runner project..."
+  })
   let existing = await findSkillRunnerWorkerProject(accessToken, team, preferredProjectId).catch((error: unknown) => {
     if (isVercelProjectNotFoundError(error)) return null
     throw error
   })
   if (existing) {
+    await emitInstallProgress(options, startTime, {
+      phase: "project",
+      message: `Found existing runner project ${existing.projectName}; checking configuration...`
+    })
     await removeWorkerMetadataEnvVars(accessToken, team, existing.projectId).catch((error: unknown) => {
       if (isVercelProjectNotFoundError(error)) {
         existing = null
@@ -1536,23 +1583,47 @@ export async function installSkillRunnerWorkerProject(
     existing.latestDeploymentReadyState === "READY" &&
     existing.shellVersionStatus !== "outdated"
   ) {
+    await emitInstallProgress(options, startTime, {
+      phase: "ready",
+      message: "Team skill runner project is already ready."
+    })
     return existing
   }
 
   let project = existing
   let createdProject = false
   if (!project) {
+    await emitInstallProgress(options, startTime, {
+      phase: "project",
+      message: "Creating d3k-skill-runner project..."
+    })
     const createResult = await createWorkerProject(accessToken, team, preferredProjectId)
     project = createResult.project
     createdProject = createResult.created
+    await emitInstallProgress(options, startTime, {
+      phase: "project",
+      message: `Created runner project ${project.projectName}.`
+    })
   }
 
   try {
     if (createdProject) {
+      await emitInstallProgress(options, startTime, {
+        phase: "project",
+        message: "Verifying Vercel app access to the new runner project..."
+      })
       await assertWorkerProjectIncludedInOauthGrant(accessToken, team, project.projectId)
     }
+    await emitInstallProgress(options, startTime, {
+      phase: "blob",
+      message: "Configuring team-owned Blob storage..."
+    })
     await ensureWorkerBlobStore(accessToken, team, project, {
       skipExistingCleanup: createdProject
+    })
+    await emitInstallProgress(options, startTime, {
+      phase: "blob",
+      message: "Blob storage is connected to the runner project."
     })
   } catch (error: unknown) {
     if (createdProject) {
@@ -1592,7 +1663,7 @@ export async function installSkillRunnerWorkerProject(
   }
 
   if (!deploymentId) {
-    deploymentId = await createInitialWorkerDeployment(accessToken, team, project)
+    deploymentId = await createInitialWorkerDeployment(accessToken, team, project, options, startTime)
     createdInitialDeployment = true
   }
 
@@ -1602,10 +1673,16 @@ export async function installSkillRunnerWorkerProject(
   }
   const redeployedId = createdInitialDeployment
     ? deploymentId
-    : await redeployWorkerProject(accessToken, team, redeployProject)
+    : await redeployWorkerProject(accessToken, team, redeployProject, options, startTime)
 
   if (redeployedId) {
     for (let attempt = 0; attempt < 30; attempt += 1) {
+      if (attempt === 0 || attempt % 5 === 0) {
+        await emitInstallProgress(options, startTime, {
+          phase: "build",
+          message: `Waiting for Vercel deployment to finish${attempt > 0 ? ` (${attempt * 3}s elapsed)` : ""}...`
+        })
+      }
       const resolved = await findSkillRunnerWorkerProject(accessToken, team, project.projectId)
       if (resolved && isFailedDeploymentState(resolved.latestDeploymentReadyState)) {
         const details = resolved.latestDeploymentId
@@ -1631,6 +1708,10 @@ export async function installSkillRunnerWorkerProject(
         resolved.latestDeploymentReadyState === "READY" &&
         resolved.shellVersionStatus !== "outdated"
       ) {
+        await emitInstallProgress(options, startTime, {
+          phase: "ready",
+          message: "Team skill runner project is ready."
+        })
         return resolved
       }
       await sleep(3000)
@@ -1640,8 +1721,18 @@ export async function installSkillRunnerWorkerProject(
   }
 
   for (let attempt = 0; attempt < 20; attempt += 1) {
+    if (attempt === 0 || attempt % 5 === 0) {
+      await emitInstallProgress(options, startTime, {
+        phase: "build",
+        message: `Waiting for runner project to become reachable${attempt > 0 ? ` (${attempt * 3}s elapsed)` : ""}...`
+      })
+    }
     const resolved = await findSkillRunnerWorkerProject(accessToken, team, project.projectId)
     if (resolved?.workerBaseUrl && (!resolved.missingEnvKeys || resolved.missingEnvKeys.length === 0)) {
+      await emitInstallProgress(options, startTime, {
+        phase: "ready",
+        message: "Team skill runner project is ready."
+      })
       return resolved
     }
     await sleep(3000)

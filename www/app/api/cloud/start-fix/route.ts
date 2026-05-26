@@ -799,7 +799,7 @@ export async function POST(request: Request) {
         )
       }
 
-      if (teamSettings.executionMode === "self-hosted" && !isSelfHostedWorker) {
+      if (teamSettings.executionMode === "self-hosted" && !isForwardedSkillRunnerWorkerRequest) {
         let workerProject: SkillRunnerWorkerProject | null = null
         const skillRunnerTeamIdentity = {
           id: team.id,

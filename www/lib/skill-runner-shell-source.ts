@@ -1,19 +1,66 @@
 import { createHash } from "node:crypto"
 import { SKILL_RUNNER_WORKER_REPO, SKILL_RUNNER_WORKER_ROOT_DIRECTORY } from "@/lib/skill-runner-config"
 
-const RUNNER_SHELL_ROOT_FILES = new Set(["package.json", "bun.lock", "tsconfig.json", "turbo.json"])
-const RUNNER_SHELL_EXCLUDED_FILES = [
-  /(^|\/)\.DS_Store$/,
-  /\.tgz$/,
-  /\.tsbuildinfo$/,
-  /^www\/\.env/,
-  /^www\/(?:\.next|\.vercel|node_modules|\.swc)\//,
-  /^www\/(?:WORKFLOW_TESTING_GUIDE|d3k-skill-runner-team-impl)\.md$/
-]
+const RUNNER_SHELL_ROOT_FILES = new Set(["package.json", "bun.lock"])
+const RUNNER_SHELL_EXACT_FILES = new Set([
+  "www/app/api/cloud/fix-workflow/health/route.ts",
+  "www/app/api/cloud/fix-workflow/steps.ts",
+  "www/app/api/cloud/fix-workflow/workflow.ts",
+  "www/app/api/cloud/start-fix/route.ts",
+  "www/app/api/skill-runner-worker/version/route.ts",
+  "www/app/skill-runner-worker-home.tsx",
+  "www/app/skill-runner-worker-layout.tsx",
+  "www/bunfig.toml",
+  "www/lib/ai-gateway.ts",
+  "www/lib/auth.ts",
+  "www/lib/blob-store.ts",
+  "www/lib/constants.ts",
+  "www/lib/dev-agent-ash-spec.ts",
+  "www/lib/dev-agent-ash.ts",
+  "www/lib/dev-agents.ts",
+  "www/lib/dev-server-command.ts",
+  "www/lib/file-to-route.ts",
+  "www/lib/report-redaction.ts",
+  "www/lib/skill-runner-config.ts",
+  "www/lib/skill-runner-runtime.ts",
+  "www/lib/skill-runner-shell-source.ts",
+  "www/lib/skill-runner-worker.ts",
+  "www/lib/skill-runners.ts",
+  "www/lib/skills-sh.ts",
+  "www/lib/team-selection.ts",
+  "www/lib/telemetry-storage.ts",
+  "www/lib/telemetry.ts",
+  "www/lib/vercel-cli-sandbox-context.ts",
+  "www/lib/vercel-protection-bypass.ts",
+  "www/lib/vercel-teams.ts",
+  "www/lib/workflow-api.ts",
+  "www/lib/workflow-logger.ts",
+  "www/lib/workflow-report-summary.ts",
+  "www/lib/workflow-storage.ts",
+  "www/next.config.ts",
+  "www/package.json",
+  "www/scripts/patch-workflow-vercel-config.mjs",
+  "www/tsconfig.json",
+  "www/types.ts",
+  "www/vercel.json"
+])
+const RUNNER_SHELL_INCLUDED_PREFIXES = ["www/app/.well-known/workflow/v1/", "www/lib/cloud/", "www/lib/skills/"]
 const RUNNER_SHELL_UPLOAD_CONCURRENCY = 8
 const RUNNER_NEXT_CONFIG_PREVIEW_COMMENTS_PATCH =
   '// Self-hosted runner shells disable Preview Comments to avoid Vercel adapter/Next ctx.projectDir skew.\nprocess.env.VERCEL_PREVIEW_COMMENTS_ENABLED = "0"\n'
 const RUNNER_NEXT_CONFIG_PATH = `${SKILL_RUNNER_WORKER_ROOT_DIRECTORY}/next.config.ts`
+const RUNNER_ROOT_PACKAGE_PATH = "package.json"
+const RUNNER_WWW_PACKAGE_PATH = `${SKILL_RUNNER_WORKER_ROOT_DIRECTORY}/package.json`
+const RUNNER_SHELL_PATH_OVERRIDES = new Map([
+  [
+    `${SKILL_RUNNER_WORKER_ROOT_DIRECTORY}/app/skill-runner-worker-home.tsx`,
+    `${SKILL_RUNNER_WORKER_ROOT_DIRECTORY}/app/page.tsx`
+  ],
+  [
+    `${SKILL_RUNNER_WORKER_ROOT_DIRECTORY}/app/skill-runner-worker-layout.tsx`,
+    `${SKILL_RUNNER_WORKER_ROOT_DIRECTORY}/app/layout.tsx`
+  ]
+])
 
 export interface SkillRunnerShellTreeEntry {
   path?: string
@@ -28,6 +75,7 @@ interface GitHubTreeResponse {
 interface SkillRunnerShellManifestFile {
   path: string
   contentUrl: string
+  sourcePath?: string
 }
 
 export interface SkillRunnerShellSource {
@@ -44,8 +92,8 @@ export interface VercelUploadedDeploymentFile {
 
 export function isRunnerShellFile(file: string): boolean {
   if (RUNNER_SHELL_ROOT_FILES.has(file)) return true
-  if (!file.startsWith(`${SKILL_RUNNER_WORKER_ROOT_DIRECTORY}/`)) return false
-  return !RUNNER_SHELL_EXCLUDED_FILES.some((pattern) => pattern.test(file))
+  if (RUNNER_SHELL_EXACT_FILES.has(file)) return true
+  return RUNNER_SHELL_INCLUDED_PREFIXES.some((prefix) => file.startsWith(prefix))
 }
 
 function encodePathForUrl(file: string): string {
@@ -53,6 +101,10 @@ function encodePathForUrl(file: string): string {
     .split("/")
     .map((segment) => encodeURIComponent(segment))
     .join("/")
+}
+
+function resolveRunnerShellDeploymentPath(file: string): string {
+  return RUNNER_SHELL_PATH_OVERRIDES.get(file) || file
 }
 
 async function fetchGitHubTree(commit: string): Promise<GitHubTreeResponse> {
@@ -86,7 +138,8 @@ export function resolveSkillRunnerShellSourceFromTree(
     )
     .filter((entry) => entry.type === "blob" && isRunnerShellFile(entry.path))
     .map((entry) => ({
-      path: entry.path,
+      path: resolveRunnerShellDeploymentPath(entry.path),
+      sourcePath: entry.path,
       contentUrl: `https://raw.githubusercontent.com/${SKILL_RUNNER_WORKER_REPO}/${commit}/${encodePathForUrl(entry.path)}`
     }))
     .sort((a, b) => a.path.localeCompare(b.path))
@@ -176,6 +229,90 @@ function patchRunnerNextConfig(content: string): string {
   return content.replace(importBlockMatch[0], `${importBlockMatch[0]}\n${RUNNER_NEXT_CONFIG_PREVIEW_COMMENTS_PATCH}`)
 }
 
+function pickPackageFields<T extends Record<string, string>>(
+  values: Record<string, string> | undefined,
+  keys: string[]
+): T {
+  const picked: Record<string, string> = {}
+  for (const key of keys) {
+    const value = values?.[key]
+    if (value) {
+      picked[key] = value
+    }
+  }
+  return picked as T
+}
+
+function patchRunnerRootPackageJson(content: string): string {
+  try {
+    const parsed = JSON.parse(content) as {
+      packageManager?: string
+      version?: string
+    }
+    return `${JSON.stringify(
+      {
+        name: "dev3000-skill-runner-root",
+        version: parsed.version || "0.0.0",
+        private: true,
+        type: "module",
+        packageManager: parsed.packageManager || "bun@1.2.5",
+        workspaces: [SKILL_RUNNER_WORKER_ROOT_DIRECTORY]
+      },
+      null,
+      2
+    )}\n`
+  } catch {
+    return content
+  }
+}
+
+function patchRunnerWwwPackageJson(content: string): string {
+  try {
+    const parsed = JSON.parse(content) as {
+      dependencies?: Record<string, string>
+      devDependencies?: Record<string, string>
+      packageManager?: string
+      version?: string
+    }
+    return `${JSON.stringify(
+      {
+        name: "dev3000-skill-runner",
+        version: parsed.version || "0.0.0",
+        private: true,
+        packageManager: parsed.packageManager || "bun@1.2.5",
+        scripts: {
+          build: "next build --turbopack && node scripts/patch-workflow-vercel-config.mjs",
+          start: "next start"
+        },
+        dependencies: pickPackageFields(parsed.dependencies, [
+          "@vercel/analytics",
+          "@vercel/blob",
+          "@vercel/oidc",
+          "@vercel/sandbox",
+          "@workflow/world-vercel",
+          "ai",
+          "ms",
+          "next",
+          "react",
+          "react-dom",
+          "workflow"
+        ]),
+        devDependencies: pickPackageFields(parsed.devDependencies, [
+          "@types/node",
+          "@types/react",
+          "@types/react-dom",
+          "babel-plugin-react-compiler",
+          "typescript"
+        ])
+      },
+      null,
+      2
+    )}\n`
+  } catch {
+    return content
+  }
+}
+
 function patchRunnerShellTextFile({
   content,
   file,
@@ -187,6 +324,14 @@ function patchRunnerShellTextFile({
   maxFunctionDurationSeconds?: number
   maxWorkflowStepDurationSeconds?: number
 }): string {
+  if (file.path === RUNNER_ROOT_PACKAGE_PATH) {
+    return patchRunnerRootPackageJson(content)
+  }
+
+  if (file.path === RUNNER_WWW_PACKAGE_PATH) {
+    return patchRunnerWwwPackageJson(content)
+  }
+
   if (file.path === RUNNER_NEXT_CONFIG_PATH) {
     return patchRunnerNextConfig(content)
   }
@@ -229,7 +374,8 @@ function patchRunnerShellFile({
   maxFunctionDurationSeconds?: number
   maxWorkflowStepDurationSeconds?: number
 }): Uint8Array {
-  if (!maxFunctionDurationSeconds && !maxWorkflowStepDurationSeconds && file.path !== RUNNER_NEXT_CONFIG_PATH) {
+  const alwaysPatchedFiles = new Set([RUNNER_ROOT_PACKAGE_PATH, RUNNER_WWW_PACKAGE_PATH, RUNNER_NEXT_CONFIG_PATH])
+  if (!maxFunctionDurationSeconds && !maxWorkflowStepDurationSeconds && !alwaysPatchedFiles.has(file.path)) {
     return bytes
   }
 

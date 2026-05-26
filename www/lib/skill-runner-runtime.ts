@@ -1,4 +1,8 @@
-import { HOSTED_SKILL_RUNNER_TEAM_IDS, HOSTED_SKILL_RUNNER_TEAM_SLUGS } from "@/lib/skill-runner-config"
+import {
+  HOSTED_SKILL_RUNNER_TEAM_IDS,
+  HOSTED_SKILL_RUNNER_TEAM_SLUGS,
+  SKILL_RUNNER_WORKER_PROJECT_NAME
+} from "@/lib/skill-runner-config"
 
 const HOSTED_SKILL_RUNNER_TEAM_ID_SET = new Set<string>(HOSTED_SKILL_RUNNER_TEAM_IDS)
 const HOSTED_SKILL_RUNNER_TEAM_SLUG_SET = new Set<string>(HOSTED_SKILL_RUNNER_TEAM_SLUGS)
@@ -36,6 +40,26 @@ function getCurrentVercelOwnerIdentifier(): string | undefined {
 
 export function isSelfHostedSkillRunnerRuntime(): boolean {
   const ownerIdentifier = getCurrentVercelOwnerIdentifier()
-  if (!ownerIdentifier) return process.env.VERCEL === "1"
+  if (!ownerIdentifier) return process.env.VERCEL === "1" && isSkillRunnerWorkerProjectRuntime()
   return !(isHostedSkillRunnerTeamId(ownerIdentifier) || isHostedSkillRunnerTeamSlug(ownerIdentifier))
+}
+
+function isSkillRunnerWorkerProjectRuntime(): boolean {
+  return [process.env.VERCEL_PROJECT_PRODUCTION_URL, process.env.VERCEL_URL, process.env.NEXT_PUBLIC_VERCEL_URL].some(
+    (value) => {
+      const host = normalizeHost(value)
+      return Boolean(host?.split(".")[0]?.startsWith(SKILL_RUNNER_WORKER_PROJECT_NAME))
+    }
+  )
+}
+
+function normalizeHost(value: string | undefined): string | null {
+  const trimmed = value?.trim()
+  if (!trimmed) return null
+
+  try {
+    return new URL(trimmed.startsWith("http") ? trimmed : `https://${trimmed}`).host
+  } catch {
+    return trimmed.split("/")[0] || null
+  }
 }

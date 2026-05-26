@@ -11,15 +11,54 @@ const outputDir = path.resolve(
   process.env.SKILL_RUNNER_SHELL_OUTPUT_DIR?.trim() || ".artifacts/skill-runner-shell"
 )
 
-const rootFiles = new Set(["package.json", "bun.lock", "tsconfig.json", "turbo.json"])
-const excludedFiles = [
-  /(^|\/)\.DS_Store$/,
-  /\.tgz$/,
-  /\.tsbuildinfo$/,
-  /^www\/\.env/,
-  /^www\/(?:\.next|\.vercel|node_modules|\.swc)\//,
-  /^www\/(?:WORKFLOW_TESTING_GUIDE|d3k-skill-runner-team-impl)\.md$/
-]
+const rootFiles = new Set(["package.json", "bun.lock"])
+const exactFiles = new Set([
+  "www/app/api/cloud/fix-workflow/health/route.ts",
+  "www/app/api/cloud/fix-workflow/steps.ts",
+  "www/app/api/cloud/fix-workflow/workflow.ts",
+  "www/app/api/cloud/start-fix/route.ts",
+  "www/app/api/skill-runner-worker/version/route.ts",
+  "www/app/skill-runner-worker-home.tsx",
+  "www/app/skill-runner-worker-layout.tsx",
+  "www/bunfig.toml",
+  "www/lib/ai-gateway.ts",
+  "www/lib/auth.ts",
+  "www/lib/blob-store.ts",
+  "www/lib/constants.ts",
+  "www/lib/dev-agent-ash-spec.ts",
+  "www/lib/dev-agent-ash.ts",
+  "www/lib/dev-agents.ts",
+  "www/lib/dev-server-command.ts",
+  "www/lib/file-to-route.ts",
+  "www/lib/report-redaction.ts",
+  "www/lib/skill-runner-config.ts",
+  "www/lib/skill-runner-runtime.ts",
+  "www/lib/skill-runner-shell-source.ts",
+  "www/lib/skill-runner-worker.ts",
+  "www/lib/skill-runners.ts",
+  "www/lib/skills-sh.ts",
+  "www/lib/team-selection.ts",
+  "www/lib/telemetry-storage.ts",
+  "www/lib/telemetry.ts",
+  "www/lib/vercel-cli-sandbox-context.ts",
+  "www/lib/vercel-protection-bypass.ts",
+  "www/lib/vercel-teams.ts",
+  "www/lib/workflow-api.ts",
+  "www/lib/workflow-logger.ts",
+  "www/lib/workflow-report-summary.ts",
+  "www/lib/workflow-storage.ts",
+  "www/next.config.ts",
+  "www/package.json",
+  "www/scripts/patch-workflow-vercel-config.mjs",
+  "www/tsconfig.json",
+  "www/types.ts",
+  "www/vercel.json"
+])
+const includedPrefixes = ["www/app/.well-known/workflow/v1/", "www/lib/cloud/", "www/lib/skills/"]
+const pathOverrides = new Map([
+  ["www/app/skill-runner-worker-home.tsx", "www/app/page.tsx"],
+  ["www/app/skill-runner-worker-layout.tsx", "www/app/layout.tsx"]
+])
 
 interface SkillRunnerShellManifestFile {
   path: string
@@ -73,7 +112,7 @@ function resolveCommit(): string {
 }
 
 function listTrackedFiles(): string[] {
-  return git(["ls-files", "-z"])
+  return git(["ls-files", "--cached", "--others", "--exclude-standard", "-z"])
     .split("\0")
     .map((file) => file.trim())
     .filter(Boolean)
@@ -81,8 +120,12 @@ function listTrackedFiles(): string[] {
 
 function isRunnerShellFile(file: string): boolean {
   if (rootFiles.has(file)) return true
-  if (!file.startsWith("www/")) return false
-  return !excludedFiles.some((pattern) => pattern.test(file))
+  if (exactFiles.has(file)) return true
+  return includedPrefixes.some((prefix) => file.startsWith(prefix))
+}
+
+function resolveRunnerShellDeploymentPath(file: string): string {
+  return pathOverrides.get(file) || file
 }
 
 function encodePathForUrl(file: string): string {
@@ -95,7 +138,7 @@ function encodePathForUrl(file: string): string {
 function buildManifestFile(file: string, sourceBaseUrl: string): SkillRunnerShellManifestFile {
   const contents = readFileSync(path.join(repoRoot, file))
   return {
-    path: file,
+    path: resolveRunnerShellDeploymentPath(file),
     sha1: createHash("sha1").update(contents).digest("hex"),
     size: contents.byteLength,
     contentUrl: `${sourceBaseUrl.replace(/\/$/, "")}/${encodePathForUrl(file)}`
