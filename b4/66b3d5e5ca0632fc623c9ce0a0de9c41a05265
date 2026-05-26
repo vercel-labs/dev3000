@@ -1,0 +1,19 @@
+CHANGELOG.md
+  ai_agent 7-16
+packages/d3k-windows-x64/package.json
+  ai_agent 3
+packages/d3k-darwin-arm64/package.json
+  ai_agent 3
+packages/d3k-linux-x64/package.json
+  ai_agent 3
+package.json
+  ai_agent 3,71-73
+www/lib/changelog.ts
+  ai_agent 13-24
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.1",
+  "base_commit_sha": "b466b3d5e5ca0632fc623c9ce0a0de9c41a05265",
+  "prompts": {}
+}
