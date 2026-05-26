@@ -155,6 +155,7 @@ describe("skill runner shell source manifest", () => {
         workflow: "4.2.2"
       },
       devDependencies: {
+        "@types/ms": "^2.1.0",
         "@types/node": "25.3.5",
         "@types/react": "19.2.14",
         "@types/react-dom": "19.2.3",
@@ -247,6 +248,7 @@ describe("skill runner shell source manifest", () => {
     })
     expect(wwwPackage?.dependencies).not.toHaveProperty("@radix-ui/react-dialog")
     expect(wwwPackage?.dependencies).not.toHaveProperty("lucide-react")
+    expect(wwwPackage?.devDependencies).toHaveProperty("@types/ms")
     expect(wwwPackage?.devDependencies).toHaveProperty("typescript")
     expect(wwwPackage?.devDependencies).not.toHaveProperty("tailwindcss")
     expect(patchedNextConfig).toContain('process.env.VERCEL_PREVIEW_COMMENTS_ENABLED = "0"')

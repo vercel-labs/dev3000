@@ -298,6 +298,7 @@ function patchRunnerWwwPackageJson(content: string): string {
           "workflow"
         ]),
         devDependencies: pickPackageFields(parsed.devDependencies, [
+          "@types/ms",
           "@types/node",
           "@types/react",
           "@types/react-dom",
