@@ -68,12 +68,12 @@ When changes are pushed to `main`:
 
 1. Get the latest deployment URL:
    ```bash
-   vercel ls --scope team_nLlpyC6REAqxydlFKbrMDlud | head -10
+   vercel ls --scope team_nO2mCG4W8IxPIeKoSsqwAxxB | head -10
    ```
 2. Wait for the deployment to become `Ready`.
 3. Monitor runtime logs with the specific deployment URL:
    ```bash
-   vercel logs <deployment-url>.vercel.sh --scope team_nLlpyC6REAqxydlFKbrMDlud
+   vercel logs <deployment-url>.vercel.sh --scope team_nO2mCG4W8IxPIeKoSsqwAxxB
    ```
 4. Do not stop at the first deployment status check. Keep polling until the specific new deployment for the pushed commit is `Ready` or has clearly failed.
 5. After the deployment is `Ready`, continue the task autonomously:

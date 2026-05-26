@@ -125,10 +125,10 @@ Start production log monitoring **before** clicking Start Workflow:
 
 ```bash
 # Get latest www deployment
-DEPLOYMENT=$(vercel ls dev3000-www --scope team_nLlpyC6REAqxydlFKbrMDlud | grep https | head -1 | awk '{print $2}')
+DEPLOYMENT=$(vercel ls dev3000-www --scope team_nO2mCG4W8IxPIeKoSsqwAxxB | grep https | head -1 | awk '{print $2}')
 
 # Stream logs in real-time
-vercel logs $DEPLOYMENT --scope team_nLlpyC6REAqxydlFKbrMDlud
+vercel logs $DEPLOYMENT --scope team_nO2mCG4W8IxPIeKoSsqwAxxB
 ```
 
 Key log markers:
