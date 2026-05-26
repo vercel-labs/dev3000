@@ -1,0 +1,21 @@
+www/lib/skill-runner-shell-source.ts
+  s_5da4393566ec36::t_f70a6042dbd3ec 301
+www/lib/skill-runner-shell-source.test.ts
+  s_5da4393566ec36::t_6f6015621048e9 158,251
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.1",
+  "base_commit_sha": "2151a51975635cea04ff38c4d4754963a2492084",
+  "prompts": {},
+  "sessions": {
+    "s_5da4393566ec36": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e3207-b24c-7e90-bd42-71198956a1ad",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>"
+    }
+  }
+}
