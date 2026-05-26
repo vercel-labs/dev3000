@@ -1,0 +1,48 @@
+www/lib/skill-runner-shell-source.ts
+  s_5da4393566ec36::t_0e1cbc6e1a0638 23
+www/app/api/cloud/fix-workflow/steps.ts
+  s_5da4393566ec36::t_804a581176120f 4951
+  s_5da4393566ec36::t_ee4b45e872344d 10013-10016
+www/lib/run-failure-display.ts
+  s_5da4393566ec36::t_0b12efabe369ab 54-63
+www/lib/oidc-token-binding.test.ts
+  s_5da4393566ec36::t_0d1f01d94b251a 34-37
+  s_5da4393566ec36::t_c33aae199ebd60 1-2,4-33,38-47
+  s_5da4393566ec36::t_64781cf3baedf8 3
+www/lib/ai-gateway.ts
+  s_5da4393566ec36::t_840509b062320f 16,23
+www/lib/oidc-token-binding.ts
+  s_5da4393566ec36::t_c33aae199ebd60 1-43,45-48,52-58,60
+  s_5da4393566ec36::t_64781cf3baedf8 44
+  s_5da4393566ec36::t_4abc9de15ae6c6 49-51,59
+www/app/api/cloud/start-fix/route.ts
+  s_5da4393566ec36::t_ecb2511e9e737d 1403-1440,1442
+  s_5da4393566ec36::t_930115b7bea75b 191-201,204-207,243-244,300,307,312,319-323,330-332,339,347-348
+  s_5da4393566ec36::t_e0a0026a5d6375 215-232,235,237
+  s_5da4393566ec36::t_64781cf3baedf8 8
+  s_5da4393566ec36::t_4f75aaad9032cf 202-203,208-214,233-234,236,238-242,640-642,669,675-685
+  s_5da4393566ec36::t_731fcf52372f8d 340
+www/WORKFLOW_TESTING_GUIDE.md
+  s_5da4393566ec36::t_c17743497f4d3e 1,3,7-11,13,15,17,19-24,26,28-36,38,40,42-44,46,48-49,52,54-58,60,62,64-65,68,71,74,77,80,83,86,88,90,93,96-97,99,102-103,105,108,110,112-114,116-135,138,140-142,144,146,148,150-152,154,156-160,162,164,166,168-170,172,174-180,182,184,186,188,190-193,195,197-200,202,204,207-208,212-215
+www/lib/run-failure-display.test.ts
+  s_5da4393566ec36::t_815528ae604c12 1-10,14-18
+  s_5da4393566ec36::t_6d80d199ce4294 11-13
+www/lib/ai-gateway.test.ts
+  s_5da4393566ec36::t_19c6e6c1c23414 1-29
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "31415cf78e7a14751cfb136034287fcca60c3d84",
+  "prompts": {},
+  "sessions": {
+    "s_5da4393566ec36": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e3207-b24c-7e90-bd42-71198956a1ad",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>"
+    }
+  }
+}
