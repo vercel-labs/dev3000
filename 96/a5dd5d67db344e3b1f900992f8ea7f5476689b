@@ -1,0 +1,21 @@
+www/WORKFLOW_TESTING_GUIDE.md
+  s_5da4393566ec36::t_618f86d27e45da 128,131
+AGENTS.md
+  s_5da4393566ec36::t_5909c35dd52dde 71,76
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.1",
+  "base_commit_sha": "96a5dd5d67db344e3b1f900992f8ea7f5476689b",
+  "prompts": {},
+  "sessions": {
+    "s_5da4393566ec36": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e3207-b24c-7e90-bd42-71198956a1ad",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>"
+    }
+  }
+}
