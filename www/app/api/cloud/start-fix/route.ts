@@ -507,11 +507,17 @@ async function forwardSelfHostedStartRequest({
     try {
       parsed = JSON.parse(text)
     } catch {
+      const upstreamContentType = upstream.headers.get("content-type") || ""
+      const isVercelAuthenticationPage =
+        upstream.status === 401 && /Authentication Required|Vercel Authentication|sso-api/i.test(text)
       return Response.json(
         {
           success: false,
-          error: "Self-hosted worker returned a non-JSON response.",
+          error: isVercelAuthenticationPage
+            ? "Self-hosted worker was blocked by Vercel Authentication instead of returning JSON."
+            : `Self-hosted worker returned a non-JSON response (${upstream.status} ${upstream.statusText || "unknown"}).`,
           upstreamStatus: upstream.status,
+          upstreamContentType,
           upstreamBodyPreview: text.slice(0, 400)
         },
         { status: upstream.ok ? 502 : upstream.status, headers: corsHeaders }

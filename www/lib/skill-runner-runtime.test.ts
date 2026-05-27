@@ -55,4 +55,13 @@ describe("isSelfHostedSkillRunnerRuntime", () => {
 
     expect(isSelfHostedSkillRunnerRuntime()).toBe(false)
   })
+
+  it("classifies d3k-skill-runner deployments as self-hosted even on hosted teams", () => {
+    clearRuntimeEnv()
+    process.env.VERCEL = "1"
+    process.env.VERCEL_ORG_ID = "team_nO2mCG4W8IxPIeKoSsqwAxxB"
+    process.env.VERCEL_PROJECT_PRODUCTION_URL = "d3k-skill-runner.labs.vercel.dev"
+
+    expect(isSelfHostedSkillRunnerRuntime()).toBe(true)
+  })
 })

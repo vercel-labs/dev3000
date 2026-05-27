@@ -39,8 +39,10 @@ function getCurrentVercelOwnerIdentifier(): string | undefined {
 }
 
 export function isSelfHostedSkillRunnerRuntime(): boolean {
+  if (isSkillRunnerWorkerProjectRuntime()) return true
+
   const ownerIdentifier = getCurrentVercelOwnerIdentifier()
-  if (!ownerIdentifier) return process.env.VERCEL === "1" && isSkillRunnerWorkerProjectRuntime()
+  if (!ownerIdentifier) return false
   return !(isHostedSkillRunnerTeamId(ownerIdentifier) || isHostedSkillRunnerTeamSlug(ownerIdentifier))
 }
 
