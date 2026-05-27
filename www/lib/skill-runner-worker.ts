@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process"
+import { Effect } from "effect"
 import {
   SKILL_RUNNER_RUNTIME_MANIFEST_VERSION,
   SKILL_RUNNER_WORKER_PROJECT_NAME,
@@ -534,6 +535,52 @@ function buildInitialDeploymentCreateError(
 
 async function sleep(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function normalizeWorkerEffectError(error: unknown): Error {
+  if (error instanceof Error) return error
+  return new Error(String(error))
+}
+
+function workerEffect<T>(tryPromise: () => Promise<T>): Effect.Effect<T, Error> {
+  return Effect.tryPromise({
+    try: tryPromise,
+    catch: normalizeWorkerEffectError
+  })
+}
+
+function workerSleepEffect(ms: number): Effect.Effect<void> {
+  return Effect.sleep(ms)
+}
+
+function recoverMissingWorkerProject<T>(effect: Effect.Effect<T, Error>): Effect.Effect<T | null, Error> {
+  return effect.pipe(
+    Effect.catchAll((error) => (isVercelProjectNotFoundError(error) ? Effect.succeed(null) : Effect.fail(error)))
+  )
+}
+
+function pollWorkerProjectEffect<T>({
+  attempts,
+  intervalMs,
+  read,
+  ready
+}: {
+  attempts: number
+  intervalMs: number
+  read: (attempt: number) => Promise<T>
+  ready: (value: T, attempt: number) => boolean
+}): Effect.Effect<T | null, Error> {
+  return Effect.gen(function* () {
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      const value = yield* workerEffect(() => read(attempt))
+      if (ready(value, attempt)) {
+        return value
+      }
+      yield* workerSleepEffect(intervalMs)
+    }
+
+    return null
+  })
 }
 
 function resolveWorkerGitBranch(): string {
@@ -1554,191 +1601,228 @@ export async function installSkillRunnerWorkerProject(
   preferredProjectId?: string,
   options?: SkillRunnerWorkerInstallOptions
 ): Promise<SkillRunnerWorkerProject> {
+  return Effect.runPromise(installSkillRunnerWorkerProjectEffect(accessToken, team, preferredProjectId, options))
+}
+
+function installSkillRunnerWorkerProjectEffect(
+  accessToken: string,
+  team: VercelTeam,
+  preferredProjectId?: string,
+  options?: SkillRunnerWorkerInstallOptions
+): Effect.Effect<SkillRunnerWorkerProject, Error> {
   const startTime = Date.now()
-  await emitInstallProgress(options, startTime, {
-    phase: "validate",
-    message: "Checking for an existing d3k-skill-runner project..."
-  })
-  let existing = await findSkillRunnerWorkerProject(accessToken, team, preferredProjectId).catch((error: unknown) => {
-    if (isVercelProjectNotFoundError(error)) return null
-    throw error
-  })
-  if (existing) {
-    await emitInstallProgress(options, startTime, {
-      phase: "project",
-      message: `Found existing runner project ${existing.projectName}; checking configuration...`
-    })
-    await removeWorkerMetadataEnvVars(accessToken, team, existing.projectId).catch((error: unknown) => {
-      if (isVercelProjectNotFoundError(error)) {
-        existing = null
-        return
-      }
-      throw error
-    })
-  }
+  const progress = (event: Omit<SkillRunnerWorkerInstallProgress, "elapsedMs">) =>
+    workerEffect(() => emitInstallProgress(options, startTime, event))
 
-  if (
-    existing?.workerBaseUrl &&
-    (!existing.missingEnvKeys || existing.missingEnvKeys.length === 0) &&
-    existing.latestDeploymentReadyState === "READY" &&
-    existing.shellVersionStatus !== "outdated"
-  ) {
-    await emitInstallProgress(options, startTime, {
-      phase: "ready",
-      message: "Team skill runner project is already ready."
+  return Effect.gen(function* () {
+    yield* progress({
+      phase: "validate",
+      message: "Checking for an existing d3k-skill-runner project..."
     })
-    return existing
-  }
 
-  let project = existing
-  let createdProject = false
-  if (!project) {
-    await emitInstallProgress(options, startTime, {
-      phase: "project",
-      message: "Creating d3k-skill-runner project..."
-    })
-    const createResult = await createWorkerProject(accessToken, team, preferredProjectId)
-    project = createResult.project
-    createdProject = createResult.created
-    await emitInstallProgress(options, startTime, {
-      phase: "project",
-      message: `Created runner project ${project.projectName}.`
-    })
-  }
-
-  try {
-    if (createdProject) {
-      await emitInstallProgress(options, startTime, {
-        phase: "project",
-        message: "Verifying Vercel app access to the new runner project..."
-      })
-      await assertWorkerProjectIncludedInOauthGrant(accessToken, team, project.projectId)
-    }
-    await emitInstallProgress(options, startTime, {
-      phase: "blob",
-      message: "Configuring team-owned Blob storage..."
-    })
-    await ensureWorkerBlobStore(accessToken, team, project, {
-      skipExistingCleanup: createdProject
-    })
-    await emitInstallProgress(options, startTime, {
-      phase: "blob",
-      message: "Blob storage is connected to the runner project."
-    })
-  } catch (error: unknown) {
-    if (createdProject) {
-      await deleteWorkerProject(accessToken, team, project.projectId).catch((cleanupError: unknown) => {
-        console.warn(
-          "[Skill Runner Worker] Failed to clean up runner project after setup failure:",
-          cleanupError instanceof Error ? cleanupError.message : String(cleanupError)
-        )
-      })
-    }
-
-    if (!isVercelProjectNotFoundError(error)) {
-      throw error
-    }
-    throw new SkillRunnerWorkerSetupError(
-      `Vercel reported that the runner project "${project.projectName}" no longer exists while dev3000 was preparing its Blob storage. Retry setup so dev3000 can recreate the runner project.`,
-      {
-        code: "unknown",
-        actionLabel: "Open Vercel Projects",
-        actionUrl: `https://vercel.com/${team.slug}`,
-        projectName: project.projectName
-      }
+    let existing = yield* recoverMissingWorkerProject(
+      workerEffect(() => findSkillRunnerWorkerProject(accessToken, team, preferredProjectId))
     )
-  }
 
-  let deploymentId = project.latestDeploymentId || null
-  let createdInitialDeployment = false
-  if (!deploymentId && !createdProject) {
-    for (let attempt = 0; attempt < INITIAL_DEPLOYMENT_POLL_ATTEMPTS; attempt += 1) {
-      const resolved = await findSkillRunnerWorkerProject(accessToken, team, project.projectId)
-      if (resolved?.latestDeploymentId) {
-        deploymentId = resolved.latestDeploymentId
-        break
+    if (existing) {
+      yield* progress({
+        phase: "project",
+        message: `Found existing runner project ${existing.projectName}; checking configuration...`
+      })
+
+      const existingProject = existing
+      const metadataCleanup = yield* workerEffect(async () => {
+        await removeWorkerMetadataEnvVars(accessToken, team, existingProject.projectId)
+        return "cleaned" as const
+      }).pipe(
+        Effect.catchAll((error) =>
+          isVercelProjectNotFoundError(error) ? Effect.succeed("missing" as const) : Effect.fail(error)
+        )
+      )
+      if (metadataCleanup === "missing") {
+        existing = null
       }
-      await sleep(INITIAL_DEPLOYMENT_POLL_INTERVAL_MS)
     }
-  }
 
-  if (!deploymentId) {
-    deploymentId = await createInitialWorkerDeployment(accessToken, team, project, options, startTime)
-    createdInitialDeployment = true
-  }
+    if (
+      existing?.workerBaseUrl &&
+      (!existing.missingEnvKeys || existing.missingEnvKeys.length === 0) &&
+      existing.latestDeploymentReadyState === "READY" &&
+      existing.shellVersionStatus !== "outdated"
+    ) {
+      yield* progress({
+        phase: "ready",
+        message: "Team skill runner project is already ready."
+      })
+      return existing
+    }
 
-  const redeployProject = {
-    ...project,
-    latestDeploymentId: deploymentId
-  }
-  const redeployedId = createdInitialDeployment
-    ? deploymentId
-    : await redeployWorkerProject(accessToken, team, redeployProject, options, startTime)
+    let project = existing
+    let createdProject = false
+    if (!project) {
+      yield* progress({
+        phase: "project",
+        message: "Creating d3k-skill-runner project..."
+      })
+      const createResult = yield* workerEffect(() => createWorkerProject(accessToken, team, preferredProjectId))
+      project = createResult.project
+      createdProject = createResult.created
+      yield* progress({
+        phase: "project",
+        message: `Created runner project ${project.projectName}.`
+      })
+    }
 
-  if (redeployedId) {
-    for (let attempt = 0; attempt < 30; attempt += 1) {
-      if (attempt === 0 || attempt % 5 === 0) {
+    yield* workerEffect(async () => {
+      try {
+        if (createdProject) {
+          await emitInstallProgress(options, startTime, {
+            phase: "project",
+            message: "Verifying Vercel app access to the new runner project..."
+          })
+          await assertWorkerProjectIncludedInOauthGrant(accessToken, team, project.projectId)
+        }
         await emitInstallProgress(options, startTime, {
-          phase: "build",
-          message: `Waiting for Vercel deployment to finish${attempt > 0 ? ` (${attempt * 3}s elapsed)` : ""}...`
+          phase: "blob",
+          message: "Configuring team-owned Blob storage..."
         })
-      }
-      const resolved = await findSkillRunnerWorkerProject(accessToken, team, project.projectId)
-      if (resolved && isFailedDeploymentState(resolved.latestDeploymentReadyState)) {
-        const details = resolved.latestDeploymentId
-          ? await getDeploymentFailureSummary(accessToken, team, resolved.latestDeploymentId).catch(() => undefined)
-          : undefined
-        const deploymentLogsUrl = buildDeploymentLogsUrl(resolved.latestDeploymentUrl)
+        await ensureWorkerBlobStore(accessToken, team, project, {
+          skipExistingCleanup: createdProject
+        })
+        await emitInstallProgress(options, startTime, {
+          phase: "blob",
+          message: "Blob storage is connected to the runner project."
+        })
+      } catch (error: unknown) {
+        if (createdProject) {
+          await deleteWorkerProject(accessToken, team, project.projectId).catch((cleanupError: unknown) => {
+            console.warn(
+              "[Skill Runner Worker] Failed to clean up runner project after setup failure:",
+              cleanupError instanceof Error ? cleanupError.message : String(cleanupError)
+            )
+          })
+        }
+
+        if (!isVercelProjectNotFoundError(error)) {
+          throw error
+        }
         throw new SkillRunnerWorkerSetupError(
-          `Vercel build failed before the runner project "${resolved.projectName}" became ready.`,
+          `Vercel reported that the runner project "${project.projectName}" no longer exists while dev3000 was preparing its Blob storage. Retry setup so dev3000 can recreate the runner project.`,
           {
-            code: "initial_deployment_failed",
-            actionLabel: deploymentLogsUrl ? "Open Failed Deployment Logs" : "Open Runner Project",
-            actionUrl: deploymentLogsUrl || resolved.dashboardUrl,
-            deploymentUrl: resolved.latestDeploymentUrl,
-            details,
-            projectName: resolved.projectName
+            code: "unknown",
+            actionLabel: "Open Vercel Projects",
+            actionUrl: `https://vercel.com/${team.slug}`,
+            projectName: project.projectName
           }
         )
       }
-      if (
-        resolved?.workerBaseUrl &&
-        (!resolved.missingEnvKeys || resolved.missingEnvKeys.length === 0) &&
-        resolved.latestDeploymentId === redeployedId &&
-        resolved.latestDeploymentReadyState === "READY" &&
-        resolved.shellVersionStatus !== "outdated"
-      ) {
-        await emitInstallProgress(options, startTime, {
+    })
+
+    let deploymentId = project.latestDeploymentId || null
+    let createdInitialDeployment = false
+    if (!deploymentId && !createdProject) {
+      const resolved = yield* pollWorkerProjectEffect({
+        attempts: INITIAL_DEPLOYMENT_POLL_ATTEMPTS,
+        intervalMs: INITIAL_DEPLOYMENT_POLL_INTERVAL_MS,
+        read: () => findSkillRunnerWorkerProject(accessToken, team, project.projectId),
+        ready: (candidate) => Boolean(candidate?.latestDeploymentId)
+      })
+      deploymentId = resolved?.latestDeploymentId || null
+    }
+
+    if (!deploymentId) {
+      deploymentId = yield* workerEffect(() =>
+        createInitialWorkerDeployment(accessToken, team, project, options, startTime)
+      )
+      createdInitialDeployment = true
+    }
+
+    const redeployProject = {
+      ...project,
+      latestDeploymentId: deploymentId
+    }
+    const redeployedId = createdInitialDeployment
+      ? deploymentId
+      : yield* workerEffect(() => redeployWorkerProject(accessToken, team, redeployProject, options, startTime))
+
+    if (redeployedId) {
+      const readyProject = yield* pollWorkerProjectEffect({
+        attempts: 30,
+        intervalMs: 3000,
+        read: async (attempt) => {
+          if (attempt === 0 || attempt % 5 === 0) {
+            await emitInstallProgress(options, startTime, {
+              phase: "build",
+              message: `Waiting for Vercel deployment to finish${attempt > 0 ? ` (${attempt * 3}s elapsed)` : ""}...`
+            })
+          }
+          const resolved = await findSkillRunnerWorkerProject(accessToken, team, project.projectId)
+          if (resolved && isFailedDeploymentState(resolved.latestDeploymentReadyState)) {
+            const details = resolved.latestDeploymentId
+              ? await getDeploymentFailureSummary(accessToken, team, resolved.latestDeploymentId).catch(() => undefined)
+              : undefined
+            const deploymentLogsUrl = buildDeploymentLogsUrl(resolved.latestDeploymentUrl)
+            throw new SkillRunnerWorkerSetupError(
+              `Vercel build failed before the runner project "${resolved.projectName}" became ready.`,
+              {
+                code: "initial_deployment_failed",
+                actionLabel: deploymentLogsUrl ? "Open Failed Deployment Logs" : "Open Runner Project",
+                actionUrl: deploymentLogsUrl || resolved.dashboardUrl,
+                deploymentUrl: resolved.latestDeploymentUrl,
+                details,
+                projectName: resolved.projectName
+              }
+            )
+          }
+          return resolved
+        },
+        ready: (candidate) =>
+          Boolean(
+            candidate?.workerBaseUrl &&
+              (!candidate.missingEnvKeys || candidate.missingEnvKeys.length === 0) &&
+              candidate.latestDeploymentId === redeployedId &&
+              candidate.latestDeploymentReadyState === "READY" &&
+              candidate.shellVersionStatus !== "outdated"
+          )
+      })
+
+      if (readyProject) {
+        yield* progress({
           phase: "ready",
           message: "Team skill runner project is ready."
         })
-        return resolved
+        return readyProject
       }
-      await sleep(3000)
+
+      return (yield* workerEffect(() => findSkillRunnerWorkerProject(accessToken, team, project.projectId))) || project
     }
 
-    return (await findSkillRunnerWorkerProject(accessToken, team, project.projectId)) || project
-  }
+    const reachableProject = yield* pollWorkerProjectEffect({
+      attempts: 20,
+      intervalMs: 3000,
+      read: async (attempt) => {
+        if (attempt === 0 || attempt % 5 === 0) {
+          await emitInstallProgress(options, startTime, {
+            phase: "build",
+            message: `Waiting for runner project to become reachable${attempt > 0 ? ` (${attempt * 3}s elapsed)` : ""}...`
+          })
+        }
+        return findSkillRunnerWorkerProject(accessToken, team, project.projectId)
+      },
+      ready: (candidate) =>
+        Boolean(candidate?.workerBaseUrl && (!candidate.missingEnvKeys || candidate.missingEnvKeys.length === 0))
+    })
 
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    if (attempt === 0 || attempt % 5 === 0) {
-      await emitInstallProgress(options, startTime, {
-        phase: "build",
-        message: `Waiting for runner project to become reachable${attempt > 0 ? ` (${attempt * 3}s elapsed)` : ""}...`
-      })
-    }
-    const resolved = await findSkillRunnerWorkerProject(accessToken, team, project.projectId)
-    if (resolved?.workerBaseUrl && (!resolved.missingEnvKeys || resolved.missingEnvKeys.length === 0)) {
-      await emitInstallProgress(options, startTime, {
+    if (reachableProject) {
+      yield* progress({
         phase: "ready",
         message: "Team skill runner project is ready."
       })
-      return resolved
+      return reachableProject
     }
-    await sleep(3000)
-  }
 
-  return (await findSkillRunnerWorkerProject(accessToken, team, project.projectId)) || project
+    return (yield* workerEffect(() => findSkillRunnerWorkerProject(accessToken, team, project.projectId))) || project
+  })
 }
 
 async function createWorkerProject(

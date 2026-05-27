@@ -56,6 +56,7 @@
     "clsx": "^2.1.1",
     "cmdk": "1.1.1",
     "date-fns": "4.1.0",
+    "effect": "^3.21.2",
     "embla-carousel-react": "8.6.0",
     "flags": "4.0.3",
     "geist": "latest",

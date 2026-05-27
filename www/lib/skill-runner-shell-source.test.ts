@@ -147,6 +147,7 @@ describe("skill runner shell source manifest", () => {
         "@vercel/sandbox": "1.9.3",
         "@workflow/world-vercel": "4.1.0",
         ai: "6.0.159",
+        effect: "3.21.2",
         "lucide-react": "0.577.0",
         ms: "^2.1.3",
         next: "16.2.3",
@@ -243,6 +244,7 @@ describe("skill runner shell source manifest", () => {
       "@vercel/blob": "2.3.1",
       "@vercel/oidc": "3.2.0",
       "@vercel/sandbox": "1.9.3",
+      effect: "3.21.2",
       next: "16.2.3",
       workflow: "4.2.2"
     })

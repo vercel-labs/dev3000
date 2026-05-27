@@ -292,6 +292,7 @@ function patchRunnerWwwPackageJson(content: string): string {
           "@vercel/sandbox",
           "@workflow/world-vercel",
           "ai",
+          "effect",
           "ms",
           "next",
           "react",
