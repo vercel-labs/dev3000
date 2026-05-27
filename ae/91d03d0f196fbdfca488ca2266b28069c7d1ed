@@ -1,0 +1,31 @@
+www/package.json
+  s_5da4393566ec36::t_a665f705b41873 59
+www/lib/skill-runner-shell-source.test.ts
+  s_5da4393566ec36::t_ea8b69deca6f13 150,247
+bun.lock
+  ai_agent 87,1258-1259,1332-1333,1384,1744
+www/lib/skill-runner-shell-source.ts
+  s_5da4393566ec36::t_ca290917ef26fc 295
+www/lib/skill-runner-worker.ts
+  s_5da4393566ec36::t_bde7a827db7ac6 540-555,557-585
+  s_5da4393566ec36::t_d83d0d31f1a1a8 556,1734-1736,1812-1813
+  s_5da4393566ec36::t_9e1d9103c8ae37 1633,1635
+  s_5da4393566ec36::t_be9c6154f71e10 1604-1612,1614-1615,1617-1620,1623-1625,1627-1628,1630,1632,1634,1636-1639,1641-1644,1647-1657,1660-1673,1676-1684,1686-1687,1689-1708,1710,1712-1715,1719-1733,1737-1790,1794,1796-1797,1800-1811,1814,1816-1817,1821,1824-1825
+  s_5da4393566ec36::t_709727ab1532a9 2
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "ae91d03d0f196fbdfca488ca2266b28069c7d1ed",
+  "prompts": {},
+  "sessions": {
+    "s_5da4393566ec36": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e3207-b24c-7e90-bd42-71198956a1ad",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>"
+    }
+  }
+}
