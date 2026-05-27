@@ -69,6 +69,9 @@ interface Project {
 type RepoVisibility = "unknown" | "checking" | "public" | "private_or_unknown"
 
 const PROJECT_NAME_COLLATOR = new Intl.Collator("en", { sensitivity: "base" })
+const INITIAL_PROJECT_PICKER_LIMIT = 20
+const PROJECT_SEARCH_LIMIT = 50
+const PROJECT_SEARCH_DEBOUNCE_MS = 250
 
 interface MarketplaceStats {
   projectRuns: string
@@ -305,6 +308,7 @@ export default function DevAgentRunClient({
   const [projects, setProjects] = useState<Project[]>([])
   const [projectsLoading, setProjectsLoading] = useState(false)
   const [projectSearch, setProjectSearch] = useState("")
+  const [debouncedProjectSearch, setDebouncedProjectSearch] = useState("")
   const [selectedProjectId, setSelectedProjectId] = useState(() => searchParams?.get("project") ?? "")
   const [selectedProjectFallback, setSelectedProjectFallback] = useState<Project | null>(null)
   const [availableBranches, setAvailableBranches] = useState<Array<{ name: string; lastDeployment?: { url: string } }>>(
@@ -355,11 +359,13 @@ export default function DevAgentRunClient({
     () => sortProjectsForPicker(selectableProjects, repoVisibilities),
     [repoVisibilities, selectableProjects]
   )
+  const projectSearchQuery = projectSearch.trim()
+  const isProjectSearchDebouncing = projectSearchQuery !== debouncedProjectSearch
   const filteredProjects = useMemo(() => {
-    const query = projectSearch.trim().toLowerCase()
+    const query = projectSearchQuery.toLowerCase()
     if (!query) return allProjects
     return allProjects.filter((project) => project.name.toLowerCase().includes(query))
-  }, [allProjects, projectSearch])
+  }, [allProjects, projectSearchQuery])
   const selectedProject = useMemo(
     () => allProjects.find((project) => project.id === selectedProjectId) || null,
     [allProjects, selectedProjectId]
@@ -617,6 +623,15 @@ export default function DevAgentRunClient({
 
   const selectedTeamId = selectedTeam?.id
   const selectedTeamScope = selectedTeam?.isPersonal ? selectedTeam?.slug : selectedTeam?.id
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setDebouncedProjectSearch(projectSearch.trim())
+    }, PROJECT_SEARCH_DEBOUNCE_MS)
+
+    return () => window.clearTimeout(timeout)
+  }, [projectSearch])
+
   useEffect(() => {
     if (!selectedTeamId || !selectedTeamScope) {
       setProjects([])
@@ -629,7 +644,13 @@ export default function DevAgentRunClient({
     setProjectsLoading(true)
     setError(null)
 
-    const params = new URLSearchParams({ teamId: selectedTeamScope })
+    const params = new URLSearchParams({
+      limit: String(debouncedProjectSearch ? PROJECT_SEARCH_LIMIT : INITIAL_PROJECT_PICKER_LIMIT),
+      teamId: selectedTeamScope
+    })
+    if (debouncedProjectSearch) {
+      params.set("search", debouncedProjectSearch)
+    }
 
     void fetch(params.toString() ? `/api/projects?${params.toString()}` : "/api/projects", {
       signal: controller.signal
@@ -654,7 +675,7 @@ export default function DevAgentRunClient({
       })
 
     return () => controller.abort()
-  }, [selectedTeamId, selectedTeamScope])
+  }, [debouncedProjectSearch, selectedTeamId, selectedTeamScope])
 
   useEffect(() => {
     if (!selectedProjectId || !selectedTeamScope) {
@@ -1175,7 +1196,7 @@ export default function DevAgentRunClient({
         <div className="rounded-lg border border-[#1f1f1f] p-5">
           <div className="mb-4">
             <h2 className="text-[14px] font-medium text-[#ededed]">Project</h2>
-            <p className="mt-0.5 text-[13px] text-[#888]">Select a project in {team.name}.</p>
+            <p className="mt-0.5 text-[13px] text-[#888]">Search by name or pick a recent project in {team.name}.</p>
           </div>
 
           <div className="space-y-3">
@@ -1185,20 +1206,26 @@ export default function DevAgentRunClient({
                 id={projectSearchId}
                 value={projectSearch}
                 onChange={(event) => setProjectSearch(event.target.value)}
-                placeholder="Filter projects…"
+                placeholder="Search all projects…"
                 className="h-9 border-[#1f1f1f] bg-transparent pl-9 text-[13px] text-[#ededed] placeholder:text-[#555]"
               />
             </div>
 
             <div className="max-h-[24rem] space-y-1 overflow-y-auto">
-              {projectsLoading ? (
+              {projectsLoading || isProjectSearchDebouncing ? (
                 <div className="flex items-center gap-2 py-3 text-[13px] text-[#666]">
                   <Spinner className="size-3.5" />
-                  Loading projects…
+                  {projectSearchQuery ? "Searching projects…" : "Loading recent projects…"}
                 </div>
               ) : filteredProjects.length === 0 ? (
                 <p className="py-3 text-[13px] text-[#666]">
-                  {requiresGitHubBackedProject ? "No GitHub-backed projects found." : "No matching projects."}
+                  {projectSearchQuery
+                    ? requiresGitHubBackedProject
+                      ? "No matching GitHub-backed projects found."
+                      : "No matching projects."
+                    : requiresGitHubBackedProject
+                      ? "No recent GitHub-backed projects found. Search by project name."
+                      : "No recent projects found."}
                 </p>
               ) : (
                 filteredProjects.map((project) => (

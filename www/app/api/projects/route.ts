@@ -33,11 +33,27 @@ interface VercelProjectsResponse {
   }
 }
 
-async function fetchAllProjects(accessToken: string, options: { teamId?: string | null; search?: string | null }) {
+const DEFAULT_PROJECT_LIMIT = 20
+const DEFAULT_SEARCH_LIMIT = 50
+const MAX_PROJECT_LIMIT = 100
+const MAX_PROJECT_PAGES = 20
+
+function parseLimit(value: string | null, fallback: number): number {
+  if (!value) return fallback
+  const parsed = Number(value)
+  if (!Number.isInteger(parsed) || parsed <= 0) return fallback
+  return Math.min(parsed, MAX_PROJECT_LIMIT)
+}
+
+async function fetchProjects(
+  accessToken: string,
+  options: { maxPages: number; teamId?: string | null; search?: string | null; limit: number }
+) {
   const projects: NonNullable<VercelProjectsResponse["projects"]> = []
   let until: string | null = null
+  let next: number | undefined
 
-  for (let page = 0; page < 20; page++) {
+  for (let page = 0; page < options.maxPages; page++) {
     const apiUrl = new URL("https://api.vercel.com/v9/projects")
     if (options.teamId) {
       apiUrl.searchParams.set("teamId", options.teamId)
@@ -45,7 +61,7 @@ async function fetchAllProjects(accessToken: string, options: { teamId?: string 
     if (options.search) {
       apiUrl.searchParams.set("search", options.search)
     }
-    apiUrl.searchParams.set("limit", "100")
+    apiUrl.searchParams.set("limit", String(options.limit))
     if (until) {
       apiUrl.searchParams.set("until", until)
     }
@@ -66,6 +82,7 @@ async function fetchAllProjects(accessToken: string, options: { teamId?: string 
     projects.push(...pageProjects)
 
     const nextCursor = data.pagination?.next
+    next = nextCursor
     if (!nextCursor || pageProjects.length === 0) {
       break
     }
@@ -73,7 +90,11 @@ async function fetchAllProjects(accessToken: string, options: { teamId?: string 
     until = String(nextCursor)
   }
 
-  return projects
+  return {
+    hasMore: Boolean(next),
+    next,
+    projects
+  }
 }
 
 /**
@@ -82,6 +103,8 @@ async function fetchAllProjects(accessToken: string, options: { teamId?: string 
  * Query params:
  * - teamId: Team ID or username (optional - if omitted, fetches personal projects)
  * - search: Project name search query (optional)
+ * - limit: Maximum projects to return for each page (default: 20, search default: 50, max: 100)
+ * - all: Set to 1 to paginate through up to 20 pages. Omit for picker-friendly bounded fetches.
  */
 export async function GET(request: Request) {
   try {
@@ -93,18 +116,30 @@ export async function GET(request: Request) {
 
     const url = new URL(request.url)
     const teamId = url.searchParams.get("teamId")
-    const search = url.searchParams.get("search")
+    const search = url.searchParams.get("search")?.trim() || null
+    const limit = parseLimit(url.searchParams.get("limit"), search ? DEFAULT_SEARCH_LIMIT : DEFAULT_PROJECT_LIMIT)
+    const fetchAll = url.searchParams.get("all") === "1"
 
-    const fetchedProjects = await fetchAllProjects(accessToken, { teamId, search })
+    const result = await fetchProjects(accessToken, {
+      maxPages: fetchAll ? MAX_PROJECT_PAGES : 1,
+      teamId,
+      search,
+      limit
+    })
+    const fetchedProjects = result.projects
     console.log(
-      `[Projects API] Fetched ${fetchedProjects.length} projects${teamId ? ` for team ${teamId}` : " for personal account"}`
+      `[Projects API] Fetched ${fetchedProjects.length} projects${teamId ? ` for team ${teamId}` : " for personal account"}${search ? ` matching "${search}"` : ""}${result.hasMore ? " (more available)" : ""}`
     )
 
     // Handle case where no projects exist
     if (fetchedProjects.length === 0) {
       return Response.json({
         success: true,
-        projects: []
+        projects: [],
+        pagination: {
+          hasMore: result.hasMore,
+          next: result.next
+        }
       })
     }
 
@@ -145,7 +180,11 @@ export async function GET(request: Request) {
 
     return Response.json({
       success: true,
-      projects
+      projects,
+      pagination: {
+        hasMore: result.hasMore,
+        next: result.next
+      }
     })
   } catch (error) {
     console.error("Error fetching projects:", error)
