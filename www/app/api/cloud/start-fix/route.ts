@@ -211,8 +211,18 @@ function warnAboutRejectedSelfHostedOidcToken(source: WorkflowAuthSource, token:
   warnAboutRejectedRuntimeOidcToken("self-hosted", source, token)
 }
 
-async function resolveControlPlaneRuntimeOidcToken(runtimeOidcToken: string | undefined): Promise<string | undefined> {
-  if (runtimeOidcToken) {
+function isVercelRuntime() {
+  return process.env.VERCEL === "1" || Boolean(process.env.VERCEL_ENV)
+}
+
+async function resolveControlPlaneRuntimeOidcToken({
+  headerOidcToken,
+  runtimeOidcToken
+}: {
+  headerOidcToken?: string
+  runtimeOidcToken?: string
+}): Promise<string | undefined> {
+  if (runtimeOidcToken || headerOidcToken || isVercelRuntime()) {
     try {
       const token = (await getVercelOidcToken({ expirationBufferMs: WORKER_OIDC_EXPIRATION_BUFFER_MS })).trim()
       if (isUsableSelfHostedOidcToken(token)) {
@@ -228,15 +238,21 @@ async function resolveControlPlaneRuntimeOidcToken(runtimeOidcToken: string | un
     } catch (error) {
       console.warn("[Start Fix] Failed to resolve control-plane OIDC token", describeErrorForLog(error))
     }
+  }
 
-    if (isUsableSelfHostedOidcToken(runtimeOidcToken)) {
+  for (const candidate of [
+    { source: "control-plane-runtime-oidc" as const, token: headerOidcToken },
+    { source: "control-plane-runtime-oidc" as const, token: runtimeOidcToken }
+  ]) {
+    if (!candidate.token) continue
+    if (isUsableSelfHostedOidcToken(candidate.token)) {
       console.log("[Start Fix] Resolved control-plane OIDC token", {
-        source: "control-plane-runtime-oidc",
-        claims: describeOidcClaimsForLog(runtimeOidcToken)
+        source: candidate.source,
+        claims: describeOidcClaimsForLog(candidate.token)
       })
-      return runtimeOidcToken
+      return candidate.token
     }
-    warnAboutRejectedRuntimeOidcToken("control-plane", "control-plane-runtime-oidc", runtimeOidcToken)
+    warnAboutRejectedRuntimeOidcToken("control-plane", candidate.source, candidate.token)
   }
 
   return undefined
@@ -639,7 +655,7 @@ export async function POST(request: Request) {
     })
     const controlPlaneOidcToken = isSelfHostedWorker
       ? undefined
-      : await resolveControlPlaneRuntimeOidcToken(runtimeOidcToken)
+      : await resolveControlPlaneRuntimeOidcToken({ headerOidcToken, runtimeOidcToken })
     const workerOidcBinding = getOidcSandboxBinding(workerOidcAuth.token)
 
     // Resolve the token used by downstream Vercel project/sandbox APIs inside the workflow.
@@ -655,7 +671,8 @@ export async function POST(request: Request) {
         ? "user-access-token"
         : forwardedAccessToken && vercelApiToken === forwardedAccessToken
           ? "forwarded-user-token"
-          : runtimeOidcToken && vercelApiToken === runtimeOidcToken
+          : (headerOidcToken && vercelApiToken === headerOidcToken) ||
+              (runtimeOidcToken && vercelApiToken === runtimeOidcToken)
             ? "control-plane-runtime-oidc"
             : "control-plane-vercel-token"
     const workflowWorldToken = isSelfHostedWorker ? workerOidcAuth.token || fallbackVercelToken : undefined
