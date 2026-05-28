@@ -48,6 +48,24 @@ interface WorkerInstallResponse {
   }
 }
 
+interface WorkerInstallProgressSnapshot {
+  phase: string
+  message: string
+  elapsedMs?: number
+}
+
+interface WorkerInstallResult {
+  status: number
+  data: WorkerInstallResponse
+  progress: WorkerInstallProgressSnapshot[]
+  durationMs: number
+}
+
+interface TimingEntry {
+  name: string
+  durationMs: number
+}
+
 interface RawVercelTeam {
   id?: string
   slug?: string
@@ -98,6 +116,8 @@ interface VercelBlobStoreListResponse {
 
 interface CleanupSummary {
   phase: "before" | "after" | "only"
+  durationMs: number
+  timings: TimingEntry[]
   team: VercelTeam
   deletedProjects: Array<{ id: string; name: string }>
   deletedBlobStores: Array<{ id: string; name: string }>
@@ -109,12 +129,16 @@ interface CleanupSummary {
 
 interface AutoUpdateSummary {
   staleSha: string
+  durationMs: number
+  timings: TimingEntry[]
   initial: {
     status: number
     projectId?: string
     deploymentId?: string
     shellVersionStatus?: string
     workerShellVersion?: string
+    durationMs?: number
+    progress?: WorkerInstallProgressSnapshot[]
   }
   stale: {
     deploymentId: string
@@ -122,6 +146,7 @@ interface AutoUpdateSummary {
     shellVersionStatus?: string
     workerShellVersion?: string
     latestDeploymentReadyState?: string
+    detectionDurationMs?: number
   }
   update: {
     status: number
@@ -129,6 +154,8 @@ interface AutoUpdateSummary {
     deploymentId?: string
     shellVersionStatus?: string
     workerShellVersion?: string
+    durationMs?: number
+    progress?: WorkerInstallProgressSnapshot[]
   }
   updated: boolean
 }
@@ -145,6 +172,7 @@ interface RunnerSnapshot {
 interface SmokeSuiteStep {
   name: string
   success: boolean
+  durationMs: number
   details?: unknown
   error?: string
 }
@@ -512,6 +540,27 @@ async function sleep(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+function formatDuration(ms: number | undefined): string {
+  if (typeof ms !== "number" || !Number.isFinite(ms)) return "unknown"
+  if (ms < 1000) return `${Math.round(ms)}ms`
+  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`
+  const minutes = Math.floor(ms / 60_000)
+  const seconds = Math.round((ms % 60_000) / 1000)
+  return `${minutes}m ${seconds}s`
+}
+
+async function recordTiming<T>(timings: TimingEntry[], name: string, run: () => Promise<T>): Promise<T> {
+  const start = Date.now()
+  try {
+    return await run()
+  } finally {
+    timings.push({
+      name,
+      durationMs: Date.now() - start
+    })
+  }
+}
+
 async function waitForRunnerProjectsDeleted(token: string, team: VercelTeam) {
   for (let attempt = 0; attempt < 10; attempt += 1) {
     const remainingProjects = await findRunnerProjects(token, team)
@@ -526,29 +575,43 @@ async function cleanupRunnerResources(
   token: string,
   phase: CleanupSummary["phase"]
 ): Promise<CleanupSummary> {
+  const start = Date.now()
+  const timings: TimingEntry[] = []
   if (!options.team) {
     throw new Error("Missing team.")
   }
 
-  const team = await resolveVercelTeam(token, options.team)
-  const projects = await findRunnerProjects(token, team)
-  const blobStores = await findRunnerBlobStores(token, team)
+  const team = await recordTiming(timings, "resolve-team", () => resolveVercelTeam(token, options.team || ""))
+  const projects = await recordTiming(timings, "find-runner-projects", () => findRunnerProjects(token, team))
+  const blobStores = await recordTiming(timings, "find-runner-blob-stores", () => findRunnerBlobStores(token, team))
 
-  for (const project of projects) {
-    await deleteRunnerProject(token, team, project.id)
-  }
+  await recordTiming(timings, "delete-runner-projects", async () => {
+    for (const project of projects) {
+      await deleteRunnerProject(token, team, project.id)
+    }
+  })
 
-  const remainingProjectsAfterDelete = await waitForRunnerProjectsDeleted(token, team)
+  const remainingProjectsAfterDelete = await recordTiming(timings, "wait-for-project-deletion", () =>
+    waitForRunnerProjectsDeleted(token, team)
+  )
 
-  for (const store of blobStores) {
-    await deleteRunnerBlobStore(token, team, store.id)
-  }
+  await recordTiming(timings, "delete-runner-blob-stores", async () => {
+    for (const store of blobStores) {
+      await deleteRunnerBlobStore(token, team, store.id)
+    }
+  })
 
-  const remainingBlobStores = await findRunnerBlobStores(token, team)
-  const resetResponse = await requestWorkerInstall({ ...options, validateOnly: true }, token)
+  const remainingBlobStores = await recordTiming(timings, "verify-blob-store-deletion", () =>
+    findRunnerBlobStores(token, team)
+  )
+  const resetResponse = await recordTiming(timings, "reset-runner-settings", () =>
+    requestWorkerInstall({ ...options, validateOnly: true }, token)
+  )
 
   return {
     phase,
+    durationMs: Date.now() - start,
+    timings,
     team,
     deletedProjects: projects,
     deletedBlobStores: blobStores,
@@ -603,24 +666,11 @@ function toRunnerSnapshot(status: number, data: WorkerInstallResponse): RunnerSn
   }
 }
 
-async function requestWorkerInstall(
-  options: SmokeOptions,
-  token: string
-): Promise<{ status: number; data: WorkerInstallResponse }> {
-  const url = new URL("/api/skill-runner-teams/worker", options.baseUrl)
-  if (!options.team) {
-    throw new Error("Missing team.")
-  }
-  url.searchParams.set("team", options.team)
-
-  const response = await fetch(url, {
-    method: options.validateOnly ? "GET" : "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json"
-    },
-    body: options.validateOnly ? undefined : JSON.stringify({ team: options.team })
-  })
+async function readWorkerInstallJsonResponse(
+  response: Response,
+  start: number,
+  progress: WorkerInstallProgressSnapshot[] = []
+): Promise<WorkerInstallResult> {
   const text = await response.text()
   let data: WorkerInstallResponse
   try {
@@ -634,8 +684,102 @@ async function requestWorkerInstall(
 
   return {
     status: response.status,
-    data
+    data,
+    progress,
+    durationMs: Date.now() - start
   }
+}
+
+async function readWorkerInstallStreamResponse(response: Response, start: number): Promise<WorkerInstallResult> {
+  const reader = response.body?.getReader()
+  if (!reader) {
+    return readWorkerInstallJsonResponse(response, start)
+  }
+
+  const decoder = new TextDecoder()
+  const progress: WorkerInstallProgressSnapshot[] = []
+  let buffer = ""
+  let status = response.status
+  let data: WorkerInstallResponse | undefined
+
+  const consumeLine = (line: string) => {
+    const trimmed = line.trim()
+    if (!trimmed) return
+    const payload = JSON.parse(trimmed) as {
+      type?: "progress" | "result" | "error"
+      status?: number
+      data?: WorkerInstallResponse
+      phase?: string
+      message?: string
+      elapsedMs?: number
+    }
+
+    if (payload.type === "progress") {
+      progress.push({
+        phase: payload.phase || "unknown",
+        message: payload.message || "",
+        elapsedMs: payload.elapsedMs
+      })
+      return
+    }
+
+    if (payload.type === "result" || payload.type === "error") {
+      status = payload.status || status
+      data = payload.data || {}
+    }
+  }
+
+  while (true) {
+    const { value, done } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split("\n")
+    buffer = lines.pop() || ""
+    for (const line of lines) {
+      consumeLine(line)
+    }
+  }
+
+  buffer += decoder.decode()
+  consumeLine(buffer)
+
+  return {
+    status,
+    data: data || {
+      success: false,
+      error: "Installer stream ended without a result."
+    },
+    progress,
+    durationMs: Date.now() - start
+  }
+}
+
+async function requestWorkerInstall(options: SmokeOptions, token: string): Promise<WorkerInstallResult> {
+  const start = Date.now()
+  const url = new URL("/api/skill-runner-teams/worker", options.baseUrl)
+  if (!options.team) {
+    throw new Error("Missing team.")
+  }
+  url.searchParams.set("team", options.team)
+  if (!options.validateOnly) {
+    url.searchParams.set("stream", "1")
+  }
+
+  const response = await fetch(url, {
+    method: options.validateOnly ? "GET" : "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json"
+    },
+    body: options.validateOnly ? undefined : JSON.stringify({ team: options.team })
+  })
+
+  const contentType = response.headers.get("content-type") || ""
+  if (!options.validateOnly && contentType.includes("application/x-ndjson")) {
+    return readWorkerInstallStreamResponse(response, start)
+  }
+
+  return readWorkerInstallJsonResponse(response, start)
 }
 
 function isHobbyWorkerTeam(team: VercelTeam): boolean {
@@ -685,58 +829,67 @@ async function createRunnerShellDeployment({
   projectName,
   sourceSha,
   team,
+  timings,
   token
 }: {
   projectId: string
   projectName: string
   sourceSha: string
   team: VercelTeam
+  timings?: TimingEntry[]
   token: string
 }): Promise<string> {
-  const source = await resolveSkillRunnerShellSource(sourceSha, sourceSha)
-  const files = await uploadSkillRunnerShellSourceFiles({
-    accessToken: token,
-    ...resolveWorkerDurationConfig(team),
-    source,
-    teamId: team.id
-  })
+  const localTimings = timings || []
+  const source = await recordTiming(localTimings, "resolve-stale-runner-source", () =>
+    resolveSkillRunnerShellSource(sourceSha, sourceSha)
+  )
+  const files = await recordTiming(localTimings, "upload-stale-runner-source", () =>
+    uploadSkillRunnerShellSourceFiles({
+      accessToken: token,
+      ...resolveWorkerDurationConfig(team),
+      source,
+      teamId: team.id
+    })
+  )
   const apiUrl = new URL("https://api.vercel.com/v13/deployments")
   apiUrl.searchParams.set("teamId", team.id)
   apiUrl.searchParams.set("forceNew", "1")
   apiUrl.searchParams.set("skipAutoDetectionConfirmation", "1")
 
-  const response = await fetch(apiUrl.toString(), {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      name: projectName,
-      project: projectId,
-      target: "production",
-      files,
-      gitMetadata: {
-        commitMessage: `Deploy stale d3k skill runner shell ${sourceSha}`,
-        commitRef: "main",
-        commitSha: sourceSha,
-        dirty: false,
-        remoteUrl: `https://github.com/${SKILL_RUNNER_WORKER_REPO}.git`
+  const response = await recordTiming(localTimings, "create-stale-runner-deployment", () =>
+    fetch(apiUrl.toString(), {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json"
       },
-      meta: {
-        d3kSkillRunnerShellCommit: sourceSha,
-        d3kSkillRunnerShellVersion: sourceSha,
-        d3kSkillRunnerSource: "auto-update-smoke"
-      },
-      projectSettings: {
-        framework: "nextjs",
-        rootDirectory: SKILL_RUNNER_WORKER_ROOT_DIRECTORY,
-        nodeVersion: "24.x",
-        sourceFilesOutsideRootDirectory: true
-      }
-    }),
-    cache: "no-store"
-  })
+      body: JSON.stringify({
+        name: projectName,
+        project: projectId,
+        target: "production",
+        files,
+        gitMetadata: {
+          commitMessage: `Deploy stale d3k skill runner shell ${sourceSha}`,
+          commitRef: "main",
+          commitSha: sourceSha,
+          dirty: false,
+          remoteUrl: `https://github.com/${SKILL_RUNNER_WORKER_REPO}.git`
+        },
+        meta: {
+          d3kSkillRunnerShellCommit: sourceSha,
+          d3kSkillRunnerShellVersion: sourceSha,
+          d3kSkillRunnerSource: "auto-update-smoke"
+        },
+        projectSettings: {
+          framework: "nextjs",
+          rootDirectory: SKILL_RUNNER_WORKER_ROOT_DIRECTORY,
+          nodeVersion: "24.x",
+          sourceFilesOutsideRootDirectory: true
+        }
+      }),
+      cache: "no-store"
+    })
+  )
 
   if (!response.ok) {
     const errorText = await response.text()
@@ -757,8 +910,8 @@ async function waitForWorkerProject(
   token: string,
   predicate: (data: WorkerInstallResponse) => boolean,
   failureMessage: string
-): Promise<{ status: number; data: WorkerInstallResponse }> {
-  let lastResponse: { status: number; data: WorkerInstallResponse } | undefined
+): Promise<WorkerInstallResult> {
+  let lastResponse: WorkerInstallResult | undefined
   for (let attempt = 0; attempt < 50; attempt += 1) {
     lastResponse = await requestWorkerInstall({ ...options, validateOnly: true }, token)
     if (predicate(lastResponse.data)) return lastResponse
@@ -776,12 +929,16 @@ async function runAutoUpdateSmoke(
   data: WorkerInstallResponse
   summary: AutoUpdateSummary
 }> {
+  const start = Date.now()
+  const timings: TimingEntry[] = []
   if (!options.team) {
     throw new Error("Missing team.")
   }
 
-  const team = await resolveVercelTeam(token, options.team)
-  const initial = await requestWorkerInstall({ ...options, validateOnly: false }, token)
+  const team = await recordTiming(timings, "resolve-team", () => resolveVercelTeam(token, options.team || ""))
+  const initial = await recordTiming(timings, "initial-install", () =>
+    requestWorkerInstall({ ...options, validateOnly: false }, token)
+  )
   if (!isReadyResponse(initial.data)) {
     throw new Error(`Initial runner install was not ready: ${JSON.stringify(initial.data)}`)
   }
@@ -793,45 +950,61 @@ async function runAutoUpdateSmoke(
   }
 
   const staleSha = options.staleSha?.trim() || resolveDefaultStaleSha(initial.data.project?.desiredWorkerGitSha)
-  const staleDeploymentId = await createRunnerShellDeployment({
-    projectId,
-    projectName,
-    sourceSha: staleSha,
-    team,
-    token
-  })
-  const stale = await waitForWorkerProject(
-    options,
-    token,
-    (data) =>
-      data.project?.latestDeploymentId === staleDeploymentId &&
-      data.project?.latestDeploymentReadyState === "READY" &&
-      data.project?.shellVersionStatus === "outdated",
-    "Stale runner deployment did not become visible as outdated."
+  const staleDeploymentId = await recordTiming(timings, "seed-stale-runner-deployment", () =>
+    createRunnerShellDeployment({
+      projectId,
+      projectName,
+      sourceSha: staleSha,
+      team,
+      timings,
+      token
+    })
   )
-  const update = await requestWorkerInstall({ ...options, validateOnly: false }, token)
+  const staleDetectionStart = Date.now()
+  const stale = await recordTiming(timings, "wait-for-outdated-stale-runner", () =>
+    waitForWorkerProject(
+      options,
+      token,
+      (data) =>
+        data.project?.latestDeploymentId === staleDeploymentId &&
+        data.project?.latestDeploymentReadyState === "READY" &&
+        data.project?.shellVersionStatus === "outdated",
+      "Stale runner deployment did not become visible as outdated."
+    )
+  )
+  const staleDetectionDurationMs = Date.now() - staleDetectionStart
+  const update = await recordTiming(timings, "repair-install", () =>
+    requestWorkerInstall({ ...options, validateOnly: false }, token)
+  )
   const summary: AutoUpdateSummary = {
     staleSha,
+    durationMs: Date.now() - start,
+    timings,
     initial: {
       status: initial.status,
       projectId: initial.data.project?.projectId,
       deploymentId: initial.data.project?.latestDeploymentId,
       shellVersionStatus: initial.data.project?.shellVersionStatus,
-      workerShellVersion: initial.data.project?.workerShellVersion
+      workerShellVersion: initial.data.project?.workerShellVersion,
+      durationMs: initial.durationMs,
+      progress: initial.progress
     },
     stale: {
       deploymentId: staleDeploymentId,
       status: stale.status,
       shellVersionStatus: stale.data.project?.shellVersionStatus,
       workerShellVersion: stale.data.project?.workerShellVersion,
-      latestDeploymentReadyState: stale.data.project?.latestDeploymentReadyState
+      latestDeploymentReadyState: stale.data.project?.latestDeploymentReadyState,
+      detectionDurationMs: staleDetectionDurationMs
     },
     update: {
       status: update.status,
       projectId: update.data.project?.projectId,
       deploymentId: update.data.project?.latestDeploymentId,
       shellVersionStatus: update.data.project?.shellVersionStatus,
-      workerShellVersion: update.data.project?.workerShellVersion
+      workerShellVersion: update.data.project?.workerShellVersion,
+      durationMs: update.durationMs,
+      progress: update.progress
     },
     updated: isReadyResponse(update.data)
   }
@@ -852,13 +1025,14 @@ async function runSmokeSuite(options: SmokeOptions, token: string): Promise<Smok
   let failedError: string | undefined
 
   async function record<T>(name: string, run: () => Promise<T>): Promise<T> {
+    const start = Date.now()
     try {
       const details = await run()
-      steps.push({ name, success: true, details })
+      steps.push({ name, success: true, durationMs: Date.now() - start, details })
       return details
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      steps.push({ name, success: false, error: message })
+      steps.push({ name, success: false, durationMs: Date.now() - start, error: message })
       throw error
     }
   }
@@ -879,6 +1053,8 @@ async function runSmokeSuite(options: SmokeOptions, token: string): Promise<Smok
       }
       return {
         ...toRunnerSnapshot(response.status, response.data),
+        durationMs: response.durationMs,
+        progress: response.progress,
         workerBaseUrl: response.data.project?.workerBaseUrl || response.data.settings?.workerBaseUrl
       }
     })
@@ -896,7 +1072,10 @@ async function runSmokeSuite(options: SmokeOptions, token: string): Promise<Smok
           }`
         )
       }
-      return snapshot
+      return {
+        ...snapshot,
+        durationMs: response.durationMs
+      }
     })
 
     await record("post-install-cleanup", async () => {
@@ -914,12 +1093,14 @@ async function runSmokeSuite(options: SmokeOptions, token: string): Promise<Smok
   } catch (error) {
     failedError = error instanceof Error ? error.message : String(error)
   } finally {
+    const cleanupStart = Date.now()
     try {
       const cleanup = await cleanupRunnerResources(options, token, "only")
       const cleaned = isCleanedUp(cleanup)
       steps.push({
         name: "final-cleanup",
         success: cleaned,
+        durationMs: cleanup.durationMs,
         details: cleanup,
         error: cleaned ? undefined : "Final cleanup did not fully complete."
       })
@@ -927,6 +1108,7 @@ async function runSmokeSuite(options: SmokeOptions, token: string): Promise<Smok
       steps.push({
         name: "final-cleanup",
         success: false,
+        durationMs: Date.now() - cleanupStart,
         error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError)
       })
     }
@@ -941,6 +1123,8 @@ async function runSmokeSuite(options: SmokeOptions, token: string): Promise<Smok
 
 function printCleanupSummary(summary: CleanupSummary) {
   console.log(`Cleanup (${summary.phase}): ${isCleanedUp(summary) ? "complete" : "incomplete"}`)
+  console.log(`Duration: ${formatDuration(summary.durationMs)}`)
+  printTimingEntries(summary.timings, "  ")
   console.log(`Resolved team: ${summary.team.name} (${summary.team.slug}, id: ${summary.team.id})`)
   console.log(`Deleted projects: ${summary.deletedProjects.length}`)
   for (const project of summary.deletedProjects) {
@@ -956,6 +1140,71 @@ function printCleanupSummary(summary: CleanupSummary) {
   }
   if (summary.remainingBlobStores.length > 0) {
     console.log(`Remaining Blob stores: ${summary.remainingBlobStores.map((store) => store.name).join(", ")}`)
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value))
+}
+
+function readTimingEntries(value: unknown): TimingEntry[] {
+  if (!Array.isArray(value)) return []
+  return value.filter(
+    (entry): entry is TimingEntry =>
+      isRecord(entry) && typeof entry.name === "string" && typeof entry.durationMs === "number"
+  )
+}
+
+function readProgressEntries(value: unknown): WorkerInstallProgressSnapshot[] {
+  if (!Array.isArray(value)) return []
+  return value.filter(
+    (entry): entry is WorkerInstallProgressSnapshot =>
+      isRecord(entry) && typeof entry.phase === "string" && typeof entry.message === "string"
+  )
+}
+
+function printTimingEntries(timings: TimingEntry[], indent = "") {
+  if (timings.length === 0) return
+  console.log(`${indent}timings:`)
+  for (const timing of timings) {
+    console.log(`${indent}  ${timing.name}: ${formatDuration(timing.durationMs)}`)
+  }
+}
+
+function printProgressEntries(progress: WorkerInstallProgressSnapshot[], indent = "") {
+  if (progress.length === 0) return
+  console.log(`${indent}installer progress:`)
+  for (const entry of progress) {
+    const elapsed = typeof entry.elapsedMs === "number" ? formatDuration(entry.elapsedMs) : "unknown"
+    console.log(`${indent}  ${elapsed} ${entry.phase}: ${entry.message}`)
+  }
+}
+
+function printStepDetails(details: unknown) {
+  if (!isRecord(details)) return
+
+  const timings = readTimingEntries(details.timings)
+  printTimingEntries(timings, "  ")
+
+  const progress = readProgressEntries(details.progress)
+  printProgressEntries(progress, "  ")
+
+  const initial = isRecord(details.initial) ? details.initial : undefined
+  if (initial) {
+    const initialProgress = readProgressEntries(initial.progress)
+    if (initialProgress.length > 0) {
+      console.log("  initial install:")
+      printProgressEntries(initialProgress, "    ")
+    }
+  }
+
+  const update = isRecord(details.update) ? details.update : undefined
+  if (update) {
+    const updateProgress = readProgressEntries(update.progress)
+    if (updateProgress.length > 0) {
+      console.log("  repair install:")
+      printProgressEntries(updateProgress, "    ")
+    }
   }
 }
 
@@ -994,10 +1243,11 @@ function printHumanSummary(options: SmokeOptions, status: number, data: WorkerIn
 function printSuiteSummary(summary: SmokeSuiteSummary) {
   console.log(`Skill runner smoke suite: ${summary.success ? "passed" : "failed"}`)
   for (const step of summary.steps) {
-    console.log(`- ${step.name}: ${step.success ? "passed" : "failed"}`)
+    console.log(`- ${step.name}: ${step.success ? "passed" : "failed"} (${formatDuration(step.durationMs)})`)
     if (step.error) {
       console.log(`  ${step.error}`)
     }
+    printStepDetails(step.details)
   }
 }
 
@@ -1008,6 +1258,8 @@ async function main() {
   let postCleanup: CleanupSummary | undefined
   let status = 0
   let data: WorkerInstallResponse = {}
+  let durationMs = 0
+  let progress: WorkerInstallProgressSnapshot[] = []
   let ready = false
   let autoUpdate: AutoUpdateSummary | undefined
   let smokeError: unknown
@@ -1052,12 +1304,16 @@ async function main() {
           autoUpdate = result.summary
           return {
             status: result.status,
-            data: result.data
+            data: result.data,
+            durationMs: result.summary.durationMs,
+            progress: result.summary.update.progress || []
           }
         })
       : await requestWorkerInstall(options, token)
     status = response.status
     data = response.data
+    durationMs = response.durationMs
+    progress = response.progress
     ready = isReadyResponse(data)
   } catch (error) {
     smokeError = error
@@ -1074,6 +1330,8 @@ async function main() {
         {
           ready,
           status,
+          durationMs,
+          progress,
           error: smokeError instanceof Error ? smokeError.message : smokeError ? String(smokeError) : undefined,
           preCleanup,
           postCleanup,
@@ -1091,7 +1349,10 @@ async function main() {
       console.error(smokeError instanceof Error ? smokeError.message : String(smokeError))
     } else {
       printHumanSummary(options, status, data)
+      console.log(`Duration: ${formatDuration(durationMs)}`)
+      printProgressEntries(progress)
       if (autoUpdate) {
+        printTimingEntries(autoUpdate.timings)
         console.log(
           `Auto-update: ${isAutoUpdated(autoUpdate) ? "passed" : "failed"} (${autoUpdate.staleSha.slice(0, 8)} -> ${autoUpdate.update.workerShellVersion?.slice(0, 8) || "unknown"})`
         )

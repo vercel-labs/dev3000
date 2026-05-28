@@ -49,6 +49,24 @@ const RUNNER_SHELL_INCLUDED_PREFIXES = ["www/app/.well-known/workflow/v1/", "www
 const RUNNER_SHELL_UPLOAD_CONCURRENCY = 8
 const RUNNER_NEXT_CONFIG_PREVIEW_COMMENTS_PATCH =
   '// Self-hosted runner shells disable Preview Comments to avoid Vercel adapter/Next ctx.projectDir skew.\nprocess.env.VERCEL_PREVIEW_COMMENTS_ENABLED = "0"\n'
+const RUNNER_NEXT_CONFIG_CONTENT = `import type { NextConfig } from "next"
+import path from "path"
+import { fileURLToPath } from "url"
+import { withWorkflow } from "workflow/next"
+
+${RUNNER_NEXT_CONFIG_PREVIEW_COMMENTS_PATCH}
+const currentDir = path.dirname(fileURLToPath(import.meta.url))
+
+const nextConfig: NextConfig = {
+  reactStrictMode: true,
+  outputFileTracingRoot: path.join(currentDir, ".."),
+  turbopack: {
+    root: path.join(currentDir, "..")
+  }
+}
+
+export default withWorkflow(nextConfig)
+`
 const RUNNER_NEXT_CONFIG_PATH = `${SKILL_RUNNER_WORKER_ROOT_DIRECTORY}/next.config.ts`
 const RUNNER_ROOT_PACKAGE_PATH = "package.json"
 const RUNNER_WWW_PACKAGE_PATH = `${SKILL_RUNNER_WORKER_ROOT_DIRECTORY}/package.json`
@@ -217,17 +235,8 @@ function patchWorkflowConfigJson(content: string, maxDurationSeconds: number): s
   }
 }
 
-function patchRunnerNextConfig(content: string): string {
-  if (content.includes("VERCEL_PREVIEW_COMMENTS_ENABLED")) {
-    return content
-  }
-
-  const importBlockMatch = content.match(/^(?:import[^\n]*\n)+/)
-  if (!importBlockMatch) {
-    return `${RUNNER_NEXT_CONFIG_PREVIEW_COMMENTS_PATCH}\n${content}`
-  }
-
-  return content.replace(importBlockMatch[0], `${importBlockMatch[0]}\n${RUNNER_NEXT_CONFIG_PREVIEW_COMMENTS_PATCH}`)
+function patchRunnerNextConfig(_content: string): string {
+  return RUNNER_NEXT_CONFIG_CONTENT
 }
 
 function pickPackageFields<T extends Record<string, string>>(
@@ -304,7 +313,6 @@ function patchRunnerWwwPackageJson(content: string): string {
           "@types/node",
           "@types/react",
           "@types/react-dom",
-          "babel-plugin-react-compiler",
           "typescript"
         ])
       },
