@@ -1,0 +1,36 @@
+www/lib/skill-runner-shell-source.ts
+  s_5da4393566ec36::t_0e3260df3f3e90 52-69,238-239
+scripts/smoke-skill-runner-install.ts
+  s_5da4393566ec36::t_4fcc26b5bfada7 669-758,764-766,777-779,781-782
+  s_5da4393566ec36::t_31fe48ae2ae8a1 1028,1031,1035,1056-1057,1075-1078,1103
+  s_5da4393566ec36::t_268dfe2b35c727 1333-1334
+  s_5da4393566ec36::t_de6684f216fdc7 1307-1309,1315-1316
+  s_5da4393566ec36::t_4c3a0a6d813c41 832,839,842-853,859-864,866-892
+  s_5da4393566ec36::t_8f2bdd52789a70 1096,1111
+  s_5da4393566ec36::t_fdbfb5ba02b99c 51-68,119-120,132-133,140-141,149,157-158,175
+  s_5da4393566ec36::t_c79eb95334b936 932-933,938-941,953-977,981-982,988-990,997-998,1005-1007
+  s_5da4393566ec36::t_36dc47896ab7ec 578-579,584-586,588-592,594-596,598-602,604-609,613-614
+  s_5da4393566ec36::t_447ba49dea9f7e 1126-1127,1146-1210,1246,1250
+  s_5da4393566ec36::t_ffcd5376579a46 913-914
+  s_5da4393566ec36::t_87e4b368c45780 1261-1262
+  s_5da4393566ec36::t_c83dd337be827e 1352-1353,1355
+  s_5da4393566ec36::t_08ef5c2239bdc5 543-563
+www/lib/skill-runner-shell-source.test.ts
+  s_5da4393566ec36::t_8db9e7cdf42961 255,259-263
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "aa771350f95ff625846c5bbe517540ea25387a7d",
+  "prompts": {},
+  "sessions": {
+    "s_5da4393566ec36": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e3207-b24c-7e90-bd42-71198956a1ad",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>"
+    }
+  }
+}
