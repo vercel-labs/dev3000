@@ -1,0 +1,27 @@
+www/app/api/projects/[projectId]/route.ts
+  s_5da4393566ec36::t_ee3406cf148bd7 65-68,100-104
+www/app/api/projects/route.ts
+  s_5da4393566ec36::t_b2b3136183c07a 28-31,179-183
+www/app/dev-agents/[agentId]/new/dev-agent-run-client.tsx
+  s_5da4393566ec36::t_bcd89c1c11e007 1274-1279
+  s_5da4393566ec36::t_003870b2c98ecd 1271-1273
+  s_5da4393566ec36::t_77277af97b88e2 63-64
+  s_5da4393566ec36::t_3a6ddb3729bec6 65-68,241-267,269-271,274-285
+  s_5da4393566ec36::t_b6e7a524a49cf9 405-417
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "e36ab70328a12a68bcc1de88fad8cd6a6a0f3739",
+  "prompts": {},
+  "sessions": {
+    "s_5da4393566ec36": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019e3207-b24c-7e90-bd42-71198956a1ad",
+        "model": "gpt-5.5"
+      },
+      "human_author": "elsigh <lindsey@vercel.com>"
+    }
+  }
+}
