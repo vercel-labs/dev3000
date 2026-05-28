@@ -60,8 +60,12 @@ interface Project {
       message: string
     } | null
     meta: {
-      githubOrg: string
-      githubRepo: string
+      githubOrg?: string
+      githubRepo?: string
+      githubRepoOwner?: string
+      githubCommitOrg?: string
+      githubCommitRepo?: string
+      githubCommitRepoId?: string
     } | null
   }>
 }
@@ -234,19 +238,51 @@ function isSkillRunnerWorkerProject(project: Pick<Project, "name">): boolean {
   )
 }
 
+function parseGitHubRepoSlug(value: string | undefined): { owner: string; repo: string } | null {
+  const trimmed = value?.trim()
+  if (!trimmed) return null
+
+  const match = trimmed.match(/^([^/\s]+)\/([^/\s]+)$/)
+  if (!match) return null
+
+  return {
+    owner: match[1],
+    repo: match[2]
+  }
+}
+
+function pickGitHubRepo(owner: string | undefined, repo: string | undefined): { owner: string; repo: string } | null {
+  const repoSlug = parseGitHubRepoSlug(repo)
+  if (repoSlug) return repoSlug
+
+  const normalizedOwner = owner?.trim()
+  const normalizedRepo = repo?.trim()
+  if (!normalizedOwner || !normalizedRepo) return null
+
+  return {
+    owner: normalizedOwner,
+    repo: normalizedRepo
+  }
+}
+
 function getProjectGitHubRepo(project: Project): { owner: string; repo: string } | null {
-  const linkedOwner = project.link?.org?.trim()
-  const linkedRepo = project.link?.repo?.trim()
-  if (linkedOwner && linkedRepo) {
-    return { owner: linkedOwner, repo: linkedRepo }
+  const linkedRepo = pickGitHubRepo(project.link?.org, project.link?.repo)
+  if (linkedRepo) {
+    return linkedRepo
   }
 
-  const deploymentWithGitHubMeta = project.latestDeployments.find(
-    (deployment) => deployment.meta?.githubOrg?.trim() && deployment.meta?.githubRepo?.trim()
-  )
-  const metaOwner = deploymentWithGitHubMeta?.meta?.githubOrg?.trim()
-  const metaRepo = deploymentWithGitHubMeta?.meta?.githubRepo?.trim()
-  return metaOwner && metaRepo ? { owner: metaOwner, repo: metaRepo } : null
+  for (const deployment of project.latestDeployments) {
+    const meta = deployment.meta
+    const metaRepo =
+      pickGitHubRepo(meta?.githubOrg, meta?.githubRepo) ||
+      pickGitHubRepo(meta?.githubRepoOwner, meta?.githubRepo) ||
+      pickGitHubRepo(meta?.githubCommitOrg, meta?.githubCommitRepo)
+    if (metaRepo) {
+      return metaRepo
+    }
+  }
+
+  return null
 }
 
 function isSelectableProject(
@@ -366,6 +402,19 @@ export default function DevAgentRunClient({
     if (!query) return allProjects
     return allProjects.filter((project) => project.name.toLowerCase().includes(query))
   }, [allProjects, projectSearchQuery])
+  const matchingFetchedProjects = useMemo(() => {
+    const query = projectSearchQuery.toLowerCase()
+    if (!query) return projects
+    return projects.filter((project) => project.name.toLowerCase().includes(query))
+  }, [projects, projectSearchQuery])
+  const hasMatchingProjectsWithoutGitHubMetadata =
+    requiresGitHubBackedProject &&
+    matchingFetchedProjects.some(
+      (project) =>
+        !isSkillRunnerWorkerProject(project) &&
+        !getProjectGitHubRepo(project) &&
+        !filteredProjects.some((filteredProject) => filteredProject.id === project.id)
+    )
   const selectedProject = useMemo(
     () => allProjects.find((project) => project.id === selectedProjectId) || null,
     [allProjects, selectedProjectId]
@@ -1219,13 +1268,15 @@ export default function DevAgentRunClient({
                 </div>
               ) : filteredProjects.length === 0 ? (
                 <p className="py-3 text-[13px] text-[#666]">
-                  {projectSearchQuery
-                    ? requiresGitHubBackedProject
-                      ? "No matching GitHub-backed projects found."
-                      : "No matching projects."
-                    : requiresGitHubBackedProject
-                      ? "No recent GitHub-backed projects found. Search by project name."
-                      : "No recent projects found."}
+                  {hasMatchingProjectsWithoutGitHubMetadata
+                    ? "Matching projects were found, but dev3000 could not read their GitHub repository metadata. Reconnect Vercel and choose all projects for this team."
+                    : projectSearchQuery
+                      ? requiresGitHubBackedProject
+                        ? "No matching GitHub-backed projects found."
+                        : "No matching projects."
+                      : requiresGitHubBackedProject
+                        ? "No recent GitHub-backed projects found. Search by project name."
+                        : "No recent projects found."}
                 </p>
               ) : (
                 filteredProjects.map((project) => (

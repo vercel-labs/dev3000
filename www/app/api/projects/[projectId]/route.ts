@@ -62,6 +62,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ proj
         meta?: {
           githubOrg?: string
           githubRepo?: string
+          githubRepoOwner?: string
+          githubCommitOrg?: string
+          githubCommitRepo?: string
+          githubCommitRepoId?: string
         }
       }>
     }
@@ -93,7 +97,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ proj
           meta: deployment.meta
             ? {
                 githubOrg: deployment.meta.githubOrg,
-                githubRepo: deployment.meta.githubRepo
+                githubRepo: deployment.meta.githubRepo,
+                githubRepoOwner: deployment.meta.githubRepoOwner,
+                githubCommitOrg: deployment.meta.githubCommitOrg,
+                githubCommitRepo: deployment.meta.githubCommitRepo,
+                githubCommitRepoId: deployment.meta.githubCommitRepoId
               }
             : null
         })) || []
