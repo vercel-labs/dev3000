@@ -1,5 +1,5 @@
 export interface VercelProtectionBypassResponse {
-  protectionBypass?: Record<string, { scope?: string }> | string
+  protectionBypass?: Record<string, { scope?: string; createdAt?: number }> | string
   secret?: string
 }
 
@@ -16,5 +16,11 @@ export function extractAutomationProtectionBypassToken(data: VercelProtectionByp
     return undefined
   }
 
-  return Object.entries(data.protectionBypass).find(([, value]) => value?.scope === "automation-bypass")?.[0]
+  const automationBypasses = Object.entries(data.protectionBypass).filter(
+    ([, value]) => value?.scope === "automation-bypass"
+  )
+
+  automationBypasses.sort(([, a], [, b]) => (b.createdAt || 0) - (a.createdAt || 0))
+
+  return automationBypasses[0]?.[0]
 }

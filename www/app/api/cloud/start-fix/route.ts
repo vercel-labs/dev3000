@@ -541,6 +541,14 @@ async function generateWorkerProtectionBypassToken({
   projectId: string
   teamId: string
 }): Promise<string | undefined> {
+  const existingToken = await readWorkerProtectionBypassToken({ accessToken, projectId, teamId }).catch(
+    (error: unknown) => {
+      workflowError("[Start Fix] Failed to read existing worker protection bypass token:", error)
+      return undefined
+    }
+  )
+  if (existingToken) return existingToken
+
   const apiUrl = new URL(`https://api.vercel.com/v1/projects/${encodeURIComponent(projectId)}/protection-bypass`)
   apiUrl.searchParams.set("teamId", teamId)
 
@@ -557,7 +565,44 @@ async function generateWorkerProtectionBypassToken({
   if (!response.ok) {
     const errorText = await response.text()
     workflowError("[Start Fix] Failed to generate worker protection bypass token:", errorText)
-    return undefined
+    return readWorkerProtectionBypassToken({ accessToken, projectId, teamId }).catch((error: unknown) => {
+      workflowError("[Start Fix] Failed to recover existing worker protection bypass token:", error)
+      return undefined
+    })
+  }
+
+  const data = (await response.json()) as VercelProtectionBypassResponse
+  return (
+    extractAutomationProtectionBypassToken(data) ||
+    readWorkerProtectionBypassToken({ accessToken, projectId, teamId }).catch((error: unknown) => {
+      workflowError("[Start Fix] Failed to read generated worker protection bypass token:", error)
+      return undefined
+    })
+  )
+}
+
+async function readWorkerProtectionBypassToken({
+  accessToken,
+  projectId,
+  teamId
+}: {
+  accessToken: string
+  projectId: string
+  teamId: string
+}): Promise<string | undefined> {
+  const apiUrl = new URL(`https://api.vercel.com/v9/projects/${encodeURIComponent(projectId)}`)
+  apiUrl.searchParams.set("teamId", teamId)
+
+  const response = await fetch(apiUrl.toString(), {
+    headers: {
+      Authorization: `Bearer ${accessToken}`
+    },
+    cache: "no-store"
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    throw new Error(`Failed to read project settings (${response.status}): ${errorText.slice(0, 500)}`)
   }
 
   const data = (await response.json()) as VercelProtectionBypassResponse
